@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Конструктор шкафов. Соберите шкаф и получите спецификацию</title>
+<meta name="description" content="2D-конструктор распашных шкафов и гардеробных: модули, наполнение, фасады с петлями, автоматические фальши и живая спецификация деталей.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f4f1ea;--ink:#221f1a;--muted:#6d675c;--line:#ddd6c8;--accent:#235b4e;
+        --accent-deep:#17423a;--accent-soft:#e4eeea;--brass:#a87c3f;--card:#fbf9f4}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Manrope",system-ui,sans-serif;background:var(--bg);color:var(--ink);
+       font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:"Cormorant Garamond",serif;font-weight:500;line-height:1.15}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  header{height:70px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;width:100%}
+  .logo{font-family:"Cormorant Garamond",serif;font-size:24px;text-decoration:none;color:var(--ink)}
+  .logo b{color:var(--accent);font-weight:500}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px;
+       padding:14px 28px;border-radius:999px;text-decoration:none;border:none;cursor:pointer;
+       background:var(--accent);color:#fff;transition:background .2s}
+  .btn:hover{background:var(--accent-deep)}
+  .btn.sm{padding:10px 20px;font-size:14.5px}
+  .hero{padding:80px 0 60px;display:grid;gap:40px}
+  @media(min-width:960px){.hero{grid-template-columns:1fr 1fr;align-items:center}}
+  .hero h1{font-size:clamp(36px,4.6vw,58px);max-width:16ch;margin-bottom:18px}
+  .hero h1 em{font-style:italic;color:var(--brass)}
+  .hero p{color:var(--muted);max-width:48ch;margin-bottom:28px}
+  .shot{border:1px solid var(--line);border-radius:18px;background:var(--card);
+        box-shadow:0 24px 60px rgba(30,26,20,.12);overflow:hidden}
+  .shot svg{display:block;width:100%}
+  .feats{padding:60px 0 90px;display:grid;gap:22px}
+  @media(min-width:840px){.feats{grid-template-columns:repeat(3,1fr)}}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
+  .feat b{display:block;font-size:16px;margin-bottom:6px}
+  .feat p{color:var(--muted);font-size:14.5px;line-height:1.55}
+  footer{border-top:1px solid var(--line);padding:26px 0;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="index.html">Шкаф<b>·конструктор</b></a>
+    <a class="btn sm" href="editor.html">Открыть редактор</a>
+  </div>
+</header>
+
+<section class="hero wrap">
+  <div>
+    <h1>Шкаф собирается <em>как тетрис</em></h1>
+    <p>Задайте помещение и глубину, дальше раскидывайте модули и наполнение мышью. Петли, фальши и тех. зазоры конструктор проставит сам по стандартам производства, спецификация деталей собирается на лету.</p>
+    <a class="btn" href="editor.html">Собрать шкаф</a>
+  </div>
+  <div class="shot">
+    <svg viewBox="0 0 640 420" xmlns="http://www.w3.org/2000/svg">
+      <rect width="640" height="420" fill="#f1ede4"/>
+      <rect x="60" y="40" width="520" height="330" fill="none" stroke="#b9b2a4" stroke-width="2"/>
+      <g stroke="#6f6759" stroke-width="1.4">
+        <rect x="90" y="70" width="14" height="290" fill="#d9cfb8"/>
+        <rect x="266" y="70" width="14" height="290" fill="#d9cfb8"/>
+        <rect x="104" y="70" width="162" height="12" fill="#d9cfb8"/>
+        <rect x="104" y="330" width="162" height="12" fill="#d9cfb8"/>
+        <rect x="104" y="342" width="162" height="18" fill="#cfc4aa"/>
+        <rect x="104" y="150" width="162" height="10" fill="#e4dbc6"/>
+        <rect x="112" y="250" width="146" height="52" fill="#e7dfcd"/>
+        <line x1="126" y1="276" x2="244" y2="276" stroke="#9a917f" stroke-width="3"/>
+        <rect x="292" y="70" width="14" height="290" fill="#d9cfb8"/>
+        <rect x="468" y="70" width="14" height="290" fill="#d9cfb8"/>
+        <rect x="306" y="70" width="162" height="12" fill="#d9cfb8"/>
+        <rect x="306" y="330" width="162" height="12" fill="#d9cfb8"/>
+        <rect x="310" y="86" width="76" height="250" fill="#efe6d2" fill-opacity=".9"/>
+        <rect x="390" y="86" width="76" height="250" fill="#efe6d2" fill-opacity=".9"/>
+        <circle cx="318" cy="100" r="4" fill="#4d463b"/>
+        <circle cx="318" cy="210" r="4" fill="#4d463b"/>
+        <circle cx="318" cy="320" r="4" fill="#4d463b"/>
+        <rect x="378" y="180" width="4" height="60" fill="#3c362e"/>
+      </g>
+      <g font-family="Manrope,sans-serif" font-size="13" fill="#6d675c">
+        <text x="150" y="395">600</text>
+        <text x="360" y="395">600</text>
+        <text x="500" y="60">до потолка 2500</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section class="feats wrap">
+  <div class="feat"><b>Правила цеха внутри</b><p>Цоколь, вкладные царги, кромка 2 и 0,4 мм, петли GTV по стандарту: до 1200 мм две, выше три. Конструктор не даст собрать то, что цех не сделает.</p></div>
+  <div class="feat"><b>Фальши сами</b><p>Поставили выкатной ящик за распашной фасад: фальш по стороне петель добавится автоматически и попадёт в деталировку.</p></div>
+  <div class="feat"><b>Спецификация на лету</b><p>Каждая деталь с размерами и кромкой, фурнитура с закупочными ценами. Дальше из этой таблицы вырастут карты раскроя и смета.</p></div>
+  <div class="feat"><b>133 декора Lamarty</b><p>Живые текстуры из каталога СФЗ: корпус и каждый фасад можно перекрасить кликом.</p></div>
+  <div class="feat"><b>Проверка фурнитуры</b><p>Сетчатые корзины и брючницы ставятся только туда, где им хватает места. Не хватает: конструктор предложит расширить модуль до технички.</p></div>
+  <div class="feat"><b>Купе следующим</b><p>Корпус общий, купе - это другая фасадная система. Расчёт дверей возьмём из готового калькулятора.</p></div>
+</section>
+
+<footer>
+  <div class="wrap">Конструктор шкафов · рабочая версия для менеджеров производства · 2026</div>
+</footer>
+
+</body>
+</html>
