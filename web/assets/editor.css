@@ -44,6 +44,13 @@ body{font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--bg
 .spec-details summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--accent);padding:6px 0}
 .cut-sheet{display:block;width:100%;margin-bottom:10px;border-radius:8px}
 
+.lib-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.btn-link-mini{font:inherit;font-size:12.5px;color:var(--accent);background:#fff;
+  border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;
+  flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-link-mini:hover{background:var(--accent-soft)}
+.btn-link-mini.danger{flex:none;color:var(--danger);width:30px;text-align:center;padding:6px 0}
+
 .layout{flex:1;display:grid;grid-template-columns:230px 1fr 340px;min-height:0}
 
 /* палитра */

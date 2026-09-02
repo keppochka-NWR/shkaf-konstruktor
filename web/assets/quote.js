@@ -63,8 +63,16 @@ function openQuote(project, svgEl) {
     "</body></html>";
 
   const win = window.open("", "_blank");
-  if (!win) return false;
-  win.document.write(html);
-  win.document.close();
-  return true;
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    return "window";
+  }
+  // попап заблокирован: скачиваем HTML-файл, он открывается двойным кликом
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "КП " + (project.name || "шкаф") + ".html";
+  a.click();
+  return "download";
 }

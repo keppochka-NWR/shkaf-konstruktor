@@ -145,9 +145,9 @@
       if (!project.modules.length) { banner("Сначала соберите шкаф.", null); return; }
       var was = view.mode;
       if (was !== "front") { view.mode = "front"; update(true); }
-      var okOpen = openQuote(project, svg);
+      var how = openQuote(project, svg);
       if (was !== "front") { view.mode = was; update(true); }
-      if (!okOpen) banner("Браузер заблокировал окно КП: разрешите всплывающие окна.", null);
+      if (how === "download") banner("КП скачано файлом: откройте его и нажмите «Печать».", null);
     });
 
     $("btnExport").addEventListener("click", exportJSON);
@@ -580,6 +580,48 @@
       box.appendChild(decorRow("Декор фасадов (общий)", project.facadeDecor, function (n) {
         project.facadeDecor = n; update();
       }));
+      /* библиотека проектов */
+      var gl = document.createElement("div");
+      gl.className = "p-group";
+      gl.innerHTML = "<h3>Мои проекты</h3>";
+      var saveBtn = document.createElement("button");
+      saveBtn.className = "p-del"; saveBtn.type = "button";
+      saveBtn.style.color = "var(--accent)";
+      saveBtn.textContent = "Сохранить в проекты: " + (project.name || "Шкаф");
+      saveBtn.addEventListener("click", function () {
+        librarySave(project);
+        saveProject(project);
+        banner("Проект «" + (project.name || "Шкаф") + "» сохранён в библиотеку.", null);
+        renderProps();
+      });
+      gl.appendChild(saveBtn);
+      libraryList().forEach(function (entry) {
+        var row = document.createElement("div");
+        row.className = "lib-row";
+        var open = document.createElement("button");
+        open.className = "btn-link-mini"; open.type = "button";
+        open.textContent = entry.name + " · " + entry.updated;
+        open.addEventListener("click", function () {
+          var p = libraryLoad(entry.id);
+          if (p) {
+            project = p; sel = { modId: null, itemId: null, face: null };
+            syncTop(); update();
+          }
+        });
+        var del = document.createElement("button");
+        del.className = "btn-link-mini danger"; del.type = "button";
+        del.textContent = "×";
+        del.title = "Удалить из библиотеки";
+        del.addEventListener("click", function () {
+          libraryDelete(entry.id);
+          renderProps();
+        });
+        row.appendChild(open);
+        row.appendChild(del);
+        gl.appendChild(row);
+      });
+      box.appendChild(gl);
+
       var e = document.createElement("div");
       e.className = "p-empty";
       e.textContent = "Выберите модуль на холсте, чтобы настроить его размеры, наполнение и фасады.";
