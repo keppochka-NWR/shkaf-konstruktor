@@ -335,6 +335,8 @@ function edgeMeters(panels) {
 /* ---------- сериализация ---------- */
 
 const STORAGE_KEY = "wardrobeProject";
+const LIBRARY_KEY = "wardrobeLibrary";
+
 function saveProject(p) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch (e) {}
 }
@@ -343,4 +345,32 @@ function loadProject() {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? migrateProject(JSON.parse(raw)) : null;
   } catch (e) { return null; }
+}
+
+/* библиотека проектов менеджера: несколько клиентов в одном браузере */
+function libraryList() {
+  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY) || "[]"); }
+  catch (e) { return []; }
+}
+function librarySave(project) {
+  const lib = libraryList();
+  const entry = {
+    id: project.libId || uid(),
+    name: project.name || "Шкаф",
+    updated: new Date().toLocaleString("ru-RU"),
+    data: JSON.stringify(project),
+  };
+  project.libId = entry.id;
+  const idx = lib.findIndex(x => x.id === entry.id);
+  if (idx >= 0) lib[idx] = entry; else lib.unshift(entry);
+  try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(lib.slice(0, 30))); } catch (e) {}
+  return entry.id;
+}
+function libraryLoad(id) {
+  const e = libraryList().find(x => x.id === id);
+  return e ? migrateProject(JSON.parse(e.data)) : null;
+}
+function libraryDelete(id) {
+  const lib = libraryList().filter(x => x.id !== id);
+  try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(lib)); } catch (e) {}
 }
