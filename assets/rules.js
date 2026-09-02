@@ -1,59 +1,53 @@
-/* Движок правил: валидации, авто-фальши, предупреждения.
-   Каждое правило возвращает предупреждения или молча правит проект (авто-правила). */
+/* Движок правил: валидации вставки и предупреждения.
+   Фальши больше не хранятся - вычисляются в model.js (fillerPanels). */
 
-/* авто-правило: выкатные ящики за распашным фасадом требуют фальш по стороне петель */
-function applyDrawerFillers(mod) {
-  const hasDrawers = mod.items.some(it => it.type === "drawer" || it.type === "mesh");
-  const f = mod.facade;
-  let left = 0, right = 0;
-  if (hasDrawers && f.system === "hinge") {
-    if (f.doors === 1) {
-      if (f.side === "left") left = CONST.drawerFiller;
-      else right = CONST.drawerFiller;
-    } else {
-      left = CONST.drawerFiller;
-      right = CONST.drawerFiller;
-    }
-  }
-  const changed = mod.fillers.left !== left || mod.fillers.right !== right;
-  mod.fillers.left = left;
-  mod.fillers.right = right;
-  return changed;
-}
-
-/* проверка вставки элемента; возвращает { ok, reason, suggestW } */
 function canInsert(project, mod, item) {
   const inner = innerBox(project, mod);
-  if (item.type === "drawer") {
+  const sides = hingeSidesOf(mod);
+  const availW = inner.w - sides.length * CONST.drawerFiller;
+
+  if (item.type === "drawers") {
     const s = SLIDES[item.slide];
-    if (inner.w < s.minInnerW) {
+    if (availW < s.minInnerW) {
       return { ok: false,
-        reason: "Секция уже " + s.minInnerW + " мм: направляющие " + s.label + " не встанут.",
-        suggestW: s.minInnerW + (mod.w - inner.w) };
+        reason: "Для направляющих " + s.label + " нужно " + s.minInnerW +
+          " мм внутренней ширины" + (sides.length ? " (с учётом фальшей под фасадом)" : "") +
+          ", сейчас " + Math.round(availW) + ".",
+        suggestW: s.minInnerW + (mod.w - availW) };
     }
-    if (inner.w > s.maxInnerW) {
+    if (availW > s.maxInnerW) {
       return { ok: false,
-        reason: "Секция шире " + s.maxInnerW + " мм: ящик на " + s.label + " провиснет. Сузьте модуль или добавьте перегородку (следующая версия)." };
+        reason: "Секция шире " + s.maxInnerW + " мм: ящик на " + s.label +
+          " провиснет. Сузьте модуль или добавьте перегородку (следующая версия)." };
+    }
+    const zoneH = item.count * (item.boxH + CONST.drawerStep);
+    if (zoneH > inner.h) {
+      return { ok: false,
+        reason: "Секция ящиков " + Math.round(zoneH) + " мм выше проёма " +
+          Math.round(inner.h) + ". Уменьшите количество или высоту ящиков." };
     }
   }
+
   if (item.type === "mesh") {
     const mesh = meshCatalog().find(x => x.id === item.meshId);
     if (!mesh) return { ok: false, reason: "Элемент не найден в каталоге." };
-    if (project.depth - 5 < mesh.reqD) {
-      return { ok: false, reason: "Глубина шкафа мала: для «" + mesh.label + "» нужно от " + mesh.reqD + " мм." };
-    }
-    if (inner.w < mesh.reqW) {
-      // главное правило Max: предлагаем расширить модуль до требуемой ширины
+    if (modDepth(project, mod) - 5 < mesh.reqD) {
       return { ok: false,
-        reason: "«" + mesh.label + "» требует " + mesh.reqW + " мм внутренней ширины, сейчас " + Math.round(inner.w) + ".",
-        suggestW: mesh.reqW + (mod.w - inner.w) };
+        reason: "Глубина модуля мала: для «" + mesh.label + "» нужно от " + mesh.reqD + " мм." };
     }
-    if (inner.w > mesh.reqW + 40) {
+    if (availW < mesh.reqW) {
+      return { ok: false,
+        reason: "«" + mesh.label + "» требует " + mesh.reqW + " мм внутренней ширины, доступно " +
+          Math.round(availW) + ".",
+        suggestW: mesh.reqW + (mod.w - availW) };
+    }
+    if (availW > mesh.reqW + 4) {
       return { ok: true,
-        note: "Секция шире технички «" + mesh.label + "» на " + Math.round(inner.w - mesh.reqW) + " мм: добавим фальш до требуемой ширины.",
-        fillerAdd: Math.round(inner.w - mesh.reqW) };
+        note: "Секция шире технички «" + mesh.label + "» на " + Math.round(availW - mesh.reqW) +
+          " мм: добавится фальш-проставка до требуемой ширины." };
     }
   }
+
   if (item.type === "rod") {
     if (inner.h < CONST.rod.minSectionH) {
       return { ok: false, reason: "Под штангу нужно от " + CONST.rod.minSectionH + " мм высоты секции." };
@@ -62,13 +56,15 @@ function canInsert(project, mod, item) {
   return { ok: true };
 }
 
-/* предупреждения по модулю и проекту (не блокируют, подсвечивают) */
 function moduleWarnings(project, mod) {
   const w = [];
   const m = CONST.module;
   const inner = innerBox(project, mod);
-  if (mod.w < m.minW || mod.w > m.maxW) w.push("Ширина модуля вне 250-1200 мм.");
-  if (mod.h < m.minH || mod.h > m.maxH) w.push("Высота модуля вне 300-2200 мм.");
+  if (mod.w < m.minW || mod.w > m.maxW) w.push("Ширина модуля вне " + m.minW + "-" + m.maxW + " мм.");
+  if (mod.h < m.minH || mod.h > m.maxH) w.push("Высота модуля вне " + m.minH + "-" + m.maxH + " мм.");
+  const d = modDepth(project, mod);
+  if (d < m.minD || d > m.maxD) w.push("Глубина модуля вне " + m.minD + "-" + m.maxD + " мм.");
+
   if (mod.facade.system === "hinge") {
     for (const f of facadeSizes(project, mod)) {
       if (f.w > CONST.facade.maxHingeW)
@@ -80,18 +76,16 @@ function moduleWarnings(project, mod) {
   const adj = mod.items.filter(i => i.type === "shelf_adj");
   if (adj.length && inner.w > CONST.shelfMaxSpan)
     w.push("Пролёт съёмной полки " + Math.round(inner.w) + " мм: провиснет, нужна жёсткая или перегородка.");
-  // пересечения наполнения по высоте
+
   const spans = mod.items.map(it => {
-    const h = it.type === "drawer" ? it.boxH + 20
-      : it.type === "mesh" ? ((meshCatalog().find(x => x.id === it.meshId) || {}).h || 150) + 20
-      : it.type === "rod" ? 60 : CONST.panel;
-    return { it: it, y1: it.y, y2: it.y + h };
+    const z = itemZone(it);
+    return { it: it, y1: z.y1, y2: z.y2 };
   }).sort((a, b) => a.y1 - b.y1);
   for (let i = 1; i < spans.length; i++) {
-    if (spans[i].y1 < spans[i - 1].y2) { w.push("Наполнение пересекается по высоте."); break; }
+    if (spans[i].y1 < spans[i - 1].y2 - 1) { w.push("Наполнение пересекается по высоте."); break; }
   }
   for (const s of spans) {
-    if (s.y2 > inner.h) { w.push("Элемент выходит за верх секции."); break; }
+    if (s.y2 > inner.h + 1) { w.push("Элемент выходит за верх секции."); break; }
   }
   return w;
 }

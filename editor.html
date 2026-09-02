@@ -13,10 +13,16 @@
 
 <header class="topbar">
   <a class="logo" href="index.html">Шкаф<b>·конструктор</b></a>
+  <div class="view-switch" id="viewSwitch">
+    <button data-view="front" aria-pressed="true" type="button">Спереди</button>
+    <button data-view="side" aria-pressed="false" type="button">Сбоку</button>
+    <button data-view="top" aria-pressed="false" type="button">Сверху</button>
+  </div>
   <div class="top-controls">
-    <label>Стена <input type="number" id="roomW" step="10" min="600" max="12000"> мм</label>
-    <label>Потолок <input type="number" id="roomH" step="10" min="1800" max="4000"> мм</label>
-    <label>Глубина шкафа <input type="number" id="depth" step="10" min="250" max="700"> мм</label>
+    <label>Стена <input type="number" id="roomW" step="10" min="600" max="12000"></label>
+    <label>Потолок <input type="number" id="roomH" step="10" min="1800" max="4000"></label>
+    <label>Глубина <input type="number" id="depth" step="10" min="250" max="700"></label>
+    <label>Цоколь <input type="number" id="plinthH" step="10" min="60" max="150"></label>
     <label>Задняя
       <select id="back">
         <option value="lhdf">ЛХДФ 3</option>
@@ -26,7 +32,8 @@
     <label class="chk"><input type="checkbox" id="showFacades"> фасады</label>
   </div>
   <div class="top-actions">
-    <button id="btnExport" type="button" title="Скачать проект JSON">Экспорт</button>
+    <button id="btnQuote" type="button" class="primary">КП</button>
+    <button id="btnExport" type="button">Экспорт</button>
     <button id="btnImport" type="button">Импорт</button>
     <input type="file" id="importFile" accept=".json" hidden>
     <button id="btnClear" type="button" class="danger">Очистить</button>
@@ -37,18 +44,27 @@
   <!-- палитра -->
   <aside class="palette">
     <div class="pal-title">Модули</div>
-    <button class="pal-btn" id="addBase" type="button">+ Нижний модуль<span>на цоколе, до 1200×2200</span></button>
-    <button class="pal-btn" id="addUpper" type="button">+ Верхний модуль<span>антресоль, до 1200×2200</span></button>
+    <button class="pal-btn" id="addBase" type="button">+ Нижний модуль<span>на цоколе</span></button>
+    <button class="pal-btn" id="addUpper" type="button">+ Верхний модуль<span>антресоль</span></button>
+
+    <div class="pal-title">Шаблоны</div>
+    <button class="pal-btn" data-preset="hang" type="button">Платяной<span>штанга + полка, 2 двери</span></button>
+    <button class="pal-btn" data-preset="drawers" type="button">С ящиками<span>3 ящика + штанга + полка</span></button>
+    <button class="pal-btn" data-preset="shelves" type="button">Полочный<span>5 полок, 1 дверь</span></button>
 
     <div class="pal-title">Наполнение <span class="pal-hint">перетащите в модуль</span></div>
     <div class="pal-item" draggable="true" data-drag="shelf_adj">Полка съёмная</div>
     <div class="pal-item" draggable="true" data-drag="shelf_fixed">Полка жёсткая</div>
     <div class="pal-item" draggable="true" data-drag="rod">Штанга</div>
-    <div class="pal-item" draggable="true" data-drag="drawer">Ящик выкатной</div>
-    <div class="pal-item" draggable="true" data-drag="mesh">Сетка / корзина</div>
+    <div class="pal-item" draggable="true" data-drag="drawers">Секция ящиков</div>
+
+    <div class="pal-title">Лемана Про <span class="pal-hint">сетчатые системы</span></div>
+    <div class="pal-item" draggable="true" data-drag="mesh" data-mesh="lm85127628">Корзина сетчатая</div>
+    <div class="pal-item" draggable="true" data-drag="mesh" data-mesh="lm91586765">Брючница</div>
+    <div class="pal-item" draggable="true" data-drag="mesh" data-mesh="lm91587993">Обувница</div>
 
     <div class="pal-title">Подсказка</div>
-    <p class="pal-note">Клик по модулю выбирает его, перетаскивание меняет порядок в ряду. Наполнение двигается мышью по высоте, шаг 16 мм. Декоры настраиваются справа: снимите выделение, чтобы задать общие.</p>
+    <p class="pal-note">Клик по модулю выбирает его, размеры в жёлтых рамках редактируются кликом. Наполнение двигается мышью по высоте. Вид «Сбоку» показывает выбранный модуль: там же его глубина.</p>
   </aside>
 
   <!-- холст -->
@@ -56,16 +72,19 @@
     <div id="banner" class="banner" hidden></div>
     <svg id="canvas"></svg>
     <div class="canvas-hint" id="canvasHint">Добавьте первый модуль кнопкой слева</div>
+    <input type="text" id="dimInput" class="dim-input" inputmode="numeric" hidden>
   </main>
 
-  <!-- свойства / спецификация -->
+  <!-- свойства / спецификация / раскрой -->
   <aside class="props">
     <div class="tabs">
       <button class="tab" data-tab="props" aria-pressed="true" type="button">Свойства</button>
-      <button class="tab" data-tab="spec" aria-pressed="false" type="button">Спецификация</button>
+      <button class="tab" data-tab="spec" aria-pressed="false" type="button">Смета</button>
+      <button class="tab" data-tab="cut" aria-pressed="false" type="button">Раскрой</button>
     </div>
     <div id="tabProps" class="tab-body"></div>
     <div id="tabSpec" class="tab-body" hidden></div>
+    <div id="tabCut" class="tab-body" hidden></div>
   </aside>
 </div>
 
@@ -77,7 +96,10 @@
 <script src="assets/lemana.js"></script>
 <script src="assets/model.js"></script>
 <script src="assets/rules.js"></script>
+<script src="assets/nesting.js"></script>
+<script src="assets/pricing.js"></script>
 <script src="assets/render.js"></script>
+<script src="assets/quote.js"></script>
 <script src="assets/editor.js"></script>
 </body>
 </html>

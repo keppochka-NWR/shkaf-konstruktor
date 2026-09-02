@@ -1,11 +1,9 @@
-/* Модель проекта и деталировка.
-   Вся геометрия в миллиметрах. Проект сериализуется в JSON как есть.
+/* Модель проекта и деталировка. Вся геометрия в миллиметрах.
 
-   project
-   ├─ room: стена (w × h) и рекомендуемые зазоры
-   ├─ depth, back, bodyDecor, facadeDecor: общие настройки шкафа
-   └─ modules[]: kind base|upper, size, items[] (наполнение), facade
-      купе заложен как facade.system = "hinge" | "coupe" (редактор купе - следующий этап)
+   v2: цоколь редактируется (project.plinthH), у модуля своя глубина (mod.depth,
+   null = общая), ящики добавляются секциями (type "drawers", count штук),
+   фальши не хранятся - вычисляются: панель 16 мм торцом на стойку по стороне
+   петель, ТОЛЬКО в зоне выкатного элемента (правило Max).
 */
 
 let _seq = 1;
@@ -13,14 +11,16 @@ function uid() { return "m" + (_seq++) + "_" + Date.now().toString(36); }
 
 function newProject() {
   return {
-    v: 1,
+    v: 2,
     name: "Шкаф",
     room: { w: 3000, h: 2500 },
     depth: 600,
+    plinthH: CONST.plinthH,
     back: "lhdf",
     bodyDecor: "Белый",
     facadeDecor: "Белый",
-    upperY: 2000,            // высота низа верхнего ряда от пола
+    upperY: 2000,
+    markup: CONST.pricing.markup,
     modules: [],
   };
 }
@@ -32,34 +32,58 @@ function newModule(kind) {
     kind: kind,                          // base | upper
     w: m.defaultW,
     h: kind === "base" ? m.defaultBaseH : m.defaultUpperH,
-    items: [],                           // наполнение
-    fillers: { left: 0, right: 0 },      // фальш-планки, мм (0 = нет)
+    depth: null,                         // null = глубина проекта
+    items: [],
     facade: {
-      system: "none",                    // none | hinge | coupe(поздний этап)
-      doors: 2,                          // 1 | 2
-      side: "left",                      // сторона петель при 1 двери
-      opening: "handle",                 // handle | push
+      system: "none",                    // none | hinge | coupe(следующий этап)
+      doors: 2,
+      side: "left",
+      opening: "handle",
       handleId: null,
-      decor: null,                       // null = как project.facadeDecor
+      decor: null,
     },
   };
 }
 
-function newItem(type) {
+function newItem(type, opts) {
+  opts = opts || {};
   const base = { id: uid(), type: type, y: 300 };
-  if (type === "drawer") {
+  if (type === "drawers") {
+    base.count = 3;
     base.boxH = 150;
     base.slide = "ball";
-    base.y = 100;
+    base.y = 0;
   }
-  if (type === "mesh") base.meshId = "basket450";
+  if (type === "mesh") {
+    base.meshId = opts.meshId || (meshCatalog()[0] || {}).id;
+    base.y = 0;
+  }
   return base;
+}
+
+/* миграция старых проектов */
+function migrateProject(p) {
+  if (!p) return p;
+  if (p.plinthH == null) p.plinthH = CONST.plinthH;
+  if (p.markup == null) p.markup = CONST.pricing.markup;
+  for (const m of p.modules || []) {
+    if (m.depth === undefined) m.depth = null;
+    delete m.fillers;
+    for (const it of m.items || []) {
+      if (it.type === "drawer") { it.type = "drawers"; it.count = 1; }
+      if (it.type === "drawers" && it.count == null) it.count = 1;
+    }
+  }
+  p.v = 2;
+  return p;
 }
 
 /* ---------- геометрия ---------- */
 
+function modDepth(project, mod) { return mod.depth || project.depth; }
+function plinthOf(project, mod) { return mod.kind === "base" ? (project.plinthH || CONST.plinthH) : 0; }
+
 function moduleX(project, mod) {
-  // позиция модуля в своём ряду: сумма ширин предыдущих
   let x = 0;
   for (const m of project.modules) {
     if (m.kind !== mod.kind) continue;
@@ -70,33 +94,90 @@ function moduleX(project, mod) {
 }
 
 function rowWidth(project, kind) {
-  return project.modules.filter(m => m.kind === kind)
-    .reduce((s, m) => s + m.w, 0);
+  return project.modules.filter(m => m.kind === kind).reduce((s, m) => s + m.w, 0);
 }
 
 function moduleY(project, mod) {
-  // низ модуля от пола
   return mod.kind === "base" ? 0 : project.upperY;
 }
 
-/* внутренний проём секции с учётом фальшей */
+/* внутренний проём секции (без учёта фальшей - они зонные) */
 function innerBox(project, mod) {
   const t = CONST.panel;
-  const plinth = mod.kind === "base" ? CONST.plinthH : 0;
+  const plinth = plinthOf(project, mod);
   return {
-    w: mod.w - 2 * t - mod.fillers.left - mod.fillers.right,
+    w: mod.w - 2 * t,
     h: mod.h - plinth - 2 * t,
-    d: project.depth - (project.back === "ldsp" ? CONST.panel : 0),
-    x0: t + mod.fillers.left,            // от левого края модуля
-    y0: plinth + t,                      // от низа модуля
+    d: modDepth(project, mod) - (project.back === "ldsp" ? CONST.panel : 0),
+    x0: t,
+    y0: plinth + t,
   };
+}
+
+/* стороны, где стоят петли распашного фасада */
+function hingeSidesOf(mod) {
+  const f = mod.facade;
+  if (f.system !== "hinge") return [];
+  return f.doors === 2 ? ["left", "right"] : [f.side];
+}
+
+/* вертикальная зона выкатного элемента */
+function itemZone(item) {
+  if (item.type === "drawers") {
+    return { y1: item.y, y2: item.y + item.count * (item.boxH + CONST.drawerStep) };
+  }
+  if (item.type === "mesh") {
+    const mesh = meshCatalog().find(x => x.id === item.meshId) || { h: 150 };
+    return { y1: item.y, y2: item.y + mesh.h + 40 };
+  }
+  const h = item.type === "rod" ? 60 : CONST.panel;
+  return { y1: item.y, y2: item.y + h };
+}
+
+/* фальш-панели модуля: по стороне петель, только в зонах выкатных элементов */
+function fillerPanels(project, mod) {
+  const sides = hingeSidesOf(mod);
+  if (!sides.length) return [];
+  const out = [];
+  for (const it of mod.items) {
+    if (it.type !== "drawers" && it.type !== "mesh") continue;
+    const z = itemZone(it);
+    for (const side of sides) {
+      out.push({ side: side, y1: z.y1, y2: z.y2, w: CONST.drawerFiller, item: it.id });
+    }
+    // сетка: если после фальшей осталось шире технички - проставка до требуемой ширины
+    if (it.type === "mesh") {
+      const mesh = meshCatalog().find(x => x.id === it.meshId);
+      if (mesh) {
+        const inner = innerBox(project, mod);
+        const avail = inner.w - sides.length * CONST.drawerFiller;
+        const extra = avail - mesh.reqW;
+        if (extra > 4) {
+          out.push({ side: "spacer", y1: z.y1, y2: z.y2, w: CONST.panel,
+                     offset: extra, item: it.id, note: "проставка до " + mesh.reqW });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/* внутренняя ширина для выкатного элемента (с учётом его фальшей) */
+function slideInnerW(project, mod, item) {
+  const inner = innerBox(project, mod);
+  const sides = hingeSidesOf(mod);
+  let w = inner.w - sides.length * CONST.drawerFiller;
+  if (item && item.type === "mesh") {
+    const mesh = meshCatalog().find(x => x.id === item.meshId);
+    if (mesh && w > mesh.reqW) w = mesh.reqW;
+  }
+  return w;
 }
 
 function facadeDecorOf(project, mod) {
   return mod.facade.decor || project.facadeDecor;
 }
 
-/* количество и позиции петель по высоте фасада */
 function hingesFor(facadeH) {
   let n = CONST.hingeCountByHeight[CONST.hingeCountByHeight.length - 1].n;
   for (const rule of CONST.hingeCountByHeight) {
@@ -110,16 +191,16 @@ function hingesFor(facadeH) {
   return { n: n, positions: pos };
 }
 
-/* размеры фасадов модуля (накладные) */
 function facadeSizes(project, mod) {
   if (mod.facade.system !== "hinge") return [];
   const g = CONST.facade.gap;
-  const plinth = mod.kind === "base" ? CONST.plinthH : 0;
-  const fh = mod.h - plinth - 2 * 2;
+  const per = CONST.facade.perimeter;
+  const plinth = plinthOf(project, mod);
+  const fh = mod.h - plinth - 2 * per;
   if (mod.facade.doors === 1) {
-    return [{ w: mod.w - 4, h: fh, side: mod.facade.side }];
+    return [{ w: mod.w - 2 * per, h: fh, side: mod.facade.side }];
   }
-  const fw = (mod.w - 4 - g) / 2;
+  const fw = (mod.w - 2 * per - g) / 2;
   return [
     { w: Math.floor(fw), h: fh, side: "left" },
     { w: Math.ceil(fw), h: fh, side: "right" },
@@ -130,25 +211,29 @@ function facadeSizes(project, mod) {
 
 function moduleSpec(project, mod, index) {
   const t = CONST.panel;
-  const D = project.depth;
+  const D = modDepth(project, mod);
   const inner = innerBox(project, mod);
+  const plinth = plinthOf(project, mod);
   const name = (mod.kind === "base" ? "Нижний " : "Верхний ") + (index + 1);
   const panels = [];
   const hw = [];
-  const add = (part, w, h, qty, edge) =>
+  const add = (part, w, h, qty, edge, material) =>
     panels.push({ mod: name, part: part, w: Math.round(w), h: Math.round(h),
-                  qty: qty || 1, edge: edge || "" });
+                  qty: qty || 1, edge: edge || "", material: material || "" });
 
   add("Боковина", mod.h, D, 2, "0,4 перед");
   add("Дно", mod.w - 2 * t, D, 1, "0,4 перед");
   add("Крыша", mod.w - 2 * t, D, 1, "0,4 перед");
-  if (mod.kind === "base") add("Цоколь", mod.w - 2 * t, CONST.plinthH, 1, "0,4 перед");
-  if (mod.fillers.left) add("Фальш левый", inner.h, mod.fillers.left, 1, "1 длинная");
-  if (mod.fillers.right) add("Фальш правый", inner.h, mod.fillers.right, 1, "1 длинная");
+  if (plinth) add("Цоколь", mod.w - 2 * t, plinth, 1, "0,4 перед");
+
+  const fillers = fillerPanels(project, mod);
+  fillers.forEach(f => {
+    add(f.side === "spacer" ? "Фальш-проставка" : "Фальш-панель",
+        Math.round(f.y2 - f.y1), D - CONST.shelfDepthMinus, 1, "0,4 перед");
+  });
 
   if (project.back === "lhdf") {
-    panels.push({ mod: name, part: "Задняя ЛХДФ", w: mod.w - 4, h: mod.h - 4, qty: 1,
-                  edge: "", material: "ЛХДФ 3" });
+    add("Задняя стенка", mod.w - 4, mod.h - 4, 1, "", "ЛХДФ 3");
   } else {
     add("Задняя ЛДСП", mod.w - 2 * t, mod.h - 2 * t, 1, "");
   }
@@ -167,28 +252,29 @@ function moduleSpec(project, mod, index) {
                 price: Math.round(RODS.round.pricePerM * inner.w / 1000) });
       hw.push({ name: "Штангодержатель", qty: 2, price: RODS.round.holder });
     }
-    if (it.type === "drawer") {
+    if (it.type === "drawers") {
       const s = SLIDES[it.slide];
-      const boxW = inner.w - 2 * s.sideDeduct;
-      const len = slideLengthFor(project, it);
+      const zoneW = slideInnerW(project, mod, it);
+      const boxW = zoneW - 2 * s.sideDeduct;
+      const len = slideLengthFor(project, mod, it);
+      const n = it.count;
       if (it.slide !== "metabox") {
-        add("Ящик боковина", len, it.boxH, 2, "верх");
-        add("Ящик перед/зад", boxW - 2 * t, it.boxH, 2, "верх");
+        add("Ящик боковина", len, it.boxH, 2 * n, "верх 0,4");
+        add("Ящик перед/зад", boxW - 2 * t, it.boxH, 2 * n, "верх 0,4");
       } else {
-        add("Ящик перед/зад (метабокс)", boxW, it.boxH, 2, "верх");
+        add("Ящик перед/зад (метабокс)", boxW, it.boxH, 2 * n, "верх 0,4");
       }
-      panels.push({ mod: name, part: "Ящик дно ЛХДФ", w: boxW - 2, h: len - 2, qty: 1,
-                    edge: "", material: "ЛХДФ 3" });
-      hw.push({ name: "Направляющие " + s.label + " " + len, qty: 1,
+      add("Ящик дно", boxW - 2, len - 2, n, "", "ЛХДФ 3");
+      hw.push({ name: "Направляющие " + s.label + " " + len, qty: n,
                 price: s.price[len] || null });
     }
     if (it.type === "mesh") {
       const mesh = meshCatalog().find(x => x.id === it.meshId);
-      if (mesh) hw.push({ name: mesh.label, qty: 1, price: mesh.price });
+      if (mesh) hw.push({ name: mesh.label + (mesh.art ? " (арт. " + mesh.art + ")" : ""),
+                          qty: 1, price: mesh.price });
     }
   }
 
-  // фасады и петли
   const faces = facadeSizes(project, mod);
   faces.forEach(f => {
     add("Фасад", f.h, f.w, 1, "2 мм периметр");
@@ -199,16 +285,17 @@ function moduleSpec(project, mod, index) {
       hw.push({ name: PUSH_LATCH.label, qty: 1, price: PUSH_LATCH.price });
     } else if (mod.facade.handleId) {
       const h = handlesCatalog().find(x => x.id === mod.facade.handleId);
-      if (h) hw.push({ name: "Ручка " + h.label, qty: 1, price: h.price });
+      if (h) hw.push({ name: "Ручка " + h.label + (h.art ? " (арт. " + h.art + ")" : ""),
+                       qty: 1, price: h.price });
     }
   });
 
   return { panels: panels, hardware: hw };
 }
 
-function slideLengthFor(project, item) {
+function slideLengthFor(project, mod, item) {
   const s = SLIDES[item.slide];
-  const usable = project.depth - (project.back === "ldsp" ? CONST.panel : 5) - 20;
+  const usable = modDepth(project, mod) - (project.back === "ldsp" ? CONST.panel : 5) - 20;
   let best = s.lengths[0];
   for (const L of s.lengths) if (L <= usable) best = L;
   return best;
@@ -221,7 +308,6 @@ function specification(project) {
     panels.push.apply(panels, s.panels);
     hardware.push.apply(hardware, s.hardware);
   });
-  // сгруппировать фурнитуру по имени
   const grouped = {};
   for (const h of hardware) {
     if (!grouped[h.name]) grouped[h.name] = { name: h.name, qty: 0, price: h.price };
@@ -234,6 +320,18 @@ function specification(project) {
   return { panels: panels, hardware: hwList, ldspArea: ldspArea, hwCost: hwCost };
 }
 
+/* кромка: погонные метры по типам (для цены) */
+function edgeMeters(panels) {
+  let face = 0, tech = 0;
+  for (const p of panels) {
+    if (p.material) continue;
+    const perim = 2 * (p.w + p.h) / 1000 * p.qty;
+    if (p.edge.indexOf("2 мм") >= 0) face += perim;
+    else if (p.edge) tech += (p.w / 1000) * p.qty;   // кромка одного торца
+  }
+  return { face: face, tech: tech };
+}
+
 /* ---------- сериализация ---------- */
 
 const STORAGE_KEY = "wardrobeProject";
@@ -243,6 +341,6 @@ function saveProject(p) {
 function loadProject() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? migrateProject(JSON.parse(raw)) : null;
   } catch (e) { return null; }
 }
