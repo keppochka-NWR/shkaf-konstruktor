@@ -33,6 +33,7 @@ function newModule(kind) {
     w: m.defaultW,
     h: kind === "base" ? m.defaultBaseH : m.defaultUpperH,
     depth: null,                         // null = глубина проекта
+    standLight: false,                   // подсветка врезная в обеих стойках
     items: [],
     facade: {
       system: "none",                    // none | hinge | coupe(следующий этап)
@@ -66,8 +67,10 @@ function migrateProject(p) {
   if (!p) return p;
   if (p.plinthH == null) p.plinthH = CONST.plinthH;
   if (p.markup == null) p.markup = CONST.pricing.markup;
+  if (p.edgeBody === undefined) p.edgeBody = "";
   for (const m of p.modules || []) {
     if (m.depth === undefined) m.depth = null;
+    if (m.standLight === undefined) m.standLight = false;
     delete m.fillers;
     for (const it of m.items || []) {
       if (it.type === "drawer") { it.type = "drawers"; it.count = 1; }
@@ -178,17 +181,24 @@ function facadeDecorOf(project, mod) {
   return mod.facade.decor || project.facadeDecor;
 }
 
-function hingesFor(facadeH) {
+function bodyEdgeLabel(project) {
+  // кромка каркаса: пусто = в цвет корпуса
+  return project.edgeBody ? "0,4 " + project.edgeBody : "0,4 перед";
+}
+
+function hingesFor(facadeH, facadeW) {
   let n = CONST.hingeCountByHeight[CONST.hingeCountByHeight.length - 1].n;
   for (const rule of CONST.hingeCountByHeight) {
     if (facadeH <= rule.maxH) { n = rule.n; break; }
   }
+  if (facadeW && facadeW > CONST.hingeWideW) n += 1;   // широкий фасад тяжелее
   const off = CONST.hingeOffset;
   const pos = [];
   for (let i = 0; i < n; i++) {
     pos.push(n === 1 ? facadeH / 2 : off + (facadeH - 2 * off) * i / (n - 1));
   }
-  return { n: n, positions: pos };
+  const weight = facadeW ? facadeH * facadeW / 1e6 * CONST.facadeKgPerM2 : null;
+  return { n: n, positions: pos, weight: weight };
 }
 
 function facadeSizes(project, mod) {
@@ -221,15 +231,16 @@ function moduleSpec(project, mod, index) {
     panels.push({ mod: name, part: part, w: Math.round(w), h: Math.round(h),
                   qty: qty || 1, edge: edge || "", material: material || "" });
 
-  add("Боковина", mod.h, D, 2, "0,4 перед");
-  add("Дно", mod.w - 2 * t, D, 1, "0,4 перед");
-  add("Крыша", mod.w - 2 * t, D, 1, "0,4 перед");
-  if (plinth) add("Цоколь", mod.w - 2 * t, plinth, 1, "0,4 перед");
+  const be = bodyEdgeLabel(project);
+  add("Боковина", mod.h, D, 2, be);
+  add("Дно", mod.w - 2 * t, D, 1, be);
+  add("Крыша", mod.w - 2 * t, D, 1, be);
+  if (plinth) add("Цоколь", mod.w - 2 * t, plinth, 1, be);
 
   const fillers = fillerPanels(project, mod);
   fillers.forEach(f => {
     add(f.side === "spacer" ? "Фальш-проставка" : "Фальш-панель",
-        Math.round(f.y2 - f.y1), D - CONST.shelfDepthMinus, 1, "0,4 перед");
+        Math.round(f.y2 - f.y1), D - CONST.shelfDepthMinus, 1, bodyEdgeLabel(project));
   });
 
   if (project.back === "lhdf") {
@@ -240,11 +251,11 @@ function moduleSpec(project, mod, index) {
 
   for (const it of mod.items) {
     if (it.type === "shelf_fixed") {
-      add("Полка жёсткая", inner.w, D - CONST.shelfDepthMinus, 1, "0,4 перед");
+      add("Полка жёсткая", inner.w, D - CONST.shelfDepthMinus, 1, bodyEdgeLabel(project));
       hw.push({ name: "Конфирматы полки", qty: 4, price: 3 });
     }
     if (it.type === "shelf_adj") {
-      add("Полка съёмная", inner.w - 2 * CONST.shelfGap, D - CONST.shelfDepthMinus, 1, "0,4 перед");
+      add("Полка съёмная", inner.w - 2 * CONST.shelfGap, D - CONST.shelfDepthMinus, 1, bodyEdgeLabel(project));
       hw.push({ name: "Полкодержатель Boyard p521", qty: 4, price: 3 });
     }
     if (it.type === "rod") {
@@ -275,10 +286,15 @@ function moduleSpec(project, mod, index) {
     }
   }
 
+  if (mod.standLight) {
+    hw.push({ name: "Подсветка врезная в стойках, " +
+      (2 * inner.h / 1000).toFixed(1) + " пог.м (прайс 3000/м)", qty: 1, price: null });
+  }
+
   const faces = facadeSizes(project, mod);
   faces.forEach(f => {
     add("Фасад", f.h, f.w, 1, "2 мм периметр");
-    const hinges = hingesFor(f.h);
+    const hinges = hingesFor(f.h, f.w);
     const hingeType = mod.facade.opening === "push" ? HINGES.gtv_free : HINGES.gtv_soft;
     hw.push({ name: "Петля " + hingeType.label, qty: hinges.n, price: hingeType.price });
     if (mod.facade.opening === "push") {
@@ -318,6 +334,15 @@ function specification(project) {
   const hwList = Object.values(grouped);
   const hwCost = hwList.reduce((s, h) => s + (h.price ? h.price * h.qty : 0), 0);
   return { panels: panels, hardware: hwList, ldspArea: ldspArea, hwCost: hwCost };
+}
+
+/* подсветка: только в стойках (решение Max), погонные метры розничного прайса */
+function lightMeters(project) {
+  let stands = 0;
+  for (const mod of project.modules) {
+    if (mod.standLight) stands += 2 * innerBox(project, mod).h / 1000;  // обе стойки
+  }
+  return { stands: stands };
 }
 
 /* кромка: погонные метры по типам (для цены) */

@@ -614,6 +614,11 @@
         function (v) { project.upperY = v; update(); }));
       g.appendChild(numRow("Наценка (розница = себест. × k)", project.markup, 1, 5, 0.1,
         function (v) { project.markup = v; update(); }));
+      g.appendChild(selectRow("Кромка каркаса", project.edgeBody || "",
+        [{ value: "", label: "в цвет корпуса" }].concat(EDGE_COLORS.map(function (c) {
+          return { value: c, label: c };
+        })),
+        function (v) { project.edgeBody = v; update(); }));
       box.appendChild(g);
       box.appendChild(decorRow("Декор корпуса", project.bodyDecor, function (n) {
         project.bodyDecor = n; update();
@@ -753,6 +758,22 @@
       function (v) { mod.h = v || 600; update(); }));
     gm.appendChild(numRow("Глубина, мм", mod.depth, CONST.module.minD, CONST.module.maxD, 10,
       function (v) { mod.depth = v; update(); }, "общая " + project.depth));
+    var lightWrap = document.createElement("div");
+    lightWrap.className = "checks";
+    lightWrap.style.marginTop = "6px";
+    var lightLbl = document.createElement("label");
+    lightLbl.className = "check";
+    var lightCb = document.createElement("input");
+    lightCb.type = "checkbox";
+    lightCb.checked = !!mod.standLight;
+    lightCb.addEventListener("change", function () { mod.standLight = lightCb.checked; update(); });
+    lightLbl.appendChild(lightCb);
+    var lightSpan = document.createElement("span");
+    lightSpan.textContent = "Подсветка врезная в стойках (" +
+      (2 * innerBox(project, mod).h / 1000).toFixed(1) + " пог.м × 3000 ₽)";
+    lightLbl.appendChild(lightSpan);
+    lightWrap.appendChild(lightLbl);
+    gm.appendChild(lightWrap);
     var fills = fillerPanels(project, mod);
     if (fills.length) {
       var fn = document.createElement("p");
@@ -797,10 +818,11 @@
       hint.className = "p-note";
       var faces = facadeSizes(project, mod);
       if (faces.length) {
-        var hg = hingesFor(faces[0].h);
+        var hg = hingesFor(faces[0].h, faces[0].w);
         hint.textContent = "Фасад " + Math.round(faces[0].w) + "×" + Math.round(faces[0].h) +
-          ", петель на дверь: " + hg.n + " (" +
-          (mod.facade.opening === "push" ? HINGES.gtv_free.label : HINGES.gtv_soft.label) + ").";
+          " (~" + hg.weight.toFixed(1) + " кг), петель на дверь: " + hg.n +
+          (faces[0].w > CONST.hingeWideW ? " (+1 за ширину)" : "") + " · " +
+          (mod.facade.opening === "push" ? HINGES.gtv_free.label : HINGES.gtv_soft.label) + ".";
       }
       gf.appendChild(hint);
       box.appendChild(gf);
@@ -988,6 +1010,12 @@
       ")</td><td style='text-align:right'>" + fmtRub(pr.workCost) + "</td></tr>";
     html += "<tr><td style='font-weight:700'>Итого себестоимость</td><td style='text-align:right;font-weight:700'>" +
       fmtRub(pr.cost) + "</td></tr>";
+    if (pr.lightCost) {
+      html += "<tr><td>Подсветка в стойках " + pr.light.stands.toFixed(1) +
+        " пог.м × " + CONST.pricing.lightStandPerM +
+        " <span style='color:var(--muted)'>(прайс, поверх наценки)</span></td><td style='text-align:right'>" +
+        fmtRub(pr.lightCost) + "</td></tr>";
+    }
     html += "</tbody></table>";
 
     html += '<table class="spec-table"><thead><tr><th>Фурнитура</th><th>шт</th><th>₽ закуп</th></tr></thead><tbody>';

@@ -229,6 +229,16 @@ function drawModuleFront(svg, defs, used, project, mod, x, y0, Y, sel, opts) {
       fill: "rgba(0,0,0,.12)", "pointer-events": "none" }));
   }
 
+  /* подсветка врезная в стойках: полосы свечения вдоль внутренних граней */
+  if (mod.standLight) {
+    [x + t, x + mod.w - t - 6].forEach(function (lx) {
+      g.appendChild(el("rect", { x: lx + (lx === x + t ? 0 : 0), y: Y(y0 + inner.y0 + inner.h),
+        width: 6, height: inner.h, fill: "#ffd977", opacity: .95 }));
+      g.appendChild(el("rect", { x: lx - 14, y: Y(y0 + inner.y0 + inner.h),
+        width: 34, height: inner.h, fill: "#ffe9ad", opacity: .28 }));
+    });
+  }
+
   /* фальш-панели (зонные) */
   const fillers = fillerPanels(project, mod);
   for (const f of fillers) {
@@ -395,7 +405,7 @@ function drawFacadesFront(g, defs, used, project, mod, x, y0, Y, sel) {
     fg.appendChild(el("rect", { x: fx, y: Y(fy + f.h), width: f.w, height: f.h, rx: 2,
       fill: "url(#sheenV)", "pointer-events": "none" }));
     /* петли */
-    const hinges = hingesFor(f.h);
+    const hinges = hingesFor(f.h, f.w);
     const hingeX = f.side === "left" ? fx + 22 : fx + f.w - 22;
     hinges.positions.forEach(p => {
       fg.appendChild(el("circle", { cx: hingeX, cy: Y(fy + f.h - p), r: 17, fill: "#e8e6df",

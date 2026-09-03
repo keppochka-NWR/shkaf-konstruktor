@@ -26,11 +26,17 @@ function priceProject(project) {
 
   const cost = sheetsCost + edgeCost + hwCost + feeCost + workCost;
   const markup = project.markup || CONST.pricing.markup;
-  const retail = Math.round(cost * markup / 100) * 100;
+
+  // подсветка в стойках: позиция РОЗНИЧНОГО прайса цеха, добавляется поверх наценки
+  const lm = lightMeters(project);
+  const lightCost = Math.round(lm.stands * CONST.pricing.lightStandPerM);
+
+  const retail = Math.round((cost * markup + lightCost) / 100) * 100;
 
   return {
     sheets: sheetLines, sheetsCost, sheetsCount,
     edge: em, edgeCost, hwCost, feeCost, workCost,
+    light: lm, lightCost: lightCost,
     cost: cost, markup: markup, retail: retail,
     plan: plan, spec: spec,
   };
