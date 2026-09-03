@@ -103,6 +103,21 @@
   });
   svg.addEventListener("pointerup", function () { pan = null; });
 
+  /* ---------- облако: автосохранение с дебаунсом ---------- */
+
+  var cloudTimer = null;
+  var cloudState = { stage: "email", email: "", sentTo: "", msg: "" };
+
+  function cloudAutosave() {
+    if (!window.cloud || !cloud.loggedIn() || !project.cloudId) return;
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(function () {
+      cloud.save(project).then(function (res) {
+        if (res.ok) renderStatus();
+      });
+    }, 4000);
+  }
+
   /* ---------- главный цикл ---------- */
 
   function update(skipSave) {
@@ -113,7 +128,7 @@
     renderCut();
     renderStatus();
     $("canvasHint").hidden = project.modules.length > 0;
-    if (!skipSave) { saveProject(project); pushUndo(); }
+    if (!skipSave) { saveProject(project); pushUndo(); cloudAutosave(); }
   }
 
   /* ---------- верхняя панель ---------- */
@@ -606,10 +621,13 @@
       box.appendChild(decorRow("Декор фасадов (общий)", project.facadeDecor, function (n) {
         project.facadeDecor = n; update();
       }));
+      /* облако */
+      box.appendChild(cloudBlock());
+
       /* библиотека проектов */
       var gl = document.createElement("div");
       gl.className = "p-group";
-      gl.innerHTML = "<h3>Мои проекты</h3>";
+      gl.innerHTML = "<h3>Мои проекты" + (cloud.loggedIn() ? " (на этом компьютере)" : "") + "</h3>";
       var saveBtn = document.createElement("button");
       saveBtn.className = "p-del"; saveBtn.type = "button";
       saveBtn.style.color = "var(--accent)";
@@ -819,6 +837,127 @@
     box.appendChild(delM);
   }
 
+  /* блок «Облако» в свойствах проекта */
+  function cloudBlock() {
+    var g = document.createElement("div");
+    g.className = "p-group";
+    if (!window.cloud || cloud.available === false) {
+      g.innerHTML = "<h3>Облако</h3><p class='p-note'>Сервер не запущен: проекты хранятся " +
+        "только в этом браузере. Запустите конструктор через ЗАПУСК.bat, чтобы включить " +
+        "аккаунты и облачное сохранение.</p>";
+      return g;
+    }
+    if (cloud.loggedIn()) {
+      g.innerHTML = "<h3>Облако · " + esc(cloud.email) + "</h3>";
+      var saveNow = document.createElement("button");
+      saveNow.className = "p-del"; saveNow.type = "button";
+      saveNow.style.color = "var(--accent)";
+      saveNow.textContent = "Сохранить в облако: " + (project.name || "Шкаф");
+      saveNow.addEventListener("click", function () {
+        cloud.save(project).then(function (res) {
+          if (res.ok) { saveProject(project); banner("Проект сохранён в облаке.", null); renderProps(); }
+          else banner(res.message || "Не сохранилось.", null);
+        });
+      });
+      g.appendChild(saveNow);
+      var listWrap = document.createElement("div");
+      g.appendChild(listWrap);
+      cloud.list().then(function (res) {
+        if (!res.ok) return;
+        res.items.forEach(function (entry) {
+          var row = document.createElement("div");
+          row.className = "lib-row";
+          var open = document.createElement("button");
+          open.className = "btn-link-mini"; open.type = "button";
+          open.textContent = entry.name + " · " +
+            (entry.updated_at || "").slice(0, 10);
+          open.addEventListener("click", function () {
+            cloud.load(entry.id).then(function (r2) {
+              if (r2.ok) {
+                project = migrateProject(r2.data);
+                project.cloudId = entry.id;
+                sel = { modId: null, itemId: null, face: null };
+                syncTop(); update();
+              }
+            });
+          });
+          var del = document.createElement("button");
+          del.className = "btn-link-mini danger"; del.type = "button";
+          del.textContent = "×";
+          del.addEventListener("click", function () {
+            cloud.remove(entry.id).then(function () { renderProps(); });
+          });
+          row.appendChild(open);
+          row.appendChild(del);
+          listWrap.appendChild(row);
+        });
+        if (!res.items.length) {
+          listWrap.innerHTML = "<p class='p-note'>В облаке пока пусто.</p>";
+        }
+      });
+      var out = document.createElement("button");
+      out.className = "p-del"; out.type = "button";
+      out.textContent = "Выйти из аккаунта";
+      out.addEventListener("click", function () { cloud.logout(); renderProps(); });
+      g.appendChild(out);
+      return g;
+    }
+    /* вход */
+    g.innerHTML = "<h3>Облако · вход</h3>" +
+      "<p class='p-note'>Проекты будут храниться в вашем аккаунте и открываться с любого компьютера. Пароль не нужен: пришлём код на почту.</p>";
+    if (cloudState.stage === "email") {
+      var row = document.createElement("div");
+      row.className = "p-row";
+      var inp = document.createElement("input");
+      inp.type = "text"; inp.placeholder = "you@mail.ru"; inp.value = cloudState.email;
+      inp.style.flex = "1";
+      inp.addEventListener("input", function () { cloudState.email = inp.value; });
+      row.appendChild(inp);
+      g.appendChild(row);
+      var btn = document.createElement("button");
+      btn.className = "p-del"; btn.type = "button";
+      btn.style.color = "var(--accent)";
+      btn.textContent = "Получить код";
+      btn.addEventListener("click", function () {
+        cloud.requestCode(cloudState.email.trim()).then(function (res) {
+          if (res.ok) {
+            cloudState.stage = "code";
+            cloudState.sentTo = cloudState.email.trim();
+            cloudState.devCode = res.dev_code || "";
+            renderProps();
+          } else banner(res.message || "Не получилось отправить код.", null);
+        });
+      });
+      g.appendChild(btn);
+    } else {
+      var row2 = document.createElement("div");
+      row2.className = "p-row";
+      var code = document.createElement("input");
+      code.type = "text"; code.placeholder = "код из письма"; code.maxLength = 6;
+      code.style.flex = "1";
+      if (cloudState.devCode) code.value = cloudState.devCode;
+      row2.appendChild(code);
+      g.appendChild(row2);
+      var enter = document.createElement("button");
+      enter.className = "p-del"; enter.type = "button";
+      enter.style.color = "var(--accent)";
+      enter.textContent = "Войти (" + cloudState.sentTo + ")";
+      enter.addEventListener("click", function () {
+        cloud.verify(cloudState.sentTo, code.value).then(function (res) {
+          if (res.ok) { cloudState.stage = "email"; renderProps(); banner("Вы вошли: " + res.email, null); }
+          else banner(res.message || "Неверный код.", null);
+        });
+      });
+      g.appendChild(enter);
+      var back = document.createElement("button");
+      back.className = "p-del"; back.type = "button";
+      back.textContent = "Другая почта";
+      back.addEventListener("click", function () { cloudState.stage = "email"; renderProps(); });
+      g.appendChild(back);
+    }
+    return g;
+  }
+
   function itemLabel(type) {
     return { shelf_adj: "Полка съёмная", shelf_fixed: "Полка жёсткая", rod: "Штанга",
              drawers: "Секция ящиков", mesh: "Сетчатый элемент" }[type] || type;
@@ -945,4 +1084,5 @@
 
   bindTop();
   update(true);
+  if (window.cloud) cloud.probe().then(function () { renderProps(); });
 })();
