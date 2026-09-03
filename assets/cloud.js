@@ -33,10 +33,14 @@
     probe: function () {
       var self = this;
       if (!token()) {
-        // сервер есть? проверяем лёгким запросом кода без email - 422 значит жив
+        // сервер есть? наш бэкенд отвечает на пустой email кодом 422/429;
+        // статичный хостинг отдаст 404/405 - облака нет
         return fetch("/api/auth/request-code", { method: "POST",
           headers: { "Content-Type": "application/json" }, body: "{}" })
-          .then(function (r) { self.available = r.status !== 404; return self.available; })
+          .then(function (r) {
+            self.available = r.status === 422 || r.status === 429 || r.status === 200;
+            return self.available;
+          })
           .catch(function () { self.available = false; return false; });
       }
       return call("GET", "/api/me").then(function (res) {
