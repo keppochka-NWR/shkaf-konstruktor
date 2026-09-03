@@ -1,2 +1,5 @@
-﻿data/lamarty-source.js
+﻿.venv/
+server/data.db*
+server/.env
+data/lamarty-source.js
 __pycache__/
