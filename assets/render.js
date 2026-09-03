@@ -11,6 +11,25 @@ function el(tag, attrs, children) {
   return node;
 }
 
+/* растянуть viewBox под пропорции контейнера: холст заполняется целиком,
+   лишнее пространство закрывают "бесконечные" фоны стены и пола */
+function fitViewBox(svg) {
+  const raw = (svg.getAttribute("viewBox") || "").split(" ").map(Number);
+  if (raw.length !== 4 || !svg.clientWidth || !svg.clientHeight) return;
+  const ar = svg.clientWidth / svg.clientHeight;
+  const vbAr = raw[2] / raw[3];
+  if (ar > vbAr) {
+    const nw = raw[3] * ar;
+    raw[0] -= (nw - raw[2]) / 2;
+    raw[2] = nw;
+  } else {
+    const nh = raw[2] / ar;
+    raw[1] -= (nh - raw[3]) / 2;
+    raw[3] = nh;
+  }
+  svg.setAttribute("viewBox", raw.join(" "));
+}
+
 /* ---------- defs: текстуры, градиенты, тени ---------- */
 
 function buildDefs(svg) {
@@ -136,23 +155,24 @@ function renderProject(svg, project, sel, opts) {
   const used = new Set();
   const Y = (mm) => roomH - mm;
 
-  /* комната */
-  svg.appendChild(el("rect", { x: -pad, y: -pad, width: roomW + 2 * pad, height: roomH + pad,
+  /* комната: фоны огромные, чтобы холст был заполнен при любом окне */
+  const BIG = 40000;
+  svg.appendChild(el("rect", { x: -BIG, y: -BIG, width: roomW + 2 * BIG, height: roomH + BIG,
     fill: "url(#gradWall)" }));
   // пол дощатый
   const floor = el("g", {});
-  floor.appendChild(el("rect", { x: -pad, y: roomH, width: roomW + 2 * pad, height: pad * 0.95,
+  floor.appendChild(el("rect", { x: -BIG, y: roomH, width: roomW + 2 * BIG, height: BIG,
     fill: "#cbb896" }));
-  for (let fx = -pad; fx < roomW + pad; fx += 190) {
-    floor.appendChild(el("line", { x1: fx, y1: roomH, x2: fx - 60, y2: roomH + pad * 0.95,
+  for (let fx = -pad * 4; fx < roomW + pad * 4; fx += 190) {
+    floor.appendChild(el("line", { x1: fx, y1: roomH, x2: fx - 60, y2: roomH + pad * 2,
       stroke: "#b9a37c", "stroke-width": 2 }));
   }
-  for (let k = 1; k <= 3; k++) {
-    floor.appendChild(el("line", { x1: -pad, y1: roomH + k * 60, x2: roomW + pad, y2: roomH + k * 60,
+  for (let k = 1; k <= 8; k++) {
+    floor.appendChild(el("line", { x1: -BIG, y1: roomH + k * 60, x2: roomW + BIG, y2: roomH + k * 60,
       stroke: "#bfa982", "stroke-width": 1.4 }));
   }
   svg.appendChild(floor);
-  svg.appendChild(el("line", { x1: -pad, y1: roomH, x2: roomW + pad, y2: roomH,
+  svg.appendChild(el("line", { x1: -BIG, y1: roomH, x2: roomW + BIG, y2: roomH,
     stroke: "#8d8271", "stroke-width": 4 }));
   // границы стены
   svg.appendChild(el("line", { x1: 0, y1: Y(roomH), x2: 0, y2: Y(0), stroke: "#b3a smoke", "stroke-width": 0 }));
@@ -181,6 +201,7 @@ function renderProject(svg, project, sel, opts) {
     chainDims(svg, project, "upper", startX, Y(project.upperY) + 84);
     dimV(svg, -pad * 0.5, Y(project.upperY), Y(0), project.upperY, "upperY");
   }
+  fitViewBox(svg);
 }
 
 function drawModuleFront(svg, defs, used, project, mod, x, y0, Y, sel, opts) {
@@ -425,10 +446,11 @@ function renderSide(svg, project, sel, opts) {
   const Y = (mm) => H - mm;
   const bodyTex = texPattern(project.bodyDecor, defs, used);
 
-  svg.appendChild(el("rect", { x: -pad, y: -pad * 0.5, width: D + 2 * pad, height: H + pad * 0.5 + H * 0,
+  const BIG = 40000;
+  svg.appendChild(el("rect", { x: -BIG, y: -BIG, width: D + 2 * BIG, height: H + BIG,
     fill: "url(#gradWall)" }));
-  svg.appendChild(el("rect", { x: -pad, y: H, width: D + 2 * pad, height: pad * 0.8, fill: "#cbb896" }));
-  svg.appendChild(el("line", { x1: -pad, y1: H, x2: D + pad, y2: H, stroke: "#8d8271", "stroke-width": 4 }));
+  svg.appendChild(el("rect", { x: -BIG, y: H, width: D + 2 * BIG, height: BIG, fill: "#cbb896" }));
+  svg.appendChild(el("line", { x1: -BIG, y1: H, x2: D + BIG, y2: H, stroke: "#8d8271", "stroke-width": 4 }));
 
   const g = el("g", { "data-mod": mod.id });
   // боковина: контур с текстурой по периметру, внутренность светлая (разрез)
@@ -491,6 +513,7 @@ function renderSide(svg, project, sel, opts) {
   dimV(svg, D + 90 + (mod.facade.system === "hinge" ? t : 0), Y(H), Y(0), H, "modH|" + mod.id);
   if (plinth) dimV(svg, -70, Y(plinth), Y(0), plinth, "plinth");
   dimLabel(svg, D / 2, Y(H) - 60, (mod.kind === "base" ? "Нижний" : "Верхний") + " · вид сбоку", null, 30);
+  fitViewBox(svg);
 }
 
 /* ---------- вид сверху ---------- */
@@ -506,10 +529,11 @@ function renderTop(svg, project, sel, opts) {
   const t = CONST.panel;
 
   // стена сверху
-  svg.appendChild(el("rect", { x: -pad, y: -pad * 0.7, width: roomW + 2 * pad, height: pad * 0.7,
+  const BIG = 40000;
+  svg.appendChild(el("rect", { x: -BIG, y: -BIG, width: roomW + 2 * BIG, height: BIG,
     fill: "#b7ab93" }));
-  svg.appendChild(el("line", { x1: -pad, y1: 0, x2: roomW + pad, y2: 0, stroke: "#8d8271", "stroke-width": 5 }));
-  svg.appendChild(el("rect", { x: -pad, y: 0, width: roomW + 2 * pad, height: maxD + pad * 0.9,
+  svg.appendChild(el("line", { x1: -BIG, y1: 0, x2: roomW + BIG, y2: 0, stroke: "#8d8271", "stroke-width": 5 }));
+  svg.appendChild(el("rect", { x: -BIG, y: 0, width: roomW + 2 * BIG, height: maxD + BIG,
     fill: "#e6ddc9" }));
   dimH(svg, 0, roomW, maxD + 150, "стена " + roomW, "roomW");
 
@@ -546,4 +570,5 @@ function renderTop(svg, project, sel, opts) {
     }
   }
   dimLabel(svg, roomW / 2, -pad * 0.32, "Вид сверху · верхний ряд полупрозрачным", null, 30);
+  fitViewBox(svg);
 }

@@ -81,6 +81,10 @@
 
   var pan = null;
   svg.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  // клики по размерам: гасим фокус-поведение mousedown, иначе поле ввода закрывается
+  svg.addEventListener("mousedown", function (e) {
+    if (e.target.closest && e.target.closest("[data-dim]")) e.preventDefault();
+  });
   svg.addEventListener("pointerdown", function (e) {
     if (e.button === 1 || e.button === 2) {
       var vb = (svg.getAttribute("viewBox") || "").split(" ").map(Number);
@@ -413,23 +417,45 @@
     if (drag) { update(); drag = null; }
   });
 
-  /* инлайн-редактирование размеров: клик по жёлтой рамке */
+  /* инлайн-редактирование размеров: клик по жёлтой рамке.
+     preventDefault обязателен: иначе mousedown по svg уводит фокус
+     и поле закрывается в момент открытия (реальная мышь, не тесты). */
   function openDimInput(dimEl, evt) {
+    if (evt) { evt.preventDefault(); evt.stopPropagation(); }
     var dim = dimEl.getAttribute("data-dim").split("|");
     var input = $("dimInput");
     var rect = dimEl.getBoundingClientRect();
     var wrap = $("canvas").parentElement.getBoundingClientRect();
     input.style.left = (rect.left - wrap.left + rect.width / 2 - 46) + "px";
-    input.style.top = (rect.top - wrap.top - 4) + "px";
+    input.style.top = (rect.top - wrap.top - 6) + "px";
     input.hidden = false;
     input.value = currentDimValue(dim);
-    input.focus();
-    input.select();
+    var done = false;
+    var openedAt = performance.now();
+    function commit() {
+      if (done) return;
+      done = true;
+      if (input.value !== "" && !isNaN(+input.value)) applyDim(dim, +input.value);
+      input.hidden = true;
+    }
     input.onkeydown = function (e) {
-      if (e.key === "Enter") { applyDim(dim, +input.value); input.hidden = true; }
-      if (e.key === "Escape") input.hidden = true;
+      e.stopPropagation();
+      if (e.key === "Enter" || e.code === "Enter" || e.keyCode === 13) commit();
+      if (e.key === "Escape" || e.code === "Escape" || e.keyCode === 27) {
+        done = true; input.hidden = true;
+      }
     };
-    input.onblur = function () { input.hidden = true; };
+    // страховка: mousedown исходного клика может украсть фокус сразу после
+    // открытия (preventDefault на pointerdown его не всегда гасит) -
+    // первые 400 мс возвращаем фокус вместо закрытия
+    input.onblur = function () {
+      if (performance.now() - openedAt < 400) {
+        setTimeout(function () { if (!input.hidden) { input.focus(); input.select(); } }, 0);
+        return;
+      }
+      commit();
+    };
+    setTimeout(function () { input.focus(); input.select(); }, 0);
   }
 
   function currentDimValue(dim) {
