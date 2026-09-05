@@ -22,3 +22,5 @@
 .measurement-fields{border-top:1px solid #e0e5e8;border-bottom:1px solid #e0e5e8;padding:16px 0;margin:16px 0}.measurement-fields summary{cursor:pointer;font-weight:600}.measurement-fields textarea{width:100%;box-sizing:border-box;font:inherit;padding:9px;border:1px solid #dbe1e5;border-radius:7px;resize:vertical}
 
 .drag-badge.invalid,.plan-help.invalid{background:#a92d32;color:#fff;white-space:normal;max-width:calc(100% - 36px);line-height:1.4;padding:10px 14px;border-radius:7px}.drag-badge.invalid{min-width:200px}
+
+.help-steps{display:grid;gap:10px;margin-bottom:20px}.help-steps button{text-align:left;padding:14px;border:1px solid #dce2e7;background:#f8fafb;border-radius:8px;color:#263844}.help-steps button:hover{border-color:#325bee;background:#edf1ff}.help-steps b,.help-steps span{display:block}.help-steps span{font-size:12px;line-height:1.5;color:#64727e;margin-top:6px}
