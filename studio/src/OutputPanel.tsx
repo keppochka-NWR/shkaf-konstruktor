@@ -1,3 +1,4 @@
+import {EstimatePanel} from './EstimatePanel';
 import { useState } from "react";
 import { type Project } from "./project";
 import {
@@ -19,7 +20,7 @@ export function OutputPanel({
   update: (p: Project) => boolean;
 }) {
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
-  const [tab, setTab] = useState<"sheets" | "quote">("sheets");
+  const [tab, setTab] = useState<"sheets" | "quote" | "estimate">("sheets");
   const sheets = nest(project),
     all = details(project);
   const q = project.offer || { customer: "", price: "", notes: "" };
@@ -35,6 +36,7 @@ export function OutputPanel({
         <button aria-pressed={tab === "quote"} onClick={() => setTab("quote")}>
           Коммерческое предложение
         </button>
+        <button aria-pressed={tab === 'estimate'} onClick={()=>setTab('estimate')}>Смета</button>
       </div>
       {tab === "sheets" ? (
         <>
@@ -134,7 +136,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : (
+      ) : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение
@@ -198,3 +200,4 @@ export function OutputPanel({
     </div>
   );
 }
+

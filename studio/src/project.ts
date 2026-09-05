@@ -2,12 +2,13 @@ import {id,initialModule,parseModule,validate,type Module,section} from './model
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type Room={width:number;depth:number;height:number;openings?:Opening[]};
 export type PlacedModule={id:string;x:number;z:number;y?:number;module:Module};
-export type Project={version:3;room:Room;modules:PlacedModule[];offer?:{customer:string;price:string;notes:string}};
+export type Project={version:3;room:Room;modules:PlacedModule[];calculation?:{markup:number;overrides:Record<string,number>};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function bounds(a:PlacedModule){return {x:a.x,y:a.y??0,z:a.z-(a.module.backType==='groove'?0:3),w:a.module.width,h:a.module.height,d:a.module.depth+18+(a.module.backType==='groove'?0:3)};}
 export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x<b.x+b.w-0.1&&a.x+a.w>b.x+0.1&&a.y<b.y+b.h-0.1&&a.y+a.h>b.y+0.1&&a.z<b.z+b.d-0.1&&a.z+a.d>b.z+0.1;}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
+  if(p.calculation&&(!Number.isFinite(p.calculation.markup)||p.calculation.markup<1||p.calculation.markup>10||!p.calculation.overrides||typeof p.calculation.overrides!=='object'||Array.isArray(p.calculation.overrides)||Object.keys(p.calculation.overrides).length>300||Object.values(p.calculation.overrides).some(v=>!Number.isFinite(v)||v<0||v>1e9)))return ['Проверьте цены и коэффициент сметы (от 1 до 10).'];
   if(p.offer&&(typeof p.offer.customer!=='string'||p.offer.customer.length>120||typeof p.offer.notes!=='string'||p.offer.notes.length>2000||typeof p.offer.price!=='string'||(p.offer.price!==''&&(!Number.isFinite(Number(p.offer.price))||Number(p.offer.price)<0||Number(p.offer.price)>1e12))))return ['Проверьте поля коммерческого предложения.'];
   if(!p.modules.length||p.modules.length>40)return ['В проекте должно быть от 1 до 40 модулей.'];
   if(new Set(p.modules.map(m=>m.id)).size!==p.modules.length)return ['Идентификаторы модулей повторяются.'];
@@ -38,6 +39,7 @@ export function parseProject(data:unknown):Project{
   const p:Project={version:3,room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill}));}
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
+  if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides};
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes};const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;
 }
 export function appendModule(p:Project,source:Module):Project{
@@ -48,3 +50,4 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
   for(const b of p.modules){if(b.id===mid)continue;candidates.x.push(b.x,b.x+b.module.width,b.x-a.module.width,b.x+b.module.width-a.module.width);candidates.y.push(b.y??0,(b.y??0)+b.module.height,(b.y??0)-a.module.height);candidates.z.push(b.z,b.z+b.module.depth+21,b.z-a.module.depth-21);}
   const next={...position};for(const k of ['x','y','z'] as const){let diff=tolerance;for(const v of candidates[k])if(v>=0&&Math.abs(position[k]-v)<diff){diff=Math.abs(position[k]-v);next[k]=v;}next[k]=Math.round(next[k]);}return next;
 }
+

@@ -56,7 +56,7 @@ import {
   appendModule, snapPlacement,
   type Project,
 } from "./project";
-import {insertItem,moveModule,movePart,type FillKind} from './operations';
+import {insertItem,moveModule,movePart,removePart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -175,6 +175,10 @@ export default function App() {
   const m = placed.module;
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
+  const [selectedPart,setSelectedPart]=useState<{mid:string;sid:string;pid:string}|null>(null);
+  const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
+  const canRemove=selectedDetail&&(/:shelf:|:drawer:|:pantograph:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
+  function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
   const [direct, setDirect] = useState<{
@@ -293,6 +297,7 @@ export default function App() {
     });
   }
   function chooseSection(id: string) {
+    setSelectedPart(null);
     setSelected(id);
     setDrawerIndex(null);
     setTab("section");
@@ -315,6 +320,7 @@ export default function App() {
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement;
       if (input || direct) return;
+      if(e.key==='Delete'&&!modal&&canRemove){e.preventDefault();removeSelected();}
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -764,6 +770,7 @@ export default function App() {
             }}
             onPartSelect={(sid, pid) => {
               chooseSection(sid);
+              setSelectedPart({mid:placed.id,sid,pid});
               if(pid.includes(":shelf:")||pid.includes(":drawer:"))setMode("fill");
               if (pid.includes(":drawer:")) {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
@@ -1103,6 +1110,7 @@ export default function App() {
                   <h2>Секция {idx + 1}</h2>
                   <Columns2 size={17} />
                 </div>
+                {canRemove&&<div className="selected-filling"><span>{selectedDetail.name}</span><button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>Удалить выбранное</button><small>Можно нажать Delete · Ctrl+Z отменит удаление</small></div>}
                 <NumberField
                   label="Внутренняя ширина"
                   value={Math.round(b.width * 10) / 10}
@@ -1242,7 +1250,7 @@ export default function App() {
                   </button>
                 </div>
                 <button className="outline full" onClick={()=>modifySection(a=>{a.pantograph=!a.pantograph;a.rod=false})}>{s.pantograph?'Убрать пантограф':'Добавить пантограф'}</button>
-                {(s.rod||s.pantograph)&&<NumberField label="Высота штанги от дна" value={Math.round((s.rodAt??(s.pantograph?0.87:0.85))*(b.top-b.bottom))} min={100} max={b.top-b.bottom-50} onChange={v=>modifySection(a=>a.rodAt=v/(b.top-b.bottom))}/>}
+                {(s.rod||s.pantograph)&&<NumberField label="Высота штанги от дна" value={Math.round((parts(m).find(p=>p.id===s.id+':rod'||p.id===s.id+':pantograph:rod')?.position[1]??b.bottom)-b.bottom)} min={100} max={b.top-b.bottom-50} onChange={v=>modifySection(a=>a.rodAt=v/(b.top-b.bottom))}/>}
                 {s.shelves.length > 0 && (
                   <>
                     <button
@@ -1511,3 +1519,4 @@ export default function App() {
     </div>
   );
 }
+

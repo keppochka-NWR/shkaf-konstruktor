@@ -455,11 +455,11 @@ export function Scene(p: Props) {
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
-      const isPart=state.mode==='fill'&&['shelf','drawer','rod','pantograph'].includes(hit.object.userData.role)&&!pid.includes(':drawer-cap');
+      const isPart=state.mode==='fill'&&['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)&&!pid.includes(':drawer-cap');
       const plane=new THREE.Plane(isPart||state.view==='front'?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0),isPart||state.view==='front'?-hit.point.z:-hit.point.y);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
-      const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
-      moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)))meshes.push(o);});
+      const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':pantograph:')?sid+':pantograph:':pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
+      moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)||((pid===sid+':rod'||pid.includes(':flange:'))&&(o.userData.partId===sid+':rod'||o.userData.partId?.startsWith(sid+':flange:')))))meshes.push(o);});
       drag={mid:a.id,sid,pid,kind:isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
     }
     function pointerMove(e:PointerEvent){
@@ -569,5 +569,6 @@ export function Scene(p: Props) {
     </div>
   );
 }
+
 
 
