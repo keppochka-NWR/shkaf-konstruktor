@@ -13,6 +13,7 @@ type Props = {
   mode:'move'|'fill'|'orbit';
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
   onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
+  moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
   onMovePart:(mid:string,sid:string,pid:string,y:number)=>boolean;
   onDropItem:(kind:string,mid:string,sid:string,y:number)=>boolean;
   onTransfer:(mid:string,sid:string,pid:string,toMid:string,toSid:string,y:number)=>boolean;
@@ -479,10 +480,10 @@ export function Scene(p: Props) {
       drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
         const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z});
-        drag.candidate=next;const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));badge.textContent='Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+        drag.candidate=next;const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit);badge.textContent=(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';}
     }
-    function resetDrag(){dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
+    function resetDrag(){dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;

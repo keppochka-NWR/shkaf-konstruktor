@@ -753,6 +753,7 @@ export default function App() {
             presentation={presentation}
             snap={(mid,p)=>snapPlacement(project,mid,p)}
             onMoveModule={moveBody}
+            moveProblem={(mid,p)=>projectErrors(moveModule(project,mid,p))[0]}
             onMovePart={moveFilling}
             onDropItem={dropFilling}
             onTransfer={(mid,sid,pid,toMid,toSid,y)=>{try{const next=transferPart(project,mid,sid,pid,toMid,toSid,y);if(commitProject(next)){setActive(toMid);chooseSection(toSid);setMode('fill');return true;}}catch(e){setError((e as Error).message);}return false;}}
