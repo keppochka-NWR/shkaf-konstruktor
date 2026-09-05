@@ -1,3 +1,4 @@
+import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useRef } from "react";
 import {
   Box,
@@ -230,7 +231,7 @@ export default function App() {
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
     [modal, setModal] = useState<
-      "materials" | "parts" | "help" | "output" | "cloud" | "render" | null
+      "materials" | "parts" | "help" | "output" | "cloud" | "render" | "library" | null
     >(null),
     [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor">(
       "decor",
@@ -640,6 +641,7 @@ export default function App() {
           </div>
           <button className="text-action upper-add" onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
           <div className="library-label">Готовое наполнение</div>
+          <button className="text-action upper-add" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
           <div className="presets">
             {(
               [
@@ -1383,7 +1385,7 @@ export default function App() {
           }}
         >
           <div
-            className={`modal ${modal === "parts" || modal === "output" || modal === "cloud" || modal === "render" ? "wide" : ""}`}
+            className={`modal ${modal === "parts" || modal === "output" || modal === "cloud" || modal === "render" || modal === "library" ? "wide" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -1392,7 +1394,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">МОДУЛЬ</span>
                 <h2 id="modal-title">
-                  {modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
+                  {modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
                       ? "Материалы Lamarty"
@@ -1409,7 +1411,7 @@ export default function App() {
                 <X />
               </button>
             </div>
-            {modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><a className="primary render-download" href={renderImage} download="Проект мебели.png">Скачать PNG</a><p className="field-note">PNG, до 2560 пикселей. Если встроенный браузер не скачивает файл, откройте редактор в Edge или Chrome.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
+            {modal === "library" ? <ModuleLibrary module={m} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><a className="primary render-download" href={renderImage} download="Проект мебели.png">Скачать PNG</a><p className="field-note">PNG, до 2560 пикселей. Если встроенный браузер не скачивает файл, откройте редактор в Edge или Chrome.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <OutputPanel
                 project={project}
                 capture={() => capture.current?.()}
