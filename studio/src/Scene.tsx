@@ -455,8 +455,21 @@ export function Scene(p: Props) {
     const badge=document.createElement('div');badge.className='drag-badge';badge.hidden=true;target.appendChild(badge);
     type Drag={mid:string;sid:string;pid:string;kind:'module'|'part';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
     let drag:Drag|null=null;
+    const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
+    const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
+    function indicateTarget(hit:THREE.Intersection|undefined){
+      if(!hit){dropTarget.visible=false;return '';}
+      const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId),focus=state.arrangement.find(a=>a.id===state.activeId);
+      if(!a||!focus){dropTarget.visible=false;return '';}
+      const sid=sectionFor(hit),b=boxes(a.module).find(b=>b.id===sid);if(!b)return '';
+      const center=moduleCenter(focus),pos=localToRoom(a,b.x+b.width/2,a.module.depth/2);
+      dropTarget.position.set(pos.x-center.x,(a.y??0)+(b.bottom+b.top)/2,pos.z-center.z);
+      dropTarget.rotation.y=(a.rotation??0)*Math.PI/180;dropTarget.scale.set(b.width,b.top-b.bottom,a.module.depth);dropTarget.visible=true;
+      return 'Корпус '+(state.arrangement.indexOf(a)+1)+' · секция '+(a.module.sections.findIndex(s=>s.id===sid)+1);
+    }
+
     function cast(clientX:number,clientY:number){const r=renderer.domElement.getBoundingClientRect();pointer.set((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
-    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)));}
+    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(drag?.kind==='part'&&drag.moved&&drag.meshes.includes(h.object))&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)));}
     function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.mode==='orbit')return;
@@ -464,6 +477,7 @@ export function Scene(p: Props) {
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       const isPart=state.mode==='fill'&&['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)&&!pid.includes(':drawer-cap');
+      if(state.mode==='fill'&&!isPart){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
       const normal=isPart||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
@@ -477,9 +491,9 @@ export function Scene(p: Props) {
       if(drag.kind==='module'){
         const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z});
         drag.candidate=next;const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));badge.textContent='Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
-      }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;badge.textContent='Перемещение: '+(dy>0?'+':'')+dy+' мм';}
+      }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit);badge.textContent=(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';}
     }
-    function resetDrag(){if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
+    function resetDrag(){dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
     function pointerUp(e:PointerEvent){
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
@@ -495,14 +509,15 @@ export function Scene(p: Props) {
       }else{if(d.mid!==current.current.activeId)current.current.onModuleSelect(d.mid);else current.current.onPartSelect(d.sid,d.pid);}
       resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
     }
-    function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;badge.textContent='Отпустите внутри нужного корпуса';}
-    function drop(e:DragEvent){e.preventDefault();badge.hidden=true;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
+    function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
+    function drop(e:DragEvent){e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     function key(e:KeyboardEvent){if(e.key==='Escape')resetDrag();}
     renderer.domElement.addEventListener('pointerdown',pointerDown);
     renderer.domElement.addEventListener('pointermove',pointerMove);
     renderer.domElement.addEventListener('pointerup',pointerUp);
     renderer.domElement.addEventListener('pointercancel',resetDrag);
-    target.addEventListener('dragover',dragOver);target.addEventListener('drop',drop);target.addEventListener('dragleave',()=>badge.hidden=true);window.addEventListener('keydown',key);
+    function dragLeave(e:DragEvent){if(e.relatedTarget instanceof Node&&target.contains(e.relatedTarget))return;badge.hidden=true;dropTarget.visible=false;}
+    target.addEventListener('dragover',dragOver);target.addEventListener('drop',drop);target.addEventListener('dragleave',dragLeave);window.addEventListener('keydown',key);
     const loss = (e: Event) => {
       e.preventDefault();
       setError(
@@ -552,7 +567,7 @@ export function Scene(p: Props) {
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
-      window.removeEventListener('keydown',key);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);badge.remove();
+      window.removeEventListener('keydown',key);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
