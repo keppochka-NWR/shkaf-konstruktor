@@ -184,6 +184,8 @@ export default function App() {
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
+  const [presentation,setPresentation]=useState(false);
+  const [renderImage,setRenderImage]=useState("");
   const [direct, setDirect] = useState<{
     label: string;
     value: number;
@@ -228,7 +230,7 @@ export default function App() {
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
     [modal, setModal] = useState<
-      "materials" | "parts" | "help" | "output" | "cloud" | null
+      "materials" | "parts" | "help" | "output" | "cloud" | "render" | null
     >(null),
     [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor">(
       "decor",
@@ -434,7 +436,7 @@ export default function App() {
   const texture = (name: string) =>
     catalog.find((c) => c.n === name)?.tex || undefined;
   return (
-    <div className="app">
+    <div className={'app'+(presentation?' presentation':'')}>
       <header className="header">
         <a className="brand" href="./" aria-label="Модуль — главная">
           <span className="brand-mark">
@@ -447,6 +449,7 @@ export default function App() {
         <div className="document-name">
           <input
             aria-label="Название модуля"
+            readOnly={presentation}
             maxLength={80}
             value={m.name}
             onChange={(e) => modify((n) => (n.name = e.target.value))}
@@ -457,6 +460,7 @@ export default function App() {
           </span>
         </div>
         <div className="header-actions">
+          <button className="outline presentation-trigger" onClick={()=>{setPresentation(!presentation);setRoomPlan(false);setView('iso');setOpenDoors(false);}}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
           <button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
@@ -739,13 +743,14 @@ export default function App() {
                   {v.label}
                 </button>
               ))}
-              <button aria-pressed={roomPlan} onClick={()=>{setRoomPlan(true);setTab('room');}}>План</button>
+              <button hidden={presentation} aria-pressed={roomPlan} onClick={()=>{setRoomPlan(true);setTab('room');}}>План</button>
             </div>
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
           {roomPlan?<RoomPlan project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
-            mode={mode}
+            mode={presentation?'orbit':mode}
+            presentation={presentation}
             snap={(mid,p)=>snapPlacement(project,mid,p)}
             onMoveModule={moveBody}
             onMovePart={moveFilling}
@@ -757,7 +762,7 @@ export default function App() {
             activeId={placed.id}
             room={showRoom ? project.room : undefined}
             onModuleSelect={selectModule}
-            transparent={transparent}
+            transparent={presentation?false:transparent}
             onDimension={(key) =>
               editDimension(
                 key === "width"
@@ -784,16 +789,17 @@ export default function App() {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
               }
             }}
-            selected={selectedId}
+            selected={presentation?'':selectedId}
             onSelect={chooseSection}
             texture={texture(m.decor)}
             facadeTexture={texture(m.facadeDecor)}
             view={view}
             fit={fit}
             openDoors={openDoors}
-            exploded={exploded}
-            dimensions={dimensions}
+            exploded={presentation?false:exploded}
+            dimensions={presentation?false:dimensions}
           />}
+          {presentation&&<div className="presentation-tools"><button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button><button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch{setError('Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
             <span>КОРПУС / ЛДСП 16</span>
             <b>
@@ -1371,7 +1377,7 @@ export default function App() {
           }}
         >
           <div
-            className={`modal ${modal === "parts" || modal === "output" || modal === "cloud" ? "wide" : ""}`}
+            className={`modal ${modal === "parts" || modal === "output" || modal === "cloud" || modal === "render" ? "wide" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -1380,7 +1386,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">МОДУЛЬ</span>
                 <h2 id="modal-title">
-                  {modal === "cloud" ? "Кабинет проектов" : modal === "output"
+                  {modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
                       ? "Материалы Lamarty"
@@ -1397,7 +1403,7 @@ export default function App() {
                 <X />
               </button>
             </div>
-            {modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
+            {modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><a className="primary render-download" href={renderImage} download="Проект мебели.png">Скачать PNG</a><p className="field-note">PNG, до 2560 пикселей. Если встроенный браузер не скачивает файл, откройте редактор в Edge или Chrome.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <OutputPanel
                 project={project}
                 capture={() => capture.current?.()}
@@ -1528,6 +1534,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 

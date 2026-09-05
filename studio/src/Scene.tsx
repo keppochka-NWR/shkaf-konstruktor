@@ -32,6 +32,7 @@ type Props = {
   openDoors: boolean;
   exploded: boolean;
   dimensions: boolean;
+  presentation?:boolean;
 };
 export function Scene(p: Props) {
   const host = useRef<HTMLDivElement>(null),
@@ -171,6 +172,8 @@ export function Scene(p: Props) {
     function rebuild() {
       const state = current.current,
         m = state.module;
+      grid.visible=!state.presentation;
+      scene.background=state.presentation?new THREE.Color(0xf1f0eb):null;
       for (const l of labels) l.element.remove();
       labels.length = 0;
       moduleGroups.clear();
@@ -511,8 +514,17 @@ export function Scene(p: Props) {
     fit();
     api.current = { rebuild, fit };
     current.current.captureReady(() => {
-      renderer.render(scene, camera);
-      return renderer.domElement.toDataURL("image/png");
+      const size=renderer.getSize(new THREE.Vector2()),ratio=renderer.getPixelRatio(),background=scene.background,gridVisible=grid.visible;
+      const guides=modelGroup.children.filter(o=>o instanceof THREE.Line||o instanceof THREE.LineSegments),visibility=guides.map(o=>o.visible);
+      const aspect=size.x/size.y,width=aspect>=1?2560:Math.round(2560*aspect),height=aspect>=1?Math.round(2560/aspect):2560;
+      try{
+        guides.forEach(o=>o.visible=false);grid.visible=false;scene.background=new THREE.Color(0xf1f0eb);
+        renderer.setPixelRatio(1);renderer.setSize(width,height,false);renderer.render(scene,camera);
+        return renderer.domElement.toDataURL('image/png');
+      }finally{
+        guides.forEach((o,i)=>o.visible=visibility[i]);grid.visible=gridVisible;scene.background=background;
+        renderer.setPixelRatio(ratio);renderer.setSize(size.x,size.y,false);renderer.render(scene,camera);
+      }
     });
     let frame = 0;
     function animate() {
@@ -560,6 +572,7 @@ export function Scene(p: Props) {
       p.openDoors,
       p.exploded,
       p.dimensions,
+      p.presentation,
     ],
   );
   useEffect(
