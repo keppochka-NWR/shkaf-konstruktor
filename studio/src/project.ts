@@ -51,8 +51,17 @@ export function parseProject(data:unknown):Project{
   if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides};
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes};const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;
 }
-export function appendModule(p:Project,source:Module):Project{
-  const n=structuredClone(p),module=structuredClone(source);module.sections.forEach(s=>s.id=id());module.name=`Модуль ${p.modules.length+1}`;const x=Math.max(...p.modules.filter(a=>(a.y??0)===0).map(a=>bounds(a).x+bounds(a).w),0);n.modules.push({id:id(),x,y:0,z:30,module});return n;
+export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
+  const n=structuredClone(p),module=structuredClone(source);module.sections.forEach(s=>s.id=id());module.name=`Модуль ${p.modules.length+1}`;
+  const a:PlacedModule={id:id(),x:0,y:anchor?.y??0,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
+  const occupied=p.modules.map(bounds),preferredX=anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...occupied.filter(b=>b.y===0).map(b=>b.x+b.w),0),preferredZ=anchor?bounds(anchor).z:30;
+  const xs=[preferredX,0,...occupied.flatMap(b=>[b.x+b.w,b.x-base.w,b.x]),p.room.width-base.w],zs=[preferredZ,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-base.d,b.z]),p.room.depth-base.d];
+  for(const z of [...new Set(zs)])for(const x of [...new Set(xs)]){
+    const box={...base,x,z};if(x<0||z<0||x+base.w>p.room.width||z+base.d>p.room.depth||base.y+base.h>p.room.height||occupied.some(b=>overlap(box,b)))continue;
+    a.x=x-base.x;a.z=z-base.z;n.modules.push(a);return n;
+  }
+  // Keep the invalid candidate reviewable by the common commit validator.
+  a.x=preferredX-base.x;a.z=preferredZ-base.z;n.modules.push(a);return n;
 }
 export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z:number},tolerance=35){
   const a=p.modules.find(a=>a.id===mid)!,ab=bounds({...a,x:0,z:0,y:0});const candidates={x:[-ab.x,p.room.width-ab.x-ab.w],y:[0],z:[-ab.z,p.room.depth-ab.z-ab.d]};

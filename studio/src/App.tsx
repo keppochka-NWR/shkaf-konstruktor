@@ -216,7 +216,7 @@ export default function App() {
     const source = copy
       ? m
       : { ...initialModule(), width: 600, sections: [section()] };
-    const next = appendModule(project, source);
+    const next = appendModule(project, source,copy?placed:undefined);
     if (commitProject(next)) {
       selectModule(next.modules.at(-1)!.id);
     }

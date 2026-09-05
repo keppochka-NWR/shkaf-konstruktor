@@ -222,3 +222,13 @@ test('inserted board back reduces usable depth and appears in board nesting',()=
   assert.equal(parseModule(JSON.parse(JSON.stringify(m))).backType,'board');
   m.backType='none';assert.ok(!parts(m).some(d=>d.id==='back'));assert.equal(parseModule(JSON.parse(JSON.stringify(m))).backType,'none');
 });
+
+test('copies preserve rotation and insertion finds another row when the first is full',()=>{
+  const p=newProject();p.room.width=1500;p.modules[0].rotation=90;
+  const copied=appendModule(p,p.modules[0].module,p.modules[0]);
+  assert.equal(copied.modules[1].rotation,90);assert.equal(projectErrors(copied).length,0);
+  assert.notEqual(copied.modules[1].module.sections[0].id,p.modules[0].module.sections[0].id);
+  const next=appendModule(copied,p.modules[0].module);
+  assert.equal(projectErrors(next).length,0);assert.ok(next.modules[2].z>600);
+  assert.equal(p.modules.length,1);
+});
