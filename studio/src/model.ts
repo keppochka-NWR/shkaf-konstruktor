@@ -52,6 +52,7 @@ export type Module = {
   depth: number;
   decor: string;
   facadeDecor: string;
+  drawerFacadeDecor?: string;
   doors: boolean;
   sections: Section[];
   backType?: "nailed" | "groove" | "board" | "none";
@@ -328,7 +329,7 @@ export function parts(m: Module): Part[] {
       );
       const fh=bh+RULES.drawerStep-RULES.drawerFrontGap,fw=b.width-filler-2*RULES.drawerFrontGap;
       add(s.id+':drawer:'+j+':facade','Ящик '+(j+1)+' · фасад',[fw,fh,t],[b.x+f.left+(b.width-filler)/2,y-RULES.drawerStep/2+(bh+RULES.drawerStep)/2,m.doors?d-36:d+t/2+2],fh,fw,t,'drawer',s.id);
-      out.at(-1)!.decor=m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
+      out.at(-1)!.decor=m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
       if(drawerHasHandle(cfg))add(s.id+':drawer:'+j+':handle','Ручка ящика',[128,10,18],[b.x+f.left+(b.width-filler)/2,y+bh/2,m.doors?d-20:d+28],128,10,18,'handle',s.id,'metal');
       for (const side of [0, 1])
         add(
@@ -600,6 +601,7 @@ export function parseModule(input: unknown): Module {
     x.name.length > 80 ||
     typeof x.decor !== "string" ||
     typeof x.facadeDecor !== "string" ||
+    (x.drawerFacadeDecor!==undefined&&(typeof x.drawerFacadeDecor!=="string"||x.drawerFacadeDecor.length>150)) ||
     typeof x.doors !== "boolean" ||
     !Array.isArray(x.sections) ||
     x.sections.length > 4
@@ -628,6 +630,7 @@ export function parseModule(input: unknown): Module {
     depth: x.depth as number,
     decor: x.decor,
     facadeDecor: x.facadeDecor,
+    ...(x.drawerFacadeDecor===undefined?{}:{drawerFacadeDecor:x.drawerFacadeDecor}),
     doors: x.doors,
     ...(x.backType===undefined?{}:{backType:x.backType as Module["backType"]}),
     ...(x.grooveInset===undefined?{}:{grooveInset:x.grooveInset as number}),

@@ -234,7 +234,7 @@ export default function App() {
     [modal, setModal] = useState<
       "materials" | "parts" | "help" | "output" | "cloud" | "render" | "library" | null
     >(null),
-    [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor">(
+    [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor" | "drawerFacadeDecor">(
       "decor",
     ),
     [search, setSearch] = useState("");
@@ -375,17 +375,7 @@ export default function App() {
     };
   }, [modal]);
   function preset(type: "shelves" | "wardrobe" | "drawers" | "empty") {
-    const n = {
-      ...initialModule(),
-      name: m.name,
-      width: m.width,
-      height: m.height,
-      depth: m.depth,
-      decor: m.decor,
-      facadeDecor: m.facadeDecor,
-      doors: true,
-      sections: [section()],
-    };
+    const n = {...structuredClone(m),sections:[section()]};
     const a = n.sections[0];
     if (type === "shelves") a.shelves = distribute(n, a, 4);
     if (type === "wardrobe") {
@@ -519,7 +509,7 @@ export default function App() {
               imported.modules.some(
                 ({ module: n }) =>
                   !catalog.some((c) => c.n === n.decor) ||
-                  !catalog.some((c) => c.n === n.facadeDecor),
+                  !catalog.some((c) => c.n === n.facadeDecor)||(n.drawerFacadeDecor!==undefined&&!catalog.some(c=>c.n===n.drawerFacadeDecor)),
               )
             )
               throw new Error(
@@ -1063,6 +1053,7 @@ export default function App() {
                   </button>
                 )}
               </div>
+              {m.sections.some(s=>s.drawers>0)&&<div className="property-section"><h2>Фасады ящиков</h2><button className="text-action" onClick={()=>{setMaterialTarget('drawerFacadeDecor');setModal('materials');}}>Материал ящиков: {m.drawerFacadeDecor??m.facadeDecor}<ChevronDown size={13}/></button>{m.drawerFacadeDecor&&<button className="text-action" onClick={()=>modify(n=>delete n.drawerFacadeDecor)}>Как у распашных фасадов</button>}</div>}
               <div className="property-section">
                 <h2>Положение в помещении</h2>
                 <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>commitProject({...project,modules:project.modules.map(a=>a.id===placed.id?{...a,rotation:Number(e.target.value) as 0|90|180|270}:a)})}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Перетащите корпус в сцене. На виде спереди можно поставить его сверху другого.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
@@ -1439,7 +1430,7 @@ export default function App() {
                     .map((c) => (
                       <button
                         key={c.n}
-                        aria-pressed={m[materialTarget] === c.n}
+                        aria-pressed={(m[materialTarget]??m.facadeDecor) === c.n}
                         onClick={() => {
                           modify((n) => (n[materialTarget] = c.n));
                           setModal(null);
@@ -1456,7 +1447,7 @@ export default function App() {
                           }}
                         />
                         {c.n}
-                        {m[materialTarget] === c.n && <Check size={15} />}
+                        {(m[materialTarget]??m.facadeDecor) === c.n && <Check size={15} />}
                       </button>
                     ))}
                 </div>

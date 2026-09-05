@@ -240,3 +240,10 @@ test('niche limits follow workshop deductions and remain separate from room geom
   p.measurement.niche!.deviation=10;assert.equal(nicheSize(p.measurement.niche!).width,1985);
   const q=parseProject(JSON.parse(JSON.stringify(p)));assert.deepEqual(q.measurement,p.measurement);assert.equal(q.room.width,4000);
 });
+
+test('drawer front material is independent from doors and follows file roundtrip',()=>{
+  const m=initialModule();m.drawerFacadeDecor='Графит';const restored=parseModule(JSON.parse(JSON.stringify(m))),ds=parts(restored);
+  assert.ok(ds.filter(d=>d.id.includes(':drawer:')&&d.id.endsWith(':facade')).every(d=>d.decor==='Графит'));
+  assert.ok(ds.filter(d=>d.role==='door').every(d=>d.decor===m.facadeDecor));
+  delete restored.drawerFacadeDecor;assert.ok(parts(restored).filter(d=>d.id.endsWith(':facade')).every(d=>d.decor===m.facadeDecor));
+});
