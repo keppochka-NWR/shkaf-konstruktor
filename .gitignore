@@ -3,3 +3,6 @@ server/data.db*
 server/.env
 data/lamarty-source.js
 __pycache__/
+studio/node_modules/
+studio/test-results/
+studio/playwright-report/
