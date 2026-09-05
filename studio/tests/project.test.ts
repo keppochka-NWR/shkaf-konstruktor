@@ -17,7 +17,7 @@ import {
   drawerConfig,
   RULES,
 } from "../src/model";
-import { nest, details, quoteHTML, detailCSV } from "../src/exports";
+import { nest, details, quoteHTML, detailCSV, labelDetails, labelsHTML } from "../src/exports";
 
 test("Lamarty sheet format is exactly the user correction", () => {
   assert.equal(RULES.sheetW, 2750);
@@ -169,3 +169,12 @@ test("exports escape customer and module HTML and never invent a price", () => {
   assert.ok(detailCSV(p).startsWith("\uFEFF"));
 });
 
+
+test('labels have one code per detail and refer to its actual sheet',()=>{
+  const p=newProject(initialModule()),sheets=nest(p),labels=labelDetails(p);
+  assert.equal(labels.length,details(p).length);
+  assert.equal(new Set(labels.map(d=>d.code)).size,labels.length);
+  for(const d of labels)assert.ok(sheets[d.sheet-1].items.some(a=>a.detail.code===d.code&&a.w===d.width&&a.h===d.length));
+  p.modules[0].module.name='<script>alert(1)</script>';
+  const html=labelsHTML(p);assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('ПРОВЕРКА'));
+});

@@ -9,6 +9,8 @@ import {
   quoteHTML,
   saveFile,
   sheetSVG,
+  labelDetails,
+  labelsHTML,
 } from "./exports";
 export function OutputPanel({
   project,
@@ -20,7 +22,7 @@ export function OutputPanel({
   update: (p: Project) => boolean;
 }) {
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
-  const [tab, setTab] = useState<"sheets" | "quote" | "estimate">("sheets");
+  const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels">("sheets");
   const sheets = nest(project),
     all = details(project);
   const q = project.offer || { customer: "", price: "", notes: "" };
@@ -36,6 +38,7 @@ export function OutputPanel({
         <button aria-pressed={tab === "quote"} onClick={() => setTab("quote")}>
           Коммерческое предложение
         </button>
+        <button aria-pressed={tab === 'labels'} onClick={()=>setTab('labels')}>Бирки деталей</button>
         <button aria-pressed={tab === 'estimate'} onClick={()=>setTab('estimate')}>Смета</button>
       </div>
       {tab === "sheets" ? (
@@ -136,7 +139,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
+      ) : tab === "labels" ? <><p className="field-note">Бирки для проверки, 90 × 50 мм. Коды совпадают с деталировкой и картами текущего проекта. После изменения конструкции сформируйте весь комплект заново. Размеры габаритные, припуски и присадка ещё не включены.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelsHTML(project))}>Скачать бирки / PDF</button><div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>Лист {d.sheet}</span></div><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div></> : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение
