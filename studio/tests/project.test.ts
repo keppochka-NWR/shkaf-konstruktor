@@ -252,3 +252,8 @@ test('customer quote lists actual protective shelves and drawer front material',
   const p=newProject();p.modules[0].module.drawerFacadeDecor='Графит';const html=quoteHTML(p,'Клиент','100000','');
   assert.ok(html.includes('Фасады ящиков: Графит'));assert.ok(html.includes('Двери: Белый'));assert.ok(html.includes('Полок: 2 (включая полки над ящиками)'));assert.ok(html.includes('пантографов: 0'));
 });
+
+test('server project title stays distinct from the first module name in files',()=>{
+  const p=newProject();p.cloud={id:'order-1',revision:2,owner:'manager@example.test',name:'Заказ — прихожая'};
+  const q=parseProject(JSON.parse(JSON.stringify(p)));assert.equal(q.cloud?.name,'Заказ — прихожая');assert.notEqual(q.cloud?.name,q.modules[0].module.name);
+});

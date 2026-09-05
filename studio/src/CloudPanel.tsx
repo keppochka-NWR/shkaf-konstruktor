@@ -5,7 +5,7 @@ type Revision={revision:number;name:string;updated:number};
 type Entry={id:string;name:string;email:string;revision:number;updated:number;archived:number};
 async function api(path:string,body?:unknown){const r=await fetch('/api/studio'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','x-studio-request':'1'},...(body===undefined?{}:{body:JSON.stringify(body)})});let data;try{data=await r.json();}catch{throw Error('Сервер кабинета недоступен. Запустите студию с сервером.');}if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Проверьте введённые данные.');return data;}
 export function CloudPanel({project,update}:{project:Project;update:(p:Project)=>boolean}){
-  const [user,setUser]=useState<User|null>(null),[mode,setMode]=useState(''),[ready,setReady]=useState(false),[email,setEmail]=useState('manager@example.test'),[code,setCode]=useState(''),[sent,setSent]=useState(false),[items,setItems]=useState<Entry[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[all,setAll]=useState(false),[archived,setArchived]=useState(false),[name,setName]=useState(project.modules[0].module.name),[message,setMessage]=useState('');
+  const [user,setUser]=useState<User|null>(null),[mode,setMode]=useState(''),[ready,setReady]=useState(false),[email,setEmail]=useState('manager@example.test'),[code,setCode]=useState(''),[sent,setSent]=useState(false),[items,setItems]=useState<Entry[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[all,setAll]=useState(false),[archived,setArchived]=useState(false),[name,setName]=useState(project.cloud?.name||project.modules[0].module.name),[message,setMessage]=useState('');
   const [history,setHistory]=useState<{item:Entry;items:Revision[]}|null>(null);
   const reload=async()=>{const r=await api('/projects?all='+all+'&archived='+archived);setItems(r.items);};
   async function run(fn:()=>Promise<void>){setBusy(true);setError('');setMessage('');try{await fn();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
@@ -15,12 +15,12 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
   async function save(copy:boolean){
     const link=!copy&&project.cloud?.owner===user?.email?project.cloud:undefined,id=link?.id||crypto.randomUUID();
     const r=await api('/projects',{id,name:name.trim()||'Проект',revision:link?.revision||0,data:project});
-    update({...project,cloud:{id,revision:r.revision,owner:user!.email}});await reload();setMessage('Проект сохранён. Версия '+r.revision+'.');
+    update({...project,cloud:{id,revision:r.revision,owner:user!.email,name:name.trim()||'Проект'}});await reload();setMessage('Проект сохранён. Версия '+r.revision+'.');
   }
-  async function load(item:Entry){const r=await api('/projects/'+item.id),p=parseProject(r.data);p.cloud={id:item.id,revision:r.revision,owner:r.email};if(update(p)){setName(item.name);setMessage('Открыт проект «'+item.name+'».');}}
+  async function load(item:Entry){const r=await api('/projects/'+item.id),p=parseProject(r.data);p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};if(update(p)){setName(item.name);setMessage('Открыт проект «'+item.name+'».');}}
   async function openRevision(item:Entry,revision:number){
     const r=await api('/projects/'+item.id+'/revisions/'+revision),p=parseProject(r.data);
-    p.cloud={id:item.id,revision:r.currentRevision,owner:r.email};
+    p.cloud={id:item.id,revision:r.currentRevision,owner:r.email,name:r.name};
     if(update(p)){setName(r.name);setMessage('Открыта версия '+revision+'. На сервере ничего не изменилось. Сохраните проект, чтобы записать этот вариант новой версией.');}
   }
   return <div className="cloud-panel"><p className="field-note">{mode==='local-demo'?'Сейчас кабинет работает на этом компьютере. Демо-профили общие; письма не отправляются. Это ещё не размещение в облаке.':'Проекты сотрудников хранятся на сервере. Менеджер видит свои проекты, администратор — все.'}</p>{error&&<p role="alert" className="cloud-error">{error}</p>}{message&&<p role="status" className="cloud-success">{message}</p>}
