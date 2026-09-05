@@ -1,3 +1,4 @@
+import {frameDistance} from './framing';
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -406,23 +407,9 @@ export function Scene(p: Props) {
         maxX = Math.max(...state.arrangement.map((a) => bounds(a).x + bounds(a).w));
       const minZ = Math.min(...state.arrangement.map((a) => a.z)),
         maxZ = Math.max(...state.arrangement.map((a) => bounds(a).z + bounds(a).d));
-      const height = state.room
-        ? state.room.height + 380
-        : Math.max(...state.arrangement.map((a) => a.module.height+(a.y??0))) + 380;
-      const width = state.room
-        ? state.room.width + state.room.depth
-        : maxX - minX + maxZ - minZ + 650;
-      const dist =
-        (Math.max(height, width / aspect) /
-          (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))) *
-        1.1;
-      const center = new THREE.Vector3(
-        (state.room ? state.room.width / 2 : (minX + maxX) / 2) -
-          moduleCenter(focus).x,
-        height / 2 - 240,
-        (state.room ? state.room.depth / 2 : (minZ + maxZ) / 2) -
-          moduleCenter(focus).z,
-      );
+      const height=state.room?state.room.height:Math.max(...state.arrangement.map(a=>a.module.height+(a.y??0)));
+      const width=state.room?state.room.width:maxX-minX,depth=state.room?state.room.depth:maxZ-minZ;
+      const center=new THREE.Vector3((state.room?state.room.width/2:(minX+maxX)/2)-moduleCenter(focus).x,height/2,(state.room?state.room.depth/2:(minZ+maxZ)/2)-moduleCenter(focus).z);
       controls.target.copy(center);
       const view = current.current.view;
       const dir =
@@ -434,6 +421,8 @@ export function Scene(p: Props) {
               ? new THREE.Vector3(0, 1, 0.001)
               : new THREE.Vector3(1, 0.55, 1.7).normalize();
       if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);
+      const padding=state.presentation?50:state.dimensions?500:180;
+      const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,camera.fov,1.08);
       camera.up.set(0, 1, 0);
       camera.position.copy(center).addScaledVector(dir, dist);
       controls.update();
@@ -614,6 +603,7 @@ export function Scene(p: Props) {
     </div>
   );
 }
+
 
 
 

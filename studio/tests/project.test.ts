@@ -1,3 +1,4 @@
+import {frameDistance} from '../src/framing';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -199,4 +200,16 @@ test('push drawers omit handles by default but explicit handle choice survives i
   s.drawerConfigs[0].handle=true;
   assert.equal(parts(parseModule(JSON.parse(JSON.stringify(m)))).filter(d=>d.role==='handle'&&d.id.includes(':drawer:')).length,1);
   assert.ok(specificationHTML(p).includes('нет · Push'));
+});
+
+test('front framing uses projected width and safely fits narrow and wide screens',()=>{
+  const size={x:1400,y:2200,z:600};
+  for(const aspect of [.4,1,2]){
+    const d=frameDistance(size,{x:0,y:0,z:1},aspect,34),tan=Math.tan(17*Math.PI/180);
+    assert.ok(size.x/2/(d-size.z/2)/tan/aspect<1);
+    assert.ok(size.y/2/(d-size.z/2)/tan<1);
+  }
+  const front=frameDistance(size,{x:0,y:0,z:1},.5,34);
+  const former=(Math.max(2580,(1400+600+650)/.5)/(2*Math.tan(17*Math.PI/180)))*1.1;
+  assert.ok(front<former*.7,'front view should no longer count depth as extra width');
 });
