@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { boxes, parts, shelfGaps, type Module } from "./model";
 import { catalog } from "./catalog";
-import type { Room, PlacedModule } from "./project";
+import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
 import {wallPanels} from './roomGeometry';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
@@ -138,6 +138,8 @@ export function Scene(p: Props) {
       action?: () => void,
       small = false,
     ) {
+      const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
+      pos.applyAxisAngle(new THREE.Vector3(0,1,0),(active.rotation??0)*Math.PI/180);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "model-dimension" + (small ? " gap-dimension" : "");
@@ -157,6 +159,8 @@ export function Scene(p: Props) {
     }
 
     function line(points: THREE.Vector3[]) {
+      const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
+      points.forEach(p=>p.applyAxisAngle(new THREE.Vector3(0,1,0),(active.rotation??0)*Math.PI/180));
       modelGroup.add(
         new THREE.Line(
           new THREE.BufferGeometry().setFromPoints(points),
@@ -183,8 +187,8 @@ export function Scene(p: Props) {
         const doorPivots=new Map<string,THREE.Group>();
         const m = placed.module,
           active = placed.id === focus.id;
-        const dx = placed.x + m.width / 2 - focus.x - state.module.width / 2;
-        const dz = placed.z + m.depth / 2 - focus.z - state.module.depth / 2;
+        const origin=localToRoom(placed,0,0),center=moduleCenter(focus);
+        moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();
         for (const part of parts(m)) {
           const isMetal = part.material === "metal",
             isBack = part.material === "hdf";
@@ -242,9 +246,9 @@ export function Scene(p: Props) {
           const mesh = new THREE.Mesh(geometry, mat);
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
           mesh.position.set(
-            part.position[0] - m.width / 2 + dx,
-            part.position[1]+(placed.y??0),
-            part.position[2] - m.depth / 2 + dz,
+            part.position[0],
+            part.position[1],
+            part.position[2],
           );
           mesh.castShadow = true;
           mesh.receiveShadow = true;
@@ -256,10 +260,10 @@ export function Scene(p: Props) {
             role: part.role,
           };
           if (state.exploded && active) {
-            mesh.position.x *= 1.3;
+            mesh.position.x = (mesh.position.x-m.width/2)*1.3+m.width/2;
             mesh.position.y =
               (mesh.position.y - m.height / 2) * 1.18 + m.height / 2;
-            mesh.position.z *= 1.6;
+            mesh.position.z = (mesh.position.z-m.depth/2)*1.6+m.depth/2;
           }
           if (part.role === "door" && state.openDoors) {
             const pivot = new THREE.Group();
@@ -288,8 +292,8 @@ export function Scene(p: Props) {
       }
       if (state.room) {
         const r = state.room,
-          x0 = -focus.x - m.width / 2,
-          z0 = -focus.z - m.depth / 2;
+          x0 = -moduleCenter(focus).x,
+          z0 = -moduleCenter(focus).z;
         const geo = new THREE.BoxGeometry(r.width, r.height, r.depth);
         const outline = new THREE.LineSegments(
           new THREE.EdgesGeometry(geo),
@@ -340,6 +344,7 @@ export function Scene(p: Props) {
           (b.top + b.bottom) / 2+(focus.y??0),
           5,
         );
+        highlight.position.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);highlight.rotation.y=(focus.rotation??0)*Math.PI/180;
         modelGroup.add(highlight);
       }
       if (state.dimensions) {
@@ -395,9 +400,9 @@ export function Scene(p: Props) {
           state.arrangement.find((a) => a.id === state.activeId) ||
           state.arrangement[0];
       const minX = Math.min(...state.arrangement.map((a) => a.x)),
-        maxX = Math.max(...state.arrangement.map((a) => a.x + a.module.width));
+        maxX = Math.max(...state.arrangement.map((a) => bounds(a).x + bounds(a).w));
       const minZ = Math.min(...state.arrangement.map((a) => a.z)),
-        maxZ = Math.max(...state.arrangement.map((a) => a.z + a.module.depth));
+        maxZ = Math.max(...state.arrangement.map((a) => bounds(a).z + bounds(a).d));
       const height = state.room
         ? state.room.height + 380
         : Math.max(...state.arrangement.map((a) => a.module.height+(a.y??0))) + 380;
@@ -410,12 +415,10 @@ export function Scene(p: Props) {
         1.1;
       const center = new THREE.Vector3(
         (state.room ? state.room.width / 2 : (minX + maxX) / 2) -
-          focus.x -
-          m.width / 2,
+          moduleCenter(focus).x,
         height / 2 - 240,
         (state.room ? state.room.depth / 2 : (minZ + maxZ) / 2) -
-          focus.z -
-          m.depth / 2,
+          moduleCenter(focus).z,
       );
       controls.target.copy(center);
       const view = current.current.view;
@@ -427,6 +430,7 @@ export function Scene(p: Props) {
             : view === "top"
               ? new THREE.Vector3(0, 1, 0.001)
               : new THREE.Vector3(1, 0.55, 1.7).normalize();
+      if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);
       camera.up.set(0, 1, 0);
       camera.position.copy(center).addScaledVector(dir, dist);
       controls.update();
@@ -450,14 +454,15 @@ export function Scene(p: Props) {
     let drag:Drag|null=null;
     function cast(clientX:number,clientY:number){const r=renderer.domElement.getBoundingClientRect();pointer.set((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
     function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)));}
-    function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const xx=hit.point.x+focus.x+focus.module.width/2-a.x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
+    function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.mode==='orbit')return;
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       const isPart=state.mode==='fill'&&['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)&&!pid.includes(':drawer-cap');
-      const plane=new THREE.Plane(isPart||state.view==='front'?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0),isPart||state.view==='front'?-hit.point.z:-hit.point.y);
+      const normal=isPart||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
+      const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
       const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':pantograph:')?sid+':pantograph:':pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
       moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)||((pid===sid+':rod'||pid.includes(':flange:'))&&(o.userData.partId===sid+':rod'||o.userData.partId?.startsWith(sid+':flange:')))))meshes.push(o);});
@@ -467,11 +472,11 @@ export function Scene(p: Props) {
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
       drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
-        const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:current.current.view==='front'?drag.origin.z:drag.origin.z+point.z});
-        drag.candidate=next;moduleGroups.get(drag.mid)?.position.set(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z);badge.textContent='Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+        const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z});
+        drag.candidate=next;const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));badge.textContent='Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;badge.textContent='Перемещение: '+(dy>0?'+':'')+dy+' мм';}
     }
-    function resetDrag(){if(!drag)return;if(drag.kind==='module')moduleGroups.get(drag.mid)?.position.set(0,0,0);else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
+    function resetDrag(){if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
     function pointerUp(e:PointerEvent){
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
@@ -568,6 +573,7 @@ export function Scene(p: Props) {
       p.module.width,
       p.module.height,
       p.module.depth,
+      p.arrangement.find(a=>a.id===p.activeId)?.rotation,
     ],
   );
   return (

@@ -201,7 +201,7 @@ export default function App() {
     setTab("module");
     setFit((f) => f + 1);
   }
-  function addUpper(){const n=structuredClone(project);const mid=crypto.randomUUID();n.modules.push({id:mid,x:placed.x,z:placed.z,y:(placed.y??0)+m.height,module:{...initialModule(),name:'Антресоль',width:m.width,height:600,plinthHeight:0,sections:[section()]}});if(commitProject(n))selectModule(mid);}
+  function addUpper(){const n=structuredClone(project);const mid=crypto.randomUUID();n.modules.push({id:mid,x:placed.x,z:placed.z,rotation:placed.rotation??0,y:(placed.y??0)+m.height,module:{...initialModule(),name:'Антресоль',width:m.width,depth:m.depth,height:600,plinthHeight:0,sections:[section()]}});if(commitProject(n))selectModule(mid);}
   function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(moveModule(project,mid,pos));}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
   function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
@@ -1045,7 +1045,8 @@ export default function App() {
                 )}
               </div>
               <div className="property-section">
-                <h2>Положение в помещении</h2><p className="field-note">Перетащите корпус в сцене. На виде спереди можно поставить его сверху другого.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
+                <h2>Положение в помещении</h2>
+                <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>commitProject({...project,modules:project.modules.map(a=>a.id===placed.id?{...a,rotation:Number(e.target.value) as 0|90|180|270}:a)})}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Перетащите корпус в сцене. На виде спереди можно поставить его сверху другого.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"
                   value={placed.x}
@@ -1520,4 +1521,5 @@ export default function App() {
     </div>
   );
 }
+
 

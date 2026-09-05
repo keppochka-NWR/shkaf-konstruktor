@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
-import {newProject,projectErrors,parseProject,appendModule,snapPlacement} from '../src/project';
+import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
 import {insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
@@ -22,4 +22,6 @@ test('estimate uses actual sheets and never substitutes unknown hardware prices'
 test('estimate rejects malformed rates and follows workshop hinge count',()=>{const p=newProject();p.calculation={markup:0,overrides:{}};assert.throws(()=>parseProject(p));p.calculation={markup:2.2,overrides:{a:-1}};assert.throws(()=>parseProject(p));assert.deepEqual([[600,300],[600,600],[2000,300],[2000,600]].map(([h,w])=>hingeCount(h,w)),[2,3,4,5]);});
 test('moving a drawer to another body keeps its hardware and leaves one source copy',()=>{const p=appendModule(newProject(),initialModule()),a=p.modules[0],b=p.modules[1],s=a.module.sections[0];b.module.sections=[section()];s.drawerConfigs=[{slide:'gtv0fpo',length:450,height:180},{slide:'ball',length:500,height:140}];const n=transferPart(p,a.id,s.id,s.id+':drawer:0:facade',b.id,b.module.sections[0].id,120);assert.deepEqual(projectErrors(n),[]);assert.equal(n.modules[0].module.sections[0].drawers,1);const target=n.modules[1].module.sections[0];assert.equal(target.drawers,1);assert.equal(target.drawerConfigs![0].slide,'gtv0fpo');assert.equal(target.drawerConfigs![0].length,450);assert.equal(target.drawerConfigs![0].height,180);assert.equal(s.drawers,2);});
 test('failed transfer never removes the source drawer',()=>{const p=appendModule(newProject(),initialModule()),a=p.modules[0],b=p.modules[1],s=a.module.sections[0];b.module.sections=[section()];b.module.depth=300;const before=JSON.stringify(p);assert.throws(()=>transferPart(p,a.id,s.id,s.id+':drawer:0:left',b.id,b.module.sections[0].id,120));assert.equal(JSON.stringify(p),before);});
+test('quarter rotations invert points and exchange full occupied dimensions',()=>{const p=newProject(),a=p.modules[0];a.module.width=500;a.x=1000;a.z=1000;for(const r of [0,90,180,270] as const){a.rotation=r;const point=localToRoom(a,123,456);assert.deepEqual(roomToLocal(a,point.x,point.z),{x:123,z:456});const b=bounds(a);assert.equal(b.w,r%180===0?500:621);assert.equal(b.d,r%180===0?621:500);assert.deepEqual(parseProject(p),p);assert.deepEqual(projectErrors(p),[]);}});
+test('rotated fronts and backs participate in room limits and snapping',()=>{const p=newProject(),a=p.modules[0];a.rotation=90;a.x=0;assert.ok(projectErrors(p).length);const pos=snapPlacement(p,a.id,{x:8,y:0,z:30});assert.equal(pos.x,3);Object.assign(a,pos);assert.deepEqual(projectErrors(p),[]);assert.throws(()=>parseProject({...p,modules:[{...a,rotation:45}]}));});
 
