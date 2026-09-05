@@ -40,7 +40,7 @@ import {
   RULES,
   shelfGaps,
   setShelfGap,
-  drawerConfig, drawerOffsets, plinth,
+  drawerConfig, drawerOffsets, plinth, rearClear,
   type Module,
   type Section,
 } from "./model";
@@ -1187,7 +1187,8 @@ export default function App() {
                                 update({
                                   slide: e.target
                                     .value as DrawerConfig["slide"],
-                                  length: [...SLIDES[e.target.value as DrawerConfig['slide']].lengths].reverse().find(l=>l<=m.depth-25) || 250,
+                                  handle:undefined,
+                                  length: [...SLIDES[e.target.value as DrawerConfig['slide']].lengths].reverse().find(l=>l<=m.depth-rearClear(m)-(m.doors?44:25)) || 250,
                                 })
                               }
                             >
@@ -1210,11 +1211,12 @@ export default function App() {
                               {SLIDES[c.slide].lengths.map((l) => (
                                 <option key={l} value={l}>
                                   {l} мм
-                                  {l > m.depth - 25 ? " · не помещается" : ""}
+                                  {l > m.depth - rearClear(m) - (m.doors?44:25) ? " · не помещается" : ""}
                                 </option>
                               ))}
                             </select>
                           </label>
+                          <label className="hardware-field">Ручка ящика<select aria-label="Ручка ящика" value={c.handle===undefined?'auto':c.handle?'yes':'no'} onChange={e=>update({handle:e.target.value==='auto'?undefined:e.target.value==='yes'})}><option value="auto">{c.slide==='gtv0fpo'?'Без ручки · Push to Open':'Ручка 128 мм'}</option>{c.slide==='gtv0fpo'&&<option value="yes">Добавить ручку 128 мм</option>}{c.slide==='gtv0fpo'&&<option value="no">Без ручки</option>}</select></label>
                           <NumberField label="Ящик от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>
                           <NumberField
                             label="Высота боковины ящика"

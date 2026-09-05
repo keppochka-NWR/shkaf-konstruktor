@@ -476,7 +476,7 @@ export function Scene(p: Props) {
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
-      const isPart=state.mode==='fill'&&['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)&&!pid.includes(':drawer-cap');
+      const isPart=state.mode==='fill'&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
       if(state.mode==='fill'&&!isPart){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
       const normal=isPart||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);

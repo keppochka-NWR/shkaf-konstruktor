@@ -191,3 +191,12 @@ test('measurement survives files and rejects impossible dates',()=>{
   assert.ok(specificationHTML(p).includes('З-123'));assert.ok(specificationHTML(p).includes('Плинтус 80 мм'));
   p.measurement.date='2026-02-30';assert.ok(projectErrors(p).length);
 });
+
+test('push drawers omit handles by default but explicit handle choice survives import',()=>{
+  const p=newProject(),m=p.modules[0].module,s=m.sections[0];
+  s.drawerConfigs=Array.from({length:s.drawers},()=>({slide:'gtv0fpo' as const,length:450,height:140}));
+  assert.equal(parts(m).filter(d=>d.role==='handle'&&d.id.includes(':drawer:')).length,0);
+  s.drawerConfigs[0].handle=true;
+  assert.equal(parts(parseModule(JSON.parse(JSON.stringify(m)))).filter(d=>d.role==='handle'&&d.id.includes(':drawer:')).length,1);
+  assert.ok(specificationHTML(p).includes('нет · Push'));
+});

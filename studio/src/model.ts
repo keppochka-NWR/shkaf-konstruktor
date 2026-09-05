@@ -1,4 +1,4 @@
-import { SLIDES, type DrawerConfig } from "./hardware";
+import { drawerHasHandle, SLIDES, type DrawerConfig } from "./hardware";
 export const RULES = {
   panel: 16,
   back: 3,
@@ -328,7 +328,7 @@ export function parts(m: Module): Part[] {
       const fh=bh+RULES.drawerStep-RULES.drawerFrontGap,fw=b.width-filler-2*RULES.drawerFrontGap;
       add(s.id+':drawer:'+j+':facade','Ящик '+(j+1)+' · фасад',[fw,fh,t],[b.x+f.left+(b.width-filler)/2,y-RULES.drawerStep/2+(bh+RULES.drawerStep)/2,m.doors?d-36:d+t/2+2],fh,fw,t,'drawer',s.id);
       out.at(-1)!.decor=m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
-      add(s.id+':drawer:'+j+':handle','Ручка ящика',[128,10,18],[b.x+f.left+(b.width-filler)/2,y+bh/2,m.doors?d-20:d+28],128,10,18,'handle',s.id,'metal');
+      if(drawerHasHandle(cfg))add(s.id+':drawer:'+j+':handle','Ручка ящика',[128,10,18],[b.x+f.left+(b.width-filler)/2,y+bh/2,m.doors?d-20:d+28],128,10,18,'handle',s.id,'metal');
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -441,6 +441,8 @@ export function validate(m: Module): string[] {
         hw = SLIDES[c.slide];
       if (
         !hw ||
+        (c.handle!==undefined&&typeof c.handle!=='boolean') ||
+        (c.handle===false&&c.slide==='ball') ||
         !Number.isFinite(c.height) ||
         c.height < 68 ||
         c.height > 300 ||
@@ -646,6 +648,7 @@ export function parseModule(input: unknown): Module {
               slide: c?.slide,
               height: c?.height,
               length: c?.length,
+              ...(c?.handle===undefined?{}:{handle:c.handle}),
                   ...(c?.y===undefined?{}:{y:c.y}),
             })),
           }),

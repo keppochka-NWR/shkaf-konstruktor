@@ -17,6 +17,9 @@ export type DrawerConfig = {
   height: number;
   length: number;
   y?: number;
+  handle?: boolean;
 };
 export const GTV_SOURCE =
   "https://api2.gtv.com.pl/pimcore/assets/attachments/karta_techniczna/Karta_techniczna_2020_128-129.pdf";
+
+export function drawerHasHandle(c:DrawerConfig){return c.handle??(c.slide!=="gtv0fpo");}
