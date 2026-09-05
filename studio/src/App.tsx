@@ -48,6 +48,7 @@ import { Scene, type View } from "./Scene";
 import { OutputPanel } from "./OutputPanel";
 import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
+import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
@@ -227,7 +228,7 @@ export default function App() {
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
     [modal, setModal] = useState<
-      "materials" | "parts" | "help" | "output" | null
+      "materials" | "parts" | "help" | "output" | "cloud" | null
     >(null),
     [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor">(
       "decor",
@@ -456,6 +457,7 @@ export default function App() {
           </span>
         </div>
         <div className="header-actions">
+          <button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
@@ -1369,7 +1371,7 @@ export default function App() {
           }}
         >
           <div
-            className={`modal ${modal === "parts" || modal === "output" ? "wide" : ""}`}
+            className={`modal ${modal === "parts" || modal === "output" || modal === "cloud" ? "wide" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -1378,7 +1380,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">МОДУЛЬ</span>
                 <h2 id="modal-title">
-                  {modal === "output"
+                  {modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
                       ? "Материалы Lamarty"
@@ -1395,7 +1397,7 @@ export default function App() {
                 <X />
               </button>
             </div>
-            {modal === "output" ? (
+            {modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <OutputPanel
                 project={project}
                 capture={() => capture.current?.()}
@@ -1526,6 +1528,7 @@ export default function App() {
     </div>
   );
 }
+
 
 
 
