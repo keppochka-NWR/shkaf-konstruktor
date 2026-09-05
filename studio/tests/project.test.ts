@@ -213,3 +213,12 @@ test('front framing uses projected width and safely fits narrow and wide screens
   const former=(Math.max(2580,(1400+600+650)/.5)/(2*Math.tan(17*Math.PI/180)))*1.1;
   assert.ok(front<former*.7,'front view should no longer count depth as extra width');
 });
+
+test('inserted board back reduces usable depth and appears in board nesting',()=>{
+  const p=newProject(),m=p.modules[0].module;m.backType='board';
+  const back=parts(m).find(d=>d.id==='back')!;assert.equal(back.material,'board');assert.equal(back.thickness,16);assert.equal(back.size[0],m.width-32);
+  const shelf=parts(m).find(d=>d.id.includes(':shelf:'))!;assert.equal(shelf.position[2]-shelf.size[2]/2,17);
+  assert.ok(!parts(m).some(d=>d.material==='hdf'));assert.ok(!nest(p).some(s=>s.material==='hdf'));
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).backType,'board');
+  m.backType='none';assert.ok(!parts(m).some(d=>d.id==='back'));assert.equal(parseModule(JSON.parse(JSON.stringify(m))).backType,'none');
+});

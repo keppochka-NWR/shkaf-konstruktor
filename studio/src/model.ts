@@ -54,7 +54,7 @@ export type Module = {
   facadeDecor: string;
   doors: boolean;
   sections: Section[];
-  backType?: "nailed" | "groove";
+  backType?: "nailed" | "groove" | "board" | "none";
   grooveInset?: number;
   grooveDepth?: number;
   hingeSide?: "left" | "right";
@@ -103,7 +103,7 @@ export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
   );
 }
 export function plinth(m:Module){return m.plinthHeight ?? RULES.plinth;}
-export function rearClear(m:Module){return m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
+export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+(s.drawerConfigs?.[j]?.height??RULES.drawerH)+RULES.drawerStep;return start;});}
 export function doorCount(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>RULES.doorMax?2:1;}
 export function fillerSides(m:Module,s:Section){if(!m.doors||!s.drawers)return {left:0,right:0};const both=doorCount(m,s)===2;return {left:both||m.hingeSide!=='right'?RULES.drawerFiller:0,right:both||m.hingeSide==='right'?RULES.drawerFiller:0};}
@@ -228,7 +228,8 @@ export function parts(m: Module): Part[] {
   const groove=m.backType==='groove',gd=m.grooveDepth??8;
   const backW=groove?m.width-2*t+2*gd-1:m.width-4;
   const backH=groove?m.height-bottom-2*t+2*gd-1:m.height-4;
-  add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,groove?(bottom+m.height)/2:m.height/2,groove?(m.grooveInset??16)+RULES.back/2:-RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
+  if(m.backType==='board'){add('back','Задняя стенка · ЛДСП вкладная',[m.width-2*t,m.height-bottom-2*t,t],[m.width/2,(bottom+m.height)/2,t/2],m.height-bottom-2*t,m.width-2*t,t,'body');out.at(-1)!.edge=[0.4,0.4,0.4,0.4];}
+  else if(m.backType!=='none')add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,groove?(bottom+m.height)/2:m.height/2,groove?(m.grooveInset??16)+RULES.back/2:-RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
   boxes(m).forEach((b, i) => {
     const s = m.sections[i],
       h = b.top - b.bottom,
@@ -404,7 +405,7 @@ export function validate(m: Module): string[] {
     if (!Number.isFinite(n) || n < min || n > max)
       errors.push(`${label}: допустимо от ${min} до ${max} мм.`);
   }
-  if (m.backType!==undefined && !["nailed","groove"].includes(m.backType)) errors.push("Задняя стенка: только в паз или набивная.");
+  if (m.backType!==undefined && !["nailed","groove","board","none"].includes(m.backType)) errors.push("Выберите допустимый тип задней стенки.");
   if(m.hingeSide!==undefined&&!['left','right'].includes(m.hingeSide))errors.push('Выберите сторону петель.');
   if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");

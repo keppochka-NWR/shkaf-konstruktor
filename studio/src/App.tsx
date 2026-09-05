@@ -1092,7 +1092,9 @@ export default function App() {
               </div>
               <div className="property-section">
                 <h2>Конструкция цеха</h2>
-                <label className="hardware-field">Задняя стенка<select aria-label="Тип задней стенки" value={m.backType??'nailed'} onChange={e=>modify(n=>n.backType=e.target.value as Module['backType'])}><option value="nailed">ЛХДФ · набивная</option><option value="groove">ЛХДФ · в паз</option></select></label>
+                <label className="hardware-field">Задняя стенка<select aria-label="Тип задней стенки" value={m.backType??'nailed'} onChange={e=>modify(n=>n.backType=e.target.value as Module['backType'])}><option value="nailed">ЛХДФ · набивная</option><option value="groove">ЛХДФ · в паз</option><option value="board">ЛДСП 16 · вкладная</option><option value="none">Без задней стенки</option></select></label>
+                {m.backType==='none'&&<p className="field-note">Корпус без задней стенки: крепление к стене и жёсткость проверяет технолог.</p>}
+                {m.backType==='board'&&<p className="field-note">ЛДСП 16 мм в цвет корпуса, между боковинами, дном и крышей. Уменьшает полезную глубину на 17 мм. Крепёж уточняет технолог.</p>}
                 {m.backType==='groove'&&<><NumberField label="Отступ паза от зада" value={m.grooveInset??16} min={8} max={30} onChange={v=>modify(n=>n.grooveInset=v)}/><NumberField label="Глубина паза" value={m.grooveDepth??8} min={4} max={10} onChange={v=>modify(n=>n.grooveDepth=v)}/><p className="field-note">Профиль паза проверяет технолог перед выпуском.</p></>}
                 <label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{[0,80,100,120,150].map(v=><option key={v} value={v}>{v===0?'Без цоколя':v+' мм'}</option>)}</select></label>
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
@@ -1110,7 +1112,7 @@ export default function App() {
                   </div>
                   <div>
                     <dt>Задняя стенка</dt>
-                    <dd>ЛХДФ 3 мм</dd>
+                    <dd>{m.backType==='none'?'Нет':m.backType==='board'?'ЛДСП 16 мм':'ЛХДФ 3 мм'}</dd>
                   </div>
                   <div>
                     <dt>Секций</dt>

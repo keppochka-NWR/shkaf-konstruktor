@@ -7,7 +7,7 @@ export function newProject(module=initialModule()):Project{return {version:3,roo
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
-export function bounds(a:PlacedModule){const rear=a.module.backType==='groove'?0:3;const points=[localToRoom(a,0,-rear),localToRoom(a,a.module.width,a.module.depth+18)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const points=[localToRoom(a,0,-rear),localToRoom(a,a.module.width,a.module.depth+18)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
 export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x<b.x+b.w-0.1&&a.x+a.w>b.x+0.1&&a.y<b.y+b.h-0.1&&a.y+a.h>b.y+0.1&&a.z<b.z+b.d-0.1&&a.z+a.d>b.z+0.1;}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
