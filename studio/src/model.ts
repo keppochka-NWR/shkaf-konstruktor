@@ -1,3 +1,4 @@
+import { SLIDES, type DrawerConfig } from "./hardware";
 export const RULES = {
   panel: 16,
   back: 3,
@@ -39,6 +40,7 @@ export type Section = {
   shelves: number[];
   drawers: number;
   rod: boolean;
+  drawerConfigs?: DrawerConfig[];
 };
 export type Module = {
   version: 1;
@@ -81,6 +83,24 @@ export const section = (): Section => ({
   drawers: 0,
   rod: false,
 });
+export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
+  return (
+    s.drawerConfigs?.[j] || {
+      slide: "ball",
+      height: RULES.drawerH,
+      length:
+        [...SLIDES.ball.lengths].reverse().find((l) => l <= m.depth - 25) ||
+        250,
+    }
+  );
+}
+export function drawerStackHeight(s: Section) {
+  return Array.from(
+    { length: Math.max(0, Math.min(5, s.drawers)) },
+    (_, j) =>
+      (s.drawerConfigs?.[j]?.height ?? RULES.drawerH) + RULES.drawerStep,
+  ).reduce((a, b) => a + b, 0);
+}
 export function initialModule(): Module {
   return {
     version: 1,
@@ -242,77 +262,95 @@ export function parts(m: Module): Part[] {
       add(
         `${s.id}:filler`,
         "Фальш-панель",
-        [filler, s.drawers * (RULES.drawerH + RULES.drawerStep), sd],
-        [
-          b.x + filler / 2,
-          b.bottom + (s.drawers * (RULES.drawerH + RULES.drawerStep)) / 2,
-          sd / 2,
-        ],
-        s.drawers * (RULES.drawerH + RULES.drawerStep),
+        [filler, drawerStackHeight(s), sd],
+        [b.x + filler / 2, b.bottom + drawerStackHeight(s) / 2, sd / 2],
+        drawerStackHeight(s),
         sd,
         t,
         "body",
         s.id,
       );
-    const boxW = b.width - filler - 2 * RULES.drawerSideGap,
-      boxD = Math.floor((d - 25) / 50) * 50;
+    let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
-      const y =
-        b.bottom +
-        j * (RULES.drawerH + RULES.drawerStep) +
-        RULES.drawerStep / 2;
-      const bx = b.x + filler + RULES.drawerSideGap;
-      const z = d - boxD - 20;
-      add(
-        `${s.id}:drawer:${j}:left`,
-        "Ящик · боковина",
-        [t, RULES.drawerH, boxD],
-        [bx + t / 2, y + RULES.drawerH / 2, z + boxD / 2],
-        boxD,
-        RULES.drawerH,
-        t,
-        "drawer",
-        s.id,
-      );
-      add(
-        `${s.id}:drawer:${j}:right`,
-        "Ящик · боковина",
-        [t, RULES.drawerH, boxD],
-        [bx + boxW - t / 2, y + RULES.drawerH / 2, z + boxD / 2],
-        boxD,
-        RULES.drawerH,
-        t,
-        "drawer",
-        s.id,
-      );
-      for (const end of ["front", "back"])
+      const cfg = drawerConfig(m, s, j),
+        hidden = cfg.slide === "gtv0fpo";
+      const sideGap = hidden ? 5 : RULES.drawerSideGap,
+        boxW = b.width - filler - 2 * sideGap;
+      const boxD = cfg.length - (hidden ? 10 : 0),
+        bh = cfg.height;
+      const bx = b.x + filler + sideGap,
+        y = nextY,
+        z = d - 20 - boxD;
+      nextY += bh + RULES.drawerStep;
+      for (const side of ["left", "right"])
         add(
-          `${s.id}:drawer:${j}:${end}`,
-          end === "front" ? "Ящик · передняя стенка" : "Ящик · задняя стенка",
-          [boxW - 2 * t, RULES.drawerH, t],
+          s.id + ":drawer:" + j + ":" + side,
+          "Ящик " + (j + 1) + " · боковина",
+          [t, bh, boxD],
           [
-            bx + boxW / 2,
-            y + RULES.drawerH / 2,
-            end === "front" ? z + boxD - t / 2 : z + t / 2,
+            side === "left" ? bx + t / 2 : bx + boxW - t / 2,
+            y + bh / 2,
+            z + boxD / 2,
           ],
-          boxW - 2 * t,
-          RULES.drawerH,
+          boxD,
+          bh,
           t,
           "drawer",
           s.id,
         );
+      const endH = hidden ? bh - 28 : bh,
+        endY = hidden ? y + 28 : y;
+      for (const end of ["front", "back"])
+        add(
+          s.id + ":drawer:" + j + ":" + end,
+          "Ящик " +
+            (j + 1) +
+            " · " +
+            (end === "front" ? "передняя стенка" : "задняя стенка"),
+          [boxW - 2 * t, endH, t],
+          [
+            bx + boxW / 2,
+            endY + endH / 2,
+            end === "front" ? z + boxD - t / 2 : z + t / 2,
+          ],
+          boxW - 2 * t,
+          endH,
+          t,
+          "drawer",
+          s.id,
+        );
+      const bw = hidden ? boxW - 2 * t : boxW - 2,
+        bd = hidden ? boxD : boxD - 2,
+        bt = hidden ? t : RULES.back;
       add(
-        `${s.id}:drawer:${j}:bottom`,
-        "Дно ящика",
-        [boxW - 2, RULES.back, boxD - 2],
-        [bx + boxW / 2, y - RULES.back / 2, z + boxD / 2],
-        boxW - 2,
-        boxD - 2,
-        RULES.back,
+        s.id + ":drawer:" + j + ":bottom",
+        "Ящик " + (j + 1) + " · дно",
+        [bw, bt, bd],
+        [bx + boxW / 2, hidden ? y + 12 + t / 2 : y - bt / 2, z + boxD / 2],
+        bw,
+        bd,
+        bt,
         "drawer",
         s.id,
-        "hdf",
+        hidden ? "board" : "hdf",
       );
+      for (const side of [0, 1])
+        add(
+          s.id + ":drawer:" + j + ":slide:" + side,
+          "Направляющая " + cfg.slide,
+          [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length],
+          [
+            hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6),
+            hidden ? y + 6 : y + bh / 2,
+            z + boxD - cfg.length / 2,
+          ],
+          cfg.length,
+          20,
+          12,
+          "drawer",
+          s.id,
+          "metal",
+        );
     }
     if (s.rod) {
       const topShelf = s.shelves.length
@@ -387,8 +425,34 @@ export function validate(m: Module): string[] {
       s.drawers > RULES.maxDrawers
     )
       errors.push(prefix + "слишком много элементов.");
+    if (
+      s.drawerConfigs &&
+      (!Array.isArray(s.drawerConfigs) || s.drawerConfigs.length > 5)
+    )
+      errors.push(prefix + "некорректные параметры ящиков.");
+    for (let j = 0; j < s.drawers && j < 5; j++) {
+      const c = drawerConfig(m, s, j),
+        hw = SLIDES[c.slide];
+      if (
+        !hw ||
+        !Number.isFinite(c.height) ||
+        c.height < 68 ||
+        c.height > 300 ||
+        !hw.lengths.some((l) => l === c.length)
+      ) {
+        errors.push(prefix + "неверный размер или тип направляющих.");
+        continue;
+      }
+      if (c.length > m.depth - (c.slide === "gtv0fpo" ? 25 : 25))
+        errors.push(prefix + "направляющая слишком длинная для этой глубины.");
+      if (c.slide === "gtv0fpo" && b.width - (m.doors ? 16 : 0) - 10 > c.length)
+        errors.push(
+          prefix +
+            "GTV 0FPO: ширина ящика не должна превышать длину направляющей. Увеличьте длину или разделите секцию.",
+        );
+    }
     const shelfY = s.shelves.map((f) => f * h).sort((a, b) => a - b);
-    const drawerTop = s.drawers * (RULES.drawerH + RULES.drawerStep);
+    const drawerTop = drawerStackHeight(s);
     if (drawerTop > h - RULES.shelfMinClear)
       errors.push(
         prefix +
@@ -424,6 +488,7 @@ export function validate(m: Module): string[] {
           "под штангой нужно 900 мм до ящиков или дна. Поднимите нижнюю полку или уберите наполнение.",
       );
   });
+  if (errors.length) return [...new Set(errors)];
   for (const p of parts(m)) {
     if (p.material === "metal") continue;
     const sw = p.material === "hdf" ? RULES.hdfW : RULES.sheetW,
@@ -448,7 +513,7 @@ function dTooSmall(m: Module) {
 }
 export function distribute(m: Module, s: Section, count: number): number[] {
   const h = m.height - RULES.plinth - 2 * RULES.panel,
-    base = s.drawers * (RULES.drawerH + RULES.drawerStep);
+    base = drawerStackHeight(s);
   if (s.rod)
     return count === 0
       ? []
@@ -480,6 +545,37 @@ export function splitSection(m: Module, sid: string): Module {
   );
   return next;
 }
+/** Clear openings, measured between actual panel faces, bottom to top. */
+export function shelfGaps(m: Module, sid: string) {
+  const b = boxes(m).find((b) => b.id === sid)!;
+  const s = m.sections.find((s) => s.id === sid)!;
+  const centers = s.shelves
+    .map((f) => b.bottom + f * (b.top - b.bottom))
+    .sort((a, b) => a - b);
+  return [...centers, b.top + RULES.panel / 2].map((y, i) => {
+    const bottom = i === 0 ? b.bottom : centers[i - 1] + RULES.panel / 2;
+    const top = y - RULES.panel / 2;
+    return { bottom, top, height: Math.round((top - bottom) * 10) / 10 };
+  });
+}
+export function setShelfGap(
+  m: Module,
+  sid: string,
+  index: number,
+  value: number,
+) {
+  const b = boxes(m).find((b) => b.id === sid)!,
+    s = m.sections.find((s) => s.id === sid)!;
+  s.shelves.sort((a, b) => a - b);
+  const gaps = shelfGaps(m, sid);
+  if (!s.shelves.length || !gaps[index]) return;
+  const j = Math.min(index, s.shelves.length - 1);
+  const center =
+    index === s.shelves.length
+      ? b.top - value - RULES.panel / 2
+      : gaps[index].bottom + value + RULES.panel / 2;
+  s.shelves[j] = (center - b.bottom) / (b.top - b.bottom);
+}
 export function parseModule(input: unknown): Module {
   if (!input || typeof input !== "object")
     throw new Error("Файл не содержит модуль.");
@@ -504,7 +600,9 @@ export function parseModule(input: unknown): Module {
       s.shelves.length > 10 ||
       !s.shelves.every((v: unknown) => typeof v === "number") ||
       typeof s.drawers !== "number" ||
-      typeof s.rod !== "boolean"
+      typeof s.rod !== "boolean" ||
+      (s.drawerConfigs !== undefined &&
+        (!Array.isArray(s.drawerConfigs) || s.drawerConfigs.length > 5))
     )
       throw new Error("Некорректные данные секции.");
   }
@@ -523,6 +621,15 @@ export function parseModule(input: unknown): Module {
       shelves: [...s.shelves],
       drawers: s.drawers,
       rod: s.rod,
+      ...(s.drawerConfigs === undefined
+        ? {}
+        : {
+            drawerConfigs: s.drawerConfigs.map((c: DrawerConfig) => ({
+              slide: c?.slide,
+              height: c?.height,
+              length: c?.length,
+            })),
+          }),
     })),
   };
   const errors = validate(m);

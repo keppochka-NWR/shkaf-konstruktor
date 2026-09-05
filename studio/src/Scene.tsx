@@ -1,10 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { boxes, parts, type Module } from "./model";
+import { boxes, parts, shelfGaps, type Module } from "./model";
+import { catalog } from "./catalog";
+import type { Room, PlacedModule } from "./project";
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
+  captureReady: (fn: (() => string) | undefined) => void;
   module: Module;
+  arrangement: PlacedModule[];
+  activeId: string;
+  room?: Room;
+  transparent: boolean;
+  onModuleSelect: (id: string) => void;
+  onDimension: (key: "width" | "height" | "depth") => void;
+  onGap: (index: number) => void;
+  onPartSelect: (sid: string, pid: string) => void;
   selected: string;
   onSelect: (id: string) => void;
   texture?: string;
@@ -26,7 +37,11 @@ export function Scene(p: Props) {
     let disposed = false;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true,
+      });
     } catch {
       setError(
         "Не удалось включить 3D. Откройте редактор в Chrome или Edge с аппаратным ускорением. Ваш модуль сохранён.",
@@ -44,12 +59,12 @@ export function Scene(p: Props) {
     renderer.domElement.setAttribute("role", "img");
     target.appendChild(renderer.domElement);
     const scene = new THREE.Scene(),
-      camera = new THREE.PerspectiveCamera(34, 1, 5, 50000);
+      camera = new THREE.PerspectiveCamera(34, 1, 5, 250000);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
     controls.minDistance = 350;
-    controls.maxDistance = 14000;
+    controls.maxDistance = 150000;
     controls.maxPolarAngle = Math.PI * 0.91;
     scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8991, 2.1));
     const sun = new THREE.DirectionalLight(0xfff8ed, 3.1);
@@ -107,28 +122,32 @@ export function Scene(p: Props) {
       });
       scene.remove(group);
     }
-    function label(text: string, pos: THREE.Vector3) {
-      const c = document.createElement("canvas");
-      c.width = 512;
-      c.height = 128;
-      const ctx = c.getContext("2d")!;
-      ctx.fillStyle = "#f6fafb";
-      ctx.beginPath();
-      ctx.roundRect(8, 8, 496, 112, 22);
-      ctx.fill();
-      ctx.fillStyle = "#234754";
-      ctx.font = "600 58px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(text, 256, 66);
-      const map = new THREE.CanvasTexture(c);
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map, depthTest: false }),
+    const labels: { element: HTMLButtonElement; position: THREE.Vector3 }[] =
+      [];
+    function label(
+      text: string,
+      pos: THREE.Vector3,
+      action?: () => void,
+      small = false,
+    ) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "model-dimension" + (small ? " gap-dimension" : "");
+      button.textContent = text;
+      button.setAttribute(
+        "aria-label",
+        (small ? "Проём " : "Изменить размер ") + text,
       );
-      sprite.position.copy(pos);
-      sprite.scale.set(530, 132.5, 1);
-      modelGroup.add(sprite);
+      button.title = action
+        ? "Нажмите, чтобы изменить размер"
+        : "Размер в свету";
+      button.addEventListener("pointerdown", (e) => e.stopPropagation());
+      button.addEventListener("click", () => action?.());
+      button.disabled = !action;
+      target.appendChild(button);
+      labels.push({ element: button, position: pos });
     }
+
     function line(points: THREE.Vector3[]) {
       modelGroup.add(
         new THREE.Line(
@@ -140,96 +159,147 @@ export function Scene(p: Props) {
     function rebuild() {
       const state = current.current,
         m = state.module;
+      for (const l of labels) l.element.remove();
+      labels.length = 0;
       generation++;
       const gen = generation;
       disposeGroup(modelGroup);
       modelGroup = new THREE.Group();
       scene.add(modelGroup);
-      for (const part of parts(m)) {
-        const isMetal = part.material === "metal",
-          isBack = part.material === "hdf";
-        const wood = part.decor.includes("Дуб") || part.decor.includes("Орех");
-        const mat = new THREE.MeshStandardMaterial({
-          color: isMetal
-            ? 0xbecad0
-            : isBack
-              ? 0xd7d5cc
-              : wood
-                ? 0xd2b68d
-                : part.decor === "Графит"
-                  ? 0x505653
-                  : 0xe6e4dc,
-          roughness: isMetal ? 0.24 : 0.73,
-          metalness: isMetal ? 0.8 : 0,
-        });
-        const texture =
-          part.role === "door" ? state.facadeTexture : state.texture;
-        if (texture && !isBack && !isMetal) {
-          loader.load(
-            texture,
-            (map) => {
-              if (disposed || gen !== generation) {
-                map.dispose();
-                return;
-              }
-              map.colorSpace = THREE.SRGBColorSpace;
-              map.anisotropy = Math.min(
-                8,
-                renderer.capabilities.getMaxAnisotropy(),
-              );
-              mat.map = map;
-              mat.color.set(0xffffff);
-              mat.needsUpdate = true;
-            },
-            undefined,
-            () => {},
+      const focus =
+        state.arrangement.find((a) => a.id === state.activeId) ||
+        state.arrangement[0];
+      for (const placed of state.arrangement) {
+        const m = placed.module,
+          active = placed.id === focus.id;
+        const dx = placed.x + m.width / 2 - focus.x - state.module.width / 2;
+        const dz = placed.z + m.depth / 2 - focus.z - state.module.depth / 2;
+        for (const part of parts(m)) {
+          const isMetal = part.material === "metal",
+            isBack = part.material === "hdf";
+          const wood =
+            part.decor.includes("Дуб") || part.decor.includes("Орех");
+          const mat = new THREE.MeshStandardMaterial({
+            color: isMetal
+              ? 0xbecad0
+              : isBack
+                ? 0xd7d5cc
+                : wood
+                  ? 0xd2b68d
+                  : part.decor === "Графит"
+                    ? 0x505653
+                    : 0xe6e4dc,
+            transparent: state.transparent && (part.role === "body" || part.role === "door"),
+            opacity: state.transparent && (part.role === "body" || part.role === "door") ? 0.16 : 1,
+            depthWrite: !(state.transparent && (part.role === "body" || part.role === "door")),
+            roughness: isMetal ? 0.24 : 0.73,
+            metalness: isMetal ? 0.8 : 0,
+          });
+          const texture = catalog.find(
+            (c) => c.n === (part.role === "door" ? m.facadeDecor : m.decor),
+          )?.tex;
+          if (texture && !isBack && !isMetal) {
+            loader.load(
+              texture,
+              (map) => {
+                if (disposed || gen !== generation) {
+                  map.dispose();
+                  return;
+                }
+                map.colorSpace = THREE.SRGBColorSpace;
+                map.anisotropy = Math.min(
+                  8,
+                  renderer.capabilities.getMaxAnisotropy(),
+                );
+                mat.map = map;
+                mat.color.set(0xffffff);
+                mat.needsUpdate = true;
+              },
+              undefined,
+              () => {},
+            );
+          }
+          const geometry =
+            part.role === "rod"
+              ? new THREE.CylinderGeometry(
+                  part.size[1] / 2,
+                  part.size[1] / 2,
+                  part.size[0],
+                  24,
+                )
+              : new THREE.BoxGeometry(...part.size);
+          const mesh = new THREE.Mesh(geometry, mat);
+          if (part.role === "rod") mesh.rotation.z = Math.PI / 2;
+          mesh.position.set(
+            part.position[0] - m.width / 2 + dx,
+            part.position[1],
+            part.position[2] - m.depth / 2 + dz,
           );
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.userData = {
+            sectionId: part.sectionId,
+            partId: part.id,
+            moduleId: placed.id,
+            active,
+            role: part.role,
+          };
+          if (state.exploded && active) {
+            mesh.position.x *= 1.3;
+            mesh.position.y =
+              (mesh.position.y - m.height / 2) * 1.18 + m.height / 2;
+            mesh.position.z *= 1.6;
+          }
+          if (part.role === "door" && state.openDoors) {
+            const pivot = new THREE.Group();
+            pivot.position.copy(mesh.position);
+            pivot.position.x -= part.size[0] / 2;
+            mesh.position.set(part.size[0] / 2, 0, 0);
+            pivot.add(mesh);
+            pivot.rotation.y = -Math.PI * 0.58;
+            modelGroup.add(pivot);
+          } else modelGroup.add(mesh);
+          if (!isMetal) {
+            const edge = new THREE.LineSegments(
+              new THREE.EdgesGeometry(geometry),
+              new THREE.LineBasicMaterial({
+                color: 0x4a4b40,
+                transparent: true,
+                opacity: 0.16,
+              }),
+            );
+            mesh.add(edge);
+          }
         }
-        const geometry =
-          part.role === "rod"
-            ? new THREE.CylinderGeometry(
-                part.size[1] / 2,
-                part.size[1] / 2,
-                part.size[0],
-                24,
-              )
-            : new THREE.BoxGeometry(...part.size);
-        const mesh = new THREE.Mesh(geometry, mat);
-        if (part.role === "rod") mesh.rotation.z = Math.PI / 2;
-        mesh.position.set(
-          part.position[0] - m.width / 2,
-          part.position[1],
-          part.position[2] - m.depth / 2,
+      }
+      if (state.room) {
+        const r = state.room,
+          x0 = -focus.x - m.width / 2,
+          z0 = -focus.z - m.depth / 2;
+        const geo = new THREE.BoxGeometry(r.width, r.height, r.depth);
+        const outline = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geo),
+          new THREE.LineBasicMaterial({
+            color: 0x8dabb4,
+            transparent: true,
+            opacity: 0.5,
+          }),
         );
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.userData = { sectionId: part.sectionId, partId: part.id };
-        if (state.exploded) {
-          mesh.position.x *= 1.3;
-          mesh.position.y =
-            (mesh.position.y - m.height / 2) * 1.18 + m.height / 2;
-          mesh.position.z *= 1.6;
-        }
-        if (part.role === "door" && state.openDoors) {
-          const pivot = new THREE.Group();
-          pivot.position.copy(mesh.position);
-          pivot.position.x -= part.size[0] / 2;
-          mesh.position.set(part.size[0] / 2, 0, 0);
-          pivot.add(mesh);
-          pivot.rotation.y = -Math.PI * 0.58;
-          modelGroup.add(pivot);
-        } else modelGroup.add(mesh);
-        if (!isMetal) {
-          const edge = new THREE.LineSegments(
-            new THREE.EdgesGeometry(geometry),
-            new THREE.LineBasicMaterial({
-              color: 0x4a4b40,
-              transparent: true,
-              opacity: 0.16,
-            }),
-          );
-          mesh.add(edge);
-        }
+        geo.dispose();
+        outline.position.set(x0 + r.width / 2, r.height / 2, z0 + r.depth / 2);
+        modelGroup.add(outline);
+        const wall = new THREE.Mesh(
+          new THREE.PlaneGeometry(r.width, r.height),
+          new THREE.MeshStandardMaterial({
+            color: 0xd5e2e7,
+            transparent: true,
+            opacity: 0.22,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          }),
+        );
+        wall.position.set(x0 + r.width / 2, r.height / 2, z0 - 4);
+        modelGroup.add(wall);
       }
       const b = boxes(m).find((b) => b.id === state.selected);
       if (b) {
@@ -263,21 +333,71 @@ export function Scene(p: Props) {
         ]);
         for (const dx of [-m.width / 2, m.width / 2])
           line([new THREE.Vector3(dx, -55, z), new THREE.Vector3(dx, -125, z)]);
-        label(`${m.width} мм`, new THREE.Vector3(0, -110, z));
+        label(`${m.width} мм`, new THREE.Vector3(0, -110, z), () =>
+          current.current.onDimension("width"),
+        );
         line([new THREE.Vector3(x, 0, z), new THREE.Vector3(x, m.height, z)]);
-        label(`${m.height} мм`, new THREE.Vector3(x - 30, m.height / 2, z));
+        label(
+          m.height + " мм",
+          new THREE.Vector3(x - 30, m.height / 2, z),
+          () => current.current.onDimension("height"),
+        );
+        label(
+          m.depth + " мм",
+          new THREE.Vector3(m.width / 2 + 150, 100, 0),
+          () => current.current.onDimension("depth"),
+        );
+        if (
+          b &&
+          m.sections.find((s) => s.id === b.id)!.shelves.length &&
+          !state.exploded
+        ) {
+          shelfGaps(m, b.id).forEach((g, i) => {
+            const gx = b.x + b.width / 2 - m.width / 2;
+            line([
+              new THREE.Vector3(gx, g.bottom, z - 85),
+              new THREE.Vector3(gx, g.top, z - 85),
+            ]);
+            label(
+              String(g.height),
+              new THREE.Vector3(gx, (g.top + g.bottom) / 2, z - 75),
+              () => current.current.onGap(i),
+              true,
+            );
+          });
+        }
       }
     }
     function fit() {
       const m = current.current.module;
       const aspect = target.clientWidth / Math.max(1, target.clientHeight);
-      const height = m.height + 380;
-      const width = m.width + m.depth + 650;
+      const state = current.current,
+        focus =
+          state.arrangement.find((a) => a.id === state.activeId) ||
+          state.arrangement[0];
+      const minX = Math.min(...state.arrangement.map((a) => a.x)),
+        maxX = Math.max(...state.arrangement.map((a) => a.x + a.module.width));
+      const minZ = Math.min(...state.arrangement.map((a) => a.z)),
+        maxZ = Math.max(...state.arrangement.map((a) => a.z + a.module.depth));
+      const height = state.room
+        ? state.room.height + 380
+        : Math.max(...state.arrangement.map((a) => a.module.height)) + 380;
+      const width = state.room
+        ? state.room.width + state.room.depth
+        : maxX - minX + maxZ - minZ + 650;
       const dist =
         (Math.max(height, width / aspect) /
           (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)))) *
         1.1;
-      const center = new THREE.Vector3(0, m.height / 2 - 50, 0);
+      const center = new THREE.Vector3(
+        (state.room ? state.room.width / 2 : (minX + maxX) / 2) -
+          focus.x -
+          m.width / 2,
+        height / 2 - 240,
+        (state.room ? state.room.depth / 2 : (minZ + maxZ) / 2) -
+          focus.z -
+          m.depth / 2,
+      );
       controls.target.copy(center);
       const view = current.current.view;
       const dir =
@@ -324,8 +444,17 @@ export function Scene(p: Props) {
       ray.setFromCamera(pointer, camera);
       const hit = ray
         .intersectObjects(modelGroup.children, true)
-        .find((h) => h.object instanceof THREE.Mesh);
+        .find(
+          (h) =>
+            h.object instanceof THREE.Mesh &&
+            h.object.userData.moduleId &&
+            !(current.current.transparent && (h.object.userData.role === "body" || h.object.userData.role === "door")),
+        );
       if (hit) {
+        if (hit.object.userData.moduleId !== current.current.activeId) {
+          current.current.onModuleSelect(hit.object.userData.moduleId);
+          return;
+        }
         const sid =
           hit.object.userData.sectionId ||
           boxes(current.current.module).find(
@@ -333,7 +462,7 @@ export function Scene(p: Props) {
               hit.point.x + current.current.module.width / 2 >= b.x &&
               hit.point.x + current.current.module.width / 2 <= b.x + b.width,
           )?.id;
-        if (sid) current.current.onSelect(sid);
+        if (sid) current.current.onPartSelect(sid, hit.object.userData.partId);
       }
     }
     renderer.domElement.addEventListener("pointerdown", pointerDown);
@@ -348,16 +477,27 @@ export function Scene(p: Props) {
     rebuild();
     fit();
     api.current = { rebuild, fit };
+    current.current.captureReady(() => {
+      renderer.render(scene, camera);
+      return renderer.domElement.toDataURL("image/png");
+    });
     let frame = 0;
     function animate() {
       if (disposed) return;
       controls.update();
       renderer.render(scene, camera);
+      for (const l of labels) {
+        const v = l.position.clone().project(camera);
+        l.element.style.left = ((v.x + 1) / 2) * target.clientWidth + "px";
+        l.element.style.top = ((-v.y + 1) / 2) * target.clientHeight + "px";
+        l.element.style.display = v.z < 1 && v.z > -1 ? "" : "none";
+      }
       frame = requestAnimationFrame(animate);
     }
     animate();
     return () => {
       disposed = true;
+      current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
       observer.disconnect();
       controls.dispose();
@@ -366,6 +506,7 @@ export function Scene(p: Props) {
       (floor.material as THREE.Material).dispose();
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
+      for (const l of labels) l.element.remove();
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
@@ -375,6 +516,10 @@ export function Scene(p: Props) {
     () => api.current?.rebuild(),
     [
       p.module,
+      p.arrangement,
+      p.activeId,
+      p.room,
+      p.transparent,
       p.selected,
       p.texture,
       p.facadeTexture,
@@ -385,7 +530,16 @@ export function Scene(p: Props) {
   );
   useEffect(
     () => api.current?.fit(),
-    [p.view, p.fit, p.module.width, p.module.height, p.module.depth],
+    [
+      p.view,
+      p.fit,
+      p.activeId,
+      p.room,
+      p.arrangement.length,
+      p.module.width,
+      p.module.height,
+      p.module.depth,
+    ],
   );
   return (
     <div className="scene" ref={host} data-testid="scene">

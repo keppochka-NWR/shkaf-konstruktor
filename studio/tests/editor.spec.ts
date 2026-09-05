@@ -5,7 +5,7 @@ test("complete editing, persistence, validation, undo and download", async ({
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/studio/");
-  await expect(page.getByRole("heading", { name: "Ваш модуль" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ваш проект" })).toBeVisible();
   await expect(page.locator("canvas")).toBeVisible();
   await page.getByLabel("Ширина", { exact: true }).fill("1100");
   await page.getByLabel("Ширина", { exact: true }).press("Enter");
@@ -34,7 +34,7 @@ test("complete editing, persistence, validation, undo and download", async ({
     await page.getByRole("button", { name, exact: true }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Скачать", exact: true }).click();
-  expect((await download).suggestedFilename()).toContain(".module.json");
+  expect((await download).suggestedFilename()).toContain(".project.json");
   await page.getByRole("button", { name: /деталей/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.getByText("Фальш-панель", { exact: true })).toBeVisible();

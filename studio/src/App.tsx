@@ -38,12 +38,24 @@ import {
   distribute,
   section,
   RULES,
+  shelfGaps,
+  setShelfGap,
+  drawerConfig,
   type Module,
   type Section,
 } from "./model";
 import { Scene, type View } from "./Scene";
+import { OutputPanel } from "./OutputPanel";
 import { catalog } from "./catalog";
-const KEY = "module-studio-v1";
+import { SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
+import {
+  newProject,
+  parseProject,
+  projectErrors,
+  appendModule,
+  type Project,
+} from "./project";
+const KEY = "module-studio-v2";
 function NumberField({
   label,
   value,
@@ -58,8 +70,14 @@ function NumberField({
   onChange: (n: number) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
+  const cancelled = useRef(false);
   useEffect(() => setDraft(String(value)), [value]);
   const apply = () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      setDraft(String(value));
+      return;
+    }
     const n = Number(draft);
     if (draft.trim() === "" || !Number.isFinite(n) || n === value) {
       setDraft(String(value));
@@ -84,6 +102,7 @@ function NumberField({
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
             if (e.key === "Escape") {
+              cancelled.current = true;
               setDraft(String(value));
               e.currentTarget.blur();
             }
@@ -131,36 +150,76 @@ function Counter({
 export default function App() {
   const [startup] = useState(() => {
     try {
-      const s = localStorage.getItem(KEY);
+      const s =
+        localStorage.getItem(KEY) || localStorage.getItem("module-studio-v1");
       return {
-        model: s ? parseModule(JSON.parse(s)) : initialModule(),
+        model: s ? parseProject(JSON.parse(s)) : newProject(),
         error: "",
       };
     } catch {
       return {
-        model: initialModule(),
+        model: newProject(),
         error:
           "Сохранённый модуль не удалось прочитать. Открыт пример; исходная запись сохранится до первого изменения.",
       };
     }
   });
-  const [history, setHistory] = useState<Module[]>([startup.model]),
+  const [history, setHistory] = useState<Project[]>([startup.model]),
     [cursor, setCursor] = useState(0);
-  const m = history[cursor];
+  const project = history[cursor];
+  const [active, setActive] = useState(project.modules[0].id);
+  const placed =
+    project.modules.find((a) => a.id === active) || project.modules[0];
+  const m = placed.module;
+  const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
+  const [transparent, setTransparent] = useState(false);
+  const [showRoom, setShowRoom] = useState(false);
+  const [direct, setDirect] = useState<{
+    label: string;
+    value: number;
+    apply: (v: number) => boolean;
+  } | null>(null);
+  const [directValue, setDirectValue] = useState("");
+  function editDimension(
+    label: string,
+    value: number,
+    apply: (v: number) => boolean,
+  ) {
+    setError("");
+    setDirect({ label, value, apply });
+    setDirectValue(String(value));
+  }
+  function selectModule(mid: string) {
+    setActive(mid);
+    setTab("module");
+    setFit((f) => f + 1);
+  }
+  function addModule(copy = false) {
+    const source = copy
+      ? m
+      : { ...initialModule(), width: 600, sections: [section()] };
+    const next = appendModule(project, source);
+    if (commitProject(next)) {
+      selectModule(next.modules.at(-1)!.id);
+    }
+  }
   const [selected, setSelected] = useState(m.sections[0].id),
     [view, setView] = useState<View>("iso"),
     [fit, setFit] = useState(0),
     [openDoors, setOpenDoors] = useState(true),
     [exploded, setExploded] = useState(false),
     [dimensions, setDimensions] = useState(true),
-    [tab, setTab] = useState<"module" | "section">("module");
+    [tab, setTab] = useState<"module" | "section" | "room">("module");
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
-    [modal, setModal] = useState<"materials" | "parts" | "help" | null>(null),
+    [modal, setModal] = useState<
+      "materials" | "parts" | "help" | "output" | null
+    >(null),
     [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor">(
       "decor",
     ),
     [search, setSearch] = useState("");
+  const capture = useRef<(() => string) | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null),
     touched = useRef(false);
   const selectedId = m.sections.some((s) => s.id === selected)
@@ -180,13 +239,13 @@ export default function App() {
     setError("");
     touched.current = true;
   };
-  function commit(next: Module) {
-    const e = validate(next);
+  function commitProject(next: Project) {
+    const e = projectErrors(next);
     if (e.length) {
       setError(e[0]);
       return false;
     }
-    if (JSON.stringify(next) === JSON.stringify(m)) {
+    if (JSON.stringify(next) === JSON.stringify(project)) {
       setError("");
       return true;
     }
@@ -196,22 +255,44 @@ export default function App() {
     setError("");
     return true;
   }
+  function commit(next: Module) {
+    return commitProject({
+      ...project,
+      modules: project.modules.map((a) =>
+        a.id === placed.id ? { ...a, module: next } : a,
+      ),
+    });
+  }
+  function movePlaced(key: "x" | "z", value: number) {
+    commitProject({
+      ...project,
+      modules: project.modules.map((a) =>
+        a.id === placed.id ? { ...a, [key]: value } : a,
+      ),
+    });
+  }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
     update(next);
     return commit(next);
   }
   function modifySection(update: (draft: Section, next: Module) => void) {
-    modify((next) => update(next.sections[idx], next));
+    modify((next) => {
+      update(next.sections[idx], next);
+      const a = next.sections[idx];
+      if (a.drawerConfigs)
+        a.drawerConfigs = a.drawerConfigs.slice(0, Math.max(0, a.drawers));
+    });
   }
   function chooseSection(id: string) {
     setSelected(id);
+    setDrawerIndex(null);
     setTab("section");
   }
   useEffect(() => {
     if (!touched.current) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify(m));
+      localStorage.setItem(KEY, JSON.stringify(project));
       setSaved("Изменения сохранены");
     } catch {
       setSaved("Не сохранено");
@@ -219,13 +300,13 @@ export default function App() {
         "Хранилище браузера недоступно. Сохраните модуль кнопкой «Скачать».",
       );
     }
-  }, [m]);
+  }, [project]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const input =
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement;
-      if (input) return;
+      if (input || direct) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -252,7 +333,7 @@ export default function App() {
       if (e.key !== "Tab" || !dialog) return;
       const items = Array.from(
         dialog.querySelectorAll<HTMLElement>(
-          'button:not(:disabled),input,a[href],[tabindex="0"]',
+          'button:not(:disabled),input,select,textarea,a[href],[tabindex="0"]',
         ),
       ).filter((el) => el.offsetParent !== null);
       const first = items[0],
@@ -322,14 +403,14 @@ export default function App() {
     });
   }
   function download() {
-    const blob = new Blob([JSON.stringify(m, null, 2)], {
+    const blob = new Blob([JSON.stringify(project, null, 2)], {
         type: "application/json",
       }),
       url = URL.createObjectURL(blob),
       a = document.createElement("a");
     a.href = url;
     a.download =
-      (m.name.replace(/[<>:"/\\|?*]/g, "_") || "Модуль") + ".module.json";
+      (m.name.replace(/[<>:"/\\|?*]/g, "_") || "Модуль") + ".project.json";
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -359,6 +440,9 @@ export default function App() {
           </span>
         </div>
         <div className="header-actions">
+          <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => setModal("output")}>
+            <Layers size={16} /> <span>Выдать документы</span>
+          </button>
           <div className="history">
             <button
               title="Отменить · Ctrl+Z"
@@ -400,22 +484,25 @@ export default function App() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
-          if (file.size > 100000) {
-            setError(
-              "Файл слишком большой. Откройте файл одного модуля до 100 КБ.",
-            );
+          if (file.size > 2000000) {
+            setError("Файл слишком большой. Откройте файл проекта до 2 МБ.");
             return;
           }
           try {
-            const next = parseModule(JSON.parse(await file.text()));
+            const imported = parseProject(JSON.parse(await file.text()));
+            const next = imported.modules[0].module;
             if (
-              !catalog.some((c) => c.n === next.decor) ||
-              !catalog.some((c) => c.n === next.facadeDecor)
+              imported.modules.some(
+                ({ module: n }) =>
+                  !catalog.some((c) => c.n === n.decor) ||
+                  !catalog.some((c) => c.n === n.facadeDecor),
+              )
             )
               throw new Error(
                 "Материал из файла не найден в каталоге Lamarty.",
               );
-            if (commit(next)) {
+            if (commitProject(imported)) {
+              setActive(imported.modules[0].id);
               setSelected(next.sections[0].id);
               setFit((f) => f + 1);
             }
@@ -426,18 +513,111 @@ export default function App() {
           }
         }}
       />
+      {direct && (
+        <div
+          className="dimension-editor"
+          role="dialog"
+          aria-label="Изменить размер"
+        >
+          <form
+            onKeyDown={(e) => {
+              if (e.key !== "Tab") return;
+              const items = Array.from(
+                e.currentTarget.querySelectorAll<HTMLElement>("input,button"),
+              );
+              const first = items[0],
+                last = items.at(-1);
+              if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last?.focus();
+              } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first?.focus();
+              }
+            }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = Number(directValue);
+              if (!directValue.trim() || !Number.isFinite(v)) {
+                setError("Введите размер числом.");
+                return;
+              }
+              if (direct.apply(v)) setDirect(null);
+            }}
+          >
+            <label>
+              {direct.label}, мм
+              <input
+                autoFocus
+                type="number"
+                value={directValue}
+                onChange={(e) => setDirectValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setDirect(null);
+                }}
+              />
+            </label>
+            {error && (
+              <p role="alert" className="dimension-error">
+                {error}
+              </p>
+            )}
+            <button type="submit" className="primary">
+              Применить
+            </button>
+            <button type="button" onClick={() => setDirect(null)}>
+              Отмена
+            </button>
+          </form>
+        </div>
+      )}
       <main className="workspace">
         <aside className="library">
           <div className="panel-heading">
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
-            <h1>Ваш модуль</h1>
+            <h1>Ваш проект</h1>
             <p>
               Начните с формы.
               <br />
               Остальное подстроится.
             </p>
           </div>
-          <div className="library-label">Быстрый старт</div>
+          <div className="project-modules">
+            <button className="primary full" onClick={() => addModule()}>
+              <Plus size={17} /> Добавить модуль
+            </button>
+            {project.modules.map((a, i) => (
+              <button
+                key={a.id}
+                className="module-item"
+                aria-pressed={a.id === placed.id}
+                onClick={() => selectModule(a.id)}
+              >
+                <Box size={18} />
+                <span>
+                  <b>{a.module.name}</b>
+                  <small>
+                    {a.module.width} × {a.module.height} × {a.module.depth}
+                  </small>
+                </span>
+                <small>{i + 1}</small>
+              </button>
+            ))}
+            <button className="text-action" onClick={() => addModule(true)}>
+              <Copy size={14} /> Копировать выбранный
+            </button>
+            <button
+              className="text-action"
+              onClick={() => {
+                setTab("room");
+                setShowRoom(true);
+                setFit((f) => f + 1);
+              }}
+            >
+              <Ruler size={14} /> Замер помещения
+            </button>
+          </div>
+          <div className="library-label">Наполнить выбранный модуль</div>
           <div className="presets">
             {(
               [
@@ -543,7 +723,37 @@ export default function App() {
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <Scene
+            captureReady={(fn) => (capture.current = fn)}
             module={m}
+            arrangement={project.modules}
+            activeId={placed.id}
+            room={showRoom ? project.room : undefined}
+            onModuleSelect={selectModule}
+            transparent={transparent}
+            onDimension={(key) =>
+              editDimension(
+                key === "width"
+                  ? "Ширина"
+                  : key === "height"
+                    ? "Высота"
+                    : "Глубина",
+                m[key],
+                (v) => modify((n) => (n[key] = v)),
+              )
+            }
+            onGap={(index) => {
+              const g = shelfGaps(m, selectedId)[index];
+              if (g)
+                editDimension("Проём " + (index + 1), g.height, (v) =>
+                  modify((n) => setShelfGap(n, selectedId, index, v)),
+                );
+            }}
+            onPartSelect={(sid, pid) => {
+              chooseSection(sid);
+              if (pid.includes(":drawer:")) {
+                setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
+              }
+            }}
             selected={selectedId}
             onSelect={chooseSection}
             texture={texture(m.decor)}
@@ -576,6 +786,25 @@ export default function App() {
             </div>
           )}
           <div className="scene-tools">
+            <button
+              aria-label="Прозрачный корпус"
+              title="Прозрачный корпус"
+              aria-pressed={transparent}
+              onClick={() => setTransparent((v) => !v)}
+            >
+              <Layers size={19} />
+            </button>
+            <button
+              aria-label="Показать помещение"
+              title="Помещение"
+              aria-pressed={showRoom}
+              onClick={() => {
+                setShowRoom((v) => !v);
+                setFit((f) => f + 1);
+              }}
+            >
+              <Box size={19} />
+            </button>
             <button
               aria-label="Вписать модель"
               title="Вписать модель"
@@ -645,7 +874,35 @@ export default function App() {
               Секция {idx + 1}
             </button>
           </div>
-          {tab === "module" ? (
+          {tab === "room" ? (
+            <div className="property-section">
+              <h2>Замер помещения</h2>
+              <p className="field-note">
+                Прямоугольное помещение. Модули не должны пересекаться или
+                выходить за стены.
+              </p>
+              {(["width", "height", "depth"] as const).map((k, i) => (
+                <NumberField
+                  key={k}
+                  label={
+                    ["Ширина комнаты", "Высота потолка", "Глубина комнаты"][i]
+                  }
+                  value={project.room[k]}
+                  min={500}
+                  max={20000}
+                  onChange={(v) =>
+                    commitProject({
+                      ...project,
+                      room: { ...project.room, [k]: v },
+                    })
+                  }
+                />
+              ))}
+              <button className="text-action" onClick={() => setTab("module")}>
+                К выбранному модулю
+              </button>
+            </div>
+          ) : tab === "module" ? (
             <>
               <div className="property-section">
                 <div className="section-heading">
@@ -763,6 +1020,37 @@ export default function App() {
                   </button>
                 )}
               </div>
+              <div className="property-section">
+                <h2>Положение в помещении</h2>
+                <NumberField
+                  label="От левой стены"
+                  value={placed.x}
+                  min={0}
+                  max={project.room.width - m.width}
+                  onChange={(v) => movePlaced("x", v)}
+                />
+                <NumberField
+                  label="От задней стены"
+                  value={placed.z}
+                  min={3}
+                  max={project.room.depth - m.depth}
+                  onChange={(v) => movePlaced("z", v)}
+                />
+                <button
+                  className="text-action danger"
+                  disabled={project.modules.length === 1}
+                  onClick={() =>
+                    commitProject({
+                      ...project,
+                      modules: project.modules.filter(
+                        (a) => a.id !== placed.id,
+                      ),
+                    })
+                  }
+                >
+                  <Trash2 size={14} /> Удалить модуль
+                </button>
+              </div>
               <div className="property-section specs">
                 <h2>Основа модуля</h2>
                 <dl>
@@ -812,6 +1100,96 @@ export default function App() {
               </div>
               <div className="property-section">
                 <h2>Наполнение</h2>
+                {s.drawers > 0 && (
+                  <div className="drawer-selection">
+                    <h3>Настройка ящиков</h3>
+                    <div className="drawer-tabs">
+                      {Array.from({ length: s.drawers }, (_, j) => (
+                        <button
+                          key={j}
+                          aria-pressed={(drawerIndex ?? 0) === j}
+                          onClick={() => setDrawerIndex(j)}
+                        >
+                          Ящик {j + 1}
+                        </button>
+                      ))}
+                    </div>
+                    {(() => {
+                      const j = Math.min(drawerIndex ?? 0, s.drawers - 1),
+                        c = drawerConfig(m, s, j);
+                      const update = (patch: Partial<DrawerConfig>) =>
+                        modifySection((a, n) => {
+                          a.drawerConfigs = Array.from(
+                            { length: a.drawers },
+                            (_, k) => drawerConfig(n, a, k),
+                          );
+                          a.drawerConfigs[j] = {
+                            ...a.drawerConfigs[j],
+                            ...patch,
+                          };
+                        });
+                      return (
+                        <>
+                          <label className="hardware-field">
+                            Направляющие
+                            <select
+                              aria-label="Направляющие ящика"
+                              value={c.slide}
+                              onChange={(e) =>
+                                update({
+                                  slide: e.target
+                                    .value as DrawerConfig["slide"],
+                                  length: [...SLIDES[e.target.value as DrawerConfig['slide']].lengths].reverse().find(l=>l<=m.depth-25) || 250,
+                                })
+                              }
+                            >
+                              {Object.entries(SLIDES).map(([k, v]) => (
+                                <option key={k} value={k}>
+                                  {v.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="hardware-field">
+                            Номинальная длина
+                            <select
+                              aria-label="Длина направляющих"
+                              value={c.length}
+                              onChange={(e) =>
+                                update({ length: Number(e.target.value) })
+                              }
+                            >
+                              {SLIDES[c.slide].lengths.map((l) => (
+                                <option key={l} value={l}>
+                                  {l} мм
+                                  {l > m.depth - 25 ? " · не помещается" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <NumberField
+                            label="Высота боковины ящика"
+                            value={c.height}
+                            min={68}
+                            max={300}
+                            onChange={(v) => update({ height: v })}
+                          />
+                          <p className="field-note">{SLIDES[c.slide].note}</p>
+                          {c.slide === "gtv0fpo" && (
+                            <a
+                              className="text-action"
+                              href={GTV_SOURCE}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Техническая карта GTV ↗
+                            </a>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
                 <Counter
                   label="Полки"
                   value={s.shelves.length}
@@ -854,6 +1232,20 @@ export default function App() {
                     <p className="field-note">
                       Высота полок — от дна внутреннего проёма.
                     </p>
+                    <h3>Проёмы в свету</h3>
+                    {shelfGaps(m, selectedId).map((g, j) => (
+                      <NumberField
+                        key={"gap" + j}
+                        label={"Проём " + (j + 1)}
+                        value={g.height}
+                        min={64}
+                        max={b.top - b.bottom}
+                        onChange={(v) =>
+                          modify((n) => setShelfGap(n, selectedId, j, v))
+                        }
+                      />
+                    ))}
+                    <h3>Высота центра полки</h3>
                     {s.shelves.map((f, j) => (
                       <NumberField
                         key={j}
@@ -916,14 +1308,16 @@ export default function App() {
       <footer className="statusbar">
         <span>
           <span className="status-dot" />
-          3D-редактор модулей <b>01</b>
+          3D-редактор модулей <b>02</b>
         </span>
         <button onClick={() => setModal("parts")}>
           <Layers size={14} />
           {allParts.filter((p) => p.material !== "metal").length} деталей{" "}
           <span>Посмотреть</span>
         </button>
-        <span className="stage-note">Конструкция · без раскроя и УП</span>
+        <button className="stage-note" onClick={() => setModal("output")}>
+          Lamarty 2750 × 1830 · Карты листов и КП
+        </button>
       </footer>
       {modal && (
         <div
@@ -933,7 +1327,7 @@ export default function App() {
           }}
         >
           <div
-            className={`modal ${modal === "parts" ? "wide" : ""}`}
+            className={`modal ${modal === "parts" || modal === "output" ? "wide" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -942,11 +1336,13 @@ export default function App() {
               <div>
                 <span className="eyebrow">МОДУЛЬ</span>
                 <h2 id="modal-title">
-                  {modal === "materials"
-                    ? "Материалы Lamarty"
-                    : modal === "parts"
-                      ? "Детали модуля"
-                      : "Несколько простых действий"}
+                  {modal === "output"
+                    ? "Документы проекта"
+                    : modal === "materials"
+                      ? "Материалы Lamarty"
+                      : modal === "parts"
+                        ? "Детали модуля"
+                        : "Несколько простых действий"}
                 </h2>
               </div>
               <button
@@ -957,7 +1353,13 @@ export default function App() {
                 <X />
               </button>
             </div>
-            {modal === "materials" ? (
+            {modal === "output" ? (
+              <OutputPanel
+                project={project}
+                capture={() => capture.current?.()}
+                update={commitProject}
+              />
+            ) : modal === "materials" ? (
               <>
                 <label className="search">
                   <Search size={18} />
@@ -1052,8 +1454,9 @@ export default function App() {
                   Приблизить — колесо. Сдвинуть — правая кнопка мыши.
                 </p>
                 <p>
-                  <strong>Изменить размеры</strong> — введите число справа и
-                  нажмите Enter. Программа объяснит, если размер не подходит.
+                  <strong>Изменить размеры</strong> — нажмите размер на модели
+                  или введите число справа и нажмите Enter. Программа объяснит,
+                  если размер не подходит.
                 </p>
                 <p>
                   <strong>Выбрать секцию</strong> — нажмите на её полку/ящик в
@@ -1069,8 +1472,9 @@ export default function App() {
                   используйте «Скачать» и «Открыть».
                 </p>
                 <div className="help-note">
-                  Первая версия работает с одним прямым корпусом. Раскрой,
-                  производственные чертежи и УП — следующие этапы.
+                  Добавляйте модули слева, задавайте замер помещения и
+                  проверяйте карты листов в «Выдать документы». Производственные
+                  чертежи, присадка и УП остаются следующим этапом.
                 </div>
               </div>
             )}

@@ -1,4 +1,223 @@
 @import url("https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;450;500;550;600;650;700;750&display=swap");
+.project-modules {
+  padding: 0 18px 16px;
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid #e2e8ea;
+  margin-bottom: 18px;
+}
+.module-item {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #dfe7ea;
+  border-radius: 8px;
+  background: white;
+  min-width: 0;
+}
+.module-item > span {
+  flex: 1;
+  min-width: 0;
+}
+.module-item b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.module-item small {
+  display: block;
+  color: #70838c;
+  font-size: 10px;
+  margin-top: 3px;
+}
+.module-item[aria-pressed="true"] {
+  border-color: #24899b;
+  background: #edf7f8;
+}
+.model-dimension {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  padding: 5px 9px;
+  border: 1px solid #aac4ce;
+  border-radius: 5px;
+  background: #f8fcff;
+  color: #234754;
+  font:
+    600 12px "Golos Text",
+    Arial;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px #24455418;
+  cursor: text;
+}
+.model-dimension:hover,
+.model-dimension:focus-visible {
+  background: #dff2f5;
+  outline: 2px solid #24899b;
+  outline-offset: 2px;
+}
+.gap-dimension {
+  font-size: 11px;
+  padding: 3px 6px;
+  color: #147489;
+  background: #f0fafce8;
+}
+.dimension-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #18394440;
+}
+.dimension-editor form {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  width: min(340px, 90vw);
+  box-shadow: 0 20px 90px #16333f40;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dimension-editor label {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  font-weight: 600;
+}
+.dimension-editor input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  font-size: 22px;
+  border: 1px solid #a3bec9;
+  border-radius: 6px;
+}
+.dimension-editor button {
+  padding: 10px 18px;
+  border-radius: 6px;
+  border: 1px solid #d0dce2;
+}
+.drawer-selection {
+  padding: 12px;
+  background: #edf7f8;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.hardware-field {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.hardware-field select,
+.hardware-field input,
+.hardware-field textarea {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #b8ccd3;
+  background: white;
+  border-radius: 6px;
+  color: #253e49;
+  font: inherit;
+}
+.drawer-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.drawer-tabs button {
+  padding: 7px;
+  border: 1px solid #d5e1e6;
+  border-radius: 5px;
+  background: white;
+  font-size: 11px;
+}
+.drawer-tabs button[aria-pressed="true"] {
+  background: #d5ecef;
+  border-color: #24899b;
+}
+.output-panel {
+  padding: 0 28px 28px;
+  overflow: auto;
+  max-height: 70vh;
+}
+.output-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.output-tabs button {
+  padding: 12px;
+  border: 1px solid #cadce2;
+  background: white;
+  border-radius: 7px;
+}
+.output-tabs button[aria-pressed="true"] {
+  background: #e1f2f4;
+  border-color: #24899b;
+}
+.output-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.output-panel button.primary,
+.output-panel button.outline {
+  padding: 12px 16px;
+}
+.sheets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 24px;
+}
+.sheets-grid section {
+  max-width: 290px;
+}
+.sheets-grid svg {
+  width: 100%;
+  max-height: 340px;
+  margin-top: 12px;
+}
+.sheets-grid small {
+  color: #6c8691;
+}
+.hardware-field textarea {
+  resize: vertical;
+}
+.sheet-preview {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: zoom-in;
+}
+.sheets-grid.enlarged {
+  display: block;
+}
+.sheets-grid.enlarged section {
+  max-width: 100%;
+}
+.sheets-grid.enlarged svg {
+  max-height: 760px;
+}
+.sheets-grid.enlarged .sheet-preview {
+  cursor: zoom-out;
+}
+.dimension-error {
+  color: #9d382c;
+  background: #fff0e9;
+  padding: 10px;
+  border-radius: 6px;
+  width: 100%;
+}
 :root {
   font-family: "Golos Text", Arial, sans-serif;
   color: #253e49;
@@ -1159,6 +1378,7 @@ th {
     width: 100%;
   }
   .header-actions .quiet span,
+  .header-actions .documents-action span,
   .header-actions .primary span {
     display: none;
   }
@@ -1180,6 +1400,7 @@ th {
     width: 28px;
   }
   .primary,
+  .documents-action,
   .quiet {
     padding: 9px;
   }
