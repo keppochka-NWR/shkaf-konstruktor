@@ -247,3 +247,8 @@ test('drawer front material is independent from doors and follows file roundtrip
   assert.ok(ds.filter(d=>d.role==='door').every(d=>d.decor===m.facadeDecor));
   delete restored.drawerFacadeDecor;assert.ok(parts(restored).filter(d=>d.id.endsWith(':facade')).every(d=>d.decor===m.facadeDecor));
 });
+
+test('customer quote lists actual protective shelves and drawer front material',()=>{
+  const p=newProject();p.modules[0].module.drawerFacadeDecor='Графит';const html=quoteHTML(p,'Клиент','100000','');
+  assert.ok(html.includes('Фасады ящиков: Графит'));assert.ok(html.includes('Двери: Белый'));assert.ok(html.includes('Полок: 2 (включая полки над ящиками)'));assert.ok(html.includes('пантографов: 0'));
+});

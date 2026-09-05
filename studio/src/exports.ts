@@ -203,7 +203,9 @@ export function quoteHTML(
     `<h1>Коммерческое предложение</h1><p>${esc(customer || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p>${image ? `<img src="${image}" style="width:100%;max-height:420px;object-fit:contain" alt="Вид проекта"/>` : ""}<table><thead><tr><th>Модуль</th><th>Ш × В × Г, мм</th><th>Материалы</th><th>Наполнение</th></tr></thead><tbody>${p.modules
       .map((a) => {
         const m = a.module;
-        return `<tr><td>${esc(m.name)}</td><td>${m.width} × ${m.height} × ${m.depth}</td><td>${esc(m.decor)}${m.doors ? " / " + esc(m.facadeDecor) : ""}</td><td>Полок: ${m.sections.reduce((n, s) => n + s.shelves.length, 0)}; ящиков: ${m.sections.reduce((n, s) => n + s.drawers, 0)}; штанг: ${m.sections.filter((s) => s.rod).length}</td></tr>`;
+        const drawerCount=m.sections.reduce((n,s)=>n+s.drawers,0),shelfCount=parts(m).filter(d=>d.role==='shelf').length;
+        const materials=[`Корпус: ${esc(m.decor)}`,m.doors?`Двери: ${esc(m.facadeDecor)}`:'',drawerCount?`Фасады ящиков: ${esc(m.drawerFacadeDecor??m.facadeDecor)}`:''].filter(Boolean).join('<br>');
+        return `<tr><td>${esc(m.name)}</td><td>${m.width} × ${m.height} × ${m.depth}</td><td>${materials}</td><td>Полок: ${shelfCount} (включая полки над ящиками); ящиков: ${drawerCount}; штанг: ${m.sections.filter(s=>s.rod).length}; пантографов: ${m.sections.filter(s=>s.pantograph).length}</td></tr>`;
       })
       .join(
         "",
