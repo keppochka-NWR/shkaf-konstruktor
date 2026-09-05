@@ -40,22 +40,24 @@ import {
   RULES,
   shelfGaps,
   setShelfGap,
-  drawerConfig,
+  drawerConfig, drawerOffsets, plinth,
   type Module,
   type Section,
 } from "./model";
 import { Scene, type View } from "./Scene";
 import { OutputPanel } from "./OutputPanel";
+import { RoomEditor } from './RoomEditor';
 import { catalog } from "./catalog";
 import { SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule,
+  appendModule, snapPlacement,
   type Project,
 } from "./project";
-const KEY = "module-studio-v2";
+import {insertItem,moveModule,movePart,type FillKind} from './operations';
+const KEY = "module-studio-v3";
 function NumberField({
   label,
   value,
@@ -151,7 +153,7 @@ export default function App() {
   const [startup] = useState(() => {
     try {
       const s =
-        localStorage.getItem(KEY) || localStorage.getItem("module-studio-v1");
+        localStorage.getItem(KEY) || localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1");
       return {
         model: s ? parseProject(JSON.parse(s)) : newProject(),
         error: "",
@@ -171,6 +173,7 @@ export default function App() {
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
+  const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
@@ -194,6 +197,11 @@ export default function App() {
     setTab("module");
     setFit((f) => f + 1);
   }
+  function addUpper(){const n=structuredClone(project);const mid=crypto.randomUUID();n.modules.push({id:mid,x:placed.x,z:placed.z,y:(placed.y??0)+m.height,module:{...initialModule(),name:'Антресоль',width:m.width,height:600,plinthHeight:0,sections:[section()]}});if(commitProject(n))selectModule(mid);}
+  function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(moveModule(project,mid,pos));}
+  function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
+  function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
+  function startFill(e:React.DragEvent,kind:FillKind){e.dataTransfer.setData('application/x-furniture',kind);e.dataTransfer.effectAllowed='copy';setMode('fill');setOpenDoors(true);}
   function addModule(copy = false) {
     const source = copy
       ? m
@@ -263,7 +271,7 @@ export default function App() {
       ),
     });
   }
-  function movePlaced(key: "x" | "z", value: number) {
+  function movePlaced(key: "x" | "y" | "z", value: number) {
     commitProject({
       ...project,
       modules: project.modules.map((a) =>
@@ -362,7 +370,7 @@ export default function App() {
       depth: m.depth,
       decor: m.decor,
       facadeDecor: m.facadeDecor,
-      doors: false,
+      doors: true,
       sections: [section()],
     };
     const a = n.sections[0];
@@ -575,11 +583,9 @@ export default function App() {
         <aside className="library">
           <div className="panel-heading">
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
-            <h1>Ваш проект</h1>
+            <h1>Соберите шкаф</h1>
             <p>
-              Начните с формы.
-              <br />
-              Остальное подстроится.
+              Отдельные корпуса, как тетрис.
             </p>
           </div>
           <div className="project-modules">
@@ -617,7 +623,8 @@ export default function App() {
               <Ruler size={14} /> Замер помещения
             </button>
           </div>
-          <div className="library-label">Наполнить выбранный модуль</div>
+          <button className="text-action upper-add" onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
+          <div className="library-label">Готовое наполнение</div>
           <div className="presets">
             {(
               [
@@ -642,7 +649,8 @@ export default function App() {
             Наполнение <span>в секцию {idx + 1}</span>
           </div>
           <div className="fill-buttons">
-            <button
+            <button draggable onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
+            <button draggable onDragStart={e=>startFill(e,'shelf')}
               onClick={() => {
                 setTab("section");
                 modifySection(
@@ -655,7 +663,7 @@ export default function App() {
               <span>Добавить полку</span>
               <Plus size={15} />
             </button>
-            <button
+            <button draggable onDragStart={e=>startFill(e,'drawer')}
               onClick={() => {
                 setTab("section");
                 modifySection((a) => a.drawers++);
@@ -665,10 +673,10 @@ export default function App() {
               <span>Добавить ящик</span>
               <Plus size={15} />
             </button>
-            <button
+            <button draggable onDragStart={e=>startFill(e,'rod')}
               onClick={() => {
                 setTab("section");
-                modifySection((a) => (a.rod = !a.rod));
+                modifySection((a) => {a.rod=!a.rod;a.pantograph=false;});
               }}
             >
               <Shirt size={19} />
@@ -691,7 +699,7 @@ export default function App() {
             <div className="tip-mark">
               <Info size={17} />
             </div>
-            <p>Нажмите на секцию в модели, чтобы изменить её наполнение.</p>
+            <p>Перетащите полку, ящик или штангу в корпус. Для перемещения корпуса выберите «Двигать корпуса».</p>
             <button onClick={() => setModal("help")}>
               <HelpCircle size={16} /> Как пользоваться
             </button>
@@ -722,7 +730,13 @@ export default function App() {
             </div>
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
+          <div className="interaction-bar">{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
           <Scene
+            mode={mode}
+            snap={(mid,p)=>snapPlacement(project,mid,p)}
+            onMoveModule={moveBody}
+            onMovePart={moveFilling}
+            onDropItem={dropFilling}
             captureReady={(fn) => (capture.current = fn)}
             module={m}
             arrangement={project.modules}
@@ -750,6 +764,7 @@ export default function App() {
             }}
             onPartSelect={(sid, pid) => {
               chooseSection(sid);
+              if(pid.includes(":shelf:")||pid.includes(":drawer:"))setMode("fill");
               if (pid.includes(":drawer:")) {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
               }
@@ -855,7 +870,7 @@ export default function App() {
             ))}
           </div>
           <div className="orbit-help">
-            <RotateCcw size={13} /> Перетащите, чтобы повернуть <span>·</span>{" "}
+            <RotateCcw size={13} /> {mode==='move'?'Тяните корпус · привязка к соседям':mode==='fill'?'Тяните полки и ящики по высоте':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
             Колесо — масштаб
           </div>
         </section>
@@ -898,6 +913,7 @@ export default function App() {
                   }
                 />
               ))}
+              <RoomEditor room={project.room} onChange={room=>commitProject({...project,room})}/>
               <button className="text-action" onClick={() => setTab("module")}>
                 К выбранному модулю
               </button>
@@ -996,7 +1012,7 @@ export default function App() {
                 <div className="toggle-row">
                   <span>
                     <b>Распашные фасады</b>
-                    <small>По одной двери на секцию</small>
+                    <small>Одна или две створки по ширине</small>
                   </span>
                   <button
                     role="switch"
@@ -1021,7 +1037,7 @@ export default function App() {
                 )}
               </div>
               <div className="property-section">
-                <h2>Положение в помещении</h2>
+                <h2>Положение в помещении</h2><p className="field-note">Перетащите корпус в сцене. На виде спереди можно поставить его сверху другого.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"
                   value={placed.x}
@@ -1051,6 +1067,13 @@ export default function App() {
                   <Trash2 size={14} /> Удалить модуль
                 </button>
               </div>
+              <div className="property-section">
+                <h2>Конструкция цеха</h2>
+                <label className="hardware-field">Задняя стенка<select aria-label="Тип задней стенки" value={m.backType??'nailed'} onChange={e=>modify(n=>n.backType=e.target.value as Module['backType'])}><option value="nailed">ЛХДФ · набивная</option><option value="groove">ЛХДФ · в паз</option></select></label>
+                {m.backType==='groove'&&<><NumberField label="Отступ паза от зада" value={m.grooveInset??16} min={8} max={30} onChange={v=>modify(n=>n.grooveInset=v)}/><NumberField label="Глубина паза" value={m.grooveDepth??8} min={4} max={10} onChange={v=>modify(n=>n.grooveDepth=v)}/><p className="field-note">Профиль паза проверяет технолог перед выпуском.</p></>}
+                <label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{[0,80,100,120,150].map(v=><option key={v} value={v}>{v===0?'Без цоколя':v+' мм'}</option>)}</select></label>
+                <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
+              </div>
               <div className="property-section specs">
                 <h2>Основа модуля</h2>
                 <dl>
@@ -1060,7 +1083,7 @@ export default function App() {
                   </div>
                   <div>
                     <dt>Цоколь</dt>
-                    <dd>80 мм</dd>
+                    <dd>{plinth(m)} мм</dd>
                   </div>
                   <div>
                     <dt>Задняя стенка</dt>
@@ -1119,9 +1142,10 @@ export default function App() {
                         c = drawerConfig(m, s, j);
                       const update = (patch: Partial<DrawerConfig>) =>
                         modifySection((a, n) => {
+                          const offsets=drawerOffsets(a);
                           a.drawerConfigs = Array.from(
                             { length: a.drawers },
-                            (_, k) => drawerConfig(n, a, k),
+                            (_, k) => ({...drawerConfig(n, a, k),...(patch.y===undefined?{}:{y:offsets[k]})}),
                           );
                           a.drawerConfigs[j] = {
                             ...a.drawerConfigs[j],
@@ -1167,6 +1191,7 @@ export default function App() {
                               ))}
                             </select>
                           </label>
+                          <NumberField label="Ящик от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>
                           <NumberField
                             label="Высота боковины ящика"
                             value={c.height}
@@ -1216,6 +1241,8 @@ export default function App() {
                     <span />
                   </button>
                 </div>
+                <button className="outline full" onClick={()=>modifySection(a=>{a.pantograph=!a.pantograph;a.rod=false})}>{s.pantograph?'Убрать пантограф':'Добавить пантограф'}</button>
+                {(s.rod||s.pantograph)&&<NumberField label="Высота штанги от дна" value={Math.round((s.rodAt??(s.pantograph?0.87:0.85))*(b.top-b.bottom))} min={100} max={b.top-b.bottom-50} onChange={v=>modifySection(a=>a.rodAt=v/(b.top-b.bottom))}/>}
                 {s.shelves.length > 0 && (
                   <>
                     <button
@@ -1308,7 +1335,7 @@ export default function App() {
       <footer className="statusbar">
         <span>
           <span className="status-dot" />
-          3D-редактор модулей <b>02</b>
+          3D-редактор модулей <b>03</b>
         </span>
         <button onClick={() => setModal("parts")}>
           <Layers size={14} />

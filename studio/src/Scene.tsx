@@ -4,10 +4,16 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { boxes, parts, shelfGaps, type Module } from "./model";
 import { catalog } from "./catalog";
 import type { Room, PlacedModule } from "./project";
+import {wallPanels} from './roomGeometry';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
   captureReady: (fn: (() => string) | undefined) => void;
   module: Module;
+  mode:'move'|'fill'|'orbit';
+  snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
+  onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
+  onMovePart:(mid:string,sid:string,pid:string,y:number)=>boolean;
+  onDropItem:(kind:string,mid:string,sid:string,y:number)=>boolean;
   arrangement: PlacedModule[];
   activeId: string;
   room?: Room;
@@ -98,6 +104,7 @@ export function Scene(p: Props) {
     (grid.material as THREE.Material).transparent = true;
     (grid.material as THREE.Material).opacity = 0.38;
     scene.add(grid);
+    const moduleGroups=new Map<string,THREE.Group>();
     let modelGroup = new THREE.Group();
     scene.add(modelGroup);
     const loader = new THREE.TextureLoader();
@@ -161,6 +168,7 @@ export function Scene(p: Props) {
         m = state.module;
       for (const l of labels) l.element.remove();
       labels.length = 0;
+      moduleGroups.clear();
       generation++;
       const gen = generation;
       disposeGroup(modelGroup);
@@ -170,6 +178,8 @@ export function Scene(p: Props) {
         state.arrangement.find((a) => a.id === state.activeId) ||
         state.arrangement[0];
       for (const placed of state.arrangement) {
+        const moduleGroup=new THREE.Group();moduleGroups.set(placed.id,moduleGroup);modelGroup.add(moduleGroup);
+        const doorPivots=new Map<string,THREE.Group>();
         const m = placed.module,
           active = placed.id === focus.id;
         const dx = placed.x + m.width / 2 - focus.x - state.module.width / 2;
@@ -220,7 +230,7 @@ export function Scene(p: Props) {
             );
           }
           const geometry =
-            part.role === "rod"
+            (part.role === "rod" || part.role === "flange")
               ? new THREE.CylinderGeometry(
                   part.size[1] / 2,
                   part.size[1] / 2,
@@ -229,10 +239,10 @@ export function Scene(p: Props) {
                 )
               : new THREE.BoxGeometry(...part.size);
           const mesh = new THREE.Mesh(geometry, mat);
-          if (part.role === "rod") mesh.rotation.z = Math.PI / 2;
+          if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
           mesh.position.set(
             part.position[0] - m.width / 2 + dx,
-            part.position[1],
+            part.position[1]+(placed.y??0),
             part.position[2] - m.depth / 2 + dz,
           );
           mesh.castShadow = true;
@@ -253,12 +263,15 @@ export function Scene(p: Props) {
           if (part.role === "door" && state.openDoors) {
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
-            pivot.position.x -= part.size[0] / 2;
-            mesh.position.set(part.size[0] / 2, 0, 0);
+            const sign=part.hinge==='right'?-1:1;
+            pivot.position.x -= sign*part.size[0] / 2;
+            mesh.position.set(sign*part.size[0] / 2, 0, 0);
             pivot.add(mesh);
-            pivot.rotation.y = -Math.PI * 0.58;
-            modelGroup.add(pivot);
-          } else modelGroup.add(mesh);
+            pivot.rotation.y = -Math.PI * 0.58*sign;
+            doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
+          } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
+            const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position);pivot.add(mesh);
+          } else moduleGroup.add(mesh);
           if (!isMetal) {
             const edge = new THREE.LineSegments(
               new THREE.EdgesGeometry(geometry),
@@ -288,18 +301,22 @@ export function Scene(p: Props) {
         geo.dispose();
         outline.position.set(x0 + r.width / 2, r.height / 2, z0 + r.depth / 2);
         modelGroup.add(outline);
-        const wall = new THREE.Mesh(
-          new THREE.PlaneGeometry(r.width, r.height),
-          new THREE.MeshStandardMaterial({
-            color: 0xd5e2e7,
-            transparent: true,
-            opacity: 0.22,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-          }),
-        );
-        wall.position.set(x0 + r.width / 2, r.height / 2, z0 - 4);
-        modelGroup.add(wall);
+        function wallBox(wall:string,u:number,y:number,w:number,h:number,depth:number,color:number,opacity:number){
+          const horizontal=wall==='back'||wall==='front';
+          const mesh=new THREE.Mesh(new THREE.BoxGeometry(horizontal?w:depth,h,horizontal?depth:w),new THREE.MeshStandardMaterial({color,transparent:opacity<1,opacity,depthWrite:opacity===1}));
+          mesh.position.set(horizontal?x0+u:x0+(wall==='left'?-depth/2:r.width+depth/2),y,horizontal?z0+(wall==='back'?-depth/2:r.depth+depth/2):z0+u);mesh.receiveShadow=true;modelGroup.add(mesh);
+        }
+        for(const panel of wallPanels(r))wallBox(panel.wall,panel.u,panel.y,panel.width,panel.height,80,0xd5d5cc,panel.wall==='front'||panel.wall==='right'?0.06:0.25);
+        for(const o of r.openings||[]){
+          const u=o.offset+o.width/2,y=o.sill+o.height/2;
+          for(const dx of [-o.width/2+20,o.width/2-20])wallBox(o.wall,u+dx,y,40,o.height,85,0xfafaf6,0.95);
+          wallBox(o.wall,u,o.sill+o.height-20,o.width,40,85,0xfafaf6,0.95);
+          if(o.type==='window'){
+            wallBox(o.wall,u,o.sill+20,o.width,40,85,0xfafaf6,0.95);wallBox(o.wall,u,y,40,o.height,85,0xfafaf6,0.95);
+            wallBox(o.wall,u,y,o.width-80,o.height-80,4,0x8cbac6,0.2);
+          }else wallBox(o.wall,u,y,o.width-80,o.height-40,35,0xaa8e6d,0.3);
+        }
+        const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
       const b = boxes(m).find((b) => b.id === state.selected);
       if (b) {
@@ -319,32 +336,33 @@ export function Scene(p: Props) {
         geo.dispose();
         highlight.position.set(
           b.x + b.width / 2 - m.width / 2,
-          (b.top + b.bottom) / 2,
+          (b.top + b.bottom) / 2+(focus.y??0),
           5,
         );
         modelGroup.add(highlight);
       }
       if (state.dimensions) {
+        const fy=focus.y??0;
         const z = m.depth / 2 + 110,
           x = -m.width / 2 - 150;
         line([
-          new THREE.Vector3(-m.width / 2, -90, z),
-          new THREE.Vector3(m.width / 2, -90, z),
+          new THREE.Vector3(-m.width / 2, fy-90, z),
+          new THREE.Vector3(m.width / 2, fy-90, z),
         ]);
         for (const dx of [-m.width / 2, m.width / 2])
-          line([new THREE.Vector3(dx, -55, z), new THREE.Vector3(dx, -125, z)]);
-        label(`${m.width} мм`, new THREE.Vector3(0, -110, z), () =>
+          line([new THREE.Vector3(dx, fy-55, z), new THREE.Vector3(dx, fy-125, z)]);
+        label(`${m.width} мм`, new THREE.Vector3(0, (focus.y??0)-110, z), () =>
           current.current.onDimension("width"),
         );
-        line([new THREE.Vector3(x, 0, z), new THREE.Vector3(x, m.height, z)]);
+        line([new THREE.Vector3(x, fy, z), new THREE.Vector3(x, m.height+fy, z)]);
         label(
           m.height + " мм",
-          new THREE.Vector3(x - 30, m.height / 2, z),
+          new THREE.Vector3(x - 30, m.height / 2+(focus.y??0), z),
           () => current.current.onDimension("height"),
         );
         label(
           m.depth + " мм",
-          new THREE.Vector3(m.width / 2 + 150, 100, 0),
+          new THREE.Vector3(m.width / 2 + 150, fy+100, 0),
           () => current.current.onDimension("depth"),
         );
         if (
@@ -355,12 +373,12 @@ export function Scene(p: Props) {
           shelfGaps(m, b.id).forEach((g, i) => {
             const gx = b.x + b.width / 2 - m.width / 2;
             line([
-              new THREE.Vector3(gx, g.bottom, z - 85),
-              new THREE.Vector3(gx, g.top, z - 85),
+              new THREE.Vector3(gx, g.bottom+fy, z - 85),
+              new THREE.Vector3(gx, g.top+fy, z - 85),
             ]);
             label(
               String(g.height),
-              new THREE.Vector3(gx, (g.top + g.bottom) / 2, z - 75),
+              new THREE.Vector3(gx, (g.top + g.bottom) / 2+(focus.y??0), z - 75),
               () => current.current.onGap(i),
               true,
             );
@@ -381,7 +399,7 @@ export function Scene(p: Props) {
         maxZ = Math.max(...state.arrangement.map((a) => a.z + a.module.depth));
       const height = state.room
         ? state.room.height + 380
-        : Math.max(...state.arrangement.map((a) => a.module.height)) + 380;
+        : Math.max(...state.arrangement.map((a) => a.module.height+(a.y??0))) + 380;
       const width = state.room
         ? state.room.width + state.room.depth
         : maxX - minX + maxZ - minZ + 650;
@@ -426,47 +444,46 @@ export function Scene(p: Props) {
     observer.observe(target);
     const ray = new THREE.Raycaster(),
       pointer = new THREE.Vector2();
-    let down = [0, 0];
-    function pointerDown(e: PointerEvent) {
-      down = [e.clientX, e.clientY];
+    const badge=document.createElement('div');badge.className='drag-badge';badge.hidden=true;target.appendChild(badge);
+    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
+    let drag:Drag|null=null;
+    function cast(clientX:number,clientY:number){const r=renderer.domElement.getBoundingClientRect();pointer.set((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
+    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)));}
+    function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const xx=hit.point.x+focus.x+focus.module.width/2-a.x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
+    function pointerDown(e:PointerEvent){
+      if(e.button!==0||current.current.mode==='orbit')return;
+      const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
+      const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
+      const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
+      const isPart=state.mode==='fill'&&['shelf','drawer','rod','pantograph'].includes(hit.object.userData.role)&&!pid.includes(':drawer-cap');
+      const plane=new THREE.Plane(isPart||state.view==='front'?new THREE.Vector3(0,0,1):new THREE.Vector3(0,1,0),isPart||state.view==='front'?-hit.point.z:-hit.point.y);
+      const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
+      const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
+      moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)))meshes.push(o);});
+      drag={mid:a.id,sid,pid,kind:isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
     }
-    function pointerUp(e: PointerEvent) {
-      if (
-        e.button !== 0 ||
-        Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5
-      )
-        return;
-      const r = renderer.domElement.getBoundingClientRect();
-      pointer.set(
-        ((e.clientX - r.left) / r.width) * 2 - 1,
-        (-(e.clientY - r.top) / r.height) * 2 + 1,
-      );
-      ray.setFromCamera(pointer, camera);
-      const hit = ray
-        .intersectObjects(modelGroup.children, true)
-        .find(
-          (h) =>
-            h.object instanceof THREE.Mesh &&
-            h.object.userData.moduleId &&
-            !(current.current.transparent && (h.object.userData.role === "body" || h.object.userData.role === "door")),
-        );
-      if (hit) {
-        if (hit.object.userData.moduleId !== current.current.activeId) {
-          current.current.onModuleSelect(hit.object.userData.moduleId);
-          return;
-        }
-        const sid =
-          hit.object.userData.sectionId ||
-          boxes(current.current.module).find(
-            (b) =>
-              hit.point.x + current.current.module.width / 2 >= b.x &&
-              hit.point.x + current.current.module.width / 2 <= b.x + b.width,
-          )?.id;
-        if (sid) current.current.onPartSelect(sid, hit.object.userData.partId);
-      }
+    function pointerMove(e:PointerEvent){
+      if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
+      drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
+      if(drag.kind==='module'){
+        const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:current.current.view==='front'?drag.origin.z:drag.origin.z+point.z});
+        drag.candidate=next;moduleGroups.get(drag.mid)?.position.set(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z);badge.textContent='Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+      }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;badge.textContent='Перемещение: '+(dy>0?'+':'')+dy+' мм';}
     }
-    renderer.domElement.addEventListener("pointerdown", pointerDown);
-    renderer.domElement.addEventListener("pointerup", pointerUp);
+    function resetDrag(){if(!drag)return;if(drag.kind==='module')moduleGroups.get(drag.mid)?.position.set(0,0,0);else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
+    function pointerUp(e:PointerEvent){
+      if(!drag){if(current.current.mode==='orbit')return;return;}
+      const d=drag;if(d.moved){if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);else current.current.onMovePart(d.mid,d.sid,d.pid,d.delta);}else{if(d.mid!==current.current.activeId)current.current.onModuleSelect(d.mid);else current.current.onPartSelect(d.sid,d.pid);}
+      resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
+    }
+    function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;badge.textContent='Отпустите внутри нужного корпуса';}
+    function drop(e:DragEvent){e.preventDefault();badge.hidden=true;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
+    function key(e:KeyboardEvent){if(e.key==='Escape')resetDrag();}
+    renderer.domElement.addEventListener('pointerdown',pointerDown);
+    renderer.domElement.addEventListener('pointermove',pointerMove);
+    renderer.domElement.addEventListener('pointerup',pointerUp);
+    renderer.domElement.addEventListener('pointercancel',resetDrag);
+    target.addEventListener('dragover',dragOver);target.addEventListener('drop',drop);target.addEventListener('dragleave',()=>badge.hidden=true);window.addEventListener('keydown',key);
     const loss = (e: Event) => {
       e.preventDefault();
       setError(
@@ -507,6 +524,7 @@ export function Scene(p: Props) {
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
+      window.removeEventListener('keydown',key);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);badge.remove();
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
@@ -551,3 +569,5 @@ export function Scene(p: Props) {
     </div>
   );
 }
+
+

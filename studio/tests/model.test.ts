@@ -20,7 +20,7 @@ test("default module has complete positive geometry and unique IDs", () => {
 });
 test("outer dimensions and section widths conserve panel thickness", () => {
   const m = initialModule();
-  for (const w of [700, 850, 1000, 1200]) {
+  for (const w of [400, 600, 850, 900]) {
     m.width = w;
     assert.ok(
       Math.abs(
@@ -42,7 +42,7 @@ test("all forbidden dimensions rejected by model, not just UI", () => {
 test("invalid imported shape and duplicate section IDs rejected", () => {
   assert.throws(() => parseModule({}));
   const m = initialModule();
-  m.sections[1].id = m.sections[0].id;
+  m.sections.push({...m.sections[0]});
   assert.throws(() => parseModule(m));
 });
 test("valid serialized project roundtrips exactly", () => {
@@ -67,7 +67,8 @@ test("shelf collisions and drawer overlap are rejected", () => {
 });
 test("rod needs clear hanging height, shelf distribution respects it", () => {
   const m = initialModule(),
-    s = m.sections[1];
+    s = m.sections[0];
+  s.rod=true;
   s.shelves = distribute(m, s, 2);
   assert.deepEqual(validate(m), []);
   m.height = 1000;
@@ -86,10 +87,12 @@ test("doors are bounded and add fillers only for drawer zones", () => {
   const m = initialModule();
   m.doors = true;
   assert.deepEqual(validate(m), []);
-  assert.equal(parts(m).filter((p) => p.role === "door").length, 2);
-  const fillers = parts(m).filter((p) => p.name === "Фальш-панель");
+  assert.equal(parts(m).filter((p) => p.role === "door").length, 1);
+  const fillers = parts(m).filter((p) => p.name.startsWith("Фальш-панель"));
   assert.equal(fillers.length, 1);
   assert.equal(fillers[0].size[1], 360);
-  m.sections = [section()];
-  assert.ok(validate(m).some((e) => e.includes("Фасад")));
+  m.width=900;
+  assert.deepEqual(validate(m), []);
+  assert.equal(parts(m).filter(p=>p.role==="door").length,2);
+  assert.equal(parts(m).filter(p=>p.name.startsWith("Фальш-панель")).length,2);
 });

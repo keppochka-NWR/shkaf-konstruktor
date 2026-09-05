@@ -37,14 +37,14 @@ test("append keeps original section IDs and creates independent copy", () => {
     n = appendModule(p, p.modules[0].module);
   assert.equal(p.modules.length, 1);
   assert.equal(n.modules.length, 2);
-  assert.equal(n.modules[1].x, 1050);
+  assert.equal(n.modules[1].x, 650);
   assert.deepEqual(projectErrors(n), []);
   assert.notEqual(
     n.modules[1].module.sections[0].id,
     n.modules[0].module.sections[0].id,
   );
   n.modules[1].module.sections[0].shelves[0] = 0.3;
-  assert.equal(n.modules[0].module.sections[0].shelves[0], 0.26);
+  assert.equal(n.modules[0].module.sections[0].shelves[0], 0.72);
 });
 test("room boundaries and overlap reject edits; touching side panels allowed", () => {
   const p = newProject(),
@@ -67,21 +67,21 @@ test("clear shelf openings plus panel thickness exactly fill section; editing fi
     Math.abs(
       g.reduce((n, g) => n + g.height, 0) +
         s.shelves.length * 16 -
-        (b.top - b.bottom),
+        (b.top - b.bottom - 376),
     ) < 0.2,
   );
   setShelfGap(m, s.id, 1, 350);
   assert.equal(shelfGaps(m, s.id)[1].height, 350);
   assert.deepEqual(validate(m), []);
-  setShelfGap(m, s.id, 3, 300);
-  assert.equal(shelfGaps(m, s.id)[3].height, 300);
+  setShelfGap(m, s.id, 0, 300);
+  assert.equal(shelfGaps(m, s.id)[0].height, 300);
   setShelfGap(m, s.id, 0, 2000);
   assert.ok(validate(m).length);
 });
 test("individual GTV 0FPO profile changes inner width, side length and bottom material", () => {
   const m = initialModule(),
-    s = m.sections[1],
-    b = boxes(m)[1];
+    s = m.sections[0],
+    b = boxes(m)[0];
   s.drawerConfigs = [
     { slide: "gtv0fpo", height: 140, length: 500 },
     drawerConfig(m, s, 1),
@@ -91,26 +91,27 @@ test("individual GTV 0FPO profile changes inner width, side length and bottom ma
     side = pp.find((p) => p.id === s.id + ":drawer:0:left")!,
     bottom = pp.find((p) => p.id === s.id + ":drawer:0:bottom")!;
   assert.equal(side.length, 490);
-  assert.equal(bottom.size[0], b.width - 42);
+  assert.equal(bottom.size[0], b.width - 16 - 42);
   assert.equal(bottom.material, "board");
   assert.equal(bottom.thickness, 16);
   assert.equal(
     pp.find((p) => p.id === s.id + ":drawer:1:bottom")!.material,
-    "hdf",
+    "board",
   );
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))), m);
   s.drawerConfigs[0].length = 300;
-  assert.match(validate(m).join(" "), /ширина ящика/);
+  assert.deepEqual(validate(m), []);
   s.drawerConfigs[0].length = 600;
   assert.match(validate(m).join(" "), /слишком длинная/);
 });
 test("drawer height participates in collision detection and mixed stack geometry", () => {
   const m = initialModule(),
-    s = m.sections[1];
+    s = m.sections[0];
   s.drawerConfigs = [
     { slide: "ball", height: 300, length: 500 },
     { slide: "ball", height: 300, length: 500 },
   ];
+  s.rod=true; s.rodAt=0.55;
   assert.ok(validate(m).length, "rod clearance must fail");
   s.rod = false;
   assert.deepEqual(validate(m), []);
@@ -167,3 +168,4 @@ test("exports escape customer and module HTML and never invent a price", () => {
   assert.ok(html.includes("после согласования"));
   assert.ok(detailCSV(p).startsWith("\uFEFF"));
 });
+

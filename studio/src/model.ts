@@ -7,7 +7,7 @@ export const RULES = {
   shelfDepthMinus: 25,
   shelfGap: 1,
   minW: 250,
-  maxW: 1200,
+  maxW: 900,
   minH: 400,
   maxH: 2200,
   minD: 250,
@@ -41,6 +41,8 @@ export type Section = {
   drawers: number;
   rod: boolean;
   drawerConfigs?: DrawerConfig[];
+  pantograph?: boolean;
+  rodAt?: number;
 };
 export type Module = {
   version: 1;
@@ -52,6 +54,11 @@ export type Module = {
   facadeDecor: string;
   doors: boolean;
   sections: Section[];
+  backType?: "nailed" | "groove";
+  grooveInset?: number;
+  grooveDepth?: number;
+  hingeSide?: "left" | "right";
+  plinthHeight?: number;
 };
 export type Part = {
   id: string;
@@ -64,7 +71,8 @@ export type Part = {
   thickness: number;
   material: "board" | "hdf" | "metal";
   decor: string;
-  role: "body" | "shelf" | "drawer" | "door" | "rod";
+  role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge";
+  hinge?: "left" | "right";
   grain: "length";
   edge: [number, number, number, number];
 };
@@ -89,31 +97,31 @@ export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
       slide: "ball",
       height: RULES.drawerH,
       length:
-        [...SLIDES.ball.lengths].reverse().find((l) => l <= m.depth - 25) ||
+        [...SLIDES.ball.lengths].reverse().find((l) => l <= m.depth - rearClear(m) - (m.doors ? 44 : 25)) ||
         250,
     }
   );
 }
+export function plinth(m:Module){return m.plinthHeight ?? RULES.plinth;}
+export function rearClear(m:Module){return m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
+export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+(s.drawerConfigs?.[j]?.height??RULES.drawerH)+RULES.drawerStep;return start;});}
+export function doorCount(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>RULES.doorMax?2:1;}
+export function fillerSides(m:Module,s:Section){if(!m.doors||!s.drawers)return {left:0,right:0};const both=doorCount(m,s)===2;return {left:both||m.hingeSide!=='right'?RULES.drawerFiller:0,right:both||m.hingeSide==='right'?RULES.drawerFiller:0};}
 export function drawerStackHeight(s: Section) {
-  return Array.from(
-    { length: Math.max(0, Math.min(5, s.drawers)) },
-    (_, j) =>
-      (s.drawerConfigs?.[j]?.height ?? RULES.drawerH) + RULES.drawerStep,
-  ).reduce((a, b) => a + b, 0);
+  const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+(s.drawerConfigs?.[j]?.height??RULES.drawerH)+RULES.drawerStep));
 }
 export function initialModule(): Module {
   return {
     version: 1,
     name: "Шкаф в прихожую",
-    width: 1000,
+    width: 600,
     height: 2000,
     depth: 600,
     decor: "Дуб Вотан",
     facadeDecor: "Белый",
-    doors: false,
+    doors: true,
     sections: [
-      { ...section(), shelves: [0.26, 0.51, 0.76] },
-      { ...section(), shelves: [0.86], drawers: 2, rod: true },
+      { ...section(), shelves: [0.72], drawers: 2, rod: false },
     ],
   };
 }
@@ -131,7 +139,7 @@ export function boxes(m: Module): SectionBox[] {
       id: s.id,
       x,
       width,
-      bottom: RULES.plinth + t,
+      bottom: plinth(m) + t,
       top: m.height - t,
     };
     x += width + t;
@@ -142,7 +150,8 @@ export function parts(m: Module): Part[] {
   const out: Part[] = [];
   const t = RULES.panel;
   const d = m.depth;
-  const bottom = RULES.plinth;
+  const bottom = plinth(m);
+  const rear=rearClear(m);
   function add(
     key: string,
     name: string,
@@ -168,7 +177,7 @@ export function parts(m: Module): Part[] {
       material,
       decor: role === "door" ? m.facadeDecor : m.decor,
       grain: "length",
-      edge: material === "board" ? [0.4, 0.4, 2, 0.4] : [0, 0, 0, 0],
+      edge: material === "board" ? role === "door" ? [2,2,2,2] : [0.4, 0.4, 2, 0.4] : [0, 0, 0, 0],
     });
   }
   add(
@@ -207,7 +216,7 @@ export function parts(m: Module): Part[] {
     d,
     t,
   );
-  add(
+  if(bottom>0)add(
     "plinth",
     "Цоколь",
     [m.width - 2 * t, bottom, t],
@@ -216,28 +225,20 @@ export function parts(m: Module): Part[] {
     bottom,
     t,
   );
-  add(
-    "back",
-    "Задняя стенка",
-    [m.width - 4, m.height - 4, RULES.back],
-    [m.width / 2, m.height / 2, -RULES.back / 2],
-    m.height - 4,
-    m.width - 4,
-    RULES.back,
-    "body",
-    undefined,
-    "hdf",
-  );
+  const groove=m.backType==='groove',gd=m.grooveDepth??8;
+  const backW=groove?m.width-2*t+2*gd-1:m.width-4;
+  const backH=groove?m.height-bottom-2*t+2*gd-1:m.height-4;
+  add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,groove?(bottom+m.height)/2:m.height/2,groove?(m.grooveInset??16)+RULES.back/2:-RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
   boxes(m).forEach((b, i) => {
     const s = m.sections[i],
       h = b.top - b.bottom,
-      sd = d - RULES.shelfDepthMinus;
+      sd = d - rear - RULES.shelfDepthMinus;
     if (i > 0)
       add(
         `${s.id}:divider`,
         "Перегородка",
         [t, h, sd],
-        [b.x - t / 2, b.bottom + h / 2, sd / 2],
+        [b.x - t / 2, b.bottom + h / 2, rear + sd / 2],
         h,
         sd,
         t,
@@ -249,7 +250,7 @@ export function parts(m: Module): Part[] {
         `${s.id}:shelf:${j}`,
         "Полка съёмная",
         [b.width - 2 * RULES.shelfGap, t, sd],
-        [b.x + b.width / 2, b.bottom + f * h, sd / 2],
+        [b.x + b.width / 2, b.bottom + f * h, rear + sd / 2],
         b.width - 2 * RULES.shelfGap,
         sd,
         t,
@@ -257,19 +258,9 @@ export function parts(m: Module): Part[] {
         s.id,
       ),
     );
-    const filler = m.doors && s.drawers > 0 ? RULES.drawerFiller : 0;
-    if (filler)
-      add(
-        `${s.id}:filler`,
-        "Фальш-панель",
-        [filler, drawerStackHeight(s), sd],
-        [b.x + filler / 2, b.bottom + drawerStackHeight(s) / 2, sd / 2],
-        drawerStackHeight(s),
-        sd,
-        t,
-        "body",
-        s.id,
-      );
+    const f=fillerSides(m,s),filler=f.left+f.right;
+    for(const side of ['left','right'] as const)if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
+    if(s.drawers>0)add(s.id+':drawer-cap','Обязательная полка над ящиками',[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
       const cfg = drawerConfig(m, s, j),
@@ -278,9 +269,9 @@ export function parts(m: Module): Part[] {
         boxW = b.width - filler - 2 * sideGap;
       const boxD = cfg.length - (hidden ? 10 : 0),
         bh = cfg.height;
-      const bx = b.x + filler + sideGap,
-        y = nextY,
-        z = d - 20 - boxD;
+      const bx = b.x + f.left + sideGap,
+        y = b.bottom + RULES.drawerStep/2 + drawerOffsets(s)[j],
+        z = d - (m.doors ? 44 : 20) - boxD;
       nextY += bh + RULES.drawerStep;
       for (const side of ["left", "right"])
         add(
@@ -319,9 +310,9 @@ export function parts(m: Module): Part[] {
           "drawer",
           s.id,
         );
-      const bw = hidden ? boxW - 2 * t : boxW - 2,
-        bd = hidden ? boxD : boxD - 2,
-        bt = hidden ? t : RULES.back;
+      const bw = hidden ? boxW - 2 * t : boxW,
+        bd = boxD,
+        bt = t;
       add(
         s.id + ":drawer:" + j + ":bottom",
         "Ящик " + (j + 1) + " · дно",
@@ -332,8 +323,12 @@ export function parts(m: Module): Part[] {
         bt,
         "drawer",
         s.id,
-        hidden ? "board" : "hdf",
+        "board",
       );
+      const fh=bh+RULES.drawerStep-RULES.drawerFrontGap,fw=b.width-filler-2*RULES.drawerFrontGap;
+      add(s.id+':drawer:'+j+':facade','Ящик '+(j+1)+' · фасад',[fw,fh,t],[b.x+f.left+(b.width-filler)/2,y-RULES.drawerStep/2+(bh+RULES.drawerStep)/2,m.doors?d-36:d+t/2+2],fh,fw,t,'drawer',s.id);
+      out.at(-1)!.decor=m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
+      add(s.id+':drawer:'+j+':handle','Ручка ящика',[128,10,18],[b.x+f.left+(b.width-filler)/2,y+bh/2,m.doors?d-20:d+28],128,10,18,'handle',s.id,'metal');
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -356,7 +351,7 @@ export function parts(m: Module): Part[] {
       const topShelf = s.shelves.length
         ? Math.min(...s.shelves.map((f) => b.bottom + f * h))
         : b.top;
-      const ry = topShelf - RULES.rodTopOffset;
+      const ry = s.rodAt===undefined?topShelf-RULES.rodTopOffset:b.bottom+s.rodAt*h;
       add(
         `${s.id}:rod`,
         "Штанга",
@@ -370,23 +365,30 @@ export function parts(m: Module): Part[] {
         "metal",
       );
     }
+    if(s.rod){const rp=out.find(p=>p.id===s.id+':rod')!;for(const side of [0,1])add(s.id+':flange:'+side,'Фланец штанги D25',[5,48,48],[side?b.x+b.width-2.5:b.x+2.5,rp.position[1],rp.position[2]],48,48,5,'flange',s.id,'metal');}
+    if(s.pantograph){
+      const ry=b.bottom+(s.rodAt??0.87)*h,cy=ry-360;
+      for(const side of [0,1]){
+        const xx=side?b.x+b.width-24:b.x+24;
+        add(s.id+':pantograph:mount:'+side,'Пантограф · механизм',[48,160,95],[xx,cy, d/2],160,95,48,'pantograph',s.id,'metal');
+        add(s.id+':pantograph:arm:'+side,'Пантограф · рычаг',[18,400,22],[xx,cy+200,d/2],400,22,18,'pantograph',s.id,'metal');
+      }
+      add(s.id+':pantograph:rod','Пантограф · штанга',[b.width-48,25,25],[b.x+b.width/2,ry,d/2],b.width-48,25,25,'rod',s.id,'metal');
+      add(s.id+':pantograph:pull','Пантограф · ручка',[18,550,18],[b.x+b.width/2,ry-275,d/2+40],550,18,18,'pantograph',s.id,'metal');
+    }
     if (m.doors) {
       const left = i === 0 ? RULES.faceGap : b.x - t / 2 + RULES.faceGap / 2;
       const right =
         i === m.sections.length - 1
           ? m.width - RULES.faceGap
           : b.x + b.width + t / 2 - RULES.faceGap / 2;
-      add(
-        `${s.id}:door`,
-        "Фасад",
-        [right - left, m.height - bottom - 4, t],
-        [(right + left) / 2, (m.height + bottom) / 2, d + t / 2 + 2],
-        m.height - bottom - 4,
-        right - left,
-        t,
-        "door",
-        s.id,
-      );
+      const count=doorCount(m,s),dw=(right-left-(count-1)*RULES.faceGap)/count;
+      for(let k=0;k<count;k++){
+        const hinge=count===2?(k===0?'left':'right'):(m.hingeSide??'left'),cx=left+k*(dw+RULES.faceGap)+dw/2;
+        add(s.id+':door:'+k,'Фасад распашной',[dw,m.height-bottom-4,t],[cx,(m.height+bottom)/2,d+t/2+2],m.height-bottom-4,dw,t,'door',s.id);out.at(-1)!.hinge=hinge;
+        add(s.id+':handle:'+k,'Ручка фасада',[10,128,25],[cx+(hinge==='left'?1:-1)*(dw/2-40),m.height/2,d+31],128,25,10,'handle',s.id,'metal');
+      }
+
     }
   });
   return out;
@@ -402,6 +404,10 @@ export function validate(m: Module): string[] {
     if (!Number.isFinite(n) || n < min || n > max)
       errors.push(`${label}: допустимо от ${min} до ${max} мм.`);
   }
+  if (m.backType!==undefined && !["nailed","groove"].includes(m.backType)) errors.push("Задняя стенка: только в паз или набивная.");
+  if(m.hingeSide!==undefined&&!['left','right'].includes(m.hingeSide))errors.push('Выберите сторону петель.');
+  if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
+  if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
     return [...errors, "Допустимо от 1 до 4 секций."];
@@ -443,14 +449,19 @@ export function validate(m: Module): string[] {
         errors.push(prefix + "неверный размер или тип направляющих.");
         continue;
       }
-      if (c.length > m.depth - (c.slide === "gtv0fpo" ? 25 : 25))
+      if (c.length > m.depth - rearClear(m) - (m.doors ? 44 : 25))
         errors.push(prefix + "направляющая слишком длинная для этой глубины.");
-      if (c.slide === "gtv0fpo" && b.width - (m.doors ? 16 : 0) - 10 > c.length)
-        errors.push(
-          prefix +
-            "GTV 0FPO: ширина ящика не должна превышать длину направляющей. Увеличьте длину или разделите секцию.",
-        );
+
     }
+    const offsets=drawerOffsets(s);
+    for(let j=0;j<offsets.length;j++){
+      if(!Number.isFinite(offsets[j])||offsets[j]<0)errors.push(prefix+'неверное положение ящика.');
+      for(let k=0;k<j;k++)if(offsets[j]<offsets[k]+drawerConfig(m,s,k).height+RULES.drawerStep&&offsets[k]<offsets[j]+drawerConfig(m,s,j).height+RULES.drawerStep)errors.push(prefix+'ящики пересекаются.');
+    }
+    if(s.pantograph && (b.width<545||b.width>910||h<1100))errors.push(prefix+'пантографу нужен проём шириной 545–910 мм и высотой от 1100 мм.');
+    if(s.rod&&s.pantograph)errors.push(prefix+'выберите штангу или пантограф.');
+    if(s.rodAt!==undefined&&(!Number.isFinite(s.rodAt)||s.rodAt<0.1||s.rodAt>0.97))errors.push(prefix+'измените высоту штанги.');
+    if(s.pantograph!==undefined&&typeof s.pantograph!=='boolean')errors.push(prefix+'неверный тип пантографа.');
     const shelfY = s.shelves.map((f) => f * h).sort((a, b) => a - b);
     const drawerTop = drawerStackHeight(s);
     if (drawerTop > h - RULES.shelfMinClear)
@@ -481,7 +492,7 @@ export function validate(m: Module): string[] {
       );
     if (
       s.rod &&
-      (shelfY[0] ?? h) - RULES.rodTopOffset - drawerTop < RULES.rodMinClear
+      (s.rodAt===undefined?(shelfY[0]??h)-RULES.rodTopOffset:s.rodAt*h) - drawerTop < RULES.rodMinClear
     )
       errors.push(
         prefix +
@@ -512,7 +523,7 @@ function dTooSmall(m: Module) {
   return m.depth < 300;
 }
 export function distribute(m: Module, s: Section, count: number): number[] {
-  const h = m.height - RULES.plinth - 2 * RULES.panel,
+  const h = m.height - plinth(m) - 2 * RULES.panel,
     base = drawerStackHeight(s);
   if (s.rod)
     return count === 0
@@ -553,7 +564,7 @@ export function shelfGaps(m: Module, sid: string) {
     .map((f) => b.bottom + f * (b.top - b.bottom))
     .sort((a, b) => a - b);
   return [...centers, b.top + RULES.panel / 2].map((y, i) => {
-    const bottom = i === 0 ? b.bottom : centers[i - 1] + RULES.panel / 2;
+    const bottom = i === 0 ? b.bottom + (s.drawers ? drawerStackHeight(s)+RULES.panel : 0) : centers[i - 1] + RULES.panel / 2;
     const top = y - RULES.panel / 2;
     return { bottom, top, height: Math.round((top - bottom) * 10) / 10 };
   });
@@ -615,12 +626,19 @@ export function parseModule(input: unknown): Module {
     decor: x.decor,
     facadeDecor: x.facadeDecor,
     doors: x.doors,
+    ...(x.backType===undefined?{}:{backType:x.backType as Module["backType"]}),
+    ...(x.grooveInset===undefined?{}:{grooveInset:x.grooveInset as number}),
+    ...(x.grooveDepth===undefined?{}:{grooveDepth:x.grooveDepth as number}),
+    ...(x.plinthHeight===undefined?{}:{plinthHeight:x.plinthHeight as number}),
+    ...(x.hingeSide===undefined?{}:{hingeSide:x.hingeSide as Module["hingeSide"]}),
     sections: x.sections.map((s) => ({
       id: s.id,
       weight: s.weight,
       shelves: [...s.shelves],
       drawers: s.drawers,
       rod: s.rod,
+      ...(s.pantograph===undefined?{}:{pantograph:s.pantograph}),
+      ...(s.rodAt===undefined?{}:{rodAt:s.rodAt}),
       ...(s.drawerConfigs === undefined
         ? {}
         : {
@@ -628,6 +646,7 @@ export function parseModule(input: unknown): Module {
               slide: c?.slide,
               height: c?.height,
               length: c?.length,
+                  ...(c?.y===undefined?{}:{y:c.y}),
             })),
           }),
     })),
@@ -636,3 +655,4 @@ export function parseModule(input: unknown): Module {
   if (errors.length) throw new Error(errors[0]);
   return m;
 }
+
