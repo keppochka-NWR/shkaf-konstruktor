@@ -11,6 +11,7 @@ import {
   sheetSVG,
   labelDetails,
   labelsHTML,
+  specificationHTML,
 } from "./exports";
 export function OutputPanel({
   project,
@@ -44,6 +45,7 @@ export function OutputPanel({
       {tab === "sheets" ? (
         <>
           <div className="output-actions">
+            <button className="outline" onClick={()=>saveFile("Ведомость проекта.html",specificationHTML(project))}>Ведомость комплектации</button>
             <button
               className="primary"
               onClick={() =>

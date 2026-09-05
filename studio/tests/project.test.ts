@@ -17,7 +17,7 @@ import {
   drawerConfig,
   RULES,
 } from "../src/model";
-import { nest, details, quoteHTML, detailCSV, labelDetails, labelsHTML } from "../src/exports";
+import { nest, details, quoteHTML, detailCSV, labelDetails, labelsHTML, specificationHTML } from "../src/exports";
 
 test("Lamarty sheet format is exactly the user correction", () => {
   assert.equal(RULES.sheetW, 2750);
@@ -177,4 +177,10 @@ test('labels have one code per detail and refer to its actual sheet',()=>{
   for(const d of labels)assert.ok(sheets[d.sheet-1].items.some(a=>a.detail.code===d.code&&a.w===d.width&&a.h===d.length));
   p.modules[0].module.name='<script>alert(1)</script>';
   const html=labelsHTML(p);assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('ПРОВЕРКА'));
+});
+
+test('project specification follows chosen drawers, back and room openings',()=>{
+  const p=newProject(initialModule());p.modules[0].module.backType='groove';
+  p.room.openings=[{id:'window',type:'window',wall:'back',offset:100,width:800,height:900,sill:1000}];
+  const html=specificationHTML(p);assert.ok(html.includes('в паз'));assert.ok(html.includes('800 × 900'));assert.ok(html.includes('GTV Versalite'));assert.ok(html.includes('Дно ящиков ЛДСП16'));
 });
