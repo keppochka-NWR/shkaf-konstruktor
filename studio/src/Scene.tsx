@@ -71,6 +71,7 @@ export function Scene(p: Props) {
     const scene = new THREE.Scene(),
       camera = new THREE.PerspectiveCamera(34, 1, 5, 250000);
     const controls = new OrbitControls(camera, renderer.domElement);
+    let needsRender=true;const requestRender=()=>{needsRender=true;};controls.addEventListener('change',requestRender);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
     controls.minDistance = 350;
@@ -112,6 +113,12 @@ export function Scene(p: Props) {
     let modelGroup = new THREE.Group();
     scene.add(modelGroup);
     const loader = new THREE.TextureLoader();
+    const textureLoads=new Map<string,Promise<THREE.Texture>>(),loadedTextures=new Set<THREE.Texture>();
+    function cachedTexture(url:string){
+      let result=textureLoads.get(url);
+      if(!result){result=new Promise<THREE.Texture>((resolve,reject)=>loader.load(url,map=>{map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(disposed)map.dispose();else loadedTextures.add(map);resolve(map);},undefined,reject));textureLoads.set(url,result);}
+      return result;
+    }
     let generation = 0;
     function disposeGroup(group: THREE.Group) {
       group.traverse((o) => {
@@ -125,8 +132,6 @@ export function Scene(p: Props) {
             ? o.material
             : [o.material];
           for (const mat of materials) {
-            if ("map" in mat && (mat as THREE.MeshStandardMaterial).map)
-              (mat as THREE.MeshStandardMaterial).map?.dispose();
             mat.dispose();
           }
         }
@@ -172,6 +177,7 @@ export function Scene(p: Props) {
       );
     }
     function rebuild() {
+      needsRender=true;
       const state = current.current,
         m = state.module;
       grid.visible=!state.presentation;
@@ -219,25 +225,10 @@ export function Scene(p: Props) {
             (c) => c.n === part.decor,
           )?.tex;
           if (texture && !isBack && !isMetal) {
-            loader.load(
-              texture,
-              (map) => {
-                if (disposed || gen !== generation) {
-                  map.dispose();
-                  return;
-                }
-                map.colorSpace = THREE.SRGBColorSpace;
-                map.anisotropy = Math.min(
-                  8,
-                  renderer.capabilities.getMaxAnisotropy(),
-                );
-                mat.map = map;
-                mat.color.set(0xffffff);
-                mat.needsUpdate = true;
-              },
-              undefined,
-              () => {},
-            );
+            cachedTexture(texture).then(map=>{
+              if(disposed||gen!==generation)return;
+              mat.map=map;mat.color.set(0xffffff);mat.needsUpdate=true;needsRender=true;
+            }).catch(()=>{});
           }
           const geometry =
             (part.role === "rod" || part.role === "flange")
@@ -398,6 +389,7 @@ export function Scene(p: Props) {
       }
     }
     function fit() {
+      needsRender=true;
       const m = current.current.module;
       const aspect = target.clientWidth / Math.max(1, target.clientHeight);
       const state = current.current,
@@ -448,6 +440,7 @@ export function Scene(p: Props) {
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
     function indicateTarget(hit:THREE.Intersection|undefined){
+      needsRender=true;
       if(!hit){dropTarget.visible=false;return '';}
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId),focus=state.arrangement.find(a=>a.id===state.activeId);
       if(!a||!focus){dropTarget.visible=false;return '';}
@@ -477,13 +470,13 @@ export function Scene(p: Props) {
     }
     function pointerMove(e:PointerEvent){
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
-      drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
+      needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
         const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z});
         drag.candidate=next;const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit);badge.textContent=(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';}
     }
-    function resetDrag(){dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
+    function resetDrag(){needsRender=true;dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
@@ -500,13 +493,13 @@ export function Scene(p: Props) {
       resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
     }
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
-    function drop(e:DragEvent){e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
+    function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     function key(e:KeyboardEvent){if(e.key==='Escape')resetDrag();}
     renderer.domElement.addEventListener('pointerdown',pointerDown);
     renderer.domElement.addEventListener('pointermove',pointerMove);
     renderer.domElement.addEventListener('pointerup',pointerUp);
     renderer.domElement.addEventListener('pointercancel',resetDrag);
-    function dragLeave(e:DragEvent){if(e.relatedTarget instanceof Node&&target.contains(e.relatedTarget))return;badge.hidden=true;dropTarget.visible=false;}
+    function dragLeave(e:DragEvent){if(e.relatedTarget instanceof Node&&target.contains(e.relatedTarget))return;badge.hidden=true;dropTarget.visible=false;needsRender=true;}
     target.addEventListener('dragover',dragOver);target.addEventListener('drop',drop);target.addEventListener('dragleave',dragLeave);window.addEventListener('keydown',key);
     const loss = (e: Event) => {
       e.preventDefault();
@@ -535,12 +528,14 @@ export function Scene(p: Props) {
     function animate() {
       if (disposed) return;
       controls.update();
-      renderer.render(scene, camera);
+      if(needsRender){
+      needsRender=false;renderer.render(scene, camera);
       for (const l of labels) {
         const v = l.position.clone().project(camera);
         l.element.style.left = ((v.x + 1) / 2) * target.clientWidth + "px";
         l.element.style.top = ((-v.y + 1) / 2) * target.clientHeight + "px";
         l.element.style.display = v.z < 1 && v.z > -1 ? "" : "none";
+      }
       }
       frame = requestAnimationFrame(animate);
     }
@@ -550,7 +545,7 @@ export function Scene(p: Props) {
       current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
       observer.disconnect();
-      controls.dispose();
+      controls.removeEventListener('change',requestRender);controls.dispose();
       disposeGroup(modelGroup);
       floor.geometry.dispose();
       (floor.material as THREE.Material).dispose();
@@ -558,6 +553,8 @@ export function Scene(p: Props) {
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
       window.removeEventListener('keydown',key);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
+      sun.shadow.dispose();
+      for(const texture of loadedTextures)texture.dispose();loadedTextures.clear();textureLoads.clear();
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
