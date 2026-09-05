@@ -1,3 +1,4 @@
+import {nicheSize} from '../src/measurement';
 import {frameDistance} from '../src/framing';
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -231,4 +232,11 @@ test('copies preserve rotation and insertion finds another row when the first is
   const next=appendModule(copied,p.modules[0].module);
   assert.equal(projectErrors(next).length,0);assert.ok(next.modules[2].z>600);
   assert.equal(p.modules.length,1);
+});
+
+test('niche limits follow workshop deductions and remain separate from room geometry',()=>{
+  const p=newProject();p.measurement={number:'1',date:'',notes:'',niche:{width:2000,height:2700,depth:650,deviation:5}};
+  assert.deepEqual(nicheSize(p.measurement.niche!),{width:1990,height:2670,depth:645,side:10});
+  p.measurement.niche!.deviation=10;assert.equal(nicheSize(p.measurement.niche!).width,1985);
+  const q=parseProject(JSON.parse(JSON.stringify(p)));assert.deepEqual(q.measurement,p.measurement);assert.equal(q.room.width,4000);
 });
