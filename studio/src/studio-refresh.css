@@ -18,3 +18,5 @@
 .cloud-history{padding:16px;border:1px solid #dce1e4;border-radius:12px;background:#f7f9fa;margin:18px 0}.cloud-revision{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #e3e7ea}.cloud-revision small{display:block;color:#677780;font-size:12px;margin-top:4px}.cloud-project{flex-wrap:wrap}
 
 .label-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:20px}.label-card{padding:16px;border:1px solid #dbe1e5;border-radius:8px}.label-card>div{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.label-card b{font-size:28px}.label-card strong,.label-card small{display:block}.label-card p{font-size:13px}.label-card h3{margin:8px 0}.label-card small{color:#65747c}.output-tabs{flex-wrap:wrap}
+
+.measurement-fields{border-top:1px solid #e0e5e8;border-bottom:1px solid #e0e5e8;padding:16px 0;margin:16px 0}.measurement-fields summary{cursor:pointer;font-weight:600}.measurement-fields textarea{width:100%;box-sizing:border-box;font:inherit;padding:9px;border:1px solid #dbe1e5;border-radius:7px;resize:vertical}

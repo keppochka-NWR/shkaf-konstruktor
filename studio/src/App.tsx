@@ -934,6 +934,7 @@ export default function App() {
                   }
                 />
               ))}
+              <details className="measurement-fields"><summary>Карточка замера</summary><p className="field-note">Номер и дата из задания на корпус. Примечания сохранятся в ведомости проекта.</p>{(['number','date','notes'] as const).map(k=>{const measure=project.measurement||{number:'',date:'',notes:''};const change=(value:string)=>commitProject({...project,measurement:{...measure,[k]:value}});const label={number:'Номер замера',date:'Дата замера',notes:'Особенности замера'}[k];return <label className="hardware-field" key={k}>{label}{k==='notes'?<textarea aria-label={label} value={measure[k]} maxLength={2000} rows={4} placeholder="Перепады стен, плинтус, розетки, доступ к коммуникациям…" onChange={e=>change(e.target.value)}/>:<input aria-label={label} type={k==='date'?'date':'text'} maxLength={k==='number'?60:10} value={measure[k]} onChange={e=>change(e.target.value)}/>}</label>;})}</details>
               <RoomEditor room={project.room} onChange={room=>commitProject({...project,room})}/>
               <button className="text-action" onClick={() => setTab("module")}>
                 К выбранному модулю

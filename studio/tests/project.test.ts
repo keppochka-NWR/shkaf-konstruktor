@@ -184,3 +184,10 @@ test('project specification follows chosen drawers, back and room openings',()=>
   p.room.openings=[{id:'window',type:'window',wall:'back',offset:100,width:800,height:900,sill:1000}];
   const html=specificationHTML(p);assert.ok(html.includes('в паз'));assert.ok(html.includes('800 × 900'));assert.ok(html.includes('GTV Versalite'));assert.ok(html.includes('Дно ящиков ЛДСП16'));
 });
+
+test('measurement survives files and rejects impossible dates',()=>{
+  const p=newProject();p.measurement={number:'З-123',date:'2026-09-06',notes:'Плинтус 80 мм'};
+  assert.deepEqual(parseProject(JSON.parse(JSON.stringify(p))).measurement,p.measurement);
+  assert.ok(specificationHTML(p).includes('З-123'));assert.ok(specificationHTML(p).includes('Плинтус 80 мм'));
+  p.measurement.date='2026-02-30';assert.ok(projectErrors(p).length);
+});
