@@ -1,5 +1,6 @@
 import {boxes,drawerConfig,drawerOffsets,drawerStackHeight,parts,RULES,type Module,type Section} from './model';
 import {type Project,projectErrors} from './project';
+import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
@@ -19,7 +20,7 @@ export function movePart(p:Project,mid:string,sid:string,pid:string,delta:number
   else if(pid.includes(':rod')||pid.includes(':pantograph:')||pid.includes(':flange:')){const current=parts(m).find(p=>p.id===sid+':rod'||p.id===sid+':pantograph:rod')!;s.rodAt=(current.position[1]+delta-b.bottom)/(b.top-b.bottom);}
   return n;
 }
-export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:number):Project{
+export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:number,drawer?:DrawerConfig):Project{
   const source=p.modules.find(a=>a.id===mid)?.module;if(!source)throw Error('Перетащите элемент в корпус.');const b=boxes(source).find(b=>b.id===sid)!;
   const desired=Math.round((worldY-b.bottom)/5)*5;
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));
@@ -28,12 +29,20 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     if(kind==='shelf'){if(s.shelves.length>=RULES.maxShelves)break;s.shelves.push(y/(b.top-b.bottom));s.shelves.sort((a,b)=>a-b);}
     else if(kind==='drawer'){
       if(s.drawers>=RULES.maxDrawers)break;
-      s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
+      s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawer??drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
     }else if(kind==='rod'){s.rod=true;s.pantograph=false;s.rodAt=y/(b.top-b.bottom);}
     else {s.pantograph=true;s.rod=false;s.rodAt=y/(b.top-b.bottom);}
     if(!projectErrors(n).length)return n;
   }
   throw Error(kind==='pantograph'?'Пантографу нужен внутренний проём от 545 мм и место по высоте.':'Здесь недостаточно свободного места. Переместите наполнение или увеличьте корпус.');
+}
+export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,toMid:string,toSid:string,y:number):Project{
+  if(fromMid===toMid&&fromSid===toSid)throw Error('Выберите другой корпус или секцию.');
+  const m=p.modules.find(a=>a.id===fromMid)?.module,s=m?.sections.find(s=>s.id===fromSid);if(!m||!s)throw Error('Элемент не найден.');
+  const kind:FillKind=pid.includes(':pantograph:')?'pantograph':pid.includes(':drawer:')?'drawer':pid.includes(':shelf:')?'shelf':'rod';
+  const cfg=kind==='drawer'?drawerConfig(m,s,Number(pid.split(':drawer:')[1].split(':')[0])):undefined;
+  const n=removePart(p,fromMid,fromSid,pid);
+  return insertItem(n,kind,toMid,toSid,y,cfg);
 }
 
 

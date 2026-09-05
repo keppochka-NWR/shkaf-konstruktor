@@ -14,6 +14,7 @@ type Props = {
   onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
   onMovePart:(mid:string,sid:string,pid:string,y:number)=>boolean;
   onDropItem:(kind:string,mid:string,sid:string,y:number)=>boolean;
+  onTransfer:(mid:string,sid:string,pid:string,toMid:string,toSid:string,y:number)=>boolean;
   arrangement: PlacedModule[];
   activeId: string;
   room?: Room;
@@ -206,7 +207,7 @@ export function Scene(p: Props) {
             metalness: isMetal ? 0.8 : 0,
           });
           const texture = catalog.find(
-            (c) => c.n === (part.role === "door" ? m.facadeDecor : m.decor),
+            (c) => c.n === part.decor,
           )?.tex;
           if (texture && !isBack && !isMetal) {
             loader.load(
@@ -473,7 +474,17 @@ export function Scene(p: Props) {
     function resetDrag(){if(!drag)return;if(drag.kind==='module')moduleGroups.get(drag.mid)?.position.set(0,0,0);else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;controls.enabled=true;}
     function pointerUp(e:PointerEvent){
       if(!drag){if(current.current.mode==='orbit')return;return;}
-      const d=drag;if(d.moved){if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);else current.current.onMovePart(d.mid,d.sid,d.pid,d.delta);}else{if(d.mid!==current.current.activeId)current.current.onModuleSelect(d.mid);else current.current.onPartSelect(d.sid,d.pid);}
+      const d=drag;
+      if(d.moved){
+        if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);
+        else{
+          const hit=hitAt(e.clientX,e.clientY,true),toMid=hit?.object.userData.moduleId,toSid=hit?sectionFor(hit):undefined;
+          if(hit&&toMid&&toSid&&(toMid!==d.mid||toSid!==d.sid)){
+            const placed=current.current.arrangement.find(a=>a.id===toMid)!;
+            current.current.onTransfer(d.mid,d.sid,d.pid,toMid,toSid,hit.point.y-(placed.y??0));
+          }else current.current.onMovePart(d.mid,d.sid,d.pid,d.delta);
+        }
+      }else{if(d.mid!==current.current.activeId)current.current.onModuleSelect(d.mid);else current.current.onPartSelect(d.sid,d.pid);}
       resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
     }
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;badge.textContent='Отпустите внутри нужного корпуса';}

@@ -1,5 +1,6 @@
 import { parts, RULES, type Part } from "./model";
 import { projectErrors, type Project } from "./project";
+import {packRectangles} from './packing';
 export type Detail = Part & { moduleName: string; code: string };
 export type Placement = {
   detail: Detail;
@@ -28,7 +29,7 @@ export function details(p: Project): Detail[] {
   );
 }
 /** Conservative guillotine preview. Grain locked to sheet long side; no mirroring or rotation. */
-export function nest(p: Project, gap = 10): Sheet[] {
+export function nestGuillotine(p: Project, gap = 10): Sheet[] {
   const err = projectErrors(p);
   if (err.length) throw Error(err[0]);
   if (!Number.isFinite(gap) || gap < 0 || gap > 30)
@@ -81,6 +82,26 @@ export function nest(p: Project, gap = 10): Sheet[] {
     if (bh > 0) s.free.push({ x: f.x, y: f.y + d.length + gap, w: f.w, h: bh });
   }
   return result.map(({ free, ...s }) => s);
+}
+/** Compare six fixed-grain nestings against the previous guaranteed baseline. */
+export function nest(p:Project,gap=10):Sheet[]{
+  const baseline=nestGuillotine(p,gap),all=details(p),groups=new Map<string,Detail[]>();
+  for(const d of all){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
+  const result:Sheet[]=[];
+  for(const ds of groups.values()){
+    const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:RULES.sheetW;
+    let best=baseline.filter(s=>s.material===first.material&&s.decor===decor&&s.thickness===first.thickness);
+    const byId=new Map(ds.map(d=>[d.code,d]));
+    const footprint=(s:Sheet[])=>Math.max(...s.at(-1)!.items.map(p=>p.y+p.h));
+    for(const order of ['area','height','width'] as const)for(const fit of ['short','area'] as const){
+      const packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length})),width-20,height-20,gap,order,fit);
+      if(packed.length>best.length)continue;
+      const candidate:Sheet[]=packed.map(items=>({decor,material:first.material,thickness:first.thickness,width,height,items:items.map(a=>({detail:byId.get(a.id)!,x:a.x+10,y:a.y+10,w:a.w,h:a.h}))}));
+      if(candidate.length<best.length||footprint(candidate)<footprint(best))best=candidate;
+    }
+    result.push(...best);
+  }
+  return result;
 }
 export const esc = (v: unknown) =>
   String(v).replace(

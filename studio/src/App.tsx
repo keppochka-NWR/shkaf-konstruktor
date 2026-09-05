@@ -56,7 +56,7 @@ import {
   appendModule, snapPlacement,
   type Project,
 } from "./project";
-import {insertItem,moveModule,movePart,removePart,type FillKind} from './operations';
+import {insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -743,6 +743,7 @@ export default function App() {
             onMoveModule={moveBody}
             onMovePart={moveFilling}
             onDropItem={dropFilling}
+            onTransfer={(mid,sid,pid,toMid,toSid,y)=>{try{const next=transferPart(project,mid,sid,pid,toMid,toSid,y);if(commitProject(next)){setActive(toMid);chooseSection(toSid);setMode('fill');return true;}}catch(e){setError((e as Error).message);}return false;}}
             captureReady={(fn) => (capture.current = fn)}
             module={m}
             arrangement={project.modules}
