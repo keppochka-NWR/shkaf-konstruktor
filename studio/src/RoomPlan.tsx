@@ -1,0 +1,26 @@
+import {useRef,useState} from 'react';
+import {bounds,localToRoom,snapPlacement,type Project,type Opening} from './project';
+type Props={project:Project;active:string;onSelect:(id:string)=>void;onRoom:()=>void;update:(p:Project)=>boolean};
+type Drag={kind:'module'|'opening';id:string;start:{x:number;y:number};origin:{x:number;z:number};pointerId:number};
+export function RoomPlan({project,active,onSelect,onRoom,update}:Props){
+  const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag|null>(null),[preview,setPreview]=useState<Project|null>(null);
+  const p=preview||project,r=p.room,margin=Math.max(r.width,r.depth)*0.1;
+  function point(e:React.PointerEvent){const pt=new DOMPoint(e.clientX,e.clientY),matrix=svg.current?.getScreenCTM();return matrix?pt.matrixTransform(matrix.inverse()):pt;}
+  function start(e:React.PointerEvent,kind:Drag['kind'],id:string){if(e.button!==0)return;e.stopPropagation();const a=project.modules.find(a=>a.id===id),o=project.room.openings?.find(o=>o.id===id);const pt=point(e);drag.current={kind,id,start:pt,origin:kind==='module'?{x:a!.x,z:a!.z}:{x:o!.offset,z:0},pointerId:e.pointerId};svg.current?.setPointerCapture(e.pointerId);if(kind==='module')onSelect(id);else onRoom();}
+  function move(e:React.PointerEvent){const d=drag.current;if(!d)return;const pt=point(e),n=structuredClone(project);
+    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;Object.assign(a,snapPlacement(project,d.id,{x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0}));}
+    else{const o=n.room.openings!.find(o=>o.id===d.id)!,horizontal=o.wall==='back'||o.wall==='front',length=horizontal?r.width:r.depth;o.offset=Math.max(0,Math.min(length-o.width,Math.round((d.origin.x+(horizontal?pt.x-d.start.x:pt.y-d.start.y))/10)*10));}
+    setPreview(n);
+  }
+  function finish(e:React.PointerEvent){const d=drag.current;if(!d)return;if(preview)update(preview);drag.current=null;setPreview(null);if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);}
+  function cancel(){drag.current=null;setPreview(null);}
+  function opening(o:Opening){const horizontal=o.wall==='back'||o.wall==='front',x=horizontal?o.offset:o.wall==='left'?0:r.width,z=horizontal?o.wall==='back'?0:r.depth:o.offset;return <g key={o.id} tabIndex={0} role="button" aria-label={(o.type==='window'?'Окно':'Дверь')+' '+Math.round(o.width)+' мм'} onPointerDown={e=>start(e,'opening',o.id)} onKeyDown={e=>{if(e.key==='Enter')onRoom();}} style={{cursor:'ew-resize'}}><line x1={x} y1={z} x2={x+(horizontal?o.width:0)} y2={z+(horizontal?0:o.width)} stroke="#fafaf8" strokeWidth={90}/><line x1={x} y1={z} x2={x+(horizontal?o.width:0)} y2={z+(horizontal?0:o.width)} stroke={o.type==='window'?'#78a9bd':'#b29a7b'} strokeWidth={45}/><text x={x+(horizontal?o.width/2:-110)} y={z+(horizontal?-85:o.width/2)} fontSize={70} textAnchor="middle" fill="#607180">{o.type==='window'?'Окно':'Дверь'} {o.width}</text></g>;}
+  return <div className="room-plan"><svg ref={svg} role="group" aria-label="План комнаты. Перетаскивайте корпуса, окна и двери." viewBox={`${-margin} ${-margin} ${r.width+margin*2} ${r.depth+margin*2}`} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel} onKeyDown={e=>{if(e.key==='Escape')cancel();}}>
+    <defs><pattern id="room-plan-grid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#e1e3e2" strokeWidth="3"/></pattern></defs>
+    <rect width={r.width} height={r.depth} fill="url(#room-plan-grid)" stroke="#717b84" strokeWidth={55}/>
+    <text x={r.width/2} y={-margin*.55} fontSize={90} textAnchor="middle" fill="#5b6570">{r.width} мм</text><text x={-margin*.55} y={r.depth/2} transform={`rotate(-90 ${-margin*.55} ${r.depth/2})`} fontSize={90} textAnchor="middle" fill="#5b6570">{r.depth} мм</text>
+    {r.openings?.map(opening)}
+    {p.modules.map((a,i)=>{const b=bounds(a),front1=localToRoom(a,0,a.module.depth),front2=localToRoom(a,a.module.width,a.module.depth);return <g key={a.id} role="button" tabIndex={0} aria-label={'На плане: '+a.module.name} onPointerDown={e=>start(e,'module',a.id)} onKeyDown={e=>{if(e.key==='Enter')onSelect(a.id);}} style={{cursor:'grab'}}><rect x={b.x} y={b.z} width={b.w} height={b.d} rx={12} fill={a.id===active?'#dce5ff':(a.y??0)>0?'#e4dfd4':'#e6e9e7'} fillOpacity={(a.y??0)>0?.65:1} stroke={a.id===active?'#325bee':'#87958e'} strokeWidth={a.id===active?14:8} strokeDasharray={(a.y??0)>0?'35 20':undefined}/><line x1={front1.x} y1={front1.z} x2={front2.x} y2={front2.z} stroke={a.id===active?'#325bee':'#6b8072'} strokeWidth={28}/><text x={b.x+b.w/2} y={b.z+b.d/2-25} fontSize={75} textAnchor="middle" fill="#283747" pointerEvents="none">{i+1}</text><text x={b.x+b.w/2} y={b.z+b.d/2+65} fontSize={48} textAnchor="middle" fill="#586776" pointerEvents="none">{a.module.width} × {a.module.depth}</text></g>;})}
+  </svg><div className="plan-help">Тяните корпуса и проёмы · Толстая линия — фасад · Пунктир — верхний модуль</div></div>;
+}
+

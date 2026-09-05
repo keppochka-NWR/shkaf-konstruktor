@@ -47,6 +47,7 @@ import {
 import { Scene, type View } from "./Scene";
 import { OutputPanel } from "./OutputPanel";
 import { RoomEditor } from './RoomEditor';
+import {RoomPlan} from './RoomPlan';
 import { catalog } from "./catalog";
 import { SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
@@ -181,6 +182,7 @@ export default function App() {
   function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
+  const [roomPlan,setRoomPlan]=useState(false);
   const [direct, setDirect] = useState<{
     label: string;
     value: number;
@@ -205,7 +207,7 @@ export default function App() {
   function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(moveModule(project,mid,pos));}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
   function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
-  function startFill(e:React.DragEvent,kind:FillKind){e.dataTransfer.setData('application/x-furniture',kind);e.dataTransfer.effectAllowed='copy';setMode('fill');setOpenDoors(true);}
+  function startFill(e:React.DragEvent,kind:FillKind){setRoomPlan(false);e.dataTransfer.setData('application/x-furniture',kind);e.dataTransfer.effectAllowed='copy';setMode('fill');setOpenDoors(true);}
   function addModule(copy = false) {
     const source = copy
       ? m
@@ -454,7 +456,7 @@ export default function App() {
           </span>
         </div>
         <div className="header-actions">
-          <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => setModal("output")}>
+          <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
           <div className="history">
@@ -623,6 +625,7 @@ export default function App() {
               onClick={() => {
                 setTab("room");
                 setShowRoom(true);
+                setRoomPlan(true);
                 setFit((f) => f + 1);
               }}
             >
@@ -724,20 +727,22 @@ export default function App() {
               ).map((v) => (
                 <button
                   key={v.id}
-                  aria-pressed={view === v.id}
+                  aria-pressed={!roomPlan&&view === v.id}
                   onClick={() => {
                     setView(v.id);
+                    setRoomPlan(false);
                     setFit((f) => f + 1);
                   }}
                 >
                   {v.label}
                 </button>
               ))}
+              <button aria-pressed={roomPlan} onClick={()=>{setRoomPlan(true);setTab('room');}}>План</button>
             </div>
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
-          <div className="interaction-bar">{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
-          <Scene
+          <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
+          {roomPlan?<RoomPlan project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             mode={mode}
             snap={(mid,p)=>snapPlacement(project,mid,p)}
             onMoveModule={moveBody}
@@ -786,7 +791,7 @@ export default function App() {
             openDoors={openDoors}
             exploded={exploded}
             dimensions={dimensions}
-          />
+          />}
           <div className="scene-caption">
             <span>КОРПУС / ЛДСП 16</span>
             <b>
@@ -808,7 +813,7 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="scene-tools">
+          <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
               aria-label="Прозрачный корпус"
               title="Прозрачный корпус"
@@ -862,7 +867,7 @@ export default function App() {
               </button>
             )}
           </div>
-          <div className="section-picker">
+          <div className="section-picker" style={{display:roomPlan?"none":undefined}}>
             {boxes(m).map((box, i) => (
               <button
                 key={box.id}
@@ -877,7 +882,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="orbit-help">
+          <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {mode==='move'?'Тяните корпус · привязка к соседям':mode==='fill'?'Тяните полки и ящики по высоте':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
             Колесо — масштаб
           </div>
@@ -1352,7 +1357,7 @@ export default function App() {
           {allParts.filter((p) => p.material !== "metal").length} деталей{" "}
           <span>Посмотреть</span>
         </button>
-        <button className="stage-note" onClick={() => setModal("output")}>
+        <button className="stage-note" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setModal("output");}}>
           Lamarty 2750 × 1830 · Карты листов и КП
         </button>
       </footer>
@@ -1521,5 +1526,7 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
