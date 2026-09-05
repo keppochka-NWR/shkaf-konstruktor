@@ -38,6 +38,23 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(len(self.a.get('/api/studio/projects?archived=true').json()['items']),1)
         self.a.post('/api/studio/projects/test-project/archive?archived=false')
         self.assertEqual(len(self.a.get('/api/studio/projects').json()['items']),1)
+    def test_history_access_and_non_destructive_restore(self):
+        old=self.payload();old['data']['note']='Первый вариант'
+        self.a.post('/api/studio/projects',json=old)
+        new=self.payload(1);new['data']['note']='Второй вариант'
+        self.a.post('/api/studio/projects',json=new)
+        path='/api/studio/projects/test-project/revisions'
+        self.assertEqual(self.b.get(path).status_code,404)
+        self.assertEqual(self.b.get(path+'/1').status_code,404)
+        self.assertEqual([r['revision'] for r in self.admin.get(path).json()['items']],[2,1])
+        restored=self.a.get(path+'/1').json()
+        self.assertEqual(restored['currentRevision'],2)
+        self.assertEqual(restored['data']['note'],'Первый вариант')
+        self.assertEqual(self.a.get('/api/studio/projects/test-project').json()['data']['note'],'Второй вариант')
+        body=self.payload(restored['currentRevision']);body['data']=restored['data']
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).json()['revision'],3)
+        self.assertEqual(self.a.get(path+'/2').json()['data']['note'],'Второй вариант')
+        self.assertEqual(self.a.get(path+'/99').status_code,404)
     def test_csrf_and_logout(self):
         self.assertEqual(self.a.post('/api/studio/projects',json=self.payload(),headers={'origin':'https://outside.example'}).status_code,403)
         self.a.post('/api/studio/logout')

@@ -132,6 +132,23 @@ def create_app(db_path=None, config=None):
         with connect() as c:row=c.execute('SELECT * FROM projects WHERE id=?',(pid,)).fetchone()
         if not row or (row['email']!=u['email'] and u['role']!='admin'):raise HTTPException(404,'Проект не найден.')
         return {**dict(row),'data':json.loads(row['data'])}
+    @app.get('/api/studio/projects/{pid}/revisions')
+    def history(pid:str,request:Request):
+        u=user(request)
+        with connect() as c:
+            row=c.execute('SELECT email,revision FROM projects WHERE id=?',(pid,)).fetchone()
+            if not row or (row['email']!=u['email'] and u['role']!='admin'):raise HTTPException(404,'Проект не найден.')
+            rows=c.execute('SELECT revision,name,updated FROM revisions WHERE project_id=? ORDER BY revision DESC LIMIT 100',(pid,)).fetchall()
+        return {'items':[dict(r) for r in rows],'currentRevision':row['revision']}
+    @app.get('/api/studio/projects/{pid}/revisions/{revision}')
+    def load_revision(pid:str,revision:int,request:Request):
+        u=user(request)
+        with connect() as c:
+            project=c.execute('SELECT email,revision FROM projects WHERE id=?',(pid,)).fetchone()
+            if not project or (project['email']!=u['email'] and u['role']!='admin'):raise HTTPException(404,'Проект не найден.')
+            row=c.execute('SELECT * FROM revisions WHERE project_id=? AND revision=?',(pid,revision)).fetchone()
+        if not row:raise HTTPException(404,'Версия не найдена.')
+        return {**dict(row),'data':json.loads(row['data']),'email':project['email'],'currentRevision':project['revision']}
     @app.post('/api/studio/projects')
     def save(body:SaveBody,request:Request):
         u=user(request)
