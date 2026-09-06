@@ -468,3 +468,12 @@ test('labels show four edge values in the same order as detail CSV',()=>{
  const p=newProject();assert.equal(labelEdges({edge:[.4,2,0,.4]}),'Кромка 1–4: 0,4 / 2 / — / 0,4 мм');
  const html=labelsHTML(p);assert.ok(html.includes('Кромка 1–4: 2 / 2 / 2 / 2 мм'));assert.ok(html.includes('Кромка 1–4: — / — / — / — мм'));
 });
+
+
+test('label document groups at most ten intact labels into each A4 page',()=>{
+ const p=newProject(),html=labelsHTML(p),count=labelDetails(p).length;
+ const pages=html.split('<section class="label-page">').slice(1).map(s=>s.split('</section>')[0]);
+ assert.equal(pages.length,Math.ceil(count/10));assert.equal(pages.reduce((n,s)=>n+(s.match(/class="part-label"/g)||[]).length,0),count);
+ pages.forEach((s,i)=>assert.equal((s.match(/class="part-label"/g)||[]).length,Math.min(10,count-i*10)));
+ assert.ok(html.includes('break-after:page'));assert.ok(html.includes('width:90mm;height:50mm'));
+});
