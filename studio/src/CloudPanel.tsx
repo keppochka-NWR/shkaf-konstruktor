@@ -28,8 +28,12 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
   async function save(copy:boolean){
     const link=!copy&&project.cloud?.owner===user?.email?project.cloud:undefined,id=link?.id||crypto.randomUUID();
     const r=await api('/projects',{id,name:name.trim()||'Проект',revision:link?.revision||0,data:project});
-    if(!canApply())return;
-    update({...project,cloud:{id,revision:r.revision,owner:user!.email,name:name.trim()||'Проект'}});await reload();setMessage('Проект сохранён. Версия '+r.revision+'.');
+    if(!mounted.current)return;
+    if(canApply()){
+      const linked=update({...project,cloud:{id,revision:r.revision,owner:user!.email,name:name.trim()||'Проект'}});
+      setMessage(linked?'Проект сохранён на сервере. Версия '+r.revision+'.':'Версия '+r.revision+' сохранена на сервере, но рабочий проект не удалось связать с ней. Откройте сохранённый вариант из списка после проверки текущих правок.');
+    }
+    try{await reload();}catch{if(mounted.current)setError('Не удалось обновить список проектов. Запись на сервере уже выполнена; повторно откройте кабинет для проверки.');}
   }
   async function load(item:Entry){const r=await api('/projects/'+item.id),p=parseProject(r.data);p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};if(!canApply())return;backupProject(project);if(update(p)){setName(r.name);setItems(previous=>previous.map(entry=>entry.id===item.id?{...entry,name:r.name,revision:r.revision,email:r.email,updated:r.updated}:entry));setMessage('Открыт проект «'+r.name+'».');}}
   async function downloadSaved(item:Entry){
