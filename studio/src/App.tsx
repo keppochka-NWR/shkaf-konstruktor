@@ -1,3 +1,4 @@
+import {RoomObstacles} from './RoomObstacles';
 import {NewProjectPanel} from './NewProjectPanel';
 import {MEASUREMENT_RULES,nicheSize} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
@@ -200,6 +201,7 @@ export default function App() {
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
   const [selectedOpening,setSelectedOpening]=useState<string>();
+  const [selectedObstacle,setSelectedObstacle]=useState<string>();
   const [presentation,setPresentation]=useState(false);
   const [outputTab,setOutputTab] = useState<"sheets" | "estimate">("sheets");
   const [renderImage,setRenderImage]=useState("");
@@ -220,6 +222,7 @@ export default function App() {
   }
   function selectModule(mid: string) {
     setSelectedOpening(undefined);
+    setSelectedObstacle(undefined);
     setDrawerPreview(false);
     setSelectedPart(null);
     setActive(mid);
@@ -745,7 +748,7 @@ export default function App() {
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
-          {roomPlan?<RoomPlan selectedOpening={selectedOpening} onOpeningSelect={setSelectedOpening} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+          {roomPlan?<RoomPlan selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);}} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             mode={presentation?'orbit':mode}
             presentation={presentation}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
@@ -942,6 +945,7 @@ export default function App() {
               <details className="measurement-fields"><summary>Сдвинуть всю композицию</summary><p className="field-note">Все {project.modules.length} корпуса сдвигаются вместе. Стыки, расстояния и положение антресолей относительно нижних модулей сохраняются.</p>{(['x','z','y'] as const).map(axis=><NumberField key={axis} label={{x:'Композиция от левой стены',z:'Композиция от задней стены',y:'Композиция от пола'}[axis]} value={Math.round(mountingComposition[axis]*10)/10} min={0} max={{x:project.room.width-mountingComposition.w,z:project.room.depth-mountingComposition.d,y:project.room.height-mountingComposition.h}[axis]} onChange={v=>{try{commitProject(setCompositionDistance(project,axis,v));}catch(e){setError((e as Error).message);}}}/>)}<p className="field-note">Отступы — по монтажному габариту, как у отдельного корпуса. Выступы ручек проверяются отдельными подсказками. Отмена возвращает всю расстановку одним шагом.</p></details>
               <RoomWarnings project={project} select={mid=>{selectModule(mid);setRoomPlan(true);}}/>
               <RoomEditor selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
+              <RoomObstacles selected={selectedObstacle} onSelect={setSelectedObstacle} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <button className="text-action" onClick={() => setTab("module")}>
                 К выбранному модулю
               </button>

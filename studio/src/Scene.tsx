@@ -330,6 +330,7 @@ export function Scene(p: Props) {
             wallBox(o.wall,u,y,o.width-80,o.height-80,4,0x8cbac6,0.2);
           }else wallBox(o.wall,u,y,o.width-80,o.height-40,35,0xaa8e6d,0.3);
         }
+        for(const o of r.obstacles||[]){const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:0x786d62,transparent:true,opacity:.5}));mesh.add(edge);}
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
       const b = boxes(m).find((b) => b.id === state.selected);

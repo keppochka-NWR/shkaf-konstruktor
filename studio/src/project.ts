@@ -1,7 +1,9 @@
 import type {Niche} from './measurement';
 import {parts,id,initialModule,parseModule,validate,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
-export type Room={width:number;depth:number;height:number;openings?:Opening[]};
+export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
+export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
+export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[]};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
 export type Project={version:3;measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
@@ -21,6 +23,12 @@ export function projectErrors(p:Project):string[]{
   if(!p.modules.length||p.modules.length>40)return ['В проекте должно быть от 1 до 40 модулей.'];
   if(new Set(p.modules.map(m=>m.id)).size!==p.modules.length)return ['Идентификаторы модулей повторяются.'];
   for(const v of [p.room.width,p.room.depth,p.room.height])if(!Number.isFinite(v)||v<500||v>20000)return ['Размеры помещения: от 500 до 20 000 мм.'];
+  const obstacles=p.room.obstacles;
+  if(obstacles!==undefined){
+    if(!Array.isArray(obstacles)||obstacles.length>30)return ['Допустимо до 30 объектов замера.'];
+    for(const o of obstacles)if(!o||typeof o.id!=='string'||!o.id||typeof o.name!=='string'||!o.name.trim()||o.name.length>80||!['column','beam','radiator'].includes(o.type)||![o.x,o.y,o.z,o.width,o.depth,o.height].every(Number.isFinite)||o.x<0||o.y<0||o.z<0||Math.min(o.width,o.depth,o.height)<10||o.x+o.width>p.room.width||o.z+o.depth>p.room.depth||o.y+o.height>p.room.height)return ['Проверьте название, размеры и положение объекта замера: он должен помещаться в комнате.'];
+    if(new Set(obstacles.map(o=>o.id)).size!==obstacles.length)return ['Идентификаторы объектов замера повторяются.'];
+  }
   if(p.room.openings&&(!Array.isArray(p.room.openings)||p.room.openings.length>30))return ['Допустимо до 30 окон и дверей.'];
   for(const o of p.room.openings||[])if(!o||!['window','door'].includes(o.type)||!['back','left','right','front'].includes(o.wall)||typeof o.id!=='string'||![o.offset,o.width,o.height,o.sill].every(Number.isFinite)||o.offset<0||o.width<200||o.height<200||o.sill<0||o.sill+o.height>p.room.height||o.offset+o.width>(o.wall==='back'||o.wall==='front'?p.room.width:p.room.depth))errors.push('Окно или дверь выходят за границы стены.');
   const os=p.room.openings||[];
@@ -47,6 +55,7 @@ export function parseProject(data:unknown):Project{
   if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>40)throw Error('Нужен файл проекта редактора.');
   const p:Project={version:3,room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill}));}
+  if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height}));}
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation}})};
   if(x.cloud)p.cloud={id:x.cloud.id,revision:x.cloud.revision,owner:x.cloud.owner,...(x.cloud.name===undefined?{}:{name:x.cloud.name})};

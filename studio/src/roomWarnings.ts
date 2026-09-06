@@ -1,5 +1,5 @@
 import {MEASUREMENT_RULES} from './measurement';
-import {bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
+import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 
 // Advisory inspection zones, not workshop rules or door-swing geometry.
 export function openingZone(room:Room,o:Opening){
@@ -10,6 +10,7 @@ export function openingZone(room:Room,o:Opening){
     y:o.sill,w:horizontal?o.width:reach,d:horizontal?reach:o.width,h:o.height};
 }
 export function roomWarnings(project:Project){
+  const closed=project.modules.map(a=>({a,b:closedModuleBounds(a)}));
   const warnings:{moduleId:string;openingId?:string;kind?:string;message:string}[]=[];
   for(const [index,o] of (project.room.openings||[]).entries())for(const a of project.modules){
     if(!overlap(bounds(a),openingZone(project.room,o)))continue;
@@ -18,10 +19,10 @@ export function roomWarnings(project:Project){
       :`«${a.module.name}»: корпус перекрывает окно ${index+1} у стены. Проверьте доступ к окну и подоконнику.`});
   }
   for(const a of project.modules){const gap=project.room.height-(a.y??0)-a.module.height;if(gap<MEASUREMENT_RULES.ceilingClearance-.001)warnings.push({moduleId:a.id,kind:"ceiling",message:`«${a.module.name}»: до потолка ${Math.round(gap*10)/10} мм. По СТП оставьте ${MEASUREMENT_RULES.ceilingClearance} мм от нижней точки потолка; проверьте светильники и выступы.`});}
-  for(const a of project.modules){
-    const b=closedModuleBounds(a);
+  for(const {a,b} of closed){
     const exits=[['левой',-b.x],['задней',-b.z],['правой',b.x+b.w-project.room.width],['передней',b.z+b.d-project.room.depth]] as const;
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});
   }
+  for(const o of project.room.obstacles||[])for(const {a,b} of closed)if(overlap(b,obstacleBounds(o)))warnings.push({moduleId:a.id,kind:'obstacle-'+o.id,message:`«${a.module.name}» пересекается с объектом замера «${o.name}». Измените расстановку или уточните замер${o.type==='radiator'?'; отдельно проверьте доступ и теплоотвод':''}.`});
   return warnings;
 }
