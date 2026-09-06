@@ -403,22 +403,8 @@ export default function App() {
       setError("Ширину единственной секции меняйте через габарит модуля.");
       return;
     }
-    modify((next) => {
-      const avail = next.width - RULES.panel * (next.sections.length + 1);
-      if (width <= 0 || width >= avail) {
-        next.sections[idx].weight = -1;
-        return;
-      }
-      const remaining = m.sections.reduce(
-        (sum, s, i) => sum + (i === idx ? 0 : s.weight),
-        0,
-      );
-      next.sections.forEach(
-        (ss, i) =>
-          (ss.weight =
-            i === idx ? width : ((avail - width) * ss.weight) / remaining),
-      );
-    });
+    const right=idx<m.sections.length-1;
+    try{commitProject(moveDivider(project,placed.id,m.sections[right?idx+1:idx].id,right?width-b.width:b.width-width));}catch(e){setError((e as Error).message);}
   }
   function download() {
     const blob = new Blob([JSON.stringify(project, null, 2)], {
@@ -1146,11 +1132,11 @@ export default function App() {
                   label="Внутренняя ширина"
                   value={Math.round(b.width * 10) / 10}
                   min={RULES.minSection}
-                  max={m.width - 32}
+                  max={m.sections.length===1?b.width:b.width+boxes(m)[idx<m.sections.length-1?idx+1:idx-1].width-RULES.minSection}
                   onChange={resizeSection}
                 />
                 <p className="field-note">
-                  Соседние секции займут оставшееся место.
+                  {m.sections.length===1?'Ширину единственной секции задаёт габарит корпуса.':`Изменится только соседняя секция ${idx<m.sections.length-1?'справа':'слева'}. Остальные проёмы сохранят ширину.`}
                 </p>
                 <button
                   className="outline full"
