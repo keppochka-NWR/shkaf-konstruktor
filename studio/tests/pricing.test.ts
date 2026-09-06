@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
-import {newProject,parseProject,applyCornerFillers,projectErrors} from '../src/project';
+import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
+import {roomWarnings} from '../src/roomWarnings';
 import {parts,initialModule,validate} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML} from '../src/exports';
@@ -124,6 +125,39 @@ test('corner filler appears when a body meets another at 90 degrees and disappea
   const far=applyCornerFillers({...n,modules:[{...a,x:a.x+500},b]});
   assert.equal(far.modules[0].module.cornerFiller,undefined);
   assert.equal(parseProject(n).modules[0].module.cornerFiller,'left');
+});
+
+test('wall fillers follow the workshop regulation: standard strip with handles, edge panel without',()=>{
+  const p=newProject();const a=p.modules[0];a.x=0;a.z=3; // левая боковина у левой стены, корпус с дверями (ручки есть)
+  const n=applyAutoFillers(p),m=n.modules[0].module;
+  assert.deepEqual(m.wallFiller,{left:{kind:'standard',width:50}});
+  assert.ok(n.modules[0].x>=50-0.01,'body moved off the wall by the strip width');
+  const strip=parts(m).find(x=>x.id==='wall-filler:left')!;assert.equal(strip.size[0],50);assert.equal(strip.decor,m.facadeDecor);
+  assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
+  // без дверей и с push-ящиками ручек нет: при ровных стенах — ФП торцом 100 мм на нижнем корпусе
+  const q=newProject();const b=q.modules[0];b.x=0;b.z=3;b.module.doors=false;b.module.sections[0].drawerConfigs=[{slide:'gtv0fpo',height:140,length:300},{slide:'gtv0fpo',height:140,length:300}];
+  const e=applyAutoFillers(q).modules[0].module;assert.deepEqual(e.wallFiller,{left:{kind:'edge',width:100}});
+  const edge=parts(e).find(x=>x.id==='wall-filler:left')!;assert.equal(edge.size[2],100);assert.equal(edge.size[0],16);
+  // кривые стены (отклонение 10+) — снова стандартная ФП
+  q.measurement={number:'1',date:'',notes:'',niche:{width:3000,height:2700,depth:600,deviation:12}};
+  assert.equal(applyAutoFillers(q).modules[0].module.wallFiller!.left!.kind,'standard');
+  // открытый стеллаж без фасадов и ящиков — ФП не нужна
+  const r=newProject();r.modules[0].x=0;r.modules[0].z=3;r.modules[0].module.doors=false;r.modules[0].module.sections[0].drawers=0;delete r.modules[0].module.sections[0].drawerConfigs;
+  assert.equal(applyAutoFillers(r).modules[0].module.wallFiller,undefined);
+  // отодвинули от стены — ФП снимается
+  const far=applyAutoFillers({...n,modules:[{...n.modules[0],x:400}]});assert.equal(far.modules[0].module.wallFiller,undefined);
+});
+
+test('facade size rules: 640 wide up to 920 high, 600 above, 360 minimum, straightener advice',()=>{
+  const m=initialModule();m.width=640;m.height=900;m.sections[0].shelves=[];m.sections[0].drawers=0;delete m.sections[0].drawerConfigs;
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  assert.equal(parts(m).filter(p=>p.role==='door').length,1,'one 636 mm door is allowed under 920 mm high');
+  m.height=1000;assert.equal(parts(m).filter(p=>p.role==='door').length,2,'above 920 mm the same width splits into two doors');
+  m.width=600;m.height=400;m.plinthHeight=150;assert.ok(parts(m).find(p=>p.role==='door')!.length>=360,'400 body on a 150 plinth still gives a 368 door');
+  m.height=2000;m.width=560;delete m.plinthHeight;const p=newProject(m);
+  assert.ok(specificationHTML(p).includes('выпрямитель'),'specification recommends a straightener for tall wide doors');
+  p.room.ceiling='stretch';p.room.height=2000+20;assert.ok(!roomWarnings(p).some(w=>w.kind==='ceiling'));
+  p.room.height=2000+25;p.room.ceiling='stationary';assert.ok(roomWarnings(p).some(w=>w.kind==='ceiling'));
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

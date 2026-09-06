@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, plinth, rearClear,
+  drawerConfig, drawerOffsets, drawerStackHeight, plinth, rearClear, needsWallFiller,
   type Module,
   type Section,
 } from "./model";
@@ -66,7 +66,7 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyCornerFillers,
+  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers,
   type Project,
 } from "./project";
 import {insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
@@ -332,7 +332,7 @@ export default function App() {
   };
   function commitProject(raw: Project) {
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
-    const next = applyCornerFillers(raw);
+    const next = applyAutoFillers(raw);
     const e = projectErrors(next);
     if (e.length) {
       setError(e[0]);
@@ -1224,6 +1224,8 @@ export default function App() {
                 {m.backType==='groove'&&<><NumberField label="Отступ паза от зада" value={m.grooveInset??16} min={8} max={30} onChange={v=>modify(n=>n.grooveInset=v)}/><NumberField label="Глубина паза" value={m.grooveDepth??8} min={4} max={10} onChange={v=>modify(n=>n.grooveDepth=v)}/><p className="field-note">Профиль паза проверяет технолог перед выпуском.</p></>}
                 <label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{plinth(m)===0&&<option value={0}>Без цоколя · антресоль</option>}{[80,100,120,150].map(v=><option key={v} value={v}>{v} мм</option>)}</select></label>
                 <p className="field-note">Вариант без цоколя (каркас на регулируемых опорах, подъём 30 мм, накладное дно) пока не делаем: нижние корпуса только на цоколе.</p>
+                {(['left','right'] as const).map(side=>{const w=m.wallFiller?.[side];if(!w&&m.cornerFiller!==side)return null;return <div key={side} className="filler-status">{m.cornerFiller===side?<p className="field-note">У {side==='left'?'левой':'правой'} боковины — угловая фальш 16 мм, глубина корпус + 40 (стык под 90°).</p>:w!.kind==='edge'?<p className="field-note">У {side==='left'?'левой':'правой'} стены — фальшпанель торцом {w!.width} мм, зазор 5 мм к стене (регламент: стены ровные, ручек нет).</p>:<NumberField label={`Фальшпанель к ${side==='left'?'левой':'правой'} стене, ширина`} value={w!.width} min={RULES.wallFillerMin} max={400} onChange={v=>modify(n=>{n.wallFiller={...n.wallFiller,[side]:{kind:'standard',width:v}};})}/>}</div>;})}
+                {needsWallFiller(m)&&!m.wallFiller&&!m.cornerFiller&&<p className="field-note">Фальшпанели к стенам и угловые фальши добавляются сами, когда корпус придвинут к стене или к другому корпусу под 90°.</p>}
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
                 <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. В смете — {RULES.lightRetailPerM.toLocaleString('ru-RU')} ₽ за пог.м по прайсу цеха, поверх коэффициента.</p>

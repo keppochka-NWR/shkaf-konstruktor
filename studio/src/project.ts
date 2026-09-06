@@ -1,43 +1,69 @@
-import type {Niche} from './measurement';
-import {parts,id,initialModule,parseModule,validate,RULES,type Module,section} from './model';
+import type {Niche,CeilingType} from './measurement';
+import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,hasHandles,plinth,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
-export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[]};
+export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
 export type Project={version:3;measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
-export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller,t=RULES.panel;const front=Math.max(a.module.depth+18,cf?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,cf==='left'?-t:0,-rear),localToRoom(a,a.module.width+(cf==='right'?t:0),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
-/** Габарит корпуса без угловой фальши — для поиска стыка. */
-function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined}});}
+/** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
+export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return w.kind==='edge'?RULES.panel+RULES.wallFillerEdgeGap:w.width;}
+export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=Math.max(a.module.depth+18,cf?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+/** Габарит корпуса без фальшей — для поиска стыков и стен. */
+function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
 /**
  * Автоматические угловые фальши: если к боковине корпуса под 90° примыкает другой корпус (в пределах RULES.cornerSnap),
  * снаружи этой боковины ставится фальш-панель 16 мм глубиной корпус + 40, а корпус при необходимости отодвигается на её толщину.
  * Если стыка больше нет, фальш убирается. Вызывается перед проверкой проекта при каждом изменении.
  */
-export function applyCornerFillers(p:Project):Project{
-  const n=structuredClone(p),t=RULES.panel;
+export function applyCornerFillers(p:Project):Project{return applyAutoFillers(p);}
+/** Сдвиг корпуса вдоль его оси ширины на delta мм (delta>0 — вправо в локальных координатах). */
+function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0,0),to=localToRoom(a,delta,0);a.x+=to.x-from.x;a.z+=to.z-from.z;}
+/**
+ * Автоматические фальши (регламент цеха по фальшпанелям + правило угла Макса):
+ * — стык под 90°: снаружи боковины ставится угловая фальш 16 мм глубиной корпус + 40, корпус отодвигается на её толщину;
+ * — боковина у стены при наличии фасадов/ящиков: ФП торцом (+5 мм к стене; низ 100 мм, верх/антресоль — глубина + фасад)
+ *   при ровных стенах и без ручек, иначе стандартная ФП (ширина сохраняется, если менеджер её уже задал; по умолчанию 50).
+ * Корпус отодвигается от стены на вылет фальши. Если стык или стена больше не рядом — фальш убирается.
+ */
+export function applyAutoFillers(p:Project):Project{
+  const n=structuredClone(p),t=RULES.panel,room=n.room;
+  const straight=!(n.measurement?.niche&&n.measurement.niche.deviation>=10);
   for(const a of n.modules){
     const rot=a.rotation??0;
-    let found:Module['cornerFiller'];
+    let corner:Module['cornerFiller'];
     for(const side of ['left','right'] as const){
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
       const p0=localToRoom(a,u,0),p1=localToRoom(a,u,a.module.depth),pOut=localToRoom(a,u+dir*RULES.cornerSnap,0);
       const strip={x:Math.min(p0.x,p1.x,pOut.x),z:Math.min(p0.z,p1.z,pOut.z),w:Math.max(p0.x,p1.x,pOut.x)-Math.min(p0.x,p1.x,pOut.x)||1,d:Math.max(p0.z,p1.z,pOut.z)-Math.min(p0.z,p1.z,pOut.z)||1,y:a.y??0,h:a.module.height};
       const neighbour=n.modules.find(b=>b!==a&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90&&overlap(strip,bodyBounds(b)));
-      if(neighbour){found=side;break;}
+      if(neighbour){corner=side;break;}
     }
-    if(found){
-      if(a.module.cornerFiller!==found){
-        a.module.cornerFiller=found;
-        // Стык был вплотную: сдвигаем корпус от соседа на толщину фальши.
-        const b=bounds(a);
-        for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){const dir=found==='left'?-1:1;const from=localToRoom(a,0,0),to=localToRoom(a,dir*t,0);a.x+=from.x-to.x;a.z+=from.z-to.z;break;}
-      }
-    }else delete a.module.cornerFiller;
+    const hadCorner=a.module.cornerFiller;
+    if(corner)a.module.cornerFiller=corner;else delete a.module.cornerFiller;
+    if(corner&&hadCorner!==corner){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);break;}}
+    // Стены: боковина в пределах wallSnap от стены комнаты.
+    const wf:Module['wallFiller']={};
+    if(needsWallFiller(a.module))for(const side of ['left','right'] as const){
+      if(corner===side)continue;
+      const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
+      const face=localToRoom(a,u,a.module.depth/2),out=localToRoom(a,u+dir*10,a.module.depth/2);
+      const nx=Math.sign(Math.round(out.x-face.x)),nz=Math.sign(Math.round(out.z-face.z));
+      const dist=nx<0?face.x:nx>0?room.width-face.x:nz<0?face.z:room.depth-face.z;
+      const allowance=sideExtension(a.module,side);
+      if(dist>RULES.wallSnap+allowance)continue;
+      const existing=a.module.wallFiller?.[side];
+      const upper=(a.y??0)>0||plinth(a.module)===0;
+      const edgeAllowed=straight&&!hasHandles(a.module);
+      wf[side]=edgeAllowed?{kind:'edge',width:upper?a.module.depth+18:RULES.wallFillerEdgeLower}:{kind:'standard',width:existing?.kind==='standard'?existing.width:RULES.wallFillerStd};
+      const needed=sideExtension({...a.module,wallFiller:wf},side)-dist;
+      if(needed>0){a.module.wallFiller={...a.module.wallFiller,[side]:wf[side]};shiftAlongWidth(a,side==='left'?needed:-needed);}
+    }
+    if(Object.keys(wf).length)a.module.wallFiller=wf;else delete a.module.wallFiller;
   }
   return n;
 }
