@@ -351,10 +351,8 @@ export default function App() {
   }, [project]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const input =
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement;
-      if (input || direct) return;
+      const editing = e.target instanceof Element && !!e.target.closest('input,textarea,select,[contenteditable="true"],[contenteditable=""]');
+      if (e.defaultPrevented || editing || direct || modal) return;
       if(e.key==='Delete'&&!modal&&canRemove){e.preventDefault();removeSelected();}
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
