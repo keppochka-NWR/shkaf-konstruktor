@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -39,4 +39,19 @@ test('mirroring reverses unequal sections and door fillers without changing plac
  assert.ok(Math.abs(newFiller.position[0]-(m.width-oldFiller.position[0]))<.001);
  assert.deepEqual(projectErrors(n),[]);assert.deepEqual(mirrorModule(n,a.id),p);
  assert.deepEqual({...n.modules[0],module:null},{...a,module:null});
+});
+
+test('wall distance controls measure the occupied envelope for every rotation and back type',()=>{
+ for(const rotation of [0,90,180,270] as const)for(const backType of ['nailed','groove','board','none'] as const){
+  const p=newProject(),a=p.modules[0];a.rotation=rotation;a.module.backType=backType;
+  a.module.sections=[{...section(),drawers:0,shelves:[.5]}];a.x=500;a.z=500;
+  const original=structuredClone(p);
+  const n=setWallDistance(setWallDistance(p,a.id,'x',0),a.id,'z',0);
+  assert.equal(bounds(n.modules[0]).x,0);assert.equal(bounds(n.modules[0]).z,0);assert.deepEqual(projectErrors(n),[]);
+  const b=bounds(n.modules[0]);
+  const far=setWallDistance(setWallDistance(n,a.id,'x',p.room.width-b.w),a.id,'z',p.room.depth-b.d);
+  const fb=bounds(far.modules[0]);assert.equal(fb.x+fb.w,p.room.width);assert.equal(fb.z+fb.d,p.room.depth);
+  assert.throws(()=>setWallDistance(far,a.id,'x',p.room.width-b.w+1));
+  assert.throws(()=>setWallDistance(n,a.id,'z',-1));assert.deepEqual(p,original);
+ }
 });

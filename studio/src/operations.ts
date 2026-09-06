@@ -1,5 +1,5 @@
 import {boxes,drawerConfig,drawerOffsets,drawerStackHeight,parts,RULES,type Module,type Section} from './model';
-import {type Project,projectErrors} from './project';
+import {bounds,type Project,projectErrors} from './project';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
@@ -63,6 +63,15 @@ export function mirrorModule(p:Project,mid:string):Project {
  if(!m)throw Error('Выберите корпус для отражения.');
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
+ const error=projectErrors(n)[0];if(error)throw Error(error);
+ return n;
+}
+
+export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number):Project {
+ const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);
+ if(!a||!Number.isFinite(distance)||distance<0)throw Error('Укажите неотрицательное расстояние от стены или пола.');
+ const edge=bounds(a)[axis];
+ a[axis]=(a[axis]??0)+distance-edge;
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }

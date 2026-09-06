@@ -61,10 +61,10 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, snapPlacement,
+  appendModule, snapPlacement, bounds,
   type Project,
 } from "./project";
-import {mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -181,6 +181,7 @@ export default function App() {
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
+  const placedBounds=bounds(placed);
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
@@ -291,12 +292,7 @@ export default function App() {
     });
   }
   function movePlaced(key: "x" | "y" | "z", value: number) {
-    commitProject({
-      ...project,
-      modules: project.modules.map((a) =>
-        a.id === placed.id ? { ...a, [key]: value } : a,
-      ),
-    });
+    try{commitProject(setWallDistance(project,placed.id,key,value));}catch(e){setError((e as Error).message);}
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
@@ -1077,18 +1073,19 @@ export default function App() {
                 <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>commitProject({...project,modules:project.modules.map(a=>a.id===placed.id?{...a,rotation:Number(e.target.value) as 0|90|180|270}:a)})}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Перетащите корпус в сцене. На виде спереди можно поставить его сверху другого.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"
-                  value={placed.x}
+                  value={placedBounds.x}
                   min={0}
-                  max={project.room.width - m.width}
+                  max={project.room.width - placedBounds.w}
                   onChange={(v) => movePlaced("x", v)}
                 />
                 <NumberField
                   label="От задней стены"
-                  value={placed.z}
-                  min={3}
-                  max={project.room.depth - m.depth}
+                  value={placedBounds.z}
+                  min={0}
+                  max={project.room.depth - placedBounds.d}
                   onChange={(v) => movePlaced("z", v)}
                 />
+                <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>
                 <button
                   className="text-action danger"
                   disabled={project.modules.length === 1}
