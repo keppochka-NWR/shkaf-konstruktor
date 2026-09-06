@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -69,3 +69,12 @@ test('rotation preserves occupied center, clamps to room walls and never pushes 
 
 import {libraryFile,parseLibraryFile} from '../src/moduleLibraryFile';
 test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:901}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
+
+test('upper module inherits cabinet finishes and fits available height without copying filling',()=>{
+ const p=newProject(),a=p.modules[0];a.module.height=2200;a.module.decor='Белый';a.module.facadeDecor='Графит';a.module.backType='groove';a.module.grooveInset=20;a.module.hingeSide='right';a.rotation=90;a.x=100;a.z=100;
+ const original=structuredClone(p),n=addUpperModule(p,a.id),upper=n.modules[1];
+ assert.equal(upper.y,2200);assert.equal(upper.module.height,500);assert.equal(upper.module.plinthHeight,0);assert.equal(upper.rotation,90);assert.equal(upper.x,a.x);assert.equal(upper.z,a.z);
+ for(const k of ['width','depth','decor','facadeDecor','doors','backType','grooveInset','hingeSide'] as const)assert.equal(upper.module[k],a.module[k]);
+ assert.equal(upper.module.sections[0].drawers,0);assert.notEqual(upper.module.sections[0].id,a.module.sections[0].id);assert.deepEqual(projectErrors(n),[]);assert.deepEqual(p,original);
+ p.room.height=2500;assert.throws(()=>addUpperModule(p,a.id),/хотя бы/);
+});

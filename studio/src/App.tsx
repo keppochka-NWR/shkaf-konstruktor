@@ -64,7 +64,7 @@ import {
   appendModule, snapPlacement, bounds,
   type Project,
 } from "./project";
-import {rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -217,7 +217,7 @@ export default function App() {
     setTab("module");
     setFit((f) => f + 1);
   }
-  function addUpper(){const n=structuredClone(project);const mid=crypto.randomUUID();n.modules.push({id:mid,x:placed.x,z:placed.z,rotation:placed.rotation??0,y:(placed.y??0)+m.height,module:{...initialModule(),name:'Антресоль',width:m.width,depth:m.depth,height:600,plinthHeight:0,sections:[section()]}});if(commitProject(n))selectModule(mid);}
+  function addUpper(){try{const n=addUpperModule(project,placed.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}}
   function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(moveModule(project,mid,pos));}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
   function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
