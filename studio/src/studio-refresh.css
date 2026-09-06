@@ -49,3 +49,5 @@
 .specification-preview{display:block;width:100%;height:65vh;min-height:360px;border:1px solid #dce1e4;border-radius:8px;background:white}
 
 .opening-card.selected{border-color:#325bee;box-shadow:0 0 0 1px #325bee;background:#f7f9ff}.opening-card header .opening-title{color:#283747;font-weight:650;text-align:left;padding:3px 0;cursor:pointer;}
+
+.plan-keyboard-help{padding:0 16px 12px;text-align:center;max-width:600px;margin:0 auto;font-size:10px;}
