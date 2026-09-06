@@ -22,6 +22,25 @@ class StudioTests(unittest.TestCase):
         self.assertIn('httponly',result.headers['set-cookie'].lower())
         return c
     def payload(self,revision=0):return {'id':'test-project','name':'Шкаф','revision':revision,'data':{'version':3,'modules':[{}]}}
+    def test_combined_web_server_exposes_only_editor_assets(self):
+        root=Path(self.tmp.name)/'web'
+        (root/'studio'/'assets').mkdir(parents=True)
+        (root/'assets'/'tex').mkdir(parents=True)
+        (root/'studio'/'index.html').write_text('<!doctype html><title>Studio fixture</title>',encoding='utf-8')
+        (root/'studio'/'assets'/'app.js').write_text('/* fixture */',encoding='utf-8')
+        (root/'assets'/'tex'/'wood.jpg').write_bytes(b'fixture')
+        (root/'secret.txt').write_text('private',encoding='utf-8')
+        app=create_app(Path(self.tmp.name)/'web.db',{'STUDIO_DEMO':'1'},static_root=root)
+        with TestClient(app) as c:
+            self.assertIn('Studio fixture',c.get('/').text)
+            self.assertEqual(c.get('/studio/assets/app.js').status_code,200)
+            self.assertEqual(c.get('/assets/tex/wood.jpg').status_code,200)
+            self.assertEqual(c.get('/api/studio/status').status_code,200)
+            for path in ['/secret.txt','/server/studio-data.db','/assets/catalog-lamarty.js','/studio/%2e%2e/secret.txt']:
+                self.assertEqual(c.get(path).status_code,404,path)
+        with self.assertRaises(RuntimeError):
+            create_app(Path(self.tmp.name)/'missing.db',{'STUDIO_DEMO':'1'},static_root=root/'missing')
+
     def test_ownership_and_admin(self):
         self.assertEqual(self.a.post('/api/studio/projects',json=self.payload()).status_code,200)
         self.assertEqual(self.b.get('/api/studio/projects/test-project').status_code,404)

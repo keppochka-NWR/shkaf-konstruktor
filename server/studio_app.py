@@ -13,6 +13,8 @@ from email.message import EmailMessage
 from pathlib import Path
 from fastapi import FastAPI, Request, Response, HTTPException
 from pydantic import BaseModel, Field
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 
 ROOT = Path(__file__).resolve().parent
 COOKIE = 'studio_session'
@@ -30,7 +32,7 @@ class SaveBody(BaseModel):
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
-def create_app(db_path=None, config=None):
+def create_app(db_path=None, config=None, static_root=None):
     cfg = dict(os.environ if config is None else config)
     demo = cfg.get('STUDIO_DEMO') == '1'
     admins = {e.strip().lower() for e in cfg.get('STUDIO_ADMINS', 'admin@example.test' if demo else '').split(',') if e.strip()}
@@ -171,4 +173,13 @@ def create_app(db_path=None, config=None):
         with connect() as c:
             c.execute('UPDATE projects SET archived=? WHERE id=? AND email=?',(int(archived),pid,u['email']))
         return {'ok':True}
+    if static_root is not None:
+        web=Path(static_root).resolve()
+        if not (web/'studio'/'index.html').is_file():
+            raise RuntimeError('Studio build not found. Build studio before serving the web interface.')
+        app.mount('/studio',StaticFiles(directory=web/'studio',html=True),name='studio-web')
+        app.mount('/assets/tex',StaticFiles(directory=web/'assets'/'tex'),name='studio-textures')
+        @app.get('/')
+        def home():
+            return RedirectResponse('/studio/')
     return app
