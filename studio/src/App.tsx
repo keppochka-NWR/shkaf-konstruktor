@@ -66,7 +66,7 @@ import {
   appendModule, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
   type Project,
 } from "./project";
-import {moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = CURRENT_PROJECT;
 function NumberField({
   label,
@@ -203,6 +203,7 @@ export default function App() {
   const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.name;
   const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик целиком':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
   function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
+  function copySelected(){if(!selectedPart)return;try{const result=duplicatePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid);if(commitProject(result.project)){setSelectedPart({...selectedPart,pid:result.partId});setDrawerIndex(result.partId.includes(':drawer:')?Number(result.partId.split(':drawer:')[1].split(':')[0]):null);setDrawerPreview(false);setMode('fill');}}catch(e){setError((e as Error).message);}}
   const [snapping,setSnapping]=useState(true);
   const [moveAll,setMoveAll]=useState(false);
   const [transparent, setTransparent] = useState(false);
@@ -1160,7 +1161,7 @@ export default function App() {
                   <h2>Секция {idx + 1}</h2>
                   <Columns2 size={17} />
                 </div>
-                {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span><button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>Можно нажать Delete · Ctrl+Z отменит удаление</small></div>}
+                {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>}
                 <NumberField
                   label="Внутренняя ширина"
                   value={Math.round(b.width * 10) / 10}

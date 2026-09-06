@@ -55,3 +55,5 @@
 .drawer-selection .drawer-tabs{margin:10px 0}.drawer-group-tools{border-top:1px solid #dce0eb;margin-top:14px;padding-top:12px}.drawer-group-tools summary{font-size:12px;font-weight:600;cursor:pointer}.drawer-group-tools[open] summary{margin-bottom:10px;}
 
 .room-openings .room-add{flex-wrap:wrap;}
+
+.selected-filling button{display:flex;align-items:center;gap:6px;width:100%;text-align:left}

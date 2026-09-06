@@ -142,3 +142,22 @@ export function moveComposition(p:Project,mid:string,pos:{x:number;y:number;z:nu
  const delta={x:pos.x-anchor.x,y:pos.y-(anchor.y??0),z:pos.z-anchor.z};
  return {...p,modules:p.modules.map(a=>({...a,x:a.x+delta.x,y:(a.y??0)+delta.y,z:a.z+delta.z}))};
 }
+
+
+export function duplicatePart(p:Project,mid:string,sid:string,pid:string):{project:Project;partId:string}{
+ const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid),part=m&&parts(m).find(a=>a.id===pid&&a.sectionId===sid);
+ if(!m||!s||!part)throw Error('Выберите полку или ящик для копирования.');
+ const b=boxes(m).find(b=>b.id===sid)!;
+ if(pid.includes(':drawer:')){
+  const j=Number(pid.split(':drawer:')[1].split(':')[0]),cfg=drawerConfig(m,s,j);
+  const next=insertItem(p,'drawer',mid,sid,b.bottom+drawerOffsets(s)[j]+cfg.height+RULES.drawerStep,cfg);
+  return {project:next,partId:sid+':drawer:'+s.drawers+':facade'};
+ }
+ if(pid.includes(':shelf:')){
+  const above=Math.min(b.top,...s.shelves.map(f=>b.bottom+f*(b.top-b.bottom)).filter(y=>y>part.position[1]+.01));
+  const next=insertItem(p,'shelf',mid,sid,(part.position[1]+above)/2);
+  const shelves=next.modules.find(a=>a.id===mid)!.module.sections.find(a=>a.id===sid)!.shelves;
+  return {project:next,partId:sid+':shelf:'+shelves.findIndex(f=>!s.shelves.includes(f))};
+ }
+ throw Error('В этой секции можно копировать отдельные полки и ящики.');
+}

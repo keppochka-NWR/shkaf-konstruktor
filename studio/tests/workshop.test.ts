@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {closedModuleBounds,compositionBounds,snapComposition,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -169,4 +169,19 @@ test('numeric wall distances in group mode preserve offsets and reject moving ot
  const moved=setWallDistance(n,a.id,'x',1000,true);assert.equal(moved.modules[0].x,400);assert.equal(moved.modules[1].x,1000);assert.deepEqual(projectErrors(moved),[]);
  assert.throws(()=>setWallDistance(n,a.id,'x',100,true));assert.deepEqual(n,before);
  const individual=setWallDistance(n,a.id,'x',1000);assert.equal(individual.modules[0].x,50);
+});
+
+
+test('copy selected drawer preserves hardware, handle and source, and derives a new cap',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.shelves=[];s.rod=false;s.drawers=1;s.drawerConfigs=[{slide:'gtv0fpo',length:450,height:180,y:0,handle:true}];
+ const before=JSON.stringify(p),result=duplicatePart(p,a.id,s.id,s.id+':drawer:0:left'),next=result.project.modules[0].module.sections[0];
+ assert.deepEqual(projectErrors(result.project),[]);assert.equal(next.drawers,2);assert.equal(next.drawerConfigs![1].slide,'gtv0fpo');assert.equal(next.drawerConfigs![1].length,450);assert.equal(next.drawerConfigs![1].height,180);assert.equal(next.drawerConfigs![1].handle,true);assert.equal(next.drawerConfigs![1].y,220);assert.ok(parts(result.project.modules[0].module).some(p=>p.id===result.partId));assert.equal(drawerStackHeight(next),440);assert.equal(JSON.stringify(p),before);
+});
+
+test('copy shelf selects the inserted shelf and a full section cannot lose its source',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.drawers=0;s.drawerConfigs=[];s.rod=false;s.shelves=[.25,.75];
+ const before=JSON.stringify(p),result=duplicatePart(p,a.id,s.id,s.id+':shelf:0'),next=result.project.modules[0].module.sections[0];
+ assert.deepEqual(projectErrors(result.project),[]);assert.equal(next.shelves.length,3);assert.equal(result.partId,s.id+':shelf:1');assert.ok(next.shelves[1]>.25&&next.shelves[1]<.75);assert.equal(JSON.stringify(p),before);
+ assert.throws(()=>duplicatePart(p,a.id,s.id,'left'));
+ s.drawers=5;s.shelves=[];const full=JSON.stringify(p);assert.throws(()=>duplicatePart(p,a.id,s.id,s.id+':drawer:0:facade'));assert.equal(JSON.stringify(p),full);
 });
