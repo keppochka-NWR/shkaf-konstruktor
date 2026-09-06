@@ -16,6 +16,7 @@ type Props = {
   moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
   onMoveDivider:(mid:string,sid:string,delta:number)=>boolean;
   dividerProblem:(mid:string,sid:string,delta:number)=>string|undefined;
+  partProblem:(mid:string,sid:string,pid:string,delta:number,target?:{mid:string;sid:string;y:number})=>string|undefined;
   onMovePart:(mid:string,sid:string,pid:string,y:number)=>boolean;
   onDropItem:(kind:string,mid:string,sid:string,y:number)=>boolean;
   onTransfer:(mid:string,sid:string,pid:string,toMid:string,toSid:string,y:number)=>boolean;
@@ -445,7 +446,7 @@ export function Scene(p: Props) {
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
     function indicateTarget(hit:THREE.Intersection|undefined){
-      needsRender=true;
+      needsRender=true;targetMaterial.color.set(0x4057ee);
       if(!hit){dropTarget.visible=false;return '';}
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId),focus=state.arrangement.find(a=>a.id===state.activeId);
       if(!a||!focus){dropTarget.visible=false;return '';}
@@ -486,7 +487,13 @@ export function Scene(p: Props) {
         for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
         const b=boxes(a.module),i=b.findIndex(b=>b.id===drag!.sid),problem=current.current.dividerProblem(drag.mid,drag.sid,dx);
         badge.classList.toggle('invalid',!!problem);badge.textContent=problem||`Секции: ${Math.round(b[i-1].width+dx)} / ${Math.round(b[i].width-dx)} мм · отпустите для пересчёта`;
-      }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit);badge.textContent=(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';}
+      }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;
+        const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit),toMid=hit?.object.userData.moduleId,toSid=hit?sectionFor(hit):undefined;
+        const placed=current.current.arrangement.find(a=>a.id===toMid),to=hit&&placed&&toSid?{mid:placed.id,sid:toSid,y:hit.point.y-(placed.y??0)}:undefined;
+        const problem=current.current.partProblem(drag.mid,drag.sid,drag.pid,dy,to);
+        badge.classList.toggle('invalid',!!problem);if(problem)targetMaterial.color.set(0xc63838);
+        badge.textContent=problem||(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';
+      }
     }
     function resetDrag(){needsRender=true;dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
