@@ -318,7 +318,7 @@ export default function App() {
     if (!touched.current) return;
     try {
       localStorage.setItem(KEY, JSON.stringify(project));
-      setSaved("Изменения сохранены");
+      setSaved("Сохранено в браузере");
     } catch {
       setSaved("Не сохранено");
       setError(
