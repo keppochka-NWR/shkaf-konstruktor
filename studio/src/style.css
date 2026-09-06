@@ -1467,3 +1467,6 @@ th {
     scroll-behavior: auto !important;
   }
 }
+
+.drawer-tabs button {display:flex;flex-direction:column;gap:3px;text-align:left;flex:1 0 58px;}
+.drawer-tabs button small {font-size:9px;color:#53646a;white-space:nowrap;}

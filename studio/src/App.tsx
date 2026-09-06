@@ -217,6 +217,7 @@ export default function App() {
   }
   function selectModule(mid: string) {
     setDrawerPreview(false);
+    setSelectedPart(null);
     setActive(mid);
     setTab("module");
     setFit((f) => f + 1);
@@ -786,6 +787,7 @@ export default function App() {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
               }
             }}
+            selectedPart={!presentation&&selectedPart?.mid===placed.id?selectedPart.pid:undefined}
             selected={presentation?'':selectedId}
             onSelect={chooseSection}
             texture={texture(m.decor)}
@@ -1164,9 +1166,9 @@ export default function App() {
                         <button
                           key={j}
                           aria-pressed={(drawerIndex ?? 0) === j}
-                          onClick={() => setDrawerIndex(j)}
+                          onClick={() => {setDrawerIndex(j);setSelectedPart({mid:placed.id,sid:s.id,pid:s.id+':drawer:'+j+':facade'});setMode('fill');setOpenDoors(true);}}
                         >
-                          Ящик {j + 1}
+                          <span>Ящик {j + 1}</span><small>{Math.round(drawerOffsets(s)[j])} мм от дна</small>
                         </button>
                       ))}
                     </div>

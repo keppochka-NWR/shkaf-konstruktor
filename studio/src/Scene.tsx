@@ -29,6 +29,7 @@ type Props = {
   onGap: (index: number) => void;
   onPartSelect: (sid: string, pid: string) => void;
   selected: string;
+  selectedPart?:string;
   onSelect: (id: string) => void;
   texture?: string;
   facadeTexture?: string;
@@ -281,13 +282,17 @@ export function Scene(p: Props) {
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
             const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position);pivot.add(mesh);
           } else moduleGroup.add(mesh);
-          if (!isMetal) {
+          const selectedPart=active&&!state.presentation?state.selectedPart:undefined;
+          const drawerPrefix=selectedPart?.includes(':drawer:')?selectedPart.split(':drawer:')[0]+':drawer:'+selectedPart.split(':drawer:')[1].split(':')[0]+':':undefined;
+          const picked=!!selectedPart&&(drawerPrefix?part.id.startsWith(drawerPrefix):part.id===selectedPart);
+          if (!isMetal || picked) {
             const edge = new THREE.LineSegments(
               new THREE.EdgesGeometry(geometry),
               new THREE.LineBasicMaterial({
-                color: 0x4a4b40,
+                color: picked?0x087f94:0x4a4b40,
                 transparent: true,
-                opacity: 0.16,
+                opacity: picked?1:0.16,
+                depthTest: !picked,
               }),
             );
             mesh.add(edge);
@@ -594,6 +599,7 @@ export function Scene(p: Props) {
       p.room,
       p.transparent,
       p.selected,
+      p.selectedPart,
       p.texture,
       p.facadeTexture,
       p.openDoors,
