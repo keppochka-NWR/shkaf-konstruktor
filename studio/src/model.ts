@@ -42,6 +42,7 @@ export const RULES = {
   lightProfileT: 3,
   lightFrontOffset: 60,
   lightRetailPerM: 3000, // прайс цеха «Подсветка врезная в стойках полного свечения», розница за пог.м
+  meshDoorClear: 20, // сетка Лемана за распашной дверью: дверь 16 + зазор 4 перед рамой
 } as const;
 export type Section = {
   id: string;
@@ -316,7 +317,9 @@ export function parts(m: Module): Part[] {
       const mesh = cfg.mesh ? meshById(cfg.mesh) : undefined;
       if (mesh) {
         // Сетчатый элемент Лемана: рама по требуемой ширине минус крепление, глубина изделия, свои направляющие.
-        const mw = mesh.reqW - 8, md = Math.min(mesh.reqD - 10, d - rear - (m.doors ? 44 : 20)), mz = d - (m.doors ? 44 : 20) - md;
+        // Сетка без фасада: за дверью хватает 20 мм (дверь 16 + зазор), в открытом корпусе рама заподлицо с передом.
+        const front = m.doors ? RULES.meshDoorClear : 0;
+        const mw = mesh.reqW - 8, md = Math.min(mesh.reqD - 10, d - rear - front), mz = d - front - md;
         add(s.id + ":drawer:" + j + ":mesh", mesh.label + " · Лемана Про арт. " + mesh.art, [mw, mesh.h, md], [b.x + f.left + (b.width - filler) / 2, y + mesh.h / 2, mz + md / 2], md, mw, mesh.h, "drawer", s.id, "metal");
         continue;
       }
@@ -501,8 +504,8 @@ export function validate(m: Module): string[] {
         const inner = b.width - (m.doors ? RULES.drawerFiller * (doorCount(m, s) === 2 ? 2 : 1) : 0);
         if (inner < item.reqW || inner > item.reqW + MESH_WIDTH_TOLERANCE)
           errors.push(prefix + `«${item.label}» нужен проём ${item.reqW}–${item.reqW + MESH_WIDTH_TOLERANCE} мм внутри, сейчас ${Math.round(inner)}. Сделайте секцию ${Math.round(item.reqW + (b.width - inner) + 2 * RULES.panel)} мм по корпусу.`);
-        const depthAvailable = m.depth - rearClear(m) - (m.doors ? 44 : 20);
-        if (depthAvailable < item.reqD) errors.push(prefix + `«${item.label}» нужна глубина корпуса от ${item.reqD + rearClear(m) + (m.doors ? 44 : 20)} мм.`);
+        const front = m.doors ? RULES.meshDoorClear : 0, depthAvailable = m.depth - rearClear(m) - front;
+        if (depthAvailable < item.reqD) errors.push(prefix + `«${item.label}» нужна глубина корпуса от ${item.reqD + rearClear(m) + front} мм.`);
         continue;
       }
       if (

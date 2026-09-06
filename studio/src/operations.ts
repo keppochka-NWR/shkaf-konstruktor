@@ -45,7 +45,8 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
       s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawer??drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
     }else if(kind==='rod'){s.rod=true;s.pantograph=false;s.rodAt=y/(b.top-b.bottom);}
     else {s.pantograph=true;s.rod=false;s.rodAt=y/(b.top-b.bottom);}
-    if(!projectErrors(n).length)return n;
+    const errs=projectErrors(n);if(!errs.length)return n;
+    if(drawer?.mesh&&/Лемана|нужен проём|нужна глубина|фиксирована/.test(errs[0]))throw Error(errs[0]);
   }
   throw Error(kind==='pantograph'?'Пантографу нужен внутренний проём от 545 мм и место по высоте.':'Здесь недостаточно свободного места. Переместите наполнение или увеличьте корпус.');
 }

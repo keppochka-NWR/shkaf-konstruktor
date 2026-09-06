@@ -99,6 +99,10 @@ test('Lemana mesh replaces a drawer: geometry, price, width check and files',()=
   assert.equal(parseProject(n).modules[0].module.sections[0].drawerConfigs![0].mesh,'lm85127628');
   assert.ok(specificationHTML(n).includes('85127628'));
   assert.throws(()=>insertItem(p,'mesh',a.id,a.module.sections[0].id,100,undefined,'lm91587996'),/864–924/,'shoe rack 864 does not fit a 480 body');
+  const shallow=structuredClone(p);shallow.modules[0].module.depth=500;
+  assert.throws(()=>insertItem(shallow,'mesh',shallow.modules[0].id,shallow.modules[0].module.sections[0].id,100,undefined,'lm85127628'),/глубина корпуса от 560/,'basket 560 deep needs a 560 body when open');
+  const withDoors=structuredClone(p);withDoors.modules[0].module.doors=true;withDoors.modules[0].module.width=504;
+  assert.ok(parts(insertItem(withDoors,'mesh',withDoors.modules[0].id,withDoors.modules[0].module.sections[0].id,100,undefined,'lm85127628').modules[0].module).some(x=>x.id.endsWith(':mesh')),'600 deep body with doors takes the 560 basket (20 mm behind the door)');
   const wide=structuredClone(p);wide.modules[0].module.width=900;
   assert.throws(()=>insertItem(wide,'mesh',wide.modules[0].id,wide.modules[0].module.sections[0].id,100,undefined,'lm85127628'),/440–500/,'basket 440 in an 868 opening is rejected with a size hint');
 });
