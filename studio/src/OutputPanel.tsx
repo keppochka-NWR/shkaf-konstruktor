@@ -172,14 +172,11 @@ export function OutputPanel({
             Клиент / название предложения
             <input
               aria-label="Клиент для КП"
-              value={q.customer}
+              key={'customer:'+q.customer}
+              defaultValue={q.customer}
               maxLength={120}
-              onChange={(e) =>
-                update({
-                  ...project,
-                  offer: { ...q, customer: e.target.value },
-                })
-              }
+              onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape')e.currentTarget.blur();}}
+              onBlur={e=>{if(e.target.value!==q.customer&&!update({...project,offer:{...q,customer:e.target.value}}))e.target.value=q.customer;}}
             />
           </label>
           <label className="hardware-field">
@@ -188,10 +185,10 @@ export function OutputPanel({
               aria-label="Стоимость КП"
               type="number"
               min="0"
-              value={q.price}
-              onChange={(e) =>
-                update({ ...project, offer: { ...q, price: e.target.value } })
-              }
+              key={'price:'+q.price}
+              defaultValue={q.price}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape')e.currentTarget.blur();}}
+              onBlur={e=>{if(e.target.value!==q.price&&!update({...project,offer:{...q,price:e.target.value}}))e.target.value=q.price;}}
             />
           </label>
           <label className="hardware-field">
@@ -200,10 +197,10 @@ export function OutputPanel({
               aria-label="Условия КП"
               maxLength={2000}
               rows={4}
-              value={q.notes}
-              onChange={(e) =>
-                update({ ...project, offer: { ...q, notes: e.target.value } })
-              }
+              key={'notes:'+q.notes}
+              defaultValue={q.notes}
+              onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.blur();}}
+              onBlur={e=>{if(e.target.value!==q.notes&&!update({...project,offer:{...q,notes:e.target.value}}))e.target.value=q.notes;}}
             />
           </label>
           <div className="output-actions"><button className="outline" onClick={()=>setQuoteImage(quoteImage===null?(capture()||''):null)}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
