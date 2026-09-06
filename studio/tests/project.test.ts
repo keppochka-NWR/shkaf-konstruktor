@@ -413,3 +413,11 @@ test('autosave preserves a damaged source before replacing it, including failure
  const count=data.size;persistProject(storage,p,original);assert.equal(data.size,count);
  data.set(CURRENT_PROJECT,'new broken');assert.throws(()=>persistProject({...storage,setItem:()=>{throw Error('quota');}},p,'new broken'));assert.equal(data.get(CURRENT_PROJECT),'new broken');
 });
+
+
+test('room reductions identify the measured object or opening that no longer fits',()=>{
+ const p=newProject();p.room.openings=[{id:'window',type:'window',wall:'back',offset:2000,width:1200,height:1400,sill:900}];assert.deepEqual(projectErrors(p),[]);
+ const narrow=structuredClone(p);narrow.room.width=2000;assert.match(projectErrors(narrow)[0],/Проём 1/);assert.throws(()=>parseProject(narrow),/Проём 1/);assert.equal(p.room.width,4000);
+ const invalid=structuredClone(p);invalid.room.openings![0].id='';assert.throws(()=>parseProject(invalid),/Проём 1/);
+ p.room.openings=[];p.room.obstacles=[{id:'column',name:'Колонна у входа',type:'column',x:1800,z:0,y:0,width:300,depth:300,height:2700}];p.room.width=2000;assert.match(projectErrors(p)[0],/Колонна у входа/);
+});
