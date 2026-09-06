@@ -182,6 +182,7 @@ export default function App() {
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
   const placedBounds=bounds(placed);
+  const [allMaterials,setAllMaterials]=useState(false);
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
@@ -291,6 +292,7 @@ export default function App() {
       ),
     });
   }
+  useEffect(()=>{setAllMaterials(false);},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{commitProject(setWallDistance(project,placed.id,key,value));}catch(e){setError((e as Error).message);}
   }
@@ -1432,6 +1434,7 @@ export default function App() {
               />
             ) : modal === "materials" ? (
               <>
+                <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="cloud-filters"><input type="checkbox" aria-label="Все модули проекта" checked={allMaterials} onChange={e=>setAllMaterials(e.target.checked)}/>Все модули проекта ({project.modules.length})</label>
                 <label className="search">
                   <Search size={18} />
                   <input
@@ -1452,7 +1455,9 @@ export default function App() {
                         key={c.n}
                         aria-pressed={(m[materialTarget]??m.facadeDecor) === c.n}
                         onClick={() => {
-                          modify((n) => (n[materialTarget] = c.n));
+                          const ok=allMaterials?commitProject({...project,modules:project.modules.map(a=>({...a,module:{...a.module,[materialTarget]:c.n}}))}):modify((n) => (n[materialTarget] = c.n));
+                          if(!ok)return;
+                          setAllMaterials(false);
                           setModal(null);
                           setSearch("");
                         }}
