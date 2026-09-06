@@ -1111,6 +1111,12 @@ input {
 .drawer-selection h3 { color: #1f4ea8; }
 .property-section:has(> h2:first-child) > h2 { padding-left: 10px; border-left: 4px solid #2e9d6a; }
 .upper-cta { margin: 6px 0 2px; }
+.rails-editor { display: grid; gap: 4px; margin: 6px 0 10px; }
+.rails-editor .rails-title { font-size: 12px; color: #6b7280; }
+.rail-row { display: grid; grid-template-columns: auto 1fr 80px; align-items: center; gap: 8px; font-size: 13px; }
+.rail-row input[type="number"] { width: 80px; padding: 4px 6px; border: 1px solid #d5dbe2; border-radius: 6px; }
+.side-panel-fields { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.side-panel-fields input { width: 100%; padding: 4px 6px; border: 1px solid #d5dbe2; border-radius: 6px; }
 .floor-height { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6px; }
 .floor-height .hint { width: 22px; height: 22px; border-radius: 50%; background: #1d6679; color: #fff; font-size: 13px; font-weight: 700; display: grid; place-items: center; cursor: help; margin-bottom: 9px; }
 .history-label { font-size: 12px; }

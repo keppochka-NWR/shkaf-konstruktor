@@ -12,7 +12,7 @@ import {captureSectionFilling,pasteSectionFilling,duplicatePart,moveComposition,
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,estimateCSV,hingeCount} from '../src/pricing';
 import {nest,specificationHTML} from '../src/exports';
-test('900 × 2200 is a hard limit for every physical module',()=>{const m=initialModule();m.width=900;m.height=2200;assert.deepEqual(validate(m),[]);m.width=901;assert.throws(()=>parseModule(m));m.width=900;m.height=2201;assert.throws(()=>parseModule(m));});
+test('1200 × 2200 is a hard limit for every physical module',()=>{const m=initialModule();m.width=1200;m.height=2200;assert.deepEqual(validate(m),[]);m.width=1201;assert.throws(()=>parseModule(m));m.width=900;m.height=2201;assert.throws(()=>parseModule(m));});
 test('every drawer has a board bottom, front and shelf above its group',()=>{const m=initialModule(),s=m.sections[0];s.drawerConfigs=[{slide:'ball',length:300,height:140},{slide:'gtv0fpo',length:300,height:140}];assert.deepEqual(validate(m),[]);const ps=parts(m),cap=ps.find(p=>p.id.endsWith(':drawer-cap'))!;assert.equal(cap.position[1]-8,boxes(m)[0].bottom+drawerStackHeight(s));for(let j=0;j<2;j++){const bottom=ps.find(p=>p.id===`${s.id}:drawer:${j}:bottom`)!;assert.equal(bottom.material,'board');assert.equal(bottom.thickness,16);assert.ok(ps.find(p=>p.id===`${s.id}:drawer:${j}:facade`));}assert.ok(ps.filter(p=>p.id.includes(':drawer:')).every(p=>p.position[2]+p.size[2]/2<m.depth+2),'internal handles clear the closed door');});
 test('grooved backs reduce usable depth and never select a quarter rebate',()=>{const m=initialModule();m.backType='groove';m.grooveInset=16;m.grooveDepth=8;assert.deepEqual(validate(m),[]);assert.equal(drawerConfig(m,m.sections[0],0).length,500);const back=parts(m).find(p=>p.id==='back')!;assert.equal(back.size[0],583);assert.equal(back.position[2],17.5);assert.throws(()=>parseModule({...m,backType:'quarter'}));});
 test('drawer movement creates no overlapping groups',()=>{const p=newProject(),a=p.modules[0],s=a.module.sections[0];const bad=movePart(p,a.id,s.id,`${s.id}:drawer:0:left`,100);assert.ok(projectErrors(bad).some(e=>e.includes('пересекаются')));const good=movePart(p,a.id,s.id,`${s.id}:drawer:1:left`,100);assert.deepEqual(projectErrors(good),[]);assert.equal(drawerStackHeight(good.modules[0].module.sections[0]),460);assert.equal(drawerStackHeight(s),360);});
@@ -74,7 +74,7 @@ test('rotation preserves occupied center, clamps to room walls and never pushes 
 });
 
 import {LIBRARY_KEY,recoverStoredLibrary,inspectStoredLibrary,libraryFile,parseLibraryFile} from '../src/moduleLibraryFile';
-test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:901}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
+test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:1201}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
 
 test('upper module inherits cabinet finishes and fits available height without copying filling',()=>{
  const p=newProject(),a=p.modules[0];a.module.height=2200;a.module.decor='Белый';a.module.facadeDecor='Графит';a.module.backType='groove';a.module.grooveInset=20;a.module.hingeSide='right';a.rotation=90;a.x=100;a.z=100;
@@ -82,7 +82,7 @@ test('upper module inherits cabinet finishes and fits available height without c
  assert.equal(upper.y,2200);assert.equal(upper.module.height,470);assert.equal(upper.module.plinthHeight,0);assert.equal(upper.rotation,90);assert.equal(upper.x,a.x);assert.equal(upper.z,a.z);
  for(const k of ['width','depth','decor','facadeDecor','doors','backType','grooveInset','hingeSide'] as const)assert.equal(upper.module[k],a.module[k]);
  assert.equal(upper.module.sections[0].drawers,0);assert.notEqual(upper.module.sections[0].id,a.module.sections[0].id);assert.deepEqual(projectErrors(n),[]);assert.deepEqual(p,original);
- p.room.height=2600;assert.throws(()=>addUpperModule(p,a.id),/монтажного зазора/);p.room.height=2630;assert.equal(addUpperModule(p,a.id).modules[1].module.height,400);
+ p.room.height=2470;assert.throws(()=>addUpperModule(p,a.id),/монтажного зазора/);p.room.height=2630;assert.equal(addUpperModule(p,a.id).modules[1].module.height,400);
 });
 
 test('section clear removes all filling settings and removal expands only the adjacent opening',()=>{
@@ -117,7 +117,7 @@ test('moving the composition preserves contacts, rotations and raised modules at
 test('stored library reports malformed and duplicate records without silently replacing the source',()=>{
  const good={id:'a',name:'Рабочий',module:initialModule()};
  assert.deepEqual(inspectStoredLibrary(null),{items:[],problem:''});assert.equal(inspectStoredLibrary(JSON.stringify([good])).problem,'');
- const raw=JSON.stringify([good,{...good,id:'b',module:{...good.module,width:901}},good,null]);
+ const raw=JSON.stringify([good,{...good,id:'b',module:{...good.module,width:1201}},good,null]);
  const result=inspectStoredLibrary(raw);assert.deepEqual(result.items,[good]);assert.match(result.problem,/3/);assert.equal(JSON.parse(raw).length,4);
  for(const text of ['broken','{}','null']){const result=inspectStoredLibrary(text);assert.equal(result.items.length,0);assert.ok(result.problem);}
  const many=Array.from({length:31},(_,i)=>({...good,id:String(i)}));assert.equal(inspectStoredLibrary(JSON.stringify(many)).items.length,30);assert.ok(inspectStoredLibrary(JSON.stringify(many)).problem);
@@ -197,7 +197,7 @@ test('round rod mounting screws enter estimate and specification without affecti
  const p=newProject(),m=p.modules[0].module;m.sections=[section()];m.sections[0].rod=true;
  const two=appendModule(p,m),pantograph=structuredClone(m);pantograph.sections[0].rod=false;pantograph.sections[0].pantograph=true;
  const n=appendModule(two,pantograph),e=estimate(n),line=e.lines.find(l=>l.id==='screw35x16-rod')!;
- assert.deepEqual(projectErrors(n),[]);assert.equal(line.quantity,12);assert.equal(line.unitPrice,null);assert.equal(e.lines.find(l=>l.id==='flange25')!.quantity,4);assert.ok(e.missing.includes(line));
+ assert.deepEqual(projectErrors(n),[]);assert.equal(line.quantity,12);assert.equal(line.unitPrice,0.3);assert.equal(e.lines.find(l=>l.id==='flange25')!.quantity,4);assert.ok(!e.missing.includes(line));
  n.calculation={markup:2.2,overrides:{'screw35x16-rod':3}};assert.equal(estimate(n).lines.find(l=>l.id===line.id)!.unitPrice,3);
  assert.equal((specificationHTML(n).match(/саморезы 3,5×16 — 6 шт/g)||[]).length,2);
 });
@@ -205,7 +205,7 @@ test('round rod mounting screws enter estimate and specification without affecti
 
 test('estimate CSV preserves unknown prices, quantities, totals and safe customer text',()=>{
  const p=newProject();p.modules[0].module.sections=[section()];p.modules[0].module.sections[0].rod=true;p.offer={customer:'=1+1',price:'',notes:''};
- const csv=estimateCSV(p),e=estimate(p);assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes('"\'=1+1"'));assert.ok(csv.includes('"Саморез 3,5×16 · крепление штанги D25";"6";"шт";"";"";'));assert.ok(csv.includes('"Смета не завершена"'));assert.ok(csv.includes('"'+e.knownCost+'"'));
+ const csv=estimateCSV(p),e=estimate(p);assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes('"\'=1+1"'));assert.ok(csv.includes('"Саморез 3,5×16 · крепление штанги";"6";"шт";"0,3";"2";'));assert.ok(csv.includes('"Предварительно"')||csv.includes('"Смета не завершена"'));assert.ok(csv.includes('"'+e.knownCost+'"'));
  p.calculation={markup:2.2,overrides:{'screw35x16-rod':3}};const full=estimateCSV(p);assert.ok(full.includes('"6";"шт";"3";"18";"Цена в этом проекте";"Учтено"'));assert.ok(!full.includes('"Смета не завершена"'));assert.ok(full.includes('"2,2"'));
 });
 
@@ -248,7 +248,7 @@ test('review ZIP preserves Unicode filenames and captures the project before asy
   assert.ok(names.every(name=>!name.includes('/')&&!name.includes('\\')));
 });
 test('review package refuses invalid furniture instead of exporting partial documents',()=>{
-  const p=newProject();p.modules[0].module.width=901;
+  const p=newProject();p.modules[0].module.width=1201;
   assert.throws(()=>reviewFiles(p));
 });
 
@@ -390,7 +390,7 @@ test('group library rejects malformed groups instead of silently importing one b
  assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[entry]}),/версии 2/);
  assert.throws(()=>templateGroup([]));
  assert.throws(()=>templateGroup([p.modules[0],{...p.modules[0],id:'other'}]),/пересекается/);
- const broken={...entry,id:'broken',group:[{...p.modules[0],module:{...p.modules[0].module,width:901}}]};
+ const broken={...entry,id:'broken',group:[{...p.modules[0],module:{...p.modules[0].module,width:1201}}]};
  const stored=inspectStoredLibrary(JSON.stringify([broken,{id:'good',name:'Один',module:initialModule()}]));
  assert.equal(stored.items.length,1);assert.match(stored.problem,/Не удалось загрузить записей: 1/);
 });

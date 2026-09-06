@@ -1,0 +1,235 @@
+{
+ "version": 3,
+ "room": {
+  "width": 3600,
+  "height": 2700,
+  "depth": 3200,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "m8",
+   "x": 700,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Штанга",
+    "width": 1000,
+    "height": 2014,
+    "depth": 500,
+    "decor": "Тэффи",
+    "facadeDecor": "Тэффи",
+    "doors": false,
+    "backType": "none",
+    "feet": {
+     "height": 100
+    },
+    "rails": [
+     {
+      "place": "rear-bottom",
+      "height": 100
+     }
+    ],
+    "rodType": "oval",
+    "sections": [
+     {
+      "id": "d7386b6e-0cd0-474a-b81a-444ae6b6c069",
+      "weight": 1,
+      "shelves": [
+       0.2
+      ],
+      "drawers": 0,
+      "rod": true,
+      "rodAt": 0.95
+     }
+    ]
+   }
+  },
+  {
+   "id": "m9",
+   "x": 1707,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Ящики",
+    "width": 900,
+    "height": 2014,
+    "depth": 500,
+    "decor": "Тэффи",
+    "facadeDecor": "Тэффи",
+    "doors": false,
+    "backType": "none",
+    "feet": {
+     "height": 100
+    },
+    "rails": [
+     {
+      "place": "rear-bottom",
+      "height": 100
+     }
+    ],
+    "sections": [
+     {
+      "id": "5949b070-8e3d-40f5-b2d1-532e5393f760",
+      "weight": 1,
+      "shelves": [
+       0.6,
+       0.8
+      ],
+      "drawers": 3,
+      "rod": false,
+      "drawerConfigs": [
+       {
+        "slide": "ball",
+        "height": 142,
+        "length": 450
+       },
+       {
+        "slide": "ball",
+        "height": 142,
+        "length": 450
+       },
+       {
+        "slide": "ball",
+        "height": 142,
+        "length": 450
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "m10",
+   "x": 700,
+   "z": 3,
+   "y": 2040,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль",
+    "width": 1000,
+    "height": 300,
+    "depth": 500,
+    "decor": "Тэффи",
+    "facadeDecor": "Тэффи",
+    "doors": false,
+    "backType": "none",
+    "plinthHeight": 0,
+    "rails": [
+     {
+      "place": "rear-top",
+      "height": 100
+     }
+    ],
+    "sections": [
+     {
+      "id": "31a26da4-d4e1-4bc0-9378-69b95f0749e4",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m11",
+   "x": 1707,
+   "z": 3,
+   "y": 2040,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль",
+    "width": 900,
+    "height": 300,
+    "depth": 500,
+    "decor": "Тэффи",
+    "facadeDecor": "Тэффи",
+    "doors": false,
+    "backType": "none",
+    "plinthHeight": 0,
+    "rails": [
+     {
+      "place": "rear-top",
+      "height": 100
+     }
+    ],
+    "sections": [
+     {
+      "id": "89d03c63-1cc1-4267-9e96-56133a536a3b",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m12",
+   "x": 3,
+   "z": 700,
+   "y": 0,
+   "rotation": 90,
+   "module": {
+    "version": 1,
+    "name": "Шкаф у стены",
+    "width": 481,
+    "height": 1726,
+    "depth": 350,
+    "decor": "Тэффи",
+    "facadeDecor": "Тэффи",
+    "doors": true,
+    "plinthHeight": 100,
+    "hingeSide": "right",
+    "sections": [
+     {
+      "id": "8dcd2e86-a8af-42ed-998b-ce2f47296a25",
+      "weight": 1,
+      "shelves": [
+       0.5
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m13",
+   "x": 3,
+   "z": 700,
+   "y": 1726,
+   "rotation": 90,
+   "module": {
+    "version": 1,
+    "name": "Антресоль угловая",
+    "width": 481,
+    "height": 598,
+    "depth": 350,
+    "decor": "Тэффи",
+    "facadeDecor": "Тэффи",
+    "doors": false,
+    "backType": "none",
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "dd833b72-aec4-413f-a1b5-94667d5b1efe",
+      "weight": 1,
+      "shelves": [
+       0.5
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}

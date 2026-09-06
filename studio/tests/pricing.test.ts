@@ -4,7 +4,7 @@ import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
 import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
 import {roomWarnings} from '../src/roomWarnings';
-import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers} from '../src/model';
+import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers,section} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML,details} from '../src/exports';
 
@@ -232,6 +232,35 @@ test('floor height of the shelf above drawers distributes drawers equally; glass
   assert.ok(!details(p).some(d=>d.id==='top'),'glass top is not in the board cut list');
   assert.equal(parseProject(p).modules[0].module.topGlass,'glass-clear');
   m.topGlass='нет';assert.ok(validate(m).some(x=>x.includes('Стеклянная крыша')));
+});
+
+test('workshop frames: feet without plinth, no bottom, rails, inset push doors, top strip, side panel, oval rod',()=>{
+  // Байков 01: 900×2058×500 на ножках M6, без дна, стяжки сзади 200, полка, овальная штанга, без фасадов
+  const f=initialModule();f.width=900;f.height=2058;f.depth=500;f.doors=false;f.feet={height:18};f.bottomType='none';f.rails=[{place:'rear-bottom',height:200},{place:'rear-top',height:200}];f.rodType='oval';
+  f.sections=[{...section(),shelves:[0.2],drawers:0,rod:true,rodAt:0.95}];
+  assert.equal(validate(f).length,0,validate(f).join('; '));
+  const ps=parts(f);const left=ps.find(p=>p.id==='left')!;
+  assert.equal(left.size[1],2058-18,'sides stand on the feet');assert.ok(!ps.some(p=>p.id==='bottom'),'no bottom panel');assert.ok(!ps.some(p=>p.id==='plinth'));
+  assert.equal(ps.filter(p=>p.id.startsWith('rail:')).length,2);assert.equal(ps.find(p=>p.id==='rail:rear-bottom')!.position[2],8,'rear rail flush with the back');
+  assert.equal(ps.filter(p=>p.id.startsWith('leg:')).length,4);assert.equal(ps.find(p=>p.role==='rod')!.size[2],30,'oval rod');
+  const e=estimate(newProject(f));assert.equal(e.lines.find(l=>l.id==='legs-m6')!.quantity,6,'900 wide → 6 legs');assert.ok(e.lines.some(l=>l.id==='rod-oval'));
+  // без дна и без нижней стяжки — ошибка
+  const g=structuredClone(f);g.rails=[];assert.ok(validate(g).some(x=>x.includes('стяжкой')));
+  // Корижин 01: вкладные фасады push, планка под крышей 60, задняя стенка ЛДСП
+  const k=initialModule();k.width=852;k.height=1455;k.depth=240;k.plinthHeight=0;k.backType='board';k.doorMount='inset';k.doorOpen='push';k.topStrip=60;k.sections=[{...section(),shelves:[0.25,0.5,0.75],drawers:0,rod:false}];
+  assert.equal(validate(k).length,0,validate(k).join('; '));
+  const kp=parts(k),doors=kp.filter(p=>p.role==='door');
+  assert.equal(doors.length,2);assert.ok(doors.every(d=>d.position[2]+d.size[2]/2<=240+0.01),'inset doors flush with the front');
+  assert.ok(!kp.some(p=>p.role==='handle'),'push: no handles');
+  assert.ok(kp.some(p=>p.id==='top-strip'&&p.size[1]===60));
+  const ke=estimate(newProject(k));assert.ok(ke.lines.some(l=>l.id==='hinge-push-inset'&&l.unitPrice===80));assert.equal(ke.lines.find(l=>l.id==='push-latch')!.quantity,2);
+  // Ошарина СУ: без дна и крыши, три стяжки, фасады накладные push
+  const o=initialModule();o.width=812;o.height=845;o.depth=475;o.feet={height:18};o.bottomType='none';o.topType='none';o.rails=[{place:'rear-bottom',height:180},{place:'front-bottom',height:80},{place:'rear-top',height:100}];o.doorOpen='push';o.sections=[{...section(),shelves:[],drawers:0,rod:false}];
+  assert.equal(validate(o).length,0,validate(o).join('; '));const op=parts(o);assert.ok(!op.some(p=>p.id==='top')&&!op.some(p=>p.id==='bottom'));assert.equal(op.filter(p=>p.id.startsWith('rail:')).length,3);
+  // Байков 02: боковая фальшпанель до потолка 2440×600 справа
+  const s=structuredClone(f);s.sidePanels={right:{height:2440,depth:600}};assert.equal(validate(s).length,0,validate(s).join('; '));
+  const spn=parts(s).find(p=>p.id==='side-panel:right')!;assert.deepEqual([spn.size[1],spn.size[2]],[2440,600]);
+  assert.equal(parseProject(newProject(s)).modules[0].module.sidePanels!.right!.height,2440);
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

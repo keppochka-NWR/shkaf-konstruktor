@@ -43,6 +43,9 @@ const hidden:Record<number,{price:number;source:string}>={
   500:{price:1250,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'}};
 export const HINGE={label:'Петля GTV SOLID PRO с доводчиком',price:157,source:'Счёт Мега-Трейд 6219, 2026 · стандарт цеха при ручках'};
 export const LEG={price:127.4,source:'МДМ, INTEGRATO TECH G опора регулируемая с шипами; 4 на корпус, 6 при ширине от 900'};
+export const LEG_M6={price:30,source:'Ножка мебельная M6×18 + гайка BP01 (заказы цеха); оценка, счёта нет'};
+export const HINGE_FREE={price:80,source:'ФАМ: петля GTV ZP-COCA клиповая без пружины'};
+export const PUSH_LATCH={price:90,source:'Толкатель push-to-open (старый калькулятор 90 ₽); подтвердить счётом'};
 export const FASTENERS={
   confirmat:{price:2.45,source:'МДМ: конфирмат 5,0×50 чёрный цинк'},
   cap:{price:0.7,source:'ФАМ: заглушка самоклеящаяся D14, лист 35 ₽ ≈ 50 шт'},
@@ -68,13 +71,19 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка (фальш-планка к каркасу)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
     add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
-    const legs=legCount(a.module,a.y??0);if(legs)add('legs','Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',LEG.price,LEG.source);
+    const legs=legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
     for(const d of parts(a.module)){
       if(d.material==='board'){
         d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
-      if(d.role==='door')add('hinge',HINGE.label,hingeCount(d.length,d.width),'шт',HINGE.price,HINGE.source);
+      if(d.role==='door'){
+        const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=hingeCount(d.length,d.width);
+        // СТП: с ручками — GTV с доводчиком; push-to-open — петля без пружины (накладная SOLID / вкладная COCA) + толкатель.
+        if(push)add(inset?'hinge-push-inset':'hinge-push','Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'),n,'шт',HINGE_FREE.price,HINGE_FREE.source);
+        else add(inset?'hinge-inset':'hinge',inset?'Петля GTV с доводчиком вкладная':HINGE.label,n,'шт',HINGE.price,HINGE.source);
+        if(push)add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
+      }
       if(d.role==='door'&&d.material==='alu'&&a.module.alu){
         // Бланк цеха «Расчет алюм.фасад рам»: профиль по периметру, вставка по площади фасада, уплотнитель, уголки, отверстия.
         const al=a.module.alu,prof=aluProfile(al.profile),col=aluColor(al.profile,al.color),ins=aluInsert(al.insert);
@@ -89,7 +98,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.role==='handle'){const h=handleById(a.module.handleId);add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
-      if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');
+      if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){
         const ins=aluInsert(a.module.topGlass),area=d.size[0]*d.size[2]/1e6,perimeter=2*(d.size[0]+d.size[2])/1000;
         add('glass-top:'+a.module.topGlass,'Крыша · '+(ins?.label??'стекло'),area,'м²',ins?.perM2??null,ins?.source??'Цена стекла не найдена');
@@ -99,7 +108,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.role==='light')add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     for(const s of a.module.sections){
-      if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги D25',RULES.rodMountScrews,'шт',null,'Фрагмент цеха: 6 на штангу; закупочную цену уточнить');
+      if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews,'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха');
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');
       for(let j=0;j<s.drawers;j++){
         const c=drawerConfig(a.module,s,j);

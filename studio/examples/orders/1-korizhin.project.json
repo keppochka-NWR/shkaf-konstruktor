@@ -1,0 +1,124 @@
+{
+ "version": 3,
+ "room": {
+  "width": 3600,
+  "height": 2700,
+  "depth": 3000,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "m1",
+   "x": 300,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Пенал",
+    "width": 820,
+    "height": 2140,
+    "depth": 450,
+    "decor": "Цемент",
+    "facadeDecor": "Цемент",
+    "doors": true,
+    "backType": "none",
+    "feet": {
+     "height": 18
+    },
+    "bottomType": "none",
+    "rails": [
+     {
+      "place": "rear-bottom",
+      "height": 150
+     },
+     {
+      "place": "rear-top",
+      "height": 150
+     }
+    ],
+    "sections": [
+     {
+      "id": "534fdba7-9bdc-4159-bb3e-fcf64feb1a55",
+      "weight": 1,
+      "shelves": [
+       0.36,
+       0.7
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m2",
+   "x": 300,
+   "z": 3,
+   "y": 2140,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль",
+    "width": 820,
+    "height": 458,
+    "depth": 450,
+    "decor": "Цемент",
+    "facadeDecor": "Цемент",
+    "doors": true,
+    "backType": "none",
+    "plinthHeight": 0,
+    "rails": [
+     {
+      "place": "rear-top",
+      "height": 150
+     }
+    ],
+    "sections": [
+     {
+      "id": "5d9efe42-3ce7-4146-8a66-08ec683e1e1a",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m3",
+   "x": 1500,
+   "z": 3,
+   "y": 1195,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Навесной",
+    "width": 852,
+    "height": 1455,
+    "depth": 240,
+    "decor": "Цемент",
+    "facadeDecor": "Цемент",
+    "doors": true,
+    "backType": "board",
+    "plinthHeight": 0,
+    "doorMount": "inset",
+    "doorOpen": "push",
+    "topStrip": 60,
+    "sections": [
+     {
+      "id": "f74c91ff-346f-4c38-9153-446fd3ef3102",
+      "weight": 1,
+      "shelves": [
+       0.25,
+       0.5,
+       0.75
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}

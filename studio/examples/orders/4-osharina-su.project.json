@@ -1,0 +1,58 @@
+{
+ "version": 3,
+ "room": {
+  "width": 1800,
+  "height": 2700,
+  "depth": 1800,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "m14",
+   "x": 300,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Тумба под раковину",
+    "width": 812,
+    "height": 845,
+    "depth": 475,
+    "decor": "Афелия D*",
+    "facadeDecor": "Афелия D*",
+    "doors": true,
+    "backType": "none",
+    "feet": {
+     "height": 18
+    },
+    "bottomType": "none",
+    "topType": "none",
+    "rails": [
+     {
+      "place": "rear-bottom",
+      "height": 180
+     },
+     {
+      "place": "front-bottom",
+      "height": 80
+     },
+     {
+      "place": "rear-top",
+      "height": 100
+     }
+    ],
+    "doorOpen": "push",
+    "sections": [
+     {
+      "id": "771596b3-8ee2-480d-a4f6-f6fded33d7ca",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}

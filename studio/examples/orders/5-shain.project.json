@@ -1,0 +1,110 @@
+{
+ "version": 3,
+ "room": {
+  "width": 2600,
+  "height": 2500,
+  "depth": 2600,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "m15",
+   "x": 300,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Тумба",
+    "width": 708,
+    "height": 960,
+    "depth": 489,
+    "decor": "Дуб Сонома",
+    "facadeDecor": "Белый",
+    "doors": true,
+    "plinthHeight": 80,
+    "sections": [
+     {
+      "id": "f7f0b776-86ca-4a6a-bf00-34c6386c873e",
+      "weight": 426,
+      "shelves": [
+       0.5
+      ],
+      "drawers": 0,
+      "rod": false
+     },
+     {
+      "id": "7f0be809-c4d1-4765-af41-5a23109cfc75",
+      "weight": 266,
+      "shelves": [
+       0.5
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m16",
+   "x": 300,
+   "z": 3,
+   "y": 960,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Пенал",
+    "width": 426,
+    "height": 1420,
+    "depth": 489,
+    "decor": "Дуб Сонома",
+    "facadeDecor": "Белый",
+    "doors": true,
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "5ddd9c95-8c76-4d95-ab14-2ff54c0ed1ad",
+      "weight": 1,
+      "shelves": [
+       0.33,
+       0.66
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m17",
+   "x": 726,
+   "z": 3,
+   "y": 960,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Стеллаж",
+    "width": 282,
+    "height": 1420,
+    "depth": 368,
+    "decor": "Дуб Сонома",
+    "facadeDecor": "Дуб Сонома",
+    "doors": false,
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "cd99bcc9-e653-43d7-b13f-ad12f9b9e23b",
+      "weight": 1,
+      "shelves": [
+       0.25,
+       0.5,
+       0.75
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}

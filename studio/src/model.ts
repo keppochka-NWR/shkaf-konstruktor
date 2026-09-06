@@ -11,10 +11,10 @@ export const RULES = {
   shelfDepthMinus: 25,
   shelfGap: 1,
   minW: 250,
-  maxW: 900,
-  minH: 400,
+  maxW: 1200, // ТЗ Макса 1200; в заказах цеха каркасы 1000 (Семиклетова), СТП 900 — предупреждение оставлено в ведомости
+  minH: 250, // антресоли заказов 300–372
   maxH: 2200,
-  minD: 250,
+  minD: 200, // заказы цеха: шкафы 240 (Корижин), стеллажи 200 (Дельта КИП)
   maxD: 700,
   minSection: 180,
   maxSections: 4,
@@ -61,6 +61,15 @@ export const RULES = {
   confirmatD: 7,
   confirmatL: 50,
   confirmatInset: 50,
+  // Каркасы на ножках и стяжках (заказы цеха: Байков, Семиклетова, Ошарина, Корижин): ножки M6×18 или 1033 h=100; стяжки 100–200.
+  feetMin: 15,
+  feetMax: 150,
+  railMin: 60,
+  railMax: 300,
+  topStripMin: 30,
+  topStripMax: 150,
+  sidePanelMaxH: 3000,
+  sidePanelMaxD: 800,
   glassTop: 4, // стеклянная крыша: закалённое стекло 4 мм (АТБ), полировка кромки
   glassTopTemper: 880, // закалка 4 мм, ₽/м² (АТБ 01.01.2026)
   glassTopPolishPerM: 100, // полировка прямолинейная 4 мм, ₽/пог.м (прайс МВМ 13.01.26)
@@ -112,7 +121,24 @@ export type Module = {
   alu?: AluFacade;
   /** Крыша из стекла вместо ЛДСП: id вставки из alu.ts (стекло, сатин, лакобель, зеркало), закалённое 4 мм с полировкой. */
   topGlass?: string;
+  /** Основание на ножках вместо цоколя (заказы цеха: ножки M6×18 или регулируемые 1033 h=100): боковины стоят на ножках. */
+  feet?: { height: number };
+  /** Дно / крыша: 'none' — без панели (открытый каркас на стяжках). По умолчанию панели есть. */
+  bottomType?: "panel" | "none";
+  topType?: "panel" | "none";
+  /** Стяжки — вертикальные планки между боковинами сзади или спереди, снизу или сверху (высота 60–300). */
+  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number }[];
+  /** Распашные фасады: накладные (по умолчанию) или вкладные в проём; открывание ручкой (по умолчанию) или push-to-open без ручек. */
+  doorMount?: "overlay" | "inset";
+  doorOpen?: "handle" | "push";
+  /** Планка под крышей спереди (фальшпанель над фасадами), высота 30–150; фасады укорачиваются. */
+  topStrip?: number;
+  /** Боковая фальшпанель до потолка снаружи боковины: своя высота (от пола) и глубина, заподлицо с фасадом. */
+  sidePanels?: Partial<Record<"left" | "right", { height: number; depth: number }>>;
+  /** Штанга: круглая D25 (по умолчанию) или овальная 15×30 (труба-штанга овальная 3000). */
+  rodType?: "round" | "oval";
 };
+export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
 export type Part = {
   id: string;
@@ -157,17 +183,35 @@ export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
     }
   );
 }
-export function plinth(m:Module){return m.plinthHeight ?? RULES.plinth;}
+export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
+/** Уровень низа корпуса над полом: цоколь или высота ножек. */
+export function baseLevel(m:Module){return m.feet?m.feet.height:plinth(m);}
+export function hasBottom(m:Module){return m.bottomType!=='none';}
+export function hasTop(m:Module){return m.topType!=='none';}
+/** Верхняя плоскость дна (или низ проёма без дна) и нижняя плоскость крыши (или верх боковин без крыши). */
+export function innerBottom(m:Module){return baseLevel(m)+(hasBottom(m)?RULES.panel:0);}
+export function innerTop(m:Module){return m.height-(hasTop(m)?(m.topGlass?RULES.glassTop:RULES.panel):0);}
+export function railsOf(m:Module){return (m.rails??[]).filter(r=>r&&Number.isFinite(r.height));}
+export function railHeight(m:Module,place:NonNullable<Module['rails']>[number]['place']){return railsOf(m).find(r=>r.place===place)?.height??0;}
 /** Угловая фальш этого корпуса — планка из фасада (strip). Старые файлы без cornerKind: по наличию фасадов. */
 export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.cornerKind?m.cornerKind==='strip'&&m.doors:m.doors;}
 /** Опоры регулируемые под нижним корпусом (за цоколем): 4, при ширине от 900 — 6. Антресоли и корпуса без цоколя — без опор. */
-export function legCount(m:Module,y=0){if(y>0||plinth(m)===0)return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
+export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
 export function needsWallFiller(m:Module){return m.doors||m.sections.some(s=>s.drawers>0);}
 /** В корпусе есть ручки (распашные фасады всегда с ручкой; ящики — если не push-to-open). */
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
-export function facadeBottom(m:Module){return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):RULES.faceGap;}
+export function facadeBottom(m:Module){
+  if(m.feet){
+    // На ножках: накладной фасад закрывает торец дна; без дна — начинается над передней/задней нижней стяжкой.
+    const rail=Math.max(railHeight(m,'front-bottom'),hasBottom(m)?0:railHeight(m,'rear-bottom'));
+    return hasBottom(m)?m.feet.height:m.feet.height+rail;
+  }
+  return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):RULES.faceGap;
+}
+/** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
+export function facadeTop(m:Module){return m.height-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
@@ -218,8 +262,8 @@ export function boxes(m: Module): SectionBox[] {
       id: s.id,
       x,
       width,
-      bottom: plinth(m) + t,
-      top: m.height - t,
+      bottom: innerBottom(m),
+      top: innerTop(m),
     };
     x += width + t;
     return b;
@@ -229,7 +273,7 @@ export function parts(m: Module): Part[] {
   const out: Part[] = [];
   const t = RULES.panel;
   const d = m.depth;
-  const bottom = plinth(m);
+  const bottom = baseLevel(m), floorY = m.feet ? m.feet.height : 0;
   const rear=rearClear(m);
   function add(
     key: string,
@@ -260,49 +304,42 @@ export function parts(m: Module): Part[] {
       edge: material === "board" ? role === "door" ? [2,2,2,2] : [0.4, 0.4, 2, 0.4] : [0, 0, 0, 0],
     });
   }
-  add(
-    "left",
-    "Боковина левая",
-    [t, m.height, d],
-    [t / 2, m.height / 2, d / 2],
-    m.height,
-    d,
-    t,
-  );
-  add(
-    "right",
-    "Боковина правая",
-    [t, m.height, d],
-    [m.width - t / 2, m.height / 2, d / 2],
-    m.height,
-    d,
-    t,
-  );
-  add(
-    "bottom",
-    "Дно",
-    [m.width - 2 * t, t, d],
-    [m.width / 2, bottom + t / 2, d / 2],
-    m.width - 2 * t,
-    d,
-    t,
-  );
-  if (m.topGlass) {
-    // Стеклянная крыша: закалённое стекло 4 мм лежит на боковинах заподлицо с верхом, полировка кромки по периметру.
-    const g = RULES.glassTop;
-    add("top", "Крыша · " + (aluInsert(m.topGlass)?.label ?? "стекло") + " закалённое", [m.width, g, d], [m.width / 2, m.height - g / 2, d / 2], m.width, d, g, "body", undefined, "glass");
-    out.at(-1)!.decor = aluInsert(m.topGlass)?.label ?? "стекло";
-    // Боковины под стеклянной крышей ниже на её толщину — стекло ложится сверху.
-    for (const key of ["left", "right"] as const) { const p = out.find((x) => x.id === key)!; p.size[1] = m.height - g; p.position[1] = (m.height - g) / 2; p.length = m.height - g; }
-  } else add(
-    "top",
-    "Крыша",
-    [m.width - 2 * t, t, d],
-    [m.width / 2, m.height - t / 2, d / 2],
-    m.width - 2 * t,
-    d,
-    t,
-  );
+  // Боковины: от пола (на цоколе) или от верха ножек; под стеклянной крышей — короче на её толщину.
+  const sideTop = m.topGlass && hasTop(m) ? m.height - RULES.glassTop : m.height;
+  add("left", "Боковина левая", [t, sideTop - floorY, d], [t / 2, (sideTop + floorY) / 2, d / 2], sideTop - floorY, d, t);
+  add("right", "Боковина правая", [t, sideTop - floorY, d], [m.width - t / 2, (sideTop + floorY) / 2, d / 2], sideTop - floorY, d, t);
+  if (hasBottom(m)) add("bottom", "Дно", [m.width - 2 * t, t, d], [m.width / 2, bottom + t / 2, d / 2], m.width - 2 * t, d, t);
+  if (hasTop(m)) {
+    if (m.topGlass) {
+      // Стеклянная крыша: закалённое стекло 4 мм лежит на боковинах заподлицо с верхом, полировка кромки по периметру.
+      const g = RULES.glassTop;
+      add("top", "Крыша · " + (aluInsert(m.topGlass)?.label ?? "стекло") + " закалённое", [m.width, g, d], [m.width / 2, m.height - g / 2, d / 2], m.width, d, g, "body", undefined, "glass");
+      out.at(-1)!.decor = aluInsert(m.topGlass)?.label ?? "стекло";
+    } else add("top", "Крыша", [m.width - 2 * t, t, d], [m.width / 2, m.height - t / 2, d / 2], m.width - 2 * t, d, t);
+  }
+  // Ножки: по 2 под каждой боковиной (для сцены и опор в смете), в раскрой не идут.
+  if (m.feet) for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) for (const [k, z] of [[0, 60], [1, d - 60]] as const)
+    add(`leg:${side}:${k}`, "Ножка", [40, m.feet.height, 40], [x, m.feet.height / 2, z], m.feet.height, 40, 40, "fastener", undefined, "metal");
+  // Стяжки — планки между боковинами: сзади/спереди, снизу/сверху.
+  for (const r of railsOf(m)) {
+    const front = r.place.startsWith("front"), low = r.place.endsWith("bottom");
+    const y0 = low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height;
+    add("rail:" + r.place, "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
+  }
+  // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
+  if (m.topStrip) {
+    const inset = m.doorMount === "inset";
+    const y1 = inset ? innerTop(m) : m.height - RULES.faceGap, sw = inset ? m.width - 2 * t - 2 * RULES.faceGap : m.width - 2 * RULES.faceGap;
+    add("top-strip", "Планка под крышей " + m.topStrip, [sw, m.topStrip, t], [m.width / 2, y1 - m.topStrip / 2, inset ? d - t / 2 : d + t / 2 + 2], sw, m.topStrip, t);
+    out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
+  }
+  // Боковые фальшпанели до потолка снаружи боковин.
+  for (const side of ["left", "right"] as const) {
+    const sp = m.sidePanels?.[side];
+    if (!sp) continue;
+    add("side-panel:" + side, "Фальшпанель боковая " + (side === "left" ? "левая" : "правая") + " " + sp.height + "×" + sp.depth, [t, sp.height, sp.depth], [side === "left" ? -t / 2 : m.width + t / 2, sp.height / 2, d + 18 - sp.depth / 2], sp.height, sp.depth, t);
+    out.at(-1)!.edge = [2, 2, 2, 2];
+  }
   // Фальши цеха — только «торцом»: планка 16 × 100 на всю высоту, прикручена пластью снаружи боковины, виден торец 16 мм.
   // Угловая: выступает вперёд на 40 мм от корпуса (правило Макса). К стене: заподлицо с фасадом, +5 мм к стене (регламент).
   if (m.cornerFiller && cornerStrip(m)) {
@@ -322,7 +359,7 @@ export function parts(m: Module): Part[] {
     const dir = side === "left" ? -1 : 1, edge = side === "left" ? 0 : m.width, w = wf.width;
     add("wall-filler:" + side, "Фальшпанель к стене " + (side === "left" ? "левая" : "правая") + " " + w + "×16", [t, m.height, w], [edge + dir * t / 2, m.height / 2, d + 18 - w / 2], m.height, w, t);
   }
-  if(bottom>0)add(
+  if(!m.feet&&bottom>0)add(
     "plinth",
     "Цоколь",
     [m.width - 2 * t, bottom, t],
@@ -492,14 +529,15 @@ export function parts(m: Module): Part[] {
         ? Math.min(...s.shelves.map((f) => b.bottom + f * h))
         : b.top;
       const ry = s.rodAt===undefined?topShelf-RULES.rodTopOffset:b.bottom+s.rodAt*h;
+      const oval = m.rodType === "oval";
       add(
         `${s.id}:rod`,
-        "Штанга",
-        [b.width, RULES.rodDiameter, RULES.rodDiameter],
+        oval ? "Штанга овальная 15×30" : "Штанга",
+        [b.width, oval ? 15 : RULES.rodDiameter, oval ? 30 : RULES.rodDiameter],
         [b.x + b.width / 2, ry, d / 2],
         b.width,
-        RULES.rodDiameter,
-        RULES.rodDiameter,
+        oval ? 15 : RULES.rodDiameter,
+        oval ? 30 : RULES.rodDiameter,
         "rod",
         s.id,
         "metal",
@@ -518,18 +556,23 @@ export function parts(m: Module): Part[] {
     }
     if (m.doors) {
       const {left,right}=facadeSpan(m,i,b);
-      const count=doorCount(m,s),dw=(right-left-(count-1)*RULES.faceGap)/count;
-      const y0=facadeBottom(m),y1=m.height-RULES.faceGap,dh=y1-y0;
+      const inset=m.doorMount==='inset';
+      // Вкладной фасад: внутри проёма секции с зазором 2, заподлицо с передом корпуса. Накладной: перекрывает стойки.
+      const spanL=inset?b.x+RULES.faceGap:left,spanR=inset?b.x+b.width-RULES.faceGap:right;
+      const count=doorCount(m,s),dw=(spanR-spanL-(count-1)*RULES.faceGap)/count;
+      const y0=inset?b.bottom+RULES.faceGap:facadeBottom(m),y1=inset?b.top-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0):facadeTop(m),dh=y1-y0;
+      const dz=inset?d-t/2:d+t/2+2;
       for(let k=0;k<count;k++){
-        const hinge=count===2?(k===0?'left':'right'):(m.hingeSide??'left'),cx=left+k*(dw+RULES.faceGap)+dw/2;
+        const hinge=count===2?(k===0?'left':'right'):(m.hingeSide??'left'),cx=spanL+k*(dw+RULES.faceGap)+dw/2;
         if(m.alu){
           const ft=ALU_EXTRAS.frameDepth;
-          add(s.id+':door:'+k,'Фасад в алюминиевой рамке',[dw,dh,ft],[cx,(y0+y1)/2,d+ft/2+2],dh,dw,ft,'door',s.id,'alu');
+          add(s.id+':door:'+k,'Фасад в алюминиевой рамке',[dw,dh,ft],[cx,(y0+y1)/2,inset?d-ft/2:d+ft/2+2],dh,dw,ft,'door',s.id,'alu');
           out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
-        } else add(s.id+':door:'+k,'Фасад распашной',[dw,dh,t],[cx,(y0+y1)/2,d+t/2+2],dh,dw,t,'door',s.id);
+        } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,t],[cx,(y0+y1)/2,dz],dh,dw,t,'door',s.id);
         out.at(-1)!.hinge=hinge;
+        if(m.doorOpen==='push')continue; // push-to-open: без ручки, толкатель в смете
         const hl=handleById(m.handleId).len;
-        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(m.handleId).label,[10,hl,25],[cx+(hinge==='left'?1:-1)*(dw/2-40),(y0+y1)/2,d+31],hl,25,10,'handle',s.id,'metal');
+        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(m.handleId).label,[10,hl,25],[cx+(hinge==='left'?1:-1)*(dw/2-40),(y0+y1)/2,dz+t/2+13],hl,25,10,'handle',s.id,'metal');
       }
 
     }
@@ -568,7 +611,7 @@ export function distributeDrawers(m:Module,s:Section,capTop:number):DrawerConfig
 /** Число конфирматов корпуса и полкодержателей под съёмные полки. */
 export function fastenerCounts(m: Module) {
   const ps = parts(m);
-  return { confirmats: ps.filter((p) => p.role === "fastener").length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap")).length, eccentrics: cornerStrip(m) ? 4 : 0 };
+  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap")).length, eccentrics: cornerStrip(m) ? 4 : 0 };
 }
 export function validate(m: Module): string[] {
   const errors: string[] = [];
@@ -589,6 +632,16 @@ export function validate(m: Module): string[] {
   if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluInsert(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
+  if(m.feet!==undefined&&(!Number.isFinite(m.feet.height)||m.feet.height<RULES.feetMin||m.feet.height>RULES.feetMax))errors.push(`Ножки: высота от ${RULES.feetMin} до ${RULES.feetMax} мм.`);
+  if(m.bottomType!==undefined&&!['panel','none'].includes(m.bottomType))errors.push('Неверный тип дна.');
+  if(m.topType!==undefined&&!['panel','none'].includes(m.topType))errors.push('Неверный тип крыши.');
+  if(m.rails!==undefined){if(!Array.isArray(m.rails)||m.rails.length>4)errors.push('Стяжек не более четырёх.');else{const seen=new Set<string>();for(const r of m.rails){if(!r||!(r.place in RAIL_PLACES)||seen.has(r.place)||!Number.isFinite(r.height)||r.height<RULES.railMin||r.height>RULES.railMax)errors.push(`Стяжка: одно место, высота от ${RULES.railMin} до ${RULES.railMax} мм.`);seen.add(r?.place);}}}
+  if(m.doorMount!==undefined&&!['overlay','inset'].includes(m.doorMount))errors.push('Неверный тип монтажа фасадов.');
+  if(m.doorOpen!==undefined&&!['handle','push'].includes(m.doorOpen))errors.push('Неверный тип открывания фасадов.');
+  if(m.topStrip!==undefined&&(!Number.isFinite(m.topStrip)||m.topStrip<RULES.topStripMin||m.topStrip>RULES.topStripMax))errors.push(`Планка под крышей: от ${RULES.topStripMin} до ${RULES.topStripMax} мм.`);
+  if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);}
+  if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
+  if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
   if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
@@ -852,6 +905,15 @@ export function parseModule(input: unknown): Module {
     ...(x.cornerKind===undefined?{}:{cornerKind:x.cornerKind as Module["cornerKind"]}),
     ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
+    ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
+    ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
+    ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
+    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height)})):[]}),
+    ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
+    ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
+    ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
+    ...(x.sidePanels===undefined?{}:{sidePanels:Object.fromEntries(Object.entries(x.sidePanels as Record<string,{height:number;depth:number}>).map(([k,v])=>[k,{height:Number(v?.height),depth:Number(v?.depth)}]))}),
+    ...(x.rodType===undefined?{}:{rodType:x.rodType as Module['rodType']}),
     ...(x.wallFiller===undefined?{}:{wallFiller:Object.fromEntries(Object.entries(x.wallFiller as Record<string,{kind?:string;width?:number}>).map(([k,v])=>[k,{kind:'edge' as const,width:v?.kind==='standard'||v?.width===undefined?RULES.fillerStrip:v.width}]))}),
     sections: x.sections.map((s) => ({
       id: s.id,

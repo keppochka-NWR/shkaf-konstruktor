@@ -1,0 +1,164 @@
+{
+ "version": 3,
+ "room": {
+  "width": 3000,
+  "height": 2500,
+  "depth": 3000,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "m4",
+   "x": 300,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Каркас со штангой",
+    "width": 900,
+    "height": 2058,
+    "depth": 500,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "backType": "none",
+    "feet": {
+     "height": 18
+    },
+    "bottomType": "none",
+    "rails": [
+     {
+      "place": "rear-bottom",
+      "height": 200
+     },
+     {
+      "place": "rear-top",
+      "height": 200
+     }
+    ],
+    "rodType": "oval",
+    "sections": [
+     {
+      "id": "22cd2f42-1128-42cf-bfc9-a1fcfe239da2",
+      "weight": 1,
+      "shelves": [
+       0.2
+      ],
+      "drawers": 0,
+      "rod": true,
+      "rodAt": 0.95
+     }
+    ]
+   }
+  },
+  {
+   "id": "m5",
+   "x": 1200,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Каркас с полками",
+    "width": 784,
+    "height": 2058,
+    "depth": 500,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "backType": "none",
+    "feet": {
+     "height": 18
+    },
+    "bottomType": "none",
+    "rails": [
+     {
+      "place": "rear-bottom",
+      "height": 200
+     },
+     {
+      "place": "rear-top",
+      "height": 200
+     }
+    ],
+    "sidePanels": {
+     "right": {
+      "height": 2440,
+      "depth": 600
+     }
+    },
+    "sections": [
+     {
+      "id": "cb66d452-1e22-446d-b032-14979863326f",
+      "weight": 1,
+      "shelves": [
+       0.2,
+       0.4,
+       0.6,
+       0.8
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m6",
+   "x": 300,
+   "z": 3,
+   "y": 2068,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль 900",
+    "width": 900,
+    "height": 372,
+    "depth": 500,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "backType": "none",
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "cd9de35d-faa7-409d-8046-f6bcb370c235",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m7",
+   "x": 1200,
+   "z": 3,
+   "y": 2068,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль 784",
+    "width": 784,
+    "height": 372,
+    "depth": 500,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "backType": "none",
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "5414af30-c930-4aca-8b03-2f5c211e1d21",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}
