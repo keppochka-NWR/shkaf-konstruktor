@@ -208,7 +208,7 @@ export default function App() {
   const visibleModules=project.modules.map((a,i)=>({a,i})).filter(({a,i})=>moduleWords.every(word=>([i+1,a.module.name,a.module.width,a.module.height,a.module.depth].join(' ').toLocaleLowerCase('ru-RU')).includes(word)));
   useEffect(()=>{setModuleSearch('');},[active]);
   useEffect(()=>{moduleList.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({block:'nearest'});},[active,moduleSearch]);
-  const [allMaterials,setAllMaterials]=useState(false);
+  const [materialScope,setMaterialScope]=useState<"active"|"group"|"all">("active");
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
@@ -298,6 +298,7 @@ export default function App() {
       "decor",
     ),
     [search, setSearch] = useState("");
+  const materialRecipients=project.modules.filter(a=>materialScope==='all'||(materialScope==='group'?liveGroupIds.includes(a.id):a.id===placed.id));
   const capture = useRef<(() => string) | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null),
     touched = useRef(false);
@@ -348,7 +349,7 @@ export default function App() {
       ),
     });
   }
-  useEffect(()=>{setAllMaterials(false);},[modal]);
+  useEffect(()=>{setMaterialScope("active");},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);}
   }
@@ -1503,7 +1504,7 @@ export default function App() {
               />
             ) : modal === "materials" ? (
               <>
-                <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="cloud-filters"><input type="checkbox" aria-label="Все модули проекта" checked={allMaterials} onChange={e=>setAllMaterials(e.target.checked)}/>Все модули проекта ({project.modules.length})</label>
+                <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label><p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p>
                 <label className="search">
                   <Search size={18} />
                   <input
@@ -1522,11 +1523,12 @@ export default function App() {
                     .map((c) => (
                       <button
                         key={c.n}
-                        aria-pressed={(m[materialTarget]??m.facadeDecor) === c.n}
+                        aria-pressed={materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n)}
                         onClick={() => {
-                          const ok=allMaterials?commitProject({...project,modules:project.modules.map(a=>({...a,module:{...a.module,[materialTarget]:c.n}}))}):modify((n) => (n[materialTarget] = c.n));
+                          if(materialScope==='group'&&!liveGroupIds.length){setError("Сначала отметьте корпуса в группе.");return;}
+                          const ok=materialScope==='active'?modify((n) => (n[materialTarget] = c.n)):commitProject({...project,modules:project.modules.map(a=>materialScope==='all'||liveGroupIds.includes(a.id)?({...a,module:{...a.module,[materialTarget]:c.n}}):a)});
                           if(!ok)return;
-                          setAllMaterials(false);
+                          setMaterialScope("active");
                           setModal(null);
                           setSearch("");
                         }}
@@ -1541,7 +1543,7 @@ export default function App() {
                           }}
                         />
                         {c.n}
-                        {(m[materialTarget]??m.facadeDecor) === c.n && <Check size={15} />}
+                        {materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n) && <Check size={15} />}
                       </button>
                     ))}
                 </div>
