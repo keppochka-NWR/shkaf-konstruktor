@@ -78,3 +78,5 @@
 
 .help-content details{border-top:1px solid #dce2e7;padding:14px 0}.help-content summary{cursor:pointer;font-size:13px;font-weight:600;color:#263844}.help-content details p{margin:10px 0}.help-content details .text-action{padding:4px 0}
 .help-steps button{display:block}
+
+.library-preview{display:block;width:100px;height:125px;flex:0 0 100px;background:#f4f6f7;border-radius:6px}.library-entry{gap:14px}.library-entry>div{min-width:0;flex:1}.library-entry>div strong{overflow-wrap:anywhere}@media(max-width:650px){.library-preview{width:76px;height:100px;flex-basis:76px}.library-entry{flex-wrap:wrap}}
