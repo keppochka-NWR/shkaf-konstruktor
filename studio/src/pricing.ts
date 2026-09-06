@@ -3,6 +3,7 @@ import {nest,type Sheet} from './exports';
 import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
+import {meshById} from './mesh';
 export type PriceSettings={markup:number;overrides:Record<string,number>};
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
 
@@ -68,6 +69,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');
       for(let j=0;j<s.drawers;j++){
         const c=drawerConfig(a.module,s,j);
+        if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');continue;}
         const q=c.slide==='ball'?ball[c.length]:hidden[c.length];
         add('slide:'+c.slide+':'+c.length,(c.slide==='ball'?'Шариковые GTV Versalite с доводчиком':'Скрытые направляющие (закупка DTC / Unihopper)')+' · '+c.length+' мм',1,'компл',q?.price??null,q?.source??'Длины нет в закупке цеха; цену уточнить');
       }

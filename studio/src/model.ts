@@ -1,5 +1,6 @@
 import { drawerHasHandle, SLIDES, type DrawerConfig } from "./hardware";
 import { handleById, HANDLES, HANDLE_MARGIN } from "./handles";
+import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 export const RULES = {
   panel: 16,
   back: 3,
@@ -312,6 +313,13 @@ export function parts(m: Module): Part[] {
         y = b.bottom + RULES.drawerStep/2 + drawerOffsets(s)[j],
         z = d - (m.doors ? 44 : 20) - boxD;
       nextY += bh + RULES.drawerStep;
+      const mesh = cfg.mesh ? meshById(cfg.mesh) : undefined;
+      if (mesh) {
+        // Сетчатый элемент Лемана: рама по требуемой ширине минус крепление, глубина изделия, свои направляющие.
+        const mw = mesh.reqW - 8, md = Math.min(mesh.reqD - 10, d - rear - (m.doors ? 44 : 20)), mz = d - (m.doors ? 44 : 20) - md;
+        add(s.id + ":drawer:" + j + ":mesh", mesh.label + " · Лемана Про арт. " + mesh.art, [mw, mesh.h, md], [b.x + f.left + (b.width - filler) / 2, y + mesh.h / 2, mz + md / 2], md, mw, mesh.h, "drawer", s.id, "metal");
+        continue;
+      }
       for (const side of ["left", "right"])
         add(
           s.id + ":drawer:" + j + ":" + side,
@@ -486,6 +494,17 @@ export function validate(m: Module): string[] {
     for (let j = 0; j < s.drawers && j < 5; j++) {
       const c = drawerConfig(m, s, j),
         hw = SLIDES[c.slide];
+      if (c.mesh !== undefined) {
+        const item = meshById(c.mesh);
+        if (!item) { errors.push(prefix + "неизвестный элемент Лемана Про."); continue; }
+        if (!Number.isFinite(c.height) || c.height !== item.h) errors.push(prefix + `высота «${item.label}» фиксирована: ${item.h} мм.`);
+        const inner = b.width - (m.doors ? RULES.drawerFiller * (doorCount(m, s) === 2 ? 2 : 1) : 0);
+        if (inner < item.reqW || inner > item.reqW + MESH_WIDTH_TOLERANCE)
+          errors.push(prefix + `«${item.label}» нужен проём ${item.reqW}–${item.reqW + MESH_WIDTH_TOLERANCE} мм внутри, сейчас ${Math.round(inner)}. Сделайте секцию ${Math.round(item.reqW + (b.width - inner) + 2 * RULES.panel)} мм по корпусу.`);
+        const depthAvailable = m.depth - rearClear(m) - (m.doors ? 44 : 20);
+        if (depthAvailable < item.reqD) errors.push(prefix + `«${item.label}» нужна глубина корпуса от ${item.reqD + rearClear(m) + (m.doors ? 44 : 20)} мм.`);
+        continue;
+      }
       if (
         !hw ||
         (c.handle!==undefined&&typeof c.handle!=='boolean') ||
@@ -711,6 +730,7 @@ export function parseModule(input: unknown): Module {
               length: c?.length,
               ...(c?.handle===undefined?{}:{handle:c.handle}),
                   ...(c?.y===undefined?{}:{y:c.y}),
+                  ...(c?.mesh===undefined?{}:{mesh:c.mesh}),
             })),
           }),
     })),

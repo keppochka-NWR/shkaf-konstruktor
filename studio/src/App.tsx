@@ -60,6 +60,7 @@ import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { decorPrice } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE } from "./handles";
+import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
   newProject,
@@ -214,6 +215,7 @@ export default function App() {
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
+  const [meshChoice, setMeshChoice] = useState<string>(DEFAULT_MESH);
   const [fillingCopy,setFillingCopy]=useState<SectionFilling|null>(null);
   const [selectedPart,setSelectedPart]=useState<{mid:string;sid:string;pid:string}|null>(null);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
@@ -272,9 +274,9 @@ export default function App() {
   function selectInserted(next:Project,mid:string,sid:string,kind:FillKind){
     const pid=insertedPartId(project,next,mid,sid,kind);
     setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);
-    if(pid){setSelectedPart({mid,sid,pid});if(kind==='drawer')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
+    if(pid){setSelectedPart({mid,sid,pid});if(kind==='drawer'||kind==='mesh')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
   }
-  function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
+  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string){if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
   function startFill(e:React.DragEvent,kind:FillKind){setRoomPlan(false);e.dataTransfer.setData('application/x-furniture',kind);e.dataTransfer.effectAllowed='copy';setMode('fill');setOpenDoors(true);}
   function addModule(copy = false) {
     const source = copy
@@ -754,6 +756,18 @@ export default function App() {
               <span>Добавить ящик</span>
               <Plus size={15} />
             </button>
+            <div className="mesh-add">
+              <button draggable onDragStart={e=>startFill(e,'mesh')}
+                onClick={()=>dropFilling('mesh',placed.id,selectedId,b.bottom+drawerStackHeight(s),meshChoice)}
+              >
+                <Archive size={19} />
+                <span>Сетка Лемана Про</span>
+                <Plus size={15} />
+              </button>
+              <select aria-label="Элемент Лемана Про" value={meshChoice} onChange={e=>setMeshChoice(e.target.value)}>
+                {(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD} · {i.price} ₽</option>)}</optgroup>)}
+              </select>
+            </div>
             <button draggable onDragStart={e=>startFill(e,'rod')}
               onClick={() => {
                 setTab("section");
@@ -1261,7 +1275,7 @@ export default function App() {
                           aria-pressed={(drawerIndex ?? 0) === j}
                           onClick={() => {setDrawerIndex(j);setSelectedPart({mid:placed.id,sid:s.id,pid:s.id+':drawer:'+j+':facade'});setMode('fill');setOpenDoors(true);}}
                         >
-                          <span>Ящик {j + 1}</span><small>{Math.round(drawerOffsets(s)[j])} мм от дна</small>
+                          <span>{drawerConfig(m,s,j).mesh?MESH_KIND_LABEL[meshById(drawerConfig(m,s,j).mesh!)?.kind??'basket']:'Ящик'} {j + 1}</span><small>{Math.round(drawerOffsets(s)[j])} мм от дна</small>
                         </button>
                       ))}
                     </div>
@@ -1282,8 +1296,13 @@ export default function App() {
                             ...patch,
                           };
                         });
+                      const meshItem=c.mesh?meshById(c.mesh):undefined;
                       return (
                         <>
+                          <label className="hardware-field">Тип элемента<select aria-label="Тип ящика" value={c.mesh??'box'} onChange={e=>{const v=e.target.value;if(v==='box')update({mesh:undefined,height:RULES.drawerH,handle:undefined});else{const item=meshById(v)!;update({mesh:v,height:item.h,handle:undefined});}}}><option value="box">Ящик ЛДСП 16 с фасадом</option>{(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]+' · Лемана Про'}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD} · {i.price} ₽</option>)}</optgroup>)}</select></label>
+                          {meshItem&&<p className="field-note">Арт. {meshItem.art}, высота {meshItem.h} мм, нужен проём {meshItem.reqW}–{meshItem.reqW+60} мм в ширину и глубина от {meshItem.reqD} мм. Направляющие в комплекте, без фасада и ручки; за распашными дверями ставятся фальши.</p>}
+                          {meshItem&&<NumberField label="Элемент от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>}
+                          {!meshItem&&<>
                           <label className="hardware-field">
                             Направляющие
                             <select
@@ -1339,6 +1358,7 @@ export default function App() {
                               Техническая карта GTV ↗
                             </a>
                           )}
+                          </>}
                         </>
                       );
                     })()}

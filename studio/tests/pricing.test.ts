@@ -4,6 +4,8 @@ import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
 import {newProject,parseProject} from '../src/project';
 import {parts,initialModule,validate} from '../src/model';
+import {insertItem} from '../src/operations';
+import {specificationHTML} from '../src/exports';
 
 test('every catalog decor has a purchase price from explicit list or Lamarty tier',()=>{
   assert.equal(catalog.length,133);
@@ -82,6 +84,23 @@ test('handles come from the catalog: geometry length, price line and length chec
   assert.equal(parseProject(p).modules[0].module.handleId,'lm86899315');
   m.handleId='hexa1200b';assert.ok(validate(m).some(e=>e.includes('длиннее фасада')),'1200 handle does not fit a 568 drawer facade');
   m.handleId='нет такой';assert.ok(validate(m).some(e=>e.includes('каталога')));
+});
+
+test('Lemana mesh replaces a drawer: geometry, price, width check and files',()=>{
+  const p=newProject(),a=p.modules[0];a.module.width=480;a.module.doors=false;a.module.sections[0].shelves=[];a.module.sections[0].drawers=0;delete a.module.sections[0].drawerConfigs;
+  const n=insertItem(p,'mesh',a.id,a.module.sections[0].id,100,undefined,'lm85127628');
+  const s=n.modules[0].module.sections[0];assert.equal(s.drawers,1);assert.equal(s.drawerConfigs![0].mesh,'lm85127628');assert.equal(s.drawerConfigs![0].height,185);
+  const ps=parts(n.modules[0].module);
+  assert.ok(ps.some(x=>x.id.endsWith(':drawer:0:mesh')&&x.material==='metal'),'mesh part');
+  assert.ok(!ps.some(x=>x.id.endsWith(':drawer:0:facade')||x.id.endsWith(':drawer:0:bottom')||x.id.includes(':drawer:0:slide')),'no board box, facade or slides');
+  assert.ok(ps.some(x=>x.id.endsWith(':drawer-cap')),'shelf above the group stays');
+  const e=estimate(n),line=e.lines.find(l=>l.id==='mesh:lm85127628')!;assert.equal(line.unitPrice,711);assert.match(line.source,/85127628/);
+  assert.ok(!e.lines.some(l=>l.id.startsWith('slide:')),'no slide line for mesh');
+  assert.equal(parseProject(n).modules[0].module.sections[0].drawerConfigs![0].mesh,'lm85127628');
+  assert.ok(specificationHTML(n).includes('85127628'));
+  assert.throws(()=>insertItem(p,'mesh',a.id,a.module.sections[0].id,100,undefined,'lm91587996'),/864–924/,'shoe rack 864 does not fit a 480 body');
+  const wide=structuredClone(p);wide.modules[0].module.width=900;
+  assert.throws(()=>insertItem(wide,'mesh',wide.modules[0].id,wide.modules[0].module.sections[0].id,100,undefined,'lm85127628'),/440–500/,'basket 440 in an 868 opening is rejected with a size hint');
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

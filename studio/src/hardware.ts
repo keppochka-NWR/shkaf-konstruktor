@@ -18,11 +18,13 @@ export type DrawerConfig = {
   length: number;
   y?: number;
   handle?: boolean;
+  /** id сетчатого элемента Лемана Про (mesh.ts): вместо ящика ЛДСП ставится корзина/брючница/обувница. */
+  mesh?: string;
 };
 export const GTV_SOURCE =
   "https://api2.gtv.com.pl/pimcore/assets/attachments/karta_techniczna/Karta_techniczna_2020_128-129.pdf";
 
-export function drawerHasHandle(c:DrawerConfig){return c.handle??(c.slide!=="gtv0fpo");}
+export function drawerHasHandle(c:DrawerConfig){if(c.mesh)return false;return c.handle??(c.slide!=="gtv0fpo");}
 
 
 export function compatibleSlideLength(slide:DrawerConfig['slide'],current:number,available:number):number|undefined {

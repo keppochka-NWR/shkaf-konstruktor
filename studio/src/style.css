@@ -1096,6 +1096,18 @@ input {
   background-size: cover;
   border: 1px solid #0000000a;
 }
+.mesh-add {
+  display: grid;
+  gap: 6px;
+}
+.mesh-add select {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid #d5dbe2;
+  border-radius: 8px;
+  background: #fff;
+}
 .decor-grid button .decor-meta {
   display: block;
   font-size: 9px;

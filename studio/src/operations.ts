@@ -1,8 +1,9 @@
 import {MEASUREMENT_RULES} from './measurement';
-import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,parts,RULES,type Module,type Section} from './model';
+import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,parts,RULES,type Module,type Section} from './model';
+import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors} from './project';
 import type {DrawerConfig} from './hardware';
-export type FillKind='shelf'|'drawer'|'rod'|'pantograph';
+export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
@@ -21,12 +22,19 @@ export function movePart(p:Project,mid:string,sid:string,pid:string,delta:number
   else if(pid.includes(':rod')||pid.includes(':pantograph:')||pid.includes(':flange:')){const current=parts(m).find(p=>p.id===sid+':rod'||p.id===sid+':pantograph:rod')!;s.rodAt=(current.position[1]+delta-b.bottom)/(b.top-b.bottom);}
   return n;
 }
-export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:number,drawer?:DrawerConfig):Project{
+export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:number,drawer?:DrawerConfig,meshId:string=DEFAULT_MESH):Project{
   const source=p.modules.find(a=>a.id===mid)?.module;if(!source)throw Error('Перетащите элемент в корпус.');
   const target=source.sections.find(s=>s.id===sid),b=boxes(source).find(b=>b.id===sid);
   if(!target||!b)throw Error('Выберите секцию для наполнения.');
   if(kind==='shelf'&&target.shelves.length>=RULES.maxShelves)throw Error(`В секции уже ${RULES.maxShelves} полок. Выберите другую секцию или удалите ненужную полку.`);
-  if(kind==='drawer'&&target.drawers>=RULES.maxDrawers)throw Error(`В секции уже ${RULES.maxDrawers} ящиков. Выберите другую секцию или удалите ненужный ящик.`);
+  if((kind==='drawer'||kind==='mesh')&&target.drawers>=RULES.maxDrawers)throw Error(`В секции уже ${RULES.maxDrawers} ящиков. Выберите другую секцию или удалите ненужный ящик.`);
+  if(kind==='mesh'){
+    const item=meshById(meshId);if(!item)throw Error('Элемент Лемана Про не найден в каталоге.');
+    kind='drawer';drawer={slide:'ball',length:250,height:item.h,mesh:item.id};
+    // Ширина проверяется валидацией; здесь даём понятную подсказку сразу.
+    const inner=b.width-(source.doors?RULES.drawerFiller*(doorCount(source,target)===2?2:1):0);
+    if(inner<item.reqW||inner>item.reqW+MESH_WIDTH_TOLERANCE)throw Error(`«${item.label}» нужен проём ${item.reqW}–${item.reqW+MESH_WIDTH_TOLERANCE} мм внутри, сейчас ${Math.round(inner)}. Сделайте секцию ${Math.round(item.reqW+(b.width-inner)+2*RULES.panel)} мм по корпусу или выберите другой элемент.`);
+  }
   const desired=Math.round((worldY-b.bottom)/5)*5;
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));
   for(const y of candidates){
@@ -49,7 +57,7 @@ export function insertedPartId(before:Project,after:Project,mid:string,sid:strin
     const index=current.shelves.findIndex(height=>!previous?.shelves.includes(height));
     return index<0?undefined:sid+':shelf:'+index;
   }
-  if(kind==='drawer')return current.drawers>(previous?.drawers??0)?sid+':drawer:'+(current.drawers-1)+':facade':undefined;
+  if(kind==='drawer'||kind==='mesh'){if(current.drawers<=(previous?.drawers??0))return undefined;const j=current.drawers-1;return sid+':drawer:'+j+(current.drawerConfigs?.[j]?.mesh?':mesh':':facade');}
   if(kind==='pantograph')return current.pantograph?sid+':pantograph:rod':undefined;
   return current.rod?sid+':rod':undefined;
 }
