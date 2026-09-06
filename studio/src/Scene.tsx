@@ -390,6 +390,7 @@ export function Scene(p: Props) {
         if (
           b &&
           m.sections.find((s) => s.id === b.id)!.shelves.length &&
+          (!m.doors||state.openDoors||state.transparent) &&
           !state.exploded
         ) {
           shelfGaps(m, b.id).forEach((g, i) => {
