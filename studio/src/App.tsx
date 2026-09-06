@@ -62,10 +62,10 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
+  appendModule, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
   type Project,
 } from "./project";
-import {compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -197,6 +197,7 @@ export default function App() {
   const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик целиком':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
   function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   const [snapping,setSnapping]=useState(true);
+  const [moveAll,setMoveAll]=useState(false);
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
@@ -230,7 +231,7 @@ export default function App() {
     setFit((f) => f + 1);
   }
   function addUpper(){try{const n=addUpperModule(project,placed.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}}
-  function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(moveModule(project,mid,pos));}
+  function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject((moveAll?moveComposition:moveModule)(project,mid,pos));}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
   function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
   function startFill(e:React.DragEvent,kind:FillKind){setRoomPlan(false);e.dataTransfer.setData('application/x-furniture',kind);e.dataTransfer.effectAllowed='copy';setMode('fill');setOpenDoors(true);}
@@ -622,6 +623,7 @@ export default function App() {
               </button>
             ))}
 <label className="snap-control"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
+<label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);setMode('move');}}/> Двигать всю композицию</label>
             <button className="text-action" onClick={() => addModule(true)}>
               <Copy size={14} /> Копировать выбранный
             </button>
@@ -748,13 +750,14 @@ export default function App() {
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
-          {roomPlan?<RoomPlan selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);}} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+          {roomPlan?<RoomPlan moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);}} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+            moveAll={moveAll}
             mode={presentation?'orbit':mode}
             presentation={presentation}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
-            snap={(mid,p)=>snapping?snapPlacement(project,mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
+            snap={(mid,p)=>snapping?(moveAll?snapComposition:snapPlacement)(project,mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
-            moveProblem={(mid,p)=>projectErrors(moveModule(project,mid,p))[0]}
+            moveProblem={(mid,p)=>projectErrors((moveAll?moveComposition:moveModule)(project,mid,p))[0]}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
             dividerProblem={(mid,sid,delta)=>{try{moveDivider(project,mid,sid,delta);return undefined;}catch(e){return (e as Error).message;}}}
             partProblem={(mid,sid,pid,delta,to)=>{try{const next=to&&(to.mid!==mid||to.sid!==sid)?transferPart(project,mid,sid,pid,to.mid,to.sid,to.y):movePart(project,mid,sid,pid,delta);return projectErrors(next)[0];}catch(e){return (e as Error).message;}}}
@@ -899,7 +902,7 @@ export default function App() {
             ))}
           </div>
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
-            <RotateCcw size={13} /> {mode==='move'?(snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
+            <RotateCcw size={13} /> {mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
             Колесо — масштаб
           </div>
         </section>

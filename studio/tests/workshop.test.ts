@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
-import {closedModuleBounds,compositionBounds,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {closedModuleBounds,compositionBounds,snapComposition,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
+import {moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -149,4 +149,16 @@ test('changing runner family retains a supported length and otherwise chooses a 
  assert.equal(compatibleSlideLength('gtv0fpo',500,430),400);
  assert.equal(compatibleSlideLength('ball',200,575),250);
  assert.equal(compatibleSlideLength('gtv0fpo',450,240),undefined);
+});
+
+
+test('group drag translates every module and snaps the whole envelope to room walls',()=>{
+ const p=newProject(),a=p.modules[0];p.room.height=3500;const n=appendModule(p,a.module,a),anchor=n.modules[1];
+ n.modules.push({...structuredClone(a),id:'upper-drag',y:2000,module:{...structuredClone(a.module),height:600,sections:[section()]}});
+ const before=structuredClone(n),moved=moveComposition(n,anchor.id,{x:anchor.x+100,y:50,z:300});
+ for(let i=0;i<n.modules.length;i++){assert.equal(moved.modules[i].x-n.modules[i].x,100);assert.equal((moved.modules[i].y??0)-(n.modules[i].y??0),50);assert.equal(moved.modules[i].z-n.modules[i].z,270);assert.deepEqual(moved.modules[i].module,n.modules[i].module);}
+ assert.deepEqual(projectErrors(moved),[]);assert.deepEqual(n,before);
+ const left=snapComposition(n,anchor.id,{x:601,y:0,z:30});assert.equal(left.x,600);assert.equal(left.z,3);assert.equal(bounds(moveComposition(n,anchor.id,left).modules[0]).x,0);
+ const right=snapComposition(n,anchor.id,{x:3390,y:0,z:30});assert.equal(right.x,3400);assert.deepEqual(projectErrors(moveComposition(n,anchor.id,right)),[]);
+ assert.ok(projectErrors(moveComposition(n,anchor.id,{x:4000,y:0,z:30})).length);
 });

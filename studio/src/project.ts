@@ -93,3 +93,12 @@ function unionBounds(bb:ReturnType<typeof bounds>[]){if(!bb.length)return {x:0,y
  const x=Math.min(...bb.map(b=>b.x)),y=Math.min(...bb.map(b=>b.y)),z=Math.min(...bb.map(b=>b.z));
  return {x,y,z,w:Math.max(...bb.map(b=>b.x+b.w))-x,h:Math.max(...bb.map(b=>b.y+b.h))-y,d:Math.max(...bb.map(b=>b.z+b.d))-z};
 }
+
+
+export function snapComposition(p:Project,mid:string,position:{x:number;y:number;z:number},tolerance=35){
+ const a=p.modules.find(a=>a.id===mid);if(!a)return position;
+ const b=mountingCompositionBounds(p),next={...position},sizes={x:b.w,y:b.h,z:b.d},limits={x:p.room.width,y:p.room.height,z:p.room.depth};
+ for(const axis of ['x','y','z'] as const){const start=a[axis]??0,candidates=[start-b[axis],start+limits[axis]-b[axis]-sizes[axis]];let distance=tolerance;
+  for(const candidate of candidates)if(Math.abs(candidate-position[axis])<distance){next[axis]=candidate;distance=Math.abs(candidate-position[axis]);}next[axis]=Math.round(next[axis]);}
+ return next;
+}

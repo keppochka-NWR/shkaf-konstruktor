@@ -134,3 +134,10 @@ export function compactDrawers(p:Project,mid:string,sid:string):Project {
  for(const {index} of order){configs[index].y=y;y+=configs[index].height+RULES.drawerStep;}
  s.drawerConfigs=configs;const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
+
+
+export function moveComposition(p:Project,mid:string,pos:{x:number;y:number;z:number}):Project {
+ const anchor=p.modules.find(a=>a.id===mid);if(!anchor)throw Error('Корпус не найден.');
+ const delta={x:pos.x-anchor.x,y:pos.y-(anchor.y??0),z:pos.z-anchor.z};
+ return {...p,modules:p.modules.map(a=>({...a,x:a.x+delta.x,y:(a.y??0)+delta.y,z:a.z+delta.z}))};
+}
