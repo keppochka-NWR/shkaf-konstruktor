@@ -59,6 +59,7 @@ import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { decorPrice } from "./pricing";
+import { HANDLES, DEFAULT_HANDLE } from "./handles";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
   newProject,
@@ -230,6 +231,7 @@ export default function App() {
   const groupBounds=moveAll?mountingComposition:mountingCompositionBounds({...project,modules:project.modules.filter(a=>liveGroupIds.includes(a.id))});
   const [focusActive,setFocusActive]=useState(false);
   const [transparent, setTransparent] = useState(false);
+  const [clearFacades, setClearFacades] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
   const [selectedOpening,setSelectedOpening]=useState<string>();
@@ -836,6 +838,7 @@ export default function App() {
             onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedPart(null);setTab('room');}}
             onModuleSelect={selectModule}
             transparent={presentation?false:transparent}
+            clearFacades={presentation?false:clearFacades}
             onDimension={(key) =>
               editDimension(
                 key === "width"
@@ -905,6 +908,14 @@ export default function App() {
               onClick={() => setTransparent((v) => !v)}
             >
               <Layers size={19} />
+            </button>
+            <button
+              aria-label="Прозрачные фасады"
+              title="Прозрачные фасады"
+              aria-pressed={clearFacades}
+              onClick={() => setClearFacades((v) => !v)}
+            >
+              <PanelTop size={19} />
             </button>
             <button
               aria-label="Показать помещение"
@@ -1186,6 +1197,8 @@ export default function App() {
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
                 <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. В смете — {RULES.lightRetailPerM.toLocaleString('ru-RU')} ₽ за пог.м по прайсу цеха, поверх коэффициента.</p>
+                <label className="hardware-field">Ручка фасадов и ящиков<select aria-label="Ручка" value={m.handleId??DEFAULT_HANDLE} onChange={e=>modify(n=>{if(e.target.value===DEFAULT_HANDLE)delete n.handleId;else n.handleId=e.target.value;})}><optgroup label="Закупка цеха">{HANDLES.filter(h=>h.vendor==='workshop').map(h=><option key={h.id} value={h.id}>{h.label} · {h.price} ₽</option>)}</optgroup><optgroup label="Лемана Про · выбор клиента, розница">{HANDLES.filter(h=>h.vendor==='lemana').map(h=><option key={h.id} value={h.id}>{h.label} · {h.price} ₽ · арт. {h.art}</option>)}</optgroup></select></label>
+                <p className="field-note">Одна ручка на распашной фасад и на каждый ящик с ручкой. Ящики push-to-open остаются без ручки.</p>
               </div>
               <div className="property-section specs">
                 <h2>Основа модуля</h2>

@@ -2,6 +2,7 @@ import {parts,drawerConfig,RULES} from './model';
 import {nest,type Sheet} from './exports';
 import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
+import {handleById} from './handles';
 export type PriceSettings={markup:number;overrides:Record<string,number>};
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
 
@@ -57,7 +58,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(Math.min(d.length,d.width)<70)small++;
       }
       if(d.role==='door')add('hinge',HINGE.label,hingeCount(d.length,d.width),'шт',HINGE.price,HINGE.source);
-      if(d.role==='handle')add('handle128','Ручка 128 мм · UZ 819',1,'шт',100,'Счета ФАМ, 2026');
+      if(d.role==='handle'){const h=handleById(a.module.handleId);add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
       if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');
       if(d.role==='light')add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);

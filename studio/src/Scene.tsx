@@ -29,6 +29,8 @@ type Props = {
   selectedObstacle?:string;
   onObstacleSelect:(id:string)=>void;
   transparent: boolean;
+  /** Полупрозрачные фасады: видно наполнение за закрытыми дверями и фасадами ящиков. */
+  clearFacades?: boolean;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
@@ -213,7 +215,8 @@ export function Scene(p: Props) {
         moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();
         for (const part of parts(m)) {
           const isMetal = part.material === "metal",
-            isBack = part.material === "hdf";
+            isBack = part.material === "hdf",
+            isFacade = part.role === "door" || part.id.endsWith(":facade");
           const wood =
             part.decor.includes("Дуб") || part.decor.includes("Орех");
           const mat = new THREE.MeshStandardMaterial({
@@ -226,9 +229,9 @@ export function Scene(p: Props) {
                   : part.decor === "Графит"
                     ? 0x505653
                     : 0xe6e4dc,
-            transparent: state.transparent && (part.role === "body" || part.role === "door"),
-            opacity: state.transparent && (part.role === "body" || part.role === "door") ? 0.16 : 1,
-            depthWrite: !(state.transparent && (part.role === "body" || part.role === "door")),
+            transparent: (state.transparent && (part.role === "body" || part.role === "door")) || (state.clearFacades && isFacade),
+            opacity: state.transparent && (part.role === "body" || part.role === "door") ? 0.16 : state.clearFacades && isFacade ? 0.35 : 1,
+            depthWrite: !((state.transparent && (part.role === "body" || part.role === "door")) || (state.clearFacades && isFacade)),
             roughness: isMetal ? 0.24 : 0.73,
             metalness: isMetal ? 0.8 : 0,
             ...(part.role === "light" ? { color: 0xfff1c9, emissive: 0xffd27a, emissiveIntensity: 1.4, metalness: 0, roughness: 0.4 } : {}),
@@ -620,6 +623,7 @@ export function Scene(p: Props) {
       p.groupIds?.join(','),
       p.mode,
       p.transparent,
+      p.clearFacades,
       p.selected,
       p.selectedPart,
       p.texture,
