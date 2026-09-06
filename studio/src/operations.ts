@@ -1,6 +1,6 @@
 import {MEASUREMENT_RULES} from './measurement';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,parts,RULES,type Module,type Section} from './model';
-import {bounds,mountingCompositionBounds,type Project,projectErrors} from './project';
+import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors} from './project';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
@@ -195,4 +195,24 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
  s.shelves=copy.shelves.map(y=>y/height);s.drawers=copy.drawers.length;s.drawerConfigs=copy.drawers.map(c=>({...c}));s.rod=copy.hanger==='rod';s.pantograph=copy.hanger==='pantograph';
  if(copy.hanger&&copy.hangerHeight!==undefined)s.rodAt=copy.hangerHeight/height;else delete s.rodAt;
  const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;
+}
+
+
+export function rotateModuleGroup(p:Project,ids:readonly string[]):Project{
+ const chosen=p.modules.filter(a=>ids.includes(a.id));
+ if(!chosen.length)throw Error('Отметьте корпуса для поворота.');
+ const box=mountingCompositionBounds({...p,modules:chosen}),cx=box.x+box.w/2,cz=box.z+box.d/2;
+ if(box.d>p.room.width||box.w>p.room.depth)throw Error('После поворота группа не помещается в комнате. Измените состав группы или замер.');
+ const n=structuredClone(p);
+ for(const a of n.modules.filter(a=>ids.includes(a.id))){
+  const center=moduleCenter(a),x=cx+center.z-cz,z=cz-center.x+cx;
+  a.rotation=(((a.rotation??0)+90)%360) as 0|90|180|270;
+  const local=moduleCenter({...a,x:0,z:0});a.x=x-local.x;a.z=z-local.z;
+ }
+ const rotated=mountingCompositionBounds({...n,modules:n.modules.filter(a=>ids.includes(a.id))});
+ const dx=Math.max(0,Math.min(p.room.width-rotated.w,rotated.x))-rotated.x;
+ const dz=Math.max(0,Math.min(p.room.depth-rotated.d,rotated.z))-rotated.z;
+ for(const a of n.modules.filter(a=>ids.includes(a.id))){a.x+=dx;a.z+=dz;}
+ const error=projectErrors(n)[0];if(error)throw Error(error);
+ return n;
 }

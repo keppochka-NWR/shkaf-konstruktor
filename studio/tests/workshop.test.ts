@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {closedModuleBounds,compositionBounds,snapComposition,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {captureSectionFilling,pasteSectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {captureSectionFilling,pasteSectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,estimateCSV,hingeCount} from '../src/pricing';
 import {nest,specificationHTML} from '../src/exports';
@@ -404,4 +404,27 @@ test('inserting a library assembly preserves names and creates independent edita
  copies[0].module.decor='Графит';assert.notEqual(group[0].module.decor,'Графит');assert.equal(JSON.stringify(p),before);
  const full=newProject();full.room.width=600;full.room.depth=621;full.modules[0].x=0;full.modules[0].z=3;
  const unchanged=JSON.stringify(full);assert.throws(()=>appendModuleGroup(full,group),/не найдено свободного места/);assert.equal(JSON.stringify(full),unchanged);
+});
+
+
+test('group rotation is a rigid transform and four turns restore bodies away from walls',()=>{
+ let base=newProject();base.modules[0].x=1200;base.modules[0].z=1000;
+ base=appendModule(base,initialModule(),base.modules[0]);const p=addUpperModule(base,base.modules[0].id),ids=p.modules.map(a=>a.id),before=JSON.stringify(p);
+ const turned=rotateModuleGroup(p,ids);assert.deepEqual(projectErrors(turned),[]);assert.equal(JSON.stringify(p),before);
+ const points=(q:typeof p)=>q.modules.flatMap(a=>[[0,0],[a.module.width,a.module.depth]].map(([u,v])=>({...localToRoom(a,u,v),y:a.y??0})));
+ const old=points(p),next=points(turned);
+ for(let i=0;i<old.length;i++)for(let j=0;j<i;j++)assert.ok(Math.abs(Math.hypot(old[i].x-old[j].x,old[i].z-old[j].z)-Math.hypot(next[i].x-next[j].x,next[i].z-next[j].z))<1e-8);
+ for(let i=0;i<p.modules.length;i++){assert.equal(turned.modules[i].y,p.modules[i].y);assert.deepEqual(turned.modules[i].module,p.modules[i].module);}
+ let four=turned;for(let i=0;i<3;i++)four=rotateModuleGroup(four,ids);
+ for(let i=0;i<p.modules.length;i++){assert.equal(four.modules[i].x,p.modules[i].x);assert.equal(four.modules[i].z,p.modules[i].z);assert.equal(four.modules[i].rotation??0,p.modules[i].rotation??0);}
+});
+
+test('group rotation stays inside the room and rejects collisions without changing source',()=>{
+ const p=appendModule(newProject(),initialModule()),ids=p.modules.map(a=>a.id),turned=rotateModuleGroup(p,ids);
+ assert.deepEqual(projectErrors(turned),[]);assert.ok(turned.modules.every(a=>bounds(a).x>=0&&bounds(a).z>=0));
+ const before=JSON.stringify(p);assert.throws(()=>rotateModuleGroup(p,[ids[0]]),/пересекается/);assert.equal(JSON.stringify(p),before);
+ const narrow=structuredClone(p);narrow.room.depth=800;assert.throws(()=>rotateModuleGroup(narrow,ids),/не помещается/);
+ assert.throws(()=>rotateModuleGroup(p,[]),/Отметьте корпуса/);
+ const extra=appendModule(p,initialModule());extra.modules[2].x=3000;extra.modules[2].z=1800;
+ const partial=rotateModuleGroup(extra,ids);assert.deepEqual(partial.modules[2],extra.modules[2]);
 });
