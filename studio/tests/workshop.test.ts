@@ -1,3 +1,4 @@
+import {shelfInsertionHeight} from '../src/model';
 import {insertedPartId} from '../src/operations';
 import {details} from '../src/exports';
 import {reviewFiles,reviewArchive,reviewArchiveName} from '../src/reviewPackage';
@@ -311,4 +312,20 @@ test('selection after a transfer belongs to the receiving module and section',()
  assert.equal(pid,target.id+':drawer:2:facade');
  assert.ok(parts(n.modules[1].module).some(d=>d.id===pid));
  assert.equal(n.modules[0].module.sections[0].drawers,1);
+});
+
+test('shelf button divides the largest clear gap while preserving existing shelf heights',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.drawers=0;s.shelves=[0.2,0.7];
+ const before=[...s.shelves],n=insertItem(p,'shelf',a.id,s.id,shelfInsertionHeight(a.module,s.id)),after=n.modules[0].module.sections[0].shelves;
+ assert.ok(before.every(height=>after.includes(height)));
+ const inserted=after.find(height=>!before.includes(height))!;
+ assert.ok(Math.abs(inserted-0.45)<0.003);
+ assert.deepEqual(projectErrors(n),[]);
+});
+test('shelf insertion suggestion excludes the mandatory drawer cap',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.shelves=[];
+ const cap=parts(a.module).find(d=>d.id.endsWith(':drawer-cap'))!,height=shelfInsertionHeight(a.module,s.id);
+ assert.ok(height>cap.position[1]+cap.size[1]/2+80);
+ const n=insertItem(p,'shelf',a.id,s.id,height);assert.deepEqual(projectErrors(n),[]);
+ assert.equal(n.modules[0].module.sections[0].drawers,s.drawers);
 });

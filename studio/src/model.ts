@@ -572,6 +572,10 @@ export function shelfGaps(m: Module, sid: string) {
     return { bottom, top, height: Math.round((top - bottom) * 10) / 10 };
   });
 }
+export function shelfInsertionHeight(m:Module,sid:string){
+  const gaps=shelfGaps(m,sid).sort((a,b)=>b.height-a.height);
+  return (gaps[0].bottom+gaps[0].top)/2;
+}
 export function setShelfGap(
   m: Module,
   sid: string,

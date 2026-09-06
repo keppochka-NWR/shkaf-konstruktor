@@ -43,7 +43,7 @@ import {
   distribute,
   section,
   RULES,
-  shelfGaps,
+  shelfGaps, shelfInsertionHeight,
   setShelfGap,
   drawerConfig, drawerOffsets, drawerStackHeight, plinth, rearClear,
   type Module,
@@ -724,7 +724,7 @@ export default function App() {
           <div className="fill-buttons">
             <button draggable onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
             <button draggable onDragStart={e=>startFill(e,'shelf')}
-              onClick={()=>dropFilling('shelf',placed.id,selectedId,(b.bottom+b.top)/2)}
+              onClick={()=>dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId))}
             >
               <Rows3 size={19} />
               <span>Добавить полку</span>
@@ -1321,7 +1321,7 @@ export default function App() {
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
-                  onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,(b.bottom+b.top)/2);else{modifySection(a=>a.shelves=a.shelves.slice(0,c));setSelectedPart(null);}}}
+                  onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId));else{modifySection(a=>a.shelves=a.shelves.slice(0,c));setSelectedPart(null);}}}
                 />
                 <Counter
                   label="Ящики"
