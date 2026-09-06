@@ -20,9 +20,11 @@ export function OutputPanel({
   project,
   initialTab = "sheets",
   capture,
+  inspect,
   update,
 }: {
   project: Project;
+  inspect: (moduleId:string,partId:string)=>void;
   initialTab?: "sheets" | "estimate";
   capture: () => string | undefined;
   update: (p: Project) => boolean;
@@ -134,7 +136,7 @@ export function OutputPanel({
                         <tr>
                           <th>Код</th>
                           <th>Деталь</th>
-                          <th>Размер</th>
+                          <th>Размер</th><th>В модели</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -146,7 +148,7 @@ export function OutputPanel({
                             </td>
                             <td>
                               {a.h} × {a.w}
-                            </td>
+                            </td><td><button className="text-action" aria-label={'Показать в 3D деталь '+a.detail.code} onClick={()=>inspect(a.detail.moduleId,a.detail.id)}>Показать в 3D</button></td>
                           </tr>
                         ))}
                       </tbody>

@@ -445,3 +445,11 @@ test('niche advisories compare the closed composition and height from floor with
  warnings=roomWarnings(p).filter(w=>w.kind==='niche-w');assert.equal(warnings[0].moduleId,second.id);assert.match(warnings[0].message,/1300 мм/);
  delete p.measurement.niche;assert.equal(roomWarnings(p).filter(w=>w.kind?.startsWith('niche-')).length,0);
 });
+
+
+test('sheet details retain module identity when copied bodies share local part ids',()=>{
+ const p=newProject(),copy=structuredClone(p.modules[0]);copy.id='detail-copy';copy.x+=700;p.modules.push(copy);
+ const all=details(p),first=all.find(d=>d.moduleId===p.modules[0].id)!,second=all.find(d=>d.moduleId===copy.id)!;
+ assert.equal(first.id,second.id);assert.notEqual(first.code,second.code);
+ assert.ok(nest(p).flatMap(s=>s.items).some(a=>a.detail.moduleId===copy.id&&a.detail.id===second.id));
+});

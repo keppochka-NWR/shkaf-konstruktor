@@ -1463,6 +1463,8 @@ export default function App() {
                   initialTab={outputTab}
                 project={project}
                 capture={() => capture.current?.()}
+                inspect={(mid,pid)=>{const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}}
+
                 update={commitProject}
               />
             ) : modal === "materials" ? (

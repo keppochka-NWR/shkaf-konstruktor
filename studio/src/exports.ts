@@ -4,7 +4,7 @@ import {SLIDES,drawerHasHandle} from './hardware';
 import { parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, type Part } from "./model";
 import { bounds, projectErrors, type Project } from "./project";
 import {packRectangles} from './packing';
-export type Detail = Part & { moduleName: string; code: string };
+export type Detail = Part & { moduleName: string; moduleId: string; code: string };
 export type Placement = {
   detail: Detail;
   x: number;
@@ -27,6 +27,7 @@ export function details(p: Project): Detail[] {
       .map((d, j) => ({
         ...d,
         moduleName: m.module.name,
+        moduleId: m.id,
         code: `${i + 1}.${j + 1}`,
       })),
   );
