@@ -20,8 +20,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.role==='door')add('hinge','Петля GTV SOLID PLUS',hingeCount(d.length,d.width),'шт',115,'Счета ФАМ, 2026');
       if(d.role==='handle')add('handle128','Ручка 128 мм · UZ 819',1,'шт',100,'Счета ФАМ, 2026');
-      if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'База фурнитуры цеха');
-      if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'База фурнитуры цеха');
+      if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
+      if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');
     }
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги D25',RULES.rodMountScrews,'шт',null,'Фрагмент цеха: 6 на штангу; закупочную цену уточнить');
