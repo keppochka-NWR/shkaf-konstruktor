@@ -23,7 +23,7 @@ import {
   drawerConfig,
   RULES,
 } from "../src/model";
-import { findSheetDetails, nest, details, quoteHTML, detailCSV, labelDetails, labelsHTML, specificationHTML } from "../src/exports";
+import { findSheetDetails, nest, details, quoteHTML, detailCSV, labelDetails, labelEdges, labelsHTML, specificationHTML } from "../src/exports";
 
 test("Lamarty sheet format is exactly the user correction", () => {
   assert.equal(RULES.sheetW, 2750);
@@ -461,4 +461,10 @@ test('cut list search ranks exact codes first and combines words and sizes',()=>
  const found=findSheetDetails(sheets,'БОКОВИНА 2000 прихожую');assert.equal(found.length,2);assert.ok(found.every(a=>a.a.detail.name.includes('Боковина')));
  assert.equal(findSheetDetails(sheets,'   ').length,0);assert.equal(findSheetDetails(sheets,'боковина неизвестныйдекор').length,0);
  assert.ok(findSheetDetails(sheets,'Вотан 16').length>0);
+});
+
+
+test('labels show four edge values in the same order as detail CSV',()=>{
+ const p=newProject();assert.equal(labelEdges({edge:[.4,2,0,.4]}),'Кромка 1–4: 0,4 / 2 / — / 0,4 мм');
+ const html=labelsHTML(p);assert.ok(html.includes('Кромка 1–4: 2 / 2 / 2 / 2 мм'));assert.ok(html.includes('Кромка 1–4: — / — / — / — мм'));
 });
