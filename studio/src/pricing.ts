@@ -4,6 +4,7 @@ import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
 import {meshById} from './mesh';
+import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 export type PriceSettings={markup:number;overrides:Record<string,number>};
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
 
@@ -59,6 +60,18 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(Math.min(d.length,d.width)<70)small++;
       }
       if(d.role==='door')add('hinge',HINGE.label,hingeCount(d.length,d.width),'шт',HINGE.price,HINGE.source);
+      if(d.role==='door'&&d.material==='alu'&&a.module.alu){
+        // Бланк цеха «Расчет алюм.фасад рам»: профиль по периметру, вставка по площади фасада, уплотнитель, уголки, отверстия.
+        const al=a.module.alu,prof=aluProfile(al.profile),col=aluColor(al.profile,al.color),ins=aluInsert(al.insert);
+        const perimeter=2*(d.length+d.width)/1000,area=d.length*d.width/1e6;
+        add('alu-profile:'+al.profile+':'+al.color,'Профиль '+(prof?.label??al.profile)+' · '+(col?.label??al.color),perimeter,'м',col?.perM??null,col?.source??'Цена профиля не найдена');
+        add('alu-insert:'+al.insert,'Вставка · '+(ins?.label??al.insert),area,'м²',ins?.perM2??null,ins?.source??'Цена вставки не найдена');
+        if(ins?.mirror)add('alu-film','Армирующая плёнка на зеркало',area,'м²',ALU_EXTRAS.mirrorFilmPerM2,'АТБ, прайс 01.01.2026');
+        add('alu-seal','Уплотнитель вставки',perimeter,'м',ALU_EXTRAS.sealPerM,ALU_EXTRAS.source);
+        add('alu-corners','Соединительная фурнитура рамки',1,'фасад',ALU_EXTRAS.cornersPerFacade,ALU_EXTRAS.source);
+        add('alu-hinge-hole'+(prof?.narrow?'-narrow':''),'Отверстие под петлю'+(prof?.narrow?' в узком профиле':''),hingeCount(d.length,d.width),'шт',prof?.narrow?ALU_EXTRAS.hingeHoleNarrow:ALU_EXTRAS.hingeHole,ALU_EXTRAS.source);
+        add('alu-handle-hole','Отверстие под ручку (стекло 8 мм под втулку)',1,'шт',ALU_EXTRAS.handleHole,ALU_EXTRAS.source);
+      }
       if(d.role==='handle'){const h=handleById(a.module.handleId);add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
       if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');

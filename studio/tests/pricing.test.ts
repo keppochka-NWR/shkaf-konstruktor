@@ -6,7 +6,7 @@ import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectError
 import {roomWarnings} from '../src/roomWarnings';
 import {parts,initialModule,validate} from '../src/model';
 import {insertItem} from '../src/operations';
-import {specificationHTML} from '../src/exports';
+import {specificationHTML,details} from '../src/exports';
 
 test('every catalog decor has a purchase price from explicit list or Lamarty tier',()=>{
   assert.equal(catalog.length,133);
@@ -158,6 +158,27 @@ test('facade size rules: 640 wide up to 920 high, 600 above, 360 minimum, straig
   assert.ok(specificationHTML(p).includes('выпрямитель'),'specification recommends a straightener for tall wide doors');
   p.room.ceiling='stretch';p.room.height=2000+20;assert.ok(!roomWarnings(p).some(w=>w.kind==='ceiling'));
   p.room.height=2000+25;p.room.ceiling='stationary';assert.ok(roomWarnings(p).some(w=>w.kind==='ceiling'));
+});
+
+test('aluminium framed doors: geometry, workshop pricing formula, limits, cut list and files',()=>{
+  const p=newProject(),m=p.modules[0].module;m.sections[0].shelves=[];m.sections[0].drawers=0;delete m.sections[0].drawerConfigs;
+  const ldsp=estimate(p);
+  m.alu={profile:'F1-09',color:'silver',insert:'mirror-silver'};
+  const doors=parts(m).filter(x=>x.role==='door');assert.equal(doors.length,1);assert.equal(doors[0].material,'alu');assert.equal(doors[0].size[2],20);
+  assert.ok(!details(p).some(d=>d.code&&/Фасад/.test(d.name||'')),'alu door is not a board detail');
+  const e=estimate(p),line=(id:string)=>e.lines.find(l=>l.id===id)!;
+  const perimeter=2*(doors[0].length+doors[0].width)/1000,area=doors[0].length*doors[0].width/1e6;
+  assert.ok(Math.abs(line('alu-profile:F1-09:silver').quantity-perimeter)<0.01);assert.equal(line('alu-profile:F1-09:silver').unitPrice,447.17);
+  assert.ok(Math.abs(line('alu-insert:mirror-silver').quantity-area)<0.01);assert.equal(line('alu-insert:mirror-silver').unitPrice,1530);
+  assert.equal(line('alu-film').unitPrice,90);assert.equal(line('alu-seal').unitPrice,13);assert.equal(line('alu-corners').quantity,1);
+  assert.equal(line('alu-hinge-hole-narrow').unitPrice,150);assert.equal(line('alu-hinge-hole-narrow').quantity,line('hinge').quantity);
+  assert.equal(line('alu-handle-hole').unitPrice,70);
+  assert.ok(e.retail!==null&&ldsp.retail!==null&&e.retail>ldsp.retail,'mirror frame costs more than an LDSP door');
+  m.alu.profile='F1-19';assert.equal(estimate(p).lines.find(l=>l.id==='alu-hinge-hole')!.unitPrice,40,'wide profile: plain hinge hole');
+  assert.equal(parseProject(p).modules[0].module.alu!.profile,'F1-19');
+  assert.ok(specificationHTML(p).includes('алюминиевой рамке'));
+  m.height=2200;assert.ok(validate(m).some(x=>x.includes('не выше 2000')),'alu door above 2000 is rejected');
+  m.height=2000;m.alu={profile:'нет',color:'silver',insert:'mirror-silver'};assert.ok(validate(m).some(x=>x.includes('из каталога')));
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

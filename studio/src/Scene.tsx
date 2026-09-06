@@ -1,5 +1,8 @@
 import {frameDistance,frameHeight} from './framing';
-import {boardGeometry} from './boardGeometry';
+import {boardGeometry,aluFrameGeometry} from './boardGeometry';
+import {aluProfile,aluInsert} from './alu';
+// Цвета профиля рамочного фасада для сцены.
+const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -241,13 +244,14 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
-          if (texture && !isBack && !isMetal) {
+          if (texture && !isBack && !isMetal && part.material !== "alu") {
             pendingTextures++;
             cachedTexture(texture).then(map=>{
               if(disposed||gen!==generation)return;
               mat.map=map;mat.color.set(0xffffff);mat.needsUpdate=true;needsRender=true;
             }).catch(()=>{}).finally(()=>{if(gen===generation)pendingTextures--;});
           }
+          const isAlu = part.material === "alu" && !!m.alu;
           const geometry =
             (part.role === "rod" || part.role === "flange")
               ? new THREE.CylinderGeometry(
@@ -256,8 +260,20 @@ export function Scene(p: Props) {
                   part.size[0],
                   24,
                 )
-              : boardGeometry(part);
+              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : boardGeometry(part);
+          if (isAlu) {
+            const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
+            mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
+          }
           const mesh = new THREE.Mesh(geometry, mat);
+          if (isAlu) {
+            // Вставка: зеркало, стекло или лакобель внутри рамки.
+            const ins = aluInsert(m.alu!.insert), face = aluProfile(m.alu!.profile)?.face ?? 19;
+            const glassMat = new THREE.MeshStandardMaterial(ins?.mirror ? { color: 0xe3e9ee, metalness: 1, roughness: 0.04 } : ins?.id.startsWith("lacobel") ? { color: ins.id.endsWith("black") ? 0x1b1b1b : 0xf4f4f2, metalness: 0.2, roughness: 0.15 } : { color: ins?.id === "satin" ? 0xf1f3f4 : ins?.id.includes("bronze") ? 0x8a6a45 : ins?.id.includes("graphite") ? 0x4a4f55 : 0xdfe8ec, transparent: true, opacity: ins?.id === "satin" ? 0.75 : state.clearFacades ? 0.25 : 0.45, roughness: 0.05, metalness: 0.1, depthWrite: false });
+            const glass = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, part.size[0] - 2 * face + 8), Math.max(1, part.size[1] - 2 * face + 8), 4), glassMat);
+            glass.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active };
+            mesh.add(glass);
+          }
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
           mesh.position.set(
             part.position[0],

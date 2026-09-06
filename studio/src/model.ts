@@ -1,6 +1,7 @@
 import { drawerHasHandle, SLIDES, type DrawerConfig } from "./hardware";
 import { handleById, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
+import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
 export const RULES = {
   panel: 16,
   back: 3,
@@ -92,6 +93,8 @@ export type Module = {
   /** Фальшпанели к стене по регламенту цеха: ставятся автоматически, когда боковина у стены и в корпусе есть фасады/ящики.
    *  edge — ФП торцом (16 мм в плоскости боковины, +5 мм к стене; низ 100 мм, верх — глубина+фасад), standard — ФП в плоскости фасада шириной width (≥30). */
   wallFiller?: Partial<Record<"left" | "right", WallFiller>>;
+  /** Распашные фасады в алюминиевой рамке (alu.ts): профиль, цвет, вставка. Без поля — ЛДСП 16. Фасады ящиков остаются ЛДСП. */
+  alu?: AluFacade;
 };
 export type WallFiller = { kind: "edge" | "standard"; width: number };
 export type Part = {
@@ -103,7 +106,7 @@ export type Part = {
   length: number;
   width: number;
   thickness: number;
-  material: "board" | "hdf" | "metal";
+  material: "board" | "hdf" | "metal" | "alu";
   decor: string;
   role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge" | "light";
   hinge?: "left" | "right";
@@ -492,7 +495,12 @@ export function parts(m: Module): Part[] {
       const y0=facadeBottom(m),y1=m.height-RULES.faceGap,dh=y1-y0;
       for(let k=0;k<count;k++){
         const hinge=count===2?(k===0?'left':'right'):(m.hingeSide??'left'),cx=left+k*(dw+RULES.faceGap)+dw/2;
-        add(s.id+':door:'+k,'Фасад распашной',[dw,dh,t],[cx,(y0+y1)/2,d+t/2+2],dh,dw,t,'door',s.id);out.at(-1)!.hinge=hinge;
+        if(m.alu){
+          const ft=ALU_EXTRAS.frameDepth;
+          add(s.id+':door:'+k,'Фасад в алюминиевой рамке',[dw,dh,ft],[cx,(y0+y1)/2,d+ft/2+2],dh,dw,ft,'door',s.id,'alu');
+          out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
+        } else add(s.id+':door:'+k,'Фасад распашной',[dw,dh,t],[cx,(y0+y1)/2,d+t/2+2],dh,dw,t,'door',s.id);
+        out.at(-1)!.hinge=hinge;
         const hl=handleById(m.handleId).len;
         add(s.id+':handle:'+k,'Ручка фасада · '+handleById(m.handleId).label,[10,hl,25],[cx+(hinge==='left'?1:-1)*(dw/2-40),(y0+y1)/2,d+31],hl,25,10,'handle',s.id,'metal');
       }
@@ -517,6 +525,7 @@ export function validate(m: Module): string[] {
   if(m.standLight!==undefined&&typeof m.standLight!=='boolean')errors.push('Неверный параметр подсветки.');
   if(m.handleId!==undefined&&!HANDLES.some(h=>h.id===m.handleId))errors.push('Выберите ручку из каталога.');
   if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
+  if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluInsert(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(!['edge','standard'].includes(w.kind)||!Number.isFinite(w.width)||w.width<(w.kind==='standard'?RULES.wallFillerMin:RULES.panel)||w.width>400)errors.push(`Фальшпанель к стене: стандартная не менее ${RULES.wallFillerMin} мм и не более 400.`);}}
   if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
@@ -653,6 +662,8 @@ export function validate(m: Module): string[] {
       );
     if (p.role === "door" && p.length < RULES.doorMinH)
       errors.push(`Распашной фасад ниже ${RULES.doorMinH} мм. Увеличьте высоту корпуса или уберите фасады.`);
+    if (p.role === "door" && p.material === "alu" && (p.length > ALU_EXTRAS.maxH || p.width > ALU_EXTRAS.maxW))
+      errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: по СТП не выше ${ALU_EXTRAS.maxH} и не шире ${ALU_EXTRAS.maxW} мм. Разделите секцию или уменьшите высоту.`);
   }
   const hl=handleById(m.handleId).len;
   for(const p of geometry){
@@ -773,6 +784,7 @@ export function parseModule(input: unknown): Module {
     ...(x.standLight===undefined?{}:{standLight:x.standLight as boolean}),
     ...(x.handleId===undefined?{}:{handleId:x.handleId as string}),
     ...(x.cornerFiller===undefined?{}:{cornerFiller:x.cornerFiller as Module["cornerFiller"]}),
+    ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
     ...(x.wallFiller===undefined?{}:{wallFiller:Object.fromEntries(Object.entries(x.wallFiller as Record<string,WallFiller>).map(([k,v])=>[k,{kind:v?.kind,width:v?.width}]))}),
     sections: x.sections.map((s) => ({
       id: s.id,
