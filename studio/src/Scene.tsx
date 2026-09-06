@@ -305,6 +305,11 @@ export function Scene(p: Props) {
             mesh.add(edge);
           }
         }
+        if(!state.presentation&&state.mode==='move'&&state.groupIds?.includes(placed.id)){
+          const box=new THREE.BoxGeometry(m.width+3,m.height+3,m.depth+3);
+          const guide=new THREE.LineSegments(new THREE.EdgesGeometry(box),new THREE.LineBasicMaterial({color:0x168976,transparent:true,opacity:.85,depthTest:false}));
+          box.dispose();guide.position.set(m.width/2,m.height/2,m.depth/2);guide.userData.captureGuide=true;guide.renderOrder=10;moduleGroup.add(guide);
+        }
       }
       if (state.room) {
         const r = state.room,
@@ -610,6 +615,8 @@ export function Scene(p: Props) {
       p.activeId,
       p.room,
       p.selectedObstacle,
+      p.groupIds?.join(','),
+      p.mode,
       p.transparent,
       p.selected,
       p.selectedPart,
