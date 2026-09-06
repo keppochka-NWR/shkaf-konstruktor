@@ -178,6 +178,7 @@ export default function App() {
   const [history, setHistory] = useState<Project[]>([startup.model]),
     [cursor, setCursor] = useState(0);
   const project = history[cursor];
+  const currentProject=useRef(project),importSequence=useRef(0);currentProject.current=project;
   const [active, setActive] = useState(project.modules[0].id);
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
@@ -503,12 +504,16 @@ export default function App() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
+          const request=++importSequence.current,before=currentProject.current;
           if (file.size > 2000000) {
             setError("Файл слишком большой. Откройте файл проекта до 2 МБ.");
             return;
           }
           try {
-            const imported = parseProject(JSON.parse(await file.text()));
+            const text=await file.text();
+            if(request!==importSequence.current)return;
+            if(currentProject.current!==before)throw Error("Проект изменился во время чтения файла. Откройте файл ещё раз, чтобы сохранить последние правки в истории отмены.");
+            const imported = parseProject(JSON.parse(text));
             const next = imported.modules[0].module;
             if (
               imported.modules.some(
@@ -521,11 +526,13 @@ export default function App() {
                 "Материал из файла не найден в каталоге Lamarty.",
               );
             if (commitProject(imported)) {
+              setSelectedPart(null);setDrawerPreview(false);setSelectedObstacle(undefined);setSelectedOpening(undefined);setMoveAll(false);setTab("module");
               setActive(imported.modules[0].id);
               setSelected(next.sections[0].id);
               setFit((f) => f + 1);
             }
           } catch (e) {
+            if(request!==importSequence.current)return;
             setError(
               e instanceof Error ? e.message : "Не удалось открыть файл.",
             );
