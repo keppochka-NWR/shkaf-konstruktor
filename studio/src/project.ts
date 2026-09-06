@@ -1,5 +1,5 @@
 import type {Niche} from './measurement';
-import {parts,id,initialModule,parseModule,validate,type Module,section} from './model';
+import {parts,id,initialModule,parseModule,validate,RULES,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
@@ -10,7 +10,37 @@ export function newProject(module=initialModule()):Project{return {version:3,roo
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
-export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const points=[localToRoom(a,0,-rear),localToRoom(a,a.module.width,a.module.depth+18)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller,t=RULES.panel;const front=Math.max(a.module.depth+18,cf?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,cf==='left'?-t:0,-rear),localToRoom(a,a.module.width+(cf==='right'?t:0),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+/** Габарит корпуса без угловой фальши — для поиска стыка. */
+function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined}});}
+/**
+ * Автоматические угловые фальши: если к боковине корпуса под 90° примыкает другой корпус (в пределах RULES.cornerSnap),
+ * снаружи этой боковины ставится фальш-панель 16 мм глубиной корпус + 40, а корпус при необходимости отодвигается на её толщину.
+ * Если стыка больше нет, фальш убирается. Вызывается перед проверкой проекта при каждом изменении.
+ */
+export function applyCornerFillers(p:Project):Project{
+  const n=structuredClone(p),t=RULES.panel;
+  for(const a of n.modules){
+    const rot=a.rotation??0;
+    let found:Module['cornerFiller'];
+    for(const side of ['left','right'] as const){
+      const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
+      const p0=localToRoom(a,u,0),p1=localToRoom(a,u,a.module.depth),pOut=localToRoom(a,u+dir*RULES.cornerSnap,0);
+      const strip={x:Math.min(p0.x,p1.x,pOut.x),z:Math.min(p0.z,p1.z,pOut.z),w:Math.max(p0.x,p1.x,pOut.x)-Math.min(p0.x,p1.x,pOut.x)||1,d:Math.max(p0.z,p1.z,pOut.z)-Math.min(p0.z,p1.z,pOut.z)||1,y:a.y??0,h:a.module.height};
+      const neighbour=n.modules.find(b=>b!==a&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90&&overlap(strip,bodyBounds(b)));
+      if(neighbour){found=side;break;}
+    }
+    if(found){
+      if(a.module.cornerFiller!==found){
+        a.module.cornerFiller=found;
+        // Стык был вплотную: сдвигаем корпус от соседа на толщину фальши.
+        const b=bounds(a);
+        for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){const dir=found==='left'?-1:1;const from=localToRoom(a,0,0),to=localToRoom(a,dir*t,0);a.x+=from.x-to.x;a.z+=from.z-to.z;break;}
+      }
+    }else delete a.module.cornerFiller;
+  }
+  return n;
+}
 export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x<b.x+b.w-0.1&&a.x+a.w>b.x+0.1&&a.y<b.y+b.h-0.1&&a.y+a.h>b.y+0.1&&a.z<b.z+b.d-0.1&&a.z+a.d>b.z+0.1;}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];

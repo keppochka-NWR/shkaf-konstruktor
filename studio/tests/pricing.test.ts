@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
-import {newProject,parseProject} from '../src/project';
+import {newProject,parseProject,applyCornerFillers,projectErrors} from '../src/project';
 import {parts,initialModule,validate} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML} from '../src/exports';
@@ -105,6 +105,25 @@ test('Lemana mesh replaces a drawer: geometry, price, width check and files',()=
   assert.ok(parts(insertItem(withDoors,'mesh',withDoors.modules[0].id,withDoors.modules[0].module.sections[0].id,100,undefined,'lm85127628').modules[0].module).some(x=>x.id.endsWith(':mesh')),'600 deep body with doors takes the 560 basket (20 mm behind the door)');
   const wide=structuredClone(p);wide.modules[0].module.width=900;
   assert.throws(()=>insertItem(wide,'mesh',wide.modules[0].id,wide.modules[0].module.sections[0].id,100,undefined,'lm85127628'),/440–500/,'basket 440 in an 868 opening is rejected with a size hint');
+});
+
+test('corner filler appears when a body meets another at 90 degrees and disappears when moved away',()=>{
+  const p=newProject();p.modules[0].x=700;p.modules[0].z=3;p.modules[0].rotation=0; // корпус A по задней стене (3 мм — набивная задняя стенка)
+  const B={...p.modules[0],id:'b',x:3,z:0,rotation:90 as const,module:{...structuredClone(p.modules[0].module),name:'B'}}; // корпус B по левой стене, торцом в угол
+  p.modules.push(B);
+  // A стоит вплотную к фасаду B: боковина A (левая) примыкает к B под 90°
+  p.modules[0].x=3+B.module.depth+18;
+  const n=applyCornerFillers(p),a=n.modules[0],b=n.modules[1];
+  assert.equal(a.module.cornerFiller,'left');
+  assert.equal(b.module.cornerFiller,undefined);
+  const f=parts(a.module).find(x=>x.id==='corner-filler:left')!;
+  assert.equal(f.size[2],a.module.depth+40);assert.equal(f.size[1],a.module.height);assert.equal(f.position[0],-8);
+  assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
+  assert.ok(a.x>=3+B.module.depth+18+16-0.01,'A moved right by the filler thickness');
+  assert.ok(estimate(n).lines.some(l=>l.id.startsWith('sheet:')),'filler goes to sheets');
+  const far=applyCornerFillers({...n,modules:[{...a,x:a.x+500},b]});
+  assert.equal(far.modules[0].module.cornerFiller,undefined);
+  assert.equal(parseProject(n).modules[0].module.cornerFiller,'left');
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

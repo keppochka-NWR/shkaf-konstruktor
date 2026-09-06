@@ -43,6 +43,8 @@ export const RULES = {
   lightFrontOffset: 60,
   lightRetailPerM: 3000, // прайс цеха «Подсветка врезная в стойках полного свечения», розница за пог.м
   meshDoorClear: 20, // сетка Лемана за распашной дверью: дверь 16 + зазор 4 перед рамой
+  cornerFillerExtra: 40, // угловая фальш глубже корпуса на 40 мм (правило Макса 06.09.2026)
+  cornerSnap: 60, // расстояние, в пределах которого примыкающий под 90° корпус считается стыком
 } as const;
 export type Section = {
   id: string;
@@ -74,6 +76,8 @@ export type Module = {
   standLight?: boolean;
   /** Ручка распашных фасадов и ящиков — id из каталога handles.ts; по умолчанию UZ 819 128. */
   handleId?: string;
+  /** Угловая фальш-панель: 16 мм ЛДСП снаружи боковины, на всю высоту, глубиной корпус + 40. Ставится автоматически, когда к этой боковине под 90° примыкает другой корпус (applyCornerFillers). */
+  cornerFiller?: "left" | "right";
 };
 export type Part = {
   id: string;
@@ -202,7 +206,7 @@ export function parts(m: Module): Part[] {
       material,
       decor: role === "door" ? m.facadeDecor : m.decor,
       grain: "length",
-      grainAxis: role==='door'||key==='left'||key==='right'||key==='back'||key.endsWith(':divider')||key.includes(':filler:')||key.endsWith(':facade')?1:role==='drawer'&&(key.endsWith(':left')||key.endsWith(':right'))?2:0,
+      grainAxis: role==='door'||key==='left'||key==='right'||key==='back'||key.startsWith('corner-filler')||key.endsWith(':divider')||key.includes(':filler:')||key.endsWith(':facade')?1:role==='drawer'&&(key.endsWith(':left')||key.endsWith(':right'))?2:0,
       edge: material === "board" ? role === "door" ? [2,2,2,2] : [0.4, 0.4, 2, 0.4] : [0, 0, 0, 0],
     });
   }
@@ -242,6 +246,18 @@ export function parts(m: Module): Part[] {
     d,
     t,
   );
+  if (m.cornerFiller) {
+    const fd = d + RULES.cornerFillerExtra;
+    add(
+      "corner-filler:" + m.cornerFiller,
+      "Фальш угловая " + (m.cornerFiller === "left" ? "левая" : "правая"),
+      [t, m.height, fd],
+      [m.cornerFiller === "left" ? -t / 2 : m.width + t / 2, m.height / 2, fd / 2],
+      m.height,
+      fd,
+      t,
+    );
+  }
   if(bottom>0)add(
     "plinth",
     "Цоколь",
@@ -464,6 +480,7 @@ export function validate(m: Module): string[] {
   if(m.hingeSide!==undefined&&!['left','right'].includes(m.hingeSide))errors.push('Выберите сторону петель.');
   if(m.standLight!==undefined&&typeof m.standLight!=='boolean')errors.push('Неверный параметр подсветки.');
   if(m.handleId!==undefined&&!HANDLES.some(h=>h.id===m.handleId))errors.push('Выберите ручку из каталога.');
+  if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
   if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   if (errors.length) return errors;
@@ -716,6 +733,7 @@ export function parseModule(input: unknown): Module {
     ...(x.hingeSide===undefined?{}:{hingeSide:x.hingeSide as Module["hingeSide"]}),
     ...(x.standLight===undefined?{}:{standLight:x.standLight as boolean}),
     ...(x.handleId===undefined?{}:{handleId:x.handleId as string}),
+    ...(x.cornerFiller===undefined?{}:{cornerFiller:x.cornerFiller as Module["cornerFiller"]}),
     sections: x.sections.map((s) => ({
       id: s.id,
       weight: s.weight,

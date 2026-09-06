@@ -66,7 +66,7 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
+  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyCornerFillers,
   type Project,
 } from "./project";
 import {insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
@@ -330,7 +330,9 @@ export default function App() {
     setError("");
     touched.current = true;
   };
-  function commitProject(next: Project) {
+  function commitProject(raw: Project) {
+    // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
+    const next = applyCornerFillers(raw);
     const e = projectErrors(next);
     if (e.length) {
       setError(e[0]);
@@ -966,6 +968,13 @@ export default function App() {
               onClick={() => setExploded((v) => !v)}
             >
               <Move3D size={19} />
+            </button>
+            <button
+              aria-label="Повернуть корпус на 90°"
+              title="Повернуть выбранный корпус на 90°"
+              onClick={() => {try{commitProject(rotateModule(project,placed.id,(((placed.rotation??0)+90)%360) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}
+            >
+              <RotateCcw size={19} />
             </button>
             {m.doors && (
               <button
