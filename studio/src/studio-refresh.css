@@ -59,3 +59,5 @@
 .selected-filling button{display:flex;align-items:center;gap:6px;width:100%;text-align:left}
 
 .selected-filling .number-field{margin-top:12px}
+
+.estimate-filter{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:18px 0;font-size:12px}.estimate-filter label{display:flex;align-items:center;gap:8px}.estimate-filter span{color:#707b87}.estimate-panel tr.price-missing{background:#fff8e9}.estimate-panel .price-reset{display:block;padding:0;margin-top:6px;font-size:10px;color:#496b79;background:none;border:none;text-align:left;cursor:pointer}.estimate-ready{padding:12px;background:#eff7f1;color:#346547;border-radius:8px;font-size:12px}
