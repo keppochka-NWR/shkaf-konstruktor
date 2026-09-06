@@ -523,31 +523,17 @@ export default function App() {
             {saved}
           </span>
         </div>
+        {!presentation && <div className="history" title={`История изменений: шаг ${cursor + 1} из ${history.length}. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z`}>
+          <button title="Шаг назад · Ctrl+Z" aria-label="Отменить" disabled={cursor === 0} onClick={undo}><Undo2 size={16} /><span className="history-label">Назад</span></button>
+          <span className="history-step" aria-live="polite">{cursor + 1}/{history.length}</span>
+          <button title="Шаг вперёд · Ctrl+Shift+Z" aria-label="Повторить" disabled={cursor === history.length - 1} onClick={redo}><span className="history-label">Вперёд</span><Redo2 size={16} /></button>
+        </div>}
         <div className="header-actions">
           <button className="outline presentation-trigger" onClick={()=>changePresentation(!presentation)}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
           <button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
-          <div className="history" title={`История изменений: шаг ${cursor + 1} из ${history.length}. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z`}>
-            <button
-              title="Шаг назад · Ctrl+Z"
-              aria-label="Отменить"
-              disabled={cursor === 0}
-              onClick={undo}
-            >
-              <Undo2 size={18} /><span className="history-label">Назад</span>
-            </button>
-            <span className="history-step" aria-live="polite">{cursor + 1}/{history.length}</span>
-            <button
-              title="Шаг вперёд · Ctrl+Shift+Z"
-              aria-label="Повторить"
-              disabled={cursor === history.length - 1}
-              onClick={redo}
-            >
-              <span className="history-label">Вперёд</span><Redo2 size={18} />
-            </button>
-          </div>
           <button
             className="quiet"
             aria-label="Открыть"
