@@ -634,6 +634,7 @@ export function Scene(p: Props) {
       p.arrangement.find(a=>a.id===p.activeId)?.rotation,
     ],
   );
+  useEffect(()=>{const action=p.presentation||p.mode==='orbit'?'Перетаскивание — поворот вида':p.mode==='fill'?'Перетаскивайте полки и ящики по высоте, перегородки по ширине':p.moveAll?'Перетаскивание корпуса перемещает всю композицию':'Перетаскивайте корпуса для расстановки';host.current?.querySelector('canvas')?.setAttribute('aria-label','3D-модель мебели. '+action+'. Колесо — масштаб.');},[p.mode,p.moveAll,p.presentation]);
   return (
     <div className="scene" ref={host} data-testid="scene">
       {error && (
