@@ -1,4 +1,4 @@
-import {CURRENT_PROJECT,persistProject} from './projectStorage';
+import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {RoomObstacles} from './RoomObstacles';
 import {NewProjectPanel} from './NewProjectPanel';
 import {MEASUREMENT_RULES,nicheSize} from './measurement';
@@ -161,15 +161,17 @@ function Counter({
 }
 export default function App() {
   const [startup] = useState(() => {
-    let original:string|null=null;
+    let original:string|null=null,currentRaw:string|null=null;
     try {
+      currentRaw=localStorage.getItem(KEY);
       const s = original =
-        localStorage.getItem(KEY) || localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1");
+        currentRaw || localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1");
       return {
         model: s ? parseProject(JSON.parse(s)) : newProject(),
         error: "",
         damaged:undefined as string|undefined,
         storageUnavailable:false,
+        currentRaw,
       };
     } catch {
       return {
@@ -178,12 +180,14 @@ export default function App() {
           "Сохранённый проект не удалось прочитать. Открыт пример; перед автосохранением исходник будет помещён в резервную копию.",
         damaged:original??undefined,
         storageUnavailable:original===null,
+        currentRaw,
       };
     }
   });
   const [history, setHistory] = useState<Project[]>([startup.model]),
     [cursor, setCursor] = useState(0);
   const project = history[cursor];
+  const lastLocalWrite=useRef(startup.currentRaw);
   const currentProject=useRef(project),importSequence=useRef(0);currentProject.current=project;
   const [active, setActive] = useState(project.modules[0].id);
   const placed =
@@ -348,13 +352,11 @@ export default function App() {
     if (!touched.current) return;
     if(startup.storageUnavailable){setSaved("Не сохранено");setError("При запуске не удалось прочитать хранилище. Автосохранение отключено, чтобы не заменить недоступный проект. Скачайте текущую работу и перезагрузите редактор.");return;}
     try {
-      persistProject(localStorage,project,startup.damaged);
+      lastLocalWrite.current=persistProject(localStorage,project,startup.damaged,lastLocalWrite.current);
       setSaved("Сохранено в браузере");
-    } catch {
+    } catch (error) {
       setSaved("Не сохранено");
-      setError(
-        "Хранилище браузера недоступно. Сохраните модуль кнопкой «Скачать».",
-      );
+      setError(error instanceof ProjectStorageConflict?error.message:"Хранилище браузера недоступно. Сохраните модуль кнопкой «Скачать».");
     }
   }, [project]);
   useEffect(() => {
@@ -849,7 +851,7 @@ export default function App() {
             <div className="error-banner" role="alert">
               <Info size={20} />
               <div>
-                <strong>Изменение не применено</strong>
+                <strong>{saved==="Не сохранено"?"Текущий вариант не сохранён":"Изменение не применено"}</strong>
                 <p>{error}</p>
               </div>
               <button

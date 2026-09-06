@@ -405,7 +405,7 @@ test('new module placement searches around measured obstacles and respects their
 });
 
 
-import {persistProject,CURRENT_PROJECT,DAMAGED_PROJECT} from '../src/projectStorage';
+import {persistProject,ProjectStorageConflict,CURRENT_PROJECT,DAMAGED_PROJECT} from '../src/projectStorage';
 test('autosave preserves a damaged source before replacing it, including failure and older backups',()=>{
  const original='broken source',data=new Map([[CURRENT_PROJECT,original],[DAMAGED_PROJECT,'older damaged source']]),order:string[]=[],p=newProject();
  const storage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{order.push(key);data.set(key,value);}};
@@ -420,4 +420,12 @@ test('room reductions identify the measured object or opening that no longer fit
  const narrow=structuredClone(p);narrow.room.width=2000;assert.match(projectErrors(narrow)[0],/Проём 1/);assert.throws(()=>parseProject(narrow),/Проём 1/);assert.equal(p.room.width,4000);
  const invalid=structuredClone(p);invalid.room.openings![0].id='';assert.throws(()=>parseProject(invalid),/Проём 1/);
  p.room.openings=[];p.room.obstacles=[{id:'column',name:'Колонна у входа',type:'column',x:1800,z:0,y:0,width:300,depth:300,height:2700}];p.room.width=2000;assert.match(projectErrors(p)[0],/Колонна у входа/);
+});
+
+
+test('autosave rejects a stale browser tab before writing the project or damaged backups',()=>{
+ const p=newProject(),data=new Map<string,string>(),writes:string[]=[];const storage={getItem:(k:string)=>data.get(k)??null,setItem:(k:string,v:string)=>{writes.push(k);data.set(k,v);}};
+ const original=persistProject(storage,p,undefined,null),a=structuredClone(p);a.modules[0].module.name='Новый вариант';const saved=persistProject(storage,a,undefined,original);assert.equal(data.get(CURRENT_PROJECT),saved);
+ writes.length=0;assert.throws(()=>persistProject(storage,p,'damaged',original),ProjectStorageConflict);assert.equal(writes.length,0);assert.equal(data.get(CURRENT_PROJECT),saved);assert.equal(data.has(DAMAGED_PROJECT),false);
+ data.delete(CURRENT_PROJECT);assert.throws(()=>persistProject(storage,p,undefined,saved),ProjectStorageConflict);assert.equal(writes.length,0);
 });
