@@ -1098,6 +1098,7 @@ export default function App() {
                     <span />
                   </button>
                 </div>
+                {project.modules.length>1&&<details className="measurement-fields"><summary>Фасады всей композиции</summary><p className="field-note">Сохраняются материалы каждого корпуса. Детали, фальши и смета пересчитаются; отмена возвращает всё одним шагом.</p>{[true,false].map(enabled=><button key={String(enabled)} className="text-action" disabled={project.modules.every(a=>a.module.doors===enabled)} onClick={()=>{if(commitProject({...project,modules:project.modules.map(a=>({...a,module:{...a.module,doors:enabled}}))})){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(false);}}}>{enabled?'Добавить фасады всем корпусам':'Убрать фасады у всех корпусов'}</button>)}</details>}
                 {m.doors && (
                   <button
                     className="text-action"
