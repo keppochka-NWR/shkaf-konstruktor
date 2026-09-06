@@ -838,9 +838,10 @@ export default function App() {
                   modify((n) => setShelfGap(n, selectedId, index, v)),
                 );
             }}
-            onPartSelect={(sid, pid) => {
+            onPartSelect={(sid, pid,mid=placed.id) => {
+              setActive(mid);
               chooseSection(sid);
-              setSelectedPart({mid:placed.id,sid,pid});
+              setSelectedPart({mid,sid,pid});
               if(pid.includes(":shelf:")||pid.includes(":drawer:"))setMode("fill");
               if (pid.includes(":drawer:")) {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
