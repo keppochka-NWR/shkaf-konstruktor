@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
-import {newProject} from '../src/project';
+import {newProject,parseProject} from '../src/project';
+import {parts} from '../src/model';
 
 test('every catalog decor has a purchase price from explicit list or Lamarty tier',()=>{
   assert.equal(catalog.length,133);
@@ -33,6 +34,20 @@ test('hidden slides use workshop purchase of DTC/Unihopper and unknown lengths s
   const known=e.lines.find(l=>l.id==='slide:gtv0fpo:300')!,unknown=e.lines.find(l=>l.id==='slide:gtv0fpo:250')!;
   assert.equal(known.unitPrice,1040);assert.match(known.source,/DTC F10D300H/);
   assert.equal(unknown.unitPrice,null);assert.equal(e.retail,null);
+});
+
+test('stand lighting adds LED strips per stand face and a retail line on top of the markup',()=>{
+  const p=newProject(),m=p.modules[0].module;
+  const base=estimate(p);assert.ok(!parts(m).some(x=>x.role==='light'));
+  m.standLight=true;
+  const strips=parts(m).filter(x=>x.role==='light');
+  assert.equal(strips.length,2*m.sections.length);
+  const h=m.height-(m.plinthHeight??80)-2*16;assert.ok(strips.every(s=>Math.abs(s.length-h)<0.01&&s.material==='metal'));
+  const e=estimate(p),line=e.lines.find(l=>l.id==='light-stand')!;
+  assert.equal(line.retail,true);assert.equal(line.unitPrice,3000);assert.ok(Math.abs(line.quantity-strips.length*h/1000)<0.01);
+  assert.equal(e.knownCost,base.knownCost);
+  assert.equal(e.retail,base.retail!+Math.round(line.quantity*3000));
+  assert.deepEqual(parseProject(p).modules[0].module.standLight,true);
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

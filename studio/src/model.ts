@@ -34,6 +34,11 @@ export const RULES = {
   faceGap: 2,
   doorMax: 600,
   drawerFiller: 16,
+  // Подсветка в стойках: врезной LED-профиль (LR39 15×6, Мега-Трейд) — условная геометрия для сцены и метража.
+  lightProfileW: 15,
+  lightProfileT: 3,
+  lightFrontOffset: 60,
+  lightRetailPerM: 3000, // прайс цеха «Подсветка врезная в стойках полного свечения», розница за пог.м
 } as const;
 export type Section = {
   id: string;
@@ -61,6 +66,8 @@ export type Module = {
   grooveDepth?: number;
   hingeSide?: "left" | "right";
   plinthHeight?: number;
+  /** Подсветка врезная в стойках полного свечения: LED-профиль на внутренних гранях боковин и перегородок, на всю высоту проёма. Розница 3000 ₽/пог.м поверх коэффициента (прайс цеха). */
+  standLight?: boolean;
 };
 export type Part = {
   id: string;
@@ -73,7 +80,7 @@ export type Part = {
   thickness: number;
   material: "board" | "hdf" | "metal";
   decor: string;
-  role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge";
+  role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge" | "light";
   hinge?: "left" | "right";
   grain: "length";
   grainAxis: 0 | 1 | 2;
@@ -250,6 +257,20 @@ export function parts(m: Module): Part[] {
         "body",
         s.id,
       );
+    if (m.standLight)
+      for (const side of ["left", "right"] as const)
+        add(
+          `${s.id}:light:${side}`,
+          "Подсветка LED в стойке",
+          [RULES.lightProfileT, h, RULES.lightProfileW],
+          [side === "left" ? b.x + RULES.lightProfileT / 2 : b.x + b.width - RULES.lightProfileT / 2, b.bottom + h / 2, d - RULES.lightFrontOffset],
+          h,
+          RULES.lightProfileW,
+          RULES.lightProfileT,
+          "light",
+          s.id,
+          "metal",
+        );
     s.shelves.forEach((f, j) =>
       add(
         `${s.id}:shelf:${j}`,
@@ -411,6 +432,7 @@ export function validate(m: Module): string[] {
   }
   if (m.backType!==undefined && !["nailed","groove","board","none"].includes(m.backType)) errors.push("Выберите допустимый тип задней стенки.");
   if(m.hingeSide!==undefined&&!['left','right'].includes(m.hingeSide))errors.push('Выберите сторону петель.');
+  if(m.standLight!==undefined&&typeof m.standLight!=='boolean')errors.push('Неверный параметр подсветки.');
   if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   if (errors.length) return errors;
@@ -642,6 +664,7 @@ export function parseModule(input: unknown): Module {
     ...(x.grooveDepth===undefined?{}:{grooveDepth:x.grooveDepth as number}),
     ...(x.plinthHeight===undefined?{}:{plinthHeight:x.plinthHeight as number}),
     ...(x.hingeSide===undefined?{}:{hingeSide:x.hingeSide as Module["hingeSide"]}),
+    ...(x.standLight===undefined?{}:{standLight:x.standLight as boolean}),
     sections: x.sections.map((s) => ({
       id: s.id,
       weight: s.weight,

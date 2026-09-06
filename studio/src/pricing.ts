@@ -3,7 +3,7 @@ import {nest,type Sheet} from './exports';
 import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
 export type PriceSettings={markup:number;overrides:Record<string,number>};
-export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string};
+export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
 // Явные цены по ходовым декорам — прайс Победы (совпадает с прайсом Lamarty «Спец» 01.01.2026).
@@ -42,7 +42,8 @@ export const HARDWARE_KIT={label:'Крепёж и мелочёвка корпу�
 export function hingeCount(height:number,width:number){return (height<=900?2:height<=1600?3:height<=2000?4:5)+(width>450?1:0);}
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const lines:PriceLine[]=[];const settings=p.calculation||{markup:2.2,overrides:{}};
-  function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}lines.push({id,label,quantity,unit,unitPrice:settings.overrides[id]??unitPrice,source:settings.overrides[id]===undefined?source:'Цена в этом проекте'});}
+  // retail=true: розничная позиция прайса цеха, добавляется к цене ПОСЛЕ коэффициента и не входит в себестоимость.
+  function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string,retail=false){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}lines.push({id,label,quantity,unit,unitPrice:settings.overrides[id]??unitPrice,source:settings.overrides[id]===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
   for(const sheet of plan){
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
     const d=decorPrice(sheet.decor);add('sheet:'+sheet.decor,'Lamarty 16 мм · '+sheet.decor,1,'лист',d.price,d.source);
@@ -59,6 +60,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.role==='handle')add('handle128','Ручка 128 мм · UZ 819',1,'шт',100,'Счета ФАМ, 2026');
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
       if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');
+      if(d.role==='light')add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги D25',RULES.rodMountScrews,'шт',null,'Фрагмент цеха: 6 на штангу; закупочную цену уточнить');
@@ -72,15 +74,16 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   }
   add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');add('work','Работа цеха',plan.length,'лист',2500,'База расчёта шкафа');
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
-  const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  return {lines,missing,knownCost,markup:settings.markup,retail:missing.length?null:Math.round(knownCost*settings.markup/100)*100};
+  const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  return {lines,missing,knownCost,retailExtras,markup:settings.markup,retail:missing.length?null:Math.round(knownCost*settings.markup/100)*100+retailExtras};
 }
 
 
 export function estimateCSV(p:Project,result=estimate(p)){
  const rows:(string|number)[][]=[['Проект',p.offer?.customer||'Проект мебели','','','','',''],['Позиция','Количество','Единица','Цена, ₽','Сумма, ₽','Источник','Статус']];
  for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.unitPrice===null?'Уточнить цену':'Учтено']);
- rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  const cell=(v:string|number)=>{let text=typeof v==='number'?String(v).replace('.',','):v;if(typeof v==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
  return '﻿'+rows.map(row=>row.map(cell).join(';')).join('\r\n');
 }

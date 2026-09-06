@@ -231,6 +231,7 @@ export function Scene(p: Props) {
             depthWrite: !(state.transparent && (part.role === "body" || part.role === "door")),
             roughness: isMetal ? 0.24 : 0.73,
             metalness: isMetal ? 0.8 : 0,
+            ...(part.role === "light" ? { color: 0xfff1c9, emissive: 0xffd27a, emissiveIntensity: 1.4, metalness: 0, roughness: 0.4 } : {}),
           });
           const texture = catalog.find(
             (c) => c.n === part.decor,

@@ -1184,6 +1184,8 @@ export default function App() {
                 {m.backType==='groove'&&<><NumberField label="Отступ паза от зада" value={m.grooveInset??16} min={8} max={30} onChange={v=>modify(n=>n.grooveInset=v)}/><NumberField label="Глубина паза" value={m.grooveDepth??8} min={4} max={10} onChange={v=>modify(n=>n.grooveDepth=v)}/><p className="field-note">Профиль паза проверяет технолог перед выпуском.</p></>}
                 <label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{[0,80,100,120,150].map(v=><option key={v} value={v}>{v===0?'Без цоколя':v+' мм'}</option>)}</select></label>
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
+                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
+                <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. В смете — {RULES.lightRetailPerM.toLocaleString('ru-RU')} ₽ за пог.м по прайсу цеха, поверх коэффициента.</p>
               </div>
               <div className="property-section specs">
                 <h2>Основа модуля</h2>
