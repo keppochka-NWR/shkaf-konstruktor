@@ -105,3 +105,21 @@ export function snapComposition(p:Project,mid:string,position:{x:number;y:number
   for(const candidate of candidates)if(Math.abs(candidate-position[axis])<distance){next[axis]=candidate;distance=Math.abs(candidate-position[axis]);}next[axis]=Math.round(next[axis]);}
  return next;
 }
+
+export function copyModuleGroup(p:Project,ids:readonly string[]):{project:Project;ids:string[]}{
+ const selected=p.modules.filter(a=>ids.includes(a.id));
+ if(!selected.length)throw Error('Отметьте корпуса для копирования.');
+ if(p.modules.length+selected.length>40)throw Error('После копирования будет больше 40 корпусов. Уменьшите группу.');
+ const errors=projectErrors(p);if(errors.length)throw Error(errors[0]);
+ const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();copy.module.name=(copy.module.name.slice(0,72)+' · копия').slice(0,80);copy.module.sections.forEach(s=>s.id=id());return copy;});
+ const group=mountingCompositionBounds({...p,modules:selected}),occupied=[...p.modules.map(bounds),...(p.room.obstacles||[]).map(obstacleBounds)];
+ const xs=[group.x+group.w,0,...occupied.flatMap(b=>[b.x+b.w,b.x-group.w,b.x]),p.room.width-group.w];
+ const zs=[group.z,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-group.d,b.z]),p.room.depth-group.d];
+ for(const z of [...new Set(zs)])for(const x of [...new Set(xs)]){
+  const dx=x-group.x,dz=z-group.z,next=copies.map(a=>({...a,x:a.x+dx,z:a.z+dz})),bb=next.map(bounds);
+  if(bb.some(b=>b.x<0||b.z<0||b.x+b.w>p.room.width||b.z+b.d>p.room.depth||b.y+b.h>p.room.height||occupied.some(o=>overlap(b,o))))continue;
+  const project={...p,modules:[...p.modules,...next]};
+  if(!projectErrors(project).length)return {project,ids:next.map(a=>a.id)};
+ }
+ throw Error('Для копии группы не найдено свободного места. Освободите место или измените замер помещения. Исходные корпуса сохранены.');
+}

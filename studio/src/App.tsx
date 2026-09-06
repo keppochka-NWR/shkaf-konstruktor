@@ -63,7 +63,7 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
+  appendModule, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
   type Project,
 } from "./project";
 import {insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
@@ -692,7 +692,7 @@ export default function App() {
             </div>
 <label className="snap-control"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
 <label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);if(e.target.checked)setGroupIds([]);setMode('move');}}/> Двигать всю композицию</label>
-            {project.modules.length>1&&<details className="move-group"><summary>Двигать группу{liveGroupIds.length?' · '+liveGroupIds.length:''}</summary><p className="field-note">Отметьте корпуса и тяните один из отмеченных. Остальные корпуса двигаются отдельно.</p><div className="move-group-list">{project.modules.map((a,i)=><label key={a.id}><input type="checkbox" aria-label={'В группу: '+(i+1)+'. '+a.module.name} checked={liveGroupIds.includes(a.id)} onChange={e=>{setGroupIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id));setMoveAll(false);setMode('move');}}/><span>{i+1}. {a.module.name}</span></label>)}</div><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>setGroupIds([])}>Снять группу</button></details>}
+            {project.modules.length>1&&<details className="move-group"><summary>Двигать группу{liveGroupIds.length?' · '+liveGroupIds.length:''}</summary><p className="field-note">Отметьте корпуса и тяните один из отмеченных. Остальные корпуса двигаются отдельно.</p><div className="move-group-list">{project.modules.map((a,i)=><label key={a.id}><input type="checkbox" aria-label={'В группу: '+(i+1)+'. '+a.module.name} checked={liveGroupIds.includes(a.id)} onChange={e=>{setGroupIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id));setMoveAll(false);setMode('move');}}/><span>{i+1}. {a.module.name}</span></label>)}</div><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>{try{const result=copyModuleGroup(project,liveGroupIds);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);selectModule(result.ids[0]);setMode('move');}}catch(e){setError(e instanceof Error?e.message:'Не удалось скопировать группу.');}}}>Копировать группу</button><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>setGroupIds([])}>Снять группу</button></details>}
             <button className="text-action" onClick={() => addModule(true)}>
               <Copy size={14} /> Копировать выбранный
             </button>

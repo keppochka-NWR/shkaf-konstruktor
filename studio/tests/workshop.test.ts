@@ -1,3 +1,4 @@
+import {copyModuleGroup} from '../src/project';
 import {shelfInsertionHeight} from '../src/model';
 import {insertedPartId} from '../src/operations';
 import {details} from '../src/exports';
@@ -349,4 +350,21 @@ test('group snapping uses its own bounds and unselected neighbour edges',()=>{
  assert.equal(snapComposition(p,a.id,{x:8,y:0,z:30},35,ids).x,0);
  assert.equal(snapComposition(p,a.id,{x:990,y:0,z:30},35,ids).x,1000);
  const collision=moveComposition(p,a.id,{x:1600,y:0,z:30},ids);assert.ok(projectErrors(collision).length>0);
+});
+
+test('group copies preserve upper placement and settings with independent identities',()=>{
+ const base=appendModule(newProject(),initialModule()),p=addUpperModule(base,base.modules[0].id),source=[p.modules[0],p.modules.at(-1)!],before=JSON.stringify(p);
+ const result=copyModuleGroup(p,source.map(a=>a.id)),copies=result.project.modules.filter(a=>result.ids.includes(a.id));
+ assert.equal(copies.length,2);assert.equal(result.project.modules.length,p.modules.length+2);assert.equal(JSON.stringify(p),before);
+ const dx=copies[0].x-source[0].x,dz=copies[0].z-source[0].z;
+ for(let i=0;i<2;i++){assert.equal(copies[i].x-source[i].x,dx);assert.equal(copies[i].z-source[i].z,dz);assert.equal(copies[i].y,source[i].y);assert.equal(copies[i].module.decor,source[i].module.decor);assert.notEqual(copies[i].id,source[i].id);assert.notEqual(copies[i].module.sections[0].id,source[i].module.sections[0].id);}
+ assert.deepEqual(projectErrors(result.project),[]);
+ copies[0].module.sections[0].shelves.push(0.3);assert.equal(JSON.stringify(p),before);
+});
+
+test('group copy failure leaves a full room untouched',()=>{
+ const p=newProject();p.room.width=600;p.room.depth=621;p.modules[0].x=0;p.modules[0].z=3;
+ assert.deepEqual(projectErrors(p),[]);const before=JSON.stringify(p);
+ assert.throws(()=>copyModuleGroup(p,[p.modules[0].id]),/не найдено свободного места/);
+ assert.equal(JSON.stringify(p),before);assert.throws(()=>copyModuleGroup(p,[]),/Отметьте корпуса/);
 });
