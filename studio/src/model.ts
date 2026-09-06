@@ -21,6 +21,7 @@ export const RULES = {
   drawerSideGap: 13,
   drawerFrontGap: 3,
   rodDiameter: 25,
+  rodMountScrews: 6, // Штанга 25мм.fr3d: два фланца, по три самореза 3,5×16.
   rodTopOffset: 70,
   rodMinClear: 900,
   shelfMinClear: 80,

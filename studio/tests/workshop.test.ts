@@ -5,7 +5,7 @@ import {closedModuleBounds,compositionBounds,snapComposition,newProject,projectE
 import {duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
-import {nest} from '../src/exports';
+import {nest,specificationHTML} from '../src/exports';
 test('900 × 2200 is a hard limit for every physical module',()=>{const m=initialModule();m.width=900;m.height=2200;assert.deepEqual(validate(m),[]);m.width=901;assert.throws(()=>parseModule(m));m.width=900;m.height=2201;assert.throws(()=>parseModule(m));});
 test('every drawer has a board bottom, front and shelf above its group',()=>{const m=initialModule(),s=m.sections[0];s.drawerConfigs=[{slide:'ball',length:300,height:140},{slide:'gtv0fpo',length:300,height:140}];assert.deepEqual(validate(m),[]);const ps=parts(m),cap=ps.find(p=>p.id.endsWith(':drawer-cap'))!;assert.equal(cap.position[1]-8,boxes(m)[0].bottom+drawerStackHeight(s));for(let j=0;j<2;j++){const bottom=ps.find(p=>p.id===`${s.id}:drawer:${j}:bottom`)!;assert.equal(bottom.material,'board');assert.equal(bottom.thickness,16);assert.ok(ps.find(p=>p.id===`${s.id}:drawer:${j}:facade`));}assert.ok(ps.filter(p=>p.id.includes(':drawer:')).every(p=>p.position[2]+p.size[2]/2<m.depth+2),'internal handles clear the closed door');});
 test('grooved backs reduce usable depth and never select a quarter rebate',()=>{const m=initialModule();m.backType='groove';m.grooveInset=16;m.grooveDepth=8;assert.deepEqual(validate(m),[]);assert.equal(drawerConfig(m,m.sections[0],0).length,500);const back=parts(m).find(p=>p.id==='back')!;assert.equal(back.size[0],583);assert.equal(back.position[2],17.5);assert.throws(()=>parseModule({...m,backType:'quarter'}));});
@@ -184,4 +184,14 @@ test('copy shelf selects the inserted shelf and a full section cannot lose its s
  assert.deepEqual(projectErrors(result.project),[]);assert.equal(next.shelves.length,3);assert.equal(result.partId,s.id+':shelf:1');assert.ok(next.shelves[1]>.25&&next.shelves[1]<.75);assert.equal(JSON.stringify(p),before);
  assert.throws(()=>duplicatePart(p,a.id,s.id,'left'));
  s.drawers=5;s.shelves=[];const full=JSON.stringify(p);assert.throws(()=>duplicatePart(p,a.id,s.id,s.id+':drawer:0:facade'));assert.equal(JSON.stringify(p),full);
+});
+
+
+test('round rod mounting screws enter estimate and specification without affecting pantographs',()=>{
+ const p=newProject(),m=p.modules[0].module;m.sections=[section()];m.sections[0].rod=true;
+ const two=appendModule(p,m),pantograph=structuredClone(m);pantograph.sections[0].rod=false;pantograph.sections[0].pantograph=true;
+ const n=appendModule(two,pantograph),e=estimate(n),line=e.lines.find(l=>l.id==='screw35x16-rod')!;
+ assert.deepEqual(projectErrors(n),[]);assert.equal(line.quantity,12);assert.equal(line.unitPrice,null);assert.equal(e.lines.find(l=>l.id==='flange25')!.quantity,4);assert.ok(e.missing.includes(line));
+ n.calculation={markup:2.2,overrides:{'screw35x16-rod':3}};assert.equal(estimate(n).lines.find(l=>l.id===line.id)!.unitPrice,3);
+ assert.equal((specificationHTML(n).match(/саморезы 3,5×16 — 6 шт/g)||[]).length,2);
 });

@@ -1,4 +1,4 @@
-import {parts,drawerConfig} from './model';
+import {parts,drawerConfig,RULES} from './model';
 import {nest,type Sheet} from './exports';
 import type {Project} from './project';
 export type PriceSettings={markup:number;overrides:Record<string,number>};
@@ -24,6 +24,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.role==='rod'&&!d.id.includes('pantograph'))add('rod25','Штанга D25',d.length/1000,'м',300,'База фурнитуры цеха');
     }
     for(const s of a.module.sections){
+      if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги D25',RULES.rodMountScrews,'шт',null,'Фрагмент цеха: 6 на штангу; закупочную цену уточнить');
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');
       for(let j=0;j<s.drawers;j++){const c=drawerConfig(a.module,s,j);add('slide:'+c.slide+':'+c.length,(c.slide==='ball'?'GTV Versalite':'GTV 0FPO')+' · '+c.length+' мм',1,'компл',c.slide==='ball'?ball[c.length]??null:null,'Счета ФАМ; отсутствующие размеры требуют цены');}
     }
