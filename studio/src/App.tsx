@@ -59,7 +59,7 @@ import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { decorPrice } from "./pricing";
-import { HANDLES, DEFAULT_HANDLE } from "./handles";
+import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
@@ -297,7 +297,7 @@ export default function App() {
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
     [modal, setModal] = useState<
-      "materials" | "parts" | "help" | "output" | "cloud" | "render" | "library" | "new" | null
+      "materials" | "handles" | "parts" | "help" | "output" | "cloud" | "render" | "library" | "new" | null
     >(null),
     [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor" | "drawerFacadeDecor">(
       "decor",
@@ -880,6 +880,7 @@ export default function App() {
                 setDrawerIndex(Number(pid.split(":drawer:")[1].split(":")[0]));
               }
             }}
+            onHandleClick={(mid)=>{setActive(mid);setModal("handles");}}
             selectedPart={!presentation&&selectedPart?.mid===placed.id?selectedPart.pid:undefined}
             selected={presentation?'':selectedId}
             onSelect={chooseSection}
@@ -1164,8 +1165,13 @@ export default function App() {
                     Материал фасадов: {m.facadeDecor} <ChevronDown size={13} />
                   </button>
                 )}
+                {m.doors && (
+                  <button className="text-action" onClick={() => setModal("handles")}>
+                    Ручка: {handleById(m.handleId).label} <ChevronDown size={13} />
+                  </button>
+                )}
               </div>
-              {m.sections.some(s=>s.drawers>0)&&<div className="property-section"><h2>Фасады ящиков</h2><button className="text-action" onClick={()=>{setMaterialTarget('drawerFacadeDecor');setModal('materials');}}>Материал ящиков: {m.drawerFacadeDecor??m.facadeDecor}<ChevronDown size={13}/></button>{m.drawerFacadeDecor&&<button className="text-action" onClick={()=>modify(n=>delete n.drawerFacadeDecor)}>Как у распашных фасадов</button>}</div>}
+              {m.sections.some(s=>s.drawers>0)&&<div className="property-section"><h2>Фасады ящиков</h2><button className="text-action" onClick={()=>{setMaterialTarget('drawerFacadeDecor');setModal('materials');}}>Материал ящиков: {m.drawerFacadeDecor??m.facadeDecor}<ChevronDown size={13}/></button>{m.drawerFacadeDecor&&<button className="text-action" onClick={()=>modify(n=>delete n.drawerFacadeDecor)}>Как у распашных фасадов</button>}{!m.doors&&<button className="text-action" onClick={()=>setModal('handles')}>Ручка: {handleById(m.handleId).label}<ChevronDown size={13}/></button>}</div>}
               <div className="property-section">
                 <h2>Положение в помещении</h2>
                 <button className="outline" onClick={()=>{try{if(commitProject(mirrorModule(project,active))){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>Зеркально отразить наполнение</button><p className="field-note">Меняет левую и правую секции местами и сторону петель. Размеры и положение корпуса сохраняются.</p>
@@ -1207,12 +1213,13 @@ export default function App() {
                 {m.backType==='none'&&<p className="field-note">Корпус без задней стенки: крепление к стене и жёсткость проверяет технолог.</p>}
                 {m.backType==='board'&&<p className="field-note">ЛДСП 16 мм в цвет корпуса, между боковинами, дном и крышей. Уменьшает полезную глубину на 17 мм. Крепёж уточняет технолог.</p>}
                 {m.backType==='groove'&&<><NumberField label="Отступ паза от зада" value={m.grooveInset??16} min={8} max={30} onChange={v=>modify(n=>n.grooveInset=v)}/><NumberField label="Глубина паза" value={m.grooveDepth??8} min={4} max={10} onChange={v=>modify(n=>n.grooveDepth=v)}/><p className="field-note">Профиль паза проверяет технолог перед выпуском.</p></>}
-                <label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{[0,80,100,120,150].map(v=><option key={v} value={v}>{v===0?'Без цоколя':v+' мм'}</option>)}</select></label>
+                <label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{plinth(m)===0&&<option value={0}>Без цоколя · антресоль</option>}{[80,100,120,150].map(v=><option key={v} value={v}>{v} мм</option>)}</select></label>
+                <p className="field-note">Вариант без цоколя (каркас на регулируемых опорах, подъём 30 мм, накладное дно) пока не делаем: нижние корпуса только на цоколе.</p>
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
                 <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. В смете — {RULES.lightRetailPerM.toLocaleString('ru-RU')} ₽ за пог.м по прайсу цеха, поверх коэффициента.</p>
-                <label className="hardware-field">Ручка фасадов и ящиков<select aria-label="Ручка" value={m.handleId??DEFAULT_HANDLE} onChange={e=>modify(n=>{if(e.target.value===DEFAULT_HANDLE)delete n.handleId;else n.handleId=e.target.value;})}><optgroup label="Закупка цеха">{HANDLES.filter(h=>h.vendor==='workshop').map(h=><option key={h.id} value={h.id}>{h.label} · {h.price} ₽</option>)}</optgroup><optgroup label="Лемана Про · выбор клиента, розница">{HANDLES.filter(h=>h.vendor==='lemana').sort((a,b)=>a.len-b.len||a.price-b.price).map(h=><option key={h.id} value={h.id}>{h.label} · {h.price} ₽ · арт. {h.art}</option>)}</optgroup></select></label>
-                <p className="field-note">Одна ручка на распашной фасад и на каждый ящик с ручкой. Ящики push-to-open остаются без ручки.</p>
+                <button className="text-action" onClick={()=>setModal('handles')}>Ручка: {handleById(m.handleId).label} <ChevronDown size={13}/></button>
+                <p className="field-note">Ручку можно выбрать и кликом по ней в 3D. Одна на распашной фасад и на каждый ящик с ручкой; push-to-open без ручки.</p>
               </div>
               <div className="property-section specs">
                 <h2>Основа модуля</h2>
@@ -1516,6 +1523,8 @@ export default function App() {
                     ? "Документы проекта"
                     : modal === "materials"
                       ? "Материалы Lamarty"
+                      : modal === "handles"
+                      ? "Ручка фасадов и ящиков"
                       : modal === "parts"
                         ? "Детали модуля"
                         : "Несколько простых действий"}
@@ -1583,6 +1592,27 @@ export default function App() {
                         {materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n) && <Check size={15} />}
                       </button>
                     ))}
+                </div>
+              </>
+            ) : modal === "handles" ? (
+              <>
+                <p className="field-note">Корпус «{m.name}». Одна ручка на распашной фасад и на каждый ящик с ручкой; цена — в смете. Ручка длиннее фасада не применится.</p>
+                <label className="hardware-field">Применить<select aria-label="К каким корпусам применить ручку" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label>
+                <label className="search"><Search size={18} /><input autoFocus placeholder="Найти ручку: 128, чёрный, HEXA…" aria-label="Найти ручку" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+                <div className="handle-list">
+                  {(["workshop","lemana"] as const).map(vendor=>{
+                    const items=HANDLES.filter(h=>h.vendor===vendor&&(h.label+' '+h.len+' '+(h.art??'')).toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.len-b.len||a.price-b.price);
+                    if(!items.length)return null;
+                    return <div key={vendor}><h3>{vendor==='workshop'?'Закупка цеха':'Лемана Про · выбор клиента, розница'}</h3>{items.map(h=>{
+                      const current=(m.handleId??DEFAULT_HANDLE)===h.id;
+                      return <button key={h.id} className="handle-item" aria-pressed={current} onClick={()=>{
+                        if(materialScope==='group'&&!liveGroupIds.length){setError('Сначала отметьте корпуса в группе.');return;}
+                        const value=h.id===DEFAULT_HANDLE?undefined:h.id;
+                        const ok=materialScope==='active'?modify(n=>{if(value===undefined)delete n.handleId;else n.handleId=value;}):commitProject({...project,modules:project.modules.map(a=>materialScope==='all'||liveGroupIds.includes(a.id)?({...a,module:{...a.module,...(value===undefined?{handleId:undefined}:{handleId:value})}}):a)});
+                        if(!ok)return;setMaterialScope('active');setModal(null);setSearch('');
+                      }}><span className="handle-bar" style={{width:Math.min(100,Math.max(14,h.len/12))+'px'}}/><span className="handle-name">{h.label}</span><span className="handle-meta">{h.len} мм · {h.price} ₽{h.art?' · арт. '+h.art:''}</span>{current&&<Check size={15}/>}</button>;
+                    })}</div>;
+                  })}
                 </div>
               </>
             ) : modal === "parts" ? (

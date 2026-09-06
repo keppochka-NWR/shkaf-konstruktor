@@ -31,6 +31,8 @@ type Props = {
   transparent: boolean;
   /** Полупрозрачные фасады: видно наполнение за закрытыми дверями и фасадами ящиков. */
   clearFacades?: boolean;
+  /** Клик по ручке фасада или ящика: открыть выбор ручки корпуса. */
+  onHandleClick?: (mid: string) => void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
@@ -496,6 +498,8 @@ export function Scene(p: Props) {
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
+      // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
+      if(hit.object.userData.role==='handle'&&state.onHandleClick&&!state.presentation){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onHandleClick(a.id);return;}
       const isPart=state.mode==='fill'&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
       const isDivider=state.mode==='fill'&&pid.endsWith(':divider');
       if(state.mode==='fill'&&!isPart&&!isDivider){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}

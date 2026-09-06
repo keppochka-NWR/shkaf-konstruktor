@@ -1096,6 +1096,41 @@ input {
   background-size: cover;
   border: 1px solid #0000000a;
 }
+.handle-list {
+  overflow-y: auto;
+  max-height: 60vh;
+  display: grid;
+  gap: 10px;
+}
+.handle-list h3 {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 8px 0 2px;
+  font-weight: 600;
+}
+.handle-item {
+  display: grid;
+  grid-template-columns: 110px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid #e3e7ec;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+.handle-item:hover { border-color: #4e8a9a; }
+.handle-item[aria-pressed="true"] { border-color: #1d6679; background: #eef6f7; }
+.handle-item .handle-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #7b8a95, #2b3a44);
+  justify-self: start;
+}
+.handle-item .handle-meta { color: #6b7280; font-size: 12px; white-space: nowrap; }
+.handle-item svg { color: #1d6679; }
 .mesh-add {
   display: grid;
   gap: 6px;
