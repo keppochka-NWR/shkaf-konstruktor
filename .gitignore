@@ -11,3 +11,5 @@ server/.studio-deps/
 server/studio-data.db*
 server/studio*.log
 
+
+server/studio-backups/

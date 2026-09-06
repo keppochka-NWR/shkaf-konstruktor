@@ -5,6 +5,9 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent/'.studio-deps'))
 from fastapi.testclient import TestClient
 from studio_app import create_app
+from backup_studio import backup_database
+import sqlite3
+from contextlib import closing
 
 class StudioTests(unittest.TestCase):
     def setUp(self):
@@ -40,6 +43,25 @@ class StudioTests(unittest.TestCase):
                 self.assertEqual(c.get(path).status_code,404,path)
         with self.assertRaises(RuntimeError):
             create_app(Path(self.tmp.name)/'missing.db',{'STUDIO_DEMO':'1'},static_root=root/'missing')
+
+    def test_live_database_backup_preserves_projects_and_versions(self):
+        self.assertEqual(self.a.post('/api/studio/projects',json=self.payload()).status_code,200)
+        self.assertEqual(self.a.post('/api/studio/projects',json=self.payload(1)).status_code,200)
+        source=Path(self.tmp.name)/'test.db'
+        # Hold a WAL connection open to exercise the online SQLite backup path.
+        with closing(sqlite3.connect(source)) as live:
+            live.execute('PRAGMA journal_mode=WAL')
+            result=backup_database(source,Path(self.tmp.name)/'backups')
+            self.assertEqual(result['projects'],1)
+            self.assertEqual(result['revisions'],2)
+            with closing(sqlite3.connect(result['path'])) as copy:
+                self.assertEqual(copy.execute('SELECT revision FROM projects').fetchone()[0],2)
+                self.assertEqual(copy.execute('PRAGMA quick_check').fetchone()[0],'ok')
+            again=backup_database(source,Path(self.tmp.name)/'backups')
+            self.assertNotEqual(result['path'],again['path'])
+            self.assertTrue(Path(result['path']).exists())
+        with self.assertRaises(FileNotFoundError):
+            backup_database(Path(self.tmp.name)/'missing.db',Path(self.tmp.name)/'backups')
 
     def test_ownership_and_admin(self):
         self.assertEqual(self.a.post('/api/studio/projects',json=self.payload()).status_code,200)
