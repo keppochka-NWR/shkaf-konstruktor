@@ -269,7 +269,7 @@ export function Scene(p: Props) {
           if (isAlu) {
             // Вставка: зеркало, стекло или лакобель внутри рамки.
             const ins = aluInsert(m.alu!.insert), face = aluProfile(m.alu!.profile)?.face ?? 19;
-            const glassMat = new THREE.MeshStandardMaterial(ins?.mirror ? { color: 0xe3e9ee, metalness: 1, roughness: 0.04 } : ins?.id.startsWith("lacobel") ? { color: ins.id.endsWith("black") ? 0x1b1b1b : 0xf4f4f2, metalness: 0.2, roughness: 0.15 } : { color: ins?.id === "satin" ? 0xf1f3f4 : ins?.id.includes("bronze") ? 0x8a6a45 : ins?.id.includes("graphite") ? 0x4a4f55 : 0xdfe8ec, transparent: true, opacity: ins?.id === "satin" ? 0.75 : state.clearFacades ? 0.25 : 0.45, roughness: 0.05, metalness: 0.1, depthWrite: false });
+            const glassMat = new THREE.MeshStandardMaterial(ins?.mirror ? { color: ins.id.includes("bronze") ? 0xb8a58c : ins.id.includes("graphite") ? 0x8d949a : 0xd6dee3, metalness: 0.55, roughness: 0.08 } : ins?.id.startsWith("lacobel") ? { color: ins.id.endsWith("black") ? 0x1b1b1b : 0xf4f4f2, metalness: 0.2, roughness: 0.15 } : { color: ins?.id === "satin" ? 0xf1f3f4 : ins?.id.includes("bronze") ? 0x8a6a45 : ins?.id.includes("graphite") ? 0x4a4f55 : 0xdfe8ec, transparent: true, opacity: ins?.id === "satin" ? 0.75 : state.clearFacades ? 0.25 : 0.45, roughness: 0.05, metalness: 0.1, depthWrite: false });
             const glass = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, part.size[0] - 2 * face + 8), Math.max(1, part.size[1] - 2 * face + 8), 4), glassMat);
             glass.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active };
             mesh.add(glass);
