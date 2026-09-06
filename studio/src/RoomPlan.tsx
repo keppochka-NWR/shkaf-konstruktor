@@ -1,9 +1,9 @@
 import {openingZone,roomWarnings} from './roomWarnings';
 import {useRef,useState} from 'react';
 import {projectErrors,bounds,localToRoom,snapPlacement,type Project,type Opening} from './project';
-type Props={project:Project;active:string;onSelect:(id:string)=>void;onRoom:()=>void;update:(p:Project)=>boolean};
+type Props={snapping:boolean;project:Project;active:string;onSelect:(id:string)=>void;onRoom:()=>void;update:(p:Project)=>boolean};
 type Drag={kind:'module'|'opening';id:string;start:{x:number;y:number};origin:{x:number;z:number};pointerId:number};
-export function RoomPlan({project,active,onSelect,onRoom,update}:Props){
+export function RoomPlan({snapping,project,active,onSelect,onRoom,update}:Props){
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag|null>(null),[preview,setPreview]=useState<Project|null>(null);
   const p=preview||project,r=p.room,margin=Math.max(r.width,r.depth)*0.1;
   const warnings=roomWarnings(p);
@@ -11,7 +11,7 @@ export function RoomPlan({project,active,onSelect,onRoom,update}:Props){
   function point(e:React.PointerEvent){const pt=new DOMPoint(e.clientX,e.clientY),matrix=svg.current?.getScreenCTM();return matrix?pt.matrixTransform(matrix.inverse()):pt;}
   function start(e:React.PointerEvent,kind:Drag['kind'],id:string){if(e.button!==0)return;e.stopPropagation();const a=project.modules.find(a=>a.id===id),o=project.room.openings?.find(o=>o.id===id);const pt=point(e);drag.current={kind,id,start:pt,origin:kind==='module'?{x:a!.x,z:a!.z}:{x:o!.offset,z:0},pointerId:e.pointerId};svg.current?.setPointerCapture(e.pointerId);if(kind==='module')onSelect(id);else onRoom();}
   function move(e:React.PointerEvent){const d=drag.current;if(!d)return;const pt=point(e),n=structuredClone(project);
-    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};Object.assign(a,e.altKey?{x:Math.round(raw.x),y:raw.y,z:Math.round(raw.z)}:snapPlacement(project,d.id,raw));}
+    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};Object.assign(a,!snapping||e.altKey?{x:Math.round(raw.x),y:raw.y,z:Math.round(raw.z)}:snapPlacement(project,d.id,raw));}
     else{const o=n.room.openings!.find(o=>o.id===d.id)!,horizontal=o.wall==='back'||o.wall==='front',length=horizontal?r.width:r.depth;o.offset=Math.max(0,Math.min(length-o.width,Math.round((d.origin.x+(horizontal?pt.x-d.start.x:pt.y-d.start.y))/10)*10));}
     setPreview(n);
   }
@@ -25,6 +25,6 @@ export function RoomPlan({project,active,onSelect,onRoom,update}:Props){
     {r.openings?.map(o=>{const z=openingZone(r,o),hit=warnings.some(w=>w.openingId===o.id);return <rect key={'zone-'+o.id} x={z.x} y={z.z} width={z.w} height={z.d} fill={hit?'#edac43':'#b8cbd6'} fillOpacity={.18} stroke={hit?'#b77514':'#93a8b5'} strokeWidth={5} strokeDasharray="20 14" pointerEvents="none"><title>{o.type==='door'?'Условная зона подхода к двери: 900 мм':'Зона у окна: 100 мм'}</title></rect>;})}
     {r.openings?.map(opening)}
     {p.modules.map((a,i)=>{const b=bounds(a),front1=localToRoom(a,0,a.module.depth),front2=localToRoom(a,a.module.width,a.module.depth);return <g key={a.id} role="button" tabIndex={0} aria-label={'На плане: '+a.module.name} onPointerDown={e=>start(e,'module',a.id)} onKeyDown={e=>{if(e.key==='Enter')onSelect(a.id);}} style={{cursor:'grab'}}><rect x={b.x} y={b.z} width={b.w} height={b.d} rx={12} fill={a.id===active?'#dce5ff':(a.y??0)>0?'#e4dfd4':'#e6e9e7'} fillOpacity={(a.y??0)>0?.65:1} stroke={problem&&a.id===drag.current?.id?'#c63838':warnings.some(w=>w.moduleId===a.id)?'#b77514':a.id===active?'#325bee':'#87958e'} strokeWidth={a.id===active?14:8} strokeDasharray={(a.y??0)>0?'35 20':undefined}/><line x1={front1.x} y1={front1.z} x2={front2.x} y2={front2.z} stroke={a.id===active?'#325bee':'#6b8072'} strokeWidth={28}/><text x={b.x+b.w/2} y={b.z+b.d/2-25} fontSize={75} textAnchor="middle" fill="#283747" pointerEvents="none">{i+1}</text><text x={b.x+b.w/2} y={b.z+b.d/2+65} fontSize={48} textAnchor="middle" fill="#586776" pointerEvents="none">{a.module.width} × {a.module.depth}</text></g>;})}
-  </svg><div className={"plan-help"+(problem?" invalid":"")} role={problem?"alert":undefined}>{problem||warnings[0]?.message||"Alt — без привязки · Толстая линия — фасад · Пунктир — верхний модуль"}</div></div>;
+  </svg><div className={"plan-help"+(problem?" invalid":"")} role={problem?"alert":undefined}>{problem||warnings[0]?.message||(snapping?"Alt — без привязки · Толстая линия — фасад · Пунктир — верхний модуль":"Привязки отключены · Толстая линия — фасад · Пунктир — верхний модуль")}</div></div>;
 }
 
