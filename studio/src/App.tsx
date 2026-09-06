@@ -192,6 +192,8 @@ export default function App() {
   const [selectedPart,setSelectedPart]=useState<{mid:string;sid:string;pid:string}|null>(null);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
   const canRemove=selectedDetail&&(/:shelf:|:drawer:|:pantograph:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
+  const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.name;
+  const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик целиком':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
   function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   const [snapping,setSnapping]=useState(true);
   const [transparent, setTransparent] = useState(false);
@@ -1135,7 +1137,7 @@ export default function App() {
                   <h2>Секция {idx + 1}</h2>
                   <Columns2 size={17} />
                 </div>
-                {canRemove&&<div className="selected-filling"><span>{selectedDetail.name}</span><button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>Удалить выбранное</button><small>Можно нажать Delete · Ctrl+Z отменит удаление</small></div>}
+                {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span><button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>Можно нажать Delete · Ctrl+Z отменит удаление</small></div>}
                 <NumberField
                   label="Внутренняя ширина"
                   value={Math.round(b.width * 10) / 10}
@@ -1159,10 +1161,6 @@ export default function App() {
                 {s.drawers > 0 && (
                   <div className="drawer-selection">
                     <h3>Настройка ящиков</h3>
-                    <button className="text-action" onClick={()=>{try{commitProject(compactDrawers(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Собрать ящики от дна</button><p className="field-note">Убирает разрывы между ящиками. Порядок снизу вверх, высоты и направляющие сохраняются; полка над блоком перемещается вместе с ним.</p>
-                    <button className="outline full" aria-pressed={drawerPreview} onClick={()=>{setDrawerPreview(!drawerPreview);setOpenDoors(true);setExploded(false);setRoomPlan(false);setView('iso');}}>{drawerPreview?'Задвинуть ящик':'Выдвинуть для просмотра'}</button>
-                    <p className="field-note">Просмотр конструкции. Положение ящика не меняет деталировку.</p>
-                    {s.drawers>1&&<><button className="text-action" onClick={()=>{try{commitProject(applyDrawerSlide(project,placed.id,s.id,Math.min(drawerIndex??0,s.drawers-1)));}catch(e){setError((e as Error).message);}}}>Эти направляющие всем ящикам секции</button><p className="field-note">Копирует тип и длину. Высота и положение каждого ящика сохраняются.</p></>}
                     <div className="drawer-tabs">
                       {Array.from({ length: s.drawers }, (_, j) => (
                         <button
@@ -1174,6 +1172,8 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+                    <button className="outline full" aria-pressed={drawerPreview} onClick={()=>{setDrawerPreview(!drawerPreview);setOpenDoors(true);setExploded(false);setRoomPlan(false);setView('iso');}}>{drawerPreview?'Задвинуть ящик':'Выдвинуть для просмотра'}</button>
+                    <p className="field-note">Просмотр конструкции. Положение ящика не меняет деталировку.</p>
                     {(() => {
                       const j = Math.min(drawerIndex ?? 0, s.drawers - 1),
                         c = drawerConfig(m, s, j);
@@ -1252,6 +1252,10 @@ export default function App() {
                         </>
                       );
                     })()}
+                    <details className="drawer-group-tools"><summary>Весь блок ящиков</summary>
+                    <button className="text-action" onClick={()=>{try{commitProject(compactDrawers(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Собрать ящики от дна</button><p className="field-note">Убирает разрывы между ящиками. Порядок снизу вверх, высоты и направляющие сохраняются; полка над блоком перемещается вместе с ним.</p>
+                    {s.drawers>1&&<><button className="text-action" onClick={()=>{try{commitProject(applyDrawerSlide(project,placed.id,s.id,Math.min(drawerIndex??0,s.drawers-1)));}catch(e){setError((e as Error).message);}}}>Эти направляющие всем ящикам секции</button><p className="field-note">Копирует тип и длину. Высота и положение каждого ящика сохраняются.</p></>}
+                    </details>
                   </div>
                 )}
                 <Counter
