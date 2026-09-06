@@ -1,5 +1,5 @@
 import {NewProjectPanel} from './NewProjectPanel';
-import {nicheSize} from './measurement';
+import {MEASUREMENT_RULES,nicheSize} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useRef } from "react";
 import {
@@ -638,7 +638,7 @@ export default function App() {
               <Ruler size={14} /> Замер помещения
             </button>
           </div>
-          <button className="text-action upper-add" onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
+          <button className="text-action upper-add" title={`Высота до 600 мм; под потолком остаётся ${MEASUREMENT_RULES.ceilingClearance} мм по СТП`} onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
           <div className="library-label">Готовое наполнение</div>
           <button className="text-action upper-add" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
           <div className="presets">

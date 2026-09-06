@@ -73,8 +73,8 @@ test('library transfer validates all modules and assigns independent template ID
 test('upper module inherits cabinet finishes and fits available height without copying filling',()=>{
  const p=newProject(),a=p.modules[0];a.module.height=2200;a.module.decor='Белый';a.module.facadeDecor='Графит';a.module.backType='groove';a.module.grooveInset=20;a.module.hingeSide='right';a.rotation=90;a.x=100;a.z=100;
  const original=structuredClone(p),n=addUpperModule(p,a.id),upper=n.modules[1];
- assert.equal(upper.y,2200);assert.equal(upper.module.height,500);assert.equal(upper.module.plinthHeight,0);assert.equal(upper.rotation,90);assert.equal(upper.x,a.x);assert.equal(upper.z,a.z);
+ assert.equal(upper.y,2200);assert.equal(upper.module.height,470);assert.equal(upper.module.plinthHeight,0);assert.equal(upper.rotation,90);assert.equal(upper.x,a.x);assert.equal(upper.z,a.z);
  for(const k of ['width','depth','decor','facadeDecor','doors','backType','grooveInset','hingeSide'] as const)assert.equal(upper.module[k],a.module[k]);
  assert.equal(upper.module.sections[0].drawers,0);assert.notEqual(upper.module.sections[0].id,a.module.sections[0].id);assert.deepEqual(projectErrors(n),[]);assert.deepEqual(p,original);
- p.room.height=2500;assert.throws(()=>addUpperModule(p,a.id),/хотя бы/);
+ p.room.height=2600;assert.throws(()=>addUpperModule(p,a.id),/монтажного зазора/);p.room.height=2630;assert.equal(addUpperModule(p,a.id).modules[1].module.height,400);
 });
