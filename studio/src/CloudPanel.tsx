@@ -1,3 +1,4 @@
+import {saveFile} from './exports';
 import {backupProject,projectContent} from './projectStorage';
 import {useEffect,useState,useRef} from 'react';
 import {parseProject,type Project} from './project';
@@ -31,6 +32,14 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
     update({...project,cloud:{id,revision:r.revision,owner:user!.email,name:name.trim()||'Проект'}});await reload();setMessage('Проект сохранён. Версия '+r.revision+'.');
   }
   async function load(item:Entry){const r=await api('/projects/'+item.id),p=parseProject(r.data);p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};if(!canApply())return;backupProject(project);if(update(p)){setName(r.name);setItems(previous=>previous.map(entry=>entry.id===item.id?{...entry,name:r.name,revision:r.revision,email:r.email,updated:r.updated}:entry));setMessage('Открыт проект «'+r.name+'».');}}
+  async function downloadSaved(item:Entry){
+    const r=await api('/projects/'+item.id),p=parseProject(r.data);
+    p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};
+    if(!mounted.current)return;
+    const filename=(r.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim()||'Проект')+'.project.json';
+    saveFile(filename,JSON.stringify(p,null,2),'application/json');
+    setMessage('Файл серверной версии '+r.revision+' передан браузеру для скачивания. Рабочий проект не изменён.');
+  }
   async function openRevision(item:Entry,revision:number){
     const r=await api('/projects/'+item.id+'/revisions/'+revision),p=parseProject(r.data);
     p.cloud={id:item.id,revision:r.currentRevision,owner:r.email,name:r.name};
@@ -44,6 +53,6 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
     <div className="cloud-filters">{user.role==='admin'&&<label><input disabled={busy} type="checkbox" checked={all} onChange={e=>setAll(e.target.checked)}/>Все сотрудники</label>}<label><input disabled={busy} type="checkbox" checked={archived} onChange={e=>setArchived(e.target.checked)}/>Архив</label></div>
     <div className="cloud-search"><label className="hardware-field">Найти проект<input type="search" aria-label="Поиск проектов" placeholder="Название или сотрудник" value={query} onChange={e=>setQuery(e.target.value)}/></label><label className="hardware-field">Порядок<select aria-label="Сортировка проектов" value={sort} onChange={e=>setSort(e.target.value)}><option value="recent">Сначала последние</option><option value="name">По названию</option></select></label></div><p className="field-note" role="status">Показано {visibleItems.length} из {items.length}{archived?' · архив':''}</p>
     {history&&<section className="cloud-history"><div className="cloud-user"><strong>История: {history.item.name}</strong><button onClick={()=>setHistory(null)}>Закрыть историю</button></div><p className="field-note">Последние 100 сохранений. Открытие версии меняет рабочий проект; прежние сохранения остаются на сервере.</p>{history.items.map(r=><div className="cloud-revision" key={r.revision}><span><strong>Версия {r.revision}</strong><small>{r.name} · {new Date(r.updated*1000).toLocaleString('ru-RU')}</small></span><button className="outline" disabled={busy} onClick={()=>run(()=>openRevision(history.item,r.revision))}>Открыть версию {r.revision}</button></div>)}</section>}
-    {!items.length&&<p className="field-note">Здесь пока нет проектов.</p>}{!!items.length&&!visibleItems.length&&<p className="field-note">Ничего не найдено. Измените запрос или <button className="text-action" onClick={()=>setQuery('')}>Сбросить поиск</button></p>}{visibleItems.map(item=><article className="cloud-project" key={item.id}><div><strong>{item.name}</strong><small>{item.email} · версия {item.revision} · {new Date(item.updated*1000).toLocaleString('ru-RU')}</small></div><button className="outline" disabled={busy} onClick={()=>run(()=>load(item))}>Открыть проект</button><button className="outline" disabled={busy} onClick={()=>run(async()=>{const r=await api('/projects/'+item.id+'/revisions');setHistory({item,items:r.items});})}>История</button>{item.email===user.email&&<button className="text-action" disabled={busy} onClick={()=>run(async()=>{await api('/projects/'+item.id+'/archive?archived='+!archived,{});await reload();})}>{archived?'Восстановить':'В архив'}</button>}</article>)}
+    {!items.length&&<p className="field-note">Здесь пока нет проектов.</p>}{!!items.length&&!visibleItems.length&&<p className="field-note">Ничего не найдено. Измените запрос или <button className="text-action" onClick={()=>setQuery('')}>Сбросить поиск</button></p>}{visibleItems.map(item=><article className="cloud-project" key={item.id}><div><strong>{item.name}</strong><small>{item.email} · версия {item.revision} · {new Date(item.updated*1000).toLocaleString('ru-RU')}</small></div><button className="outline" disabled={busy} onClick={()=>run(()=>load(item))}>Открыть проект</button><button className="outline" disabled={busy} aria-label={'Скачать сохранённый проект: '+item.name} onClick={()=>run(()=>downloadSaved(item))}>Скачать файл</button><button className="outline" disabled={busy} onClick={()=>run(async()=>{const r=await api('/projects/'+item.id+'/revisions');setHistory({item,items:r.items});})}>История</button>{item.email===user.email&&<button className="text-action" disabled={busy} onClick={()=>run(async()=>{await api('/projects/'+item.id+'/archive?archived='+!archived,{});await reload();})}>{archived?'Восстановить':'В архив'}</button>}</article>)}
   </>}</div>;
 }
