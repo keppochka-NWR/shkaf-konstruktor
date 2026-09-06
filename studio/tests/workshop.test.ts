@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -54,4 +54,15 @@ test('wall distance controls measure the occupied envelope for every rotation an
   assert.throws(()=>setWallDistance(far,a.id,'x',p.room.width-b.w+1));
   assert.throws(()=>setWallDistance(n,a.id,'z',-1));assert.deepEqual(p,original);
  }
+});
+
+test('rotation preserves occupied center, clamps to room walls and never pushes a neighbour',()=>{
+ const p=newProject(),a=p.modules[0];a.module.width=400;a.x=800;a.z=900;
+ const original=structuredClone(p),b=bounds(a);let n=p;
+ for(const r of [90,180,270,0] as const){n=rotateModule(n,a.id,r);const q=bounds(n.modules[0]);assert.ok(Math.abs(q.x+q.w/2-b.x-b.w/2)<.001);assert.ok(Math.abs(q.z+q.d/2-b.z-b.d/2)<.001);assert.deepEqual(projectErrors(n),[]);}
+ assert.deepEqual(p,original);
+ const corner=setWallDistance(setWallDistance(p,a.id,'x',0),a.id,'z',0);const turned=rotateModule(corner,a.id,90),tb=bounds(turned.modules[0]);
+ assert.equal(tb.x,0);assert.ok(tb.z>=0);assert.deepEqual(projectErrors(turned),[]);
+ const paired=appendModule(p,a.module,p.modules[0]);assert.throws(()=>rotateModule(paired,a.id,90),/пересекается/);assert.deepEqual(paired.modules[0],a);
+ const narrow=structuredClone(p);narrow.room.width=500;narrow.modules[0].x=50;assert.throws(()=>rotateModule(narrow,a.id,90),/не помещается/);
 });

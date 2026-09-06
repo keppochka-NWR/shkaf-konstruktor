@@ -75,3 +75,15 @@ export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:n
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }
+
+export function rotateModule(p:Project,mid:string,rotation:0|90|180|270):Project {
+ const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);
+ if(!a||![0,90,180,270].includes(rotation))throw Error('Выберите поворот корпуса.');
+ const before=bounds(a);a.rotation=rotation;const after=bounds(a);
+ if(after.w>p.room.width||after.d>p.room.depth)throw Error('В этом направлении корпус не помещается в комнате.');
+ const x=Math.max(0,Math.min(p.room.width-after.w,before.x+(before.w-after.w)/2));
+ const z=Math.max(0,Math.min(p.room.depth-after.d,before.z+(before.d-after.d)/2));
+ a.x+=x-after.x;a.z+=z-after.z;
+ const error=projectErrors(n)[0];if(error)throw Error(error);
+ return n;
+}
