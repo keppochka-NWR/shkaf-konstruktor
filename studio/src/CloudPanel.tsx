@@ -30,7 +30,7 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
     if(!canApply())return;
     update({...project,cloud:{id,revision:r.revision,owner:user!.email,name:name.trim()||'Проект'}});await reload();setMessage('Проект сохранён. Версия '+r.revision+'.');
   }
-  async function load(item:Entry){const r=await api('/projects/'+item.id),p=parseProject(r.data);p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};if(!canApply())return;backupProject(project);if(update(p)){setName(item.name);setMessage('Открыт проект «'+item.name+'».');}}
+  async function load(item:Entry){const r=await api('/projects/'+item.id),p=parseProject(r.data);p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};if(!canApply())return;backupProject(project);if(update(p)){setName(r.name);setItems(previous=>previous.map(entry=>entry.id===item.id?{...entry,name:r.name,revision:r.revision,email:r.email,updated:r.updated}:entry));setMessage('Открыт проект «'+r.name+'».');}}
   async function openRevision(item:Entry,revision:number){
     const r=await api('/projects/'+item.id+'/revisions/'+revision),p=parseProject(r.data);
     p.cloud={id:item.id,revision:r.currentRevision,owner:r.email,name:r.name};
