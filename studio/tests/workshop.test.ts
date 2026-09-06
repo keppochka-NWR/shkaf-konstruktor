@@ -67,7 +67,7 @@ test('rotation preserves occupied center, clamps to room walls and never pushes 
  const narrow=structuredClone(p);narrow.room.width=500;narrow.modules[0].x=50;assert.throws(()=>rotateModule(narrow,a.id,90),/не помещается/);
 });
 
-import {libraryFile,parseLibraryFile} from '../src/moduleLibraryFile';
+import {LIBRARY_KEY,recoverStoredLibrary,inspectStoredLibrary,libraryFile,parseLibraryFile} from '../src/moduleLibraryFile';
 test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:901}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
 
 test('upper module inherits cabinet finishes and fits available height without copying filling',()=>{
@@ -105,4 +105,25 @@ test('moving the composition preserves contacts, rotations and raised modules at
  }
  assert.deepEqual(n,original);
  assert.throws(()=>setCompositionDistance(n,'x',3900));assert.throws(()=>setCompositionDistance(n,'y',1000));assert.throws(()=>setCompositionDistance(n,'z',NaN));assert.throws(()=>setCompositionDistance(n,'x',-1));assert.deepEqual(n,original);
+});
+
+
+test('stored library reports malformed and duplicate records without silently replacing the source',()=>{
+ const good={id:'a',name:'Рабочий',module:initialModule()};
+ assert.deepEqual(inspectStoredLibrary(null),{items:[],problem:''});assert.equal(inspectStoredLibrary(JSON.stringify([good])).problem,'');
+ const raw=JSON.stringify([good,{...good,id:'b',module:{...good.module,width:901}},good,null]);
+ const result=inspectStoredLibrary(raw);assert.deepEqual(result.items,[good]);assert.match(result.problem,/3/);assert.equal(JSON.parse(raw).length,4);
+ for(const text of ['broken','{}','null']){const result=inspectStoredLibrary(text);assert.equal(result.items.length,0);assert.ok(result.problem);}
+ const many=Array.from({length:31},(_,i)=>({...good,id:String(i)}));assert.equal(inspectStoredLibrary(JSON.stringify(many)).items.length,30);assert.ok(inspectStoredLibrary(JSON.stringify(many)).problem);
+});
+
+
+test('library recovery backs up first and refuses stale or failed storage writes',()=>{
+ const original='broken',data=new Map([[LIBRARY_KEY,original]]),writes:string[]=[];
+ const storage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{writes.push(key);data.set(key,value);}};
+ const backup=recoverStoredLibrary(storage,original,[]);assert.equal(data.get(backup),original);assert.equal(data.get(LIBRARY_KEY),'[]');assert.deepEqual(writes,[backup,LIBRARY_KEY]);
+ assert.throws(()=>recoverStoredLibrary(storage,original,[]),/другом окне/);assert.equal(writes.length,2);
+ data.set(LIBRARY_KEY,original);
+ assert.throws(()=>recoverStoredLibrary({...storage,setItem:()=>{throw Error('quota');}},original,[]));assert.equal(data.get(LIBRARY_KEY),original);
+ assert.throws(()=>recoverStoredLibrary({...storage,setItem:(k,v)=>{if(k===LIBRARY_KEY)throw Error('quota');storage.setItem(k,v);}},original,[]));assert.equal(data.get(LIBRARY_KEY),original);
 });
