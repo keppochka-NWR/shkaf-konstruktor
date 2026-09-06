@@ -76,6 +76,21 @@ export const orders: Record<string, { title: string; note: string; project: Proj
       ],
     },
   },
+  "6-imomkulova": {
+    title: "6785429 Имомкулова Морджоне — угловой кабинет со столом (предварительный проект)",
+    note: "Lamarty, задники ЛХДФ белые. Левая стена: колонна 600 — тумба 600×706×350 на цоколе 80 с дверью и полкой, над ней открытый корпус 600×1722×350 с тремя полками (правая боковина 500 глубиной до стены); стол 1734×750×500 между колонной и угловой секцией без своих опор (Базис: «Стяжка эксц. + шкант фикс 50» на высоте 732); угловая секция 497×513: тумба 706 с полкой и открытый корпус 1690 с тремя полками. Правая стена: два шкафа 800×2412×497 с двумя дверями 2313×397, полка + штанга. Декор в b3d не указан — взят Белый.",
+    project: {
+      version: 3, room: room(3331, 2600, 2700), modules: [
+        place(mod("Тумба левая", 600, 706, 350, "Белый", { plinthHeight: 80, facadeDecor: "Белый", fastening: "eccentric" }, [{ shelves: [0.5] }]), 0, 150),
+        place(mod("Стеллаж левый", 600, 1722, 350, "Белый", { plinthHeight: 0, doors: false, fastening: "eccentric", sidePanels: { right: { height: 1722, depth: 500 } } }, [{ shelves: [0.25, 0.5, 0.75] }]), 0, 150, 706),
+        place(mod("Стол", 1716, 750, 500, "Белый", { doors: false, plinthHeight: 0, bottomType: "none", backType: "none", desk: { sides: "none", apron: 100 } }, [{ shelves: [] }]), 621, 3),
+        place(mod("Тумба угловая", 497, 706, 513, "Белый", { plinthHeight: 80, doors: false, fastening: "eccentric" }, [{ shelves: [0.5] }]), 2337, 3),
+        place(mod("Стеллаж угловой", 497, 1690, 513, "Белый", { plinthHeight: 0, doors: false, fastening: "eccentric" }, [{ shelves: [0.25, 0.5, 0.75] }]), 2337, 3, 706),
+        place(mod("Шкаф 1", 800, 2412, 497, "Белый", { plinthHeight: 80, facadeDecor: "Белый", fastening: "eccentric" }, [{ shelves: [0.85], rod: true }]), 2831, 534, 0, 270),
+        place(mod("Шкаф 2", 800, 2412, 497, "Белый", { plinthHeight: 80, facadeDecor: "Белый", fastening: "eccentric" }, [{ shelves: [0.85], rod: true }]), 2831, 1350, 0, 270),
+      ],
+    },
+  },
 };
 
 if (process.argv[1]?.endsWith("orders.ts")) {

@@ -1,4 +1,4 @@
-import {copyModuleGroup} from '../src/project';
+﻿import {copyModuleGroup} from '../src/project';
 import {shelfInsertionHeight} from '../src/model';
 import {insertedPartId} from '../src/operations';
 import {details} from '../src/exports';
@@ -12,7 +12,7 @@ import {captureSectionFilling,pasteSectionFilling,duplicatePart,moveComposition,
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,estimateCSV,hingeCount} from '../src/pricing';
 import {nest,specificationHTML} from '../src/exports';
-test('1200 × 2200 is a hard limit for every physical module',()=>{const m=initialModule();m.width=1200;m.height=2200;assert.deepEqual(validate(m),[]);m.width=1201;assert.throws(()=>parseModule(m));m.width=900;m.height=2201;assert.throws(()=>parseModule(m));});
+test('1200 × 2500 is a hard limit for every physical module',()=>{const m=initialModule();m.width=1200;m.height=2500;assert.deepEqual(validate(m),[]);m.width=1201;assert.throws(()=>parseModule(m));m.width=900;m.height=2501;assert.throws(()=>parseModule(m));});
 test('every drawer has a board bottom, front and shelf above its group',()=>{const m=initialModule(),s=m.sections[0];s.drawerConfigs=[{slide:'ball',length:300,height:140},{slide:'gtv0fpo',length:300,height:140}];assert.deepEqual(validate(m),[]);const ps=parts(m),cap=ps.find(p=>p.id.endsWith(':drawer-cap'))!;assert.equal(cap.position[1]-8,boxes(m)[0].bottom+drawerStackHeight(s));for(let j=0;j<2;j++){const bottom=ps.find(p=>p.id===`${s.id}:drawer:${j}:bottom`)!;assert.equal(bottom.material,'board');assert.equal(bottom.thickness,16);assert.ok(ps.find(p=>p.id===`${s.id}:drawer:${j}:facade`));}assert.ok(ps.filter(p=>p.id.includes(':drawer:')).every(p=>p.position[2]+p.size[2]/2<m.depth+2),'internal handles clear the closed door');});
 test('grooved backs reduce usable depth and never select a quarter rebate',()=>{const m=initialModule();m.backType='groove';m.grooveInset=16;m.grooveDepth=8;assert.deepEqual(validate(m),[]);assert.equal(drawerConfig(m,m.sections[0],0).length,500);const back=parts(m).find(p=>p.id==='back')!;assert.equal(back.size[0],583);assert.equal(back.position[2],17.5);assert.throws(()=>parseModule({...m,backType:'quarter'}));});
 test('drawer movement creates no overlapping groups',()=>{const p=newProject(),a=p.modules[0],s=a.module.sections[0];const bad=movePart(p,a.id,s.id,`${s.id}:drawer:0:left`,100);assert.ok(projectErrors(bad).some(e=>e.includes('пересекаются')));const good=movePart(p,a.id,s.id,`${s.id}:drawer:1:left`,100);assert.deepEqual(projectErrors(good),[]);assert.equal(drawerStackHeight(good.modules[0].module.sections[0]),460);assert.equal(drawerStackHeight(s),360);});

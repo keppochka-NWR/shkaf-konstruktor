@@ -1,0 +1,242 @@
+{
+ "version": 3,
+ "room": {
+  "width": 3331,
+  "height": 2700,
+  "depth": 2600,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "m19",
+   "x": 21,
+   "z": 150,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Тумба левая",
+    "width": 600,
+    "height": 706,
+    "depth": 350,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": true,
+    "plinthHeight": 80,
+    "fastening": "eccentric",
+    "wallFiller": {
+     "left": {
+      "kind": "edge",
+      "width": 100
+     }
+    },
+    "sections": [
+     {
+      "id": "bd7de030-7c68-48a9-b97a-96d4603f6b91",
+      "weight": 1,
+      "shelves": [
+       0.5
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m20",
+   "x": 0,
+   "z": 150,
+   "y": 706,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Стеллаж левый",
+    "width": 600,
+    "height": 1722,
+    "depth": 350,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "plinthHeight": 0,
+    "sidePanels": {
+     "right": {
+      "height": 1722,
+      "depth": 500
+     }
+    },
+    "fastening": "eccentric",
+    "sections": [
+     {
+      "id": "0692211e-d615-48ea-a9e3-ee17db4d030a",
+      "weight": 1,
+      "shelves": [
+       0.25,
+       0.5,
+       0.75
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m21",
+   "x": 621,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Стол",
+    "width": 1716,
+    "height": 750,
+    "depth": 500,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "backType": "none",
+    "plinthHeight": 0,
+    "bottomType": "none",
+    "desk": {
+     "sides": "none",
+     "apron": 100
+    },
+    "sections": [
+     {
+      "id": "39c3259c-f77b-4d33-bb17-31da53bca01c",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m22",
+   "x": 2337,
+   "z": 3,
+   "y": 0,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Тумба угловая",
+    "width": 497,
+    "height": 706,
+    "depth": 513,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "plinthHeight": 80,
+    "fastening": "eccentric",
+    "sections": [
+     {
+      "id": "44508c27-5720-4189-80c5-a583343ee755",
+      "weight": 1,
+      "shelves": [
+       0.5
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m23",
+   "x": 2337,
+   "z": 3,
+   "y": 706,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Стеллаж угловой",
+    "width": 497,
+    "height": 1690,
+    "depth": 513,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": false,
+    "plinthHeight": 0,
+    "fastening": "eccentric",
+    "sections": [
+     {
+      "id": "c2bf133b-8e4a-4ff8-ac13-2910db1177c2",
+      "weight": 1,
+      "shelves": [
+       0.25,
+       0.5,
+       0.75
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m24",
+   "x": 2831,
+   "z": 550,
+   "y": 0,
+   "rotation": 270,
+   "module": {
+    "version": 1,
+    "name": "Шкаф 1",
+    "width": 800,
+    "height": 2412,
+    "depth": 497,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": true,
+    "plinthHeight": 80,
+    "cornerFiller": "left",
+    "cornerKind": "plank",
+    "fastening": "eccentric",
+    "sections": [
+     {
+      "id": "fbfbebc7-7e6e-4b49-afc6-6ff4fcd969de",
+      "weight": 1,
+      "shelves": [
+       0.85
+      ],
+      "drawers": 0,
+      "rod": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "m25",
+   "x": 2831,
+   "z": 1350,
+   "y": 0,
+   "rotation": 270,
+   "module": {
+    "version": 1,
+    "name": "Шкаф 2",
+    "width": 800,
+    "height": 2412,
+    "depth": 497,
+    "decor": "Белый",
+    "facadeDecor": "Белый",
+    "doors": true,
+    "plinthHeight": 80,
+    "fastening": "eccentric",
+    "sections": [
+     {
+      "id": "c0df99d9-8aab-4d83-b257-4443d8b69658",
+      "weight": 1,
+      "shelves": [
+       0.85
+      ],
+      "drawers": 0,
+      "rod": true
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "@playwright/test";
 test("complete editing, persistence, validation, undo and download", async ({
   page,
 }) => {
@@ -12,7 +12,7 @@ test("complete editing, persistence, validation, undo and download", async ({
   await expect(page.getByLabel("Ширина", { exact: true })).toHaveValue("1100");
   await page.getByLabel("Высота", { exact: true }).fill("3000");
   await page.getByLabel("Высота", { exact: true }).press("Enter");
-  await expect(page.getByRole("alert")).toContainText("2200");
+  await expect(page.getByRole("alert")).toContainText("2500");
   await expect(page.getByLabel("Высота", { exact: true })).toHaveValue("2000");
   await page.getByLabel("Закрыть сообщение").click();
   await page.getByLabel("Отменить", { exact: true }).click();

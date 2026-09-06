@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule,
   type Module,
   type Section,
 } from "./model";
@@ -448,8 +448,10 @@ export default function App() {
       before?.focus();
     };
   }, [modal]);
-  function preset(type: "shelves" | "wardrobe" | "drawers" | "empty") {
+  function preset(type: "shelves" | "wardrobe" | "drawers" | "empty" | "desk") {
+    if (type === "desk") { const n = deskModule(m); if (commit(n)) { setSelected(n.sections[0].id); setTab("module"); } return; }
     const n = {...structuredClone(m),sections:[section()]};
+    delete n.desk; if (m.desk) { n.height = 2000; n.doors = true; delete n.plinthHeight; delete n.bottomType; delete n.backType; }
     const a = n.sections[0];
     if (type === "shelves") a.shelves = distribute(n, a, 4);
     if (type === "wardrobe") {
@@ -714,6 +716,7 @@ export default function App() {
                 { type: "shelves", title: "Полочный", icon: Rows3 },
                 { type: "wardrobe", title: "Платяной", icon: Shirt },
                 { type: "drawers", title: "С ящиками", icon: Archive },
+                { type: "desk", title: "Стол", icon: PanelTop },
               ] as const
             ).map((p) => (
               <button key={p.type} onClick={() => preset(p.type)}>
@@ -1236,10 +1239,16 @@ export default function App() {
                 {needsWallFiller(m)&&!m.wallFiller&&!m.cornerFiller&&<p className="field-note">Фальши — планка 100×16 торцом снаружи боковины. Добавляются сами, когда корпус придвинут к стене (зазор 5 мм) или к другому корпусу под 90°.</p>}
                 <label className="hardware-field">Крыша<select aria-label="Материал крыши" value={m.topType==='none'?'none':(m.topGlass??'ldsp')} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none'){n.topType='none';delete n.topGlass;}else{delete n.topType;if(v==='ldsp')delete n.topGlass;else n.topGlass=v;}})}><option value="ldsp">ЛДСП 16 в цвет корпуса</option><option value="none">Без крыши · каркас на стяжках</option>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>Стекло · {i.label}</option>)}</select></label>
                 {m.topGlass&&<p className="field-note">Закалённое стекло 4 мм ложится на боковины сверху, кромка полируется по периметру. В раскрой ЛДСП не идёт, в смете — стекло, закалка и полировка.</p>}
+                {m.desk&&<>
+                  <label className="hardware-field">Опоры стола<select aria-label="Опоры стола" value={m.desk.sides} onChange={e=>modify(n=>{n.desk={...n.desk!,sides:e.target.value as NonNullable<Module['desk']>['sides']};})}><option value="both">Две боковины до пола</option><option value="left">Только левая · справа на соседний корпус</option><option value="right">Только правая · слева на соседний корпус</option><option value="none">Без опор · между двумя корпусами</option></select></label>
+                  <NumberField label="Царга сзади под столешницей" value={m.desk.apron} min={RULES.deskApronMin} max={RULES.deskApronMax} onChange={v=>modify(n=>{n.desk={...n.desk!,apron:v};})}/>
+                  <p className="field-note">Столешница ЛДСП 16 на всю ширину, кромка 2 мм по периметру, лежит на опорах и царге; к соседнему корпусу крепится стяжкой эксцентрик + шкант. Высота {RULES.deskMinH}–{RULES.deskMaxH}, ширина до {RULES.deskMaxW} мм. Чтобы вернуть шкаф — выберите другой шаблон наполнения.</p>
+                </>}
                 <label className="hardware-field">Крепёж корпуса<select aria-label="Крепёж корпуса" value={m.fastening??'confirmat'} onChange={e=>modify(n=>{if(e.target.value==='eccentric')n.fastening='eccentric';else delete n.fastening;})}><option value="confirmat">Евровинты · видны снаружи, под заглушки</option><option value="eccentric">Эксцентрики D15 · скрытый крепёж</option></select></label>
                 <p className="field-note">{m.fastening==='eccentric'?'Бочонок в пласти горизонталей на 34 мм от торца, шток в боковине; снаружи корпус чистый. В 3D — светлые бочонки при открытых фасадах.':'Конфирматы 5×50 через боковины в дно, крышу, жёсткие полки и полку над ящиками; снаружи — заглушки в цвет. В 3D — тёмные головки на боковинах.'}</p>
-                {m.topType!=='none'&&!m.topGlass&&!m.alu&&<label className="hardware-field">Скос под потолок<select aria-label="Скос под потолок" value={m.slope?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.slope;else n.slope={side:v as 'left'|'right',lowHeight:n.slope?.lowHeight??Math.max(RULES.slopeMinLow,Math.round((n.height-300)/10)*10)};})}><option value="none">Нет · крыша ровная</option><option value="left">Ниже слева</option><option value="right">Ниже справа</option></select></label>}
-                {m.slope&&<NumberField label={`Высота корпуса у ${m.slope.side==='left'?'левой':'правой'} стороны`} value={m.slope.lowHeight} min={RULES.slopeMinLow} max={m.height-50} onChange={v=>modify(n=>{n.slope={...n.slope!,lowHeight:v};})}/>}
+                {m.topType!=='none'&&!m.topGlass&&!m.alu&&<label className="hardware-field">Скос под потолок<select aria-label="Скос под потолок" value={m.slope?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.slope;else n.slope={side:v as 'left'|'right',lowHeight:Math.min(n.height-RULES.slopeMinDrop,Math.max(RULES.slopeMinLow,n.slope?.lowHeight??Math.round((n.height*0.65)/10)*10))};})}><option value="none">Нет · крыша ровная</option><option value="left">Ниже слева</option><option value="right">Ниже справа</option></select></label>}
+                {m.slope&&<NumberField label={`Высота корпуса у ${m.slope.side==='left'?'левой':'правой'} стороны`} value={m.slope.lowHeight} min={RULES.slopeMinLow} max={m.height-RULES.slopeMinDrop} onChange={v=>modify(n=>{n.slope={...n.slope!,lowHeight:v};})}/>}
+                {m.slope&&<p className="field-note">Как задать: выберите, с какой стороны потолок ниже, и впишите высоту корпуса у этой стороны (от {RULES.slopeMinLow} до {m.height-RULES.slopeMinDrop} мм). Высокая сторона — общая высота корпуса выше.</p>}
                 {m.slope&&<p className="field-note">Крыша ложится по скату на боковины разной высоты, фасады и набивной задник режутся трапецией; полки и перегородки — до низкой стороны. В раскрое крыша идёт длиной по скату, фасад — по большей высоте.</p>}
                 {!m.slope&&!m.alu&&m.doorMount!=='inset'&&!m.sections.some(s=>s.drawers>0)&&<label className="hardware-field">Скос фронта в плане<select aria-label="Скос фронта в плане" value={m.skew?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.skew;else n.skew={side:v as 'left'|'right',depth:n.skew?.depth??Math.max(RULES.minD,Math.round((n.depth-150)/10)*10)};})}><option value="none">Нет · фронт ровный</option><option value="left">Мельче слева</option><option value="right">Мельче справа</option></select></label>}
                 {m.skew&&<NumberField label={`Глубина корпуса у ${m.skew.side==='left'?'левой':'правой'} стороны`} value={m.skew.depth} min={RULES.minD} max={m.depth-30} onChange={v=>modify(n=>{n.skew={...n.skew!,depth:v};})}/>}

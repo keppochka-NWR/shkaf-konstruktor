@@ -30,7 +30,7 @@
     },
     "sections": [
      {
-      "id": "75a5206b-11a1-4299-863a-048592fa8fdb",
+      "id": "bf858e2f-bea0-449d-9866-f351d760f604",
       "weight": 426,
       "shelves": [
        0.5
@@ -39,7 +39,7 @@
       "rod": false
      },
      {
-      "id": "7eef1922-6b97-460c-a229-a0802a6fadaf",
+      "id": "18a37209-d1ce-4cc9-9d1e-3fa5bff7c43b",
       "weight": 266,
       "shelves": [
        0.5
@@ -73,7 +73,7 @@
     },
     "sections": [
      {
-      "id": "9b932ed5-2405-4608-b9ec-01b4cbd8d42d",
+      "id": "f7758589-aa37-4afb-9efc-80e02b671847",
       "weight": 1,
       "shelves": [
        0.33,
@@ -104,7 +104,7 @@
     "fastening": "eccentric",
     "sections": [
      {
-      "id": "c277d38c-f70a-45ec-b4a1-3190ae6fb6f8",
+      "id": "d8904a35-8688-4009-9f0b-c4707c08082e",
       "weight": 1,
       "shelves": [
        0.27,
@@ -141,7 +141,7 @@
     },
     "sections": [
      {
-      "id": "bf66634c-4e6a-4a75-8601-648115de65e0",
+      "id": "c3c6e7a2-a024-4162-9791-2a6c6cdb2ee6",
       "weight": 1,
       "shelves": [
        0.55

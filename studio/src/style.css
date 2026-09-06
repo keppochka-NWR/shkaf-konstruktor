@@ -452,6 +452,7 @@ input {
   grid-template-columns: 1fr 1fr;
   gap: 7px;
 }
+.presets button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .presets button {
   flex-direction: column;
   gap: 10px;

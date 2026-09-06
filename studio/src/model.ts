@@ -13,7 +13,7 @@ export const RULES = {
   minW: 250,
   maxW: 1200, // ТЗ Макса 1200; в заказах цеха каркасы 1000 (Семиклетова), СТП 900 — предупреждение оставлено в ведомости
   minH: 250, // антресоли заказов 300–372
-  maxH: 2200,
+  maxH: 2500, // шкафы Имомкуловой 2412 (боковина 2396 из листа 2750); было 2200
   minD: 200, // заказы цеха: шкафы 240 (Корижин), стеллажи 200 (Дельта КИП)
   maxD: 700,
   minSection: 180,
@@ -66,7 +66,14 @@ export const RULES = {
   eccBarrelH: 13,
   eccCenter: 34,
   logisticsW: 900, // корпус шире 900 в сборе не во все лифты входит — предупреждение
-  slopeMinLow: 400,
+  // Стол: столешница ЛДСП 16 на боковинах-опорах; высота 650–800, ширина до 2400 (лист 2750), царга 60–150
+  deskMinH: 650,
+  deskMaxH: 800,
+  deskMaxW: 2400,
+  deskApronMin: 60,
+  deskApronMax: 150,
+  slopeMinLow: 150, // низкая сторона мансардного скоса: хотя бы полка-ниша (антресоль 430 → низ 200)
+  slopeMinDrop: 50,
   // Каркасы на ножках и стяжках (заказы цеха: Байков, Семиклетова, Ошарина, Корижин): ножки M6×18 или 1033 h=100; стяжки 100–200.
   feetMin: 15,
   feetMax: 150,
@@ -152,6 +159,9 @@ export type Module = {
   /** Скос фронта в плане (Шаин 6724055): у стороны side корпус мельче — depth; фасады и цоколь идут под углом, боковины разной глубины,
    *  дно/крыша/полки трапецией (в раскрое — габарит с пометкой «скос»), задник прямой. */
   skew?: { side: "left" | "right"; depth: number };
+  /** Стол (Имомкулова 6785429): столешница ЛДСП на опорах-боковинах и задней царге. sides — какие опоры свои;
+   *  отсутствующая опора — столешница опирается на соседний корпус (стяжки эксцентрик + шкант). Без дна, цоколя, задника и фасадов. */
+  desk?: { sides: "both" | "left" | "right" | "none"; apron: number };
 };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
@@ -233,7 +243,14 @@ export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.c
 /** Опоры регулируемые под нижним корпусом (за цоколем): 4, при ширине от 900 — 6. Антресоли и корпуса без цоколя — без опор. */
 export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
-export function needsWallFiller(m:Module){return m.doors||m.sections.some(s=>s.drawers>0);}
+export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0));}
+/** Заготовка стола: столешница 750 на двух опорах, глубина 600, без фасадов, дна, задника и цоколя. */
+export function deskModule(base?:Module):Module{
+  const m=base?structuredClone(base):initialModule();
+  return {...m,name:'Стол',height:750,depth:Math.max(500,Math.min(m.depth,700)),doors:false,plinthHeight:0,bottomType:'none',backType:'none',topType:'panel',
+    sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
+    feet:undefined,slope:undefined,skew:undefined,alu:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
+}
 /** В корпусе есть ручки (распашные фасады всегда с ручкой; ящики — если не push-to-open). */
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
@@ -338,6 +355,23 @@ export function parts(m: Module): Part[] {
       grainAxis: role==='door'||key==='left'||key==='right'||key==='back'||key.startsWith('corner-filler')||key.startsWith('wall-filler')||key.endsWith(':divider')||key.includes(':filler:')||key.endsWith(':facade')?1:role==='drawer'&&(key.endsWith(':left')||key.endsWith(':right'))?2:0,
       edge: material === "board" ? role === "door" ? [2,2,2,2] : [0.4, 0.4, 2, 0.4] : [0, 0, 0, 0],
     });
+  }
+  if (m.desk) {
+    // Стол: столешница на всю ширину лежит на опорах (боковины до пола), сзади царга под столешницей.
+    // Без своей опоры столешница и царга крепятся к соседнему корпусу эксцентриком + шкантом (Базис: «Стяжка эксц. + шкант фикс 50»).
+    const H = m.height, hasL = m.desk.sides === "both" || m.desk.sides === "left", hasR = m.desk.sides === "both" || m.desk.sides === "right";
+    add("top", "Столешница", [m.width, t, d], [m.width / 2, H - t / 2, d / 2], m.width, d, t);
+    out.at(-1)!.edge = [2, 2, 2, 2];
+    if (hasL) add("left", "Опора стола левая", [t, H - t, d], [t / 2, (H - t) / 2, d / 2], H - t, d, t);
+    if (hasR) add("right", "Опора стола правая", [t, H - t, d], [m.width - t / 2, (H - t) / 2, d / 2], H - t, d, t);
+    const ax0 = hasL ? t : 0, ax1 = hasR ? m.width - t : m.width, aw = ax1 - ax0;
+    add("rail:rear-top", "Царга стола " + m.desk.apron, [aw, m.desk.apron, t], [(ax0 + ax1) / 2, H - t - m.desk.apron / 2, t / 2], aw, m.desk.apron, t);
+    // Крепёж столешницы к опорам: по СТП сверху в столешницу не сверлят — эксцентрики снизу столешницы либо конфирматы через опору не видны; ставим эксцентрики.
+    for (const [side, x, has] of [["left", t / 2, hasL], ["right", m.width - t / 2, hasR]] as const) if (has)
+      for (const [k, z] of [RULES.confirmatInset, d - RULES.confirmatInset].entries()) {
+        add(`ecc:top:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [x, H - t - RULES.eccBarrelH / 2 + 0.3, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", undefined, "metal");
+      }
+    return out;
   }
   // Боковины: от пола (на цоколе) или от верха ножек; под стеклянной крышей — короче на её толщину; под скосом — до наклонной крыши.
   const topT = hasTop(m) ? (m.topGlass ? RULES.glassTop : t) : 0;
@@ -701,11 +735,15 @@ export function fastenerCounts(m: Module) {
 }
 export function validate(m: Module): string[] {
   const errors: string[] = [];
-  for (const [key, label, min, max] of [
+  for (const [key, label, min, max] of (m.desk ? [
+    ["width", "Ширина стола", RULES.minW, RULES.deskMaxW],
+    ["height", "Высота стола", RULES.deskMinH, RULES.deskMaxH],
+    ["depth", "Глубина стола", RULES.minD, RULES.maxD],
+  ] : [
     ["width", "Ширина", RULES.minW, RULES.maxW],
     ["height", "Высота", RULES.minH, RULES.maxH],
     ["depth", "Глубина", RULES.minD, RULES.maxD],
-  ] as const) {
+  ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
     const n = m[key];
     if (!Number.isFinite(n) || n < min || n > max)
       errors.push(`${label}: допустимо от ${min} до ${max} мм.`);
@@ -728,8 +766,13 @@ export function validate(m: Module): string[] {
   if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);}
   if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
-  if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-50)errors.push(`Скос: низкая сторона от ${RULES.slopeMinLow} мм и минимум на 50 ниже корпуса.`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
+  if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
+  if(m.desk!==undefined){
+    if(!['both','left','right','none'].includes(m.desk.sides)||!Number.isFinite(m.desk.apron)||m.desk.apron<RULES.deskApronMin||m.desk.apron>RULES.deskApronMax)errors.push(`Стол: опоры слева/справа/обе/нет, царга от ${RULES.deskApronMin} до ${RULES.deskApronMax} мм.`);
+    if(m.doors||m.sections.some(s=>s.shelves.length||s.drawers>0||s.rod||s.pantograph)||m.sections.length>1)errors.push('Стол: наполнение и фасады не ставятся — это столешница на опорах.');
+    if(m.slope||m.skew||m.alu||m.topGlass||m.feet||m.sidePanels||m.topStrip||m.standLight)errors.push('Стол: скосы, стекло, ножки, фальшпанели и подсветка не применяются.');
+  }
   if(m.skew!==undefined){
     if(!['left','right'].includes(m.skew.side)||!Number.isFinite(m.skew.depth)||m.skew.depth<RULES.minD||m.skew.depth>m.depth-30)errors.push(`Скос фронта: глубина мелкой стороны от ${RULES.minD} мм и минимум на 30 меньше глубины корпуса.`);
     if(m.slope)errors.push('Скос фронта и скос под потолок вместе не делаем.');
@@ -1015,6 +1058,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.skew===undefined?{}:{skew:{side:(x.skew as {side:'left'|'right'})?.side,depth:Number((x.skew as {depth:number})?.depth)}}),
+    ...(x.desk===undefined?{}:{desk:{sides:(x.desk as Module['desk'])!.sides,apron:Number((x.desk as Module['desk'])!.apron)}}),
     ...(x.wallFiller===undefined?{}:{wallFiller:Object.fromEntries(Object.entries(x.wallFiller as Record<string,{kind?:string;width?:number}>).map(([k,v])=>[k,{kind:'edge' as const,width:v?.kind==='standard'||v?.width===undefined?RULES.fillerStrip:v.width}]))}),
     sections: x.sections.map((s) => ({
       id: s.id,

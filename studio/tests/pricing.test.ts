@@ -4,7 +4,7 @@ import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
 import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
 import {roomWarnings} from '../src/roomWarnings';
-import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers,section} from '../src/model';
+import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers,section,deskModule} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML,details} from '../src/exports';
 
@@ -332,4 +332,27 @@ test('logistics warning for bodies wider than 900',()=>{
   const p=newProject();p.modules[0].module.width=1000;p.room.width=4000;p.room.depth=4000;
   assert.ok(roomWarnings(p).some(w=>w.kind==='logistics'));
   p.modules[0].module.width=900;assert.ok(!roomWarnings(p).some(w=>w.kind==='logistics'));
+});
+
+test('desk module: full-width top, chosen supports, rear apron, eccentrics; no facades or filling; limits differ',()=>{
+  const m=deskModule();m.width=1734;m.depth=500;m.desk={sides:'none',apron:100};
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  let ps=parts(m);
+  assert.equal(ps.find(p=>p.id==='top')!.size[0],1734);assert.ok(!ps.some(p=>p.id==='left'||p.id==='right'));
+  const apron=ps.find(p=>p.id==='rail:rear-top')!;assert.equal(apron.size[0],1734);assert.equal(apron.size[1],100);
+  assert.ok(!ps.some(p=>p.role==='door'||p.id==='plinth'||p.id==='back'||p.id==='bottom'));
+  m.desk={sides:'both',apron:100};ps=parts(m);
+  assert.equal(ps.filter(p=>p.id==='left'||p.id==='right').length,2);assert.equal(ps.find(p=>p.id==='left')!.size[1],750-16);
+  assert.equal(ps.filter(p=>p.id.startsWith('ecc:top:')).length,4);
+  m.width=2400;assert.equal(validate(m).length,0);m.width=2500;assert.ok(validate(m).some(e=>e.includes('Ширина стола')));
+  m.width=1200;m.height=900;assert.ok(validate(m).some(e=>e.includes('Высота стола')));
+  m.height=750;m.sections[0].shelves=[0.5];assert.ok(validate(m).some(e=>e.includes('наполнение')));
+  const p=newProject();p.modules[0].module=deskModule();assert.deepEqual(parseProject(p).modules[0].module.desk,{sides:'both',apron:100});
+  const e=estimate(p);assert.equal(e.missing.length,0);assert.ok(e.retail!>0);
+});
+
+test('mansard slope accepts a low antresol (430 → 200) and reports the allowed range',()=>{
+  const m=initialModule();m.height=430;m.plinthHeight=0;m.doors=false;m.sections=[{...section(),shelves:[]}];
+  m.slope={side:'right',lowHeight:200};assert.equal(validate(m).length,0,validate(m).join('; '));
+  m.slope={side:'right',lowHeight:400};assert.ok(validate(m).some(e=>e.includes('от 150 до 380')));
 });
