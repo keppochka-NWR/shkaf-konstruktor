@@ -1,4 +1,4 @@
-import {frameDistance} from './framing';
+import {frameDistance,frameHeight} from './framing';
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -68,14 +68,14 @@ export function Scene(p: Props) {
     );
     renderer.domElement.setAttribute("role", "img");
     target.appendChild(renderer.domElement);
-    const scene = new THREE.Scene(),
-      camera = new THREE.PerspectiveCamera(34, 1, 5, 250000);
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const scene = new THREE.Scene(),perspective=new THREE.PerspectiveCamera(34,1,5,250000),orthographic=new THREE.OrthographicCamera(-1000,1000,1000,-1000,5,250000);
+    let camera:THREE.PerspectiveCamera|THREE.OrthographicCamera=perspective;
+    const controls = new OrbitControls<THREE.PerspectiveCamera|THREE.OrthographicCamera>(camera, renderer.domElement);
     let needsRender=true;const requestRender=()=>{needsRender=true;};controls.addEventListener('change',requestRender);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
     controls.minDistance = 350;
-    controls.maxDistance = 150000;
+    controls.maxDistance = 150000;controls.minZoom=.05;controls.maxZoom=20;
     controls.maxPolarAngle = Math.PI * 0.91;
     scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8991, 2.1));
     const sun = new THREE.DirectionalLight(0xfff8ed, 3.1);
@@ -405,6 +405,7 @@ export function Scene(p: Props) {
       const center=new THREE.Vector3((state.room?state.room.width/2:(minX+maxX)/2)-moduleCenter(focus).x,height/2,(state.room?state.room.depth/2:(minZ+maxZ)/2)-moduleCenter(focus).z);
       controls.target.copy(center);
       const view = current.current.view;
+      camera=view==='iso'?perspective:orthographic;controls.object=camera;
       const dir =
         view === "front"
           ? new THREE.Vector3(0, 0, 1)
@@ -415,7 +416,9 @@ export function Scene(p: Props) {
               : new THREE.Vector3(1, 0.55, 1.7).normalize();
       if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);
       const padding=state.presentation?50:state.dimensions?500:180;
-      const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,camera.fov,1.08);
+      const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,perspective.fov,1.08);
+      if(camera===orthographic){const h=frameHeight({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,1.08);orthographic.left=-h*aspect/2;orthographic.right=h*aspect/2;orthographic.top=h/2;orthographic.bottom=-h/2;orthographic.zoom=1;}else perspective.aspect=aspect;
+      camera.updateProjectionMatrix();
       camera.up.set(0, 1, 0);
       camera.position.copy(center).addScaledVector(dir, dist);
       controls.update();
@@ -424,7 +427,7 @@ export function Scene(p: Props) {
     const observer = new ResizeObserver(() => {
       if (!target.clientWidth || !target.clientHeight) return;
       renderer.setSize(target.clientWidth, target.clientHeight);
-      camera.aspect = target.clientWidth / target.clientHeight;
+      perspective.aspect = target.clientWidth / target.clientHeight;
       camera.updateProjectionMatrix();
       fit();
       if (initial) {
@@ -601,6 +604,7 @@ export function Scene(p: Props) {
     </div>
   );
 }
+
 
 
 

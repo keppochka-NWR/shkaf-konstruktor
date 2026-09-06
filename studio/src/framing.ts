@@ -12,3 +12,11 @@ export function frameDistance(size:V,direction:V,aspect:number,fovDegrees:number
   }
   return distance;
 }
+
+export function frameHeight(size:V,direction:V,aspect:number,margin=1.1){
+  const n=Math.hypot(direction.x,direction.y,direction.z),z={x:direction.x/n,y:direction.y/n,z:direction.z/n};
+  const rn=Math.hypot(z.x,z.z),right=rn>1e-8?{x:z.z/rn,y:0,z:-z.x/rn}:{x:1,y:0,z:0};
+  const up={x:z.y*right.z,y:z.z*right.x-z.x*right.z,z:-z.y*right.x};
+  const span=(v:V)=>Math.abs(v.x)*size.x+Math.abs(v.y)*size.y+Math.abs(v.z)*size.z;
+  return margin*Math.max(span(up),span(right)/aspect);
+}

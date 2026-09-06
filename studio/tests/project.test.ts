@@ -1,5 +1,5 @@
 import {nicheSize} from '../src/measurement';
-import {frameDistance} from '../src/framing';
+import {frameDistance,frameHeight} from '../src/framing';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -256,4 +256,12 @@ test('customer quote lists actual protective shelves and drawer front material',
 test('server project title stays distinct from the first module name in files',()=>{
   const p=newProject();p.cloud={id:'order-1',revision:2,owner:'manager@example.test',name:'Заказ — прихожая'};
   const q=parseProject(JSON.parse(JSON.stringify(p)));assert.equal(q.cloud?.name,'Заказ — прихожая');assert.notEqual(q.cloud?.name,q.modules[0].module.name);
+});
+
+test('orthographic working views use exact projected extents',()=>{
+  const size={x:1400,y:2200,z:600};
+  assert.equal(frameHeight(size,{x:0,y:0,z:1},1,1),2200);
+  assert.equal(frameHeight(size,{x:0,y:0,z:1},.5,1),2800);
+  assert.equal(frameHeight(size,{x:0,y:1,z:0},1,1),1400);
+  assert.equal(frameHeight(size,{x:1,y:0,z:0},1,1),2200);
 });
