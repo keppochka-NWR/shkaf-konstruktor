@@ -4,7 +4,7 @@ import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
 import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
 import {roomWarnings} from '../src/roomWarnings';
-import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch} from '../src/model';
+import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML,details} from '../src/exports';
 
@@ -211,6 +211,24 @@ test('drawer facade height is independent from the box side height',()=>{
   assert.equal(validate(m).length,0,validate(m).join('; '));
   m.sections[0].drawerConfigs[1].facadeH=20;assert.ok(validate(m).some(e=>e.includes('высота фасада ящика')));
   m.sections[0].drawerConfigs[1].facadeH=300;assert.equal(parseProject(newProject(m)).modules[0].module.sections[0].drawerConfigs![1].facadeH,300);
+});
+
+test('floor height of the shelf above drawers distributes drawers equally; glass top replaces the LDSP top',()=>{
+  const m=initialModule(),s=m.sections[0];s.shelves=[];s.drawers=3;s.drawerConfigs=[{slide:'ball',height:140,length:500},{slide:'ball',height:100,length:500},{slide:'ball',height:200,length:500,facadeH:300}];
+  const before=drawerCapTop(m,s);assert.ok(before>0);
+  const cfg=distributeDrawers(m,s,800);s.drawerConfigs=cfg;
+  assert.ok(cfg.every(c=>c.height===cfg[0].height&&c.facadeH===undefined),'equal boxes, facades follow the pitch');
+  assert.ok(Math.abs(drawerCapTop(m,s)-800)<=3,'cap top lands on the requested height (rounded to whole mm pitch)');
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  assert.throws(()=>distributeDrawers(m,s,300),/Слишком низко/);assert.throws(()=>distributeDrawers(m,s,1500),/Слишком высоко/);
+  m.topGlass='glass-clear';const ps=parts(m),top=ps.find(p=>p.id==='top')!,left=ps.find(p=>p.id==='left')!;
+  assert.equal(top.material,'glass');assert.equal(top.size[1],4);assert.equal(top.size[0],m.width);assert.equal(left.size[1],m.height-4,'sides shortened under the glass');
+  assert.ok(!ps.some(p=>p.id.startsWith('fast:top')),'no confirmats into a glass top');
+  const p=newProject(m),e=estimate(p);
+  assert.equal(e.lines.find(l=>l.id==='glass-top:glass-clear')!.unitPrice,970);assert.ok(e.lines.some(l=>l.id==='glass-top-temper')&&e.lines.some(l=>l.id==='glass-top-polish'));
+  assert.ok(!details(p).some(d=>d.id==='top'),'glass top is not in the board cut list');
+  assert.equal(parseProject(p).modules[0].module.topGlass,'glass-clear');
+  m.topGlass='нет';assert.ok(validate(m).some(x=>x.includes('Стеклянная крыша')));
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

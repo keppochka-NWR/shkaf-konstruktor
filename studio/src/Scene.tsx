@@ -246,7 +246,7 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
-          if (texture && !isBack && !isMetal && part.material !== "alu") {
+          if (texture && !isBack && !isMetal && part.material !== "alu" && part.material !== "glass") {
             pendingTextures++;
             cachedTexture(texture).then(map=>{
               if(disposed||gen!==generation)return;
@@ -266,6 +266,12 @@ export function Scene(p: Props) {
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
+          }
+          if (part.material === "glass") {
+            const ins = aluInsert(m.topGlass ?? "");
+            const dark = ins?.id.endsWith("black"), mirror = ins?.mirror;
+            mat.color.set(mirror ? 0xd6dee3 : dark ? 0x1b1b1b : ins?.id === "satin" ? 0xf1f3f4 : ins?.id.includes("bronze") ? 0x8a6a45 : ins?.id.includes("graphite") ? 0x4a4f55 : 0xdfe8ec);
+            mat.transparent = !mirror && !dark; mat.opacity = mirror || dark ? 1 : ins?.id === "satin" ? 0.75 : 0.45; mat.roughness = 0.05; mat.metalness = mirror ? 0.55 : 0.1; mat.depthWrite = !mat.transparent;
           }
           const isMeshItem = part.id.endsWith(":mesh");
           if (isMeshItem) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }

@@ -61,6 +61,9 @@ export const RULES = {
   confirmatD: 7,
   confirmatL: 50,
   confirmatInset: 50,
+  glassTop: 4, // стеклянная крыша: закалённое стекло 4 мм (АТБ), полировка кромки
+  glassTopTemper: 880, // закалка 4 мм, ₽/м² (АТБ 01.01.2026)
+  glassTopPolishPerM: 100, // полировка прямолинейная 4 мм, ₽/пог.м (прайс МВМ 13.01.26)
   doorMaxLow: 640, // ширина фасада до 640 при высоте до 920 (Перечень для производства), выше — 600
   doorLowH: 920,
   doorMinH: 360, // минимальная высота распашного фасада
@@ -104,6 +107,8 @@ export type Module = {
   wallFiller?: Partial<Record<"left" | "right", WallFiller>>;
   /** Распашные фасады в алюминиевой рамке (alu.ts): профиль, цвет, вставка. Без поля — ЛДСП 16. Фасады ящиков остаются ЛДСП. */
   alu?: AluFacade;
+  /** Крыша из стекла вместо ЛДСП: id вставки из alu.ts (стекло, сатин, лакобель, зеркало), закалённое 4 мм с полировкой. */
+  topGlass?: string;
 };
 export type WallFiller = { kind: "edge"; width: number };
 export type Part = {
@@ -115,7 +120,7 @@ export type Part = {
   length: number;
   width: number;
   thickness: number;
-  material: "board" | "hdf" | "metal" | "alu";
+  material: "board" | "hdf" | "metal" | "alu" | "glass";
   decor: string;
   role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge" | "light" | "fastener";
   hinge?: "left" | "right";
@@ -277,7 +282,14 @@ export function parts(m: Module): Part[] {
     d,
     t,
   );
-  add(
+  if (m.topGlass) {
+    // Стеклянная крыша: закалённое стекло 4 мм лежит на боковинах заподлицо с верхом, полировка кромки по периметру.
+    const g = RULES.glassTop;
+    add("top", "Крыша · " + (aluInsert(m.topGlass)?.label ?? "стекло") + " закалённое", [m.width, g, d], [m.width / 2, m.height - g / 2, d / 2], m.width, d, g, "body", undefined, "glass");
+    out.at(-1)!.decor = aluInsert(m.topGlass)?.label ?? "стекло";
+    // Боковины под стеклянной крышей ниже на её толщину — стекло ложится сверху.
+    for (const key of ["left", "right"] as const) { const p = out.find((x) => x.id === key)!; p.size[1] = m.height - g; p.position[1] = (m.height - g) / 2; p.length = m.height - g; }
+  } else add(
     "top",
     "Крыша",
     [m.width - 2 * t, t, d],
@@ -533,6 +545,21 @@ export function parts(m: Module): Part[] {
   }
   return out;
 }
+/** Верх полки над ящиками секции от низа корпуса (цоколь + дно + стопка ящиков + полка). */
+export function drawerCapTop(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.bottom+drawerStackHeight(s)+RULES.panel;}
+/**
+ * Задать высоту верха полки над ящиками (от низа корпуса): ящики делятся поровну по высоте.
+ * Возвращает новые конфигурации; высота короба = шаг − 40, фасады по шагу.
+ */
+export function distributeDrawers(m:Module,s:Section,capTop:number):DrawerConfig[]{
+  const b=boxes(m).find(b=>b.id===s.id)!,n=s.drawers;
+  if(n<1)throw Error('В секции нет ящиков.');
+  const stack=capTop-b.bottom-RULES.panel,pitch=Math.floor(stack/n);
+  const box=pitch-RULES.drawerStep;
+  if(box<68)throw Error(`Слишком низко: при ${n} ящиках нужно не меньше ${b.bottom+RULES.panel+n*(68+RULES.drawerStep)} мм от низа корпуса.`);
+  if(box>300)throw Error(`Слишком высоко: боковина ящика выйдет ${box} мм, максимум 300. Добавьте ящик или опустите полку.`);
+  return Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};});
+}
 /** Число конфирматов корпуса и полкодержателей под съёмные полки. */
 export function fastenerCounts(m: Module) {
   const ps = parts(m);
@@ -555,6 +582,7 @@ export function validate(m: Module): string[] {
   if(m.handleId!==undefined&&!HANDLES.some(h=>h.id===m.handleId))errors.push('Выберите ручку из каталога.');
   if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluInsert(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
+  if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
   if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
@@ -816,6 +844,7 @@ export function parseModule(input: unknown): Module {
     ...(x.handleId===undefined?{}:{handleId:x.handleId as string}),
     ...(x.cornerFiller===undefined?{}:{cornerFiller:x.cornerFiller as Module["cornerFiller"]}),
     ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
+    ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.wallFiller===undefined?{}:{wallFiller:Object.fromEntries(Object.entries(x.wallFiller as Record<string,{kind?:string;width?:number}>).map(([k,v])=>[k,{kind:'edge' as const,width:v?.kind==='standard'||v?.width===undefined?RULES.fillerStrip:v.width}]))}),
     sections: x.sections.map((s) => ({
       id: s.id,

@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, plinth, rearClear, needsWallFiller,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller,
   type Module,
   type Section,
 } from "./model";
@@ -1225,6 +1225,8 @@ export default function App() {
                 <p className="field-note">Вариант без цоколя (каркас на регулируемых опорах, подъём 30 мм, накладное дно) пока не делаем: нижние корпуса только на цоколе.</p>
                 {(['left','right'] as const).map(side=>{const w=m.wallFiller?.[side];if(!w&&m.cornerFiller!==side)return null;return <div key={side} className="filler-status">{m.cornerFiller===side?<p className="field-note">У {side==='left'?'левой':'правой'} боковины — угловая фальш 100×16 торцом, выступает на 40 мм вперёд (стык под 90°).</p>:<NumberField label={`Фальш к ${side==='left'?'левой':'правой'} стене торцом, ширина планки`} value={w!.width} min={RULES.wallFillerMin} max={RULES.wallFillerMax} onChange={v=>modify(n=>{n.wallFiller={...n.wallFiller,[side]:{kind:'edge',width:v}};})}/>}</div>;})}
                 {needsWallFiller(m)&&!m.wallFiller&&!m.cornerFiller&&<p className="field-note">Фальши — планка 100×16 торцом снаружи боковины. Добавляются сами, когда корпус придвинут к стене (зазор 5 мм) или к другому корпусу под 90°.</p>}
+                <label className="hardware-field">Крыша<select aria-label="Материал крыши" value={m.topGlass??'ldsp'} onChange={e=>modify(n=>{if(e.target.value==='ldsp')delete n.topGlass;else n.topGlass=e.target.value;})}><option value="ldsp">ЛДСП 16 в цвет корпуса</option>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>Стекло · {i.label}</option>)}</select></label>
+                {m.topGlass&&<p className="field-note">Закалённое стекло 4 мм ложится на боковины сверху, кромка полируется по периметру. В раскрой ЛДСП не идёт, в смете — стекло, закалка и полировка.</p>}
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
                 <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. В смете — {RULES.lightRetailPerM.toLocaleString('ru-RU')} ₽ за пог.м по прайсу цеха, поверх коэффициента.</p>
@@ -1295,6 +1297,10 @@ export default function App() {
                           <span>{drawerConfig(m,s,j).mesh?MESH_KIND_LABEL[meshById(drawerConfig(m,s,j).mesh!)?.kind??'basket']:'Ящик'} {j + 1}</span><small>{Math.round(drawerOffsets(s)[j])} мм от дна</small>
                         </button>
                       ))}
+                    </div>
+                    <div className="floor-height">
+                      <NumberField label="От пола до верха полки над ящиками" value={Math.round((placed.y??0)+drawerCapTop(m,s))} min={(placed.y??0)+b.bottom+RULES.panel+s.drawers*(68+RULES.drawerStep)} max={(placed.y??0)+b.top-RULES.shelfMinClear} onChange={v=>{try{const configs=distributeDrawers(m,s,v-(placed.y??0));modifySection(a=>{a.drawerConfigs=configs;});}catch(e){setError((e as Error).message);}}}/>
+                      <span className="hint" tabIndex={0} role="note" aria-label="Размер от пола: от чистого пола до верхней плоскости полки над блоком ящиков. При изменении ящики делятся поровну по высоте." title="Размер от пола: от чистого пола до верхней плоскости полки над блоком ящиков. При изменении ящики делятся поровну по высоте.">?</span>
                     </div>
                     <NumberField label="Ящиков в секции" value={s.drawers} min={1} max={RULES.maxDrawers} onChange={v=>{
                       try{
