@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
@@ -267,4 +267,69 @@ test('estimate falls back to the tier price for decors outside the explicit list
   const p=newProject();p.modules[0].module.decor='Титан';
   const e=estimate(p),line=e.lines.find(l=>l.id==='sheet:Титан')!;
   assert.equal(line.unitPrice,decorPrice('Титан').price);assert.match(line.source,/Прайс Lamarty/);
+});
+
+test('mansard slope: sides of different height, tilted top, tapered doors and back, shelves below low side',()=>{
+  const m=initialModule();m.width=800;m.height=2000;m.depth=500;m.slope={side:'right',lowHeight:1400};
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  const ps=parts(m),L=ps.find(p=>p.id==='left')!,R=ps.find(p=>p.id==='right')!,top=ps.find(p=>p.id==='top')!;
+  assert.ok(L.size[1]>R.size[1]+500,'left side taller');
+  assert.ok(top.rotZ!==undefined&&Math.abs(top.rotZ!)>30,'top tilted');
+  assert.ok(Math.abs(top.size[0]-Math.hypot(800,600))<1,'top length along slope');
+  const doors=ps.filter(p=>p.role==='door');assert.ok(doors.length>0);
+  for(const d of doors){assert.ok(d.taper,'door tapered');assert.ok(d.taper![0]>d.taper![1],'door higher at left');}
+  const back=ps.find(p=>p.id==='back')!;assert.ok(back.taper,'nailed back tapered');
+  for(const sh of ps.filter(p=>p.role==='shelf'))assert.ok(sh.position[1]<1400-16,'shelf below low side');
+  m.topGlass='clear';assert.ok(validate(m).some(e=>e.includes('стеклянной')));
+});
+
+test('plan skew (Шаин): sides of different depth, tapered horizontals, rotated doors and plinth, front fasteners follow depth',()=>{
+  const m=initialModule();m.width=708;m.height=960;m.depth=493;m.plinthHeight=80;m.skew={side:'right',depth:300};m.sections=[{...section(),weight:426,shelves:[0.5]},{...section(),weight:266,shelves:[0.5]}];
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  const ps=parts(m),L=ps.find(p=>p.id==='left')!,R=ps.find(p=>p.id==='right')!;
+  assert.equal(L.size[2],493);assert.equal(R.size[2],300);
+  const top=ps.find(p=>p.id==='top')!;assert.ok(top.taperZ&&top.taperZ[0]>top.taperZ[1],'top tapered in plan');assert.ok(top.name.includes('скос'));
+  const doors=ps.filter(p=>p.role==='door');assert.equal(doors.length,2);
+  for(const d of doors){assert.ok(Math.abs(d.rotY!)>14&&Math.abs(d.rotY!)<17,'door rotated ~15°: '+d.rotY);}
+  assert.ok(doors[0].position[2]>doors[1].position[2],'left door deeper than right');
+  const plinth=ps.find(p=>p.id==='plinth')!;assert.ok(plinth.rotY,'plinth rotated');assert.ok(plinth.size[0]>708-32,'plinth longer along the skew');
+  const frontFast=ps.filter(p=>p.id.startsWith('fast:top:right:'));assert.ok(frontFast.every(f=>f.position[2]<300),'right front confirmat within shallow depth');
+  const handles=ps.filter(p=>p.role==='handle');assert.equal(handles.length,2);
+  for(const h of handles)assert.ok(h.rotY,'handle rotated with door');
+  m.sections[0].drawers=1;assert.ok(validate(m).some(e=>e.includes('ящиками')));
+});
+
+test('eccentric fastening replaces confirmats with barrels and pins and is priced',()=>{
+  const m=initialModule();m.fastening='eccentric';
+  const ps=parts(m);
+  assert.equal(ps.filter(p=>p.id.startsWith('fast:')).length,0);
+  const barrels=ps.filter(p=>p.id.startsWith('ecc:')&&!p.id.endsWith(':pin')),pins=ps.filter(p=>p.id.endsWith(':pin'));
+  assert.ok(barrels.length>=8);assert.ok(pins.length>=8);
+  const fc=fastenerCounts(m);assert.equal(fc.confirmats,0);assert.equal(fc.eccentrics,barrels.length);
+  const p=newProject();p.modules[0].module.fastening='eccentric';const e=estimate(p);
+  assert.ok(e.lines.some(l=>l.id==='eccentric'&&l.quantity===barrels.length));assert.ok(!e.lines.some(l=>l.id==='confirmat'));
+});
+
+test('fixed shelves are full-width, fastened like body horizontals and not counted for shelf holders',()=>{
+  const m=initialModule();m.sections=[{...section(),shelves:[0.3,0.6],fixed:[1]}];
+  const ps=parts(m),s=m.sections[0];
+  const removable=ps.find(p=>p.id===s.id+':shelf:0')!,fixed=ps.find(p=>p.id===s.id+':shelf:1')!;
+  assert.ok(fixed.size[0]>removable.size[0]&&fixed.size[0]===Math.round(fixed.size[0]));assert.ok(fixed.name.startsWith('Полка жёсткая'));
+  assert.ok(ps.some(p=>p.id.startsWith('fast:'+s.id+':shelf:1:')));assert.ok(!ps.some(p=>p.id.startsWith('fast:'+s.id+':shelf:0:')));
+  assert.equal(fastenerCounts(m).shelfHolders,4);
+  m.sections[0].fixed=[5];assert.ok(validate(m).some(e=>e.includes('Жёсткие полки')));
+});
+
+test('drawer without facade has box and slides only, no handle, and parses',()=>{
+  const m=initialModule();m.sections=[{...section(),shelves:[],drawers:1,drawerConfigs:[{slide:'ball',height:150,length:450,noFacade:true}]}];
+  const ps=parts(m),s=m.sections[0];
+  assert.ok(!ps.some(p=>p.id===s.id+':drawer:0:facade'));assert.ok(!ps.some(p=>p.id===s.id+':drawer:0:handle'));
+  assert.ok(ps.some(p=>p.id===s.id+':drawer:0:bottom'));assert.equal(ps.filter(p=>p.id.startsWith(s.id+':drawer:0:slide:')).length,2);
+  const p=newProject();p.modules[0].module=m;const parsed=parseProject(p);assert.equal(parsed.modules[0].module.sections[0].drawerConfigs?.[0]?.noFacade,true);
+});
+
+test('logistics warning for bodies wider than 900',()=>{
+  const p=newProject();p.modules[0].module.width=1000;p.room.width=4000;p.room.depth=4000;
+  assert.ok(roomWarnings(p).some(w=>w.kind==='logistics'));
+  p.modules[0].module.width=900;assert.ok(!roomWarnings(p).some(w=>w.kind==='logistics'));
 });

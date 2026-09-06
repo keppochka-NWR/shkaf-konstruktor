@@ -1,5 +1,5 @@
 import {frameDistance,frameHeight} from './framing';
-import {boardGeometry,aluFrameGeometry} from './boardGeometry';
+import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
@@ -264,7 +264,7 @@ export function Scene(p: Props) {
                   part.size[0],
                   24,
                 )
-              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : boardGeometry(part);
+              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
@@ -296,7 +296,10 @@ export function Scene(p: Props) {
             mesh.add(glass);
           }
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
-          if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
+          if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
+          if (part.rotZ) mesh.rotation.z = (part.rotZ * Math.PI) / 180;
+          const rotY = part.rotY ? (part.rotY * Math.PI) / 180 : 0;
+          if (rotY) mesh.rotation.y = rotY;
           mesh.position.set(
             part.position[0],
             part.position[1],
@@ -322,16 +325,18 @@ export function Scene(p: Props) {
             mesh.position.z = (mesh.position.z-m.depth/2)*1.6+m.depth/2;
           }
           if (part.role === "door" && state.openDoors) {
+            // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
             const sign=part.hinge==='right'?-1:1;
-            pivot.position.x -= sign*part.size[0] / 2;
-            mesh.position.set(sign*part.size[0] / 2, 0, 0);
+            const hingeOff=new THREE.Vector3(sign*part.size[0]/2,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
+            pivot.position.sub(hingeOff);
+            mesh.position.set(sign*part.size[0] / 2, 0, 0);mesh.rotation.y=0;
             pivot.add(mesh);
-            pivot.rotation.y = -Math.PI * 0.58*sign;
+            pivot.rotation.y = rotY-Math.PI * 0.58*sign;pivot.userData.rotY=rotY;
             doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
-            const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position);pivot.add(mesh);
+            const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));mesh.rotation.y=0;pivot.add(mesh);
           } else moduleGroup.add(mesh);
           const selectedPart=active&&!state.presentation?state.selectedPart:undefined;
           const drawerPrefix=selectedPart?.includes(':drawer:')?selectedPart.split(':drawer:')[0]+':drawer:'+selectedPart.split(':drawer:')[1].split(':')[0]+':':undefined;

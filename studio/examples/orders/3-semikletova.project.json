@@ -35,7 +35,7 @@
     "rodType": "oval",
     "sections": [
      {
-      "id": "d7386b6e-0cd0-474a-b81a-444ae6b6c069",
+      "id": "461ca462-c01c-470e-a45b-39d97a928884",
       "weight": 1,
       "shelves": [
        0.2
@@ -74,7 +74,7 @@
     ],
     "sections": [
      {
-      "id": "5949b070-8e3d-40f5-b2d1-532e5393f760",
+      "id": "8256b024-575e-4ed4-86e0-786385cb4467",
       "weight": 1,
       "shelves": [
        0.6,
@@ -128,7 +128,7 @@
     ],
     "sections": [
      {
-      "id": "31a26da4-d4e1-4bc0-9378-69b95f0749e4",
+      "id": "fff48175-0d23-4ea6-99cd-b98e2d70ca63",
       "weight": 1,
       "shelves": [],
       "drawers": 0,
@@ -162,7 +162,7 @@
     ],
     "sections": [
      {
-      "id": "89d03c63-1cc1-4267-9e96-56133a536a3b",
+      "id": "5dd22866-06ae-4eb0-a556-5944f75185e3",
       "weight": 1,
       "shelves": [],
       "drawers": 0,
@@ -190,7 +190,7 @@
     "hingeSide": "right",
     "sections": [
      {
-      "id": "8dcd2e86-a8af-42ed-998b-ce2f47296a25",
+      "id": "b2fa6c74-749c-44be-b935-f7974bb32d22",
       "weight": 1,
       "shelves": [
        0.5
@@ -220,7 +220,7 @@
     "plinthHeight": 0,
     "sections": [
      {
-      "id": "dd833b72-aec4-413f-a1b5-94667d5b1efe",
+      "id": "3c84f67d-3e04-477d-bfe8-b9b7728e4a54",
       "weight": 1,
       "shelves": [
        0.5

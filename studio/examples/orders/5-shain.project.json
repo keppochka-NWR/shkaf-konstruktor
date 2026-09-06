@@ -18,14 +18,19 @@
     "name": "Тумба",
     "width": 708,
     "height": 960,
-    "depth": 489,
+    "depth": 493,
     "decor": "Дуб Сонома",
     "facadeDecor": "Белый",
     "doors": true,
     "plinthHeight": 80,
+    "fastening": "eccentric",
+    "skew": {
+     "side": "right",
+     "depth": 300
+    },
     "sections": [
      {
-      "id": "f7f0b776-86ca-4a6a-bf00-34c6386c873e",
+      "id": "75a5206b-11a1-4299-863a-048592fa8fdb",
       "weight": 426,
       "shelves": [
        0.5
@@ -34,7 +39,7 @@
       "rod": false
      },
      {
-      "id": "7f0be809-c4d1-4765-af41-5a23109cfc75",
+      "id": "7eef1922-6b97-460c-a229-a0802a6fadaf",
       "weight": 266,
       "shelves": [
        0.5
@@ -56,14 +61,19 @@
     "name": "Пенал",
     "width": 426,
     "height": 1420,
-    "depth": 489,
+    "depth": 493,
     "decor": "Дуб Сонома",
     "facadeDecor": "Белый",
     "doors": true,
     "plinthHeight": 0,
+    "fastening": "eccentric",
+    "skew": {
+     "side": "right",
+     "depth": 368
+    },
     "sections": [
      {
-      "id": "5ddd9c95-8c76-4d95-ab14-2ff54c0ed1ad",
+      "id": "9b932ed5-2405-4608-b9ec-01b4cbd8d42d",
       "weight": 1,
       "shelves": [
        0.33,
@@ -85,20 +95,56 @@
     "version": 1,
     "name": "Стеллаж",
     "width": 282,
-    "height": 1420,
+    "height": 990,
     "depth": 368,
     "decor": "Дуб Сонома",
     "facadeDecor": "Дуб Сонома",
     "doors": false,
     "plinthHeight": 0,
+    "fastening": "eccentric",
     "sections": [
      {
-      "id": "cd99bcc9-e653-43d7-b13f-ad12f9b9e23b",
+      "id": "c277d38c-f70a-45ec-b4a1-3190ae6fb6f8",
       "weight": 1,
       "shelves": [
-       0.25,
-       0.5,
-       0.75
+       0.27,
+       0.53,
+       0.8
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "m18",
+   "x": 726,
+   "z": 3,
+   "y": 1950,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль",
+    "width": 282,
+    "height": 430,
+    "depth": 364,
+    "decor": "Дуб Сонома",
+    "facadeDecor": "Белый",
+    "doors": true,
+    "plinthHeight": 0,
+    "hingeSide": "right",
+    "fastening": "eccentric",
+    "skew": {
+     "side": "right",
+     "depth": 300
+    },
+    "sections": [
+     {
+      "id": "bf66634c-4e6a-4a75-8601-648115de65e0",
+      "weight": 1,
+      "shelves": [
+       0.55
       ],
       "drawers": 0,
       "rod": false

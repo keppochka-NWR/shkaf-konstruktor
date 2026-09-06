@@ -69,7 +69,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
     add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
-    if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка (фальш-планка к каркасу)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
+    if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
     add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
     const legs=legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
     for(const d of parts(a.module)){

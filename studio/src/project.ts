@@ -144,7 +144,7 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
 
 
 export function closedModuleBounds(a:PlacedModule){
- const points=parts(a.module).filter(part=>part.role!=='fastener'&&part.role!=='light').flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
+ const points=parts(a.module).filter(part=>part.role!=='fastener'&&part.role!=='light'&&!part.rotZ&&!part.rotY).flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
  const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),z=Math.min(...points.map(p=>p.z));
  return {x,y,z,w:Math.max(...points.map(p=>p.x))-x,h:Math.max(...points.map(p=>p.y))-y,d:Math.max(...points.map(p=>p.z))-z};
 }

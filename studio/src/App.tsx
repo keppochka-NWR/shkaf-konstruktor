@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle,
   type Module,
   type Section,
 } from "./model";
@@ -1236,6 +1236,14 @@ export default function App() {
                 {needsWallFiller(m)&&!m.wallFiller&&!m.cornerFiller&&<p className="field-note">Фальши — планка 100×16 торцом снаружи боковины. Добавляются сами, когда корпус придвинут к стене (зазор 5 мм) или к другому корпусу под 90°.</p>}
                 <label className="hardware-field">Крыша<select aria-label="Материал крыши" value={m.topType==='none'?'none':(m.topGlass??'ldsp')} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none'){n.topType='none';delete n.topGlass;}else{delete n.topType;if(v==='ldsp')delete n.topGlass;else n.topGlass=v;}})}><option value="ldsp">ЛДСП 16 в цвет корпуса</option><option value="none">Без крыши · каркас на стяжках</option>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>Стекло · {i.label}</option>)}</select></label>
                 {m.topGlass&&<p className="field-note">Закалённое стекло 4 мм ложится на боковины сверху, кромка полируется по периметру. В раскрой ЛДСП не идёт, в смете — стекло, закалка и полировка.</p>}
+                <label className="hardware-field">Крепёж корпуса<select aria-label="Крепёж корпуса" value={m.fastening??'confirmat'} onChange={e=>modify(n=>{if(e.target.value==='eccentric')n.fastening='eccentric';else delete n.fastening;})}><option value="confirmat">Евровинты · видны снаружи, под заглушки</option><option value="eccentric">Эксцентрики D15 · скрытый крепёж</option></select></label>
+                <p className="field-note">{m.fastening==='eccentric'?'Бочонок в пласти горизонталей на 34 мм от торца, шток в боковине; снаружи корпус чистый. В 3D — светлые бочонки при открытых фасадах.':'Конфирматы 5×50 через боковины в дно, крышу, жёсткие полки и полку над ящиками; снаружи — заглушки в цвет. В 3D — тёмные головки на боковинах.'}</p>
+                {m.topType!=='none'&&!m.topGlass&&!m.alu&&<label className="hardware-field">Скос под потолок<select aria-label="Скос под потолок" value={m.slope?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.slope;else n.slope={side:v as 'left'|'right',lowHeight:n.slope?.lowHeight??Math.max(RULES.slopeMinLow,Math.round((n.height-300)/10)*10)};})}><option value="none">Нет · крыша ровная</option><option value="left">Ниже слева</option><option value="right">Ниже справа</option></select></label>}
+                {m.slope&&<NumberField label={`Высота корпуса у ${m.slope.side==='left'?'левой':'правой'} стороны`} value={m.slope.lowHeight} min={RULES.slopeMinLow} max={m.height-50} onChange={v=>modify(n=>{n.slope={...n.slope!,lowHeight:v};})}/>}
+                {m.slope&&<p className="field-note">Крыша ложится по скату на боковины разной высоты, фасады и набивной задник режутся трапецией; полки и перегородки — до низкой стороны. В раскрое крыша идёт длиной по скату, фасад — по большей высоте.</p>}
+                {!m.slope&&!m.alu&&m.doorMount!=='inset'&&!m.sections.some(s=>s.drawers>0)&&<label className="hardware-field">Скос фронта в плане<select aria-label="Скос фронта в плане" value={m.skew?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.skew;else n.skew={side:v as 'left'|'right',depth:n.skew?.depth??Math.max(RULES.minD,Math.round((n.depth-150)/10)*10)};})}><option value="none">Нет · фронт ровный</option><option value="left">Мельче слева</option><option value="right">Мельче справа</option></select></label>}
+                {m.skew&&<NumberField label={`Глубина корпуса у ${m.skew.side==='left'?'левой':'правой'} стороны`} value={m.skew.depth} min={RULES.minD} max={m.depth-30} onChange={v=>modify(n=>{n.skew={...n.skew!,depth:v};})}/>}
+                {m.skew&&<p className="field-note">Фасады и цоколь идут под углом {Math.round(Math.abs(skewAngle(m))*180/Math.PI)}° к задней стенке, боковины разной глубины, дно, крыша и полки — трапецией (в раскрое габарит с пометкой «скос»). Ящики, вкладные и алюминиевые фасады при скосе не ставятся.</p>}
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
                 <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. В смете — {RULES.lightRetailPerM.toLocaleString('ru-RU')} ₽ за пог.м по прайсу цеха, поверх коэффициента.</p>
@@ -1388,8 +1396,10 @@ export default function App() {
                             max={300}
                             onChange={(v) => update({ height: v })}
                           />
+                          <label className="hardware-field"><span><input type="checkbox" aria-label="Ящик без фасада" checked={!!c.noFacade} onChange={e=>update({noFacade:e.target.checked?true:undefined,handle:undefined})}/> Внутренний ящик без фасада</span></label>
+                          {c.noFacade?<p className="field-note">Только короб и направляющие: ящик за распашными дверями или в открытом каркасе. Фасад, ручка и зазоры не считаются.</p>:<>
                           <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c)-(m.doors?RULES.drawerFrontGap:RULES.faceGap))} min={60} max={800} onChange={v=>update({facadeH:v})}/>
-                          {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}
+                          {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}</>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
                           {c.slide === "gtv0fpo" && (
                             <a
@@ -1484,6 +1494,9 @@ export default function App() {
                         }
                       />
                     ))}
+                    <h3>Крепление полок</h3>
+                    <div className="shelf-kind">{s.shelves.map((_, j) => <label key={j}><input type="checkbox" aria-label={`Полка ${j + 1} жёсткая`} checked={!!s.fixed?.includes(j)} onChange={e => modifySection(a => { const set = new Set(a.fixed ?? []); if (e.target.checked) set.add(j); else set.delete(j); const next = [...set].sort((x, y) => x - y); if (next.length) a.fixed = next; else delete a.fixed; })} /> Полка {j + 1}: {s.fixed?.includes(j) ? 'жёсткая' : 'съёмная'}</label>)}</div>
+                    <p className="field-note">Съёмная — на полкодержателях, короче проёма на 2 мм с каждой стороны. Жёсткая — в точную ширину проёма, на евровинтах или эксцентриках как дно и крыша; она же связывает боковины.</p>
                   </>
                 )}
               </div>

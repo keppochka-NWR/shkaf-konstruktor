@@ -22,6 +22,7 @@ export function roomWarnings(project:Project){
   }
   const clearance=ceilingClearance(project.room.ceiling);
   for(const a of project.modules){const gap=project.room.height-(a.y??0)-a.module.height;if(gap<clearance-.001)warnings.push({moduleId:a.id,kind:"ceiling",message:`«${a.module.name}»: до потолка ${Math.round(gap*10)/10} мм. По регламенту оставьте ${clearance} мм до ${project.room.ceiling==='stretch'?'натяжного':'стационарного'} потолка; проверьте светильники и выступы.`});}
+  for(const a of project.modules)if(a.module.width>900)warnings.push({moduleId:a.id,kind:'logistics',message:`«${a.module.name}»: корпус шириной ${a.module.width} мм в сборе не во все лифты входит. Уточните лифт и подъём на этаж или разбейте на два корпуса.`});
   for(const {a,b} of closed){
     const exits=[['левой',-b.x],['задней',-b.z],['правой',b.x+b.w-project.room.width],['передней',b.z+b.d-project.room.depth]] as const;
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});

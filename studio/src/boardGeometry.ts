@@ -8,6 +8,18 @@ export function aluFrameGeometry(part:Part,face:number):THREE.BufferGeometry{
  const hole=new THREE.Path();hole.moveTo(-w/2+f,-h/2+f);hole.lineTo(w/2-f,-h/2+f);hole.lineTo(w/2-f,h/2-f);hole.lineTo(-w/2+f,h/2-f);hole.closePath();shape.holes.push(hole);
  const geometry=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});geometry.translate(0,0,-t/2);return geometry;
 }
+/** Трапеция (фасад или задник под скосом): низ ровный, верх по высотам taper[0] слева и taper[1] справа; выдавлена на толщину. */
+export function taperGeometry(part:Part):THREE.BufferGeometry{
+ const [w,h,t]=part.size,[hL,hR]=part.taper!;
+ const shape=new THREE.Shape();shape.moveTo(-w/2,-h/2);shape.lineTo(w/2,-h/2);shape.lineTo(w/2,-h/2+hR);shape.lineTo(-w/2,-h/2+hL);shape.closePath();
+ const g=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});g.translate(0,0,-t/2);return g;
+}
+/** Трапеция в плане (дно, крыша, полка при скосе фронта): задняя грань прямая, передняя — от глубины taperZ[0] слева до taperZ[1] справа. */
+export function planTaperGeometry(part:Part):THREE.BufferGeometry{
+ const [w,t,dmax]=part.size,[dL,dR]=part.taperZ!,rear=-dmax/2;
+ const shape=new THREE.Shape();shape.moveTo(-w/2,rear);shape.lineTo(w/2,rear);shape.lineTo(w/2,rear+dR);shape.lineTo(-w/2,rear+dL);shape.closePath();
+ const g=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});g.translate(0,0,-t/2);g.rotateX(Math.PI/2);return g;
+}
 /** Keep the image's vertical grain aligned with the cut-list length on board faces. */
 export function boardGeometry(part:Part):THREE.BoxGeometry{
  const geometry=new THREE.BoxGeometry(...part.size);
