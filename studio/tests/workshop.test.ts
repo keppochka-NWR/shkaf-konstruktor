@@ -66,3 +66,6 @@ test('rotation preserves occupied center, clamps to room walls and never pushes 
  const paired=appendModule(p,a.module,p.modules[0]);assert.throws(()=>rotateModule(paired,a.id,90),/пересекается/);assert.deepEqual(paired.modules[0],a);
  const narrow=structuredClone(p);narrow.room.width=500;narrow.modules[0].x=50;assert.throws(()=>rotateModule(narrow,a.id,90),/не помещается/);
 });
+
+import {libraryFile,parseLibraryFile} from '../src/moduleLibraryFile';
+test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:901}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
