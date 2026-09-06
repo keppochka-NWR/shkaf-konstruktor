@@ -1,3 +1,4 @@
+import {projectContent} from '../src/projectStorage';
 import {openingZone,roomWarnings} from '../src/roomWarnings';
 import {nicheSize} from '../src/measurement';
 import {frameDistance,frameHeight} from '../src/framing';
@@ -283,4 +284,13 @@ test('room warnings inspect all four walls and height without blocking project s
     p.room.openings=[o];a.x=z.x+10;a.z=z.z+10;a.rotation=90;
     assert.equal(roomWarnings(p).length,1,wall);
   }
+});
+
+test('server content comparison ignores link metadata and key order but detects edits',()=>{
+  const p=newProject(),copy=structuredClone(p);
+  copy.cloud={id:'example',revision:4,owner:'manager@example.test',name:'Шкаф'};
+  copy.room={height:p.room.height,depth:p.room.depth,width:p.room.width,openings:[]};
+  assert.equal(projectContent(copy),projectContent(p));
+  copy.modules[0].x+=10;assert.notEqual(projectContent(copy),projectContent(p));
+  copy.modules[0].x-=10;copy.measurement={number:'123',date:'',notes:''};assert.notEqual(projectContent(copy),projectContent(p));
 });

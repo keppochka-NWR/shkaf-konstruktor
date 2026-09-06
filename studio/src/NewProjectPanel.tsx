@@ -1,9 +1,9 @@
 import {useState} from 'react';
 import {newProject,parseProject,type Project} from './project';
-const BACKUP='module-studio-previous-project-v1';
+import {PREVIOUS_PROJECT as BACKUP,backupProject} from './projectStorage';
 export function NewProjectPanel({project,open}:{project:Project;open:(p:Project)=>boolean}){
   const [name,setName]=useState('Новый шкаф'),[error,setError]=useState('');
   const [backup]=useState(()=>{try{return localStorage.getItem(BACKUP);}catch{return null;}});
-  function replace(next:Project){try{localStorage.setItem(BACKUP,JSON.stringify(project));if(!open(next))setError('Не удалось открыть проект. Проверьте его параметры.');}catch{setError('Не удалось сохранить резервную копию. Скачайте текущий проект файлом и освободите место в браузере.');}}
+  function replace(next:Project){try{backupProject(project);if(!open(next))setError('Не удалось открыть проект. Проверьте его параметры.');}catch{setError('Не удалось сохранить резервную копию. Скачайте текущий проект файлом и освободите место в браузере.');}}
   return <div className="new-project-panel"><p>Текущий проект останется резервной копией в этом браузере. Серверные проекты не изменяются.</p>{error&&<p role="alert" className="cloud-error">{error}</p>}<label className="hardware-field">Название первого корпуса<input aria-label="Название нового шкафа" maxLength={80} value={name} onChange={e=>setName(e.target.value)}/></label><p className="field-note">Начальный корпус 600 × 2000 × 600 мм с фасадами. Комната 4000 × 3000 × 2700 мм. Все размеры можно изменить после создания.</p><button className="primary" disabled={!name.trim()} onClick={()=>{const next=newProject();next.modules[0].module.name=name.trim();replace(next);}}>Создать новый проект</button>{backup&&<div className="help-note"><p>Есть предыдущая резервная копия. Её восстановление сохранит текущий проект на её место.</p><button className="outline" onClick={()=>{try{replace(parseProject(JSON.parse(backup)));}catch{setError('Резервная копия повреждена. Откройте сохранённый файл проекта.');}}}>Восстановить предыдущий проект</button></div>}<p className="field-note">Здесь хранится одна резервная копия. Для постоянной истории используйте кабинет или скачивайте файлы проектов.</p></div>;
 }
