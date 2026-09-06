@@ -1123,6 +1123,7 @@ export default function App() {
                   max={moveAll?project.room.depth-mountingComposition.d+placedBounds.z-mountingComposition.z:project.room.depth-placedBounds.d}
                   onChange={(v) => movePlaced("z", v)}
                 />
+                <details className="measurement-fields"><summary>От противоположных стен и потолка</summary>{(['x','z','y'] as const).map(axis=>{const size={x:'w',z:'d',y:'h'}[axis] as 'w'|'d'|'h',roomSize={x:project.room.width,z:project.room.depth,y:project.room.height}[axis],extent=placedBounds[size],near=placedBounds[axis],groupOffset=near-mountingComposition[axis],minNear=moveAll?groupOffset:0,maxNear=moveAll?roomSize-mountingComposition[size]+groupOffset:roomSize-extent;return <NumberField key={axis} label={{x:'От правой стены',z:'От передней стены',y:'До потолка'}[axis]} value={Math.round((roomSize-near-extent)*10)/10} min={Math.max(0,roomSize-extent-maxNear)} max={roomSize-extent-minNear} onChange={v=>movePlaced(axis,roomSize-extent-v)}/>;})}<p className="field-note">Меняется положение корпуса, а не его размер. Для антресоли можно задать расстояние до потолка.</p></details>
                 <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>{moveAll&&<p className="field-note"><b>Общий сдвиг:</b> отступ выбранного корпуса перемещает всю композицию.</p>}
                 <button
                   className="text-action danger"
