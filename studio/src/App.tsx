@@ -64,7 +64,7 @@ import {
   appendModule, snapPlacement, bounds,
   type Project,
 } from "./project";
-import {addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -1337,11 +1337,7 @@ export default function App() {
                 <button
                   className="text-action danger"
                   onClick={() =>
-                    modifySection((a) => {
-                      a.shelves = [];
-                      a.drawers = 0;
-                      a.rod = false;
-                    })
+                    commitProject(clearSection(project,placed.id,selectedId))
                   }
                 >
                   <Trash2 size={15} /> Очистить наполнение
@@ -1350,10 +1346,7 @@ export default function App() {
                   <button
                     className="text-action danger"
                     onClick={() => {
-                      const n = structuredClone(m);
-                      const removed = n.sections.splice(idx, 1)[0];
-                      n.sections[Math.max(0, idx - 1)].weight += removed.weight;
-                      commit(n);
+                      try{commitProject(removeSection(project,placed.id,selectedId));}catch(e){setError((e as Error).message);}
                     }}
                   >
                     <Minus size={15} /> Удалить секцию

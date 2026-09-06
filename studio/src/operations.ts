@@ -97,3 +97,14 @@ export function addUpperModule(p:Project,mid:string):Project {
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
+
+export function clearSection(p:Project,mid:string,sid:string):Project {
+ const n=structuredClone(p),s=n.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);if(!s)throw Error('Выберите секцию.');
+ s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;return n;
+}
+export function removeSection(p:Project,mid:string,sid:string):Project {
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;if(!m||m.sections.length<2)throw Error('В корпусе должна остаться хотя бы одна секция.');
+ const i=m.sections.findIndex(s=>s.id===sid);if(i<0)throw Error('Выберите секцию.');const bb=boxes(m),recipient=i===0?1:i-1;
+ m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);
+ const error=projectErrors(n)[0];if(error)throw Error(error);return n;
+}
