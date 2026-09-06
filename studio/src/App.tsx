@@ -609,6 +609,7 @@ export default function App() {
               <button
                 key={a.id}
                 className="module-item"
+                title={a.module.name}
                 aria-pressed={a.id === placed.id}
                 onClick={() => selectModule(a.id)}
               >
