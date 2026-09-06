@@ -429,3 +429,19 @@ test('autosave rejects a stale browser tab before writing the project or damaged
  writes.length=0;assert.throws(()=>persistProject(storage,p,'damaged',original),ProjectStorageConflict);assert.equal(writes.length,0);assert.equal(data.get(CURRENT_PROJECT),saved);assert.equal(data.has(DAMAGED_PROJECT),false);
  data.delete(CURRENT_PROJECT);assert.throws(()=>persistProject(storage,p,undefined,saved),ProjectStorageConflict);assert.equal(writes.length,0);
 });
+
+
+test('niche advisories compare the closed composition and height from floor without blocking editing',()=>{
+ const p=newProject();p.measurement={number:'Н-1',date:'',notes:'',niche:{width:610,height:2030,depth:652,deviation:0}};
+ assert.equal(roomWarnings(p).filter(w=>w.kind?.startsWith('niche-')).length,0);
+ p.measurement.niche!.deviation=10;
+ let warnings=roomWarnings(p).filter(w=>w.kind?.startsWith('niche-'));
+ assert.equal(warnings.length,1);assert.equal(warnings[0].kind,'niche-w');assert.match(warnings[0].message,/595 мм/);
+ p.measurement.niche!.depth=650;p.modules[0].y=20;
+ warnings=roomWarnings(p).filter(w=>w.kind?.startsWith('niche-'));
+ assert.deepEqual(warnings.map(w=>w.kind),['niche-w','niche-d','niche-h']);assert.match(warnings[2].message,/2020 мм/);
+ assert.deepEqual(projectErrors(p),[]);assert.match(specificationHTML(p),/Ниша: ширина мебели/);assert.match(placementHTML(p),/Ниша: глубина мебели/);
+ const second=structuredClone(p.modules[0]);second.id='niche-second';second.x+=700;p.modules.push(second);
+ warnings=roomWarnings(p).filter(w=>w.kind==='niche-w');assert.equal(warnings[0].moduleId,second.id);assert.match(warnings[0].message,/1300 мм/);
+ delete p.measurement.niche;assert.equal(roomWarnings(p).filter(w=>w.kind?.startsWith('niche-')).length,0);
+});

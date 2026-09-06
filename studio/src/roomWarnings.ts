@@ -1,4 +1,4 @@
-import {MEASUREMENT_RULES} from './measurement';
+import {MEASUREMENT_RULES,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;kind?:string;message:string};
@@ -26,5 +26,14 @@ export function roomWarnings(project:Project){
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});
   }
   for(const o of project.room.obstacles||[])for(const {a,b} of closed)if(overlap(b,obstacleBounds(o)))warnings.push({moduleId:a.id,obstacleId:o.id,kind:'obstacle-'+o.id,message:`«${a.module.name}» пересекается с объектом замера «${o.name}». Измените расстановку или уточните замер${o.type==='radiator'?'; отдельно проверьте доступ и теплоотвод':''}.`});
+  if(project.measurement?.niche&&closed.length){
+    const fit=nicheSize(project.measurement.niche);
+    for(const [axis,size,label,limit] of [['x','w','Ширина',fit.width],['z','d','Глубина',fit.depth],['y','h','Высота от пола',fit.height]] as const){
+      const edge=closed.reduce((a,b)=>a.b[axis]+a.b[size]>=b.b[axis]+b.b[size]?a:b);
+      const start=axis==='y'?0:Math.min(...closed.map(a=>a.b[axis]));
+      const actual=edge.b[axis]+edge.b[size]-start;
+      if(actual>limit+.1)warnings.push({moduleId:edge.a.id,kind:'niche-'+size,message:`Ниша: ${label.toLocaleLowerCase('ru')} мебели ${Math.round(actual*10)/10} мм превышает допустимые ${limit} мм после вычетов СТП. Проверьте состав композиции и замер. Учтены закрытые фасады, ручки и промежутки между корпусами.`});
+    }
+  }
   return warnings;
 }
