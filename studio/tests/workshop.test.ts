@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -25,3 +25,18 @@ test('failed transfer never removes the source drawer',()=>{const p=appendModule
 test('quarter rotations invert points and exchange full occupied dimensions',()=>{const p=newProject(),a=p.modules[0];a.module.width=500;a.x=1000;a.z=1000;for(const r of [0,90,180,270] as const){a.rotation=r;const point=localToRoom(a,123,456);assert.deepEqual(roomToLocal(a,point.x,point.z),{x:123,z:456});const b=bounds(a);assert.equal(b.w,r%180===0?500:621);assert.equal(b.d,r%180===0?621:500);assert.deepEqual(parseProject(p),p);assert.deepEqual(projectErrors(p),[]);}});
 test('rotated fronts and backs participate in room limits and snapping',()=>{const p=newProject(),a=p.modules[0];a.rotation=90;a.x=0;assert.ok(projectErrors(p).length);const pos=snapPlacement(p,a.id,{x:8,y:0,z:30});assert.equal(pos.x,3);Object.assign(a,pos);assert.deepEqual(projectErrors(p),[]);assert.throws(()=>parseProject({...p,modules:[{...a,rotation:45}]}));});
 
+
+test('mirroring reverses unequal sections and door fillers without changing placement or drawer setup',()=>{
+ const p=newProject(),a=p.modules[0],m=a.module;m.width=900;m.hingeSide='left';
+ m.sections=[{...section(),weight:1,shelves:[.5],drawers:0},{...section(),weight:2,shelves:[.72],drawers:2,drawerConfigs:[{slide:'gtv0fpo',length:300,height:140},{slide:'ball',length:450,height:180}]}];
+ assert.deepEqual(projectErrors(p),[]);const original=structuredClone(p);
+ const n=mirrorModule(p,a.id),nm=n.modules[0].module;
+ assert.deepEqual(p,original);assert.equal(nm.hingeSide,'right');
+ assert.deepEqual(nm.sections,[m.sections[1],m.sections[0]]);
+ assert.deepEqual(boxes(nm).map(b=>b.width),boxes(m).map(b=>b.width).reverse());
+ for(const b of boxes(m)){const mirrored=boxes(nm).find(v=>v.id===b.id)!;assert.ok(Math.abs(mirrored.x-(m.width-b.x-b.width))<.001);}
+ const oldFiller=parts(m).find(p=>p.name.startsWith('Фальш-панель'))!,newFiller=parts(nm).find(p=>p.name.startsWith('Фальш-панель'))!;
+ assert.ok(Math.abs(newFiller.position[0]-(m.width-oldFiller.position[0]))<.001);
+ assert.deepEqual(projectErrors(n),[]);assert.deepEqual(mirrorModule(n,a.id),p);
+ assert.deepEqual({...n.modules[0],module:null},{...a,module:null});
+});

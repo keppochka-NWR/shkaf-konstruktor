@@ -64,7 +64,7 @@ import {
   appendModule, snapPlacement,
   type Project,
 } from "./project";
-import {moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -1073,6 +1073,7 @@ export default function App() {
               {m.sections.some(s=>s.drawers>0)&&<div className="property-section"><h2>Фасады ящиков</h2><button className="text-action" onClick={()=>{setMaterialTarget('drawerFacadeDecor');setModal('materials');}}>Материал ящиков: {m.drawerFacadeDecor??m.facadeDecor}<ChevronDown size={13}/></button>{m.drawerFacadeDecor&&<button className="text-action" onClick={()=>modify(n=>delete n.drawerFacadeDecor)}>Как у распашных фасадов</button>}</div>}
               <div className="property-section">
                 <h2>Положение в помещении</h2>
+                <button className="outline" onClick={()=>{try{if(commitProject(mirrorModule(project,active))){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>Зеркально отразить наполнение</button><p className="field-note">Меняет левую и правую секции местами и сторону петель. Размеры и положение корпуса сохраняются.</p>
                 <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>commitProject({...project,modules:project.modules.map(a=>a.id===placed.id?{...a,rotation:Number(e.target.value) as 0|90|180|270}:a)})}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Перетащите корпус в сцене. На виде спереди можно поставить его сверху другого.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"

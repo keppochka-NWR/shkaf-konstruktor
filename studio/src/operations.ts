@@ -57,3 +57,12 @@ export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:num
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }
+
+export function mirrorModule(p:Project,mid:string):Project {
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
+ if(!m)throw Error('Выберите корпус для отражения.');
+ m.sections.reverse();
+ m.hingeSide=m.hingeSide==='right'?'left':'right';
+ const error=projectErrors(n)[0];if(error)throw Error(error);
+ return n;
+}
