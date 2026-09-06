@@ -74,7 +74,11 @@ function NumberField({
   min,
   max,
   onChange,
+  onSelect,
+  selected,
 }: {
+  onSelect?:()=>void;
+  selected?:boolean;
   label: string;
   value: number;
   min: number;
@@ -98,9 +102,10 @@ function NumberField({
     onChange(n);
     setDraft(String(value));
   };
+  const Wrapper=onSelect?'div':'label';
   return (
-    <label className="number-field">
-      <span>{label}</span>
+    <Wrapper className="number-field">
+      {onSelect?<button className="number-label-select" aria-label={'Выбрать: '+label} aria-pressed={selected} onClick={onSelect}>{label}</button>:<span>{label}</span>}
       <div>
         <input
           aria-label={label}
@@ -122,7 +127,7 @@ function NumberField({
         />
         <small>мм</small>
       </div>
-    </label>
+    </Wrapper>
   );
 }
 function Counter({
@@ -1355,11 +1360,14 @@ export default function App() {
                         }
                       />
                     ))}
-                    <h3>Высота центра полки</h3>
+                    <h3>Высота центра полки</h3><p className="field-note">Нажмите название полки, чтобы выбрать её в модели.</p>
                     {s.shelves.map((f, j) => (
                       <NumberField
                         key={j}
                         label={`Полка ${j + 1}`}
+                        selected={selectedPart?.pid===s.id+':shelf:'+j}
+                        onSelect={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:s.id+':shelf:'+j});setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}}
+
                         value={Math.round(f * (b.top - b.bottom))}
                         min={80}
                         max={b.top - b.bottom - 80}
