@@ -248,3 +248,25 @@ test('review package refuses invalid furniture instead of exporting partial docu
   const p=newProject();p.modules[0].module.width=901;
   assert.throws(()=>reviewFiles(p));
 });
+
+test('specification follows actual door handing, filler sides and drawer cap heights',()=>{
+ const p=newProject(),m=p.modules[0].module;
+ m.hingeSide='right';let html=specificationHTML(p);
+ assert.ok(html.includes('петли справа'));
+ assert.ok(html.includes('Фальши в зоне ящиков: справа —'));
+ const cap=parts(m).find(d=>d.id.endsWith(':drawer-cap'))!;
+ const bottom=boxes(m)[0].bottom,lower=Math.round((cap.position[1]-cap.size[1]/2-bottom)*10)/10;
+ assert.ok(html.includes('Полка над ящиками: низ от дна проёма '+lower));
+ m.width=900;html=specificationHTML(p);
+ assert.ok(html.includes('петли слева'));assert.ok(html.includes('петли справа'));
+ assert.ok(html.includes('Фальши в зоне ящиков: слева —'));assert.ok(html.includes('; справа —'));
+ m.doors=false;html=specificationHTML(p);assert.ok(!html.includes('Фальши в зоне ящиков:'));assert.ok(html.includes('Створки: нет'));
+});
+test('specification reports rod and pantograph heights from geometry without inventing drilling',()=>{
+ const p=newProject(),m=p.modules[0].module,s=m.sections[0];s.drawers=0;s.drawerConfigs=[];s.shelves=[];s.rod=true;s.rodAt=0.7;
+ const rod=parts(m).find(d=>d.role==='rod')!,bottom=boxes(m)[0].bottom;
+ let html=specificationHTML(p);assert.ok(html.includes('Штанга D25: ось от дна проёма '+Math.round((rod.position[1]-bottom)*10)/10));
+ assert.ok(html.includes('не координаты присадки'));
+ s.rod=false;s.pantograph=true;html=specificationHTML(p);assert.ok(html.includes('Штанга пантографа: ось от дна проёма'));
+ assert.ok(!html.includes('Крепление штанги D25:'));
+});
