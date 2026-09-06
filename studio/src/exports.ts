@@ -141,10 +141,10 @@ export function detailCSV(p: Project) {
       "Длина",
       "Ширина",
       "Толщина",
-      "Кромка 1",
-      "Кромка 2",
-      "Кромка 3",
-      "Кромка 4",
+      "Кромка 1 · торец ширины",
+      "Кромка 2 · торец ширины",
+      "Кромка 3 · торец длины",
+      "Кромка 4 · торец длины",
     ],
     ...details(p).map((d) => [
       d.code,
@@ -220,6 +220,7 @@ export function quoteHTML(
 }
 
 export function labelOrder(p:Project){const number=p.measurement?.number.trim();return number?'Замер '+number:p.offer?.customer.trim()||p.cloud?.name?.trim()||'Заказ не указан';}
+export const EDGE_LEGEND='1–2: торцы по ширине · 3–4: по длине';
 export function labelEdges(d:Pick<Detail,'edge'>){return 'Кромка 1–4: '+d.edge.map(v=>v===0?'—':String(v).replace('.',',')).join(' / ')+' мм';}
 export function labelDetails(p:Project){
   const sheets=nest(p),location=new Map(sheets.flatMap((s,i)=>s.items.map(a=>[a.detail.code,i+1] as const)));
@@ -227,7 +228,7 @@ export function labelDetails(p:Project){
 }
 export function labelsHTML(p:Project){
   const labels=labelDetails(p),order=labelOrder(p),stamp=new Date().toLocaleString('ru-RU');
-  return htmlDocument('Бирки деталей для проверки',`<style>@page{size:A4;margin:10mm}.label-page{display:grid;grid-template-columns:90mm 90mm;gap:3mm;margin:0 0 6mm;break-inside:avoid}.label-page:last-child{margin-bottom:0}.part-label{box-sizing:border-box;width:90mm;height:50mm;border:1px solid #8e9a9f;padding:3mm;break-inside:avoid;color:#172c36;font-size:11px;overflow:hidden}.label-top{display:flex;justify-content:space-between;align-items:center}.label-code{font-size:28px;font-weight:bold}.label-name{font-weight:bold;font-size:14px;margin:2mm 0;line-height:1.15;max-height:9mm;overflow:hidden}.label-module{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.label-material{margin:1mm 0}.label-size{font-size:20px;font-weight:bold}.label-note{font-size:9px;color:#5c6870;margin-top:1mm}@media print{body{padding:0;max-width:none}.label-heading{display:none}.label-page{margin:0;break-after:page}.label-page:last-child{break-after:auto}}</style><div class="label-heading"><h1>Бирки деталей · для проверки</h1><p>90 × 50 мм, печать 100%. По 10 бирок на A4, без колонтитулов браузера. ${labels.length} деталей · ${Math.ceil(labels.length/10)} страниц. Сформировано ${esc(stamp)}.</p><p>Коды соответствуют картам текущего проекта. После изменения конструкции сформируйте карты и бирки заново. Размеры габаритные; припуски, кромление и присадку проверяет технолог.</p></div><div class="labels">${labels.map((d,i)=>`${i%10===0?'<section class="label-page">':''}<article class="part-label"><div class="label-top"><span class="label-code">${esc(d.code)}</span><span>Лист ${d.sheet} · ↑ текстура</span></div><div class="label-module label-note" title="${esc(order)}">${esc(order)}</div><div class="label-name">${esc(d.name)}</div><div class="label-module" title="${esc(d.moduleName)}">${esc(d.moduleName)}</div><div class="label-material">${esc(d.material==='hdf'?'ЛХДФ':d.decor)} · ${d.thickness} мм</div><div class="label-size">${d.length} × ${d.width} мм</div><div class="label-note">${esc(labelEdges(d))}</div><div class="label-note">ПРОВЕРКА · ${esc(stamp)} · длина вдоль текстуры</div></article>${i%10===9||i===labels.length-1?'</section>':''}`).join('')}</div>`);
+  return htmlDocument('Бирки деталей для проверки',`<style>@page{size:A4;margin:10mm}.label-page{display:grid;grid-template-columns:90mm 90mm;gap:3mm;margin:0 0 6mm;break-inside:avoid}.label-page:last-child{margin-bottom:0}.part-label{box-sizing:border-box;width:90mm;height:50mm;border:1px solid #8e9a9f;padding:3mm;break-inside:avoid;color:#172c36;font-size:11px;overflow:hidden}.label-top{display:flex;justify-content:space-between;align-items:center}.label-code{font-size:28px;font-weight:bold}.label-name{font-weight:bold;font-size:14px;margin:2mm 0;line-height:1.15;max-height:9mm;overflow:hidden}.label-module{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.label-material{margin:1mm 0}.label-size{font-size:20px;font-weight:bold}.label-note{font-size:9px;color:#5c6870;margin-top:1mm}@media print{body{padding:0;max-width:none}.label-heading{display:none}.label-page{margin:0;break-after:page}.label-page:last-child{break-after:auto}}</style><div class="label-heading"><h1>Бирки деталей · для проверки</h1><p>90 × 50 мм, печать 100%. По 10 бирок на A4, без колонтитулов браузера. ${labels.length} деталей · ${Math.ceil(labels.length/10)} страниц. Сформировано ${esc(stamp)}.</p><p>Коды соответствуют картам текущего проекта. После изменения конструкции сформируйте карты и бирки заново. Размеры габаритные; припуски, кромление и присадку проверяет технолог.</p></div><div class="labels">${labels.map((d,i)=>`${i%10===0?'<section class="label-page">':''}<article class="part-label"><div class="label-top"><span class="label-code">${esc(d.code)}</span><span>Лист ${d.sheet} · ↑ текстура</span></div><div class="label-module label-note" title="${esc(order)}">${esc(order)}</div><div class="label-name">${esc(d.name)}</div><div class="label-module" title="${esc(d.moduleName)}">${esc(d.moduleName)}</div><div class="label-material">${esc(d.material==='hdf'?'ЛХДФ':d.decor)} · ${d.thickness} мм</div><div class="label-size">${d.length} × ${d.width} мм</div><div class="label-note">${esc(labelEdges(d))}</div><div class="label-note">${EDGE_LEGEND}</div><div class="label-note">ПРОВЕРКА · ${esc(stamp)} · длина вдоль текстуры</div></article>${i%10===9||i===labels.length-1?'</section>':''}`).join('')}</div>`);
 }
 
 function sectionAssemblyHTML(sectionParts:Part[],bottom:number){
