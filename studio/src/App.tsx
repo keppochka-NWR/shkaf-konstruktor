@@ -302,12 +302,18 @@ export default function App() {
     s = m.sections[idx],
     b = boxes(m)[idx],
     allParts = parts(m);
+  function clearHistorySelection(){
+    setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);
+    setSelectedOpening(undefined);setSelectedObstacle(undefined);
+  }
   const undo = () => {
+    clearHistorySelection();
     setCursor((c) => Math.max(0, c - 1));
     setError("");
     touched.current = true;
   };
   const redo = () => {
+    clearHistorySelection();
     setCursor((c) => Math.min(history.length - 1, c + 1));
     setError("");
     touched.current = true;
