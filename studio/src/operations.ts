@@ -22,7 +22,11 @@ export function movePart(p:Project,mid:string,sid:string,pid:string,delta:number
   return n;
 }
 export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:number,drawer?:DrawerConfig):Project{
-  const source=p.modules.find(a=>a.id===mid)?.module;if(!source)throw Error('Перетащите элемент в корпус.');const b=boxes(source).find(b=>b.id===sid)!;
+  const source=p.modules.find(a=>a.id===mid)?.module;if(!source)throw Error('Перетащите элемент в корпус.');
+  const target=source.sections.find(s=>s.id===sid),b=boxes(source).find(b=>b.id===sid);
+  if(!target||!b)throw Error('Выберите секцию для наполнения.');
+  if(kind==='shelf'&&target.shelves.length>=RULES.maxShelves)throw Error(`В секции уже ${RULES.maxShelves} полок. Выберите другую секцию или удалите ненужную полку.`);
+  if(kind==='drawer'&&target.drawers>=RULES.maxDrawers)throw Error(`В секции уже ${RULES.maxDrawers} ящиков. Выберите другую секцию или удалите ненужный ящик.`);
   const desired=Math.round((worldY-b.bottom)/5)*5;
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));
   for(const y of candidates){
@@ -41,6 +45,9 @@ export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,
   if(fromMid===toMid&&fromSid===toSid)throw Error('Выберите другой корпус или секцию.');
   const m=p.modules.find(a=>a.id===fromMid)?.module,s=m?.sections.find(s=>s.id===fromSid);if(!m||!s)throw Error('Элемент не найден.');
   const kind:FillKind=pid.includes(':pantograph:')?'pantograph':pid.includes(':drawer:')?'drawer':pid.includes(':shelf:')?'shelf':'rod';
+  const target=p.modules.find(a=>a.id===toMid)?.module.sections.find(s=>s.id===toSid);
+  if(!target)throw Error('Выберите принимающую секцию.');
+  if((kind==='rod'||kind==='pantograph')&&(target.rod||target.pantograph))throw Error('В принимающей секции уже есть штанга или пантограф. Выберите свободную секцию или сначала уберите существующий элемент.');
   const cfg=kind==='drawer'?drawerConfig(m,s,Number(pid.split(':drawer:')[1].split(':')[0])):undefined;
   const n=removePart(p,fromMid,fromSid,pid);
   return insertItem(n,kind,toMid,toSid,y,cfg);

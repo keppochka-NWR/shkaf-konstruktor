@@ -270,3 +270,26 @@ test('specification reports rod and pantograph heights from geometry without inv
  s.rod=false;s.pantograph=true;html=specificationHTML(p);assert.ok(html.includes('Штанга пантографа: ось от дна проёма'));
  assert.ok(!html.includes('Крепление штанги D25:'));
 });
+
+test('transferring a hanging rail never replaces an existing rail or pantograph',()=>{
+ const p=appendModule(newProject(),initialModule()),a=p.modules[0],b=p.modules[1];
+ for(const body of [a,b]){body.module.sections=[section()];body.module.sections[0].rod=true;}
+ const source=a.module.sections[0],target=b.module.sections[0];
+ for(const pantograph of [false,true]){
+  target.rod=!pantograph;target.pantograph=pantograph;
+  const before=JSON.stringify(p);
+  assert.throws(()=>transferPart(p,a.id,source.id,source.id+':rod',b.id,target.id,1500),/уже есть штанга или пантограф/);
+  assert.equal(JSON.stringify(p),before);
+ }
+ target.rod=false;target.pantograph=false;
+ const moved=transferPart(p,a.id,source.id,source.id+':rod',b.id,target.id,1500);
+ assert.equal(moved.modules[0].module.sections[0].rod,false);assert.equal(moved.modules[1].module.sections[0].rod,true);
+});
+test('full section insertion explains the item limit without mutating the project',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.drawers=0;s.shelves=Array.from({length:10},(_,i)=>(i+1)/12);
+ assert.throws(()=>insertItem(p,'shelf',a.id,s.id,1000),/уже 10 полок/);
+ s.shelves=[];s.drawers=5;
+ assert.throws(()=>insertItem(p,'drawer',a.id,s.id,1000),/уже 5 ящиков/);
+ assert.equal(s.drawers,5);
+ assert.throws(()=>insertItem(p,'shelf',a.id,'missing',1000),/Выберите секцию/);
+});
