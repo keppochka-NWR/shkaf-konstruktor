@@ -68,11 +68,12 @@ export function mirrorModule(p:Project,mid:string):Project {
  return n;
 }
 
-export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number):Project {
+export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number,whole=false):Project {
  const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);
  if(!a||!Number.isFinite(distance)||distance<0)throw Error('Укажите неотрицательное расстояние от стены или пола.');
  const edge=bounds(a)[axis];
- a[axis]=(a[axis]??0)+distance-edge;
+ const delta=distance-edge;
+ for(const item of whole?n.modules:[a])item[axis]=(item[axis]??0)+delta;
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }

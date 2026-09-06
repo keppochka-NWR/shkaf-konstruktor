@@ -306,7 +306,7 @@ export default function App() {
   }
   useEffect(()=>{setAllMaterials(false);},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
-    try{commitProject(setWallDistance(project,placed.id,key,value));}catch(e){setError((e as Error).message);}
+    try{commitProject(setWallDistance(project,placed.id,key,value,moveAll));}catch(e){setError((e as Error).message);}
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
@@ -1077,22 +1077,22 @@ export default function App() {
               <div className="property-section">
                 <h2>Положение в помещении</h2>
                 <button className="outline" onClick={()=>{try{if(commitProject(mirrorModule(project,active))){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>Зеркально отразить наполнение</button><p className="field-note">Меняет левую и правую секции местами и сторону петель. Размеры и положение корпуса сохраняются.</p>
-                <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>{try{commitProject(rotateModule(project,placed.id,Number(e.target.value) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Поворот — вокруг центра; у стены корпус сдвигается внутрь комнаты. Перетащите его в сцене для расстановки, на виде спереди — по высоте.</p><NumberField label="От пола" value={placed.y??0} min={0} max={project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
+                <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>{try{commitProject(rotateModule(project,placed.id,Number(e.target.value) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Поворот — вокруг центра; у стены корпус сдвигается внутрь комнаты. Перетащите его в сцене для расстановки, на виде спереди — по высоте.</p><NumberField label="От пола" value={placed.y??0} min={moveAll?placedBounds.y-mountingComposition.y:0} max={moveAll?project.room.height-mountingComposition.h+placedBounds.y-mountingComposition.y:project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"
                   value={placedBounds.x}
-                  min={0}
-                  max={project.room.width - placedBounds.w}
+                  min={moveAll?placedBounds.x-mountingComposition.x:0}
+                  max={moveAll?project.room.width-mountingComposition.w+placedBounds.x-mountingComposition.x:project.room.width-placedBounds.w}
                   onChange={(v) => movePlaced("x", v)}
                 />
                 <NumberField
                   label="От задней стены"
                   value={placedBounds.z}
-                  min={0}
-                  max={project.room.depth - placedBounds.d}
+                  min={moveAll?placedBounds.z-mountingComposition.z:0}
+                  max={moveAll?project.room.depth-mountingComposition.d+placedBounds.z-mountingComposition.z:project.room.depth-placedBounds.d}
                   onChange={(v) => movePlaced("z", v)}
                 />
-                <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>
+                <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>{moveAll&&<p className="field-note"><b>Общий сдвиг:</b> отступ выбранного корпуса перемещает всю композицию.</p>}
                 <button
                   className="text-action danger"
                   disabled={project.modules.length === 1}

@@ -162,3 +162,11 @@ test('group drag translates every module and snaps the whole envelope to room wa
  const right=snapComposition(n,anchor.id,{x:3390,y:0,z:30});assert.equal(right.x,3400);assert.deepEqual(projectErrors(moveComposition(n,anchor.id,right)),[]);
  assert.ok(projectErrors(moveComposition(n,anchor.id,{x:4000,y:0,z:30})).length);
 });
+
+
+test('numeric wall distances in group mode preserve offsets and reject moving other bodies outside',()=>{
+ const p=newProject(),n=appendModule(p,p.modules[0].module,p.modules[0]),a=n.modules[1],before=structuredClone(n);
+ const moved=setWallDistance(n,a.id,'x',1000,true);assert.equal(moved.modules[0].x,400);assert.equal(moved.modules[1].x,1000);assert.deepEqual(projectErrors(moved),[]);
+ assert.throws(()=>setWallDistance(n,a.id,'x',100,true));assert.deepEqual(n,before);
+ const individual=setWallDistance(n,a.id,'x',1000);assert.equal(individual.modules[0].x,50);
+});
