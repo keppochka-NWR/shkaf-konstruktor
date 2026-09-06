@@ -64,7 +64,7 @@ import {
   appendModule, snapPlacement,
   type Project,
 } from "./project";
-import {insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -753,6 +753,8 @@ export default function App() {
             snap={(mid,p)=>snapPlacement(project,mid,p)}
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(moveModule(project,mid,p))[0]}
+            onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
+            dividerProblem={(mid,sid,delta)=>{try{moveDivider(project,mid,sid,delta);return undefined;}catch(e){return (e as Error).message;}}}
             onMovePart={moveFilling}
             onDropItem={dropFilling}
             onTransfer={(mid,sid,pid,toMid,toSid,y)=>{try{const next=transferPart(project,mid,sid,pid,toMid,toSid,y);if(commitProject(next)){setActive(toMid);chooseSection(toSid);setMode('fill');return true;}}catch(e){setError((e as Error).message);}return false;}}
@@ -891,7 +893,7 @@ export default function App() {
             ))}
           </div>
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
-            <RotateCcw size={13} /> {mode==='move'?'Тяните корпус · привязка к соседям':mode==='fill'?'Тяните полки и ящики по высоте':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
+            <RotateCcw size={13} /> {mode==='move'?'Тяните корпус · привязка к соседям':mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
             Колесо — масштаб
           </div>
         </section>
@@ -1513,7 +1515,7 @@ export default function App() {
                 <div className="help-steps">
                   <button onClick={()=>{setModal(null);setRoomPlan(true);setTab('room');}}><b>1. Замерьте помещение</b><span>Габариты комнаты, окна и двери. В карточке замера — номер, дата и особенности.</span></button>
                   <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('module');setMode('move');}}><b>2. Соберите шкаф из корпусов</b><span>Добавьте модули до 900 × 2200 мм. Тяните их в режиме «Двигать корпуса» или на плане: края притягиваются к соседям.</span></button>
-                  <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('section');setMode('fill');setOpenDoors(true);}}><b>3. Настройте наполнение</b><span>В режиме «Наполнение» тяните полки и ящики по высоте или в другой корпус. Новые элементы перетаскивайте слева. Нажмите ящик, чтобы выбрать направляющие.</span></button>
+                  <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('section');setMode('fill');setOpenDoors(true);}}><b>3. Настройте наполнение</b><span>В режиме «Наполнение» тяните полки и ящики по высоте или в другой корпус. Новые элементы перетаскивайте слева. Перегородки тяните влево или вправо. Нажмите ящик, чтобы выбрать направляющие.</span></button>
                   <button onClick={()=>{setOutputTab('sheets');setModal('output');}}><b>4. Проверьте проект</b><span>Смета, деталировка, карты Lamarty 2750 × 1830, ведомость и проверочные бирки — в «Выдать документы».</span></button>
                   <button onClick={()=>{setModal(null);setPresentation(true);setRoomPlan(false);setView('iso');setOpenDoors(false);}}><b>5. Покажите клиенту</b><span>Крупный вид без рабочих панелей. Покажите помещение и фасады, сохраните изображение. КП — в документах.</span></button>
                   <button onClick={()=>setModal('cloud')}><b>6. Сохраните вариант</b><span>Кабинет хранит проекты и историю версий. Сейчас сервер работает на этом компьютере. Файл проекта можно перенести кнопками «Скачать» и «Открыть».</span></button>

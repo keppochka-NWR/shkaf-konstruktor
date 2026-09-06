@@ -14,6 +14,8 @@ type Props = {
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
   onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
   moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
+  onMoveDivider:(mid:string,sid:string,delta:number)=>boolean;
+  dividerProblem:(mid:string,sid:string,delta:number)=>string|undefined;
   onMovePart:(mid:string,sid:string,pid:string,y:number)=>boolean;
   onDropItem:(kind:string,mid:string,sid:string,y:number)=>boolean;
   onTransfer:(mid:string,sid:string,pid:string,toMid:string,toSid:string,y:number)=>boolean;
@@ -438,7 +440,7 @@ export function Scene(p: Props) {
     const ray = new THREE.Raycaster(),
       pointer = new THREE.Vector2();
     const badge=document.createElement('div');badge.className='drag-badge';badge.hidden=true;target.appendChild(badge);
-    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
+    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
     let drag:Drag|null=null;
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
@@ -455,7 +457,7 @@ export function Scene(p: Props) {
     }
 
     function cast(clientX:number,clientY:number){const r=renderer.domElement.getBoundingClientRect();pointer.set((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
-    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(drag?.kind==='part'&&drag.moved&&drag.meshes.includes(h.object))&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)));}
+    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(drag?.kind==='part'&&drag.moved&&drag.meshes.includes(h.object))&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)&&!h.object.userData.partId?.endsWith(':divider')));}
     function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.mode==='orbit')return;
@@ -463,13 +465,14 @@ export function Scene(p: Props) {
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       const isPart=state.mode==='fill'&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
-      if(state.mode==='fill'&&!isPart){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
-      const normal=isPart||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
+      const isDivider=state.mode==='fill'&&pid.endsWith(':divider');
+      if(state.mode==='fill'&&!isPart&&!isDivider){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
+      const normal=isPart||isDivider||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
       const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':pantograph:')?sid+':pantograph:':pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
       moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)||((pid===sid+':rod'||pid.includes(':flange:'))&&(o.userData.partId===sid+':rod'||o.userData.partId?.startsWith(sid+':flange:')))))meshes.push(o);});
-      drag={mid:a.id,sid,pid,kind:isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
+      drag={mid:a.id,sid,pid,kind:isDivider?'divider':isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
     }
     function pointerMove(e:PointerEvent){
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
@@ -477,14 +480,20 @@ export function Scene(p: Props) {
       if(drag.kind==='module'){
         const next=current.current.snap(drag.mid,{x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z});
         drag.candidate=next;const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+      }else if(drag.kind==='divider'){
+        const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;
+        for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
+        const b=boxes(a.module),i=b.findIndex(b=>b.id===drag!.sid),problem=current.current.dividerProblem(drag.mid,drag.sid,dx);
+        badge.classList.toggle('invalid',!!problem);badge.textContent=problem||`Секции: ${Math.round(b[i-1].width+dx)} / ${Math.round(b[i].width-dx)} мм · отпустите для пересчёта`;
       }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit);badge.textContent=(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';}
     }
-    function resetDrag(){needsRender=true;dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes)mesh.position.y-=drag.delta;drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
+    function resetDrag(){needsRender=true;dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){const group=moduleGroups.get(drag.mid);if(group)group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
       if(d.moved){
         if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);
+        else if(d.kind==='divider')current.current.onMoveDivider(d.mid,d.sid,d.delta);
         else{
           const hit=hitAt(e.clientX,e.clientY,true),toMid=hit?.object.userData.moduleId,toSid=hit?sectionFor(hit):undefined;
           if(hit&&toMid&&toSid&&(toMid!==d.mid||toSid!==d.sid)){

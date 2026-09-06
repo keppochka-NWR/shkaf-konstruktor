@@ -46,3 +46,14 @@ export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,
 }
 
 
+
+export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:number){
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
+ if(!m||!Number.isFinite(delta))throw Error('Перегородка не найдена.');
+ const i=m.sections.findIndex(s=>s.id===rightSectionId),bb=boxes(m);
+ if(i<1)throw Error('Выберите внутреннюю перегородку.');
+ m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===i-1?delta:j===i?-delta:0));
+ if(m.sections.some(s=>s.weight<RULES.minSection))throw Error(`Ширина секции должна быть не меньше ${RULES.minSection} мм.`);
+ const error=projectErrors(n)[0];if(error)throw Error(error);
+ return n;
+}

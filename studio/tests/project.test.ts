@@ -1,3 +1,4 @@
+import {moveDivider} from '../src/operations';
 import {drawingLevels,moduleDrawingSVG,drawingsHTML} from '../src/drawings';
 import {projectContent} from '../src/projectStorage';
 import {openingZone,roomWarnings} from '../src/roomWarnings';
@@ -304,4 +305,12 @@ test('review drawings use actual part elevations and escape user labels',()=>{
  for(const level of levels){const d=actual.find(d=>d.id===level.id)!;assert.equal(level.bottom,Math.round((d.position[1]-d.size[1]/2)*10)/10);assert.equal(level.top,Math.round((d.position[1]+d.size[1]/2)*10)/10);}
  const svg=moduleDrawingSVG(m),html=drawingsHTML(p);
  assert.ok(!svg.includes('NaN'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('без присадки'));
+});
+
+test('divider drag resizes only adjacent sections and rejects an unusable result atomically',()=>{
+ const p=newProject(),m=p.modules[0].module;m.width=900;m.sections=Array.from({length:3},(_,i)=>({id:'s'+i,weight:1,shelves:[],drawers:0,rod:false}));
+ const before=boxes(m),n=moveDivider(p,p.modules[0].id,'s1',35),after=boxes(n.modules[0].module);
+ assert.ok(Math.abs(after[0].width-before[0].width-35)<.001);assert.ok(Math.abs(after[1].width-before[1].width+35)<.001);assert.equal(after[2].width,before[2].width);
+ assert.deepEqual(boxes(m),before);assert.throws(()=>moveDivider(p,p.modules[0].id,'s1',200),/180/);assert.throws(()=>moveDivider(p,p.modules[0].id,'s0',10));
+ assert.equal(n.modules[0].module.width,900);
 });
