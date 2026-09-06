@@ -85,6 +85,32 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(self.b.get('/api/studio/projects?all=true').status_code,403)
         self.assertEqual(len(self.admin.get('/api/studio/projects?all=true').json()['items']),1)
         self.assertEqual(self.admin.get('/api/studio/projects/test-project').status_code,200)
+    def test_concurrent_saves_preserve_one_winner_and_exact_history(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        self.assertEqual(self.a.post('/api/studio/projects',json=self.payload()).status_code,200)
+        second=self.login('one@example.test')
+        barrier=Barrier(2)
+        def save(args):
+            client,name=args
+            body=self.payload(1);body['name']=name;body['data']['note']=name
+            barrier.wait(timeout=5)
+            return name,client.post('/api/studio/projects',json=body)
+        try:
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                results=list(workers.map(save,[(self.a,'Вариант A'),(second,'Вариант B')]))
+            self.assertEqual(sorted(response.status_code for _,response in results),[200,409])
+            winner=next(name for name,response in results if response.status_code==200)
+            current=self.a.get('/api/studio/projects/test-project').json()
+            self.assertEqual(current['revision'],2)
+            self.assertEqual(current['name'],winner)
+            self.assertEqual(current['data']['note'],winner)
+            history=self.a.get('/api/studio/projects/test-project/revisions').json()
+            self.assertEqual([item['revision'] for item in history['items']],[2,1])
+            self.assertEqual(self.a.get('/api/studio/projects/test-project/revisions/2').json()['data']['note'],winner)
+        finally:
+            second.close()
+
     def test_revision_archive_restore(self):
         self.a.post('/api/studio/projects',json=self.payload())
         self.assertEqual(self.a.post('/api/studio/projects',json=self.payload()).status_code,409)
