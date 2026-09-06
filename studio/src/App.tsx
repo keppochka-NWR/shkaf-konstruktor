@@ -230,6 +230,7 @@ export default function App() {
   const [selectedOpening,setSelectedOpening]=useState<string>();
   const [selectedObstacle,setSelectedObstacle]=useState<string>();
   const [presentation,setPresentation]=useState(false);
+  const beforePresentation=useRef<{view:View;roomPlan:boolean;openDoors:boolean;showRoom:boolean}|null>(null);
   const [outputTab,setOutputTab] = useState<"sheets" | "estimate">("sheets");
   const [renderImage,setRenderImage]=useState("");
   const [direct, setDirect] = useState<{
@@ -482,7 +483,7 @@ export default function App() {
           </span>
         </div>
         <div className="header-actions">
-          <button className="outline presentation-trigger" onClick={()=>{setPresentation(!presentation);setRoomPlan(false);setView('iso');setOpenDoors(false);}}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
+          <button className="outline presentation-trigger" onClick={()=>{if(!presentation){beforePresentation.current={view,roomPlan,openDoors,showRoom};setRoomPlan(false);setView('iso');setOpenDoors(false);setPresentation(true);}else{const previous=beforePresentation.current;if(previous){setView(previous.view);setRoomPlan(previous.roomPlan);setOpenDoors(previous.openDoors);setShowRoom(previous.showRoom);}beforePresentation.current=null;setPresentation(false);setFit(f=>f+1);}}}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
           <button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
