@@ -1,3 +1,4 @@
+import {insertedPartId} from '../src/operations';
 import {details} from '../src/exports';
 import {reviewFiles,reviewArchive,reviewArchiveName} from '../src/reviewPackage';
 import {unzipSync,strFromU8} from 'three/addons/libs/fflate.module.js';
@@ -292,4 +293,22 @@ test('full section insertion explains the item limit without mutating the projec
  assert.throws(()=>insertItem(p,'drawer',a.id,s.id,1000),/уже 5 ящиков/);
  assert.equal(s.drawers,5);
  assert.throws(()=>insertItem(p,'shelf',a.id,'missing',1000),/Выберите секцию/);
+});
+
+test('new filling selection follows a sorted shelf and appended drawer',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];
+ const shelf=insertItem(p,'shelf',a.id,s.id,900),pid=insertedPartId(p,shelf,a.id,s.id,'shelf');
+ assert.equal(pid,s.id+':shelf:0');
+ assert.ok(parts(shelf.modules[0].module).some(d=>d.id===pid));
+ const drawer=insertItem(p,'drawer',a.id,s.id,500),drawerId=insertedPartId(p,drawer,a.id,s.id,'drawer');
+ assert.equal(drawerId,s.id+':drawer:2:facade');
+ assert.ok(parts(drawer.modules[0].module).some(d=>d.id===drawerId));
+ assert.equal(insertedPartId(p,p,a.id,s.id,'shelf'),undefined);
+});
+test('selection after a transfer belongs to the receiving module and section',()=>{
+ const p=appendModule(newProject(),initialModule()),a=p.modules[0],b=p.modules[1],s=a.module.sections[0],target=b.module.sections[0];
+ const n=transferPart(p,a.id,s.id,s.id+':drawer:0:facade',b.id,target.id,500),pid=insertedPartId(p,n,b.id,target.id,'drawer');
+ assert.equal(pid,target.id+':drawer:2:facade');
+ assert.ok(parts(n.modules[1].module).some(d=>d.id===pid));
+ assert.equal(n.modules[0].module.sections[0].drawers,1);
 });

@@ -41,6 +41,18 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   }
   throw Error(kind==='pantograph'?'Пантографу нужен внутренний проём от 545 мм и место по высоте.':'Здесь недостаточно свободного места. Переместите наполнение или увеличьте корпус.');
 }
+export function insertedPartId(before:Project,after:Project,mid:string,sid:string,kind:FillKind):string|undefined{
+  const previous=before.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);
+  const current=after.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);
+  if(!current)return undefined;
+  if(kind==='shelf'){
+    const index=current.shelves.findIndex(height=>!previous?.shelves.includes(height));
+    return index<0?undefined:sid+':shelf:'+index;
+  }
+  if(kind==='drawer')return current.drawers>(previous?.drawers??0)?sid+':drawer:'+(current.drawers-1)+':facade':undefined;
+  if(kind==='pantograph')return current.pantograph?sid+':pantograph:rod':undefined;
+  return current.rod?sid+':rod':undefined;
+}
 export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,toMid:string,toSid:string,y:number):Project{
   if(fromMid===toMid&&fromSid===toSid)throw Error('Выберите другой корпус или секцию.');
   const m=p.modules.find(a=>a.id===fromMid)?.module,s=m?.sections.find(s=>s.id===fromSid);if(!m||!s)throw Error('Элемент не найден.');

@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps,
   setShelfGap,
-  drawerConfig, drawerOffsets, plinth, rearClear,
+  drawerConfig, drawerOffsets, drawerStackHeight, plinth, rearClear,
   type Module,
   type Section,
 } from "./model";
@@ -66,7 +66,7 @@ import {
   appendModule, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
   type Project,
 } from "./project";
-import {captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = CURRENT_PROJECT;
 function NumberField({
   label,
@@ -260,7 +260,12 @@ export default function App() {
   function addUpper(){try{const n=addUpperModule(project,placed.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}}
   function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject((moveAll?moveComposition:moveModule)(project,mid,pos));}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
-  function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
+  function selectInserted(next:Project,mid:string,sid:string,kind:FillKind){
+    const pid=insertedPartId(project,next,mid,sid,kind);
+    setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);
+    if(pid){setSelectedPart({mid,sid,pid});if(kind==='drawer')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
+  }
+  function dropFilling(kind:string,mid:string,sid:string,y:number){if(!['shelf','drawer','rod','pantograph'].includes(kind))return false;try{const next=insertItem(project,kind as FillKind,mid,sid,y);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}catch(e){setError(e instanceof Error?e.message:'Не удалось добавить элемент.')}return false;}
   function startFill(e:React.DragEvent,kind:FillKind){setRoomPlan(false);e.dataTransfer.setData('application/x-furniture',kind);e.dataTransfer.effectAllowed='copy';setMode('fill');setOpenDoors(true);}
   function addModule(copy = false) {
     const source = copy
@@ -719,23 +724,14 @@ export default function App() {
           <div className="fill-buttons">
             <button draggable onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
             <button draggable onDragStart={e=>startFill(e,'shelf')}
-              onClick={() => {
-                setTab("section");
-                modifySection(
-                  (a, n) =>
-                    (a.shelves = distribute(n, a, a.shelves.length + 1)),
-                );
-              }}
+              onClick={()=>dropFilling('shelf',placed.id,selectedId,(b.bottom+b.top)/2)}
             >
               <Rows3 size={19} />
               <span>Добавить полку</span>
               <Plus size={15} />
             </button>
             <button draggable onDragStart={e=>startFill(e,'drawer')}
-              onClick={() => {
-                setTab("section");
-                modifySection((a) => a.drawers++);
-              }}
+              onClick={()=>dropFilling('drawer',placed.id,selectedId,b.bottom+drawerStackHeight(s))}
             >
               <Archive size={19} />
               <span>Добавить ящик</span>
@@ -744,7 +740,7 @@ export default function App() {
             <button draggable onDragStart={e=>startFill(e,'rod')}
               onClick={() => {
                 setTab("section");
-                modifySection((a) => {a.rod=!a.rod;a.pantograph=false;});
+                if(s.rod)modifySection(a=>{a.rod=false;delete a.rodAt;});else dropFilling('rod',placed.id,selectedId,b.top-RULES.rodTopOffset);
               }}
             >
               <Shirt size={19} />
@@ -814,7 +810,7 @@ export default function App() {
             partProblem={(mid,sid,pid,delta,to)=>{try{const next=to&&(to.mid!==mid||to.sid!==sid)?transferPart(project,mid,sid,pid,to.mid,to.sid,to.y):movePart(project,mid,sid,pid,delta);return projectErrors(next)[0];}catch(e){return (e as Error).message;}}}
             onMovePart={moveFilling}
             onDropItem={dropFilling}
-            onTransfer={(mid,sid,pid,toMid,toSid,y)=>{try{const next=transferPart(project,mid,sid,pid,toMid,toSid,y);if(commitProject(next)){setActive(toMid);chooseSection(toSid);setMode('fill');return true;}}catch(e){setError((e as Error).message);}return false;}}
+            onTransfer={(mid,sid,pid,toMid,toSid,y)=>{try{const next=transferPart(project,mid,sid,pid,toMid,toSid,y);if(commitProject(next)){selectInserted(next,toMid,toSid,pid.includes(':pantograph:')?'pantograph':pid.includes(':drawer:')?'drawer':pid.includes(':shelf:')?'shelf':'rod');return true;}}catch(e){setError((e as Error).message);}return false;}}
             captureReady={(fn) => (capture.current = fn)}
             module={m}
             arrangement={project.modules}
@@ -1324,15 +1320,13 @@ export default function App() {
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
-                  onChange={(c) =>
-                    modifySection((a, n) => (a.shelves = distribute(n, a, c)))
-                  }
+                  onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,(b.bottom+b.top)/2);else{modifySection(a=>a.shelves=a.shelves.slice(0,c));setSelectedPart(null);}}}
                 />
                 <Counter
                   label="Ящики"
                   value={s.drawers}
                   max={RULES.maxDrawers}
-                  onChange={(c) => modifySection((a) => (a.drawers = c))}
+                  onChange={c=>{if(c>s.drawers)dropFilling('drawer',placed.id,selectedId,b.bottom+drawerStackHeight(s));else{modifySection(a=>a.drawers=c);setSelectedPart(null);}}}
                 />
                 <div className="toggle-row">
                   <span>Штанга</span>
