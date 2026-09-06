@@ -63,3 +63,5 @@
 .estimate-filter{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:18px 0;font-size:12px}.estimate-filter label{display:flex;align-items:center;gap:8px}.estimate-filter span{color:#707b87}.estimate-panel tr.price-missing{background:#fff8e9}.estimate-panel .price-reset{display:block;padding:0;margin-top:6px;font-size:10px;color:#496b79;background:none;border:none;text-align:left;cursor:pointer}.estimate-ready{padding:12px;background:#eff7f1;color:#346547;border-radius:8px;font-size:12px}
 
 .quote-price-check{padding:14px 16px;background:#f1f4f7;border-radius:8px;margin:16px 0;font-size:12px}.quote-price-check p{margin:0 0 10px}.quote-price-check .text-action{display:block;margin-top:10px}
+
+.module-list{display:flex;flex-direction:column;gap:6px;max-height:310px;overflow-y:auto;scrollbar-width:thin}.module-list .module-item{flex-shrink:0;width:100%}.module-search{display:block;margin:5px 0}.module-search input{width:100%;min-width:0;padding:8px;border:1px solid #dce1e5;border-radius:6px;font-size:11px}.module-search small{display:block;margin-top:5px;font-size:10px;color:#70808a}

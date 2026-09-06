@@ -193,6 +193,12 @@ export default function App() {
   const mountingComposition=useMemo(()=>mountingCompositionBounds(project),[project]);
   const composition=useMemo(()=>compositionBounds(project),[project]);
   const placementWarnings=useMemo(()=>roomWarnings(project),[project]);
+  const [moduleSearch,setModuleSearch]=useState('');
+  const moduleList=useRef<HTMLDivElement>(null);
+  const moduleWords=moduleSearch.toLocaleLowerCase('ru-RU').trim().split(/\s+/).filter(Boolean);
+  const visibleModules=project.modules.map((a,i)=>({a,i})).filter(({a,i})=>moduleWords.every(word=>([i+1,a.module.name,a.module.width,a.module.height,a.module.depth].join(' ').toLocaleLowerCase('ru-RU')).includes(word)));
+  useEffect(()=>{setModuleSearch('');},[active]);
+  useEffect(()=>{moduleList.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView({block:'nearest'});},[active,moduleSearch]);
   const [allMaterials,setAllMaterials]=useState(false);
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
@@ -619,7 +625,9 @@ export default function App() {
             <button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
             </button>
-            {project.modules.map((a, i) => (
+            {(project.modules.length>6||moduleSearch)&&<label className="module-search"><input type="search" aria-label="Найти корпус в проекте" placeholder="Название, номер, размер…" value={moduleSearch} onChange={e=>setModuleSearch(e.target.value)}/><small>{visibleModules.length} из {project.modules.length} корпусов</small></label>}
+            <div className="module-list" ref={moduleList}>
+            {visibleModules.map(({a,i}) => (
               <button
                 key={a.id}
                 className="module-item"
@@ -637,6 +645,8 @@ export default function App() {
                 <small>{i + 1}</small>
               </button>
             ))}
+            {!visibleModules.length&&<p className="field-note">Корпуса не найдены. Измените запрос.</p>}
+            </div>
 <label className="snap-control"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
 <label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);setMode('move');}}/> Двигать всю композицию</label>
             <button className="text-action" onClick={() => addModule(true)}>
