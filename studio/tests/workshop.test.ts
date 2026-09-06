@@ -368,3 +368,40 @@ test('group copy failure leaves a full room untouched',()=>{
  assert.throws(()=>copyModuleGroup(p,[p.modules[0].id]),/не найдено свободного места/);
  assert.equal(JSON.stringify(p),before);assert.throws(()=>copyModuleGroup(p,[]),/Отметьте корпуса/);
 });
+
+
+import {templateGroup} from '../src/moduleLibraryFile';
+import {appendModuleGroup} from '../src/project';
+test('group library preserves relative placement, construction and old single templates',()=>{
+ const base=newProject(),p=addUpperModule(base,base.modules[0].id),before=JSON.stringify(p);
+ const group=templateGroup(p.modules),entry={id:'template',name:'Шкаф с антресолью',module:group[0].module,group};
+ assert.equal(group[0].x,0);assert.equal(group[0].z,3);assert.equal(group[0].y,0);
+ assert.equal(group[1].y,p.modules[1].y);assert.equal(JSON.stringify(p),before);
+ const file=JSON.parse(libraryFile([entry,{id:'single',name:'Отдельный',module:initialModule()}]));
+ assert.equal(file.version,2);const imported=parseLibraryFile(file);
+ assert.deepEqual(imported[0].group,group);assert.equal(imported[1].group,undefined);
+ const stored=inspectStoredLibrary(JSON.stringify(imported));assert.equal(stored.problem,'');assert.equal(stored.items.length,2);
+ assert.equal(JSON.parse(libraryFile([{id:'single',name:'Один',module:initialModule()}])).version,1);
+ group[0].module.decor='Графит';assert.equal(JSON.stringify(p),before);
+});
+
+test('group library rejects malformed groups instead of silently importing one body',()=>{
+ const p=newProject(),entry={name:'Группа',module:p.modules[0].module,group:p.modules};
+ assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[entry]}),/версии 2/);
+ assert.throws(()=>templateGroup([]));
+ assert.throws(()=>templateGroup([p.modules[0],{...p.modules[0],id:'other'}]),/пересекается/);
+ const broken={...entry,id:'broken',group:[{...p.modules[0],module:{...p.modules[0].module,width:901}}]};
+ const stored=inspectStoredLibrary(JSON.stringify([broken,{id:'good',name:'Один',module:initialModule()}]));
+ assert.equal(stored.items.length,1);assert.match(stored.problem,/Не удалось загрузить записей: 1/);
+});
+
+test('inserting a library assembly preserves names and creates independent editable bodies',()=>{
+ const source=newProject(),withUpper=addUpperModule(source,source.modules[0].id),group=templateGroup(withUpper.modules),p=newProject(),before=JSON.stringify(p);
+ const result=appendModuleGroup(p,group),copies=result.project.modules.filter(a=>result.ids.includes(a.id));
+ assert.equal(copies.length,2);assert.equal(copies[1].y,group[1].y);assert.equal(bounds(copies[0]).z,30);
+ assert.equal(copies[0].module.name,group[0].module.name);assert.notEqual(copies[0].id,group[0].id);
+ assert.notEqual(copies[0].module.sections[0].id,group[0].module.sections[0].id);assert.deepEqual(projectErrors(result.project),[]);
+ copies[0].module.decor='Графит';assert.notEqual(group[0].module.decor,'Графит');assert.equal(JSON.stringify(p),before);
+ const full=newProject();full.room.width=600;full.room.depth=621;full.modules[0].x=0;full.modules[0].z=3;
+ const unchanged=JSON.stringify(full);assert.throws(()=>appendModuleGroup(full,group),/не найдено свободного места/);assert.equal(JSON.stringify(full),unchanged);
+});
