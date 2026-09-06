@@ -468,7 +468,7 @@ export function validate(m: Module): string[] {
     if(s.pantograph!==undefined&&typeof s.pantograph!=='boolean')errors.push(prefix+'неверный тип пантографа.');
     const shelfY = s.shelves.map((f) => f * h).sort((a, b) => a - b);
     const drawerTop = drawerStackHeight(s);
-    if (drawerTop > h - RULES.shelfMinClear)
+    if (s.drawers && drawerTop + RULES.panel > h - RULES.shelfMinClear)
       errors.push(
         prefix +
           "ящики не помещаются по высоте. Уберите один ящик или увеличьте высоту.",
@@ -476,14 +476,14 @@ export function validate(m: Module): string[] {
     shelfY.forEach((y, j) => {
       if (
         !Number.isFinite(y) ||
-        y < RULES.shelfMinClear ||
-        y > h - RULES.shelfMinClear ||
-        y < drawerTop + RULES.shelfMinClear ||
-        (j > 0 && y - shelfY[j - 1] < RULES.shelfMinClear)
+        y < RULES.shelfMinClear + RULES.panel / 2 - .001 ||
+        y > h - RULES.shelfMinClear - RULES.panel / 2 + .001 ||
+        y < drawerTop + (s.drawers ? RULES.panel : 0) + RULES.shelfMinClear + RULES.panel / 2 - .001 ||
+        (j > 0 && y - shelfY[j - 1] < RULES.shelfMinClear + RULES.panel - .001)
       )
         errors.push(
           prefix +
-            "полки слишком близко друг к другу, ящикам или краям. Измените их положение.",
+            "между поверхностями полок, дна и крыши нужно не менее 80 мм. Измените положение полок.",
         );
     });
     if (

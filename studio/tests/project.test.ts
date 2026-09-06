@@ -324,3 +324,13 @@ test('manual rod height respects the nearest shelf and pantograph stays inside i
  s.rodAt=.8;s.shelves=[.7];assert.ok(validate(m).some(e=>e.includes('Пантограф пересекает')));
  s.shelves=[.3];assert.deepEqual(validate(m),[]);
 });
+
+test('minimum shelf clearance is measured between panel faces, including the drawer cap',()=>{
+ const m=initialModule(),s=m.sections[0];s.drawers=0;s.shelves=[];
+ const h=boxes(m)[0].top-boxes(m)[0].bottom;
+ s.shelves=[88/h,184/h];assert.deepEqual(validate(m),[]);assert.equal(shelfGaps(m,s.id)[0].height,80);assert.equal(shelfGaps(m,s.id)[1].height,80);
+ s.shelves=[80/h];assert.ok(validate(m).some(e=>e.includes('80 мм')));
+ s.shelves=[88/h,176/h];assert.ok(validate(m).some(e=>e.includes('80 мм')));
+ s.drawers=1;s.shelves=[284/h];assert.deepEqual(validate(m),[]);assert.equal(shelfGaps(m,s.id)[0].height,80);
+ s.shelves=[276/h];assert.ok(validate(m).some(e=>e.includes('80 мм')));
+});
