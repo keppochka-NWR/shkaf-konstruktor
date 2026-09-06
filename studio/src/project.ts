@@ -72,3 +72,9 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
 
 
 
+
+export function compositionBounds(p:Project){
+ const bb=p.modules.map(bounds);if(!bb.length)return {x:0,y:0,z:0,w:0,h:0,d:0};
+ const x=Math.min(...bb.map(b=>b.x)),y=Math.min(...bb.map(b=>b.y)),z=Math.min(...bb.map(b=>b.z));
+ return {x,y,z,w:Math.max(...bb.map(b=>b.x+b.w))-x,h:Math.max(...bb.map(b=>b.y+b.h))-y,d:Math.max(...bb.map(b=>b.z+b.d))-z};
+}

@@ -61,7 +61,7 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, snapPlacement, bounds,
+  appendModule, snapPlacement, bounds, compositionBounds,
   type Project,
 } from "./project";
 import {applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
@@ -181,7 +181,7 @@ export default function App() {
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
-  const placedBounds=bounds(placed);
+  const placedBounds=bounds(placed),composition=compositionBounds(project);
   const [allMaterials,setAllMaterials]=useState(false);
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
@@ -584,7 +584,7 @@ export default function App() {
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
             <h1>Соберите шкаф</h1>
             <p>
-              Отдельные корпуса, как тетрис.
+              <span title="Общий габарит расстановки Ш × В × Г: включает промежутки, задники и место под фасады.">Вся композиция:<br/><span style={{whiteSpace:'nowrap'}}>{Math.round(composition.w)} × {Math.round(composition.h)} × {Math.round(composition.d)} мм</span></span>
             </p>
           </div>
           <button className="text-action upper-add" onClick={()=>setModal("new")}>Новый проект / восстановить</button>

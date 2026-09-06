@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
-import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
+import {compositionBounds,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
 import {applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
@@ -87,3 +87,5 @@ test('section clear removes all filling settings and removal expands only the ad
 });
 
 test('applying a runner profile to section drawers preserves individual heights and positions',()=>{const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.drawerConfigs=[{slide:'gtv0fpo',length:300,height:140,y:0},{slide:'ball',length:450,height:180,y:240}];const n=applyDrawerSlide(p,a.id,s.id,0),cfg=n.modules[0].module.sections[0].drawerConfigs!;assert.deepEqual(cfg.map(c=>[c.slide,c.length,c.height,c.y]),[['gtv0fpo',300,140,0],['gtv0fpo',300,180,240]]);assert.equal(s.drawerConfigs[1].slide,'ball');assert.deepEqual(projectErrors(n),[]);assert.throws(()=>applyDrawerSlide(p,a.id,s.id,4));});
+
+test('composition bounds include gaps, raised and rotated modules',()=>{const p=newProject(),a=p.modules[0];const n=appendModule(p,a.module,a),b=n.modules[1];b.rotation=90;b.x=1000;b.y=500;b.z=800;const out=compositionBounds(n),aa=bounds(a),bb=bounds(b);assert.equal(out.x,aa.x);assert.equal(out.y,0);assert.equal(out.z,aa.z);assert.equal(out.w,bb.x+bb.w-aa.x);assert.equal(out.h,2500);assert.equal(out.d,bb.z+bb.d-aa.z);assert.deepEqual(compositionBounds(newProject()),bounds(newProject().modules[0]));});
