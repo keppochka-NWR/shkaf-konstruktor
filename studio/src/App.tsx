@@ -1,3 +1,4 @@
+import {NewProjectPanel} from './NewProjectPanel';
 import {nicheSize} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useRef } from "react";
@@ -232,7 +233,7 @@ export default function App() {
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
     [modal, setModal] = useState<
-      "materials" | "parts" | "help" | "output" | "cloud" | "render" | "library" | null
+      "materials" | "parts" | "help" | "output" | "cloud" | "render" | "library" | "new" | null
     >(null),
     [materialTarget, setMaterialTarget] = useState<"decor" | "facadeDecor" | "drawerFacadeDecor">(
       "decor",
@@ -594,6 +595,7 @@ export default function App() {
               Отдельные корпуса, как тетрис.
             </p>
           </div>
+          <button className="text-action upper-add" onClick={()=>setModal("new")}>Новый проект / восстановить</button>
           <div className="project-modules">
             <button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1387,7 +1389,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">МОДУЛЬ</span>
                 <h2 id="modal-title">
-                  {modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
+                  {modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
                       ? "Материалы Lamarty"
@@ -1404,7 +1406,7 @@ export default function App() {
                 <X />
               </button>
             </div>
-            {modal === "library" ? <ModuleLibrary module={m} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><a className="primary render-download" href={renderImage} download="Проект мебели.png">Скачать PNG</a><p className="field-note">PNG, до 2560 пикселей. Если встроенный браузер не скачивает файл, откройте редактор в Edge или Chrome.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
+            {modal === "new" ? <NewProjectPanel project={project} open={next=>{if(commitProject(next)){selectModule(next.modules[0].id);setRoomPlan(false);setView("iso");setMode("move");setModal(null);return true;}return false;}}/> : modal === "library" ? <ModuleLibrary module={m} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><a className="primary render-download" href={renderImage} download="Проект мебели.png">Скачать PNG</a><p className="field-note">PNG, до 2560 пикселей. Если встроенный браузер не скачивает файл, откройте редактор в Edge или Chrome.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <OutputPanel
                 project={project}
                 capture={() => capture.current?.()}
