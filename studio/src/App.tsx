@@ -50,6 +50,8 @@ import {
 import { Scene, type View } from "./Scene";
 import { PriceStatus } from "./PriceStatus";
 import { OutputPanel } from "./OutputPanel";
+import {RoomWarnings} from './RoomWarningPanel';
+import {roomWarnings} from './roomWarnings';
 import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
@@ -934,6 +936,7 @@ export default function App() {
               ))}
               <details className="measurement-fields"><summary>Карточка замера</summary><p className="field-note">Номер и дата из задания на корпус. Примечания сохранятся в ведомости проекта.</p>{(['number','date','notes'] as const).map(k=>{const measure=project.measurement||{number:'',date:'',notes:''};const change=(value:string)=>commitProject({...project,measurement:{...measure,[k]:value}});const label={number:'Номер замера',date:'Дата замера',notes:'Особенности замера'}[k];return <label className="hardware-field" key={k}>{label}{k==='notes'?<textarea aria-label={label} value={measure[k]} maxLength={2000} rows={4} placeholder="Перепады стен, плинтус, розетки, доступ к коммуникациям…" onChange={e=>change(e.target.value)}/>:<input aria-label={label} type={k==='date'?'date':'text'} maxLength={k==='number'?60:10} value={measure[k]} onChange={e=>change(e.target.value)}/>}</label>;})}</details>
               <details className="measurement-fields"><summary>Мебель в нише · вычеты СТП</summary><p className="field-note">Введите минимальные размеры по нескольким точкам. Отклонение стены измеряется относительно уровня.</p>{!project.measurement?.niche?<button className="outline" onClick={()=>commitProject({...project,measurement:{number:'',date:'',notes:'',...project.measurement,niche:{width:project.room.width,height:project.room.height,depth:project.room.depth,deviation:0}}})}>Рассчитать по замеру</button>:<>{(['width','height','depth','deviation'] as const).map(k=><NumberField key={k} label={{width:'Минимальная ширина ниши',height:'Нижняя точка потолка',depth:'Минимальная глубина ниши',deviation:'Отклонение стены'}[k]} value={project.measurement!.niche![k]} min={k==='deviation'?0:500} max={k==='deviation'?300:20000} onChange={v=>commitProject({...project,measurement:{...project.measurement!,niche:{...project.measurement!.niche!,[k]:v}}})}/>)}{(()=>{const fit=nicheSize(project.measurement!.niche!);return <div className="niche-result"><strong>Предельные габариты мебели</strong><p>{fit.width} × {fit.height} × {fit.depth} мм</p><small>Ширина −{fit.side}, высота −30, глубина −5 мм. Каждый отдельный корпус — не более 900 × 2200 мм.</small></div>;})()}<p className="field-note">При отклонении ровно 10 мм выбран запас 15 мм. Проверьте светильники, выступы и карнизы. Расчёт не меняет размеры комнаты и модулей автоматически.</p></>}</details>
+              <RoomWarnings project={project} select={mid=>{selectModule(mid);setRoomPlan(true);}}/>
               <RoomEditor room={project.room} onChange={room=>commitProject({...project,room})}/>
               <button className="text-action" onClick={() => setTab("module")}>
                 К выбранному модулю
@@ -1370,6 +1373,7 @@ export default function App() {
           {allParts.filter((p) => p.material !== "metal").length} деталей{" "}
           <span>Посмотреть</span>
         </button>
+        <button className="room-warning-link" hidden={!roomWarnings(project).length} onClick={()=>{setRoomPlan(true);setTab("room");}}>Расстановка: {roomWarnings(project).length} подсказок</button>
         <PriceStatus project={project} open={()=>{setOutputTab("estimate");setModal("output");}}/>
         <button className="stage-note" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
           Lamarty 2750 × 1830 · Карты листов и КП

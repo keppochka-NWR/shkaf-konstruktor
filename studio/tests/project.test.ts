@@ -1,3 +1,4 @@
+import {openingZone,roomWarnings} from '../src/roomWarnings';
 import {nicheSize} from '../src/measurement';
 import {frameDistance,frameHeight} from '../src/framing';
 import test from "node:test";
@@ -264,4 +265,22 @@ test('orthographic working views use exact projected extents',()=>{
   assert.equal(frameHeight(size,{x:0,y:0,z:1},.5,1),2800);
   assert.equal(frameHeight(size,{x:0,y:1,z:0},1,1),1400);
   assert.equal(frameHeight(size,{x:1,y:0,z:0},1,1),2200);
+});
+
+test('room warnings inspect all four walls and height without blocking project saves',()=>{
+  const p=newProject();const a=p.modules[0];a.x=50;a.z=30;
+  p.room.openings=[{id:'door',type:'door',wall:'back',offset:50,width:900,height:2100,sill:0}];
+  assert.equal(roomWarnings(p).length,1);assert.deepEqual(projectErrors(p),[]);
+  a.z=901;assert.equal(roomWarnings(p).length,1); // nailed back extends 3 mm
+  a.z=903;assert.equal(roomWarnings(p).length,0);
+  a.z=30;a.y=2200;p.room.height=4500;assert.equal(roomWarnings(p).length,0);
+  a.y=0;p.room.openings[0]={...p.room.openings[0],type:'window',sill:2100,height:1000};
+  assert.equal(roomWarnings(p).length,0);
+  p.room.openings[0].sill=900;assert.equal(roomWarnings(p).length,1);
+  for(const wall of ['back','front','left','right'] as const){
+    const o:import('../src/project').Opening={...p.room.openings[0],type:'door' as const,wall,sill:0,height:2100};
+    const z=openingZone(p.room,o);assert.equal(z.w,900);assert.equal(z.d,900);
+    p.room.openings=[o];a.x=z.x+10;a.z=z.z+10;a.rotation=90;
+    assert.equal(roomWarnings(p).length,1,wall);
+  }
 });
