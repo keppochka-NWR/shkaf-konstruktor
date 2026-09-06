@@ -23,7 +23,7 @@ import {
   drawerConfig,
   RULES,
 } from "../src/model";
-import { findSheetDetails, nest, details, quoteHTML, detailCSV, labelDetails, labelEdges, labelsHTML, specificationHTML } from "../src/exports";
+import { findSheetDetails, nest, details, quoteHTML, detailCSV, labelDetails, labelOrder, labelEdges, labelsHTML, specificationHTML } from "../src/exports";
 
 test("Lamarty sheet format is exactly the user correction", () => {
   assert.equal(RULES.sheetW, 2750);
@@ -476,4 +476,11 @@ test('label document groups at most ten intact labels into each A4 page',()=>{
  assert.equal(pages.length,Math.ceil(count/10));assert.equal(pages.reduce((n,s)=>n+(s.match(/class="part-label"/g)||[]).length,0),count);
  pages.forEach((s,i)=>assert.equal((s.match(/class="part-label"/g)||[]).length,Math.min(10,count-i*10)));
  assert.ok(html.includes('break-after:page'));assert.ok(html.includes('width:90mm;height:50mm'));
+});
+
+
+test('part labels identify measurement or customer without inventing an order',()=>{
+ const p=newProject();assert.equal(labelOrder(p),'Заказ не указан');p.cloud={id:'order',owner:'x@example.test',revision:1,name:'Кабинетный проект'};assert.equal(labelOrder(p),'Кабинетный проект');
+ p.offer={customer:'Клиент <А>',price:'',notes:''};assert.equal(labelOrder(p),'Клиент <А>');assert.ok(labelsHTML(p).includes('Клиент &lt;А&gt;'));
+ p.measurement={number:'  З-17  ',date:'',notes:''};assert.equal(labelOrder(p),'Замер З-17');assert.ok(labelsHTML(p).includes('Замер З-17'));
 });
