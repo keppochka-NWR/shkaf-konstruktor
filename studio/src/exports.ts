@@ -170,8 +170,8 @@ export function detailCSV(p: Project) {
       .join("\r\n")
   );
 }
-export function sheetSVG(s: Sheet) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${s.width} ${s.height}"><rect width="${s.width}" height="${s.height}" fill="#f1ede3" stroke="#90a7ac" stroke-width="5"/>${s.items.map((p) => `<g><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="#d7e9e8" stroke="#4a8e98" stroke-width="3"/><text x="${p.x + p.w / 2}" y="${p.y + p.h / 2}" text-anchor="middle" font-size="65" font-family="Arial" fill="#234754">${esc(p.detail.code)}</text></g>`).join("")}</svg>`;
+export function sheetSVG(s: Sheet,highlight="") {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${s.width} ${s.height}"><rect width="${s.width}" height="${s.height}" fill="#f1ede3" stroke="#90a7ac" stroke-width="5"/>${s.items.map((p) => `<g><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${p.detail.code===highlight?'#ffd77e':'#d7e9e8'}" stroke="${p.detail.code===highlight?'#a56300':'#4a8e98'}" stroke-width="${p.detail.code===highlight?12:3}"/><text x="${p.x + p.w / 2}" y="${p.y + p.h / 2}" text-anchor="middle" font-size="65" font-family="Arial" fill="#234754">${esc(p.detail.code)}</text></g>`).join("")}</svg>`;
 }
 const style =
   "body{font:14px Arial;color:#23404c;max-width:1000px;margin:40px auto;padding:20px}h1{font-size:32px}h2{margin-top:32px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d5dfe3}small{color:#637c85}svg{width:300px;max-height:480px}section{break-inside:avoid;margin:30px 0}.sum{font-size:24px;font-weight:bold}.note{white-space:pre-wrap}button{padding:12px 22px;background:#187f91;color:white;border:0;border-radius:6px}@media print{button{display:none}body{margin:0}thead{display:table-header}}";

@@ -1,6 +1,6 @@
 import {DrawingsPanel} from './DrawingsPanel';
 import {EstimatePanel} from './EstimatePanel';
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { type Project } from "./project";
 import {
   nest,
@@ -27,8 +27,10 @@ export function OutputPanel({
 }) {
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
   const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels" | "drawings">(initialTab);
-  const sheets = nest(project),
-    all = details(project);
+  const [detailQuery,setDetailQuery]=useState(''),[highlight,setHighlight]=useState('');
+  const sheets = useMemo(()=>nest(project),[project]),all=useMemo(()=>details(project),[project]);
+  const query=detailQuery.trim().toLocaleLowerCase('ru-RU');
+  const found=query?sheets.flatMap((s,i)=>s.items.filter(a=>(a.detail.code+' '+a.detail.name+' '+a.detail.moduleName+' '+a.detail.decor).toLocaleLowerCase('ru-RU').includes(query)).map(a=>({a,sheet:i}))):[];
   const q = project.offer || { customer: "", price: "", notes: "" };
   return (
     <div className="output-panel">
@@ -81,8 +83,9 @@ export function OutputPanel({
             гарантирует минимального числа листов и не учитывает припуски
             станка.
           </p>
+          <div className="detail-search"><label>Найти деталь на листе<input type="search" aria-label="Поиск детали на картах" placeholder="Код, название детали, корпус или материал" value={detailQuery} onChange={e=>{setDetailQuery(e.target.value);setHighlight('');}}/></label>{query&&<><p>{found.length?`Найдено: ${found.length}. Выберите деталь, чтобы показать её на листе.`:'Детали не найдены. Попробуйте другое название или код.'}</p><div className="detail-results">{found.slice(0,30).map(({a,sheet})=><button key={a.detail.code} aria-pressed={highlight===a.detail.code} onClick={()=>{setSheetIndex(sheet);setHighlight(a.detail.code);}}><b>{a.detail.code} · {a.detail.name}</b><span>{a.detail.moduleName} · лист {sheet+1} · {a.h} × {a.w}</span></button>)}</div>{found.length>30&&<p>Показаны первые 30. Уточните запрос.</p>}</>}</div>
           {sheetIndex !== null && (
-            <button className="text-action" onClick={() => setSheetIndex(null)}>
+            <button className="text-action" onClick={() => {setSheetIndex(null);setHighlight("");}}>
               ← Все листы
             </button>
           )}
@@ -105,7 +108,7 @@ export function OutputPanel({
                       setSheetIndex(sheetIndex === null ? i : null)
                     }
                   >
-                    <span dangerouslySetInnerHTML={{ __html: sheetSVG(s) }} />
+                    <span dangerouslySetInnerHTML={{ __html: sheetSVG(s,highlight) }} />
                   </button>
                   <p>
                     {s.items.length} деталей · заполнение{" "}
@@ -127,7 +130,7 @@ export function OutputPanel({
                       </thead>
                       <tbody>
                         {s.items.map((a) => (
-                          <tr key={a.detail.code}>
+                          <tr key={a.detail.code} className={highlight===a.detail.code?"highlight-detail":""}>
                             <td>{a.detail.code}</td>
                             <td>
                               {a.detail.moduleName} / {a.detail.name}
