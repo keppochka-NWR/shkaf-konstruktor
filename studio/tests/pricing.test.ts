@@ -4,7 +4,7 @@ import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
 import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
 import {roomWarnings} from '../src/roomWarnings';
-import {parts,initialModule,validate} from '../src/model';
+import {parts,initialModule,validate,legCount,fastenerCounts} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML,details} from '../src/exports';
 
@@ -118,7 +118,7 @@ test('corner filler appears when a body meets another at 90 degrees and disappea
   assert.equal(a.module.cornerFiller,'left');
   assert.equal(b.module.cornerFiller,undefined);
   const f=parts(a.module).find(x=>x.id==='corner-filler:left')!;
-  assert.equal(f.size[2],a.module.depth+40);assert.equal(f.size[1],a.module.height);assert.equal(f.position[0],-8);
+  assert.equal(f.size[2],100);assert.equal(f.size[1],a.module.height);assert.equal(f.position[0],-8);assert.ok(Math.abs(f.position[2]+50-(a.module.depth+40))<0.01,'strip protrudes 40 mm in front of the body');
   assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
   assert.ok(a.x>=3+B.module.depth+18+16-0.01,'A moved right by the filler thickness');
   assert.ok(estimate(n).lines.some(l=>l.id.startsWith('sheet:')),'filler goes to sheets');
@@ -127,20 +127,23 @@ test('corner filler appears when a body meets another at 90 degrees and disappea
   assert.equal(parseProject(n).modules[0].module.cornerFiller,'left');
 });
 
-test('wall fillers follow the workshop regulation: standard strip with handles, edge panel without',()=>{
-  const p=newProject();const a=p.modules[0];a.x=0;a.z=3; // левая боковина у левой стены, корпус с дверями (ручки есть)
+test('wall fillers are 100x16 edge strips: full height, flush with the facade, 5 mm off the wall',()=>{
+  const p=newProject();const a=p.modules[0];a.x=0;a.z=3; // левая боковина у левой стены, корпус с дверями
   const n=applyAutoFillers(p),m=n.modules[0].module;
-  assert.deepEqual(m.wallFiller,{left:{kind:'standard',width:50}});
-  assert.ok(n.modules[0].x>=50-0.01,'body moved off the wall by the strip width');
-  const strip=parts(m).find(x=>x.id==='wall-filler:left')!;assert.equal(strip.size[0],50);assert.equal(strip.decor,m.facadeDecor);
+  assert.deepEqual(m.wallFiller,{left:{kind:'edge',width:100}});
+  assert.ok(n.modules[0].x>=16+5-0.01,'body moved off the wall by strip + 5 mm gap');
+  const strip=parts(m).find(x=>x.id==='wall-filler:left')!;assert.deepEqual(strip.size,[16,m.height,100]);assert.ok(Math.abs(strip.position[2]+50-(m.depth+18))<0.01,'flush with the facade face');assert.equal(strip.position[0],-8);
   assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
-  // без дверей и с push-ящиками ручек нет: при ровных стенах — ФП торцом 100 мм на нижнем корпусе
-  const q=newProject();const b=q.modules[0];b.x=0;b.z=3;b.module.doors=false;b.module.sections[0].drawerConfigs=[{slide:'gtv0fpo',height:140,length:300},{slide:'gtv0fpo',height:140,length:300}];
-  const e=applyAutoFillers(q).modules[0].module;assert.deepEqual(e.wallFiller,{left:{kind:'edge',width:100}});
-  const edge=parts(e).find(x=>x.id==='wall-filler:left')!;assert.equal(edge.size[2],100);assert.equal(edge.size[0],16);
-  // кривые стены (отклонение 10+) — снова стандартная ФП
-  q.measurement={number:'1',date:'',notes:'',niche:{width:3000,height:2700,depth:600,deviation:12}};
-  assert.equal(applyAutoFillers(q).modules[0].module.wallFiller!.left!.kind,'standard');
+  // старые файлы со «стандартной» ФП читаются как планка торцом 100
+  const legacy=structuredClone(n);(legacy.modules[0].module as any).wallFiller={left:{kind:'standard',width:50}};assert.deepEqual(parseProject(legacy).modules[0].module.wallFiller,{left:{kind:'edge',width:100}});
+  // ширину планки менеджер может изменить в допустимых пределах
+  m.wallFiller={left:{kind:'edge',width:120}};assert.equal(validate(m).length,0);m.wallFiller={left:{kind:'edge',width:40}};assert.ok(validate(m).some(e=>e.includes('планка')));m.wallFiller={left:{kind:'edge',width:100}};
+  // угловая фальш — тоже планка 100×16, выступает на 40 вперёд
+  const c=initialModule();c.cornerFiller='right';const cf=parts(c).find(x=>x.id==='corner-filler:right')!;assert.deepEqual(cf.size,[16,c.height,100]);assert.ok(Math.abs(cf.position[2]+50-(c.depth+40))<0.01);
+  // опоры: 4 на нижний корпус, 6 от 900, 0 на антресоли
+  assert.equal(legCount(c),4);c.width=900;assert.equal(legCount(c),6);assert.equal(legCount(c,400),0);c.plinthHeight=0;assert.equal(legCount(c),0);
+  assert.equal(estimate(n).lines.find(l=>l.id==='legs')!.quantity,4);
+  const q=newProject();q.modules[0].x=0;q.modules[0].z=3;
   // открытый стеллаж без фасадов и ящиков — ФП не нужна
   const r=newProject();r.modules[0].x=0;r.modules[0].z=3;r.modules[0].module.doors=false;r.modules[0].module.sections[0].drawers=0;delete r.modules[0].module.sections[0].drawerConfigs;
   assert.equal(applyAutoFillers(r).modules[0].module.wallFiller,undefined);
@@ -179,6 +182,21 @@ test('aluminium framed doors: geometry, workshop pricing formula, limits, cut li
   assert.ok(specificationHTML(p).includes('алюминиевой рамке'));
   m.height=2200;assert.ok(validate(m).some(x=>x.includes('не выше 2000')),'alu door above 2000 is rejected');
   m.height=2000;m.alu={profile:'нет',color:'silver',insert:'mirror-silver'};assert.ok(validate(m).some(x=>x.includes('из каталога')));
+});
+
+test('price models: markup vs 23 000 per LDSP sheet; fasteners drawn and counted',()=>{
+  const p=newProject(),e=estimate(p);
+  assert.equal(e.model,'markup');assert.equal(e.sheetPrice,23000);assert.ok(e.ldspSheets>=1);
+  assert.equal(e.bySheet,e.ldspSheets*23000+e.retailExtras);assert.equal(e.retail,e.byMarkup);
+  assert.ok(e.perSheet!==null&&e.perSheet<23000,'markup 2.2 yields less than 23 000 per sheet on the default body');
+  p.calculation={markup:2.2,overrides:{},model:'sheet',sheetPrice:24000};
+  const s=estimate(p);assert.equal(s.retail,s.ldspSheets*24000+s.retailExtras);assert.equal(parseProject(p).calculation!.model,'sheet');
+  p.calculation.sheetPrice=100;assert.ok(projectErrors(p).length);
+  const m=p.modules[0].module,fc=fastenerCounts(m),fast=parts(m).filter(x=>x.role==='fastener');
+  assert.equal(fast.length,fc.confirmats);assert.ok(fc.confirmats>=8,'bottom and top give 8 confirmats');
+  assert.ok(fast.every(f=>f.material==='metal'));
+  const lines=estimate(newProject()).lines;assert.equal(lines.find(l=>l.id==='confirmat')!.quantity,fc.confirmats);assert.equal(lines.find(l=>l.id==='shelf-holder')!.quantity,fc.shelfHolders);
+  assert.ok(!details(newProject()).some(d=>d.role==='fastener'),'fasteners are not board details');
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

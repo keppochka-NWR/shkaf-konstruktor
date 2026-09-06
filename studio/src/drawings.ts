@@ -15,7 +15,7 @@ export function moduleDrawingSVG(m:Module){
     const fill=profile?'none':d.role==='body'?'#e5ebef':d.id.endsWith(':facade')?'#f2f5f7':d.role==='shelf'?'#dbe5eb':'none';
     return `<rect data-part="${esc(d.id)}" x="${x}" y="${y}" width="${d.size[axis]*scale}" height="${d.size[1]*scale}" fill="${fill}" stroke="#4c6574" stroke-width="${profile?.7:1}" opacity="${profile?.6:1}"><title>${esc(d.name)}</title></rect>`;
   }
-  const visible=all.filter(d=>d.role!=='door'&&d.id!=='back'&&d.role!=='hinge'&&d.role!=='handle'&&d.role!=='light');
+  const visible=all.filter(d=>d.role!=='door'&&d.id!=='back'&&d.role!=='hinge'&&d.role!=='handle'&&d.role!=='light'&&d.role!=='fastener');
   return `<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Размерные виды корпуса ${esc(m.name)}" viewBox="0 0 920 630" style="width:100%;height:auto;background:white;font-family:Arial,sans-serif">
   ${txt(front+m.width*scale/2,35,'Спереди · фасады скрыты')}${txt(side+m.depth*scale/2,35,'Сбоку · прозрачная схема')}
   ${visible.slice().sort((a,b)=>a.position[2]-b.position[2]).map(d=>shape(d,false)).join('')}

@@ -2,6 +2,7 @@ import {saveFile} from './exports';
 import {backupProject,projectContent} from './projectStorage';
 import {useEffect,useState,useRef} from 'react';
 import {parseProject,type Project} from './project';
+import {LIBRARY_KEY,inspectStoredLibrary,parseLibraryFile,writeStoredLibrary} from './moduleLibraryFile';
 type User={email:string;role:'manager'|'admin'};
 type Revision={revision:number;name:string;updated:number};
 type Entry={id:string;name:string;email:string;revision:number;updated:number;archived:number};
@@ -44,6 +45,24 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
     saveFile(filename,JSON.stringify(p,null,2),'application/json');
     setMessage('Файл серверной версии '+r.revision+' передан браузеру для скачивания. Рабочий проект не изменён.');
   }
+  const [libraryInfo,setLibraryInfo]=useState('');
+  useEffect(()=>{let live=true;if(!user){setLibraryInfo('');return;}api('/library').then(r=>{if(live)setLibraryInfo(r.items.length?`На сервере ${r.items.length} шаблонов · ${new Date(r.updated*1000).toLocaleString('ru-RU')}`:'На сервере шаблонов пока нет.');}).catch(()=>{if(live)setLibraryInfo('');});return()=>{live=false;};},[user]);
+  async function uploadLibrary(){
+    const stored=inspectStoredLibrary(localStorage.getItem(LIBRARY_KEY));
+    if(stored.problem)throw Error(stored.problem);
+    if(!stored.items.length)throw Error('В этом браузере нет сохранённых шаблонов. Сохраните корпус или группу в «Моя библиотека модулей».');
+    const r=await api('/library',{items:stored.items.map(({name,module,group})=>({name,module,...(group?{group}:{})}))});
+    if(mounted.current){setLibraryInfo(`На сервере ${r.count} шаблонов · ${new Date(r.updated*1000).toLocaleString('ru-RU')}`);setMessage('Библиотека отправлена в кабинет: '+r.count+' шаблонов.');}
+  }
+  async function downloadLibrary(){
+    const r=await api('/library');
+    if(!r.items.length)throw Error('В кабинете нет шаблонов. Сначала отправьте библиотеку из браузера, где она есть.');
+    const items=parseLibraryFile({format:'module-library',version:2,items:r.items});
+    const current=localStorage.getItem(LIBRARY_KEY);
+    if(current){const backup=LIBRARY_KEY+'-backup-'+crypto.randomUUID();localStorage.setItem(backup,current);}
+    writeStoredLibrary(localStorage,current,items);
+    if(mounted.current)setMessage('Загружено шаблонов: '+items.length+'. Прежняя библиотека этого браузера сохранена резервной копией.');
+  }
   async function openRevision(item:Entry,revision:number){
     const r=await api('/projects/'+item.id+'/revisions/'+revision),p=parseProject(r.data);
     p.cloud={id:item.id,revision:r.currentRevision,owner:r.email,name:r.name};
@@ -54,6 +73,7 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
     <div className="cloud-user"><span>{user.role==='admin'?'Администратор':'Менеджер'} · {user.email}</span><button disabled={busy} onClick={()=>run(async()=>{await api('/logout',{});setUser(null);setItems([]);setAll(false);setHistory(null);})}>Выйти</button></div>
     <p className="cloud-sync" role="status">{syncStatus}</p><p className="field-note">При открытии другого проекта или версии текущий вариант остаётся резервной копией в этом браузере. Восстановление: «Новый проект / восстановить».</p>
     <div className="cloud-save"><label className="hardware-field">Название проекта<input aria-label="Название сохраняемого проекта" value={name} onChange={e=>setName(e.target.value)} maxLength={100}/></label><button className="primary" disabled={busy} onClick={()=>run(()=>save(false))}>Сохранить проект</button><button className="outline" disabled={busy} onClick={()=>run(()=>save(true))}>Сохранить копию</button></div>
+    <section className="cloud-library"><div className="cloud-user"><strong>Мои шаблоны в кабинете</strong><span>{libraryInfo}</span></div><p className="field-note">Библиотека модулей и групп из этого браузера («Моя библиотека модулей») хранится в кабинете и доступна с любого компьютера после входа.</p><div className="cloud-save"><button className="outline" disabled={busy} onClick={()=>run(uploadLibrary)}>Отправить библиотеку в кабинет</button><button className="outline" disabled={busy} onClick={()=>run(downloadLibrary)}>Загрузить из кабинета в этот браузер</button></div></section>
     <div className="cloud-filters">{user.role==='admin'&&<label><input disabled={busy} type="checkbox" checked={all} onChange={e=>setAll(e.target.checked)}/>Все сотрудники</label>}<label><input disabled={busy} type="checkbox" checked={archived} onChange={e=>setArchived(e.target.checked)}/>Архив</label></div>
     <div className="cloud-search"><label className="hardware-field">Найти проект<input type="search" aria-label="Поиск проектов" placeholder="Название или сотрудник" value={query} onChange={e=>setQuery(e.target.value)}/></label><label className="hardware-field">Порядок<select aria-label="Сортировка проектов" value={sort} onChange={e=>setSort(e.target.value)}><option value="recent">Сначала последние</option><option value="name">По названию</option></select></label></div><p className="field-note" role="status">Показано {visibleItems.length} из {items.length}{archived?' · архив':''}</p>
     {history&&<section className="cloud-history"><div className="cloud-user"><strong>История: {history.item.name}</strong><button onClick={()=>setHistory(null)}>Закрыть историю</button></div><p className="field-note">Последние 100 сохранений. Открытие версии меняет рабочий проект; прежние сохранения остаются на сервере.</p>{history.items.map(r=><div className="cloud-revision" key={r.revision}><span><strong>Версия {r.revision}</strong><small>{r.name} · {new Date(r.updated*1000).toLocaleString('ru-RU')}</small></span><button className="outline" disabled={busy} onClick={()=>run(()=>openRevision(history.item,r.revision))}>Открыть версию {r.revision}</button></div>)}</section>}

@@ -1,11 +1,13 @@
-import {parts,drawerConfig,RULES} from './model';
+import {parts,drawerConfig,RULES,legCount,fastenerCounts} from './model';
 import {nest,type Sheet} from './exports';
 import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
 import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
-export type PriceSettings={markup:number;overrides:Record<string,number>};
+/** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
+export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
+export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
@@ -40,7 +42,13 @@ const hidden:Record<number,{price:number;source:string}>={
   450:{price:1200,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   500:{price:1250,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'}};
 export const HINGE={label:'Петля GTV SOLID PRO с доводчиком',price:157,source:'Счёт Мега-Трейд 6219, 2026 · стандарт цеха при ручках'};
-export const HARDWARE_KIT={label:'Крепёж и мелочёвка корпуса',price:300,source:'Норматив старого калькулятора: конфирматы, полкодержатели, подпятники, заглушки — 300 ₽ на корпус; подтвердить по факту закупки'};
+export const LEG={price:127.4,source:'МДМ, INTEGRATO TECH G опора регулируемая с шипами; 4 на корпус, 6 при ширине от 900'};
+export const FASTENERS={
+  confirmat:{price:2.45,source:'МДМ: конфирмат 5,0×50 чёрный цинк'},
+  cap:{price:0.7,source:'ФАМ: заглушка самоклеящаяся D14, лист 35 ₽ ≈ 50 шт'},
+  shelfHolder:{price:6,source:'Оценка: Boyard p521 (СТП цеха); цены в счетах нет — подтвердить'},
+};
+export const HARDWARE_KIT={label:'Мелочёвка корпуса (шурупы задника, стяжки антресолей, подпятники)',price:150,source:'Норматив; конфирматы, заглушки, полкодержатели и опоры считаются отдельно'};
 
 export function hingeCount(height:number,width:number){return (height<=900?2:height<=1600?3:height<=2000?4:5)+(width>450?1:0);}
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
@@ -53,7 +61,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   }
   let edge2=0,edge04=0,small=0;
   for(const a of p.modules){
+    const fc=fastenerCounts(a.module);
+    add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
+    add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
+    if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
     add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
+    const legs=legCount(a.module,a.y??0);if(legs)add('legs','Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',LEG.price,LEG.source);
     for(const d of parts(a.module)){
       if(d.material==='board'){
         d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;});
@@ -92,14 +105,19 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  return {lines,missing,knownCost,retailExtras,markup:settings.markup,retail:missing.length?null:Math.round(knownCost*settings.markup/100)*100+retailExtras};
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model=settings.model??'markup';
+  const byMarkup=missing.length?null:Math.round(knownCost*settings.markup/100)*100+retailExtras;
+  // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
+  const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana;
+  return {lines,missing,knownCost,retailExtras,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:model==='sheet'?bySheet:byMarkup};
 }
 
 
 export function estimateCSV(p:Project,result=estimate(p)){
  const rows:(string|number)[][]=[['Проект',p.offer?.customer||'Проект мебели','','','','',''],['Позиция','Количество','Единица','Цена, ₽','Сумма, ₽','Источник','Статус']];
  for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.unitPrice===null?'Уточнить цену':'Учтено']);
- rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой',result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'','',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  const cell=(v:string|number)=>{let text=typeof v==='number'?String(v).replace('.',','):v;if(typeof v==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
  return '﻿'+rows.map(row=>row.map(cell).join(';')).join('\r\n');
 }

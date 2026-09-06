@@ -1,17 +1,17 @@
 import type {Niche,CeilingType} from './measurement';
-import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,hasHandles,plinth,type Module,section} from './model';
+import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
 export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
-export type Project={version:3;measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>};offer?:{customer:string;price:string;notes:string}};
+export type Project={version:3;measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
-export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return w.kind==='edge'?RULES.panel+RULES.wallFillerEdgeGap:w.width;}
+export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
 export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=Math.max(a.module.depth+18,cf?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
@@ -26,13 +26,11 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
 /**
  * Автоматические фальши (регламент цеха по фальшпанелям + правило угла Макса):
  * — стык под 90°: снаружи боковины ставится угловая фальш 16 мм глубиной корпус + 40, корпус отодвигается на её толщину;
- * — боковина у стены при наличии фасадов/ящиков: ФП торцом (+5 мм к стене; низ 100 мм, верх/антресоль — глубина + фасад)
- *   при ровных стенах и без ручек, иначе стандартная ФП (ширина сохраняется, если менеджер её уже задал; по умолчанию 50).
+ * — боковина у стены при наличии фасадов/ящиков: планка торцом 100×16 (ширину менеджер может изменить), +5 мм к стене.
  * Корпус отодвигается от стены на вылет фальши. Если стык или стена больше не рядом — фальш убирается.
  */
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room;
-  const straight=!(n.measurement?.niche&&n.measurement.niche.deviation>=10);
   for(const a of n.modules){
     const rot=a.rotation??0;
     let corner:Module['cornerFiller'];
@@ -57,9 +55,7 @@ export function applyAutoFillers(p:Project):Project{
       const allowance=sideExtension(a.module,side);
       if(dist>RULES.wallSnap+allowance)continue;
       const existing=a.module.wallFiller?.[side];
-      const upper=(a.y??0)>0||plinth(a.module)===0;
-      const edgeAllowed=straight&&!hasHandles(a.module);
-      wf[side]=edgeAllowed?{kind:'edge',width:upper?a.module.depth+18:RULES.wallFillerEdgeLower}:{kind:'standard',width:existing?.kind==='standard'?existing.width:RULES.wallFillerStd};
+      wf[side]={kind:'edge',width:existing?.width??RULES.fillerStrip};
       const needed=sideExtension({...a.module,wallFiller:wf},side)-dist;
       if(needed>0){a.module.wallFiller={...a.module.wallFiller,[side]:wf[side]};shiftAlongWidth(a,side==='left'?needed:-needed);}
     }
@@ -74,6 +70,7 @@ export function projectErrors(p:Project):string[]{
 
   if(p.measurement?.niche){const n=p.measurement.niche;if(![n.width,n.height,n.depth].every(v=>Number.isFinite(v)&&v>=500&&v<=20000)||!Number.isFinite(n.deviation)||n.deviation<0||n.deviation>300)return ['Проверьте минимальные размеры ниши и отклонение стены.'];}
   if(p.cloud&&(typeof p.cloud.id!=="string"||!/^[-A-Za-z0-9_]{1,64}$/.test(p.cloud.id)||!Number.isInteger(p.cloud.revision)||p.cloud.revision<1||typeof p.cloud.owner!=="string"||p.cloud.owner.length>120||(p.cloud.name!==undefined&&(typeof p.cloud.name!=="string"||p.cloud.name.length>100))))return ["Некорректная связь с кабинетом."];
+  if(p.calculation&&((p.calculation.model!==undefined&&!['markup','sheet'].includes(p.calculation.model))||(p.calculation.sheetPrice!==undefined&&(!Number.isFinite(p.calculation.sheetPrice)||p.calculation.sheetPrice<5000||p.calculation.sheetPrice>100000))))return ['Проверьте модель цены и цену за лист (5 000–100 000 ₽).'];
   if(p.calculation&&(!Number.isFinite(p.calculation.markup)||p.calculation.markup<1||p.calculation.markup>10||!p.calculation.overrides||typeof p.calculation.overrides!=='object'||Array.isArray(p.calculation.overrides)||Object.keys(p.calculation.overrides).length>300||Object.values(p.calculation.overrides).some(v=>!Number.isFinite(v)||v<0||v>1e9)))return ['Проверьте цены и коэффициент сметы (от 1 до 10).'];
   if(p.offer&&(typeof p.offer.customer!=='string'||p.offer.customer.length>120||typeof p.offer.notes!=='string'||p.offer.notes.length>2000||typeof p.offer.price!=='string'||(p.offer.price!==''&&(!Number.isFinite(Number(p.offer.price))||Number(p.offer.price)<0||Number(p.offer.price)>1e12))))return ['Проверьте поля коммерческого предложения.'];
   if(!p.modules.length||p.modules.length>40)return ['В проекте должно быть от 1 до 40 модулей.'];
@@ -115,7 +112,7 @@ export function parseProject(data:unknown):Project{
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation}})};
   if(x.cloud)p.cloud={id:x.cloud.id,revision:x.cloud.revision,owner:x.cloud.owner,...(x.cloud.name===undefined?{}:{name:x.cloud.name})};
-  if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides};
+  if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.model===undefined?{}:{model:x.calculation.model}),...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice})};
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes};const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;
 }
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
@@ -139,7 +136,7 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
 
 
 export function closedModuleBounds(a:PlacedModule){
- const points=parts(a.module).flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
+ const points=parts(a.module).filter(part=>part.role!=='fastener'&&part.role!=='light').flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
  const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),z=Math.min(...points.map(p=>p.z));
  return {x,y,z,w:Math.max(...points.map(p=>p.x))-x,h:Math.max(...points.map(p=>p.y))-y,d:Math.max(...points.map(p=>p.z))-z};
 }

@@ -9,7 +9,7 @@ export const LibraryPreview=memo(function LibraryPreview({module,group}:{module:
   const bodies=group??[{id:'preview',x:0,y:0,z:0,module}];
   const faces:{points:Point[];depth:number;color:string}[]=[];
   for(const a of bodies){
-   const ps=bodies.length>8?[{size:[a.module.width,a.module.height,a.module.depth],position:[a.module.width/2,a.module.height/2,a.module.depth/2],role:'body',material:'board',id:'body'}]:parts(a.module).filter(p=>p.role!=='door'&&p.id!=='back'&&p.role!=='hinge'&&p.role!=='handle'&&p.role!=='light'&&!p.id.includes(':slide:'));
+   const ps=bodies.length>8?[{size:[a.module.width,a.module.height,a.module.depth],position:[a.module.width/2,a.module.height/2,a.module.depth/2],role:'body',material:'board',id:'body'}]:parts(a.module).filter(p=>p.role!=='door'&&p.id!=='back'&&p.role!=='hinge'&&p.role!=='handle'&&p.role!=='light'&&p.role!=='fastener'&&!p.id.includes(':slide:'));
    for(const p of ps){
     const corners:Point[]=[];for(const dx of [-1,1])for(const dy of [-1,1])for(const dz of [-1,1]){const q=localToRoom(a,p.position[0]+dx*p.size[0]/2,p.position[2]+dz*p.size[2]/2);corners.push([q.x,(a.y??0)+p.position[1]+dy*p.size[1]/2,q.z]);}
     const [x,y,z]=[0,1,2].map(i=>Math.min(...corners.map(q=>q[i]))),[X,Y,Z]=[0,1,2].map(i=>Math.max(...corners.map(q=>q[i])));

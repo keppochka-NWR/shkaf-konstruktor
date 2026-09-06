@@ -25,6 +25,25 @@ class StudioTests(unittest.TestCase):
         self.assertIn('httponly',result.headers['set-cookie'].lower())
         return c
     def payload(self,revision=0):return {'id':'test-project','name':'Шкаф','revision':revision,'data':{'version':3,'modules':[{}]}}
+    def test_personal_library_is_stored_per_user_and_validated(self):
+        self.assertEqual(self.a.get('/api/studio/library').json(),{'items':[],'updated':None})
+        items=[{'name':'Платяной 600','module':{'version':1,'width':600}},{'name':'Прихожая','group':[{'x':0,'z':0,'module':{}}]}]
+        r=self.a.post('/api/studio/library',json={'items':items});self.assertEqual(r.status_code,200);self.assertEqual(r.json()['count'],2)
+        self.assertEqual(self.a.get('/api/studio/library').json()['items'],items)
+        self.assertEqual(self.b.get('/api/studio/library').json()['items'],[],'другой сотрудник не видит чужие шаблоны')
+        self.assertEqual(self.a.post('/api/studio/library',json={'items':[{'name':'','module':{}}]}).status_code,422)
+        self.assertEqual(self.a.post('/api/studio/library',json={'items':[{'name':'x'}]}).status_code,422)
+        self.assertEqual(self.a.post('/api/studio/library',json={'items':[{'name':'n','module':{}}]*31}).status_code,422)
+        r=self.a.post('/api/studio/library',json={'items':[]});self.assertEqual(r.json()['count'],0)
+    def test_open_signup_lets_any_email_register_by_code(self):
+        closed=create_app(Path(self.tmp.name)/'closed.db',{'STUDIO_USERS':'staff@firm.ru'})
+        c=TestClient(closed,headers={'x-studio-request':'1'})
+        self.assertEqual(c.post('/api/studio/auth/code',json={'email':'new@client.ru'}).status_code,403)
+        opened=create_app(Path(self.tmp.name)/'open.db',{'STUDIO_OPEN_SIGNUP':'1'})
+        o=TestClient(opened,headers={'x-studio-request':'1'})
+        self.assertTrue(o.get('/api/studio/status').json()['openSignup'])
+        # без SMTP код не уйдёт (503), но адрес принят — это и есть регистрация по почте
+        self.assertEqual(o.post('/api/studio/auth/code',json={'email':'new@client.ru'}).status_code,503)
     def test_combined_web_server_exposes_only_editor_assets(self):
         root=Path(self.tmp.name)/'web'
         (root/'studio'/'assets').mkdir(parents=True)

@@ -1096,6 +1096,17 @@ input {
   background-size: cover;
   border: 1px solid #0000000a;
 }
+.estimate-models {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  margin: 6px 0 10px;
+  border: 1px dashed #cfd6dd;
+  border-radius: 10px;
+  font-size: 13px;
+  background: #f7f9fb;
+}
+.estimate-models small { color: #6b7280; }
 .handle-list {
   overflow-y: auto;
   max-height: 60vh;

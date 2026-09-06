@@ -23,6 +23,8 @@ class EmailBody(BaseModel):
     email: str = Field(max_length=120)
 class CodeBody(EmailBody):
     code: str = Field(min_length=6, max_length=6, pattern=r'^\d{6}$')
+class LibraryBody(BaseModel):
+    items: list = Field(max_length=30)
 class SaveBody(BaseModel):
     id: str = Field(pattern=r'^[A-Za-z0-9_-]{1,64}$')
     name: str = Field(min_length=1, max_length=100)
@@ -35,8 +37,12 @@ def digest(value):
 def create_app(db_path=None, config=None, static_root=None):
     cfg = dict(os.environ if config is None else config)
     demo = cfg.get('STUDIO_DEMO') == '1'
+    # STUDIO_OPEN_SIGNUP=1 — регистрация по почте: любой адрес получает код и кабинет (личные проекты и шаблоны).
+    open_signup = cfg.get('STUDIO_OPEN_SIGNUP') == '1'
     admins = {e.strip().lower() for e in cfg.get('STUDIO_ADMINS', 'admin@example.test' if demo else '').split(',') if e.strip()}
     allowed = {e.strip().lower() for e in cfg.get('STUDIO_USERS', '').split(',') if e.strip()} | admins
+    def permitted(email):
+        return demo or open_signup or email in allowed
     database = Path(db_path or cfg.get('STUDIO_DB', ROOT / 'studio-data.db'))
     database.parent.mkdir(parents=True, exist_ok=True)
     @contextmanager
@@ -55,6 +61,7 @@ def create_app(db_path=None, config=None, static_root=None):
         CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,email TEXT,expires INTEGER);
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,email TEXT,name TEXT,data TEXT,revision INTEGER,updated INTEGER,archived INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS revisions(project_id TEXT,revision INTEGER,data TEXT,name TEXT,updated INTEGER,PRIMARY KEY(project_id,revision));
+        CREATE TABLE IF NOT EXISTS libraries(email TEXT PRIMARY KEY,data TEXT,updated INTEGER);
         ''')
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     @app.middleware('http')
@@ -77,16 +84,16 @@ def create_app(db_path=None, config=None, static_root=None):
         with connect() as c:
             row=c.execute('SELECT email FROM sessions WHERE hash=? AND expires>?',(digest(token),int(time.time()))).fetchone()
         if not row: raise HTTPException(401,'Войдите в кабинет.')
-        if not demo and row['email'] not in allowed:raise HTTPException(401,'Доступ сотрудника отозван.')
+        if not permitted(row['email']):raise HTTPException(401,'Доступ сотрудника отозван.')
         return {'email':row['email'],'role':'admin' if row['email'] in admins else 'manager'}
     @app.get('/api/studio/status')
     def status():
-        return {'mode':'local-demo' if demo else 'server','ready':demo or bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER') and cfg.get('SMTP_PASSWORD') and allowed)}
+        return {'mode':'local-demo' if demo else 'server','ready':demo or bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER') and cfg.get('SMTP_PASSWORD') and (allowed or open_signup)),'openSignup':open_signup}
     @app.post('/api/studio/auth/code')
     def request_code(body:EmailBody):
         email=body.email.strip().lower()
         if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise HTTPException(422,'Проверьте адрес почты.')
-        if (demo and not email.endswith('@example.test')) or (not demo and email not in allowed):raise HTTPException(403,'Этот адрес не добавлен в список сотрудников.')
+        if (demo and not email.endswith('@example.test')) or (not demo and not permitted(email)):raise HTTPException(403,'Этот адрес не добавлен в список сотрудников.')
         now=int(time.time())
         with connect() as c:
             if c.execute('SELECT COUNT(*) FROM codes WHERE email=? AND created>?',(email,now-3600)).fetchone()[0]>=6:raise HTTPException(429,'Слишком много кодов. Повторите позже.')
@@ -167,6 +174,23 @@ def create_app(db_path=None, config=None, static_root=None):
             c.execute('INSERT INTO projects VALUES(?,?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET name=excluded.name,data=excluded.data,revision=excluded.revision,updated=excluded.updated',(body.id,u['email'],body.name,data,revision,now))
             c.execute('INSERT INTO revisions VALUES(?,?,?,?,?)',(body.id,revision,data,body.name,now))
         return {'id':body.id,'revision':revision,'updated':now}
+    # Личная библиотека шаблонов (часто используемые корпуса и группы) — по одной записи на сотрудника.
+    @app.get('/api/studio/library')
+    def library_get(request:Request):
+        u=user(request)
+        with connect() as c:row=c.execute('SELECT data,updated FROM libraries WHERE email=?',(u['email'],)).fetchone()
+        return {'items':json.loads(row['data']) if row else [],'updated':row['updated'] if row else None}
+    @app.post('/api/studio/library')
+    def library_put(body:LibraryBody,request:Request):
+        u=user(request)
+        try:data=json.dumps(body.items,ensure_ascii=False,allow_nan=False)
+        except ValueError:raise HTTPException(422,'Некорректные числа в шаблонах.')
+        if len(data.encode())>1500000:raise HTTPException(413,'Библиотека слишком большая.')
+        for item in body.items:
+            if not isinstance(item,dict) or not isinstance(item.get('name'),str) or not item['name'].strip() or len(item['name'])>80 or not (isinstance(item.get('module'),dict) or isinstance(item.get('group'),list)):raise HTTPException(422,'Проверьте шаблоны: нужны название и корпус или группа.')
+        now=int(time.time())
+        with connect() as c:c.execute('INSERT INTO libraries VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET data=excluded.data,updated=excluded.updated',(u['email'],data,now))
+        return {'ok':True,'count':len(body.items),'updated':now}
     @app.post('/api/studio/projects/{pid}/archive')
     def archive(pid:str,request:Request,archived:bool=True):
         u=user(request)

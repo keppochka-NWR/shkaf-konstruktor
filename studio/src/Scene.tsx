@@ -1,6 +1,8 @@
 import {frameDistance,frameHeight} from './framing';
 import {boardGeometry,aluFrameGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
+import {meshById} from './mesh';
+import {meshModel} from './meshModels';
 // Цвета профиля рамочного фасада для сцены.
 const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
@@ -253,7 +255,7 @@ export function Scene(p: Props) {
           }
           const isAlu = part.material === "alu" && !!m.alu;
           const geometry =
-            (part.role === "rod" || part.role === "flange")
+            (part.role === "rod" || part.role === "flange" || part.role === "fastener")
               ? new THREE.CylinderGeometry(
                   part.size[1] / 2,
                   part.size[1] / 2,
@@ -265,7 +267,18 @@ export function Scene(p: Props) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
           }
+          const isMeshItem = part.id.endsWith(":mesh");
+          if (isMeshItem) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh(geometry, mat);
+          if (isMeshItem) {
+            // Сетка Лемана: невидимый бокс для выбора + проволочная модель внутри.
+            const section = m.sections.find((s) => s.id === part.sectionId);
+            const j = Number(part.id.split(":drawer:")[1].split(":")[0]);
+            const cfg = section ? drawerConfig(m, section, j) : undefined;
+            const model = meshModel(cfg?.mesh ? meshById(cfg.mesh) : undefined, part.size);
+            model.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active }; });
+            mesh.add(model);
+          }
           if (isAlu) {
             // Вставка: зеркало, стекло или лакобель внутри рамки.
             const ins = aluInsert(m.alu!.insert), face = aluProfile(m.alu!.profile)?.face ?? 19;
@@ -275,6 +288,7 @@ export function Scene(p: Props) {
             mesh.add(glass);
           }
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
+          if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
           mesh.position.set(
             part.position[0],
             part.position[1],
