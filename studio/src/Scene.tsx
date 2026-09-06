@@ -38,6 +38,7 @@ type Props = {
   facadeTexture?: string;
   view: View;
   fit: number;
+  focusActive?:boolean;
   openDoors: boolean;
   exploded: boolean;
   dimensions: boolean;
@@ -413,13 +414,13 @@ export function Scene(p: Props) {
         focus =
           state.arrangement.find((a) => a.id === state.activeId) ||
           state.arrangement[0];
-      const minX = Math.min(...state.arrangement.map((a) => a.x)),
-        maxX = Math.max(...state.arrangement.map((a) => bounds(a).x + bounds(a).w));
-      const minZ = Math.min(...state.arrangement.map((a) => a.z)),
-        maxZ = Math.max(...state.arrangement.map((a) => bounds(a).z + bounds(a).d));
-      const height=state.room?state.room.height:Math.max(...state.arrangement.map(a=>a.module.height+(a.y??0)));
-      const width=state.room?state.room.width:maxX-minX,depth=state.room?state.room.depth:maxZ-minZ;
-      const center=new THREE.Vector3((state.room?state.room.width/2:(minX+maxX)/2)-moduleCenter(focus).x,height/2,(state.room?state.room.depth/2:(minZ+maxZ)/2)-moduleCenter(focus).z);
+      const items=state.focusActive?[focus]:state.arrangement,room=state.focusActive?undefined:state.room;
+      const minX=Math.min(...items.map(a=>bounds(a).x)),maxX=Math.max(...items.map(a=>bounds(a).x+bounds(a).w));
+      const minZ=Math.min(...items.map(a=>bounds(a).z)),maxZ=Math.max(...items.map(a=>bounds(a).z+bounds(a).d));
+      const minY=state.focusActive?(focus.y??0):0;
+      const height=room?room.height:Math.max(...items.map(a=>a.module.height+(a.y??0)))-minY;
+      const width=room?room.width:maxX-minX,depth=room?room.depth:maxZ-minZ;
+      const center=new THREE.Vector3((room?room.width/2:(minX+maxX)/2)-moduleCenter(focus).x,minY+height/2,(room?room.depth/2:(minZ+maxZ)/2)-moduleCenter(focus).z);
       controls.target.copy(center);
       const view = current.current.view;
       camera=view==='iso'?perspective:orthographic;controls.object=camera;
@@ -622,6 +623,7 @@ export function Scene(p: Props) {
     [
       p.view,
       p.fit,
+      p.focusActive,
       p.activeId,
       p.room,
       p.selectedObstacle,

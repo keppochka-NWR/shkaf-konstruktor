@@ -213,6 +213,7 @@ export default function App() {
   function copySelected(){if(!selectedPart)return;try{const result=duplicatePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid);if(commitProject(result.project)){setSelectedPart({...selectedPart,pid:result.partId});setDrawerIndex(result.partId.includes(':drawer:')?Number(result.partId.split(':drawer:')[1].split(':')[0]):null);setDrawerPreview(false);setMode('fill');}}catch(e){setError((e as Error).message);}}
   const [snapping,setSnapping]=useState(true);
   const [moveAll,setMoveAll]=useState(false);
+  const [focusActive,setFocusActive]=useState(false);
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
@@ -832,6 +833,7 @@ export default function App() {
             facadeTexture={texture(m.facadeDecor)}
             view={view}
             fit={fit}
+            focusActive={!presentation&&focusActive}
             openDoors={openDoors}
             exploded={presentation?false:exploded}
             dimensions={presentation?false:dimensions}
@@ -878,10 +880,11 @@ export default function App() {
             >
               <Box size={19} />
             </button>
+            <button aria-label="Приблизить выбранный корпус" title="Приблизить выбранный корпус" aria-pressed={focusActive} onClick={()=>{setFocusActive(v=>!v);setFit(f=>f+1);}}><Search size={19}/></button>
             <button
               aria-label="Вписать модель"
               title="Вписать модель"
-              onClick={() => setFit((f) => f + 1)}
+              onClick={() => {setFocusActive(false);setFit((f) => f + 1);}}
             >
               <Maximize size={19} />
             </button>
