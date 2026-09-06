@@ -20,6 +20,10 @@ export type Sheet = {
   height: number;
   items: Placement[];
 };
+export function findSheetDetails(sheets:Sheet[],query:string){
+ const q=query.trim().toLocaleLowerCase('ru-RU'),words=q.split(/\s+/).filter(Boolean);if(!q)return [];
+ return sheets.flatMap((s,sheet)=>s.items.filter(a=>{const text=[a.detail.code,a.detail.name,a.detail.moduleName,a.detail.decor,a.h,a.w,a.detail.thickness].join(' ').toLocaleLowerCase('ru-RU');return words.every(w=>text.includes(w));}).map(a=>({a,sheet}))).sort((a,b)=>Number(b.a.detail.code===q)-Number(a.a.detail.code===q)||a.a.detail.code.localeCompare(b.a.detail.code,'ru',{numeric:true}));
+}
 export function details(p: Project): Detail[] {
   return p.modules.flatMap((m, i) =>
     parts(m.module)

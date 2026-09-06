@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import { type Project } from "./project";
 import {
   nest,
+  findSheetDetails,
   details,
   detailCSV,
   nestingHTML,
@@ -34,7 +35,7 @@ export function OutputPanel({
   const [detailQuery,setDetailQuery]=useState(''),[highlight,setHighlight]=useState('');
   const sheets = useMemo(()=>nest(project),[project]),all=useMemo(()=>details(project),[project]);
   const query=detailQuery.trim().toLocaleLowerCase('ru-RU');
-  const found=query?sheets.flatMap((s,i)=>s.items.filter(a=>(a.detail.code+' '+a.detail.name+' '+a.detail.moduleName+' '+a.detail.decor).toLocaleLowerCase('ru-RU').includes(query)).map(a=>({a,sheet:i}))):[];
+  const found=useMemo(()=>findSheetDetails(sheets,query),[sheets,query]);
   const specification=useMemo(()=>tab==='specification'?specificationHTML(project):'',[project,tab]);
   const placement=useMemo(()=>tab==='placement'?placementHTML(project):'',[project,tab]);
   const [quoteImage,setQuoteImage]=useState<string|null>(null);
@@ -94,7 +95,7 @@ export function OutputPanel({
             гарантирует минимального числа листов и не учитывает припуски
             станка.
           </p>
-          <div className="detail-search"><label>Найти деталь на листе<input type="search" aria-label="Поиск детали на картах" placeholder="Код, название детали, корпус или материал" value={detailQuery} onChange={e=>{setDetailQuery(e.target.value);setHighlight('');}}/></label>{query&&<><p>{found.length?`Найдено: ${found.length}. Выберите деталь, чтобы показать её на листе.`:'Детали не найдены. Попробуйте другое название или код.'}</p><div className="detail-results">{found.slice(0,30).map(({a,sheet})=><button key={a.detail.code} aria-pressed={highlight===a.detail.code} onClick={()=>{setSheetIndex(sheet);setHighlight(a.detail.code);}}><b>{a.detail.code} · {a.detail.name}</b><span>{a.detail.moduleName} · лист {sheet+1} · {a.h} × {a.w}</span></button>)}</div>{found.length>30&&<p>Показаны первые 30. Уточните запрос.</p>}</>}</div>
+          <div className="detail-search"><label>Найти деталь на листе<input type="search" aria-label="Поиск детали на картах" placeholder="Код, корпус, материал или размер" value={detailQuery} onChange={e=>{setDetailQuery(e.target.value);setHighlight('');}}/></label>{query&&<><p>{found.length?`Найдено: ${found.length}. Выберите деталь, чтобы показать её на листе.`:'Детали не найдены. Попробуйте другое название или код.'}</p><div className="detail-results">{found.slice(0,30).map(({a,sheet})=><button key={a.detail.code} aria-pressed={highlight===a.detail.code} onClick={()=>{setSheetIndex(sheet);setHighlight(a.detail.code);}}><b>{a.detail.code} · {a.detail.name}</b><span>{a.detail.moduleName} · лист {sheet+1} · {a.h} × {a.w}</span></button>)}</div>{found.length>30&&<p>Показаны первые 30. Уточните запрос.</p>}</>}</div>
           {sheetIndex !== null && (
             <button className="text-action" onClick={() => {setSheetIndex(null);setHighlight("");}}>
               ← Все листы

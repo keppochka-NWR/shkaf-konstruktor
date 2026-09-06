@@ -23,7 +23,7 @@ import {
   drawerConfig,
   RULES,
 } from "../src/model";
-import { nest, details, quoteHTML, detailCSV, labelDetails, labelsHTML, specificationHTML } from "../src/exports";
+import { findSheetDetails, nest, details, quoteHTML, detailCSV, labelDetails, labelsHTML, specificationHTML } from "../src/exports";
 
 test("Lamarty sheet format is exactly the user correction", () => {
   assert.equal(RULES.sheetW, 2750);
@@ -452,4 +452,13 @@ test('sheet details retain module identity when copied bodies share local part i
  const all=details(p),first=all.find(d=>d.moduleId===p.modules[0].id)!,second=all.find(d=>d.moduleId===copy.id)!;
  assert.equal(first.id,second.id);assert.notEqual(first.code,second.code);
  assert.ok(nest(p).flatMap(s=>s.items).some(a=>a.detail.moduleId===copy.id&&a.detail.id===second.id));
+});
+
+
+test('cut list search ranks exact codes first and combines words and sizes',()=>{
+ const p=newProject(),sheets=nest(p);
+ assert.equal(findSheetDetails(sheets,'1.1')[0].a.detail.code,'1.1');
+ const found=findSheetDetails(sheets,'БОКОВИНА 2000 прихожую');assert.equal(found.length,2);assert.ok(found.every(a=>a.a.detail.name.includes('Боковина')));
+ assert.equal(findSheetDetails(sheets,'   ').length,0);assert.equal(findSheetDetails(sheets,'боковина неизвестныйдекор').length,0);
+ assert.ok(findSheetDetails(sheets,'Вотан 16').length>0);
 });
