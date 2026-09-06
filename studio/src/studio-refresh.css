@@ -75,3 +75,6 @@
 .module-library>.primary,.module-library>.outline{margin:0 8px 8px 0}
 
 .library-search{display:grid;grid-template-columns:minmax(0,2fr) minmax(140px,1fr);gap:12px;margin-top:18px}.module-library [role=status] .text-action{margin-left:10px}@media(max-width:560px){.library-search{grid-template-columns:1fr;gap:0}}
+
+.help-content details{border-top:1px solid #dce2e7;padding:14px 0}.help-content summary{cursor:pointer;font-size:13px;font-weight:600;color:#263844}.help-content details p{margin:10px 0}.help-content details .text-action{padding:4px 0}
+.help-steps button{display:block}
