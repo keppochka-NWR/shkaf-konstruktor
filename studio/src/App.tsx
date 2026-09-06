@@ -58,6 +58,7 @@ import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
+import { decorPrice } from "./pricing";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
   newProject,
@@ -1543,6 +1544,7 @@ export default function App() {
                           }}
                         />
                         {c.n}
+                        <small className="decor-meta">{c.tier.toLowerCase()} · {decorPrice(c.n).price?.toLocaleString('ru-RU')} ₽/лист</small>
                         {materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n) && <Check size={15} />}
                       </button>
                     ))}

@@ -7,13 +7,14 @@ const src = fs.readFileSync(
   ),
   "utf8",
 );
+// tier — ценовая группа прайса Lamarty 01.01.2026 (КЛАССИКА / ПРЕМИУМ / ЛЮКС); цена листа считается в pricing.ts.
 const data = vm
   .runInNewContext(src + "; LAMARTY;")
-  .map((c) => ({ n: c.n, cat: c.cat, tex: c.tex ? "../" + c.tex : "" }));
+  .map((c) => ({ n: c.n, cat: c.cat, tier: c.tier, tex: c.tex ? "../" + c.tex : "" }));
 fs.writeFileSync(
   new URL("../src/catalog.ts", `file://${__filename.replaceAll("\\", "/")}`),
-  "export type Decor={n:string;cat:string;tex:string};\nexport const catalog:Decor[]=" +
+  "export type Tier='КЛАССИКА'|'ПРЕМИУМ'|'ЛЮКС';\nexport type Decor={n:string;cat:string;tier:Tier;tex:string};\nexport const catalog:Decor[]=" +
     JSON.stringify(data, null, 2) +
     ";\n",
 );
-console.log(`Catalog: ${data.length} decors (no prices)`);
+console.log(`Catalog: ${data.length} decors with price tiers`);
