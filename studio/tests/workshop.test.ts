@@ -4,7 +4,7 @@ import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule
 import {closedModuleBounds,compositionBounds,snapComposition,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
 import {duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
-import {estimate,hingeCount} from '../src/pricing';
+import {estimate,estimateCSV,hingeCount} from '../src/pricing';
 import {nest,specificationHTML} from '../src/exports';
 test('900 × 2200 is a hard limit for every physical module',()=>{const m=initialModule();m.width=900;m.height=2200;assert.deepEqual(validate(m),[]);m.width=901;assert.throws(()=>parseModule(m));m.width=900;m.height=2201;assert.throws(()=>parseModule(m));});
 test('every drawer has a board bottom, front and shelf above its group',()=>{const m=initialModule(),s=m.sections[0];s.drawerConfigs=[{slide:'ball',length:300,height:140},{slide:'gtv0fpo',length:300,height:140}];assert.deepEqual(validate(m),[]);const ps=parts(m),cap=ps.find(p=>p.id.endsWith(':drawer-cap'))!;assert.equal(cap.position[1]-8,boxes(m)[0].bottom+drawerStackHeight(s));for(let j=0;j<2;j++){const bottom=ps.find(p=>p.id===`${s.id}:drawer:${j}:bottom`)!;assert.equal(bottom.material,'board');assert.equal(bottom.thickness,16);assert.ok(ps.find(p=>p.id===`${s.id}:drawer:${j}:facade`));}assert.ok(ps.filter(p=>p.id.includes(':drawer:')).every(p=>p.position[2]+p.size[2]/2<m.depth+2),'internal handles clear the closed door');});
@@ -194,4 +194,11 @@ test('round rod mounting screws enter estimate and specification without affecti
  assert.deepEqual(projectErrors(n),[]);assert.equal(line.quantity,12);assert.equal(line.unitPrice,null);assert.equal(e.lines.find(l=>l.id==='flange25')!.quantity,4);assert.ok(e.missing.includes(line));
  n.calculation={markup:2.2,overrides:{'screw35x16-rod':3}};assert.equal(estimate(n).lines.find(l=>l.id===line.id)!.unitPrice,3);
  assert.equal((specificationHTML(n).match(/саморезы 3,5×16 — 6 шт/g)||[]).length,2);
+});
+
+
+test('estimate CSV preserves unknown prices, quantities, totals and safe customer text',()=>{
+ const p=newProject();p.modules[0].module.sections=[section()];p.modules[0].module.sections[0].rod=true;p.offer={customer:'=1+1',price:'',notes:''};
+ const csv=estimateCSV(p),e=estimate(p);assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes('"\'=1+1"'));assert.ok(csv.includes('"Саморез 3,5×16 · крепление штанги D25";"6";"шт";"";"";'));assert.ok(csv.includes('"Смета не завершена"'));assert.ok(csv.includes('"'+e.knownCost+'"'));
+ p.calculation={markup:2.2,overrides:{'screw35x16-rod':3}};const full=estimateCSV(p);assert.ok(full.includes('"6";"шт";"3";"18";"Цена в этом проекте";"Учтено"'));assert.ok(!full.includes('"Смета не завершена"'));assert.ok(full.includes('"2,2"'));
 });

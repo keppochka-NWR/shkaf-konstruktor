@@ -34,3 +34,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   return {lines,missing,knownCost,markup:settings.markup,retail:missing.length?null:Math.round(knownCost*settings.markup/100)*100};
 }
+
+
+export function estimateCSV(p:Project,result=estimate(p)){
+ const rows:(string|number)[][]=[['Проект',p.offer?.customer||'Проект мебели','','','','',''],['Позиция','Количество','Единица','Цена, ₽','Сумма, ₽','Источник','Статус']];
+ for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.unitPrice===null?'Уточнить цену':'Учтено']);
+ rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ const cell=(v:string|number)=>{let text=typeof v==='number'?String(v).replace('.',','):v;if(typeof v==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
+ return '\uFEFF'+rows.map(row=>row.map(cell).join(';')).join('\r\n');
+}
