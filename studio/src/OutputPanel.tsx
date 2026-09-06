@@ -1,3 +1,4 @@
+import {estimate} from './pricing';
 import {placementHTML} from './placementPlan';
 import {DrawingsPanel} from './DrawingsPanel';
 import {EstimatePanel} from './EstimatePanel';
@@ -34,7 +35,10 @@ export function OutputPanel({
   const found=query?sheets.flatMap((s,i)=>s.items.filter(a=>(a.detail.code+' '+a.detail.name+' '+a.detail.moduleName+' '+a.detail.decor).toLocaleLowerCase('ru-RU').includes(query)).map(a=>({a,sheet:i}))):[];
   const specification=useMemo(()=>tab==='specification'?specificationHTML(project):'',[project,tab]);
   const placement=useMemo(()=>tab==='placement'?placementHTML(project):'',[project,tab]);
+  const [quoteImage,setQuoteImage]=useState<string|null>(null);
+  const calculated=useMemo(()=>tab==='quote'?estimate(project,sheets):null,[tab,project,sheets]);
   const q = project.offer || { customer: "", price: "", notes: "" };
+  const quotePreview=useMemo(()=>tab==='quote'&&quoteImage!==null?quoteHTML(project,q.customer,q.price,q.notes,quoteImage||undefined):'',[tab,project,quoteImage,q.customer,q.price,q.notes]);
   return (
     <div className="output-panel">
       <div className="output-tabs">
@@ -157,9 +161,13 @@ export function OutputPanel({
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение
-            всех модулей. Цена пока вводится вручную; без неё выводится «после
-            согласования».
+            всех модулей. Цену можно перенести из сметы или задать вручную;
+            без неё выводится «после согласования».
           </p>
+          <div className="quote-price-check">
+            {calculated?.retail==null?<p>Смета ещё не завершена: незаполненных цен — {calculated?.missing.length??0}. Указанную вручную цену КП нужно проверить.</p>:<><p>По текущей смете: <b>{calculated.retail.toLocaleString('ru-RU')} ₽</b>.</p>{q.price.trim()&&Number(q.price)!==calculated.retail&&<p>Цена КП отличается от сметы. Проверьте её после изменения мебели; согласованную скидку можно оставить.</p>}<button className="outline" onClick={()=>update({...project,offer:{...q,price:String(calculated.retail)}})}>Подставить текущую смету</button></>}
+            <button className="text-action" onClick={()=>setTab('estimate')}>Открыть смету</button>
+          </div>
           <label className="hardware-field">
             Клиент / название предложения
             <input
@@ -198,6 +206,7 @@ export function OutputPanel({
               }
             />
           </label>
+          <div className="output-actions"><button className="outline" onClick={()=>setQuoteImage(quoteImage===null?(capture()||''):null)}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
           <button
             className="primary"
             onClick={() =>
@@ -212,6 +221,7 @@ export function OutputPanel({
           <p className="field-note">
             Откройте скачанный документ и нажмите «Печать / Сохранить PDF».
           </p>
+          {quoteImage!==null&&<iframe title="Предпросмотр коммерческого предложения" className="specification-preview" sandbox="" srcDoc={quotePreview.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>}
         </>
       )}
     </div>
