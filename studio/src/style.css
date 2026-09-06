@@ -1472,3 +1472,5 @@ th {
 .drawer-tabs button small {font-size:9px;color:#53646a;white-space:nowrap;}
 
 .review-package{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;background:#f2f5f3;border:1px solid #dce5de;border-radius:10px}.review-package .field-note{margin:4px 0 0}.review-package>button{flex-shrink:0}@media(max-width:700px){.review-package{align-items:stretch;flex-direction:column}}
+
+.move-group{margin:8px 0;padding:10px;border:1px solid #dce5de;border-radius:8px}.move-group summary{cursor:pointer;font-weight:600;font-size:12px}.move-group-list{max-height:190px;overflow:auto}.move-group-list label{display:flex;align-items:flex-start;gap:7px;font-size:12px;padding:7px 0;line-height:1.4}.move-group-list input{margin-top:2px;flex-shrink:0}.move-group .field-note{font-size:11px}

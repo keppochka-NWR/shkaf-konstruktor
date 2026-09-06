@@ -223,6 +223,10 @@ export default function App() {
   function copySelected(){if(!selectedPart)return;try{const result=duplicatePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid);if(commitProject(result.project)){setSelectedPart({...selectedPart,pid:result.partId});setDrawerIndex(result.partId.includes(':drawer:')?Number(result.partId.split(':drawer:')[1].split(':')[0]):null);setDrawerPreview(false);setMode('fill');}}catch(e){setError((e as Error).message);}}
   const [snapping,setSnapping]=useState(true);
   const [moveAll,setMoveAll]=useState(false);
+  const [groupIds,setGroupIds]=useState<string[]>([]);
+  const liveGroupIds=groupIds.filter(id=>project.modules.some(a=>a.id===id));
+  const movingTogether=moveAll||liveGroupIds.includes(placed.id);
+  const groupBounds=moveAll?mountingComposition:mountingCompositionBounds({...project,modules:project.modules.filter(a=>liveGroupIds.includes(a.id))});
   const [focusActive,setFocusActive]=useState(false);
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
@@ -258,7 +262,9 @@ export default function App() {
     setFit((f) => f + 1);
   }
   function addUpper(){try{const n=addUpperModule(project,placed.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}}
-  function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject((moveAll?moveComposition:moveModule)(project,mid,pos));}
+  function movedBodies(mid:string,pos:{x:number;y:number;z:number}){return moveAll?moveComposition(project,mid,pos):liveGroupIds.includes(mid)?moveComposition(project,mid,pos,liveGroupIds):moveModule(project,mid,pos);}
+  function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(movedBodies(mid,pos));}
+  function snapBodies(mid:string,pos:{x:number;y:number;z:number}){return moveAll?snapComposition(project,mid,pos):liveGroupIds.includes(mid)?snapComposition(project,mid,pos,35,liveGroupIds):snapPlacement(project,mid,pos);}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
   function selectInserted(next:Project,mid:string,sid:string,kind:FillKind){
     const pid=insertedPartId(project,next,mid,sid,kind);
@@ -344,7 +350,7 @@ export default function App() {
   }
   useEffect(()=>{setAllMaterials(false);},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
-    try{commitProject(setWallDistance(project,placed.id,key,value,moveAll));}catch(e){setError((e as Error).message);}
+    try{commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);}
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
@@ -577,7 +583,7 @@ export default function App() {
                 "Материал из файла не найден в каталоге Lamarty.",
               );
             if (commitProject(imported)) {
-              setSelectedPart(null);setDrawerPreview(false);setSelectedObstacle(undefined);setSelectedOpening(undefined);setMoveAll(false);setTab("module");
+              setSelectedPart(null);setDrawerPreview(false);setSelectedObstacle(undefined);setSelectedOpening(undefined);setMoveAll(false);setGroupIds([]);setTab("module");
               setActive(imported.modules[0].id);
               setSelected(next.sections[0].id);
               setFit((f) => f + 1);
@@ -685,7 +691,8 @@ export default function App() {
             {!visibleModules.length&&<p className="field-note">Корпуса не найдены. Измените запрос.</p>}
             </div>
 <label className="snap-control"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
-<label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);setMode('move');}}/> Двигать всю композицию</label>
+<label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);if(e.target.checked)setGroupIds([]);setMode('move');}}/> Двигать всю композицию</label>
+            {project.modules.length>1&&<details className="move-group"><summary>Двигать группу{liveGroupIds.length?' · '+liveGroupIds.length:''}</summary><p className="field-note">Отметьте корпуса и тяните один из отмеченных. Остальные корпуса двигаются отдельно.</p><div className="move-group-list">{project.modules.map((a,i)=><label key={a.id}><input type="checkbox" aria-label={'В группу: '+(i+1)+'. '+a.module.name} checked={liveGroupIds.includes(a.id)} onChange={e=>{setGroupIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id));setMoveAll(false);setMode('move');}}/><span>{i+1}. {a.module.name}</span></label>)}</div><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>setGroupIds([])}>Снять группу</button></details>}
             <button className="text-action" onClick={() => addModule(true)}>
               <Copy size={14} /> Копировать выбранный
             </button>
@@ -803,14 +810,15 @@ export default function App() {
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
-          {roomPlan?<RoomPlan moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);}} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+          {roomPlan?<RoomPlan groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);}} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             moveAll={moveAll}
+            groupIds={liveGroupIds}
             mode={presentation?'orbit':mode}
             presentation={presentation}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
-            snap={(mid,p)=>snapping?(moveAll?snapComposition:snapPlacement)(project,mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
+            snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
-            moveProblem={(mid,p)=>projectErrors((moveAll?moveComposition:moveModule)(project,mid,p))[0]}
+            moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
             dividerProblem={(mid,sid,delta)=>{try{moveDivider(project,mid,sid,delta);return undefined;}catch(e){return (e as Error).message;}}}
             partProblem={(mid,sid,pid,delta,to)=>{try{const next=to&&(to.mid!==mid||to.sid!==sid)?transferPart(project,mid,sid,pid,to.mid,to.sid,to.y):movePart(project,mid,sid,pid,delta);return projectErrors(next)[0];}catch(e){return (e as Error).message;}}}
@@ -958,7 +966,7 @@ export default function App() {
             ))}
           </div>
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
-            <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
+            <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
             Колесо — масштаб
           </div>
         </section>
@@ -1134,23 +1142,23 @@ export default function App() {
               <div className="property-section">
                 <h2>Положение в помещении</h2>
                 <button className="outline" onClick={()=>{try{if(commitProject(mirrorModule(project,active))){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>Зеркально отразить наполнение</button><p className="field-note">Меняет левую и правую секции местами и сторону петель. Размеры и положение корпуса сохраняются.</p>
-                <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>{try{commitProject(rotateModule(project,placed.id,Number(e.target.value) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Поворот — вокруг центра; у стены корпус сдвигается внутрь комнаты. Перетащите его в сцене для расстановки, на виде спереди — по высоте.</p><NumberField label="От пола" value={placed.y??0} min={moveAll?placedBounds.y-mountingComposition.y:0} max={moveAll?project.room.height-mountingComposition.h+placedBounds.y-mountingComposition.y:project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
+                <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>{try{commitProject(rotateModule(project,placed.id,Number(e.target.value) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Поворот — вокруг центра; у стены корпус сдвигается внутрь комнаты. Перетащите его в сцене для расстановки, на виде спереди — по высоте.</p><NumberField label="От пола" value={placed.y??0} min={movingTogether?placedBounds.y-groupBounds.y:0} max={movingTogether?project.room.height-groupBounds.h+placedBounds.y-groupBounds.y:project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"
                   value={placedBounds.x}
-                  min={moveAll?placedBounds.x-mountingComposition.x:0}
-                  max={moveAll?project.room.width-mountingComposition.w+placedBounds.x-mountingComposition.x:project.room.width-placedBounds.w}
+                  min={movingTogether?placedBounds.x-groupBounds.x:0}
+                  max={movingTogether?project.room.width-groupBounds.w+placedBounds.x-groupBounds.x:project.room.width-placedBounds.w}
                   onChange={(v) => movePlaced("x", v)}
                 />
                 <NumberField
                   label="От задней стены"
                   value={placedBounds.z}
-                  min={moveAll?placedBounds.z-mountingComposition.z:0}
-                  max={moveAll?project.room.depth-mountingComposition.d+placedBounds.z-mountingComposition.z:project.room.depth-placedBounds.d}
+                  min={movingTogether?placedBounds.z-groupBounds.z:0}
+                  max={movingTogether?project.room.depth-groupBounds.d+placedBounds.z-groupBounds.z:project.room.depth-placedBounds.d}
                   onChange={(v) => movePlaced("z", v)}
                 />
-                <details className="measurement-fields"><summary>От противоположных стен и потолка</summary>{(['x','z','y'] as const).map(axis=>{const size={x:'w',z:'d',y:'h'}[axis] as 'w'|'d'|'h',roomSize={x:project.room.width,z:project.room.depth,y:project.room.height}[axis],extent=placedBounds[size],near=placedBounds[axis],groupOffset=near-mountingComposition[axis],minNear=moveAll?groupOffset:0,maxNear=moveAll?roomSize-mountingComposition[size]+groupOffset:roomSize-extent;return <NumberField key={axis} label={{x:'От правой стены',z:'От передней стены',y:'До потолка'}[axis]} value={Math.round((roomSize-near-extent)*10)/10} min={Math.max(0,roomSize-extent-maxNear)} max={roomSize-extent-minNear} onChange={v=>movePlaced(axis,roomSize-extent-v)}/>;})}<p className="field-note">Меняется положение корпуса, а не его размер. Для антресоли можно задать расстояние до потолка.</p></details>
-                <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>{moveAll&&<p className="field-note"><b>Общий сдвиг:</b> отступ выбранного корпуса перемещает всю композицию.</p>}
+                <details className="measurement-fields"><summary>От противоположных стен и потолка</summary>{(['x','z','y'] as const).map(axis=>{const size={x:'w',z:'d',y:'h'}[axis] as 'w'|'d'|'h',roomSize={x:project.room.width,z:project.room.depth,y:project.room.height}[axis],extent=placedBounds[size],near=placedBounds[axis],groupOffset=near-groupBounds[axis],minNear=movingTogether?groupOffset:0,maxNear=movingTogether?roomSize-groupBounds[size]+groupOffset:roomSize-extent;return <NumberField key={axis} label={{x:'От правой стены',z:'От передней стены',y:'До потолка'}[axis]} value={Math.round((roomSize-near-extent)*10)/10} min={Math.max(0,roomSize-extent-maxNear)} max={roomSize-extent-minNear} onChange={v=>movePlaced(axis,roomSize-extent-v)}/>;})}<p className="field-note">Меняется положение корпуса, а не его размер. Для антресоли можно задать расстояние до потолка.</p></details>
+                <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>{movingTogether&&<p className="field-note"><b>Общий сдвиг:</b> отступ выбранного корпуса перемещает {moveAll?'всю композицию':'отмеченную группу'}.</p>}
                 <button
                   className="text-action danger"
                   disabled={project.modules.length === 1}

@@ -87,12 +87,12 @@ export function mirrorModule(p:Project,mid:string):Project {
  return n;
 }
 
-export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number,whole=false):Project {
+export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number,whole=false,ids?:readonly string[]):Project {
  const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);
  if(!a||!Number.isFinite(distance)||distance<0)throw Error('Укажите неотрицательное расстояние от стены или пола.');
  const edge=bounds(a)[axis];
  const delta=distance-edge;
- for(const item of whole?n.modules:[a])item[axis]=(item[axis]??0)+delta;
+ for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a])item[axis]=(item[axis]??0)+delta;
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }
@@ -156,10 +156,10 @@ export function compactDrawers(p:Project,mid:string,sid:string):Project {
 }
 
 
-export function moveComposition(p:Project,mid:string,pos:{x:number;y:number;z:number}):Project {
+export function moveComposition(p:Project,mid:string,pos:{x:number;y:number;z:number},ids?:readonly string[]):Project {
  const anchor=p.modules.find(a=>a.id===mid);if(!anchor)throw Error('Корпус не найден.');
  const delta={x:pos.x-anchor.x,y:pos.y-(anchor.y??0),z:pos.z-anchor.z};
- return {...p,modules:p.modules.map(a=>({...a,x:a.x+delta.x,y:(a.y??0)+delta.y,z:a.z+delta.z}))};
+ return {...p,modules:p.modules.map(a=>(!ids||ids.includes(mid)&&ids.includes(a.id)||a.id===mid)?({...a,x:a.x+delta.x,y:(a.y??0)+delta.y,z:a.z+delta.z}):a)};
 }
 
 

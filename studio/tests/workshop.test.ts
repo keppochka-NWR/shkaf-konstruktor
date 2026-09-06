@@ -329,3 +329,24 @@ test('shelf insertion suggestion excludes the mandatory drawer cap',()=>{
  const n=insertItem(p,'shelf',a.id,s.id,height);assert.deepEqual(projectErrors(n),[]);
  assert.equal(n.modules[0].module.sections[0].drawers,s.drawers);
 });
+
+test('selected group moves together while unselected bodies retain their position',()=>{
+ const p=appendModule(appendModule(newProject(),initialModule()),initialModule()),ids=p.modules.slice(0,2).map(a=>a.id),a=p.modules[0],before=JSON.stringify(p);
+ const n=moveComposition(p,a.id,{x:a.x,y:0,z:a.z+200},ids);
+ for(let i=0;i<2;i++){assert.equal(n.modules[i].z,p.modules[i].z+200);assert.equal(n.modules[i].x,p.modules[i].x);}
+ assert.deepEqual(n.modules[2],p.modules[2]);assert.equal(JSON.stringify(p),before);assert.deepEqual(projectErrors(n),[]);
+ const single=moveComposition(p,p.modules[2].id,{x:p.modules[2].x,y:0,z:300},ids);
+ assert.deepEqual(single.modules[0],p.modules[0]);assert.deepEqual(single.modules[1],p.modules[1]);assert.equal(single.modules[2].z,300);
+});
+test('group wall distances preserve upper modules and leave other modules unchanged',()=>{
+ const p=appendModule(newProject(),initialModule()),upper=addUpperModule(p,p.modules[0].id),base=upper.modules[0],top=upper.modules.at(-1)!,ids=[base.id,top.id];
+ const n=setWallDistance(upper,base.id,'z',200,false,ids),delta=n.modules[0].z-base.z;
+ assert.equal(n.modules.at(-1)!.z,top.z+delta);assert.equal(n.modules.at(-1)!.y,top.y);assert.deepEqual(n.modules[1],upper.modules[1]);
+ assert.deepEqual(projectErrors(n),[]);
+});
+test('group snapping uses its own bounds and unselected neighbour edges',()=>{
+ const p=appendModule(appendModule(newProject(),initialModule()),initialModule()),a=p.modules[0],ids=p.modules.slice(0,2).map(a=>a.id);p.modules[2].x=2200;
+ assert.equal(snapComposition(p,a.id,{x:8,y:0,z:30},35,ids).x,0);
+ assert.equal(snapComposition(p,a.id,{x:990,y:0,z:30},35,ids).x,1000);
+ const collision=moveComposition(p,a.id,{x:1600,y:0,z:30},ids);assert.ok(projectErrors(collision).length>0);
+});
