@@ -766,6 +766,8 @@ export default function App() {
             arrangement={project.modules}
             activeId={placed.id}
             room={showRoom ? project.room : undefined}
+            selectedObstacle={selectedObstacle}
+            onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedPart(null);setTab('room');}}
             onModuleSelect={selectModule}
             transparent={presentation?false:transparent}
             onDimension={(key) =>
