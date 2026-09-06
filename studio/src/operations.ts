@@ -124,3 +124,13 @@ export function setCompositionDistance(p:Project,axis:'x'|'y'|'z',distance:numbe
  for(const a of n.modules)a[axis]=(a[axis]??0)+delta;
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
+
+
+export function compactDrawers(p:Project,mid:string,sid:string):Project {
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
+ if(!m||!s||!s.drawers)throw Error('Выберите секцию с ящиками.');
+ const offsets=drawerOffsets(s),order=offsets.map((y,index)=>({y,index})).sort((a,b)=>a.y-b.y);
+ const configs=Array.from({length:s.drawers},(_,i)=>({...drawerConfig(m,s,i)}));let y=0;
+ for(const {index} of order){configs[index].y=y;y+=configs[index].height+RULES.drawerStep;}
+ s.drawerConfigs=configs;const error=projectErrors(n)[0];if(error)throw Error(error);return n;
+}

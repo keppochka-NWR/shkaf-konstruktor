@@ -64,7 +64,7 @@ import {
   appendModule, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
   type Project,
 } from "./project";
-import {setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = "module-studio-v3";
 function NumberField({
   label,
@@ -1155,6 +1155,7 @@ export default function App() {
                 {s.drawers > 0 && (
                   <div className="drawer-selection">
                     <h3>Настройка ящиков</h3>
+                    <button className="text-action" onClick={()=>{try{commitProject(compactDrawers(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Собрать ящики от дна</button><p className="field-note">Убирает разрывы между ящиками. Порядок снизу вверх, высоты и направляющие сохраняются; полка над блоком перемещается вместе с ним.</p>
                     <button className="outline full" aria-pressed={drawerPreview} onClick={()=>{setDrawerPreview(!drawerPreview);setOpenDoors(true);setExploded(false);setRoomPlan(false);setView('iso');}}>{drawerPreview?'Задвинуть ящик':'Выдвинуть для просмотра'}</button>
                     <p className="field-note">Просмотр конструкции. Положение ящика не меняет деталировку.</p>
                     {s.drawers>1&&<><button className="text-action" onClick={()=>{try{commitProject(applyDrawerSlide(project,placed.id,s.id,Math.min(drawerIndex??0,s.drawers-1)));}catch(e){setError((e as Error).message);}}}>Эти направляющие всем ящикам секции</button><p className="field-note">Копирует тип и длину. Высота и положение каждого ящика сохраняются.</p></>}

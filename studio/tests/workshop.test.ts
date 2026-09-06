@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {closedModuleBounds,compositionBounds,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -126,4 +126,16 @@ test('library recovery backs up first and refuses stale or failed storage writes
  data.set(LIBRARY_KEY,original);
  assert.throws(()=>recoverStoredLibrary({...storage,setItem:()=>{throw Error('quota');}},original,[]));assert.equal(data.get(LIBRARY_KEY),original);
  assert.throws(()=>recoverStoredLibrary({...storage,setItem:(k,v)=>{if(k===LIBRARY_KEY)throw Error('quota');storage.setItem(k,v);}},original,[]));assert.equal(data.get(LIBRARY_KEY),original);
+});
+
+
+test('compacting drawers preserves physical order and each hardware setup while lowering the cap',()=>{
+ const p=newProject(),m=p.modules[0].module,s=m.sections[0];s.shelves=[];s.drawers=3;
+ s.drawerConfigs=[{slide:'ball',length:300,height:160,y:600},{slide:'gtv0fpo',length:450,height:120,y:50},{slide:'ball',length:350,height:140,y:300}];
+ const before=structuredClone(p),cap=parts(m).find(a=>a.id===s.id+':drawer-cap')!;
+ const out=compactDrawers(p,p.modules[0].id,s.id),next=out.modules[0].module.sections[0];
+ assert.deepEqual(next.drawerConfigs?.map(c=>c.y),[340,0,160]);
+ for(let i=0;i<3;i++)assert.deepEqual({...next.drawerConfigs![i],y:s.drawerConfigs[i].y},s.drawerConfigs[i]);
+ assert.ok(parts(out.modules[0].module).find(a=>a.id===s.id+':drawer-cap')!.position[1]<cap.position[1]);assert.deepEqual(projectErrors(out),[]);assert.deepEqual(p,before);
+ assert.deepEqual(compactDrawers(out,p.modules[0].id,s.id),out);
 });
