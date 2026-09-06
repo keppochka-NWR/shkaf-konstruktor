@@ -96,3 +96,5 @@ test("doors are bounded and add fillers only for drawer zones", () => {
   assert.equal(parts(m).filter(p=>p.role==="door").length,2);
   assert.equal(parts(m).filter(p=>p.name.startsWith("Фальш-панель")).length,2);
 });
+
+test('splitting subtracts the new panel only from the selected opening',()=>{const m=initialModule();m.width=900;m.sections=[{...section(),weight:2,shelves:[.5]},{...section(),weight:1}];const before=boxes(m),n=splitSection(m,m.sections[0].id),after=boxes(n);assert.deepEqual(validate(n),[]);assert.ok(Math.abs(after[0].width-(before[0].width-16)/2)<.001);assert.equal(after[0].width,after[1].width);assert.ok(Math.abs(after[2].width-before[1].width)<.001);assert.deepEqual(n.sections[0].shelves,[.5]);assert.deepEqual(n.sections[1].shelves,[]);assert.equal(m.sections.length,2);});

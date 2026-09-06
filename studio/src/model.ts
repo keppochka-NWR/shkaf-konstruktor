@@ -548,11 +548,13 @@ export function splitSection(m: Module, sid: string): Module {
     i = next.sections.findIndex((s) => s.id === sid),
     s = next.sections[i];
   if (!s) return next;
+  const bb=boxes(m),half=(bb[i].width-RULES.panel)/2;
+  next.sections.forEach((a,j)=>a.weight=bb[j].width);
   next.sections.splice(
     i,
     1,
-    { ...s, weight: s.weight / 2 },
-    { ...section(), weight: s.weight / 2 },
+    { ...s, weight: half },
+    { ...section(), weight: half },
   );
   return next;
 }
