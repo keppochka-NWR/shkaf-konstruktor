@@ -108,3 +108,11 @@ export function removeSection(p:Project,mid:string,sid:string):Project {
  m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
+
+export function applyDrawerSlide(p:Project,mid:string,sid:string,index:number):Project {
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
+ if(!m||!s||!Number.isInteger(index)||index<0||index>=s.drawers)throw Error('Выберите ящик.');
+ const chosen=drawerConfig(m,s,index),offsets=drawerOffsets(s);
+ s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>{const old=drawerConfig(m,s,k);return {...old,slide:chosen.slide,length:chosen.length,y:offsets[k],handle:old.slide===chosen.slide?old.handle:undefined};});
+ const error=projectErrors(n)[0];if(error)throw Error(error);return n;
+}

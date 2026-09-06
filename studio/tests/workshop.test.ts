@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -85,3 +85,5 @@ test('section clear removes all filling settings and removal expands only the ad
  for(const i of [0,1,2]){const n=removeSection(p,a.id,a.module.sections[i].id),nb=boxes(n.modules[0].module),recipient=i===0?1:i-1;for(const b of nb){const j=bb.findIndex(v=>v.id===b.id);assert.ok(Math.abs(b.width-(bb[j].width+(j===recipient?bb[i].width+16:0)))<.001);}assert.deepEqual(projectErrors(n),[]);}
  assert.equal(a.module.sections.length,3);assert.throws(()=>removeSection(newProject(),'missing','missing'));
 });
+
+test('applying a runner profile to section drawers preserves individual heights and positions',()=>{const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.drawerConfigs=[{slide:'gtv0fpo',length:300,height:140,y:0},{slide:'ball',length:450,height:180,y:240}];const n=applyDrawerSlide(p,a.id,s.id,0),cfg=n.modules[0].module.sections[0].drawerConfigs!;assert.deepEqual(cfg.map(c=>[c.slide,c.length,c.height,c.y]),[['gtv0fpo',300,140,0],['gtv0fpo',300,180,240]]);assert.equal(s.drawerConfigs[1].slide,'ball');assert.deepEqual(projectErrors(n),[]);assert.throws(()=>applyDrawerSlide(p,a.id,s.id,4));});
