@@ -1,3 +1,4 @@
+import {placementHTML} from './placementPlan';
 import {DrawingsPanel} from './DrawingsPanel';
 import {EstimatePanel} from './EstimatePanel';
 import { useState, useMemo } from "react";
@@ -26,12 +27,13 @@ export function OutputPanel({
   update: (p: Project) => boolean;
 }) {
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
-  const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification">(initialTab);
+  const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement">(initialTab);
   const [detailQuery,setDetailQuery]=useState(''),[highlight,setHighlight]=useState('');
   const sheets = useMemo(()=>nest(project),[project]),all=useMemo(()=>details(project),[project]);
   const query=detailQuery.trim().toLocaleLowerCase('ru-RU');
   const found=query?sheets.flatMap((s,i)=>s.items.filter(a=>(a.detail.code+' '+a.detail.name+' '+a.detail.moduleName+' '+a.detail.decor).toLocaleLowerCase('ru-RU').includes(query)).map(a=>({a,sheet:i}))):[];
   const specification=useMemo(()=>tab==='specification'?specificationHTML(project):'',[project,tab]);
+  const placement=useMemo(()=>tab==='placement'?placementHTML(project):'',[project,tab]);
   const q = project.offer || { customer: "", price: "", notes: "" };
   return (
     <div className="output-panel">
@@ -45,6 +47,7 @@ export function OutputPanel({
         <button aria-pressed={tab === "quote"} onClick={() => setTab("quote")}>
           Коммерческое предложение
         </button>
+        <button aria-pressed={tab === "placement"} onClick={()=>setTab("placement")}>Расстановка</button>
         <button aria-pressed={tab === "specification"} onClick={()=>setTab("specification")}>Ведомость</button>
         <button aria-pressed={tab === "drawings"} onClick={()=>setTab("drawings")}>Чертежи модулей</button>
         <button aria-pressed={tab === 'labels'} onClick={()=>setTab('labels')}>Бирки деталей</button>
@@ -150,7 +153,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки для проверки, 90 × 50 мм. Коды совпадают с деталировкой и картами текущего проекта. После изменения конструкции сформируйте весь комплект заново. Размеры габаритные, припуски и присадка ещё не включены.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelsHTML(project))}>Скачать бирки / PDF</button><div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>Лист {d.sheet}</span></div><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div></> : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
+      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план / PDF</button><p className="field-note">Вид сверху и таблица отступов для согласования.</p></div><iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки для проверки, 90 × 50 мм. Коды совпадают с деталировкой и картами текущего проекта. После изменения конструкции сформируйте весь комплект заново. Размеры габаритные, припуски и присадка ещё не включены.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelsHTML(project))}>Скачать бирки / PDF</button><div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>Лист {d.sheet}</span></div><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div></> : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение

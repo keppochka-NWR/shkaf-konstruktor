@@ -362,3 +362,25 @@ test('closed handles protruding through each wall produce advisory without block
   assert.equal(roomWarnings(p).length,0);
  }
 });
+
+
+import {placementHTML,placementSVG} from '../src/placementPlan';
+test('placement document includes every module, opening, mounting offset and escaped customer data',()=>{
+ const p=newProject();p.modules[0].rotation=90;p.modules[0].x=300;p.modules[0].z=100;p.modules[0].y=200;p.room.height=2220;
+ p.modules[0].module.name='<script>bad</script>';p.offer={customer:'A & B <client>',price:'',notes:''};
+ p.room.openings=[{id:'window',type:'window',wall:'right',offset:100,width:1200,height:1400,sill:800}];
+ p.measurement={number:'<N>',date:'2026-09-06',notes:'Плинтус & розетка'};
+ const svg=placementSVG(p),html=placementHTML(p);
+ assert.equal((svg.match(/data-module=/g)||[]).length,1);assert.equal((svg.match(/data-opening=/g)||[]).length,1);assert.match(svg,/stroke-dasharray="5 3"/);
+ assert.match(html,/&lt;script&gt;bad&lt;\/script&gt;/);assert.ok(!html.includes('<script>'));assert.match(html,/A &amp; B &lt;client&gt;/);assert.match(html,/Плинтус &amp; розетка/);
+ assert.match(html,/<td>297<\/td><td>100<\/td><td>200<\/td><td>90°/);assert.match(html,/Окно О1/);assert.match(html,/до потолка 20 мм/);
+ p.modules[0].module.width=901;assert.throws(()=>placementSVG(p));
+});
+
+
+test('placement plan combines labels of identical stacked footprints',()=>{
+ const p=newProject(),a=p.modules[0];p.room.height=3000;
+ const top=structuredClone(a);top.id='upper-plan';top.y=2000;top.module.height=600;top.module.sections=[];
+ top.module.sections=[{id:'upper-section',weight:1,shelves:[],drawers:0,rod:false}];p.modules.push(top);
+ assert.match(placementSVG(p),/>1 \/ 2<\/text>/);assert.equal((placementSVG(p).match(/data-module=/g)||[]).length,2);
+});
