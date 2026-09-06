@@ -1,6 +1,6 @@
 import {MEASUREMENT_RULES} from './measurement';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,parts,RULES,type Module,type Section} from './model';
-import {bounds,type Project,projectErrors} from './project';
+import {bounds,mountingCompositionBounds,type Project,projectErrors} from './project';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
@@ -114,5 +114,13 @@ export function applyDrawerSlide(p:Project,mid:string,sid:string,index:number):P
  if(!m||!s||!Number.isInteger(index)||index<0||index>=s.drawers)throw Error('Выберите ящик.');
  const chosen=drawerConfig(m,s,index),offsets=drawerOffsets(s);
  s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>{const old=drawerConfig(m,s,k);return {...old,slide:chosen.slide,length:chosen.length,y:offsets[k],handle:old.slide===chosen.slide?old.handle:undefined};});
+ const error=projectErrors(n)[0];if(error)throw Error(error);return n;
+}
+
+
+export function setCompositionDistance(p:Project,axis:'x'|'y'|'z',distance:number):Project {
+ if(!Number.isFinite(distance)||distance<0)throw Error('Укажите неотрицательный отступ композиции.');
+ const n=structuredClone(p),delta=distance-mountingCompositionBounds(p)[axis];
+ for(const a of n.modules)a[axis]=(a[axis]??0)+delta;
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }

@@ -78,8 +78,9 @@ export function closedModuleBounds(a:PlacedModule){
  const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),z=Math.min(...points.map(p=>p.z));
  return {x,y,z,w:Math.max(...points.map(p=>p.x))-x,h:Math.max(...points.map(p=>p.y))-y,d:Math.max(...points.map(p=>p.z))-z};
 }
-export function compositionBounds(p:Project){
- const bb=p.modules.map(closedModuleBounds);if(!bb.length)return {x:0,y:0,z:0,w:0,h:0,d:0};
+export function compositionBounds(p:Project){return unionBounds(p.modules.map(closedModuleBounds));}
+export function mountingCompositionBounds(p:Project){return unionBounds(p.modules.map(bounds));}
+function unionBounds(bb:ReturnType<typeof bounds>[]){if(!bb.length)return {x:0,y:0,z:0,w:0,h:0,d:0};
  const x=Math.min(...bb.map(b=>b.x)),y=Math.min(...bb.map(b=>b.y)),z=Math.min(...bb.map(b=>b.z));
  return {x,y,z,w:Math.max(...bb.map(b=>b.x+b.w))-x,h:Math.max(...bb.map(b=>b.y+b.h))-y,d:Math.max(...bb.map(b=>b.z+b.d))-z};
 }

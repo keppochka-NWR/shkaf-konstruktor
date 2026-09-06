@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {closedModuleBounds,compositionBounds,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,hingeCount} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -91,3 +91,18 @@ test('applying a runner profile to section drawers preserves individual heights 
 test('composition bounds include gaps, raised and rotated modules',()=>{const p=newProject(),a=p.modules[0];const n=appendModule(p,a.module,a),b=n.modules[1];b.rotation=90;b.x=1000;b.y=500;b.z=800;const out=compositionBounds(n),aa=closedModuleBounds(a),bb=closedModuleBounds(b);assert.equal(out.x,aa.x);assert.equal(out.y,0);assert.equal(out.z,aa.z);assert.equal(out.w,bb.x+bb.w-aa.x);assert.equal(out.h,2500);assert.equal(out.d,bb.z+bb.d-aa.z);assert.deepEqual(compositionBounds(newProject()),closedModuleBounds(newProject().modules[0]));});
 
 test('closed dimensions include handles and do not reserve doors on empty open shelves',()=>{const p=newProject(),a=p.modules[0];assert.equal(closedModuleBounds(a).d,646.5);a.module.doors=false;assert.equal(closedModuleBounds(a).d,640);a.module.sections=[section()];assert.equal(closedModuleBounds(a).d,603);a.module.backType='none';assert.equal(closedModuleBounds(a).d,600);a.rotation=90;assert.equal(closedModuleBounds(a).w,600);});
+
+
+test('moving the composition preserves contacts, rotations and raised modules atomically',()=>{
+ const p=newProject(),a=p.modules[0];p.room.height=3500;
+ const n=appendModule(p,a.module,a);n.modules[1].rotation=90;n.modules[1].x=1300;n.modules[1].z=800;
+ n.modules.push({...structuredClone(a),id:'upper-check',y:2000,module:{...structuredClone(a.module),height:600,sections:[section()]}});
+ const original=structuredClone(n);
+ let moved=setCompositionDistance(n,'x',200);moved=setCompositionDistance(moved,'z',150);moved=setCompositionDistance(moved,'y',100);
+ assert.deepEqual(projectErrors(moved),[]);
+ for(let i=0;i<n.modules.length;i++){
+  const before=n.modules[i],after=moved.modules[i];assert.equal(after.x-before.x,150);assert.equal(after.z-before.z,123);assert.equal((after.y??0)-(before.y??0),100);assert.equal(after.rotation,before.rotation);assert.deepEqual(after.module,before.module);
+ }
+ assert.deepEqual(n,original);
+ assert.throws(()=>setCompositionDistance(n,'x',3900));assert.throws(()=>setCompositionDistance(n,'y',1000));assert.throws(()=>setCompositionDistance(n,'z',NaN));assert.throws(()=>setCompositionDistance(n,'x',-1));assert.deepEqual(n,original);
+});
