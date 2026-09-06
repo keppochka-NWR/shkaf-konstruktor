@@ -2,7 +2,7 @@ import {frameDistance,frameHeight} from './framing';
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { boxes, parts, shelfGaps, type Module } from "./model";
+import { boxes, parts, shelfGaps, drawerConfig, type Module } from "./model";
 import { catalog } from "./catalog";
 import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
 import {wallPanels} from './roomGeometry';
@@ -38,6 +38,7 @@ type Props = {
   exploded: boolean;
   dimensions: boolean;
   presentation?:boolean;
+  drawerPreview?:{sid:string;index:number};
 };
 export function Scene(p: Props) {
   const host = useRef<HTMLDivElement>(null),
@@ -249,6 +250,10 @@ export function Scene(p: Props) {
             part.position[1],
             part.position[2],
           );
+          const preview=state.drawerPreview;
+          if(active&&preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')&&!part.id.includes(':slide:')){
+            const section=m.sections.find(s=>s.id===preview.sid);if(section)mesh.position.z+=drawerConfig(m,section,preview.index).length*.8;
+          }
           mesh.castShadow = true;
           mesh.receiveShadow = true;
           mesh.userData = {
@@ -595,6 +600,8 @@ export function Scene(p: Props) {
       p.exploded,
       p.dimensions,
       p.presentation,
+      p.drawerPreview?.sid,
+      p.drawerPreview?.index,
     ],
   );
   useEffect(

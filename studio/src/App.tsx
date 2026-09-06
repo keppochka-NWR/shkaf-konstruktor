@@ -182,6 +182,7 @@ export default function App() {
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
+  const [drawerPreview,setDrawerPreview]=useState(false);
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
   const [selectedPart,setSelectedPart]=useState<{mid:string;sid:string;pid:string}|null>(null);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
@@ -210,6 +211,7 @@ export default function App() {
     setDirectValue(String(value));
   }
   function selectModule(mid: string) {
+    setDrawerPreview(false);
     setActive(mid);
     setTab("module");
     setFit((f) => f + 1);
@@ -310,6 +312,7 @@ export default function App() {
     });
   }
   function chooseSection(id: string) {
+    setDrawerPreview(false);
     setSelectedPart(null);
     setSelected(id);
     setDrawerIndex(null);
@@ -753,6 +756,7 @@ export default function App() {
           {roomPlan?<RoomPlan snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             mode={presentation?'orbit':mode}
             presentation={presentation}
+            drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snap={(mid,p)=>snapping?snapPlacement(project,mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(moveModule(project,mid,p))[0]}
@@ -1161,6 +1165,8 @@ export default function App() {
                 {s.drawers > 0 && (
                   <div className="drawer-selection">
                     <h3>Настройка ящиков</h3>
+                    <button className="outline full" aria-pressed={drawerPreview} onClick={()=>{setDrawerPreview(!drawerPreview);setOpenDoors(true);setExploded(false);setRoomPlan(false);setView('iso');}}>{drawerPreview?'Задвинуть ящик':'Выдвинуть для просмотра'}</button>
+                    <p className="field-note">Просмотр конструкции. Положение ящика не меняет деталировку.</p>
                     <div className="drawer-tabs">
                       {Array.from({ length: s.drawers }, (_, j) => (
                         <button
