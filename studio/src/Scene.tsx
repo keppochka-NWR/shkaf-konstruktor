@@ -8,7 +8,7 @@ const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { boxes, parts, shelfGaps, drawerConfig, type Module } from "./model";
+import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type Module } from "./model";
 import { catalog } from "./catalog";
 import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
 import {wallPanels} from './roomGeometry';
@@ -41,6 +41,8 @@ type Props = {
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
+  /** Клик по размеру «от дна до верха полки над ящиками» — задать высоту блока ящиков. */
+  onDrawerStack?: (sid: string) => void;
   onPartSelect: (sid: string, pid: string, mid?: string) => void;
   selected: string;
   selectedPart?:string;
@@ -411,6 +413,17 @@ export function Scene(p: Props) {
         );
         highlight.position.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);highlight.rotation.y=(focus.rotation??0)*Math.PI/180;
         modelGroup.add(highlight);
+      }
+      // Размер блока ящиков: от верхней плоскости дна пенала до верха полки над ящиками — при редактировании ящиков.
+      if (b && !state.presentation && !state.exploded) {
+        const sec = m.sections.find((s) => s.id === b.id);
+        if (sec && sec.drawers > 0 && (state.selectedPart?.includes(":drawer:") || state.drawerPreview)) {
+          const fy = focus.y ?? 0, zz = m.depth / 2 + 30, gx = b.x - m.width / 2 + 40;
+          const top = b.bottom + drawerStackHeight(sec) + RULES.panel;
+          line([new THREE.Vector3(gx, b.bottom + fy, zz), new THREE.Vector3(gx, top + fy, zz)]);
+          for (const yy of [b.bottom, top]) line([new THREE.Vector3(gx - 30, yy + fy, zz), new THREE.Vector3(gx + 30, yy + fy, zz)]);
+          label(`${Math.round(top - b.bottom)} мм от дна`, new THREE.Vector3(gx, (b.bottom + top) / 2 + fy, zz + 10), () => current.current.onDrawerStack?.(b.id), true);
+        }
       }
       if (state.dimensions) {
         const fy=focus.y??0;

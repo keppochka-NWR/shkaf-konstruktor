@@ -1,5 +1,5 @@
 import type {Niche,CeilingType} from './measurement';
-import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,type Module,section} from './model';
+import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
@@ -11,8 +11,8 @@ export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.w
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
-export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return m.doors?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
-export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=Math.max(a.module.depth+18,cf?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
+export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=Math.max(a.module.depth+18,cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
 /**
@@ -33,17 +33,25 @@ export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room;
   for(const a of n.modules){
     const rot=a.rotation??0;
-    let corner:Module['cornerFiller'];
+    let corner:Module['cornerFiller'],kind:Module['cornerKind'];
+    const perpendicular=(b:PlacedModule)=>b!==a&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
     for(const side of ['left','right'] as const){
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
+      // 1) Фасад этого корпуса упирается в тело соседа: точка чуть внутри края фасада и на 15 мм перед ним лежит в соседе → планка из фасада.
+      if(a.module.doors){
+        const q0=localToRoom(a,u-dir*2,a.module.depth+18+2),q1=localToRoom(a,u-dir*2,a.module.depth+18+45);
+        const probe={x:Math.min(q0.x,q1.x),z:Math.min(q0.z,q1.z),w:Math.abs(q1.x-q0.x)||1,d:Math.abs(q1.z-q0.z)||1,y:a.y??0,h:a.module.height};
+        const hit=n.modules.find(b=>perpendicular(b)&&overlap(probe,bodyBounds(b)));
+        if(hit){corner=side;kind='strip';break;}
+      }
+      // 2) Сосед примыкает к боковине: планка торцом с выступом 40.
       const p0=localToRoom(a,u,0),p1=localToRoom(a,u,a.module.depth),pOut=localToRoom(a,u+dir*RULES.cornerSnap,0);
       const strip={x:Math.min(p0.x,p1.x,pOut.x),z:Math.min(p0.z,p1.z,pOut.z),w:Math.max(p0.x,p1.x,pOut.x)-Math.min(p0.x,p1.x,pOut.x)||1,d:Math.max(p0.z,p1.z,pOut.z)-Math.min(p0.z,p1.z,pOut.z)||1,y:a.y??0,h:a.module.height};
-      const neighbour=n.modules.find(b=>b!==a&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90&&overlap(strip,bodyBounds(b)));
-      if(neighbour){corner=side;break;}
+      if(n.modules.some(b=>perpendicular(b)&&overlap(strip,bodyBounds(b)))){corner=side;kind='plank';break;}
     }
-    const hadCorner=a.module.cornerFiller;
-    if(corner)a.module.cornerFiller=corner;else delete a.module.cornerFiller;
-    if(corner&&hadCorner!==corner){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);break;}}
+    const hadCorner=a.module.cornerFiller,hadKind=a.module.cornerKind;
+    if(corner){a.module.cornerFiller=corner;a.module.cornerKind=kind;}else{delete a.module.cornerFiller;delete a.module.cornerKind;}
+    if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);break;}}
     // Стены: боковина в пределах wallSnap от стены комнаты.
     const wf:Module['wallFiller']={};
     if(needsWallFiller(a.module))for(const side of ['left','right'] as const){

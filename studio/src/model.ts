@@ -102,6 +102,9 @@ export type Module = {
   handleId?: string;
   /** Угловая фальш-панель: 16 мм ЛДСП снаружи боковины, на всю высоту, глубиной корпус + 40. Ставится автоматически, когда к этой боковине под 90° примыкает другой корпус (applyCornerFillers). */
   cornerFiller?: "left" | "right";
+  /** Вид угловой фальши: plank — планка 100×16 торцом снаружи боковины с выступом 40 (сосед примыкает к боковине);
+   *  strip — фальш-планка из фасада вровень с фасадами (фасад этого корпуса упирается в боковину соседа). */
+  cornerKind?: "plank" | "strip";
   /** Фальшпанели к стене по регламенту цеха: ставятся автоматически, когда боковина у стены и в корпусе есть фасады/ящики.
    *  Только «торцом» (Макс, 06.09): планка width×16 на всю высоту снаружи боковины, заподлицо с фасадом, +5 мм к стене. */
   wallFiller?: Partial<Record<"left" | "right", WallFiller>>;
@@ -155,6 +158,8 @@ export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
   );
 }
 export function plinth(m:Module){return m.plinthHeight ?? RULES.plinth;}
+/** Угловая фальш этого корпуса — планка из фасада (strip). Старые файлы без cornerKind: по наличию фасадов. */
+export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.cornerKind?m.cornerKind==='strip'&&m.doors:m.doors;}
 /** Опоры регулируемые под нижним корпусом (за цоколем): 4, при ширине от 900 — 6. Антресоли и корпуса без цоколя — без опор. */
 export function legCount(m:Module,y=0){if(y>0||plinth(m)===0)return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
@@ -169,8 +174,8 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
   let left=i===0?RULES.faceGap:b.x-t/2+RULES.faceGap/2;
   let right=i===m.sections.length-1?m.width-RULES.faceGap:b.x+b.width+t/2-RULES.faceGap/2;
   // Угловая фальш-планка из фасада занимает край проёма: фасады крайней секции сдвигаются на планку + зазор 3.
-  if(m.doors&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
-  if(m.doors&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
+  if(cornerStrip(m)&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
+  if(cornerStrip(m)&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
   return {left,right};
 }
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
@@ -300,14 +305,14 @@ export function parts(m: Module): Part[] {
   );
   // Фальши цеха — только «торцом»: планка 16 × 100 на всю высоту, прикручена пластью снаружи боковины, виден торец 16 мм.
   // Угловая: выступает вперёд на 40 мм от корпуса (правило Макса). К стене: заподлицо с фасадом, +5 мм к стене (регламент).
-  if (m.cornerFiller && m.doors) {
-    // Угловой стык корпуса с фасадами: фальш-планка из фасадного материала вровень с фасадами, на эксцентриках к каркасу,
-    // зазор 3 к соседнему фасаду (Макс, 06.09). Занимает край фасадного проёма; распашные фасады становятся уже.
+  if (m.cornerFiller && cornerStrip(m)) {
+    // Фасад корпуса упирается в боковину соседа: фальш-планка из фасадного материала вровень с фасадами, на эксцентриках
+    // к каркасу, зазор 3 к соседнему фасаду (Макс, 06.09). Занимает край фасадного проёма; распашные фасады становятся уже.
     const w = RULES.fillerStrip, y0 = facadeBottom(m), y1 = m.height - RULES.faceGap;
     add("corner-filler:" + m.cornerFiller, "Фальш-планка угловая из фасада " + (m.cornerFiller === "left" ? "левая" : "правая"), [w, y1 - y0, t], [m.cornerFiller === "left" ? RULES.faceGap + w / 2 : m.width - RULES.faceGap - w / 2, (y0 + y1) / 2, d + t / 2 + 2], y1 - y0, w, t);
     out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
   } else if (m.cornerFiller) {
-    // Без фасадов — планка 100×16 торцом снаружи боковины, выступает вперёд на 40.
+    // Сосед примыкает к боковине: планка 100×16 торцом снаружи боковины, выступает вперёд на 40 (правило Макса).
     const w = RULES.fillerStrip, front = d + RULES.cornerFillerExtra;
     add("corner-filler:" + m.cornerFiller, "Фальш угловая " + (m.cornerFiller === "left" ? "левая" : "правая") + " 100×16 торцом", [t, m.height, w], [m.cornerFiller === "left" ? -t / 2 : m.width + t / 2, m.height / 2, front - w / 2], m.height, w, t);
   }
@@ -563,7 +568,7 @@ export function distributeDrawers(m:Module,s:Section,capTop:number):DrawerConfig
 /** Число конфирматов корпуса и полкодержателей под съёмные полки. */
 export function fastenerCounts(m: Module) {
   const ps = parts(m);
-  return { confirmats: ps.filter((p) => p.role === "fastener").length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap")).length, eccentrics: m.cornerFiller && m.doors ? 4 : 0 };
+  return { confirmats: ps.filter((p) => p.role === "fastener").length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap")).length, eccentrics: cornerStrip(m) ? 4 : 0 };
 }
 export function validate(m: Module): string[] {
   const errors: string[] = [];
@@ -581,6 +586,7 @@ export function validate(m: Module): string[] {
   if(m.standLight!==undefined&&typeof m.standLight!=='boolean')errors.push('Неверный параметр подсветки.');
   if(m.handleId!==undefined&&!HANDLES.some(h=>h.id===m.handleId))errors.push('Выберите ручку из каталога.');
   if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
+  if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluInsert(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
@@ -843,6 +849,7 @@ export function parseModule(input: unknown): Module {
     ...(x.standLight===undefined?{}:{standLight:x.standLight as boolean}),
     ...(x.handleId===undefined?{}:{handleId:x.handleId as string}),
     ...(x.cornerFiller===undefined?{}:{cornerFiller:x.cornerFiller as Module["cornerFiller"]}),
+    ...(x.cornerKind===undefined?{}:{cornerKind:x.cornerKind as Module["cornerKind"]}),
     ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.wallFiller===undefined?{}:{wallFiller:Object.fromEntries(Object.entries(x.wallFiller as Record<string,{kind?:string;width?:number}>).map(([k,v])=>[k,{kind:'edge' as const,width:v?.kind==='standard'||v?.width===undefined?RULES.fillerStrip:v.width}]))}),

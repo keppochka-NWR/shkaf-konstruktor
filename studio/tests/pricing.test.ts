@@ -110,23 +110,26 @@ test('Lemana mesh replaces a drawer: geometry, price, width check and files',()=
 
 test('corner filler appears when a body meets another at 90 degrees and disappears when moved away',()=>{
   const p=newProject();p.modules[0].x=700;p.modules[0].z=3;p.modules[0].rotation=0; // корпус A по задней стене (3 мм — набивная задняя стенка)
-  const B={...p.modules[0],id:'b',x:3,z:0,rotation:90 as const,module:{...structuredClone(p.modules[0].module),name:'B'}}; // корпус B по левой стене, торцом в угол
+  const B={...p.modules[0],id:'b',x:3,z:0,rotation:90 as const,module:{...structuredClone(p.modules[0].module),name:'B',width:900}}; // корпус B 900 по левой стене, торцом в угол; его дальний край выходит за глубину A
   p.modules.push(B);
   // A стоит вплотную к фасаду B: боковина A (левая) примыкает к B под 90°
   p.modules[0].x=3+B.module.depth+18;
   const n=applyCornerFillers(p),a=n.modules[0],b=n.modules[1];
-  assert.equal(a.module.cornerFiller,'left');
-  assert.equal(b.module.cornerFiller,undefined);
-  const f=parts(a.module).find(x=>x.id==='corner-filler:left')!,door=parts(a.module).find(x=>x.role==='door')!;
-  assert.equal(f.size[0],100,'facade-material strip 100 wide');assert.equal(f.decor,a.module.facadeDecor);assert.ok(Math.abs(f.position[2]-door.position[2])<0.01,'strip flush with the doors');
-  assert.ok(Math.abs((door.position[0]-door.size[0]/2)-(f.position[0]+f.size[0]/2)-3)<0.01,'3 mm gap between strip and door');
-  assert.equal(fastenerCounts(a.module).eccentrics,4);
+  // A: сосед примыкает к левой боковине → планка торцом с выступом 40, корпус отодвинут на 16
+  assert.equal(a.module.cornerFiller,'left');assert.equal(a.module.cornerKind,'plank');
+  const plank=parts(a.module).find(x=>x.id==='corner-filler:left')!;assert.deepEqual(plank.size,[16,a.module.height,100]);assert.ok(Math.abs(plank.position[2]+50-(a.module.depth+40))<0.01);
+  assert.ok(a.x>=3+B.module.depth+18+16-0.01,'A moved right by the plank thickness');
+  // B: его фасад упирается в тело A → фальш-планка из фасада на этом краю, фасад уже на 103
+  assert.equal(b.module.cornerFiller,'right');assert.equal(b.module.cornerKind,'strip');
+  const f=parts(b.module).find(x=>x.id==='corner-filler:right')!,door=parts(b.module).filter(x=>x.role==='door').sort((p,q)=>q.position[0]-p.position[0])[0];
+  assert.equal(f.size[0],100,'facade-material strip 100 wide');assert.equal(f.decor,b.module.facadeDecor);assert.ok(Math.abs(f.position[2]-door.position[2])<0.01,'strip flush with the doors');
+  assert.ok(Math.abs((f.position[0]-f.size[0]/2)-(door.position[0]+door.size[0]/2)-3)<0.01,'3 mm gap between door and strip');
+  assert.equal(fastenerCounts(b.module).eccentrics,4);assert.equal(fastenerCounts(a.module).eccentrics,0);
   assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
-  assert.ok(Math.abs(a.x-(3+B.module.depth+18))<0.01,'A stays in place: the strip sits inside the facade span');
-  const open=structuredClone(a.module);open.doors=false;const plank=parts(open).find(x=>x.id==='corner-filler:left')!;assert.deepEqual(plank.size,[16,open.height,100],'without doors the corner filler is an edge plank');
+  assert.equal(parseProject(n).modules[1].module.cornerKind,'strip');
   assert.ok(estimate(n).lines.some(l=>l.id.startsWith('sheet:')),'filler goes to sheets');
   const far=applyCornerFillers({...n,modules:[{...a,x:a.x+500},b]});
-  assert.equal(far.modules[0].module.cornerFiller,undefined);
+  assert.equal(far.modules[0].module.cornerFiller,undefined);assert.equal(far.modules[1].module.cornerFiller,undefined);
   assert.equal(parseProject(n).modules[0].module.cornerFiller,'left');
 });
 
@@ -141,8 +144,8 @@ test('wall fillers are 100x16 edge strips: full height, flush with the facade, 5
   const legacy=structuredClone(n);(legacy.modules[0].module as any).wallFiller={left:{kind:'standard',width:50}};assert.deepEqual(parseProject(legacy).modules[0].module.wallFiller,{left:{kind:'edge',width:100}});
   // ширину планки менеджер может изменить в допустимых пределах
   m.wallFiller={left:{kind:'edge',width:120}};assert.equal(validate(m).length,0);m.wallFiller={left:{kind:'edge',width:40}};assert.ok(validate(m).some(e=>e.includes('планка')));m.wallFiller={left:{kind:'edge',width:100}};
-  // угловая фальш без фасадов — планка 100×16, выступает на 40 вперёд
-  const c=initialModule();c.doors=false;c.cornerFiller='right';const cf=parts(c).find(x=>x.id==='corner-filler:right')!;assert.deepEqual(cf.size,[16,c.height,100]);assert.ok(Math.abs(cf.position[2]+50-(c.depth+40))<0.01);c.doors=true;
+  // угловая планка торцом — 100×16, выступает на 40 вперёд
+  const c=initialModule();c.cornerFiller='right';c.cornerKind='plank';const cf=parts(c).find(x=>x.id==='corner-filler:right')!;assert.deepEqual(cf.size,[16,c.height,100]);assert.ok(Math.abs(cf.position[2]+50-(c.depth+40))<0.01);delete c.cornerFiller;delete c.cornerKind;
   // опоры: 4 на нижний корпус, 6 от 900, 0 на антресоли
   assert.equal(legCount(c),4);c.width=900;assert.equal(legCount(c),6);assert.equal(legCount(c,400),0);c.plinthHeight=0;assert.equal(legCount(c),0);
   assert.equal(estimate(n).lines.find(l=>l.id==='legs')!.quantity,4);
@@ -216,7 +219,7 @@ test('drawer facade height is independent from the box side height',()=>{
 test('floor height of the shelf above drawers distributes drawers equally; glass top replaces the LDSP top',()=>{
   const m=initialModule(),s=m.sections[0];s.shelves=[];s.drawers=3;s.drawerConfigs=[{slide:'ball',height:140,length:500},{slide:'ball',height:100,length:500},{slide:'ball',height:200,length:500,facadeH:300}];
   const before=drawerCapTop(m,s);assert.ok(before>0);
-  const cfg=distributeDrawers(m,s,800);s.drawerConfigs=cfg;
+  const cfg=distributeDrawers(m,s,800);s.drawerConfigs=cfg; // 800 от низа корпуса = 704 от дна пенала (цоколь 80 + дно 16)
   assert.ok(cfg.every(c=>c.height===cfg[0].height&&c.facadeH===undefined),'equal boxes, facades follow the pitch');
   assert.ok(Math.abs(drawerCapTop(m,s)-800)<=3,'cap top lands on the requested height (rounded to whole mm pitch)');
   assert.equal(validate(m).length,0,validate(m).join('; '));
