@@ -15,15 +15,17 @@ import {
 } from "./exports";
 export function OutputPanel({
   project,
+  initialTab = "sheets",
   capture,
   update,
 }: {
   project: Project;
+  initialTab?: "sheets" | "estimate";
   capture: () => string | undefined;
   update: (p: Project) => boolean;
 }) {
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
-  const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels">("sheets");
+  const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels">(initialTab);
   const sheets = nest(project),
     all = details(project);
   const q = project.offer || { customer: "", price: "", notes: "" };

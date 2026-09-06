@@ -26,3 +26,5 @@
 .help-steps{display:grid;gap:10px;margin-bottom:20px}.help-steps button{text-align:left;padding:14px;border:1px solid #dce2e7;background:#f8fafb;border-radius:8px;color:#263844}.help-steps button:hover{border-color:#325bee;background:#edf1ff}.help-steps b,.help-steps span{display:block}.help-steps span{font-size:12px;line-height:1.5;color:#64727e;margin-top:6px}
 
 .niche-result{padding:12px;background:#edf1ff;border:1px solid #d5def5;border-radius:8px}.niche-result strong{font-size:12px}.niche-result p{font-size:17px;font-weight:600}.niche-result small{font-size:11px;line-height:1.5}
+
+.statusbar .price-status{color:#2449d6;font-weight:650;white-space:nowrap}.statusbar .stage-note{margin-left:auto}@media(max-width:1100px){.statusbar>span:first-child{display:none}}

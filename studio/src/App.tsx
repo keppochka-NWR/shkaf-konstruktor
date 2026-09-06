@@ -48,6 +48,7 @@ import {
   type Section,
 } from "./model";
 import { Scene, type View } from "./Scene";
+import { PriceStatus } from "./PriceStatus";
 import { OutputPanel } from "./OutputPanel";
 import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
@@ -188,6 +189,7 @@ export default function App() {
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
   const [presentation,setPresentation]=useState(false);
+  const [outputTab,setOutputTab] = useState<"sheets" | "estimate">("sheets");
   const [renderImage,setRenderImage]=useState("");
   const [direct, setDirect] = useState<{
     label: string;
@@ -455,7 +457,7 @@ export default function App() {
         <div className="header-actions">
           <button className="outline presentation-trigger" onClick={()=>{setPresentation(!presentation);setRoomPlan(false);setView('iso');setOpenDoors(false);}}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
           <button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>
-          <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setModal("output");}}>
+          <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
           <div className="history">
@@ -1368,7 +1370,8 @@ export default function App() {
           {allParts.filter((p) => p.material !== "metal").length} деталей{" "}
           <span>Посмотреть</span>
         </button>
-        <button className="stage-note" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setModal("output");}}>
+        <PriceStatus project={project} open={()=>{setOutputTab("estimate");setModal("output");}}/>
+        <button className="stage-note" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
           Lamarty 2750 × 1830 · Карты листов и КП
         </button>
       </footer>
@@ -1408,6 +1411,7 @@ export default function App() {
             </div>
             {modal === "new" ? <NewProjectPanel project={project} open={next=>{if(commitProject(next)){selectModule(next.modules[0].id);setRoomPlan(false);setView("iso");setMode("move");setModal(null);return true;}return false;}}/> : modal === "library" ? <ModuleLibrary module={m} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><a className="primary render-download" href={renderImage} download="Проект мебели.png">Скачать PNG</a><p className="field-note">PNG, до 2560 пикселей. Если встроенный браузер не скачивает файл, откройте редактор в Edge или Chrome.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <OutputPanel
+                  initialTab={outputTab}
                 project={project}
                 capture={() => capture.current?.()}
                 update={commitProject}
@@ -1506,7 +1510,7 @@ export default function App() {
                   <button onClick={()=>{setModal(null);setRoomPlan(true);setTab('room');}}><b>1. Замерьте помещение</b><span>Габариты комнаты, окна и двери. В карточке замера — номер, дата и особенности.</span></button>
                   <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('module');setMode('move');}}><b>2. Соберите шкаф из корпусов</b><span>Добавьте модули до 900 × 2200 мм. Тяните их в режиме «Двигать корпуса» или на плане: края притягиваются к соседям.</span></button>
                   <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('section');setMode('fill');setOpenDoors(true);}}><b>3. Настройте наполнение</b><span>В режиме «Наполнение» тяните полки и ящики по высоте или в другой корпус. Новые элементы перетаскивайте слева. Нажмите ящик, чтобы выбрать направляющие.</span></button>
-                  <button onClick={()=>setModal('output')}><b>4. Проверьте проект</b><span>Смета, деталировка, карты Lamarty 2750 × 1830, ведомость и проверочные бирки — в «Выдать документы».</span></button>
+                  <button onClick={()=>{setOutputTab('sheets');setModal('output');}}><b>4. Проверьте проект</b><span>Смета, деталировка, карты Lamarty 2750 × 1830, ведомость и проверочные бирки — в «Выдать документы».</span></button>
                   <button onClick={()=>{setModal(null);setPresentation(true);setRoomPlan(false);setView('iso');setOpenDoors(false);}}><b>5. Покажите клиенту</b><span>Крупный вид без рабочих панелей. Покажите помещение и фасады, сохраните изображение. КП — в документах.</span></button>
                   <button onClick={()=>setModal('cloud')}><b>6. Сохраните вариант</b><span>Кабинет хранит проекты и историю версий. Сейчас сервер работает на этом компьютере. Файл проекта можно перенести кнопками «Скачать» и «Открыть».</span></button>
                 </div>
