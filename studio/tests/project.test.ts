@@ -13,7 +13,7 @@ import {
   projectErrors,
 } from "../src/project";
 import {
-  initialModule,
+  initialModule, distribute,
   parts,
   boxes,
   shelfGaps,
@@ -333,4 +333,12 @@ test('minimum shelf clearance is measured between panel faces, including the dra
  s.shelves=[88/h,176/h];assert.ok(validate(m).some(e=>e.includes('80 мм')));
  s.drawers=1;s.shelves=[284/h];assert.deepEqual(validate(m),[]);assert.equal(shelfGaps(m,s.id)[0].height,80);
  s.shelves=[276/h];assert.ok(validate(m).some(e=>e.includes('80 мм')));
+});
+
+test('distribute shelves produces equal clear openings above the base or drawer cap',()=>{
+ for(const drawers of [0,2])for(const count of [1,3,5]){
+  const m=initialModule(),s=m.sections[0];s.drawers=drawers;s.shelves=distribute(m,s,count);
+  assert.deepEqual(validate(m),[]);const gaps=shelfGaps(m,s.id).map(g=>g.height);assert.ok(Math.max(...gaps)-Math.min(...gaps)<=.1);
+ }
+ const m=initialModule(),s=m.sections[0];s.drawers=0;s.rod=true;s.rodAt=.65;s.shelves=distribute(m,s,2);assert.deepEqual(validate(m),[]);assert.ok(s.shelves.every(y=>y>s.rodAt!));
 });

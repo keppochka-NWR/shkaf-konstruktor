@@ -537,25 +537,11 @@ function dTooSmall(m: Module) {
   return m.depth < 300;
 }
 export function distribute(m: Module, s: Section, count: number): number[] {
-  const h = m.height - plinth(m) - 2 * RULES.panel,
-    base = drawerStackHeight(s);
-  if (s.rod)
-    return count === 0
-      ? []
-      : Array.from(
-          { length: count },
-          (_, i) =>
-            (base +
-              RULES.rodMinClear +
-              RULES.rodTopOffset +
-              ((h - base - RULES.rodMinClear - RULES.rodTopOffset) * (i + 1)) /
-                (count + 1)) /
-            h,
-        );
-  return Array.from(
-    { length: count },
-    (_, i) => (base + ((h - base) * (i + 1)) / (count + 1)) / h,
-  );
+  const h=m.height-plinth(m)-2*RULES.panel;
+  let base=s.drawers?drawerStackHeight(s)+RULES.panel:0;
+  if(s.rod)base=Math.max(base+RULES.rodMinClear+RULES.rodTopOffset,s.rodAt===undefined?0:s.rodAt*h+RULES.rodTopOffset-RULES.panel/2);
+  const clear=(h-base-count*RULES.panel)/(count+1);
+  return Array.from({length:count},(_,i)=>(base+clear*(i+1)+RULES.panel*i+RULES.panel/2)/h);
 }
 export function splitSection(m: Module, sid: string): Module {
   const next = structuredClone(m),
