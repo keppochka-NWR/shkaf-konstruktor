@@ -57,3 +57,5 @@
 .room-openings .room-add{flex-wrap:wrap;}
 
 .selected-filling button{display:flex;align-items:center;gap:6px;width:100%;text-align:left}
+
+.selected-filling .number-field{margin-top:12px}
