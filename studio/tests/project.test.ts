@@ -314,3 +314,13 @@ test('divider drag resizes only adjacent sections and rejects an unusable result
  assert.deepEqual(boxes(m),before);assert.throws(()=>moveDivider(p,p.modules[0].id,'s1',200),/180/);assert.throws(()=>moveDivider(p,p.modules[0].id,'s0',10));
  assert.equal(n.modules[0].module.width,900);
 });
+
+test('manual rod height respects the nearest shelf and pantograph stays inside its clear space',()=>{
+ const m=initialModule(),s=m.sections[0];s.drawers=0;s.shelves=[];s.rod=true;s.rodAt=.8;
+ assert.deepEqual(validate(m),[]);s.shelves=[.6];assert.ok(validate(m).some(e=>e.includes('900')));
+ s.shelves=[.8];assert.ok(validate(m).some(e=>e.includes('пересекает полку')));
+ s.rod=false;s.pantograph=true;s.shelves=[];s.rodAt=.8;assert.deepEqual(validate(m),[]);
+ s.rodAt=.1;assert.ok(validate(m).some(e=>e.includes('внутреннюю высоту')));
+ s.rodAt=.8;s.shelves=[.7];assert.ok(validate(m).some(e=>e.includes('Пантограф пересекает')));
+ s.shelves=[.3];assert.deepEqual(validate(m),[]);
+});

@@ -494,17 +494,27 @@ export function validate(m: Module): string[] {
         prefix +
           "для ящиков нужно от 250 мм внутри и глубина корпуса от 300 мм.",
       );
+    const rodY=s.rodAt===undefined?(shelfY[0]??h)-RULES.rodTopOffset:s.rodAt*h;
+    const support=Math.max(drawerTop+(s.drawers?RULES.panel:0),0,...shelfY.filter(y=>y<rodY).map(y=>y+RULES.panel/2));
+    if(s.rod&&shelfY.some(y=>Math.abs(y-rodY)<(RULES.panel+RULES.rodDiameter)/2))errors.push(prefix+'штанга пересекает полку. Измените высоту.');
     if (
-      s.rod &&
-      (s.rodAt===undefined?(shelfY[0]??h)-RULES.rodTopOffset:s.rodAt*h) - drawerTop < RULES.rodMinClear
+      s.rod && rodY - support < RULES.rodMinClear
     )
       errors.push(
         prefix +
-          "под штангой нужно 900 мм до ящиков или дна. Поднимите нижнюю полку или уберите наполнение.",
+          "под штангой нужно 900 мм до полки, ящиков или дна. Измените высоту штанги или наполнение.",
       );
   });
   if (errors.length) return [...new Set(errors)];
-  for (const p of parts(m)) {
+  const geometry=parts(m);
+  for(const section of m.sections.filter(s=>s.pantograph)){
+    const b=boxes(m).find(b=>b.id===section.id)!;
+    const mechanism=geometry.filter(p=>p.id.startsWith(section.id+':pantograph:'));
+    if(mechanism.some(p=>p.position[1]-p.size[1]/2<b.bottom||p.position[1]+p.size[1]/2>b.top))errors.push('Пантограф выходит за внутреннюю высоту корпуса. Измените его положение.');
+    const filling=geometry.filter(p=>p.sectionId===section.id&&(p.role==='shelf'||p.role==='drawer')&&p.material==='board');
+    if(mechanism.some(a=>filling.some(b=>a.size.every((size,k)=>Math.abs(a.position[k]-b.position[k])<(size+b.size[k])/2-.1))))errors.push('Пантограф пересекает полку или ящик. Освободите место для механизма.');
+  }
+  for (const p of geometry) {
     if (p.material === "metal") continue;
     const sw = p.material === "hdf" ? RULES.hdfW : RULES.sheetW,
       sh = p.material === "hdf" ? RULES.hdfH : RULES.sheetH;
