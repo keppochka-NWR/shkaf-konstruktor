@@ -11,7 +11,7 @@ export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.w
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
-export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
+export function sideExtension(m:Module,side:'left'|'right'){if(m.cornerFiller===side)return m.doors?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
 export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=Math.max(a.module.depth+18,cf?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}

@@ -4,7 +4,7 @@ import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
 import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
 import {roomWarnings} from '../src/roomWarnings';
-import {parts,initialModule,validate,legCount,fastenerCounts} from '../src/model';
+import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch} from '../src/model';
 import {insertItem} from '../src/operations';
 import {specificationHTML,details} from '../src/exports';
 
@@ -117,10 +117,13 @@ test('corner filler appears when a body meets another at 90 degrees and disappea
   const n=applyCornerFillers(p),a=n.modules[0],b=n.modules[1];
   assert.equal(a.module.cornerFiller,'left');
   assert.equal(b.module.cornerFiller,undefined);
-  const f=parts(a.module).find(x=>x.id==='corner-filler:left')!;
-  assert.equal(f.size[2],100);assert.equal(f.size[1],a.module.height);assert.equal(f.position[0],-8);assert.ok(Math.abs(f.position[2]+50-(a.module.depth+40))<0.01,'strip protrudes 40 mm in front of the body');
+  const f=parts(a.module).find(x=>x.id==='corner-filler:left')!,door=parts(a.module).find(x=>x.role==='door')!;
+  assert.equal(f.size[0],100,'facade-material strip 100 wide');assert.equal(f.decor,a.module.facadeDecor);assert.ok(Math.abs(f.position[2]-door.position[2])<0.01,'strip flush with the doors');
+  assert.ok(Math.abs((door.position[0]-door.size[0]/2)-(f.position[0]+f.size[0]/2)-3)<0.01,'3 mm gap between strip and door');
+  assert.equal(fastenerCounts(a.module).eccentrics,4);
   assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
-  assert.ok(a.x>=3+B.module.depth+18+16-0.01,'A moved right by the filler thickness');
+  assert.ok(Math.abs(a.x-(3+B.module.depth+18))<0.01,'A stays in place: the strip sits inside the facade span');
+  const open=structuredClone(a.module);open.doors=false;const plank=parts(open).find(x=>x.id==='corner-filler:left')!;assert.deepEqual(plank.size,[16,open.height,100],'without doors the corner filler is an edge plank');
   assert.ok(estimate(n).lines.some(l=>l.id.startsWith('sheet:')),'filler goes to sheets');
   const far=applyCornerFillers({...n,modules:[{...a,x:a.x+500},b]});
   assert.equal(far.modules[0].module.cornerFiller,undefined);
@@ -138,8 +141,8 @@ test('wall fillers are 100x16 edge strips: full height, flush with the facade, 5
   const legacy=structuredClone(n);(legacy.modules[0].module as any).wallFiller={left:{kind:'standard',width:50}};assert.deepEqual(parseProject(legacy).modules[0].module.wallFiller,{left:{kind:'edge',width:100}});
   // ширину планки менеджер может изменить в допустимых пределах
   m.wallFiller={left:{kind:'edge',width:120}};assert.equal(validate(m).length,0);m.wallFiller={left:{kind:'edge',width:40}};assert.ok(validate(m).some(e=>e.includes('планка')));m.wallFiller={left:{kind:'edge',width:100}};
-  // угловая фальш — тоже планка 100×16, выступает на 40 вперёд
-  const c=initialModule();c.cornerFiller='right';const cf=parts(c).find(x=>x.id==='corner-filler:right')!;assert.deepEqual(cf.size,[16,c.height,100]);assert.ok(Math.abs(cf.position[2]+50-(c.depth+40))<0.01);
+  // угловая фальш без фасадов — планка 100×16, выступает на 40 вперёд
+  const c=initialModule();c.doors=false;c.cornerFiller='right';const cf=parts(c).find(x=>x.id==='corner-filler:right')!;assert.deepEqual(cf.size,[16,c.height,100]);assert.ok(Math.abs(cf.position[2]+50-(c.depth+40))<0.01);c.doors=true;
   // опоры: 4 на нижний корпус, 6 от 900, 0 на антресоли
   assert.equal(legCount(c),4);c.width=900;assert.equal(legCount(c),6);assert.equal(legCount(c,400),0);c.plinthHeight=0;assert.equal(legCount(c),0);
   assert.equal(estimate(n).lines.find(l=>l.id==='legs')!.quantity,4);
@@ -197,6 +200,17 @@ test('price models: markup vs 23 000 per LDSP sheet; fasteners drawn and counted
   assert.ok(fast.every(f=>f.material==='metal'));
   const lines=estimate(newProject()).lines;assert.equal(lines.find(l=>l.id==='confirmat')!.quantity,fc.confirmats);assert.equal(lines.find(l=>l.id==='shelf-holder')!.quantity,fc.shelfHolders);
   assert.ok(!details(newProject()).some(d=>d.role==='fastener'),'fasteners are not board details');
+});
+
+test('drawer facade height is independent from the box side height',()=>{
+  const m=initialModule();m.sections[0].shelves=[];m.sections[0].drawers=2;m.sections[0].drawerConfigs=[{slide:'ball',height:140,length:500},{slide:'ball',height:140,length:500,facadeH:300}];
+  assert.equal(drawerPitch(m.sections[0].drawerConfigs[0]),180);assert.equal(drawerPitch(m.sections[0].drawerConfigs[1]),303,'pitch grows to the facade plus gap');
+  const ps=parts(m),f0=ps.find(p=>p.id.endsWith(':drawer:0:facade'))!,f1=ps.find(p=>p.id.endsWith(':drawer:1:facade'))!,side1=ps.find(p=>p.id.endsWith(':drawer:1:left'))!;
+  assert.equal(f0.size[1],177);assert.equal(f1.size[1],300);assert.equal(side1.size[1],140,'box stays 140 while the facade is 300');
+  assert.ok(f1.position[1]-f1.size[1]/2>f0.position[1]+f0.size[1]/2,'facades do not overlap');
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  m.sections[0].drawerConfigs[1].facadeH=20;assert.ok(validate(m).some(e=>e.includes('высота фасада ящика')));
+  m.sections[0].drawerConfigs[1].facadeH=300;assert.equal(parseProject(newProject(m)).modules[0].module.sections[0].drawerConfigs![1].facadeH,300);
 });
 
 test('estimate falls back to the tier price for decors outside the explicit list',()=>{

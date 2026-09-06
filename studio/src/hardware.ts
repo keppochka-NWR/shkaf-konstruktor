@@ -20,6 +20,8 @@ export type DrawerConfig = {
   handle?: boolean;
   /** id сетчатого элемента Лемана Про (mesh.ts): вместо ящика ЛДСП ставится корзина/брючница/обувница. */
   mesh?: string;
+  /** Высота фасада ящика отдельно от боковины короба (экономия плиты): по умолчанию боковина + 40 − зазор. */
+  facadeH?: number;
 };
 export const GTV_SOURCE =
   "https://api2.gtv.com.pl/pimcore/assets/attachments/karta_techniczna/Karta_techniczna_2020_128-129.pdf";

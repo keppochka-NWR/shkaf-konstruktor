@@ -48,6 +48,7 @@ export const RULES = {
   cornerSnap: 60, // расстояние, в пределах которого примыкающий под 90° корпус считается стыком
   // Фальши цеха: планка 100×16 торцом (Макс, 06.09.2026); к стене +5 мм (регламент по ФП).
   fillerStrip: 100,
+  fillerGap: 3, // зазор между фальш-планкой из фасада и соседним фасадом
   wallSnap: 25,
   wallFillerEdgeGap: 5,
   wallFillerMin: 60,
@@ -160,18 +161,23 @@ export function facadeBottom(m:Module){return plinth(m)>0?Math.min(RULES.facadeF
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
-  const left=i===0?RULES.faceGap:b.x-t/2+RULES.faceGap/2;
-  const right=i===m.sections.length-1?m.width-RULES.faceGap:b.x+b.width+t/2-RULES.faceGap/2;
+  let left=i===0?RULES.faceGap:b.x-t/2+RULES.faceGap/2;
+  let right=i===m.sections.length-1?m.width-RULES.faceGap:b.x+b.width+t/2-RULES.faceGap/2;
+  // Угловая фальш-планка из фасада занимает край проёма: фасады крайней секции сдвигаются на планку + зазор 3.
+  if(m.doors&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
+  if(m.doors&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
   return {left,right};
 }
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
-export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+(s.drawerConfigs?.[j]?.height??RULES.drawerH)+RULES.drawerStep;return start;});}
+/** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
+export function drawerPitch(c:{height?:number;facadeH?:number}){const box=(c.height??RULES.drawerH)+RULES.drawerStep;return c.facadeH?Math.max(box,c.facadeH+RULES.drawerFrontGap):box;}
+export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{});return start;});}
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
 export function doorMaxWidth(m:Module){const h=m.height-RULES.faceGap-facadeBottom(m);return h<=RULES.doorLowH?RULES.doorMaxLow:RULES.doorMax;}
 export function doorCount(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>doorMaxWidth(m)?2:1;}
 export function fillerSides(m:Module,s:Section){if(!m.doors||!s.drawers)return {left:0,right:0};const both=doorCount(m,s)===2;return {left:both||m.hingeSide!=='right'?RULES.drawerFiller:0,right:both||m.hingeSide==='right'?RULES.drawerFiller:0};}
 export function drawerStackHeight(s: Section) {
-  const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+(s.drawerConfigs?.[j]?.height??RULES.drawerH)+RULES.drawerStep));
+  const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+drawerPitch(s.drawerConfigs?.[j]??{})));
 }
 export function initialModule(): Module {
   return {
@@ -282,17 +288,16 @@ export function parts(m: Module): Part[] {
   );
   // Фальши цеха — только «торцом»: планка 16 × 100 на всю высоту, прикручена пластью снаружи боковины, виден торец 16 мм.
   // Угловая: выступает вперёд на 40 мм от корпуса (правило Макса). К стене: заподлицо с фасадом, +5 мм к стене (регламент).
-  if (m.cornerFiller) {
+  if (m.cornerFiller && m.doors) {
+    // Угловой стык корпуса с фасадами: фальш-планка из фасадного материала вровень с фасадами, на эксцентриках к каркасу,
+    // зазор 3 к соседнему фасаду (Макс, 06.09). Занимает край фасадного проёма; распашные фасады становятся уже.
+    const w = RULES.fillerStrip, y0 = facadeBottom(m), y1 = m.height - RULES.faceGap;
+    add("corner-filler:" + m.cornerFiller, "Фальш-планка угловая из фасада " + (m.cornerFiller === "left" ? "левая" : "правая"), [w, y1 - y0, t], [m.cornerFiller === "left" ? RULES.faceGap + w / 2 : m.width - RULES.faceGap - w / 2, (y0 + y1) / 2, d + t / 2 + 2], y1 - y0, w, t);
+    out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
+  } else if (m.cornerFiller) {
+    // Без фасадов — планка 100×16 торцом снаружи боковины, выступает вперёд на 40.
     const w = RULES.fillerStrip, front = d + RULES.cornerFillerExtra;
-    add(
-      "corner-filler:" + m.cornerFiller,
-      "Фальш угловая " + (m.cornerFiller === "left" ? "левая" : "правая") + " 100×16",
-      [t, m.height, w],
-      [m.cornerFiller === "left" ? -t / 2 : m.width + t / 2, m.height / 2, front - w / 2],
-      m.height,
-      w,
-      t,
-    );
+    add("corner-filler:" + m.cornerFiller, "Фальш угловая " + (m.cornerFiller === "left" ? "левая" : "правая") + " 100×16 торцом", [t, m.height, w], [m.cornerFiller === "left" ? -t / 2 : m.width + t / 2, m.height / 2, front - w / 2], m.height, w, t);
   }
   for (const side of ["left", "right"] as const) {
     const wf = m.wallFiller?.[side];
@@ -435,10 +440,12 @@ export function parts(m: Module): Part[] {
       );
       // За распашными дверями фасад ящика вкладной (внутри проёма, зазор 3). В открытом корпусе — накладной:
       // перекрывает стойки как распашной фасад, зазор 2, нижний фасад опускается на цоколь до 30 мм от пола.
-      let fh=bh+RULES.drawerStep-RULES.drawerFrontGap,fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=y+bh/2;
+      // Фасад: по умолчанию на шаг ящика минус зазор; при заданной высоте фасада — она (короб может быть ниже, экономия плиты).
+      const pitch=drawerPitch(cfg),pitchBottom=y-RULES.drawerStep/2;
+      let fh=cfg.facadeH??(pitch-RULES.drawerFrontGap),fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+fh/2+(cfg.facadeH?RULES.drawerFrontGap/2:0);
       if(!m.doors){
         const span=facadeSpan(m,i,b);fw=span.right-span.left;fx=(span.left+span.right)/2;
-        fh=bh+RULES.drawerStep-RULES.faceGap;
+        fh=cfg.facadeH??(pitch-RULES.faceGap);fy=pitchBottom+fh/2+(cfg.facadeH?RULES.faceGap/2:0);
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
         if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
       }
@@ -529,7 +536,7 @@ export function parts(m: Module): Part[] {
 /** Число конфирматов корпуса и полкодержателей под съёмные полки. */
 export function fastenerCounts(m: Module) {
   const ps = parts(m);
-  return { confirmats: ps.filter((p) => p.role === "fastener").length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap")).length };
+  return { confirmats: ps.filter((p) => p.role === "fastener").length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap")).length, eccentrics: m.cornerFiller && m.doors ? 4 : 0 };
 }
 export function validate(m: Module): string[] {
   const errors: string[] = [];
@@ -607,12 +614,14 @@ export function validate(m: Module): string[] {
       }
       if (c.length > m.depth - rearClear(m) - (m.doors ? 44 : 25))
         errors.push(prefix + "направляющая слишком длинная для этой глубины.");
+      if (c.facadeH !== undefined && (!Number.isFinite(c.facadeH) || c.facadeH < 60 || c.facadeH > 800))
+        errors.push(prefix + "высота фасада ящика: от 60 до 800 мм.");
 
     }
     const offsets=drawerOffsets(s);
     for(let j=0;j<offsets.length;j++){
       if(!Number.isFinite(offsets[j])||offsets[j]<0)errors.push(prefix+'неверное положение ящика.');
-      for(let k=0;k<j;k++)if(offsets[j]<offsets[k]+drawerConfig(m,s,k).height+RULES.drawerStep&&offsets[k]<offsets[j]+drawerConfig(m,s,j).height+RULES.drawerStep)errors.push(prefix+'ящики пересекаются.');
+      for(let k=0;k<j;k++)if(offsets[j]<offsets[k]+drawerPitch(drawerConfig(m,s,k))&&offsets[k]<offsets[j]+drawerPitch(drawerConfig(m,s,j)))errors.push(prefix+'ящики пересекаются.');
     }
     if(s.pantograph && (b.width<545||b.width>910||h<1100))errors.push(prefix+'пантографу нужен проём шириной 545–910 мм и высотой от 1100 мм.');
     if(s.rod&&s.pantograph)errors.push(prefix+'выберите штангу или пантограф.');
@@ -826,6 +835,7 @@ export function parseModule(input: unknown): Module {
               ...(c?.handle===undefined?{}:{handle:c.handle}),
                   ...(c?.y===undefined?{}:{y:c.y}),
                   ...(c?.mesh===undefined?{}:{mesh:c.mesh}),
+                  ...(c?.facadeH===undefined?{}:{facadeH:c.facadeH}),
             })),
           }),
     })),

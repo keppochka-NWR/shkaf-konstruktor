@@ -47,6 +47,7 @@ export const FASTENERS={
   confirmat:{price:2.45,source:'МДМ: конфирмат 5,0×50 чёрный цинк'},
   cap:{price:0.7,source:'ФАМ: заглушка самоклеящаяся D14, лист 35 ₽ ≈ 50 шт'},
   shelfHolder:{price:6,source:'Оценка: Boyard p521 (СТП цеха); цены в счетах нет — подтвердить'},
+  eccentric:{price:10,source:'Оценка: эксцентрик 15 + шток (СТП: скрытый крепёж); цены в счетах нет — подтвердить'},
 };
 export const HARDWARE_KIT={label:'Мелочёвка корпуса (шурупы задника, стяжки антресолей, подпятники)',price:150,source:'Норматив; конфирматы, заглушки, полкодержатели и опоры считаются отдельно'};
 
@@ -65,6 +66,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
     add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
+    if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка (фальш-планка к каркасу)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
     add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
     const legs=legCount(a.module,a.y??0);if(legs)add('legs','Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',LEG.price,LEG.source);
     for(const d of parts(a.module)){

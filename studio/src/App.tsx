@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, plinth, rearClear, needsWallFiller,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, plinth, rearClear, needsWallFiller,
   type Module,
   type Section,
 } from "./model";
@@ -529,22 +529,23 @@ export default function App() {
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
-          <div className="history">
+          <div className="history" title={`История изменений: шаг ${cursor + 1} из ${history.length}. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z`}>
             <button
-              title="Отменить · Ctrl+Z"
+              title="Шаг назад · Ctrl+Z"
               aria-label="Отменить"
               disabled={cursor === 0}
               onClick={undo}
             >
-              <Undo2 size={18} />
+              <Undo2 size={18} /><span className="history-label">Назад</span>
             </button>
+            <span className="history-step" aria-live="polite">{cursor + 1}/{history.length}</span>
             <button
-              title="Повторить · Ctrl+Shift+Z"
+              title="Шаг вперёд · Ctrl+Shift+Z"
               aria-label="Повторить"
               disabled={cursor === history.length - 1}
               onClick={redo}
             >
-              <Redo2 size={18} />
+              <span className="history-label">Вперёд</span><Redo2 size={18} />
             </button>
           </div>
           <button
@@ -1064,6 +1065,8 @@ export default function App() {
                   <h2>Габариты корпуса</h2>
                   <Ruler size={17} />
                 </div>
+                <button className="outline full upper-cta" onClick={addUpper}><Plus size={16}/> Антресоль сверху на этот корпус</button>
+                <p className="field-note">Антресоль встанет на крышу корпуса той же ширины и глубины, без цоколя; до потолка останется зазор по регламенту.</p>
                 <NumberField
                   label="Ширина"
                   value={m.width}
@@ -1147,7 +1150,7 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div className="property-section">
+              <div className="property-section accent-facade">
                 <div className="toggle-row">
                   <span>
                     <b>Распашные фасады</b>
@@ -1307,6 +1310,15 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+                    <NumberField label="Ящиков в секции" value={s.drawers} min={1} max={RULES.maxDrawers} onChange={v=>{
+                      try{
+                        let next=project;const count=Math.max(1,Math.min(RULES.maxDrawers,Math.round(v)));
+                        for(let k=s.drawers;k<count;k++){const sec=next.modules.find(a=>a.id===placed.id)!.module.sections.find(x=>x.id===s.id)!;next=insertItem(next,'drawer',placed.id,s.id,boxes(next.modules.find(a=>a.id===placed.id)!.module).find(x=>x.id===s.id)!.bottom+drawerStackHeight(sec),drawerConfig(next.modules.find(a=>a.id===placed.id)!.module,sec,Math.max(0,sec.drawers-1)));}
+                        for(let k=s.drawers;k>count;k--)next=removePart(next,placed.id,s.id,s.id+':drawer:'+(k-1)+':facade');
+                        if(commitProject(next))setDrawerIndex(Math.min(drawerIndex??0,count-1));
+                      }catch(e){setError((e as Error).message);}
+                    }}/>
+                    <p className="field-note">Новые ящики копируют настройки последнего; лишние убираются сверху.</p>
                     <button className="outline full" aria-pressed={drawerPreview} onClick={()=>{setDrawerPreview(!drawerPreview);setOpenDoors(true);setExploded(false);setRoomPlan(false);setView('iso');}}>{drawerPreview?'Задвинуть ящик':'Выдвинуть для просмотра'}</button>
                     <p className="field-note">Просмотр конструкции. Положение ящика не меняет деталировку.</p>
                     {(() => {
@@ -1375,6 +1387,8 @@ export default function App() {
                             max={300}
                             onChange={(v) => update({ height: v })}
                           />
+                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c)-(m.doors?RULES.drawerFrontGap:RULES.faceGap))} min={60} max={800} onChange={v=>update({facadeH:v})}/>
+                          {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
                           {c.slide === "gtv0fpo" && (
                             <a
