@@ -1,5 +1,5 @@
 import type {Niche} from './measurement';
-import {id,initialModule,parseModule,validate,type Module,section} from './model';
+import {parts,id,initialModule,parseModule,validate,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type Room={width:number;depth:number;height:number;openings?:Opening[]};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
@@ -73,8 +73,13 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
 
 
 
+export function closedModuleBounds(a:PlacedModule){
+ const points=parts(a.module).flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
+ const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),z=Math.min(...points.map(p=>p.z));
+ return {x,y,z,w:Math.max(...points.map(p=>p.x))-x,h:Math.max(...points.map(p=>p.y))-y,d:Math.max(...points.map(p=>p.z))-z};
+}
 export function compositionBounds(p:Project){
- const bb=p.modules.map(bounds);if(!bb.length)return {x:0,y:0,z:0,w:0,h:0,d:0};
+ const bb=p.modules.map(closedModuleBounds);if(!bb.length)return {x:0,y:0,z:0,w:0,h:0,d:0};
  const x=Math.min(...bb.map(b=>b.x)),y=Math.min(...bb.map(b=>b.y)),z=Math.min(...bb.map(b=>b.z));
  return {x,y,z,w:Math.max(...bb.map(b=>b.x+b.w))-x,h:Math.max(...bb.map(b=>b.y+b.h))-y,d:Math.max(...bb.map(b=>b.z+b.d))-z};
 }

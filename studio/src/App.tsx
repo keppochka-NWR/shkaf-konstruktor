@@ -1,7 +1,7 @@
 import {NewProjectPanel} from './NewProjectPanel';
 import {MEASUREMENT_RULES,nicheSize} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Box,
   Undo2,
@@ -181,7 +181,8 @@ export default function App() {
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
-  const placedBounds=bounds(placed),composition=compositionBounds(project);
+  const placedBounds=bounds(placed);
+  const composition=useMemo(()=>compositionBounds(project),[project]);
   const [allMaterials,setAllMaterials]=useState(false);
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
@@ -584,7 +585,7 @@ export default function App() {
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
             <h1>Соберите шкаф</h1>
             <p>
-              <span title="Общий габарит расстановки Ш × В × Г: включает промежутки, задники и место под фасады.">Вся композиция:<br/><span style={{whiteSpace:'nowrap'}}>{Math.round(composition.w)} × {Math.round(composition.h)} × {Math.round(composition.d)} мм</span></span>
+              <span title="Габарит закрытой мебели Ш × В × Г: включает промежутки, задники, фасады и ручки.">Вся композиция:<br/><span style={{whiteSpace:'nowrap'}}>{Math.round(composition.w)} × {Math.round(composition.h)} × {Math.round(composition.d)} мм</span></span>
             </p>
           </div>
           <button className="text-action upper-add" onClick={()=>setModal("new")}>Новый проект / восстановить</button>
