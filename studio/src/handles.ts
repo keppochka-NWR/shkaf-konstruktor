@@ -9,6 +9,31 @@ export type Handle = {
   vendor: "workshop" | "lemana";
   art?: string;
 };
+/** Семейство формы ручки для 3D-модели (Blender → GLB в public/models/handles). */
+export type HandleKind = "bracket" | "rail" | "knob" | "profile";
+export function handleKind(h: Pick<Handle, "label">): HandleKind {
+  const l = h.label.toLocaleLowerCase("ru-RU");
+  if (l.includes("рейлинг")) return "rail";
+  if (l.includes("кнопка") || l.includes("knob")) return "knob";
+  if (l.includes("торцев") || l.includes("профил") || l.includes("hexa l-")) return "profile";
+  return "bracket";
+}
+/** Цвет металла по подписи ручки (для сцены). */
+export function handleColour(h: Pick<Handle, "label">): number {
+  const l = h.label.toLocaleLowerCase("ru-RU");
+  if (l.includes("золот")) return 0xc9a44a;
+  if (l.includes("бронз")) return 0x6b4a2e;
+  if (l.includes("дерев")) return 0x9a6b3c;
+  if (l.includes("чёрн") || l.includes("черн") || l.includes("графит")) return 0x25272a;
+  if (l.includes("алюмин")) return 0xb9bcc0;
+  if (l.includes("никел") || l.includes("хром") || l.includes("серебр") || l.includes("сталь")) return 0xc8ccd0;
+  return 0x8d949a;
+}
+/** Файл модели для ручки: скобы/рейлинги/профили — по межосевому, кнопка одна. */
+export function handleModelFile(h: Pick<Handle, "label" | "len">): string {
+  const k = handleKind(h);
+  return k === "knob" ? "knob.glb" : `${k}_${h.len}.glb`;
+}
 const workshop = (id: string, label: string, len: number, price: number, source: string): Handle => ({ id, label, len, price, source, vendor: "workshop" });
 const lemana = (art: string, label: string, len: number, price: number): Handle => ({ id: "lm" + art, art, label, len, price, source: "Лемана Про, розница 01.09.2026, арт. " + art, vendor: "lemana" });
 export const HANDLES: Handle[] = [

@@ -674,6 +674,14 @@ input {
   color: #8ba0a9;
   pointer-events: none;
 }
+/* Контекстное меню корпуса по правой кнопке в 3D */
+.ctx-menu { position: fixed; z-index: 60; min-width: 220px; padding: 6px; background: #fff; border: 1px solid #d5dbe2; border-radius: 10px; box-shadow: 0 10px 30px rgba(20, 30, 40, 0.18); display: grid; gap: 2px; }
+.ctx-menu .ctx-title { padding: 6px 10px 8px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e6eaef; margin-bottom: 4px; display: grid; }
+.ctx-menu .ctx-title small { font-weight: 400; color: #6b7280; font-size: 11px; }
+.ctx-menu button[role="menuitem"] { display: flex; justify-content: flex-start; text-align: left; width: 100%; padding: 7px 10px; border: 0; background: transparent; border-radius: 6px; font: inherit; font-size: 13px; color: #1f2933; cursor: pointer; box-shadow: none; }
+.ctx-menu button:hover:not(:disabled) { background: #eef3fb; }
+.ctx-menu button:disabled { color: #a0a8b3; cursor: default; }
+.ctx-menu button.danger { color: #b42318; }
 .error-banner {
   position: absolute;
   left: 20px;

@@ -72,6 +72,9 @@ export const RULES = {
   deskMaxW: 2400,
   deskApronMin: 60,
   deskApronMax: 150,
+  deskTop: 32, // столешница всегда 32: две плиты 16 склейкой, кромка 2 по периметру
+  deskGrilleRear: 30, // решётка от задней кромки столешницы
+  deskGrilleMinW: 200,
   slopeMinLow: 150, // низкая сторона мансардного скоса: хотя бы полка-ниша (антресоль 430 → низ 200)
   slopeMinDrop: 50,
   // Каркасы на ножках и стяжках (заказы цеха: Байков, Семиклетова, Ошарина, Корижин): ножки M6×18 или 1033 h=100; стяжки 100–200.
@@ -161,7 +164,20 @@ export type Module = {
   skew?: { side: "left" | "right"; depth: number };
   /** Стол (Имомкулова 6785429): столешница ЛДСП на опорах-боковинах и задней царге. sides — какие опоры свои;
    *  отсутствующая опора — столешница опирается на соседний корпус (стяжки эксцентрик + шкант). Без дна, цоколя, задника и фасадов. */
-  desk?: { sides: "both" | "left" | "right" | "none"; apron: number };
+  desk?: {
+    sides: "both" | "left" | "right" | "none";
+    /** Высота царги. */
+    apron: number;
+    /** Смещение царги от задней кромки столешницы вперёд (под батарею), мм. По умолчанию 0. */
+    apronOffset?: number;
+    /** Подстолье отдельно от столешницы: ширина по внешним граням опор и отступ от левого края столешницы. По умолчанию — вся ширина. */
+    baseWidth?: number;
+    baseX?: number;
+    /** Глубина опор; по умолчанию — глубина столешницы. Опоры прижаты к задней кромке. */
+    baseDepth?: number;
+    /** Вентиляционная решётка в столешнице над батареей: отступ от левого края, ширина, глубина (от задней кромки 30). */
+    grille?: { x: number; width: number; depth: number };
+  };
 };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
@@ -244,6 +260,11 @@ export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.c
 export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
 export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0));}
+/** Геометрия подстолья: границы опор по X, глубина опор, отступ царги — с подстановкой значений по умолчанию. */
+export function deskGeometry(m:Module){
+  const dk=m.desk!,x0=dk.baseX??0,bw=dk.baseWidth??m.width-x0;
+  return {x0,x1:x0+bw,baseWidth:bw,baseDepth:dk.baseDepth??m.depth,apronOffset:dk.apronOffset??0,hasL:dk.sides==='both'||dk.sides==='left',hasR:dk.sides==='both'||dk.sides==='right'};
+}
 /** Заготовка стола: столешница 750 на двух опорах, глубина 600, без фасадов, дна, задника и цоколя. */
 export function deskModule(base?:Module):Module{
   const m=base?structuredClone(base):initialModule();
@@ -263,7 +284,8 @@ export function facadeBottom(m:Module){
   return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):RULES.faceGap;
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
-export function facadeTop(m:Module){return m.height-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0);}
+/** Верх накладных фасадов: под скосом — по низкой стороне (крыша плоская на её высоте), выше идёт фальш из фасадного материала. */
+export function facadeTop(m:Module){return (m.slope?m.slope.lowHeight:m.height)-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
@@ -357,37 +379,50 @@ export function parts(m: Module): Part[] {
     });
   }
   if (m.desk) {
-    // Стол: столешница на всю ширину лежит на опорах (боковины до пола), сзади царга под столешницей.
+    // Стол: столешница 32 (две плиты 16 склейкой) на всю ширину, подстолье — опоры до пола и царга, могут быть уже столешницы.
     // Без своей опоры столешница и царга крепятся к соседнему корпусу эксцентриком + шкантом (Базис: «Стяжка эксц. + шкант фикс 50»).
-    const H = m.height, hasL = m.desk.sides === "both" || m.desk.sides === "left", hasR = m.desk.sides === "both" || m.desk.sides === "right";
-    add("top", "Столешница", [m.width, t, d], [m.width / 2, H - t / 2, d / 2], m.width, d, t);
+    const g = deskGeometry(m), H = m.height, T = RULES.deskTop;
+    add("top", "Столешница · верхняя плита 16", [m.width, t, d], [m.width / 2, H - t / 2, d / 2], m.width, d, t);
     out.at(-1)!.edge = [2, 2, 2, 2];
-    if (hasL) add("left", "Опора стола левая", [t, H - t, d], [t / 2, (H - t) / 2, d / 2], H - t, d, t);
-    if (hasR) add("right", "Опора стола правая", [t, H - t, d], [m.width - t / 2, (H - t) / 2, d / 2], H - t, d, t);
-    const ax0 = hasL ? t : 0, ax1 = hasR ? m.width - t : m.width, aw = ax1 - ax0;
-    add("rail:rear-top", "Царга стола " + m.desk.apron, [aw, m.desk.apron, t], [(ax0 + ax1) / 2, H - t - m.desk.apron / 2, t / 2], aw, m.desk.apron, t);
-    // Крепёж столешницы к опорам: по СТП сверху в столешницу не сверлят — эксцентрики снизу столешницы либо конфирматы через опору не видны; ставим эксцентрики.
-    for (const [side, x, has] of [["left", t / 2, hasL], ["right", m.width - t / 2, hasR]] as const) if (has)
-      for (const [k, z] of [RULES.confirmatInset, d - RULES.confirmatInset].entries()) {
-        add(`ecc:top:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [x, H - t - RULES.eccBarrelH / 2 + 0.3, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", undefined, "metal");
+    add("top2", "Столешница · нижняя плита 16 (склейка до 32)", [m.width, t, d], [m.width / 2, H - T + t / 2, d / 2], m.width, d, t);
+    out.at(-1)!.edge = [2, 2, 2, 2];
+    const bz = g.baseDepth / 2;
+    if (g.hasL) add("left", "Опора стола левая", [t, H - T, g.baseDepth], [g.x0 + t / 2, (H - T) / 2, bz], H - T, g.baseDepth, t);
+    if (g.hasR) add("right", "Опора стола правая", [t, H - T, g.baseDepth], [g.x1 - t / 2, (H - T) / 2, bz], H - T, g.baseDepth, t);
+    const ax0 = g.hasL ? g.x0 + t : g.x0, ax1 = g.hasR ? g.x1 - t : g.x1, aw = ax1 - ax0;
+    add("rail:rear-top", "Царга стола " + m.desk.apron + (g.apronOffset ? " · отступ " + g.apronOffset : ""), [aw, m.desk.apron, t], [(ax0 + ax1) / 2, H - T - m.desk.apron / 2, g.apronOffset + t / 2], aw, m.desk.apron, t);
+    if (m.desk.grille) {
+      const gr = m.desk.grille;
+      add("desk-grille", `Решётка вентиляционная ${gr.width}×${gr.depth} в столешницу`, [gr.width, 3, gr.depth], [gr.x + gr.width / 2, H + 1, RULES.deskGrilleRear + gr.depth / 2], gr.width, gr.depth, 3, "body", undefined, "metal");
+    }
+    // Крепёж столешницы к опорам: эксцентрики снизу столешницы, сверху не сверлим.
+    for (const [side, x, has] of [["left", g.x0 + t / 2, g.hasL], ["right", g.x1 - t / 2, g.hasR]] as const) if (has)
+      for (const [k, z] of [RULES.confirmatInset, g.baseDepth - RULES.confirmatInset].entries()) {
+        add(`ecc:top:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [x, H - T - RULES.eccBarrelH / 2 + 0.3, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", undefined, "metal");
       }
     return out;
   }
-  // Боковины: от пола (на цоколе) или от верха ножек; под стеклянной крышей — короче на её толщину; под скосом — до наклонной крыши.
-  const topT = hasTop(m) ? (m.topGlass ? RULES.glassTop : t) : 0;
-  const sideTopAt = (x: number) => (m.slope ? slopeAt(m, x) - (hasTop(m) ? t / Math.cos(slopeAngle(m)) : 0) : m.height - (m.topGlass && hasTop(m) ? RULES.glassTop : 0));
+  // Боковины: от пола (на цоколе) или от верха ножек; под стеклянной крышей — короче на её толщину.
+  // Скос под потолок (правило Макса): крыша плоская на высоте низкой стороны, низкая боковина — до крыши, высокая — до потолка;
+  // треугольник над фасадами закрывает фальш из фасадного материала вровень с фасадами. Так дешевле, чем косая крыша.
+  const sideTopAt = (x: number) => (m.slope ? (x < m.width / 2 === (m.slope.side === "left") ? m.slope.lowHeight : m.height) : m.height - (m.topGlass && hasTop(m) ? RULES.glassTop : 0));
   const lT = sideTopAt(t / 2), rT = sideTopAt(m.width - t / 2);
   // Скос фронта в плане: боковины разной глубины, горизонтали — трапецией (в раскрое габарит с пометкой «скос»).
   const dL = depthAt(m, 0), dR = depthAt(m, m.width), sk = m.skew ? " · скос" : "";
   const planTaper = (p: Part, x0: number, x1: number, rearOff: number, minus: number) => { if (m.skew) p.taperZ = [depthAt(m, x0) - rearOff - minus, depthAt(m, x1) - rearOff - minus]; };
-  add("left", "Боковина левая" + (m.slope ? " · скос" : ""), [t, lT - floorY, dL], [t / 2, (lT + floorY) / 2, dL / 2], lT - floorY, dL, t);
-  add("right", "Боковина правая" + (m.slope ? " · скос" : ""), [t, rT - floorY, dR], [m.width - t / 2, (rT + floorY) / 2, dR / 2], rT - floorY, dR, t);
+  add("left", "Боковина левая", [t, lT - floorY, dL], [t / 2, (lT + floorY) / 2, dL / 2], lT - floorY, dL, t);
+  add("right", "Боковина правая", [t, rT - floorY, dR], [m.width - t / 2, (rT + floorY) / 2, dR / 2], rT - floorY, dR, t);
   if (hasBottom(m)) { add("bottom", "Дно" + sk, [m.width - 2 * t, t, d], [m.width / 2, bottom + t / 2, d / 2], m.width - 2 * t, d, t); planTaper(out.at(-1)!, t, m.width - t, 0, 0); }
   if (hasTop(m) && m.slope) {
-    // Наклонная крыша: лежит на боковинах по скосу, торцы с косым резом; в раскрое — длина по скату.
-    const h0 = slopeAt(m, 0), h1 = slopeAt(m, m.width), L = Math.hypot(m.width, h1 - h0), ang = Math.atan2(h1 - h0, m.width);
-    add("top", "Крыша наклонная · скос", [L, t, d], [m.width / 2, (h0 + h1) / 2 - (t / 2) / Math.cos(ang), d / 2], L, d, t);
-    out.at(-1)!.rotZ = (ang * 180) / Math.PI;
+    // Плоская крыша на высоте низкой стороны, между боковинами.
+    add("top", "Крыша", [m.width - 2 * t, t, d], [m.width / 2, m.slope.lowHeight - t / 2, d / 2], m.width - 2 * t, d, t);
+    if (m.doors && m.doorMount !== "inset") {
+      // Фальш над фасадами: трапеция из фасадного материала, низ — над фасадами с зазором 2, верх — по линии потолка минус зазор.
+      const bx = boxes(m), l = facadeSpan(m, 0, bx[0]).left, r = facadeSpan(m, bx.length - 1, bx.at(-1)!).right;
+      const y0 = m.slope.lowHeight, hL = Math.max(1, slopeAt(m, l) - RULES.faceGap - y0), hR = Math.max(1, slopeAt(m, r) - RULES.faceGap - y0), hh = Math.max(hL, hR);
+      add("slope-filler", "Фальш над фасадами под скос · фасадный материал", [r - l, hh, t], [(l + r) / 2, y0 + hh / 2, d + t / 2 + 2], hh, r - l, t, "door");
+      out.at(-1)!.taper = [hL, hR]; out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
+    }
   } else if (hasTop(m)) {
     if (m.topGlass) {
       // Стеклянная крыша: закалённое стекло 4 мм лежит на боковинах заподлицо с верхом, полировка кромки по периметру.
@@ -662,16 +697,14 @@ export function parts(m: Module): Part[] {
       for(let k=0;k<count;k++){
         const hinge=count===2?(k===0?'left':'right'):(m.hingeSide??'left'),x0=spanL+k*(dw+RULES.faceGap)*cosK,cx=x0+dw*cosK/2;
         const fp=m.skew?frontPoint(m,cx,t/2+2):undefined;
-        // Под скосом накладной фасад — трапеция: верх идёт вдоль наклонной крыши минус её толщина и зазор.
-        const topAt=(x:number)=>m.slope&&!inset?slopeAt(m,x)-t/Math.cos(slopeAngle(m))-RULES.faceGap:y1flat;
-        const hL=topAt(x0)-y0,hR=topAt(x0+dw)-y0,dh=Math.max(hL,hR),y1=y0+dh;
+        // Фасады прямоугольные и под скосом: их верх — по низкой стороне, выше идёт фальш (см. slope-filler).
+        const hL=y1flat-y0,hR=y1flat-y0,dh=Math.max(hL,hR),y1=y0+dh;void x0;
         if(m.alu){
           const ft=ALU_EXTRAS.frameDepth;
           add(s.id+':door:'+k,'Фасад в алюминиевой рамке',[dw,dh,ft],[cx,(y0+y1)/2,inset?d-ft/2:d+ft/2+2],dh,dw,ft,'door',s.id,'alu');
           out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
-        } else add(s.id+':door:'+k,(inset?'Фасад распашной вкладной':'Фасад распашной')+(m.slope&&!inset?' · скос':''),[dw,dh,t],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,t,'door',s.id);
+        } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,t],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,t,'door',s.id);
         if(fp)out.at(-1)!.rotY=fp.rotY;
-        if(m.slope&&!inset&&Math.abs(hL-hR)>0.5)out.at(-1)!.taper=[hL,hR];
         out.at(-1)!.hinge=hinge;
         if(m.doorOpen==='push')continue; // push-to-open: без ручки, толкатель в смете
         const hl=handleById(m.handleId).len;
@@ -770,6 +803,13 @@ export function validate(m: Module): string[] {
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.desk!==undefined){
     if(!['both','left','right','none'].includes(m.desk.sides)||!Number.isFinite(m.desk.apron)||m.desk.apron<RULES.deskApronMin||m.desk.apron>RULES.deskApronMax)errors.push(`Стол: опоры слева/справа/обе/нет, царга от ${RULES.deskApronMin} до ${RULES.deskApronMax} мм.`);
+    else{
+      const g=deskGeometry(m),dk=m.desk;
+      if(!Number.isFinite(g.x0)||!Number.isFinite(g.baseWidth)||g.x0<0||g.baseWidth<RULES.minW||g.x1>m.width+0.01)errors.push(`Подстолье: ширина от ${RULES.minW} мм и в пределах столешницы (${m.width}).`);
+      if(!Number.isFinite(g.baseDepth)||g.baseDepth<RULES.minD||g.baseDepth>m.depth+0.01)errors.push(`Опоры стола: глубина от ${RULES.minD} до глубины столешницы (${m.depth}).`);
+      if(!Number.isFinite(g.apronOffset)||g.apronOffset<0||g.apronOffset>g.baseDepth-RULES.panel-50)errors.push(`Царга: отступ от задней кромки от 0 до ${Math.max(0,g.baseDepth-RULES.panel-50)} мм.`);
+      if(dk.grille!==undefined){const gr=dk.grille;if(![gr.x,gr.width,gr.depth].every(Number.isFinite)||gr.width<RULES.deskGrilleMinW||gr.depth<60||gr.x<30||gr.x+gr.width>m.width-30||RULES.deskGrilleRear+gr.depth>m.depth-30)errors.push(`Решётка: ширина от ${RULES.deskGrilleMinW}, глубина от 60, отступ 30 мм от кромок столешницы.`);}
+    }
     if(m.doors||m.sections.some(s=>s.shelves.length||s.drawers>0||s.rod||s.pantograph)||m.sections.length>1)errors.push('Стол: наполнение и фасады не ставятся — это столешница на опорах.');
     if(m.slope||m.skew||m.alu||m.topGlass||m.feet||m.sidePanels||m.topStrip||m.standLight)errors.push('Стол: скосы, стекло, ножки, фальшпанели и подсветка не применяются.');
   }
@@ -915,6 +955,7 @@ export function validate(m: Module): string[] {
       errors.push(
         `«${p.name}» не помещается в полезное поле листа или имеет неверный размер.`,
       );
+    if (p.id === "slope-filler") continue; // фальш над фасадами — не створка: без ограничений ширины/высоты двери
     if (p.role === "door" && p.width > (p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax))
       errors.push(
         `Фасад шире ${p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`,
@@ -1058,7 +1099,9 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.skew===undefined?{}:{skew:{side:(x.skew as {side:'left'|'right'})?.side,depth:Number((x.skew as {depth:number})?.depth)}}),
-    ...(x.desk===undefined?{}:{desk:{sides:(x.desk as Module['desk'])!.sides,apron:Number((x.desk as Module['desk'])!.apron)}}),
+    ...(x.desk===undefined?{}:{desk:(()=>{const dk=x.desk as NonNullable<Module['desk']>;return {sides:dk.sides,apron:Number(dk.apron),
+      ...(dk.apronOffset===undefined?{}:{apronOffset:Number(dk.apronOffset)}),...(dk.baseWidth===undefined?{}:{baseWidth:Number(dk.baseWidth)}),...(dk.baseX===undefined?{}:{baseX:Number(dk.baseX)}),...(dk.baseDepth===undefined?{}:{baseDepth:Number(dk.baseDepth)}),
+      ...(dk.grille===undefined?{}:{grille:{x:Number(dk.grille.x),width:Number(dk.grille.width),depth:Number(dk.grille.depth)}})};})()}),
     ...(x.wallFiller===undefined?{}:{wallFiller:Object.fromEntries(Object.entries(x.wallFiller as Record<string,{kind?:string;width?:number}>).map(([k,v])=>[k,{kind:'edge' as const,width:v?.kind==='standard'||v?.width===undefined?RULES.fillerStrip:v.width}]))}),
     sections: x.sections.map((s) => ({
       id: s.id,

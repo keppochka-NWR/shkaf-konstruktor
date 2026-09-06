@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
@@ -6,7 +6,8 @@ import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectError
 import {roomWarnings} from '../src/roomWarnings';
 import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers,section,deskModule} from '../src/model';
 import {insertItem} from '../src/operations';
-import {specificationHTML,details} from '../src/exports';
+import {specificationHTML,details,grainFree,labelData,labelsHTML} from '../src/exports';
+import {packRectangles} from '../src/packing';
 
 test('every catalog decor has a purchase price from explicit list or Lamarty tier',()=>{
   assert.equal(catalog.length,133);
@@ -269,20 +270,6 @@ test('estimate falls back to the tier price for decors outside the explicit list
   assert.equal(line.unitPrice,decorPrice('Титан').price);assert.match(line.source,/Прайс Lamarty/);
 });
 
-test('mansard slope: sides of different height, tilted top, tapered doors and back, shelves below low side',()=>{
-  const m=initialModule();m.width=800;m.height=2000;m.depth=500;m.slope={side:'right',lowHeight:1400};
-  assert.equal(validate(m).length,0,validate(m).join('; '));
-  const ps=parts(m),L=ps.find(p=>p.id==='left')!,R=ps.find(p=>p.id==='right')!,top=ps.find(p=>p.id==='top')!;
-  assert.ok(L.size[1]>R.size[1]+500,'left side taller');
-  assert.ok(top.rotZ!==undefined&&Math.abs(top.rotZ!)>30,'top tilted');
-  assert.ok(Math.abs(top.size[0]-Math.hypot(800,600))<1,'top length along slope');
-  const doors=ps.filter(p=>p.role==='door');assert.ok(doors.length>0);
-  for(const d of doors){assert.ok(d.taper,'door tapered');assert.ok(d.taper![0]>d.taper![1],'door higher at left');}
-  const back=ps.find(p=>p.id==='back')!;assert.ok(back.taper,'nailed back tapered');
-  for(const sh of ps.filter(p=>p.role==='shelf'))assert.ok(sh.position[1]<1400-16,'shelf below low side');
-  m.topGlass='clear';assert.ok(validate(m).some(e=>e.includes('стеклянной')));
-});
-
 test('plan skew (Шаин): sides of different depth, tapered horizontals, rotated doors and plinth, front fasteners follow depth',()=>{
   const m=initialModule();m.width=708;m.height=960;m.depth=493;m.plinthHeight=80;m.skew={side:'right',depth:300};m.sections=[{...section(),weight:426,shelves:[0.5]},{...section(),weight:266,shelves:[0.5]}];
   assert.equal(validate(m).length,0,validate(m).join('; '));
@@ -342,7 +329,7 @@ test('desk module: full-width top, chosen supports, rear apron, eccentrics; no f
   const apron=ps.find(p=>p.id==='rail:rear-top')!;assert.equal(apron.size[0],1734);assert.equal(apron.size[1],100);
   assert.ok(!ps.some(p=>p.role==='door'||p.id==='plinth'||p.id==='back'||p.id==='bottom'));
   m.desk={sides:'both',apron:100};ps=parts(m);
-  assert.equal(ps.filter(p=>p.id==='left'||p.id==='right').length,2);assert.equal(ps.find(p=>p.id==='left')!.size[1],750-16);
+  assert.equal(ps.filter(p=>p.id==='left'||p.id==='right').length,2);assert.equal(ps.find(p=>p.id==='left')!.size[1],750-32);
   assert.equal(ps.filter(p=>p.id.startsWith('ecc:top:')).length,4);
   m.width=2400;assert.equal(validate(m).length,0);m.width=2500;assert.ok(validate(m).some(e=>e.includes('Ширина стола')));
   m.width=1200;m.height=900;assert.ok(validate(m).some(e=>e.includes('Высота стола')));
@@ -355,4 +342,54 @@ test('mansard slope accepts a low antresol (430 → 200) and reports the allowed
   const m=initialModule();m.height=430;m.plinthHeight=0;m.doors=false;m.sections=[{...section(),shelves:[]}];
   m.slope={side:'right',lowHeight:200};assert.equal(validate(m).length,0,validate(m).join('; '));
   m.slope={side:'right',lowHeight:400};assert.ok(validate(m).some(e=>e.includes('от 150 до 380')));
+});
+
+test('slope (workshop rule): flat roof at the low side, tall side to ceiling, rectangular doors, facade-material filler above',()=>{
+  const m=initialModule();m.width=800;m.height=2000;m.depth=500;m.slope={side:'right',lowHeight:1400};
+  assert.equal(validate(m).length,0,validate(m).join('; '));
+  const ps=parts(m),L=ps.find(p=>p.id==='left')!,R=ps.find(p=>p.id==='right')!,top=ps.find(p=>p.id==='top')!;
+  assert.equal(Math.round(L.size[1]),2000);assert.equal(Math.round(R.size[1]),1400);
+  assert.ok(!top.rotZ);assert.equal(Math.round(top.position[1]+top.size[1]/2),1400);
+  for(const d of ps.filter(p=>p.role==='door'&&p.id!=='slope-filler')){assert.ok(!d.taper);assert.ok(d.position[1]+d.size[1]/2<=1400-1);}
+  const filler=ps.find(p=>p.id==='slope-filler')!;assert.ok(filler.taper&&filler.taper[0]>filler.taper[1]);assert.equal(filler.decor,m.facadeDecor);
+  assert.ok(Math.abs(filler.position[1]-filler.size[1]/2-1400)<0.01,'filler starts at the low side height');
+  m.doors=false;assert.ok(!parts(m).some(p=>p.id==='slope-filler'));
+});
+
+test('desk volumes let a cabinet stand under the top; parameters: base width/offset, apron offset, grille, 32 mm top',()=>{
+  const p=newProject();p.room={width:4000,depth:4000,height:2700};
+  const desk=deskModule();desk.width=1600;desk.depth=600;desk.desk={sides:'both',apron:100,apronOffset:120,baseWidth:1200,baseX:200,baseDepth:500,grille:{x:500,width:600,depth:100}};
+  p.modules[0]={...p.modules[0],module:desk,x:0,z:0};
+  assert.equal(validate(desk).length,0,validate(desk).join('; '));
+  const ps=parts(desk);
+  assert.ok(ps.some(x=>x.id==='top')&&ps.some(x=>x.id==='top2'),'two 16 mm plates');
+  assert.equal(Math.round(ps.find(x=>x.id==='left')!.position[0]),208);assert.equal(Math.round(ps.find(x=>x.id==='right')!.position[0]),1392);
+  assert.equal(Math.round(ps.find(x=>x.id==='left')!.size[1]),750-32);assert.equal(ps.find(x=>x.id==='left')!.size[2],500);
+  assert.equal(Math.round(ps.find(x=>x.id==='rail:rear-top')!.position[2]),128);
+  assert.ok(ps.some(x=>x.id==='desk-grille'&&x.material==='metal'));
+  const cab=initialModule();cab.width=500;cab.height=600;cab.depth=450;cab.sections=[{...section(),shelves:[0.5]}];
+  p.modules.push({id:'cab',x:600,z:3,y:0,module:cab});
+  assert.deepEqual(projectErrors(p),[],'cabinet under the desk top is allowed');
+  p.modules[1].x=100;assert.ok(projectErrors(p).some(e=>e.includes('пересекается')),'cabinet through the left support is rejected');
+  p.modules[1].x=600;p.modules[1].module.height=760;assert.ok(projectErrors(p).some(e=>e.includes('пересекается')),'cabinet into the top is rejected');
+  desk.desk.grille={x:10,width:100,depth:20};assert.ok(validate(desk).some(e=>e.includes('Решётка')));
+});
+
+test('grain-free details may rotate in nesting; textured decors keep orientation',()=>{
+  const packed=packRectangles([{id:'a',w:1700,h:300,rot:true},{id:'b',w:1700,h:300,rot:true},{id:'c',w:1700,h:300,rot:true},{id:'d',w:1700,h:300,rot:true},{id:'e',w:1700,h:300,rot:true},{id:'f',w:1700,h:300,rot:true},{id:'g',w:1700,h:300,rot:true}],1810,2730,10,'area','short');
+  assert.equal(packed.length,1,'seven 1700×300 strips fit one sheet only when some are turned');
+  const fixed=packRectangles([{id:'a',w:1700,h:300},{id:'b',w:1700,h:300},{id:'c',w:1700,h:300},{id:'d',w:1700,h:300},{id:'e',w:1700,h:300},{id:'f',w:1700,h:300},{id:'g',w:1700,h:300},{id:'h',w:1700,h:300},{id:'i',w:1700,h:300}],1810,2730,10,'area','short');
+  assert.equal(fixed.length,2);for(const s of fixed)for(const a of s)assert.equal(a.w,1700);
+  assert.ok(grainFree({material:'hdf',decor:'ЛХДФ'}));assert.ok(!grainFree({material:'board',decor:'Дуб Вотан'}));
+});
+
+test('labels follow the workshop 120×75 template: order, material, module, code, part, edges, size',()=>{
+  const p=newProject();p.modules[0].module.backType='groove';const data=labelData(p);
+  assert.equal(data.length,details(p).length);
+  const side=data.find(d=>d.name==='Боковина левая')!;
+  assert.equal(side.code,'1.1');assert.ok(side.material.startsWith('ЛДСП '));assert.ok(side.groove.includes('паз'));
+  const bottom=data.find(d=>d.name==='Дно')!;assert.ok(bottom.endHoles.endsWith('отв.'));
+  const html=labelsHTML(p);
+  assert.ok(html.includes('size:120mm 75mm'));assert.ok(html.includes('№ заказа'));assert.ok(html.includes('Пазование'));assert.ok(html.includes('class="edge L1'));
+  assert.ok(html.split('class="birka"').length-1===data.length);
 });

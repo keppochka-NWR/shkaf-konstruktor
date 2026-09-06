@@ -8,6 +8,19 @@ const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { handleById, handleColour, handleModelFile } from "./handles";
+// Модели ручек (Blender → GLB, scripts/blender_handles.py): кэш по файлу, экземпляры делят геометрию.
+const gltfLoader = new GLTFLoader();
+const handleModels = new Map<string, Promise<THREE.Group>>();
+function loadHandleModel(file: string) {
+  let p = handleModels.get(file);
+  if (!p) {
+    p = new Promise<THREE.Group>((resolve, reject) => gltfLoader.load(`${import.meta.env.BASE_URL}models/handles/${file}`, (g) => resolve(g.scene), undefined, reject));
+    handleModels.set(file, p);
+  }
+  return p;
+}
 import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type Module } from "./model";
 import { catalog } from "./catalog";
 import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
@@ -38,6 +51,8 @@ type Props = {
   clearFacades?: boolean;
   /** Клик по ручке фасада или ящика: открыть выбор ручки корпуса. */
   onHandleClick?: (mid: string) => void;
+  /** Правая кнопка по корпусу: контекстное меню редактирования (как в B Planner). Координаты — экранные. */
+  onContextMenu?: (mid: string, sid: string, x: number, y: number) => void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
@@ -149,7 +164,7 @@ export function Scene(p: Props) {
           o instanceof THREE.Line ||
           o instanceof THREE.Sprite
         ) {
-          o.geometry?.dispose();
+          if (!o.userData.sharedGeometry) o.geometry?.dispose();
           const materials = Array.isArray(o.material)
             ? o.material
             : [o.material];
@@ -276,8 +291,27 @@ export function Scene(p: Props) {
             mat.transparent = !mirror && !dark; mat.opacity = mirror || dark ? 1 : ins?.id === "satin" ? 0.75 : 0.45; mat.roughness = 0.05; mat.metalness = mirror ? 0.55 : 0.1; mat.depthWrite = !mat.transparent;
           }
           const isMeshItem = part.id.endsWith(":mesh");
-          if (isMeshItem) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
+          const isHandle = part.role === "handle";
+          if (isMeshItem || isHandle) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh(geometry, mat);
+          if (isHandle) {
+            // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
+            const handle = handleById(m.handleId), vertical = part.size[1] > part.size[0];
+            const holder = new THREE.Group();
+            holder.rotation.z = vertical ? Math.PI / 2 : 0;
+            holder.position.z = -part.size[2] / 2; // к плоскости фасада
+            mesh.add(holder);
+            const g = generation;
+            pendingTextures++;
+            loadHandleModel(handleModelFile(handle)).then((src) => {
+              if (disposed || g !== generation) return;
+              const model = src.clone(true);
+              model.rotation.y = Math.PI; model.scale.setScalar(1000);
+              const hm = new THREE.MeshStandardMaterial({ color: handleColour(handle), metalness: 0.85, roughness: 0.32 });
+              model.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; if (o instanceof THREE.Mesh) { o.material = hm; o.castShadow = true; } });
+              holder.add(model); needsRender = true;
+            }).catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
+          }
           if (isMeshItem) {
             // Сетка Лемана: невидимый бокс для выбора + проволочная модель внутри.
             const section = m.sections.find((s) => s.id === part.sectionId);
@@ -324,7 +358,7 @@ export function Scene(p: Props) {
               (mesh.position.y - m.height / 2) * 1.18 + m.height / 2;
             mesh.position.z = (mesh.position.z-m.depth/2)*1.6+m.depth/2;
           }
-          if (part.role === "door" && state.openDoors) {
+          if (part.role === "door" && state.openDoors && part.id !== "slope-filler") {
             // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
@@ -604,6 +638,13 @@ export function Scene(p: Props) {
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     function key(e:KeyboardEvent){if(e.key==='Escape')resetDrag();}
+    function contextMenu(e:MouseEvent){
+      e.preventDefault();if(current.current.presentation)return;
+      const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;
+      const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId);if(!a)return;
+      current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY);
+    }
+    renderer.domElement.addEventListener('contextmenu',contextMenu);
     renderer.domElement.addEventListener('pointerdown',pointerDown);
     renderer.domElement.addEventListener('pointermove',pointerMove);
     renderer.domElement.addEventListener('pointerup',pointerUp);
@@ -662,7 +703,7 @@ export function Scene(p: Props) {
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
-      window.removeEventListener('keydown',key);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
+      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
       sun.shadow.dispose();
       for(const texture of loadedTextures)texture.dispose();loadedTextures.clear();textureLoads.clear();
       renderer.dispose();

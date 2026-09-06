@@ -45,7 +45,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule, deskGeometry, hasHandles,
   type Module,
   type Section,
 } from "./model";
@@ -381,6 +381,15 @@ export default function App() {
     setDrawerIndex(null);
     setTab("section");
   }
+  // Контекстное меню по правой кнопке на корпусе в 3D (как в B Planner): редактировать, наполнение, материал, ручка, копия, поворот, антресоль, удалить.
+  const [ctxMenu,setCtxMenu]=useState<{mid:string;sid:string;x:number;y:number}|null>(null);
+  useEffect(()=>{
+    if(!ctxMenu)return;
+    const close=(e:Event)=>{if(e instanceof KeyboardEvent&&e.key!=='Escape')return;if(e instanceof MouseEvent&&(e.target as HTMLElement).closest('.ctx-menu'))return;setCtxMenu(null);};
+    window.addEventListener('pointerdown',close);window.addEventListener('keydown',close);window.addEventListener('wheel',close,{passive:true});
+    return()=>{window.removeEventListener('pointerdown',close);window.removeEventListener('keydown',close);window.removeEventListener('wheel',close);};
+  },[ctxMenu]);
+  function ctxAction(run:()=>void){setCtxMenu(null);try{run();}catch(e){setError((e as Error).message);}}
   useEffect(() => {
     if (!touched.current) return;
     if(startup.storageUnavailable){setSaved("Не сохранено");setError("При запуске не удалось прочитать хранилище. Автосохранение отключено, чтобы не заменить недоступный проект. Скачайте текущую работу и перезагрузите редактор.");return;}
@@ -874,6 +883,7 @@ export default function App() {
               }
             }}
             onHandleClick={(mid)=>{setActive(mid);setModal("handles");}}
+            onContextMenu={(mid,sid,x,y)=>{if(mid!==placed.id)selectModule(mid);setCtxMenu({mid,sid,x:Math.min(x,window.innerWidth-240),y:Math.min(y,window.innerHeight-330)});}}
             onDrawerStack={(sid)=>{const sec=m.sections.find(s=>s.id===sid),bb=boxes(m).find(x=>x.id===sid);if(!sec||!bb)return;editDimension('От дна пенала до верха полки над ящиками',Math.round(drawerCapTop(m,sec)-bb.bottom),v=>{try{const configs=distributeDrawers(m,sec,bb.bottom+v);return modify(n=>{const target=n.sections.find(s=>s.id===sid);if(target)target.drawerConfigs=configs;});}catch(e){setError((e as Error).message);return false;}});}}
             selectedPart={!presentation&&selectedPart?.mid===placed.id?selectedPart.pid:undefined}
             selected={presentation?'':selectedId}
@@ -909,6 +919,19 @@ export default function App() {
               </button>
             </div>
           )}
+          {ctxMenu&&(()=>{const a=project.modules.find(x=>x.id===ctxMenu.mid);if(!a)return null;const sidx=a.module.sections.findIndex(s=>s.id===ctxMenu.sid);return <div className="ctx-menu" role="menu" style={{left:ctxMenu.x,top:ctxMenu.y}}>
+            <div className="ctx-title">{project.modules.indexOf(a)+1}. {a.module.name}<small>{a.module.width} × {a.module.height} × {a.module.depth}</small></div>
+            <button role="menuitem" onClick={()=>ctxAction(()=>{selectModule(a.id);setTab('module');})}>Редактировать корпус</button>
+            <button role="menuitem" onClick={()=>ctxAction(()=>{selectModule(a.id);chooseSection(ctxMenu.sid);})}>Наполнение{sidx>=0?` · секция ${sidx+1}`:''}</button>
+            <button role="menuitem" onClick={()=>ctxAction(()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');})}>Материал корпуса…</button>
+            {a.module.doors&&<button role="menuitem" onClick={()=>ctxAction(()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');})}>Материал фасадов…</button>}
+            {hasHandles(a.module)&&<button role="menuitem" onClick={()=>ctxAction(()=>{setActive(a.id);setModal('handles');})}>Ручка…</button>}
+            <button role="menuitem" onClick={()=>ctxAction(()=>setOpenDoors(o=>!o))}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button>
+            <button role="menuitem" onClick={()=>ctxAction(()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);})}>Копировать корпус</button>
+            <button role="menuitem" onClick={()=>ctxAction(()=>{if(commitProject(rotateModule(project,a.id,(((a.rotation??0)+90)%360) as 0|90|180|270)))setFit(f=>f+1);})}>Повернуть на 90°</button>
+            <button role="menuitem" onClick={()=>ctxAction(()=>{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);})}>Антресоль сверху</button>
+            <button role="menuitem" className="danger" disabled={project.modules.length===1} onClick={()=>ctxAction(()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});})}>Удалить корпус</button>
+          </div>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
               aria-label="Прозрачный корпус"
@@ -1241,15 +1264,29 @@ export default function App() {
                 {m.topGlass&&<p className="field-note">Закалённое стекло 4 мм ложится на боковины сверху, кромка полируется по периметру. В раскрой ЛДСП не идёт, в смете — стекло, закалка и полировка.</p>}
                 {m.desk&&<>
                   <label className="hardware-field">Опоры стола<select aria-label="Опоры стола" value={m.desk.sides} onChange={e=>modify(n=>{n.desk={...n.desk!,sides:e.target.value as NonNullable<Module['desk']>['sides']};})}><option value="both">Две боковины до пола</option><option value="left">Только левая · справа на соседний корпус</option><option value="right">Только правая · слева на соседний корпус</option><option value="none">Без опор · между двумя корпусами</option></select></label>
-                  <NumberField label="Царга сзади под столешницей" value={m.desk.apron} min={RULES.deskApronMin} max={RULES.deskApronMax} onChange={v=>modify(n=>{n.desk={...n.desk!,apron:v};})}/>
-                  <p className="field-note">Столешница ЛДСП 16 на всю ширину, кромка 2 мм по периметру, лежит на опорах и царге; к соседнему корпусу крепится стяжкой эксцентрик + шкант. Высота {RULES.deskMinH}–{RULES.deskMaxH}, ширина до {RULES.deskMaxW} мм. Чтобы вернуть шкаф — выберите другой шаблон наполнения.</p>
+                  <p className="field-note">Столешница {RULES.deskTop} мм (две плиты 16 склейкой, кромка 2 по периметру) — её ширина и глубина задаются габаритами корпуса выше. Подстолье настраивается отдельно.</p>
+                  <h3>Подстолье</h3>
+                  <NumberField label="Ширина подстолья по внешним граням опор" value={deskGeometry(m).baseWidth} min={RULES.minW} max={m.width-deskGeometry(m).x0} onChange={v=>modify(n=>{n.desk={...n.desk!,baseWidth:v};})}/>
+                  <NumberField label="Отступ подстолья от левого края столешницы" value={deskGeometry(m).x0} min={0} max={m.width-RULES.minW} onChange={v=>modify(n=>{const bw=Math.min(deskGeometry(n).baseWidth,n.width-v);n.desk={...n.desk!,baseX:v,baseWidth:bw};})}/>
+                  <NumberField label="Глубина опор (от задней кромки)" value={deskGeometry(m).baseDepth} min={RULES.minD} max={m.depth} onChange={v=>modify(n=>{n.desk={...n.desk!,baseDepth:v};})}/>
+                  <NumberField label="Царга: высота" value={m.desk.apron} min={RULES.deskApronMin} max={RULES.deskApronMax} onChange={v=>modify(n=>{n.desk={...n.desk!,apron:v};})}/>
+                  <NumberField label="Царга: отступ от задней кромки вперёд" value={deskGeometry(m).apronOffset} min={0} max={Math.max(0,deskGeometry(m).baseDepth-RULES.panel-50)} onChange={v=>modify(n=>{n.desk={...n.desk!,apronOffset:v};})}/>
+                  <p className="field-note">Царгу смещают вперёд, когда за столом батарея. Опоры и царга крепятся к соседнему корпусу стяжкой эксцентрик + шкант, если своей опоры с этой стороны нет.</p>
+                  <label className="hardware-field"><span><input type="checkbox" aria-label="Решётка в столешнице" checked={!!m.desk.grille} onChange={e=>modify(n=>{if(e.target.checked)n.desk={...n.desk!,grille:{x:Math.round((n.width-Math.min(600,n.width-60))/2),width:Math.min(600,n.width-60),depth:Math.min(100,n.depth-RULES.deskGrilleRear-30)}};else{const {grille:_g,...rest}=n.desk!;void _g;n.desk=rest;}})}/> Вентиляционная решётка в столешнице над батареей</span></label>
+                  {m.desk.grille&&<>
+                    <NumberField label="Решётка: отступ от левого края" value={m.desk.grille.x} min={30} max={m.width-30-RULES.deskGrilleMinW} onChange={v=>modify(n=>{n.desk={...n.desk!,grille:{...n.desk!.grille!,x:v}};})}/>
+                    <NumberField label="Решётка: ширина" value={m.desk.grille.width} min={RULES.deskGrilleMinW} max={m.width-30-m.desk.grille.x} onChange={v=>modify(n=>{n.desk={...n.desk!,grille:{...n.desk!.grille!,width:v}};})}/>
+                    <NumberField label="Решётка: глубина" value={m.desk.grille.depth} min={60} max={m.depth-RULES.deskGrilleRear-30} onChange={v=>modify(n=>{n.desk={...n.desk!,grille:{...n.desk!.grille!,depth:v}};})}/>
+                    <p className="field-note">Решётка стоит в {RULES.deskGrilleRear} мм от задней кромки, вырез в обеих плитах столешницы. В смете — решётка по оценке, подтвердить счётом.</p>
+                  </>}
+                  <p className="field-note">Высота стола {RULES.deskMinH}–{RULES.deskMaxH}, ширина до {RULES.deskMaxW} мм. Под столешницу можно поставить тумбу: пересечение считается только со столешницей, опорами и царгой. Чтобы вернуть шкаф — выберите другой шаблон наполнения.</p>
                 </>}
                 <label className="hardware-field">Крепёж корпуса<select aria-label="Крепёж корпуса" value={m.fastening??'confirmat'} onChange={e=>modify(n=>{if(e.target.value==='eccentric')n.fastening='eccentric';else delete n.fastening;})}><option value="confirmat">Евровинты · видны снаружи, под заглушки</option><option value="eccentric">Эксцентрики D15 · скрытый крепёж</option></select></label>
                 <p className="field-note">{m.fastening==='eccentric'?'Бочонок в пласти горизонталей на 34 мм от торца, шток в боковине; снаружи корпус чистый. В 3D — светлые бочонки при открытых фасадах.':'Конфирматы 5×50 через боковины в дно, крышу, жёсткие полки и полку над ящиками; снаружи — заглушки в цвет. В 3D — тёмные головки на боковинах.'}</p>
                 {m.topType!=='none'&&!m.topGlass&&!m.alu&&<label className="hardware-field">Скос под потолок<select aria-label="Скос под потолок" value={m.slope?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.slope;else n.slope={side:v as 'left'|'right',lowHeight:Math.min(n.height-RULES.slopeMinDrop,Math.max(RULES.slopeMinLow,n.slope?.lowHeight??Math.round((n.height*0.65)/10)*10))};})}><option value="none">Нет · крыша ровная</option><option value="left">Ниже слева</option><option value="right">Ниже справа</option></select></label>}
                 {m.slope&&<NumberField label={`Высота корпуса у ${m.slope.side==='left'?'левой':'правой'} стороны`} value={m.slope.lowHeight} min={RULES.slopeMinLow} max={m.height-RULES.slopeMinDrop} onChange={v=>modify(n=>{n.slope={...n.slope!,lowHeight:v};})}/>}
                 {m.slope&&<p className="field-note">Как задать: выберите, с какой стороны потолок ниже, и впишите высоту корпуса у этой стороны (от {RULES.slopeMinLow} до {m.height-RULES.slopeMinDrop} мм). Высокая сторона — общая высота корпуса выше.</p>}
-                {m.slope&&<p className="field-note">Крыша ложится по скату на боковины разной высоты, фасады и набивной задник режутся трапецией; полки и перегородки — до низкой стороны. В раскрое крыша идёт длиной по скату, фасад — по большей высоте.</p>}
+                {m.slope&&<p className="field-note">Конструкция цеха: крыша плоская на высоте низкой стороны, низкая боковина — до крыши, высокая — до потолка. Фасады прямоугольные до низкой стороны, треугольник над ними закрывает фальш из фасадного материала вровень с фасадами (трапеция в раскрое). Набивной задник — трапецией. Так дешевле, чем косая крыша.</p>}
                 {!m.slope&&!m.alu&&m.doorMount!=='inset'&&!m.sections.some(s=>s.drawers>0)&&<label className="hardware-field">Скос фронта в плане<select aria-label="Скос фронта в плане" value={m.skew?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.skew;else n.skew={side:v as 'left'|'right',depth:n.skew?.depth??Math.max(RULES.minD,Math.round((n.depth-150)/10)*10)};})}><option value="none">Нет · фронт ровный</option><option value="left">Мельче слева</option><option value="right">Мельче справа</option></select></label>}
                 {m.skew&&<NumberField label={`Глубина корпуса у ${m.skew.side==='left'?'левой':'правой'} стороны`} value={m.skew.depth} min={RULES.minD} max={m.depth-30} onChange={v=>modify(n=>{n.skew={...n.skew!,depth:v};})}/>}
                 {m.skew&&<p className="field-note">Фасады и цоколь идут под углом {Math.round(Math.abs(skewAngle(m))*180/Math.PI)}° к задней стенке, боковины разной глубины, дно, крыша и полки — трапецией (в раскрое габарит с пометкой «скос»). Ящики, вкладные и алюминиевые фасады при скосе не ставятся.</p>}

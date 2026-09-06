@@ -1,5 +1,5 @@
 import type {Niche,CeilingType} from './measurement';
-import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,type Module,section} from './model';
+import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
 export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
@@ -72,6 +72,19 @@ export function applyAutoFillers(p:Project):Project{
   return n;
 }
 export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x<b.x+b.w-0.1&&a.x+a.w>b.x+0.1&&a.y<b.y+b.h-0.1&&a.y+a.h>b.y+0.1&&a.z<b.z+b.d-0.1&&a.z+a.d>b.z+0.1;}
+/** Занятые объёмы корпуса для проверки пересечений: обычный корпус — один габарит; стол — столешница, опоры и царга,
+ *  чтобы под столешницу можно было поставить тумбу. */
+export function volumes(a:PlacedModule):ReturnType<typeof bounds>[]{
+  const m=a.module;if(!m.desk)return [bounds(a)];
+  const g=deskGeometry(m),T=RULES.deskTop,y=a.y??0,t=RULES.panel;
+  const box=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number)=>{const p=localToRoom(a,u0,v0),q=localToRoom(a,u1,v1);return {x:Math.min(p.x,q.x),z:Math.min(p.z,q.z),y:y+y0,w:Math.abs(q.x-p.x),d:Math.abs(q.z-p.z),h:y1-y0};};
+  const out=[box(0,m.width,0,m.depth,m.height-T,m.height)];
+  if(g.hasL)out.push(box(g.x0,g.x0+t,0,g.baseDepth,0,m.height-T));
+  if(g.hasR)out.push(box(g.x1-t,g.x1,0,g.baseDepth,0,m.height-T));
+  out.push(box(g.hasL?g.x0+t:g.x0,g.hasR?g.x1-t:g.x1,g.apronOffset,g.apronOffset+t,m.height-T-m.desk.apron,m.height-T));
+  return out;
+}
+export function modulesOverlap(a:PlacedModule,b:PlacedModule){const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
   if(p.measurement){const m=p.measurement;if(typeof m.number!=='string'||m.number.length>60||typeof m.notes!=='string'||m.notes.length>2000||typeof m.date!=='string'||(m.date!==''&&(!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!Number.isFinite(Date.parse(m.date))||new Date(m.date).toISOString().slice(0,10)!==m.date)))return ['Проверьте номер, дату и примечания замера.'];}
@@ -99,7 +112,7 @@ export function projectErrors(p:Project):string[]{
     if(a.rotation!==undefined&&![0,90,180,270].includes(a.rotation))errors.push('Поворот корпуса: 0, 90, 180 или 270 градусов.');
     errors.push(...validate(a.module).map(e=>`${a.module.name}: ${e}`));const b=bounds(a);
     if(![a.x,a.z,a.y??0].every(Number.isFinite)||b.x<0||b.y<0||b.z<0||b.x+b.w>p.room.width+0.1||b.z+b.d>p.room.depth+0.1||b.y+b.h>p.room.height+0.1)errors.push(`${a.module.name}: корпус выходит за границы помещения. Измените замер или положение.`);
-    for(const other of p.modules.slice(0,i))if(overlap(b,bounds(other)))errors.push(`«${a.module.name}» пересекается с «${other.module.name}». Сдвиньте корпус или поставьте его сверху.`);
+    for(const other of p.modules.slice(0,i))if(modulesOverlap(a,other))errors.push(`«${a.module.name}» пересекается с «${other.module.name}». Сдвиньте корпус или поставьте его сверху.`);
   });return [...new Set(errors)];
 }
 function legacyModules(raw:any,placement:{id:string;x:number;z:number;y?:number}):PlacedModule[]{

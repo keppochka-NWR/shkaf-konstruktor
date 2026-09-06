@@ -7,6 +7,9 @@ import {aluLabel,aluProfile,aluInsertSize} from './alu';
 import { parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, cornerStrip, type Part } from "./model";
 import { bounds, projectErrors, type Project } from "./project";
 import {packRectangles} from './packing';
+import {catalog} from './catalog';
+/** Деталь без направления текстуры: ЛХДФ или однотонный декор без картинки в каталоге — на карте можно класть поперёк. */
+export function grainFree(d:Pick<Detail,'material'|'decor'>){return d.material==='hdf'||!catalog.find(c=>c.n===d.decor)?.tex;}
 export type Detail = Part & { moduleName: string; moduleId: string; code: string };
 export type Placement = {
   detail: Detail;
@@ -105,7 +108,7 @@ export function nest(p:Project,gap=10):Sheet[]{
     const byId=new Map(ds.map(d=>[d.code,d]));
     const footprint=(s:Sheet[])=>Math.max(...s.at(-1)!.items.map(p=>p.y+p.h));
     for(const order of ['area','height','width'] as const)for(const fit of ['short','area'] as const){
-      const packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length})),width-20,height-20,gap,order,fit);
+      const packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width-20,height-20,gap,order,fit);
       if(packed.length>best.length)continue;
       const candidate:Sheet[]=packed.map(items=>({decor,material:first.material,thickness:first.thickness,width,height,items:items.map(a=>({detail:byId.get(a.id)!,x:a.x+10,y:a.y+10,w:a.w,h:a.h}))}));
       if(candidate.length<best.length||footprint(candidate)<footprint(best))best=candidate;
@@ -190,7 +193,7 @@ function htmlDocument(title: string, body: string) {
 export function nestingHTML(p: Project) {
   return htmlDocument(
     "Карты листов",
-    `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${nest(
+    `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${nest(
       p,
     )
       .map(
@@ -229,11 +232,55 @@ export function labelDetails(p:Project){
   const sheets=nest(p),location=new Map(sheets.flatMap((s,i)=>s.items.map(a=>[a.detail.code,i+1] as const)));
   return details(p).map(d=>({...d,sheet:location.get(d.code)!}));
 }
-export function labelsHTML(p:Project){
-  const labels=labelDetails(p),order=labelOrder(p),stamp=new Date().toLocaleString('ru-RU');
-  return htmlDocument('Бирки деталей для проверки',`<style>@page{size:A4;margin:10mm}.label-page{display:grid;grid-template-columns:90mm 90mm;gap:3mm;margin:0 0 6mm;break-inside:avoid}.label-page:last-child{margin-bottom:0}.part-label{box-sizing:border-box;width:90mm;height:50mm;border:1px solid #8e9a9f;padding:3mm;break-inside:avoid;color:#172c36;font-size:11px;overflow:hidden}.label-top{display:flex;justify-content:space-between;align-items:center}.label-code{font-size:28px;font-weight:bold}.label-name{font-weight:bold;font-size:14px;margin:2mm 0;line-height:1.15;max-height:9mm;overflow:hidden}.label-module{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.label-material{margin:1mm 0}.label-size{font-size:20px;font-weight:bold}.label-note{font-size:9px;color:#5c6870;margin-top:1mm}@media print{body{padding:0;max-width:none}.label-heading{display:none}.label-page{margin:0;break-after:page}.label-page:last-child{break-after:auto}}</style><div class="label-heading"><h1>Бирки деталей · для проверки</h1><p>90 × 50 мм, печать 100%. По 10 бирок на A4, без колонтитулов браузера. ${labels.length} деталей · ${Math.ceil(labels.length/10)} страниц. Сформировано ${esc(stamp)}.</p><p>Коды соответствуют картам текущего проекта. После изменения конструкции сформируйте карты и бирки заново. Размеры габаритные; припуски, кромление и присадку проверяет технолог.</p></div><div class="labels">${labels.map((d,i)=>`${i%10===0?'<section class="label-page">':''}<article class="part-label"><div class="label-top"><span class="label-code">${esc(d.code)}</span><span>Лист ${d.sheet} · ↑ текстура</span></div><div class="label-module label-note" title="${esc(order)}">${esc(order)}</div><div class="label-name">${esc(d.name)}</div><div class="label-module" title="${esc(d.moduleName)}">${esc(d.moduleName)}</div><div class="label-material">${esc(d.material==='hdf'?'ЛХДФ':d.decor)} · ${d.thickness} мм</div><div class="label-size">${d.length} × ${d.width} мм</div><div class="label-note">${esc(labelEdges(d))}</div><div class="label-note">${EDGE_LEGEND}</div><div class="label-note">ПРОВЕРКА · ${esc(stamp)} · длина вдоль текстуры</div></article>${i%10===9||i===labels.length-1?'</section>':''}`).join('')}</div>`);
+/** Бирка по производственному шаблону цеха «Birka Лёха.brx» (Базис, FastReport): 120 × 75 мм на Xprinter XP-365B, одна деталь на этикетку.
+ *  Поля: № заказа, материал, наименование (модуль), поз. (код), № детали (обозначение), пазование, паз, торец (отверстия),
+ *  длина × ширина крупно; по четырём сторонам — кромка: обозначение и линия (тонкая < 0,8, толстая ≥ 0,8). */
+export type LabelData={order:string;material:string;module:string;code:string;name:string;groove:string;notches:string;endHoles:string;length:number;width:number;edges:{L1:number;L2:number;W1:number;W2:number}};
+export function labelData(p:Project):LabelData[]{
+  const order=labelOrder(p);
+  return p.modules.flatMap((a,i)=>{
+    const m=a.module,all=parts(m);
+    return all.filter(d=>d.material!=='metal'&&d.material!=='alu'&&d.material!=='glass').map((d,j)=>{
+      const holes=all.filter(f=>(f.id.startsWith('fast:'+d.id+':')||f.id.startsWith('ecc:'+d.id+':'))&&!f.id.endsWith(':pin')).length;
+      const grooved=m.backType==='groove'&&['left','right','top','bottom'].includes(d.id);
+      // Кромка: 1–2 — торцы по ширине (короткие, слева/справа на бирке), 3–4 — по длине (сверху/снизу).
+      return {order,material:(d.material==='hdf'?'ЛХДФ ':'ЛДСП ')+d.decor+' '+d.thickness+' мм'+(d.material==='hdf'?'':' (Lamarty)'),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
+        groove:grooved?`паз ${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:'—',endHoles:holes?`${holes} отв.`:'—',
+        length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]}};
+    });
+  });
 }
-
+export function labelsHTML(p:Project){
+  const data=labelData(p),stamp=new Date().toLocaleString('ru-RU');
+  const edgeBox=(v:number,cls:string)=>v>0?`<div class="edge ${cls} ${v>=0.8?'thick':'thin'}">${String(v).replace('.',',')}</div>`:'';
+  const f=(v:string)=>esc(v);
+  return htmlDocument('Бирки деталей',`<style>
+  @page{size:120mm 75mm;margin:0}
+  .label-heading{margin:10mm}
+  .birka{position:relative;box-sizing:border-box;width:120mm;height:75mm;margin:0 auto 4mm;background:#fff;border:1px dashed #c6ccd1;color:#000;font:10pt Arial,sans-serif;overflow:hidden;break-after:page;break-inside:avoid}
+  .birka .frame{position:absolute;left:11mm;top:11mm;width:98mm;height:53mm;border:0.3mm solid #000;box-sizing:border-box}
+  .birka .row{position:absolute;left:12mm;height:5mm;line-height:5mm;white-space:nowrap;overflow:hidden}
+  .birka .row b{font-weight:bold}
+  .birka .size{position:absolute;top:56mm;left:11mm;width:98mm;text-align:center;font:bold 16pt Arial,sans-serif;line-height:7mm}
+  .birka .size small{font-weight:normal;font-size:12pt;margin:0 3mm}
+  .birka .edge{position:absolute;text-align:center;font-size:10pt;line-height:5mm;box-sizing:border-box}
+  .birka .edge.L1{left:42mm;top:1mm;width:36mm;height:5mm;border-bottom:0.3mm solid #000}
+  .birka .edge.L2{left:42mm;top:69mm;width:36mm;height:5mm;border-top:0.3mm solid #000}
+  .birka .edge.W1{left:1mm;top:19.5mm;width:5mm;height:36mm;border-right:0.3mm solid #000;writing-mode:vertical-rl;transform:rotate(180deg)}
+  .birka .edge.W2{left:114mm;top:19.5mm;width:5mm;height:36mm;border-left:0.3mm solid #000;writing-mode:vertical-rl}
+  .birka .edge.thick{border-width:1.2mm}
+  @media print{body{margin:0;padding:0;max-width:none}.label-heading{display:none}.birka{margin:0;border:0}.birka:last-child{break-after:auto}}
+  </style><div class="label-heading"><h1>Бирки деталей · шаблон цеха 120 × 75</h1><p>Одна деталь на этикетку, принтер Xprinter XP-365B (лента 120 × 75 мм), масштаб 100%, без полей и колонтитулов браузера. ${data.length} деталей. Сформировано ${esc(stamp)}.</p><p>Кромка по сторонам бирки: цифра — толщина, тонкая линия до 0,8 мм, толстая — 2 мм. Длина детали — по горизонтали бирки, вдоль текстуры. Коды деталей совпадают с картами листов и деталировкой текущего проекта.</p></div>${data.map(d=>`<article class="birka">${edgeBox(d.edges.L1,'L1')}${edgeBox(d.edges.L2,'L2')}${edgeBox(d.edges.W1,'W1')}${edgeBox(d.edges.W2,'W2')}<div class="frame"></div>
+<div class="row" style="top:12mm;width:96mm">№ заказа &nbsp;<b>${f(d.order)}</b></div>
+<div class="row" style="top:17mm;width:96mm">${f(d.material)}</div>
+<div class="row" style="top:23mm;width:96mm">${f(d.module)}</div>
+<div class="row" style="top:28mm;width:96mm">Поз. &nbsp;<b>${f(d.code)}</b></div>
+<div class="row" style="top:33mm;width:96mm">№ детали &nbsp;<b>${f(d.name)}</b></div>
+<div class="row" style="top:39mm;width:96mm">Пазование: &nbsp;<b>${f(d.groove)}</b></div>
+<div class="row" style="top:45mm;width:96mm">Паз: &nbsp;<b>${f(d.notches)}</b></div>
+<div class="row" style="top:51mm;width:96mm">Торец: &nbsp;<b>${f(d.endHoles)}</b></div>
+<div class="size">${d.length}<small>x</small>${d.width}</div></article>`).join('')}`);
+}
 function sectionAssemblyHTML(sectionParts:Part[],bottom:number){
   const mm=(n:number)=>Math.round(n*10)/10;
   const doors=sectionParts.filter(d=>d.role==='door'),fillers=sectionParts.filter(d=>d.id.includes(':filler:'));

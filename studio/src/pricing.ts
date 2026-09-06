@@ -77,7 +77,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
-      if(d.role==='door'){
+      if(d.role==='door'&&d.id!=='slope-filler'){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=hingeCount(d.length,d.width);
         // СТП: с ручками — GTV с доводчиком; push-to-open — петля без пружины (накладная SOLID / вкладная COCA) + толкатель.
         if(push)add(inset?'hinge-push-inset':'hinge-push','Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'),n,'шт',HINGE_FREE.price,HINGE_FREE.source);
