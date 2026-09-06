@@ -66,7 +66,7 @@ import {
   appendModule, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds,
   type Project,
 } from "./project";
-import {duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 const KEY = CURRENT_PROJECT;
 function NumberField({
   label,
@@ -203,6 +203,7 @@ export default function App() {
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
   const [drawerIndex, setDrawerIndex] = useState<number | null>(null);
+  const [fillingCopy,setFillingCopy]=useState<SectionFilling|null>(null);
   const [selectedPart,setSelectedPart]=useState<{mid:string;sid:string;pid:string}|null>(null);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
   const canRemove=selectedDetail&&(/:shelf:|:drawer:|:pantograph:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
@@ -1171,6 +1172,7 @@ export default function App() {
                   <h2>Секция {idx + 1}</h2>
                   <Columns2 size={17} />
                 </div>
+                <div className="section-copy"><button className="text-action" onClick={()=>{try{setFillingCopy(captureSectionFilling(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Копировать наполнение секции</button>{fillingCopy&&<><p className="field-note">Скопировано: {fillingCopy.name}</p><button className="outline full" onClick={()=>{try{if(commitProject(pasteSectionFilling(project,placed.id,s.id,fillingCopy))){setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>{s.drawers||s.shelves.length||s.rod||s.pantograph?'Заменить наполнение копией':'Вставить наполнение секции'}</button><p className="field-note">Высоты от дна и фурнитура сохранятся. Корпус и материалы остаются его собственными. Ctrl+Z отменит вставку.</p></>}</div>
                 {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span>{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round((selectedDetail.position[1]-b.bottom)*10)/10} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>}
                 <NumberField
                   label="Внутренняя ширина"

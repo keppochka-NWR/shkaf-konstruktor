@@ -65,3 +65,5 @@
 .quote-price-check{padding:14px 16px;background:#f1f4f7;border-radius:8px;margin:16px 0;font-size:12px}.quote-price-check p{margin:0 0 10px}.quote-price-check .text-action{display:block;margin-top:10px}
 
 .module-list{display:flex;flex-direction:column;gap:6px;max-height:310px;overflow-y:auto;scrollbar-width:thin}.module-list .module-item{flex-shrink:0;width:100%}.module-search{display:block;margin:5px 0}.module-search input{width:100%;min-width:0;padding:8px;border:1px solid #dce1e5;border-radius:6px;font-size:11px}.module-search small{display:block;margin-top:5px;font-size:10px;color:#70808a}
+
+.section-copy{margin-bottom:14px}.section-copy>.text-action{padding:0;font-size:11px}.section-copy .field-note{margin:7px 0;font-size:10px}

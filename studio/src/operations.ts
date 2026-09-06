@@ -161,3 +161,19 @@ export function duplicatePart(p:Project,mid:string,sid:string,pid:string):{proje
  }
  throw Error('В этой секции можно копировать отдельные полки и ящики.');
 }
+
+
+export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number};
+export function captureSectionFilling(p:Project,mid:string,sid:string):SectionFilling{
+ const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для копирования.');
+ const b=boxes(m).find(b=>b.id===sid)!,offsets=drawerOffsets(s),hanger=s.pantograph?'pantograph':s.rod?'rod':null;
+ const rod=parts(m).find(a=>a.id===sid+':rod'||a.id===sid+':pantograph:rod');
+ return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{})};
+}
+export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:SectionFilling):Project{
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для вставки.');
+ const b=boxes(m).find(b=>b.id===sid)!,height=b.top-b.bottom;
+ s.shelves=copy.shelves.map(y=>y/height);s.drawers=copy.drawers.length;s.drawerConfigs=copy.drawers.map(c=>({...c}));s.rod=copy.hanger==='rod';s.pantograph=copy.hanger==='pantograph';
+ if(copy.hanger&&copy.hangerHeight!==undefined)s.rodAt=copy.hangerHeight/height;else delete s.rodAt;
+ const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;
+}

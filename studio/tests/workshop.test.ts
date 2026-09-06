@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
 import {closedModuleBounds,compositionBounds,snapComposition,newProject,projectErrors,parseProject,appendModule,snapPlacement,bounds,localToRoom,roomToLocal} from '../src/project';
-import {duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
+import {captureSectionFilling,pasteSectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,insertItem,moveModule,movePart,removePart,transferPart} from '../src/operations';
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,estimateCSV,hingeCount} from '../src/pricing';
 import {nest,specificationHTML} from '../src/exports';
@@ -201,4 +201,18 @@ test('estimate CSV preserves unknown prices, quantities, totals and safe custome
  const p=newProject();p.modules[0].module.sections=[section()];p.modules[0].module.sections[0].rod=true;p.offer={customer:'=1+1',price:'',notes:''};
  const csv=estimateCSV(p),e=estimate(p);assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes('"\'=1+1"'));assert.ok(csv.includes('"Саморез 3,5×16 · крепление штанги D25";"6";"шт";"";"";'));assert.ok(csv.includes('"Смета не завершена"'));assert.ok(csv.includes('"'+e.knownCost+'"'));
  p.calculation={markup:2.2,overrides:{'screw35x16-rod':3}};const full=estimateCSV(p);assert.ok(full.includes('"6";"шт";"3";"18";"Цена в этом проекте";"Учтено"'));assert.ok(!full.includes('"Смета не завершена"'));assert.ok(full.includes('"2,2"'));
+});
+
+
+test('section filling copies physical heights and hardware into a different body without copying its material',()=>{
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.drawerConfigs=[{slide:'gtv0fpo',length:450,height:140,handle:true,y:0},{slide:'ball',length:500,height:180,y:180}];
+ const copy=captureSectionFilling(p,a.id,s.id),n=appendModule(p,a.module),target=n.modules[1];target.module.height=2200;target.module.plinthHeight=0;target.module.width=700;target.module.decor='Белый';const before=JSON.stringify(n),sid=target.module.sections[0].id;
+ const pasted=pasteSectionFilling(n,target.id,sid,copy),m=pasted.modules[1].module,box=boxes(m)[0],fill=m.sections[0];assert.deepEqual(projectErrors(pasted),[]);assert.equal(m.decor,'Белый');assert.equal(m.width,700);assert.equal(fill.id,sid);assert.deepEqual(fill.drawerConfigs,copy.drawers);assert.ok(Math.abs(fill.shelves[0]*(box.top-box.bottom)-copy.shelves[0])<1e-6);assert.equal(JSON.stringify(n),before);
+ target.module.depth=300;const shallow=JSON.stringify(n);assert.throws(()=>pasteSectionFilling(n,target.id,sid,copy),/не подходит/);assert.equal(JSON.stringify(n),shallow);
+});
+
+test('section clipboard resolves an automatic rod height and is independent of later source edits',()=>{
+ const p=newProject(),a=p.modules[0];a.module.sections=[section()];const s=a.module.sections[0];s.rod=true;s.shelves=[.8];const copy=captureSectionFilling(p,a.id,s.id),saved=JSON.stringify(copy);s.shelves[0]=.9;
+ const n=appendModule(p,a.module),b=n.modules[1];b.module.height=2200;const pasted=pasteSectionFilling(n,b.id,b.module.sections[0].id,copy),m=pasted.modules[1].module,box=boxes(m)[0],rod=parts(m).find(a=>a.role==='rod')!;
+ assert.ok(Math.abs(rod.position[1]-box.bottom-copy.hangerHeight!)<1e-6);assert.equal(JSON.stringify(copy),saved);assert.equal(m.sections[0].drawers,0);assert.equal(m.sections[0].pantograph,false);
 });
