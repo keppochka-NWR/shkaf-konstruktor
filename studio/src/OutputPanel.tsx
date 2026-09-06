@@ -42,6 +42,7 @@ export function OutputPanel({
   const placement=useMemo(()=>tab==='placement'?placementHTML(project):'',[project,tab]);
   const [labelPreview,setLabelPreview]=useState(false);
   const labelDocument=useMemo(()=>tab==='labels'?labelsHTML(project):'',[project,tab]);
+  const [imageError,setImageError]=useState('');
   const [quoteImage,setQuoteImage]=useState<string|null>(null);
   const calculated=useMemo(()=>tab==='quote'?estimate(project,sheets):null,[tab,project,sheets]);
   const q = project.offer || { customer: "", price: "", notes: "" };
@@ -210,21 +211,17 @@ export function OutputPanel({
               onBlur={e=>{if(e.target.value!==q.notes&&!update({...project,offer:{...q,notes:e.target.value}}))e.target.value=q.notes;}}
             />
           </label>
-          <div className="output-actions"><button className="outline" onClick={()=>setQuoteImage(quoteImage===null?(capture()||''):null)}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
+          <div className="output-actions"><button className="outline" onClick={()=>{setImageError('');if(quoteImage!==null){setQuoteImage(null);return;}try{setQuoteImage(capture()||'');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить изображение.');}}}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
           <button
             className="primary"
-            onClick={() =>
-              saveFile(
-                "Коммерческое предложение.html",
-                quoteHTML(project, q.customer, q.price, q.notes, capture()),
-              )
-            }
+            onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture()));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
           >
             Скачать КП / PDF
           </button>
           <p className="field-note">
             Откройте скачанный документ и нажмите «Печать / Сохранить PDF».
           </p>
+          {imageError&&<p role="alert" className="cloud-error">{imageError}</p>}
           {quoteImage!==null&&<iframe title="Предпросмотр коммерческого предложения" className="specification-preview" sandbox="" srcDoc={quotePreview.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>}
         </>
       )}

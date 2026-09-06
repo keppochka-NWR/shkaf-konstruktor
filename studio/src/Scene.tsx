@@ -128,7 +128,7 @@ export function Scene(p: Props) {
       if(!result){result=new Promise<THREE.Texture>((resolve,reject)=>loader.load(url,map=>{map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(disposed)map.dispose();else loadedTextures.add(map);resolve(map);},undefined,reject));textureLoads.set(url,result);}
       return result;
     }
-    let generation = 0;
+    let generation = 0,pendingTextures=0;
     function disposeGroup(group: THREE.Group) {
       group.traverse((o) => {
         if (
@@ -194,7 +194,7 @@ export function Scene(p: Props) {
       for (const l of labels) l.element.remove();
       labels.length = 0;
       moduleGroups.clear();
-      generation++;
+      generation++;pendingTextures=0;
       const gen = generation;
       disposeGroup(modelGroup);
       modelGroup = new THREE.Group();
@@ -234,10 +234,11 @@ export function Scene(p: Props) {
             (c) => c.n === part.decor,
           )?.tex;
           if (texture && !isBack && !isMetal) {
+            pendingTextures++;
             cachedTexture(texture).then(map=>{
               if(disposed||gen!==generation)return;
               mat.map=map;mat.color.set(0xffffff);mat.needsUpdate=true;needsRender=true;
-            }).catch(()=>{});
+            }).catch(()=>{}).finally(()=>{if(gen===generation)pendingTextures--;});
           }
           const geometry =
             (part.role === "rod" || part.role === "flange")
@@ -550,6 +551,7 @@ export function Scene(p: Props) {
     fit();
     api.current = { rebuild, fit };
     current.current.captureReady(() => {
+      if(pendingTextures>0)throw Error("Материалы ещё загружаются. Подождите несколько секунд и повторите сохранение изображения.");
       const size=renderer.getSize(new THREE.Vector2()),ratio=renderer.getPixelRatio(),background=scene.background,gridVisible=grid.visible;
       const guides:THREE.Object3D[]=[];modelGroup.traverse(o=>{if(o.userData.captureGuide||o.parent===modelGroup&&(o instanceof THREE.Line||o instanceof THREE.LineSegments))guides.push(o);});const visibility=guides.map(o=>o.visible);
       const aspect=size.x/size.y,width=aspect>=1?2560:Math.round(2560*aspect),height=aspect>=1?Math.round(2560/aspect):2560;
