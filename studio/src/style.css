@@ -1470,3 +1470,5 @@ th {
 
 .drawer-tabs button {display:flex;flex-direction:column;gap:3px;text-align:left;flex:1 0 58px;}
 .drawer-tabs button small {font-size:9px;color:#53646a;white-space:nowrap;}
+
+.review-package{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin-bottom:16px;background:#f2f5f3;border:1px solid #dce5de;border-radius:10px}.review-package .field-note{margin:4px 0 0}.review-package>button{flex-shrink:0}@media(max-width:700px){.review-package{align-items:stretch;flex-direction:column}}

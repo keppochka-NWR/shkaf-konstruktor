@@ -1,3 +1,6 @@
+import {details} from '../src/exports';
+import {reviewFiles,reviewArchive,reviewArchiveName} from '../src/reviewPackage';
+import {unzipSync,strFromU8} from 'three/addons/libs/fflate.module.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,section,boxes,drawerStackHeight,parseModule,drawerConfig} from '../src/model';
@@ -215,4 +218,33 @@ test('section clipboard resolves an automatic rod height and is independent of l
  const p=newProject(),a=p.modules[0];a.module.sections=[section()];const s=a.module.sections[0];s.rod=true;s.shelves=[.8];const copy=captureSectionFilling(p,a.id,s.id),saved=JSON.stringify(copy);s.shelves[0]=.9;
  const n=appendModule(p,a.module),b=n.modules[1];b.module.height=2200;const pasted=pasteSectionFilling(n,b.id,b.module.sections[0].id,copy),m=pasted.modules[1].module,box=boxes(m)[0],rod=parts(m).find(a=>a.role==='rod')!;
  assert.ok(Math.abs(rod.position[1]-box.bottom-copy.hangerHeight!)<1e-6);assert.equal(JSON.stringify(copy),saved);assert.equal(m.sections[0].drawers,0);assert.equal(m.sections[0].pantograph,false);
+});
+
+test('review package contains consistent details and internal review warnings',()=>{
+  const p=newProject();p.offer={customer:'Заказ / <тест>',price:'',notes:''};
+  p.modules[0].module.sections[0].drawerConfigs=[{slide:'gtv0fpo',length:500,height:140},{slide:'gtv0fpo',length:500,height:140}];
+  const before=JSON.stringify(p),files=reviewFiles(p,new Date('2026-09-06T05:00:00Z'));
+  assert.equal(Object.keys(files).length,9);
+  assert.deepEqual(JSON.parse(files['01-Проект.project.json']),p);
+  assert.ok(files['00-Прочитайте.txt'].includes('GTV 0FPO'));
+  assert.ok(files['00-Прочитайте.txt'].includes('2026-09-06T05:00:00.000Z'));
+  assert.ok(files['00-Прочитайте.txt'].includes('управляющие программы не включены'));
+  for(const d of details(p)){assert.ok(files['06-Деталировка.csv'].includes(d.code));assert.ok(files['07-Бирки.html'].includes(d.code));}
+  assert.ok(files['08-Смета.csv'].startsWith('\ufeff'));
+  assert.ok(!/[<>:"/\\|?*]/.test(reviewArchiveName(p)));
+  assert.equal(JSON.stringify(p),before);
+});
+test('review ZIP preserves Unicode filenames and captures the project before asynchronous loading',async()=>{
+  const p=newProject(),before=structuredClone(p),pending=reviewArchive(p);
+  p.modules[0].module.name='Позднее изменение';
+  const archive=unzipSync(await pending),names=Object.keys(archive);
+  assert.equal(names.length,9);
+  assert.ok(names.includes('01-Проект.project.json'));
+  assert.deepEqual(JSON.parse(strFromU8(archive['01-Проект.project.json'])),before);
+  assert.ok(strFromU8(archive['02-Ведомость.html']).includes(before.modules[0].module.name));
+  assert.ok(names.every(name=>!name.includes('/')&&!name.includes('\\')));
+});
+test('review package refuses invalid furniture instead of exporting partial documents',()=>{
+  const p=newProject();p.modules[0].module.width=901;
+  assert.throws(()=>reviewFiles(p));
 });

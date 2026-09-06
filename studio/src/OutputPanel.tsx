@@ -1,3 +1,4 @@
+import {downloadReviewArchive} from './reviewPackage';
 import {estimate} from './pricing';
 import {placementHTML} from './placementPlan';
 import {DrawingsPanel} from './DrawingsPanel';
@@ -32,6 +33,7 @@ export function OutputPanel({
   capture: () => string | undefined;
   update: (p: Project) => boolean;
 }) {
+  const [packing,setPacking]=useState(false),[packageMessage,setPackageMessage]=useState(''),[packageError,setPackageError]=useState('');
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
   const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement">(initialTab);
   const [detailQuery,setDetailQuery]=useState(''),[highlight,setHighlight]=useState('');
@@ -49,6 +51,11 @@ export function OutputPanel({
   const quotePreview=useMemo(()=>tab==='quote'&&quoteImage!==null?quoteHTML(project,q.customer,q.price,q.notes,quoteImage||undefined):'',[tab,project,quoteImage,q.customer,q.price,q.notes]);
   return (
     <div className="output-panel">
+      <div className="review-package">
+        <div><b>Передать технологу</b><p className="field-note">Один ZIP: проект, документы, карты, бирки и внутренняя смета из одной версии.</p></div>
+        <button className="outline" disabled={packing} onClick={async()=>{setPacking(true);setPackageMessage('');setPackageError('');try{await downloadReviewArchive(project);setPackageMessage('Комплект передан браузеру для скачивания. Внутри — памятка и замечания. Серверное сохранение выполняется отдельно в кабинете.');}catch(e){setPackageError(e instanceof Error?e.message:'Не удалось сформировать комплект. Попробуйте ещё раз.');}finally{setPacking(false);}}}>{packing?'Готовим комплект…':'Скачать комплект ZIP'}</button>
+      </div>
+      {packageMessage&&<p role="status" className="field-note">{packageMessage}</p>}{packageError&&<p role="alert" className="cloud-error">{packageError}</p>}
       <div className="output-tabs">
         <button
           aria-pressed={tab === "sheets"}
