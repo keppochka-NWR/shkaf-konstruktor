@@ -389,7 +389,7 @@ test('placement plan combines labels of identical stacked footprints',()=>{
 test('room obstacles survive files, validate dimensions and warn only at intersecting heights',()=>{
  const p=newProject();p.room.obstacles=[{id:'beam',name:'Балка',type:'beam',x:100,z:100,y:2300,width:300,depth:300,height:300}];
  assert.deepEqual(projectErrors(p),[]);assert.deepEqual(parseProject(JSON.parse(JSON.stringify(p))).room.obstacles,p.room.obstacles);assert.equal(roomWarnings(p).filter(w=>w.kind==='obstacle-beam').length,0);
- p.room.obstacles[0].y=1900;assert.equal(roomWarnings(p).filter(w=>w.kind==='obstacle-beam').length,1);assert.deepEqual(projectErrors(p),[]);
+ p.room.obstacles[0].y=1900;assert.equal(roomWarnings(p).filter(w=>w.kind==='obstacle-beam').length,1);assert.equal(roomWarnings(p).find(w=>w.kind==='obstacle-beam')!.obstacleId,'beam');assert.deepEqual(projectErrors(p),[]);
  assert.match(placementHTML(p),/data-obstacle="beam"/);assert.match(placementHTML(p),/Объекты замера/);
  for(const change of [{width:0},{x:-1},{height:NaN},{type:'unknown'},{name:''},{y:2700}]){const bad=structuredClone(p);Object.assign(bad.room.obstacles![0],change);assert.throws(()=>parseProject(bad));}
  const duplicate=structuredClone(p);duplicate.room.obstacles!.push({...duplicate.room.obstacles![0]});assert.throws(()=>parseProject(duplicate));

@@ -1,6 +1,8 @@
 import {MEASUREMENT_RULES} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 
+export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;kind?:string;message:string};
+
 // Advisory inspection zones, not workshop rules or door-swing geometry.
 export function openingZone(room:Room,o:Opening){
   const horizontal=o.wall==='back'||o.wall==='front';
@@ -11,7 +13,7 @@ export function openingZone(room:Room,o:Opening){
 }
 export function roomWarnings(project:Project){
   const closed=project.modules.map(a=>({a,b:closedModuleBounds(a)}));
-  const warnings:{moduleId:string;openingId?:string;kind?:string;message:string}[]=[];
+  const warnings:RoomWarning[]=[];
   for(const [index,o] of (project.room.openings||[]).entries())for(const a of project.modules){
     if(!overlap(bounds(a),openingZone(project.room,o)))continue;
     warnings.push({moduleId:a.id,openingId:o.id,message:o.type==='door'
@@ -23,6 +25,6 @@ export function roomWarnings(project:Project){
     const exits=[['левой',-b.x],['задней',-b.z],['правой',b.x+b.w-project.room.width],['передней',b.z+b.d-project.room.depth]] as const;
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});
   }
-  for(const o of project.room.obstacles||[])for(const {a,b} of closed)if(overlap(b,obstacleBounds(o)))warnings.push({moduleId:a.id,kind:'obstacle-'+o.id,message:`«${a.module.name}» пересекается с объектом замера «${o.name}». Измените расстановку или уточните замер${o.type==='radiator'?'; отдельно проверьте доступ и теплоотвод':''}.`});
+  for(const o of project.room.obstacles||[])for(const {a,b} of closed)if(overlap(b,obstacleBounds(o)))warnings.push({moduleId:a.id,obstacleId:o.id,kind:'obstacle-'+o.id,message:`«${a.module.name}» пересекается с объектом замера «${o.name}». Измените расстановку или уточните замер${o.type==='radiator'?'; отдельно проверьте доступ и теплоотвод':''}.`});
   return warnings;
 }
