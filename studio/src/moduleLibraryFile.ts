@@ -45,3 +45,10 @@ function entryContent(a:any,allowGroup:boolean):Pick<LibraryEntry,'module'|'grou
  }
  return {module:parseModule(a.module)};
 }
+
+
+/** Call while holding the same-origin library lock when available. */
+export function writeStoredLibrary(storage:Pick<Storage,'getItem'|'setItem'>,expected:string|null,items:LibraryEntry[]):string{
+ if(storage.getItem(LIBRARY_KEY)!==expected)throw Error('Библиотека изменилась в другом окне. Изменение не записано. Закройте и снова откройте библиотеку, затем повторите действие.');
+ const raw=JSON.stringify(items);storage.setItem(LIBRARY_KEY,raw);return raw;
+}

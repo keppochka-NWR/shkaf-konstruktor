@@ -446,3 +446,14 @@ test('board texture grain follows cut length including square faces and drawer c
   assert.equal(faces,8);g.dispose();
  }
 });
+
+
+import {writeStoredLibrary} from '../src/moduleLibraryFile';
+test('stale library writes cannot replace templates saved by another window',()=>{
+ let raw:string|null=null;const storage={getItem:()=>raw,setItem:(_key:string,value:string)=>{raw=value;}};
+ const first=[{id:'first',name:'Первый',module:initialModule()}],saved=writeStoredLibrary(storage,null,first);
+ assert.equal(raw,saved);assert.throws(()=>writeStoredLibrary(storage,null,[]),/изменилась в другом окне/);assert.equal(raw,saved);
+ const next=writeStoredLibrary(storage,saved,[...first,{id:'second',name:'Второй',module:initialModule()}]);assert.equal(JSON.parse(next).length,2);
+ assert.throws(()=>writeStoredLibrary(storage,saved,[]),/Изменение не записано/);assert.equal(raw,next);
+ const failing={getItem:()=>next,setItem:()=>{throw Error('QuotaExceeded');}};assert.throws(()=>writeStoredLibrary(failing,next,[]),/QuotaExceeded/);assert.equal(raw,next);
+});
