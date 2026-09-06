@@ -197,6 +197,7 @@ export default function App() {
   const [transparent, setTransparent] = useState(false);
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
+  const [selectedOpening,setSelectedOpening]=useState<string>();
   const [presentation,setPresentation]=useState(false);
   const [outputTab,setOutputTab] = useState<"sheets" | "estimate">("sheets");
   const [renderImage,setRenderImage]=useState("");
@@ -216,6 +217,7 @@ export default function App() {
     setDirectValue(String(value));
   }
   function selectModule(mid: string) {
+    setSelectedOpening(undefined);
     setDrawerPreview(false);
     setSelectedPart(null);
     setActive(mid);
@@ -741,7 +743,7 @@ export default function App() {
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
-          {roomPlan?<RoomPlan snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+          {roomPlan?<RoomPlan selectedOpening={selectedOpening} onOpeningSelect={setSelectedOpening} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             mode={presentation?'orbit':mode}
             presentation={presentation}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
@@ -937,7 +939,7 @@ export default function App() {
               <details className="measurement-fields"><summary>Мебель в нише · вычеты СТП</summary><p className="field-note">Введите минимальные размеры по нескольким точкам. Отклонение стены измеряется относительно уровня.</p>{!project.measurement?.niche?<button className="outline" onClick={()=>commitProject({...project,measurement:{number:'',date:'',notes:'',...project.measurement,niche:{width:project.room.width,height:project.room.height,depth:project.room.depth,deviation:0}}})}>Рассчитать по замеру</button>:<>{(['width','height','depth','deviation'] as const).map(k=><NumberField key={k} label={{width:'Минимальная ширина ниши',height:'Нижняя точка потолка',depth:'Минимальная глубина ниши',deviation:'Отклонение стены'}[k]} value={project.measurement!.niche![k]} min={k==='deviation'?0:500} max={k==='deviation'?300:20000} onChange={v=>commitProject({...project,measurement:{...project.measurement!,niche:{...project.measurement!.niche!,[k]:v}}})}/>)}{(()=>{const fit=nicheSize(project.measurement!.niche!);return <div className="niche-result"><strong>Предельные габариты мебели</strong><p>{fit.width} × {fit.height} × {fit.depth} мм</p><small>Ширина −{fit.side}, высота −30, глубина −5 мм. Каждый отдельный корпус — не более 900 × 2200 мм.</small></div>;})()}<p className="field-note">При отклонении ровно 10 мм выбран запас 15 мм. Проверьте светильники, выступы и карнизы. Расчёт не меняет размеры комнаты и модулей автоматически.</p></>}</details>
               <details className="measurement-fields"><summary>Сдвинуть всю композицию</summary><p className="field-note">Все {project.modules.length} корпуса сдвигаются вместе. Стыки, расстояния и положение антресолей относительно нижних модулей сохраняются.</p>{(['x','z','y'] as const).map(axis=><NumberField key={axis} label={{x:'Композиция от левой стены',z:'Композиция от задней стены',y:'Композиция от пола'}[axis]} value={Math.round(mountingComposition[axis]*10)/10} min={0} max={{x:project.room.width-mountingComposition.w,z:project.room.depth-mountingComposition.d,y:project.room.height-mountingComposition.h}[axis]} onChange={v=>{try{commitProject(setCompositionDistance(project,axis,v));}catch(e){setError((e as Error).message);}}}/>)}<p className="field-note">Отступы — по монтажному габариту, как у отдельного корпуса. Выступы ручек проверяются отдельными подсказками. Отмена возвращает всю расстановку одним шагом.</p></details>
               <RoomWarnings project={project} select={mid=>{selectModule(mid);setRoomPlan(true);}}/>
-              <RoomEditor room={project.room} onChange={room=>commitProject({...project,room})}/>
+              <RoomEditor selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <button className="text-action" onClick={() => setTab("module")}>
                 К выбранному модулю
               </button>
