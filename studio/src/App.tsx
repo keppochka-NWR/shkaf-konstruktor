@@ -1,3 +1,4 @@
+import {CURRENT_PROJECT,persistProject} from './projectStorage';
 import {RoomObstacles} from './RoomObstacles';
 import {NewProjectPanel} from './NewProjectPanel';
 import {MEASUREMENT_RULES,nicheSize} from './measurement';
@@ -66,7 +67,7 @@ import {
   type Project,
 } from "./project";
 import {moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
-const KEY = "module-studio-v3";
+const KEY = CURRENT_PROJECT;
 function NumberField({
   label,
   value,
@@ -160,18 +161,23 @@ function Counter({
 }
 export default function App() {
   const [startup] = useState(() => {
+    let original:string|null=null;
     try {
-      const s =
+      const s = original =
         localStorage.getItem(KEY) || localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1");
       return {
         model: s ? parseProject(JSON.parse(s)) : newProject(),
         error: "",
+        damaged:undefined as string|undefined,
+        storageUnavailable:false,
       };
     } catch {
       return {
         model: newProject(),
         error:
-          "Сохранённый модуль не удалось прочитать. Открыт пример; исходная запись сохранится до первого изменения.",
+          "Сохранённый проект не удалось прочитать. Открыт пример; перед автосохранением исходник будет помещён в резервную копию.",
+        damaged:original??undefined,
+        storageUnavailable:original===null,
       };
     }
   });
@@ -331,8 +337,9 @@ export default function App() {
   }
   useEffect(() => {
     if (!touched.current) return;
+    if(startup.storageUnavailable){setSaved("Не сохранено");setError("При запуске не удалось прочитать хранилище. Автосохранение отключено, чтобы не заменить недоступный проект. Скачайте текущую работу и перезагрузите редактор.");return;}
     try {
-      localStorage.setItem(KEY, JSON.stringify(project));
+      persistProject(localStorage,project,startup.damaged);
       setSaved("Сохранено в браузере");
     } catch {
       setSaved("Не сохранено");

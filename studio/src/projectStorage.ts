@@ -10,3 +10,11 @@ export function projectContent(project:Project){
   function sorted(value:any):any{return Array.isArray(value)?value.map(sorted):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,sorted(value[key])])):value;}
   return JSON.stringify(sorted(data));
 }
+
+
+export const CURRENT_PROJECT='module-studio-v3';
+export const DAMAGED_PROJECT='module-studio-damaged-project-v1';
+export function persistProject(storage:Pick<Storage,'getItem'|'setItem'>,project:Project,damaged?:string){
+ if(damaged!==undefined){const previous=storage.getItem(DAMAGED_PROJECT);if(previous!==damaged){if(previous!==null)storage.setItem(DAMAGED_PROJECT+'-'+crypto.randomUUID(),previous);storage.setItem(DAMAGED_PROJECT,damaged);}}
+ storage.setItem(CURRENT_PROJECT,JSON.stringify(project));
+}

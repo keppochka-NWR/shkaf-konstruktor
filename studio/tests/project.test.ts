@@ -403,3 +403,13 @@ test('new module placement searches around measured obstacles and respects their
  p.room.obstacles[0].type='beam';p.room.obstacles[0].y=2300;p.room.obstacles[0].height=300;
  const under=appendModule(p,a.module,a);assert.equal(under.modules[1].x,650);assert.equal(roomWarnings(under).filter(w=>w.kind==='obstacle-column').length,0);
 });
+
+
+import {persistProject,CURRENT_PROJECT,DAMAGED_PROJECT} from '../src/projectStorage';
+test('autosave preserves a damaged source before replacing it, including failure and older backups',()=>{
+ const original='broken source',data=new Map([[CURRENT_PROJECT,original],[DAMAGED_PROJECT,'older damaged source']]),order:string[]=[],p=newProject();
+ const storage={getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{order.push(key);data.set(key,value);}};
+ persistProject(storage,p,original);assert.equal(data.get(DAMAGED_PROJECT),original);assert.equal(data.get(order[0]),'older damaged source');assert.equal(order.at(-1),CURRENT_PROJECT);assert.deepEqual(JSON.parse(data.get(CURRENT_PROJECT)!),p);
+ const count=data.size;persistProject(storage,p,original);assert.equal(data.size,count);
+ data.set(CURRENT_PROJECT,'new broken');assert.throws(()=>persistProject({...storage,setItem:()=>{throw Error('quota');}},p,'new broken'));assert.equal(data.get(CURRENT_PROJECT),'new broken');
+});
