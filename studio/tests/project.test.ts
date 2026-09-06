@@ -346,3 +346,19 @@ test('distribute shelves produces equal clear openings above the base or drawer 
 test('ceiling advisory uses workshop clearance and raised module height',()=>{const p=newProject();p.room.height=2029;assert.equal(roomWarnings(p).length,1);assert.match(roomWarnings(p)[0].message,/29 мм/);assert.deepEqual(projectErrors(p),[]);p.room.height=2030;assert.equal(roomWarnings(p).length,0);p.modules[0].y=500;p.room.height=2529;assert.match(roomWarnings(p)[0].message,/29 мм/);assert.equal(roomWarnings(p)[0].openingId,undefined);});
 
 test('technologist specification carries placement advisories and escaped module names',()=>{const p=newProject();p.room.height=2020;p.modules[0].module.name='<img src=x>';const html=specificationHTML(p);assert.ok(html.includes('Проверить перед согласованием'));assert.ok(html.includes('до потолка 20 мм'));assert.ok(html.includes('от задней стены 27'));assert.ok(html.includes('&lt;img src=x&gt;'));assert.ok(!html.includes('<img src=x>'));p.room.height=2700;assert.ok(!specificationHTML(p).includes('Проверить перед согласованием'));});
+
+
+test('closed handles protruding through each wall produce advisory without blocking placement',()=>{
+ for(const rotation of [0,90,180,270] as const){
+  const p=newProject(),a=p.modules[0];a.rotation=rotation;
+  if(rotation===0)a.z=p.room.depth-a.module.depth-18;
+  if(rotation===90)a.x=p.room.width-a.module.depth-18;
+  if(rotation===180)a.z=18;
+  if(rotation===270)a.x=18;
+  assert.deepEqual(projectErrors(p),[]);
+  assert.equal(roomWarnings(p).filter(w=>w.kind?.startsWith('closed-wall')).length,1);
+  assert.match(roomWarnings(p)[0].message,/26 мм/);
+  if(rotation===0)a.z-=26;if(rotation===90)a.x-=26;if(rotation===180)a.z+=26;if(rotation===270)a.x+=26;
+  assert.equal(roomWarnings(p).length,0);
+ }
+});

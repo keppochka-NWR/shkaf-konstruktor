@@ -183,6 +183,7 @@ export default function App() {
   const m = placed.module;
   const placedBounds=bounds(placed);
   const composition=useMemo(()=>compositionBounds(project),[project]);
+  const placementWarnings=useMemo(()=>roomWarnings(project),[project]);
   const [allMaterials,setAllMaterials]=useState(false);
   const [mode,setMode]=useState<"move"|"fill"|"orbit">("move");
   const [drawerPreview,setDrawerPreview]=useState(false);
@@ -1366,7 +1367,7 @@ export default function App() {
           {allParts.filter((p) => p.material !== "metal").length} деталей{" "}
           <span>Посмотреть</span>
         </button>
-        <button className="room-warning-link" hidden={!roomWarnings(project).length} onClick={()=>{setRoomPlan(true);setTab("room");}}>Расстановка: {roomWarnings(project).length} подсказок</button>
+        <button className="room-warning-link" hidden={!placementWarnings.length} onClick={()=>{setRoomPlan(true);setTab("room");}}>Проверить расстановку · {placementWarnings.length}</button>
         <PriceStatus project={project} open={()=>{setOutputTab("estimate");setModal("output");}}/>
         <button className="stage-note" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
           Lamarty 2750 × 1830 · Карты листов и КП
