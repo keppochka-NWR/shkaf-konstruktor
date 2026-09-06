@@ -32,3 +32,5 @@
 .room-warnings{margin:14px 0;padding:12px;border:1px solid #e7c893;border-radius:7px;background:#fffbf1}.room-warnings h3{font-size:13px;margin:0 0 8px}.room-warnings button{display:block;width:100%;text-align:left;padding:9px 0;border:0;border-bottom:1px solid #e9d8b8;background:none;color:#80510a;font-size:12px;line-height:1.5}.room-warnings p{font-size:11px;line-height:1.5;color:#73634a}.statusbar .room-warning-link{color:#80510a}.statusbar .room-warning-link[hidden]{display:none}@media(max-width:1200px){.statusbar:has(.room-warning-link:not([hidden])) .stage-note{display:none}}
 
 .cloud-sync{padding:12px 14px;background:#edf1ff;border:1px solid #c9d5fb;border-radius:7px;font-size:13px;line-height:1.5;color:#294990}
+
+.drawing-table{overflow:auto}.drawing-table table{width:100%;border-collapse:collapse;font-size:12px}.drawing-table th,.drawing-table td{padding:8px;border:1px solid #d3dce2;text-align:left}.drawings-panel select{max-width:350px;padding:9px;border:1px solid #c8d1d9;border-radius:5px}.output-tabs{flex-wrap:wrap}

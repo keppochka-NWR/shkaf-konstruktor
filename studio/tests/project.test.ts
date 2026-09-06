@@ -1,3 +1,4 @@
+import {drawingLevels,moduleDrawingSVG,drawingsHTML} from '../src/drawings';
 import {projectContent} from '../src/projectStorage';
 import {openingZone,roomWarnings} from '../src/roomWarnings';
 import {nicheSize} from '../src/measurement';
@@ -293,4 +294,14 @@ test('server content comparison ignores link metadata and key order but detects 
   assert.equal(projectContent(copy),projectContent(p));
   copy.modules[0].x+=10;assert.notEqual(projectContent(copy),projectContent(p));
   copy.modules[0].x-=10;copy.measurement={number:'123',date:'',notes:''};assert.notEqual(projectContent(copy),projectContent(p));
+});
+
+test('review drawings use actual part elevations and escape user labels',()=>{
+ const p=newProject(),m=p.modules[0].module;m.name='<script>test</script>';
+ const levels=drawingLevels(m),actual=parts(m);
+ assert.ok(levels.some(l=>l.name.includes('Обязательная')));
+ assert.ok(levels.some(l=>l.name.includes('фасад')));
+ for(const level of levels){const d=actual.find(d=>d.id===level.id)!;assert.equal(level.bottom,Math.round((d.position[1]-d.size[1]/2)*10)/10);assert.equal(level.top,Math.round((d.position[1]+d.size[1]/2)*10)/10);}
+ const svg=moduleDrawingSVG(m),html=drawingsHTML(p);
+ assert.ok(!svg.includes('NaN'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('без присадки'));
 });
