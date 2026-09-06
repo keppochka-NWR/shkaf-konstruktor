@@ -76,6 +76,7 @@ export type Part = {
   role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge";
   hinge?: "left" | "right";
   grain: "length";
+  grainAxis: 0 | 1 | 2;
   edge: [number, number, number, number];
 };
 export type SectionBox = {
@@ -179,6 +180,7 @@ export function parts(m: Module): Part[] {
       material,
       decor: role === "door" ? m.facadeDecor : m.decor,
       grain: "length",
+      grainAxis: role==='door'||key==='left'||key==='right'||key==='back'||key.endsWith(':divider')||key.includes(':filler:')||key.endsWith(':facade')?1:role==='drawer'&&(key.endsWith(':left')||key.endsWith(':right'))?2:0,
       edge: material === "board" ? role === "door" ? [2,2,2,2] : [0.4, 0.4, 2, 0.4] : [0, 0, 0, 0],
     });
   }

@@ -428,3 +428,21 @@ test('group rotation stays inside the room and rejects collisions without changi
  const extra=appendModule(p,initialModule());extra.modules[2].x=3000;extra.modules[2].z=1800;
  const partial=rotateModuleGroup(extra,ids);assert.deepEqual(partial.modules[2],extra.modules[2]);
 });
+
+
+import {boardGeometry} from '../src/boardGeometry';
+test('board texture grain follows cut length including square faces and drawer construction',()=>{
+ const m=initialModule();m.width=632;m.depth=600;m.backType='board';m.decor='Дуб Вотан';m.doors=true;m.sections[0].drawers=2;
+ const ps=parts(m).filter(p=>p.material==='board');
+ assert.equal(ps.find(p=>p.id==='top')!.grainAxis,0);assert.equal(ps.find(p=>p.id==='back')!.grainAxis,1);
+ assert.equal(ps.find(p=>p.id.endsWith(':drawer:0:left'))!.grainAxis,2);assert.equal(ps.find(p=>p.id.endsWith(':drawer:0:facade'))!.grainAxis,1);
+ for(const p of ps){
+  assert.ok(Math.abs(p.size[p.grainAxis]-p.length)<1e-6,p.name);
+  const g=boardGeometry(p),pos=g.getAttribute('position'),normal=g.getAttribute('normal'),uv=g.getAttribute('uv');
+  const thicknessAxis=p.size.findIndex((v,i)=>i!==p.grainAxis&&Math.abs(v-p.thickness)<1e-6);assert.ok(thicknessAxis>=0,p.name);
+  const widthAxis=[0,1,2].find(i=>i!==p.grainAxis&&i!==thicknessAxis)!;
+  assert.ok(Math.abs(p.size[widthAxis]-p.width)<1e-6,p.name);
+  let faces=0;for(let i=0;i<pos.count;i++)if(Math.abs(normal.getComponent(i,thicknessAxis))>.99){faces++;assert.ok(Math.abs(uv.getY(i)-(pos.getComponent(i,p.grainAxis)/p.length+.5))<1e-6);assert.ok(Math.abs(uv.getX(i)-(pos.getComponent(i,widthAxis)/p.width+.5))<1e-6);}
+  assert.equal(faces,8);g.dispose();
+ }
+});

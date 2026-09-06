@@ -1,4 +1,5 @@
 import {frameDistance,frameHeight} from './framing';
+import {boardGeometry} from './boardGeometry';
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -249,7 +250,7 @@ export function Scene(p: Props) {
                   part.size[0],
                   24,
                 )
-              : new THREE.BoxGeometry(...part.size);
+              : boardGeometry(part);
           const mesh = new THREE.Mesh(geometry, mat);
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
           mesh.position.set(
