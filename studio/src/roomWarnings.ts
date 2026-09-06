@@ -1,3 +1,4 @@
+import {MEASUREMENT_RULES} from './measurement';
 import {bounds,overlap,type Opening,type Project,type Room} from './project';
 
 // Advisory inspection zones, not workshop rules or door-swing geometry.
@@ -9,12 +10,13 @@ export function openingZone(room:Room,o:Opening){
     y:o.sill,w:horizontal?o.width:reach,d:horizontal?reach:o.width,h:o.height};
 }
 export function roomWarnings(project:Project){
-  const warnings:{moduleId:string;openingId:string;message:string}[]=[];
+  const warnings:{moduleId:string;openingId?:string;message:string}[]=[];
   for(const [index,o] of (project.room.openings||[]).entries())for(const a of project.modules){
     if(!overlap(bounds(a),openingZone(project.room,o)))continue;
     warnings.push({moduleId:a.id,openingId:o.id,message:o.type==='door'
       ?`«${a.module.name}»: проверьте проход к двери ${index+1}. Корпус попадает в зону 900 мм перед проёмом.`
       :`«${a.module.name}»: корпус перекрывает окно ${index+1} у стены. Проверьте доступ к окну и подоконнику.`});
   }
+  for(const a of project.modules){const gap=project.room.height-(a.y??0)-a.module.height;if(gap<MEASUREMENT_RULES.ceilingClearance-.001)warnings.push({moduleId:a.id,message:`«${a.module.name}»: до потолка ${Math.round(gap*10)/10} мм. По СТП оставьте ${MEASUREMENT_RULES.ceilingClearance} мм от нижней точки потолка; проверьте светильники и выступы.`});}
   return warnings;
 }

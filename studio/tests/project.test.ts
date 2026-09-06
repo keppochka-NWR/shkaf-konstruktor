@@ -342,3 +342,5 @@ test('distribute shelves produces equal clear openings above the base or drawer 
  }
  const m=initialModule(),s=m.sections[0];s.drawers=0;s.rod=true;s.rodAt=.65;s.shelves=distribute(m,s,2);assert.deepEqual(validate(m),[]);assert.ok(s.shelves.every(y=>y>s.rodAt!));
 });
+
+test('ceiling advisory uses workshop clearance and raised module height',()=>{const p=newProject();p.room.height=2029;assert.equal(roomWarnings(p).length,1);assert.match(roomWarnings(p)[0].message,/29 мм/);assert.deepEqual(projectErrors(p),[]);p.room.height=2030;assert.equal(roomWarnings(p).length,0);p.modules[0].y=500;p.room.height=2529;assert.match(roomWarnings(p)[0].message,/29 мм/);assert.equal(roomWarnings(p)[0].openingId,undefined);});
