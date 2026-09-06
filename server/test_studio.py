@@ -63,6 +63,21 @@ class StudioTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             backup_database(Path(self.tmp.name)/'missing.db',Path(self.tmp.name)/'backups')
 
+    def test_room_obstacles_survive_save_and_revision_history(self):
+        body=self.payload()
+        obstacle={'id':'column','type':'column','name':'Колонна у входа','x':1800,'y':0,'z':0,'width':300,'depth':300,'height':2700}
+        body['data']['room']={'width':4000,'depth':3000,'height':2700,'obstacles':[obstacle]}
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).status_code,200)
+        loaded=self.a.get('/api/studio/projects/test-project').json()['data']
+        self.assertEqual(loaded['room']['obstacles'],[obstacle])
+        body['revision']=1
+        body['data']['room']['obstacles'][0]['x']=2100
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).status_code,200)
+        previous=self.admin.get('/api/studio/projects/test-project/revisions/1').json()['data']
+        self.assertEqual(previous['room']['obstacles'][0]['x'],1800)
+        current=self.a.get('/api/studio/projects/test-project').json()['data']
+        self.assertEqual(current['room']['obstacles'][0]['x'],2100)
+
     def test_ownership_and_admin(self):
         self.assertEqual(self.a.post('/api/studio/projects',json=self.payload()).status_code,200)
         self.assertEqual(self.b.get('/api/studio/projects/test-project').status_code,404)

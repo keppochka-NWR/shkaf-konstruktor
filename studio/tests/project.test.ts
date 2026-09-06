@@ -395,3 +395,11 @@ test('room obstacles survive files, validate dimensions and warn only at interse
  const duplicate=structuredClone(p);duplicate.room.obstacles!.push({...duplicate.room.obstacles![0]});assert.throws(()=>parseProject(duplicate));
  const malformed=structuredClone(p) as any;malformed.room.obstacles=[null];assert.throws(()=>parseProject(malformed));
 });
+
+
+test('new module placement searches around measured obstacles and respects their elevation',()=>{
+ const p=newProject(),a=p.modules[0];p.room.obstacles=[{id:'column',name:'Колонна',type:'column',x:650,z:0,y:0,width:300,depth:700,height:2700}];
+ const n=appendModule(p,a.module,a);assert.deepEqual(projectErrors(n),[]);assert.equal(roomWarnings(n).filter(w=>w.kind==='obstacle-column').length,0);assert.equal(n.modules[1].x,950);
+ p.room.obstacles[0].type='beam';p.room.obstacles[0].y=2300;p.room.obstacles[0].height=300;
+ const under=appendModule(p,a.module,a);assert.equal(under.modules[1].x,650);assert.equal(roomWarnings(under).filter(w=>w.kind==='obstacle-column').length,0);
+});

@@ -65,7 +65,7 @@ export function parseProject(data:unknown):Project{
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
   const n=structuredClone(p),module=structuredClone(source);module.sections.forEach(s=>s.id=id());module.name=`Модуль ${p.modules.length+1}`;
   const a:PlacedModule={id:id(),x:0,y:anchor?.y??0,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
-  const occupied=p.modules.map(bounds),preferredX=anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...occupied.filter(b=>b.y===0).map(b=>b.x+b.w),0),preferredZ=anchor?bounds(anchor).z:30;
+  const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),0),preferredZ=anchor?bounds(anchor).z:30;
   const xs=[preferredX,0,...occupied.flatMap(b=>[b.x+b.w,b.x-base.w,b.x]),p.room.width-base.w],zs=[preferredZ,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-base.d,b.z]),p.room.depth-base.d];
   for(const z of [...new Set(zs)])for(const x of [...new Set(xs)]){
     const box={...base,x,z};if(x<0||z<0||x+base.w>p.room.width||z+base.d>p.room.depth||base.y+base.h>p.room.height||occupied.some(b=>overlap(box,b)))continue;
