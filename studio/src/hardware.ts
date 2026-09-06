@@ -23,3 +23,10 @@ export const GTV_SOURCE =
   "https://api2.gtv.com.pl/pimcore/assets/attachments/karta_techniczna/Karta_techniczna_2020_128-129.pdf";
 
 export function drawerHasHandle(c:DrawerConfig){return c.handle??(c.slide!=="gtv0fpo");}
+
+
+export function compatibleSlideLength(slide:DrawerConfig['slide'],current:number,available:number):number|undefined {
+ const fitting=SLIDES[slide].lengths.filter(length=>length<=available);
+ if(fitting.some(length=>length===current))return current;
+ return [...fitting].reverse().find(length=>length<=current)??fitting[0];
+}

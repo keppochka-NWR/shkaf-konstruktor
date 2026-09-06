@@ -139,3 +139,14 @@ test('compacting drawers preserves physical order and each hardware setup while 
  assert.ok(parts(out.modules[0].module).find(a=>a.id===s.id+':drawer-cap')!.position[1]<cap.position[1]);assert.deepEqual(projectErrors(out),[]);assert.deepEqual(p,before);
  assert.deepEqual(compactDrawers(out,p.modules[0].id,s.id),out);
 });
+
+
+import {compatibleSlideLength} from '../src/hardware';
+test('changing runner family retains a supported length and otherwise chooses a fitting shorter nominal',()=>{
+ assert.equal(compatibleSlideLength('gtv0fpo',450,575),450);
+ assert.equal(compatibleSlideLength('ball',550,575),500);
+ assert.equal(compatibleSlideLength('ball',270,575),250);
+ assert.equal(compatibleSlideLength('gtv0fpo',500,430),400);
+ assert.equal(compatibleSlideLength('ball',200,575),250);
+ assert.equal(compatibleSlideLength('gtv0fpo',450,240),undefined);
+});

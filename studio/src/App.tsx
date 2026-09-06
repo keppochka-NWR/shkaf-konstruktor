@@ -56,7 +56,7 @@ import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
-import { SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
+import { compatibleSlideLength, SLIDES, GTV_SOURCE, type DrawerConfig } from "./hardware";
 import {
   newProject,
   parseProject,
@@ -1196,14 +1196,11 @@ export default function App() {
                             <select
                               aria-label="Направляющие ящика"
                               value={c.slide}
-                              onChange={(e) =>
-                                update({
-                                  slide: e.target
-                                    .value as DrawerConfig["slide"],
-                                  handle:undefined,
-                                  length: [...SLIDES[e.target.value as DrawerConfig['slide']].lengths].reverse().find(l=>l<=m.depth-rearClear(m)-(m.doors?44:25)) || 250,
-                                })
-                              }
+                              onChange={(e) => {
+                                const slide=e.target.value as DrawerConfig['slide'],length=compatibleSlideLength(slide,c.length,m.depth-rearClear(m)-(m.doors?44:25));
+                                if(length===undefined){setError('Для этой глубины нет подходящих направляющих выбранного типа.');return;}
+                                update({slide,handle:undefined,length});
+                              }}
                             >
                               {Object.entries(SLIDES).map(([k, v]) => (
                                 <option key={k} value={k}>
