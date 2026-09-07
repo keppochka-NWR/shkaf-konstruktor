@@ -25,6 +25,7 @@ import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type M
 import { catalog } from "./catalog";
 import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
 import {wallPanels} from './roomGeometry';
+import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
   captureReady: (fn: (() => string) | undefined) => void;
@@ -46,6 +47,8 @@ type Props = {
   room?: Room;
   selectedObstacle?:string;
   onObstacleSelect:(id:string)=>void;
+  selectedFixture?:string;
+  onFixtureSelect?:(id:string)=>void;
   transparent: boolean;
   /** Полупрозрачные фасады: видно наполнение за закрытыми дверями и фасадами ящиков. */
   clearFacades?: boolean;
@@ -427,6 +430,22 @@ export function Scene(p: Props) {
           }else wallBox(o.wall,u,y,o.width-80,o.height-40,35,0xaa8e6d,0.3);
         }
         for(const o of r.obstacles||[]){const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=o.id;mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===o.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===o.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===o.id;mesh.add(edge);}
+        // Объекты замера на стенах (розетки, батареи, короба, трубы…): боксы или цилиндры на своей стене.
+        for(const [fi,f] of (r.fixtures||[]).entries()){
+          const spec=FIXTURES[f.type],box=fixtureBox(r,f);
+          const recess=spec.recess,d=recess?f.depth:Math.max(2,box.w&&box.d?(f.wall==='back'||f.wall==='front'?box.d:box.w):2);
+          const horizontal=f.wall==='back'||f.wall==='front';
+          const geo=f.round?new THREE.CylinderGeometry(Math.min(f.width,f.height)/2,Math.min(f.width,f.height)/2,f.horizontal?f.width:f.height,20):new THREE.BoxGeometry(horizontal?f.width:d,f.height,horizontal?d:f.width);
+          const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:spec.color,roughness:.8,metalness:f.round?.4:0,transparent:recess,opacity:recess?.35:1}));
+          const cx=horizontal?x0+f.offset+f.width/2:x0+(f.wall==='left'?(recess?-f.depth/2:d/2):r.width-(recess?-f.depth/2:d/2));
+          const cz=horizontal?z0+(f.wall==='back'?(recess?-f.depth/2:d/2):r.depth-(recess?-f.depth/2:d/2)):z0+f.offset+f.width/2;
+          mesh.position.set(cx,f.fromFloor+f.height/2,cz);
+          if(f.round&&f.horizontal)mesh.rotation.z=horizontal?Math.PI/2:0,mesh.rotation.x=horizontal?0:Math.PI/2;
+          if(f.round&&!f.horizontal&&!horizontal)mesh.rotation.y=0;
+          mesh.userData.fixtureId=f.id;mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);
+          const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.selectedFixture===f.id?0x087f94:0x6f6a60,transparent:true,opacity:state.selectedFixture===f.id?1:.45}));mesh.add(edge);
+          if(!state.presentation)label(fixtureLabel(f,fi),new THREE.Vector3(cx,f.fromFloor+f.height+40,cz),()=>current.current.onFixtureSelect?.(f.id),true);
+        }
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
       const b = boxes(m).find((b) => b.id === state.selected);
@@ -581,8 +600,9 @@ export function Scene(p: Props) {
     function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.mode==='orbit')return;
-      cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.moduleId));
+      cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
+      if(first?.object.userData.fixtureId){current.current.onFixtureSelect?.(first.object.userData.fixtureId);return;}
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
@@ -719,6 +739,7 @@ export function Scene(p: Props) {
       p.activeId,
       p.room,
       p.selectedObstacle,
+      p.selectedFixture,
       p.groupIds?.join(','),
       p.mode,
       p.transparent,

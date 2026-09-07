@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Options>
+  <Items>
+    <Item Name="НАЗВАНИЕ ПОМЕЩЕНИЯ"><Value>КУХНЯ</Value></Item>
+    <Item Name="ФРОНТАЛЬНАЯ СТЕНА"><Value>Y</Value>
+      <Items>
+        <Item Name="Параметры стены"><Items>
+          <Item Name="Высота"><Value>2500</Value></Item>
+          <Item Name="Ширина"><Value>3200</Value></Item>
+          <Item Name="Толщина"><Value>120</Value></Item>
+        </Items></Item>
+        <Item Name="Дверь"><Value>Y</Value><Items>
+          <Item Name="Параметры двери"><Items>
+            <Item Name="Ширина"><Value>800</Value></Item>
+            <Item Name="Высота"><Value>2000</Value></Item>
+            <Item Name="Отступ слева"><Value>150</Value></Item>
+          </Items></Item>
+          <Item Name="Добавить дверной блок"><Value>Y</Value><Items>
+            <Item Name="Открывание двери"><Value>Правая</Value></Item>
+          </Items></Item>
+          <Item Name="Наличник"><Value>Y</Value><Items>
+            <Item Name="Параметры наличника"><Items>
+              <Item Name="Ширина"><Value>80</Value></Item>
+              <Item Name="Толщина"><Value>12</Value></Item>
+            </Items></Item>
+          </Items></Item>
+        </Items></Item>
+        <Item Name="Розетки/выключатели"><Value>Y</Value><Items>
+          <Item Name="Розетка_1"><Value>Y</Value><Items>
+            <Item Name="Параметры розетки_1"><Items>
+              <Item Name="Ширина"><Value>80</Value></Item>
+              <Item Name="Высота"><Value>80</Value></Item>
+              <Item Name="Толщина"><Value>12</Value></Item>
+              <Item Name="Отступ слева"><Value>1100</Value></Item>
+              <Item Name="Отступ от пола"><Value>900</Value></Item>
+            </Items></Item>
+          </Items></Item>
+          <Item Name="Розетка_2"><Items>
+            <Item Name="Параметры розетки_2"><Items><Item Name="Ширина"><Value>80</Value></Item></Items></Item>
+          </Items></Item>
+          <Item Name="Выключатель_1"><Value>Y</Value><Items>
+            <Item Name="Параметры выключателя_1"><Items>
+              <Item Name="Ширина"><Value>80</Value></Item>
+              <Item Name="Высота"><Value>80</Value></Item>
+              <Item Name="Толщина"><Value>12</Value></Item>
+              <Item Name="Отступ слева"><Value>300</Value></Item>
+              <Item Name="Отступ от пола"><Value>900</Value></Item>
+            </Items></Item>
+          </Items></Item>
+        </Items></Item>
+        <Item Name="Напольный плинтус"><Value>Y</Value><Items>
+          <Item Name="Ширина"><Value>25</Value></Item>
+          <Item Name="Высота"><Value>70</Value></Item>
+        </Items></Item>
+        <Item Name="Вентиляция"><Value>Y</Value><Items>
+          <Item Name="Квадратная"><Value>Y</Value></Item>
+          <Item Name="Круглая"/>
+          <Item Name="Параметры вентиляции"><Items>
+            <Item Name="Ширина"><Value>200</Value></Item>
+            <Item Name="Высота"><Value>150</Value></Item>
+            <Item Name="Отступ слева"><Value>450</Value></Item>
+            <Item Name="Отступ от пола"><Value>2100</Value></Item>
+            <Item Name="Добавить решетку"><Value>Y</Value></Item>
+          </Items></Item>
+        </Items></Item>
+        <Item Name="Трубы"><Value>Y</Value><Items>
+          <Item Name="Трубa_4_Вертикаль"><Value>Y</Value><Items>
+            <Item Name="Диаметр"><Value>25</Value></Item>
+            <Item Name="Отступ слева снизу"><Value>750</Value></Item>
+            <Item Name="Отступ слева сверху"><Value>750</Value></Item>
+            <Item Name="Отступ от стены"><Value>50</Value></Item>
+          </Items></Item>
+        </Items></Item>
+      </Items>
+    </Item>
+    <Item Name="ЛЕВАЯ СТЕНА"><Value>Y</Value>
+      <Items>
+        <Item Name="Параметры стены"><Items>
+          <Item Name="Высота"><Value>2500</Value></Item>
+          <Item Name="Ширина"><Value>2600</Value></Item>
+          <Item Name="Толщина"><Value>120</Value></Item>
+        </Items></Item>
+        <Item Name="Окно"><Value>Y</Value><Items>
+          <Item Name="Параметры окна"><Items>
+            <Item Name="Ширина"><Value>900</Value></Item>
+            <Item Name="Высота"><Value>1400</Value></Item>
+            <Item Name="Отступ справа до откоса"><Value>1300</Value></Item>
+            <Item Name="Отступ от пола до низа окна"><Value>850</Value></Item>
+          </Items></Item>
+          <Item Name="Добавить оконный блок"><Value>Y</Value><Items>
+            <Item Name="Глубина откоса"><Value>40</Value></Item>
+          </Items></Item>
+          <Item Name="Подоконник"><Value>Y</Value><Items>
+            <Item Name="Параметры подоконника"><Items>
+              <Item Name="Ширина"><Value>1000</Value></Item>
+              <Item Name="Толщина"><Value>40</Value></Item>
+              <Item Name="Отступ справа до подоконника"><Value>1250</Value></Item>
+              <Item Name="Выступ из стены в комнату"><Value>65</Value></Item>
+            </Items></Item>
+          </Items></Item>
+        </Items></Item>
+        <Item Name="Батарея"><Value>Y</Value><Items>
+          <Item Name="Ширина"><Value>800</Value></Item>
+          <Item Name="Высота"><Value>600</Value></Item>
+          <Item Name="Глубина от стены"><Value>140</Value></Item>
+          <Item Name="Отступ справа"><Value>1350</Value></Item>
+          <Item Name="Отступ от пола"><Value>150</Value></Item>
+        </Items></Item>
+      </Items>
+    </Item>
+    <Item Name="ПРАВАЯ СТЕНА">
+      <Items>
+        <Item Name="Параметры стены"><Items><Item Name="Ширина"><Value>2600</Value></Item></Items></Item>
+      </Items>
+    </Item>
+    <Item Name="ТЫЛЬНАЯ СТЕНА"><Value>Y</Value>
+      <Items>
+        <Item Name="Параметры стены"><Items><Item Name="Ширина"><Value>3200</Value></Item></Items></Item>
+        <Item Name="Розетки/выключатели"><Value>Y</Value><Items>
+          <Item Name="Розетка_1"><Value>Y</Value><Items>
+            <Item Name="Параметры розетки_1"><Items>
+              <Item Name="Ширина"><Value>80</Value></Item>
+              <Item Name="Высота"><Value>80</Value></Item>
+              <Item Name="Толщина"><Value>12</Value></Item>
+              <Item Name="Отступ слева"><Value>1100</Value></Item>
+              <Item Name="Отступ от пола"><Value>900</Value></Item>
+            </Items></Item>
+          </Items></Item>
+        </Items></Item>
+      </Items>
+    </Item>
+    <Item Name="РАЗНОЕ"><Value>Y</Value><Items>
+      <Item Name="Холодильник"><Value>Y</Value><Items>
+        <Item Name="Параметры холодильника"><Items>
+          <Item Name="Ширина"><Value>600</Value></Item>
+          <Item Name="Высота"><Value>1850</Value></Item>
+          <Item Name="Глубина"><Value>650</Value></Item>
+          <Item Name="Отступ слева"><Value>2600</Value></Item>
+          <Item Name="Отступ от фронтальной стены"><Value>0</Value></Item>
+        </Items></Item>
+      </Items></Item>
+    </Items></Item>
+    <Item Name="Угол между фронтальной и левой стеной"><Value>90</Value></Item>
+    <Item Name="Угол между фронтальной и правой стеной"><Value>90</Value></Item>
+  </Items>
+</Options>

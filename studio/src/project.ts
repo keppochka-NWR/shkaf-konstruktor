@@ -1,9 +1,16 @@
 import type {Niche,CeilingType} from './measurement';
+import {validateFixture,type Fixture} from './fixtures';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
-export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number};
-export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator';x:number;y:number;z:number;width:number;depth:number;height:number};
+/** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
+export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
+  casing?:number;casingThick?:number;hinge?:'left'|'right';reveal?:number;windowSill?:{width:number;thick:number;overhang:number;offset:number}};
+export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator'|'fridge'|'washer'|'stove';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
-export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType};
+export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType;
+  /** Объекты на стенах из замера (розетки, батареи, короба, плинтусы, трубы…). */
+  fixtures?:Fixture[];
+  /** Стены: толщина и углы между фронтальной (задней) и боковыми, как в скрипте Базиса. */
+  walls?:{thickness:number;angleLeft?:number;angleRight?:number}};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
 export type Project={version:3;measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
@@ -100,11 +107,21 @@ export function projectErrors(p:Project):string[]{
   const obstacles=p.room.obstacles;
   if(obstacles!==undefined){
     if(!Array.isArray(obstacles)||obstacles.length>30)return ['Допустимо до 30 объектов замера.'];
-    for(const o of obstacles)if(!o||typeof o.id!=='string'||!o.id||typeof o.name!=='string'||!o.name.trim()||o.name.length>80||!['column','beam','radiator'].includes(o.type)||![o.x,o.y,o.z,o.width,o.depth,o.height].every(Number.isFinite)||o.x<0||o.y<0||o.z<0||Math.min(o.width,o.depth,o.height)<10||o.x+o.width>p.room.width||o.z+o.depth>p.room.depth||o.y+o.height>p.room.height)return ['Объект замера «'+(typeof o?.name==='string'?o.name:'без названия')+'»: проверьте название, размеры и положение — он должен помещаться в комнате.'];
+    for(const o of obstacles)if(!o||typeof o.id!=='string'||!o.id||typeof o.name!=='string'||!o.name.trim()||o.name.length>80||!['column','beam','radiator','fridge','washer','stove'].includes(o.type)||![o.x,o.y,o.z,o.width,o.depth,o.height].every(Number.isFinite)||o.x<0||o.y<0||o.z<0||Math.min(o.width,o.depth,o.height)<10||o.x+o.width>p.room.width||o.z+o.depth>p.room.depth||o.y+o.height>p.room.height)return ['Объект замера «'+(typeof o?.name==='string'?o.name:'без названия')+'»: проверьте название, размеры и положение — он должен помещаться в комнате.'];
     if(new Set(obstacles.map(o=>o.id)).size!==obstacles.length)return ['Идентификаторы объектов замера повторяются.'];
   }
+  if(p.room.fixtures!==undefined){
+    if(!Array.isArray(p.room.fixtures)||p.room.fixtures.length>60)return ['Допустимо до 60 объектов на стенах.'];
+    for(const f of p.room.fixtures){const e=validateFixture(p.room,f);if(e)return [e];}
+    if(new Set(p.room.fixtures.map(f=>f.id)).size!==p.room.fixtures.length)return ['Идентификаторы объектов на стенах повторяются.'];
+  }
+  if(p.room.walls!==undefined){const w=p.room.walls;if(!Number.isFinite(w.thickness)||w.thickness<20||w.thickness>1000||(w.angleLeft!==undefined&&(!Number.isFinite(w.angleLeft)||w.angleLeft<45||w.angleLeft>135))||(w.angleRight!==undefined&&(!Number.isFinite(w.angleRight)||w.angleRight<45||w.angleRight>135)))return ['Стены: толщина 20–1000 мм, углы 45–135°.'];}
   if(p.room.openings&&(!Array.isArray(p.room.openings)||p.room.openings.length>30))return ['Допустимо до 30 окон и дверей.'];
-  for(const [index,o] of (p.room.openings||[]).entries())if(!o||!['window','door'].includes(o.type)||!['back','left','right','front'].includes(o.wall)||typeof o.id!=='string'||!o.id.trim()||![o.offset,o.width,o.height,o.sill].every(Number.isFinite)||o.offset<0||o.width<200||o.height<200||o.sill<0||o.sill+o.height>p.room.height||o.offset+o.width>(o.wall==='back'||o.wall==='front'?p.room.width:p.room.depth))return ['Проём '+(index+1)+': проверьте параметры. Окно или дверь выходят за границы стены либо имеют некорректные данные.'];
+  for(const [index,o] of (p.room.openings||[]).entries()){
+    if(!o||!['window','door'].includes(o.type)||!['back','left','right','front'].includes(o.wall)||typeof o.id!=='string'||!o.id.trim()||![o.offset,o.width,o.height,o.sill].every(Number.isFinite)||o.offset<0||o.width<200||o.height<200||o.sill<0||o.sill+o.height>p.room.height||o.offset+o.width>(o.wall==='back'||o.wall==='front'?p.room.width:p.room.depth))return ['Проём '+(index+1)+': проверьте параметры. Окно или дверь выходят за границы стены либо имеют некорректные данные.'];
+    if((o.casing!==undefined&&(!Number.isFinite(o.casing)||o.casing<0||o.casing>200))||(o.casingThick!==undefined&&(!Number.isFinite(o.casingThick)||o.casingThick<0||o.casingThick>60))||(o.hinge!==undefined&&!['left','right'].includes(o.hinge))||(o.reveal!==undefined&&(!Number.isFinite(o.reveal)||o.reveal<0||o.reveal>500)))return ['Проём '+(index+1)+': наличник до 200×60, откос до 500 мм, открывание слева/справа.'];
+    if(o.windowSill!==undefined){const s=o.windowSill;if(![s.width,s.thick,s.overhang,s.offset].every(Number.isFinite)||s.width<100||s.thick<5||s.thick>100||s.overhang<0||s.overhang>400||s.offset<0)return ['Проём '+(index+1)+': подоконник — ширина от 100, толщина 5–100, вылет до 400 мм.'];}
+  }
   const os=p.room.openings||[];
   if(new Set(os.map(o=>o.id)).size!==os.length)errors.push('Идентификаторы проёмов повторяются.');
   os.forEach((o,i)=>{for(const b of os.slice(0,i))if(o.wall===b.wall&&o.offset<b.offset+b.width&&o.offset+o.width>b.offset&&o.sill<b.sill+b.height&&o.sill+o.height>b.sill)errors.push('Окна и двери не должны пересекаться.');});
@@ -128,7 +145,12 @@ export function parseProject(data:unknown):Project{
   if(x?.version===1){const p=newProject();p.modules=legacyModules(x,{id:id(),x:50,y:0,z:30});const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;}
   if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>40)throw Error('Нужен файл проекта редактора.');
   const p:Project={version:3,room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
-  if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill}));}
+  if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill,
+    ...(o?.casing===undefined?{}:{casing:o.casing}),...(o?.casingThick===undefined?{}:{casingThick:o.casingThick}),...(o?.hinge===undefined?{}:{hinge:o.hinge}),...(o?.reveal===undefined?{}:{reveal:o.reveal}),
+    ...(o?.windowSill===undefined?{}:{windowSill:{width:o.windowSill?.width,thick:o.windowSill?.thick,overhang:o.windowSill?.overhang,offset:o.windowSill?.offset}})}));}
+  if(x.room.fixtures!==undefined){if(!Array.isArray(x.room.fixtures)||x.room.fixtures.length>60)throw Error('Неверные объекты на стенах.');p.room.fixtures=x.room.fixtures.map((f:any)=>({id:f?.id,type:f?.type,wall:f?.wall,offset:f?.offset,fromFloor:f?.fromFloor,width:f?.width,height:f?.height,depth:f?.depth,...(f?.name===undefined?{}:{name:f.name}),...(f?.round===undefined?{}:{round:!!f.round}),...(f?.horizontal===undefined?{}:{horizontal:!!f.horizontal}),...(f?.grille===undefined?{}:{grille:!!f.grille})}));}
+  if(x.room.ceiling!==undefined)p.room.ceiling=x.room.ceiling;
+  if(x.room.walls!==undefined){const w=x.room.walls;p.room.walls={thickness:Number(w?.thickness),...(w?.angleLeft===undefined?{}:{angleLeft:Number(w.angleLeft)}),...(w?.angleRight===undefined?{}:{angleRight:Number(w.angleRight)})};}
   if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height}));}
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation}})};

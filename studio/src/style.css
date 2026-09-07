@@ -1120,6 +1120,10 @@ input {
 .drawer-selection h3 { color: #1f4ea8; }
 .property-section:has(> h2:first-child) > h2 { padding-left: 10px; border-left: 4px solid #2e9d6a; }
 .upper-cta { margin: 6px 0 2px; }
+.bazis-exchange { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.bazis-exchange button { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.fixture-add { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
+.fixture-add select { min-width: 0; }
 .shelf-kind { display: grid; gap: 4px; margin: 4px 0 6px; font-size: 13px; }
 .shelf-kind label { display: flex; gap: 6px; align-items: center; }
 .rails-editor { display: grid; gap: 4px; margin: 6px 0 10px; }
