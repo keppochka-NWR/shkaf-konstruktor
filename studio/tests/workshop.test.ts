@@ -12,7 +12,7 @@ import {captureSectionFilling,pasteSectionFilling,duplicatePart,moveComposition,
 import {wallPanels} from '../src/roomGeometry';
 import {estimate,estimateCSV,hingeCount} from '../src/pricing';
 import {nest,specificationHTML} from '../src/exports';
-test('1200 × 2500 is a hard limit for every physical module',()=>{const m=initialModule();m.width=1200;m.height=2500;assert.deepEqual(validate(m),[]);m.width=1201;assert.throws(()=>parseModule(m));m.width=900;m.height=2501;assert.throws(()=>parseModule(m));});
+test('1300 × 2500 is a hard limit for every physical module',()=>{const m=initialModule();m.doors=false;m.width=1300;m.height=2500;assert.deepEqual(validate(m),[]);m.width=1301;assert.throws(()=>parseModule(m));m.width=900;m.height=2501;assert.throws(()=>parseModule(m));});
 test('every drawer has a board bottom, front and shelf above its group',()=>{const m=initialModule(),s=m.sections[0];s.drawerConfigs=[{slide:'ball',length:300,height:140},{slide:'gtv0fpo',length:300,height:140}];assert.deepEqual(validate(m),[]);const ps=parts(m),cap=ps.find(p=>p.id.endsWith(':drawer-cap'))!;assert.equal(cap.position[1]-8,boxes(m)[0].bottom+drawerStackHeight(s));for(let j=0;j<2;j++){const bottom=ps.find(p=>p.id===`${s.id}:drawer:${j}:bottom`)!;assert.equal(bottom.material,'board');assert.equal(bottom.thickness,16);assert.ok(ps.find(p=>p.id===`${s.id}:drawer:${j}:facade`));}assert.ok(ps.filter(p=>p.id.includes(':drawer:')).every(p=>p.position[2]+p.size[2]/2<m.depth+2),'internal handles clear the closed door');});
 test('grooved backs reduce usable depth and never select a quarter rebate',()=>{const m=initialModule();m.backType='groove';m.grooveInset=16;m.grooveDepth=8;assert.deepEqual(validate(m),[]);assert.equal(drawerConfig(m,m.sections[0],0).length,500);const back=parts(m).find(p=>p.id==='back')!;assert.equal(back.size[0],583);assert.equal(back.position[2],17.5);assert.throws(()=>parseModule({...m,backType:'quarter'}));});
 test('drawer movement creates no overlapping groups',()=>{const p=newProject(),a=p.modules[0],s=a.module.sections[0];const bad=movePart(p,a.id,s.id,`${s.id}:drawer:0:left`,100);assert.ok(projectErrors(bad).some(e=>e.includes('пересекаются')));const good=movePart(p,a.id,s.id,`${s.id}:drawer:1:left`,100);assert.deepEqual(projectErrors(good),[]);assert.equal(drawerStackHeight(good.modules[0].module.sections[0]),460);assert.equal(drawerStackHeight(s),360);});
@@ -74,7 +74,7 @@ test('rotation preserves occupied center, clamps to room walls and never pushes 
 });
 
 import {LIBRARY_KEY,recoverStoredLibrary,inspectStoredLibrary,libraryFile,parseLibraryFile} from '../src/moduleLibraryFile';
-test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:1201}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
+test('library transfer validates all modules and assigns independent template IDs',()=>{const m=initialModule(),entries=[{id:'a',name:'Шкаф',module:m}];const parsed=parseLibraryFile(JSON.parse(libraryFile(entries)));assert.deepEqual(parsed[0].module,m);assert.notEqual(parsed[0].id,'a');assert.notEqual(parseLibraryFile(JSON.parse(libraryFile(entries)))[0].id,parsed[0].id);assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[{name:'Слишком широкий',module:{...m,width:1301}}]}));assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:Array(31).fill(entries[0])}));assert.throws(()=>parseLibraryFile({version:3,modules:[]}));});
 
 test('upper module inherits cabinet finishes and fits available height without copying filling',()=>{
  const p=newProject(),a=p.modules[0];a.module.height=2200;a.module.decor='Белый';a.module.facadeDecor='Графит';a.module.backType='groove';a.module.grooveInset=20;a.module.hingeSide='right';a.rotation=90;a.x=100;a.z=100;
@@ -117,7 +117,7 @@ test('moving the composition preserves contacts, rotations and raised modules at
 test('stored library reports malformed and duplicate records without silently replacing the source',()=>{
  const good={id:'a',name:'Рабочий',module:initialModule()};
  assert.deepEqual(inspectStoredLibrary(null),{items:[],problem:''});assert.equal(inspectStoredLibrary(JSON.stringify([good])).problem,'');
- const raw=JSON.stringify([good,{...good,id:'b',module:{...good.module,width:1201}},good,null]);
+ const raw=JSON.stringify([good,{...good,id:'b',module:{...good.module,width:1301}},good,null]);
  const result=inspectStoredLibrary(raw);assert.deepEqual(result.items,[good]);assert.match(result.problem,/3/);assert.equal(JSON.parse(raw).length,4);
  for(const text of ['broken','{}','null']){const result=inspectStoredLibrary(text);assert.equal(result.items.length,0);assert.ok(result.problem);}
  const many=Array.from({length:31},(_,i)=>({...good,id:String(i)}));assert.equal(inspectStoredLibrary(JSON.stringify(many)).items.length,30);assert.ok(inspectStoredLibrary(JSON.stringify(many)).problem);
@@ -248,7 +248,7 @@ test('review ZIP preserves Unicode filenames and captures the project before asy
   assert.ok(names.every(name=>!name.includes('/')&&!name.includes('\\')));
 });
 test('review package refuses invalid furniture instead of exporting partial documents',()=>{
-  const p=newProject();p.modules[0].module.width=1201;
+  const p=newProject();p.modules[0].module.width=1301;
   assert.throws(()=>reviewFiles(p));
 });
 
@@ -390,7 +390,7 @@ test('group library rejects malformed groups instead of silently importing one b
  assert.throws(()=>parseLibraryFile({format:'module-library',version:1,items:[entry]}),/версии 2/);
  assert.throws(()=>templateGroup([]));
  assert.throws(()=>templateGroup([p.modules[0],{...p.modules[0],id:'other'}]),/пересекается/);
- const broken={...entry,id:'broken',group:[{...p.modules[0],module:{...p.modules[0].module,width:1201}}]};
+ const broken={...entry,id:'broken',group:[{...p.modules[0],module:{...p.modules[0].module,width:1301}}]};
  const stored=inspectStoredLibrary(JSON.stringify([broken,{id:'good',name:'Один',module:initialModule()}]));
  assert.equal(stored.items.length,1);assert.match(stored.problem,/Не удалось загрузить записей: 1/);
 });

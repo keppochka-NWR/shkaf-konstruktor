@@ -1,0 +1,161 @@
+{
+ "version": 3,
+ "room": {
+  "width": 1465,
+  "height": 2455,
+  "depth": 1252,
+  "openings": [],
+  "obstacles": [
+   {
+    "id": "shchitok",
+    "name": "Электрощиток 383×290×90",
+    "type": "column",
+    "x": 1375,
+    "y": 1232,
+    "z": 892,
+    "width": 90,
+    "depth": 290,
+    "height": 383
+   },
+   {
+    "id": "kabel",
+    "name": "Кабель-канал 70×50 до потолка",
+    "type": "column",
+    "x": 1415,
+    "y": 1615,
+    "z": 1002,
+    "width": 50,
+    "depth": 70,
+    "height": 840
+   }
+  ]
+ },
+ "modules": [
+  {
+   "id": "c1",
+   "x": 990,
+   "z": 8,
+   "y": 0,
+   "rotation": 270,
+   "module": {
+    "version": 1,
+    "name": "Шкаф",
+    "width": 1244,
+    "height": 2058,
+    "depth": 472,
+    "decor": "Луно",
+    "facadeDecor": "Луно",
+    "doors": false,
+    "backType": "nailed",
+    "handleId": "fp527-160",
+    "feet": {
+     "height": 30
+    },
+    "sections": [
+     {
+      "id": "e844ad64-7e05-4097-ad09-2231c07429a5",
+      "weight": 598,
+      "shelves": [
+       0.47
+      ],
+      "drawers": 4,
+      "rod": false,
+      "drawerConfigs": [
+       {
+        "slide": "ball",
+        "height": 74,
+        "length": 400,
+        "facadeH": 105
+       },
+       {
+        "slide": "ball",
+        "height": 150,
+        "length": 400,
+        "facadeH": 211
+       },
+       {
+        "slide": "ball",
+        "height": 150,
+        "length": 400,
+        "facadeH": 211
+       },
+       {
+        "slide": "ball",
+        "height": 150,
+        "length": 400,
+        "facadeH": 211
+       }
+      ]
+     },
+     {
+      "id": "04bf4392-8dfa-4a94-9767-e4aed0bdf5ce",
+      "weight": 598,
+      "shelves": [
+       0.2,
+       0.36
+      ],
+      "drawers": 0,
+      "rod": true,
+      "rodAt": 0.94
+     }
+    ]
+   }
+  },
+  {
+   "id": "c2",
+   "x": 990,
+   "z": 8,
+   "y": 2058,
+   "rotation": 270,
+   "module": {
+    "version": 1,
+    "name": "Антресоль",
+    "width": 1244,
+    "height": 367,
+    "depth": 472,
+    "decor": "Луно",
+    "facadeDecor": "Луно",
+    "doors": false,
+    "backType": "nailed",
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "bb1c2eee-2cd2-44b2-a6ac-688c02396241",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  },
+  {
+   "id": "c3",
+   "x": 21,
+   "z": 3,
+   "y": 2058,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Антресоль-полка",
+    "width": 950,
+    "height": 367,
+    "depth": 477,
+    "decor": "Луно",
+    "facadeDecor": "Луно",
+    "doors": false,
+    "backType": "nailed",
+    "plinthHeight": 0,
+    "sections": [
+     {
+      "id": "18d7231f-1d84-4344-b175-7202d46ef90d",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -374,7 +374,7 @@ test('placement document includes every module, opening, mounting offset and esc
  assert.equal((svg.match(/data-module=/g)||[]).length,1);assert.equal((svg.match(/data-opening=/g)||[]).length,1);assert.match(svg,/stroke-dasharray="5 3"/);
  assert.match(html,/&lt;script&gt;bad&lt;\/script&gt;/);assert.ok(!html.includes('<script>'));assert.match(html,/A &amp; B &lt;client&gt;/);assert.match(html,/Плинтус &amp; розетка/);
  assert.match(html,/<td>297<\/td><td>100<\/td><td>200<\/td><td>90°/);assert.match(html,/Окно О1/);assert.match(html,/до потолка 20 мм/);
- p.modules[0].module.width=1201;assert.throws(()=>placementSVG(p));
+ p.modules[0].module.width=1301;assert.throws(()=>placementSVG(p));
 });
 
 
