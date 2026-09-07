@@ -49,6 +49,9 @@ type Props = {
   onObstacleSelect:(id:string)=>void;
   selectedFixture?:string;
   onFixtureSelect?:(id:string)=>void;
+  selectedOpening?:string;
+  /** Клик по размеру помещения, проёма или объекта на стене в 3D: kind room/opening/fixture, field width/depth/height/offset/end/sill/fromFloor. */
+  onRoomDimension?:(kind:'room'|'opening'|'fixture',id:string,field:string,value:number)=>void;
   transparent: boolean;
   /** Полупрозрачные фасады: видно наполнение за закрытыми дверями и фасадами ящиков. */
   clearFacades?: boolean;
@@ -206,6 +209,13 @@ export function Scene(p: Props) {
       labels.push({ element: button, position: pos });
     }
 
+    /** Подпись в координатах комнаты (без поворота активного корпуса). */
+    function roomLabel(text:string,pos:THREE.Vector3,action?:()=>void,small=false){
+      const button=document.createElement("button");button.type="button";button.className="model-dimension room-dimension"+(small?" gap-dimension":"");button.textContent=text;
+      button.setAttribute("aria-label","Размер помещения: "+text);button.title=action?"Нажмите, чтобы изменить размер":text;
+      button.addEventListener("pointerdown",e=>e.stopPropagation());button.addEventListener("click",()=>action?.());button.disabled=!action;
+      target.appendChild(button);labels.push({element:button,position:pos});
+    }
     function line(points: THREE.Vector3[]) {
       const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
       points.forEach(p=>p.applyAxisAngle(new THREE.Vector3(0,1,0),(active.rotation??0)*Math.PI/180));
@@ -445,6 +455,25 @@ export function Scene(p: Props) {
           mesh.userData.fixtureId=f.id;mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);
           const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.selectedFixture===f.id?0x087f94:0x6f6a60,transparent:true,opacity:state.selectedFixture===f.id?1:.45}));mesh.add(edge);
           if(!state.presentation)label(fixtureLabel(f,fi),new THREE.Vector3(cx,f.fromFloor+f.height+40,cz),()=>current.current.onFixtureSelect?.(f.id),true);
+        }
+        // Размеры помещения и выбранного проёма/объекта прямо в 3D: клик по числу — правка (как у корпуса).
+        if(!state.presentation&&state.onRoomDimension){
+          const dim=state.onRoomDimension;
+          roomLabel(`${r.width} мм`,new THREE.Vector3(x0+r.width/2,-60,z0+r.depth+80),()=>dim('room','','width',r.width));
+          roomLabel(`${r.depth} мм`,new THREE.Vector3(x0+r.width+80,-60,z0+r.depth/2),()=>dim('room','','depth',r.depth));
+          roomLabel(`${r.height} мм`,new THREE.Vector3(x0-80,r.height/2,z0+r.depth+40),()=>dim('room','','height',r.height));
+          const wallPoint=(wall:string,u:number,y:number,out=60)=>{const horizontal=wall==='back'||wall==='front';return horizontal?new THREE.Vector3(x0+u,y,z0+(wall==='back'?out:r.depth-out)):new THREE.Vector3(x0+(wall==='left'?out:r.width-out),y,z0+u);};
+          const chain=(kind:'opening'|'fixture',id:string,wall:string,offset:number,width:number,y:number,extra?:[string,number,string])=>{
+            const len=wall==='back'||wall==='front'?r.width:r.depth,rest=len-offset-width;
+            roomLabel(`${Math.round(offset)} от угла`,wallPoint(wall,offset/2,y),()=>dim(kind,id,'offset',offset),true);
+            roomLabel(`${Math.round(width)} мм`,wallPoint(wall,offset+width/2,y,40),()=>dim(kind,id,'width',width));
+            roomLabel(`${Math.round(rest)} до угла`,wallPoint(wall,offset+width+rest/2,y),()=>dim(kind,id,'end',rest),true);
+            if(extra)roomLabel(extra[0],wallPoint(wall,offset+width/2,extra[1],40),()=>dim(kind,id,extra[2],extra[1]),true);
+          };
+          const o=(r.openings||[]).find(o=>o.id===state.selectedOpening);
+          if(o)chain('opening',o.id,o.wall,o.offset,o.width,o.sill+o.height/2,o.type==='window'?[`${o.sill} от пола`,o.sill/2,'sill']:[`высота ${o.height}`,o.sill+o.height+60,'height']);
+          const fsel=(r.fixtures||[]).find(f=>f.id===state.selectedFixture);
+          if(fsel)chain('fixture',fsel.id,fsel.wall,fsel.offset,fsel.width,fsel.fromFloor+fsel.height/2,[`${fsel.fromFloor} от пола`,Math.max(60,fsel.fromFloor/2),'fromFloor']);
         }
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
@@ -740,6 +769,7 @@ export function Scene(p: Props) {
       p.room,
       p.selectedObstacle,
       p.selectedFixture,
+      p.selectedOpening,
       p.groupIds?.join(','),
       p.mode,
       p.transparent,

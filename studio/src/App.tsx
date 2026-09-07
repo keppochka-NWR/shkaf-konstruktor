@@ -278,6 +278,21 @@ export default function App() {
     setFit((f) => f + 1);
     if(stage==='room'||stage==='fixtures')setStageState('bodies'); // выбрали корпус — работаем с мебелью
   }
+  /** Размер помещения, проёма или объекта на стене, нажатый на эскизе или в 3D: открывает поле ввода и применяет к комнате. */
+  function roomDimension(kind:'room'|'opening'|'fixture',id:string,field:string,value:number){
+    const room=project.room;
+    const labels:Record<string,string>={width:'Ширина',depth:'Глубина комнаты',height:'Высота',offset:'От угла стены',end:'До конца стены',sill:'Подоконник от пола',fromFloor:'От пола'};
+    const label=(kind==='room'?{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота потолка'}[field]:labels[field])??field;
+    editDimension(label,Math.round(value),v=>{
+      if(kind==='room')return commitProject({...project,room:{...room,[field]:v}});
+      const list=kind==='opening'?(room.openings||[]):(room.fixtures||[]);
+      const item=list.find(x=>x.id===id) as {wall:'back'|'left'|'right'|'front';offset:number;width:number}|undefined;if(!item)return false;
+      const len=item.wall==='back'||item.wall==='front'?room.width:room.depth;
+      const patch=field==='end'?{offset:len-item.width-v}:{[field]:v};
+      const next=kind==='opening'?{...room,openings:(room.openings||[]).map(o=>o.id===id?{...o,...patch}:o)}:{...room,fixtures:(room.fixtures||[]).map(f=>f.id===id?{...f,...patch}:f)};
+      return commitProject({...project,room:next});
+    });
+  }
   /** Переход на этап: подстраивает вкладку, режим, вид и открытие фасадов. */
   function goStage(next:Stage){
     setStageState(next);setModal(m=>m==='room-setup'?null:m);
@@ -855,7 +870,7 @@ export default function App() {
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan?"none":undefined}}>{([{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Повернуть вид',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}</div>
-          {roomPlan?<RoomPlan groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+          {roomPlan?<RoomPlan groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation?'orbit':mode}
@@ -879,6 +894,8 @@ export default function App() {
             onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);setSelectedPart(null);setTab('room');}}
             selectedFixture={selectedFixture}
             onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);setSelectedPart(null);setTab('room');}}
+            selectedOpening={selectedOpening}
+            onRoomDimension={roomDimension}
             onModuleSelect={selectModule}
             transparent={presentation?false:transparent}
             clearFacades={presentation?false:clearFacades}
@@ -922,7 +939,7 @@ export default function App() {
             focusActive={!presentation&&focusActive}
             openDoors={openDoors}
             exploded={presentation?false:exploded}
-            dimensions={presentation?false:dimensions}
+            dimensions={presentation?false:dimensions&&!((stage==='room'||stage==='fixtures')&&!advanced)}
           />}
           {presentation&&<div className="presentation-tools"><button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button><button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">

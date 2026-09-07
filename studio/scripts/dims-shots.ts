@@ -1,0 +1,22 @@
+// Скрины размеров проёма на плане и в 3D: npx tsx scripts/dims-shots.ts <url> <project.json> <outDir>
+import { chromium } from "playwright";
+import { readFileSync } from "node:fs";
+const [url, file, out] = process.argv.slice(2);
+const project = readFileSync(file, "utf8");
+const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+await page.goto(url);
+await page.evaluate((raw) => { localStorage.clear(); localStorage.setItem("module-studio-v3", raw); localStorage.setItem("studio-stage", "fixtures"); }, project);
+await page.goto(url);
+await page.waitForSelector("canvas");
+await page.waitForTimeout(1500);
+await page.getByRole("button", { name: "Коммуникации" }).first().click();
+await page.waitForTimeout(1200);
+await page.locator('[aria-label^="На плане: Дверь 1"]').dispatchEvent("pointerdown", { button: 0, pointerId: 1, clientX: 0, clientY: 0 }); await page.locator('[aria-label^="На плане: Дверь 1"]').dispatchEvent("pointerup", { button: 0, pointerId: 1 });
+await page.waitForTimeout(800);
+await page.screenshot({ path: `${out}/dims-plan.png` });
+await page.getByRole("button", { name: "3D", exact: true }).click();
+await page.waitForTimeout(2000);
+await page.screenshot({ path: `${out}/dims-3d.png` });
+console.log("saved dims screenshots");
+await browser.close();
