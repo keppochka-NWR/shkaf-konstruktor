@@ -7,7 +7,7 @@ const project = readFileSync(file, "utf8");
 const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
 await page.goto(url);
-await page.evaluate((raw) => { localStorage.clear(); localStorage.setItem("module-studio-v3", raw); }, project);
+await page.evaluate((raw) => { localStorage.clear(); localStorage.setItem("module-studio-v3", raw); localStorage.setItem("studio-stage", "bodies"); localStorage.setItem("studio-stage-advanced", "1"); }, project);
 await page.goto(url);
 await page.waitForSelector("canvas");
 await page.waitForTimeout(2500);
