@@ -463,17 +463,18 @@ export function Scene(p: Props) {
           roomLabel(`${r.depth} мм`,new THREE.Vector3(x0+r.width+80,-60,z0+r.depth/2),()=>dim('room','','depth',r.depth));
           roomLabel(`${r.height} мм`,new THREE.Vector3(x0-80,r.height/2,z0+r.depth+40),()=>dim('room','','height',r.height));
           const wallPoint=(wall:string,u:number,y:number,out=60)=>{const horizontal=wall==='back'||wall==='front';return horizontal?new THREE.Vector3(x0+u,y,z0+(wall==='back'?out:r.depth-out)):new THREE.Vector3(x0+(wall==='left'?out:r.width-out),y,z0+u);};
-          const chain=(kind:'opening'|'fixture',id:string,wall:string,offset:number,width:number,y:number,extra?:[string,number,string])=>{
+          // Подписи не накрывают объект: ширина — над ним, «от угла / до угла» — по бокам на его высоте, «от пола» — под ним.
+          const chain=(kind:'opening'|'fixture',id:string,wall:string,offset:number,width:number,y:number,top:number,extra?:[string,number,string])=>{
             const len=wall==='back'||wall==='front'?r.width:r.depth,rest=len-offset-width;
             roomLabel(`${Math.round(offset)} от угла`,wallPoint(wall,offset/2,y),()=>dim(kind,id,'offset',offset),true);
-            roomLabel(`${Math.round(width)} мм`,wallPoint(wall,offset+width/2,y,40),()=>dim(kind,id,'width',width));
+            roomLabel(`${Math.round(width)} мм`,wallPoint(wall,offset+width/2,top+90,40),()=>dim(kind,id,'width',width));
             roomLabel(`${Math.round(rest)} до угла`,wallPoint(wall,offset+width+rest/2,y),()=>dim(kind,id,'end',rest),true);
             if(extra)roomLabel(extra[0],wallPoint(wall,offset+width/2,extra[1],40),()=>dim(kind,id,extra[2],extra[1]),true);
           };
           const o=(r.openings||[]).find(o=>o.id===state.selectedOpening);
-          if(o)chain('opening',o.id,o.wall,o.offset,o.width,o.sill+o.height/2,o.type==='window'?[`${o.sill} от пола`,o.sill/2,'sill']:[`высота ${o.height}`,o.sill+o.height+60,'height']);
+          if(o)chain('opening',o.id,o.wall,o.offset,o.width,o.sill+o.height/2,o.sill+o.height,o.type==='window'?[`${o.sill} от пола`,o.sill/2,'sill']:[`высота ${o.height}`,o.sill+o.height/2-120,'height']);
           const fsel=(r.fixtures||[]).find(f=>f.id===state.selectedFixture);
-          if(fsel)chain('fixture',fsel.id,fsel.wall,fsel.offset,fsel.width,fsel.fromFloor+fsel.height/2,[`${fsel.fromFloor} от пола`,Math.max(60,fsel.fromFloor/2),'fromFloor']);
+          if(fsel)chain('fixture',fsel.id,fsel.wall,fsel.offset,fsel.width,fsel.fromFloor+fsel.height/2,fsel.fromFloor+fsel.height,[`${fsel.fromFloor} от пола`,Math.max(40,fsel.fromFloor/2),'fromFloor']);
         }
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }

@@ -677,6 +677,8 @@ input {
 /* Размеры помещения, проёмов и объектов в 3D — синие, чтобы отличались от размеров корпуса */
 .model-dimension.room-dimension { border-color: #325bee; color: #1f3a8f; background: #f5f7ff; }
 .model-dimension.room-dimension:not(:disabled):hover { background: #e6ecff; }
+/* Простой режим: пояснительный текст скрыт, остаются поля, кнопки и сообщения. «Все настройки» возвращает подсказки. */
+.app:not(.advanced) .field-note:not([role]), .app:not(.advanced) .small-note, .app:not(.advanced) .plan-keyboard-help, .app:not(.advanced) .library-bottom p, .app:not(.advanced) .panel-heading p, .app:not(.advanced) .room-openings > p.field-note { display: none; }
 /* Пошаговый режим: полоса этапов, цвет этапа, скрытие панелей других этапов */
 .stage-bar { flex-shrink: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; padding: 8px 25px; background: var(--panel); border-bottom: 1px solid var(--line); border-top: 3px solid var(--stage, #1b697a); }
 .stage-steps { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; }

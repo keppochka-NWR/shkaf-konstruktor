@@ -18,5 +18,6 @@ await page.screenshot({ path: `${out}/dims-plan.png` });
 await page.getByRole("button", { name: "3D", exact: true }).click();
 await page.waitForTimeout(2000);
 await page.screenshot({ path: `${out}/dims-3d.png` });
+await page.getByRole("button", { name: "План", exact: true }).click(); await page.waitForTimeout(800); await page.locator('[aria-label^="На плане: О2"]').dispatchEvent("pointerdown", { button: 0, pointerId: 2, clientX: 0, clientY: 0 }); await page.locator('[aria-label^="На плане: О2"]').dispatchEvent("pointerup", { button: 0, pointerId: 2 }); await page.waitForTimeout(600); await page.getByRole("button", { name: "3D", exact: true }).click(); await page.waitForTimeout(2000); await page.screenshot({ path: `${out}/dims-3d-socket.png` });
 console.log("saved dims screenshots");
 await browser.close();
