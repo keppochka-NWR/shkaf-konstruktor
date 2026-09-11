@@ -28,6 +28,7 @@ import {wallPanels} from './roomGeometry';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
+  isoDirection?: [number, number];
   captureReady: (fn: (() => string) | undefined) => void;
   module: Module;
   mode:'move'|'fill'|'orbit';
@@ -259,7 +260,7 @@ export function Scene(p: Props) {
           const mat = new THREE.MeshStandardMaterial({
             color: isMetal
               ? 0xbecad0
-              : isBack
+              : isBack && !m.casework
                 ? 0xd7d5cc
                 : wood
                   ? 0xd2b68d
@@ -276,7 +277,7 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
-          if (texture && !isBack && !isMetal && part.material !== "alu" && part.material !== "glass") {
+          if (texture && (!isBack || m.casework) && !isMetal && part.material !== "alu" && part.material !== "glass") {
             pendingTextures++;
             cachedTexture(texture).then(map=>{
               if(disposed||gen!==generation)return;
@@ -306,7 +307,7 @@ export function Scene(p: Props) {
           const isMeshItem = part.id.endsWith(":mesh");
           const isHandle = part.role === "handle";
           if (isMeshItem || isHandle) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
-          const mesh = new THREE.Mesh(geometry, mat);
+          const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
           if (isHandle) {
             // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
             const handle = handleById(m.handleId), vertical = part.size[1] > part.size[0];
@@ -339,8 +340,18 @@ export function Scene(p: Props) {
             const ins = aluInsert(m.alu!.insert), face = aluProfile(m.alu!.profile)?.face ?? 19;
             const glassMat = new THREE.MeshStandardMaterial(ins?.mirror ? { color: ins.id.includes("bronze") ? 0xb8a58c : ins.id.includes("graphite") ? 0x8d949a : 0xd6dee3, metalness: 0.55, roughness: 0.08 } : ins?.id.startsWith("lacobel") ? { color: ins.id.endsWith("black") ? 0x1b1b1b : 0xf4f4f2, metalness: 0.2, roughness: 0.15 } : { color: ins?.id === "satin" ? 0xf1f3f4 : ins?.id.includes("bronze") ? 0x8a6a45 : ins?.id.includes("graphite") ? 0x4a4f55 : 0xdfe8ec, transparent: true, opacity: ins?.id === "satin" ? 0.75 : state.clearFacades ? 0.25 : 0.45, roughness: 0.05, metalness: 0.1, depthWrite: false });
             const glass = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, part.size[0] - 2 * face + 8), Math.max(1, part.size[1] - 2 * face + 8), 4), glassMat);
+            if(ins?.id==='satin-bronze'){glassMat.roughness=.85;glassMat.opacity=.78;}
+            if(ins?.id==='moru-bronze'){
+              const pixels=new Uint8Array(64*4);
+              for(let k=0;k<64;k++){const nx=Math.sin(k/64*Math.PI*2)*.65;pixels[k*4]=Math.round((nx+1)*127.5);pixels[k*4+1]=128;pixels[k*4+2]=Math.round((Math.sqrt(1-nx*nx)+1)*127.5);pixels[k*4+3]=255;}
+              const normal=new THREE.DataTexture(pixels,64,1,THREE.RGBAFormat);normal.wrapS=THREE.RepeatWrapping;normal.repeat.set(part.size[0]/8,1);normal.needsUpdate=true;glassMat.normalMap=normal;glassMat.roughness=.22;glassMat.opacity=.58;
+            }
             glass.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active };
             mesh.add(glass);
+          }
+          if(part.edgeColor&&part.material==='board'){
+            const axis=part.size.indexOf(part.thickness),edgemat=new THREE.MeshStandardMaterial({color:part.edgeColor,roughness:.7});
+            mesh.material=Array.from({length:6},(_,face)=>Math.floor(face/2)===axis?mat:edgemat);
           }
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
           if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
@@ -584,7 +595,7 @@ export function Scene(p: Props) {
             ? new THREE.Vector3(1, 0, 0.001)
             : view === "top"
               ? new THREE.Vector3(0, 1, 0.001)
-              : new THREE.Vector3(1, 0.55, 1.7).normalize();
+              : new THREE.Vector3(state.isoDirection?.[0]??1, state.isoDirection?.75:.55, state.isoDirection?.[1]??1.7).normalize();
       if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);
       const padding=state.presentation?50:state.dimensions?500:180;
       const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,perspective.fov,1.08);
@@ -814,8 +825,3 @@ export function Scene(p: Props) {
     </div>
   );
 }
-
-
-
-
-

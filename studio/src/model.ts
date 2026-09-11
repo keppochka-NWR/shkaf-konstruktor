@@ -1,4 +1,5 @@
 import { drawerHasHandle, SLIDES, type DrawerConfig } from "./hardware";
+import {caseworkParts,caseworkErrors,type Casework} from './casework';
 import { handleById, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
@@ -108,6 +109,7 @@ export type Section = {
   fixed?: number[];
 };
 export type Module = {
+  casework?: Casework;
   version: 1;
   name: string;
   width: number;
@@ -182,6 +184,7 @@ export type Module = {
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
 export type Part = {
+  edgeColor?: string;
   id: string;
   name: string;
   sectionId?: string;
@@ -344,6 +347,7 @@ export function boxes(m: Module): SectionBox[] {
   });
 }
 export function parts(m: Module): Part[] {
+  if(m.casework)return caseworkParts(m);
   const out: Part[] = [];
   const t = RULES.panel;
   const d = m.depth;
@@ -767,6 +771,7 @@ export function fastenerCounts(m: Module) {
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0) };
 }
 export function validate(m: Module): string[] {
+  if(m.casework)return caseworkErrors(m);
   const errors: string[] = [];
   for (const [key, label, min, max] of (m.desk ? [
     ["width", "Ширина стола", RULES.minW, RULES.deskMaxW],
@@ -1074,6 +1079,7 @@ export function parseModule(input: unknown): Module {
     depth: x.depth as number,
     decor: x.decor,
     facadeDecor: x.facadeDecor,
+    ...(x.casework===undefined?{}:{casework:structuredClone(x.casework) as Casework}),
     ...(x.drawerFacadeDecor===undefined?{}:{drawerFacadeDecor:x.drawerFacadeDecor}),
     doors: x.doors,
     ...(x.backType===undefined?{}:{backType:x.backType as Module["backType"]}),

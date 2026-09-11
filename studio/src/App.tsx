@@ -710,6 +710,7 @@ export default function App() {
             </p>
           </div>
           <button className="text-action upper-add" onClick={()=>setModal("new")}>Новый проект / восстановить</button>
+          <a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Шаг 1 · Помещение':'Шаг 2 · Коммуникации'}</b><p>{stage==='room'?'Введите размеры комнаты справа. Когда готово — «Дальше».':'Окна, двери, батареи, розетки и трубы добавляются справа; на плане их можно перетаскивать.'}</p><button className="primary full" onClick={()=>goStage(nextStage(stage))}>Дальше: {stage==='room'?'коммуникации':'каркасы'}</button></div>
           <div className="project-modules" data-stages="bodies filling facades">
             <button className="primary full" onClick={() => addModule()}>
@@ -1234,7 +1235,7 @@ export default function App() {
                 {m.doors && m.alu && (<>
                   <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
                   <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={m.alu.color} onChange={e=>modify(n=>{n.alu={...n.alu!,color:e.target.value};})}>{aluProfile(m.alu.profile)!.colors.map(c=><option key={c.id} value={c.id}>{c.label} · {c.perM} ₽/м</option>)}</select></label>
-                  <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={m.alu.insert} onChange={e=>modify(n=>{n.alu={...n.alu!,insert:e.target.value};})}>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>{i.label} · {i.perM2} ₽/м²</option>)}</select></label>
+                  <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={m.alu.insert} onChange={e=>modify(n=>{n.alu={...n.alu!,insert:e.target.value};})}>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>{i.label} · {i.perM2===null?'цена уточняется':i.perM2+' ₽/м²'}</option>)}</select></label>
                   <p className="field-note">Считается по бланку цеха: профиль по периметру, вставка по площади, уплотнитель, уголки, отверстия под петли и ручку. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
                 </>)}
                 {m.doors && !m.alu && (
@@ -1839,10 +1840,3 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
-
-
-

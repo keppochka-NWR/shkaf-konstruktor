@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "node scripts/catalog.cjs && tsc --noEmit && vite build",
-    "test": "tsx --test tests/model.test.ts tests/project.test.ts tests/workshop.test.ts tests/packing.test.ts tests/pricing.test.ts tests/room.test.ts",
+    "test": "tsx --test tests/model.test.ts tests/project.test.ts tests/workshop.test.ts tests/packing.test.ts tests/pricing.test.ts tests/room.test.ts tests/votan.test.ts",
     "test:ui": "playwright test"
   },
   "dependencies": {
@@ -28,5 +28,3 @@
     "vite": "8.2.2"
   }
 }
-
-
