@@ -6,6 +6,8 @@ __pycache__/
 studio/node_modules/
 studio/test-results/
 studio/playwright-report/
+studio/dev-*.log
+studio/test-results-*.log
 
 server/.studio-deps/
 server/studio-data.db*
@@ -13,3 +15,5 @@ server/studio*.log
 
 
 server/studio-backups/
+
+studio/test-*.log

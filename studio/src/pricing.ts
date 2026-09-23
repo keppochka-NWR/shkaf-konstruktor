@@ -1,3 +1,4 @@
+import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts} from './model';
 import {nest,type Sheet} from './exports';
 import type {Project} from './project';
@@ -96,7 +97,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         add('alu-hinge-hole'+(prof?.narrow?'-narrow':''),'Отверстие под петлю'+(prof?.narrow?' в узком профиле':''),hingeCount(d.length,d.width),'шт',prof?.narrow?ALU_EXTRAS.hingeHoleNarrow:ALU_EXTRAS.hingeHole,ALU_EXTRAS.source);
         add('alu-handle-hole','Отверстие под ручку (стекло 8 мм под втулку)',1,'шт',ALU_EXTRAS.handleHole,ALU_EXTRAS.source);
       }
-      if(d.role==='handle'){const h=handleById(a.module.handleId);add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
+      if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
       if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){

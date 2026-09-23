@@ -7,7 +7,8 @@ export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
-  if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);}
+  if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
+  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
   else if(pid.endsWith(':rod')||pid.includes(':flange:')){s.rod=false;delete s.rodAt;}
@@ -39,7 +40,12 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));
   for(const y of candidates){
     const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module,s=m.sections.find(s=>s.id===sid)!;
-    if(kind==='shelf'){if(s.shelves.length>=RULES.maxShelves)break;s.shelves.push(y/(b.top-b.bottom));s.shelves.sort((a,b)=>a-b);}
+    if(kind==='shelf'){
+      if(s.shelves.length>=RULES.maxShelves)break;
+      const fixedHeights=new Set((s.fixed??[]).map(j=>s.shelves[j]));
+      s.shelves.push(y/(b.top-b.bottom));s.shelves.sort((a,b)=>a-b);
+      if(s.fixed)s.fixed=s.shelves.flatMap((f,j)=>fixedHeights.has(f)?[j]:[]);
+    }
     else if(kind==='drawer'){
       if(s.drawers>=RULES.maxDrawers)break;
       s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawer??drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
@@ -90,6 +96,7 @@ export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:num
 export function mirrorModule(p:Project,mid:string):Project {
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
  if(!m)throw Error('Выберите корпус для отражения.');
+ for(const sec of m.sections){if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=[sec.doorHandles[1]??null,sec.doorHandles[0]??null];if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>1-k);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  const error=projectErrors(n)[0];if(error)throw Error(error);
@@ -122,7 +129,7 @@ export function addUpperModule(p:Project,mid:string):Project {
  const n=structuredClone(p),base=n.modules.find(a=>a.id===mid);if(!base)throw Error('Выберите нижний корпус.');
  const y=(base.y??0)+base.module.height,height=Math.min(600,Math.floor(p.room.height-y-MEASUREMENT_RULES.ceilingClearance));
  if(height<RULES.minH)throw Error(`Над корпусом нужно хотя бы ${RULES.minH} мм для отдельной антресоли и ${MEASUREMENT_RULES.ceilingClearance} мм монтажного зазора. Измените высоту нижнего корпуса или замер помещения.`);
- n.modules.push({...base,id:id(),y,module:{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,sections:[section()]}});
+ n.modules.push({...base,id:id(),y,module:{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]}});
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
@@ -191,17 +198,19 @@ export function duplicatePart(p:Project,mid:string,sid:string,pid:string):{proje
 }
 
 
-export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number};
+export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number;shelfDepth?:number;fixed?:number[]};
 export function captureSectionFilling(p:Project,mid:string,sid:string):SectionFilling{
  const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для копирования.');
  const b=boxes(m).find(b=>b.id===sid)!,offsets=drawerOffsets(s),hanger=s.pantograph?'pantograph':s.rod?'rod':null;
  const rod=parts(m).find(a=>a.id===sid+':rod'||a.id===sid+':pantograph:rod');
- return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{})};
+ return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),...(s.fixed?{fixed:[...s.fixed]}:{}),...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{})};
 }
 export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:SectionFilling):Project{
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для вставки.');
  const b=boxes(m).find(b=>b.id===sid)!,height=b.top-b.bottom;
  s.shelves=copy.shelves.map(y=>y/height);s.drawers=copy.drawers.length;s.drawerConfigs=copy.drawers.map(c=>({...c}));s.rod=copy.hanger==='rod';s.pantograph=copy.hanger==='pantograph';
+ if(copy.shelfDepth!==undefined)s.shelfDepth=copy.shelfDepth;else delete s.shelfDepth;
+ if(copy.fixed)s.fixed=[...copy.fixed];else delete s.fixed;
  if(copy.hanger&&copy.hangerHeight!==undefined)s.rodAt=copy.hangerHeight/height;else delete s.rodAt;
  const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;
 }
@@ -224,4 +233,24 @@ export function rotateModuleGroup(p:Project,ids:readonly string[]):Project{
  for(const a of n.modules.filter(a=>ids.includes(a.id))){a.x+=dx;a.z+=dz;}
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
+}
+
+/** Resize only the target opening; other section widths and contents stay intact. One undo step. */
+export function fitMeshItem(p:Project,mid:string,sid:string,meshId:string,worldY:number):Project {
+ const original=p.modules.find(a=>a.id===mid)?.module,item=meshById(meshId);
+ if(!original||!item)throw Error('Выберите корпус и элемент из каталога.');
+ const before=boxes(original),target=before.find(b=>b.id===sid);
+ if(!target)throw Error('Секция не найдена.');
+ let failure='Подходящая ширина превышает допустимый габарит корпуса.';
+ const widths=Array.from({length:RULES.maxW-RULES.minW+1},(_,i)=>RULES.minW+i).sort((a,b)=>Math.abs(a-original.width)-Math.abs(b-original.width));
+ for(const width of widths){
+   const opening=target.width+width-original.width;if(opening<RULES.minSection)continue;
+   const next=structuredClone(p),m=next.modules.find(a=>a.id===mid)!.module;m.width=width;
+   m.sections.forEach(s=>s.weight=s.id===sid?opening:before.find(b=>b.id===s.id)!.width);
+   const sec=m.sections.find(s=>s.id===sid)!;
+   const inner=boxes(m).find(b=>b.id===sid)!.width-(m.doors?RULES.drawerFiller*(doorCount(m,sec)===2?2:1):0);
+   if(inner<item.reqW-0.001||inner>item.reqW+MESH_WIDTH_TOLERANCE+0.001)continue;
+   try{return insertItem(next,'mesh',mid,sid,worldY,undefined,meshId);}catch(e){failure=(e as Error).message;}
+ }
+ throw Error('Не удалось подобрать корпус: '+failure+' Размеры и наполнение сохранены.');
 }

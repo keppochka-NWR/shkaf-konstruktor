@@ -11,7 +11,7 @@ export function StageBar({stage,advanced,onStage,onAdvanced,done}:Props){
     <p className="stage-hint" aria-live="polite"><b>{current.n}. {current.title}.</b> {current.hint}</p>
     <div className="stage-actions">
       <button className="outline" disabled={i===0} onClick={()=>onStage(prevStage(stage))}><ChevronLeft size={15}/> Назад</button>
-      <button className="primary" disabled={i===STAGES.length-1} onClick={()=>onStage(nextStage(stage))}>Дальше: {STAGES[Math.min(STAGES.length-1,i+1)].title} <ChevronRight size={15}/></button>
+      {i<STAGES.length-1?<button className="primary" onClick={()=>onStage(nextStage(stage))}>Дальше: {STAGES[i+1].title} <ChevronRight size={15}/></button>:<button className="primary" onClick={()=>onStage('docs')}>Открыть документы</button>}
       <label className="stage-advanced" title="Показать все панели независимо от этапа"><input type="checkbox" checked={advanced} onChange={e=>onAdvanced(e.target.checked)}/><SlidersHorizontal size={14}/> Все настройки</label>
     </div>
   </nav>;

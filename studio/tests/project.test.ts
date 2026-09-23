@@ -335,10 +335,10 @@ test('minimum shelf clearance is measured between panel faces, including the dra
  s.shelves=[276/h];assert.ok(validate(m).some(e=>e.includes('80 мм')));
 });
 
-test('distribute shelves produces equal clear openings above the base or drawer cap',()=>{
+test('distribute shelves uses whole millimetres and balances openings within one millimetre',()=>{
  for(const drawers of [0,2])for(const count of [1,3,5]){
   const m=initialModule(),s=m.sections[0];s.drawers=drawers;s.shelves=distribute(m,s,count);
-  assert.deepEqual(validate(m),[]);const gaps=shelfGaps(m,s.id).map(g=>g.height);assert.ok(Math.max(...gaps)-Math.min(...gaps)<=.1);
+  assert.deepEqual(validate(m),[]);const gaps=shelfGaps(m,s.id).map(g=>g.height);assert.ok(Math.max(...gaps)-Math.min(...gaps)<=1); const box=boxes(m)[0],height=box.top-box.bottom; assert.ok(s.shelves.every(f=>Math.abs(f*height-Math.round(f*height))<1e-8));
  }
  const m=initialModule(),s=m.sections[0];s.drawers=0;s.rod=true;s.rodAt=.65;s.shelves=distribute(m,s,2);assert.deepEqual(validate(m),[]);assert.ok(s.shelves.every(y=>y>s.rodAt!));
 });

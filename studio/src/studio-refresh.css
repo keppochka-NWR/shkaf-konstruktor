@@ -80,3 +80,82 @@
 .help-steps button{display:block}
 
 .library-preview{display:block;width:100px;height:125px;flex:0 0 100px;background:#f4f6f7;border-radius:6px}.library-entry{gap:14px}.library-entry>div{min-width:0;flex:1}.library-entry>div strong{overflow-wrap:anywhere}@media(max-width:650px){.library-preview{width:76px;height:100px;flex-basis:76px}.library-entry{flex-wrap:wrap}}
+.module-palette,.filling-composer{margin:12px 16px;padding:14px;background:#f5f7fa;border:1px solid #dce2e9;border-radius:10px;color:#263348}
+.module-palette summary,.replace-filling summary{font-size:13px;font-weight:650;cursor:pointer;padding:4px 0}
+.module-kinds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:12px 0}
+.module-kinds button{display:flex;align-items:center;gap:6px;min-height:44px;padding:9px 6px;text-align:left;background:white;border:1px solid #cbd4df;border-radius:7px;font-size:12px;color:#263348}
+.module-kinds button[aria-pressed=true]{border-color:#325bee;background:#eaf0ff;color:#2443a4}
+.module-kinds button svg{flex-shrink:0}
+.module-sizes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.module-sizes label,.filling-composer label{display:grid;gap:5px;font-size:11px;color:#53616f}
+.module-sizes input,.filling-composer input,.filling-composer select{min-width:0;width:100%;box-sizing:border-box;border:1px solid #bec9d7;border-radius:5px;background:white;color:#263348;padding:8px 5px;font:inherit;font-size:14px;font-variant-numeric:tabular-nums}
+.module-palette small{display:block;font-size:11px;line-height:1.5;margin:8px 0}
+.module-palette .primary{margin-top:4px;min-height:40px}
+.filling-composer{border-color:#325bee;background:#f1f5ff;display:grid;gap:10px}
+.filling-composer p,.essential-note{font-size:12px;line-height:1.5;color:#53616f;margin:0}
+.filling-composer select{font-size:12px}
+.composer-actions{display:flex;flex-wrap:wrap;gap:6px}
+.replace-filling{margin:10px 16px;border-bottom:1px solid #dce2e9;padding-bottom:10px}
+.replace-filling .small-note{display:block;font-size:12px}
+.replace-filling .presets{grid-template-columns:repeat(2,minmax(0,1fr))}
+.app .stage-title{display:inline!important}
+.stage-steps{overflow-x:auto;scrollbar-width:thin}
+.stage-step{white-space:nowrap}
+.app button:focus-visible,.app input:focus-visible,.app select:focus-visible,.app summary:focus-visible{outline:3px solid #325bee;outline-offset:3px}
+.construction-options>summary{font-size:14px;font-weight:650;cursor:pointer;list-style-position:inside;padding:4px 0}
+.construction-options[open]>summary{margin-bottom:16px}
+.number-field{flex-wrap:wrap;row-gap:5px}
+.number-field .number-range,.number-field .number-feedback{flex:0 0 100%;font-size:11px;line-height:1.45;text-align:left}
+.number-field .number-range{display:none;color:#53616f}
+.number-field:focus-within .number-range{display:block}
+.number-field .number-feedback{display:block;color:#a32820}
+.number-field.has-error>div{border-color:#b6352b;background:#fff5f3}
+.number-field.has-error input{background:#fff5f3}
+.niche-readings{margin:14px 0;padding:12px;background:#f5f7fa;border:1px solid #dce2e9;border-radius:7px}
+.niche-readings summary{cursor:pointer;font-weight:600;font-size:12px}
+.niche-readings p,.niche-readings small{font-size:11px;line-height:1.5;color:#53616f}
+.niche-readings form,.niche-readings label{display:grid;gap:7px}
+.niche-readings form{gap:12px}.niche-readings label{font-size:12px}
+.niche-readings input{width:100%;min-width:0;padding:9px;border:1px solid #bdc8d6;border-radius:5px;font:inherit;box-sizing:border-box}
+.niche-readings [role=alert]{color:#a32820}
+.selection-action-bar{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:9px 20px;background:#fff9e9;border-bottom:1px solid #e3d5b4;flex-shrink:0}
+.selection-context{display:grid;gap:3px;min-width:130px;margin-right:auto;font-size:12px}
+.selection-context span{font-size:11px;color:#59616b;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selection-action-bar button{min-height:36px;padding:7px 10px;font-size:12px}
+.interaction-bar button.gap-toggle{font-size:11px;border-left:1px solid #dce2e9;margin-left:3px;padding-left:10px}
+@media(max-width:650px){.selection-action-bar{padding:8px 12px}.selection-context{flex-basis:100%}}
+@media(prefers-reduced-motion:reduce){.app *, .app *::before,.app *::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media(max-width:1100px){
+ .module-palette,.filling-composer{margin:10px 8px;padding:10px}
+ .module-kinds{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .module-kinds button{flex-direction:column;justify-content:center;text-align:center;font-size:11px;min-height:58px;padding:6px 3px;gap:4px}
+ .module-kinds button span{overflow-wrap:anywhere}
+ .module-sizes{grid-template-columns:1fr}
+ .module-sizes label{grid-template-columns:1fr 76px;align-items:center}
+ .module-sizes input{width:76px}
+}
+@media(max-width:1200px){
+ .app .header{height:auto;min-height:64px;flex-wrap:wrap;padding:10px 14px;gap:10px}
+ .header-actions{width:100%;flex-wrap:wrap;justify-content:flex-start}
+ .header-actions button{min-height:38px;font-size:12px}
+ .header-actions button span{display:inline}
+ .app .workspace{min-width:0}
+ .stage-actions{flex-wrap:wrap}
+ .app .stage-bar{min-width:0}
+ .stage-steps{max-width:100%}
+}
+
+/* UX-02/04: labels must remain visible before users discover the tool. */
+.interaction-bar{top:66px;left:24px;right:24px;flex-wrap:wrap;width:auto;justify-content:flex-start}
+.interaction-bar button,.interaction-bar button[aria-pressed=true]{font-size:11px;min-height:34px;padding:7px 9px}
+.viewport .scene{top:156px}
+@media(max-width:520px){.interaction-bar{left:14px;right:14px;top:66px}.viewport .scene{top:200px}}
+
+/* Keep instruction text on its own row instead of squeezing it into a tall column. */
+.app .stage-bar{grid-template-columns:minmax(0,1fr) auto;gap:6px 16px}
+.app .stage-hint{grid-column:1/-1;grid-row:2;font-size:12px}
+.app .stage-actions{grid-column:2;grid-row:1}
+@media(max-width:900px){.app .stage-bar{grid-template-columns:1fr}.app .stage-actions{grid-column:1;grid-row:3;flex-wrap:wrap}.app .stage-step .stage-title{display:inline}}
+.error-banner .primary{margin-top:8px;font-size:12px}
+
+.section-facades{border:1px solid var(--line);border-radius:6px;padding:12px;margin:12px 0}.section-facades summary{font-weight:650;cursor:pointer}.section-facades[open] summary{margin-bottom:12px}

@@ -1,3 +1,4 @@
+import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
 import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
@@ -30,7 +31,9 @@ export type View = "iso" | "front" | "side" | "top";
 type Props = {
   captureReady: (fn: (() => string) | undefined) => void;
   module: Module;
-  mode:'move'|'fill'|'orbit';
+  mode:'move'|'fill'|'orbit'|'select';
+  hideFacades?:boolean;
+  hideFurniture?:boolean;
   moveAll:boolean;
   groupIds?:string[];
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
@@ -56,7 +59,7 @@ type Props = {
   /** Полупрозрачные фасады: видно наполнение за закрытыми дверями и фасадами ящиков. */
   clearFacades?: boolean;
   /** Клик по ручке фасада или ящика: открыть выбор ручки корпуса. */
-  onHandleClick?: (mid: string) => void;
+  onHandleClick?: (mid: string, pid: string) => void;
   /** Правая кнопка по корпусу: контекстное меню редактирования (как в B Planner). Координаты — экранные. */
   onContextMenu?: (mid: string, sid: string, x: number, y: number) => void;
   onModuleSelect: (id: string) => void;
@@ -76,6 +79,8 @@ type Props = {
   openDoors: boolean;
   exploded: boolean;
   dimensions: boolean;
+  roomDimensions?:boolean;
+  gapDimensions?:boolean;
   presentation?:boolean;
   drawerPreview?:{sid:string;index:number};
 };
@@ -226,6 +231,7 @@ export function Scene(p: Props) {
         ),
       );
     }
+    let sceneOrigin: {x:number;z:number}|undefined;
     function rebuild() {
       needsRender=true;
       const state = current.current,
@@ -243,7 +249,13 @@ export function Scene(p: Props) {
       const focus =
         state.arrangement.find((a) => a.id === state.activeId) ||
         state.arrangement[0];
-      for (const placed of state.arrangement) {
+      const nextOrigin=moduleCenter(focus);
+      if(sceneOrigin){
+        const shift=new THREE.Vector3(sceneOrigin.x-nextOrigin.x,0,sceneOrigin.z-nextOrigin.z);
+        perspective.position.add(shift);orthographic.position.add(shift);controls.target.add(shift);
+      }
+      sceneOrigin=nextOrigin;
+      for (const placed of state.hideFurniture?[]:state.arrangement) {
         const moduleGroup=new THREE.Group();moduleGroups.set(placed.id,moduleGroup);modelGroup.add(moduleGroup);
         const doorPivots=new Map<string,THREE.Group>();
         const m = placed.module,
@@ -251,6 +263,7 @@ export function Scene(p: Props) {
         const origin=localToRoom(placed,0,0),center=moduleCenter(focus);
         moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();
         for (const part of parts(m)) {
+          if(state.hideFacades&&(part.role==='door'||part.role==='hinge'||part.role==='handle'||part.id.endsWith(':facade')))continue;
           const isMetal = part.material === "metal",
             isBack = part.material === "hdf",
             isFacade = part.role === "door" || part.id.endsWith(":facade");
@@ -309,7 +322,7 @@ export function Scene(p: Props) {
           const mesh = new THREE.Mesh(geometry, mat);
           if (isHandle) {
             // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
-            const handle = handleById(m.handleId), vertical = part.size[1] > part.size[0];
+            const handle = handleById(facadeHandleId(m,part.id)), vertical = part.size[1] > part.size[0];
             const holder = new THREE.Group();
             holder.rotation.z = vertical ? Math.PI / 2 : 0;
             holder.position.z = -part.size[2] / 2; // к плоскости фасада
@@ -457,7 +470,7 @@ export function Scene(p: Props) {
           if(!state.presentation)label(fixtureLabel(f,fi),new THREE.Vector3(cx,f.fromFloor+f.height+40,cz),()=>current.current.onFixtureSelect?.(f.id),true);
         }
         // Размеры помещения и выбранного проёма/объекта прямо в 3D: клик по числу — правка (как у корпуса).
-        if(!state.presentation&&state.onRoomDimension){
+        if(!state.presentation&&state.onRoomDimension&&state.roomDimensions!==false){
           const dim=state.onRoomDimension;
           roomLabel(`${r.width} мм`,new THREE.Vector3(x0+r.width/2,-60,z0+r.depth+80),()=>dim('room','','width',r.width));
           roomLabel(`${r.depth} мм`,new THREE.Vector3(x0+r.width+80,-60,z0+r.depth/2),()=>dim('room','','depth',r.depth));
@@ -478,7 +491,7 @@ export function Scene(p: Props) {
         }
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
-      const b = boxes(m).find((b) => b.id === state.selected);
+      const b = state.hideFurniture?undefined:boxes(m).find((b) => b.id === state.selected);
       if (b) {
         const geo = new THREE.BoxGeometry(
           b.width,
@@ -513,7 +526,7 @@ export function Scene(p: Props) {
           label(`${Math.round(top - b.bottom)} мм от дна`, new THREE.Vector3(gx, (b.bottom + top) / 2 + fy, zz + 10), () => current.current.onDrawerStack?.(b.id), true);
         }
       }
-      if (state.dimensions) {
+      if (state.dimensions&&!state.hideFurniture) {
         const fy=focus.y??0;
         const z = m.depth / 2 + 110,
           x = -m.width / 2 - 150;
@@ -538,7 +551,7 @@ export function Scene(p: Props) {
           () => current.current.onDimension("depth"),
         );
         if (
-          b &&
+          b && state.gapDimensions!==false &&
           m.sections.find((s) => s.id === b.id)!.shelves.length &&
           (!m.doors||state.openDoors||state.transparent) &&
           !state.exploded
@@ -599,9 +612,13 @@ export function Scene(p: Props) {
       if (!target.clientWidth || !target.clientHeight) return;
       renderer.setSize(target.clientWidth, target.clientHeight);
       perspective.aspect = target.clientWidth / target.clientHeight;
-      camera.updateProjectionMatrix();
-      fit();
+      const aspect=target.clientWidth/target.clientHeight;
+      const halfHeight=(orthographic.top-orthographic.bottom)/2;
+      orthographic.left=-halfHeight*aspect;orthographic.right=halfHeight*aspect;
+      orthographic.updateProjectionMatrix();perspective.updateProjectionMatrix();
+      needsRender=true;
       if (initial) {
+        fit();
         initial = false;
       }
     });
@@ -637,7 +654,8 @@ export function Scene(p: Props) {
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
-      if(hit.object.userData.role==='handle'&&state.onHandleClick&&!state.presentation){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onHandleClick(a.id);return;}
+      if(hit.object.userData.role==='handle'&&state.onHandleClick&&!state.presentation){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onHandleClick(a.id,pid.includes(':drawer:')?pid.replace(':handle',':facade'):pid.replace(':handle:',':door:'));return;}
+      if(state.mode==='select'){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onPartSelect(sid,pid,a.id);return;}
       const isPart=state.mode==='fill'&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
       const isDivider=state.mode==='fill'&&pid.endsWith(':divider');
       if(state.mode==='fill'&&!isPart&&!isDivider){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
@@ -775,6 +793,8 @@ export function Scene(p: Props) {
       p.mode,
       p.transparent,
       p.clearFacades,
+      p.hideFacades,
+      p.hideFurniture,
       p.selected,
       p.selectedPart,
       p.texture,
@@ -782,6 +802,8 @@ export function Scene(p: Props) {
       p.openDoors,
       p.exploded,
       p.dimensions,
+      p.roomDimensions,
+      p.gapDimensions,
       p.presentation,
       p.drawerPreview?.sid,
       p.drawerPreview?.index,
@@ -793,14 +815,7 @@ export function Scene(p: Props) {
       p.view,
       p.fit,
       p.focusActive,
-      p.activeId,
-      p.room,
-      p.selectedObstacle,
-      p.arrangement.length,
-      p.module.width,
-      p.module.height,
-      p.module.depth,
-      p.arrangement.find(a=>a.id===p.activeId)?.rotation,
+
     ],
   );
   useEffect(()=>{const action=p.presentation||p.mode==='orbit'?'Перетаскивание — поворот вида':p.mode==='fill'?'Перетаскивайте полки и ящики по высоте, перегородки по ширине':p.moveAll?'Перетаскивание корпуса перемещает всю композицию':'Перетаскивайте корпуса для расстановки';host.current?.querySelector('canvas')?.setAttribute('aria-label','3D-модель мебели. '+action+'. Колесо — масштаб.');},[p.mode,p.moveAll,p.presentation]);
