@@ -27,9 +27,11 @@ export const ALU_PROFILES: AluProfile[] = [
     { id: "cognac", label: "коньяк", perM: 1231.83, source: mvm },
   ] },
 ];
-export type AluInsert = { id: string; label: string; perM2: number; source: string; mirror?: boolean; thickness: number };
+export type AluInsert = { id: string; label: string; perM2: number | null; source: string; mirror?: boolean; thickness: number };
 const atb = "АТБ, прайс 01.01.2026 (закупка)";
 export const ALU_INSERTS: AluInsert[] = [
+  { id:'moru-bronze',label:'Мору бронза · образец и цену согласовать',perM2:null,source:'ТЗ Вотан; цена не подтверждена',thickness:4 },
+  { id:'satin-bronze',label:'Сатин бронза · образец и цену согласовать',perM2:null,source:'ТЗ Вотан; цена не подтверждена',thickness:4 },
   { id: "mirror-silver", label: "Зеркало серебро 4 мм", perM2: 1530, source: atb, mirror: true, thickness: 4 },
   { id: "mirror-bronze", label: "Зеркало бронза 4 мм", perM2: 2190, source: atb, mirror: true, thickness: 4 },
   { id: "mirror-graphite", label: "Зеркало графит 4 мм", perM2: 2190, source: atb, mirror: true, thickness: 4 },
