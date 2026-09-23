@@ -1,6 +1,6 @@
 import { drawerHasHandle, SLIDES, type DrawerConfig } from "./hardware";
 import {caseworkParts,caseworkErrors,type Casework} from './casework';
-import { handleById, HANDLES, HANDLE_MARGIN } from "./handles";
+import { handleById, handleKind, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
 export const RULES = {
@@ -101,9 +101,15 @@ export type Section = {
   weight: number;
   doorLeaves?: 1 | 2;
   doorHandles?: (string | null)[];
+  doorHinges?: ("left"|"right"|"top"|null)[];
   hingeSide?: "left" | "right";
   removedDoors?: number[];
   doorGap?: number;
+  /** Высота нижнего ряда фасадов от низа дверного проёма. */
+  doorSplit?: number;
+  /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
+  externalDrawers?: boolean;
+  drawerGap?: number;
   shelves: number[];
   drawers: number;
   rod: boolean;
@@ -205,7 +211,7 @@ export type Part = {
   material: "board" | "hdf" | "metal" | "alu" | "glass";
   decor: string;
   role: "body" | "shelf" | "drawer" | "door" | "rod" | "flange" | "pantograph" | "handle" | "hinge" | "light" | "fastener";
-  hinge?: "left" | "right";
+  hinge?: "left" | "right" | "top";
   grain: "length";
   grainAxis: 0 | 1 | 2;
   edge: [number, number, number, number];
@@ -239,7 +245,7 @@ export function drawerConfig(m: Module, s: Section, j: number): DrawerConfig {
       slide: "ball",
       height: RULES.drawerH,
       length:
-        [...SLIDES.ball.lengths].reverse().find((l) => l <= m.depth - rearClear(m) - (m.doors ? 44 : 25)) ||
+        [...SLIDES.ball.lengths].reverse().find((l) => l <= m.depth - rearClear(m) - (drawersBehindDoors(m,s) ? 44 : 25)) ||
         250,
     }
   );
@@ -254,7 +260,7 @@ export function setFacadeHandle(m:Module,pid:string,handleId:string){
  if(!parts(m).some(p=>p.id===pid&&(p.role==='door'||p.id.endsWith(':facade'))))throw Error('Выбранный фасад больше не существует.');
  const s=m.sections.find(s=>s.id===pid.split(':')[0]);if(!s)throw Error('Секция фасада не найдена.');
  if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].handleId=handleId;}
- else{const k=Number(pid.split(':door:')[1]);s.doorHandles=Array.from({length:2},(_,i)=>s.doorHandles?.[i]??null);s.doorHandles[k]=handleId;}
+ else{const k=Number(pid.split(':door:')[1]);s.doorHandles=Array.from({length:4},(_,i)=>s.doorHandles?.[i]??null);s.doorHandles[k]=handleId;}
 }
 export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
 /** Уровень низа корпуса над полом: цоколь или высота ножек. */
@@ -324,14 +330,19 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
 }
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
-export function drawerPitch(c:{height?:number;facadeH?:number}){const box=(c.height??RULES.drawerH)+RULES.drawerStep;return c.facadeH?Math.max(box,c.facadeH+RULES.drawerFrontGap):box;}
-export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{});return start;});}
+export function drawerPitch(c:{height?:number;facadeH?:number},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+RULES.drawerStep;return c.facadeH?Math.max(box,c.facadeH+gap):box;}
+export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
 export function doorMaxWidth(m:Module){const h=m.height-RULES.faceGap-facadeBottom(m);return h<=RULES.doorLowH?RULES.doorMaxLow:RULES.doorMax;}
 export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeaves;const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>doorMaxWidth(m)?2:1;}
-export function fillerSides(m:Module,s:Section){if(!m.doors||!s.drawers)return {left:0,right:0};const both=doorCount(m,s)===2;return {left:both||(s.hingeSide??m.hingeSide)!=='right'?RULES.drawerFiller:0,right:both||(s.hingeSide??m.hingeSide)==='right'?RULES.drawerFiller:0};}
+export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers;}
+export function fillerSides(m:Module,s:Section){
+ if(!drawersBehindDoors(m,s)||!s.drawers)return {left:0,right:0};
+ const count=doorCount(m,s),hinges=Array.from({length:s.doorSplit===undefined?1:2},(_,row)=>Array.from({length:count},(_,col)=>s.doorHinges?.[row*2+col]??(count===2?(col===0?'left':'right'):(s.hingeSide??m.hingeSide??'left')))).flat();
+ return {left:hinges.includes('left')?RULES.drawerFiller:0,right:hinges.includes('right')?RULES.drawerFiller:0};
+}
 export function drawerStackHeight(s: Section) {
-  const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+drawerPitch(s.drawerConfigs?.[j]??{})));
+  const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap)));
 }
 export function initialModule(): Module {
   return {
@@ -582,13 +593,13 @@ export function parts(m: Module): Part[] {
         bh = cfg.height;
       const bx = b.x + f.left + sideGap,
         y = b.bottom + RULES.drawerStep/2 + drawerOffsets(s)[j],
-        z = d - (m.doors ? 44 : 20) - boxD;
+        z = d - (drawersBehindDoors(m,s) ? 44 : 20) - boxD;
       nextY += bh + RULES.drawerStep;
       const mesh = cfg.mesh ? meshById(cfg.mesh) : undefined;
       if (mesh) {
         // Сетчатый элемент Лемана: рама по требуемой ширине минус крепление, глубина изделия, свои направляющие.
         // Сетка без фасада: за дверью хватает 20 мм (дверь 16 + зазор), в открытом корпусе рама заподлицо с передом.
-        const front = m.doors ? RULES.meshDoorClear : 0;
+        const front = drawersBehindDoors(m,s) ? RULES.meshDoorClear : 0;
         const mw = mesh.reqW - 8, md = Math.min(mesh.reqD - 10, d - rear - front), mz = d - front - md;
         add(s.id + ":drawer:" + j + ":mesh", mesh.label + " · Лемана Про арт. " + mesh.art, [mw, mesh.h, md], [b.x + f.left + (b.width - filler) / 2, y + mesh.h / 2, mz + md / 2], md, mw, mesh.h, "drawer", s.id, "metal");
         continue;
@@ -648,22 +659,22 @@ export function parts(m: Module): Part[] {
       // За распашными дверями фасад ящика вкладной (внутри проёма, зазор 3). В открытом корпусе — накладной:
       // перекрывает стойки как распашной фасад, зазор 2, нижний фасад опускается на цоколь до 30 мм от пола.
       // Фасад: по умолчанию на шаг ящика минус зазор; при заданной высоте фасада — она (короб может быть ниже, экономия плиты).
-      const pitch=drawerPitch(cfg),pitchBottom=y-RULES.drawerStep/2;
-      let fh=cfg.facadeH??(pitch-RULES.drawerFrontGap),fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+fh/2+(cfg.facadeH?RULES.drawerFrontGap/2:0);
+      const frontGap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:RULES.faceGap),pitch=drawerPitch(cfg,frontGap),pitchBottom=y-RULES.drawerStep/2;
+      let fh=cfg.facadeH??(pitch-frontGap),fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+fh/2+(cfg.facadeH?frontGap/2:0);
       if(cfg.noFacade){ // внутренний ящик: только короб и направляющие
         for (const side of [0, 1])
           add(s.id + ":drawer:" + j + ":slide:" + side, "Направляющая " + cfg.slide, [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length], [hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6), hidden ? y + 6 : y + bh / 2, z + boxD - cfg.length / 2], cfg.length, 20, 12, "drawer", s.id, "metal");
         continue;
       }
-      if(!m.doors){
+      if(!drawersBehindDoors(m,s)){
         const span=facadeSpan(m,i,b);fw=span.right-span.left;fx=(span.left+span.right)/2;
-        fh=cfg.facadeH??(pitch-RULES.faceGap);fy=pitchBottom+fh/2+(cfg.facadeH?RULES.faceGap/2:0);
+        fh=cfg.facadeH??(pitch-frontGap);fy=pitchBottom+fh/2+(cfg.facadeH?frontGap/2:0);
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
         if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
       }
-      add(s.id+':drawer:'+j+':facade','Ящик '+(j+1)+' · фасад',[fw,fh,t],[fx,fy,m.doors?d-36:d+t/2+2],fh,fw,t,'drawer',s.id);
+      add(s.id+':drawer:'+j+':facade','Ящик '+(j+1)+' · фасад',[fw,fh,t],[fx,fy,drawersBehindDoors(m,s)?d-36:d+t/2+2],fh,fw,t,'drawer',s.id);
       out.at(-1)!.decor=m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
-      if(drawerHasHandle(cfg)){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,m.doors?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
+      if(drawerHasHandle(cfg)){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -720,26 +731,31 @@ export function parts(m: Module): Part[] {
       // Скос фронта: фасады лежат вдоль наклонной линии фронта, их суммарная ширина — по косой (длиннее проёма).
       const cosK=Math.cos(skewAngle(m)),frontLen=(spanR-spanL)/cosK;
       const gap=s.doorGap??RULES.faceGap,count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
-      const y0=inset?b.bottom+RULES.faceGap:facadeBottom(m),y1flat=inset?b.top-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0):facadeTop(m);
+      const baseY=inset?b.bottom+RULES.faceGap:facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0):facadeTop(m);
       const dz=inset?d-t/2:d+t/2+2;
-      for(let k=0;k<count;k++){
+      const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2],[doorBottom+s.doorSplit+gap/2,y1flat]];
+      for(let row=0;row<bands.length;row++){
+      const [y0,yTop]=bands[row];
+      for(let col=0;col<count;col++){
+        const k=row*2+col;
         if(s.removedDoors?.includes(k))continue;
-        const hinge=count===2?(k===0?'left':'right'):(s.hingeSide??m.hingeSide??'left'),x0=spanL+k*(dw+gap)*cosK,cx=x0+dw*cosK/2;
+        const hinge=s.doorHinges?.[k]??(count===2?(col===0?'left':'right'):(s.hingeSide??m.hingeSide??'left')),x0=spanL+col*(dw+gap)*cosK,cx=x0+dw*cosK/2;
         const fp=m.skew?frontPoint(m,cx,t/2+2):undefined;
         // Фасады прямоугольные и под скосом: их верх — по низкой стороне, выше идёт фальш (см. slope-filler).
-        const hL=y1flat-y0,hR=y1flat-y0,dh=Math.max(hL,hR),y1=y0+dh;void x0;
+        const hL=yTop-y0,hR=yTop-y0,dh=Math.max(hL,hR),y1=y0+dh;void x0;
         if(m.alu){
           const ft=ALU_EXTRAS.frameDepth;
           add(s.id+':door:'+k,'Фасад в алюминиевой рамке',[dw,dh,ft],[cx,(y0+y1)/2,inset?d-ft/2:d+ft/2+2],dh,dw,ft,'door',s.id,'alu');
           out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
         } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,t],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,t,'door',s.id);
         if(fp)out.at(-1)!.rotY=fp.rotY;
-        out.at(-1)!.hinge=hinge;
+        out.at(-1)!.hinge=hinge;if(hinge==='top')out.at(-1)!.name='Фасад подъёмный · механизм требует подбора';
         if(m.doorOpen==='push')continue; // push-to-open: без ручки, толкатель в смете
         const hl=handleById(s.doorHandles?.[k]??m.handleId).len;
-        const hp=m.skew?frontPoint(m,cx,t+2+13,(hinge==='left'?1:-1)*(dw/2-40)):undefined;
-        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(s.doorHandles?.[k]??m.handleId).label,[10,hl,25],[hp?hp.x:cx+(hinge==='left'?1:-1)*(dw/2-40),y0+Math.min(hL,hR)/2,hp?hp.z:dz+t/2+13],hl,25,10,'handle',s.id,'metal');
+        const hp=m.skew?frontPoint(m,cx,t+2+13,hinge==='top'?0:(hinge==='left'?1:-1)*(dw/2-40)):undefined;
+        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(s.doorHandles?.[k]??m.handleId).label,hinge==='top'?[hl,10,25]:[10,hl,25],[hp?hp.x:hinge==='top'?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),hinge==='top'?y0+40:y0+Math.min(hL,hR)/2,hp?hp.z:dz+t/2+13],hl,25,10,'handle',s.id,'metal');
         if(hp)out.at(-1)!.rotY=hp.rotY;
+      }
       }
 
     }
@@ -772,6 +788,14 @@ export function parts(m: Module): Part[] {
         else add(`fast:${dv.id}:${edge}:${k}`, "Конфирмат 5×50", [RULES.confirmatD, RULES.confirmatL, RULES.confirmatD], [dv.position[0], y, z], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", dv.sectionId, "metal");
       }
   }
+  // Edge pulls mount on the free edge, not at the bracket-handle drilling offset.
+  for(const handle of out.filter(p=>p.role==='handle')){
+    if(handleKind(handleById(facadeHandleId(m,handle.id)))!=='profile')continue;
+    const drawer=handle.id.includes(':drawer:'),face=out.find(p=>p.id===handle.id.replace(drawer?':handle':':handle:',drawer?':facade':':door:'));
+    if(!face)continue;
+    if(drawer||face.hinge==='top')handle.position[1]=face.position[1]+(drawer?1:-1)*(face.size[1]/2-2);
+    else{const off=(face.hinge==='right'?-1:1)*(face.size[0]/2-2),angle=(face.rotY??0)*Math.PI/180;handle.position[0]=face.position[0]+off*Math.cos(angle);handle.position[2]=face.position[2]-off*Math.sin(angle)+face.size[2]/2+3;}
+  }
   return out;
 }
 /** Верх полки над ящиками секции от низа корпуса (цоколь + дно + стопка ящиков + полка). */
@@ -788,6 +812,17 @@ export function distributeDrawers(m:Module,s:Section,capTop:number):DrawerConfig
   if(box<68)throw Error(`Слишком низко: при ${n} ящиках нужно не меньше ${b.bottom+RULES.panel+n*(68+RULES.drawerStep)} мм от низа корпуса.`);
   if(box>300)throw Error(`Слишком высоко: боковина ящика выйдет ${box} мм, максимум 300. Добавьте ящик или опустите полку.`);
   return Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};});
+}
+/** Refit only overflowing drawer stacks on a height change; reject infeasible hardware instead of deleting it. */
+export function fitDrawersAfterResize(m:Module){
+ for(const section of m.sections){
+  if(!section.drawers)continue;
+  const b=boxes(m).find(b=>b.id===section.id)!,h=b.top-b.bottom;
+  const ceiling=Math.min(b.top-RULES.shelfMinClear,...section.shelves.map(f=>b.bottom+f*h-RULES.panel/2-RULES.shelfMinClear));
+  if(drawerCapTop(m,section)<=ceiling)continue;
+  if(section.drawerConfigs?.some(c=>c.mesh))throw Error('Корзины имеют фиксированную высоту. Увеличьте корпус или уберите корзину.');
+  section.drawerConfigs=distributeDrawers(m,section,ceiling);
+ }
 }
 /** Число конфирматов корпуса и полкодержателей под съёмные полки. */
 export function fastenerCounts(m: Module) {
@@ -868,11 +903,15 @@ export function validate(m: Module): string[] {
     const s = m.sections[i],
       h = b.top - b.bottom,
       prefix = `Секция ${i + 1}: `;
-    if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>2||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
+    if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
+    if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
+    if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<RULES.doorMinH||s.doorSplit>m.height-RULES.doorMinH))errors.push(prefix+'недопустимая высота разделения фасадов.');
+    if(s.doorHinges!==undefined&&(!Array.isArray(s.doorHinges)||s.doorHinges.length>4||s.doorHinges.some(v=>v!==null&&!['left','right','top'].includes(v))))errors.push(prefix+'неверное открывание фасада.');
+    if(s.drawerGap!==undefined&&(!Number.isFinite(s.drawerGap)||s.drawerGap<2||s.drawerGap>10))errors.push(prefix+'зазор фасадов ящиков от 2 до 10 мм.');
     if(s.doorLeaves!==undefined&&s.doorLeaves!==1&&s.doorLeaves!==2)errors.push(prefix+'число створок: 1 или 2.');
     if(s.hingeSide!==undefined&&!['left','right'].includes(s.hingeSide))errors.push(prefix+'неверная сторона петель.');
     if(s.doorGap!==undefined&&(!Number.isFinite(s.doorGap)||s.doorGap<2||s.doorGap>10))errors.push(prefix+'зазор створок от 2 до 10 мм.');
-    if(s.removedDoors!==undefined&&(!Array.isArray(s.removedDoors)||s.removedDoors.some(k=>k!==0&&k!==1)))errors.push(prefix+'неверный список снятых фасадов.');
+    if(s.removedDoors!==undefined&&(!Array.isArray(s.removedDoors)||s.removedDoors.some(k=>!Number.isInteger(k)||k<0||k>(s.doorSplit===undefined?1:3))))errors.push(prefix+'неверный список снятых фасадов.');
     if(s.shelfDepth!==undefined){
       const max=shelfMaxDepth(m);
       if(!Number.isFinite(s.shelfDepth)||s.shelfDepth<100||s.shelfDepth>max)errors.push(prefix+`глубина полок должна быть от 100 до ${max} мм. Уменьшите глубину полки или увеличьте корпус.`);
@@ -903,10 +942,10 @@ export function validate(m: Module): string[] {
         const item = meshById(c.mesh);
         if (!item) { errors.push(prefix + "неизвестный элемент Лемана Про."); continue; }
         if (!Number.isFinite(c.height) || c.height !== item.h) errors.push(prefix + `высота «${item.label}» фиксирована: ${item.h} мм.`);
-        const inner = b.width - (m.doors ? RULES.drawerFiller * (doorCount(m, s) === 2 ? 2 : 1) : 0);
+        const inner = b.width-fillerSides(m,s).left-fillerSides(m,s).right;
         if (inner < item.reqW || inner > item.reqW + MESH_WIDTH_TOLERANCE)
           errors.push(prefix + `«${item.label}» нужен проём ${item.reqW}–${item.reqW + MESH_WIDTH_TOLERANCE} мм внутри, сейчас ${Math.round(inner)}. Сделайте секцию ${Math.round(item.reqW + (b.width - inner) + 2 * RULES.panel)} мм по корпусу.`);
-        const front = m.doors ? RULES.meshDoorClear : 0, depthAvailable = m.depth - rearClear(m) - front;
+        const front = drawersBehindDoors(m,s) ? RULES.meshDoorClear : 0, depthAvailable = m.depth - rearClear(m) - front;
         if (depthAvailable < item.reqD) errors.push(prefix + `«${item.label}» нужна глубина корпуса от ${item.reqD + rearClear(m) + front} мм.`);
         continue;
       }
@@ -922,7 +961,7 @@ export function validate(m: Module): string[] {
         errors.push(prefix + "неверный размер или тип направляющих.");
         continue;
       }
-      if (c.length > m.depth - rearClear(m) - (m.doors ? 44 : 25))
+      if (c.length > m.depth - rearClear(m) - (drawersBehindDoors(m,s) ? 44 : 25))
         errors.push(prefix + "направляющая слишком длинная для этой глубины.");
       if (c.facadeH !== undefined && (!Number.isFinite(c.facadeH) || c.facadeH < 60 || c.facadeH > 800))
         errors.push(prefix + "высота фасада ящика: от 60 до 800 мм.");
@@ -931,7 +970,7 @@ export function validate(m: Module): string[] {
     const offsets=drawerOffsets(s);
     for(let j=0;j<offsets.length;j++){
       if(!Number.isFinite(offsets[j])||offsets[j]<0)errors.push(prefix+'неверное положение ящика.');
-      for(let k=0;k<j;k++)if(offsets[j]<offsets[k]+drawerPitch(drawerConfig(m,s,k))&&offsets[k]<offsets[j]+drawerPitch(drawerConfig(m,s,j)))errors.push(prefix+'ящики пересекаются.');
+      for(let k=0;k<j;k++)if(offsets[j]<offsets[k]+drawerPitch(drawerConfig(m,s,k),s.drawerGap)&&offsets[k]<offsets[j]+drawerPitch(drawerConfig(m,s,j),s.drawerGap))errors.push(prefix+'ящики пересекаются.');
     }
     if(s.pantograph && (b.width<545||b.width>910||h<1100))errors.push(prefix+'пантографу нужен проём шириной 545–910 мм и высотой от 1100 мм.');
     if(s.rod&&s.pantograph)errors.push(prefix+'выберите штангу или пантограф.');
@@ -959,7 +998,7 @@ export function validate(m: Module): string[] {
     });
     if (
       s.drawers > 0 &&
-      (b.width - (m.doors ? RULES.drawerFiller : 0) < 250 || dTooSmall(m))
+      (b.width - (drawersBehindDoors(m,s) ? RULES.drawerFiller : 0) < 250 || dTooSmall(m))
     )
       errors.push(
         prefix +
@@ -1012,7 +1051,7 @@ export function validate(m: Module): string[] {
     if(p.role!=='handle')continue;
     const facade=p.id.includes(':drawer:')?geometry.find(f=>f.id===p.id.replace(':handle',':facade')):geometry.find(f=>f.id===p.id.replace(':handle:',':door:'));
     if(!facade)continue;
-    const room=p.id.includes(':drawer:')?facade.size[0]:facade.size[1];
+    const room=p.id.includes(':drawer:')||facade.hinge==='top'?facade.size[0]:facade.size[1];
     if(hl+2*HANDLE_MARGIN>room)errors.push(`Ручка ${hl} мм длиннее фасада «${facade.name}». Выберите короче или измените фасад.`);
   }
   return [...new Set(errors)];
@@ -1150,9 +1189,13 @@ export function parseModule(input: unknown): Module {
     sections: x.sections.map((s) => ({
       id: s.id,
       weight: s.weight,
+      ...(s.doorHinges===undefined?{}:{doorHinges:Array.isArray(s.doorHinges)?[...s.doorHinges]:s.doorHinges}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),
+      ...(s.doorSplit===undefined?{}:{doorSplit:s.doorSplit}),
+      ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
+      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
       shelves: [...s.shelves],

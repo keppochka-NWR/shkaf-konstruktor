@@ -159,3 +159,21 @@
 .error-banner .primary{margin-top:8px;font-size:12px}
 
 .section-facades{border:1px solid var(--line);border-radius:6px;padding:12px;margin:12px 0}.section-facades summary{font-weight:650;cursor:pointer}.section-facades[open] summary{margin-bottom:12px}
+
+/* Workshop acceptance: discrete facade picking and keyboard-accessible dimension tool. */
+.hardware-field:has(input[type="checkbox"]){display:block}
+.hardware-field>span:has(input[type="checkbox"]){display:flex;align-items:center;gap:8px;line-height:1.4}
+.hardware-field input[type="checkbox"]{width:16px;height:16px;min-width:16px;margin:0;accent-color:var(--accent,#6151b8)}
+.facade-pick-list{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.facade-pick-list button{min-width:0;white-space:normal;font-size:11px;padding:8px;text-align:left}
+.facade-pick-list button[aria-pressed="true"]{background:#eceafa;border-color:#6d60b5}
+.plan-measure-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px;font-size:12px;background:white;border-bottom:1px solid #ddd}
+.plan-measure-tools form{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}
+.plan-measure-tools label{display:grid;gap:4px}
+.plan-measure-tools input{width:85px;padding:6px;border:1px solid #ccc;border-radius:5px}
+.plan-measure-list{padding:8px 12px;font-size:12px;background:white}
+.plan-measure-list>div{display:flex;justify-content:space-between;gap:12px}
+.room-plan{overflow:auto}
+
+.room-plan svg{flex:1 0 300px;min-height:300px}
+.construction-note{font-size:12px;line-height:1.5;padding:10px;background:#fff4dd;border-left:3px solid #ba8731;color:#725322}

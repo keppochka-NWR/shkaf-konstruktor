@@ -400,11 +400,11 @@ export function Scene(p: Props) {
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
             const sign=part.hinge==='right'?-1:1;
-            const hingeOff=new THREE.Vector3(sign*part.size[0]/2,0,0).applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
+            const hingeOff=new THREE.Vector3(part.hinge==='top'?0:sign*part.size[0]/2,part.hinge==='top'?-part.size[1]/2:0,0).applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
             pivot.position.sub(hingeOff);
-            mesh.position.set(sign*part.size[0] / 2, 0, 0);mesh.rotation.y=0;
+            mesh.position.set(part.hinge==='top'?0:sign*part.size[0]/2,part.hinge==='top'?-part.size[1]/2:0,0);mesh.rotation.y=0;
             pivot.add(mesh);
-            pivot.rotation.y = rotY-Math.PI * 0.58*sign;pivot.userData.rotY=rotY;
+            pivot.rotation.y=rotY;if(part.hinge==='top')pivot.rotation.x=-Math.PI/2;else pivot.rotation.y-=Math.PI*.58*sign;pivot.userData.rotY=rotY;
             doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
             const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));mesh.rotation.y=0;pivot.add(mesh);

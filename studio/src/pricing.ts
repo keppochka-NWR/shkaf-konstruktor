@@ -81,9 +81,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.role==='door'&&d.id!=='slope-filler'){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=hingeCount(d.length,d.width);
         // СТП: с ручками — GTV с доводчиком; push-to-open — петля без пружины (накладная SOLID / вкладная COCA) + толкатель.
-        if(push)add(inset?'hinge-push-inset':'hinge-push','Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'),n,'шт',HINGE_FREE.price,HINGE_FREE.source);
+        if(d.hinge==='top')add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
+        else if(push)add(inset?'hinge-push-inset':'hinge-push','Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'),n,'шт',HINGE_FREE.price,HINGE_FREE.source);
         else add(inset?'hinge-inset':'hinge',inset?'Петля GTV с доводчиком вкладная':HINGE.label,n,'шт',HINGE.price,HINGE.source);
-        if(push)add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
+        if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
       if(d.role==='door'&&d.material==='alu'&&a.module.alu){
         // Бланк цеха «Расчет алюм.фасад рам»: профиль по периметру, вставка по площади фасада, уплотнитель, уголки, отверстия.
@@ -94,7 +95,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(ins?.mirror)add('alu-film','Армирующая плёнка на зеркало',area,'м²',ALU_EXTRAS.mirrorFilmPerM2,'АТБ, прайс 01.01.2026');
         add('alu-seal','Уплотнитель вставки',perimeter,'м',ALU_EXTRAS.sealPerM,ALU_EXTRAS.source);
         add('alu-corners','Соединительная фурнитура рамки',1,'фасад',ALU_EXTRAS.cornersPerFacade,ALU_EXTRAS.source);
-        add('alu-hinge-hole'+(prof?.narrow?'-narrow':''),'Отверстие под петлю'+(prof?.narrow?' в узком профиле':''),hingeCount(d.length,d.width),'шт',prof?.narrow?ALU_EXTRAS.hingeHoleNarrow:ALU_EXTRAS.hingeHole,ALU_EXTRAS.source);
+        if(d.hinge!=='top')add('alu-hinge-hole'+(prof?.narrow?'-narrow':''),'Отверстие под петлю'+(prof?.narrow?' в узком профиле':''),hingeCount(d.length,d.width),'шт',prof?.narrow?ALU_EXTRAS.hingeHoleNarrow:ALU_EXTRAS.hingeHole,ALU_EXTRAS.source);
         add('alu-handle-hole','Отверстие под ручку (стекло 8 мм под втулку)',1,'шт',ALU_EXTRAS.handleHole,ALU_EXTRAS.source);
       }
       if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}

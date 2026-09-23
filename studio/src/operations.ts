@@ -1,5 +1,5 @@
 import {MEASUREMENT_RULES} from './measurement';
-import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,parts,RULES,type Module,type Section} from './model';
+import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors} from './project';
 import type {DrawerConfig} from './hardware';
@@ -9,6 +9,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   if(!m||!s)throw Error('Выберите элемент наполнения.');
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
   else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);}
+  else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
   else if(pid.endsWith(':rod')||pid.includes(':flange:')){s.rod=false;delete s.rodAt;}
@@ -18,7 +19,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
 export function moveModule(p:Project,mid:string,pos:{x:number;y:number;z:number}){const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);if(!a)throw Error('Корпус не найден.');Object.assign(a,pos);return n;}
 export function movePart(p:Project,mid:string,sid:string,pid:string,delta:number){
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module,s=m.sections.find(s=>s.id===sid)!,b=boxes(m).find(b=>b.id===sid)!;
-  if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);s.shelves[j]+=delta/(b.top-b.bottom);}
+  if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);s.shelves[j]=Math.round(s.shelves[j]*(b.top-b.bottom)+delta)/(b.top-b.bottom);}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);const yy=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:yy[k]}));s.drawerConfigs[j]={...s.drawerConfigs[j],y:Math.round(yy[j]+delta)};}
   else if(pid.includes(':rod')||pid.includes(':pantograph:')||pid.includes(':flange:')){const current=parts(m).find(p=>p.id===sid+':rod'||p.id===sid+':pantograph:rod')!;s.rodAt=(current.position[1]+delta-b.bottom)/(b.top-b.bottom);}
   return n;
@@ -33,7 +34,7 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     const item=meshById(meshId);if(!item)throw Error('Элемент Лемана Про не найден в каталоге.');
     kind='drawer';drawer={slide:'ball',length:250,height:item.h,mesh:item.id};
     // Ширина проверяется валидацией; здесь даём понятную подсказку сразу.
-    const inner=b.width-(source.doors?RULES.drawerFiller*(doorCount(source,target)===2?2:1):0);
+    const inner=b.width-fillerSides(source,target).left-fillerSides(source,target).right;
     if(inner<item.reqW||inner>item.reqW+MESH_WIDTH_TOLERANCE)throw Error(`«${item.label}» нужен проём ${item.reqW}–${item.reqW+MESH_WIDTH_TOLERANCE} мм внутри, сейчас ${Math.round(inner)}. Сделайте секцию ${Math.round(item.reqW+(b.width-inner)+2*RULES.panel)} мм по корпусу или выберите другой элемент.`);
   }
   const desired=Math.round((worldY-b.bottom)/5)*5;
@@ -76,7 +77,7 @@ export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,
   if(!target)throw Error('Выберите принимающую секцию.');
   if((kind==='rod'||kind==='pantograph')&&(target.rod||target.pantograph))throw Error('В принимающей секции уже есть штанга или пантограф. Выберите свободную секцию или сначала уберите существующий элемент.');
   const cfg=kind==='drawer'?drawerConfig(m,s,Number(pid.split(':drawer:')[1].split(':')[0])):undefined;
-  const n=removePart(p,fromMid,fromSid,pid);
+  const n=removePart(p,fromMid,fromSid,kind==='drawer'?pid.replace(':facade',':bottom'):pid);
   return insertItem(n,kind,toMid,toSid,y,cfg);
 }
 
@@ -96,7 +97,7 @@ export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:num
 export function mirrorModule(p:Project,mid:string):Project {
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
  if(!m)throw Error('Выберите корпус для отражения.');
- for(const sec of m.sections){if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=[sec.doorHandles[1]??null,sec.doorHandles[0]??null];if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>1-k);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
+ for(const sec of m.sections){if(sec.doorHinges){const hinges=[...sec.doorHinges];sec.doorHinges=hinges.map((_,k)=>{const h=hinges[doorCount(m,sec)===2?k^1:k];return h==='left'?'right':h==='right'?'left':h??null;});}if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=Array.from({length:sec.doorHandles.length},(_,k)=>sec.doorHandles?.[k^1]??null);if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>k^1);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  const error=projectErrors(n)[0];if(error)throw Error(error);
@@ -248,7 +249,7 @@ export function fitMeshItem(p:Project,mid:string,sid:string,meshId:string,worldY
    const next=structuredClone(p),m=next.modules.find(a=>a.id===mid)!.module;m.width=width;
    m.sections.forEach(s=>s.weight=s.id===sid?opening:before.find(b=>b.id===s.id)!.width);
    const sec=m.sections.find(s=>s.id===sid)!;
-   const inner=boxes(m).find(b=>b.id===sid)!.width-(m.doors?RULES.drawerFiller*(doorCount(m,sec)===2?2:1):0);
+   const inner=boxes(m).find(b=>b.id===sid)!.width-fillerSides(m,sec).left-fillerSides(m,sec).right;
    if(inner<item.reqW-0.001||inner>item.reqW+MESH_WIDTH_TOLERANCE+0.001)continue;
    try{return insertItem(next,'mesh',mid,sid,worldY,undefined,meshId);}catch(e){failure=(e as Error).message;}
  }

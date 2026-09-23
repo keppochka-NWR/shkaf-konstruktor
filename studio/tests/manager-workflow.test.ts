@@ -195,7 +195,7 @@ test('every door leaf and drawer front has an independent persisted priced handl
  const n=parseProject(JSON.parse(JSON.stringify(p))),nm=n.modules[0].module;
  for(const [pid,id] of [[s.id+':door:0','hexa1200b'],[s.id+':door:1','hexa256a'],[s.id+':drawer:0:facade','fp527-160'],[s.id+':drawer:1:facade',DEFAULT_HANDLE]])assert.equal(facadeHandleId(nm,pid),id);
  const quote=estimate(n);for(const id of ['hexa1200b','hexa256a','fp527-160',DEFAULT_HANDLE])assert.ok(quote.lines.some(l=>l.id==='handle:'+id&&l.quantity===1));
- const afterRemove=removePart(n,n.modules[0].id,s.id,s.id+':drawer:0:facade');
+ const afterRemove=removePart(n,n.modules[0].id,s.id,s.id+':drawer:0:bottom');
  assert.equal(facadeHandleId(afterRemove.modules[0].module,s.id+':drawer:0:facade'),DEFAULT_HANDLE);
  const mirrored=mirrorModule(n,n.modules[0].id);
  assert.equal(facadeHandleId(mirrored.modules[0].module,s.id+':door:1'),'hexa1200b');
@@ -206,4 +206,71 @@ test('invalid individual hardware is rejected instead of silently becoming a def
  if(assignment==='door')s.doorHandles=['unknown'];else{s.drawers=1;s.drawerConfigs=[{slide:'ball',height:140,length:450,handleId:'unknown'}];}
  assert.throws(()=>parseModule(m));
  }
+});
+
+import {fitDrawersAfterResize,drawerCapTop} from '../src/model';
+test('external drawers shorten hinged doors above their mandatory cap and save correctly',()=>{
+ const m=initialModule();m.sections=[section()];const s=m.sections[0];s.drawers=2;s.externalDrawers=true;
+ const ps=parts(m),door=ps.find(p=>p.role==='door')!,front=ps.find(p=>p.id.endsWith(':drawer:0:facade'))!;
+ assert.deepEqual(validate(m),[]);assert.ok(door.position[1]-door.size[1]/2>=drawerCapTop(m,s));
+ assert.ok(front.position[2]>m.depth);assert.ok(!ps.some(p=>p.id.includes(':filler:')));
+ assert.equal(parseModule(JSON.parse(JSON.stringify(m))).sections[0].externalDrawers,true);
+});
+test('split doors retain independent handles, gaps, mirroring and import validation',()=>{
+ const p=newProject(),m=p.modules[0].module;m.sections=[section()];const s=m.sections[0];s.doorLeaves=2;s.doorSplit=850;
+ setFacadeHandle(m,s.id+':door:0','uz819-128');setFacadeHandle(m,s.id+':door:2','fp527-160');
+ const ps=parts(m),doors=ps.filter(p=>p.role==='door');assert.equal(doors.length,4);assert.deepEqual(validate(m),[]);
+ const lo=doors.find(p=>p.id.endsWith(':0'))!,hi=doors.find(p=>p.id.endsWith(':2'))!;
+ assert.equal(hi.position[1]-hi.size[1]/2-(lo.position[1]+lo.size[1]/2),RULES.faceGap);
+ const restored=parseModule(JSON.parse(JSON.stringify(m)));assert.equal(restored.sections[0].doorSplit,850);
+ assert.equal(facadeHandleId(mirrorModule(p,p.modules[0].id).modules[0].module,s.id+':door:3'),'fp527-160');
+ const without=removePart(p,p.modules[0].id,s.id,s.id+':door:2');assert.equal(parts(without.modules[0].module).filter(p=>p.role==='door').length,3);
+ for(const split of [NaN,-1,10,5000]){s.doorSplit=split;assert.ok(validate(m).length);}
+});
+test('Delete on a drawer front preserves box, slides and all other drawers',()=>{
+ const p=newProject(),m=p.modules[0].module;m.sections=[section()];const s=m.sections[0];s.drawers=2;
+ const n=removePart(p,p.modules[0].id,s.id,s.id+':drawer:0:facade'),changed=n.modules[0].module;
+ assert.equal(changed.sections[0].drawers,2);assert.equal(changed.sections[0].drawerConfigs![0].noFacade,true);
+ const ps=parts(changed);assert.ok(ps.some(p=>p.id===s.id+':drawer:0:bottom'));assert.ok(!ps.some(p=>p.id===s.id+':drawer:0:facade'));
+ assert.ok(ps.some(p=>p.id===s.id+':drawer:1:facade'));assert.deepEqual(projectErrors(n),[]);
+});
+test('height resize fits existing drawers without deleting hardware or changing their order',()=>{
+ const m=initialModule();m.sections=[section()];const s=m.sections[0];s.drawers=3;
+ s.drawerConfigs=Array.from({length:3},(_,j)=>({slide:'ball',height:200,length:450,handleId:j===0?'fp527-160':'uz819-128'}));
+ m.doors=false;m.height=700;fitDrawersAfterResize(m);assert.deepEqual(validate(m),[]);
+ assert.equal(s.drawers,3);assert.ok(s.drawerConfigs.every(c=>c.height>=68&&c.height<200));assert.equal(s.drawerConfigs[0].handleId,'fp527-160');
+ assert.ok(drawerCapTop(m,s)<=boxes(m)[0].top-RULES.shelfMinClear);
+ m.height=300;assert.throws(()=>fitDrawersAfterResize(m));
+});
+
+test('custom room dimensions survive import and reject malformed and excessive coordinates',()=>{
+ const p=newProject();p.dimensions=[{id:'measure-1',from:[0,0],to:[600,800]}];
+ assert.deepEqual(parseProject(JSON.parse(JSON.stringify(p))).dimensions,p.dimensions);
+ for(const dimensions of [null,{},[{id:'bad',from:[0,0],to:[0,0]}],[{id:'bad',from:[-1,0],to:[2,0]}],[{id:'bad',from:[0,0],to:[Infinity,0]}]]){
+  assert.throws(()=>parseProject({...p,dimensions}));
+ }
+});
+
+test('individual top opening is persisted and never silently prices standard hinges as a lift mechanism',()=>{
+ const p=newProject(),m=p.modules[0].module;m.sections=[section()];m.height=600;m.width=500;
+ const s=m.sections[0];s.doorHinges=['top'];assert.deepEqual(validate(m),[]);
+ const d=parts(m).find(p=>p.role==='door')!,h=parts(m).find(p=>p.role==='handle')!;
+ assert.equal(d.hinge,'top');assert.ok(h.size[0]>h.size[1]);assert.equal(parseModule(m).sections[0].doorHinges![0],'top');
+ const quote=estimate(p);assert.ok(quote.missing.some(l=>l.id==='lift-mechanism'));assert.ok(!quote.lines.some(l=>l.id==='hinge'));
+});
+
+test('edge handles attach to the free facade edge and mirror to the other edge',()=>{
+ const p=newProject(),m=p.modules[0].module;m.sections=[section()];const s=m.sections[0];s.doorLeaves=1;s.doorHinges=['left'];s.doorHandles=['fp527-160'];
+ const ps=parts(m),d=ps.find(p=>p.role==='door')!,h=ps.find(p=>p.role==='handle')!;
+ assert.equal(h.position[0],d.position[0]+d.size[0]/2-2);
+ const mirrored=parts(mirrorModule(p,p.modules[0].id).modules[0].module),md=mirrored.find(p=>p.role==='door')!,mh=mirrored.find(p=>p.role==='handle')!;
+ assert.equal(mh.position[0],md.position[0]-md.size[0]/2+2);
+});
+
+test('drawer front gap changes real geometry while preserving boxes and persists',()=>{
+ const m=initialModule();m.doors=false;m.sections=[section()];const s=m.sections[0];s.drawers=2;s.drawerGap=8;
+ const faces=parts(m).filter(p=>p.id.endsWith(':facade')).sort((a,b)=>a.position[1]-b.position[1]);
+ assert.equal(faces[1].position[1]-faces[1].size[1]/2-(faces[0].position[1]+faces[0].size[1]/2),8);
+ assert.deepEqual(validate(m),[]);assert.equal(parseModule(m).sections[0].drawerGap,8);
+ s.drawerGap=0;assert.throws(()=>parseModule(m));
 });

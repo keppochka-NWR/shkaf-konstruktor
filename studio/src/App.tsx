@@ -1,4 +1,4 @@
-import {facadeHandleId,setFacadeHandle} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
@@ -250,7 +250,7 @@ export default function App() {
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
   const canRemove=selectedDetail&&(/:door:|:shelf:|:drawer:|:pantograph:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
   const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.id.includes(':shelf:')?'Полка '+(Number(selectedDetail.id.split(':shelf:')[1])+1):selectedDetail?.name;
-  const removalLabel=selectedDetail?.role==='door'?'Удалить выбранный фасад':selectedDetail?.id.includes(':drawer:')?'Удалить ящик целиком':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
+  const removalLabel=(selectedDetail?.role==='door'||selectedDetail?.id.endsWith(':facade'))?'Удалить выбранный фасад':selectedDetail?.id.includes(':drawer:')?'Удалить ящик целиком':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
   function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   function nudgeSelected(delta:number){if(!selectedPart||!canRemove||selectedDetail?.role==='door')return;try{moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,delta);}catch(e){setError((e as Error).message);}}
   function copySelected(){if(!selectedPart)return;try{const result=duplicatePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid);if(commitProject(result.project)){setSelectedPart({...selectedPart,pid:result.partId});setDrawerIndex(result.partId.includes(':drawer:')?Number(result.partId.split(':drawer:')[1].split(':')[0]):null);setDrawerPreview(false);setMode('fill');}}catch(e){setError((e as Error).message);}}
@@ -322,9 +322,9 @@ export default function App() {
     setStageState(next);setModal(m=>m==='room-setup'?null:m);
     if(next==='room'){setTab('room');setShowRoom(true);setRoomPlan(false);setView('iso');setFit(f=>f+1);}
     else if(next==='fixtures'){setTab('room');setShowRoom(true);setRoomPlan(true);}
-    else if(next==='bodies'){setTab('module');setMode('move');setRoomPlan(false);setShowRoom(true);setOpenDoors(false);setFit(f=>f+1);}
-    else if(next==='filling'){setTab('section');setMode('fill');setRoomPlan(false);setOpenDoors(true);setFocusActive(true);setFit(f=>f+1);}
-    else if(next==='facades'){setTab('module');setMode('select');setHideFacades(false);setRoomPlan(false);setOpenDoors(false);setFocusActive(true);setFit(f=>f+1);}
+    else if(next==='bodies'){setTab('module');setMode('move');setRoomPlan(false);setShowRoom(true);setOpenDoors(false);}
+    else if(next==='filling'){setTab('section');setMode('fill');setRoomPlan(false);setOpenDoors(true);}
+    else if(next==='facades'){setTab('module');setMode('select');setHideFacades(false);setRoomPlan(false);setOpenDoors(false);}
     else {setRoomPlan(false);setView('iso');setShowRoom(true);setOutputTab('sheets');setModal('output');}
   }
   const stageDone:Partial<Record<Stage,boolean>>={room:true,fixtures:!!((project.room.openings?.length||0)+(project.room.fixtures?.length||0)+(project.room.obstacles?.length||0)),bodies:project.modules.length>0,filling:project.modules.some(a=>a.module.sections.some(s=>s.shelves.length||s.drawers||s.rod)),facades:project.modules.some(a=>a.module.doors||a.module.sections.some(s=>s.drawers))};
@@ -439,7 +439,7 @@ export default function App() {
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
-    update(next);
+    try{update(next);if(next.height!==m.height)fitDrawersAfterResize(next);}catch(e){setError((e as Error).message);return false;}
     return commit(next);
   }
   function modifySection(update: (draft: Section, next: Module) => void) {
@@ -1289,6 +1289,7 @@ export default function App() {
                 {m.doors && (
                   <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{if(e.target.value==='alu')n.alu={...DEFAULT_ALU};else delete n.alu;})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option></select></label>
                 )}
+                {m.doors&&<button className="outline full" onClick={()=>{setTab('section');propertiesRef.current?.scrollTo({top:0,behavior:'smooth'});}}>Настроить каждую дверь · ручки, петли, разделение</button>}
                 {m.doors && m.alu && (<>
                   <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
                   <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={m.alu.color} onChange={e=>modify(n=>{n.alu={...n.alu!,color:e.target.value};})}>{aluProfile(m.alu.profile)!.colors.map(c=><option key={c.id} value={c.id}>{c.label} · {c.perM} ₽/м</option>)}</select></label>
@@ -1431,11 +1432,20 @@ export default function App() {
                   <Columns2 size={17} />
                 </div>
                 <div className="section-copy"><button className="text-action" onClick={()=>{try{setFillingCopy(captureSectionFilling(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Копировать наполнение секции</button>{fillingCopy&&<><p className="field-note">Скопировано: {fillingCopy.name}</p><button className="outline full" onClick={()=>{try{if(commitProject(pasteSectionFilling(project,placed.id,s.id,fillingCopy))){setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>{s.drawers||s.shelves.length||s.rod||s.pantograph?'Заменить наполнение копией':'Вставить наполнение секции'}</button><p className="field-note">Высоты от дна и фурнитура сохранятся. Корпус и материалы остаются его собственными. Ctrl+Z отменит вставку.</p></>}</div>
-                {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span><div style={{display:selectedDetail?.role==='door'?'none':undefined}} className="filling-nudge" role="group" aria-label="Точное перемещение наполнения" onKeyDown={e=>{if(e.ctrlKey||e.metaKey||e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();nudgeSelected((e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1));}}><button className="outline" aria-label="Опустить выбранный элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ Ниже на 10</button><button className="outline" aria-label="Поднять выбранный элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ Выше на 10</button></div>{selectedDetail?.role!=='door'&&<small>На этих кнопках: ↑ / ↓ — 1 мм, Shift — 10 мм.</small>}{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round((selectedDetail.position[1]-b.bottom)*10)/10} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>}
+                {selectedDetail?.id.includes(':drawer:')&&<button className="text-action danger" onClick={()=>{if(selectedPart&&commitProject(removePart(project,placed.id,s.id,selectedPart.pid.replace(':facade',':bottom'))))setSelectedPart(null);}}>Удалить ящик целиком</button>}
+                {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span><div style={{display:selectedDetail?.role==='door'?'none':undefined}} className="filling-nudge" role="group" aria-label="Точное перемещение наполнения" onKeyDown={e=>{if(e.ctrlKey||e.metaKey||e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();nudgeSelected((e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1));}}><button className="outline" aria-label="Опустить выбранный элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ Ниже на 10</button><button className="outline" aria-label="Поднять выбранный элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ Выше на 10</button></div>{selectedDetail?.role!=='door'&&<small>На этих кнопках: ↑ / ↓ — 1 мм, Shift — 10 мм.</small>}{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round(selectedDetail.position[1]-b.bottom)} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>}
                 {m.doors&&<details className="section-facades" open={stage==='facades'||selectedDetail?.role==='door'||undefined}><summary>Фасады секции {idx+1}</summary>
+<div className="facade-pick-list" role="group" aria-label="Выбрать отдельный фасад">{parts(m).filter(p=>p.sectionId===s.id&&(p.role==='door'||p.id.endsWith(':facade'))).map((p,i)=><button key={p.id} className="outline" aria-pressed={selectedPart?.pid===p.id} onClick={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:p.id});setDrawerIndex(p.id.includes(':drawer:')?Number(p.id.split(':drawer:')[1].split(':')[0]):null);setMode('select');}}>{p.role==='door'?'Дверь '+(i+1):p.name} · {Math.round(p.width)}×{Math.round(p.length)}</button>)}</div>
+{selectedDetail?.role==='door'&&<button className="outline full" onClick={()=>{setHandleFace(selectedDetail.id);setHandleTarget('doors');setModal('handles');}}>Ручка выбранной двери</button>}
+{selectedDetail?.role==='door'&&<label className="hardware-field">Открывание выбранной двери<select aria-label="Открывание выбранной двери" value={selectedDetail.hinge??'left'} onChange={e=>modifySection(a=>{const k=Number(selectedDetail.id.split(':door:')[1]);a.doorHinges=Array.from({length:4},(_,i)=>a.doorHinges?.[i]??null);a.doorHinges[k]=e.target.value as 'left'|'right'|'top';})}><option value="left">Петли слева</option><option value="right">Петли справа</option><option value="top">Подъёмный, ось сверху</option></select></label>}
+{s.doorHinges?.includes('top')&&<p className="construction-note" role="status">Подъёмный фасад показан геометрически. Механизм нужно подобрать по массе и размерам; его цена не задана, присадка не рассчитана.</p>}
 <label className="hardware-field">Створки<select aria-label="Створки выбранной секции" value={s.doorLeaves??'auto'} onChange={e=>modifySection(a=>{a.doorLeaves=e.target.value==='auto'?undefined:Number(e.target.value) as 1|2;delete a.removedDoors;})}><option value="auto">Автоматически по ширине</option><option value="1">Одна створка</option><option value="2">Две створки</option></select></label>
 <label className="hardware-field">Петли одной створки<select aria-label="Петли выбранной секции" value={s.hingeSide??m.hingeSide??'left'} onChange={e=>modifySection(a=>a.hingeSide=e.target.value as 'left'|'right')}><option value="left">Слева</option><option value="right">Справа</option></select></label>
-<p className="field-note">У двух створок петли по внешним сторонам секции.</p>
+<p className="field-note">Выберите дверь выше: её ручка и сторона открывания меняются независимо.</p>
+<label className="hardware-field"><span><input type="checkbox" checked={!!s.externalDrawers} onChange={e=>modifySection(a=>a.externalDrawers=e.target.checked)}/> Ящики снаружи, дверь над ящиками</span></label>
+<p className="field-note">Дверь начинается над полкой ящиков. Ручка каждого фасада выбирается отдельно нажатием на фасад в модели.</p>
+<label className="hardware-field"><span><input type="checkbox" checked={s.doorSplit!==undefined} onChange={e=>modifySection(a=>{a.doorSplit=e.target.checked?Math.round((facadeTop(m)-(a.externalDrawers&&a.drawers?drawerCapTop(m,a)+(a.doorGap??RULES.faceGap):facadeBottom(m)))/2):undefined;delete a.removedDoors;})}/> Разделить фасады по высоте</span></label>
+{s.doorSplit!==undefined&&<NumberField label="Высота нижнего ряда фасадов" value={s.doorSplit} min={RULES.doorMinH} max={m.height-RULES.doorMinH} onChange={v=>modifySection(a=>a.doorSplit=v)}/>}
 <NumberField label="Зазор между створками" value={s.doorGap??RULES.faceGap} min={2} max={10} onChange={v=>modifySection(a=>a.doorGap=v)}/>
 {!!s.removedDoors?.length&&<button className="outline" onClick={()=>modifySection(a=>delete a.removedDoors)}>Вернуть снятые фасады секции</button>}
 </details>}
@@ -1458,6 +1468,7 @@ export default function App() {
                 </button>
               </div>
               <div className="property-section">
+                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)} min={2} max={10} onChange={v=>modifySection(a=>a.drawerGap=v)}/>}
                 <h2>Наполнение</h2>
                 {s.drawers > 0 && (
                   <div className="drawer-selection">
@@ -1481,7 +1492,7 @@ export default function App() {
                       try{
                         let next=project;const count=Math.max(1,Math.min(RULES.maxDrawers,Math.round(v)));
                         for(let k=s.drawers;k<count;k++){const sec=next.modules.find(a=>a.id===placed.id)!.module.sections.find(x=>x.id===s.id)!;next=insertItem(next,'drawer',placed.id,s.id,boxes(next.modules.find(a=>a.id===placed.id)!.module).find(x=>x.id===s.id)!.bottom+drawerStackHeight(sec),drawerConfig(next.modules.find(a=>a.id===placed.id)!.module,sec,Math.max(0,sec.drawers-1)));}
-                        for(let k=s.drawers;k>count;k--)next=removePart(next,placed.id,s.id,s.id+':drawer:'+(k-1)+':facade');
+                        for(let k=s.drawers;k>count;k--)next=removePart(next,placed.id,s.id,s.id+':drawer:'+(k-1)+':bottom');
                         if(commitProject(next))setDrawerIndex(Math.min(drawerIndex??0,count-1));
                       }catch(e){setError((e as Error).message);}
                     }}/>
@@ -1556,7 +1567,7 @@ export default function App() {
                           />
                           <label className="hardware-field"><span><input type="checkbox" aria-label="Ящик без фасада" checked={!!c.noFacade} onChange={e=>update({noFacade:e.target.checked?true:undefined,handle:undefined})}/> Внутренний ящик без фасада</span></label>
                           {c.noFacade?<p className="field-note">Только короб и направляющие: ящик за распашными дверями или в открытом каркасе. Фасад, ручка и зазоры не считаются.</p>:<>
-                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c)-(m.doors?RULES.drawerFrontGap:RULES.faceGap))} min={60} max={800} onChange={v=>update({facadeH:v})}/>
+                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={60} max={800} onChange={v=>update({facadeH:v})}/>
                           {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}</>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
                           {c.slide === "gtv0fpo" && (

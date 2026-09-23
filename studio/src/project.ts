@@ -12,7 +12,8 @@ export type Room={width:number;depth:number;height:number;openings?:Opening[];ob
   /** Стены: толщина и углы между фронтальной (задней) и боковыми, как в скрипте Базиса. */
   walls?:{thickness:number;angleLeft?:number;angleRight?:number}};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
-export type Project={version:3;measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};offer?:{customer:string;price:string;notes:string}};
+export type PlanDimension={id:string;from:[number,number];to:[number,number]};
+export type Project={version:3;dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
@@ -94,6 +95,7 @@ export function volumes(a:PlacedModule):ReturnType<typeof bounds>[]{
 export function modulesOverlap(a:PlacedModule,b:PlacedModule){const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
+  if(p.dimensions!==undefined&&(!Array.isArray(p.dimensions)||p.dimensions.length>50||p.dimensions.some(d=>!d||typeof d.id!=='string'||!Array.isArray(d.from)||!Array.isArray(d.to)||d.from.length!==2||d.to.length!==2||[...d.from,...d.to].some(v=>!Number.isFinite(v)||v<0||v>20000)||Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1])<1)||new Set(p.dimensions.map(d=>d.id)).size!==p.dimensions.length))return ['Проверьте размеры на плане: до 50 линий, разные точки в пределах 0–20000 мм.'];
   if(p.measurement){const m=p.measurement;if(typeof m.number!=='string'||m.number.length>60||typeof m.notes!=='string'||m.notes.length>2000||typeof m.date!=='string'||(m.date!==''&&(!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!Number.isFinite(Date.parse(m.date))||new Date(m.date).toISOString().slice(0,10)!==m.date)))return ['Проверьте номер, дату и примечания замера.'];}
 
   if(p.measurement?.niche?.readings!==undefined){const r=p.measurement.niche.readings;if(!r||typeof r!=='object'||Array.isArray(r)||Object.entries(r).some(([k,v])=>!['width','height','depth'].includes(k)||!Array.isArray(v)||v.length<1||v.length>20||v.some(x=>!Number.isFinite(x)||x<500||x>20000)))return ['Проверьте размеры ниши в нескольких точках.'];}
@@ -154,6 +156,7 @@ export function parseProject(data:unknown):Project{
   if(x.room.walls!==undefined){const w=x.room.walls;p.room.walls={thickness:Number(w?.thickness),...(w?.angleLeft===undefined?{}:{angleLeft:Number(w.angleLeft)}),...(w?.angleRight===undefined?{}:{angleRight:Number(w.angleRight)})};}
   if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height}));}
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
+  if(x.dimensions!==undefined)p.dimensions=structuredClone(x.dimensions);
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation,...(x.measurement.niche.readings===undefined?{}:{readings:structuredClone(x.measurement.niche.readings)})}})};
   if(x.cloud)p.cloud={id:x.cloud.id,revision:x.cloud.revision,owner:x.cloud.owner,...(x.cloud.name===undefined?{}:{name:x.cloud.name})};
   if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.model===undefined?{}:{model:x.calculation.model}),...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice})};
