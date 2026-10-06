@@ -15,60 +15,8 @@ MM = 0.001
 LENGTH = 1000.0
 
 
-def rect(a0, b0, a1, b1):
-    return [(a0, b0), (a1, b0), (a1, b1), (a0, b1)]
-
-
-def arc_band(ca, cb, r_out, r_in, d0, d1, n=28):
-    """Curved wall: outer arc from d0 to d1 degrees, then inner arc back."""
-    outer = [(ca + r_out * math.cos(math.radians(d0 + (d1 - d0) * i / n)), cb + r_out * math.sin(math.radians(d0 + (d1 - d0) * i / n))) for i in range(n + 1)]
-    inner = [(ca + r_in * math.cos(math.radians(d1 - (d1 - d0) * i / n)), cb + r_in * math.sin(math.radians(d1 - (d1 - d0) * i / n))) for i in range(n + 1)]
-    return outer + inner
-
-
-def slot(a0, a1, mid, panel=10.0, wall=1.4):
-    """Two flanges that hold a panel of given thickness, centred on depth mid."""
-    return [rect(a0, mid + panel / 2, a1, mid + panel / 2 + wall), rect(a0, mid - panel / 2 - wall, a1, mid - panel / 2)]
-
-
-# a: across (0 = outer edge of the leaf / outer edge of the frame), b: depth (0 = back, max = front facing the room)
-SHAPES = {
-    # Standard C: wide face 30, C-shaped finger grip on the outer edge, chamber and panel slot toward the insert.
-    "handle_c": lambda w=30.0, d=32.0: [
-        arc_band(9.5, d - 9.5, 9.5, 7.9, 45, 290),
-        rect(9.5, d - 1.6, w, d), rect(6.5, 0, w, 1.6), rect(6.5, 0, 8.1, d - 17.5),
-        rect(15, 1.6, 16.4, d - 1.6), *slot(16.4, w, d / 2), rect(16.4, d / 2 - 6.4, 18, d / 2 + 6.4),
-    ],    # Standard I / Flat: flat face, I-section, panel slot toward the insert.
-    "handle_i": lambda w=30.0, d=26.0: [
-        rect(0, d - 1.8, w, d), rect(0, 0, 14, 1.6), rect(2.4, 0, 4.0, d), rect(12.4, 0, 14, d),
-        *slot(14, w, d / 2), rect(14, d / 2 - 6.4, 15.6, d / 2 + 6.4),
-    ],
-    # Slim / GRACE / NOVA: narrow 12 mm face, small rectangular tube with a slot.
-    "handle_slim": lambda w=12.0, d=22.0: [
-        rect(0, d - 1.4, w, d), rect(0, 0, 1.4, d), rect(0, 0, 5.5, 1.4), rect(4.2, 1.4, 5.5, d - 1.4),
-        *slot(5.5, w, d / 2, wall=1.2), rect(5.5, d / 2 - 6.2, 6.8, d / 2 + 6.2),
-    ],
-    # Horizontal frame (top and bottom): a = along door height from the outer edge, b = depth.
-    "frame": lambda h=40.0, d=16.0: [
-        rect(0, 0, h - 12, 1.4), rect(0, d - 1.4, h - 12, d), rect(0, 0, 1.4, d), rect(h - 13.4, 0, h - 12, d),
-        *slot(h - 12, h, d / 2), rect(10, 1.4, 11.2, d - 1.4),
-    ],
-    # Divider between inserts: H-section with a slot on each side.
-    "divider": lambda h=20.0, d=14.0: [
-        rect(0, d / 2 + 5, h, d / 2 + 6.4), rect(0, d / 2 - 6.4, h, d / 2 - 5), rect(h / 2 - 0.8, d / 2 - 6.4, h / 2 + 0.8, d / 2 + 6.4),
-    ],
-    # Top track: a = height (0 = lower edge, 35 = ceiling), b = depth across the opening (81.6). Two channels for two rows of doors.
-    "track_top": lambda t=35.0, s=81.6: [
-        rect(t - 1.8, 0, t, s), rect(0, 0, t, 1.6), rect(0, s - 1.6, t, s),
-        rect(6, s / 2 - 0.8, t, s / 2 + 0.8), rect(10, s * 0.25 - 0.7, t, s * 0.25 + 0.7), rect(10, s * 0.75 - 0.7, t, s * 0.75 + 0.7),
-    ],
-    # Bottom track: a = height (0 = floor), b = depth. Base plate with two rounded rails.
-    "track_bottom": lambda t=10.0, s=81.6: [
-        rect(0, 0, 1.8, s), rect(0, 0, 4, 1.6), rect(0, s - 1.6, 4, s),
-        rect(0, s * 0.3 - 1.3, t - 1.3, s * 0.3 + 1.3), arc_band(t - 1.3, s * 0.3, 1.3, 0.01, -90, 90, 12),
-        rect(0, s * 0.7 - 1.3, t - 1.3, s * 0.7 + 1.3), arc_band(t - 1.3, s * 0.7, 1.3, 0.01, -90, 90, 12),
-    ],
-}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from kupe_profile_shapes import SHAPES  # noqa: E402
 
 
 def prism(name, poly, length=LENGTH):
