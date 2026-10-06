@@ -2,7 +2,7 @@
 import React, { useMemo } from "react";
 import type { Module } from "./model";
 import { KUPE_SYSTEMS, KUPE_FILLS, KUPE_SECTIONS, KUPE_SOFT_CLOSE } from "./kupeData";
-import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, KUPE_DEPTH, type KupeSpec } from "./kupe";
+import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, type KupeSpec } from "./kupe";
 import "./kupe-panel.css";
 
 const groups = [...new Set(KUPE_FILLS.map((f) => f.g))];
@@ -35,6 +35,10 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors }: { m: Module; m
       <label className="hardware-field">Система профиля<select aria-label="Система профиля купе" value={k.system} onChange={(e) => { const s = KUPE_SYSTEMS.find((x) => x.system === e.target.value)!; set({ system: s.system, color: s.colors.some((c) => c.name === k.color) ? k.color : s.colors[0].name }); }}>
         {[...new Set(KUPE_SYSTEMS.map((s) => s.family))].map((f) => <optgroup key={f} label={f}>{KUPE_SYSTEMS.filter((s) => s.family === f).map((s) => <option key={s.system} value={s.system}>{s.system} · {s.limits.Hmin}–{s.limits.Hmax} мм{s.kind === "hang" ? " · подвесная" : ""}</option>)}</optgroup>)}
       </select></label>
+      <figure className="kupe-profile-preview">
+        <img src={import.meta.env.BASE_URL + KUPE_PROFILE_PREVIEW[kupeProfileStyle(sys)]} alt={"Профиль-ручка " + sys.profile} loading="lazy" />
+        <figcaption>Профиль-ручка · {sys.profile} · {sys.dims.frameSide} мм<small>Форма по иллюстрации каталога Аристо, не заводской чертёж</small></figcaption>
+      </figure>
       <div className="kupe-field"><span>Цвет профиля · {col.name}</span>
         <div className="kupe-swatches" role="group" aria-label="Цвет профиля купе">{sys.colors.map((c) => <button key={c.name} type="button" title={c.name} aria-label={c.name} aria-pressed={c.name === k.color} style={{ background: `linear-gradient(135deg, ${c.grad})` }} onClick={() => set({ color: c.name })} />)}</div>
       </div>

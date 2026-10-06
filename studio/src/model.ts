@@ -227,6 +227,8 @@ export type Part = {
   external?: boolean;
   /** Готовый вид материала в 3D (цвет, прозрачность, металл) — для наполнений купе и профиля. */
   look?: { color: number; opacity?: number; metalness?: number; roughness?: number };
+  /** Модель профиля из Blender (public/models/<file>): вписывается в габарит детали, length — ось длины. */
+  model?: { file: string; length: "x" | "y"; mirror?: boolean };
   /** Сдвиг по X при «открытых фасадах» — полотно купе отъезжает за соседнее. */
   openShift?: number;
   /** Explicitly schematic handle; use the declared box instead of a catalogue asset. */

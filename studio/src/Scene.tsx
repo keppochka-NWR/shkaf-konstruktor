@@ -17,10 +17,26 @@ const handleModels = new Map<string, Promise<THREE.Group>>();
 function loadHandleModel(file: string) {
   let p = handleModels.get(file);
   if (!p) {
-    p = new Promise<THREE.Group>((resolve, reject) => gltfLoader.load(`${import.meta.env.BASE_URL}models/handles/${file}`, (g) => resolve(g.scene), undefined, reject));
+    p = new Promise<THREE.Group>((resolve, reject) => gltfLoader.load(`${import.meta.env.BASE_URL}models/${file.includes("/") ? file : "handles/" + file}`, (g) => resolve(g.scene), undefined, reject));
     handleModels.set(file, p);
   }
   return p;
+}
+/** Профиль из Blender (метровая заготовка: x — поперёк, y — длина, z — глубина) вписывается в габарит детали:
+ *  длина тянется, сечение остаётся; mirror — зеркально по поперечной оси; length 'x' — профиль лежит горизонтально. */
+function fitProfile(src: THREE.Group, part: { size: [number, number, number]; model?: { length: "x" | "y"; mirror?: boolean } }, material: THREE.Material) {
+  const inner = new THREE.Group(), outer = new THREE.Group(), model = src.clone(true);
+  model.scale.setScalar(1000);
+  model.traverse((o) => { if (o instanceof THREE.Mesh) { o.material = material; o.castShadow = true; o.receiveShadow = true; } });
+  inner.add(model);
+  if (part.model?.mirror) inner.scale.x = -1;
+  const pivot = new THREE.Group(); pivot.add(inner);
+  if (part.model?.length === "x") pivot.rotation.z = -Math.PI / 2;
+  outer.add(pivot); outer.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(pivot), size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
+  const s = new THREE.Vector3(part.size[0] / Math.max(size.x, 1e-6), part.size[1] / Math.max(size.y, 1e-6), part.size[2] / Math.max(size.z, 1e-6));
+  outer.scale.copy(s); outer.position.set(-centre.x * s.x, -centre.y * s.y, -centre.z * s.z);
+  return outer;
 }
 import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type Module } from "./model";
 import { catalog } from "./catalog";
@@ -325,10 +341,21 @@ export function Scene(p: Props) {
             mat.color.set(part.look.color); mat.metalness = part.look.metalness ?? 0; mat.roughness = part.look.roughness ?? 0.6;
             mat.transparent = op < 1; mat.opacity = op; mat.depthWrite = op >= 1;
           }
+          let profileMaterial: THREE.Material | null = null;
+          if (part.model) {
+            // Профиль купе из Blender: невидимый бокс для выбора + модель с цветом профиля из прайса.
+            profileMaterial = new THREE.MeshStandardMaterial({ color: part.look?.color ?? 0xc8ccd0, metalness: 0.5, roughness: 0.32 });
+            mat.transparent = true; mat.opacity = 0; mat.depthWrite = false;
+          }
           const isMeshItem = part.id.endsWith(":mesh");
           const isHandle = part.role === "handle";
           if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
+          if (part.model && profileMaterial) {
+            const g = generation, pm = profileMaterial; pendingTextures++;
+            loadHandleModel(part.model.file).then((src) => { if (disposed || g !== generation) return; const fitted = fitProfile(src, part, pm); fitted.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; }); mesh.add(fitted); needsRender = true; })
+              .catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
+          }
           if (isHandle&&!part.simpleHandle) {
             // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
             const handle = handleById(facadeHandleId(m,part.id)), vertical = part.size[1] > part.size[0];

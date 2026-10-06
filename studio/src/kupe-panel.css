@@ -23,3 +23,7 @@
 .kupe-lines td:last-child { width: 86px; text-align: right; font-weight: 600; white-space: nowrap; }
 .kupe-lines small { display: block; color: #7a8b94; overflow-wrap: anywhere; }
 .kupe-lines summary, .kupe-doors summary { cursor: pointer; font-weight: 650; font-size: 13px; }
+.kupe-profile-preview { margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px; border-radius: 10px; background: linear-gradient(180deg, #f4f6f9, #e9edf2); }
+.kupe-profile-preview img { width: 96px; height: 72px; object-fit: contain; }
+.kupe-profile-preview figcaption { font-size: 12px; font-weight: 600; color: #1d2b3a; display: grid; gap: 2px; min-width: 0; }
+.kupe-profile-preview small { font-weight: 400; color: #7a8b94; font-size: 11px; }
