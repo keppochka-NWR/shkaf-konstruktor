@@ -5,6 +5,7 @@ import {DrawingsPanel} from './DrawingsPanel';
 import {EstimatePanel} from './EstimatePanel';
 import { useState, useMemo } from "react";
 import { type Project } from "./project";
+import type { OutputTab } from "./ProjectDock";
 import {
   nest,
   findSheetDetails,
@@ -29,13 +30,13 @@ export function OutputPanel({
 }: {
   project: Project;
   inspect: (moduleId:string,partId:string)=>void;
-  initialTab?: "sheets" | "estimate";
+  initialTab?: OutputTab;
   capture: () => string | undefined;
   update: (p: Project) => boolean;
 }) {
   const [packing,setPacking]=useState(false),[packageMessage,setPackageMessage]=useState(''),[packageError,setPackageError]=useState('');
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
-  const [tab, setTab] = useState<"sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement">(initialTab);
+  const [tab, setTab] = useState<OutputTab>(initialTab);
   const [detailQuery,setDetailQuery]=useState(''),[highlight,setHighlight]=useState('');
   const sheets = useMemo(()=>nest(project),[project]),all=useMemo(()=>details(project),[project]);
   const query=detailQuery.trim().toLocaleLowerCase('ru-RU');

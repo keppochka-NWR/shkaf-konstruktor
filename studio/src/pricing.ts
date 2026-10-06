@@ -55,6 +55,20 @@ export const FASTENERS={
 };
 export const HARDWARE_KIT={label:'Мелочёвка корпуса (шурупы задника, стяжки антресолей, подпятники)',price:150,source:'Норматив; конфирматы, заглушки, полкодержатели и опоры считаются отдельно'};
 
+export type LineGroup='material'|'hardware';
+/** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы. Всё остальное — фурнитура. */
+export function lineGroup(id:string):LineGroup{return /^(sheet:|edge|small$|work$|alu-|glass-)/.test(id)?'material':'hardware';}
+export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'other';
+export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',other:'Прочее'};
+export function hardwareKind(id:string):HardwareKind{
+  if(/^(hinge|push-latch|lift-mechanism)/.test(id))return 'hinges';
+  if(/^(slide:|mesh:|pantograph)/.test(id))return 'slides';
+  if(id.startsWith('handle:'))return 'handles';
+  if(id.startsWith('legs'))return 'legs';
+  if(/^(confirmat|eccentric|shelf-holder|kit$|screw)/.test(id))return 'fasteners';
+  if(/^(rod|flange)/.test(id))return 'rods';
+  return 'other';
+}
 export function hingeCount(height:number,width:number){return (height<=900?2:height<=1600?3:height<=2000?4:5)+(width>450?1:0);}
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const lines:PriceLine[]=[];const settings=p.calculation||{markup:2.2,overrides:{}};
@@ -126,11 +140,16 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model=settings.model??'markup';
-  const byMarkup=missing.length?null:Math.round(knownCost*settings.markup/100)*100+retailExtras;
+  // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
+  // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
+  const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  const materialCost=costOf('material'),hardwareCost=costOf('hardware');
+  const split={materialCost,hardwareCost,material:Math.round(materialCost*settings.markup/100)*100,hardware:Math.round(hardwareCost*settings.markup/100)*100+retailExtras};
+  const byMarkup=missing.length?null:split.material+split.hardware;
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
   const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const bySheet=ldspSheets*sheetPrice+retailExtras+lemana;
-  return {lines,missing,knownCost,retailExtras,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:model==='sheet'?bySheet:byMarkup};
+  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:model==='sheet'?bySheet:byMarkup};
 }
 
 

@@ -1,0 +1,51 @@
+/* Нижняя навигация по проекту: вкладки + выезжающая панель над ними (3D остаётся видимым выше). */
+.project-dock { flex-shrink: 0; display: flex; flex-direction: column; background: #fff; border-top: 1px solid var(--line); z-index: 3; }
+.dock-panel { max-height: min(32dvh, 290px); overflow-y: auto; border-bottom: 1px solid var(--line); background: #fbfcfd; scrollbar-width: thin; }
+.dock-body { padding: 14px 20px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; font-size: 13px; color: #24343c; }
+.dock-bar { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 12px; }
+.dock-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.dock-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 550; color: #4d6370; background: transparent; }
+.dock-tabs button:hover { background: #eef3f6; }
+.dock-tabs button[aria-pressed="true"] { background: #2449d6; color: #fff; }
+.dock-bar .room-warning-link { font-size: 12px; color: #b4561b; font-weight: 600; }
+.dock-price { margin-left: auto; display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 8px; color: #24343c; font-size: 13px; white-space: nowrap; }
+.dock-price:hover { background: #eef3f6; }
+.dock-price b { font-size: 16px; color: #2449d6; }
+.dock-split { color: #6a7d87; font-size: 12px; }
+.dock-sums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 10px; align-items: start; }
+.dock-breakdown { display: grid; gap: 8px; }
+.dock-breakdown .dock-table td { padding: 4px; }
+.dock-sum { display: grid; gap: 2px; padding: 10px 14px; border-radius: 10px; background: #fff; border: 1px solid var(--line); border-top: 4px solid #8aa0ab; }
+.dock-sum span { font-size: 12px; color: #6a7d87; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.dock-sum b { font-size: 22px; font-weight: 700; }
+.dock-sum small { color: #6a7d87; font-size: 12px; }
+.dock-sum.material { border-top-color: #a07a4f; }
+.dock-sum.hardware { border-top-color: #4f8a7a; }
+.dock-sum.total { border-top-color: #2449d6; }
+.dock-sum.total b { color: #2449d6; }
+.dock-sum .text-action { justify-self: start; padding: 0; font-size: 12px; }
+.dock-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dock-table td:last-child { width: 110px; }
+.dock-table td { padding: 7px 4px; border-bottom: 1px solid #edf1f3; vertical-align: top; }
+.dock-table td:last-child { text-align: right; white-space: nowrap; font-weight: 600; }
+.dock-table small { display: block; color: #7a8b94; font-size: 11.5px; margin-top: 2px; white-space: normal; overflow-wrap: anywhere; }
+.dock-swaps select { min-width: 0; width: 100%; }
+.dock-swaps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.dock-swaps label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: #4d6370; }
+.dock-swaps select { font-size: 13px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.dock-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: #eef3ff; color: #1f3aa8; font-size: 12.5px; }
+.dock-hint { margin: 0; color: #7a8b94; font-size: 12px; }
+.dock-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dock-details p { margin: 0; }
+@media (max-width: 1100px) { .dock-split { display: none; } .dock-sums { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dock-breakdown { grid-column: 1 / -1; } }
+@media (max-width: 700px) {
+  .project-dock { max-width: 100vw; position: sticky; left: 0; }
+  .dock-bar { flex-wrap: wrap; gap: 4px 8px; padding: 6px 10px; }
+  .dock-tabs { flex-wrap: nowrap; overflow-x: auto; width: 100%; scrollbar-width: none; }
+  .dock-tabs button { padding: 7px 9px; font-size: 12.5px; flex-shrink: 0; }
+  .dock-tabs button svg { display: none; }
+  .dock-bar .room-warning-link { font-size: 11.5px; }
+  .dock-table small { overflow-wrap: anywhere; }
+  .dock-sums { grid-template-columns: 1fr; }
+  .dock-body { padding: 12px 16px; }
+}

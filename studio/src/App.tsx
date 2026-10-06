@@ -62,7 +62,7 @@ import {
   type Section,
 } from "./model";
 import { Scene, type View } from "./Scene";
-import { PriceStatus } from "./PriceStatus";
+import { ProjectDock, type OutputTab } from "./ProjectDock";
 import { OutputPanel } from "./OutputPanel";
 import {RoomWarnings} from './RoomWarningPanel';
 import {roomWarnings} from './roomWarnings';
@@ -275,7 +275,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
   const [selectedFixture,setSelectedFixture]=useState<string>();
   const [presentation,setPresentation]=useState(false);
   const beforePresentation=useRef<{view:View;roomPlan:boolean;openDoors:boolean;showRoom:boolean}|null>(null);
-  const [outputTab,setOutputTab] = useState<"sheets" | "estimate">("sheets");
+  const [outputTab,setOutputTab] = useState<OutputTab>("sheets");
   // Пошаговый режим: этап определяет, какие панели видны и куда ведёт «Дальше». Сохраняется в браузере.
   const [stage,setStageState]=useState<Stage>(()=>{try{const s=localStorage.getItem(STAGE_KEY);return s&&STAGES.some(x=>x.id===s)?(s as Stage):'room';}catch{return 'room';}});
   const [advanced,setAdvanced]=useState(()=>{try{return localStorage.getItem(STAGE_KEY+'-advanced')==='1';}catch{return false;}});
@@ -1721,22 +1721,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
           </div>
         </aside>
       </main>
-      <footer className="statusbar">
-        <span>
-          <span className="status-dot" />
-          3D-редактор модулей <b>03</b>
-        </span>
-        <button onClick={() => setModal("parts")}>
-          <Layers size={14} />
-          {allParts.filter((p) => p.material !== "metal").length} деталей{" "}
-          <span>Посмотреть</span>
-        </button>
-        <button className="room-warning-link" hidden={!placementWarnings.length} onClick={()=>{setRoomPlan(true);setTab("room");}}>Проверить расстановку · {placementWarnings.length}</button>
-        <PriceStatus project={project} open={()=>{setOutputTab("estimate");setModal("output");}}/>
-        <button className="stage-note" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
-          Lamarty 2750 × 1830 · Карты листов и КП
-        </button>
-      </footer>
+      {!presentation&&<ProjectDock project={project} commit={commitProject} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/>}
       {modal && (
         <div
           className="modal-backdrop"

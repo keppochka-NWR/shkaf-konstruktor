@@ -71,7 +71,7 @@ export function applyAutoFillers(p:Project):Project{
     if(corner){a.module.cornerFiller=corner;a.module.cornerKind=kind;}else{delete a.module.cornerFiller;delete a.module.cornerKind;}
     if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);break;}}
     // Стены: боковина в пределах wallSnap от стены комнаты.
-    const wf:Module['wallFiller']={};
+    const wf:Module['wallFiller']={},before={x:a.x,z:a.z};
     if(needsWallFiller(a.module))for(const side of ['left','right'] as const){
       if(corner===side)continue;
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
@@ -86,6 +86,8 @@ export function applyAutoFillers(p:Project):Project{
       if(needed>0){a.module.wallFiller={...a.module.wallFiller,[side]:wf[side]};shiftAlongWidth(a,side==='left'?needed:-needed);}
     }
     if(Object.keys(wf).length)a.module.wallFiller=wf;else delete a.module.wallFiller;
+    // Ниша впритык (Цецегов: 1244 в 1252): планкам негде встать, сдвиг вытолкнул бы корпус за стену — оставляем корпус без планок.
+    if(a.module.wallFiller){const b=bounds(a);if(b.x<-0.5||b.z<-0.5||b.x+b.w>room.width+0.5||b.z+b.d>room.depth+0.5){a.x=before.x;a.z=before.z;delete a.module.wallFiller;}}
   }
   return n;
 }
