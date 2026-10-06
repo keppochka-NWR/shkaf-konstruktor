@@ -22,6 +22,20 @@
 .document-name { min-width: 0; }
 .document-name input { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
 
+/* Эргономика 06.10.2026 (проход «как новичок»): экспертные галочки только в «Все настройки»;
+   подписи у значков колонки справа при наведении; подсказка про правую кнопку заметна. */
+.app:not(.advanced) .expert-only { display: none !important; }
+.scene-tools button { position: relative; }
+.scene-tools button[aria-label]:hover::after, .scene-tools button[aria-label]:focus-visible::after {
+  content: attr(aria-label); position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+  white-space: nowrap; font-size: 12px; font-weight: 600; color: #fff; background: #1d2b3a; padding: 5px 9px; border-radius: 6px; pointer-events: none; z-index: 10; }
+.orbit-help .rmb-hint { color: #2449d6; font-weight: 650; }
+.rmb-tip { position: absolute; left: 50%; bottom: 132px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; padding: 9px 12px 9px 14px;
+  background: #1d2b3a; color: #fff; border-radius: 10px; font-size: 13px; box-shadow: 0 8px 22px #1b2a4440; max-width: calc(100% - 40px); }
+.rmb-tip b { color: #9fb6ff; }
+.app:has(.dock-panel) .rmb-tip { display: none; }
+.rmb-tip button { color: #fff; background: #ffffff22; border-radius: 6px; padding: 4px 9px; font-size: 12px; white-space: nowrap; }
+
 /* 5. Телефон: кнопки истории без подписей; 3D-область не налезает на левую панель. */
 @media (max-width: 600px) { .history-label { display: none; } }
 @media (max-width: 520px) { .workspace { grid-template-rows: minmax(520px, auto) auto auto; } }

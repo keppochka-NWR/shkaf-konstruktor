@@ -1,4 +1,6 @@
-import { drawerHasHandle, SLIDES, type DrawerConfig } from "./hardware";
+import { drawerHasHandle, SLIDES, hingePositions, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
+export type EdgeThickness = 2 | 1 | 0.8;
+export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
 import {caseworkParts,caseworkErrors,type Casework} from './casework';
 import {cornerParts,cornerErrors,cornerBoxes,cornerDrawer,normalizeCorner,type CornerSpec} from './cornerWardrobe';
 import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
@@ -186,6 +188,11 @@ export type Module = {
   slope?: { side: "left" | "right"; lowHeight: number };
   /** Крепёж корпуса по СТП: видимый — евровинты (конфирматы), скрытый — эксцентриковые стяжки. По умолчанию евровинты. */
   fastening?: "confirmat" | "eccentric";
+  /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
+  hingeBrand?: HingeBrand;
+  /** Кромка видимых торцов корпуса и кромка фасадов, мм. По умолчанию 2; скрытые торцы всегда 0,4. */
+  edgeBody?: EdgeThickness;
+  edgeFacade?: EdgeThickness;
   /** Скос фронта в плане (Шаин 6724055): у стороны side корпус мельче — depth; фасады и цоколь идут под углом, боковины разной глубины,
    *  дно/крыша/полки трапецией (в раскрое — габарит с пометкой «скос»), задник прямой. */
   skew?: { side: "left" | "right"; depth: number };
@@ -690,7 +697,7 @@ export function parts(m: Module): Part[] {
       let fh=cfg.facadeH??(pitch-frontGap),fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+fh/2+(cfg.facadeH?frontGap/2:0);
       if(cfg.noFacade){ // внутренний ящик: только короб и направляющие
         for (const side of [0, 1])
-          add(s.id + ":drawer:" + j + ":slide:" + side, "Направляющая " + cfg.slide, [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length], [hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6), hidden ? y + 6 : y + bh / 2, z + boxD - cfg.length / 2], cfg.length, 20, 12, "drawer", s.id, "metal");
+          add(s.id + ":drawer:" + j + ":slide:" + side, "Направляющая · " + slideLabel(cfg), [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length], [hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6), hidden ? y + 6 : y + bh / 2, z + boxD - cfg.length / 2], cfg.length, 20, 12, "drawer", s.id, "metal");
         continue;
       }
       if(!drawersBehindDoors(m,s)&&s.drawerMount!=='inset'){
@@ -705,7 +712,7 @@ export function parts(m: Module): Part[] {
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
-          "Направляющая " + cfg.slide,
+          "Направляющая · " + slideLabel(cfg),
           [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length],
           [
             hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6),
@@ -823,7 +830,48 @@ export function parts(m: Module): Part[] {
     if(drawer||face.hinge==='top')handle.position[1]=face.position[1]+(drawer?1:-1)*(face.size[1]/2-2);
     else{const off=(face.hinge==='right'?-1:1)*(face.size[0]/2-2),angle=(face.rotY??0)*Math.PI/180;handle.position[0]=face.position[0]+off*Math.cos(angle);handle.position[2]=face.position[2]-off*Math.sin(angle)+face.size[2]/2+3;}
   }
+  hardwareParts(m,out);
+  // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
+  if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
+    if(p.material!=='board')continue;
+    const facade=p.role==='door'||p.id.endsWith(':facade')||p.id==='slope-filler',to=facade?m.edgeFacade??2:m.edgeBody??2;
+    p.edge=p.edge.map(e=>e===2?to:e) as Part['edge'];
+  }
   return out;
+}
+/** Подпись направляющей для 3D и чертежей: тип, бренд, ход, длина. */
+export function slideLabel(c: DrawerConfig) { return (c.slide === "ball" ? "шариковая" : "скрытая") + " " + SLIDE_BRANDS[slideBrand(c)] + " · " + ({ "soft-close": "с доводчиком", simple: "без доводчика", push: "push-to-open" } as const)[slideMotion(c)] + " · " + c.length + " мм"; }
+/** Прорисованная фурнитура (06.10.2026): петли (чашка Ø35 в фасаде + плечо и планка на стойке), толкатели push-to-open,
+ *  полкодержатели под съёмными полками. Только для 3D и визуальной проверки; цена считается в pricing.ts по тем же правилам. */
+function hardwareParts(m: Module, out: Part[]) {
+  const t = RULES.panel, d = m.depth, inset = m.doorMount === "inset", push = m.doorOpen === "push";
+  const metal = (id: string, name: string, size: Part["size"], position: Part["position"], role: Part["role"], sectionId?: string): Part =>
+    ({ id, name, sectionId, size, position, length: size[0], width: size[1], thickness: size[2], role, material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+  const brand = HINGE_BRANDS[m.hingeBrand ?? "gtv"].label;
+  for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && (p.hinge === "left" || p.hinge === "right"))) {
+    const [cx, cy, dz] = door.position, [dw, dh] = door.size, dir = door.hinge === "left" ? 1 : -1;
+    const edgeX = cx - dir * dw / 2, cupX = edgeX + dir * 22.5, back = dz - door.size[2] / 2;
+    const sideX = inset ? edgeX - dir * RULES.faceGap : edgeX + dir * (t - RULES.faceGap);
+    const front = inset ? back : d;
+    hingePositions(dh, dw).forEach((hy, n) => {
+      const y = cy - dh / 2 + hy, key = door.id.replace(":door:", ":hingecup:") + ":" + n;
+      out.push(metal(key, "Петля " + brand + " · чашка Ø35", [35, 35, 12], [cupX, y, back + 5], "hinge", door.sectionId));
+      const armL = Math.abs(cupX - sideX) + 6;
+      out.push(metal(door.id.replace(":door:", ":hingearm:") + ":" + n, "Петля " + brand + " · плечо", [armL, 16, 12], [(cupX + sideX) / 2, y, front - 6], "hinge", door.sectionId));
+      out.push(metal(door.id.replace(":door:", ":hingeplate:") + ":" + n, "Петля " + brand + " · планка", [8, 46, 36], [sideX + dir * 4, y, front - 37], "hinge", door.sectionId));
+    });
+    if (push) {
+      const freeX = cx + dir * dw / 2 - dir * (inset ? -RULES.faceGap : t - RULES.faceGap) - dir * 8;
+      out.push(metal(door.id.replace(":door:", ":latch:"), "Толкатель push-to-open", [14, 14, 40], [freeX, cy + dh / 2 - 120, (inset ? back : d) - 20], "hinge", door.sectionId));
+    }
+  }
+  const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
+  for (const sh of out.filter((p) => p.role === "shelf" && p.material === "board" && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
+    const [x, y, z] = sh.position, [w, , dd] = sh.size;
+    [[x - w / 2 + 4, z - dd / 2 + 40], [x + w / 2 - 4, z - dd / 2 + 40], [x - w / 2 + 4, z + dd / 2 - 40], [x + w / 2 - 4, z + dd / 2 - 40]].forEach(([px, pz], k) =>
+      out.push(metal(`shp:${sh.id}:${k}`, "Полкодержатель", [12, 6, 6], [px, y - t / 2 - 3, pz], "fastener", sh.sectionId)));
+  }
+  void slideMotion; void slideBrand; void SLIDE_BRANDS;
 }
 /** Верх полки над ящиками секции от низа корпуса (цоколь + дно + стопка ящиков + полка). */
 export function drawerCapTop(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.bottom+drawerStackHeight(s)+RULES.panel;}
@@ -900,6 +948,8 @@ export function validate(m: Module): string[] {
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
+  if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');
+  for(const e of [m.edgeBody,m.edgeFacade])if(e!==undefined&&![2,1,0.8].includes(e))errors.push('Кромка: выберите 2, 1 или 0,8 мм.');
   if(m.desk!==undefined){
     if(!['both','left','right','none'].includes(m.desk.sides)||!Number.isFinite(m.desk.apron)||m.desk.apron<RULES.deskApronMin||m.desk.apron>RULES.deskApronMax)errors.push(`Стол: опоры слева/справа/обе/нет, царга от ${RULES.deskApronMin} до ${RULES.deskApronMax} мм.`);
     else{
@@ -999,7 +1049,7 @@ export function validate(m: Module): string[] {
       }
       if (c.length > m.depth - rearClear(m) - (drawersBehindDoors(m,s) ? 44 : 25))
         errors.push(prefix + "направляющая слишком длинная для этой глубины.");
-      if((c.tray!==undefined&&typeof c.tray!=='boolean')||(c.operation!==undefined&&!['push','soft-close'].includes(c.operation)))errors.push(prefix+'проверьте тип выкатного элемента.');
+      if((c.tray!==undefined&&typeof c.tray!=='boolean')||(c.operation!==undefined&&!['push','soft-close','simple'].includes(c.operation))||(c.brand!==undefined&&!(c.brand in SLIDE_BRANDS))||(c.operation==='simple'&&c.slide!=='ball'))errors.push(prefix+'проверьте тип выкатного элемента.');
       if (c.facadeH !== undefined && (!Number.isFinite(c.facadeH) || c.facadeH < (c.tray?40:60) || c.facadeH > 800))
         errors.push(prefix + "высота фасада ящика: от 60 до 800 мм.");
 
@@ -1227,6 +1277,9 @@ export function parseModule(input: unknown): Module {
     ...(x.rodType===undefined?{}:{rodType:x.rodType as Module['rodType']}),
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
+    ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
+    ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
+    ...(x.edgeFacade===undefined?{}:{edgeFacade:Number(x.edgeFacade) as EdgeThickness}),
     ...(x.skew===undefined?{}:{skew:{side:(x.skew as {side:'left'|'right'})?.side,depth:Number((x.skew as {depth:number})?.depth)}}),
     ...(x.desk===undefined?{}:{desk:(()=>{const dk=x.desk as NonNullable<Module['desk']>;return {sides:dk.sides,apron:Number(dk.apron),
       ...(dk.apronOffset===undefined?{}:{apronOffset:Number(dk.apronOffset)}),...(dk.baseWidth===undefined?{}:{baseWidth:Number(dk.baseWidth)}),...(dk.baseX===undefined?{}:{baseX:Number(dk.baseX)}),...(dk.baseDepth===undefined?{}:{baseDepth:Number(dk.baseDepth)}),
@@ -1261,6 +1314,7 @@ export function parseModule(input: unknown): Module {
               slide: c?.slide,
               ...(c?.tray===undefined?{}:{tray:c.tray}),
               ...(c?.operation===undefined?{}:{operation:c.operation}),
+              ...(c?.brand===undefined?{}:{brand:c.brand}),
               height: c?.height,
               length: c?.length,
               ...(c?.handle===undefined?{}:{handle:c.handle}),

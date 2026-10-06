@@ -229,7 +229,7 @@ test('review package contains consistent details and internal review warnings',(
   const before=JSON.stringify(p),files=reviewFiles(p,new Date('2026-09-06T05:00:00Z'));
   assert.equal(Object.keys(files).length,9);
   assert.deepEqual(JSON.parse(files['01-Проект.project.json']),p);
-  assert.ok(files['00-Прочитайте.txt'].includes('Скрытые направляющие'));
+  assert.ok(files['00-Прочитайте.txt'].includes('Скрытые DTC'));
   assert.ok(files['00-Прочитайте.txt'].includes('2026-09-06T05:00:00.000Z'));
   assert.ok(files['00-Прочитайте.txt'].includes('управляющие программы не включены'));
   for(const d of details(p)){assert.ok(files['06-Деталировка.csv'].includes(d.code));assert.ok(files['07-Бирки.html'].includes(d.code));}

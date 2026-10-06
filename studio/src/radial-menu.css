@@ -1,0 +1,27 @@
+/* Круговое меню правой кнопки. Центр меню — точка клика (left/top), всё строится от неё. */
+.radial-menu { position: fixed; z-index: 60; width: 0; height: 0; outline: none; }
+.radial-ring { position: absolute; left: calc(-104px - 32px); top: calc(-104px - 32px); pointer-events: none; overflow: visible; }
+.radial-ring circle { fill: #fffffff5; stroke: #d5dde8; stroke-width: 1; filter: drop-shadow(0 10px 28px #1b2a4433); }
+.radial-center { position: absolute; left: -58px; top: -58px; width: 116px; height: 116px; border-radius: 50%; border: 1px solid #d5dde8; background: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 10px; text-align: center; cursor: pointer;
+  box-shadow: 0 2px 10px #1b2a441a; animation: radial-pop .14s ease-out both; }
+.radial-center b { font-size: 12.5px; line-height: 1.2; color: #1d2b3a; overflow-wrap: anywhere; }
+.radial-center small { font-size: 10.5px; line-height: 1.25; color: #5b6b78; }
+.radial-center i { font-style: normal; font-size: 10.5px; color: #8796a2; display: inline-flex; align-items: center; gap: 2px; margin-top: 2px; }
+.radial-center:hover i, .radial-center:focus-visible i { color: #2449d6; }
+.radial-item { position: absolute; left: -32px; top: -32px; width: 64px; height: 64px; border-radius: 50%; border: 1px solid #cfd8e3; background: #fff; color: #2b3b4c;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 3px 10px #1b2a441f;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s; animation: radial-pop .16s ease-out both; }
+.radial-item:hover:not(:disabled), .radial-item:focus-visible { background: #2449d6; border-color: #2449d6; color: #fff; box-shadow: 0 6px 16px #2449d655; outline: none; }
+.radial-item.active { border: 2px solid #2449d6; color: #2449d6; }
+.radial-item.active:hover, .radial-item.active:focus-visible { color: #fff; }
+.radial-item.danger { color: #b3261e; }
+.radial-item.danger:hover:not(:disabled), .radial-item.danger:focus-visible { background: #b3261e; border-color: #b3261e; color: #fff; }
+.radial-item:disabled { opacity: .4; cursor: not-allowed; }
+.radial-label { position: absolute; white-space: nowrap; font-size: 11.5px; font-weight: 600; color: #1d2b3a; background: #ffffffee; padding: 2px 6px; border-radius: 6px; pointer-events: none; box-shadow: 0 1px 4px #1b2a4422; }
+.radial-label.below { top: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
+.radial-label.above { bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
+.radial-label.left { right: calc(100% + 6px); top: 50%; transform: translateY(-50%); }
+.radial-label.right { left: calc(100% + 6px); top: 50%; transform: translateY(-50%); }
+@keyframes radial-pop { from { opacity: 0; scale: .6; } to { opacity: 1; scale: 1; } }
+@media (prefers-reduced-motion: reduce) { .radial-item, .radial-center { animation: none; } }

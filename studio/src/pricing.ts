@@ -6,6 +6,7 @@ import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
 import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
+import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -42,7 +43,32 @@ const hidden:Record<number,{price:number;source:string}>={
   400:{price:1150,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   450:{price:1200,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   500:{price:1250,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'}};
-export const HINGE={label:'Петля GTV SOLID PRO с доводчиком',price:157,source:'Счёт Мега-Трейд 6219, 2026 · стандарт цеха при ручках'};
+/** Цена комплекта направляющих по системе и длине. Опора — известные цены; остальное — шаг по длине и множители класса, помечено «оценка». */
+export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string}{
+  const sys=slideSystem(c),L=c.length;
+  const label=sys.label+' · '+L+' мм';
+  if(sys.slide==='ball'){
+    const base=ball[L];if(!base)return {price:null,source:'Длины нет в закупке цеха; цену уточнить',label};
+    if(sys.motion==='soft-close')return {price:base.price,source:base.source,label};
+    if(sys.motion==='simple')return {price:Math.round(base.price*0.55/10)*10,source:'Оценка: шариковые без доводчика ≈ 55 % от Versalite с доводчиком; подтвердить счётом ФАМ',label};
+    return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
+  }
+  // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
+  const range=sys.brand==='premial'?[300,550]:[300,500];
+  if(L<range[0]||L>range[1])return {price:null,source:'Длины нет в закупке цеха для '+sys.label+'; цену уточнить',label};
+  const steps=(L-300)/50;
+  if(sys.brand==='dtc'){
+    if(sys.motion==='push'&&L===300)return {price:1040,source:'Счёт ФАМ: DTC F10D300H push-to-open, 300 мм',label};
+    return {price:Math.round((1040+steps*50)*(sys.motion==='soft-close'?1.05:1)/10)*10,source:'Оценка от DTC F10D300H (1040 ₽ за 300 мм), +50 ₽ на каждые 50 мм; подтвердить счётом ФАМ',label};
+  }
+  if(sys.brand==='premial'){
+    const soft=1729+(L-400)/50*60;
+    return {price:Math.round((sys.motion==='soft-close'?soft:soft*0.95)/10)*10,source:'Оценка: Premial Morendo с доводчиком 400 мм — 1729 ₽ (розница allpremial.ru, 10.2026), ±60 ₽ на 50 мм'+(sys.motion==='push'?', push ≈ −5 %':'')+'; подтвердить закупкой',label};
+  }
+  const uni=hidden[L]?.price??(1100+steps*50);
+  return {price:Math.round((sys.motion==='soft-close'?uni:uni*0.95)/10)*10,source:'Оценка по классу Unihopper (1000–1250 ₽); цены в счетах нет, подтвердить',label};
+}
+export const HINGE={label:HINGE_BRANDS.gtv.soft.label,price:HINGE_BRANDS.gtv.soft.price,source:HINGE_BRANDS.gtv.soft.source};
 export const LEG={price:127.4,source:'МДМ, INTEGRATO TECH G опора регулируемая с шипами; 4 на корпус, 6 при ширине от 900'};
 export const LEG_M6={price:30,source:'Ножка мебельная M6×18 + гайка BP01 (заказы цеха); оценка, счёта нет'};
 export const HINGE_FREE={price:80,source:'ФАМ: петля GTV ZP-COCA клиповая без пружины'};
@@ -69,7 +95,7 @@ export function hardwareKind(id:string):HardwareKind{
   if(/^(rod|flange)/.test(id))return 'rods';
   return 'other';
 }
-export function hingeCount(height:number,width:number){return (height<=900?2:height<=1600?3:height<=2000?4:5)+(width>450?1:0);}
+export {hingeCount};
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const lines:PriceLine[]=[];const settings=p.calculation||{markup:2.2,overrides:{}};
   // retail=true: розничная позиция прайса цеха, добавляется к цене ПОСЛЕ коэффициента и не входит в себестоимость.
@@ -78,7 +104,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
     const d=decorPrice(sheet.decor);add('sheet:'+sheet.decor,'Lamarty 16 мм · '+sheet.decor,1,'лист',d.price,d.source);
   }
-  let edge2=0,edge04=0,small=0;
+  let edge2=0,edge04=0,edge1=0,edge08=0,small=0;
   for(const a of p.modules){
     const fc=fastenerCounts(a.module);
     add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
@@ -89,15 +115,16 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     const legs=legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
     for(const d of parts(a.module)){
       if(d.material==='board'){
-        d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;});
+        d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
       if(d.role==='door'&&d.id!=='slope-filler'){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=hingeCount(d.length,d.width);
-        // СТП: с ручками — GTV с доводчиком; push-to-open — петля без пружины (накладная SOLID / вкладная COCA) + толкатель.
+        // СТП: с ручками — петля с доводчиком; push-to-open — петля без пружины + толкатель. Бренд — выбор клиента (GTV по умолчанию).
+        const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
         if(d.hinge==='top')add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
-        else if(push)add(inset?'hinge-push-inset':'hinge-push','Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'),n,'шт',HINGE_FREE.price,HINGE_FREE.source);
-        else add(inset?'hinge-inset':'hinge',inset?'Петля GTV с доводчиком вкладная':HINGE.label,n,'шт',HINGE.price,HINGE.source);
+        else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
+        else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
       if(d.role==='door'&&d.material==='alu'&&a.module.alu){
@@ -130,12 +157,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       for(let j=0;j<s.drawers;j++){
         const c=drawerConfig(a.module,s,j);
         if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');continue;}
-        const q=c.slide==='ball'?ball[c.length]:hidden[c.length];
-        add('slide:'+c.slide+':'+c.length,(c.slide==='ball'?'Шариковые GTV Versalite с доводчиком':'Скрытые направляющие (закупка DTC / Unihopper)')+' · '+c.length+' мм',1,'компл',q?.price??null,q?.source??'Длины нет в закупке цеха; цену уточнить');
+        const sys=slideSystem(c),q=slidePrice(c),isDefault=sys.id==='ball-soft'||sys.id==='hidden-dtc-push';
+        add('slide:'+c.slide+':'+c.length+(isDefault?'':':'+sys.id),q.label,1,'компл',q.price,q.source);
       }
     }
   }
-  add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');add('work','Работа цеха',plan.length,'лист',2500,'База расчёта шкафа');
+  add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');add('work','Работа цеха',plan.length,'лист',2500,'База расчёта шкафа');
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));

@@ -45,7 +45,7 @@ test('slides, opening and fastening swaps apply to every module and keep the pro
   const hidden=setAllSlides(p,'gtv0fpo');assert.deepEqual(projectErrors(hidden),[]);
   const m=hidden.modules[0].module,s=m.sections[0];
   for(let j=0;j<s.drawers;j++)assert.equal(drawerConfig(m,s,j).slide,'gtv0fpo');
-  assert.deepEqual(hardwareChoice(hidden).slides,['gtv0fpo']);
+  assert.deepEqual(hardwareChoice(hidden).slides,['hidden-dtc-push']);
   assert.equal(drawerConfig(p.modules[0].module,p.modules[0].module.sections[0],0).slide,'ball');
   const push=setAllOpening(p,'push');assert.ok(push.modules.every(a=>a.module.doorOpen==='push'));
   const ep=estimate(push);assert.ok(ep.lines.some(l=>l.id.startsWith('push-latch')));

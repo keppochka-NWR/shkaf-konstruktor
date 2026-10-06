@@ -199,8 +199,8 @@ test('price models: markup vs 23 000 per LDSP sheet; fasteners drawn and counted
   p.calculation={markup:2.2,overrides:{},model:'sheet',sheetPrice:24000};
   const s=estimate(p);assert.equal(s.retail,s.ldspSheets*24000+s.retailExtras);assert.equal(parseProject(p).calculation!.model,'sheet');
   p.calculation.sheetPrice=100;assert.ok(projectErrors(p).length);
-  const m=p.modules[0].module,fc=fastenerCounts(m),fast=parts(m).filter(x=>x.role==='fastener');
-  assert.equal(fast.length,fc.confirmats);assert.ok(fc.confirmats>=8,'bottom and top give 8 confirmats');
+  const m=p.modules[0].module,fc=fastenerCounts(m),fast=parts(m).filter(x=>x.role==='fastener'&&!x.id.startsWith('shp:'));
+  assert.equal(fast.length,fc.confirmats);assert.equal(parts(m).filter(x=>x.id.startsWith('shp:')).length,fc.shelfHolders,'shelf holders drawn as counted');assert.ok(fc.confirmats>=8,'bottom and top give 8 confirmats');
   assert.ok(fast.every(f=>f.material==='metal'));
   const lines=estimate(newProject()).lines;assert.equal(lines.find(l=>l.id==='confirmat')!.quantity,fc.confirmats);assert.equal(lines.find(l=>l.id==='shelf-holder')!.quantity,fc.shelfHolders);
   assert.ok(!details(newProject()).some(d=>d.role==='fastener'),'fasteners are not board details');

@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
-import { estimate, hardwareKind, HARDWARE_KINDS, lineGroup, type HardwareKind } from "./pricing";
+import { estimate, hardwareKind, HARDWARE_KINDS, lineGroup, slidePrice, type HardwareKind } from "./pricing";
 import { HANDLES, handleById } from "./handles";
-import { SLIDES, type DrawerConfig } from "./hardware";
-import { hardwareChoice, setAllFastening, setAllHandles, setAllOpening, setAllSlides } from "./hardwareSwap";
+import { HINGE_BRANDS, SLIDE_SYSTEMS, type HingeBrand } from "./hardware";
+import { EDGE_CHOICES, type EdgeThickness } from "./model";
+import { hardwareChoice, setAllEdges, setAllFastening, setAllHandles, setAllHinges, setAllOpening, setAllSlides } from "./hardwareSwap";
+
+/** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
+function slideHint(id: string) { const s = SLIDE_SYSTEMS.find((x) => x.id === id)!; const q = slidePrice({ slide: s.slide, operation: s.motion, brand: s.brand, length: 450 }); return q.price === null ? "цена по запросу" : "≈ " + q.price.toLocaleString("ru-RU") + " ₽ за 450 мм"; }
 import { details, nest } from "./exports";
 import "./project-dock.css";
 
@@ -110,9 +114,22 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
           {choice.opening.length > 1 && <option value="">Разное</option>}
           <option value="handle">С ручками, петли с доводчиком</option><option value="push">Без ручек, push-to-open</option>
         </select></label>}
-        {choice.hasDrawers && <label>Направляющие ящиков<select aria-label="Направляющие во всём проекте" value={choice.slides.length === 1 ? choice.slides[0] : ""} onChange={(ev) => ev.target.value && swap(() => setAllSlides(project, ev.target.value as DrawerConfig["slide"]), "Направляющие")}>
+        {choice.hasDoors && <label>Петли<select aria-label="Петли во всём проекте" value={choice.hinges.length === 1 ? choice.hinges[0] : ""} onChange={(ev) => ev.target.value && swap(() => setAllHinges(project, ev.target.value as HingeBrand), "Петли " + HINGE_BRANDS[ev.target.value as HingeBrand].label)}>
+          {choice.hinges.length > 1 && <option value="">Разные</option>}
+          {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((k) => <option key={k} value={k}>{HINGE_BRANDS[k].label} · {HINGE_BRANDS[k].note} · {rub(HINGE_BRANDS[k].soft.price)}/шт</option>)}
+        </select></label>}
+        {choice.hasDrawers && <label>Направляющие ящиков<select aria-label="Направляющие во всём проекте" value={choice.slides.length === 1 ? choice.slides[0] : ""} onChange={(ev) => ev.target.value && swap(() => setAllSlides(project, ev.target.value), "Направляющие")}>
           {choice.slides.length > 1 && <option value="">Разные</option>}
-          {(Object.keys(SLIDES) as DrawerConfig["slide"][]).map((k) => <option key={k} value={k}>{k === "ball" ? "Шариковые с доводчиком" : "Скрытые, полного выдвижения"}</option>)}
+          <optgroup label="Шариковые">{SLIDE_SYSTEMS.filter((s) => s.slide === "ball").map((s) => <option key={s.id} value={s.id}>{s.label.replace("Шариковые ", "")} · {slideHint(s.id)}</option>)}</optgroup>
+          <optgroup label="Скрытого монтажа">{SLIDE_SYSTEMS.filter((s) => s.slide === "gtv0fpo").map((s) => <option key={s.id} value={s.id}>{s.label.replace("Скрытые ", "")} · {slideHint(s.id)}</option>)}</optgroup>
+        </select></label>}
+        <label>Кромка корпуса<select aria-label="Кромка корпуса во всём проекте" value={choice.edgeBody.length === 1 ? String(choice.edgeBody[0]) : ""} onChange={(ev) => ev.target.value && swap(() => setAllEdges(project, "body", Number(ev.target.value) as EdgeThickness), "Кромка корпуса")}>
+          {choice.edgeBody.length > 1 && <option value="">Разная</option>}
+          {EDGE_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+        </select></label>
+        {choice.hasDoors && <label>Кромка фасадов<select aria-label="Кромка фасадов во всём проекте" value={choice.edgeFacade.length === 1 ? String(choice.edgeFacade[0]) : ""} onChange={(ev) => ev.target.value && swap(() => setAllEdges(project, "facade", Number(ev.target.value) as EdgeThickness), "Кромка фасадов")}>
+          {choice.edgeFacade.length > 1 && <option value="">Разная</option>}
+          {EDGE_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select></label>}
         <label>Крепёж корпусов<select aria-label="Крепёж корпусов во всём проекте" value={choice.fastening.length === 1 ? choice.fastening[0] : ""} onChange={(ev) => ev.target.value && swap(() => setAllFastening(project, ev.target.value as "confirmat" | "eccentric"), "Крепёж")}>
           {choice.fastening.length > 1 && <option value="">Разный</option>}

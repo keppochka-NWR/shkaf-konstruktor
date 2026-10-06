@@ -21,7 +21,10 @@ for (const [w, h, tag] of [[1440, 900, "desk"], [400, 860, "phone"]] as const) {
   await page.locator(".dock-tabs button", { hasText: "Фурнитура" }).click();
   await page.waitForTimeout(800);
   const slides = page.getByLabel("Направляющие во всём проекте");
-  if (await slides.count()) { await slides.selectOption("gtv0fpo"); await page.waitForTimeout(1200); console.log(tag, "slides→hidden:", await price(), "|", await page.locator(".dock-note").innerText().catch(() => "")); }
+  if (await slides.count()) { await slides.selectOption("hidden-unihopper-soft"); await page.waitForTimeout(1200); console.log(tag, "slides→Unihopper с доводчиком:", await price(), "|", await page.locator(".dock-note").innerText().catch(() => "")); }
+  const hinges = page.getByLabel("Петли во всём проекте");
+  if (await hinges.count()) { await hinges.selectOption("blum"); await page.waitForTimeout(1200); console.log(tag, "hinges→Blum:", await price(), "|", await page.locator(".dock-note").innerText().catch(() => "")); }
+  await page.getByLabel("Кромка корпуса во всём проекте").selectOption("0.8"); await page.waitForTimeout(1200); console.log(tag, "edge body→0,8:", await price(), "|", await page.locator(".dock-note").innerText().catch(() => ""));
   const handles = page.getByLabel("Ручки во всём проекте");
   if (await handles.count()) { await handles.selectOption("hexa256a"); await page.waitForTimeout(1200); console.log(tag, "handles→HEXA 256:", await price(), "|", await page.locator(".dock-note").innerText().catch(() => "")); }
   else console.log(tag, "ручек в проекте нет — выбор ручек скрыт");

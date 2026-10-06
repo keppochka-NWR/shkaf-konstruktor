@@ -62,7 +62,7 @@ type Props = {
   /** Клик по ручке фасада или ящика: открыть выбор ручки корпуса. */
   onHandleClick?: (mid: string, pid: string) => void;
   /** Правая кнопка по корпусу: контекстное меню редактирования (как в B Planner). Координаты — экранные. */
-  onContextMenu?: (mid: string, sid: string, x: number, y: number) => void;
+  onContextMenu?: (mid: string, sid: string, x: number, y: number, info?: { pid?: string; role?: string; localY?: number }) => void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
@@ -298,8 +298,10 @@ export function Scene(p: Props) {
             }).catch(()=>{}).finally(()=>{if(gen===generation)pendingTextures--;});
           }
           const isAlu = part.material === "alu" && !!m.alu;
-          const geometry =
-            (part.role === "rod" || part.role === "flange" || part.role === "fastener")
+          const roundAlongZ = part.role === "hinge" && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
+          const geometry = roundAlongZ
+            ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
+            : (part.role === "rod" || part.role === "flange" || part.role === "fastener")
               ? new THREE.CylinderGeometry(
                   part.size[1] / 2,
                   part.size[1] / 2,
@@ -367,7 +369,10 @@ export function Scene(p: Props) {
             mesh.material=Array.from({length:6},(_,face)=>Math.floor(face/2)===axis?mat:edgemat);
           }
           if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
-          if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
+          // Металл без карты окружения при metalness ~0.85 выглядит чёрным: держим умеренный металл и светлый никель.
+          if (roundAlongZ) { mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.includes(":latch:") ? 0x55595d : 0xdfe3e6); mat.metalness = 0.35; mat.roughness = 0.35; }
+          else if (part.role === "hinge") { mat.color.set(0xd2d7db); mat.metalness = 0.35; mat.roughness = 0.38; }
+          if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : part.id.startsWith("shp:") ? 0xc9ced2 : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
           if (part.rotZ) mesh.rotation.z = (part.rotZ * Math.PI) / 180;
           const rotY = part.rotY ? (part.rotY * Math.PI) / 180 : 0;
           if (rotY) mesh.rotation.y = rotY;
@@ -408,6 +413,9 @@ export function Scene(p: Props) {
             doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
             const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));mesh.rotation.y=0;pivot.add(mesh);
+          } else if(/:(hingecup|hingearm):/.test(part.id) && doorPivots.has(part.id.replace(/:(hingecup|hingearm):/,':door:').replace(/:\d+$/,''))){
+            // Чашка и плечо петли поворачиваются вместе с фасадом; монтажная планка остаётся на стойке.
+            const pivot=doorPivots.get(part.id.replace(/:(hingecup|hingearm):/,':door:').replace(/:\d+$/,''))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));pivot.add(mesh);
           } else moduleGroup.add(mesh);
           const selectedPart=active&&!state.presentation?state.selectedPart:undefined;
           const drawerPrefix=selectedPart?.includes(':drawer:')?selectedPart.split(':drawer:')[0]+':drawer:'+selectedPart.split(':drawer:')[1].split(':')[0]+':':undefined;
@@ -724,12 +732,18 @@ export function Scene(p: Props) {
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     function key(e:KeyboardEvent){if(e.key==='Escape')resetDrag();}
+    // Правая кнопка: короткий клик — круговое меню; протяжка — движение камеры (меню не открываем).
+    let rightDown:{x:number;y:number}|null=null;
+    function rightPointer(e:PointerEvent){if(e.button===2)rightDown={x:e.clientX,y:e.clientY};}
     function contextMenu(e:MouseEvent){
       e.preventDefault();if(current.current.presentation)return;
+      if(rightDown&&Math.hypot(e.clientX-rightDown.x,e.clientY-rightDown.y)>6){rightDown=null;return;}
+      rightDown=null;
       const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;
       const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId);if(!a)return;
-      current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY);
+      current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY,{pid:hit.object.userData.partId as string|undefined,role:hit.object.userData.role as string|undefined,localY:hit.point.y-(a.y??0)});
     }
+    renderer.domElement.addEventListener('pointerdown',rightPointer,true);
     renderer.domElement.addEventListener('contextmenu',contextMenu);
     renderer.domElement.addEventListener('pointerdown',pointerDown);
     renderer.domElement.addEventListener('pointermove',pointerMove);
@@ -801,7 +815,7 @@ export function Scene(p: Props) {
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
-      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
+      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);renderer.domElement.removeEventListener('pointerdown',rightPointer,true);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
       sun.shadow.dispose();
       for(const texture of loadedTextures)texture.dispose();loadedTextures.clear();textureLoads.clear();
       renderer.dispose();
