@@ -35,7 +35,7 @@ export function findSheetDetails(sheets:Sheet[],query:string){
 export function details(p: Project): Detail[] {
   return p.modules.flatMap((m, i) =>
     parts(m.module)
-      .filter((p) => p.material !== "metal" && p.material !== "alu" && p.material !== "glass")
+      .filter((p) => p.material !== "metal" && p.material !== "alu" && p.material !== "glass" && !p.external)
       .map((d, j) => ({
         ...d,
         moduleName: m.module.name,

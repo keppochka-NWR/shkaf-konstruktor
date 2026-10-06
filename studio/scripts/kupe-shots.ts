@@ -1,0 +1,38 @@
+// Шкаф-купе в студии: npx tsx scripts/kupe-shots.ts <url> <outDir>
+// Чистый проект → «Шкаф-купе» из палитры → панель купе → двери сдвинуты → ЛДСП + 2 секции + доводчики. Цены по шагам.
+import { chromium } from "playwright";
+const [url, out] = process.argv.slice(2);
+const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto(url);
+await page.evaluate(() => { localStorage.clear(); localStorage.setItem("studio-stage", "bodies"); localStorage.setItem("studio-dock", "project"); localStorage.setItem("studio-tip-rmb", "1"); });
+await page.goto(url);
+await page.waitForSelector("canvas");
+await page.waitForTimeout(1500);
+const price = async () => (await page.locator(".dock-price").innerText()).replace(/\s+/g, " ");
+const kupeTotal = async () => (await page.locator(".kupe-total b").innerText().catch(() => "—")).trim();
+await page.getByRole("button", { name: "Шкаф-купе" }).click();
+await page.getByRole("button", { name: "Добавить в комнату" }).click();
+await page.waitForTimeout(1800);
+const alert = (await page.locator("[role=alert]").allInnerTexts()).join(" | ").trim(); if (alert) console.log("сообщение:", alert);
+console.log("добавлен шкаф-купе:", await price(), "| купе:", await kupeTotal());
+await page.screenshot({ path: `${out}/kupe-1-added.png` });
+await page.getByRole("button", { name: "Спереди", exact: true }).click(); await page.waitForTimeout(400);
+const fit = page.getByRole("button", { name: "Приблизить выбранный корпус" }); if (await fit.count()) await fit.first().click();
+await page.waitForTimeout(1200); await page.screenshot({ path: `${out}/kupe-1b-front.png` });
+console.log("прозрачность фасадов:", await page.evaluate(`[...document.querySelectorAll('.scene-tools button')].map(b=>b.getAttribute('aria-label')+':'+b.getAttribute('aria-pressed')).join(', ')`));
+await page.getByRole("button", { name: "3D", exact: true }).click(); await page.waitForTimeout(600);
+await page.getByRole("button", { name: /Сдвинуть двери/ }).click(); await page.waitForTimeout(1200);
+await page.screenshot({ path: `${out}/kupe-2-open.png` });
+await page.getByRole("button", { name: /Закрыть двери/ }).click(); await page.waitForTimeout(500);
+await page.getByLabel("Наполнение дверей купе").selectOption("Дуб Вотан"); await page.waitForTimeout(900);
+console.log("наполнение ЛДСП Дуб Вотан:", await kupeTotal(), "|", (await page.locator("[role=alert]").allInnerTexts()).join(" ").trim());
+await page.locator(".kupe-sections button", { hasText: "Верх ⅔ · Низ ⅓" }).click(); await page.waitForTimeout(900);
+await page.getByLabel("Наполнение двери 2").selectOption("Зеркало Бронза 4мм").catch(async () => { await page.locator(".kupe-doors summary").click(); await page.getByLabel("Наполнение двери 2").selectOption("Зеркало Бронза 4мм"); });
+await page.waitForTimeout(900);
+await page.getByLabel("Доводчики купе").check(); await page.waitForTimeout(900);
+console.log("2 секции + бронза на 2-й двери + доводчики:", await kupeTotal(), "| итог:", await price());
+await page.screenshot({ path: `${out}/kupe-3-config.png` });
+await page.locator(".dock-tabs button", { hasText: "Смета" }).click(); await page.waitForTimeout(1500);
+await page.screenshot({ path: `${out}/kupe-4-estimate.png` });
+await browser.close();

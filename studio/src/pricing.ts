@@ -7,6 +7,7 @@ import {handleById} from './handles';
 import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
+import {kupeLines} from './kupe';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -83,9 +84,9 @@ export const HARDWARE_KIT={label:'Мелочёвка корпуса (шуруп�
 
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы. Всё остальное — фурнитура. */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|edge|small$|work$|alu-|glass-)/.test(id)?'material':'hardware';}
-export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'other';
-export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',other:'Прочее'};
+export function lineGroup(id:string):LineGroup{return /^(sheet:|edge|small$|work$|alu-|glass-|kupe-(fill|profile|track|work|film))/.test(id)?'material':'hardware';}
+export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'kupe'|'other';
+export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
   if(/^(hinge|push-latch|lift-mechanism)/.test(id))return 'hinges';
   if(/^(slide:|mesh:|pantograph)/.test(id))return 'slides';
@@ -93,6 +94,7 @@ export function hardwareKind(id:string):HardwareKind{
   if(id.startsWith('legs'))return 'legs';
   if(/^(confirmat|eccentric|shelf-holder|kit$|screw)/.test(id))return 'fasteners';
   if(/^(rod|flange)/.test(id))return 'rods';
+  if(id.startsWith('kupe-'))return 'kupe';
   return 'other';
 }
 export {hingeCount};
@@ -106,6 +108,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   }
   let edge2=0,edge04=0,edge1=0,edge08=0,small=0;
   for(const a of p.modules){
+    // Двери-купе: строки по формуле калькулятора купе, розничные; корпусных деталей и крепежа у объекта нет.
+    if(a.module.kupe){for(const l of kupeLines(a.module))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
     const fc=fastenerCounts(a.module);
     add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
     add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
@@ -171,7 +175,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const materialCost=costOf('material'),hardwareCost=costOf('hardware');
-  const split={materialCost,hardwareCost,material:Math.round(materialCost*settings.markup/100)*100,hardware:Math.round(hardwareCost*settings.markup/100)*100+retailExtras};
+  // Розничные позиции (двери-купе по прайсу калькулятора купе, подсветка) идут в свою группу без коэффициента.
+  const retailOf=(g:LineGroup)=>Math.round(lines.filter(l=>l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  const split={materialCost,hardwareCost,material:Math.round(materialCost*settings.markup/100)*100+retailOf('material'),hardware:Math.round(hardwareCost*settings.markup/100)*100+retailOf('hardware')};
   const byMarkup=missing.length?null:split.material+split.hardware;
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
   const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));

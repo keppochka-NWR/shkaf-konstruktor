@@ -1,3 +1,4 @@
+import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { drawerHasHandle, SLIDES, hingePositions, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -188,6 +189,8 @@ export type Module = {
   slope?: { side: "left" | "right"; lowHeight: number };
   /** Крепёж корпуса по СТП: видимый — евровинты (конфирматы), скрытый — эксцентриковые стяжки. По умолчанию евровинты. */
   fastening?: "confirmat" | "eccentric";
+  /** Двери-купе (kupe.ts): объект-проём с направляющими и полотнами, глубина 100. Перед корпусами или в нише. */
+  kupe?: KupeSpec;
   /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
   hingeBrand?: HingeBrand;
   /** Кромка видимых торцов корпуса и кромка фасадов, мм. По умолчанию 2; скрытые торцы всегда 0,4. */
@@ -220,6 +223,12 @@ export type Part = {
   planContour?: [number,number][];
   /** Edge thickness for each successive polygon segment. */
   contourEdges?: number[];
+  /** Изделие стороннего участка (двери-купе): не идёт в раскрой ЛДСП, деталировку и бирки. */
+  external?: boolean;
+  /** Готовый вид материала в 3D (цвет, прозрачность, металл) — для наполнений купе и профиля. */
+  look?: { color: number; opacity?: number; metalness?: number; roughness?: number };
+  /** Сдвиг по X при «открытых фасадах» — полотно купе отъезжает за соседнее. */
+  openShift?: number;
   /** Explicitly schematic handle; use the declared box instead of a catalogue asset. */
   simpleHandle?: boolean;
   edgeColor?: string;
@@ -407,6 +416,7 @@ export function boxes(m: Module): SectionBox[] {
   });
 }
 export function parts(m: Module): Part[] {
+  if(m.kupe)return kupeParts(m);
   if(m.corner)return cornerParts(m);
   if(m.casework)return caseworkParts(m);
   const out: Part[] = [];
@@ -906,6 +916,7 @@ export function fastenerCounts(m: Module) {
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0) };
 }
 export function validate(m: Module): string[] {
+  if(m.kupe)return kupeErrors(m);
   if(m.corner)return cornerErrors(m);
   if(m.casework)return caseworkErrors(m);
   if(m.sectionLayout){
@@ -1278,6 +1289,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
+    ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
     ...(x.edgeFacade===undefined?{}:{edgeFacade:Number(x.edgeFacade) as EdgeThickness}),
     ...(x.skew===undefined?{}:{skew:{side:(x.skew as {side:'left'|'right'})?.side,depth:Number((x.skew as {depth:number})?.depth)}}),

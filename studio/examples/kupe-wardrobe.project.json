@@ -1,0 +1,109 @@
+{
+ "version": 3,
+ "room": {
+  "width": 2400,
+  "depth": 2000,
+  "height": 2600,
+  "openings": []
+ },
+ "modules": [
+  {
+   "id": "a1be3aad-02a2-4c82-8d08-964d1bf6b08d",
+   "x": 0,
+   "y": 0,
+   "z": 1151,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Двери купе",
+    "width": 1800,
+    "height": 2400,
+    "depth": 100,
+    "decor": "Дуб Вотан",
+    "facadeDecor": "Дуб Вотан",
+    "doors": false,
+    "sections": [
+     {
+      "id": "d1c2f8ec-058c-4b86-a7fc-6cb514a33122",
+      "weight": 1,
+      "shelves": [],
+      "drawers": 0,
+      "rod": false
+     }
+    ],
+    "plinthHeight": 0,
+    "kupe": {
+     "doors": 2,
+     "system": "Стандарт (Аристо)",
+     "color": "Серебро матовое",
+     "fills": [
+      "Зеркало Серебро 4мм",
+      "Дуб Вотан"
+     ],
+     "sections": 2,
+     "softClose": true
+    }
+   }
+  },
+  {
+   "id": "c380e140-e663-4fca-a8e0-45151fa34937",
+   "x": 0,
+   "y": 0,
+   "z": 651,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Корпус шкафа-купе",
+    "width": 900,
+    "height": 2400,
+    "depth": 500,
+    "decor": "Дуб Вотан",
+    "facadeDecor": "Дуб Вотан",
+    "doors": false,
+    "sections": [
+     {
+      "id": "d70f33ce-2eb3-4eae-9834-efde517302fc",
+      "weight": 1,
+      "shelves": [
+       0.7119755244755245
+      ],
+      "drawers": 0,
+      "rod": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "c1ade024-a759-4ace-b74e-3b6c7aba95fc",
+   "x": 900,
+   "y": 0,
+   "z": 651,
+   "rotation": 0,
+   "module": {
+    "version": 1,
+    "name": "Корпус шкафа-купе",
+    "width": 900,
+    "height": 2400,
+    "depth": 500,
+    "decor": "Дуб Вотан",
+    "facadeDecor": "Дуб Вотан",
+    "doors": false,
+    "sections": [
+     {
+      "id": "318a3a5a-df30-458b-849b-ee534756093f",
+      "weight": 1,
+      "shelves": [
+       0.16433566433566432,
+       0.3321678321678322,
+       0.5,
+       0.6678321678321678,
+       0.8356643356643356
+      ],
+      "drawers": 0,
+      "rod": false
+     }
+    ]
+   }
+  }
+ ]
+}

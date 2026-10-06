@@ -65,6 +65,7 @@ import {
 } from "./model";
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
+import { KupePanel } from "./KupePanel";
 import { OutputPanel } from "./OutputPanel";
 import {RoomWarnings} from './RoomWarningPanel';
 import {roomWarnings} from './roomWarnings';
@@ -350,6 +351,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
   }
   function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string){
     if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;
+    if(project.modules.find(a=>a.id===mid)?.module.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
     setMeshFit(null);
     try{const next=insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
     catch(e){
@@ -507,6 +509,22 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
     const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Действия со всем корпусом',children:bodyRing};
+    if(mod.kupe){
+      // Двери купе: своё кольцо — наполнение, количество дверей, доводчики, сдвинуть, профиль, размеры, копия, удалить.
+      const k=mod.kupe,setK=(patch:Partial<NonNullable<Module['kupe']>>)=>modifyAt(a.id,n=>{n.kupe={...n.kupe!,...patch};});
+      const fillItem=(name:string,label:string):RadialItem=>({id:'kf-'+name,label,icon:Palette,active:k.fills.every(f=>f===name),hint:name,run:()=>setK({fills:[name]})});
+      const panel=()=>{selectModule(a.id);setTab('module');};
+      return {title:'Двери купе',subtitle:`${mod.width} × ${mod.height} · ${k.doors} дв.`,items:[
+        {id:'kupe-fill',label:'Наполнение',icon:Palette,hint:'Зеркало, стекло, ЛДСП — для всех дверей',children:[fillItem('Зеркало Серебро 4мм','Зеркало'),fillItem('Зеркало Бронза 4мм','Бронза'),fillItem('Зеркало Графит 4мм','Графит'),fillItem('Стекло сатин матовый 4мм','Сатин'),fillItem(mod.decor,'ЛДСП корпуса'),{id:'kf-more',label:'Другое…',icon:SlidersHorizontal,hint:'Весь каталог наполнений и разное по дверям',run:panel}]},
+        {id:'kupe-doors',label:'Дверей',icon:Columns2,hint:`Сейчас ${k.doors}, полотно ${Math.round(mod.width/k.doors)} мм`,children:[2,3,4,5].map(n=>({id:'kd-'+n,label:String(n),icon:Columns2,active:k.doors===n,hint:`Полотно ${Math.round(mod.width/n)} мм`,run:()=>setK({doors:n,fills:k.fills.slice(0,n)})}))},
+        {id:'kupe-soft',label:k.softClose?'Без доводчиков':'Доводчики',icon:Hand,hint:'5 600 ₽ за дверь',run:()=>setK({softClose:k.softClose?undefined:true})},
+        {id:'kupe-open',label:openDoors?'Закрыть':'Сдвинуть',icon:openDoors?DoorClosed:DoorOpen,hint:'Посмотреть, что внутри',run:()=>setOpenDoors(o=>!o)},
+        {id:'kupe-panel',label:'Профиль',icon:SlidersHorizontal,hint:'Система, цвет профиля, секции — справа',run:panel},
+        {id:'size',label:'Размеры',icon:Ruler,hint:`Проём ${mod.width} × ${mod.height} мм`,children:[size('width','Ширина'),size('height','Высота')]},
+        {id:'copy',label:'Копия',icon:Copy,hint:'Ещё такой же комплект',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
+        {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1,hint:'Убрать двери купе. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
+      ]};
+    }
     const part=(label:string)=>({remove:{id:'remove',label:'Удалить',icon:Trash,danger:true,hint:label+': убрать. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}} as RadialItem,
       copy:{id:'copy-part',label:'Копия',icon:Copy,hint:'Ещё такой же элемент ниже',run:()=>{const r=duplicatePart(project,a.id,c.sid,pid);commitProject(r.project);}} as RadialItem,
       up:{id:'up',label:'Выше',icon:ArrowUp,hint:'Поднять на 32 мм (шаг полкодержателя)',run:()=>moveFilling(a.id,c.sid,pid,32)} as RadialItem,
@@ -834,7 +852,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}}/></div>
+          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}}/></div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1188,7 +1206,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}>
-          <div className="property-tabs" data-stages="bodies filling facades">
+          <div className="property-tabs" data-stages="bodies filling facades" hidden={!!m.kupe}>
             <button
               aria-selected={tab === "module"}
               onClick={() => setTab("module")}
@@ -1240,7 +1258,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
                 К выбранному модулю
               </button>
             </div>
-          ) : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
+          ) : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
             <>
               <div className="property-section" data-stages="bodies">
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>

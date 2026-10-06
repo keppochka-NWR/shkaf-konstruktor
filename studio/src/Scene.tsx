@@ -319,6 +319,12 @@ export function Scene(p: Props) {
             mat.color.set(mirror ? 0xd6dee3 : dark ? 0x1b1b1b : ins?.id === "satin" ? 0xf1f3f4 : ins?.id.includes("bronze") ? 0x8a6a45 : ins?.id.includes("graphite") ? 0x4a4f55 : 0xdfe8ec);
             mat.transparent = !mirror && !dark; mat.opacity = mirror || dark ? 1 : ins?.id === "satin" ? 0.75 : 0.45; mat.roughness = 0.05; mat.metalness = mirror ? 0.55 : 0.1; mat.depthWrite = !mat.transparent;
           }
+          if (part.look) {
+            // Вид из прайса купе важнее общих правил стекла: зеркало и лакобель непрозрачны, стекло — с заданной прозрачностью.
+            const op = state.clearFacades && part.role === "door" ? Math.min(0.35, part.look.opacity ?? 1) : part.look.opacity ?? 1;
+            mat.color.set(part.look.color); mat.metalness = part.look.metalness ?? 0; mat.roughness = part.look.roughness ?? 0.6;
+            mat.transparent = op < 1; mat.opacity = op; mat.depthWrite = op >= 1;
+          }
           const isMeshItem = part.id.endsWith(":mesh");
           const isHandle = part.role === "handle";
           if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
@@ -400,7 +406,11 @@ export function Scene(p: Props) {
               (mesh.position.y - m.height / 2) * 1.18 + m.height / 2;
             mesh.position.z = (mesh.position.z-m.depth/2)*1.6+m.depth/2;
           }
-          if (part.role === "door" && state.openDoors && part.id !== "slope-filler") {
+          if (part.openShift !== undefined) {
+            // Купе: «открыть фасады» — переднее полотно отъезжает за заднее, как в жизни.
+            if (state.openDoors) mesh.position.x += part.openShift;
+            moduleGroup.add(mesh);
+          } else if (part.role === "door" && state.openDoors && part.id !== "slope-filler") {
             // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);

@@ -1,0 +1,25 @@
+.kupe-panel { display: grid; gap: 12px; }
+.kupe-panel h2 { margin: 0; }
+.kupe-total { margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #eef3ff; }
+.kupe-total span { font-size: 12px; color: #4d6370; font-weight: 600; }
+.kupe-total b { font-size: 18px; color: #2449d6; }
+.kupe-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kupe-row label, .kupe-field { display: grid; gap: 5px; font-size: 12px; font-weight: 600; color: #4d6370; min-width: 0; }
+.kupe-row input { width: 100%; min-width: 0; font-size: 14px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.kupe-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.kupe-chips button { width: 34px; height: 34px; border-radius: 8px; border: 1px solid #cfd8e3; background: #fff; font-weight: 650; }
+.kupe-chips button[aria-pressed="true"] { background: #2449d6; border-color: #2449d6; color: #fff; }
+.kupe-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.kupe-swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #cfd8e3; }
+.kupe-swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px #2449d6; }
+.kupe-sections { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.kupe-sections button { display: grid; justify-items: center; gap: 3px; padding: 6px 2px; border-radius: 8px; border: 1px solid #cfd8e3; background: #fff; min-width: 0; }
+.kupe-sections button[aria-pressed="true"] { border-color: #2449d6; background: #eef3ff; }
+.kupe-sections svg { width: 20px; height: 34px; fill: none; stroke: #4d6370; stroke-width: 1.2; }
+.kupe-sections span { font-size: 9.5px; line-height: 1.15; color: #4d6370; text-align: center; overflow-wrap: anywhere; }
+.kupe-check span { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.kupe-lines table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.kupe-lines td { padding: 5px 2px; border-bottom: 1px solid #edf1f3; vertical-align: top; }
+.kupe-lines td:last-child { width: 86px; text-align: right; font-weight: 600; white-space: nowrap; }
+.kupe-lines small { display: block; color: #7a8b94; overflow-wrap: anywhere; }
+.kupe-lines summary, .kupe-doors summary { cursor: pointer; font-weight: 650; font-size: 13px; }
