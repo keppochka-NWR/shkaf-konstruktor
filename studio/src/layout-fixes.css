@@ -1,0 +1,27 @@
+/* Аудит вёрстки 06.10.2026 (scripts/overflow-audit.ts, ширины 400–1600, все этапы): убраны наложения и выходы за рамки.
+   Подключается последним, поэтому перекрывает правила style.css и studio-refresh.css. */
+
+/* 1. Палитра «Добавить мебель»: всегда иконка над подписью, текст переносится внутри кнопки и не касается рамки. */
+.module-kinds button { flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 12px; line-height: 1.2; min-height: 60px; padding: 8px 4px; gap: 4px; min-width: 0; }
+.module-kinds button span { overflow-wrap: anywhere; max-width: 100%; }
+
+/* 2. Панель инструментов сцены не заходит на колонку значков справа (колонка 46 px + отступ 20 px). */
+.interaction-bar { right: 76px; }
+@media (max-width: 520px) { .interaction-bar { right: 66px; } }
+
+/* 3. Этапы: на средних экранах «Назад / Дальше» уходят во вторую строку рядом с подсказкой, шаги получают всю ширину. */
+.app .stage-steps { min-width: 0; }
+@media (min-width: 901px) and (max-width: 1180px) {
+  .app .stage-bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .app .stage-steps { grid-column: 1 / -1; grid-row: 1; }
+  .app .stage-hint { grid-column: 1; grid-row: 2; align-self: center; }
+  .app .stage-actions { grid-column: 2; grid-row: 2; }
+}
+
+/* 4. Название проекта в шапке сжимается вместе со своим блоком. */
+.document-name { min-width: 0; }
+.document-name input { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+
+/* 5. Телефон: кнопки истории без подписей; 3D-область не налезает на левую панель. */
+@media (max-width: 600px) { .history-label { display: none; } }
+@media (max-width: 520px) { .workspace { grid-template-rows: minmax(520px, auto) auto auto; } }

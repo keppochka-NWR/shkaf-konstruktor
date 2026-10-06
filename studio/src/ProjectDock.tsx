@@ -145,7 +145,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
       {panel && <section className="dock-panel" aria-label={TABS.find((t) => t.id === tab)!.label}>{panel}</section>}
       <nav className="dock-bar" aria-label="Навигация по проекту">
         <div className="dock-tabs">{TABS.map((t) => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}><t.icon size={15} />{t.label}</button>)}</div>
-        <button className="room-warning-link" hidden={!warnings} onClick={onWarnings}>Проверить расстановку · {warnings}</button>
+        <button className="room-warning-link" hidden={!warnings} onClick={onWarnings} title="Проверить расстановку"><span className="dock-warn-long">Проверить расстановку</span><span className="dock-warn-short">Расстановка</span> · {warnings}</button>
         <button className="dock-price" onClick={() => setTab("estimate")} aria-label="Открыть смету">
           {!e ? "Считаем…" : <>{totals && <span className="dock-split">Материалы {rub(totals.material)} · Фурнитура {rub(totals.hardware)} · Итого</span>}<b>{total === null ? `Нет цены: ${e.missing.length}` : rub(total)}</b></>}
         </button>

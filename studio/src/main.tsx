@@ -6,6 +6,7 @@ import {cornerProject,CORNER_DEFAULT,CORNER_STORAGE} from './cornerWardrobe';
 import {parseProject} from './project';
 import "./style.css";
 import "./studio-refresh.css";
+import "./layout-fixes.css";
 async function start(){
   const query=new URLSearchParams(location.search),slug=query.get('project');
   let initialProject;

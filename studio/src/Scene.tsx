@@ -767,11 +767,23 @@ export function Scene(p: Props) {
       controls.update();
       if(needsRender){
       needsRender=false;renderer.render(scene, camera);
-      for (const l of labels) {
+      // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
+      // вверх/вниз на её высоту, а если места нет — прячем до следующего поворота камеры (аудит вёрстки 06.10.2026).
+      const placed: {x:number;y:number;w:number;h:number}[] = [];
+      const ordered = [...labels].sort((a,b)=>Number(a.element.classList.contains('gap-dimension'))-Number(b.element.classList.contains('gap-dimension')));
+      for (const l of ordered) {
         const v = l.position.clone().project(camera);
-        l.element.style.left = ((v.x + 1) / 2) * target.clientWidth + "px";
-        l.element.style.top = ((-v.y + 1) / 2) * target.clientHeight + "px";
-        l.element.style.display = v.z < 1 && v.z > -1 ? "" : "none";
+        const x = ((v.x + 1) / 2) * target.clientWidth, y0 = ((-v.y + 1) / 2) * target.clientHeight;
+        l.element.style.left = x + "px";
+        l.element.style.visibility = "";
+        if (!(v.z < 1 && v.z > -1)) { l.element.style.display = "none"; continue; }
+        l.element.style.display = "";
+        const w = l.element.offsetWidth + 4, h = l.element.offsetHeight + 4;
+        const hits = (y:number) => placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < (p.h + h) / 2);
+        const y = [y0, y0 - h, y0 + h, y0 - 2 * h, y0 + 2 * h].find(c => !hits(c));
+        if (y === undefined) { l.element.style.top = y0 + "px"; l.element.style.visibility = "hidden"; continue; }
+        l.element.style.top = y + "px";
+        placed.push({ x, y, w, h });
       }
       }
       frame = requestAnimationFrame(animate);
