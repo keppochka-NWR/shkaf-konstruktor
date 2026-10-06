@@ -112,7 +112,9 @@ export function kupeProfileStyle(s: KupeSystem): KupeProfileStyle {
   if (/\bi\b|i \(|узк|flat/.test(n)) return "i";
   return "c";
 }
-export const KUPE_PROFILE_DEPTH: Record<KupeProfileStyle, number> = { c: 32, i: 26, slim: 22 };
+export const KUPE_PROFILE_DEPTH: Record<KupeProfileStyle, number> = { c: 40, i: 26, slim: 22 };
+/** Смещение паза под вставку от середины глубины профиля (мм, минус — к задней стороне): у C паз у задней стороны. */
+export const KUPE_SLOT_OFFSET: Record<KupeProfileStyle, number> = { c: -11.9, i: 0, slim: 0 };
 export const KUPE_PROFILE_PREVIEW: Record<KupeProfileStyle, string> = { c: "models/kupe/preview_handle_c.png", i: "models/kupe/preview_handle_i.png", slim: "models/kupe/preview_handle_slim.png" };
 const TRACK_DEPTH = 82;
 const hex = (grad: string) => parseInt((grad.split(",")[1] ?? grad.split(",")[0] ?? "#c0c0c0").replace("#", ""), 16);
@@ -127,25 +129,25 @@ export function kupeParts(m: Module): Part[] {
   const { width: lw, overlap } = kupeLeaf(m), bottom = s.kind === "hang" ? 10 : d.trackBot + 3, top = H - d.trackTop * 0.45, lh = top - bottom;
   const sumR = sec.rowRatios.reduce((a, b) => a + b, 0), sumC = sec.colRatios.reduce((a, b) => a + b, 0);
   for (let i = 0; i < k.doors; i++) {
-    const row = i % 2, z = row ? D * 0.72 : D * 0.3, x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
+    const row = i % 2, z = row ? D * 0.72 : D * 0.3, zs = z + KUPE_SLOT_OFFSET[style], x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
     const leaf = { openShift: shift, sectionId: undefined };
     out.push(part(`kupe:${i}:side:l`, "Профиль-ручка", [d.frameSide, lh, hd], [x0 + d.frameSide / 2, bottom + lh / 2, z], { ...leaf, model: { file: `kupe/handle_${style}.glb`, length: "y" } }));
     out.push(part(`kupe:${i}:side:r`, "Профиль-ручка", [d.frameSide, lh, hd], [x0 + lw - d.frameSide / 2, bottom + lh / 2, z], { ...leaf, model: { file: `kupe/handle_${style}.glb`, length: "y", mirror: true } }));
     const iw = lw - 2 * d.frameSide;
-    out.push(part(`kupe:${i}:frame:top`, "Рамка верхняя", [iw, d.frameTop, 16], [x0 + lw / 2, top - d.frameTop / 2, z], { ...leaf, model: { file: "kupe/frame.glb", length: "x" } }));
-    out.push(part(`kupe:${i}:frame:bottom`, "Рамка нижняя", [iw, d.frameBot, 16], [x0 + lw / 2, bottom + d.frameBot / 2, z], { ...leaf, model: { file: "kupe/frame.glb", length: "x", mirror: true } }));
+    out.push(part(`kupe:${i}:frame:top`, "Рамка верхняя", [iw, d.frameTop, 16], [x0 + lw / 2, top - d.frameTop / 2, zs], { ...leaf, model: { file: "kupe/frame.glb", length: "x" } }));
+    out.push(part(`kupe:${i}:frame:bottom`, "Рамка нижняя", [iw, d.frameBot, 16], [x0 + lw / 2, bottom + d.frameBot / 2, zs], { ...leaf, model: { file: "kupe/frame.glb", length: "x", mirror: true } }));
     const ih = lh - d.frameTop - d.frameBot, cw = iw - (sec.colRatios.length - 1) * d.divider, ch = ih - (sec.rowRatios.length - 1) * d.divider;
     let y = top - d.frameTop;
     sec.rowRatios.forEach((r, ri) => {
       const rh = r / sumR * ch; let x = x0 + d.frameSide;
       sec.colRatios.forEach((c, ci) => {
         const cwi = c / sumC * cw, ldsp = isLdspFill(f);
-        out.push(part(`kupe:${i}:fill:${ri}:${ci}`, "Наполнение · " + f.n, [cwi, rh, ldsp ? 8 : 5], [x + cwi / 2, y - rh / 2, z], { material: ldsp ? "board" : "glass", decor: ldsp ? f.n : f.n, look: ldsp ? undefined : kupeFillLook(f) }));
+        out.push(part(`kupe:${i}:fill:${ri}:${ci}`, "Наполнение · " + f.n, [cwi, rh, ldsp ? 8 : 5], [x + cwi / 2, y - rh / 2, zs], { material: ldsp ? "board" : "glass", decor: ldsp ? f.n : f.n, look: ldsp ? undefined : kupeFillLook(f) }));
         x += cwi;
-        if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [d.divider, rh, 14], [x + d.divider / 2, y - rh / 2, z], { ...leaf, model: { file: "kupe/divider.glb", length: "y" } })); x += d.divider; }
+        if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [d.divider, rh, 14], [x + d.divider / 2, y - rh / 2, zs], { ...leaf, model: { file: "kupe/divider.glb", length: "y" } })); x += d.divider; }
       });
       y -= rh;
-      if (ri < sec.rowRatios.length - 1) { out.push(part(`kupe:${i}:div-h:${ri}`, "Разделитель", [iw, d.divider, 14], [x0 + lw / 2, y - d.divider / 2, z], { ...leaf, model: { file: "kupe/divider.glb", length: "x" } })); y -= d.divider; }
+      if (ri < sec.rowRatios.length - 1) { out.push(part(`kupe:${i}:div-h:${ri}`, "Разделитель", [iw, d.divider, 14], [x0 + lw / 2, y - d.divider / 2, zs], { ...leaf, model: { file: "kupe/divider.glb", length: "x" } })); y -= d.divider; }
     });
     for (const p of out) if (p.id.startsWith(`kupe:${i}:fill:`)) p.openShift = shift;
   }

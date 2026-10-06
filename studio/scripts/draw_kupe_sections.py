@@ -4,7 +4,9 @@
 import os, sys
 from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from kupe_profile_shapes import SHAPES
+from kupe_profile_shapes import SHAPES, rect, arc_band, slot
+# Previous C contour (v1), kept only for the before/after sheet.
+SHAPES_OLD = {"handle_c": lambda w=30.0, d=32.0: [arc_band(9.5, d - 9.5, 9.5, 7.9, 45, 290), rect(9.5, d - 1.6, w, d), rect(6.5, 0, w, 1.6), rect(6.5, 0, 8.1, d - 17.5), rect(15, 1.6, 16.4, d - 1.6), *slot(16.4, w, d / 2), rect(16.4, d / 2 - 6.4, 18, d / 2 + 6.4)]}
 
 ASSETS, PAGE, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
 os.makedirs(OUT, exist_ok=True)
@@ -16,7 +18,7 @@ INFO = {
     "handle_c": dict(title="Профиль-ручка C", ref="standart-c.jpg", axes=("ширина на фасаде", "глубина, сверху лицевая сторона"),
         source=["Форма: по картинке «Стандарт C» из калькулятора купе (assets/sections/standart-c.jpg).",
                 "Ширина 30 мм — из прайса калькулятора купе (frameSide системы «Стандарт»).",
-                "Глубина 32 мм, толщины стенок 1,4–1,6 мм, паз под вставку 10 мм — подобраны на глаз, не из каталога."],
+                "Версия 2: контур снят с торца на картинке. Глубина 40 мм (два ряда дверей в направляющей 81,6), паз ~12 мм под вставку 10 мм с уплотнителем — оценка, не из каталога."],
         systems="Стандарт C, Эконом C, а также FUSION, SMART, AVERS, Эконом H и O — у них в каталоге своя форма, здесь упрощённо как C."),
     "handle_i": dict(title="Профиль-ручка I / FLAT", ref="standart-i.jpg", axes=("ширина на фасаде", "глубина, сверху лицевая сторона"),
         source=["Форма: по картинке «Стандарт I» (assets/sections/standart-i.jpg).",
@@ -111,4 +113,29 @@ def draw_section(name, info):
 
 
 paths = [draw_section(n, i) for n, i in INFO.items()]
+
+
+def before_after():
+    """Sheet: old C contour, new C contour and the zoomed end face of the catalogue picture."""
+    W, H = 1500, 760
+    img = Image.new("RGB", (W, H), "white"); d = ImageDraw.Draw(img)
+    d.text((40, 24), "Профиль-ручка C: было / стало / картинка каталога", font=f(32, True), fill="#1d2b3a")
+    def panel(polys, box, title, colour):
+        pts = [p for poly in polys for p in poly]; a0, a1 = min(p[0] for p in pts), max(p[0] for p in pts); b0, b1 = min(p[1] for p in pts), max(p[1] for p in pts)
+        k = min((box[2] - box[0] - 80) / (a1 - a0), (box[3] - box[1] - 120) / (b1 - b0))
+        ox, oy = box[0] + 40, box[1] + 60
+        d.rectangle(box, outline="#d5dde8", width=2); d.text((box[0] + 12, box[1] + 10), title, font=f(22, True), fill=colour)
+        for poly in polys: d.polygon([(ox + (a - a0) * k, oy + (b1 - b) * k) for a, b in poly], fill="#9aa5ae", outline="#4d5963")
+        d.text((box[0] + 12, box[3] - 34), f"{round(a1 - a0, 1):g} × {round(b1 - b0, 1):g} мм", font=f(20), fill="#2449d6")
+    panel(SHAPES_OLD["handle_c"](), (40, 90, 500, 640), "Было (v1)", "#b3261e")
+    panel(SHAPES["handle_c"](), (520, 90, 980, 640), "Стало (v2)", "#1a7f37")
+    ref = Image.open(os.path.join(ASSETS, "standart-c.jpg")).convert("RGB").crop((250, 150, 460, 330)); ref = ref.resize((ref.width * 2, ref.height * 2))
+    d.rectangle((1000, 90, 1460, 640), outline="#d5dde8", width=2); d.text((1012, 100), "Торец на картинке каталога", font=f(22, True), fill="#1d2b3a")
+    img.paste(ref, (1020, 160))
+    d.text((40, 660), "Верх рисунка — лицевая сторона (в комнату), слева — внешний край двери, справа — сторона вставки.", font=f(19), fill="#4d6370")
+    d.text((40, 690), "Стало: вогнутый захват C под пальцы, камера за ним и камера под ним, ОДИН широкий паз под вставку с бортиком.", font=f(19), fill="#1d2b3a")
+    path = os.path.join(OUT, "handle_c_before_after.png"); img.save(path); return path
+
+
+paths.append(before_after())
 print("\n".join(paths))

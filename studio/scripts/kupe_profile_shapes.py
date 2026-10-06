@@ -22,12 +22,22 @@ def slot(a0, a1, mid, panel=10.0, wall=1.4):
 
 # a: across (0 = outer edge of the leaf / outer edge of the frame), b: depth (0 = back, max = front facing the room)
 SHAPES = {
-    # Standard C: wide face 30, C-shaped finger grip on the outer edge, chamber and panel slot toward the insert.
-    "handle_c": lambda w=30.0, d=32.0: [
-        arc_band(9.5, d - 9.5, 9.5, 7.9, 45, 290),
-        rect(9.5, d - 1.6, w, d), rect(6.5, 0, w, 1.6), rect(6.5, 0, 8.1, d - 17.5),
-        rect(15, 1.6, 16.4, d - 1.6), *slot(16.4, w, d / 2), rect(16.4, d / 2 - 6.4, 18, d / 2 + 6.4),
-    ],    # Standard I / Flat: flat face, I-section, panel slot toward the insert.
+    # Standard C, v2 (06.10.2026, traced from the end face of assets/sections/standart-c.jpg):
+    # outer wall with a rounded front corner; front shell (visible face 30) with a down-turned lip;
+    # concave C finger groove open toward the panel; upper chamber behind the groove closed by a wall with a lug;
+    # rectangular lower chamber; ONE wide panel slot between the groove's lower lip and the bottom flange with an end lip.
+    "handle_c": lambda w=30.0, d=40.0: [
+        rect(0, 0, 1.5, d - 7),                      # outer wall
+        arc_band(7, d - 7, 7, 5.5, 90, 180, 16),     # rounded front-outer corner
+        rect(7, d - 1.5, 28.5, d),                   # front shell = visible face; its end is the lip of the grip
+        arc_band(21, 26.5, 12, 10.5, 50, 250, 40),   # concave C groove: starts under the shell (lip), round the outer side, down to the lower lip
+        rect(0, 21.2, 10.8, 22.7), rect(9.2, 19.6, 11.0, 21.2),  # upper chamber floor with the lug
+        rect(17.6, 1.5, 19.1, 16.2),                 # lower chamber inner wall = slot bottom
+        rect(13.5, 14.6, w, 17.4),                   # lower lip of the groove = upper wall of the panel slot
+        rect(0, 0, w, 1.6), rect(w - 1.6, 1.6, w, 3.6),  # bottom flange with the end lip
+        rect(5, 1.6, 6.2, 3.2), rect(11, 1.6, 12.2, 3.2),  # small lugs inside the lower chamber
+    ],
+    # Standard I / Flat: flat face, I-section, panel slot toward the insert.
     "handle_i": lambda w=30.0, d=26.0: [
         rect(0, d - 1.8, w, d), rect(0, 0, 14, 1.6), rect(2.4, 0, 4.0, d), rect(12.4, 0, 14, d),
         *slot(14, w, d / 2), rect(14, d / 2 - 6.4, 15.6, d / 2 + 6.4),

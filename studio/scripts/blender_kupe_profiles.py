@@ -86,7 +86,8 @@ def render_preview(obj, path):
     obj.data.materials.append(mat)
     import mathutils
     obj.scale = (1, 1, 0.12)  # short 120 mm piece, lying along X like the catalogue pictures
-    obj.rotation_euler = (math.pi if obj.name == "track_top" else 0, math.pi / 2, 0)
+    # handles: face up, end face toward the camera (like the catalogue pictures); top track: channels down
+    obj.rotation_euler = (math.pi, math.pi / 2, 0) if obj.name == "track_top" else (-math.pi / 2, 0, 0)
     bpy.context.view_layer.update()
     world = bpy.data.worlds.new("w")
     scene.world = world
