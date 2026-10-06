@@ -1,5 +1,9 @@
 import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
+import {backupProject} from './projectStorage';
+import {CornerModulePanel} from './CornerModulePanel';
+import OpeningLayoutEditor from './OpeningLayoutEditor';
+import {resizeOpening} from './sectionLayout';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
 import {StageBar} from './StageBar';
@@ -79,7 +83,6 @@ import {
   type Project,
 } from "./project";
 import {fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
-const KEY = CURRENT_PROJECT;
 function NumberField({
   label,
   value,
@@ -191,15 +194,16 @@ function Counter({
     </div>
   );
 }
-export default function App() {
+export default function App({initialProject,projectKey}:{initialProject?:Project;projectKey?:string}={}) {
+  const KEY=CURRENT_PROJECT+(projectKey?':'+projectKey:'');
   const [startup] = useState(() => {
     let original:string|null=null,currentRaw:string|null=null;
     try {
       currentRaw=localStorage.getItem(KEY);
       const s = original =
-        currentRaw || localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1");
+        currentRaw || (projectKey?null:localStorage.getItem("module-studio-v2") || localStorage.getItem("module-studio-v1"));
       return {
-        model: s ? parseProject(JSON.parse(s)) : newProject({...initialModule(),name:'Новый шкаф',sections:[section()]}),
+        model: s ? parseProject(JSON.parse(s)) : initialProject??newProject({...initialModule(),name:'Новый шкаф',sections:[section()]}),
         error: "",
         damaged:undefined as string|undefined,
         storageUnavailable:false,
@@ -439,7 +443,7 @@ export default function App() {
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
-    try{update(next);if(next.height!==m.height)fitDrawersAfterResize(next);}catch(e){setError((e as Error).message);return false;}
+    try{update(next);if(next.height!==m.height&&!next.corner)fitDrawersAfterResize(next);}catch(e){setError((e as Error).message);return false;}
     return commit(next);
   }
   function modifySection(update: (draft: Section, next: Module) => void) {
@@ -470,7 +474,7 @@ export default function App() {
     if (!touched.current) return;
     if(startup.storageUnavailable){setSaved("Не сохранено");setError("При запуске не удалось прочитать хранилище. Автосохранение отключено, чтобы не заменить недоступный проект. Скачайте текущую работу и перезагрузите редактор.");return;}
     try {
-      lastLocalWrite.current=persistProject(localStorage,project,startup.damaged,lastLocalWrite.current);
+      lastLocalWrite.current=persistProject(localStorage,project,startup.damaged,lastLocalWrite.current,KEY);
       setSaved("Сохранено в браузере");
     } catch (error) {
       setSaved("Не сохранено");
@@ -553,6 +557,7 @@ export default function App() {
     }
   }
   function resizeSection(width: number) {
+    if(m.sectionLayout){modify(n=>resizeOpening(n,selectedId,width));return;}
     if (m.sections.length === 1) {
       modify(n=>n.width=width+2*RULES.panel);
       return;
@@ -587,12 +592,12 @@ export default function App() {
   return (
     <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
       <header className="header">
-        <a className="brand" href="./" aria-label="Модуль — главная">
+        <a className="brand" href="./" aria-label="ГардерЁб — главная">
           <span className="brand-mark">
             <Box size={23} />
           </span>
           <strong>
-            модуль<span>студия мебели</span>
+            ГардерЁб<span>проектировщик мебели</span>
           </strong>
         </a>
         <div className="document-name">
@@ -759,6 +764,7 @@ export default function App() {
           </div>
           <button className="text-action upper-add" onClick={()=>setModal("new")}>Новый проект / восстановить</button>
           <a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>
+
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
           <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}}/></div>
           <div className="project-modules" data-stages="bodies filling facades">
@@ -808,7 +814,7 @@ export default function App() {
           </div>
           <button className="text-action upper-add" data-stages="bodies" title={`Высота до 600 мм; под потолком остаётся ${MEASUREMENT_RULES.ceilingClearance} мм по СТП`} onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
           <button className="text-action upper-add" data-stages="bodies filling" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
-          <details className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
+          <details hidden={!!m.corner} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
           <div className="presets" data-stages="filling">
             {(
               [
@@ -836,22 +842,22 @@ export default function App() {
             Наполнение <span>в секцию {idx + 1}</span>
           </div>
           <div className="fill-buttons" data-stages="filling">
-            <button draggable onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
+            <button hidden={!!m.corner} draggable onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
             <button draggable onDragStart={e=>startFill(e,'shelf')}
-              onClick={()=>setComposer('shelf')}
+              onClick={()=>m.corner?dropFilling('shelf',placed.id,selectedId,(b.top+b.bottom)/2):setComposer('shelf')}
             >
               <Rows3 size={19} />
               <span>Добавить полку</span>
               <Plus size={15} />
             </button>
             <button draggable onDragStart={e=>startFill(e,'drawer')}
-              onClick={()=>setComposer('drawer')}
+              onClick={()=>m.corner?dropFilling('drawer',placed.id,selectedId,b.bottom+drawerStackHeight(s)):setComposer('drawer')}
             >
               <Archive size={19} />
               <span>Добавить ящик</span>
               <Plus size={15} />
             </button>
-            <div className="mesh-add">
+            <div hidden={!!m.corner} className="mesh-add">
               <button draggable onDragStart={e=>startFill(e,'mesh')}
                 onClick={()=>dropFilling('mesh',placed.id,selectedId,b.bottom+drawerStackHeight(s),meshChoice)}
               >
@@ -863,7 +869,7 @@ export default function App() {
                 {(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD} · {i.price} ₽</option>)}</optgroup>)}
               </select>
             </div>
-            <button draggable onDragStart={e=>startFill(e,'rod')}
+            <button hidden={!!m.corner&&(m.corner.level==='upper'||idx!==2)} draggable onDragStart={e=>startFill(e,'rod')}
               onClick={() => {
                 setTab("section");
                 if(s.rod)modifySection(a=>{a.rod=false;delete a.rodAt;});else dropFilling('rod',placed.id,selectedId,b.top-RULES.rodTopOffset);
@@ -873,7 +879,7 @@ export default function App() {
               <span>{s.rod ? "Убрать штангу" : "Добавить штангу"}</span>
               {s.rod ? <Minus size={15} /> : <Plus size={15} />}
             </button>
-            <button
+            <button hidden={!!m.corner}
               disabled={m.sections.length >= RULES.maxSections}
               onClick={() => {
                 const next = splitSection(m, selectedId);
@@ -922,7 +928,7 @@ export default function App() {
             </div>
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
-          <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='filling'&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
+          <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='filling'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {roomPlan?<RoomPlan showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
             moveAll={moveAll}
             groupIds={liveGroupIds}
@@ -962,7 +968,7 @@ export default function App() {
                     ? "Высота"
                     : "Глубина",
                 m[key],
-                (v) => modify((n) => (n[key] = v)),
+                (v) => modify((n) => {n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}}),
               )
             }
             onGap={(index) => {
@@ -1177,9 +1183,11 @@ export default function App() {
                 К выбранному модулю
               </button>
             </div>
-          ) : tab === "module" ? (
+          ) : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
             <>
               <div className="property-section" data-stages="bodies">
+                <label className="hardware-field"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>
+                <label className="hardware-field"><span><input type="checkbox" aria-label="Открытый угловой стык" checked={!!m.openJunction} onChange={e=>modify(n=>{n.openJunction=e.target.checked;delete n.cornerFiller;delete n.wallFiller;})}/> Открытый угловой стык без дверных фальшей</span></label>
                 <div className="section-heading">
                   <h2>Габариты корпуса</h2>
                   <Ruler size={17} />
@@ -1426,6 +1434,12 @@ export default function App() {
             </>
           ) : (
             <>
+              {!m.casework&&<OpeningLayoutEditor module={m} sid={s.id} edit={modify}/>}
+              <div className="property-section">
+                <label className="hardware-field"><span><input type="checkbox" aria-label="Вкладные фасады ящиков" checked={s.drawerMount==='inset'} onChange={e=>modifySection(a=>{a.drawerMount=e.target.checked?'inset':undefined;})}/> Фасады ящиков внутри проёма, без растяжения к цоколю</span></label>
+                {s.rod&&<NumberField label="Минимальный просвет под штангой" value={s.rodClearance??900} min={300} max={1500} onChange={v=>modifySection(a=>{a.rodClearance=v;})}/>}
+                {selectedDetail?.id.includes(':shelf:')&&<label className="hardware-field"><span><input type="checkbox" aria-label="Стеклянная полка" checked={!!s.glassShelves?.includes(Number(selectedDetail.id.split(':shelf:')[1]))} onChange={e=>{const j=Number(selectedDetail.id.split(':shelf:')[1]);modifySection(a=>{a.glassShelves=e.target.checked?[...new Set([...(a.glassShelves??[]),j])]:(a.glassShelves??[]).filter(k=>k!==j);});}}/> Стекло 6 мм вместо ЛДСП</span></label>}
+              </div>
               <div className="property-section">
                 <div className="section-heading">
                   <h2>Секция {idx + 1}</h2>
@@ -1484,7 +1498,7 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    <div className="floor-height">
+                    <div className="floor-height" style={{display:m.sectionLayout||s.drawerConfigs?.every(c=>c.tray)?'none':undefined}}>
                       <NumberField label="От дна пенала до верха полки над ящиками" value={Math.round(drawerCapTop(m,s)-b.bottom)} min={RULES.panel+s.drawers*(68+RULES.drawerStep)} max={b.top-b.bottom-RULES.shelfMinClear} onChange={v=>{try{const configs=distributeDrawers(m,s,b.bottom+v);modifySection(a=>{a.drawerConfigs=configs;});}catch(e){setError((e as Error).message);}}}/>
                       <span className="hint" tabIndex={0} role="note" aria-label="Размер от дна: от верхней плоскости дна пенала до верхней плоскости полки над блоком ящиков. Показан линией в 3D. При изменении ящики делятся поровну по высоте." title="Размер от дна: от верхней плоскости дна пенала до верхней плоскости полки над блоком ящиков. Показан линией в 3D. При изменении ящики делятся поровну по высоте.">?</span>
                     </div>
@@ -1517,7 +1531,7 @@ export default function App() {
                       const meshItem=c.mesh?meshById(c.mesh):undefined;
                       return (
                         <>
-                          <label className="hardware-field">Тип элемента<select aria-label="Тип ящика" value={c.mesh??'box'} onChange={e=>{const v=e.target.value;if(v==='box')update({mesh:undefined,height:RULES.drawerH,handle:undefined});else{const item=meshById(v)!;update({mesh:v,height:item.h,handle:undefined});}}}><option value="box">Ящик ЛДСП 16 с фасадом</option>{(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]+' · Лемана Про'}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD} · {i.price} ₽</option>)}</optgroup>)}</select></label>
+                          <label className="hardware-field">Тип элемента<select aria-label="Тип ящика" value={c.mesh??(c.tray?'tray':'box')} onChange={e=>{const v=e.target.value;if(v==='tray')update({mesh:undefined,tray:true,slide:'gtv0fpo',height:50,facadeH:50,handle:false});else if(v==='box')update({mesh:undefined,tray:undefined,height:RULES.drawerH,facadeH:undefined,handle:undefined});else{const item=meshById(v)!;update({mesh:v,tray:undefined,height:item.h,handle:undefined});}}}><option value="box">Ящик ЛДСП 16 с фасадом</option><option value="tray">Выкатная полка / лоток 40–60 мм</option>{(['basket','trousers','shoes'] as const).map(kind=><optgroup key={kind} label={MESH_KIND_LABEL[kind]+' · Лемана Про'}>{MESH.filter(i=>i.kind===kind).map(i=><option key={i.id} value={i.id}>{i.label} · проём {i.reqW}×{i.reqD} · {i.price} ₽</option>)}</optgroup>)}</select></label>
                           {meshItem&&<p className="field-note">Арт. {meshItem.art}, высота {meshItem.h} мм, нужен проём {meshItem.reqW}–{meshItem.reqW+60} мм в ширину и глубина от {meshItem.reqD} мм. Направляющие в комплекте, без фасада и ручки; за распашными дверями ставятся фальши.</p>}
                           {meshItem&&<NumberField label="Элемент от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>}
                           {!meshItem&&<>
@@ -1561,15 +1575,17 @@ export default function App() {
                           <NumberField
                             label="Высота боковины ящика"
                             value={c.height}
-                            min={68}
+                            min={c.tray?40:68}
                             max={300}
                             onChange={(v) => update({ height: v })}
                           />
                           <label className="hardware-field"><span><input type="checkbox" aria-label="Ящик без фасада" checked={!!c.noFacade} onChange={e=>update({noFacade:e.target.checked?true:undefined,handle:undefined})}/> Внутренний ящик без фасада</span></label>
                           {c.noFacade?<p className="field-note">Только короб и направляющие: ящик за распашными дверями или в открытом каркасе. Фасад, ручка и зазоры не считаются.</p>:<>
-                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={60} max={800} onChange={v=>update({facadeH:v})}/>
+                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={c.tray?40:60} max={800} onChange={v=>update({facadeH:v})}/>
                           {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}</>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
+                          <label className="hardware-field">Открывание<select aria-label="Открывание ящика" value={c.operation??'push'} onChange={e=>update({operation:e.target.value as DrawerConfig['operation'],handle:false})}><option value="push">Push to Open</option><option value="soft-close">Захват за фасад · с доводчиком</option></select></label>
+                          {c.operation==='soft-close'&&<p className="field-note">Геометрия скрытых направляющих — предварительная. Артикул направляющих с доводчиком нужно согласовать перед производством.</p>}
                           {c.slide === "gtv0fpo" && (
                             <a
                               className="text-action"

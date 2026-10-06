@@ -22,7 +22,7 @@ def backup_database(source, directory):
     try:
         with closing(sqlite3.connect(source.as_uri()+'?mode=ro',uri=True,timeout=30)) as src, closing(sqlite3.connect(output,timeout=30)) as dst:
             names={row[0] for row in src.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            if not {'projects','revisions','sessions','codes'}<=names:
+            if not {'projects','revisions','sessions'}<=names or not ({'accounts','codes'} & names):
                 raise ValueError('This is not a studio database.')
             src.backup(dst,pages=256,sleep=.05)
             if dst.execute('PRAGMA quick_check').fetchone()[0]!='ok':

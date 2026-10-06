@@ -1,4 +1,5 @@
 import {parts,boxes,type Module,type Part} from './model';
+import {cornerDrawingSVG} from './cornerDrawing';
 import {projectErrors,type Project} from './project';
 const esc=(s:unknown)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const mm=(v:number)=>Math.round(v*10)/10;
@@ -7,6 +8,7 @@ export function drawingLevels(m:Module){return parts(m).filter(d=>d.role==='shel
   return {mark:index+1,id:d.id,name:d.name,section:section+1,bottom:mm(d.position[1]-d.size[1]/2),top:mm(d.position[1]+d.size[1]/2),center:mm(d.position[1]),fromOpening:mm(d.position[1]-base)};
 });}
 export function moduleDrawingSVG(m:Module){
+  if(m.corner)return cornerDrawingSVG(m);
   const all=parts(m),levels=drawingLevels(m),scale=Math.min(440/m.height,280/m.width,220/m.depth),base=530,front=95,side=575;
   const txt=(x:number,y:number,value:unknown,anchor='middle')=>`<text x="${x}" y="${y}" text-anchor="${anchor}" font-size="13" fill="#23323c">${esc(value)}</text>`;
   const line=(x1:number,y1:number,x2:number,y2:number)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#667d88" stroke-width="1"/>`;

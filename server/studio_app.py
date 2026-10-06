@@ -1,28 +1,34 @@
-"""Separate studio storage. Demo is opt-in and loopback-only; production uses email codes."""
+"""Separate studio storage with administrator-created login/password accounts."""
 import hashlib
 import json
 import os
-import re
 import secrets
-import smtplib
 import sqlite3
-import ssl
 import time
 from contextlib import contextmanager
-from email.message import EmailMessage
 from pathlib import Path
+from typing import Literal
 from fastapi import FastAPI, Request, Response, HTTPException
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from studio_accounts import normalize_login, hash_password, verify_password, dummy_hash, public_account, insert_account
 
 ROOT = Path(__file__).resolve().parent
 COOKIE = 'studio_session'
 
-class EmailBody(BaseModel):
-    email: str = Field(max_length=120)
-class CodeBody(EmailBody):
-    code: str = Field(min_length=6, max_length=6, pattern=r'^\d{6}$')
+class LoginBody(BaseModel):
+    login: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
+class AccountBody(LoginBody):
+    name: str = Field(min_length=1, max_length=80)
+    role: Literal['manager', 'admin'] = 'manager'
+class PasswordBody(BaseModel):
+    password: str = Field(min_length=15, max_length=128)
+class ChangePasswordBody(PasswordBody):
+    currentPassword: str = Field(min_length=1, max_length=128)
+class ActiveBody(BaseModel):
+    active: bool
 class LibraryBody(BaseModel):
     items: list = Field(max_length=30)
 class SaveBody(BaseModel):
@@ -37,12 +43,6 @@ def digest(value):
 def create_app(db_path=None, config=None, static_root=None):
     cfg = dict(os.environ if config is None else config)
     demo = cfg.get('STUDIO_DEMO') == '1'
-    # STUDIO_OPEN_SIGNUP=1 — регистрация по почте: любой адрес получает код и кабинет (личные проекты и шаблоны).
-    open_signup = cfg.get('STUDIO_OPEN_SIGNUP') == '1'
-    admins = {e.strip().lower() for e in cfg.get('STUDIO_ADMINS', 'admin@example.test' if demo else '').split(',') if e.strip()}
-    allowed = {e.strip().lower() for e in cfg.get('STUDIO_USERS', '').split(',') if e.strip()} | admins
-    def permitted(email):
-        return demo or open_signup or email in allowed
     database = Path(db_path or cfg.get('STUDIO_DB', ROOT / 'studio-data.db'))
     database.parent.mkdir(parents=True, exist_ok=True)
     @contextmanager
@@ -57,13 +57,22 @@ def create_app(db_path=None, config=None, static_root=None):
             c.close()
     with connect() as c:
         c.executescript('''
-        CREATE TABLE IF NOT EXISTS codes(email TEXT, hash TEXT, expires INTEGER, attempts INTEGER DEFAULT 0, used INTEGER DEFAULT 0, created INTEGER);
         CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,email TEXT,expires INTEGER);
+        CREATE TABLE IF NOT EXISTS accounts(email TEXT PRIMARY KEY,login TEXT UNIQUE NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('manager','admin')),password_hash TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,created INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS login_attempts(bucket TEXT NOT NULL,created INTEGER NOT NULL);
+        CREATE INDEX IF NOT EXISTS login_attempts_time ON login_attempts(created);
+        CREATE INDEX IF NOT EXISTS login_attempts_bucket ON login_attempts(bucket,created);
         CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,email TEXT,name TEXT,data TEXT,revision INTEGER,updated INTEGER,archived INTEGER DEFAULT 0);
         CREATE TABLE IF NOT EXISTS revisions(project_id TEXT,revision INTEGER,data TEXT,name TEXT,updated INTEGER,PRIMARY KEY(project_id,revision));
         CREATE TABLE IF NOT EXISTS libraries(email TEXT PRIMARY KEY,data TEXT,updated INTEGER);
         ''')
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    # Do not echo password inputs in Pydantic validation errors.
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request, exc):
+        return JSONResponse({'detail':'Проверьте введённые данные и длину полей.'}, status_code=422)
     @app.middleware('http')
     async def guard(request: Request, call_next):
         from fastapi.responses import JSONResponse
@@ -82,46 +91,107 @@ def create_app(db_path=None, config=None, static_root=None):
     def user(request):
         token=request.cookies.get(COOKIE,'')
         with connect() as c:
-            row=c.execute('SELECT email FROM sessions WHERE hash=? AND expires>?',(digest(token),int(time.time()))).fetchone()
+            row=c.execute('SELECT a.* FROM sessions s JOIN accounts a ON a.email=s.email WHERE s.hash=? AND s.expires>? AND a.active=1',(digest(token),int(time.time()))).fetchone()
         if not row: raise HTTPException(401,'Войдите в кабинет.')
-        if not permitted(row['email']):raise HTTPException(401,'Доступ сотрудника отозван.')
-        return {'email':row['email'],'role':'admin' if row['email'] in admins else 'manager'}
-    @app.get('/api/studio/status')
-    def status():
-        return {'mode':'local-demo' if demo else 'server','ready':demo or bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER') and cfg.get('SMTP_PASSWORD') and (allowed or open_signup)),'openSignup':open_signup}
-    @app.post('/api/studio/auth/code')
-    def request_code(body:EmailBody):
-        email=body.email.strip().lower()
-        if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise HTTPException(422,'Проверьте адрес почты.')
-        if (demo and not email.endswith('@example.test')) or (not demo and not permitted(email)):raise HTTPException(403,'Этот адрес не добавлен в список сотрудников.')
+        return public_account(row)
+    def administrator(request):
+        u=user(request)
+        if u['role']!='admin':raise HTTPException(403,'Нужны права администратора.')
+        return u
+    def limit_login(request, login):
         now=int(time.time())
-        with connect() as c:
-            if c.execute('SELECT COUNT(*) FROM codes WHERE email=? AND created>?',(email,now-3600)).fetchone()[0]>=6:raise HTTPException(429,'Слишком много кодов. Повторите позже.')
-            code=f'{secrets.randbelow(1000000):06d}'
-            c.execute('UPDATE codes SET used=1 WHERE email=?',(email,))
-            c.execute('INSERT INTO codes(email,hash,expires,created) VALUES(?,?,?,?)',(email,digest(code),now+600,now))
-        if not demo:
-            try:
-                msg=EmailMessage();msg['Subject']='Вход в мебельную студию';msg['From']=cfg.get('SMTP_FROM',cfg['SMTP_USER']);msg['To']=email;msg.set_content(f'Код входа: {code}\nДействует 10 минут.')
-                with smtplib.SMTP_SSL(cfg['SMTP_HOST'],int(cfg.get('SMTP_PORT','465')),context=ssl.create_default_context(),timeout=15) as server:
-                    server.login(cfg['SMTP_USER'],cfg['SMTP_PASSWORD']);server.send_message(msg)
-            except Exception:
-                with connect() as c:c.execute('UPDATE codes SET used=1 WHERE email=?',(email,))
-                raise HTTPException(503,'Не удалось отправить код. Проверьте настройки почты сервера.')
-        return {'ok':True,**({'demoCode':code} if demo else {})}
-    @app.post('/api/studio/auth/verify')
-    def verify(body:CodeBody,response:Response):
-        email=body.email.strip().lower();now=int(time.time())
+        buckets=[('login:'+digest(login),10),('ip:'+digest(request.client.host if request.client else 'unknown'),50)]
         with connect() as c:
             c.execute('BEGIN IMMEDIATE')
-            row=c.execute('SELECT rowid,* FROM codes WHERE email=? AND used=0 ORDER BY rowid DESC LIMIT 1',(email,)).fetchone()
-            if not row or row['expires']<now or row['attempts']>=5:raise HTTPException(400,'Код недействителен. Запросите новый.')
-            if not secrets.compare_digest(row['hash'],digest(body.code)):
-                c.execute('UPDATE codes SET attempts=attempts+1 WHERE rowid=?',(row['rowid'],));c.commit();raise HTTPException(400,'Неверный код.')
-            c.execute('UPDATE codes SET used=1 WHERE rowid=?',(row['rowid'],))
-            token=secrets.token_urlsafe(32);c.execute('INSERT INTO sessions VALUES(?,?,?)',(digest(token),email,now+604800))
+            c.execute('DELETE FROM login_attempts WHERE created<=?',(now-900,))
+            for bucket,limit in buckets:
+                if c.execute('SELECT COUNT(*) FROM login_attempts WHERE bucket=?',(bucket,)).fetchone()[0]>=limit:
+                    raise HTTPException(429,'Слишком много попыток входа. Повторите через 15 минут.',headers={'Retry-After':'900'})
+            c.executemany('INSERT INTO login_attempts VALUES(?,?)',[(bucket,now) for bucket,_ in buckets])
+    def issue_session(c, owner, response):
+        now=int(time.time());token=secrets.token_urlsafe(32)
+        c.execute('DELETE FROM sessions WHERE expires<=?',(now,))
+        c.execute('INSERT INTO sessions VALUES(?,?,?)',(digest(token),owner,now+604800))
         response.set_cookie(COOKIE,token,httponly=True,secure=not demo,samesite='strict',max_age=604800,path='/api/studio')
-        return {'email':email,'role':'admin' if email in admins else 'manager'}
+    def password_hash(value):
+        try:return hash_password(value)
+        except ValueError as exc:raise HTTPException(422,str(exc))
+    @app.get('/api/studio/status')
+    def status():
+        with connect() as c:ready=bool(c.execute("SELECT 1 FROM accounts WHERE active=1 AND role='admin' LIMIT 1").fetchone())
+        return {'mode':'local-demo' if demo else 'server','ready':ready,'auth':'password','openSignup':False}
+    @app.post('/api/studio/auth/login')
+    def login(body:LoginBody,request:Request,response:Response):
+        username=body.login.strip().lower()
+        limit_login(request,username)
+        with connect() as c:row=c.execute('SELECT * FROM accounts WHERE login=?',(username,)).fetchone()
+        valid=verify_password(body.password,row['password_hash'] if row else dummy_hash())
+        if not valid or not row or not row['active']:raise HTTPException(401,'Неверный логин или пароль.')
+        with connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            current=c.execute('SELECT * FROM accounts WHERE email=? AND active=1',(row['email'],)).fetchone()
+            if not current or current['password_hash']!=row['password_hash']:raise HTTPException(401,'Повторите вход.')
+            c.execute('DELETE FROM sessions WHERE hash=?',(digest(request.cookies.get(COOKIE,'')),))
+            issue_session(c,row['email'],response)
+            c.execute('DELETE FROM login_attempts WHERE bucket=?',('login:'+digest(username),))
+        return public_account(current)
+    @app.post('/api/studio/auth/password')
+    def change_password(body:ChangePasswordBody,request:Request,response:Response):
+        u=user(request);limit_login(request,u['login'])
+        with connect() as c:row=c.execute('SELECT password_hash FROM accounts WHERE email=?',(u['email'],)).fetchone()
+        if not verify_password(body.currentPassword,row['password_hash']):raise HTTPException(400,'Текущий пароль неверный.')
+        new_hash=password_hash(body.password)
+        with connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            result=c.execute('UPDATE accounts SET password_hash=? WHERE email=? AND password_hash=? AND active=1',(new_hash,u['email'],row['password_hash']))
+            if not result.rowcount:raise HTTPException(409,'Учётная запись изменилась. Повторите вход.')
+            c.execute('DELETE FROM sessions WHERE email=?',(u['email'],))
+            issue_session(c,u['email'],response)
+        return {'ok':True}
+    @app.get('/api/studio/accounts')
+    def accounts(request:Request):
+        administrator(request)
+        with connect() as c:rows=c.execute('SELECT * FROM accounts ORDER BY login').fetchall()
+        return {'items':[public_account(r) for r in rows]}
+    @app.post('/api/studio/accounts')
+    def create_account(body:AccountBody,request:Request):
+        administrator(request)
+        try:username=normalize_login(body.login)
+        except ValueError as exc:raise HTTPException(422,str(exc))
+        hashed=password_hash(body.password)
+        try:
+            with connect() as c:
+                owner=insert_account(c,username,body.name,body.role,hashed)
+                row=c.execute('SELECT * FROM accounts WHERE email=?',(owner,)).fetchone()
+        except sqlite3.IntegrityError:raise HTTPException(409,'Этот логин уже занят.')
+        except ValueError as exc:raise HTTPException(422,str(exc))
+        return public_account(row)
+    @app.post('/api/studio/accounts/{username}/password')
+    def reset_password(username:str,body:PasswordBody,request:Request):
+        u=administrator(request)
+        if username==u['login']:raise HTTPException(400,'Для своего аккаунта используйте «Изменить пароль».')
+        hashed=password_hash(body.password)
+        with connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row=c.execute('SELECT email FROM accounts WHERE login=?',(username,)).fetchone()
+            if not row:raise HTTPException(404,'Сотрудник не найден.')
+            c.execute('UPDATE accounts SET password_hash=? WHERE email=?',(hashed,row['email']))
+            c.execute('DELETE FROM sessions WHERE email=?',(row['email'],))
+            c.execute('DELETE FROM login_attempts WHERE bucket=?',('login:'+digest(username),))
+        return {'ok':True}
+    @app.post('/api/studio/accounts/{username}/active')
+    def set_active(username:str,body:ActiveBody,request:Request):
+        u=administrator(request)
+        if username==u['login']:raise HTTPException(400,'Нельзя отключить собственный аккаунт.')
+        with connect() as c:
+            c.execute('BEGIN IMMEDIATE')
+            row=c.execute('SELECT * FROM accounts WHERE login=?',(username,)).fetchone()
+            if not row:raise HTTPException(404,'Сотрудник не найден.')
+            if not body.active and row['role']=='admin' and c.execute("SELECT COUNT(*) FROM accounts WHERE active=1 AND role='admin'").fetchone()[0]<=1:
+                raise HTTPException(409,'Должен остаться хотя бы один администратор.')
+            c.execute('UPDATE accounts SET active=? WHERE login=?',(int(body.active),username))
+            c.execute('DELETE FROM sessions WHERE email=?',(row['email'],))
+        return {'ok':True}
     @app.get('/api/studio/me')
     def me(request:Request):return user(request)
     @app.post('/api/studio/logout')
@@ -133,7 +203,7 @@ def create_app(db_path=None, config=None, static_root=None):
         u=user(request)
         if all and u['role']!='admin':raise HTTPException(403,'Нужны права администратора.')
         with connect() as c:
-            rows=c.execute('SELECT id,email,name,revision,updated,archived FROM projects WHERE archived=?'+('' if all else ' AND email=?')+' ORDER BY updated DESC',(int(archived),) if all else (int(archived),u['email'])).fetchall()
+            rows=c.execute('SELECT p.id,p.email,p.name,p.revision,p.updated,p.archived,COALESCE(a.name,p.email) AS ownerName FROM projects p LEFT JOIN accounts a ON a.email=p.email WHERE p.archived=?'+('' if all else ' AND p.email=?')+' ORDER BY p.updated DESC',(int(archived),) if all else (int(archived),u['email'])).fetchall()
         return {'items':[dict(r) for r in rows]}
     @app.get('/api/studio/projects/{pid}')
     def load(pid:str,request:Request):

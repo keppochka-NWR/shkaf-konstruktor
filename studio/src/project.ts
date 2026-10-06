@@ -1,5 +1,6 @@
 import type {Niche,CeilingType} from './measurement';
 import {validateFixture,type Fixture} from './fixtures';
+import {rekeySections} from './sectionLayout';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
@@ -20,7 +21,14 @@ export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
 export function sideExtension(m:Module,side:'left'|'right'){if(m.sidePanels?.[side])return RULES.panel;if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
-export function bounds(a:PlacedModule){const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=Math.max(a.module.depth+18,cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
+ const c=a.module.corner;
+ if(c){const w=a.module.width,d=c.sideDepth,rear=a.module.backType==='none'?0:3,front=a.module.doors?26:0;return [[-rear,-rear],[w,-rear],[w,d+front],[d+front,w],[-rear,w]].map(([u,v])=>localToRoom(a,u,v));}
+ const b=bounds(a);return [{x:b.x,z:b.z},{x:b.x+b.w,z:b.z},{x:b.x+b.w,z:b.z+b.d},{x:b.x,z:b.z+b.d}];
+}
+export function bounds(a:PlacedModule){
+ if(a.module.corner){const points=moduleFootprint(a),xs=points.map(p=>p.x),zs=points.map(p=>p.z);return {x:Math.min(...xs),z:Math.min(...zs),y:a.y??0,w:Math.max(...xs)-Math.min(...xs),d:Math.max(...zs)-Math.min(...zs),h:a.module.height};}
+ const rear=!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+18,cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
 /**
@@ -40,9 +48,11 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room;
   for(const a of n.modules){
+    // Bespoke open assemblies describe their corner themselves; no door filler.
+    if(a.module.openJunction||a.module.corner)continue;
     const rot=a.rotation??0;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
-    const perpendicular=(b:PlacedModule)=>b!==a&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
+    const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
     for(const side of ['left','right'] as const){
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
       // 1) Фасад этого корпуса упирается в тело соседа: точка чуть внутри края фасада и на 15 мм перед ним лежит в соседе → планка из фасада.
@@ -83,6 +93,7 @@ export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>)
 /** Занятые объёмы корпуса для проверки пересечений: обычный корпус — один габарит; стол — столешница, опоры и царга,
  *  чтобы под столешницу можно было поставить тумбу. */
 export function volumes(a:PlacedModule):ReturnType<typeof bounds>[]{
+  if(a.module.openJunction)return parts(a.module).filter(q=>q.role!=='fastener').map(q=>{const p=localToRoom(a,q.position[0]-q.size[0]/2,q.position[2]-q.size[2]/2),r=localToRoom(a,q.position[0]+q.size[0]/2,q.position[2]+q.size[2]/2);return {x:Math.min(p.x,r.x),z:Math.min(p.z,r.z),y:(a.y??0)+q.position[1]-q.size[1]/2,w:Math.abs(r.x-p.x),d:Math.abs(r.z-p.z),h:q.size[1]};});
   const m=a.module;if(!m.desk)return [bounds(a)];
   const g=deskGeometry(m),T=RULES.deskTop,y=a.y??0,t=RULES.panel;
   const box=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number)=>{const p=localToRoom(a,u0,v0),q=localToRoom(a,u1,v1);return {x:Math.min(p.x,q.x),z:Math.min(p.z,q.z),y:y+y0,w:Math.abs(q.x-p.x),d:Math.abs(q.z-p.z),h:y1-y0};};
@@ -92,7 +103,12 @@ export function volumes(a:PlacedModule):ReturnType<typeof bounds>[]{
   out.push(box(g.hasL?g.x0+t:g.x0,g.hasR?g.x1-t:g.x1,g.apronOffset,g.apronOffset+t,m.height-T-m.desk.apron,m.height-T));
   return out;
 }
-export function modulesOverlap(a:PlacedModule,b:PlacedModule){const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
+function polygonsOverlap(a:{x:number;z:number}[],b:{x:number;z:number}[]){
+ for(const poly of [a,b])for(let i=0;i<poly.length;i++){const p=poly[i],q=poly[(i+1)%poly.length],dx=q.x-p.x,dz=q.z-p.z,len=Math.hypot(dx,dz);if(!len)continue;const project=(r:{x:number;z:number})=>(-dz*r.x+dx*r.z)/len,aa=a.map(project),bb=b.map(project);if(Math.max(...aa)<=Math.min(...bb)+.1||Math.max(...bb)<=Math.min(...aa)+.1)return false;}return true;
+}
+export function modulesOverlap(a:PlacedModule,b:PlacedModule){
+ if(a.module.corner||b.module.corner){if(!overlap(bounds(a),bounds(b)))return false;return polygonsOverlap(moduleFootprint(a),moduleFootprint(b));}
+ const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
   if(p.dimensions!==undefined&&(!Array.isArray(p.dimensions)||p.dimensions.length>50||p.dimensions.some(d=>!d||typeof d.id!=='string'||!Array.isArray(d.from)||!Array.isArray(d.to)||d.from.length!==2||d.to.length!==2||[...d.from,...d.to].some(v=>!Number.isFinite(v)||v<0||v>20000)||Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1])<1)||new Set(p.dimensions.map(d=>d.id)).size!==p.dimensions.length))return ['Проверьте размеры на плане: до 50 линий, разные точки в пределах 0–20000 мм.'];
@@ -163,7 +179,7 @@ export function parseProject(data:unknown):Project{
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes};const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;
 }
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
-  const n=structuredClone(p),module=structuredClone(source);module.sections.forEach(s=>s.id=id());module.name=`Модуль ${p.modules.length+1}`;
+  const n=structuredClone(p),module=structuredClone(source);rekeySections(module,id);module.name=`Модуль ${p.modules.length+1}`;
   const a:PlacedModule={id:id(),x:0,y:anchor?.y??0,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
   const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),0),preferredZ=anchor?bounds(anchor).z:30;
   const xs=[preferredX,0,...occupied.flatMap(b=>[b.x+b.w,b.x-base.w,b.x]),p.room.width-base.w],zs=[preferredZ,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-base.d,b.z]),p.room.depth-base.d];
@@ -183,6 +199,7 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
 
 
 export function closedModuleBounds(a:PlacedModule){
+ if(a.module.corner)return bounds(a);
  const points=parts(a.module).filter(part=>part.role!=='fastener'&&part.role!=='light'&&!part.rotZ&&!part.rotY).flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
  const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),z=Math.min(...points.map(p=>p.z));
  return {x,y,z,w:Math.max(...points.map(p=>p.x))-x,h:Math.max(...points.map(p=>p.y))-y,d:Math.max(...points.map(p=>p.z))-z};
@@ -217,7 +234,7 @@ export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=fa
  if(p.modules.length+selected.length>40)throw Error('После копирования будет больше 40 корпусов. Уменьшите группу.');
  const errors=projectErrors(p);if(errors.length)throw Error(errors[0]);
  const sourceErrors=projectErrors({version:3,room:{width:20000,depth:20000,height:20000},modules:selected});if(sourceErrors.length)throw Error(sourceErrors[0]);
- const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();if(copyNames)copy.module.name=(copy.module.name.slice(0,72)+' · копия').slice(0,80);copy.module.sections.forEach(s=>s.id=id());return copy;});
+ const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();if(copyNames)copy.module.name=(copy.module.name.slice(0,72)+' · копия').slice(0,80);rekeySections(copy.module,id);return copy;});
  const group=mountingCompositionBounds({...p,modules:selected}),occupied=[...p.modules.map(bounds),...(p.room.obstacles||[]).map(obstacleBounds)];
  const xs=[group.x+group.w,0,...occupied.flatMap(b=>[b.x+b.w,b.x-group.w,b.x]),p.room.width-group.w];
  const zs=[copyNames?group.z:30,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-group.d,b.z]),p.room.depth-group.d];

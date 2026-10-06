@@ -100,6 +100,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
+      if(d.material==='glass'&&d.role==='shelf')add('glass-shelf','Стеклянная полка · обработка и держатели',d.size[0]*d.size[2]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');
       if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){
         const ins=aluInsert(a.module.topGlass),area=d.size[0]*d.size[2]/1e6,perimeter=2*(d.size[0]+d.size[2])/1000;

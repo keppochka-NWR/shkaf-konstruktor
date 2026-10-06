@@ -1,0 +1,16 @@
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {resolve,join} from 'node:path';
+import {cornerProject,CORNER_DEFAULT,CORNER_NOTES} from '../src/cornerWardrobe';
+import {cutting,cutCSV,cuttingHTML,sheetSVG,area} from '../src/cornerCutting';
+import {parts} from '../src/model';
+const target=resolve(process.argv[2]??'.qa/corner-1050/export');mkdirSync(target,{recursive:true});
+const project=cornerProject(CORNER_DEFAULT),cut=cutting(project);
+const summary=['board','hdf'].map(material=>{const p=cut.pieces.filter(p=>p.part.material===material),s=cut.sheets.filter(s=>s.material===(material==='board'?'ЛДСП':'ХДФ'));return {material,details:p.length,sheets:s.length,net:p.reduce((v,p)=>v+p.area,0)/1e6,finished:p.reduce((v,p)=>v+(p.part.planContour?area(p.part.planContour):p.part.length*p.part.width),0)/1e6,blanks:p.reduce((v,p)=>v+p.length*p.width,0)/1e6,purchased:s.reduce((v,s)=>v+s.width*s.height,0)/1e6};});
+const write=(file:string,content:string)=>writeFileSync(join(target,file),content,'utf8');
+write('Угловой шкаф — проект.json',JSON.stringify(project,null,2));
+write('Деталировка.csv',cutCSV(cut));
+write('Раскрой.html',cuttingHTML(cut,CORNER_NOTES));
+write('Расчёт — данные.json',JSON.stringify({date:'2026-10-05',parameters:CORNER_DEFAULT,notes:CORNER_NOTES,summary,cut,parts:project.modules.flatMap(a=>parts(a.module).map(p=>({...p,module:a.id,yOffset:a.y??0})))},null,2));
+write('Пояснения.txt',CORNER_NOTES.join('\n\n'));
+cut.sheets.forEach((s,i)=>write(`Лист ${i+1}.svg`,sheetSVG(s,i)));
+console.log(JSON.stringify({target,summary,edge04:cut.edge04,edge2:cut.edge2},null,2));

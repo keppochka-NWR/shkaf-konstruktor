@@ -107,6 +107,7 @@ export function OutputPanel({
             гарантирует минимального числа листов и не учитывает припуски
             станка.
           </p>
+          {project.modules.some(a=>a.module.corner)&&<p className="essential-note">Фигурные детали показаны внутри прямоугольных заготовок. На картах и в CSV — размеры заготовок после вычета кромки. В списке деталей — готовые габариты.</p>}
           <div className="detail-search"><label>Найти деталь на листе<input type="search" aria-label="Поиск детали на картах" placeholder="Код, корпус, материал или размер" value={detailQuery} onChange={e=>{setDetailQuery(e.target.value);setHighlight('');}}/></label>{query&&<><p>{found.length?`Найдено: ${found.length}. Выберите деталь, чтобы показать её на листе.`:'Детали не найдены. Попробуйте другое название или код.'}</p><div className="detail-results">{found.slice(0,30).map(({a,sheet})=><button key={a.detail.code} aria-pressed={highlight===a.detail.code} onClick={()=>{setSheetIndex(sheet);setHighlight(a.detail.code);}}><b>{a.detail.code} · {a.detail.name}</b><span>{a.detail.moduleName} · лист {sheet+1} · {a.h} × {a.w}</span></button>)}</div>{found.length>30&&<p>Показаны первые 30. Уточните запрос.</p>}</>}</div>
           {sheetIndex !== null && (
             <button className="text-action" onClick={() => {setSheetIndex(null);setHighlight("");}}>

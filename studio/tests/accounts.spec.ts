@@ -1,0 +1,70 @@
+import {test,expect} from '@playwright/test';
+
+test('administrator creates a manager; password login, project history and access separation',async({page,browser},testInfo)=>{
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('/studio/');
+  await page.getByRole('button',{name:'Кабинет',exact:true}).click();
+  const panel=page.locator('.cloud-panel');
+  await expect(panel.getByRole('button',{name:'Получить код'})).toHaveCount(0);
+  await panel.getByLabel('Логин',{exact:true}).fill('qa.admin');
+  await panel.getByLabel('Пароль',{exact:true}).fill('UI fixture password 2026');
+  await panel.getByRole('button',{name:'Войти',exact:true}).click();
+  await expect(panel.getByText('Администратор · Администратор проверки (qa.admin)')).toBeVisible({timeout:30000});
+  await panel.locator('summary').filter({hasText:'Сотрудники и доступ'}).click();
+  await panel.getByLabel('Имя сотрудника').fill('Менеджер проверки');
+  await panel.getByLabel('Логин сотрудника').fill('qa.manager');
+  await panel.getByLabel('Пароль сотрудника').fill('Manager fixture password 2026');
+  await panel.getByRole('button',{name:'Создать аккаунт',exact:true}).click();
+  await expect(panel.getByText('Аккаунт создан.',{exact:false})).toBeVisible({timeout:30000});
+  await panel.getByLabel('Название сохраняемого проекта').fill('Проект администратора');
+  await panel.getByRole('button',{name:'Сохранить проект',exact:true}).click();
+  await expect(panel.getByRole('status').filter({hasText:'Проект сохранён на сервере. Версия 1.'})).toBeVisible();
+
+  const manager=await browser.newContext();const other=await manager.newPage();
+  await other.goto('http://127.0.0.1:8186/studio/');await other.getByRole('button',{name:'Кабинет',exact:true}).click();
+  const cabinet=other.locator('.cloud-panel');
+  await cabinet.getByLabel('Логин',{exact:true}).fill('qa.manager');
+  await cabinet.getByLabel('Пароль',{exact:true}).fill('incorrect');
+  await cabinet.getByRole('button',{name:'Войти',exact:true}).click();
+  await expect(cabinet.getByRole('alert')).toHaveText('Неверный логин или пароль.',{timeout:30000});
+  await cabinet.getByLabel('Пароль',{exact:true}).fill('Manager fixture password 2026');
+  await cabinet.getByLabel('Пароль',{exact:true}).press('Enter');
+  await expect(cabinet.getByText('Менеджер · Менеджер проверки (qa.manager)')).toBeVisible({timeout:30000});
+  await expect(cabinet.locator('summary').filter({hasText:'Сотрудники и доступ'})).toHaveCount(0);
+  await expect(cabinet.locator('.cloud-project')).toHaveCount(0);
+  await cabinet.getByLabel('Название сохраняемого проекта').fill('Модель менеджера');
+  await cabinet.getByRole('button',{name:'Сохранить проект',exact:true}).click();
+  await expect(cabinet.getByRole('status').filter({hasText:'Проект сохранён на сервере. Версия 1.'})).toBeVisible();
+  await cabinet.getByLabel('Название сохраняемого проекта').fill('Модель менеджера — правки');
+  await cabinet.getByRole('button',{name:'Сохранить проект',exact:true}).click();
+  await expect(cabinet.getByRole('status').filter({hasText:'Проект сохранён на сервере. Версия 2.'})).toBeVisible();
+  await cabinet.getByRole('button',{name:'История',exact:true}).click();
+  await cabinet.getByRole('button',{name:'Открыть версию 1',exact:true}).click();
+  await expect(cabinet.getByLabel('Название сохраняемого проекта')).toHaveValue('Модель менеджера');
+  await other.screenshot({path:testInfo.outputPath('manager-history.png'),fullPage:true});
+  await cabinet.getByRole('button',{name:'Выйти',exact:true}).click();
+  await expect(cabinet.getByLabel('Логин',{exact:true})).toBeVisible();
+  await manager.close();
+
+  await panel.getByLabel('Все сотрудники').check();
+  await expect(panel.locator('.cloud-project')).toHaveCount(2);
+  await panel.getByRole('button',{name:'Отключить: qa.manager',exact:true}).click();
+  await expect(panel.getByText('Доступ отключён. Проекты сохранены.')).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath('admin-accounts.png'),fullPage:true});
+  expect(errors).toEqual([]);
+});
+
+test('login remains usable on a narrow screen',async({page},testInfo)=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/studio/');
+  await page.getByRole('button',{name:'Кабинет',exact:true}).click();
+  const panel=page.locator('.cloud-panel');
+  await expect(panel.getByLabel('Логин',{exact:true})).toBeVisible();
+  await expect(panel.getByLabel('Пароль',{exact:true})).toBeVisible();
+  await expect(panel.getByText('Логин и пароль выдаёт администратор.',{exact:false})).toBeVisible();
+  await panel.getByRole('button',{name:'Показать пароль',exact:true}).click();
+  await expect(panel.getByLabel('Пароль',{exact:true})).toHaveAttribute('type','text');
+  const rect=await panel.getByRole('button',{name:'Войти',exact:true}).boundingBox();
+  expect(rect).not.toBeNull();expect(rect!.x).toBeGreaterThanOrEqual(0);expect(rect!.x+rect!.width).toBeLessThanOrEqual(390);
+  await page.screenshot({path:testInfo.outputPath('mobile-login.png'),fullPage:true});
+});

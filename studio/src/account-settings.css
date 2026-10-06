@@ -1,0 +1,16 @@
+.cloud-login { display:grid; gap:12px; padding:12px 0; }
+.cloud-login .field-note { margin:0; }
+.cloud-accounts { margin:12px 0; }
+.cloud-accounts details { border:1px solid #d9e0e5; border-radius:10px; padding:12px 16px; margin:10px 0; }
+.cloud-accounts summary { cursor:pointer; font-weight:600; padding:4px 0; }
+.cloud-accounts summary:focus-visible { outline:2px solid #087f87; outline-offset:4px; }
+.cloud-accounts .cloud-save { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0; }
+.cloud-accounts .cloud-save button { margin:0; }
+.cloud-account { display:flex; gap:12px; justify-content:space-between; align-items:center; padding:14px 0; border-top:1px solid #d9e0e5; flex-wrap:wrap; }
+.cloud-account small { display:block; margin-top:4px; color:#536170; }
+.cloud-account .cloud-save { justify-content:flex-end; }
+.cloud-login input,.cloud-login select { min-width:0; width:100%; }
+@media(max-width:600px){ .cloud-account { align-items:flex-start; } .cloud-account .cloud-save { justify-content:flex-start; } }
+.modal > .cloud-panel { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-right:8px; }
+.modal:has(> .cloud-panel) > .modal-head { flex-shrink:0; }
+.app .modal .cloud-panel p.field-note { display:block; }

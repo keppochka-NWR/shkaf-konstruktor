@@ -7,12 +7,14 @@ export const SLIDES = {
     note: "Боковой зазор 13 мм. Дно ЛДСП 16 мм. Профиль из базы конструктора. Закупка ФАМ; 300 и 400 мм в смете — интерполяция.",
   },
   gtv0fpo: {
-    label: "Скрытого монтажа · Push to Open (геометрия GTV 0FPO)",
+    label: "Скрытого монтажа · геометрия GTV 0FPO",
     lengths: [250, 270, 300, 350, 400, 450, 500, 550, 600],
     note: "Для ЛДСП 16 мм. Внутренняя ширина ящика = проём − 42 мм; длина боковины = направляющая − 10 мм. Дно ЛДСП 16 мм по вашему фрагменту. В смете — закупка цеха: DTC (push) / Unihopper (с доводчиком).",
   },
 } as const;
 export type DrawerConfig = {
+  tray?: boolean;
+  operation?: 'push' | 'soft-close';
   slide: keyof typeof SLIDES;
   height: number;
   length: number;

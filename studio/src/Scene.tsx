@@ -1,6 +1,6 @@
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
-import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry} from './boardGeometry';
+import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
@@ -280,7 +280,7 @@ export function Scene(p: Props) {
                   : part.decor === "Графит"
                     ? 0x505653
                     : 0xe6e4dc,
-            transparent: (state.transparent && (part.role === "body" || part.role === "door")) || (state.clearFacades && isFacade),
+            transparent: !!((state.transparent && (part.role === "body" || part.role === "door")) || (state.clearFacades && isFacade)),
             opacity: state.transparent && (part.role === "body" || part.role === "door") ? 0.16 : state.clearFacades && isFacade ? 0.35 : 1,
             depthWrite: !((state.transparent && (part.role === "body" || part.role === "door")) || (state.clearFacades && isFacade)),
             roughness: isMetal ? 0.24 : 0.73,
@@ -306,7 +306,7 @@ export function Scene(p: Props) {
                   part.size[0],
                   24,
                 )
-              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
+              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
@@ -319,9 +319,9 @@ export function Scene(p: Props) {
           }
           const isMeshItem = part.id.endsWith(":mesh");
           const isHandle = part.role === "handle";
-          if (isMeshItem || isHandle) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
+          if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
-          if (isHandle) {
+          if (isHandle&&!part.simpleHandle) {
             // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
             const handle = handleById(facadeHandleId(m,part.id)), vertical = part.size[1] > part.size[0];
             const holder = new THREE.Group();
@@ -378,7 +378,7 @@ export function Scene(p: Props) {
           );
           const preview=state.drawerPreview;
           if(active&&preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')&&!part.id.includes(':slide:')){
-            const section=m.sections.find(s=>s.id===preview.sid);if(section)mesh.position.z+=drawerConfig(m,section,preview.index).length*.8;
+            const section=m.sections.find(s=>s.id===preview.sid);if(section){const travel=drawerConfig(m,section,preview.index).length*.8;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}
           }
           mesh.castShadow = true;
           mesh.receiveShadow = true;
@@ -502,7 +502,7 @@ export function Scene(p: Props) {
         }
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
-      const b = state.hideFurniture?undefined:boxes(m).find((b) => b.id === state.selected);
+      const b = state.hideFurniture||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
       if (b) {
         const geo = new THREE.BoxGeometry(
           b.width,
@@ -529,7 +529,7 @@ export function Scene(p: Props) {
       // Размер блока ящиков: от верхней плоскости дна пенала до верха полки над ящиками — при редактировании ящиков.
       if (b && !state.presentation && !state.exploded) {
         const sec = m.sections.find((s) => s.id === b.id);
-        if (sec && sec.drawers > 0 && (state.selectedPart?.includes(":drawer:") || state.drawerPreview)) {
+        if (sec && sec.drawers > 0 && parts(m).some(p=>p.id===sec.id+':drawer-cap') && (state.selectedPart?.includes(":drawer:") || state.drawerPreview)) {
           const fy = focus.y ?? 0, zz = m.depth / 2 + 30, gx = b.x - m.width / 2 + 40;
           const top = b.bottom + drawerStackHeight(sec) + RULES.panel;
           line([new THREE.Vector3(gx, b.bottom + fy, zz), new THREE.Vector3(gx, top + fy, zz)]);
@@ -595,11 +595,16 @@ export function Scene(p: Props) {
       const minX=Math.min(...items.map(a=>bounds(a).x)),maxX=Math.max(...items.map(a=>bounds(a).x+bounds(a).w));
       const minZ=Math.min(...items.map(a=>bounds(a).z)),maxZ=Math.max(...items.map(a=>bounds(a).z+bounds(a).d));
       const minY=state.focusActive?(focus.y??0):0;
-      const height=room?room.height:Math.max(...items.map(a=>a.module.height+(a.y??0)))-minY;
-      const width=room?room.width:maxX-minX,depth=room?room.depth:maxZ-minZ;
+      let height=room?room.height:Math.max(...items.map(a=>a.module.height+(a.y??0)))-minY;
+      let width=room?room.width:maxX-minX,depth=room?room.depth:maxZ-minZ;
       const center=new THREE.Vector3((room?room.width/2:(minX+maxX)/2)-moduleCenter(focus).x,minY+height/2,(room?room.depth/2:(minZ+maxZ)/2)-moduleCenter(focus).z);
+      if(m.corner&&!room&&!state.focusActive){
+        modelGroup.updateWorldMatrix(true,true);const visible=new THREE.Box3().setFromObject(modelGroup);
+        if(!visible.isEmpty()){const size=visible.getSize(new THREE.Vector3());width=size.x;depth=size.z;height=size.y;visible.getCenter(center);}
+      }
       controls.target.copy(center);
       const view = current.current.view;
+      const facing=items.reduce((v,a)=>{const r=(a.rotation??0)*Math.PI/180;return {x:v.x+Math.sin(r)*a.module.width,z:v.z+Math.cos(r)*a.module.width};},{x:0,z:0});
       camera=view==='iso'?perspective:orthographic;controls.object=camera;
       const dir =
         view === "front"
@@ -608,8 +613,8 @@ export function Scene(p: Props) {
             ? new THREE.Vector3(1, 0, 0.001)
             : view === "top"
               ? new THREE.Vector3(0, 1, 0.001)
-              : new THREE.Vector3(state.isoDirection?.[0]??1, state.isoDirection?.75:.55, state.isoDirection?.[1]??1.7).normalize();
-      if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),(focus.rotation??0)*Math.PI/180);
+              : new THREE.Vector3(state.isoDirection?.[0]??(facing.x<-.1?-1:1), state.isoDirection?.75:.55, state.isoDirection?.[1]??(facing.z<-.1?-1.7:1.7)).normalize();
+      if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),((focus.rotation??0)+(m.corner?45:0))*Math.PI/180);
       const padding=state.presentation?50:state.dimensions?500:180;
       const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,perspective.fov,1.08);
       if(camera===orthographic){const h=frameHeight({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,1.08);orthographic.left=-h*aspect/2;orthographic.right=h*aspect/2;orthographic.top=h/2;orthographic.bottom=-h/2;orthographic.zoom=1;}else perspective.aspect=aspect;
@@ -628,7 +633,7 @@ export function Scene(p: Props) {
       orthographic.left=-halfHeight*aspect;orthographic.right=halfHeight*aspect;
       orthographic.updateProjectionMatrix();perspective.updateProjectionMatrix();
       needsRender=true;
-      if (initial) {
+      if (initial || current.current.presentation) {
         fit();
         initial = false;
       }
@@ -647,15 +652,17 @@ export function Scene(p: Props) {
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId),focus=state.arrangement.find(a=>a.id===state.activeId);
       if(!a||!focus){dropTarget.visible=false;return '';}
       const sid=sectionFor(hit),b=boxes(a.module).find(b=>b.id===sid);if(!b)return '';
-      const center=moduleCenter(focus),pos=localToRoom(a,b.x+b.width/2,a.module.depth/2);
+      const c=a.module.corner,zone=a.module.sections.findIndex(s=>s.id===sid);
+      const local=c?(c.level==='upper'?{x:a.module.width/2,z:a.module.depth/2}:zone===0?{x:16+c.bayDepth/2,z:a.module.width-16-b.width/2}:zone===1?{x:a.module.width-16-b.width/2,z:16+c.bayDepth/2}:{x:a.module.width/2,z:a.module.depth/2}):{x:b.x+b.width/2,z:a.module.depth/2};
+      const center=moduleCenter(focus),pos=localToRoom(a,local.x,local.z);
       dropTarget.position.set(pos.x-center.x,(a.y??0)+(b.bottom+b.top)/2,pos.z-center.z);
-      dropTarget.rotation.y=(a.rotation??0)*Math.PI/180;dropTarget.scale.set(b.width,b.top-b.bottom,a.module.depth);dropTarget.visible=true;
+      dropTarget.rotation.y=(a.rotation??0)*Math.PI/180;dropTarget.scale.set(c&&zone===0?c.bayDepth:b.width,b.top-b.bottom,c?(zone===0?b.width:c.bayDepth):a.module.depth);dropTarget.visible=true;
       return 'Корпус '+(state.arrangement.indexOf(a)+1)+' · секция '+(a.module.sections.findIndex(s=>s.id===sid)+1);
     }
 
     function cast(clientX:number,clientY:number){const r=renderer.domElement.getBoundingClientRect();pointer.set((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
     function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(drag?.kind==='part'&&drag.moved&&drag.meshes.includes(h.object))&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)&&!h.object.userData.partId?.endsWith(':divider')));}
-    function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x;return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width)?.id||a.module.sections[0].id;}
+    function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x,yy=hit.point.y-(a.y??0);return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width&&yy>=b.bottom&&yy<=b.top)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
@@ -667,10 +674,10 @@ export function Scene(p: Props) {
       // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
       if(hit.object.userData.role==='handle'&&state.onHandleClick&&!state.presentation){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onHandleClick(a.id,pid.includes(':drawer:')?pid.replace(':handle',':facade'):pid.replace(':handle:',':door:'));return;}
       if(state.mode==='select'){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onPartSelect(sid,pid,a.id);return;}
-      const isPart=state.mode==='fill'&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
-      const isDivider=state.mode==='fill'&&pid.endsWith(':divider');
+      const isPart=state.mode==='fill'&&(!a.module.corner||pid.includes(':shelf:')||pid.includes(':drawer:')||pid.endsWith(':rod'))&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
+      const isDivider=state.mode==='fill'&&!a.module.corner&&pid.endsWith(':divider');
       if(state.mode==='fill'&&!isPart&&!isDivider){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
-      const normal=isPart||isDivider||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
+      const normal=isPart&&a.module.corner?camera.getWorldDirection(new THREE.Vector3()):isPart||isDivider||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
       const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':pantograph:')?sid+':pantograph:':pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
@@ -826,6 +833,7 @@ export function Scene(p: Props) {
       p.view,
       p.fit,
       p.focusActive,
+      p.presentation,
 
     ],
   );

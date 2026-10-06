@@ -15,5 +15,10 @@ server/studio*.log
 
 
 server/studio-backups/
+server/.studio-preview/
 
 studio/test-*.log
+studio/public/local-projects/
+web/studio/local-projects/
+
+studio/.qa/

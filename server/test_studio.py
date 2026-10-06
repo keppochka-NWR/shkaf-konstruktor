@@ -8,19 +8,26 @@ from studio_app import create_app
 from backup_studio import backup_database
 import sqlite3
 from contextlib import closing
+from studio_accounts import hash_password, insert_account, verify_password
+from studio_app import digest
+import time
+
+PASSWORD='Test fixture password 2026'
+PASSWORD_HASH=hash_password(PASSWORD)
 
 class StudioTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()
         self.app=create_app(Path(self.tmp.name)/'test.db',{'STUDIO_DEMO':'1'})
+        with closing(sqlite3.connect(Path(self.tmp.name)/'test.db')) as c, c:
+            for login in ['one','two','admin']:
+                insert_account(c,login,login,'admin' if login=='admin' else 'manager',PASSWORD_HASH,owner=login+'@example.test')
         self.a=self.login('one@example.test');self.b=self.login('two@example.test');self.admin=self.login('admin@example.test')
     def tearDown(self):
         self.a.close();self.b.close();self.admin.close();self.tmp.cleanup()
     def login(self,email):
         c=TestClient(self.app,headers={'x-studio-request':'1'})
-        result=c.post('/api/studio/auth/code',json={'email':email})
-        self.assertEqual(result.status_code,200)
-        result=c.post('/api/studio/auth/verify',json={'email':email,'code':result.json()['demoCode']})
+        result=c.post('/api/studio/auth/login',json={'login':email.split('@')[0],'password':PASSWORD})
         self.assertEqual(result.status_code,200)
         self.assertIn('httponly',result.headers['set-cookie'].lower())
         return c
@@ -35,15 +42,16 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(self.a.post('/api/studio/library',json={'items':[{'name':'x'}]}).status_code,422)
         self.assertEqual(self.a.post('/api/studio/library',json={'items':[{'name':'n','module':{}}]*31}).status_code,422)
         r=self.a.post('/api/studio/library',json={'items':[]});self.assertEqual(r.json()['count'],0)
-    def test_open_signup_lets_any_email_register_by_code(self):
-        closed=create_app(Path(self.tmp.name)/'closed.db',{'STUDIO_USERS':'staff@firm.ru'})
-        c=TestClient(closed,headers={'x-studio-request':'1'})
-        self.assertEqual(c.post('/api/studio/auth/code',json={'email':'new@client.ru'}).status_code,403)
-        opened=create_app(Path(self.tmp.name)/'open.db',{'STUDIO_OPEN_SIGNUP':'1'})
-        o=TestClient(opened,headers={'x-studio-request':'1'})
-        self.assertTrue(o.get('/api/studio/status').json()['openSignup'])
-        # без SMTP код не уйдёт (503), но адрес принят — это и есть регистрация по почте
-        self.assertEqual(o.post('/api/studio/auth/code',json={'email':'new@client.ru'}).status_code,503)
+    def test_no_email_backdoor_signup_or_default_accounts(self):
+        empty=create_app(Path(self.tmp.name)/'empty.db',{'STUDIO_DEMO':'1','STUDIO_OPEN_SIGNUP':'1','STUDIO_ADMINS':'admin@example.test'})
+        with TestClient(empty,headers={'x-studio-request':'1'}) as c:
+            status=c.get('/api/studio/status').json()
+            self.assertFalse(status['ready']);self.assertFalse(status['openSignup'])
+            self.assertEqual(status['auth'],'password')
+            self.assertEqual(c.post('/api/studio/auth/code',json={'email':'admin@example.test'}).status_code,404)
+            self.assertEqual(c.post('/api/studio/auth/verify',json={'email':'admin@example.test','code':'123456'}).status_code,404)
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':'admin','password':PASSWORD}).status_code,401)
+            self.assertEqual(c.post('/api/studio/accounts',json={'login':'new','name':'x','role':'admin','password':PASSWORD}).status_code,401)
     def test_combined_web_server_exposes_only_editor_assets(self):
         root=Path(self.tmp.name)/'web'
         (root/'studio'/'assets').mkdir(parents=True)
@@ -160,15 +168,124 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(self.a.post('/api/studio/projects',json=self.payload(),headers={'origin':'https://outside.example'}).status_code,403)
         self.a.post('/api/studio/logout')
         self.assertEqual(self.a.get('/api/studio/projects').status_code,401)
-    def test_code_replay_and_limits(self):
-        email='retry@example.test';c=TestClient(self.app,headers={'x-studio-request':'1'})
-        code=c.post('/api/studio/auth/code',json={'email':email}).json()['demoCode']
-        self.assertEqual(c.post('/api/studio/auth/verify',json={'email':email,'code':code}).status_code,200)
-        self.assertEqual(c.post('/api/studio/auth/verify',json={'email':email,'code':code}).status_code,400)
-        for i in range(5):self.assertEqual(c.post('/api/studio/auth/code',json={'email':email}).status_code,200)
-        self.assertEqual(c.post('/api/studio/auth/code',json={'email':email}).status_code,429)
-        c.close()
-    def test_demo_never_sends_real_email(self):
-        self.assertEqual(self.a.post('/api/studio/auth/code',json={'email':'someone@real.example'}).status_code,403)
+    def test_failed_login_and_limits_survive_app_restart(self):
+        with TestClient(self.app,headers={'x-studio-request':'1'}) as c:
+            incorrect=c.post('/api/studio/auth/login',json={'login':'one','password':'wrong'})
+            missing=c.post('/api/studio/auth/login',json={'login':'absent','password':'wrong'})
+            self.assertEqual(incorrect.status_code,401);self.assertEqual(incorrect.json(),missing.json())
+            for _ in range(9):
+                self.assertEqual(c.post('/api/studio/auth/login',json={'login':'ONE','password':'wrong'}).status_code,401)
+        restarted=create_app(Path(self.tmp.name)/'test.db',{'STUDIO_DEMO':'1'})
+        with TestClient(restarted,headers={'x-studio-request':'1'}) as c:
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':'one','password':PASSWORD}).status_code,429)
+            self.assertEqual(c.get('/api/studio/me').status_code,401)
+    def test_ip_limit_cannot_be_bypassed_by_different_logins(self):
+        with closing(sqlite3.connect(Path(self.tmp.name)/'test.db')) as c, c:
+            c.executemany('INSERT INTO login_attempts VALUES(?,?)',[('ip:'+digest('testclient'),int(time.time()))]*50)
+        with TestClient(self.app,headers={'x-studio-request':'1','x-forwarded-for':'different'}) as client:
+            self.assertEqual(client.post('/api/studio/auth/login',json={'login':'another','password':PASSWORD}).status_code,429)
+    def test_admin_creates_accounts_and_password_hash_is_private(self):
+        body={'login':'New.Manager','name':'Новый менеджер','role':'manager','password':PASSWORD}
+        self.assertEqual(self.a.post('/api/studio/accounts',json=body).status_code,403)
+        self.assertEqual(self.a.get('/api/studio/accounts').status_code,403)
+        created=self.admin.post('/api/studio/accounts',json=body)
+        self.assertEqual(created.status_code,200);self.assertEqual(created.json()['login'],'new.manager')
+        self.assertNotIn('password',created.text)
+        self.assertEqual(self.admin.post('/api/studio/accounts',json=body).status_code,409)
+        body['login']='next';body['password']='short secret'
+        r=self.admin.post('/api/studio/accounts',json=body)
+        self.assertEqual(r.status_code,422);self.assertNotIn('short secret',r.text)
+        with closing(sqlite3.connect(Path(self.tmp.name)/'test.db')) as c:
+            hashes=[r[0] for r in c.execute('SELECT password_hash FROM accounts')]
+        self.assertNotIn(PASSWORD,hashes);self.assertTrue(all(x.startswith('scrypt-v1$') for x in hashes))
+        self.assertTrue(verify_password(PASSWORD,hashes[-1]))
+        self.assertNotEqual(hashes[-1],PASSWORD_HASH,'same password uses a different salt')
+        with TestClient(self.app,headers={'x-studio-request':'1'}) as c:
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':' NEW.MANAGER ','password':PASSWORD}).status_code,200)
+            self.assertEqual(c.get('/api/studio/projects').json()['items'],[])
+    def test_reset_and_disable_revoke_existing_sessions_and_preserve_projects(self):
+        self.a.post('/api/studio/projects',json=self.payload())
+        fresh='A new fixture password 2026'
+        self.assertEqual(self.admin.post('/api/studio/accounts/one/password',json={'password':fresh}).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/me').status_code,401)
+        self.assertEqual(self.a.post('/api/studio/auth/login',json={'login':'one','password':PASSWORD}).status_code,401)
+        self.assertEqual(self.a.post('/api/studio/auth/login',json={'login':'one','password':fresh}).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/projects/test-project').status_code,200)
+        self.assertEqual(self.admin.post('/api/studio/accounts/one/active',json={'active':False}).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/projects').status_code,401)
+        self.assertEqual(self.a.post('/api/studio/auth/login',json={'login':'one','password':fresh}).status_code,401)
+        self.assertEqual(self.admin.post('/api/studio/accounts/one/active',json={'active':True}).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/me').status_code,401)
+        self.assertEqual(self.a.post('/api/studio/auth/login',json={'login':'one','password':fresh}).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/projects/test-project').status_code,200)
+        self.assertEqual(self.admin.post('/api/studio/accounts/admin/active',json={'active':False}).status_code,400)
+    def test_change_password_keeps_current_device_and_logs_out_other_devices(self):
+        second=self.login('one@example.test')
+        try:
+            self.assertEqual(self.a.post('/api/studio/auth/password',json={'currentPassword':'wrong','password':PASSWORD+' new'}).status_code,400)
+            self.assertEqual(self.a.post('/api/studio/auth/password',json={'currentPassword':PASSWORD,'password':PASSWORD+' new'}).status_code,200)
+            self.assertEqual(self.a.get('/api/studio/me').status_code,200)
+            self.assertEqual(second.get('/api/studio/me').status_code,401)
+        finally:second.close()
+    def test_production_cookie_and_csrf_without_smtp(self):
+        app=create_app(Path(self.tmp.name)/'test.db',{'STUDIO_ORIGIN':'https://studio.example'})
+        with TestClient(app,base_url='https://studio.example',headers={'x-studio-request':'1'}) as c:
+            self.assertTrue(c.get('/api/studio/status').json()['ready'])
+            r=c.post('/api/studio/auth/login',json={'login':'one','password':PASSWORD},headers={'origin':'https://evil.example'})
+            self.assertEqual(r.status_code,403)
+            r=c.post('/api/studio/auth/login',json={'login':'one','password':PASSWORD},headers={'origin':'https://studio.example'})
+            self.assertEqual(r.status_code,200)
+            cookie=r.headers['set-cookie'].lower()
+            for flag in ['secure','httponly','samesite=strict','path=/api/studio']:self.assertIn(flag,cookie)
+            self.assertEqual(c.get('/api/studio/me').status_code,200)
+            token=c.cookies.get('studio_session')
+            c.post('/api/studio/logout')
+            c.cookies.set('studio_session',token)
+            self.assertEqual(c.get('/api/studio/me').status_code,401)
+        with TestClient(app,base_url='https://studio.example') as c:
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':'one','password':PASSWORD}).status_code,403)
+    def test_legacy_database_migration_keeps_owner_versions_and_library(self):
+        path=Path(self.tmp.name)/'legacy.db'
+        with closing(sqlite3.connect(path)) as c, c:
+            c.executescript('''CREATE TABLE projects(id TEXT PRIMARY KEY,email TEXT,name TEXT,data TEXT,revision INTEGER,updated INTEGER,archived INTEGER DEFAULT 0);
+            CREATE TABLE revisions(project_id TEXT,revision INTEGER,data TEXT,name TEXT,updated INTEGER,PRIMARY KEY(project_id,revision));
+            CREATE TABLE libraries(email TEXT PRIMARY KEY,data TEXT,updated INTEGER);
+            CREATE TABLE sessions(hash TEXT PRIMARY KEY,email TEXT,expires INTEGER);''')
+            c.execute('INSERT INTO projects VALUES(?,?,?,?,?,?,0)',('legacy','old@example.test','Старый проект','{"version":3,"modules":[{}]}',1,1))
+            c.execute('INSERT INTO revisions VALUES(?,?,?,?,?)',('legacy',1,'{"version":3,"modules":[{}]}','Старый проект',1))
+            c.execute('INSERT INTO libraries VALUES(?,?,?)',('old@example.test','[{"name":"Старый шаблон","module":{}}]',1))
+            c.execute('INSERT INTO sessions VALUES(?,?,?)',(digest('old-cookie'),'old@example.test',int(time.time())+600))
+        app=create_app(path,{'STUDIO_DEMO':'1'})
+        with closing(sqlite3.connect(path)) as c, c:insert_account(c,'legacy.manager','Менеджер','manager',PASSWORD_HASH,owner='old@example.test')
+        with TestClient(app,headers={'x-studio-request':'1'}) as c:
+            c.cookies.set('studio_session','old-cookie',domain='testserver.local',path='/api/studio')
+            self.assertEqual(c.get('/api/studio/me').status_code,401)
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':'legacy.manager','password':PASSWORD}).status_code,200)
+            self.assertEqual(c.get('/api/studio/projects/legacy').json()['name'],'Старый проект')
+            self.assertEqual(c.get('/api/studio/projects/legacy/revisions/1').status_code,200)
+            self.assertEqual(c.get('/api/studio/library').json()['items'][0]['name'],'Старый шаблон')
+    def test_login_validation_does_not_echo_password(self):
+        with TestClient(self.app,headers={'x-studio-request':'1'}) as c:
+            password='private-'+('x'*130)
+            r=c.post('/api/studio/auth/login',json={'login':'one','password':password})
+            self.assertEqual(r.status_code,422);self.assertNotIn(password,r.text)
+    def test_local_admin_bootstrap_and_password_recovery(self):
+        import io
+        from unittest.mock import patch
+        from contextlib import redirect_stdout
+        from manage_studio_users import main
+        path=Path(self.tmp.name)/'bootstrap.db'
+        output=io.StringIO()
+        with patch('sys.argv',['manage','create','--db',str(path),'--login','first.admin','--name','Первый администратор','--role','admin']),patch('getpass.getpass',return_value=PASSWORD),redirect_stdout(output):
+            self.assertEqual(main(),0)
+        app=create_app(path,{'STUDIO_DEMO':'1'})
+        with TestClient(app,headers={'x-studio-request':'1'}) as c:
+            self.assertTrue(c.get('/api/studio/status').json()['ready'])
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':'first.admin','password':PASSWORD}).status_code,200)
+            with patch('sys.argv',['manage','reset-password','--db',str(path),'--login','first.admin']),patch('getpass.getpass',return_value=PASSWORD+' new'),redirect_stdout(output):
+                self.assertEqual(main(),0)
+            self.assertEqual(c.get('/api/studio/me').status_code,401)
+            self.assertEqual(c.post('/api/studio/auth/login',json={'login':'first.admin','password':PASSWORD+' new'}).status_code,200)
+        self.assertNotIn(PASSWORD,output.getvalue())
 
 if __name__=='__main__':unittest.main(verbosity=2)

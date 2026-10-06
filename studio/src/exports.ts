@@ -1,4 +1,5 @@
 import {roomWarnings} from './roomWarnings';
+import {cutting,cutCSV,cuttingHTML,sheetPolygon,type Point} from './cornerCutting';
 import {nicheSize,nicheMinimum} from './measurement';
 import {SLIDES,drawerHasHandle} from './hardware';
 import {meshById} from './mesh';
@@ -17,6 +18,7 @@ export type Placement = {
   y: number;
   w: number;
   h: number;
+  cutContour?:Point[];
 };
 export type Sheet = {
   decor: string;
@@ -99,6 +101,11 @@ export function nestGuillotine(p: Project, gap = 10): Sheet[] {
 }
 /** Compare six fixed-grain nestings against the previous guaranteed baseline. */
 export function nest(p:Project,gap=10):Sheet[]{
+  if(p.modules.some(a=>a.module.corner)){
+    if(gap!==10)throw Error('Фигурный раскрой: промежуток 10 мм.');
+    const result=cutting(p),byKey=new Map(details(p).map(d=>[d.moduleId+'/'+d.id,d]));
+    return result.sheets.map(s=>({decor:s.decor,material:s.material==='ХДФ'?'hdf':'board',thickness:s.thickness,width:s.width,height:s.height,items:s.items.map(a=>({detail:byKey.get(a.id)!,x:a.x,y:a.y,w:a.w,h:a.h,cutContour:sheetPolygon(a)}))}));
+  }
   const baseline=nestGuillotine(p,gap),all=details(p),groups=new Map<string,Detail[]>();
   for(const d of all){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
   const result:Sheet[]=[];
@@ -138,6 +145,7 @@ export function saveFile(
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export function detailCSV(p: Project) {
+  if(p.modules.some(a=>a.module.corner))return cutCSV(cutting(p));
   const rows = [
     [
       "Код",
@@ -183,14 +191,24 @@ export function detailCSV(p: Project) {
   );
 }
 export function sheetSVG(s: Sheet,highlight="") {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${s.width} ${s.height}"><rect width="${s.width}" height="${s.height}" fill="#f1ede3" stroke="#90a7ac" stroke-width="5"/>${s.items.map((p) => `<g><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${p.detail.code===highlight?'#ffd77e':'#d7e9e8'}" stroke="${p.detail.code===highlight?'#a56300':'#4a8e98'}" stroke-width="${p.detail.code===highlight?12:3}"/><text x="${p.x + p.w / 2}" y="${p.y + p.h / 2}" text-anchor="middle" font-size="65" font-family="Arial" fill="#234754">${esc(p.detail.code)}</text></g>`).join("")}</svg>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${s.width} ${s.height}"><rect width="${s.width}" height="${s.height}" fill="#f1ede3" stroke="#90a7ac" stroke-width="5"/>${s.items.map(p=>{
+  const fill=p.detail.code===highlight?'#ffd77e':'#d7e9e8',stroke=p.detail.code===highlight?'#a56300':'#4a8e98';
+  const shape=p.cutContour?`<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="#efede5" stroke="#aab3b2" stroke-dasharray="12 8"/><polygon points="${p.cutContour.map(v=>v.join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`:`<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
+  return `<g><title>${esc(p.detail.name+' · '+p.detail.moduleName)}</title>${shape}<text x="${p.x+p.w/2}" y="${p.y+p.h/2}" text-anchor="middle" dominant-baseline="central" font-size="${Math.min(p.w,p.h)<100?26:42}" font-family="Arial" fill="#234754">${esc(p.detail.code)}</text></g>`;
+ }).join('')}</svg>`;
 }
+
 const style =
   "body{font:14px Arial;color:#23404c;max-width:1000px;margin:40px auto;padding:20px}h1{font-size:32px}h2{margin-top:32px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #d5dfe3}small{color:#637c85}svg{width:300px;max-height:480px}section{break-inside:avoid;margin:30px 0}.sum{font-size:24px;font-weight:bold}.note{white-space:pre-wrap}button{padding:12px 22px;background:#187f91;color:white;border:0;border-radius:6px}@page{size:A4;margin:12mm}@media print{button{display:none}body{margin:0;padding:0;max-width:none;font-size:11px}h1{font-size:24px}h2,h3{break-after:avoid}p{orphans:3;widows:3}section{break-inside:auto}th,td{padding:5px}tr{break-inside:avoid}thead{display:table-header-group}}";
 function htmlDocument(title: string, body: string) {
   return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title><style>${style}</style><body><button onclick="window.print()">Печать / Сохранить PDF</button>${body}</body></html>`;
 }
 export function nestingHTML(p: Project) {
+  if(p.modules.some(a=>a.module.corner))return cuttingHTML(cutting(p),[
+    'Раскрой всех прямых и угловых корпусов текущего проекта, разделённый по материалу и толщине.',
+    'Фигурные детали размещены по габариту заготовки; показан контур после вычета кромки. Обрезки внутри заготовки повторно не используются.',
+    'Петли диагональных фасадов и присадку направляющих необходимо проверить по выбранным артикулам.'
+  ],'ГардерЁб · раскрой проекта');
   return htmlDocument(
     "Карты листов",
     `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${nest(

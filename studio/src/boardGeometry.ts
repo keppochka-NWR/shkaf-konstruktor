@@ -1,6 +1,16 @@
 import * as THREE from 'three';
 import type {Part} from './model';
 
+export function planContourGeometry(part:Part):THREE.BufferGeometry{
+ const [w,t,d]=part.size,shape=new THREE.Shape();
+ part.planContour!.forEach(([x,z],i)=>{if(i===0)shape.moveTo(x-w/2,z-d/2);else shape.lineTo(x-w/2,z-d/2);});
+ shape.closePath();const g=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});
+ g.translate(0,0,-t/2);g.rotateX(Math.PI/2);
+ const pos=g.getAttribute('position'),normal=g.getAttribute('normal'),uv=g.getAttribute('uv');
+ for(let i=0;i<pos.count;i++)if(Math.abs(normal.getY(i))>.99)uv.setXY(i,pos.getZ(i)/d+.5,pos.getX(i)/w+.5);
+ uv.needsUpdate=true;return g;
+}
+
 /** Рамка алюминиевого фасада: контур фасада с прямоугольным вырезом под вставку, выдавленный на толщину рамки. */
 export function aluFrameGeometry(part:Part,face:number):THREE.BufferGeometry{
  const [w,h,t]=part.size,f=Math.min(face,w/2-1,h/2-1);

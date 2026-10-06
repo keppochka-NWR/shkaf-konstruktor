@@ -15,8 +15,8 @@ export function projectContent(project:Project){
 export const CURRENT_PROJECT='module-studio-v3';
 export const DAMAGED_PROJECT='module-studio-damaged-project-v1';
 export class ProjectStorageConflict extends Error {constructor(){super('В другой вкладке сохранён новый вариант проекта. Текущие правки остались в этом окне: скачайте их отдельным файлом перед перезагрузкой.');}}
-export function persistProject(storage:Pick<Storage,'getItem'|'setItem'>,project:Project,damaged?:string,expected?:string|null){
- if(expected!==undefined&&storage.getItem(CURRENT_PROJECT)!==expected)throw new ProjectStorageConflict();
+export function persistProject(storage:Pick<Storage,'getItem'|'setItem'>,project:Project,damaged?:string,expected?:string|null,key=CURRENT_PROJECT){
+ if(expected!==undefined&&storage.getItem(key)!==expected)throw new ProjectStorageConflict();
  if(damaged!==undefined){const previous=storage.getItem(DAMAGED_PROJECT);if(previous!==damaged){if(previous!==null)storage.setItem(DAMAGED_PROJECT+'-'+crypto.randomUUID(),previous);storage.setItem(DAMAGED_PROJECT,damaged);}}
- const serialized=JSON.stringify(project);storage.setItem(CURRENT_PROJECT,serialized);return serialized;
+ const serialized=JSON.stringify(project);storage.setItem(key,serialized);return serialized;
 }

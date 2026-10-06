@@ -1,4 +1,6 @@
 import {MEASUREMENT_RULES} from './measurement';
+import {createCornerUpper} from './cornerWardrobe';
+import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors} from './project';
@@ -8,7 +10,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
-  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);}
+  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
@@ -86,7 +88,8 @@ export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,
 export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:number){
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
  if(!m||!Number.isFinite(delta))throw Error('Перегородка не найдена.');
- const i=m.sections.findIndex(s=>s.id===rightSectionId),bb=boxes(m);
+  const i=m.sections.findIndex(s=>s.id===rightSectionId),bb=boxes(m);
+  if(m.sectionLayout){resizeOpening(m,rightSectionId,bb[i].width-delta);const e=projectErrors(n)[0];if(e)throw Error(e);return n;}
  if(i<1)throw Error('Выберите внутреннюю перегородку.');
  m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===i-1?delta:j===i?-delta:0));
  if(m.sections.some(s=>s.weight<RULES.minSection))throw Error(`Ширина секции должна быть не меньше ${RULES.minSection} мм.`);
@@ -98,6 +101,7 @@ export function mirrorModule(p:Project,mid:string):Project {
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
  if(!m)throw Error('Выберите корпус для отражения.');
  for(const sec of m.sections){if(sec.doorHinges){const hinges=[...sec.doorHinges];sec.doorHinges=hinges.map((_,k)=>{const h=hinges[doorCount(m,sec)===2?k^1:k];return h==='left'?'right':h==='right'?'left':h??null;});}if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=Array.from({length:sec.doorHandles.length},(_,k)=>sec.doorHandles?.[k^1]??null);if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>k^1);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
+ if(m.sectionLayout)mirrorOpenings(m);
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  const error=projectErrors(n)[0];if(error)throw Error(error);
@@ -130,17 +134,18 @@ export function addUpperModule(p:Project,mid:string):Project {
  const n=structuredClone(p),base=n.modules.find(a=>a.id===mid);if(!base)throw Error('Выберите нижний корпус.');
  const y=(base.y??0)+base.module.height,height=Math.min(600,Math.floor(p.room.height-y-MEASUREMENT_RULES.ceilingClearance));
  if(height<RULES.minH)throw Error(`Над корпусом нужно хотя бы ${RULES.minH} мм для отдельной антресоли и ${MEASUREMENT_RULES.ceilingClearance} мм монтажного зазора. Измените высоту нижнего корпуса или замер помещения.`);
- n.modules.push({...base,id:id(),y,module:{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]}});
+ n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]}});
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
 
 export function clearSection(p:Project,mid:string,sid:string):Project {
  const n=structuredClone(p),s=n.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);if(!s)throw Error('Выберите секцию.');
- s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;return n;
+ s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;delete s.glassShelves;delete s.fixed;return n;
 }
 export function removeSection(p:Project,mid:string,sid:string):Project {
- const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;if(!m||m.sections.length<2)throw Error('В корпусе должна остаться хотя бы одна секция.');
+  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;if(!m||m.sections.length<2)throw Error('В корпусе должна остаться хотя бы одна секция.');
+  if(m.sectionLayout){removeOpening(m,sid);const e=projectErrors(n)[0];if(e)throw Error(e);return n;}
  const i=m.sections.findIndex(s=>s.id===sid);if(i<0)throw Error('Выберите секцию.');const bb=boxes(m),recipient=i===0?1:i-1;
  m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
