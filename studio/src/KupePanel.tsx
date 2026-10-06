@@ -2,7 +2,7 @@
 import React, { useMemo } from "react";
 import type { Module } from "./model";
 import { KUPE_SYSTEMS, KUPE_FILLS, KUPE_SECTIONS, KUPE_SOFT_CLOSE } from "./kupeData";
-import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, type KupeSpec } from "./kupe";
+import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, kupeProfileExact, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, KUPE_PROFILE_WIDTH, type KupeSpec } from "./kupe";
 import "./kupe-panel.css";
 
 const groups = [...new Set(KUPE_FILLS.map((f) => f.g))];
@@ -37,7 +37,7 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors }: { m: Module; m
       </select></label>
       <figure className="kupe-profile-preview">
         <img src={import.meta.env.BASE_URL + KUPE_PROFILE_PREVIEW[kupeProfileStyle(sys)]} alt={"Профиль-ручка " + sys.profile} loading="lazy" />
-        <figcaption>Профиль-ручка · {sys.profile} · {sys.dims.frameSide} мм<small>Форма по иллюстрации каталога Аристо, не заводской чертёж</small></figcaption>
+        <figcaption>Профиль-ручка · {sys.profile} · {KUPE_PROFILE_WIDTH[kupeProfileStyle(sys)] || sys.dims.frameSide} мм<small>{kupeProfileExact(sys) ? "Сечение по заводскому чертежу Aristo" : kupeProfileStyle(sys) === "c" ? "Показан как профиль C: заводского чертежа этого профиля пока нет" : "Форма упрощённая: заводского чертежа этого профиля пока нет"}</small></figcaption>
       </figure>
       <div className="kupe-field"><span>Цвет профиля · {col.name}</span>
         <div className="kupe-swatches" role="group" aria-label="Цвет профиля купе">{sys.colors.map((c) => <button key={c.name} type="button" title={c.name} aria-label={c.name} aria-pressed={c.name === k.color} style={{ background: `linear-gradient(135deg, ${c.grad})` }} onClick={() => set({ color: c.name })} />)}</div>

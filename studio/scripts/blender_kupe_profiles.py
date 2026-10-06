@@ -16,7 +16,32 @@ LENGTH = 1000.0
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from kupe_profile_shapes import SHAPES  # noqa: E402
+from kupe_profile_shapes import SHAPES, FACTORY_NAMES, loops as factory_loops  # noqa: E402
+
+
+def build_factory(name, loops, length=LENGTH):
+    """Exact contour with holes: 2D curve with fill (even-odd keeps the chambers hollow), extruded, converted to mesh."""
+    cu = bpy.data.curves.new(name, "CURVE")
+    cu.dimensions = "2D"
+    cu.fill_mode = "BOTH"
+    cu.extrude = length * MM / 2
+    for loop in loops:
+        sp = cu.splines.new("POLY")
+        sp.points.add(len(loop) - 1)
+        for i, (a, b) in enumerate(loop):
+            sp.points[i].co = (a * MM, -b * MM, 0, 1)
+        sp.use_cyclic_u = True
+    obj = bpy.data.objects.new(name, cu)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.convert(target="MESH")
+    obj = bpy.context.active_object
+    for v in obj.data.vertices:
+        v.co.z += length * MM / 2
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(30))
+    obj.name = name
+    return obj
 
 
 def prism(name, poly, length=LENGTH):
@@ -115,9 +140,9 @@ def render_preview(obj, path):
     bpy.ops.render.render(write_still=True)
 
 
-for name, shape in SHAPES.items():
+for name in [*FACTORY_NAMES, *SHAPES.keys()]:
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    obj = build(name, shape())
+    obj = build_factory(name, factory_loops(name)) if name in FACTORY_NAMES else build(name, SHAPES[name]())
     export(obj, os.path.join(OUT, f"{name}.glb"))
     print("exported", name, len(obj.data.vertices), "verts")
     if PREVIEW and (name.startswith("handle") or name == "track_top"):

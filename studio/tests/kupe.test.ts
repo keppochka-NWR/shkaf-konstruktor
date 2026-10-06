@@ -38,6 +38,23 @@ test('kupe parts are external: drawn in 3D, never in LDSP cutting; fronts slide 
   assert.equal(details(p).length,0,'nothing from kupe in cutting list');
 });
 
+test('kupe 3D follows the Aristo assembly drawing: C 26.5×34.5, rows 40.06 apart, handles of neighbours coincide',()=>{
+  const m=createKupeModule(1600,2400,initialModule());
+  const ps=kupeParts(m),by=(id:string)=>ps.find(p=>p.id===id)!;
+  const h0=by('kupe:0:side:r'),h1=by('kupe:1:side:l');
+  assert.deepEqual([h0.size[0],h0.size[2]],[26.5,34.5]);
+  assert.ok(Math.abs(h0.position[0]-h1.position[0])<1e-6,'overlap equals handle width');
+  assert.ok(Math.abs(Math.abs(h1.position[2]-h0.position[2])-40.06)<1e-6);
+  assert.equal(by('kupe:0:frame:top').model!.file,'kupe/frame_top.glb');
+  assert.equal(by('kupe:0:frame:bottom').size[1],56);
+  assert.ok(Math.abs(by('kupe:0:side:l').position[1]-by('kupe:0:side:l').size[1]/2-11.6)<1e-6,'leaf 11.6 mm above floor');
+  assert.ok(by('kupe:track:top').size[2]<=100,'top track fits the 100 mm zone');
+  const hEco=createKupeModule(1600,2400,initialModule());hEco.kupe={...hEco.kupe!,system:'Эконом H (Аристо)'};
+  assert.equal(kupeParts(hEco).find(p=>p.id==='kupe:0:side:l')!.model!.file,'kupe/handle_h.glb');
+  // цена не зависит от геометрии 3D
+  assert.equal(sum(m),sum(createKupeModule(1600,2400,initialModule())));
+});
+
 test('sliding wardrobe group: bodies without swing doors plus kupe in front, valid and priced as retail',()=>{
   const group=createKupeWardrobe(1800,2400,600,initialModule());
   assert.equal(group.filter(a=>a.module.kupe).length,1);
