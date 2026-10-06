@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ClientWorkspace } from "./ClientWorkspace";
 import VotanStudio from './VotanStudio';
 import {cornerProject,CORNER_DEFAULT,CORNER_STORAGE} from './cornerWardrobe';
 import {parseProject} from './project';
@@ -20,6 +21,6 @@ async function start(){
   if(query.get('order')==='corner'&&!initialProject){
     try{const stored=localStorage.getItem(CORNER_STORAGE);initialProject=cornerProject(stored?JSON.parse(stored):CORNER_DEFAULT);}catch{initialProject=cornerProject(CORNER_DEFAULT);}
   }
-  createRoot(document.getElementById('root')!).render(<React.StrictMode>{query.get('order')==='votan'?<VotanStudio/>:<App initialProject={initialProject} projectKey={slug??(query.get('order')==='corner'?'corner-workspace':undefined)}/>}</React.StrictMode>);
+  createRoot(document.getElementById('root')!).render(<React.StrictMode>{query.get('order')==='votan'?<VotanStudio/>:initialProject||slug?<App initialProject={initialProject} projectKey={slug??(query.get('order')==='corner'?'corner-workspace':undefined)}/>:<ClientWorkspace/>}</React.StrictMode>);
 }
 start().catch(error=>{document.getElementById('root')!.textContent='Не удалось открыть проект: '+String(error.message);});

@@ -66,6 +66,7 @@ import {
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
 import { KupePanel } from "./KupePanel";
+import { isClientBundle, type ClientBundle } from "./clientIndex";
 import { OutputPanel } from "./OutputPanel";
 import {RoomWarnings} from './RoomWarningPanel';
 import {roomWarnings} from './roomWarnings';
@@ -201,7 +202,7 @@ function Counter({
     </div>
   );
 }
-export default function App({initialProject,projectKey}:{initialProject?:Project;projectKey?:string}={}) {
+export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void}={}) {
   const KEY=CURRENT_PROJECT+(projectKey?':'+projectKey:'');
   const [startup] = useState(() => {
     let original:string|null=null,currentRaw:string|null=null;
@@ -556,11 +557,17 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
     }
     return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:bodyRing};
   }
+  // Папка клиента: новый проект сразу пишется в браузер под своим ключом, а вкладка получает цену без ожидания первой правки.
+  useEffect(()=>{
+    if((projectKey||onProjectChange)&&!startup.currentRaw&&!startup.storageUnavailable){try{lastLocalWrite.current=persistProject(localStorage,project,undefined,null,KEY);}catch{/* хранилище недоступно — сохранится при первой правке */}}
+    onProjectChange?.(project);
+  },[]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!touched.current) return;
     if(startup.storageUnavailable){setSaved("Не сохранено");setError("При запуске не удалось прочитать хранилище. Автосохранение отключено, чтобы не заменить недоступный проект. Скачайте текущую работу и перезагрузите редактор.");return;}
     try {
       lastLocalWrite.current=persistProject(localStorage,project,startup.damaged,lastLocalWrite.current,KEY);
+      onProjectChange?.(project);
       setSaved("Сохранено в браузере");
     } catch (error) {
       setSaved("Не сохранено");
@@ -726,6 +733,7 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
           </button>
         </div>
       </header>
+      {!presentation&&clientBar}
       {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone}/>}
       {!presentation&&(stage==='filling'||stage==='facades')&&canRemove&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
         <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
@@ -755,7 +763,9 @@ export default function App({initialProject,projectKey}:{initialProject?:Project
             const text=await file.text();
             if(request!==importSequence.current)return;
             if(currentProject.current!==before)throw Error("Проект изменился во время чтения файла. Откройте файл ещё раз, чтобы сохранить последние правки в истории отмены.");
-            const imported = parseProject(JSON.parse(text));
+            const raw=JSON.parse(text);
+            if(isClientBundle(raw)){if(!onImportBundle)throw Error('Папку клиента открывайте в основном редакторе, без ссылки на отдельный проект.');onImportBundle(raw);return;}
+            const imported = parseProject(raw);
             const next = imported.modules[0].module;
             if (
               imported.modules.some(

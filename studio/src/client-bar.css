@@ -1,0 +1,45 @@
+/* Полоса папки клиента: клиент · вкладки проектов · «Ещё проект» · итог по клиенту. */
+.client-bar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 5px 16px; background: #f4f6f9; border-bottom: 1px solid var(--line); min-height: 44px; position: relative; z-index: 4; min-width: 0; }
+.client-pick, .project-add { position: relative; flex-shrink: 0; }
+.client-name { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: #fff; border: 1px solid #d5dde8; font-size: 13px; font-weight: 650; color: #1d2b3a; }
+.client-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-tabs { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 1px; }
+.project-tab { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; border-radius: 9px; border: 1px solid transparent; padding-right: 4px; }
+.project-tab button[role="tab"] { display: grid; text-align: left; padding: 4px 10px; border-radius: 8px; background: transparent; color: #4d6370; max-width: 220px; }
+.project-tab button[role="tab"] span { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-tab button[role="tab"] small { font-size: 11px; color: #7a8b94; }
+.project-tab:hover { background: #e9eef4; }
+.project-tab.active { background: #fff; border-color: #2449d6; box-shadow: 0 1px 4px #2449d61f; }
+.project-tab.active button[role="tab"] span { color: #2449d6; }
+.project-tab input { width: 160px; font-size: 13px; padding: 5px 8px; border: 1px solid #2449d6; border-radius: 7px; margin: 2px 4px; }
+.tab-icon { width: 22px; height: 22px; border-radius: 6px; color: #7a8b94; display: inline-flex; align-items: center; justify-content: center; }
+.tab-icon:hover { background: #dfe6ee; color: #1d2b3a; }
+.tab-confirm { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #b3261e; padding: 0 4px; }
+.tab-confirm button { font-size: 12px; padding: 2px 7px; border-radius: 6px; background: #fff; border: 1px solid #d5dde8; }
+.add-project { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 8px; border: 1px dashed #2449d6; color: #2449d6; background: #fff; font-size: 13px; font-weight: 650; white-space: nowrap; }
+.add-project:hover { background: #eef3ff; }
+.client-total { flex-shrink: 0; font-size: 12.5px; color: #4d6370; white-space: nowrap; }
+.client-total b { color: #2449d6; font-size: 15px; margin-left: 4px; }
+.client-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: 300px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid #d5dde8; border-radius: 12px; box-shadow: 0 12px 30px #1b2a4430; padding: 12px; display: grid; gap: 10px; }
+.add-menu { width: 260px; }
+.add-menu button { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 650; color: #1d2b3a; }
+.add-menu button svg { grid-row: span 2; align-self: center; color: #2449d6; }
+.add-menu button small { font-weight: 400; color: #7a8b94; font-size: 11.5px; }
+.add-menu button:hover { background: #eef3ff; }
+.client-menu label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: #4d6370; }
+.client-menu input { font-size: 14px; padding: 7px 9px; border: 1px solid #d5dde8; border-radius: 8px; }
+.client-list { display: grid; gap: 2px; max-height: 220px; overflow-y: auto; }
+.client-list button { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 7px; font-size: 13px; text-align: left; }
+.client-list button[aria-pressed="true"] { background: #eef3ff; color: #2449d6; font-weight: 650; }
+.client-list small { color: #7a8b94; }
+.client-actions { display: grid; gap: 6px; }
+.client-actions button { display: inline-flex; align-items: center; gap: 6px; justify-content: center; font-size: 13px; }
+.client-hint { margin: 0; font-size: 11.5px; color: #7a8b94; }
+.client-error { position: absolute; right: 16px; top: calc(100% + 4px); margin: 0; background: #fff1f0; color: #a32820; border: 1px solid #f1c2bd; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; z-index: 31; }
+.app.presentation .client-bar { display: none; }
+@media (max-width: 700px) {
+  .client-bar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
+  .project-tabs { order: 3; flex-basis: 100%; }
+  .client-total { margin-left: auto; }
+  .client-name { max-width: 60vw; }
+}
