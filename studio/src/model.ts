@@ -123,6 +123,8 @@ export type Section = {
   rod: boolean;
   drawerConfigs?: DrawerConfig[];
   pantograph?: boolean;
+  /** Выдвижные тремпели (GTV, крепление к полке/крыше, выдвигаются вперёд): количество в ряд по ширине секции, 1–3. */
+  pullouts?: number;
   rodAt?: number;
   /** Индексы жёстких полок (на конфирматах/эксцентриках, в точную ширину проёма); остальные съёмные на полкодержателях. */
   fixed?: number[];
@@ -376,6 +378,8 @@ export function fillerSides(m:Module,s:Section){
  const count=doorCount(m,s),hinges=Array.from({length:s.doorSplit===undefined?1:2},(_,row)=>Array.from({length:count},(_,col)=>s.doorHinges?.[row*2+col]??(count===2?(col===0?'left':'right'):(s.hingeSide??m.hingeSide??'left')))).flat();
  return {left:hinges.includes('left')?RULES.drawerFiller:0,right:hinges.includes('right')?RULES.drawerFiller:0};
 }
+/** Длина выдвижного тремпеля: самый длинный из ряда GTV 250–500, который помещается в глубину секции с зазором 20 спереди и сзади. */
+export function pulloutLength(m:Module){const free=shelfMaxDepth(m)-40;return [500,450,400,350,300,250].find(l=>l<=free)??0;}
 export function drawerStackHeight(s: Section) {
   const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap)));
 }
@@ -759,6 +763,11 @@ export function parts(m: Module): Part[] {
       );
     }
     if(s.rod){const rp=out.find(p=>p.id===s.id+':rod')!;for(const side of [0,1])add(s.id+':flange:'+side,'Фланец штанги D25',[5,48,48],[side?b.x+b.width-2.5:b.x+2.5,rp.position[1],rp.position[2]],48,48,5,'flange',s.id,'metal');}
+    if(s.pullouts){
+      // Тремпель крепится под ближайшей полкой сверху (или под крышей), выдвигается вперёд. Длина — стандартный ряд GTV под глубину секции.
+      const topShelf=s.shelves.length?Math.min(...s.shelves.map((f)=>b.bottom+f*h)):b.top,L=pulloutLength(m),n=Math.min(3,Math.max(1,Math.round(s.pullouts)));
+      for(let k=0;k<n;k++){const x=b.x+b.width*(k+1)/(n+1);add(s.id+':pullout:'+k,'Выдвижной тремпель '+L+' мм',[24,40,L],[x,topShelf-20,d-20-L/2],L,40,24,'pantograph',s.id,'metal');}
+    }
     if(s.pantograph){
       const ry=b.bottom+(s.rodAt??0.87)*h,cy=ry-360;
       for(const side of [0,1]){
@@ -986,7 +995,7 @@ export function validate(m: Module): string[] {
   }
   for(const s of m.sections)if(s.fixed!==undefined&&(!Array.isArray(s.fixed)||s.fixed.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push('Жёсткие полки: неверные номера.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
-  if(m.plinthHeight!==undefined && ![0,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
+  if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
@@ -1076,6 +1085,8 @@ export function validate(m: Module): string[] {
     if(s.rod&&s.pantograph)errors.push(prefix+'выберите штангу или пантограф.');
     if(s.rodAt!==undefined&&(!Number.isFinite(s.rodAt)||s.rodAt<0.1||s.rodAt>0.97))errors.push(prefix+'измените высоту штанги.');
     if(s.pantograph!==undefined&&typeof s.pantograph!=='boolean')errors.push(prefix+'неверный тип пантографа.');
+    if(s.pullouts!==undefined&&(!Number.isInteger(s.pullouts)||s.pullouts<0||s.pullouts>3))errors.push(prefix+'выдвижных тремпелей — от 1 до 3.');
+    if(s.pullouts&&pulloutLength(m)<250)errors.push(prefix+'выдвижному тремпелю нужна внутренняя глубина от 270 мм.');
     const shelfY = s.shelves.map((f) => f * h).sort((a, b) => a - b);
     const drawerTop = drawerStackHeight(s);
     const partitionCap=!!m.sectionLayout&&b.top<innerTop(m),trayOnly=!!s.drawers&&!!s.drawerConfigs?.every(c=>c.tray);
@@ -1319,6 +1330,7 @@ export function parseModule(input: unknown): Module {
       drawers: s.drawers,
       rod: s.rod,
       ...(s.pantograph===undefined?{}:{pantograph:s.pantograph}),
+    ...(s.pullouts===undefined?{}:{pullouts:s.pullouts}),
       ...(s.rodAt===undefined?{}:{rodAt:s.rodAt}),
       ...(s.fixed===undefined?{}:{fixed:Array.isArray(s.fixed)?[...s.fixed]:s.fixed}),
       ...(s.drawerConfigs === undefined

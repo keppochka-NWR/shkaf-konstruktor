@@ -1,5 +1,5 @@
 import {facadeHandleId} from './model';
-import {parts,drawerConfig,RULES,legCount,fastenerCounts} from './model';
+import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
 import {nest,type Sheet} from './exports';
 import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
@@ -89,7 +89,7 @@ export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'
 export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
   if(/^(hinge|push-latch|lift-mechanism)/.test(id))return 'hinges';
-  if(/^(slide:|mesh:|pantograph)/.test(id))return 'slides';
+  if(/^(slide:|mesh:|pantograph|pullout)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
   if(id.startsWith('legs'))return 'legs';
   if(/^(confirmat|eccentric|shelf-holder|kit$|screw)/.test(id))return 'fasteners';
@@ -158,6 +158,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews,'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха');
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');
+      if(s.pullouts)add('pullout:'+pulloutLength(a.module),'Выдвижной тремпель GTV '+pulloutLength(a.module)+' мм',s.pullouts,'шт',null,'Закупочная цена не найдена: нужна цена ФАМ/GTV');
       for(let j=0;j<s.drawers;j++){
         const c=drawerConfig(a.module,s,j);
         if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');continue;}

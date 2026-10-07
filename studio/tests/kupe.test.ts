@@ -6,7 +6,7 @@ import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {createKupeModule,createKupeWardrobe} from '../src/ModulePalette';
 import {initialModule,validate,parts} from '../src/model';
-import {newProject,projectErrors,appendModuleGroup,parseProject} from '../src/project';
+import {newProject,projectErrors,appendModuleGroup,parseProject,bounds} from '../src/project';
 import {estimate,lineGroup} from '../src/pricing';
 import {details} from '../src/exports';
 
@@ -87,4 +87,14 @@ test('sliding wardrobe group: bodies without swing doors plus kupe in front, val
   assert.ok(e.retail!>=kupeRetail);
   assert.equal(parseProject(JSON.parse(JSON.stringify(r.project))).modules.find(a=>a.module.kupe)!.module.kupe!.system,'Стандарт (Аристо)');
   assert.ok(parts(r.project.modules.find(a=>a.module.kupe)!.module).length>8);
+});
+
+test('order 7358873: pull-out trempel, 60 mm plinth and inset drawer fronts behind sliding doors',()=>{
+  const m=initialModule();m.width=681;m.height=2200;m.depth=450;m.plinthHeight=60;m.doors=false;m.backType='board';
+  m.sections=[{...m.sections[0],shelves:[0.86],pullouts:1,drawers:1,drawerMount:'inset',drawerConfigs:[{slide:'gtv0fpo',operation:'soft-close',brand:'dtc',height:116,length:350,handle:false}]}];
+  assert.deepEqual(validate(m),[]);
+  const t=parts(m).find(p=>p.id.endsWith(':pullout:0'))!;assert.equal(t.size[2],350,'GTV 350 fits a 450 deep body');
+  const p=newProject();p.modules[0].module=m;
+  assert.ok(estimate(p).lines.some(l=>l.id==='pullout:350'&&l.unitPrice===null),'trempel priced as «уточнить»');
+  assert.equal(bounds(p.modules[0]).d,450,'inset drawer front does not stick out');
 });
