@@ -3,8 +3,7 @@
 # Run: blender --background --python scripts/blender_kupe_profiles.py -- <out_dir> [preview]
 # Cross-section is built in mm in Blender XY: x = a (across), y = -b (depth, front = larger b), length along Z 0..1000 mm.
 # glTF export maps Blender (x, y, z) -> three (x, z, -y), so in three.js: x = a, y = length, z = b.
-# Shapes follow the catalogue illustrations (assets/sections/*.jpg); overall sizes come from the Aristo technical catalogue
-# (top track 81.6 x 35 mm) and the price dims (handle face 30 mm for C/I, 12 mm for Slim/GRACE). Not a factory drawing.
+# All sections are factory contours from ARISTO vector PDFs (see kupe_profile_shapes.py).
 import bpy, bmesh, math, os, sys
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
@@ -112,7 +111,7 @@ def render_preview(obj, path):
     import mathutils
     obj.scale = (1, 1, 0.12)  # short 120 mm piece, lying along X like the catalogue pictures
     # handles: face up, end face toward the camera (like the catalogue pictures); top track: channels down
-    obj.rotation_euler = (math.pi, math.pi / 2, 0) if obj.name == "track_top" else (-math.pi / 2, 0, 0)
+    obj.rotation_euler = (math.pi, math.pi / 2, 0) if obj.name.startswith("track_top") else (-math.pi / 2, 0, 0)
     bpy.context.view_layer.update()
     world = bpy.data.worlds.new("w")
     scene.world = world
@@ -145,6 +144,6 @@ for name in [*FACTORY_NAMES, *SHAPES.keys()]:
     obj = build_factory(name, factory_loops(name)) if name in FACTORY_NAMES else build(name, SHAPES[name]())
     export(obj, os.path.join(OUT, f"{name}.glb"))
     print("exported", name, len(obj.data.vertices), "verts")
-    if PREVIEW and (name.startswith("handle") or name == "track_top"):
+    if PREVIEW and (name.startswith("handle") or name.startswith("track_top")):
         render_preview(obj, os.path.join(OUT, f"preview_{name}.png"))
         print("rendered", name)

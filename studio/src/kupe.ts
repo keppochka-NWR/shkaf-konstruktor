@@ -103,78 +103,121 @@ export function kupeFillLook(f: KupeFill): NonNullable<Part["look"]> {
   if (m.includes("lacobel")) return { color: /black|чёр|черн/i.test(f.n) ? 0x1b1b1b : 0xf4f4f2, roughness: 0.15, metalness: 0.15 };
   return { color: 0xe9e4da, roughness: 0.6 };
 }
-/** Форма профиля-ручки по системе: C (Стандарт C и родственные), H (Эконом H), I (узкий / Flat), Slim (Slim, GRACE, NOVA — тонкий 12–16 мм).
- *  Модели — scripts/blender_kupe_profiles.py. C, H, рамки и направляющие — точные контуры из «Схем сборки систем Aristo»
- *  (scripts/aristo_sections.json); I, Slim и разделитель — упрощённые, заводского чертежа пока нет. */
-export type KupeProfileStyle = "c" | "h" | "i" | "slim";
+/** Профили купе в 3D — заводские сечения ARISTO (модели: scripts/blender_kupe_profiles.py, листы проверки: docs/kupe-sections/*_model.png).
+ *  C и рамки/направляющие «Стандарт» — «Схемы сборки систем ARISTO» (scripts/aristo_sections.json); остальные ручки, рамки ЭКО, Slim, NOVA,
+ *  GRACE, средние рамки — каталог ARISTO 02.10.2026 (scripts/aristo_catalog_sections.json).
+ *  Сечение ручки: w — ширина на фасаде, d — глубина, slot — центр паза под вставку от середины глубины (минус — к задней стороне). */
+type KupeHandle = { file: string; w: number; d: number; slot: number; exact: boolean; note?: string };
+const HANDLES = {
+  c: { file: "handle_c", w: 26.51, d: 34.51, slot: -8.59, exact: true },
+  flat: { file: "handle_flat", w: 44.97, d: 34, slot: -8.5, exact: true },
+  i: { file: "handle_i", w: 26, d: 34, slot: -8.9, exact: true },
+  fusion: { file: "handle_fusion", w: 39.5, d: 34.28, slot: 0, exact: true },
+  smart: { file: "handle_smart", w: 26, d: 34.03, slot: 0, exact: true },
+  avers: { file: "handle_avers", w: 20, d: 34.06, slot: 0, exact: true },
+  twelve: { file: "handle_twelve", w: 12, d: 34.2, slot: 0, exact: true },
+  c_eco: { file: "handle_c_eco", w: 26, d: 34, slot: -8.9, exact: true },
+  h_eco: { file: "handle_h_eco", w: 35.17, d: 32.46, slot: 0, exact: true },
+  flat_eco: { file: "handle_flat_eco", w: 26.01, d: 34, slot: -8.9, exact: true },
+  o: { file: "handle_o", w: 25.99, d: 34, slot: -9, exact: true },
+  slim: { file: "handle_slim", w: 15.43, d: 33.94, slot: 3.68, exact: true },
+  slim_max: { file: "handle_slim_max", w: 15.44, d: 34, slot: 3.65, exact: true },
+  nova: { file: "handle_nova", w: 22, d: 34, slot: 8, exact: true },
+  grace: { file: "handle_grace", w: 10.68, d: 42, slot: 0, exact: true },
+} satisfies Record<string, KupeHandle>;
+export type KupeProfileStyle = keyof typeof HANDLES;
+/** Ручка системы по названию профиля в прайсе. Slim Fine и Slim Декор сняты с производства и в каталоге 2026 не нарисованы — показаны моделью SLIM LINE. */
 export function kupeProfileStyle(s: KupeSystem): KupeProfileStyle {
-  const n = (s.system + " " + s.profile).toLowerCase();
-  if (/slim|grace|nova/.test(n) || s.dims.frameSide <= 16) return "slim";
-  if (/(^|\s)h(\s|$)/.test(s.profile.toLowerCase())) return "h";
-  if (/\bi\b|i \(|узк|flat/.test(n)) return "i";
-  return "c";
+  const p = s.profile.toLowerCase(), eco = /эко/.test(p);
+  if (/slim max/.test(p)) return "slim_max";
+  if (/slim/.test(p)) return "slim";
+  if (/grace/.test(p)) return "grace";
+  if (/nova/.test(p)) return "nova";
+  if (/fusion/.test(p)) return "fusion";
+  if (/smart/.test(p)) return "smart";
+  if (/avers/.test(p)) return "avers";
+  if (/twelve/.test(p)) return "twelve";
+  if (/flat/.test(p)) return eco ? "flat_eco" : "flat";
+  if (/^h(\s|$)/.test(p)) return "h_eco";
+  if (/^o(\s|$)/.test(p)) return "o";
+  if (/^i(\s|$)/.test(p)) return "i";
+  return eco ? "c_eco" : "c";
 }
-/** Сечение ручки в 3D, мм: ширина (0 — ширина из прайса) и глубина. C и H — по заводскому чертежу. */
-export const KUPE_PROFILE_WIDTH: Record<KupeProfileStyle, number> = { c: 26.5, h: 35.7, i: 0, slim: 0 };
-export const KUPE_PROFILE_DEPTH: Record<KupeProfileStyle, number> = { c: 34.5, h: 35, i: 26, slim: 22 };
-/** Смещение паза под вставку от середины глубины профиля (мм, минус — к задней стороне): у C паз смещён назад, у H — по центру. */
-export const KUPE_SLOT_OFFSET: Record<KupeProfileStyle, number> = { c: -8.59, h: 0, i: 0, slim: 0 };
-/** Модели с заводским чертежом; для остальных форма упрощённая. */
-export const KUPE_PROFILE_EXACT: Record<KupeProfileStyle, boolean> = { c: true, h: true, i: false, slim: false };
-/** Ручка этой системы нарисована по её собственному чертежу (FUSION, SMART, AVERS, TWELVE, O показаны моделью C). */
-export function kupeProfileExact(s: KupeSystem): boolean {
-  const st = kupeProfileStyle(s);
-  return st === "h" || (st === "c" && /^c\b|^c\s/i.test(s.profile));
-}
-export const KUPE_PROFILE_PREVIEW: Record<KupeProfileStyle, string> = { c: "models/kupe/preview_handle_c.png", h: "models/kupe/preview_handle_h.png", i: "models/kupe/preview_handle_i.png", slim: "models/kupe/preview_handle_slim.png" };
-/** Вертикальный разрез по чертежу Aristo (стр. 4): направляющие, рамки, зазоры полотна.
- */
-const ARISTO = { trackTop: [40.3, 83.3], trackBot: [7.9, 63.8], frameTop: 21, frameBot: 56, frameDepth: 15, gapBottom: 11.6, gapTop: 19.6 } as const;
-/** Центры ручек заднего и переднего ряда от середины верхней направляющей и смещение нижней направляющей, мм.
- *  C (стр. 4): асимметричные ролики, полотна в каналах смещены назад. H (стр. 5): симметричные ролики, полотна через 40,06 мм по центру. */
-const KUPE_ROWS: Record<KupeProfileStyle, { rows: [number, number]; trackBotShift: number }> = {
-  c: { rows: [-19.51, 20.55], trackBotShift: -8.07 }, h: { rows: [-20.03, 20.03], trackBotShift: 0 },
-  i: { rows: [-19.51, 20.55], trackBotShift: -8.07 }, slim: { rows: [-19.51, 20.55], trackBotShift: -8.07 },
+export function kupeHandle(s: KupeSystem): KupeHandle { return HANDLES[kupeProfileStyle(s)]; }
+/** Ручка этой системы нарисована по её собственному заводскому сечению. */
+export function kupeProfileExact(s: KupeSystem): boolean { return !/fine|декор/i.test(s.profile); }
+export const KUPE_PROFILE_WIDTH = Object.fromEntries(Object.entries(HANDLES).map(([k, v]) => [k, v.w])) as Record<KupeProfileStyle, number>;
+export const KUPE_PROFILE_PREVIEW = Object.fromEntries(Object.keys(HANDLES).map((k) => [k, `models/kupe/preview_handle_${k}.png`])) as Record<KupeProfileStyle, string>;
+
+/** Семейства: рамки, средняя рамка, направляющие. h — высота сечения, d — глубина. */
+type Sec = { file: string; h: number; d: number };
+type KupeFamily = { trackTop: Sec; trackBot?: Sec; frameTop: Sec; frameBot: Sec; divider: Sec; insert: number; panel?: number; layout: string;
+  /** Своя направляющая у каждого ряда, свои центры вставок и зазоры (GRACE: техкаталог ARISTO 19.01.2026, стр. 13). */
+  trackPerRow?: boolean; panels?: readonly [number, number]; gapTop?: number; gapBottom?: number };
+const STD_TRACKS = { trackTop: { file: "track_top", h: 40.32, d: 83.34 }, trackBot: { file: "track_bottom", h: 7.9, d: 63.8 } };
+const FAMILIES: Record<"std" | "eco" | "slim" | "nova" | "grace", KupeFamily> = {
+  std: { ...STD_TRACKS, frameTop: { file: "frame_top", h: 21.03, d: 15.04 }, frameBot: { file: "frame_bottom", h: 56.09, d: 15.04 }, divider: { file: "divider", h: 25, d: 14.5 }, insert: 9, layout: "по чертежу сборки" },
+  eco: { trackTop: { file: "track_top_eco", h: 40.31, d: 82 }, trackBot: { file: "track_bottom_eco", h: 7.48, d: 59.86 }, frameTop: { file: "frame_top_eco", h: 21.5, d: 14.2 }, frameBot: { file: "frame_bottom_eco", h: 56.5, d: 12.94 }, divider: { file: "divider_eco", h: 25.1, d: 12 }, insert: 9, layout: "как Стандарт" },
+  slim: { ...STD_TRACKS, frameTop: { file: "frame_slim_wide", h: 46.06, d: 32.2 }, frameBot: { file: "frame_slim_wide", h: 46.06, d: 32.2 }, divider: { file: "divider_slim", h: 11.68, d: 32.2 }, insert: 0, layout: "по схеме Стандарт" },
+  nova: { ...STD_TRACKS, frameTop: { file: "frame_nova", h: 4.99, d: 17 }, frameBot: { file: "frame_nova", h: 4.99, d: 17 }, divider: { file: "divider_nova", h: 17, d: 34 }, insert: 0, panel: 16, layout: "по схеме Стандарт" },
+  grace: { trackTop: { file: "track_top_grace", h: 45.98, d: 51 }, frameTop: { file: "frame_grace", h: 26.09, d: 43 }, frameBot: { file: "frame_grace", h: 26.09, d: 43 }, divider: { file: "divider_grace", h: 12.17, d: 43 }, insert: 0, layout: "по техкаталогу: 73 мм от потолка, 9 мм от пола",
+    trackPerRow: true, panels: [-25, 25], gapTop: 73, gapBottom: 9 },
 };
+export function kupeFamily(s: KupeSystem): KupeFamily {
+  const n = s.system.toLowerCase();
+  if (/grace/.test(n)) return FAMILIES.grace;
+  if (/nova/.test(n)) return FAMILIES.nova;
+  if (/slim/.test(n)) return FAMILIES.slim;
+  if (/эконом/.test(n)) return FAMILIES.eco;
+  return FAMILIES.std;
+}
+/** Вертикальный разрез по чертежу Aristo (стр. 4): зазоры полотна до пола и до потолка. */
+const GAP = { bottom: 11.6, top: 19.6 } as const;
+/** Центры вставок заднего и переднего ряда от середины верхней направляющей и смещение нижней направляющей, мм.
+ *  Асимметричные ролики (ручки с пазом у задней стороны: C, FLAT, I, O, стр. 4): вставки в каналах смещены назад.
+ *  Симметричные ролики (H, стр. 5, и остальные ручки с пазом по центру или спереди): вставки через 40,06 мм по центру. */
+const ROWS = { asym: { panels: [-28.1, 11.96], trackBotShift: -8.07 }, sym: { panels: [-20.03, 20.03], trackBotShift: 0 } } as const;
 const hex = (grad: string) => parseInt((grad.split(",")[1] ?? grad.split(",")[0] ?? "#c0c0c0").replace("#", ""), 16);
 
 /** Детали для 3D: направляющие, рамки полотен и вставки. Внешнее изделие: в раскрой ЛДСП не идёт (external). */
 export function kupeParts(m: Module): Part[] {
   const k = m.kupe!, s = kupeSystem(k), d = s.dims, col = hex(kupeColor(k).grad), sec = kupeSections(k);
-  const out: Part[] = [], W = m.width, H = m.height, D = m.depth, style = kupeProfileStyle(s), hd = KUPE_PROFILE_DEPTH[style];
+  const out: Part[] = [], W = m.width, H = m.height, D = m.depth, h = kupeHandle(s), fam = kupeFamily(s), rows = h.slot < -4 ? ROWS.asym : ROWS.sym;
   const part = (id: string, name: string, size: Part["size"], position: Part["position"], extra: Partial<Part> = {}): Part => ({ id, name, size, position, length: size[1], width: size[0], thickness: size[2], material: "alu", decor: kupeColor(k).name, role: "door", grain: "length", grainAxis: 1, edge: [0, 0, 0, 0], external: true, look: { color: col, metalness: 0.4, roughness: 0.35 }, ...extra });
-  const [tth, ttd] = ARISTO.trackTop, [tbh, tbd] = ARISTO.trackBot;
-  out.push(part("kupe:track:top", "Направляющая верхняя", [W, tth, ttd], [W / 2, H - tth / 2, D / 2], { role: "body", model: { file: "kupe/track_top.glb", length: "x", mirror: true } }));
-  if (s.kind !== "hang" && d.trackBot > 0) out.push(part("kupe:track:bottom", "Направляющая нижняя", [W, tbh, tbd], [W / 2, tbh / 2, D / 2 + KUPE_ROWS[style].trackBotShift], { role: "body", model: { file: "kupe/track_bottom.glb", length: "x", mirror: true } }));
+  const model = (f: string, length: "x" | "y", mirror?: boolean) => ({ file: `kupe/${f}.glb`, length, ...(mirror ? { mirror } : {}) });
+  const tt = fam.trackTop, tb = fam.trackBot;
+  const panels = fam.panels ?? rows.panels;
+  if (fam.trackPerRow) for (const r of k.doors > 1 ? [0, 1] : [0]) out.push(part(`kupe:track:top${r ? ":front" : ""}`, "Направляющая верхняя", [W, tt.h, tt.d], [W / 2, H - tt.h / 2, D / 2 + panels[r]], { role: "body", model: model(tt.file, "x", true) }));
+  else out.push(part("kupe:track:top", "Направляющая верхняя", [W, tt.h, tt.d], [W / 2, H - tt.h / 2, D / 2], { role: "body", model: model(tt.file, "x", true) }));
+  if (s.kind !== "hang" && d.trackBot > 0 && tb) out.push(part("kupe:track:bottom", "Направляющая нижняя", [W, tb.h, tb.d], [W / 2, tb.h / 2, D / 2 + rows.trackBotShift], { role: "body", model: model(tb.file, "x", true) }));
   // Полотна в 3D — по чертежу: нахлёст равен ширине ручки, чтобы ручки соседних дверей совпадали. Цена считается отдельно (kupeLeaf).
-  const hw = KUPE_PROFILE_WIDTH[style] || d.frameSide, exact = KUPE_PROFILE_EXACT[style], n = k.doors;
-  const overlap = hw, lw = (W + (n - 1) * overlap) / n;
-  const bottom = s.kind === "hang" ? 10 : ARISTO.gapBottom, top = H - ARISTO.gapTop, lh = top - bottom;
-  const ft = exact ? ARISTO.frameTop : d.frameTop, fb = exact ? ARISTO.frameBot : d.frameBot;
+  const hw = h.w, n = k.doors, overlap = hw, lw = (W + (n - 1) * overlap) / n;
+  const bottom = fam.gapBottom ?? (s.kind === "hang" ? 10 : GAP.bottom), top = H - (fam.gapTop ?? GAP.top), lh = top - bottom;
+  const ft = fam.frameTop.h, fb = fam.frameBot.h, dv = /twelve/i.test(s.profile) ? { file: "divider_twelve", h: 12, d: 12.8 } : fam.divider;
   const sumR = sec.rowRatios.reduce((a, b) => a + b, 0), sumC = sec.colRatios.reduce((a, b) => a + b, 0);
   for (let i = 0; i < n; i++) {
-    const row = i % 2, z = D / 2 + KUPE_ROWS[style].rows[row], zs = z + KUPE_SLOT_OFFSET[style], x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
+    const row = i % 2, zs = D / 2 + panels[row], z = zs - h.slot, x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
     const leaf = { openShift: shift, sectionId: undefined };
-    out.push(part(`kupe:${i}:side:l`, "Профиль-ручка", [hw, lh, hd], [x0 + hw / 2, bottom + lh / 2, z], { ...leaf, model: { file: `kupe/handle_${style}.glb`, length: "y" } }));
-    out.push(part(`kupe:${i}:side:r`, "Профиль-ручка", [hw, lh, hd], [x0 + lw - hw / 2, bottom + lh / 2, z], { ...leaf, model: { file: `kupe/handle_${style}.glb`, length: "y", mirror: true } }));
+    out.push(part(`kupe:${i}:side:l`, "Профиль-ручка", [hw, lh, h.d], [x0 + hw / 2, bottom + lh / 2, z], { ...leaf, model: model(h.file, "y") }));
+    out.push(part(`kupe:${i}:side:r`, "Профиль-ручка", [hw, lh, h.d], [x0 + lw - hw / 2, bottom + lh / 2, z], { ...leaf, model: model(h.file, "y", true) }));
     const iw = lw - 2 * hw;
-    out.push(part(`kupe:${i}:frame:top`, "Рамка верхняя", [iw, ft, ARISTO.frameDepth], [x0 + lw / 2, top - ft / 2, zs], { ...leaf, model: { file: "kupe/frame_top.glb", length: "x" } }));
-    out.push(part(`kupe:${i}:frame:bottom`, "Рамка нижняя", [iw, fb, ARISTO.frameDepth], [x0 + lw / 2, bottom + fb / 2, zs], { ...leaf, model: { file: "kupe/frame_bottom.glb", length: "x", mirror: true } }));
-    const ih = lh - ft - fb, cw = iw - (sec.colRatios.length - 1) * d.divider, ch = ih - (sec.rowRatios.length - 1) * d.divider;
+    out.push(part(`kupe:${i}:frame:top`, "Рамка верхняя", [iw, ft, fam.frameTop.d], [x0 + lw / 2, top - ft / 2, zs], { ...leaf, model: model(fam.frameTop.file, "x") }));
+    out.push(part(`kupe:${i}:frame:bottom`, "Рамка нижняя", [iw, fb, fam.frameBot.d], [x0 + lw / 2, bottom + fb / 2, zs], { ...leaf, model: model(fam.frameBot.file, "x", true) }));
+    const ih = lh - ft - fb, cw = iw - (sec.colRatios.length - 1) * dv.h, ch = ih - (sec.rowRatios.length - 1) * dv.h;
     let y = top - ft;
     // по чертежу вставка заходит в паз верхней и нижней рамки на 9 мм
-    const ins = exact ? 9 : 0, last = sec.rowRatios.length - 1;
+    const ins = fam.insert, last = sec.rowRatios.length - 1;
     sec.rowRatios.forEach((r, ri) => {
       const rh = r / sumR * ch; let x = x0 + hw;
       const fTop = ri === 0 ? ins : 0, fBot = ri === last ? ins : 0, fh = rh + fTop + fBot, fy = y - rh / 2 + (fTop - fBot) / 2;
       sec.colRatios.forEach((c, ci) => {
         const cwi = c / sumC * cw, ldsp = isLdspFill(f);
-        out.push(part(`kupe:${i}:fill:${ri}:${ci}`, "Наполнение · " + f.n, [cwi, fh, ldsp ? 8 : 5], [x + cwi / 2, fy, zs], { material: ldsp ? "board" : "glass", decor: ldsp ? f.n : f.n, look: ldsp ? undefined : kupeFillLook(f) }));
+        out.push(part(`kupe:${i}:fill:${ri}:${ci}`, "Наполнение · " + f.n, [cwi, fh, ldsp ? fam.panel ?? 8 : 5], [x + cwi / 2, fy, zs], { material: ldsp ? "board" : "glass", decor: f.n, look: ldsp ? undefined : kupeFillLook(f) }));
         x += cwi;
-        if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [d.divider, rh, 14], [x + d.divider / 2, y - rh / 2, zs], { ...leaf, model: { file: "kupe/divider.glb", length: "y" } })); x += d.divider; }
+        if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [dv.h, rh, dv.d], [x + dv.h / 2, y - rh / 2, zs], { ...leaf, model: model(dv.file, "y") })); x += dv.h; }
       });
       y -= rh;
-      if (ri < sec.rowRatios.length - 1) { out.push(part(`kupe:${i}:div-h:${ri}`, "Разделитель", [iw, d.divider, 14], [x0 + lw / 2, y - d.divider / 2, zs], { ...leaf, model: { file: "kupe/divider.glb", length: "x" } })); y -= d.divider; }
+      if (ri < sec.rowRatios.length - 1) { out.push(part(`kupe:${i}:div-h:${ri}`, "Разделитель", [iw, dv.h, dv.d], [x0 + lw / 2, y - dv.h / 2, zs], { ...leaf, model: model(dv.file, "x") })); y -= dv.h; }
     });
     for (const p of out) if (p.id.startsWith(`kupe:${i}:fill:`)) p.openShift = shift;
   }

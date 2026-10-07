@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {kupeLines,kupeErrors,kupeParts,DEFAULT_KUPE} from '../src/kupe';
+import {kupeLines,kupeErrors,kupeParts,kupeProfileExact,DEFAULT_KUPE} from '../src/kupe';
+import {KUPE_SYSTEMS} from '../src/kupeData';
+import {existsSync} from 'node:fs';
+import {join} from 'node:path';
 import {createKupeModule,createKupeWardrobe} from '../src/ModulePalette';
 import {initialModule,validate,parts} from '../src/model';
 import {newProject,projectErrors,appendModuleGroup,parseProject} from '../src/project';
@@ -42,17 +45,31 @@ test('kupe 3D follows the Aristo assembly drawing: C 26.5×34.5, rows 40.06 apar
   const m=createKupeModule(1600,2400,initialModule());
   const ps=kupeParts(m),by=(id:string)=>ps.find(p=>p.id===id)!;
   const h0=by('kupe:0:side:r'),h1=by('kupe:1:side:l');
-  assert.deepEqual([h0.size[0],h0.size[2]],[26.5,34.5]);
+  assert.deepEqual([h0.size[0],h0.size[2]],[26.51,34.51]);
   assert.ok(Math.abs(h0.position[0]-h1.position[0])<1e-6,'overlap equals handle width');
   assert.ok(Math.abs(Math.abs(h1.position[2]-h0.position[2])-40.06)<1e-6);
   assert.equal(by('kupe:0:frame:top').model!.file,'kupe/frame_top.glb');
-  assert.equal(by('kupe:0:frame:bottom').size[1],56);
+  assert.equal(by('kupe:0:frame:bottom').size[1],56.09);
   assert.ok(Math.abs(by('kupe:0:side:l').position[1]-by('kupe:0:side:l').size[1]/2-11.6)<1e-6,'leaf 11.6 mm above floor');
   assert.ok(by('kupe:track:top').size[2]<=100,'top track fits the 100 mm zone');
   const hEco=createKupeModule(1600,2400,initialModule());hEco.kupe={...hEco.kupe!,system:'Эконом H (Аристо)'};
-  assert.equal(kupeParts(hEco).find(p=>p.id==='kupe:0:side:l')!.model!.file,'kupe/handle_h.glb');
+  assert.equal(kupeParts(hEco).find(p=>p.id==='kupe:0:side:l')!.model!.file,'kupe/handle_h_eco.glb');
   // цена не зависит от геометрии 3D
   assert.equal(sum(m),sum(createKupeModule(1600,2400,initialModule())));
+});
+
+test('every kupe system draws factory sections: each model file exists, Slim Fine and Slim Decor are marked as substitutes',()=>{
+  const files=new Set<string>();
+  for(const s of KUPE_SYSTEMS){
+    const m=createKupeModule(1600,2400,initialModule());m.kupe={...m.kupe!,system:s.system,color:s.colors[0].name,sections:1};
+    const ps=kupeParts(m);
+    for(const p of ps)if(p.model)files.add(p.model.file);
+    const h=ps.find(p=>p.id==='kupe:0:side:l')!;
+    assert.ok(h.size[0]>=10&&h.size[0]<=45&&h.size[2]>=32&&h.size[2]<=42,s.system+' handle section is a real one');
+    assert.ok(ps.every(p=>p.position[2]-p.size[2]/2>-1&&p.position[2]+p.size[2]/2<m.depth+1),s.system+' stays inside the 100 mm track zone');
+    assert.equal(kupeProfileExact(s),!/fine|декор/i.test(s.profile));
+  }
+  for(const f of files)assert.ok(existsSync(join('public/models',f)),f+' exists');
 });
 
 test('sliding wardrobe group: bodies without swing doors plus kupe in front, valid and priced as retail',()=>{
