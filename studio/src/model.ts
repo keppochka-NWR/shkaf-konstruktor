@@ -769,7 +769,7 @@ export function parts(m: Module): Part[] {
       // Под самой верхней полкой, если она в верхних 40 % секции (зона одежды под ней), иначе под крышей.
       const highest=s.shelves.length?Math.max(...s.shelves):0,topShelf=highest>=0.6?b.bottom+highest*h-t/2:b.top,L=pulloutLength(m),n=Math.min(3,Math.max(1,Math.round(s.pullouts)));
       // Крепление от задней стенки (как в моделях Базиса цеха): тремпель выдвигается вперёд из глубины корпуса.
-      for(let k=0;k<n;k++){const x=b.x+b.width*(k+1)/(n+1);add(s.id+':pullout:'+k,'Выдвижной тремпель '+L+' мм',[24,40,L],[x,topShelf-20,rearClear(m)+L/2],L,40,24,'pantograph',s.id,'metal');}
+      for(let k=0;k<n;k++){const x=b.x+b.width*(k+1)/(n+1);add(s.id+':pullout:'+k,'Выдвижной тремпель GTV WSL '+L+' мм',[30,42,L],[x,topShelf-21,rearClear(m)+L/2],L,42,30,'pantograph',s.id,'metal');const tp=out[out.length-1];tp.model={file:'hardware/trempel_wsl.glb',length:'y'};}
     }
     if(s.pantograph){
       const ry=b.bottom+(s.rodAt??0.87)*h,cy=ry-360;
@@ -879,10 +879,12 @@ function hardwareParts(m: Module, out: Part[]) {
     const front = inset ? back : d;
     hingePositions(dh, dw).forEach((hy, n) => {
       const y = cy - dh / 2 + hy, key = door.id.replace(":door:", ":hingecup:") + ":" + n;
-      out.push(metal(key, "Петля " + brand + " · чашка Ø35", [35, 35, 12], [cupX, y, back + 5], "hinge", door.sectionId));
-      const armL = Math.abs(cupX - sideX) + 6;
-      out.push(metal(door.id.replace(":door:", ":hingearm:") + ":" + n, "Петля " + brand + " · плечо", [armL, 16, 12], [(cupX + sideX) / 2, y, front - 6], "hinge", door.sectionId));
-      out.push(metal(door.id.replace(":door:", ":hingeplate:") + ":" + n, "Петля " + brand + " · планка", [8, 46, 36], [sideX + dir * 4, y, front - 37], "hinge", door.sectionId));
+      // Модели по технической карте GTV DCHCB 3D (scripts/blender_hardware.py): габариты деталей — точные габариты моделей,
+      // отсчёт от кромки фасада со стороны петель (x) и от тыльной плоскости фасада (z). Правая петля — зеркально.
+      const mirror = dir < 0 ? { mirror: true } : {};
+      out.push({ ...metal(key, "Петля " + brand + " · чашка Ø35", [36.4, 58, 27.3], [edgeX + dir * 22.5, y, back - 1.85], "hinge", door.sectionId), model: { file: "hardware/hinge_cup.glb", length: "y", ...mirror } });
+      out.push({ ...metal(door.id.replace(":door:", ":hingeplate:") + ":" + n, "Петля " + brand + " · плечо и планка", [19.6, 63, 76.5], [edgeX + dir * 23.8, y, back - 39.75], "hinge", door.sectionId), model: { file: "hardware/hinge_plate.glb", length: "y", ...mirror } });
+      void sideX; void front;
     });
     if (push) {
       const freeX = cx + dir * dw / 2 - dir * (inset ? -RULES.faceGap : t - RULES.faceGap) - dir * 8;
