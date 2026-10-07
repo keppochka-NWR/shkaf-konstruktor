@@ -21,19 +21,27 @@ function mod(name: string, w: number, h: number, d: number, patch: Partial<Modul
   return m;
 }
 const place = (module: Module, x: number, z: number, y = 0, rotation: PlacedModule["rotation"] = 0): PlacedModule => ({ id: nid(), x, z, y, rotation, module });
-const drawer = (height: number) => ({ slide: "gtv0fpo" as const, operation: "soft-close" as const, brand: "dtc" as const, height, length: 350, handle: false });
+// Наполнение — точные высоты из модели Базиса «проект корректировка 02.10» (мировые координаты деталей, world.py в папке заказа):
+// высота полки задаётся по её центру от пола, ящик — по низу фасада. Порядок корпусов отзеркален: Базис рисует в левой системе координат.
+const IN_BOTTOM = 76, IN_H = 2184 - 76; // дно корпуса на цоколе 60, крыша 2184
+const at = (centerFromFloor: number) => Math.round((centerFromFloor - IN_BOTTOM) / IN_H * 10000) / 10000;
+// ящик: низ фасада от пола, высота фасада и короба; зазор фасада 3 за дверью и 2 в открытом корпусе
+const drawerAt = (facadeBottom: number, facadeH: number, box: number, gap: number) =>
+  ({ slide: "gtv0fpo" as const, operation: "soft-close" as const, brand: "dtc" as const, height: box, facadeH, length: 350, handle: false, y: facadeBottom - gap / 2 - IN_BOTTOM });
 
-// Плоскость раздела: задняя сторона (прихожая) z 600..1000, лицевая (комната) 1000..1450, купе 1450..1550.
-const Z_BACK = 600, Z_FRONT = 1003, Z_KUPE = 1453, /* задник ХДФ обратных корпусов — 3 мм */ FRONT_W = 2043, BACK_W = 2215, H = 2200, ANT_H = 659; /* потолок у колонны 2889: 2889 − 30 (регламент) − 2200 */
+const Z_BACK = 600, Z_FRONT = 1003, Z_KUPE = 1453, /* задник ХДФ обратных корпусов — 3 мм */ FRONT_W = 2043, H = 2200, ANT_H = 659; /* потолок у колонны 2889: 2889 − 30 (регламент) − 2200 */
 const front = (name: string, x: number, w: number, s: Partial<ReturnType<typeof section>>) =>
   place(mod(name, w, H, 450, { doors: false, backType: "board" }, [s]), x, Z_FRONT);
-const fw = Math.round(FRONT_W / 3);
 const back = (name: string, x: number, w: number, s: Partial<ReturnType<typeof section>>) =>
   place(mod(name, w, H, 400, { doors: true, backType: "nailed", handleId: "lm87685022" /* ТЗ: торцевая, хром мат. */ }, [{ doorLeaves: 1, ...s }]), x, Z_BACK, 0, 180);
-const bw = Math.round(BACK_W / 4);
-const kupe = mod("Двери купе", FRONT_W, 2222, 100, { doors: false, plinthHeight: 0, sections: [] }, [{}]);
+const kupe = mod("Двери купе", FRONT_W, H, 100, { doors: false, plinthHeight: 0, sections: [] }, [{}]);
 kupe.kupe = { ...DEFAULT_KUPE, system: "Стандарт I (Аристо)", color: "Серебро матовое", doors: 3, fills: ["Слэйт", "Слэйт", "Зеркало Серебро 4мм"], sections: 0, softClose: false };
-
+// Комната (b3d: корпуса 739, здесь до колонны 2043 → по 681). Полка 1908 и тремпель под ней — во всех трёх.
+const fw = 681;
+// Прихожая (b3d: 561·561·561·562 = 2245, антресоли 561 · 1122 · 562): ящики фасадами 405/604/804 × 193, короб 166; над ящиками жёсткая полка 1008.
+const hallDrawers = { drawers: 3, drawerConfigs: [drawerAt(405, 193, 156, 3), drawerAt(604, 193, 156, 3), drawerAt(804, 193, 156, 3)] /* короб 156: регламент студии — 40 мм над коробом (в b3d 166 при шаге 200) */, shelves: [at(1394), at(1794)], fixed: [0, 1] }; // полку над ящиками (1008 в b3d) студия ставит сама
+const hallPullout = { shelves: [at(401), at(691)], fixed: [0, 1], pullouts: 1 };
+const ANT_SHELF = Math.round((2545 - 2216) / (2884 - 2216) * 10000) / 10000; // полка антресоли на той же доле высоты, что в b3d
 const project: Project = {
   version: 3,
   measurement: { number: "7358873", date: "2026-10-06", notes: "Замер Кондырев А.С. Проём 2043 × 2222–2230, колонна 173×164, балка 262, потолок 2900/2889, плинтус 50." },
@@ -45,18 +53,20 @@ const project: Project = {
     ],
   },
   modules: [
-    // Лицевая сторона (комната): 3 корпуса 450 между стеной и колонной, наверху полка и выдвижной тремпель.
-    front("Комната · тремпель", 0, fw, { shelves: [0.86, 0.17], pullouts: 1 }),
-    front("Комната · полки", fw, fw, { shelves: [0.86, 0.08, 0.17, 0.26], pullouts: 1 }),
-    front("Комната · ящик", 2 * fw, FRONT_W - 2 * fw, { shelves: [0.86, 0.2], pullouts: 1, drawers: 1, drawerMount: "inset", drawerConfigs: [drawer(116)] }), // за купе фасад ящика вкладной (в b3d 708,8 = ширина проёма)
+    // Комната — слева направо от стены к колонне (зеркально b3d): ящик · полки · тремпель с нижней полкой.
+    front("Комната · ящик", 0, fw, { shelves: [at(1908)], fixed: [0], /* полка над ящиком (639 в b3d) — обязательная, ставит студия */ pullouts: 1, drawers: 1, drawerMount: "inset", drawerConfigs: [drawerAt(480, 146, 116, 2)] }),
+    front("Комната · полки", fw, fw, { shelves: [at(1908), at(288), at(508), at(727)], fixed: [0, 1, 2, 3], pullouts: 1 }),
+    front("Комната · тремпель", 2 * fw, FRONT_W - 2 * fw, { shelves: [at(1908), at(448)], fixed: [0, 1], pullouts: 1 }),
     place(kupe, 0, Z_KUPE),
-    // Обратная сторона (прихожая): 4 корпуса 400 с распашными дверями, за колонной на полную ширину.
-    back("Прихожая · ящики", 0, bw, { shelves: [0.45, 0.62, 0.78], drawers: 3, drawerConfigs: [drawer(166), drawer(166), drawer(166)] }),
-    back("Прихожая · тремпель", bw, bw, { shelves: [0.12, 0.25], pullouts: 1 }),
-    back("Прихожая · тремпель", 2 * bw, bw, { shelves: [0.12, 0.25], pullouts: 1 }),
-    back("Прихожая · ящики", 3 * bw, BACK_W - 3 * bw, { shelves: [0.45, 0.62, 0.78], drawers: 3, drawerConfigs: [drawer(166), drawer(166), drawer(166)] }),
-    // Антресоли над прихожей, push-to-open.
-    ...[0, 1, 2, 3].map((i) => place(mod("Антресоль", i < 3 ? bw : BACK_W - 3 * bw, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [0.5], doorLeaves: 1 }]), i * bw, Z_BACK, H, 180)),
+    // Прихожая — 4 корпуса за колонной на полную ширину 2245.
+    back("Прихожая · ящики", 0, 561, hallDrawers),
+    back("Прихожая · тремпель", 561, 561, hallPullout),
+    back("Прихожая · тремпель", 1122, 561, hallPullout),
+    back("Прихожая · ящики", 1683, 562, hallDrawers),
+    // Антресоли над прихожей, push-to-open: 561 · 1122 (две двери) · 562.
+    place(mod("Антресоль", 561, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 1 }]), 0, Z_BACK, H, 180),
+    place(mod("Антресоль", 1122, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 2 }]), 561, Z_BACK, H, 180),
+    place(mod("Антресоль", 562, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 1 }]), 1683, Z_BACK, H, 180),
   ],
   calculation: { markup: 2.2, overrides: {}, model: "sheet", sheetPrice: 23000 },
 };

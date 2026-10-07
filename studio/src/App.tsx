@@ -311,7 +311,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setSelectedPart(null);
     setActive(mid);
     setTab(stage==='filling'?"section":"module");
-    setFit((f) => f + 1);
+    // Камера не сбрасывается при выборе корпуса (в т.ч. правой кнопкой для меню) — подгонка только в режиме «Приблизить выбранный корпус».
+    if(focusActive)setFit((f) => f + 1);
     if(stage==='room'||stage==='fixtures')setStageState('bodies'); // выбрали корпус — работаем с мебелью
   }
   /** Размер помещения, проёма или объекта на стене, нажатый на эскизе или в 3D: открывает поле ввода и применяет к комнате. */

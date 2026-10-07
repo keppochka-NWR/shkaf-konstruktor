@@ -765,8 +765,10 @@ export function parts(m: Module): Part[] {
     if(s.rod){const rp=out.find(p=>p.id===s.id+':rod')!;for(const side of [0,1])add(s.id+':flange:'+side,'Фланец штанги D25',[5,48,48],[side?b.x+b.width-2.5:b.x+2.5,rp.position[1],rp.position[2]],48,48,5,'flange',s.id,'metal');}
     if(s.pullouts){
       // Тремпель крепится под ближайшей полкой сверху (или под крышей), выдвигается вперёд. Длина — стандартный ряд GTV под глубину секции.
-      const topShelf=s.shelves.length?Math.min(...s.shelves.map((f)=>b.bottom+f*h)):b.top,L=pulloutLength(m),n=Math.min(3,Math.max(1,Math.round(s.pullouts)));
-      for(let k=0;k<n;k++){const x=b.x+b.width*(k+1)/(n+1);add(s.id+':pullout:'+k,'Выдвижной тремпель '+L+' мм',[24,40,L],[x,topShelf-20,d-20-L/2],L,40,24,'pantograph',s.id,'metal');}
+      // Под самой верхней полкой, если она в верхних 40 % секции (зона одежды под ней), иначе под крышей.
+      const highest=s.shelves.length?Math.max(...s.shelves):0,topShelf=highest>=0.6?b.bottom+highest*h-t/2:b.top,L=pulloutLength(m),n=Math.min(3,Math.max(1,Math.round(s.pullouts)));
+      // Крепление от задней стенки (как в моделях Базиса цеха): тремпель выдвигается вперёд из глубины корпуса.
+      for(let k=0;k<n;k++){const x=b.x+b.width*(k+1)/(n+1);add(s.id+':pullout:'+k,'Выдвижной тремпель '+L+' мм',[24,40,L],[x,topShelf-20,rearClear(m)+L/2],L,40,24,'pantograph',s.id,'metal');}
     }
     if(s.pantograph){
       const ry=b.bottom+(s.rodAt??0.87)*h,cy=ry-360;
