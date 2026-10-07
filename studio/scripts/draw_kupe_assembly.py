@@ -59,20 +59,22 @@ def render(y_lo, y_hi, title):
         for l in sl:
             m = Image.new("1", img.size, 0); ImageDraw.Draw(m).polygon([(X(z), Y(y)) for z, y in l], fill=1); mask = ImageChops.logical_xor(mask, m)
     img.paste(Image.new("RGB", img.size, "#9aa5ae"), mask=mask)
-    d.text((10, Hh - 26), "зелёное — вставка, красная рамка — габарит ручки C; слева — задняя сторона, справа — комната", font=f(13), fill="#7a8b94")
+    d.text((10, Hh - 26), "зелёное — вставка, красная рамка — габарит ручки; слева — задняя сторона, справа — комната", font=f(13), fill="#7a8b94")
     return img
 
 
 top = render(H - 80, H, "Студия: верх (разрез сбоку)")
 bot = render(0, 90, "Студия: низ (разрез сбоку)")
-doc = fitz.open(PDF); page = doc[3]
-pdf_top = Image.open(io.BytesIO(page.get_pixmap(clip=fitz.Rect(270, 85, 410, 190), dpi=500).tobytes("png"))).convert("RGB")
-pdf_bot = Image.open(io.BytesIO(page.get_pixmap(clip=fitz.Rect(270, 255, 410, 370), dpi=500).tobytes("png"))).convert("RGB")
+# profile H is drawn on page 5 (symmetric rollers), everything else on page 4
+PAGE, DX = (5, 3) if " H " in f" {data['profile']} " else (4, 0)
+doc = fitz.open(PDF); page = doc[PAGE - 1]
+pdf_top = Image.open(io.BytesIO(page.get_pixmap(clip=fitz.Rect(270 + DX, 85, 410 + DX, 190), dpi=500).tobytes("png"))).convert("RGB")
+pdf_bot = Image.open(io.BytesIO(page.get_pixmap(clip=fitz.Rect(270 + DX, 255, 410 + DX, 372), dpi=500).tobytes("png"))).convert("RGB")
 for im in (pdf_top, pdf_bot): im.thumbnail((top.width, 900))
 Wt = top.width + max(pdf_top.width, pdf_bot.width) + 60
 Ht = 70 + max(top.height, pdf_top.height) + 30 + max(bot.height, pdf_bot.height) + 20
 sheet = Image.new("RGB", (Wt, Ht), "white"); d = ImageDraw.Draw(sheet)
-d.text((20, 18), f"Купе в студии против чертежа Aristo, стр. 4 (вертикальное сечение) · {data['system']}", font=f(24, True), fill="#1d2b3a")
+d.text((20, 18), f"Купе в студии против чертежа Aristo, стр. {PAGE} (вертикальное сечение) · {data['system']}", font=f(24, True), fill="#1d2b3a")
 y = 70
 sheet.paste(top, (20, y)); sheet.paste(pdf_top, (top.width + 40, y)); y += max(top.height, pdf_top.height) + 30
 sheet.paste(bot, (20, y)); sheet.paste(pdf_bot, (top.width + 40, y))

@@ -128,9 +128,14 @@ export function kupeProfileExact(s: KupeSystem): boolean {
 }
 export const KUPE_PROFILE_PREVIEW: Record<KupeProfileStyle, string> = { c: "models/kupe/preview_handle_c.png", h: "models/kupe/preview_handle_h.png", i: "models/kupe/preview_handle_i.png", slim: "models/kupe/preview_handle_slim.png" };
 /** Вертикальный разрез по чертежу Aristo (стр. 4): направляющие, рамки, зазоры полотна.
- *  rows — центры ручек C заднего и переднего ряда от середины верхней направляющей (полотна через 40,06 мм, каналы несимметричны);
- *  trackBotShift — смещение нижней направляющей от середины верхней. */
-const ARISTO = { trackTop: [40.3, 83.3], trackBot: [7.9, 63.8], frameTop: 21, frameBot: 56, frameDepth: 15, gapBottom: 11.6, gapTop: 19.6, rows: [-19.51, 20.55], trackBotShift: -8.07 } as const;
+ */
+const ARISTO = { trackTop: [40.3, 83.3], trackBot: [7.9, 63.8], frameTop: 21, frameBot: 56, frameDepth: 15, gapBottom: 11.6, gapTop: 19.6 } as const;
+/** Центры ручек заднего и переднего ряда от середины верхней направляющей и смещение нижней направляющей, мм.
+ *  C (стр. 4): асимметричные ролики, полотна в каналах смещены назад. H (стр. 5): симметричные ролики, полотна через 40,06 мм по центру. */
+const KUPE_ROWS: Record<KupeProfileStyle, { rows: [number, number]; trackBotShift: number }> = {
+  c: { rows: [-19.51, 20.55], trackBotShift: -8.07 }, h: { rows: [-20.03, 20.03], trackBotShift: 0 },
+  i: { rows: [-19.51, 20.55], trackBotShift: -8.07 }, slim: { rows: [-19.51, 20.55], trackBotShift: -8.07 },
+};
 const hex = (grad: string) => parseInt((grad.split(",")[1] ?? grad.split(",")[0] ?? "#c0c0c0").replace("#", ""), 16);
 
 /** Детали для 3D: направляющие, рамки полотен и вставки. Внешнее изделие: в раскрой ЛДСП не идёт (external). */
@@ -140,7 +145,7 @@ export function kupeParts(m: Module): Part[] {
   const part = (id: string, name: string, size: Part["size"], position: Part["position"], extra: Partial<Part> = {}): Part => ({ id, name, size, position, length: size[1], width: size[0], thickness: size[2], material: "alu", decor: kupeColor(k).name, role: "door", grain: "length", grainAxis: 1, edge: [0, 0, 0, 0], external: true, look: { color: col, metalness: 0.4, roughness: 0.35 }, ...extra });
   const [tth, ttd] = ARISTO.trackTop, [tbh, tbd] = ARISTO.trackBot;
   out.push(part("kupe:track:top", "Направляющая верхняя", [W, tth, ttd], [W / 2, H - tth / 2, D / 2], { role: "body", model: { file: "kupe/track_top.glb", length: "x", mirror: true } }));
-  if (s.kind !== "hang" && d.trackBot > 0) out.push(part("kupe:track:bottom", "Направляющая нижняя", [W, tbh, tbd], [W / 2, tbh / 2, D / 2 + ARISTO.trackBotShift], { role: "body", model: { file: "kupe/track_bottom.glb", length: "x", mirror: true } }));
+  if (s.kind !== "hang" && d.trackBot > 0) out.push(part("kupe:track:bottom", "Направляющая нижняя", [W, tbh, tbd], [W / 2, tbh / 2, D / 2 + KUPE_ROWS[style].trackBotShift], { role: "body", model: { file: "kupe/track_bottom.glb", length: "x", mirror: true } }));
   // Полотна в 3D — по чертежу: нахлёст равен ширине ручки, чтобы ручки соседних дверей совпадали. Цена считается отдельно (kupeLeaf).
   const hw = KUPE_PROFILE_WIDTH[style] || d.frameSide, exact = KUPE_PROFILE_EXACT[style], n = k.doors;
   const overlap = hw, lw = (W + (n - 1) * overlap) / n;
@@ -148,7 +153,7 @@ export function kupeParts(m: Module): Part[] {
   const ft = exact ? ARISTO.frameTop : d.frameTop, fb = exact ? ARISTO.frameBot : d.frameBot;
   const sumR = sec.rowRatios.reduce((a, b) => a + b, 0), sumC = sec.colRatios.reduce((a, b) => a + b, 0);
   for (let i = 0; i < n; i++) {
-    const row = i % 2, z = D / 2 + ARISTO.rows[row], zs = z + KUPE_SLOT_OFFSET[style], x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
+    const row = i % 2, z = D / 2 + KUPE_ROWS[style].rows[row], zs = z + KUPE_SLOT_OFFSET[style], x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
     const leaf = { openShift: shift, sectionId: undefined };
     out.push(part(`kupe:${i}:side:l`, "Профиль-ручка", [hw, lh, hd], [x0 + hw / 2, bottom + lh / 2, z], { ...leaf, model: { file: `kupe/handle_${style}.glb`, length: "y" } }));
     out.push(part(`kupe:${i}:side:r`, "Профиль-ручка", [hw, lh, hd], [x0 + lw - hw / 2, bottom + lh / 2, z], { ...leaf, model: { file: `kupe/handle_${style}.glb`, length: "y", mirror: true } }));
