@@ -7,7 +7,7 @@
 // открывание за фасад; купе 3 полотна (2 Слэйт, 1 зеркало), ручка-профиль узкий.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { initialModule, section, type Module } from "../src/model";
-import { parseProject, projectErrors, type Project, type PlacedModule } from "../src/project";
+import { parseProject, projectErrors, applyAutoFillers, type Project, type PlacedModule } from "../src/project";
 import { estimate } from "../src/pricing";
 import { DEFAULT_KUPE } from "../src/kupe";
 
@@ -59,19 +59,21 @@ const project: Project = {
     front("Комната · тремпель", 2 * fw, FRONT_W - 2 * fw, { shelves: [at(1908), at(448)], fixed: [0, 1], pullouts: 1 }),
     place(kupe, 0, Z_KUPE),
     // Прихожая — 4 корпуса за колонной на полную ширину 2245.
-    back("Прихожая · ящики", 0, 561, hallDrawers),
-    back("Прихожая · тремпель", 561, 561, hallPullout),
-    back("Прихожая · тремпель", 1122, 561, hallPullout),
-    back("Прихожая · ящики", 1683, 562, hallDrawers),
+    // Регламент цеха: у стены фальшпанель «торцом» 16 + 5 мм (21) к распашным дверям; общая ширина как в b3d — 2245.
+    back("Прихожая · ящики", 21, 556, hallDrawers),
+    back("Прихожая · тремпель", 577, 556, hallPullout),
+    back("Прихожая · тремпель", 1133, 556, hallPullout),
+    back("Прихожая · ящики", 1689, 556, hallDrawers),
     // Антресоли над прихожей, push-to-open: 561 · 1122 (две двери) · 562.
-    place(mod("Антресоль", 561, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 1 }]), 0, Z_BACK, H, 180),
-    place(mod("Антресоль", 1122, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 2 }]), 561, Z_BACK, H, 180),
-    place(mod("Антресоль", 562, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 1 }]), 1683, Z_BACK, H, 180),
+    place(mod("Антресоль", 556, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 1 }]), 21, Z_BACK, H, 180),
+    place(mod("Антресоль", 1112, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 2 }]), 577, Z_BACK, H, 180),
+    place(mod("Антресоль", 556, ANT_H, 400, { doors: true, doorOpen: "push", plinthHeight: 0, backType: "nailed" }, [{ shelves: [ANT_SHELF], fixed: [0], doorLeaves: 1 }]), 1689, Z_BACK, H, 180),
   ],
   calculation: { markup: 2.2, overrides: {}, model: "sheet", sheetPrice: 23000 },
 };
 
-const parsed = parseProject(JSON.parse(JSON.stringify(project)));
+// Фальшпанели к стенам ставит студия при каждом изменении — применяем сразу, чтобы проект был в том же виде, что после любой правки.
+const parsed = applyAutoFillers(parseProject(JSON.parse(JSON.stringify(project))));
 const errors = projectErrors(parsed);
 mkdirSync("public/local-projects", { recursive: true });
 writeFileSync("public/local-projects/7358873-kofanov.json", JSON.stringify(parsed, null, 1));

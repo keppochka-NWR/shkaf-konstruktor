@@ -5,7 +5,7 @@ import {KUPE_SYSTEMS} from '../src/kupeData';
 import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {createKupeModule,createKupeWardrobe} from '../src/ModulePalette';
-import {initialModule,validate,parts} from '../src/model';
+import {initialModule,validate,parts,needsWallFiller} from '../src/model';
 import {newProject,projectErrors,appendModuleGroup,parseProject,bounds} from '../src/project';
 import {estimate,lineGroup} from '../src/pricing';
 import {details} from '../src/exports';
@@ -97,4 +97,9 @@ test('order 7358873: pull-out trempel, 60 mm plinth and inset drawer fronts behi
   const p=newProject();p.modules[0].module=m;
   assert.ok(estimate(p).lines.some(l=>l.id==='pullout:350'&&l.unitPrice===500),'trempel 500 ₽ (Макс 07.10)');
   assert.equal(bounds(p.modules[0]).d,450,'inset drawer front does not stick out');
+});
+test('body behind sliding doors with an inset drawer needs no wall filler; overlay doors at the wall still do',()=>{
+  const m=initialModule();m.doors=false;m.sections=[{...m.sections[0],drawers:1,drawerMount:'inset'}];
+  assert.equal(needsWallFiller(m),false);
+  m.doors=true;assert.equal(needsWallFiller(m),true);
 });

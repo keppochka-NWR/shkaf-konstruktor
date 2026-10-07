@@ -328,7 +328,8 @@ export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.c
 /** Опоры регулируемые под нижним корпусом (за цоколем): 4, при ширине от 900 — 6. Антресоли и корпуса без цоколя — без опор. */
 export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
-export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0));}
+/** Фальшпанель к стене нужна, когда у стены распашной фасад или накладной ящик. Вкладной ящик открытого корпуса (за купе) внутри проёма — о стену не бьёт. */
+export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'));}
 /** Геометрия подстолья: границы опор по X, глубина опор, отступ царги — с подстановкой значений по умолчанию. */
 export function deskGeometry(m:Module){
   const dk=m.desk!,x0=dk.baseX??0,bw=dk.baseWidth??m.width-x0;

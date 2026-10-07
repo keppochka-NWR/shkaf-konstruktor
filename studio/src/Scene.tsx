@@ -280,7 +280,8 @@ export function Scene(p: Props) {
         const origin=localToRoom(placed,0,0),center=moduleCenter(focus);
         moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();
         for (const part of parts(m)) {
-          if(state.hideFacades&&(part.role==='door'||part.role==='hinge'||part.role==='handle'||part.id.endsWith(':facade')))continue;
+          // «Скрыть фасады» убирает двери (распашные и полотна купе) с петлями и их ручками; ящики остаются с фасадами — это наполнение.
+          if(state.hideFacades&&(part.role==='door'||part.role==='hinge'||(part.role==='handle'&&!part.id.includes(':drawer:'))||(part.id.endsWith(':facade')&&!part.id.includes(':drawer:'))))continue;
           const isMetal = part.material === "metal",
             isBack = part.material === "hdf",
             isFacade = part.role === "door" || part.id.endsWith(":facade");
