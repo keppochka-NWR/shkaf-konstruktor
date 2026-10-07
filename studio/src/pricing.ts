@@ -85,6 +85,8 @@ export const HARDWARE_KIT={label:'Мелочёвка корпуса (шуруп�
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы. Всё остальное — фурнитура. */
 export function lineGroup(id:string):LineGroup{return /^(sheet:|edge|small$|work$|alu-|glass-|kupe-(fill|profile|track|work|film))/.test(id)?'material':'hardware';}
+/** Выдвижной тремпель GTV: решение Макса 07.10.2026 — 500 ₽ за штуку, пока нет счёта поставщика. */
+export const PULLOUT_PRICE=500;
 export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'kupe'|'other';
 export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
@@ -158,7 +160,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews,'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха');
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');
-      if(s.pullouts)add('pullout:'+pulloutLength(a.module),'Выдвижной тремпель GTV '+pulloutLength(a.module)+' мм',s.pullouts,'шт',null,'Закупочная цена не найдена: нужна цена ФАМ/GTV');
+      if(s.pullouts)add('pullout:'+pulloutLength(a.module),'Выдвижной тремпель GTV '+pulloutLength(a.module)+' мм',s.pullouts,'шт',PULLOUT_PRICE,'Цена Макса 07.10.2026: 500 ₽ за тремпель');
       for(let j=0;j<s.drawers;j++){
         const c=drawerConfig(a.module,s,j);
         if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');continue;}

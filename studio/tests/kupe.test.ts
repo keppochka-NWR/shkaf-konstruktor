@@ -95,6 +95,6 @@ test('order 7358873: pull-out trempel, 60 mm plinth and inset drawer fronts behi
   assert.deepEqual(validate(m),[]);
   const t=parts(m).find(p=>p.id.endsWith(':pullout:0'))!;assert.equal(t.size[2],350,'GTV 350 fits a 450 deep body');
   const p=newProject();p.modules[0].module=m;
-  assert.ok(estimate(p).lines.some(l=>l.id==='pullout:350'&&l.unitPrice===null),'trempel priced as «уточнить»');
+  assert.ok(estimate(p).lines.some(l=>l.id==='pullout:350'&&l.unitPrice===500),'trempel 500 ₽ (Макс 07.10)');
   assert.equal(bounds(p.modules[0]).d,450,'inset drawer front does not stick out');
 });
