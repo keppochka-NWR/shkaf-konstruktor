@@ -1,6 +1,7 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { kitchenExtraParts, kitchenErrors, worktopParts, type KitchenSpec, type WorktopSpec } from "./kitchen";
-import { drawerHasHandle, SLIDES, hingePositions, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
+import { partPenetration, allowedContact } from "./collisions";
+import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
 import {caseworkParts,caseworkErrors,type Casework} from './casework';
@@ -177,8 +178,20 @@ export type Module = {
   /** Дно / крыша: 'none' — без панели (открытый каркас на стяжках). По умолчанию панели есть. */
   bottomType?: "panel" | "none";
   topType?: "panel" | "none";
-  /** Стяжки — вертикальные планки между боковинами сзади или спереди, снизу или сверху (высота 60–300). */
-  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number }[];
+  /** Стяжки — планки между боковинами сзади или спереди, снизу или сверху (высота 60–300). По умолчанию стоят на ребре (вертикально);
+   *  lay 'flat' — лёжа, как царги кухонных низов Базиса (ширина height в глубину, заподлицо с верхом); setback — утопание от фронта (под Gola). */
+  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number }[];
+  /** Дно под боковинами на всю ширину (кухонные низы и пеналы Базиса: боковины стоят на дне). По умолчанию дно между боковинами. */
+  bottomUnder?: boolean;
+  /** Отступ фасадов от кромок корпуса и зазор между фасадами, мм (по умолчанию RULES.faceGap; кухни Базиса цеха — 1,5 и 3). */
+  faceGap?: number;
+  faceGapBetween?: number;
+  /** Накладной задник: отступ от наружных граней корпуса, мм (по умолчанию 2; кухни Базиса — 1,5 → ХДФ (W−3)×(H−3)). */
+  backGap?: number;
+  /** Паз под задник: ширина паза (задник у передней стенки паза; по умолчанию — задник на grooveInset) и недоход ХДФ до дна паза
+   *  (по умолчанию 0,5; кухни Базиса П16-4×8 — ширина 4, недоход 1 → ХДФ (W−18)×(H−18)). */
+  grooveWidth?: number;
+  grooveClear?: number;
   /** Распашные фасады: накладные (по умолчанию) или вкладные в проём; открывание ручкой (по умолчанию) или push-to-open без ручек. */
   doorMount?: "overlay" | "inset";
   doorOpen?: "handle" | "push";
@@ -235,7 +248,10 @@ export type Part = {
   /** Готовый вид материала в 3D (цвет, прозрачность, металл) — для наполнений купе и профиля. */
   look?: { color: number; opacity?: number; metalness?: number; roughness?: number };
   /** Модель профиля из Blender (public/models/<file>): вписывается в габарит детали, length — ось длины. */
-  model?: { file: string; length: "x" | "y"; mirror?: boolean };
+  model?: { file: string; length: "x" | "y"; mirror?: boolean;
+    /** Модель фурнитуры из Базиса (TriData → GLB, мм, локальные оси фурнитуры): ставится как есть — начало координат модели
+     *  в точку origin (координаты модуля), поворот quat [w,x,y,z]; без вписывания в габарит детали. */
+    native?: boolean; origin?: [number, number, number]; quat?: [number, number, number, number] };
   /** Сдвиг по X при «открытых фасадах» — полотно купе отъезжает за соседнее. */
   openShift?: number;
   /** Explicitly schematic handle; use the declared box instead of a catalogue asset. */
@@ -264,6 +280,9 @@ export type Part = {
   rotY?: number;
   /** Трапеция в плане: глубина левого и правого края от задней грани (дно, крыша, полки при скосе фронта); size[2] — большая глубина. */
   taperZ?: [number, number];
+  /** Точные коробки фурнитуры для проверки пересечений (координаты модуля) — вместо габарита модели: у петли чашка в теле фасада
+   *  и плечо с планкой у стойки, а не общий параллелепипед, задевающий торец стойки. См. collisions.ts. */
+  collide?: { size: [number, number, number]; position: [number, number, number] }[];
 };
 export type SectionBox = {
   id: string;
@@ -305,12 +324,16 @@ export function setFacadeHandle(m:Module,pid:string,handleId:string){
  else{const k=Number(pid.split(':door:')[1]);s.doorHandles=Array.from({length:4},(_,i)=>s.doorHandles?.[i]??null);s.doorHandles[k]=handleId;}
 }
 export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
+/** Отступ фасадов от кромок корпуса (шкафы — RULES.faceGap 2; кухни Базиса цеха — 1,5). */
+export function fe(m:Module){return m.faceGap??RULES.faceGap;}
+/** Зазор между фасадами (шкафы — 2; кухни Базиса — 3). */
+export function fb(m:Module){return m.faceGapBetween??RULES.faceGap;}
 /** Уровень низа корпуса над полом: цоколь или высота ножек. */
 export function baseLevel(m:Module){return m.feet?m.feet.height:plinth(m);}
 export function hasBottom(m:Module){return m.bottomType!=='none';}
 export function hasTop(m:Module){return m.topType!=='none';}
 /** Полки финальных заказов бывают на всю глубину. Вкладная дверь требует места перед полкой. */
-export function shelfMaxDepth(m:Module){return m.depth-rearClear(m)-(m.doors&&m.doorMount==='inset'?RULES.panel+RULES.faceGap:0);}
+export function shelfMaxDepth(m:Module){return m.depth-rearClear(m)-(m.doors&&m.doorMount==='inset'?RULES.panel+fe(m):0);}
 /** Верхняя плоскость дна (или низ проёма без дна) и нижняя плоскость крыши (или верх боковин без крыши). */
 export function innerBottom(m:Module){return baseLevel(m)+(hasBottom(m)?RULES.panel:0);}
 export function innerTop(m:Module){const topT=hasTop(m)?(m.topGlass?RULES.glassTop:RULES.panel):0;return (m.slope?m.slope.lowHeight:m.height)-topT;}
@@ -354,18 +377,19 @@ export function facadeBottom(m:Module){
   if(m.feet){
     // На ножках: накладной фасад закрывает торец дна; без дна — начинается над передней/задней нижней стяжкой.
     const rail=Math.max(railHeight(m,'front-bottom'),hasBottom(m)?0:railHeight(m,'rear-bottom'));
-    return hasBottom(m)?m.feet.height:m.feet.height+rail;
+    // Кухни Базиса: отступ фасада от низа дна такой же, как от остальных кромок (m.faceGap, 1,5); шкафы — вровень с низом дна.
+    return (hasBottom(m)?m.feet.height:m.feet.height+rail)+(m.faceGap??0);
   }
-  return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):RULES.faceGap;
+  return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):fe(m);
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
 /** Верх накладных фасадов: под скосом — по низкой стороне (крыша плоская на её высоте), выше идёт фальш из фасадного материала. */
-export function facadeTop(m:Module){return (m.slope?m.slope.lowHeight:m.height)-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0);}
+export function facadeTop(m:Module){return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
-  let left=i===0?RULES.faceGap:b.x-t/2+RULES.faceGap/2;
-  let right=i===m.sections.length-1?m.width-RULES.faceGap:b.x+b.width+t/2-RULES.faceGap/2;
+  let left=i===0?fe(m):b.x-t/2+fb(m)/2;
+  let right=i===m.sections.length-1?m.width-fe(m):b.x+b.width+t/2-fb(m)/2;
   // Угловая фальш-планка из фасада занимает край проёма: фасады крайней секции сдвигаются на планку + зазор 3.
   if(cornerStrip(m)&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
   if(cornerStrip(m)&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
@@ -376,7 +400,7 @@ export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.
 export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+(c.tray?10:RULES.drawerStep);return c.facadeH?Math.max(box,c.facadeH+gap):box;}
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
-export function doorMaxWidth(m:Module){const h=m.height-RULES.faceGap-facadeBottom(m);return h<=RULES.doorLowH?RULES.doorMaxLow:RULES.doorMax;}
+export function doorMaxWidth(m:Module){const h=m.height-fe(m)-facadeBottom(m);return h<=RULES.doorLowH?RULES.doorMaxLow:RULES.doorMax;}
 export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeaves;const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>doorMaxWidth(m)?2:1;}
 export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers;}
 export function fillerSides(m:Module,s:Section){
@@ -498,16 +522,19 @@ export function parts(m: Module): Part[] {
   // Скос фронта в плане: боковины разной глубины, горизонтали — трапецией (в раскрое габарит с пометкой «скос»).
   const dL = depthAt(m, 0), dR = depthAt(m, m.width), sk = m.skew ? " · скос" : "";
   const planTaper = (p: Part, x0: number, x1: number, rearOff: number, minus: number) => { if (m.skew) p.taperZ = [depthAt(m, x0) - rearOff - minus, depthAt(m, x1) - rearOff - minus]; };
-  add("left", "Боковина левая", [t, lT - floorY, dL], [t / 2, (lT + floorY) / 2, dL / 2], lT - floorY, dL, t);
-  add("right", "Боковина правая", [t, rT - floorY, dR], [m.width - t / 2, (rT + floorY) / 2, dR / 2], rT - floorY, dR, t);
-  if (hasBottom(m)) { add("bottom", "Дно" + sk, [m.width - 2 * t, t, d], [m.width / 2, bottom + t / 2, d / 2], m.width - 2 * t, d, t); planTaper(out.at(-1)!, t, m.width - t, 0, 0); }
+  // Дно под боковинами (кухни Базиса): боковины стоят на дне, дно на всю ширину.
+  const under = !!m.bottomUnder && hasBottom(m), sideY0 = under ? bottom + t : floorY;
+  add("left", "Боковина левая", [t, lT - sideY0, dL], [t / 2, (lT + sideY0) / 2, dL / 2], lT - sideY0, dL, t);
+  add("right", "Боковина правая", [t, rT - sideY0, dR], [m.width - t / 2, (rT + sideY0) / 2, dR / 2], rT - sideY0, dR, t);
+  if (under) add("bottom", "Дно · под боковинами", [m.width, t, d], [m.width / 2, bottom + t / 2, d / 2], m.width, d, t);
+  else if (hasBottom(m)) { add("bottom", "Дно" + sk, [m.width - 2 * t, t, d], [m.width / 2, bottom + t / 2, d / 2], m.width - 2 * t, d, t); planTaper(out.at(-1)!, t, m.width - t, 0, 0); }
   if (hasTop(m) && m.slope) {
     // Плоская крыша на высоте низкой стороны, между боковинами.
     add("top", "Крыша", [m.width - 2 * t, t, d], [m.width / 2, m.slope.lowHeight - t / 2, d / 2], m.width - 2 * t, d, t);
     if (m.doors && m.doorMount !== "inset") {
       // Фальш над фасадами: трапеция из фасадного материала, низ — над фасадами с зазором 2, верх — по линии потолка минус зазор.
       const bx = boxes(m), l = facadeSpan(m, 0, bx[0]).left, r = facadeSpan(m, bx.length - 1, bx.at(-1)!).right;
-      const y0 = m.slope.lowHeight, hL = Math.max(1, slopeAt(m, l) - RULES.faceGap - y0), hR = Math.max(1, slopeAt(m, r) - RULES.faceGap - y0), hh = Math.max(hL, hR);
+      const y0 = m.slope.lowHeight, hL = Math.max(1, slopeAt(m, l) - fe(m) - y0), hR = Math.max(1, slopeAt(m, r) - fe(m) - y0), hh = Math.max(hL, hR);
       add("slope-filler", "Фальш над фасадами под скос · фасадный материал", [r - l, hh, t], [(l + r) / 2, y0 + hh / 2, d + t / 2 + 2], hh, r - l, t, "door");
       out.at(-1)!.taper = [hL, hR]; out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
     }
@@ -520,18 +547,24 @@ export function parts(m: Module): Part[] {
     } else { add("top", "Крыша" + sk, [m.width - 2 * t, t, d], [m.width / 2, m.height - t / 2, d / 2], m.width - 2 * t, d, t); planTaper(out.at(-1)!, t, m.width - t, 0, 0); }
   }
   // Ножки: по 2 под каждой боковиной (для сцены и опор в смете), в раскрой не идут.
-  if (m.feet) for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) for (const [k, z] of [[0, 60], [1, d - 60]] as const)
+  if (m.feet && !m.kitchen) for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) for (const [k, z] of [[0, 60], [1, d - 60]] as const)
     add(`leg:${side}:${k}`, "Ножка", [40, m.feet.height, 40], [x, m.feet.height / 2, z], m.feet.height, 40, 40, "fastener", undefined, "metal");
   // Стяжки — планки между боковинами: сзади/спереди, снизу/сверху.
   for (const r of railsOf(m)) {
     const front = r.place.startsWith("front"), low = r.place.endsWith("bottom");
+    if (r.lay === "flat") {
+      // Царга лёжа (кухни Базиса): ширина r.height в глубину, заподлицо с верхом боковин (или на дне); передняя — с утопанием setback.
+      const yc = low ? (hasBottom(m) ? bottom + t : bottom) + t / 2 : innerTop(m) - t / 2, sb = r.setback ?? 0;
+      add("rail:" + r.place, "Царга " + RAIL_PLACES[r.place] + " " + r.height + " лёжа", [m.width - 2 * t, t, r.height], [m.width / 2, yc, front ? d - sb - r.height / 2 : r.height / 2], m.width - 2 * t, r.height, t);
+      continue;
+    }
     const y0 = low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height;
     add("rail:" + r.place, "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
   if (m.topStrip) {
     const inset = m.doorMount === "inset";
-    const y1 = inset ? innerTop(m) : m.height - RULES.faceGap, sw = inset ? m.width - 2 * t - 2 * RULES.faceGap : m.width - 2 * RULES.faceGap;
+    const y1 = inset ? innerTop(m) : m.height - fe(m), sw = inset ? m.width - 2 * t - 2 * fe(m) : m.width - 2 * fe(m);
     add("top-strip", "Планка под крышей " + m.topStrip, [sw, m.topStrip, t], [m.width / 2, y1 - m.topStrip / 2, inset ? d - t / 2 : d + t / 2 + 2], sw, m.topStrip, t);
     out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
   }
@@ -547,8 +580,8 @@ export function parts(m: Module): Part[] {
   if (m.cornerFiller && cornerStrip(m)) {
     // Фасад корпуса упирается в боковину соседа: фальш-планка из фасадного материала вровень с фасадами, на эксцентриках
     // к каркасу, зазор 3 к соседнему фасаду (Макс, 06.09). Занимает край фасадного проёма; распашные фасады становятся уже.
-    const w = RULES.fillerStrip, y0 = facadeBottom(m), y1 = m.height - RULES.faceGap;
-    add("corner-filler:" + m.cornerFiller, "Фальш-планка угловая из фасада " + (m.cornerFiller === "left" ? "левая" : "правая"), [w, y1 - y0, t], [m.cornerFiller === "left" ? RULES.faceGap + w / 2 : m.width - RULES.faceGap - w / 2, (y0 + y1) / 2, d + t / 2 + 2], y1 - y0, w, t);
+    const w = RULES.fillerStrip, y0 = facadeBottom(m), y1 = m.height - fe(m);
+    add("corner-filler:" + m.cornerFiller, "Фальш-планка угловая из фасада " + (m.cornerFiller === "left" ? "левая" : "правая"), [w, y1 - y0, t], [m.cornerFiller === "left" ? fe(m) + w / 2 : m.width - fe(m) - w / 2, (y0 + y1) / 2, d + t / 2 + 2], y1 - y0, w, t);
     out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
   } else if (m.cornerFiller) {
     // Сосед примыкает к боковине: планка 100×16 торцом снаружи боковины, выступает вперёд на 40 (правило Макса).
@@ -574,14 +607,17 @@ export function parts(m: Module): Part[] {
     bottom,
     t,
   );}
-  const groove=m.backType==='groove',gd=m.grooveDepth??8;
-  const backW=groove?m.width-2*t+2*gd-1:m.width-4;
-  const backH=groove?m.height-bottom-2*t+2*gd-1:m.height-(m.raisedSides?bottom:0)-4;
+  const groove=m.backType==='groove',gd=m.grooveDepth??8,gc=m.grooveClear??0.5,bg=m.backGap??2;
+  // Накладной задник: от низа корпуса (у корпуса на ножках — от дна, а не от пола) до верха, с отступом bg от наружных граней.
+  const backFrom=m.feet?floorY:m.raisedSides?bottom:0;
+  const backW=groove?m.width-2*t+2*gd-2*gc:m.width-2*bg;
+  const backH=groove?m.height-bottom-2*t+2*gd-2*gc:m.height-backFrom-2*bg;
+  const backZ0=groove?(m.grooveInset??16)+(m.grooveWidth!==undefined?m.grooveWidth-RULES.back:0):-RULES.back;
   const backTopL = m.slope ? slopeAt(m, 2) - 2 : m.height, backTopR = m.slope ? slopeAt(m, m.width - 2) - 2 : m.height;
   if(m.backType==='board'){const bh=innerTop(m)-bottom-t;add('back','Задняя стенка · ЛДСП вкладная',[m.width-2*t,bh,t],[m.width/2,bottom+t+bh/2,t/2],bh,m.width-2*t,t,'body');out.at(-1)!.edge=[0.4,0.4,0.4,0.4];}
   else if(m.backType!=='none'){
     if(m.slope&&!groove){const maxH=Math.max(backTopL,backTopR)-2;add('back','Задняя стенка · набивная · скос',[backW,maxH,RULES.back],[m.width/2,2+maxH/2,-RULES.back/2],maxH,backW,RULES.back,'body',undefined,'hdf');out.at(-1)!.taper=[backTopL-2,backTopR-2];}
-    else add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,groove||m.raisedSides?(bottom+m.height)/2:m.height/2,groove?(m.grooveInset??16)+RULES.back/2:-RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
+    else add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,groove||m.raisedSides?(bottom+m.height)/2:(backFrom+m.height)/2,backZ0+RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
   }
   if(m.sectionLayout)for(const panel of resolveLayout(m).panels){
     const depth=d-rear-RULES.shelfDepthMinus;
@@ -716,7 +752,7 @@ export function parts(m: Module): Part[] {
       // За распашными дверями фасад ящика вкладной (внутри проёма, зазор 3). В открытом корпусе — накладной:
       // перекрывает стойки как распашной фасад, зазор 2, нижний фасад опускается на цоколь до 30 мм от пола.
       // Фасад: по умолчанию на шаг ящика минус зазор; при заданной высоте фасада — она (короб может быть ниже, экономия плиты).
-      const frontGap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:RULES.faceGap),pitch=drawerPitch(cfg,frontGap),pitchBottom=b.bottom+drawerOffsets(s)[j];
+      const frontGap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:fb(m)),pitch=drawerPitch(cfg,frontGap),pitchBottom=b.bottom+drawerOffsets(s)[j];
       let fh=cfg.facadeH??(pitch-frontGap),fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+fh/2+(cfg.facadeH?frontGap/2:0);
       if(cfg.noFacade){ // внутренний ящик: только короб и направляющие
         for (const side of [0, 1])
@@ -791,11 +827,11 @@ export function parts(m: Module): Part[] {
       const {left,right}=facadeSpan(m,i,b);
       const inset=m.doorMount==='inset';
       // Вкладной фасад: внутри проёма секции с зазором 2, заподлицо с передом корпуса. Накладной: перекрывает стойки.
-      const spanL=inset?b.x+RULES.faceGap:left,spanR=inset?b.x+b.width-RULES.faceGap:right;
+      const spanL=inset?b.x+fe(m):left,spanR=inset?b.x+b.width-fe(m):right;
       // Скос фронта: фасады лежат вдоль наклонной линии фронта, их суммарная ширина — по косой (длиннее проёма).
       const cosK=Math.cos(skewAngle(m)),frontLen=(spanR-spanL)/cosK;
-      const gap=s.doorGap??RULES.faceGap,count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
-      const baseY=inset?b.bottom+RULES.faceGap:facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-RULES.faceGap-(m.topStrip?m.topStrip+RULES.faceGap:0):facadeTop(m);
+      const gap=s.doorGap??fb(m),count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
+      const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
       const dz=inset?d-t/2:d+t/2+2;
       const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2],[doorBottom+s.doorSplit+gap/2,y1flat]];
       for(let row=0;row<bands.length;row++){
@@ -831,6 +867,14 @@ export function parts(m: Module): Part[] {
   const ecc = m.fastening === "eccentric";
   for (const hp of horizontals) {
     const z0 = hp.position[2] - hp.size[2] / 2;
+    if (hp.id === "bottom" && m.bottomUnder) {
+      // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
+      const yb = hp.position[1] - t / 2;
+      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
+        for (const [k, z] of [z0 + RULES.confirmatInset, z0 + hp.size[2] - RULES.confirmatInset].entries())
+          add(`fast:${hp.id}:${side}:${k}`, "Конфирмат 5×50", [RULES.confirmatD, RULES.confirmatL, RULES.confirmatD], [x, yb + RULES.confirmatL / 2, z], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", hp.sectionId, "metal");
+      continue;
+    }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
       const z1 = z0 + (hp.taperZ ? hp.taperZ[side === "left" ? 0 : 1] : hp.size[2]); // при скосе фронта передний крепёж по глубине своей стороны
@@ -843,6 +887,11 @@ export function parts(m: Module): Part[] {
         } else add(`fast:${hp.id}:${side}:${k}`, "Конфирмат 5×50", [RULES.confirmatL, RULES.confirmatD, RULES.confirmatD], [edgeX - dir * t + dir * RULES.confirmatL / 2, hp.position[1], z], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", hp.sectionId, "metal");
       }
     }
+  }
+  // Царги лёжа (кухни Базиса): по одному конфирмату с каждой стороны через боковину в торец царги.
+  for (const r of out.filter((p) => p.id.startsWith("rail:") && p.size[1] === t)) {
+    for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
+      add(`fast:${r.id}:${side}:0`, "Конфирмат 5×50", [RULES.confirmatL, RULES.confirmatD, RULES.confirmatD], [edgeX - dir * t + dir * RULES.confirmatL / 2, r.position[1], r.position[2]], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", undefined, "metal");
   }
   for (const dv of out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;
@@ -879,33 +928,64 @@ function hardwareParts(m: Module, out: Part[]) {
   const metal = (id: string, name: string, size: Part["size"], position: Part["position"], role: Part["role"], sectionId?: string): Part =>
     ({ id, name, sectionId, size, position, length: size[0], width: size[1], thickness: size[2], role, material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
   const brand = HINGE_BRANDS[m.hingeBrand ?? "gtv"].label;
-  for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && (p.hinge === "left" || p.hinge === "right"))) {
-    const [cx, cy, dz] = door.position, [dw, dh] = door.size, dir = door.hinge === "left" ? 1 : -1;
-    const edgeX = cx - dir * dw / 2, cupX = edgeX + dir * 22.5, back = dz - door.size[2] / 2;
-    const sideX = inset ? edgeX - dir * RULES.faceGap : edgeX + dir * (t - RULES.faceGap);
-    const front = inset ? back : d;
-    hingePositions(dh, dw).forEach((hy, n) => {
-      const y = cy - dh / 2 + hy, key = door.id.replace(":door:", ":hingecup:") + ":" + n;
-      // Модели по технической карте GTV DCHCB 3D (scripts/blender_hardware.py): габариты деталей — точные габариты моделей,
-      // отсчёт от кромки фасада со стороны петель (x) и от тыльной плоскости фасада (z). Правая петля — зеркально.
-      const mirror = dir < 0 ? { mirror: true } : {};
-      out.push({ ...metal(key, "Петля " + brand + " · чашка Ø35", [36.4, 58, 27.3], [edgeX + dir * 22.5, y, back - 1.85], "hinge", door.sectionId), model: { file: "hardware/hinge_cup.glb", length: "y", ...mirror } });
-      out.push({ ...metal(door.id.replace(":door:", ":hingeplate:") + ":" + n, "Петля " + brand + " · плечо и планка", [19.6, 63, 76.5], [edgeX + dir * 23.8, y, back - 39.75], "hinge", door.sectionId), model: { file: "hardware/hinge_plate.glb", length: "y", ...mirror } });
-      void sideX; void front;
-    });
-    if (push) {
-      const freeX = cx + dir * dw / 2 - dir * (inset ? -RULES.faceGap : t - RULES.faceGap) - dir * 8;
-      out.push(metal(door.id.replace(":door:", ":latch:"), "Толкатель push-to-open", [14, 14, 40], [freeX, cy + dh / 2 - 120, (inset ? back : d) - 20], "hinge", door.sectionId));
-    }
-  }
+  // Полкодержатели — до петель: петля не должна сесть на полкодержатель (проверка пересечений ниже их видит).
   const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   for (const sh of out.filter((p) => p.role === "shelf" && p.material === "board" && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     [[x - w / 2 + 4, z - dd / 2 + 40], [x + w / 2 - 4, z - dd / 2 + 40], [x - w / 2 + 4, z + dd / 2 - 40], [x + w / 2 - 4, z + dd / 2 - 40]].forEach(([px, pz], k) =>
       out.push(metal(`shp:${sh.id}:${k}`, "Полкодержатель", [12, 6, 6], [px, y - t / 2 - 3, pz], "fastener", sh.sectionId)));
   }
+  for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && (p.hinge === "left" || p.hinge === "right"))) {
+    const [cx, cy, dz] = door.position, [dw, dh] = door.size, dir = door.hinge === "left" ? 1 : -1;
+    const edgeX = cx - dir * dw / 2, back = dz - door.size[2] / 2;
+    // Внутренняя грань стойки, на которую садится планка: фактическая вертикаль корпуса у кромки фасада со стороны петель
+    // (боковина, перегородка, фальш), иначе — по правилу накладного/вкладного фасада.
+    const guess = inset ? edgeX - dir * fe(m) : edgeX + dir * (t - fe(m));
+    // Стойка уходит за фасад вглубь корпуса (фальш-панель в плоскости фасадов — не стойка).
+    const stand = out.filter((p) => isBoardVertical(p) && p.position[1] - p.size[1] / 2 <= cy && p.position[1] + p.size[1] / 2 >= cy && p.position[2] + p.size[2] / 2 >= back - 30 && p.position[2] - p.size[2] / 2 <= back - 100)
+      .map((p) => dir > 0 ? p.position[0] + p.size[0] / 2 : p.position[0] - p.size[0] / 2)
+      .filter((fx) => dir * (fx - edgeX) >= -fe(m) - 1 && dir * (fx - edgeX) <= 40)
+      .sort((a, b) => Math.abs(a - guess) - Math.abs(b - guess))[0];
+    const sideX = stand ?? guess;
+    const mirror = dir < 0 ? { mirror: true } : {};
+    const obstacles = out.filter((p) => p !== door);
+    const placed: Part[] = [];
+    const hingeAt = (y: number, n: number): [Part, Part] => {
+      const cupId = door.id.replace(":door:", ":hingecup:") + ":" + n, plateId = door.id.replace(":door:", ":hingeplate:") + ":" + n;
+      // Модели по технической карте GTV DCHCB 3D (scripts/blender_hardware.py): отсчёт от кромки фасада со стороны петель (x)
+      // и от тыльной плоскости фасада (z). Правая петля — зеркально. Точные коробки: чашка Ø35×12,5 в теле фасада;
+      // плечо с планкой — у внутренней грани стойки, 26 мм внутрь корпуса, 78 мм от фасада вглубь.
+      const cup: Part = { ...metal(cupId, "Петля " + brand + " · чашка Ø35", [36.4, 58, 27.3], [edgeX + dir * 22.5, y, back - 1.85], "hinge", door.sectionId), model: { file: "hardware/hinge_cup.glb", length: "y", ...mirror },
+        collide: [{ size: [35, 35, 12.5], position: [edgeX + dir * 22.5, y, back + 6.25] }] };
+      const plate: Part = { ...metal(plateId, "Петля " + brand + " · плечо и планка", [19.6, 63, 76.5], [sideX + dir * 9.8, y, back - 39.75], "hinge", door.sectionId), model: { file: "hardware/hinge_plate.glb", length: "y", ...mirror },
+        collide: [{ size: [26, 63, 78], position: [sideX + dir * 13, y, back - 39] }] };
+      return [cup, plate];
+    };
+    const blocked = (hs: Part[]) => hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); return depth > 0.1 && !allowedContact(h, o, depth, m); }));
+    // Петля не должна пересекать ничего (замечание Макса 09.10.2026): идеальная высота (100 мм от краёв фасада), а если там полка,
+    // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
+    const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
+    hingePositions(dh, dw, !!m.kitchen).forEach((hy, n) => {
+      const ideal = cy - dh / 2 + hy;
+      let pair = hingeAt(ideal, n);
+      for (const s of hingeShifts()) {
+        const y = ideal + s;
+        if (y < lo || y > hi) continue;
+        const cand = hingeAt(y, n);
+        if (!blocked(cand)) { pair = cand; break; }
+      }
+      placed.push(...pair);
+    });
+    out.push(...placed);
+    if (push) {
+      const freeX = cx + dir * dw / 2 - dir * (inset ? -fe(m) : t - fe(m)) - dir * 8;
+      out.push(metal(door.id.replace(":door:", ":latch:"), "Толкатель push-to-open", [14, 14, 40], [freeX, cy + dh / 2 - 120, (inset ? back : d) - 20], "hinge", door.sectionId));
+    }
+  }
   void slideMotion; void slideBrand; void SLIDE_BRANDS;
 }
+/** Вертикальная доска корпуса (боковина, перегородка, фальш-планка): тонкая по X. */
+function isBoardVertical(p: Part) { return p.material === "board" && p.role === "body" && p.size[0] <= 40 && p.size[1] > 60 && !p.rotY && !p.rotZ; }
 /** Верх полки над ящиками секции от низа корпуса (цоколь + дно + стопка ящиков + полка). */
 export function drawerCapTop(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.bottom+drawerStackHeight(s)+RULES.panel;}
 /**
@@ -981,6 +1061,8 @@ export function validate(m: Module): string[] {
   if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);}
   if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
+  for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
+  if(m.rails?.some(r=>r&&((r.lay!==undefined&&!['edge','flat'].includes(r.lay))||(r.setback!==undefined&&(!Number.isFinite(r.setback)||r.setback<0||r.setback>80)))))errors.push('Царга: укладка на ребро или лёжа, утопание 0–80 мм.');
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');
@@ -1307,7 +1389,13 @@ export function parseModule(input: unknown): Module {
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
-    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height)})):[]}),
+    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)})})):[]}),
+    ...(x.bottomUnder===undefined?{}:{bottomUnder:x.bottomUnder===true}),
+    ...(x.faceGap===undefined?{}:{faceGap:Number(x.faceGap)}),
+    ...(x.faceGapBetween===undefined?{}:{faceGapBetween:Number(x.faceGapBetween)}),
+    ...(x.backGap===undefined?{}:{backGap:Number(x.backGap)}),
+    ...(x.grooveWidth===undefined?{}:{grooveWidth:Number(x.grooveWidth)}),
+    ...(x.grooveClear===undefined?{}:{grooveClear:Number(x.grooveClear)}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
@@ -1316,7 +1404,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

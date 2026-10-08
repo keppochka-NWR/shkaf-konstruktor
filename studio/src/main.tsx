@@ -13,6 +13,8 @@ async function start(){
   let initialProject;
   if(slug){
     if(!/^[a-z0-9-]{1,64}$/.test(slug))throw Error('Некорректная ссылка на локальный проект.');
+    // ?fresh=1 — открыть файл проекта заново, без правок, сохранённых в браузере (для сверки и снимков).
+    if(query.get('fresh')==='1'){try{localStorage.removeItem('module-studio-v3:'+slug);}catch{/* без хранилища и так свежий */}}
     const response=await fetch(`./local-projects/${slug}.json`);
     if(!response.ok)throw Error('Не найден локальный файл проекта.');
     const raw=await response.text();if(raw.length>2000000)throw Error('Файл проекта слишком большой.');

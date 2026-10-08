@@ -28,10 +28,19 @@ export const HINGE_BRANDS: Record<HingeBrand, { label: string; note: string; sof
 };
 /** Число петель по высоте и ширине фасада (правило цеха). */
 export function hingeCount(height: number, width: number) { return (height <= 900 ? 2 : height <= 1600 ? 3 : height <= 2000 ? 4 : 5) + (width > 450 ? 1 : 0); }
-/** Центры петель по высоте фасада: 100 мм от краёв, остальные равномерно. */
-export function hingePositions(height: number, width: number): number[] {
-  const n = hingeCount(height, width), a = 100, b = height - 100;
+/** Кухня — как в проектах Базиса цеха (разбор 1 146 петель «Пистос», 09.10.2026): число только по высоте фасада,
+ *  до 900 — 2, до 1300 — 3, до 1700 — 4, до 2100 — 5, выше — 6. Шкафы — прежнее правило hingeCount (решение Макса: шкафы не трогать). */
+export function kitchenHingeCount(height: number) { return height <= 900 ? 2 : height <= 1300 ? 3 : height <= 1700 ? 4 : height <= 2100 ? 5 : 6; }
+/** Центры петель по высоте фасада: 100 мм от краёв (у низких фасадов — четверть высоты, не меньше 40), остальные равномерно. */
+export function hingePositions(height: number, width: number, kitchen = false): number[] {
+  const n = kitchen ? kitchenHingeCount(height) : hingeCount(height, width), off = Math.min(100, Math.max(40, height / 4)), a = off, b = height - off;
   return Array.from({ length: n }, (_, k) => n === 1 ? height / 2 : a + (b - a) * k / (n - 1));
+}
+/** Пробные сдвиги петли от идеальной высоты: 0, −5, +5, −10, +10 … до ±limit (мм). */
+export function hingeShifts(limit = 200, step = 5): number[] {
+  const out = [0];
+  for (let s = step; s <= limit; s += step) out.push(-s, s);
+  return out;
 }
 /** Ход ящика: с доводчиком, простой (без доводчика, только шариковые), push-to-open (нажал — выехал, без ручки). */
 export type SlideMotion = 'soft-close' | 'simple' | 'push';
