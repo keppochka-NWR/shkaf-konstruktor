@@ -1,4 +1,5 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
+import { kitchenExtraParts, kitchenErrors, worktopParts, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { drawerHasHandle, SLIDES, hingePositions, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -193,6 +194,10 @@ export type Module = {
   fastening?: "confirmat" | "eccentric";
   /** Двери-купе (kupe.ts): объект-проём с направляющими и полотнами, глубина 100. Перед корпусами или в нише. */
   kupe?: KupeSpec;
+  /** Кухонный корпус (kitchen.ts): нижний на ножках с цокольной планкой, навесной на навесах, пенал; техника в нише. */
+  kitchen?: KitchenSpec;
+  /** Столешница (kitchen.ts): отдельный объект над нижними корпусами, цена за погонный метр. */
+  worktop?: WorktopSpec;
   /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
   hingeBrand?: HingeBrand;
   /** Кромка видимых торцов корпуса и кромка фасадов, мм. По умолчанию 2; скрытые торцы всегда 0,4. */
@@ -424,6 +429,7 @@ export function boxes(m: Module): SectionBox[] {
 }
 export function parts(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
+  if(m.worktop)return worktopParts(m);
   if(m.corner)return cornerParts(m);
   if(m.casework)return caseworkParts(m);
   const out: Part[] = [];
@@ -855,6 +861,7 @@ export function parts(m: Module): Part[] {
     else{const off=(face.hinge==='right'?-1:1)*(face.size[0]/2-2),angle=(face.rotY??0)*Math.PI/180;handle.position[0]=face.position[0]+off*Math.cos(angle);handle.position[2]=face.position[2]-off*Math.sin(angle)+face.size[2]/2+3;}
   }
   hardwareParts(m,out);
+  kitchenExtraParts(m,out);
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
   if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
     if(p.material!=='board')continue;
@@ -933,6 +940,7 @@ export function fastenerCounts(m: Module) {
 }
 export function validate(m: Module): string[] {
   if(m.kupe)return kupeErrors(m);
+  if(m.worktop)return kitchenErrors(m);
   if(m.corner)return cornerErrors(m);
   if(m.casework)return caseworkErrors(m);
   if(m.sectionLayout){
@@ -1002,6 +1010,7 @@ export function validate(m: Module): string[] {
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
   if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
+  errors.push(...kitchenErrors(m));
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
     return [...errors, "Допустимо от 1 до 4 секций."];
@@ -1307,6 +1316,8 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{})};})()}),
+    ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
     ...(x.edgeFacade===undefined?{}:{edgeFacade:Number(x.edgeFacade) as EdgeThickness}),
