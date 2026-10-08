@@ -148,6 +148,8 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
       <Check label="Дно под боковинами (боковины стоят на дне)" checked={!!m.bottomUnder} change={(v) => modify((n) => { if (v) n.bottomUnder = true; else delete n.bottomUnder; })} />
       <Check label={role === "base" ? "Крыша (у нижних обычно нет — царги под столешницу)" : "Крыша"} checked={m.topType !== "none"} change={(v) => modify((n) => { if (v) delete n.topType; else n.topType = "none"; })} />
+      <div className="kitchen-field"><span>Кромка открытых торцов</span>
+        <div className="kitchen-chips" role="group" aria-label="Кромка открытых торцов">{([1, 0.5, undefined] as const).map((t) => <button key={String(t)} type="button" title={t ? "Как в Базисе цеха: открытые торцы — кромка, скрытые — без кромки" : "Как у шкафов студии: кромка 2 мм на видимых торцах"} aria-pressed={m.edgeScheme?.t === t} onClick={() => modify((n) => { if (t) n.edgeScheme = { t }; else delete n.edgeScheme; })}>{t ? String(t).replace(".", ",") + " мм" : "как у шкафов"}</button>)}</div></div>
       <details className="kitchen-rails">
         <summary className="rails-title">Царги и стяжки · {m.rails?.length ? m.rails.map((r) => `${RAIL_PLACES[r.place]} ${r.height}${r.lay === "flat" ? " лёжа" : ""}`).join(", ") : "нет"}</summary>
         {(Object.keys(RAIL_PLACES) as Rail["place"][]).map((place) => { const r = rail(place); return <div key={place} className="kitchen-rail">
@@ -235,12 +237,15 @@ function CabinetPanel(props: KitchenPanelProps) {
       </>}
     </Group>}
 
-    {hanging && <Group icon={<Anchor size={15} />} title="Навесы" open={stage === "bodies"} note="2 шт.">
-      <ul className="kitchen-hardware">
-        <li><span>Навес мебельный регулируемый ABS · левый и правый</span><b>2</b></li>
-        <li><span>Заглушка навеса ABS · левая и правая</span><b>2</b></li>
-      </ul>
-      <p className="field-note">Навесы — на внутренних гранях боковин: {KITCHEN.hangerDown} мм ниже верха и {KITCHEN.hangerBack} мм от задней кромки; крюк заподлицо с задней кромкой, к шине или планке на стене. Модели и сетки — из проектов Базиса цеха. Задник навесных — ХДФ в паз П16-4×8.</p>
+    {hanging && <Group icon={<Anchor size={15} />} title="Навесы" open={stage === "bodies"} note={k.hangers === false ? "нет" : "2 шт."}>
+      <Check label="Навесы ABS регулируемые, левый и правый" checked={k.hangers !== false} change={(v) => setK({ hangers: v ? undefined : false })} />
+      {k.hangers !== false ? <>
+        <ul className="kitchen-hardware">
+          <li><span>Навес мебельный регулируемый ABS · левый и правый</span><b>2</b></li>
+          <li><span>Заглушка навеса ABS · левая и правая</span><b>2</b></li>
+        </ul>
+        <p className="field-note">Навесы — на внутренних гранях боковин: {KITCHEN.hangerDown} мм ниже верха и {KITCHEN.hangerBack} мм от задней кромки; крюк заподлицо с задней кромкой, к шине или планке на стене. Модели и сетки — из проектов Базиса цеха. Задник навесных — ХДФ в паз П16-4×8.</p>
+      </> : <p className="field-note">Без навесов: модуль вешают иначе (планка, шина, крепёж по месту) — в смете навесов нет.</p>}
       <p className="field-note">Низ модуля от пола: {Math.round(props.placed.y ?? 0)} мм{(() => { const under = project.modules.find((a) => a.module.worktop && a.x < placed.x + m.width && a.x + a.module.width > placed.x); return under ? ` · от столешницы ${Math.round((placed.y ?? 0) - (under.y ?? 0) - under.module.height)} мм (регламент ${KITCHEN.wallGap}, минимум ${KITCHEN.wallGapMin}, над вытяжкой ${KITCHEN.hoodGapMin})` : ""; })()}.</p>
     </Group>}
 
