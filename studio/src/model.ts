@@ -601,7 +601,7 @@ export function parts(m: Module): Part[] {
     }
     // at — низ стяжки на ребре от пола модуля (мойка Базиса: задняя стяжка посередине высоты, под трубы)
     const y0 = r.at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
-    add("rail:" + r.place, "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
+    add("rail:" + r.place, r.at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(r.at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
   if (m.topStrip) {
@@ -1175,6 +1175,7 @@ export function validate(m: Module): string[] {
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
   for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['faceAir',0,10],['shelfRear',0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
   if(m.rails?.some(r=>r&&((r.lay!==undefined&&!['edge','flat'].includes(r.lay))||(r.setback!==undefined&&(!Number.isFinite(r.setback)||r.setback<0||r.setback>80)))))errors.push('Царга: укладка на ребро или лёжа, утопание 0–80 мм.');
+  if(m.rails?.some(r=>r&&r.at!==undefined&&(!Number.isFinite(r.at)||r.at<innerBottom(m)||r.at+r.height>innerTop(m)+0.01)))errors.push('Стяжка на заданной высоте выходит за боковины — поставьте ниже или уменьшите высоту.');
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');

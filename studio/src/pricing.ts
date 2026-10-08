@@ -113,7 +113,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // пока технолог не решит (сращивание / отдельная плита). Старый движок на такой детали падает целиком.
   const unplaced=cuttingEngine(p)==='guillotine'?nestPlan(p).unplaced:[];
   for(const u of unplaced)add('unplaced:'+u.detail.code,`Не помещается в лист: ${u.detail.code} ${u.detail.name} ${u.detail.length} × ${u.detail.width}`,1,'шт',null,u.reason);
-  let edge2=0,edge04=0,edge1=0,edge08=0,small=0;
+  let edge2=0,edge04=0,edge05=0,edge1=0,edge08=0,small=0;
   for(const a of p.modules){
     // Двери-купе: строки по формуле калькулятора купе, розничные; корпусных деталей и крепежа у объекта нет.
     if(a.module.kupe){for(const l of kupeLines(a.module))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
@@ -135,7 +135,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     const allParts=parts(a.module);
     for(const d of allParts){
       if(d.material==='board'){
-        d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4||edge===0.5)edge04+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
+        d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===0.5)edge05+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e4)/100,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
@@ -187,7 +187,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
     }
   }
-  add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');add('work','Работа цеха',plan.length,'лист',2500,'База расчёта шкафа');
+  add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('edge05','Кромка 0,5 мм (как в проекте Базиса)',edge05,'м',15,'Цена как у кромки 0,4 — уточнить по счёту');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');add('work','Работа цеха',plan.length,'лист',2500,'База расчёта шкафа');
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));

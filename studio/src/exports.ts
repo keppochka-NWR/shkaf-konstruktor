@@ -1,3 +1,4 @@
+import { holes } from "./drilling";
 import {roomWarnings} from './roomWarnings';
 import {cutting,cutCSV,cuttingHTML,sheetPolygon,type Point} from './cornerCutting';
 import {nicheSize,nicheMinimum} from './measurement';
@@ -322,13 +323,14 @@ export function labelData(p:Project):LabelData[]{
   const order=labelOrder(p);
   return p.modules.flatMap((a,i)=>{
     const m=a.module,all=parts(m);
-    return all.filter(d=>d.material!=='metal'&&d.material!=='alu'&&d.material!=='glass').map((d,j)=>{
-      const holes=all.filter(f=>(f.id.startsWith('fast:'+d.id+':')||f.id.startsWith('ecc:'+d.id+':'))&&!f.id.endsWith(':pin')).length;
+    const drill=holes(m,all);
+    return all.filter(d=>d.material!=='metal'&&d.material!=='alu'&&d.material!=='glass'&&!d.external).map((d,j)=>{
+      const thin=d.size.indexOf(Math.min(...d.size)),endHoles=drill.filter(h=>h.part===d.id&&Math.abs(h.dir[thin])<0.5).length;
       const grooved=m.backType==='groove'&&['left','right','top','bottom'].includes(d.id);
       // Кромка: 1–2 — торцы по ширине (короткие, слева/справа на бирке), 3–4 — по длине (сверху/снизу).
       return {order,material:(d.material==='hdf'?'ЛХДФ ':'ЛДСП ')+d.decor+' '+d.thickness+' мм'+(d.material==='hdf'?'':' (Lamarty)'),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
         groove:grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:grooveText(m,d.id)||'—', // «Пазование» — паз под ЛХДФ, «Паз» — пазы под подсветку (каждая строка влезает в бирку)
-        endHoles:holes?`${holes} отв.`:'—',
+        endHoles:endHoles?`${endHoles} отв.`:'—',
         length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]}};
     });
   });
