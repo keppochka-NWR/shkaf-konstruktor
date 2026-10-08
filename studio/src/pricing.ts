@@ -1,7 +1,7 @@
 import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
 import {worktopLabel} from './kitchen';
-import {nest,type Sheet} from './exports';
+import {nest,nestPlan,cuttingEngine,type Sheet} from './exports';
 import type {Project} from './project';
 import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
@@ -109,6 +109,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
     const d=decorPrice(sheet.decor);add('sheet:'+sheet.decor,'Lamarty 16 мм · '+sheet.decor,1,'лист',d.price,d.source);
   }
+  // Гильотина (флаг cuttingEngine): деталь длиннее рабочего поля листа в карты не попала — смета не завершена,
+  // пока технолог не решит (сращивание / отдельная плита). Старый движок на такой детали падает целиком.
+  const unplaced=cuttingEngine(p)==='guillotine'?nestPlan(p).unplaced:[];
+  for(const u of unplaced)add('unplaced:'+u.detail.code,`Не помещается в лист: ${u.detail.code} ${u.detail.name} ${u.detail.length} × ${u.detail.width}`,1,'шт',null,u.reason);
   let edge2=0,edge04=0,edge1=0,edge08=0,small=0;
   for(const a of p.modules){
     // Двери-купе: строки по формуле калькулятора купе, розничные; корпусных деталей и крепежа у объекта нет.
@@ -189,7 +193,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
   const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const bySheet=ldspSheets*sheetPrice+retailExtras+lemana;
-  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:model==='sheet'?bySheet:byMarkup};
+  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:unplaced.length?null:model==='sheet'?bySheet:byMarkup};
 }
 
 

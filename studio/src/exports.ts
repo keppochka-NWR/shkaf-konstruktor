@@ -9,6 +9,7 @@ import { parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, cornerStrip, 
 import { bounds, projectErrors, type Project } from "./project";
 import {packRectangles} from './packing';
 import {catalog} from './catalog';
+import {guillotinePack,type GuillotineCut,type GuillotineResult,type Offcut} from './guillotine';
 /** Деталь без направления текстуры: ЛХДФ или однотонный декор без картинки в каталоге — на карте можно класть поперёк. */
 export function grainFree(d:Pick<Detail,'material'|'decor'>){return d.material==='hdf'||!catalog.find(c=>c.n===d.decor)?.tex;}
 export type Detail = Part & { moduleName: string; moduleId: string; code: string };
@@ -27,6 +28,8 @@ export type Sheet = {
   width: number;
   height: number;
   items: Placement[];
+  /** Только у карт движка «гильотина как в Базисе»: резы по стадиям, обрезки, число стадий, пропил и обрезка края. */
+  guillotine?: {cuts:GuillotineCut[];offcuts:Offcut[];stages:number;kerf:number;trim:number};
 };
 export function findSheetDetails(sheets:Sheet[],query:string){
  const q=query.trim().toLocaleLowerCase('ru-RU'),words=q.split(/\s+/).filter(Boolean);if(!q)return [];
@@ -99,8 +102,42 @@ export function nestGuillotine(p: Project, gap = 10): Sheet[] {
   }
   return result.map(({ free, ...s }) => s);
 }
+/** Движок раскроя проекта: флаг calculation.cuttingEngine; угловые (фигурные) корпуса пока всегда кроятся прежним движком. */
+export function cuttingEngine(p:Project):'classic'|'guillotine'{return p.calculation?.cuttingEngine==='guillotine'&&!p.modules.some(a=>a.module.corner)?'guillotine':'classic';}
+/** Параметры движка «гильотина как в Базисе» для студии: пропил и обрезка — из настроек Базиса цеха (Saw=4.4, Undercut 12). */
+export const GUILLOTINE_RULES={kerf:4.4,trim:12,maxStages:5,iterations:8};
+export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];engine:'classic'|'guillotine'};
+/** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
+export function nestPlan(p:Project):NestPlan{
+  if(cuttingEngine(p)==='classic')return {sheets:nest(p),unplaced:[],engine:'classic'};
+  const err=projectErrors(p);if(err.length)throw Error(err[0]);
+  const groups=new Map<string,Detail[]>();
+  for(const d of details(p)){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
+  const sheets:Sheet[]=[],unplaced:NestPlan['unplaced']=[];
+  for(const ds of groups.values()){
+    const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:RULES.sheetW;
+    const byId=new Map(ds.map(d=>[d.code,d]));
+    const r=cachedGuillotine(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width,height);
+    for(const s of r.sheets)sheets.push({decor,material:first.material,thickness:first.thickness,width,height,items:s.items.map(a=>({detail:byId.get(a.id)!,x:a.x,y:a.y,w:a.w,h:a.h})),guillotine:{cuts:s.cuts,offcuts:s.offcuts,stages:s.stages,kerf:r.kerf,trim:r.trim}});
+    for(const u of r.unplaced)unplaced.push({detail:byId.get(u.id)!,reason:u.reason});
+  }
+  return {sheets,unplaced,engine:'guillotine'};
+}
+// Кеш раскроя по группе: nest() зовут смета, док, вкладка карт и бирки на одном и том же проекте.
+const guillotineCache=new Map<string,GuillotineResult>();
+function cachedGuillotine(parts:{id:string;w:number;h:number;rot:boolean}[],width:number,height:number){
+  const key=JSON.stringify([width,height,GUILLOTINE_RULES,parts.map(a=>[a.id,a.w,a.h,a.rot?1:0])]);
+  let r=guillotineCache.get(key);
+  if(!r){r=guillotinePack(parts,width,height,GUILLOTINE_RULES);guillotineCache.set(key,r);if(guillotineCache.size>40)guillotineCache.delete(guillotineCache.keys().next().value!);}
+  else{guillotineCache.delete(key);guillotineCache.set(key,r);}
+  return r;
+}
 /** Compare six fixed-grain nestings against the previous guaranteed baseline. */
 export function nest(p:Project,gap=10):Sheet[]{
+  if(cuttingEngine(p)==='guillotine'){
+    if(!Number.isFinite(gap)||gap<0||gap>30)throw Error("Неверный промежуток между деталями.");
+    return nestPlan(p).sheets;
+  }
   if(p.modules.some(a=>a.module.corner)){
     if(gap!==10)throw Error('Фигурный раскрой: промежуток 10 мм.');
     const result=cutting(p),byKey=new Map(details(p).map(d=>[d.moduleId+'/'+d.id,d]));
@@ -195,7 +232,7 @@ export function sheetSVG(s: Sheet,highlight="") {
   const fill=p.detail.code===highlight?'#ffd77e':'#d7e9e8',stroke=p.detail.code===highlight?'#a56300':'#4a8e98';
   const shape=p.cutContour?`<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="#efede5" stroke="#aab3b2" stroke-dasharray="12 8"/><polygon points="${p.cutContour.map(v=>v.join(',')).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`:`<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${fill}" stroke="${stroke}" stroke-width="3"/>`;
   return `<g><title>${esc(p.detail.name+' · '+p.detail.moduleName)}</title>${shape}<text x="${p.x+p.w/2}" y="${p.y+p.h/2}" text-anchor="middle" dominant-baseline="central" font-size="${Math.min(p.w,p.h)<100?26:42}" font-family="Arial" fill="#234754">${esc(p.detail.code)}</text></g>`;
- }).join('')}</svg>`;
+ }).join('')}${s.guillotine?s.guillotine.offcuts.filter(o=>o.business).map(o=>`<g><title>${esc('Деловой обрезок '+Math.round(o.h)+' × '+Math.round(o.w))}</title><rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="#e4dccb" stroke="#b9a986" stroke-width="2" stroke-dasharray="14 10"/>${o.large?`<text x="${o.x+o.w/2}" y="${o.y+o.h/2}" text-anchor="middle" dominant-baseline="central" font-size="34" font-family="Arial" fill="#8a7a58">${Math.round(o.h)}×${Math.round(o.w)}</text>`:''}</g>`).join(''):''}</svg>`;
 }
 
 const style =
@@ -203,17 +240,19 @@ const style =
 function htmlDocument(title: string, body: string) {
   return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title><style>${style}</style><body><button onclick="window.print()">Печать / Сохранить PDF</button>${body}</body></html>`;
 }
+/** Пояснение к картам движка «гильотина как в Базисе» (для HTML-карт и вкладки раскроя). */
+export function guillotineNote(){return `Гильотинный раскрой как в Базисе: ЛДСП Lamarty 2750 × 1830 мм, ЛХДФ 2800 × 2070 мм; пропил ${String(GUILLOTINE_RULES.kerf).replace('.',',')} мм, обрезка края ${GUILLOTINE_RULES.trim} мм; каждый рез сквозной, не более ${GUILLOTINE_RULES.maxStages} стадий: первая — продольные полосы во всю длину листа. Текстура вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка можно поворачивать.`;}
 export function nestingHTML(p: Project) {
   if(p.modules.some(a=>a.module.corner))return cuttingHTML(cutting(p),[
     'Раскрой всех прямых и угловых корпусов текущего проекта, разделённый по материалу и толщине.',
     'Фигурные детали размещены по габариту заготовки; показан контур после вычета кромки. Обрезки внутри заготовки повторно не используются.',
     'Петли диагональных фасадов и присадку направляющих необходимо проверить по выбранным артикулам.'
   ],'ГардерЁб · раскрой проекта');
+  const plan=nestPlan(p);
+  if(plan.engine==='guillotine')return htmlDocument('Карты листов',`<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · гильотина как в Базисе</h1><p>${esc(guillotineNote())}</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.unplaced.length?`<h2>Не помещаются в лист — сращивать или заказать отдельно</h2><ul>${plan.unplaced.map(u=>`<li><b>${esc(u.detail.code)}</b> ${esc(u.detail.moduleName)} / ${esc(u.detail.name)}: ${esc(u.reason)}</li>`).join('')}</ul>`:''}${plan.sheets.map((s,i)=>{const g=s.guillotine!,used=s.items.reduce((n,a)=>n+a.w*a.h,0),offcuts=g.offcuts.filter(o=>o.business).sort((a,b)=>b.w*b.h-a.w*a.h);return `<section class="nest-sheet"><h2>Лист ${i+1} · ${esc(s.decor)} · ${s.thickness} мм</h2>${sheetSVG(s)}<p>${s.height} × ${s.width} мм · ${s.items.length} деталей · КИМ ${Math.round(used/(s.width*s.height)*1000)/10} % · стадий резов ${g.stages} · резов ${g.cuts.length}</p>${offcuts.length?`<p>Деловые обрезки: ${offcuts.slice(0,6).map(o=>`${Math.round(o.h)} × ${Math.round(o.w)}${o.large?' (крупный)':''}`).join(', ')}${offcuts.length>6?` и ещё ${offcuts.length-6}`:''}.</p>`:''}<table><thead><tr><th>Код · лист ${i+1}</th><th>Модуль / деталь</th><th>Размер</th></tr></thead><tbody>${s.items.map(a=>`<tr><td>${a.detail.code}</td><td>${esc(a.detail.moduleName)} / ${esc(a.detail.name)}</td><td>${a.detail.length} × ${a.detail.width}${a.w!==a.detail.width?' (повёрнута)':''}</td></tr>`).join('')}</tbody></table></section>`;}).join('')}`);
   return htmlDocument(
     "Карты листов",
-    `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${nest(
-      p,
-    )
+    `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.sheets
       .map(
         (s, i) =>
           `<section class="nest-sheet"><h2>Лист ${i + 1} · ${esc(s.decor)} · ${s.thickness} мм</h2>${sheetSVG(s)}<p>${s.height} × ${s.width} мм · ${s.items.length} деталей</p><table><thead><tr><th>Код · лист ${i+1}</th><th>Модуль / деталь</th><th>Размер</th></tr></thead><tbody>${s.items.map((a) => `<tr><td>${a.detail.code}</td><td>${esc(a.detail.moduleName)} / ${esc(a.detail.name)}</td><td>${a.h} × ${a.w}</td></tr>`).join("")}</tbody></table></section>`,
@@ -248,7 +287,8 @@ export const EDGE_LEGEND='1–2: торцы по ширине · 3–4: по д�
 export function labelEdges(d:Pick<Detail,'edge'>){return 'Кромка 1–4: '+d.edge.map(v=>v===0?'—':String(v).replace('.',',')).join(' / ')+' мм';}
 export function labelDetails(p:Project){
   const sheets=nest(p),location=new Map(sheets.flatMap((s,i)=>s.items.map(a=>[a.detail.code,i+1] as const)));
-  return details(p).map(d=>({...d,sheet:location.get(d.code)!}));
+  // 0 — деталь вне карт (гильотина: длиннее листа, сращивать)
+  return details(p).map(d=>({...d,sheet:location.get(d.code)??0}));
 }
 /** Бирка по производственному шаблону цеха «Birka Лёха.brx» (Базис, FastReport): 120 × 75 мм на Xprinter XP-365B, одна деталь на этикетку.
  *  Поля: № заказа, материал, наименование (модуль), поз. (код), № детали (обозначение), пазование, паз, торец (отверстия),

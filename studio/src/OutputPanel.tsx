@@ -7,7 +7,8 @@ import { useState, useMemo } from "react";
 import { type Project } from "./project";
 import type { OutputTab } from "./ProjectDock";
 import {
-  nest,
+  nestPlan,
+  guillotineNote,
   findSheetDetails,
   details,
   detailCSV,
@@ -38,7 +39,9 @@ export function OutputPanel({
   const [sheetIndex, setSheetIndex] = useState<number | null>(null);
   const [tab, setTab] = useState<OutputTab>(initialTab);
   const [detailQuery,setDetailQuery]=useState(''),[highlight,setHighlight]=useState('');
-  const sheets = useMemo(()=>nest(project),[project]),all=useMemo(()=>details(project),[project]);
+  const plan = useMemo(()=>nestPlan(project),[project]),sheets=plan.sheets,all=useMemo(()=>details(project),[project]);
+  const engineFlag=project.calculation?.cuttingEngine??'classic';
+  function setEngine(v:'classic'|'guillotine'){update({...project,calculation:{...(project.calculation||{markup:2.2,overrides:{}}),cuttingEngine:v}});}
   const query=detailQuery.trim().toLocaleLowerCase('ru-RU');
   const found=useMemo(()=>findSheetDetails(sheets,query),[sheets,query]);
   const specification=useMemo(()=>tab==='specification'?specificationHTML(project):'',[project,tab]);
@@ -98,16 +101,19 @@ export function OutputPanel({
               Деталировка CSV
             </button>
           </div>
+          <label className="hardware-field">Раскрой<select aria-label="Движок раскроя" value={engineFlag} onChange={ev=>setEngine(ev.target.value as 'classic'|'guillotine')}><option value="classic">как сейчас</option><option value="guillotine">гильотина как в Базисе (пропил 4,4)</option></select></label>
           <p>
             {all.length} деталей · {sheets.length} листов · Lamarty{" "}
             <b>2750 × 1830 мм</b>
           </p>
-          <p className="field-note">
+          {plan.engine==='guillotine'?<p className="field-note">{guillotineNote()} Смета и цена считаются по этим картам.</p>:<p className="field-note">
             Для проверки технологом. Обрезка по краю 10 мм, промежуток 10 мм.
             Текстура вдоль длинной стороны. Укладка предварительная: не
             гарантирует минимального числа листов и не учитывает припуски
             станка.
-          </p>
+          </p>}
+          {engineFlag==='guillotine'&&plan.engine==='classic'&&<p className="essential-note">В проекте есть угловые корпуса: фигурный раскрой пока считается прежним движком.</p>}
+          {plan.unplaced.length>0&&<div className="essential-note" role="alert"><b>Не помещаются в лист — сращивать или заказать отдельно ({plan.unplaced.length}). Смета не завершена.</b><ul>{plan.unplaced.map(u=><li key={u.detail.code}>{u.detail.code} · {u.detail.moduleName} / {u.detail.name}: {u.reason}</li>)}</ul></div>}
           {project.modules.some(a=>a.module.corner)&&<p className="essential-note">Фигурные детали показаны внутри прямоугольных заготовок. На картах и в CSV — размеры заготовок после вычета кромки. В списке деталей — готовые габариты.</p>}
           <div className="detail-search"><label>Найти деталь на листе<input type="search" aria-label="Поиск детали на картах" placeholder="Код, корпус, материал или размер" value={detailQuery} onChange={e=>{setDetailQuery(e.target.value);setHighlight('');}}/></label>{query&&<><p>{found.length?`Найдено: ${found.length}. Выберите деталь, чтобы показать её на листе.`:'Детали не найдены. Попробуйте другое название или код.'}</p><div className="detail-results">{found.slice(0,30).map(({a,sheet})=><button key={a.detail.code} aria-pressed={highlight===a.detail.code} onClick={()=>{setSheetIndex(sheet);setHighlight(a.detail.code);}}><b>{a.detail.code} · {a.detail.name}</b><span>{a.detail.moduleName} · лист {sheet+1} · {a.h} × {a.w}</span></button>)}</div>{found.length>30&&<p>Показаны первые 30. Уточните запрос.</p>}</>}</div>
           {sheetIndex !== null && (
@@ -143,7 +149,7 @@ export function OutputPanel({
                         (s.width * s.height)) *
                         100,
                     )}
-                    %
+                    %{s.guillotine&&` · стадий ${s.guillotine.stages} · деловых обрезков ${s.guillotine.offcuts.filter(o=>o.business).length}`}
                   </p>
                   {sheetIndex !== null && (
                     <table>
@@ -174,7 +180,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план / PDF</button><p className="field-note">Вид сверху и таблица отступов для согласования.</p></div><iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки / PDF</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>Лист {d.sheet}</span></div><small>{labelOrder(project)}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
+      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план / PDF</button><p className="field-note">Вид сверху и таблица отступов для согласования.</p></div><iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки / PDF</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{labelOrder(project)}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение
