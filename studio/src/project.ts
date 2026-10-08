@@ -14,7 +14,8 @@ export type Room={width:number;depth:number;height:number;openings?:Opening[];ob
   walls?:{thickness:number;angleLeft?:number;angleRight?:number}};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
 export type PlanDimension={id:string;from:[number,number];to:[number,number]};
-export type Project={version:3;dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};offer?:{customer:string;price:string;notes:string}};
+/** kind 'kitchen' — проект вкладки «Кухня» (кухонная палитра и панель модуля); без поля — обычный проект мебели. */
+export type Project={version:3;kind?:'kitchen';dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
@@ -115,6 +116,7 @@ export function modulesOverlap(a:PlacedModule,b:PlacedModule){
  const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
+  if(p.kind!==undefined&&p.kind!=='kitchen')return ['Неизвестный тип проекта.'];
   if(p.dimensions!==undefined&&(!Array.isArray(p.dimensions)||p.dimensions.length>50||p.dimensions.some(d=>!d||typeof d.id!=='string'||!Array.isArray(d.from)||!Array.isArray(d.to)||d.from.length!==2||d.to.length!==2||[...d.from,...d.to].some(v=>!Number.isFinite(v)||v<0||v>20000)||Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1])<1)||new Set(p.dimensions.map(d=>d.id)).size!==p.dimensions.length))return ['Проверьте размеры на плане: до 50 линий, разные точки в пределах 0–20000 мм.'];
   if(p.measurement){const m=p.measurement;if(typeof m.number!=='string'||m.number.length>60||typeof m.notes!=='string'||m.notes.length>2000||typeof m.date!=='string'||(m.date!==''&&(!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!Number.isFinite(Date.parse(m.date))||new Date(m.date).toISOString().slice(0,10)!==m.date)))return ['Проверьте номер, дату и примечания замера.'];}
 
@@ -167,7 +169,7 @@ export function parseProject(data:unknown):Project{
   const x=data as any;
   if(x?.version===1){const p=newProject();p.modules=legacyModules(x,{id:id(),x:50,y:0,z:30});const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;}
   if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>40)throw Error('Нужен файл проекта редактора.');
-  const p:Project={version:3,room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
+  const p:Project={version:3,...(x.kind===undefined?{}:{kind:x.kind}),room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill,
     ...(o?.casing===undefined?{}:{casing:o.casing}),...(o?.casingThick===undefined?{}:{casingThick:o.casingThick}),...(o?.hinge===undefined?{}:{hinge:o.hinge}),...(o?.reveal===undefined?{}:{reveal:o.reveal}),
     ...(o?.windowSill===undefined?{}:{windowSill:{width:o.windowSill?.width,thick:o.windowSill?.thick,overhang:o.windowSill?.overhang,offset:o.windowSill?.offset}})}));}

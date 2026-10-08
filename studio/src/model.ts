@@ -1,6 +1,6 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
-import { kitchenExtraParts, kitchenErrors, worktopParts, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, kitchenErrors, worktopParts, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
@@ -1095,7 +1095,7 @@ export function validate(m: Module): string[] {
     ["height", "Высота стола", RULES.deskMinH, RULES.deskMaxH],
     ["depth", "Глубина стола", RULES.minD, RULES.maxD],
   ] : [
-    ["width", "Ширина", RULES.minW, RULES.maxW],
+    ["width", "Ширина", m.kitchen ? KITCHEN.minWidth : RULES.minW, RULES.maxW], // кухня: бутылочница 150 (вкладка «Кухня»)
     ["height", "Высота", RULES.minH, RULES.maxH],
     ["depth", "Глубина", RULES.minD, RULES.maxD],
   ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
@@ -1182,10 +1182,11 @@ export function validate(m: Module): string[] {
       if(!Number.isFinite(s.shelfDepth)||s.shelfDepth<100||s.shelfDepth>max)errors.push(prefix+`глубина полок должна быть от 100 до ${max} мм. Уменьшите глубину полки или увеличьте корпус.`);
       if(m.skew)errors.push(prefix+'при скосе фронта используйте автоматическую глубину полок.');
     }
-    if (b.width < RULES.minSection)
+    const minSection = m.kitchen ? KITCHEN.minWidth - 2 * RULES.panel : RULES.minSection; // кухонная бутылочница 150: 118 внутри
+    if (b.width < minSection)
       errors.push(
         prefix +
-          `нужно не менее ${RULES.minSection} мм внутри. Уберите перегородку или увеличьте ширину.`,
+          `нужно не менее ${minSection} мм внутри. Уберите перегородку или увеличьте ширину.`,
       );
     if (
       s.shelves.length > RULES.maxShelves ||
@@ -1476,7 +1477,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

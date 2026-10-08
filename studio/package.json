@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "node scripts/catalog.cjs && tsc --noEmit && vite build",
-    "test": "tsx --test tests/model.test.ts tests/project.test.ts tests/workshop.test.ts tests/packing.test.ts tests/pricing.test.ts tests/room.test.ts tests/manager-workflow.test.ts tests/votan.test.ts tests/section-layout.test.ts tests/corner-wardrobe.test.ts tests/corner-integration.test.ts tests/dock.test.ts tests/hardware-choice.test.ts tests/kupe.test.ts tests/client-index.test.ts tests/kitchen.test.ts tests/hinges.test.ts tests/collisions.test.ts tests/compare.test.ts",
+    "test": "tsx --test tests/model.test.ts tests/project.test.ts tests/workshop.test.ts tests/packing.test.ts tests/pricing.test.ts tests/room.test.ts tests/manager-workflow.test.ts tests/votan.test.ts tests/section-layout.test.ts tests/corner-wardrobe.test.ts tests/corner-integration.test.ts tests/dock.test.ts tests/hardware-choice.test.ts tests/kupe.test.ts tests/client-index.test.ts tests/kitchen.test.ts tests/kitchen-ui.test.ts tests/hinges.test.ts tests/collisions.test.ts tests/compare.test.ts",
     "test:ui": "playwright test"
   },
   "dependencies": {
