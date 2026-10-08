@@ -219,6 +219,11 @@ export type Module = {
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
   grooves?: { box: [number, number, number, number, number, number]; name: string }[];
+  /** Крепёж по стыкам «горизонталь:сторона» (bottom:left, top:right…): конфирмат или эксцентрик (кухни Базиса: эксцентрики на открытой
+   *  стороне, чтобы не было видно головок). Без записи — общий m.fastening. */
+  jointFastening?: Record<string, "confirmat" | "eccentric">;
+  /** Шканты 8×30 рядом с эксцентриками (Базис «Стяжка эксц. + шкант»): сдвиг внутрь от эксцентрика, мм (обычно 32). */
+  dowels?: { offset: number };
   /** Распашные фасады: накладные (по умолчанию) или вкладные в проём; открывание ручкой (по умолчанию) или push-to-open без ручек. */
   doorMount?: "overlay" | "inset";
   doorOpen?: "handle" | "push";
@@ -310,6 +315,8 @@ export type Part = {
   /** Точные коробки фурнитуры для проверки пересечений (координаты модуля) — вместо габарита модели: у петли чашка в теле фасада
    *  и плечо с планкой у стойки, а не общий параллелепипед, задевающий торец стойки. См. collisions.ts. */
   collide?: { size: [number, number, number]; position: [number, number, number] }[];
+  /** Опорная точка фурнитуры как в Базисе (эксцентрик — грань стойки × внутренняя пласть горизонтали), для сверки и присадки. */
+  anchor?: [number, number, number];
 };
 export type SectionBox = {
   id: string;
@@ -917,11 +924,18 @@ export function parts(m: Module): Part[] {
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
       const z1 = z0 + (hp.taperZ ? hp.taperZ[side === "left" ? 0 : 1] : hp.size[2]); // при скосе фронта передний крепёж по глубине своей стороны
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
-        if (ecc) {
+        const jf = m.jointFastening?.[`${hp.id}:${side}`] ?? (ecc ? "eccentric" : "confirmat");
+        if (jf === "eccentric") {
           // Бочонок сверлится с пласти, обращённой внутрь корпуса: у дна — сверху, у крыши и полок — снизу; торец бочонка виден при открытых фасадах.
           const fromTop = hp.id === "bottom", by = fromTop ? hp.position[1] + t / 2 - RULES.eccBarrelH / 2 + 0.3 : hp.position[1] - t / 2 + RULES.eccBarrelH / 2 - 0.3;
           add(`ecc:${hp.id}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [edgeX + dir * RULES.eccCenter, by, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+          out.at(-1)!.anchor = [edgeX, fromTop ? hp.position[1] + t / 2 : hp.position[1] - t / 2, z];
           add(`ecc:${hp.id}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [RULES.eccCenter + t / 2, 7, 7], [edgeX + dir * (RULES.eccCenter - t / 2) / 2, hp.position[1], z], RULES.eccCenter + t / 2, 7, 7, "fastener", hp.sectionId, "metal");
+          if (m.dowels) {
+            // Шкант 8×30 рядом с эксцентриком, внутрь стыка: 12 мм в стойку, 18 в торец горизонтали (отверстия 8×12 и 8×22).
+            const dz = k === 0 ? m.dowels.offset : -m.dowels.offset;
+            add(`dowel:${hp.id}:${side}:${k}`, "Шкант 8×30", [30, 8, 8], [edgeX + dir * 3, hp.position[1], z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
+          }
         } else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], z], dir > 0 ? "+x" : "-x", hp.sectionId);
       }
     }
@@ -1478,6 +1492,8 @@ export function parseModule(input: unknown): Module {
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t)}}),
+    ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
+    ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as {box:number[];name:string}[]).map(g=>({box:(g?.box??[]).map(Number) as [number,number,number,number,number,number],name:String(g?.name??'Паз')})).filter(g=>g.box.length===6&&g.box.every(Number.isFinite)):[]}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),

@@ -75,6 +75,7 @@ function studioCategory(p: Part): string | null {
   if (id.includes(":hingeplate:")) return "петля";
   if (id.startsWith("fast:")) return "конфирмат";
   if (id.startsWith("ecc:") && !id.endsWith(":pin")) return "эксцентрик";
+  if (id.startsWith("dowel:")) return "шкант";
   if (id.startsWith("shp:")) return "полкодержатель";
   if (id.includes(":slide:")) return "направляющая";
   if (p.role === "handle") return "ручка";
@@ -84,6 +85,8 @@ function studioCategory(p: Part): string | null {
 function studioAnchor(p: Part): number[] {
   // петля Базиса — точка «внутренняя плоскость стойки × тыльная плоскость фасада» на оси петли = origin плеча в студии
   if (p.model?.native && p.model.origin) return p.model.origin;
+  if (p.anchor) return p.anchor;
+  if (p.id.startsWith("dowel:")) { const inward = p.id.includes(":left:") ? 1 : -1; return [p.position[0] - inward * 3 - inward * 16, p.position[1], p.position[2]]; } // шкант у Базиса — на наружной грани стойки
   return p.position;
 }
 /** Сопоставление точек одной категории (жадно по расстоянию), максимум отклонения. */
