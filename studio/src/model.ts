@@ -1,8 +1,9 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
-import { kitchenExtraParts, kitchenErrors, worktopParts, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
+import { partAxes as partAxesOf } from "./edges";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -214,6 +215,16 @@ export type Module = {
   raw?: RawSpec;
   /** Материал фасадов: ЛДСП (по умолчанию, в раскрое) или фасадный материал стороннего участка (МДФ/плёнка/эмаль — без раскроя и кромки). */
   facadeMaterial?: "ldsp" | "external";
+  /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
+  edgeScheme?: { t: number };
+  /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
+   *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
+  grooves?: Groove[];
+  /** Крепёж по стыкам «горизонталь:сторона» (bottom:left, top:right…): конфирмат или эксцентрик (кухни Базиса: эксцентрики на открытой
+   *  стороне, чтобы не было видно головок). Без записи — общий m.fastening. */
+  jointFastening?: Record<string, "confirmat" | "eccentric">;
+  /** Шканты 8×30 рядом с эксцентриками (Базис «Стяжка эксц. + шкант»): сдвиг внутрь от эксцентрика, мм (обычно 32). */
+  dowels?: { offset: number };
   /** Распашные фасады: накладные (по умолчанию) или вкладные в проём; открывание ручкой (по умолчанию) или push-to-open без ручек. */
   doorMount?: "overlay" | "inset";
   doorOpen?: "handle" | "push";
@@ -258,6 +269,9 @@ export type Module = {
     grille?: { x: number; width: number; depth: number };
   };
 };
+/** Паз в панели-носителе (не под задник): привязан к детали и идёт за ней при изменении размеров модуля.
+ *  face — сторона толщины детали (+/−), along — отступы от концов по длине детали, across — от минимальной грани по ширине (от/до), depth — глубина. */
+export type Groove = { host: string; face: "+" | "-"; along: [number, number]; across: [number, number]; depth: number; name: string };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
 export type Part = {
@@ -305,6 +319,8 @@ export type Part = {
   /** Точные коробки фурнитуры для проверки пересечений (координаты модуля) — вместо габарита модели: у петли чашка в теле фасада
    *  и плечо с планкой у стойки, а не общий параллелепипед, задевающий торец стойки. См. collisions.ts. */
   collide?: { size: [number, number, number]; position: [number, number, number] }[];
+  /** Опорная точка фурнитуры как в Базисе (эксцентрик — грань стойки × внутренняя пласть горизонтали), для сверки и присадки. */
+  anchor?: [number, number, number];
 };
 export type SectionBox = {
   id: string;
@@ -912,11 +928,18 @@ export function parts(m: Module): Part[] {
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
       const z1 = z0 + (hp.taperZ ? hp.taperZ[side === "left" ? 0 : 1] : hp.size[2]); // при скосе фронта передний крепёж по глубине своей стороны
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
-        if (ecc) {
+        const jf = m.jointFastening?.[`${hp.id}:${side}`] ?? (ecc ? "eccentric" : "confirmat");
+        if (jf === "eccentric") {
           // Бочонок сверлится с пласти, обращённой внутрь корпуса: у дна — сверху, у крыши и полок — снизу; торец бочонка виден при открытых фасадах.
           const fromTop = hp.id === "bottom", by = fromTop ? hp.position[1] + t / 2 - RULES.eccBarrelH / 2 + 0.3 : hp.position[1] - t / 2 + RULES.eccBarrelH / 2 - 0.3;
           add(`ecc:${hp.id}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [edgeX + dir * RULES.eccCenter, by, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+          out.at(-1)!.anchor = [edgeX, fromTop ? hp.position[1] + t / 2 : hp.position[1] - t / 2, z];
           add(`ecc:${hp.id}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [RULES.eccCenter + t / 2, 7, 7], [edgeX + dir * (RULES.eccCenter - t / 2) / 2, hp.position[1], z], RULES.eccCenter + t / 2, 7, 7, "fastener", hp.sectionId, "metal");
+          if (m.dowels) {
+            // Шкант 8×30 рядом с эксцентриком, внутрь стыка: 12 мм в стойку, 18 в торец горизонтали (отверстия 8×12 и 8×22).
+            const dz = k === 0 ? m.dowels.offset : -m.dowels.offset;
+            add(`dowel:${hp.id}:${side}:${k}`, "Шкант 8×30", [30, 8, 8], [edgeX + dir * 3, hp.position[1], z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
+          }
         } else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], z], dir > 0 ? "+x" : "-x", hp.sectionId);
       }
     }
@@ -944,6 +967,10 @@ export function parts(m: Module): Part[] {
   }
   hardwareParts(m,out);
   kitchenExtraParts(m,out);
+  kitchenEdges(m,out);
+  // Пазы под подсветку и прочие (кроме паза под задник): тёмная полоса в панели; подсветка — в смете за пог. м (роль light).
+  (m.grooves??[]).forEach((g,i)=>{const hostPart=out.find(p=>p.id===g.host);if(!hostPart)return;const b=grooveBox(hostPart,g);if(!b)return;const [x0,y0,z0,x1,y1,z1]=b,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
+    out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
   if(m.facadeMaterial==='external')for(const p of out)if(p.role==='door'||p.id.endsWith(':facade')){p.external=true;p.edge=[0,0,0,0];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
@@ -967,11 +994,11 @@ function hardwareParts(m: Module, out: Part[]) {
   const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
-    const pi = m.shelfPinInset ?? 40;
+    const pi = m.shelfPinInset ?? 40, sg = sh.material === "glass" ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap; // держатель — на грани стойки
     [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pi], [x + w / 2 - 4, z + dd / 2 - pi]].forEach(([px, pz], k) =>
       out.push({ ...metal(`shp:${sh.id}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, y - sh.size[1] / 2 - 3, pz], "fastener", sh.sectionId),
         // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
-        model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - 1 : x + w / 2 + 1, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
+        model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
   }
   for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && (p.hinge === "left" || p.hinge === "right"))) {
     const [cx, cy, dz] = door.position, [dw, dh] = door.size, dir = door.hinge === "left" ? 1 : -1;
@@ -1041,6 +1068,20 @@ function hardwareParts(m: Module, out: Part[]) {
     }
   }
   void slideMotion; void slideBrand; void SLIDE_BRANDS;
+}
+/** Коробка паза в осях модуля по детали-носителю (пересчитывается при каждом построении — паз идёт за деталью). */
+export function grooveBox(p: Part, g: Groove): [number, number, number, number, number, number] | null {
+  const ax = partAxesOf(p), lo = p.position.map((v, i) => v - p.size[i] / 2), hi = p.position.map((v, i) => v + p.size[i] / 2);
+  const b0 = [...lo], b1 = [...hi];
+  b0[ax.t] = g.face === "+" ? hi[ax.t] - g.depth : lo[ax.t]; b1[ax.t] = g.face === "+" ? hi[ax.t] : lo[ax.t] + g.depth;
+  b0[ax.L] = lo[ax.L] + g.along[0]; b1[ax.L] = hi[ax.L] - g.along[1];
+  b0[ax.W] = lo[ax.W] + g.across[0]; b1[ax.W] = lo[ax.W] + g.across[1];
+  if (b1[ax.L] <= b0[ax.L] || b1[ax.W] <= b0[ax.W] || b1[ax.W] > hi[ax.W] + 0.01) return null;
+  return [b0[0], b0[1], b0[2], b1[0], b1[1], b1[2]];
+}
+/** Пазы панели для бирки и деталировки (кроме паза под задник). */
+export function grooveText(m: Module, partId: string) {
+  return (m.grooves ?? []).filter((g) => g.host === partId).map((g) => `${g.name}: ${Math.round(g.across[1] - g.across[0])}×${g.depth}, от кромки ${Math.round(g.across[0])}, отступ от торцов ${Math.round(g.along[0])}/${Math.round(g.along[1])}`).join("; ");
 }
 /** Минимальный зазор от петли до чужих деталей при подборе высоты, мм. */
 const HINGE_CLEAR = 5;
@@ -1469,6 +1510,10 @@ export function parseModule(input: unknown): Module {
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t)}}),
+    ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
+    ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
+    ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
@@ -1477,7 +1522,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

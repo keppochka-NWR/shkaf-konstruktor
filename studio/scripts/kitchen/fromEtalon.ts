@@ -1,7 +1,8 @@
 // Распознаватель: модуль эталона Базиса (Кухни\etalon\kNN.json) → параметрический кухонный модуль студии.
 // Все размеры читаются из эталона (ширина, высота, глубина боковины, опоры, дно, царги, задник, фасады, полки, крепёж),
 // а не подставляются типовые — так модуль студии можно сверить деталь в деталь (compare.ts).
-import { initialModule, section, type Module } from "../../src/model";
+import { initialModule, section, parts, type Module, type Groove } from "../../src/model";
+import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 
@@ -9,6 +10,24 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
 const bx = (p: RefPanel): B => ({ x0: p.box[0], y0: p.box[1], z0: p.box[2], x1: p.box[3], y1: p.box[4], z1: p.box[5] });
 
+/** Пазы панелей эталона, кроме паза под задник (по положению на z задника), со слиянием проходов. */
+export function refGrooves(ref: RefModule, backZ0: number | null): { box: [number, number, number, number, number, number]; name: string; panel: number }[] {
+  const out: { box: [number, number, number, number, number, number]; name: string; panel: number }[] = [];
+  for (const p of ref.panels as (RefPanel & { cuts?: { kind: string; name: string; sign?: string; box?: number[]; width?: number; depth?: number; face?: string }[] })[]) {
+    const cs = (p.cuts ?? []).filter((c) => c.kind === "groove" && Array.isArray(c.box) && !(backZ0 !== null && c.box![2] <= backZ0 && c.box![5] >= backZ0 + 2.9 && (c.width ?? 0) <= 4.5));
+    const runs: { box: number[]; c: (typeof cs)[number] }[] = [];
+    for (const c of cs.sort((a, b) => a.box![2] - b.box![2] || a.box![0] - b.box![0])) {
+      const r = runs.find((x) => x.c.face === c.face && Math.abs(x.box[1] - c.box![1]) < 1 && Math.abs(x.box[4] - c.box![4]) < 1 && c.box![2] <= x.box[5] + 0.5 && c.box![0] <= x.box[3] + 0.5 && c.box![3] >= x.box[0] - 0.5);
+      if (r) r.box = r.box.map((v, i) => (i < 3 ? Math.min(v, c.box![i]) : Math.max(v, c.box![i])));
+      else runs.push({ box: [...c.box!], c });
+    }
+    for (const r of runs) {
+      const w = r1(Math.min(r.box[3] - r.box[0], r.box[4] - r.box[1], r.box[5] - r.box[2]) === r1(r.c.depth ?? 0) ? Math.max(...[r.box[3] - r.box[0], r.box[4] - r.box[1], r.box[5] - r.box[2]].sort((a, b) => a - b).slice(0, 2)) : 0);
+      out.push({ box: r.box.map(r1) as [number, number, number, number, number, number], name: `Паз ${w || ""}×${r.c.depth ?? ""}${r.c.sign ? " · " + r.c.sign : ""}`.replace(/^Паз ×/, "Паз "), panel: p.i });
+    }
+  }
+  return out;
+}
 export type Recognized = { module: Module; notes: string[]; unsupported: string[] };
 
 export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
@@ -87,11 +106,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
     m.faceGap = r1(f0.b.x0 - left.b.x0);
-    if (fronts.length > 1) m.faceGapBetween = r1(fronts[1].b.x0 - fronts[0].b.x1);
+    m.faceGapBetween = fronts.length > 1 ? r1(fronts[1].b.x0 - fronts[0].b.x1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
     if (rows.size > 1) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;
-    m.sections[0].doorLeaves = fronts.length > 2 ? 2 : fronts.length;
+    m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2;
     if (fronts.length === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
@@ -122,10 +141,43 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const fixed = sh.map((s, j) => (hw("полкодержатель").some((h) => Math.abs(h.pos[1] - s.b.y0) < 2) ? -1 : j)).filter((j) => j >= 0);
     if (fixed.length) m.sections[0].fixed = fixed;
   }
+  // крепёж по стыкам: эксцентрик (+шкант) или конфирмат — по фурнитуре у каждой стороны дна/крыши
+  const ecc = hw("эксцентрик"), dow = hw("шкант");
+  for (const [id, q] of [["bottom", bottom], ["top", topPanel]] as const) {
+    if (!q) continue;
+    for (const [side, sx] of [["left", left.b.x1], ["right", right.b.x0]] as const) {
+      const near = (h: { pos: number[] }) => Math.abs(h.pos[0] - sx) < 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1;
+      if (ecc.some(near)) { (m.jointFastening ??= {})[`${id}:${side}`] = "eccentric"; }
+    }
+  }
+  if (m.jointFastening && dow.length && ecc.length) {
+    const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
+    if (d0) m.dowels = { offset: r1(Math.abs(d0.pos[2] - e0.pos[2])) };
+  }
   // крепёж дна/крыши: отступ конфирматов от концов стыка (снизу через дно — у дна под боковинами; через боковину — в пределах толщины дна/крыши)
-  const conf = hw("конфирмат").filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
+  const conf = [...hw("конфирмат"), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
+  // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
+  const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
+  if (et) m.edgeScheme = { t: et };
+  // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
+  if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
+  // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
+  // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
+  const g = refGrooves(ref, back ? r1(back.b.z0) : null);
+  if (g.length) {
+    const ps = parts(m).filter((p) => p.material === "board"), out: Groove[] = [];
+    for (const gr of g) {
+      const bb = [gr.box[0], gr.box[1], gr.box[2] - sideZ0, gr.box[3], gr.box[4], gr.box[5] - sideZ0];
+      const host = ps.find((p) => [0, 1, 2].every((i) => bb[i] >= p.position[i] - p.size[i] / 2 - 0.6 && bb[i + 3] <= p.position[i] + p.size[i] / 2 + 0.6));
+      if (!host) { unsupported.push(`паз ${gr.name} без детали-носителя`); continue; }
+      const ax = partAxes(host), lo = host.position.map((v, i) => v - host.size[i] / 2), hi = host.position.map((v, i) => v + host.size[i] / 2);
+      const face = Math.abs(bb[ax.t + 3] - hi[ax.t]) < Math.abs(bb[ax.t] - lo[ax.t]) ? "+" : "-";
+      out.push({ host: host.id, face, along: [r1(bb[ax.L] - lo[ax.L]), r1(hi[ax.L] - bb[ax.L + 3])], across: [r1(bb[ax.W] - lo[ax.W]), r1(bb[ax.W + 3] - lo[ax.W])], depth: r1(bb[ax.t + 3] - bb[ax.t]), name: gr.name });
+    }
+    if (out.length) m.grooves = out;
+  }
   const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   return { module: m, notes, unsupported };

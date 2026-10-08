@@ -5,12 +5,15 @@
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
 import type { Module, Part } from "./model";
+import { setEdges } from "./edges";
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean };
+  /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
+  hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
   legs?: { back: number; front: number; side?: number; xs?: number[] } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
@@ -106,7 +109,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
   }
-  if (k.role === "wall" || k.role === "antresol") {
+  if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
     for (const side of ["left", "right"] as const) {
       // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
       // сетка Базиса: −64..+20 к стене, −42..−1 по высоте, 0..23 внутрь корпуса.
@@ -119,6 +122,26 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       out.push(metal(`kitchen-hanger-cap:${side}`, `Заглушка навеса ABS ${side === "left" ? "левая" : "правая"}`, [26, 43, 65], [fx + dir * 13, oy - 22.5, oz + 32.5],
         cm ? { file: cm.file, length: "y", native: true, origin: [fx, oy, oz], quat: Q_HANGER } : undefined));
     }
+  }
+}
+
+/** Кромка кухни по проектам Базиса цеха (k25, k16, k14): кромятся только открытые торцы, скрытые — без кромки; толщина — своя у кухни
+ *  (1 или 0,5 мм ПВХ в цвет). Боковины низа — верх и перед; навесных — все четыре; дно под боковинами — перед и концы; дно и крыша между
+ *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
+export function kitchenEdges(m: Module, out: Part[]) {
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) return;
+  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
+  for (const p of out) {
+    if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
+    // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)
+    const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
+    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z"], t);
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : [])] : ["+z", ...rear], t);
+    else if (p.id === "top") setEdges(p, ["+z", ...rear], t);
+    else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? ["+z", "-z"] : ["+y", "-y"], t);
+    else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
+    else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
+    else if (p.role === "body") setEdges(p, ["+z"], t);
   }
 }
 
@@ -154,7 +177,7 @@ export function kitchenErrors(m: Module): string[] {
 /** Общий кухонный вид корпуса по Базису: фасады 1,5 / 3, ХДФ накладной (W−3)×(H−3) или в паз П16-4×8. */
 const look = (m: Module): Module => ({ ...m, faceGap: KITCHEN.faceGap, faceGapBetween: KITCHEN.faceGapBetween, backGap: KITCHEN.backGap,
   // Базис цеха: фасад вплотную к корпусу (воздух 0), конфирматы в 64 мм от концов стыка, полка в 1 мм от задника, полкодержатели в 60 от кромок полки
-  faceAir: 0, confirmatInset: 64, shelfRear: 1, shelfPinInset: 60 });
+  faceAir: 0, confirmatInset: 64, shelfRear: 1, shelfPinInset: 60, edgeScheme: { t: 1 } });
 
 /** Нижний модуль (Базис «Нижний модуль (Пустой)»): дно под боковинами на опорах 100, крыши нет, две царги 100 лёжа заподлицо с верхом,
  *  ХДФ накладной; мойка — без задника, царги на ребре (передняя 60, задняя 100 — как 2777); духовка — без задника и царг. */

@@ -131,7 +131,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     const allParts=parts(a.module);
     for(const d of allParts){
       if(d.material==='board'){
-        d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
+        d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4||edge===0.5)edge04+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e4)/100,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
