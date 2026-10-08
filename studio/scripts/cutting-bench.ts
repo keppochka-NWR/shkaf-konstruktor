@@ -51,8 +51,8 @@ const n1=(v:number)=>Number.isFinite(v)?String(Math.round(v*10)/10).replace('.',
 const n2=(v:number)=>Number.isFinite(v)?v.toFixed(2).replace('.',','):'—';
 const sign=(v:number)=>(v>0?'+':v<0?'−':'±')+Math.abs(v);
 
-type EngineStat={sheets:number;bazisOfDone:number;fails:number;guill:number;within5:number;total:number;maxStages:number;fills:number[];lastOff:number[];ms:number[];perGroup:Map<string,number>};
-const newStat=():EngineStat=>({sheets:0,bazisOfDone:0,fails:0,guill:0,within5:0,total:0,maxStages:0,fills:[],lastOff:[],ms:[],perGroup:new Map()});
+type EngineStat={sheets:number;bazisOfDone:number;fails:number;guill:number;within5:number;total:number;maxStages:number;fills:number[];lastOff:number[];ms:number[];cuts:number[];perGroup:Map<string,number>};
+const newStat=():EngineStat=>({sheets:0,bazisOfDone:0,fails:0,guill:0,within5:0,total:0,maxStages:0,fills:[],lastOff:[],ms:[],cuts:[],perGroup:new Map()});
 /** Учёт карт движка: гильотинность и стадии — verifyGuillotine (для старых движков с их промежутком 10 и обрезкой 10). */
 function account(st:EngineStat,g:Group,maps:Map_[],kerf:number,trim:number,ms:number){
   st.sheets+=maps.length;st.bazisOfDone+=g.bazisSheets;st.ms.push(ms);st.perGroup.set(g.group,maps.length);
@@ -60,21 +60,23 @@ function account(st:EngineStat,g:Group,maps:Map_[],kerf:number,trim:number,ms:nu
   maps.forEach((m,i)=>{
     const v=verifyGuillotine(m,{kerf,trim,maxStages:99});st.total++;
     const guillotine=v.ok;
-    if(guillotine){st.guill++;st.maxStages=Math.max(st.maxStages,v.stages);if(v.stages<=5)st.within5++;}
+    if(guillotine){st.guill++;st.maxStages=Math.max(st.maxStages,v.stages);if(v.stages<=5)st.within5++;st.cuts.push(v.cuts.length);}
     const area=m.items.reduce((s,a)=>s+a.w*a.h,0);
     if(i<maps.length-1)st.fills.push(area/A);
     else st.lastOff.push(guillotine?Math.max(0,...v.offcuts.map(o=>o.w*o.h)):NaN);
   });
 }
+const studioTrim=process.argv.includes('--studio-trim');
 function trimFor(g:Group,rot:boolean){
   // Обрезка — как у Базиса в этом заказе (числа на полях карты: обычно 12, бывает 10/9/8/5/3);
   // если её нет в PDF — 12, и меньше только если иначе деталь не помещается.
-  const [L0,W0]=g.sheet;let t=g.trim??GUILLOTINE_DEFAULTS.trim;
+  // --studio-trim: правило студии (nestPlan) — всегда 12, до 10 только если иначе деталь не помещается.
+  const [L0,W0]=g.sheet;let t=studioTrim?GUILLOTINE_DEFAULTS.trim:g.trim??GUILLOTINE_DEFAULTS.trim;
   for(const [L,W] of g.parts){
     const a=Math.min((L0-L)/2,(W0-W)/2),b=rot?Math.min((L0-W)/2,(W0-L)/2):-Infinity;
     t=Math.min(t,Math.max(a,b));
   }
-  return Math.max(0,Math.floor(t*2)/2);
+  return studioTrim?Math.max(10,Math.floor(t*2)/2):Math.max(0,Math.floor(t*2)/2);
 }
 
 type Bucket={groups:Group[];bazis:number;bazisFills:number[];bazisLastOff:number[];classic:EngineStat;old:EngineStat;fresh:EngineStat;strict:EngineStat;lb:number;worse:{g:Group;ours:number;strict:number;lb:number}[];better:{g:Group;ours:number}[];equal:number;trimBelow12:number};
@@ -152,6 +154,8 @@ for(const [k,b] of buckets){
   out();
   out(`Нижняя граница по площади (обрезка учтена, пропил нет): ${b.lb}. guillotine.ts против Базиса по группам: лучше — ${b.better.length}, так же — ${b.equal}, хуже — ${b.worse.length}. Обрезка Базиса меньше 12 мм в ${b.trimBelow12} группах (взята его).`);
   out(`Крупнейший цельный обрезок последнего листа, медиана: guillotine.ts ${n2(median(b.fresh.lastOff)/1e6)} м², Базис ${n2(median(b.bazisLastOff)/1e6)} м² (у Базиса — крупнейший «Обрезок» последней карты).`);
+  const bazisCuts=b.groups.filter(g=>g.cuts).map(g=>g.cuts!/g.bazisSheets);
+  out(`Резов на лист, медиана: guillotine.ts ${n1(median(b.fresh.cuts))} (считая торцовку каждой детали), Базис ${n1(median(bazisCuts))} (по сводкам «Кол. резов», ${bazisCuts.length} групп).`);
   if(b.worse.length){
     out();out('Группы, где guillotine.ts хуже Базиса:');out();
     out('| Группа | Деталей | Поворот | Нижняя граница | Базис | guillotine.ts | строго | nest() сейчас |');out('|---|---|---|---|---|---|---|---|');

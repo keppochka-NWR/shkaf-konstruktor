@@ -109,7 +109,8 @@ export function cuttingEngine(p:Project):'classic'|'guillotine'{return p.calcula
 /** Параметры движка «гильотина как в Базисе» для студии: пропил и обрезка — из настроек Базиса цеха (Saw=4.4, Undercut 12).
  *  narrowBlank — узкие детали кроятся заготовкой 59 мм и подрезаются (ValueDetailsJoining=59, «ПОДРЕЗАТЬ» на картах Базиса).
  *  minTrim — до какой обрезки можно уменьшить край, если деталь длиннее 2726 (модель допускает 2730 при поле 10; Базис в части заказов резал с обрезкой 10/9/8). */
-export const GUILLOTINE_RULES={kerf:4.4,trim:12,minTrim:10,maxStages:5,iterations:8,narrowBlank:59};
+export const GUILLOTINE_RULES={kerf:4.4,trim:12,minTrim:10,maxStages:5,iterations:8,narrowBlank:59,
+  /** аварийный предел на группу в браузере; обычные проекты укладываются в десятки мс и результат детерминирован */ timeLimitMs:1500};
 export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];engine:'classic'|'guillotine'};
 /** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
 export function nestPlan(p:Project):NestPlan{
