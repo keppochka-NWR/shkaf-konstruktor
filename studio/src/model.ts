@@ -1,6 +1,7 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { kitchenExtraParts, kitchenErrors, worktopParts, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
+import { qmul, qrot, type Quat } from "./quat";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -863,6 +864,15 @@ export function parts(m: Module): Part[] {
   // Крепёж по СТП: евровинты (конфирматы, видны снаружи) или эксцентриковые стяжки (скрыты: бочонок в пласти горизонтали, шток в боковине).
   // Стыки: дно, крыша, полка над ящиками, жёсткие полки — с боковинами; перегородки — с крышей и дном.
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
+  // Конфирмат: головка на наружной грани сквозной панели, ось — в сторону ввинчивания; модель «Евровинт 7х50» из проектов Базиса
+  // (X — ось винта, головка при x = 0). Габарит детали — стержень 7×50 от головки.
+  const CONF_Q: Record<"+x" | "-x" | "+y" | "-y", Quat> = { "+x": [1, 0, 0, 0], "-x": [0, 0, 1, 0], "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2], "-y": [Math.SQRT1_2, 0, 0, -Math.SQRT1_2] };
+  const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y", sid?: string) => {
+    const L = RULES.confirmatL, D = RULES.confirmatD, s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y");
+    const c: [number, number, number] = vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]];
+    add(key, "Конфирмат 5×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
+    out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
+  };
   const horizontals = out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   const ecc = m.fastening === "eccentric";
   for (const hp of horizontals) {
@@ -872,7 +882,7 @@ export function parts(m: Module): Part[] {
       const yb = hp.position[1] - t / 2;
       for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
         for (const [k, z] of [z0 + RULES.confirmatInset, z0 + hp.size[2] - RULES.confirmatInset].entries())
-          add(`fast:${hp.id}:${side}:${k}`, "Конфирмат 5×50", [RULES.confirmatD, RULES.confirmatL, RULES.confirmatD], [x, yb + RULES.confirmatL / 2, z], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", hp.sectionId, "metal");
+          confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
       continue;
     }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
@@ -884,21 +894,21 @@ export function parts(m: Module): Part[] {
           const fromTop = hp.id === "bottom", by = fromTop ? hp.position[1] + t / 2 - RULES.eccBarrelH / 2 + 0.3 : hp.position[1] - t / 2 + RULES.eccBarrelH / 2 - 0.3;
           add(`ecc:${hp.id}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [edgeX + dir * RULES.eccCenter, by, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
           add(`ecc:${hp.id}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [RULES.eccCenter + t / 2, 7, 7], [edgeX + dir * (RULES.eccCenter - t / 2) / 2, hp.position[1], z], RULES.eccCenter + t / 2, 7, 7, "fastener", hp.sectionId, "metal");
-        } else add(`fast:${hp.id}:${side}:${k}`, "Конфирмат 5×50", [RULES.confirmatL, RULES.confirmatD, RULES.confirmatD], [edgeX - dir * t + dir * RULES.confirmatL / 2, hp.position[1], z], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", hp.sectionId, "metal");
+        } else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], z], dir > 0 ? "+x" : "-x", hp.sectionId);
       }
     }
   }
   // Царги лёжа (кухни Базиса): по одному конфирмату с каждой стороны через боковину в торец царги.
   for (const r of out.filter((p) => p.id.startsWith("rail:") && p.size[1] === t)) {
     for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
-      add(`fast:${r.id}:${side}:0`, "Конфирмат 5×50", [RULES.confirmatL, RULES.confirmatD, RULES.confirmatD], [edgeX - dir * t + dir * RULES.confirmatL / 2, r.position[1], r.position[2]], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", undefined, "metal");
+      confirmat(`fast:${r.id}:${side}:0`, [edgeX - dir * t, r.position[1], r.position[2]], dir > 0 ? "+x" : "-x");
   }
   for (const dv of out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;
     for (const [edge, y] of [["top", innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
       for (const [k, z] of [z0 + RULES.confirmatInset, z1 - RULES.confirmatInset].entries()) {
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
-        else add(`fast:${dv.id}:${edge}:${k}`, "Конфирмат 5×50", [RULES.confirmatD, RULES.confirmatL, RULES.confirmatD], [dv.position[0], y, z], RULES.confirmatL, RULES.confirmatD, RULES.confirmatD, "fastener", dv.sectionId, "metal");
+        else confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], edge === "top" ? y + t / 2 : y - t / 2, z], edge === "top" ? "-y" : "+y", dv.sectionId);
       }
   }
   // Edge pulls mount on the free edge, not at the bracket-handle drilling offset.
@@ -933,7 +943,9 @@ function hardwareParts(m: Module, out: Part[]) {
   for (const sh of out.filter((p) => p.role === "shelf" && p.material === "board" && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     [[x - w / 2 + 4, z - dd / 2 + 40], [x + w / 2 - 4, z - dd / 2 + 40], [x - w / 2 + 4, z + dd / 2 - 40], [x + w / 2 - 4, z + dd / 2 - 40]].forEach(([px, pz], k) =>
-      out.push(metal(`shp:${sh.id}:${k}`, "Полкодержатель", [12, 6, 6], [px, y - t / 2 - 3, pz], "fastener", sh.sectionId)));
+      out.push({ ...metal(`shp:${sh.id}:${k}`, "Полкодержатель", [12, 6, 6], [px, y - t / 2 - 3, pz], "fastener", sh.sectionId),
+        // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
+        model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - 1 : x + w / 2 + 1, y - t / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
   }
   for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && (p.hinge === "left" || p.hinge === "right"))) {
     const [cx, cy, dz] = door.position, [dw, dh] = door.size, dir = door.hinge === "left" ? 1 : -1;
@@ -952,7 +964,22 @@ function hardwareParts(m: Module, out: Part[]) {
     const placed: Part[] = [];
     const hingeAt = (y: number, n: number): [Part, Part] => {
       const cupId = door.id.replace(":door:", ":hingecup:") + ":" + n, plateId = door.id.replace(":door:", ":hingeplate:") + ":" + n;
-      // Модели по технической карте GTV DCHCB 3D (scripts/blender_hardware.py): отсчёт от кромки фасада со стороны петель (x)
+      if (!inset) {
+        // Накладная петля GTV ECHC 09BEO — сетки из проектов Базиса цеха (TriData → GLB). Узел Базиса: начало — внутренняя плоскость
+        // стойки × тыльная плоскость фасада; X — от фасада внутрь, Y — от стойки внутрь корпуса, Z — ось петли. Ориентации левой и правой
+        // петли — как в моделях Базиса. Чашка — по преобразованию из моделей: поворот Ry 90°, сдвиг 4,5 по Y.
+        const qb: Quat = dir > 0 ? [0.5, 0.5, 0.5, -0.5] : [0.5, -0.5, 0.5, 0.5], o: [number, number, number] = [sideX, y, back];
+        const co = qrot(qb, [0, 4.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
+        const cup: Part = { ...metal(cupId, "Петля " + brand + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
+          model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qb, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
+          collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }] };
+        // Плечо с планкой: по сетке ECHC 0..70 от фасада вглубь, 0..23,7 от стойки внутрь, ±26,5 по высоте.
+        const plate: Part = { ...metal(plateId, "Петля " + brand + " · плечо и планка", [23.7, 53, 70], [sideX + dir * 11.85, y, back - 35], "hinge", door.sectionId),
+          model: { file: "hardware/bazis/d7e1d3957ebe.glb", length: "y", native: true, origin: o, quat: qb },
+          collide: [{ size: [23.7, 53, 70], position: [sideX + dir * 11.85, y, back - 35] }] };
+        return [cup, plate];
+      }
+      // Вкладная — модели по технической карте GTV DCHCB 3D (scripts/blender_hardware.py): отсчёт от кромки фасада со стороны петель (x)
       // и от тыльной плоскости фасада (z). Правая петля — зеркально. Точные коробки: чашка Ø35×12,5 в теле фасада;
       // плечо с планкой — у внутренней грани стойки, 26 мм внутрь корпуса, 78 мм от фасада вглубь.
       const cup: Part = { ...metal(cupId, "Петля " + brand + " · чашка Ø35", [36.4, 58, 27.3], [edgeX + dir * 22.5, y, back - 1.85], "hinge", door.sectionId), model: { file: "hardware/hinge_cup.glb", length: "y", ...mirror },

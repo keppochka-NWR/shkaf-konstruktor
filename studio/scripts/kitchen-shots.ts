@@ -31,6 +31,7 @@ for (const cmd of (script ?? "view:3D;shot:3d").split(";").map((s) => s.trim()).
   else if (op === "free") { const b = page.getByRole("button", { name: /Свободная камера/ }); if (await b.count()) await b.first().click(); }
   else if (op === "facades") { const b = page.getByRole("button", { name: /Скрыть фасады|Показать фасады/ }); if (await b.count()) await b.first().click(); await settle(); }
   else if (op === "open") { const b = page.getByRole("button", { name: /Открыть фасады|Закрыть фасады/ }); if (await b.count()) await b.first().click(); await settle(); }
+  else if (op === "room") { const b = page.getByRole("button", { name: /Показать помещение|Скрыть помещение/ }); if (await b.count()) await b.first().click(); await settle(); }
   else if (op === "fit") { const b = page.getByRole("button", { name: "Приблизить выбранный корпус" }); if (await b.count()) await b.first().click(); await settle(); }
   else if (op === "orbit") {
     const [dx, dy] = arg.split(",").map(Number), c = await canvas(), x = c.x + c.width / 2, y = c.y + c.height / 2;
