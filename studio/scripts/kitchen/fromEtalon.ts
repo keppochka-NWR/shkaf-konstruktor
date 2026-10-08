@@ -111,7 +111,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
     if (rows.size > 1) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;
-    if (fronts.length >= 2) m.sections[0].doorLeaves = 2; // одна створка — «авто»: при расширении модуль сам разделит фасад
+    m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
     if (fronts.length === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
