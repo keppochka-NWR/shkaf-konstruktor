@@ -117,6 +117,8 @@ export type Section = {
   doorHinges?: ("left"|"right"|"top"|null)[];
   /** Высоты петель от низа фасада, мм (как в проекте Базиса); без поля — по правилу (100 мм от краёв). */
   hingeY?: number[];
+  /** Высота фасада, при которой записаны hingeY (при другой высоте высоты пересчитываются). */
+  hingeYFor?: number;
   hingeSide?: "left" | "right";
   removedDoors?: number[];
   doorGap?: number;
@@ -1050,7 +1052,7 @@ function hardwareParts(m: Module, out: Part[]) {
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
     const sec = m.sections.find((s) => s.id === door.sectionId);
-    (sec?.hingeY?.length ? sec.hingeY : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
+    (sec?.hingeY?.length ? scaleHingeY(sec.hingeY, sec.hingeYFor ?? dh, dh) : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
       for (const s of hingeShifts()) {
@@ -1081,7 +1083,14 @@ export function grooveBox(p: Part, g: Groove): [number, number, number, number, 
 }
 /** Пазы панели для бирки и деталировки (кроме паза под задник). */
 export function grooveText(m: Module, partId: string) {
-  return (m.grooves ?? []).filter((g) => g.host === partId).map((g) => `${g.name}: ${Math.round(g.across[1] - g.across[0])}×${g.depth}, от кромки ${Math.round(g.across[0])}, отступ от торцов ${Math.round(g.along[0])}/${Math.round(g.along[1])}`).join("; ");
+  // коротко, чтобы влезло в строку бирки 96 мм: «паз под подсветку 17×8, от задн. кромки 100, торцы 16/16»
+  return (m.grooves ?? []).filter((g) => g.host === partId).map((g) => `${g.name} ${Math.round(g.across[1] - g.across[0])}×${g.depth}, от задн. кромки ${Math.round(g.across[0])}, торцы ${Math.round(g.along[0])}/${Math.round(g.along[1])}`).join("; ");
+}
+/** Ручные высоты петель при другой высоте фасада: нижняя держит отступ от низа, верхняя — от верха, средние — пропорционально. */
+export function scaleHingeY(ys: number[], was: number, now: number): number[] {
+  if (Math.abs(was - now) < 0.5 || ys.length < 2) return ys.map((y) => Math.min(Math.max(y, 40), now - 40));
+  const a = ys[0], b = was - ys[ys.length - 1], top = now - b;
+  return ys.map((y, k) => k === 0 ? a : k === ys.length - 1 ? top : a + (y - a) * (top - a) / Math.max(1, ys[ys.length - 1] - a));
 }
 /** Минимальный зазор от петли до чужих деталей при подборе высоты, мм. */
 const HINGE_CLEAR = 5;
@@ -1537,6 +1546,7 @@ export function parseModule(input: unknown): Module {
       weight: s.weight,
       ...(s.doorHinges===undefined?{}:{doorHinges:Array.isArray(s.doorHinges)?[...s.doorHinges]:s.doorHinges}),
       ...(s.hingeY===undefined?{}:{hingeY:Array.isArray(s.hingeY)?s.hingeY.map(Number).filter(Number.isFinite):[]}),
+      ...(s.hingeYFor===undefined?{}:{hingeYFor:Number(s.hingeYFor)}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),

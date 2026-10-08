@@ -23,7 +23,8 @@ export function refGrooves(ref: RefModule, backZ0: number | null): { box: [numbe
     }
     for (const r of runs) {
       const w = r1(Math.min(r.box[3] - r.box[0], r.box[4] - r.box[1], r.box[5] - r.box[2]) === r1(r.c.depth ?? 0) ? Math.max(...[r.box[3] - r.box[0], r.box[4] - r.box[1], r.box[5] - r.box[2]].sort((a, b) => a - b).slice(0, 2)) : 0);
-      out.push({ box: r.box.map(r1) as [number, number, number, number, number, number], name: `Паз ${w || ""}×${r.c.depth ?? ""}${r.c.sign ? " · " + r.c.sign : ""}`.replace(/^Паз ×/, "Паз "), panel: p.i });
+      // имя без опечаток Базиса («Подстветка»): «паз под подсветку» / «паз»; размеры пишет grooveText
+      out.push({ box: r.box.map(r1) as [number, number, number, number, number, number], name: /подс?т?в?е?т/i.test(r.c.sign ?? "") || /подсвет/i.test(r.c.name) ? "паз под подсветку" : "паз", panel: p.i });
     }
   }
   return out;
@@ -123,7 +124,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const def = (() => { const n = ys.length, dh = f.b.y1 - f.b.y0, off = Math.min(100, Math.max(40, dh / 4)); return Array.from({ length: n }, (_, k) => n === 1 ? dh / 2 : off + (dh - 2 * off) * k / (n - 1)); })();
     // число петель по правилу кухни — по высоте фасада; если в проекте другое число или другие высоты — берём высоты проекта
     const n0 = (f.b.y1 - f.b.y0) <= 900 ? 2 : (f.b.y1 - f.b.y0) <= 1300 ? 3 : (f.b.y1 - f.b.y0) <= 1700 ? 4 : (f.b.y1 - f.b.y0) <= 2100 ? 5 : 6;
-    if (ys.length && (ys.length !== n0 || ys.some((y, k) => Math.abs(y - def[k]) > 0.5))) m.sections[0].hingeY = ys;
+    if (ys.length && (ys.length !== n0 || ys.some((y, k) => Math.abs(y - def[k]) > 0.5))) { m.sections[0].hingeY = ys; m.sections[0].hingeYFor = r1(f.b.y1 - f.b.y0); }
   }
   // полки (ЛДСП и стекло)
   const glassSh = P.filter(({ p }) => p.axis === "y" && p.kind === "glass");
