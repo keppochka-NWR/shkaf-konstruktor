@@ -74,7 +74,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body" && (q.material === "hdf" || (q.size[0] <= 40 && q.size[1] > 60))) return true;
     if (p.id.startsWith("kitchen-hanger-cap:") && q.id === p.id.replace("-cap", "")) return true;
     // Подсветка врезается в полку/крышу.
-    if (p.role === "light" && isBoard(q)) return true;
+    // подсветка в пазу — только в корпусной доске и не глубже паза (8,5)
+    if (p.role === "light" && isBoard(q) && q.role !== "door" && depth <= 8.5) return true;
   }
   return false;
 }

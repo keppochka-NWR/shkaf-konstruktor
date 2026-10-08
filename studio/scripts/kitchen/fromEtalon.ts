@@ -1,7 +1,8 @@
 // Распознаватель: модуль эталона Базиса (Кухни\etalon\kNN.json) → параметрический кухонный модуль студии.
 // Все размеры читаются из эталона (ширина, высота, глубина боковины, опоры, дно, царги, задник, фасады, полки, крепёж),
 // а не подставляются типовые — так модуль студии можно сверить деталь в деталь (compare.ts).
-import { initialModule, section, type Module } from "../../src/model";
+import { initialModule, section, parts, type Module, type Groove } from "../../src/model";
+import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 
@@ -163,8 +164,20 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
+  // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
   const g = refGrooves(ref, back ? r1(back.b.z0) : null);
-  if (g.length) m.grooves = g;
+  if (g.length) {
+    const ps = parts(m).filter((p) => p.material === "board"), out: Groove[] = [];
+    for (const gr of g) {
+      const bb = [gr.box[0], gr.box[1], gr.box[2] - sideZ0, gr.box[3], gr.box[4], gr.box[5] - sideZ0];
+      const host = ps.find((p) => [0, 1, 2].every((i) => bb[i] >= p.position[i] - p.size[i] / 2 - 0.6 && bb[i + 3] <= p.position[i] + p.size[i] / 2 + 0.6));
+      if (!host) { unsupported.push(`паз ${gr.name} без детали-носителя`); continue; }
+      const ax = partAxes(host), lo = host.position.map((v, i) => v - host.size[i] / 2), hi = host.position.map((v, i) => v + host.size[i] / 2);
+      const face = Math.abs(bb[ax.t + 3] - hi[ax.t]) < Math.abs(bb[ax.t] - lo[ax.t]) ? "+" : "-";
+      out.push({ host: host.id, face, along: [r1(bb[ax.L] - lo[ax.L]), r1(hi[ax.L] - bb[ax.L + 3])], across: [r1(bb[ax.W] - lo[ax.W]), r1(bb[ax.W + 3] - lo[ax.W])], depth: r1(bb[ax.t + 3] - bb[ax.t]), name: gr.name });
+    }
+    if (out.length) m.grooves = out;
+  }
   const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   return { module: m, notes, unsupported };

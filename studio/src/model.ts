@@ -3,6 +3,7 @@ import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
 import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
+import { partAxes as partAxesOf } from "./edges";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -218,7 +219,7 @@ export type Module = {
   edgeScheme?: { t: number };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
-  grooves?: { box: [number, number, number, number, number, number]; name: string }[];
+  grooves?: Groove[];
   /** Крепёж по стыкам «горизонталь:сторона» (bottom:left, top:right…): конфирмат или эксцентрик (кухни Базиса: эксцентрики на открытой
    *  стороне, чтобы не было видно головок). Без записи — общий m.fastening. */
   jointFastening?: Record<string, "confirmat" | "eccentric">;
@@ -268,6 +269,9 @@ export type Module = {
     grille?: { x: number; width: number; depth: number };
   };
 };
+/** Паз в панели-носителе (не под задник): привязан к детали и идёт за ней при изменении размеров модуля.
+ *  face — сторона толщины детали (+/−), along — отступы от концов по длине детали, across — от минимальной грани по ширине (от/до), depth — глубина. */
+export type Groove = { host: string; face: "+" | "-"; along: [number, number]; across: [number, number]; depth: number; name: string };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
 export type Part = {
@@ -965,7 +969,7 @@ export function parts(m: Module): Part[] {
   kitchenExtraParts(m,out);
   kitchenEdges(m,out);
   // Пазы под подсветку и прочие (кроме паза под задник): тёмная полоса в панели; подсветка — в смете за пог. м (роль light).
-  (m.grooves??[]).forEach((g,i)=>{const [x0,y0,z0,x1,y1,z1]=g.box,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
+  (m.grooves??[]).forEach((g,i)=>{const hostPart=out.find(p=>p.id===g.host);if(!hostPart)return;const b=grooveBox(hostPart,g);if(!b)return;const [x0,y0,z0,x1,y1,z1]=b,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
     out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
   if(m.facadeMaterial==='external')for(const p of out)if(p.role==='door'||p.id.endsWith(':facade')){p.external=true;p.edge=[0,0,0,0];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
@@ -1064,6 +1068,20 @@ function hardwareParts(m: Module, out: Part[]) {
     }
   }
   void slideMotion; void slideBrand; void SLIDE_BRANDS;
+}
+/** Коробка паза в осях модуля по детали-носителю (пересчитывается при каждом построении — паз идёт за деталью). */
+export function grooveBox(p: Part, g: Groove): [number, number, number, number, number, number] | null {
+  const ax = partAxesOf(p), lo = p.position.map((v, i) => v - p.size[i] / 2), hi = p.position.map((v, i) => v + p.size[i] / 2);
+  const b0 = [...lo], b1 = [...hi];
+  b0[ax.t] = g.face === "+" ? hi[ax.t] - g.depth : lo[ax.t]; b1[ax.t] = g.face === "+" ? hi[ax.t] : lo[ax.t] + g.depth;
+  b0[ax.L] = lo[ax.L] + g.along[0]; b1[ax.L] = hi[ax.L] - g.along[1];
+  b0[ax.W] = lo[ax.W] + g.across[0]; b1[ax.W] = lo[ax.W] + g.across[1];
+  if (b1[ax.L] <= b0[ax.L] || b1[ax.W] <= b0[ax.W] || b1[ax.W] > hi[ax.W] + 0.01) return null;
+  return [b0[0], b0[1], b0[2], b1[0], b1[1], b1[2]];
+}
+/** Пазы панели для бирки и деталировки (кроме паза под задник). */
+export function grooveText(m: Module, partId: string) {
+  return (m.grooves ?? []).filter((g) => g.host === partId).map((g) => `${g.name}: ${Math.round(g.across[1] - g.across[0])}×${g.depth}, от кромки ${Math.round(g.across[0])}, отступ от торцов ${Math.round(g.along[0])}/${Math.round(g.along[1])}`).join("; ");
 }
 /** Минимальный зазор от петли до чужих деталей при подборе высоты, мм. */
 const HINGE_CLEAR = 5;
@@ -1494,7 +1512,7 @@ export function parseModule(input: unknown): Module {
     ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t)}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
-    ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as {box:number[];name:string}[]).map(g=>({box:(g?.box??[]).map(Number) as [number,number,number,number,number,number],name:String(g?.name??'Паз')})).filter(g=>g.box.length===6&&g.box.every(Number.isFinite)):[]}),
+    ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
