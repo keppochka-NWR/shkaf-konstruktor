@@ -7,6 +7,7 @@ import { parts, type Module, type Part } from "../../src/model";
 import { parseProject } from "../../src/project";
 import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
+import { refGrooves as refGroovesOf } from "./fromEtalon";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
@@ -157,6 +158,18 @@ export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison 
     const diff = [...keys].filter((k) => Math.abs((want[k] ?? 0) - (have[k] ?? 0)) > 0.01);
     if (diff.length) edgeCheck.bad.push(`${pr.ref.name}: ${diff.map((k) => `${k} Базис ${want[k] ?? 0} / студия ${have[k] ?? 0}`).join(", ")}`);
   }
+  // пазы (кроме паза под задник): у Базиса — по панелям эталона (проходы слиты), у студии — детали groove:*
+  const backPanel = ref.panels.filter((p) => p.kind === "hdf").sort((a, b) => (b.box[3] - b.box[0]) * (b.box[4] - b.box[1]) - (a.box[3] - a.box[0]) * (a.box[4] - a.box[1]))[0];
+  const rg = refGroovesOf(ref, backPanel ? r1(backPanel.box[2]) : null).map((g) => g.box.map((v, i) => v - oa[i % 3]));
+  const sg = ps.filter((p) => p.id.startsWith("groove:")).map((p) => [0, 1, 2].map((i) => p.position[i] - p.size[i] / 2 - ob[i]).concat([0, 1, 2].map((i) => p.position[i] + p.size[i] / 2 - ob[i])));
+  const grooveBad: string[] = [];
+  const usedG = new Set<number>();
+  for (const g of rg) {
+    const j = sg.findIndex((s, k) => !usedG.has(k) && s.every((v, i) => Math.abs(v - g[i]) <= 0.6));
+    if (j >= 0) usedG.add(j); else grooveBad.push(`нет паза ${g.map(r1).join(",")}`);
+  }
+  sg.forEach((s, k) => { if (!usedG.has(k)) grooveBad.push(`лишний паз ${s.map(r1).join(",")}`); });
+  edgeCheck.bad.push(...grooveBad.map((x) => "пазы: " + x));
   const holesOk = !holeCheck || (!holeCheck.missing.length && !holeCheck.extra.length && holeCheck.maxDelta <= 0.5);
   const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length;
   return { edges: edgeCheck, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };

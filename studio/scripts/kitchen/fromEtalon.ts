@@ -9,6 +9,24 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
 const bx = (p: RefPanel): B => ({ x0: p.box[0], y0: p.box[1], z0: p.box[2], x1: p.box[3], y1: p.box[4], z1: p.box[5] });
 
+/** Пазы панелей эталона, кроме паза под задник (по положению на z задника), со слиянием проходов. */
+export function refGrooves(ref: RefModule, backZ0: number | null): { box: [number, number, number, number, number, number]; name: string; panel: number }[] {
+  const out: { box: [number, number, number, number, number, number]; name: string; panel: number }[] = [];
+  for (const p of ref.panels as (RefPanel & { cuts?: { kind: string; name: string; sign?: string; box?: number[]; width?: number; depth?: number; face?: string }[] })[]) {
+    const cs = (p.cuts ?? []).filter((c) => c.kind === "groove" && Array.isArray(c.box) && !(backZ0 !== null && c.box![2] <= backZ0 && c.box![5] >= backZ0 + 2.9 && (c.width ?? 0) <= 4.5));
+    const runs: { box: number[]; c: (typeof cs)[number] }[] = [];
+    for (const c of cs.sort((a, b) => a.box![2] - b.box![2] || a.box![0] - b.box![0])) {
+      const r = runs.find((x) => x.c.face === c.face && Math.abs(x.box[1] - c.box![1]) < 1 && Math.abs(x.box[4] - c.box![4]) < 1 && c.box![2] <= x.box[5] + 0.5 && c.box![0] <= x.box[3] + 0.5 && c.box![3] >= x.box[0] - 0.5);
+      if (r) r.box = r.box.map((v, i) => (i < 3 ? Math.min(v, c.box![i]) : Math.max(v, c.box![i])));
+      else runs.push({ box: [...c.box!], c });
+    }
+    for (const r of runs) {
+      const w = r1(Math.min(r.box[3] - r.box[0], r.box[4] - r.box[1], r.box[5] - r.box[2]) === r1(r.c.depth ?? 0) ? Math.max(...[r.box[3] - r.box[0], r.box[4] - r.box[1], r.box[5] - r.box[2]].sort((a, b) => a - b).slice(0, 2)) : 0);
+      out.push({ box: r.box.map(r1) as [number, number, number, number, number, number], name: `Паз ${w || ""}×${r.c.depth ?? ""}${r.c.sign ? " · " + r.c.sign : ""}`.replace(/^Паз ×/, "Паз "), panel: p.i });
+    }
+  }
+  return out;
+}
 export type Recognized = { module: Module; notes: string[]; unsupported: string[] };
 
 export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
@@ -91,7 +109,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
     if (rows.size > 1) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;
-    m.sections[0].doorLeaves = fronts.length > 2 ? 2 : fronts.length;
+    m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2;
     if (fronts.length === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
@@ -129,6 +147,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et };
+  // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
+  if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
+  // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
+  const g = refGrooves(ref, back ? r1(back.b.z0) : null);
+  if (g.length) m.grooves = g;
   const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   return { module: m, notes, unsupported };

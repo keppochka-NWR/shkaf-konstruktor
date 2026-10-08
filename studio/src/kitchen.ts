@@ -12,6 +12,8 @@ export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob"
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean };
+  /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
+  hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
   legs?: { back: number; front: number; side?: number; xs?: number[] } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
@@ -107,7 +109,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
   }
-  if (k.role === "wall" || k.role === "antresol") {
+  if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
     for (const side of ["left", "right"] as const) {
       // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
       // сетка Базиса: −64..+20 к стене, −42..−1 по высоте, 0..23 внутрь корпуса.
@@ -131,9 +133,11 @@ export function kitchenEdges(m: Module, out: Part[]) {
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
   for (const p of out) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
-    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", "-z"] : ["+y", "+z"], t);
-    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x"] : ["+z", "-z"], t);
-    else if (p.id === "top") setEdges(p, ["+z", "-z"], t);
+    // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)
+    const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
+    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z"], t);
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : [])] : ["+z", ...rear], t);
+    else if (p.id === "top") setEdges(p, ["+z", ...rear], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? ["+z", "-z"] : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
