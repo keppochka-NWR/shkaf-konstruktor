@@ -87,7 +87,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
     m.faceGap = r1(f0.b.x0 - left.b.x0);
-    if (fronts.length > 1) m.faceGapBetween = r1(fronts[1].b.x0 - fronts[0].b.x1);
+    m.faceGapBetween = fronts.length > 1 ? r1(fronts[1].b.x0 - fronts[0].b.x1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
     if (rows.size > 1) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;

@@ -136,7 +136,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.id === "top") setEdges(p, ["+z", "-z"], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? ["+z", "-z"] : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
-    else if (p.id === "kitchen-plinth") setEdges(p, ["+z"], t);
+    else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
     else if (p.role === "body") setEdges(p, ["+z"], t);
   }
 }
@@ -173,7 +173,7 @@ export function kitchenErrors(m: Module): string[] {
 /** Общий кухонный вид корпуса по Базису: фасады 1,5 / 3, ХДФ накладной (W−3)×(H−3) или в паз П16-4×8. */
 const look = (m: Module): Module => ({ ...m, faceGap: KITCHEN.faceGap, faceGapBetween: KITCHEN.faceGapBetween, backGap: KITCHEN.backGap,
   // Базис цеха: фасад вплотную к корпусу (воздух 0), конфирматы в 64 мм от концов стыка, полка в 1 мм от задника, полкодержатели в 60 от кромок полки
-  faceAir: 0, confirmatInset: 64, shelfRear: 1, shelfPinInset: 60 });
+  faceAir: 0, confirmatInset: 64, shelfRear: 1, shelfPinInset: 60, edgeScheme: { t: 1 } });
 
 /** Нижний модуль (Базис «Нижний модуль (Пустой)»): дно под боковинами на опорах 100, крыши нет, две царги 100 лёжа заподлицо с верхом,
  *  ХДФ накладной; мойка — без задника, царги на ребре (передняя 60, задняя 100 — как 2777); духовка — без задника и царг. */
