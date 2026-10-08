@@ -144,6 +144,13 @@ export function saveFile(
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+/** Пазы детали для деталировки: паз под ЛХДФ (если задник в паз) и пазы под подсветку — тот же текст, что на бирке. */
+function detailGrooves(p: Project, moduleId: string, partId: string) {
+  const m = p.modules.find((a) => a.id === moduleId)?.module;
+  if (!m) return "";
+  const back = m.backType === "groove" && ["left", "right", "top", "bottom"].includes(partId) ? `паз ${m.grooveWidth ?? 4}×${m.grooveDepth ?? 8} под ЛХДФ, отступ ${m.grooveInset ?? 16}` : "";
+  return [back, grooveText(m, partId)].filter(Boolean).join("; ");
+}
 export function detailCSV(p: Project) {
   if(p.modules.some(a=>a.module.corner))return cutCSV(cutting(p));
   const rows = [
@@ -159,6 +166,7 @@ export function detailCSV(p: Project) {
       "Кромка 2 · торец ширины",
       "Кромка 3 · торец длины",
       "Кромка 4 · торец длины",
+      "Пазование",
     ],
     ...details(p).map((d) => [
       d.code,
@@ -169,6 +177,7 @@ export function detailCSV(p: Project) {
       d.width,
       d.thickness,
       ...d.edge,
+      detailGrooves(p, d.moduleId, d.id),
     ]),
   ];
   return (
@@ -263,7 +272,8 @@ export function labelData(p:Project):LabelData[]{
       const grooved=m.backType==='groove'&&['left','right','top','bottom'].includes(d.id);
       // Кромка: 1–2 — торцы по ширине (короткие, слева/справа на бирке), 3–4 — по длине (сверху/снизу).
       return {order,material:(d.material==='hdf'?'ЛХДФ ':'ЛДСП ')+d.decor+' '+d.thickness+' мм'+(d.material==='hdf'?'':' (Lamarty)'),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
-        groove:[grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'',grooveText(m,d.id)].filter(Boolean).join('; ')||'—',notches:'—',endHoles:holes?`${holes} отв.`:'—',
+        groove:grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:grooveText(m,d.id).replace(/^паз /,'')||'—', // «Пазование» — паз под ЛХДФ, «Паз» — пазы под подсветку (каждая строка влезает в бирку)
+        endHoles:holes?`${holes} отв.`:'—',
         length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]}};
     });
   });
