@@ -288,7 +288,6 @@ class Packer{
 }
 function segValue(seg:Seg,price:Float64Array){let v=0;for(const c of seg.cols)for(const r of c.rows)for(const p of r.pieces)v+=price[p.t];return v;}
 function usage(seg:Seg){const m=new Map<number,number>();for(const c of seg.cols)for(const r of c.rows)for(const p of r.pieces)m.set(p.t,(m.get(p.t)??0)+1);return m;}
-function stripUsage(s:Strip){const m=new Map<number,number>();for(const g of s.segs)for(const [t,n] of usage(g))m.set(t,(m.get(t)??0)+n);return m;}
 /** Фактическая ширина полосы: самый широкий отрезок (free отрезка = w + пропил − Σ(столбец + пропил)). */
 function stripTight(s:Strip){let w=0;for(const g of s.segs)w=Math.max(w,s.w-g.free);return w;}
 /** Поджать полосу до фактической ширины (освобождая ширину листа для следующих полос). */
@@ -370,7 +369,9 @@ export function guillotinePack(parts:GuillotinePart[],width:number,height:number
     const cross=packer.buildSheet(cnt.slice(),'cross');
     if(pieceCount(cross)===lastIds.length&&leftover(cross,X,Y,kerf)>leftover(layouts.at(-1)!,X,Y,kerf)+EPS)layouts[layouts.length-1]=cross;
   }
-  const sheets=layouts.map(L=>materialize(L,types,width,height,trim,kerf,maxStages));
+  // номера деталей одного типоразмера раздаются по порядку через все листы
+  const used=new Map<number,number>();
+  const sheets=layouts.map(L=>materialize(L,types,width,height,trim,kerf,maxStages,used));
   return {sheets,unplaced,kerf,trim,maxStages,iterations:done};
 }
 function tooBig(p:GuillotinePart,X:number,Y:number,width:number,height:number,trim:number){
@@ -395,8 +396,8 @@ function scoreOf(layouts:Layout[],_p:Packer,X:number,Y:number,k:number){
   return [layouts.length,-leftover(last,X,Y,k),cuts];
 }
 function less(a:number[],b:number[]){for(let i=0;i<a.length;i++){if(a[i]<b[i]-EPS)return true;if(a[i]>b[i]+EPS)return false;}return false;}
-function materialize(L:Layout,types:T[],width:number,height:number,trim:number,k:number,maxStages:number):GuillotineSheet{
-  const used=new Map<number,number>(),items:GuillotinePlaced[]=[];
+function materialize(L:Layout,types:T[],width:number,height:number,trim:number,k:number,maxStages:number,used:Map<number,number>):GuillotineSheet{
+  const items:GuillotinePlaced[]=[];
   let x=trim;
   for(const s of L.strips){
     let y=trim;

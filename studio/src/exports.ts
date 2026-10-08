@@ -20,6 +20,8 @@ export type Placement = {
   w: number;
   h: number;
   cutContour?:Point[];
+  /** гильотина: деталь положена поперёк листа (w — её длина) */
+  rotated?:boolean;
 };
 export type Sheet = {
   decor: string;
@@ -104,8 +106,10 @@ export function nestGuillotine(p: Project, gap = 10): Sheet[] {
 }
 /** Движок раскроя проекта: флаг calculation.cuttingEngine; угловые (фигурные) корпуса пока всегда кроятся прежним движком. */
 export function cuttingEngine(p:Project):'classic'|'guillotine'{return p.calculation?.cuttingEngine==='guillotine'&&!p.modules.some(a=>a.module.corner)?'guillotine':'classic';}
-/** Параметры движка «гильотина как в Базисе» для студии: пропил и обрезка — из настроек Базиса цеха (Saw=4.4, Undercut 12). */
-export const GUILLOTINE_RULES={kerf:4.4,trim:12,maxStages:5,iterations:8};
+/** Параметры движка «гильотина как в Базисе» для студии: пропил и обрезка — из настроек Базиса цеха (Saw=4.4, Undercut 12).
+ *  narrowBlank — узкие детали кроятся заготовкой 59 мм и подрезаются (ValueDetailsJoining=59, «ПОДРЕЗАТЬ» на картах Базиса).
+ *  minTrim — до какой обрезки можно уменьшить край, если деталь длиннее 2726 (модель допускает 2730 при поле 10; Базис в части заказов резал с обрезкой 10/9/8). */
+export const GUILLOTINE_RULES={kerf:4.4,trim:12,minTrim:10,maxStages:5,iterations:8,narrowBlank:59};
 export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];engine:'classic'|'guillotine'};
 /** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
 export function nestPlan(p:Project):NestPlan{
@@ -116,19 +120,23 @@ export function nestPlan(p:Project):NestPlan{
   const sheets:Sheet[]=[],unplaced:NestPlan['unplaced']=[];
   for(const ds of groups.values()){
     const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:RULES.sheetW;
-    const byId=new Map(ds.map(d=>[d.code,d]));
-    const r=cachedGuillotine(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width,height);
-    for(const s of r.sheets)sheets.push({decor,material:first.material,thickness:first.thickness,width,height,items:s.items.map(a=>({detail:byId.get(a.id)!,x:a.x,y:a.y,w:a.w,h:a.h})),guillotine:{cuts:s.cuts,offcuts:s.offcuts,stages:s.stages,kerf:r.kerf,trim:r.trim}});
+    const byId=new Map(ds.map(d=>[d.code,d])),nb=GUILLOTINE_RULES.narrowBlank;
+    const parts=ds.map(d=>({id:d.code,w:Math.max(d.width,nb),h:Math.max(d.length,nb),rot:grainFree(d)}));
+    // обрезка 12; если деталь иначе не помещается — меньше, но не ниже minTrim
+    const need=Math.min(...parts.map(a=>Math.max(Math.min((width-a.w)/2,(height-a.h)/2),a.rot?Math.min((width-a.h)/2,(height-a.w)/2):-Infinity)));
+    const trim=Math.max(GUILLOTINE_RULES.minTrim,Math.min(GUILLOTINE_RULES.trim,Math.floor(need*2)/2));
+    const r=cachedGuillotine(parts,width,height,trim);
+    for(const s of r.sheets)sheets.push({decor,material:first.material,thickness:first.thickness,width,height,items:s.items.map(a=>({detail:byId.get(a.id)!,x:a.x,y:a.y,w:a.w,h:a.h,...(a.rotated?{rotated:true}:{})})),guillotine:{cuts:s.cuts,offcuts:s.offcuts,stages:s.stages,kerf:r.kerf,trim:r.trim}});
     for(const u of r.unplaced)unplaced.push({detail:byId.get(u.id)!,reason:u.reason});
   }
   return {sheets,unplaced,engine:'guillotine'};
 }
 // Кеш раскроя по группе: nest() зовут смета, док, вкладка карт и бирки на одном и том же проекте.
 const guillotineCache=new Map<string,GuillotineResult>();
-function cachedGuillotine(parts:{id:string;w:number;h:number;rot:boolean}[],width:number,height:number){
-  const key=JSON.stringify([width,height,GUILLOTINE_RULES,parts.map(a=>[a.id,a.w,a.h,a.rot?1:0])]);
+function cachedGuillotine(parts:{id:string;w:number;h:number;rot:boolean}[],width:number,height:number,trim:number){
+  const key=JSON.stringify([width,height,trim,GUILLOTINE_RULES,parts.map(a=>[a.id,a.w,a.h,a.rot?1:0])]);
   let r=guillotineCache.get(key);
-  if(!r){r=guillotinePack(parts,width,height,GUILLOTINE_RULES);guillotineCache.set(key,r);if(guillotineCache.size>40)guillotineCache.delete(guillotineCache.keys().next().value!);}
+  if(!r){r=guillotinePack(parts,width,height,{...GUILLOTINE_RULES,trim});guillotineCache.set(key,r);if(guillotineCache.size>40)guillotineCache.delete(guillotineCache.keys().next().value!);}
   else{guillotineCache.delete(key);guillotineCache.set(key,r);}
   return r;
 }
@@ -240,8 +248,14 @@ const style =
 function htmlDocument(title: string, body: string) {
   return `<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title><style>${style}</style><body><button onclick="window.print()">Печать / Сохранить PDF</button>${body}</body></html>`;
 }
+/** Пометка к размеру детали на гильотинной карте: повёрнута поперёк листа и/или кроится узкой заготовкой с подрезкой. */
+function blankNote(a:Placement){
+  const [along,across]=a.rotated?[a.w,a.h]:[a.h,a.w];
+  const blank=Math.abs(along-a.detail.length)>0.01||Math.abs(across-a.detail.width)>0.01;
+  return (a.rotated?' (повёрнута)':'')+(blank?` (заготовка ${along} × ${across}, подрезать)`:'');
+}
 /** Пояснение к картам движка «гильотина как в Базисе» (для HTML-карт и вкладки раскроя). */
-export function guillotineNote(){return `Гильотинный раскрой как в Базисе: ЛДСП Lamarty 2750 × 1830 мм, ЛХДФ 2800 × 2070 мм; пропил ${String(GUILLOTINE_RULES.kerf).replace('.',',')} мм, обрезка края ${GUILLOTINE_RULES.trim} мм; каждый рез сквозной, не более ${GUILLOTINE_RULES.maxStages} стадий: первая — продольные полосы во всю длину листа. Текстура вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка можно поворачивать.`;}
+export function guillotineNote(){return `Гильотинный раскрой как в Базисе: ЛДСП Lamarty 2750 × 1830 мм, ЛХДФ 2800 × 2070 мм; пропил ${String(GUILLOTINE_RULES.kerf).replace('.',',')} мм, обрезка края ${GUILLOTINE_RULES.trim} мм (до ${GUILLOTINE_RULES.minTrim} мм, если деталь иначе не помещается); каждый рез сквозной, не более ${GUILLOTINE_RULES.maxStages} стадий: первая — продольные полосы во всю длину листа. Текстура вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка можно поворачивать. Детали уже ${GUILLOTINE_RULES.narrowBlank} мм кроятся заготовкой ${GUILLOTINE_RULES.narrowBlank} мм и подрезаются.`;}
 export function nestingHTML(p: Project) {
   if(p.modules.some(a=>a.module.corner))return cuttingHTML(cutting(p),[
     'Раскрой всех прямых и угловых корпусов текущего проекта, разделённый по материалу и толщине.',
@@ -249,7 +263,7 @@ export function nestingHTML(p: Project) {
     'Петли диагональных фасадов и присадку направляющих необходимо проверить по выбранным артикулам.'
   ],'ГардерЁб · раскрой проекта');
   const plan=nestPlan(p);
-  if(plan.engine==='guillotine')return htmlDocument('Карты листов',`<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · гильотина как в Базисе</h1><p>${esc(guillotineNote())}</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.unplaced.length?`<h2>Не помещаются в лист — сращивать или заказать отдельно</h2><ul>${plan.unplaced.map(u=>`<li><b>${esc(u.detail.code)}</b> ${esc(u.detail.moduleName)} / ${esc(u.detail.name)}: ${esc(u.reason)}</li>`).join('')}</ul>`:''}${plan.sheets.map((s,i)=>{const g=s.guillotine!,used=s.items.reduce((n,a)=>n+a.w*a.h,0),offcuts=g.offcuts.filter(o=>o.business).sort((a,b)=>b.w*b.h-a.w*a.h);return `<section class="nest-sheet"><h2>Лист ${i+1} · ${esc(s.decor)} · ${s.thickness} мм</h2>${sheetSVG(s)}<p>${s.height} × ${s.width} мм · ${s.items.length} деталей · КИМ ${Math.round(used/(s.width*s.height)*1000)/10} % · стадий резов ${g.stages} · резов ${g.cuts.length}</p>${offcuts.length?`<p>Деловые обрезки: ${offcuts.slice(0,6).map(o=>`${Math.round(o.h)} × ${Math.round(o.w)}${o.large?' (крупный)':''}`).join(', ')}${offcuts.length>6?` и ещё ${offcuts.length-6}`:''}.</p>`:''}<table><thead><tr><th>Код · лист ${i+1}</th><th>Модуль / деталь</th><th>Размер</th></tr></thead><tbody>${s.items.map(a=>`<tr><td>${a.detail.code}</td><td>${esc(a.detail.moduleName)} / ${esc(a.detail.name)}</td><td>${a.detail.length} × ${a.detail.width}${a.w!==a.detail.width?' (повёрнута)':''}</td></tr>`).join('')}</tbody></table></section>`;}).join('')}`);
+  if(plan.engine==='guillotine')return htmlDocument('Карты листов',`<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · гильотина как в Базисе</h1><p>${esc(guillotineNote())}</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.unplaced.length?`<h2>Не помещаются в лист — сращивать или заказать отдельно</h2><ul>${plan.unplaced.map(u=>`<li><b>${esc(u.detail.code)}</b> ${esc(u.detail.moduleName)} / ${esc(u.detail.name)}: ${esc(u.reason)}</li>`).join('')}</ul>`:''}${plan.sheets.map((s,i)=>{const g=s.guillotine!,used=s.items.reduce((n,a)=>n+a.w*a.h,0),offcuts=g.offcuts.filter(o=>o.business).sort((a,b)=>b.w*b.h-a.w*a.h);return `<section class="nest-sheet"><h2>Лист ${i+1} · ${esc(s.decor)} · ${s.thickness} мм</h2>${sheetSVG(s)}<p>${s.height} × ${s.width} мм · ${s.items.length} деталей · КИМ ${Math.round(used/(s.width*s.height)*1000)/10} % · стадий резов ${g.stages} · резов ${g.cuts.length}${g.trim!==GUILLOTINE_RULES.trim?` · обрезка края ${g.trim} мм`:''}</p>${offcuts.length?`<p>Деловые обрезки: ${offcuts.slice(0,6).map(o=>`${Math.round(o.h)} × ${Math.round(o.w)}${o.large?' (крупный)':''}`).join(', ')}${offcuts.length>6?` и ещё ${offcuts.length-6}`:''}.</p>`:''}<table><thead><tr><th>Код · лист ${i+1}</th><th>Модуль / деталь</th><th>Размер</th></tr></thead><tbody>${s.items.map(a=>`<tr><td>${a.detail.code}</td><td>${esc(a.detail.moduleName)} / ${esc(a.detail.name)}</td><td>${a.detail.length} × ${a.detail.width}${blankNote(a)}</td></tr>`).join('')}</tbody></table></section>`;}).join('')}`);
   return htmlDocument(
     "Карты листов",
     `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.sheets
