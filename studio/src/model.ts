@@ -1084,7 +1084,7 @@ export function grooveBox(p: Part, g: Groove): [number, number, number, number, 
 /** Пазы панели для бирки и деталировки (кроме паза под задник). */
 export function grooveText(m: Module, partId: string) {
   // коротко, чтобы влезло в строку бирки 96 мм: «паз под подсветку 17×8, от задн. кромки 100, торцы 16/16»
-  return (m.grooves ?? []).filter((g) => g.host === partId).map((g) => `${g.name} ${Math.round(g.across[1] - g.across[0])}×${g.depth}, от задн. кромки ${Math.round(g.across[0])}, торцы ${Math.round(g.along[0])}/${Math.round(g.along[1])}`).join("; ");
+  return (m.grooves ?? []).filter((g) => g.host === partId).map((g) => `${g.name === "паз под подсветку" ? "подсветка" : g.name} ${Math.round(g.across[1] - g.across[0])}×${g.depth}, задн.кр. ${Math.round(g.across[0])}, торцы ${Math.round(g.along[0])}/${Math.round(g.along[1])}`).join("; ");
 }
 /** Ручные высоты петель при другой высоте фасада: нижняя держит отступ от низа, верхняя — от верха, средние — пропорционально. */
 export function scaleHingeY(ys: number[], was: number, now: number): number[] {

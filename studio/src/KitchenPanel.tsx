@@ -3,7 +3,7 @@
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { parts, distribute, RULES, RAIL_PLACES, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, RULES, RAIL_PLACES, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -130,6 +130,9 @@ function CabinetPanel(props: KitchenPanelProps) {
   }) });
   const appliance = k.appliance ? APPLIANCES[k.appliance] : undefined;
 
+  // Петли: текущая высота фасада и фактические ручные высоты (scaleHingeY), чтобы панель показывала и сохраняла то, что стоит в 3D
+  const dhNow = door ? Math.round(door.size[1] * 10) / 10 : 0;
+  const shownY = s.hingeY?.length ? scaleHingeY(s.hingeY, s.hingeYFor ?? dhNow, dhNow).map((y) => Math.round(y * 10) / 10) : [];
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head">
       <span className="eyebrow">{ROLE[role] ?? "Кухонный модуль"}{appliance ? " · " + appliance.label.toLowerCase() : ""}</span>
@@ -211,16 +214,17 @@ function CabinetPanel(props: KitchenPanelProps) {
       <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
         {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{HINGE_BRANDS[b].label} · {HINGE_BRANDS[b].note} · {HINGE_BRANDS[b].soft.price} ₽/шт</option>)}</select></label>
       {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { n.sections[sIdx].hingeSide = e.target.value as "left" | "right"; })}><option value="left">Слева</option><option value="right">Справа</option></select></label>}
+      {/* фактические высоты (ручные пересчитаны под текущую высоту фасада) — их показываем и от них считаем правки */}
       <div className="kitchen-chips" role="group" aria-label="Высоты петель">
-        <button type="button" aria-pressed={!s.hingeY?.length} onClick={() => modify((n) => { delete n.sections[sIdx].hingeY; })}>Авто</button>
-        <button type="button" aria-pressed={!!s.hingeY?.length} disabled={!door} onClick={() => modify((n) => { n.sections[sIdx].hingeY = auto.map((y) => Math.round(y)); })}>Вручную</button>
+        <button type="button" aria-pressed={!s.hingeY?.length} onClick={() => modify((n) => { delete n.sections[sIdx].hingeY; delete n.sections[sIdx].hingeYFor; })}>Авто</button>
+        <button type="button" aria-pressed={!!s.hingeY?.length} disabled={!door} onClick={() => modify((n) => { n.sections[sIdx].hingeY = auto.map((y) => Math.round(y)); n.sections[sIdx].hingeYFor = dhNow; })}>Вручную</button>
       </div>
       {!s.hingeY?.length && door && <p className="field-note">По правилу: {auto.length} шт. на {Math.round(door.size[1])} мм — {auto.map((y) => Math.round(y)).join(" и ")} мм от низа фасада; если там полка, царга или конфирмат — петля сдвигается до свободного места.</p>}
       {!!s.hingeY?.length && door && <>
-        {s.hingeY.map((y, j) => <Num key={j} label={`Петля ${j + 1} от низа фасада`} value={y} min={40} max={Math.floor(door.size[1] - 40)} change={(v) => modify((n) => { const h = [...(n.sections[sIdx].hingeY ?? [])]; h[j] = v; n.sections[sIdx].hingeY = h.sort((a, b) => a - b); })} />)}
+        {shownY.map((y, j) => <Num key={j} label={`Петля ${j + 1} от низа фасада`} value={y} min={40} max={Math.floor(door.size[1] - 40)} change={(v) => modify((n) => { const h = [...shownY]; h[j] = v; n.sections[sIdx].hingeY = h.sort((a, b) => a - b); n.sections[sIdx].hingeYFor = dhNow; })} />)}
         <div className="kitchen-chips">
-          <button type="button" disabled={s.hingeY.length >= 5} onClick={() => modify((n) => { n.sections[sIdx].hingeY = addHinge(n.sections[sIdx].hingeY ?? []); })}>+ петля</button>
-          <button type="button" disabled={s.hingeY.length <= 2} onClick={() => modify((n) => { n.sections[sIdx].hingeY = removeHinge(n.sections[sIdx].hingeY ?? [], door.size[1]); })}>− петля</button>
+          <button type="button" disabled={s.hingeY.length >= 5} onClick={() => modify((n) => { n.sections[sIdx].hingeY = addHinge(shownY); n.sections[sIdx].hingeYFor = dhNow; })}>+ петля</button>
+          <button type="button" disabled={s.hingeY.length <= 2} onClick={() => modify((n) => { n.sections[sIdx].hingeY = removeHinge(shownY, door.size[1]); n.sections[sIdx].hingeYFor = dhNow; })}>− петля</button>
         </div>
         <p className="field-note">Высоты одинаковы для всех фасадов секции, как в проекте Базиса.{doors.length > 1 && doors.some((d) => Math.abs(d.size[1] - door.size[1]) > 1) ? " У фасадов разной высоты проверьте верхний ряд." : ""}</p>
       </>}
