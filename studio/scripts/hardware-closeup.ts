@@ -6,8 +6,8 @@ import { newProject } from "../src/project";
 
 const [url, out] = process.argv.slice(2);
 const m = initialModule();
-Object.assign(m, { name: "Проверка фурнитуры", width: 556, height: 2200, depth: 400, plinthHeight: 60, doors: true, decor: "Слэйт", facadeDecor: "Слэйт" });
-m.sections = [{ ...section(), doorLeaves: 1, shelves: [0.19, 0.32], fixed: [0, 1], pullouts: 1 }];
+Object.assign(m, { name: "Проверка фурнитуры", width: Number(process.env.W ?? 556), height: Number(process.env.H ?? 2200), depth: 400, plinthHeight: 60, doors: true, decor: "Слэйт", facadeDecor: "Слэйт" });
+m.sections = [{ ...section(), doorLeaves: 1, shelves: process.env.H ? [] : [0.19, 0.32], fixed: process.env.H ? [] : [0, 1], pullouts: process.env.H ? undefined : 1 }];
 const p = newProject(m); p.room = { ...p.room, width: 1600, depth: 1400, height: 2700 };
 p.modules[0].x = 500; p.modules[0].z = 30;
 const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });

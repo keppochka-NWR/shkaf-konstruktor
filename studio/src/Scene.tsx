@@ -315,7 +315,8 @@ export function Scene(p: Props) {
             }).catch(()=>{}).finally(()=>{if(gen===generation)pendingTextures--;});
           }
           const isAlu = part.material === "alu" && !!m.alu;
-          const roundAlongZ = part.role === "hinge" && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
+          // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
+          const roundAlongZ = part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
           const geometry = roundAlongZ
             ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
             : (part.role === "rod" || part.role === "flange" || part.role === "fastener")
