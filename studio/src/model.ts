@@ -113,6 +113,8 @@ export type Section = {
   doorLeaves?: 1 | 2;
   doorHandles?: (string | null)[];
   doorHinges?: ("left"|"right"|"top"|null)[];
+  /** Высоты петель от низа фасада, мм (как в проекте Базиса); без поля — по правилу (100 мм от краёв). */
+  hingeY?: number[];
   hingeSide?: "left" | "right";
   removedDoors?: number[];
   doorGap?: number;
@@ -193,6 +195,20 @@ export type Module = {
    *  (по умолчанию 0,5; кухни Базиса П16-4×8 — ширина 4, недоход 1 → ХДФ (W−18)×(H−18)). */
   grooveWidth?: number;
   grooveClear?: number;
+  /** Толщина фасадов (ЛДСП 16 по умолчанию; МДФ 18–19, стекло в рамке 4) и «воздух» между корпусом и накладным фасадом (шкафы 2; кухни Базиса 0). */
+  facadeT?: number;
+  faceAir?: number;
+  /** Полка: отступ от задника (Базис — 1 мм) и полкодержатели от кромок полки (шкафы 40; Базис кухни — 60). */
+  shelfRear?: number;
+  shelfPinInset?: number;
+  /** Конфирматы дна/крыши/жёстких полок — от концов стыка, мм (по умолчанию RULES.confirmatInset 50; проекты Базиса — 50…64). */
+  confirmatInset?: number;
+  /** Ручки не заложены (Gola, ручки заказчика, без ручек) — как в кухнях Базиса без ручек в спецификации. */
+  noHandles?: boolean;
+  /** Толщина стеклянных полок (по умолчанию 6; кухни Базиса — 4, полкодержатели MV05). */
+  glassT?: number;
+  /** Зазор стеклянной полки до стойки с каждой стороны (по умолчанию как у ЛДСП — 1; Базис — 1,5). */
+  glassGap?: number;
   /** Распашные фасады: накладные (по умолчанию) или вкладные в проём; открывание ручкой (по умолчанию) или push-to-open без ручек. */
   doorMount?: "overlay" | "inset";
   doorOpen?: "handle" | "push";
@@ -659,13 +675,13 @@ export function parts(m: Module): Part[] {
         );
     s.shelves.forEach((f, j) => {
       const shelfDepth=s.shelfDepth??sd;
-      const glass=s.glassShelves?.includes(j),st=glass?6:t;
+      const glass=s.glassShelves?.includes(j),st=glass?(m.glassT??6):t;
       add(
         `${s.id}:shelf:${j}`,
-        (glass?'Стеклянная полка 6 мм · обработку уточнить':s.fixed?.includes(j) ? "Полка жёсткая" : "Полка съёмная") + sk,
-        [b.width - (s.fixed?.includes(j) ? 0 : 2 * RULES.shelfGap), st, shelfDepth],
-        [b.x + b.width / 2, b.bottom + f * h, rear + shelfDepth / 2],
-        b.width - (s.fixed?.includes(j) ? 0 : 2 * RULES.shelfGap),
+        (glass?"Стеклянная полка "+(m.glassT??6)+" мм · обработку уточнить":s.fixed?.includes(j) ? "Полка жёсткая" : "Полка съёмная") + sk,
+        [b.width - (s.fixed?.includes(j) ? 0 : 2 * (glass ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap)), st, shelfDepth],
+        [b.x + b.width / 2, b.bottom + f * h, rear + (m.shelfRear ?? 0) + shelfDepth / 2],
+        b.width - (s.fixed?.includes(j) ? 0 : 2 * (glass ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap)),
         shelfDepth,
         st,
         "shelf",
@@ -766,9 +782,10 @@ export function parts(m: Module): Part[] {
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
         if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
       }
-      add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад',[fw,fh,t],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-t/2:d+t/2+2],fh,fw,t,'drawer',s.id);
+      const dft=drawersBehindDoors(m,s)?t:m.facadeT??t;
+      add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад',[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id);
       out.at(-1)!.decor=m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
-      if(drawerHasHandle(cfg)){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
+      if(drawerHasHandle(cfg)&&!m.noHandles){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -833,7 +850,7 @@ export function parts(m: Module): Part[] {
       const cosK=Math.cos(skewAngle(m)),frontLen=(spanR-spanL)/cosK;
       const gap=s.doorGap??fb(m),count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
       const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
-      const dz=inset?d-t/2:d+t/2+2;
+      const ft=m.facadeT??t,dz=inset?d-ft/2:d+ft/2+(m.faceAir??2);
       const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2],[doorBottom+s.doorSplit+gap/2,y1flat]];
       for(let row=0;row<bands.length;row++){
       const [y0,yTop]=bands[row];
@@ -848,13 +865,13 @@ export function parts(m: Module): Part[] {
           const ft=ALU_EXTRAS.frameDepth;
           add(s.id+':door:'+k,'Фасад в алюминиевой рамке',[dw,dh,ft],[cx,(y0+y1)/2,inset?d-ft/2:d+ft/2+2],dh,dw,ft,'door',s.id,'alu');
           out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
-        } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,t],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,t,'door',s.id);
+        } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,ft],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,ft,'door',s.id);
         if(fp)out.at(-1)!.rotY=fp.rotY;
         out.at(-1)!.hinge=hinge;if(hinge==='top')out.at(-1)!.name='Фасад подъёмный · механизм требует подбора';
-        if(m.doorOpen==='push')continue; // push-to-open: без ручки, толкатель в смете
+        if(m.doorOpen==='push'||m.noHandles)continue; // push-to-open или ручки не заложены: без ручки
         const hl=handleById(s.doorHandles?.[k]??m.handleId).len;
         const hp=m.skew?frontPoint(m,cx,t+2+13,hinge==='top'?0:(hinge==='left'?1:-1)*(dw/2-40)):undefined;
-        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(s.doorHandles?.[k]??m.handleId).label,hinge==='top'?[hl,10,25]:[10,hl,25],[hp?hp.x:hinge==='top'?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),hinge==='top'?y0+40:y0+Math.min(hL,hR)/2,hp?hp.z:dz+t/2+13],hl,25,10,'handle',s.id,'metal');
+        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(s.doorHandles?.[k]??m.handleId).label,hinge==='top'?[hl,10,25]:[10,hl,25],[hp?hp.x:hinge==='top'?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),hinge==='top'?y0+40:y0+Math.min(hL,hR)/2,hp?hp.z:dz+ft/2+13],hl,25,10,'handle',s.id,'metal');
         if(hp)out.at(-1)!.rotY=hp.rotY;
       }
       }
@@ -881,14 +898,14 @@ export function parts(m: Module): Part[] {
       // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
       const yb = hp.position[1] - t / 2;
       for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
-        for (const [k, z] of [z0 + RULES.confirmatInset, z0 + hp.size[2] - RULES.confirmatInset].entries())
+        for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] - (m.confirmatInset ?? RULES.confirmatInset)].entries())
           confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
       continue;
     }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
       const z1 = z0 + (hp.taperZ ? hp.taperZ[side === "left" ? 0 : 1] : hp.size[2]); // при скосе фронта передний крепёж по глубине своей стороны
-      for (const [k, z] of [z0 + RULES.confirmatInset, z1 - RULES.confirmatInset].entries()) {
+      for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
         if (ecc) {
           // Бочонок сверлится с пласти, обращённой внутрь корпуса: у дна — сверху, у крыши и полок — снизу; торец бочонка виден при открытых фасадах.
           const fromTop = hp.id === "bottom", by = fromTop ? hp.position[1] + t / 2 - RULES.eccBarrelH / 2 + 0.3 : hp.position[1] - t / 2 + RULES.eccBarrelH / 2 - 0.3;
@@ -898,15 +915,15 @@ export function parts(m: Module): Part[] {
       }
     }
   }
-  // Царги лёжа (кухни Базиса): по одному конфирмату с каждой стороны через боковину в торец царги.
-  for (const r of out.filter((p) => p.id.startsWith("rail:") && p.size[1] === t)) {
+  // Царги лёжа (кухни Базиса) и стяжки кухни на ребре: по одному конфирмату с каждой стороны через боковину в торец царги.
+  for (const r of out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen))) {
     for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
       confirmat(`fast:${r.id}:${side}:0`, [edgeX - dir * t, r.position[1], r.position[2]], dir > 0 ? "+x" : "-x");
   }
   for (const dv of out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;
     for (const [edge, y] of [["top", innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
-      for (const [k, z] of [z0 + RULES.confirmatInset, z1 - RULES.confirmatInset].entries()) {
+      for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
         else confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], edge === "top" ? y + t / 2 : y - t / 2, z], edge === "top" ? "-y" : "+y", dv.sectionId);
       }
@@ -940,12 +957,13 @@ function hardwareParts(m: Module, out: Part[]) {
   const brand = HINGE_BRANDS[m.hingeBrand ?? "gtv"].label;
   // Полкодержатели — до петель: петля не должна сесть на полкодержатель (проверка пересечений ниже их видит).
   const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
-  for (const sh of out.filter((p) => p.role === "shelf" && p.material === "board" && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
+  for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
-    [[x - w / 2 + 4, z - dd / 2 + 40], [x + w / 2 - 4, z - dd / 2 + 40], [x - w / 2 + 4, z + dd / 2 - 40], [x + w / 2 - 4, z + dd / 2 - 40]].forEach(([px, pz], k) =>
-      out.push({ ...metal(`shp:${sh.id}:${k}`, "Полкодержатель", [12, 6, 6], [px, y - t / 2 - 3, pz], "fastener", sh.sectionId),
+    const pi = m.shelfPinInset ?? 40;
+    [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pi], [x + w / 2 - 4, z + dd / 2 - pi]].forEach(([px, pz], k) =>
+      out.push({ ...metal(`shp:${sh.id}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, y - sh.size[1] / 2 - 3, pz], "fastener", sh.sectionId),
         // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
-        model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - 1 : x + w / 2 + 1, y - t / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
+        model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - 1 : x + w / 2 + 1, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
   }
   for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && (p.hinge === "left" || p.hinge === "right"))) {
     const [cx, cy, dz] = door.position, [dw, dh] = door.size, dir = door.hinge === "left" ? 1 : -1;
@@ -969,7 +987,8 @@ function hardwareParts(m: Module, out: Part[]) {
         // стойки × тыльная плоскость фасада; X — от фасада внутрь, Y — от стойки внутрь корпуса, Z — ось петли. Ориентации левой и правой
         // петли — как в моделях Базиса. Чашка — по преобразованию из моделей: поворот Ry 90°, сдвиг 4,5 по Y.
         const qb: Quat = dir > 0 ? [0.5, 0.5, 0.5, -0.5] : [0.5, -0.5, 0.5, 0.5], o: [number, number, number] = [sideX, y, back];
-        const co = qrot(qb, [0, 4.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
+        // Центр чашки — в 7,5 мм от внутренней плоскости стойки (присадка «Петля накладная» в проектах Базиса цеха).
+        const co = qrot(qb, [0, 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
         const cup: Part = { ...metal(cupId, "Петля " + brand + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
           model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qb, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
           collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }] };
@@ -988,11 +1007,15 @@ function hardwareParts(m: Module, out: Part[]) {
         collide: [{ size: [26, 63, 78], position: [sideX + dir * 13, y, back - 39] }] };
       return [cup, plate];
     };
-    const blocked = (hs: Part[]) => hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); return depth > 0.1 && !allowedContact(h, o, depth, m); }));
+    // Зазор 5 мм до любой детали, кроме разрешённых контактов (своя стойка, свой фасад, своя петля) — не впритык к полке.
+    // Зазор — только до «чужих» деталей в зоне петли (полки, царги, крепёж, ящики, другие петли); каркас и свой фасад петля касает по устройству.
+    const clearOf = (o: Part) => o.role === "shelf" || o.role === "drawer" || o.role === "hinge" || o.id.startsWith("rail:") || o.id.startsWith("fast:") || o.id.startsWith("shp:") || o.id.startsWith("ecc:");
+    const blocked = (hs: Part[]) => hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); if (allowedContact(h, o, Math.max(depth, 0), m)) return false; return depth > 0.1 || (clearOf(o) && depth > -HINGE_CLEAR); }));
     // Петля не должна пересекать ничего (замечание Макса 09.10.2026): идеальная высота (100 мм от краёв фасада), а если там полка,
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
-    hingePositions(dh, dw, !!m.kitchen).forEach((hy, n) => {
+    const sec = m.sections.find((s) => s.id === door.sectionId);
+    (sec?.hingeY?.length ? sec.hingeY : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
       for (const s of hingeShifts()) {
@@ -1011,6 +1034,8 @@ function hardwareParts(m: Module, out: Part[]) {
   }
   void slideMotion; void slideBrand; void SLIDE_BRANDS;
 }
+/** Минимальный зазор от петли до чужих деталей при подборе высоты, мм. */
+const HINGE_CLEAR = 5;
 /** Вертикальная доска корпуса (боковина, перегородка, фальш-планка): тонкая по X. */
 function isBoardVertical(p: Part) { return p.material === "board" && p.role === "body" && p.size[0] <= 40 && p.size[1] > 60 && !p.rotY && !p.rotZ; }
 /** Верх полки над ящиками секции от низа корпуса (цоколь + дно + стопка ящиков + полка). */
@@ -1088,7 +1113,7 @@ export function validate(m: Module): string[] {
   if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);}
   if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
-  for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
+  for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['faceAir',0,10],['shelfRear',0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
   if(m.rails?.some(r=>r&&((r.lay!==undefined&&!['edge','flat'].includes(r.lay))||(r.setback!==undefined&&(!Number.isFinite(r.setback)||r.setback<0||r.setback>80)))))errors.push('Царга: укладка на ребро или лёжа, утопание 0–80 мм.');
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
@@ -1272,9 +1297,10 @@ export function validate(m: Module): string[] {
         `«${p.name}» не помещается в полезное поле листа или имеет неверный размер.`,
       );
     if (p.id === "slope-filler") continue; // фальш над фасадами — не створка: без ограничений ширины/высоты двери
-    if (p.role === "door" && p.width > (p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax))
+    // Кухня: фасады до 700 (в проектах Базиса цеха навесные 627–650 мм при высоте 927); шкафы — правило цеха doorMax.
+    if (p.role === "door" && p.width > (m.kitchen ? Math.max(700, RULES.doorMax) : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax))
       errors.push(
-        `Фасад шире ${p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`,
+        `Фасад шире ${m.kitchen ? Math.max(700, RULES.doorMax) : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`,
       );
     if (p.role === "door" && p.length < RULES.doorMinH)
       errors.push(`Распашной фасад ниже ${RULES.doorMinH} мм. Увеличьте высоту корпуса или уберите фасады.`);
@@ -1423,6 +1449,14 @@ export function parseModule(input: unknown): Module {
     ...(x.backGap===undefined?{}:{backGap:Number(x.backGap)}),
     ...(x.grooveWidth===undefined?{}:{grooveWidth:Number(x.grooveWidth)}),
     ...(x.grooveClear===undefined?{}:{grooveClear:Number(x.grooveClear)}),
+    ...(x.facadeT===undefined?{}:{facadeT:Number(x.facadeT)}),
+    ...(x.faceAir===undefined?{}:{faceAir:Number(x.faceAir)}),
+    ...(x.shelfRear===undefined?{}:{shelfRear:Number(x.shelfRear)}),
+    ...(x.shelfPinInset===undefined?{}:{shelfPinInset:Number(x.shelfPinInset)}),
+    ...(x.confirmatInset===undefined?{}:{confirmatInset:Number(x.confirmatInset)}),
+    ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),
+    ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),
+    ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
@@ -1431,7 +1465,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
@@ -1445,6 +1479,7 @@ export function parseModule(input: unknown): Module {
       id: s.id,
       weight: s.weight,
       ...(s.doorHinges===undefined?{}:{doorHinges:Array.isArray(s.doorHinges)?[...s.doorHinges]:s.doorHinges}),
+      ...(s.hingeY===undefined?{}:{hingeY:Array.isArray(s.hingeY)?s.hingeY.map(Number).filter(Number.isFinite):[]}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),

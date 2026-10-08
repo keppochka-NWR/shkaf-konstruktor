@@ -5,29 +5,32 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { parts, type Module, type Part } from "../../src/model";
 import { parseProject } from "../../src/project";
+import { holes as studioHoles } from "../../src/drilling";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
-export type RefModule = { key: string; name: string; archetype: string; size: number[]; panels: RefPanel[]; hardware: RefHardware[]; holes?: unknown[] };
+export type RefHole = { panel: number; face: string; at: number[]; dir: number[]; d: number; depth: number; src?: number | null };
+export type RefModule = { key: string; name: string; archetype: string; size: number[]; panels: RefPanel[]; hardware: RefHardware[]; holes?: RefHole[] };
 
 type Box = [number, number, number, number, number, number];
 type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
 export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
-export type Comparison = { pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; size: { ref: number[]; studio: number[] } };
+export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
+export type Comparison = { pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; size: { ref: number[]; studio: number[] } };
 
 const AX = ["x", "y", "z"];
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** Класс панели: вид материала, толщина (округлённо), ось толщины, фасад или корпус. */
-function cls(kind: string, thick: number, axis: string, facade: boolean) { return `${kind}|${Math.round(thick)}|${axis}|${facade ? "фасад" : "корпус"}`; }
+function cls(kind: string, thick: number, axis: string, facade: boolean) { return facade ? `фасад|${Math.round(thick)}|${axis}` : `${kind}|${Math.round(thick)}|${axis}|корпус`; }
 
 function refItems(m: RefModule): Item[] {
   // Фасад Базиса — панель перед боковинами (её задняя грань не глубже передней кромки корпуса минус 1 мм)
   const bodyFront = Math.max(...m.panels.filter((p) => p.axis === "x" && p.kind !== "hdf").map((p) => p.box[5]), 0);
-  return m.panels.filter((p) => ["ldsp", "hdf", "mdf", "glass"].includes(p.kind)).map((p) => {
+  return m.panels.filter((p) => ["ldsp", "hdf", "mdf", "glass", "other"].includes(p.kind)).map((p) => {
     const facade = p.axis === "z" && p.box[2] >= bodyFront - 1 && p.kind !== "hdf";
-    const kind = p.kind === "mdf" ? "ldsp" : p.kind;
+    const kind = p.kind === "mdf" || p.kind === "other" ? "ldsp" : p.kind;
     return { id: `b${p.i}`, name: p.name, cls: cls(kind, p.thick, p.axis, facade), box: p.box.map(r1) as Box };
   });
 }
@@ -65,7 +68,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kitchen-clip:")) return "клипса";
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
-  if (id.includes(":hingecup:")) return "петля";
+  if (id.includes(":hingeplate:")) return "петля";
   if (id.startsWith("fast:")) return "конфирмат";
   if (id.startsWith("ecc:") && !id.endsWith(":pin")) return "эксцентрик";
   if (id.startsWith("shp:")) return "полкодержатель";
@@ -75,8 +78,8 @@ function studioCategory(p: Part): string | null {
 }
 /** Точка привязки фурнитуры студии в осях Базиса: опора/клипса/навес — origin модели; петля — центр чашки на тыльной плоскости фасада. */
 function studioAnchor(p: Part): number[] {
+  // петля Базиса — точка «внутренняя плоскость стойки × тыльная плоскость фасада» на оси петли = origin плеча в студии
   if (p.model?.native && p.model.origin) return p.model.origin;
-  if (p.id.includes(":hingecup:") && p.collide?.[0]) { const c = p.collide[0]; return [c.position[0], c.position[1], c.position[2] - c.size[2] / 2]; }
   return p.position;
 }
 /** Сопоставление точек одной категории (жадно по расстоянию), максимум отклонения. */
@@ -92,7 +95,12 @@ function matchPoints(a: number[][], b: number[][]): number | null {
 }
 
 export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison {
-  const ps = parts(m), A = refItems(ref), B = studioItems(ps), pairs: PanelPair[] = [], missing: Item[] = [], extra: Item[] = [];
+  const ps = parts(m), A0 = refItems(ref), B0 = studioItems(ps), pairs: PanelPair[] = [], missing: Item[] = [], extra: Item[] = [];
+  // Общая точка отсчёта: минимальный угол габарита панелей (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0 и ХДФ на −3..0).
+  const corner = (xs: Item[]) => [0, 1, 2].map((i) => Math.min(...xs.map((x) => x.box[i])));
+  const oa = corner(A0), ob = corner(B0);
+  const shift = (x: Item, o: number[]): Item => ({ ...x, box: x.box.map((v, i) => r1(v - o[i % 3])) as Box });
+  const A = A0.map((x) => shift(x, oa)), B = B0.map((x) => shift(x, ob));
   for (const c of new Set([...A, ...B].map((x) => x.cls))) {
     const a = A.filter((x) => x.cls === c), b = B.filter((x) => x.cls === c);
     if (!a.length) { extra.push(...b); continue; }
@@ -111,13 +119,33 @@ export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison 
   for (const pr of [...pairs]) if (pr.delta > 50) { pairs.splice(pairs.indexOf(pr), 1); missing.push(pr.ref); extra.push(pr.studio); }
   const cats = new Set<string>([...ref.hardware.map((h) => h.category), ...ps.map(studioCategory).filter((x): x is string => !!x)]);
   const hardware: HardwareRow[] = [...cats].map((category) => {
-    const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor);
+    const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
     return { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
   });
   const tolOf = (p: PanelPair) => (p.ref.cls.startsWith("hdf") ? Math.max(1, tol) : tol);
   const hwOk = hardware.every((h) => h.ref === h.studio && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант"].includes(h.category) ? 2 : 1)));
-  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk;
-  return { pass, tol, pairs, missing, extra, hardware, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
+  // Отверстия: на каждой сопоставленной паре панелей — тот же диаметр, глубина, направление; точка входа ±0,5 мм.
+  let holeCheck: HoleCheck | undefined;
+  if (ref.holes) {
+    const sh = studioHoles(m, ps), used = new Set<number>(), pairOf = new Map(pairs.map((p) => [p.ref.id, p.studio.id]));
+    const hc: HoleCheck = { ref: ref.holes.length, studio: sh.length, matched: 0, maxDelta: 0, missing: [], extra: [] };
+    for (const h of ref.holes) {
+      if (h.panel === null || h.panel === undefined) { hc.ref--; continue; } // отверстие в корпусе фурнитуры (навес), не в панели
+      const sid = pairOf.get("b" + h.panel), at = h.at.map((v, i) => v - oa[i]);
+      let best = -1, bd = Infinity;
+      sh.forEach((s, j) => {
+        if (used.has(j) || s.part !== sid || s.d !== h.d || Math.abs(s.depth - h.depth) > 0.5 || s.dir[0] * h.dir[0] + s.dir[1] * h.dir[1] + s.dir[2] * h.dir[2] < 0.99) return;
+        const dd = Math.hypot(...s.at.map((v, i) => v - ob[i] - at[i])); if (dd < bd) { bd = dd; best = j; }
+      });
+      if (best >= 0 && bd <= 5) { used.add(best); hc.matched++; hc.maxDelta = Math.max(hc.maxDelta, r1(bd)); }
+      else hc.missing.push(`D${h.d}×${h.depth} ${h.face} панель ${h.panel} (${at.map(r1).join(",")})`);
+    }
+    sh.forEach((s, j) => { if (!used.has(j)) hc.extra.push(`D${s.d}×${s.depth} ${s.part.replace(/^[0-9a-f-]{36}/, "S")} (${s.at.map((v, i) => r1(v - ob[i])).join(",")})`); });
+    holeCheck = hc;
+  }
+  const holesOk = !holeCheck || (!holeCheck.missing.length && !holeCheck.extra.length && holeCheck.maxDelta <= 0.5);
+  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk;
+  return { pass, tol, pairs, missing, extra, hardware, holes: holeCheck, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
 }
 
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */
@@ -140,6 +168,7 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   md += "\n| фурнитура | Базис | студия | max Δ точки, мм |\n|---|---|---|---|\n";
   for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} |\n`;
+  if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;
 }
 

@@ -31,8 +31,9 @@ export function penetration(A: Box, B: Box): number {
     const rB = B.h[0] * Math.abs(dot(B.ax[0], L)) + B.h[1] * Math.abs(dot(B.ax[1], L)) + B.h[2] * Math.abs(dot(B.ax[2], L));
     const o = rA + rB - Math.abs(dot(d, L));
     if (o < min) min = o;
-    if (min <= 0) return min;
   }
+  // Минимум по ВСЕМ осям: > 0 — пересекаются на эту глубину; ≤ 0 — разнесены не меньше чем на |min| по лучшей оси
+  // (нужно для зазора: «ближе 5 мм» — это min > −5, а не первое отрицательное перекрытие).
   return min;
 }
 
@@ -55,7 +56,7 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
       if (k(p.id) === k(q.id)) return true;
     }
     // Планка петли привинчена к стойке: допускаем касание-вдавливание до 3 мм (саморезы и выступ планки в модели).
-    if (p.id.includes(":hingeplate:") && isBoard(q) && q.role === "body" && depth <= 3) return true;
+    if (p.id.includes(":hingeplate:") && isBoard(q) && q.role === "body" && q.size[0] <= 40 && q.size[1] > 60 && depth <= 3) return true;
     // Ручка — на своём фасаде (винты через фасад); ручка ящика — на фасаде своего ящика.
     if (p.role === "handle" && q.role === "door" && p.id.replace(":handle:", ":door:") === q.id) return true;
     if (p.role === "handle" && q.id.endsWith(":facade") && p.id.replace(/:handle$/, "") === q.id.replace(/:facade$/, "")) return true;
@@ -70,7 +71,7 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     // Кухонная фурнитура: опора — под дном, клипса — на опоре и цоколе, навес — в углу боковины, проходит через полосу ХДФ.
     if (p.id.startsWith("leg:") && isBoard(q) && depth <= 3) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
-    if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body") return true;
+    if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body" && (q.material === "hdf" || (q.size[0] <= 40 && q.size[1] > 60))) return true;
     if (p.id.startsWith("kitchen-hanger-cap:") && q.id === p.id.replace("-cap", "")) return true;
     // Подсветка врезается в полку/крышу.
     if (p.role === "light" && isBoard(q)) return true;

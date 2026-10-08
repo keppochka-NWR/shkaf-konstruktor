@@ -10,7 +10,9 @@ export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
-  plinth?: { height: number; off?: boolean } };
+  plinth?: { height: number; off?: boolean; clips?: boolean };
+  /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
+  legs?: { back: number; front: number; xs?: number[] } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
@@ -68,9 +70,9 @@ export const kitchenRole = (m: Module) => m.kitchen?.role;
 
 /** Опоры нижнего модуля: в 70 мм от краёв дна; узкие (< 250) — по центру ширины, широкие (> 1300) — третий ряд посередине. */
 export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }[] {
-  const w = m.width, d = m.depth, a = KITCHEN.legInset;
-  const xs = w < 250 ? [w / 2] : w > 1300 ? [a, w / 2, w - a] : [a, w - a];
-  return xs.flatMap((x) => [{ x, z: a, front: false }, { x, z: d - a, front: true }]);
+  const w = m.width, d = m.depth, a = KITCHEN.legInset, L = m.kitchen?.legs;
+  const xs = L?.xs ?? (w < 250 ? [w / 2] : w > 1300 ? [a, w / 2, w - a] : [a, w - a]);
+  return xs.flatMap((x) => [{ x, z: L?.back ?? a, front: false }, { x, z: d - (L?.front ?? a), front: true }]);
 }
 
 // Повороты осей фурнитуры Базиса в оси модуля (проверено по корпусу: опора — Z вниз, клипса — X к цоколю; навес — X к стене, Y вверх,
@@ -90,14 +92,15 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       // Опора: ось вниз от нижней грани дна, площадка 4×D4 по квадрату 31×31; модель Базиса ±29 × 0..100 по оси.
       const lm = KITCHEN_MODELS.leg;
       out.push(metal(`leg:${n}`, "Опора кухонная регулируемая H100-120, чёрная", [58, H, 58], [l.x, H / 2, l.z], lm ? { file: lm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: Q_LEG } : undefined));
-      if (l.front && !k.plinth?.off) {
+      // клипсы на передних опорах — и когда цоколь у ряда, а не у модуля; нет только при clips: false
+      if (l.front && k.plinth?.clips !== false) {
         const cm = KITCHEN_MODELS.clip;
         // Клипса для ПВХ цоколя: на передней опоре, 45–52 мм ниже дна, от −10,9 до +29 к цоколю.
         out.push(metal(`kitchen-clip:${n}`, "Клипса для ПВХ цоколя, чёрная", [32.3, 7, 39.9], [l.x, H - 49, l.z + 9.07], cm ? { file: cm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: Q_LEG } : undefined));
       }
     }
     if (!k.plinth?.off) {
-      const ph = k.plinth?.height ?? KITCHEN.plinthHeight, zb = m.depth - KITCHEN.legInset + KITCHEN.clipReach;
+      const ph = k.plinth?.height ?? KITCHEN.plinthHeight, zb = m.depth - (k.legs?.front ?? KITCHEN.legInset) + KITCHEN.clipReach;
       // Цоколь ЛДСП 16 на клипсах передних опор: задняя грань — по выступу клипсы, на 5 мм ниже дна.
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
@@ -148,7 +151,9 @@ export function kitchenErrors(m: Module): string[] {
 }
 
 /** Общий кухонный вид корпуса по Базису: фасады 1,5 / 3, ХДФ накладной (W−3)×(H−3) или в паз П16-4×8. */
-const look = (m: Module): Module => ({ ...m, faceGap: KITCHEN.faceGap, faceGapBetween: KITCHEN.faceGapBetween, backGap: KITCHEN.backGap });
+const look = (m: Module): Module => ({ ...m, faceGap: KITCHEN.faceGap, faceGapBetween: KITCHEN.faceGapBetween, backGap: KITCHEN.backGap,
+  // Базис цеха: фасад вплотную к корпусу (воздух 0), конфирматы в 64 мм от концов стыка, полка в 1 мм от задника, полкодержатели в 60 от кромок полки
+  faceAir: 0, confirmatInset: 64, shelfRear: 1, shelfPinInset: 60 });
 
 /** Нижний модуль (Базис «Нижний модуль (Пустой)»): дно под боковинами на опорах 100, крыши нет, две царги 100 лёжа заподлицо с верхом,
  *  ХДФ накладной; мойка — без задника, царги на ребре (передняя 60, задняя 100 — как 2777); духовка — без задника и царг. */
@@ -157,14 +162,16 @@ export function kitchenBase(base: Module, width: number, kind: "doors" | "drawer
   m.rails = kind === "oven" ? [] : kind === "sink"
     ? [{ place: "front-top", height: 60 }, { place: "rear-top", height: 100 }]
     : [{ place: "front-top", height: KITCHEN.railWidth, lay: "flat" }, { place: "rear-top", height: KITCHEN.railWidth, lay: "flat" }];
-  m.sections = [{ ...m.sections[0], shelves: kind === "doors" ? [0.5] : [], drawers: kind === "drawers" ? 3 : 0, rod: false }];
+  // полка: в 1 мм от задника и в 1,5 от лица корпуса (k25 «НМ600»)
+  m.sections = [{ ...m.sections[0], shelves: kind === "doors" ? [0.5] : [], drawers: kind === "drawers" ? 3 : 0, rod: false, shelfDepth: m.depth - 2.5 }];
   return m;
 }
 /** Навесной (Базис «ВМ (Стенка в паз)»): дно и крыша между боковинами, ХДФ в паз П16-4×8, навесы ABS L/R. */
 export function kitchenWall(base: Module, width: number): Module {
   const g = KITCHEN.groove;
   const m: Module = look({ ...structuredClone(base), name: "Навесной кухонный", width, height: KITCHEN.wallHeight, depth: KITCHEN.wallDepth, feet: undefined, plinthHeight: 0, topType: "panel", backType: "groove", grooveInset: g.inset, grooveWidth: g.width, grooveDepth: g.depth, grooveClear: g.clear, doors: true, kitchen: { role: "wall" } });
-  m.sections = [{ ...m.sections[0], shelves: [0.5], drawers: 0, rod: false }];
+  // полка: W−34, в 21 мм от задней кромки (за ХДФ в пазу) и в 1 мм от лица корпуса
+  m.sections = [{ ...m.sections[0], shelves: [0.5], drawers: 0, rod: false, shelfDepth: m.depth - 22 }];
   return m;
 }
 export function kitchenWorktop(base: Module, width: number): Module {
