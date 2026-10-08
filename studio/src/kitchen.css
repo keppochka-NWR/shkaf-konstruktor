@@ -1,0 +1,74 @@
+/* Вкладка «Кухня» (трек И, 09.10.2026): кухонная палитра слева и панель кухонного модуля справа. Цвета — из общей темы студии. */
+.kitchen-palette { --kp-accent: #b4561f; }
+.kitchen-palette > summary { display: flex; align-items: center; gap: 6px; }
+.kp-group { margin: 12px 0 4px; padding-top: 10px; border-top: 1px solid #dfe5ec; }
+.kp-group:first-of-type { border-top: 0; padding-top: 2px; }
+.kp-group h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 8px; font-size: 12px; font-weight: 650; color: #263348; }
+.kp-group h3 svg { flex-shrink: 0; color: var(--kp-accent); }
+.kp-group h3 .kp-title { display: flex; align-items: center; gap: 6px; }
+.kp-group h3 small { display: block; flex-basis: 100%; margin: 0; font-size: 10.5px; font-weight: 400; color: #6a7684; }
+.kp-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 6px 0; border-bottom: 1px dashed #e3e8ee; }
+.kp-item:last-child { border-bottom: 0; }
+.kp-label { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #263348; min-width: 0; }
+.kp-label svg { flex-shrink: 0; color: var(--kp-accent); }
+.kp-widths { display: flex; flex-wrap: wrap; gap: 4px; }
+.kp-widths button { min-width: 44px; min-height: 30px; padding: 4px 8px; border: 1px solid #cbd4df; border-radius: 6px; background: #fff; font-size: 12px; font-variant-numeric: tabular-nums; color: #263348; cursor: pointer; }
+.kp-widths button:hover { border-color: var(--kp-accent); background: #fdf3ec; color: #7d3a12; }
+.kp-widths button:focus-visible { outline: 2px solid var(--kp-accent); outline-offset: 1px; }
+.kp-widths .kp-wide { padding: 4px 12px; }
+.kp-row .number-field { margin: 6px 0; }
+.kp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0 2px; }
+.kp-actions button { min-height: 36px; font-size: 12px; justify-content: center; }
+.kp-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid #dfe5ec; }
+.kp-more > summary { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; cursor: pointer; color: #263348; }
+.kp-more .module-palette { margin: 10px 0 0; padding: 10px; background: #fff; }
+.kp-base ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow-y: auto; display: grid; gap: 2px; }
+.kp-base a { display: block; padding: 5px 8px; border-radius: 6px; font-size: 12px; color: #2443a4; text-decoration: none; }
+.kp-base a:hover { background: #eaf0ff; }
+.kp-back { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; }
+
+/* Панель кухонного модуля. Пояснения (позиции петель, опоры, навесы) показываем и в простом режиме — как у углового шкафа. */
+.kitchen-panel .field-note, .kitchen-palette .field-note { display: block !important; color: #687781; font-size: 11px; line-height: 1.5; margin: 8px 0; }
+.kitchen-panel .number-field > span:first-child { flex: 1 1 0; min-width: 0; line-height: 1.35; }
+.kitchen-panel .number-field > div { flex-shrink: 0; }
+.kitchen-colors { display: grid; gap: 6px; margin: 10px 0; }
+.kitchen-colors button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; padding: 6px 8px; border: 1px solid #dfe7e9; border-radius: 8px; background: #fff; text-align: left; font-size: 12px; color: #252a30; cursor: pointer; }
+.kitchen-colors button:hover { border-color: #b4561f; }
+.kitchen-colors .swatch { width: 30px; height: 30px; flex-shrink: 0; border-radius: 6px; border: 1px solid #d8dee3; background-size: cover; background-position: center; }
+.kitchen-colors small { display: block; font-size: 10.5px; color: #7b8794; }
+.kitchen-panel .kitchen-head { padding-bottom: 14px; }
+.kitchen-panel .kitchen-head .eyebrow { display: block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #b4561f; margin-bottom: 4px; }
+.kitchen-panel .kitchen-head h2 { margin: 0 0 4px; font-size: 15px; border-left: 0 !important; padding-left: 0 !important; }
+.kitchen-panel .kitchen-head p { margin: 0; font-size: 11.5px; color: #63707b; font-variant-numeric: tabular-nums; }
+.kitchen-group { padding-top: 14px; padding-bottom: 14px; }
+.kitchen-group > summary { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 650; color: #252a30; cursor: pointer; list-style: none; }
+.kitchen-group > summary::-webkit-details-marker { display: none; }
+.kitchen-group > summary::after { content: "▾"; margin-left: 6px; font-size: 10px; color: #8a96a3; transition: transform .15s; }
+.kitchen-group:not([open]) > summary::after { transform: rotate(-90deg); }
+.kitchen-group > summary svg { color: #b4561f; flex-shrink: 0; }
+.kitchen-group > summary small { margin-left: auto; font-size: 10.5px; font-weight: 500; color: #7b8794; font-variant-numeric: tabular-nums; }
+.kitchen-group[open] > summary { margin-bottom: 8px; }
+.kitchen-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.kitchen-chips button { min-height: 30px; padding: 4px 10px; border: 1px solid #d4dce5; border-radius: 7px; background: #fff; font-size: 12px; color: #263348; cursor: pointer; }
+.kitchen-chips button[aria-pressed="true"] { border-color: #325bee; background: #eaf0ff; color: #2443a4; }
+.kitchen-chips button:disabled { opacity: .45; cursor: default; }
+.kitchen-chips button.danger { color: #a32820; margin-left: auto; }
+.kitchen-field { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin: 8px 0; font-size: 11px; color: #71858e; }
+.kitchen-field .kitchen-chips { margin: 0; }
+.kitchen-rails, .kitchen-cuts { margin: 12px 0 4px; padding: 10px; border: 1px solid #e4e9ee; border-radius: 8px; background: #fafbfc; }
+.kitchen-rails .rails-title, .kitchen-cuts .rails-title { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 650; color: #4c5a66; }
+.kitchen-rails > summary.rails-title { margin: 0; cursor: pointer; line-height: 1.45; }
+.kitchen-rails[open] > summary.rails-title { margin-bottom: 6px; }
+.kitchen-rail + .kitchen-rail, .kitchen-cut + .kitchen-cut { border-top: 1px dashed #e0e6ec; padding-top: 4px; }
+.kitchen-rail .hardware-field { margin: 4px 0; }
+.kitchen-hardware { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 1px; }
+.kitchen-hardware li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid #f0f3f5; font-size: 11.5px; color: #3b4651; }
+.kitchen-hardware li b { font-variant-numeric: tabular-nums; color: #252a30; }
+.kitchen-warn, .kitchen-ok { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; font-size: 11px; line-height: 1.5; }
+.kitchen-warn { color: #a32820; }
+.kitchen-ok { color: #2d7a4f; }
+.kitchen-warn svg, .kitchen-ok svg { flex-shrink: 0; margin-top: 2px; }
+.kitchen-note { display: flex; gap: 8px; align-items: flex-start; }
+.kitchen-note p { margin: 0; font-size: 11px; line-height: 1.55; color: #4c5a66; }
+.kitchen-note svg { flex-shrink: 0; margin-top: 2px; color: #b4561f; }
+.kitchen-note.raw { background: #fdf6ef; }

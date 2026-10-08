@@ -1,9 +1,9 @@
 /* Полоса папки клиента: клиент · вкладки проектов · «Ещё проект» · итог по клиенту. */
-.client-bar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 5px 16px; background: #f4f6f9; border-bottom: 1px solid var(--line); min-height: 44px; position: relative; z-index: 4; min-width: 0; }
+.client-bar { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 5px 16px; background: #f4f6f9; border-bottom: 1px solid var(--line); min-height: 44px; position: relative; z-index: 12; min-width: 0; } /* выше панелей 3D (5–10), ниже модальных окон (20) */
 .client-pick, .project-add { position: relative; flex-shrink: 0; }
 .client-name { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: #fff; border: 1px solid #d5dde8; font-size: 13px; font-weight: 650; color: #1d2b3a; }
 .client-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-tabs { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 1px; }
+.project-tabs { display: flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 1px; }
 .project-tab { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; border-radius: 9px; border: 1px solid transparent; padding-right: 4px; }
 .project-tab button[role="tab"] { display: grid; text-align: left; padding: 4px 10px; border-radius: 8px; background: transparent; color: #4d6370; max-width: 220px; }
 .project-tab button[role="tab"] span { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -18,7 +18,7 @@
 .tab-confirm button { font-size: 12px; padding: 2px 7px; border-radius: 6px; background: #fff; border: 1px solid #d5dde8; }
 .add-project { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 8px; border: 1px dashed #2449d6; color: #2449d6; background: #fff; font-size: 13px; font-weight: 650; white-space: nowrap; }
 .add-project:hover { background: #eef3ff; }
-.client-total { flex-shrink: 0; font-size: 12.5px; color: #4d6370; white-space: nowrap; }
+.client-total { flex-shrink: 0; margin-left: auto; font-size: 12.5px; color: #4d6370; white-space: nowrap; }
 .client-total b { color: #2449d6; font-size: 15px; margin-left: 4px; }
 .client-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: 300px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid #d5dde8; border-radius: 12px; box-shadow: 0 12px 30px #1b2a4430; padding: 12px; display: grid; gap: 10px; }
 .add-menu { width: 260px; }
