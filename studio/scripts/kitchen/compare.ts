@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { parts, type Module, type Part } from "../../src/model";
 import { parseProject } from "../../src/project";
 import { holes as studioHoles } from "../../src/drilling";
+import { edgeByDir } from "../../src/edges";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
@@ -17,7 +18,8 @@ type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
 export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
-export type Comparison = { pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; size: { ref: number[]; studio: number[] } };
+export type EdgeCheck = { checked: number; bad: string[] };
+export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; size: { ref: number[]; studio: number[] } };
 
 const AX = ["x", "y", "z"];
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -144,9 +146,20 @@ export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison 
     sh.forEach((s, j) => { if (!used.has(j)) hc.extra.push(`D${s.d}×${s.depth} ${s.part.replace(/^[0-9a-f-]{36}/, "S")} (${s.at.map((v, i) => r1(v - ob[i])).join(",")})`); });
     holeCheck = hc;
   }
+  // кромка: у каждой пары панелей — те же кромленые торцы и толщина (фасады из фасадного материала и ХДФ — без кромки)
+  const edgeCheck: EdgeCheck = { checked: 0, bad: [] }, byId = new Map(ps.map((p) => [p.id, p]));
+  for (const pr of pairs) {
+    const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id) as (RefPanel & { edges?: { side: string; thick: number }[] }) | undefined, sp = byId.get(pr.studio.id);
+    if (!rp || !sp || !rp.edges) continue;
+    edgeCheck.checked++;
+    const want: Record<string, number> = {}; for (const e of rp.edges) if (e.thick > 0) want[e.side] = e.thick;
+    const have = edgeByDir(sp), keys = new Set([...Object.keys(want), ...Object.keys(have)]);
+    const diff = [...keys].filter((k) => Math.abs((want[k] ?? 0) - (have[k] ?? 0)) > 0.01);
+    if (diff.length) edgeCheck.bad.push(`${pr.ref.name}: ${diff.map((k) => `${k} Базис ${want[k] ?? 0} / студия ${have[k] ?? 0}`).join(", ")}`);
+  }
   const holesOk = !holeCheck || (!holeCheck.missing.length && !holeCheck.extra.length && holeCheck.maxDelta <= 0.5);
-  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk;
-  return { pass, tol, pairs, missing, extra, hardware, holes: holeCheck, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
+  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length;
+  return { edges: edgeCheck, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
 }
 
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */
@@ -169,6 +182,7 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   md += "\n| фурнитура | Базис | студия | max Δ точки, мм |\n|---|---|---|---|\n";
   for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} |\n`;
+  if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;
 }

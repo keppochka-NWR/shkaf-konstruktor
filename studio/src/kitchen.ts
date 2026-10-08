@@ -5,6 +5,7 @@
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
 import type { Module, Part } from "./model";
+import { setEdges } from "./edges";
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
@@ -119,6 +120,24 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       out.push(metal(`kitchen-hanger-cap:${side}`, `Заглушка навеса ABS ${side === "left" ? "левая" : "правая"}`, [26, 43, 65], [fx + dir * 13, oy - 22.5, oz + 32.5],
         cm ? { file: cm.file, length: "y", native: true, origin: [fx, oy, oz], quat: Q_HANGER } : undefined));
     }
+  }
+}
+
+/** Кромка кухни по проектам Базиса цеха (k25, k16, k14): кромятся только открытые торцы, скрытые — без кромки; толщина — своя у кухни
+ *  (1 или 0,5 мм ПВХ в цвет). Боковины низа — верх и перед; навесных — все четыре; дно под боковинами — перед и концы; дно и крыша между
+ *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
+export function kitchenEdges(m: Module, out: Part[]) {
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) return;
+  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
+  for (const p of out) {
+    if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
+    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", "-z"] : ["+y", "+z"], t);
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x"] : ["+z", "-z"], t);
+    else if (p.id === "top") setEdges(p, ["+z", "-z"], t);
+    else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? ["+z", "-z"] : ["+y", "-y"], t);
+    else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
+    else if (p.id === "kitchen-plinth") setEdges(p, ["+z"], t);
+    else if (p.role === "body") setEdges(p, ["+z"], t);
   }
 }
 
