@@ -217,7 +217,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {/* фактические высоты (ручные пересчитаны под текущую высоту фасада) — их показываем и от них считаем правки */}
       <div className="kitchen-chips" role="group" aria-label="Высоты петель">
         <button type="button" aria-pressed={!s.hingeY?.length} onClick={() => modify((n) => { delete n.sections[sIdx].hingeY; delete n.sections[sIdx].hingeYFor; })}>Авто</button>
-        <button type="button" aria-pressed={!!s.hingeY?.length} disabled={!door} onClick={() => modify((n) => { n.sections[sIdx].hingeY = auto.map((y) => Math.round(y)); n.sections[sIdx].hingeYFor = dhNow; })}>Вручную</button>
+        <button type="button" aria-pressed={!!s.hingeY?.length} disabled={!door || !!s.hingeY?.length} title={s.hingeY?.length ? "Уже вручную: правьте высоты ниже; «Авто» — вернуть правило" : undefined} onClick={() => modify((n) => { n.sections[sIdx].hingeY = auto.map((y) => Math.round(y)); n.sections[sIdx].hingeYFor = dhNow; })}>Вручную</button>
       </div>
       {!s.hingeY?.length && door && <p className="field-note">По правилу: {auto.length} шт. на {Math.round(door.size[1])} мм — {auto.map((y) => Math.round(y)).join(" и ")} мм от низа фасада; если там полка, царга или конфирмат — петля сдвигается до свободного места.</p>}
       {!!s.hingeY?.length && door && <>
