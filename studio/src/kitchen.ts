@@ -135,8 +135,10 @@ export function kitchenEdges(m: Module, out: Part[]) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
     // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)
     const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
-    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z"], t);
-    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : [])] : ["+z", ...rear], t);
+    // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся
+    const rearBase = m.backType === "none" ? ["-z"] : [];
+    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
     else if (p.id === "top") setEdges(p, ["+z", ...rear], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? ["+z", "-z"] : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);

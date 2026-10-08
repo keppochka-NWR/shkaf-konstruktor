@@ -187,7 +187,7 @@ export type Module = {
   topType?: "panel" | "none";
   /** Стяжки — планки между боковинами сзади или спереди, снизу или сверху (высота 60–300). По умолчанию стоят на ребре (вертикально);
    *  lay 'flat' — лёжа, как царги кухонных низов Базиса (ширина height в глубину, заподлицо с верхом); setback — утопание от фронта (под Gola). */
-  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number }[];
+  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number; at?: number }[];
   /** Дно под боковинами на всю ширину (кухонные низы и пеналы Базиса: боковины стоят на дне). По умолчанию дно между боковинами. */
   bottomUnder?: boolean;
   /** Отступ фасадов от кромок корпуса и зазор между фасадами, мм (по умолчанию RULES.faceGap; кухни Базиса цеха — 1,5 и 3). */
@@ -599,7 +599,8 @@ export function parts(m: Module): Part[] {
       add("rail:" + r.place, "Царга " + RAIL_PLACES[r.place] + " " + r.height + " лёжа", [m.width - 2 * t, t, r.height], [m.width / 2, yc, front ? d - sb - r.height / 2 : sb + r.height / 2], m.width - 2 * t, r.height, t);
       continue;
     }
-    const y0 = low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height;
+    // at — низ стяжки на ребре от пола модуля (мойка Базиса: задняя стяжка посередине высоты, под трубы)
+    const y0 = r.at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
     add("rail:" + r.place, "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
@@ -1502,7 +1503,7 @@ export function parseModule(input: unknown): Module {
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
-    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)})})):[]}),
+    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)})})):[]}),
     ...(x.bottomUnder===undefined?{}:{bottomUnder:x.bottomUnder===true}),
     ...(x.faceGap===undefined?{}:{faceGap:Number(x.faceGap)}),
     ...(x.faceGapBetween===undefined?{}:{faceGapBetween:Number(x.faceGapBetween)}),
