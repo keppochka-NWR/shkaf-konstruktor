@@ -49,7 +49,10 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if (legs.length) {
     const xs = [...new Set(legs.map((l) => r1(l.pos[0])))].sort((a, c) => a - c);
     const zs = [...new Set(legs.map((l) => r1(l.pos[2] - sideZ0)))].sort((a, c) => a - c);
-    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), xs };
+    // симметричная раскладка (отступ от торцов) — относительной: переживёт изменение ширины
+    const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
+    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
+    if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
   }
   // цоколь в модуле? (панель у пола перед опорами)
   const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
@@ -61,7 +64,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const railList: NonNullable<Module["rails"]> = [];
   for (const r of rails) {
     const front = r.b.z1 >= sideZ1 - 30, w = r1(r.b.z1 - r.b.z0);
-    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(front && sideZ1 - r.b.z1 > 0.5 ? { setback: r1(sideZ1 - r.b.z1) } : {}) });
+    const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
+    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
   }
   for (const r of railsEdge) railList.push({ place: r.b.z1 >= sideZ1 - 30 ? "front-top" : "rear-top", height: r1(r.b.y1 - r.b.y0) });
   if (railList.length) m.rails = railList;
@@ -79,6 +83,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const doors = fronts.filter((f) => hw("петля").length);
   if (fronts.length) {
     const f0 = fronts[0];
+    if (f0.p.kind === "other" || f0.p.kind === "mdf") m.facadeMaterial = "external";
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
     m.faceGap = r1(f0.b.x0 - left.b.x0);
@@ -97,7 +102,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if (fronts.length && doors.length) {
     const f = fronts[0], ys = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30).map((h) => r1(h.pos[1] - f.b.y0)).sort((a, c) => a - c);
     const def = (() => { const n = ys.length, dh = f.b.y1 - f.b.y0, off = Math.min(100, Math.max(40, dh / 4)); return Array.from({ length: n }, (_, k) => n === 1 ? dh / 2 : off + (dh - 2 * off) * k / (n - 1)); })();
-    if (ys.length && ys.some((y, k) => Math.abs(y - def[k]) > 0.5)) m.sections[0].hingeY = ys;
+    // число петель по правилу кухни — по высоте фасада; если в проекте другое число или другие высоты — берём высоты проекта
+    const n0 = (f.b.y1 - f.b.y0) <= 900 ? 2 : (f.b.y1 - f.b.y0) <= 1300 ? 3 : (f.b.y1 - f.b.y0) <= 1700 ? 4 : (f.b.y1 - f.b.y0) <= 2100 ? 5 : 6;
+    if (ys.length && (ys.length !== n0 || ys.some((y, k) => Math.abs(y - def[k]) > 0.5))) m.sections[0].hingeY = ys;
   }
   // полки (ЛДСП и стекло)
   const glassSh = P.filter(({ p }) => p.axis === "y" && p.kind === "glass");

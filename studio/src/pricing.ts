@@ -128,13 +128,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',clips,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     }
     const legs=a.module.kitchen?0:legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
-    for(const d of parts(a.module)){
+    const allParts=parts(a.module);
+    for(const d of allParts){
       if(d.material==='board'){
         d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
+      if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e4)/100,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       if(d.role==='door'&&d.id!=='slope-filler'){
-        const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=hingeCount(d.length,d.width);
+        // Число петель — фактические петли сцены (как в 3D и присадке); без них (подъёмный, скос) — по правилу.
+        const placedHinges=allParts.filter(p=>p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')).length;
+        const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);
         // СТП: с ручками — петля с доводчиком; push-to-open — петля без пружины + толкатель. Бренд — выбор клиента (GTV по умолчанию).
         const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
         if(d.hinge==='top')add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');

@@ -12,7 +12,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean };
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
-  legs?: { back: number; front: number; xs?: number[] } };
+  legs?: { back: number; front: number; side?: number; xs?: number[] } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
@@ -71,7 +71,8 @@ export const kitchenRole = (m: Module) => m.kitchen?.role;
 /** Опоры нижнего модуля: в 70 мм от краёв дна; узкие (< 250) — по центру ширины, широкие (> 1300) — третий ряд посередине. */
 export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }[] {
   const w = m.width, d = m.depth, a = KITCHEN.legInset, L = m.kitchen?.legs;
-  const xs = L?.xs ?? (w < 250 ? [w / 2] : w > 1300 ? [a, w / 2, w - a] : [a, w - a]);
+  // отступ от торцов (side) — относительный, переживает изменение ширины; xs — абсолютные позиции нестандартной раскладки
+  const s = L?.side ?? a, xs = L?.xs ?? (w < 250 ? [w / 2] : w > 1300 ? [s, w / 2, w - s] : [s, w - s]);
   return xs.flatMap((x) => [{ x, z: L?.back ?? a, front: false }, { x, z: d - (L?.front ?? a), front: true }]);
 }
 

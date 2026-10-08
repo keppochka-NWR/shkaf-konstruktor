@@ -1,4 +1,5 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
+import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
 import { kitchenExtraParts, kitchenErrors, worktopParts, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
@@ -209,6 +210,10 @@ export type Module = {
   glassT?: number;
   /** Зазор стеклянной полки до стойки с каждой стороны (по умолчанию как у ЛДСП — 1; Базис — 1,5). */
   glassGap?: number;
+  /** Сырой модуль — детали проекта Базиса как есть (rawModule.ts): импорт кухонь/шкафов, которые параметрика пока не повторяет. */
+  raw?: RawSpec;
+  /** Материал фасадов: ЛДСП (по умолчанию, в раскрое) или фасадный материал стороннего участка (МДФ/плёнка/эмаль — без раскроя и кромки). */
+  facadeMaterial?: "ldsp" | "external";
   /** Распашные фасады: накладные (по умолчанию) или вкладные в проём; открывание ручкой (по умолчанию) или push-to-open без ручек. */
   doorMount?: "overlay" | "inset";
   doorOpen?: "handle" | "push";
@@ -470,6 +475,7 @@ export function boxes(m: Module): SectionBox[] {
 }
 export function parts(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
+  if(m.raw)return rawParts(m);
   if(m.worktop)return worktopParts(m);
   if(m.corner)return cornerParts(m);
   if(m.casework)return caseworkParts(m);
@@ -572,7 +578,7 @@ export function parts(m: Module): Part[] {
     if (r.lay === "flat") {
       // Царга лёжа (кухни Базиса): ширина r.height в глубину, заподлицо с верхом боковин (или на дне); передняя — с утопанием setback.
       const yc = low ? (hasBottom(m) ? bottom + t : bottom) + t / 2 : innerTop(m) - t / 2, sb = r.setback ?? 0;
-      add("rail:" + r.place, "Царга " + RAIL_PLACES[r.place] + " " + r.height + " лёжа", [m.width - 2 * t, t, r.height], [m.width / 2, yc, front ? d - sb - r.height / 2 : r.height / 2], m.width - 2 * t, r.height, t);
+      add("rail:" + r.place, "Царга " + RAIL_PLACES[r.place] + " " + r.height + " лёжа", [m.width - 2 * t, t, r.height], [m.width / 2, yc, front ? d - sb - r.height / 2 : sb + r.height / 2], m.width - 2 * t, r.height, t);
       continue;
     }
     const y0 = low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height;
@@ -887,7 +893,7 @@ export function parts(m: Module): Part[] {
   const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y", sid?: string) => {
     const L = RULES.confirmatL, D = RULES.confirmatD, s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y");
     const c: [number, number, number] = vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]];
-    add(key, "Конфирмат 5×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
+    add(key, "Конфирмат 7×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
   const horizontals = out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
@@ -938,6 +944,8 @@ export function parts(m: Module): Part[] {
   }
   hardwareParts(m,out);
   kitchenExtraParts(m,out);
+  // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
+  if(m.facadeMaterial==='external')for(const p of out)if(p.role==='door'||p.id.endsWith(':facade')){p.external=true;p.edge=[0,0,0,0];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
   if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
     if(p.material!=='board')continue;
@@ -1072,6 +1080,7 @@ export function fastenerCounts(m: Module) {
 }
 export function validate(m: Module): string[] {
   if(m.kupe)return kupeErrors(m);
+  if(m.raw)return rawErrors(m);
   if(m.worktop)return kitchenErrors(m);
   if(m.corner)return cornerErrors(m);
   if(m.casework)return caseworkErrors(m);
@@ -1457,6 +1466,8 @@ export function parseModule(input: unknown): Module {
     ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),
     ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
+    ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
+    ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),

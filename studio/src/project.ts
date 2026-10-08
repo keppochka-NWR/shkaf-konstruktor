@@ -109,6 +109,8 @@ function polygonsOverlap(a:{x:number;z:number}[],b:{x:number;z:number}[]){
  for(const poly of [a,b])for(let i=0;i<poly.length;i++){const p=poly[i],q=poly[(i+1)%poly.length],dx=q.x-p.x,dz=q.z-p.z,len=Math.hypot(dx,dz);if(!len)continue;const project=(r:{x:number;z:number})=>(-dz*r.x+dx*r.z)/len,aa=a.map(project),bb=b.map(project);if(Math.max(...aa)<=Math.min(...bb)+.1||Math.max(...bb)<=Math.min(...aa)+.1)return false;}return true;
 }
 export function modulesOverlap(a:PlacedModule,b:PlacedModule){
+ // Сырые модули (импорт из Базиса как есть): стыки угловых и наложения повторяют проект Базиса — не ошибка студии.
+ if(a.module.raw||b.module.raw)return false;
  if(a.module.corner||b.module.corner){if(!overlap(bounds(a),bounds(b)))return false;return polygonsOverlap(moduleFootprint(a),moduleFootprint(b));}
  const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
 export function projectErrors(p:Project):string[]{

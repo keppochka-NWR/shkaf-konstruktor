@@ -35,7 +35,8 @@ function refItems(m: RefModule): Item[] {
   });
 }
 function studioItems(ps: Part[]): Item[] {
-  return ps.filter((p) => (p.material === "board" || p.material === "hdf" || p.material === "glass") && !p.external).map((p) => {
+  // фасады из фасадного материала — вне раскроя (external), но геометрию сверяем; столешница и прочее стороннее — нет
+  return ps.filter((p) => (p.material === "board" || p.material === "hdf" || p.material === "glass") && (!p.external || p.role === "door" || p.id.endsWith(":facade"))).map((p) => {
     const ax = p.size.indexOf(Math.min(...p.size)), facade = p.role === "door" || p.id.endsWith(":facade");
     const kind = p.material === "board" ? "ldsp" : p.material;
     return { id: p.id, name: p.name, cls: cls(kind, Math.min(...p.size), AX[ax], facade), box: [0, 1, 2].flatMap((i) => [p.position[i] - p.size[i] / 2]).concat([0, 1, 2].map((i) => p.position[i] + p.size[i] / 2)).map(r1) as Box };
