@@ -1,7 +1,8 @@
 // Папка клиента над редактором: клиент, вкладки его проектов с ценой, «+ ещё проект», итог по клиенту.
 // Переключение вкладки перезапускает редактор с ключом выбранного проекта (у каждого проекта своя история и автосохранение).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X, Users, Download, Pencil, Copy, FilePlus2 } from "lucide-react";
+import { Plus, X, Users, Download, Pencil, Copy, FilePlus2, CookingPot } from "lucide-react";
+import { kitchenProject } from "./kitchenProject";
 import App from "./App";
 import { parseProject, type Project } from "./project";
 import { estimate } from "./pricing";
@@ -64,13 +65,15 @@ function ClientBar({ index, setIndex }: { index: ClientIndex; setIndex: (i: Clie
               : <button type="button" className="tab-icon" aria-label={"Удалить проект " + p.title} onClick={() => setConfirmDel(p.key)}><X size={12} /></button>)}
           </div>
         ))}
-        <div className="project-add">
+      </div>
+      {/* «Ещё проект» — вне ленты вкладок: у неё overflow-x:auto, выпадающее меню внутри неё обрезалось */}
+      <div className="project-add">
           <button type="button" className="add-project" aria-expanded={adding} onClick={() => setAdding((v) => !v)}><Plus size={15} /> Ещё проект</button>
           {adding && <div className="client-menu add-menu" role="menu">
             <button type="button" role="menuitem" onClick={() => { const r = addProject(localStorage, index, "Проект " + (client.projects.length + 1)); setIndex(r.index); setAdding(false); }}><FilePlus2 size={15} /> Новый проект<small>пустая комната, свой расчёт</small></button>
+            <button type="button" role="menuitem" onClick={() => run(() => { const r = addProject(localStorage, index, "Кухня"); localStorage.setItem(projectStorageKey(r.key), JSON.stringify(kitchenProject())); setIndex(r.index); setAdding(false); })}><CookingPot size={15} /> Кухня<small>прямая 3000, кухонные модули, опоры и цоколь</small></button>
             <button type="button" role="menuitem" onClick={() => run(() => { const r = addProject(localStorage, index, (client.projects.find((p) => p.key === client.active)?.title ?? "Проект") + " · вариант", client.active); setIndex(r.index); setAdding(false); })}><Copy size={15} /> Копия этого проекта<small>для второго варианта</small></button>
           </div>}
-        </div>
       </div>
       <div className="client-total">{client.projects.length > 1 && <>Итого по клиенту <b>{total === null ? "считаем…" : rub(total)}</b></>}</div>
       {error && <p role="alert" className="client-error">{error}</p>}

@@ -1,6 +1,8 @@
 import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
+import {parts} from './model';
+import {partCollisions} from './collisions';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
 /** Что советуем по каждому типу объекта на стене, если его перекрывает мебель. */
@@ -67,4 +69,11 @@ export function roomWarnings(project:Project){
     }
   }
   return warnings;
+}
+/** Пересечения деталей внутри корпусов (петли, полки, царги, крепёж, фурнитура) — правило Макса 09.10.2026: ничего не должно пересекаться.
+ *  Отдельно от roomWarnings (размещение в помещении); панель предупреждений студии показывает оба списка. */
+export function collisionWarnings(project:Project):RoomWarning[]{
+  const out:RoomWarning[]=[];
+  for(const a of project.modules){const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм)`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. Сдвиньте полку или петлю, измените наполнение.`});}
+  return out;
 }

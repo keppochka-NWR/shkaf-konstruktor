@@ -22,6 +22,13 @@ function loadHandleModel(file: string) {
   }
   return p;
 }
+/** Цилиндр-заглушка крепежа без модели: ось — по длинной стороне (винт, ножка), у диска — по короткой; радиус — по поперечным размерам.
+ *  (Раньше ось всегда X: вертикальная ножка или конфирмат рисовались «шайбой».) */
+function fastenerAxis(size: [number, number, number]) {
+  const order = [0, 1, 2].sort((a, b) => size[b] - size[a]), disk = Math.abs(size[order[0]] - size[order[1]]) <= 1 && size[order[2]] < size[order[0]] * 0.6;
+  const axis = disk ? order[2] : order[0], rest = [0, 1, 2].filter((i) => i !== axis).map((i) => size[i]);
+  return { axis, r: Math.min(...rest) / 2, h: size[axis] };
+}
 /** Профиль из Blender (метровая заготовка: x — поперёк, y — длина, z — глубина) вписывается в габарит детали:
  *  длина тянется, сечение остаётся; mirror — зеркально по поперечной оси; length 'x' — профиль лежит горизонтально. */
 function fitProfile(src: THREE.Group, part: { size: [number, number, number]; model?: { length: "x" | "y"; mirror?: boolean } }, material: THREE.Material) {
@@ -142,6 +149,14 @@ export function Scene(p: Props) {
     controls.minDistance = 350;
     controls.maxDistance = 150000;controls.minZoom=.05;controls.maxZoom=20;
     controls.maxPolarAngle = Math.PI * 0.91;
+    // Для снимков сверки (scripts/kitchen-shots.ts): камера по координатам комнаты, мм — точный ракурс на узел (навес, опора, паз).
+    (window as unknown as {__camera?:(pos:number[],look:number[])=>void}).__camera=(pos,look)=>{
+      const o=sceneOrigin??{x:0,z:0};
+      if(camera!==perspective){camera=perspective;controls.object=perspective;}
+      controls.minDistance=60;controls.maxPolarAngle=Math.PI;
+      perspective.position.set(pos[0]-o.x,pos[1],pos[2]-o.z);controls.target.set(look[0]-o.x,look[1],look[2]-o.z);
+      perspective.updateProjectionMatrix();controls.update();needsRender=true;
+    };
     scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8991, 2.1));
     const sun = new THREE.DirectionalLight(0xfff8ed, 3.1);
     sun.position.set(-2200, 5000, 4200);
@@ -185,6 +200,8 @@ export function Scene(p: Props) {
       return result;
     }
     let generation = 0,pendingTextures=0;
+    // Для снимков проверки: скрипт ждёт, пока догрузятся текстуры и модели фурнитуры (window.__pending() === 0).
+    (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;
     function disposeGroup(group: THREE.Group) {
       group.traverse((o) => {
         if (
@@ -319,7 +336,9 @@ export function Scene(p: Props) {
           const roundAlongZ = part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
           const geometry = roundAlongZ
             ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
-            : (part.role === "rod" || part.role === "flange" || part.role === "fastener")
+            : part.role === "fastener"
+              ? (() => { const f = fastenerAxis(part.size); return new THREE.CylinderGeometry(f.r, f.r, f.h, 20); })()
+              : (part.role === "rod" || part.role === "flange")
               ? new THREE.CylinderGeometry(
                   part.size[1] / 2,
                   part.size[1] / 2,
@@ -353,7 +372,22 @@ export function Scene(p: Props) {
           const isHandle = part.role === "handle";
           if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
-          if (part.model && profileMaterial) {
+          if (part.model?.native) {
+            // Фурнитура из Базиса (TriData → GLB в мм): начало координат модели — в origin, поворот quat, свои материалы, без растяжения.
+            const g = generation, model = part.model; pendingTextures++;
+            loadHandleModel(model.file).then((src) => {
+              if (disposed || g !== generation) return;
+              const inst = src.clone(true), holder = new THREE.Group();
+              if (model.mirror) inst.scale.x = -1;
+              holder.add(inst);
+              const [w, x, y, z] = model.quat ?? [1, 0, 0, 0];
+              holder.quaternion.set(x, y, z, w);
+              const o = model.origin ?? part.position;
+              holder.position.set(o[0] - part.position[0], o[1] - part.position[1], o[2] - part.position[2]);
+              inst.traverse((c) => { c.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; if (c instanceof THREE.Mesh) { c.castShadow = true; c.receiveShadow = true; if (model.mirror) { c.material = (c.material as THREE.Material).clone(); (c.material as THREE.Material).side = THREE.DoubleSide; } } });
+              mesh.add(holder); needsRender = true;
+            }).catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
+          } else if (part.model && profileMaterial) {
             const g = generation, pm = profileMaterial; pendingTextures++;
             loadHandleModel(part.model.file).then((src) => { if (disposed || g !== generation) return; const fitted = fitProfile(src, part, pm); fitted.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; }); mesh.add(fitted); needsRender = true; })
               .catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
@@ -407,7 +441,7 @@ export function Scene(p: Props) {
           // Металл без карты окружения при metalness ~0.85 выглядит чёрным: держим умеренный металл и светлый никель.
           if (roundAlongZ) { mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.includes(":latch:") ? 0x55595d : 0xdfe3e6); mat.metalness = 0.35; mat.roughness = 0.35; }
           else if (part.role === "hinge") { mat.color.set(0xd2d7db); mat.metalness = 0.35; mat.roughness = 0.38; }
-          if (part.role === "fastener") { if (part.size[0] > part.size[1]) mesh.rotation.z = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : part.id.startsWith("shp:") ? 0xc9ced2 : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
+          if (part.role === "fastener" && !part.model?.native) { const ax = fastenerAxis(part.size).axis; if (ax === 0) mesh.rotation.z = Math.PI / 2; else if (ax === 2) mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : part.id.startsWith("shp:") ? 0xc9ced2 : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
           if (part.rotZ) mesh.rotation.z = (part.rotZ * Math.PI) / 180;
           const rotY = part.rotY ? (part.rotY * Math.PI) / 180 : 0;
           if (rotY) mesh.rotation.y = rotY;

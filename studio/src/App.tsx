@@ -8,6 +8,9 @@ import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
 import {StageBar} from './StageBar';
 import {ModulePalette} from './ModulePalette';
+import {KitchenPalette} from './KitchenPalette';
+import {KitchenPanel} from './KitchenPanel';
+import {isKitchenProject} from './kitchenProject';
 import {FillingComposer,addFillingBatch,addFittedDrawers} from './FillingComposer';
 import {STAGES,STAGE_KEY,stageIndex,nextStage,type Stage} from './stages';
 import {ChevronRight} from 'lucide-react';
@@ -237,6 +240,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
+  const kitchenMode=isKitchenProject(project); // вкладка «Кухня»: кухонная палитра слева, KitchenPanel справа
   const placedBounds=bounds(placed);
   const mountingComposition=useMemo(()=>mountingCompositionBounds(project),[project]);
   const composition=useMemo(()=>compositionBounds(project),[project]);
@@ -684,14 +688,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const texture = (name: string) =>
     catalog.find((c) => c.n === name)?.tex || undefined;
   return (
-    <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
+    <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')+(kitchenMode?' kitchen-mode':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
       <header className="header">
         <a className="brand" href="./" aria-label="ГардерЁб — главная">
           <span className="brand-mark">
             <Box size={23} />
           </span>
           <strong>
-            ГардерЁб<span>проектировщик мебели</span>
+            ГардерЁб<span>{kitchenMode?'проектировщик кухни':'проектировщик мебели'}</span>
           </strong>
         </a>
         <div className="document-name">
@@ -854,7 +858,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         <aside className="library">
           <div className="panel-heading">
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
-            <h1>Соберите шкаф</h1>
+            <h1>{kitchenMode?'Соберите кухню':'Соберите шкаф'}</h1>
             <p>
               <span title="Габарит закрытой мебели Ш × В × Г: включает промежутки, задники, фасады и ручки.">Вся композиция:<br/><span style={{whiteSpace:'nowrap'}}>{Math.round(composition.w)} × {Math.round(composition.h)} × {Math.round(composition.d)} мм</span></span>
             </p>
@@ -863,7 +867,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}}/></div>
+          <div data-stages="bodies">{(general=>kitchenMode?<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}>{general}</KitchenPalette>:general)(<ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}}/>)}</div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1217,7 +1221,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}>
-          <div className="property-tabs" data-stages="bodies filling facades" hidden={!!m.kupe}>
+          <div className="property-tabs" data-stages="bodies filling facades" hidden={!!m.kupe||!!m.raw||!!m.worktop}>
             <button
               aria-selected={tab === "module"}
               onClick={() => setTab("module")}
@@ -1269,7 +1273,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 К выбранному модулю
               </button>
             </div>
-          ) : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
+          ) : m.raw||m.worktop||(m.kitchen&&tab==='module') ? <KitchenPanel m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);setOpenDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
             <>
               <div className="property-section" data-stages="bodies">
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>

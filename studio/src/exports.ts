@@ -5,7 +5,7 @@ import {SLIDES,drawerHasHandle} from './hardware';
 import {meshById} from './mesh';
 import {handleById} from './handles';
 import {aluLabel,aluProfile,aluInsertSize} from './alu';
-import { parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, cornerStrip, type Part } from "./model";
+import { grooveText, parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, cornerStrip, type Part } from "./model";
 import { bounds, projectErrors, type Project } from "./project";
 import {packRectangles} from './packing';
 import {catalog} from './catalog';
@@ -318,7 +318,7 @@ export function labelData(p:Project):LabelData[]{
       const grooved=m.backType==='groove'&&['left','right','top','bottom'].includes(d.id);
       // Кромка: 1–2 — торцы по ширине (короткие, слева/справа на бирке), 3–4 — по длине (сверху/снизу).
       return {order,material:(d.material==='hdf'?'ЛХДФ ':'ЛДСП ')+d.decor+' '+d.thickness+' мм'+(d.material==='hdf'?'':' (Lamarty)'),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
-        groove:grooved?`паз ${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:'—',endHoles:holes?`${holes} отв.`:'—',
+        groove:[grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'',grooveText(m,d.id)].filter(Boolean).join('; ')||'—',notches:'—',endHoles:holes?`${holes} отв.`:'—',
         length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]}};
     });
   });

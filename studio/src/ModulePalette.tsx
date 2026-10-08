@@ -33,7 +33,7 @@ export function createKitchenRow(length:number,source:Module):PlacedModule[]{
   const look=(m:Module)=>({...m,decor:source.decor,facadeDecor:source.facadeDecor}),out:PlacedModule[]=[],z=3;let x=0;
   const widths=kitchenRowWidths(length);
   for(const w of widths){const b=look(kitchenBase(initialModule(),w.width,w.kind)),e=validate(b)[0];if(e)throw Error(b.name+': '+e);out.push({id:id(),x,y:0,z,rotation:0,module:b});
-    const top=look(kitchenWall(initialModule(),w.width));out.push({id:id(),x,y:KITCHEN.baseHeight+KITCHEN.worktopThickness+KITCHEN.wallGap,z,rotation:0,module:top});x+=w.width;}
+    const top=look(kitchenWall(initialModule(),w.width));out.push({id:id(),x,y:KITCHEN.baseHeight+KITCHEN.worktopThickness+KITCHEN.wallGap,z:0,rotation:0,module:top});x+=w.width;}
   const pieces=length>4100?[Math.round(length/2),length-Math.round(length/2)]:[length];let wx=0;
   for(const p of pieces){out.push({id:id(),x:wx,y:KITCHEN.baseHeight,z:0,rotation:0,module:look(kitchenWorktop(initialModule(),p))});wx+=p;}
   return out;
