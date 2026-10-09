@@ -76,6 +76,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
     screws?: true;
     /** Левые опоры — той же сетки и поворота, что правые (часть проектов Базиса: k26, k27). */
     same?: true;
+    /** Два ряда без третьего посередине и шире 1300 (широкие модули Базиса: мойка k28 m17 1480, остров k30 m01 1324): ряды — по
+     *  отступу side от торцов, поэтому правые опоры идут за боковиной при смене ширины. */
+    rows2?: true;
     /** Нерегулярная раскладка Базиса (17 модулей 10 кухонь: не сетка «ряды × перед/зад»): точки [x, z от задней кромки боковин]. */
     pts?: [number, number][] };
   /** Крепёж корпуса: по умолчанию «Конфирмат 7×50»; euro-6x50 — «Евровинт 6х50» (шаблоны «Т_» k33, k34: D8×16 + D5×36). */
@@ -95,6 +98,13 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2; n3-base).
    *  faceBottom у корпуса без опор — низ фасадов от пола, мм, как в Базисе (над нишей под техникой — от дна; n3-tall). */
   faceTop?: number; faceBottom?: number;
+  /** Угловая мойка Базиса с фальшпанелью (n4-base): у края модуля в плоскости фасадов — фальш ЛДСП корпуса width мм (от низа дна до верха),
+   *  рядом планка из фасадного материала strip мм; фасады — после них через faceGap, дверь у фальша на «Петля под фальшпанель»
+   *  (точка — кромка двери, чашка в 22 от кромки, без наколок под планку). Только плоский фальш (k25 m02, k01 m03); Г-образный — нет. */
+  faceFiller?: { side: "left" | "right"; width: number; strip?: number; /** планка по высоте фальша, а не фасадов (k28 m17) */ stripFull?: true;
+    /** конфирматы через фальш, если они есть в проекте (k01 m03): bottom — в передний торец дна, x от края модуля со стороны фальша;
+     *  side — в передний торец боковины, y от низа фальша. Нет поля — фальш без крепежа (k25 m02, k28 m17 — как в Базисе) */
+    conf?: { bottom?: number[]; side?: number[] } };
   /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 модуля 13 кухонь Базиса; k32 m06: 2 и 4 при 1,5). */
   backGaps?: { bottom: number; top: number };
   /** Эксцентрик дна сверлится снизу (бочонок в нижней пласти): 56 из 380 эксцентриков дна Базиса, флаг — на 12 модулях 10 кухонь. */
@@ -122,11 +132,15 @@ export function kitchenJointGrid(m: Module, hid: string): RafixGrid | undefined 
 }
 
 /** Крепёж стыка дна/крыши кухни со стойкой: 3 точки (третья посередине глубины) у корпусов глубже 600 мм — 21 из 25 глубоких
- *  модулей Базиса с крепежом; до 600 — 2 точки (523 из 528). Свой счёт модуля (распознан из Базиса) — kitchen.jointPoints. */
-export function kitchenJointPoints(m: Module): 2 | 3 {
+ *  модулей Базиса с крепежом; до 600 — 2 точки (523 из 528). Свой счёт модуля (распознан из Базиса) — kitchen.jointPoints.
+ *  depth — глубина стыка: корпус (по умолчанию) или дно под боковинами (9 из 9 днищ глубже 600 — по 3, ровно 600 k30 m03 — по 2).
+ *  Один порог KITCHEN.deepBottom на оба случая — «глубокое дно» и «глубокий корпус» не расходятся. */
+export function kitchenJointPoints(m: Module, depth = m.depth): 2 | 3 {
   if (!m.kitchen) return 2;
-  return m.kitchen.jointPoints ?? (m.depth > 600 ? 3 : 2);
+  return m.kitchen.jointPoints ?? jointPointsRule(depth);
 }
+/** Правило кухни без своего счёта из Базиса: глубже KITCHEN.deepBottom (600) — 3 точки, иначе 2. */
+export const jointPointsRule = (depth: number): 2 | 3 => (depth > KITCHEN.deepBottom ? 3 : 2);
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
@@ -157,6 +171,7 @@ export const KITCHEN = {
   groove: { inset: 16, width: 4, depth: 8, clear: 1 }, // П16-4×8, ХДФ (W−18)×(H−18), заходит на 7
   deepBottom: 600,      // дно под боковинами ГЛУБЖЕ 600 (602–700) — 3 конфирмата на сторону (третий посередине): 9 из 9 днищ Базиса; ровно 600 (k30 m03) и мельче — 2
   minWidth: 150, maxWidth: 1200,
+  maxModuleWidth: 1650, // предел ширины кухонного модуля в проверке: самый широкий модуль 34 кухонь Базиса — 1649 (шкафы — RULES.maxW 1300)
   maxHeight: 2900,      // пеналы в Базисе до 2869 (k30 m15), 2850 (k31 m05), 2820 (k27); у шкафов студии лимит RULES.maxH 2500 не меняется
 } as const;
 
@@ -198,7 +213,7 @@ export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }
   // узкий (< 250) — один ряд по центру, если отступ от торцов не задан явно (Базис k05 m02: 200 мм, ряды в 70 от торцов) или ряды
   // легли бы внахлёст (площадка опоры 58: Базис k16 m07 — 150 мм, опоры на 70 и 80 пересекаются; студия так не ставит)
   const s = L?.side ?? a, narrow = w < 250 && (L?.side === undefined || w - 2 * s < KITCHEN.legPad);
-  const xs = L?.xs ?? (narrow ? [w / 2] : w > 1300 ? [s, w / 2, w - s] : [s, w - s]);
+  const xs = L?.xs ?? (narrow ? [w / 2] : w > 1300 && !L?.rows2 ? [s, w / 2, w - s] : [s, w - s]);
   return xs.flatMap((x) => [{ x, z: L?.back ?? a, front: false }, { x, z: d - (L?.front ?? a), front: true }]);
 }
 
@@ -285,6 +300,9 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
 export function kitchenEdges(m: Module, out: Part[]) {
   // кухня Базиса без кромки вовсе (k23 — 15 модулей: ни одной кромки на деталях корпуса) — снимаем кромку студии по умолчанию
   if (m.kitchen && m.edgeScheme?.t === 0) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade")) p.edge = [0, 0, 0, 0];
+  // фальш угловой мойки (kitchen.faceFiller) — ЛДСП корпуса, кромка корпуса по кругу (k25 m02: 1, k01 m03 и k28 m17: 0,5)
+  const ffp = out.find((p) => p.id === "face-filler:panel:facade");
+  if (ffp && m.edgeScheme?.t !== undefined) setEdges(ffp, edgeDirs(ffp), m.edgeScheme.t);
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
   // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32 — оба, k31 m13 — только дно; edgeScheme.endsX, n3-antresol);

@@ -96,9 +96,13 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       push(cupId, [x, cy, back], [0, 0, 1], 35, 13);
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin) {
       const [sx, y, back] = p.model.origin, inward = p.position[0] > sx ? 1 : -1; // плечо — внутрь корпуса от стойки
+      const cupId = p.id.replace(":hingeplate:", ":hingecup:");
+      // «Петля под фальшпанель» (угловая мойка Базиса, kitchen.faceFiller; признак falsePanelHinge от model.ts): узел — кромка двери,
+      // чашка — в точке чашки (22 от кромки в теле двери), наколок под планку нет
+      if (p.falsePanelHinge) { const c = ps.find((q) => q.id === cupId)?.model?.origin; if (c) push(cupId, [c[0], y, back], [0, 0, 1], 35, 13); continue; }
       // кухня Базиса без наколок под планку (kitchen.plateHoles: false — 89 из 261 модулей с петлями) — только чашка
       if (m.kitchen?.plateHoles !== false) for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
-      push(p.id.replace(":hingeplate:", ":hingecup:"), [sx + inward * 7.5, y, back], [0, 0, 1], 35, 13);
+      push(cupId, [sx + inward * 7.5, y, back], [0, 0, 1], 35, 13);
     }
   }
   kitchenDrawerHoles(m, ps, push);

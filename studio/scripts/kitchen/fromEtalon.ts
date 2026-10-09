@@ -5,10 +5,10 @@ import { initialModule, section, parts, scaleHingeY, doorRowCount, facadeBottom,
 import { partAxes, edgeByDir } from "../../src/edges";
 import { hingePositions } from "../../src/hardware";
 import type { RefModule, RefPanel } from "./compare";
-import type { KitchenRole } from "../../src/kitchen";
+import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
-import { cornerFillerSink } from "./recognize-sink";
+import { edgeRail, isEuro6, legScrews, railConfY, railFastened, screwKind, sideTopEdged } from "./recognize-common";
+import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
@@ -306,7 +306,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const top = Math.max(left.b.y1, right.b.y1);
   const H = r1(top);
   const horiz = P.filter(({ p }) => p.axis === "y" && board(p.kind));
-  const fronts = P.filter(({ p, b }) => p.axis === "z" && p.kind !== "hdf" && b.z0 >= sideZ1 - 1).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
+  // угловая мойка с плоским фальшем (recognize-sink.ts, n4-base): фальш и планка — не фасады, а kitchen.faceFiller
+  const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
+  const ffFlat = role === "base" && horiz.length ? faceFillerFlat(ref, P, left, right, sideZ1, Math.min(...horiz.map((h) => h.b.y0)), top) : undefined;
+  const fronts = P.filter((x) => x.p.axis === "z" && x.p.kind !== "hdf" && x.b.z0 >= sideZ1 - 1 && !ffFlat?.panels.includes(x)).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
   const hdf = P.filter(({ p }) => p.kind === "hdf");
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
   const legs = hw("опора");
@@ -327,7 +330,6 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
-  const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
   m.kitchen = { role, bazis: true }; // из проекта Базиса: смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.screw = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно
@@ -361,7 +363,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const zs = [...new Set(legs.map((l) => r1(l.pos[2] - sideZ0)))].sort((a, c) => a - c);
     // симметричная раскладка (отступ от торцов) — относительной: переживёт изменение ширины
     const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
-    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
+    // шире 1300 при двух рядах (мойки k28 m17 1480, k31 m22 1347, остров k30 m01 1324 — все широкие модули Базиса с правильной
+    // раскладкой) — без третьего ряда студии посередине (rows2); симметричные — по отступу от торцов, правые идут за боковиной
+    const wide2 = xs.length === 2 && W > 1300;
+    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0], ...(wide2 ? { rows2: true as const } : {}) } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
     if (legScrews(ref.hardware)) m.kitchen.legs.screws = true;
     // левые опоры у большинства проектов — своя сетка (cb84c30b57a5); в части проектов (k26, k27) — та же, что у правых
@@ -394,7 +399,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
     if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
-    railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}) });
+    // и свои высоты конфирматов, если в проекте не один по центру (railConfY, n4-base)
+    const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
+    const confY = role === "base" && fastened ? railConfY(r.b, ref.hardware, left.b.x0, right.b.x1) : undefined;
+    railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...(confY ? { confY } : {}) });
   }
   if (railList.length) m.rails = railList;
   // задник
@@ -653,6 +661,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (multi.niche !== undefined) m.sections[0].doorNiche = multi.niche;
       m.sections[0].doorRows = multi.rows;
       notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
+    } else if (role === "base" && ffFlat && rows.size === 1) {
+      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}), ...(ffFlat.conf ? { conf: ffFlat.conf } : {}) };
+      // зазор фасадов — от дальнего края модуля (у фальша свой отступ)
+      m.faceGap = ffFlat.side === "left" ? r1(right.b.x1 - Math.max(...fronts.map((q) => q.b.x1))) : r1(Math.min(...fronts.map((q) => q.b.x0)) - left.b.x0);
+      notes.push(`угловая мойка: фальш ${ffFlat.width}${ffFlat.strip ? ` + планка из фасада ${ffFlat.strip}` : ""} ${ffFlat.side === "left" ? "слева" : "справа"}, петли под фальшпанель — как в Базисе`);
     } else if (role === "base" && cornerFillerSink(ref)) unsupported.push("угловая мойка с фальшпанелью (петли под фальшпанель, фальш в плоскости фасадов) — пока не поддержано");
     else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     const perRow = split || niche || multi ? lowRow.length : fronts.length;
@@ -688,6 +701,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     } else if (perRow === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
+      // угловая мойка: одна дверь висит на петлях под фальшпанель — со стороны фальша (k01 m03: петли на 502 из 950)
+      if (m.kitchen.faceFiller) m.sections[0].hingeSide = m.kitchen.faceFiller.side;
     }
     if (perRow > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
   } else m.doors = false;
@@ -800,15 +815,20 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (off !== null) m.dowels = { offset: off };
     }
   }
+  // нижние: свои отступы конфирматов дна по сторонам, если в Базисе они не по общему отступу (k28 m17: справа 252/52 при 56) — n4-base
+  else if (role === "base" && m.confirmatInset !== undefined && m.bottomUnder) {
+    const jz = wallJointZ(ref.hardware, [["bottom", bottom]], left, right, m.confirmatInset);
+    if (Object.keys(jz).length) m.kitchen.jointZ = jz;
+  }
   // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
   const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b, right.b);
-  if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;
+  if (jp && jp !== jointPointsRule(d)) m.kitchen.jointPoints = jp;
   // дно/крыша без крепежа к стойкам в Базисе (k32 m01/m02 — корпус под холодильник без фурнитуры): студия крепёж не добавляет
   const bareJ = (["bottom", "top"] as const).filter((k) => { const q = k === "bottom" ? bottom : topPanel; return !!q && bareJointFromEtalon(ref, q.b); });
   if (bareJ.length) m.kitchen.bareJoints = [...bareJ];
   // своя сетка крепежа у стыков, где Базис поставил его иначе, чем у модуля (k23: крыша 104,5/64,5 при 64,5/64,5 у дна)
   if (m.confirmatInset !== undefined) {
-    const nDef = jp ?? (d > 600 ? 3 : 2), ins = m.confirmatInset, hosts: [string, B][] = [];
+    const nDef = jp ?? jointPointsRule(d), ins = m.confirmatInset, hosts: [string, B][] = [];
     if (bottom) hosts.push(["bottom", bottom.b]);
     if (topPanel) hosts.push(["top", topPanel.b]);
     for (const j of m.sections[0].fixed ?? []) if (sh[j] && !m.kitchen.bareShelves?.includes(j) && !(m.kitchen.rafix && !rfx.confirmat.includes(j))) hosts.push([`shelf:${j}`, sh[j].b]);
@@ -920,7 +940,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthUsed, lowFront, wr?.panel, ...drawerPanels].includes(x)).length;
+  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, ...drawerPanels].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   // кромка: торцы детали — как в проекте, если правило студии кромит иначе (k32 низ: боковины, дно и царги по кругу).
   // Деталь студии сопоставляется с панелью Базиса по габариту (±0,6); полки — своей схемой (shelfSides/shelfT), фасады — без кромки.

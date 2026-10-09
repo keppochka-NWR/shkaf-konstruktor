@@ -47,6 +47,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
   for (const [p, q] of [[a, b], [b, a]] as const) {
     // Крепёж корпуса (конфирмат, эксцентрик, полкодержатель, шкант) сидит в отверстиях досок корпуса и полок.
     if (isFastener(p) && isBoard(q) && q.role !== "door" && !q.id.endsWith(":facade")) return true;
+    // фальш угловой мойки Базиса (ЛДСП корпуса в плоскости фасадов) — свой крепёж в своих отверстиях D8×16 (kitchen.faceFiller.conf, k01 m03)
+    if (isFastener(p) && p.id.startsWith("fast:face-filler:") && q.id === "face-filler:panel:facade") return true;
     // Шток эксцентрика проходит через свой бочонок.
     if (isFastener(p) && isFastener(q) && p.id.replace(/:pin$/, "") === q.id.replace(/:pin$/, "")) return true;
     // Чашка петли — в отверстии Ø35 своего фасада; чашка и планка одной петли соединены.
