@@ -11,6 +11,7 @@ import {allowedContact} from '../src/collisions';
 import {bazisHoleName,bazisHoles,bazisNames,legDupKey} from '../src/rawModule';
 import {buildKitchen} from '../scripts/kitchen/buildKitchen';
 import {etalonHoleItems,holeSig,supplierEdgeKind} from '../scripts/kitchen/wholeChecks';
+import {FRONT_NORMAL,frontCamera,mainRowRotation} from '../scripts/kitchen/frontCamera';
 
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
 const has=(k:string)=>existsSync(`${ET}/${k}.json`);
@@ -135,6 +136,19 @@ test('k23: клипса и опора у цоколя ряда — разреш�
   assert.ok(!allowedContact(clip,side,2),'клипса — только на цоколе и опоре');
   // правило — только для сырой детали Базиса: доска студии с именем «Цоколь…» под него не попадает
   assert.ok(!allowedContact(clip,box('plinth-front','Цоколь фронтальный'),2),'доска студии «Цоколь…» — не сырой цоколь Базиса');
+});
+
+test('снимки: «спереди» — по главному ряду кухни (наибольшая ширина модулей), не по выбранному модулю',()=>{
+  const pm=(x:number,z:number,rotation:0|90|180|270,width:number)=>({id:`m${x}${z}`,x,z,y:0,rotation,module:{width,depth:560,height:820}});
+  // ряд у задней стены (поворот 0, 3 × 600) и боковой модуль (поворот 90, 600): камера — перед рядом (+z), не сбоку
+  const p={modules:[pm(0,0,0,600),pm(600,0,0,600),pm(1200,0,0,600),pm(-560,600,90,600)]} as unknown as Project;
+  assert.equal(mainRowRotation(p),0);
+  const [cx,,cz,tx,,tz]=frontCamera(p,1.6);assert.ok(cz-tz>1000&&Math.abs(cx-tx)<1e-6,'камера по +z от центра');
+  // остров (поворот 180) уже ряда — на направление не влияет; если 180 шире — камера с его фасада (−z)
+  assert.equal(mainRowRotation({modules:[...p.modules,pm(0,2000,180,1200)]} as unknown as Project),0);
+  const q={modules:[pm(0,0,180,2400),pm(0,2000,0,600)]} as unknown as Project;
+  assert.equal(mainRowRotation(q),180);assert.ok(frontCamera(q,1.6)[2]<frontCamera(q,1.6)[5]);
+  assert.deepEqual(FRONT_NORMAL[90],[1,0]);
 });
 
 test('шкаф студии: смета без строк отверстий и с Firmax студии парами (правило 3)',()=>{
