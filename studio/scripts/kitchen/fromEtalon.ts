@@ -5,7 +5,7 @@ import { initialModule, section, parts, scaleHingeY, doorRowCount, facadeBottom,
 import { partAxes, edgeByDir } from "../../src/edges";
 import { hingePositions } from "../../src/hardware";
 import type { RefModule, RefPanel } from "./compare";
-import type { KitchenRole } from "../../src/kitchen";
+import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railConfY, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
@@ -822,13 +822,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
   const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b, right.b);
-  if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;
+  if (jp && jp !== jointPointsRule(d)) m.kitchen.jointPoints = jp;
   // дно/крыша без крепежа к стойкам в Базисе (k32 m01/m02 — корпус под холодильник без фурнитуры): студия крепёж не добавляет
   const bareJ = (["bottom", "top"] as const).filter((k) => { const q = k === "bottom" ? bottom : topPanel; return !!q && bareJointFromEtalon(ref, q.b); });
   if (bareJ.length) m.kitchen.bareJoints = [...bareJ];
   // своя сетка крепежа у стыков, где Базис поставил его иначе, чем у модуля (k23: крыша 104,5/64,5 при 64,5/64,5 у дна)
   if (m.confirmatInset !== undefined) {
-    const nDef = jp ?? (d > 600 ? 3 : 2), ins = m.confirmatInset, hosts: [string, B][] = [];
+    const nDef = jp ?? jointPointsRule(d), ins = m.confirmatInset, hosts: [string, B][] = [];
     if (bottom) hosts.push(["bottom", bottom.b]);
     if (topPanel) hosts.push(["top", topPanel.b]);
     for (const j of m.sections[0].fixed ?? []) if (sh[j] && !m.kitchen.bareShelves?.includes(j) && !(m.kitchen.rafix && !rfx.confirmat.includes(j))) hosts.push([`shelf:${j}`, sh[j].b]);

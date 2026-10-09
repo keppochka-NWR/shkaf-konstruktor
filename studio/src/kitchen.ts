@@ -129,11 +129,15 @@ export function kitchenJointGrid(m: Module, hid: string): RafixGrid | undefined 
 }
 
 /** Крепёж стыка дна/крыши кухни со стойкой: 3 точки (третья посередине глубины) у корпусов глубже 600 мм — 21 из 25 глубоких
- *  модулей Базиса с крепежом; до 600 — 2 точки (523 из 528). Свой счёт модуля (распознан из Базиса) — kitchen.jointPoints. */
-export function kitchenJointPoints(m: Module): 2 | 3 {
+ *  модулей Базиса с крепежом; до 600 — 2 точки (523 из 528). Свой счёт модуля (распознан из Базиса) — kitchen.jointPoints.
+ *  depth — глубина стыка: корпус (по умолчанию) или дно под боковинами (9 из 9 днищ глубже 600 — по 3, ровно 600 k30 m03 — по 2).
+ *  Один порог KITCHEN.deepBottom на оба случая — «глубокое дно» и «глубокий корпус» не расходятся. */
+export function kitchenJointPoints(m: Module, depth = m.depth): 2 | 3 {
   if (!m.kitchen) return 2;
-  return m.kitchen.jointPoints ?? (m.depth > 600 ? 3 : 2);
+  return m.kitchen.jointPoints ?? jointPointsRule(depth);
 }
+/** Правило кухни без своего счёта из Базиса: глубже KITCHEN.deepBottom (600) — 3 точки, иначе 2. */
+export const jointPointsRule = (depth: number): 2 | 3 => (depth > KITCHEN.deepBottom ? 3 : 2);
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 

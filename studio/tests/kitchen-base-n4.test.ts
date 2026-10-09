@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts,initialModule,parseModule,faceFillerEdge} from '../src/model';
+import {validate,parts,initialModule,parseModule,faceFillerEdge,type Module} from '../src/model';
+import {kitchenJointPoints,jointPointsRule} from '../src/kitchen';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {faceGapsTB,strayDoors} from '../scripts/kitchen/recognize-base';
@@ -174,6 +175,14 @@ test('стяжка на ребре со своими высотами конфи
     const back=parseModule(JSON.parse(JSON.stringify(m)));assert.deepEqual(back.rails?.find(r=>r.place==='rear-top')?.confY,[34,66],'сохраняется в проекте');
   }
   const w=initialModule();assert.ok(!(w.rails??[]).some(r=>r.confY),'шкаф студии — без confY');
+});
+
+test('глубокое дно и глубокий корпус — один порог (kitchenJointPoints/jointPointsRule): 600 — 2 точки, глубже — 3; свой счёт из Базиса главнее; шкаф — 2',()=>{
+  assert.equal(jointPointsRule(600),2);assert.equal(jointPointsRule(602),3);
+  const k={...initialModule(),depth:560,kitchen:{role:'base'}} as unknown as Module;
+  assert.equal(kitchenJointPoints(k),2);assert.equal(kitchenJointPoints(k,602),3,'дно под боковинами глубже 600');
+  assert.equal(kitchenJointPoints({...k,kitchen:{...k.kitchen!,jointPoints:2}} as Module,700),2,'счёт из Базиса');
+  assert.equal(kitchenJointPoints({...initialModule(),depth:700}),2,'шкаф студии');
 });
 
 test('лишние створки: нижний и мойка без своего фасада Базиса — распашных нет (угловые мойки k05 m05, k10 m13, k22 m06); распознанные — с дверьми (k25 m02, k14 m09)',{skip:!has('k05')||!has('k10')||!has('k22')||!has('k25')||!has('k14')},()=>{

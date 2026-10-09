@@ -1070,7 +1070,8 @@ export function parts(m: Module): Part[] {
       return all.length <= 1 ? all : [all[0], all[all.length - 1], ...all.slice(1, -1)];
     }
     const ins = mm.confirmatInset ?? RULES.confirmatInset, zs = [a + ins, front - ins];
-    const third = !!mm.kitchen && (hid === "bottom" || hid === "top") && (mm.kitchen.jointPoints ? mm.kitchen.jointPoints === 3 : hid === "bottom" && mm.bottomUnder ? b - a > KITCHEN.deepBottom + 0.5 : kitchenJointPoints(mm) === 3);
+    // глубина стыка: дно под боковинами — по самому дну (допуск 0,5 на дробную длину), иначе — корпус; порог один (kitchenJointPoints)
+    const third = !!mm.kitchen && (hid === "bottom" || hid === "top") && kitchenJointPoints(mm, hid === "bottom" && mm.bottomUnder ? b - a - 0.5 : mm.depth) === 3;
     if (third) zs.push((a + b) / 2);
     return zs;
   };
