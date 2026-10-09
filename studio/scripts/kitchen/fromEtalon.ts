@@ -57,10 +57,37 @@ export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner:
   return { hangerAt: { left, right, ...caps }, ...(out > 0 ? { note: `навесы Базиса выше корпуса на ${r1(out + 15)} мм — повторено как в проекте` } : {}) };
 }
 
+/** Боковины стоят на дне (дно под боковинами) на эксцентриках: стяжка Базиса — на наружной пласти боковины на уровне верха дна
+ *  (k16 m08–m10, k28 m10–m12, k31 m03/m04). Отступы стяжек от задней/передней кромки дна, стороны и отступ шкантов (по оси боковины, низ дна). */
+export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B): { at: { back: number; front: number }; sides: ("left" | "right")[]; dowel?: number } | null {
+  const outer = { left: left.x0, right: right.x1 };
+  const ecc = hardware.filter((h) => h.category === "эксцентрик" && Math.abs(h.pos[1] - bottom.y1) < 0.6);
+  const bySide = (s: "left" | "right") => ecc.filter((h) => Math.abs(h.pos[0] - outer[s]) < 0.6);
+  const sides = (["left", "right"] as const).filter((s) => bySide(s).length === 2);
+  if (!sides.length) return null;
+  const zs = sides.flatMap((s) => bySide(s).map((h) => h.pos[2]));
+  const at = { back: r1(Math.min(...zs) - bottom.z0), front: r1(bottom.z1 - Math.max(...zs)) };
+  const e0 = bySide(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0], cx = sides[0] === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2;
+  const d0 = hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[0] - cx) < 0.6).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
+  return { at, sides: [...sides], ...(d0 ? { dowel: r1(Math.abs(d0.pos[2] - e0.pos[2])) } : {}) };
+}
+
 /** Дно/крыша между боковинами с кромкой на торцах у боковин (±x) — так в части проектов (k32: кромка по кругу у всех панелей). */
 export function endsEdged(hs: RefPanel[]): boolean {
   const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
   return hs.length > 0 && hs.every((p) => ed(p).includes("+x") && ed(p).includes("-x"));
+}
+
+/** Отличия кромки проекта Базиса от схемы студии (kitchenEdges): торцы дна/крыши между боковинами (k32), торцы дна под боковинами
+ *  без кромки (k28), задние торцы при набивном ХДФ (k31). Только то, что видно в кромке эталона. */
+export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: RefPanel | undefined, bottomUnder: boolean, backType: Module["backType"]): { ends?: true; underEnds?: false; rear?: true } {
+  const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
+  const between = [bottomUnder ? undefined : bottom, top].filter((q): q is RefPanel => !!q);
+  const out: { ends?: true; underEnds?: false; rear?: true } = {};
+  if (endsEdged(between)) out.ends = true;
+  if (bottomUnder && bottom && !ed(bottom).includes("+x") && !ed(bottom).includes("-x")) out.underEnds = false;
+  if (backType === "nailed" && ed(side).includes("-z")) out.rear = true;
+  return out;
 }
 
 /** Крепёж корпуса в проекте Базиса не заложен вовсе (ни конфирматов, ни эксцентриков, ни шкантов, ни отверстий) — студия его не добавляет. */
@@ -316,13 +343,20 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
     if (d0) m.dowels = { offset: r1(Math.abs(d0.pos[2] - e0.pos[2])) };
   }
+  // боковины на дне на эксцентриках (дно под боковинами)
+  const ue = bottom && m.bottomUnder ? underEccFromEtalon(ref.hardware, bottom.b, left.b, right.b) : null;
+  if (ue) {
+    m.kitchen.underEcc = ue.at;
+    for (const s of ue.sides) (m.jointFastening ??= {})[`bottom:${s}`] = "eccentric";
+    if (ue.dowel !== undefined && !m.dowels) m.dowels = { offset: ue.dowel };
+  }
   // крепёж дна/крыши: отступ конфирматов от концов стыка (снизу через дно — у дна под боковинами; через боковину — в пределах толщины дна/крыши)
   const conf = [...hw("конфирмат"), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
-  if (et) m.edgeScheme = { t: et, ...(endsEdged([bottom, topPanel].filter((q) => q && !(q === bottom && m.bottomUnder)).map((q) => q!.p)) ? { ends: true as const } : {}) };
+  if (et) m.edgeScheme = { t: et, ...edgeFlags(left.p, bottom?.p, topPanel?.p, !!m.bottomUnder, m.backType) };
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
     const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);

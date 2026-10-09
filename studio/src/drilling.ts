@@ -30,6 +30,18 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм
       push(p.id, [o[0], o[1] - (p.name.includes("стекл") ? 5 : 2.5), o[2]], [into, 0, 0], 5, 12);
+    } else if (p.id.startsWith("ecc:under:") && !p.id.endsWith(":pin") && p.anchor) {
+      // боковина на дне (кухни Базиса k16/k28/k31): точка — наружная пласть боковины × верх дна; шток D8×34 вверх в торец боковины
+      // по её оси, бочонок D15×12 в наружную пласть в 34 мм над дном, D5×12 вниз в верхнюю пласть дна
+      const [ox, y, z] = p.anchor, inward = p.id.includes(":left:") ? 1 : -1, cx = ox + inward * 8;
+      push(p.id + ":pin", [cx, y, z], [0, 1, 0], 8, 34);
+      push(p.id, [ox, y + 34, z], [inward, 0, 0], 15, 12);
+      push(p.id + ":bottom", [cx, y, z], [0, -1, 0], 5, 12);
+    } else if (p.id.startsWith("dowel:under:") && p.anchor) {
+      // шкант 8×30 по оси боковины, стоящей на дне: D8×22 вверх в торец боковины, D8×12 вниз в верхнюю пласть дна
+      const y = p.position[1] - 3;
+      push(p.id, [p.position[0], y, p.position[2]], [0, 1, 0], 8, 22);
+      push(p.id + ":bottom", [p.position[0], y, p.position[2]], [0, -1, 0], 8, 12);
     } else if (p.id.startsWith("ecc:") && !p.id.endsWith(":pin") && p.anchor) {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;

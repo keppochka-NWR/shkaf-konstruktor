@@ -5,7 +5,7 @@ import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from 
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {hangersFromEtalon,fastenersAbsent,endsEdged,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 
 // Антресоль 600×400×350 (как Базис k12 «А 1»): дно и крыша между боковинами, ХДФ в паз, навесы ABS.
@@ -75,9 +75,39 @@ test('edge ends: top/bottom between sides edged at the ends only when Bazis edge
   assert.deepEqual(top.edge.filter(x=>x>0).length,4,'all four ends edged');
 });
 
+test('sides standing on the bottom with eccentrics (k16): recognizer reads insets/dowel offset, studio drills like Bazis',()=>{
+  const B=(x0:number,y0:number,z0:number,x1:number,y1:number,z1:number)=>({x0,y0,z0,x1,y1,z1});
+  const bottom=B(0,0,0,583,16,370),left=B(0,16,0,16,300,370),right=B(567,16,0,583,300,370);
+  const ecc=(x:number,z:number)=>hw('Стяжка эксц. (компл.)','эксцентрик',[x,16,z]),dw=(x:number,z:number)=>hw('Шкант 8х30 мм','шкант',[x,0,z]);
+  const r=underEccFromEtalon([ecc(0,307),ecc(0,83),ecc(583,307),ecc(583,83),dw(8,275),dw(8,115),dw(575,275),dw(575,115)],bottom,left,right)!;
+  assert.deepEqual(r,{at:{back:83,front:63},sides:['left','right'],dowel:32});
+  assert.equal(underEccFromEtalon([ecc(16,83)],bottom,left,right),null,'eccentric at the inner face is not this joint');
+  const m=antresol();m.width=583;m.height=300;m.depth=370;m.bottomUnder=true;m.kitchen!.underEcc=r.at;m.dowels={offset:32};
+  m.jointFastening={'bottom:left':'eccentric','bottom:right':'eccentric'};
+  const ps=parts(m),e=ps.filter(p=>/^ecc:under:[a-z]+:\d$/.test(p.id)),d=ps.filter(p=>p.id.startsWith('dowel:under:'));
+  assert.equal(e.length,4);assert.equal(d.length,4);
+  assert.deepEqual(e.find(p=>p.id==='ecc:under:left:0')!.anchor,[0,16,83]);
+  assert.deepEqual(d.find(p=>p.id==='dowel:under:left:0')!.anchor,[8,0,115]);
+  assert.ok(!ps.some(p=>p.id.startsWith('fast:bottom:')),'no confirmats through the bottom on eccentric joints');
+  const hs=holes(m,ps).filter(h=>h.src.startsWith('ecc:under:left:0'));
+  assert.deepEqual(hs.map(h=>[h.part,h.d,h.depth,h.at.join(',')]).sort(),[['bottom',5,12,'8,16,83'],['left',15,12,'0,50,83'],['left',8,34,'8,16,83']].sort());
+  assert.deepEqual(partCollisions(ps,m),[]);
+});
+
+test('edge flags follow the Bazis edging: under-bottom ends not edged (k28), rear ends with a nailed back (k31)',()=>{
+  const P=(edges:[string,number][]):RefPanel=>({i:0,name:'',mat:'',thick:16,kind:'ldsp',box:[0,0,0,1,1,1],axis:'y',edges:edges.map(([side,thick])=>({side,thick}))} as unknown as RefPanel);
+  assert.deepEqual(edgeFlags(P([['+z',1],['-z',1]]),P([['+z',0.4],['-z',0.4]]),P([['+z',0.4],['-z',0.4]]),true,'groove'),{underEnds:false});
+  assert.deepEqual(edgeFlags(P([['+z',1],['-z',1]]),P([['+z',1],['-z',1],['+x',1],['-x',1]]),P([['+z',1],['-z',1]]),true,'nailed'),{rear:true});
+  assert.deepEqual(edgeFlags(P([['+z',1]]),P([['+z',1],['+x',1],['-x',1]]),P([['+z',1]]),true,'nailed'),{});
+  const m=antresol();m.bottomUnder=true;m.backType='nailed';m.edgeScheme={t:1,underEnds:false,rear:true};
+  const ps=parts(m),bottom=ps.find(p=>p.id==='bottom')!,left=ps.find(p=>p.id==='left')!;
+  assert.equal(bottom.edge.filter(x=>x>0).length,2,'bottom under the sides: front and rear only');
+  assert.equal(left.edge.filter(x=>x>0).length,4,'side: all four with rear');
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
-for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16']] as const)
+for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
     const {module:m}=moduleFromEtalon(ref);

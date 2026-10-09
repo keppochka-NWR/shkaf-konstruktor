@@ -235,7 +235,8 @@ export type Module = {
   facadeEdge?: number;
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
   /** Кромка кухни: толщина; railBack:false — задняя царга заподлицо с задником без кромки по заднему торцу (18 из 80 нижних в базе). */
-  edgeScheme?: { t: number; railBack?: false; /** дно и крыша между боковинами кромятся и по торцам у боковин (k32: все торцы) */ ends?: true };
+  edgeScheme?: { t: number; railBack?: false; /** дно и крыша между боковинами кромятся и по торцам у боковин (k32: все торцы) */ ends?: true;
+    /** дно под боковинами без кромки по торцам (k28 m10–m12) */ underEnds?: false; /** задние торцы кромятся и при набивном ХДФ (k31 m03/m04) */ rear?: true };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
   grooves?: Groove[];
@@ -949,9 +950,27 @@ export function parts(m: Module): Part[] {
     if (hp.id === "bottom" && m.bottomUnder) {
       // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
       const yb = hp.position[1] - t / 2;
-      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
+      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) {
+        const ue = m.kitchen?.underEcc;
+        if (ue && m.jointFastening?.[`${hp.id}:${side}`] === "eccentric") {
+          // Кухни Базиса (k16, k28, k31): боковина стоит на дне на эксцентрике — шток D8×34 в нижний торец боковины, бочонок D15×12
+          // в наружную пласть боковины в 34 мм над дном, D5×12 в верхнюю пласть дна; шкант 8×30 — по оси боковины (22 в боковину, 12 в дно).
+          const yt = hp.position[1] + t / 2, ox = side === "left" ? 0 : m.width, inward = side === "left" ? 1 : -1;
+          for (const [k, z] of [z0 + ue.back, z0 + hp.size[2] - ue.front].entries()) {
+            add(`ecc:under:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [ox + inward * RULES.eccBarrelH / 2, yt + 34, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+            out.at(-1)!.anchor = [ox, yt, z];
+            add(`ecc:under:${side}:${k}:pin`, "Эксцентрик D15 · шток", [7, 34, 7], [x, yt + 17, z], 34, 7, 7, "fastener", hp.sectionId, "metal");
+            if (m.dowels) {
+              const dz = k === 0 ? m.dowels.offset : -m.dowels.offset;
+              add(`dowel:under:${side}:${k}`, "Шкант 8×30", [8, 30, 8], [x, yt + 3, z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
+              out.at(-1)!.anchor = [x, yb, z + dz];
+            }
+          }
+          continue;
+        }
         for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] - (m.confirmatInset ?? RULES.confirmatInset)].entries())
           confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
+      }
       continue;
     }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
@@ -1595,7 +1614,7 @@ export function parseModule(input: unknown): Module {
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
-    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:boolean}).ends?{ends:true as const}:{})}}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:boolean}).ends?{ends:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{})}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),
@@ -1607,7 +1626,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hangerAt&&Array.isArray(k.hangerAt.left)&&Array.isArray(k.hangerAt.right)?{hangerAt:{left:k.hangerAt.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.right.slice(0,3).map(Number) as [number,number,number],...(k.hangerAt.caps&&Array.isArray(k.hangerAt.caps.left)&&Array.isArray(k.hangerAt.caps.right)?{caps:{left:k.hangerAt.caps.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.caps.right.slice(0,3).map(Number) as [number,number,number]}}:{})}}:{}),...(k.noFasteners?{noFasteners:true}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hangerAt&&Array.isArray(k.hangerAt.left)&&Array.isArray(k.hangerAt.right)?{hangerAt:{left:k.hangerAt.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.right.slice(0,3).map(Number) as [number,number,number],...(k.hangerAt.caps&&Array.isArray(k.hangerAt.caps.left)&&Array.isArray(k.hangerAt.caps.right)?{caps:{left:k.hangerAt.caps.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.caps.right.slice(0,3).map(Number) as [number,number,number]}}:{})}}:{}),...(k.noFasteners?{noFasteners:true}:{}),...(k.underEcc?{underEcc:{back:Number(k.underEcc.back),front:Number(k.underEcc.front)}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
