@@ -5,8 +5,9 @@
 import type { Module, Part } from "./model";
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
- *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона). */
-export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][] };
+ *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона).
+ *  contour — фигурный контур Базиса в плоскости детали (plane: xz — горизонтальная, xy/yz — вертикальные), в координатах модуля. */
+export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; contour?: [number, number][]; plane?: "xz" | "xy" | "yz" };
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
@@ -65,6 +66,13 @@ export function rawParts(m: Module): Part[] {
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(dims[0]) === thin ? 1 : size.indexOf(dims[0])) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
+    // фигурная деталь (П- и Г-образная столешница, стеновая панель с вырезом): контур Базиса от угла габарита
+    if (p.contour && p.contour.length >= 3 && p.plane) {
+      const q = out[out.length - 1], ax: Record<string, [number, number]> = { xz: [0, 2], xy: [0, 1], yz: [1, 2] }, [a, b] = ax[p.plane];
+      const rel = p.contour.map(([u, v]) => [u - p.box[a], v - p.box[b]] as [number, number]);
+      if (p.plane === "xz" && thin === 1) q.planContour = rel;
+      else if ((p.plane === "xy" && thin === 2) || (p.plane === "yz" && thin === 0)) q.faceContour = rel;
+    }
   });
   r.hardware.forEach((h, i) => {
     const mesh = h.mesh ?? RAW_FALLBACK_MESH[h.category];
@@ -88,7 +96,8 @@ export function parseRaw(x: unknown): RawSpec | undefined {
   if (!r || typeof r !== "object" || !Array.isArray(r.panels)) return undefined;
   return {
     panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}),
-      ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}) })),
+      ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}),
+      ...(Array.isArray(p.contour) && p.plane && ["xz", "xy", "yz"].includes(p.plane) ? { contour: p.contour.slice(0, 400).map((c) => [Number(c[0]), Number(c[1])] as [number, number]).filter((c) => c.every(Number.isFinite)), plane: p.plane } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"] })),
     ...(r.source ? { source: String(r.source) } : {}),
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),

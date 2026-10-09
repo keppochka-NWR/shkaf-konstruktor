@@ -301,6 +301,8 @@ export type Part = {
   edgeLen?: Record<string, number>;
   /** Horizontal polygon in local X/Z coordinates, relative to its bounding box. */
   planContour?: [number,number][];
+  /** Фигурная вертикальная деталь (из Базиса): контур в плоскости детали от угла габарита — (x, y) у детали тонкой по Z, (y, z) у тонкой по X. */
+  faceContour?: [number,number][];
   /** Edge thickness for each successive polygon segment. */
   contourEdges?: number[];
   /** Изделие стороннего участка (двери-купе): не идёт в раскрой ЛДСП, деталировку и бирки. */
