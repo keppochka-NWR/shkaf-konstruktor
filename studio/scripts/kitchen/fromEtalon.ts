@@ -6,6 +6,7 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { wallRaise, bottomFrontRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
+import { wallDryer } from "./wallDryer";
 import { wallJointZ, endGroove, wallShelfEdges, wallEndEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
@@ -337,6 +338,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   }
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
+  // сушка навесного: элементы с сеткой Базиса — в точке и с поворотом проекта; без сетки — только заметка
+  if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
   // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
   const g = refGrooves(ref, back ? r1(back.b.z0) : null);

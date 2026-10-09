@@ -126,3 +126,15 @@ test('навесной k32 m14: в Базисе нет крепежа и кро�
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.equal(back.kitchen?.noFasteners,true);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
 });
+test('сушка навесного k21 m05: набор SU01/03 с сеткой Базиса — в точках и с поворотами проекта; без сетки (k06 m07) — только заметка',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
+  const ref=load('k21','m05'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.dryer?.length,8);
+  const ps=parts(m).filter(p=>p.id.startsWith('kitchen-dryer:'));
+  assert.equal(ps.length,8);
+  assert.ok(ps.every(p=>p.model?.native&&/^hardware\/bazis\/[0-9a-f]{12}\.glb$/.test(p.model.file)));
+  const row=compareModule(ref,m).hardware.find(h=>h.category==='сушка')!;
+  assert.deepEqual([row.ref,row.studio],[8,8]);assert.ok((row.maxPosDelta??0)<=1,'точки сушки как в Базисе');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...kitchenWall(initialModule(),600),kitchen:{role:'wall',dryer:m.kitchen?.dryer}}))).kitchen?.dryer,m.kitchen?.dryer,'сушка переживает сохранение');
+  const k6=moduleFromEtalon(load('k06','m07'));
+  assert.equal(k6.module.kitchen?.dryer,undefined);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
+});

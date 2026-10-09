@@ -23,6 +23,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   jointZ?: Record<string, [number, number]>;
   /** В проекте Базиса у модуля нет крепежа корпуса (конфирматов, эксцентриков, шкантов) — студия его не добавляет. */
   noFasteners?: boolean;
+  /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
+  dryer?: { name: string; mesh: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
@@ -122,6 +124,12 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       // Цоколь ЛДСП 16 на клипсах передних опор: задняя грань — по выступу клипсы, на 5 мм ниже дна.
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
+  }
+  // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
+  for (const [n, d] of (k.dryer ?? []).entries()) {
+    const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
+    out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
+       { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: d.quat }));
   }
   if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
     for (const side of ["left", "right"] as const) {
