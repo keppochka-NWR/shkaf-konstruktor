@@ -8,7 +8,7 @@ import {type Part} from '../src/model';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {allowedContact} from '../src/collisions';
-import {bazisHoleName,bazisHoles,bazisNames} from '../src/rawModule';
+import {bazisHoleName,bazisHoles,bazisNames,legDupKey} from '../src/rawModule';
 import {buildKitchen} from '../scripts/kitchen/buildKitchen';
 
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -72,6 +72,10 @@ test('кромка на ХДФ не только в k30: k05 «ВМ 1 (вытя�
   const p=kitchen('k05'),hdf=p.modules.flatMap(a=>a.module.raw?.panels??[]).filter(q=>q.kind==='hdf'&&q.edges?.length);
   assert.equal(hdf.length,2);
   assert.equal(Math.round(hdf.flatMap(q=>q.edges!).filter(([t])=>t===0.5).reduce((s,[,l])=>s+l,0)),3824);
+  // в смете — строкой кромки 0,5 мм (та же «лесенка» толщин, что у прочих деталей Базиса)
+  const no=structuredClone(p);for(const a of no.modules)for(const q of a.module.raw?.panels??[])if(q.kind==='hdf')delete q.edges;
+  assert.equal(Math.round((qty(p,/^edge05$/)-qty(no,/^edge05$/))*1000)/1000,3.824);
+  assert.equal(qty(p,/^edge(04|08|1|2)$/),qty(no,/^edge(04|08|1|2)$/),'другие толщины не меняются');
 });
 
 test('Firmax — штуками, как в Базисе: k30 L-350 7 шт (не 3,5 пары), строки без дробей',{skip:!has('k30')},()=>{
@@ -95,6 +99,12 @@ test('k16: опоры-дубли Базиса (две пары опор в од�
   assert.deepEqual(pen.module.bazisNames?.legsDup,{'Опора кухонная регулируемая, H100-120мм, чёрная':2});
   // одна опора в точке — дублей нет
   assert.equal(bazisNames([{name:'Опора',category:'опора',pos:[0,0,0]},{name:'Опора',category:'опора',pos:[100,0,0]}]).legsDup,undefined);
+  // правило дубля — общее со сверкой модуля (legDupKey, compare.ts): точка 0,1 мм и поворот; другой поворот в той же точке — не дубль
+  const q1=[1,0,0,0],q2=[0.5,0.5,0.5,-0.5];
+  assert.equal(bazisNames([{name:'Опора',category:'опора',pos:[0,0,0],quat:q1},{name:'Опора',category:'опора',pos:[0,0,0],quat:q2}]).legsDup,undefined);
+  assert.deepEqual(bazisNames([{name:'Опора',category:'опора',pos:[0,0,0],quat:q1},{name:'Опора',category:'опора',pos:[0.02,0,0],quat:q1}]).legsDup,{'Опора':1});
+  assert.equal(legDupKey({name:' Опора ',pos:[0.04,1,2],quat:q1}),legDupKey({name:'Опора',pos:[0,1,2],quat:q1}));
+  assert.notEqual(legDupKey({name:'Опора',pos:[0.6,1,2],quat:q1}),legDupKey({name:'Опора',pos:[0,1,2],quat:q1}));
 });
 
 test('k23: клипса и опора у цоколя ряда — разрешённый контакт до 3 мм (как в Базисе: сетка опоры Ø58 в z 493 доходит до 522, цоколь — с 520)',()=>{
@@ -104,6 +114,8 @@ test('k23: клипса и опора у цоколя ряда — разреш�
   assert.ok(allowedContact(clip,plinth,2));assert.ok(allowedContact(leg,plinth,2));
   assert.ok(!allowedContact(clip,plinth,5),'глубже 3 мм — ошибка');
   assert.ok(!allowedContact(clip,side,2),'клипса — только на цоколе и опоре');
+  // правило — только для сырой детали Базиса: доска студии с именем «Цоколь…» под него не попадает
+  assert.ok(!allowedContact(clip,box('plinth-front','Цоколь фронтальный'),2),'доска студии «Цоколь…» — не сырой цоколь Базиса');
 });
 
 test('шкаф студии: смета без строк отверстий и с Firmax студии парами (правило 3)',()=>{

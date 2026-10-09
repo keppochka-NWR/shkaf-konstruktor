@@ -129,16 +129,22 @@ export function bazisHoles(hw: { name: string; category: string; pos?: number[] 
   }
   return [...out.values()];
 }
-/** Названия петель («Петля …») и полкодержателей Базиса с количеством. legsDup — опоры Базиса, стоящие в точке другой опоры
- *  (k16 Пенал1: две пары опор по две в одной точке): в 3D одна, в спецификации Базиса — обе. */
-export function bazisNames(hw: { name: string; category: string; pos?: number[] | null }[]): BazisNames {
+/** Ключ дубля опоры Базиса: та же опора (имя), та же точка (0,1 мм) и тот же поворот (кватернион, 0,01). Одно правило для сметы
+ *  (bazisNames.legsDup) и для сверки модуля (scripts/kitchen/compare.ts: дубль в ref не входит). Без позиции — "" (не дубль). */
+export function legDupKey(h: { name?: string | null; pos?: number[] | null; quat?: number[] | null }): string {
+  if (!Array.isArray(h.pos)) return "";
+  return `${(h.name ?? "").trim()}|${h.pos.map((v) => Math.round(v * 10) / 10).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`;
+}
+/** Названия петель («Петля …») и полкодержателей Базиса с количеством. legsDup — опоры Базиса, стоящие в точке другой такой же опоры
+ *  с тем же поворотом (k16 Пенал1: две пары опор по две в одной точке; legDupKey): в 3D одна, в спецификации Базиса — обе. */
+export function bazisNames(hw: { name: string; category: string; pos?: number[] | null; quat?: number[] | null }[]): BazisNames {
   const hinges: Record<string, number> = {}, shelfHolders: Record<string, number> = {}, slides: Record<string, number> = {}, legs: Record<string, number> = {}, legsDup: Record<string, number> = {};
   const legAt = new Set<string>();
   for (const h of hw) {
     const n = (h.name ?? "").trim();
     if (h.category === "опора" && n) {
       legs[n] = (legs[n] ?? 0) + 1;
-      const at = Array.isArray(h.pos) ? h.pos.map((v) => Math.round(v)).join(",") : "";
+      const at = legDupKey(h);
       if (at && legAt.has(at)) legsDup[n] = (legsDup[n] ?? 0) + 1; else if (at) legAt.add(at);
     }
     if ((h.category === "петля" || h.category === "подъёмник" || h.category === "газлифт") && /^петля/i.test(n)) hinges[n] = (hinges[n] ?? 0) + 1;
