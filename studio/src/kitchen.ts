@@ -29,6 +29,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   noFasteners?: boolean;
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
   dryer?: { name: string; mesh: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  /** Имя крепежа корпуса по проекту Базиса, если это не «Конфирмат 7х50» (k33, k34: «Евровинт 6х50») — в деталях и смете. */
+  confirmatName?: string;
   /** В проекте Базиса у нижнего модуля нет опор (k33, k34: стоит на дне) — студия опоры не требует и не добавляет. */
   noLegs?: boolean;
   /** Глубина присадки по проекту Базиса, если она не типовая: confirmat — D5 в торец (обычно 35; k33/k34 «Евровинт 6х50» — 36), pin — D5 под полкодержатель (обычно 12; k33/k34 — 9). */

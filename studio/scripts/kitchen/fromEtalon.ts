@@ -9,7 +9,7 @@ import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type 
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
-import { normalizeRefHardware } from "./refHardware";
+import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { rearNotchFromContour } from "./sideNotch";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
@@ -104,6 +104,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     else m.plinthHeight = 0;
   } else { m.bottomType = "none"; m.plinthHeight = 0; }
   if (!topPanel) m.topType = "none";
+  const cn = confirmatName(ref.hardware); if (cn) m.kitchen.confirmatName = cn; // «Евровинт 6х50» (k33, k34) — так и в деталях и смете
   if (role === "base" && !legs.length) { m.kitchen.noLegs = true; notes.push("опор в проекте нет — студия их не добавляет"); } // k33, k34: нижний стоит на дне
   if (legs.length) {
     const xs = [...new Set(legs.map((l) => r1(l.pos[0])))].sort((a, c) => a - c);

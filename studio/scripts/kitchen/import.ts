@@ -9,7 +9,7 @@ import { compareModule, honestPass, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, type RawSpec } from "../../src/rawModule";
 import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
-import { normalizeRefHardware } from "./refHardware";
+import { normalizeRefHardware, confirmatName } from "./refHardware";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
 const OUTDIR = "public/local-projects";
@@ -27,6 +27,7 @@ function rawFromRef(ref: RefModule): RawSpec {
     panels: ref.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
     counts: rawCounts(normalizeRefHardware(ref.hardware)), // «Евровинт 6х50» из «прочего» — в смете конфирмат
+    ...(confirmatName(ref.hardware) ? { confirmatName: confirmatName(ref.hardware) } : {}), // под своим именем
   };
 }
 function place(ref: RefModule, m: Module): PlacedModule {

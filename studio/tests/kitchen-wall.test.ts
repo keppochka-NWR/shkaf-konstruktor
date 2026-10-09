@@ -6,7 +6,11 @@ import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {refCategory} from '../scripts/kitchen/refHardware';
+import {refCategory,confirmatName} from '../scripts/kitchen/refHardware';
+import {estimate} from '../src/pricing';
+import {newProject} from '../src/project';
+import {parseRaw} from '../src/rawModule';
+import {section} from '../src/model';
 import {rearNotchFromContour} from '../scripts/kitchen/sideNotch';
 import {partCollisions} from '../src/collisions';
 
@@ -180,6 +184,17 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
   assert.ok(!parts(k1.module).some(p=>p.id.startsWith('leg:')||/опор/i.test(p.name)));
   const c1=compareModule(r1,k1.module);assert.ok(c1.pass);assert.deepEqual([c1.holes?.matched,c1.holes?.ref],[16,16]);
   const sv=parseModule(JSON.parse(JSON.stringify(k1.module)));assert.equal(sv.kitchen?.noLegs,true);assert.deepEqual(sv.kitchen?.drill,{confirmat:36});
+  // крепёж под именем Базиса — «Евровинт 6х50», в деталях и смете (не «Конфирмат 7×50»)
+  assert.equal(k1.module.kitchen?.confirmatName,'Евровинт 6х50');
+  assert.ok(parts(k1.module).filter(p=>p.id.startsWith('fast:')).every(p=>p.name==='Евровинт 6х50'));
+  const lines=estimate(newProject(k1.module)).lines;
+  assert.ok(lines.some(l=>l.label==='Евровинт 6х50 (по проекту Базиса)'&&l.quantity===8));assert.ok(!lines.some(l=>l.id==='confirmat-7x50'));
+  assert.equal(sv.kitchen?.confirmatName,'Евровинт 6х50');
+  assert.equal(confirmatName(load('k30','m06').hardware),undefined,'типовой «Конфирмат 7х50» — без имени');
+  // сырой модуль: та же строка сметы
+  const raw={...initialModule(),sections:[section()],raw:{panels:[],hardware:[],counts:{confirmats:4},confirmatName:'Евровинт 6х50'}};
+  assert.equal(parseRaw(JSON.parse(JSON.stringify(raw.raw)))?.confirmatName,'Евровинт 6х50');
+  assert.ok(estimate(newProject(raw)).lines.some(l=>l.label==='Евровинт 6х50 (по проекту Базиса)'&&l.quantity===4));
   // обычный нижний без опор — по-прежнему ошибка (правило студии)
   const b=kitchenBase(initialModule(),600);delete b.feet;assert.ok(validate(b).some(e=>/на опоры/.test(e)));
   // сушка k34 m04 без дна: единственная горизонталь — «Крышка» наверху; дна студия не выдумывает, ХДФ не теряется

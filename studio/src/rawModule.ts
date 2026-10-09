@@ -12,7 +12,9 @@ export type RawHardware = { name: string; category: string; mesh?: string | null
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
 export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccentrics", "shelfHolders", "dowels", "hinges", "lifts", "drawers"] as const;
 /** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса». */
-export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean };
+export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean;
+  /** Имя крепежа корпуса Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50») — строка сметы под этим именем. */
+  confirmatName?: string };
 
 /** Счётчики фурнитуры по списку Базиса: петли — только «Петля …» (детали ФриФолд в Базисе тоже в категории «петля»),
  *  подъёмник — пара механизмов ФриФолд/подъёмника на комплект, ящик Axis PRO — пара держателей фасада на ящик. */
@@ -93,5 +95,6 @@ export function parseRaw(x: unknown): RawSpec | undefined {
     ...(r.source ? { source: String(r.source) } : {}),
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),
     ...(r.row ? { row: true } : {}),
+    ...(typeof r.confirmatName === "string" && r.confirmatName.trim() ? { confirmatName: r.confirmatName.trim().slice(0, 80) } : {}),
   };
 }
