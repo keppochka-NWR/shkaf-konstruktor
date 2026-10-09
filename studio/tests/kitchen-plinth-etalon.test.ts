@@ -30,3 +30,14 @@ test('эталоны Базиса: k28 «Вм 5» (антресоль) — бе�
   assert.equal(b.kitchen?.lowFront,true);
   assert.ok(parts(b).some(p=>p.id==='plinth'));
 });
+
+test('k04 m01: левые опоры и клипсы — левые сетки и поворот Базиса (cb84c30b57a5, 7ebcad9fda10), правые — как раньше',{skip:!existsSync(ET('k04'))},()=>{
+  const r=ref('k04','m01'),m=moduleFromEtalon(r).module,ps=parts(m),W=r.size[0];
+  const key=(mesh:string,q:number[])=>mesh+' '+q.map(v=>Math.round(v*100)/100).join(',');
+  // по сторонам: набор «сетка + поворот» у Базиса и у студии совпадает
+  const side=(x:number)=>x<W/2?'L':'R';
+  const bz=new Set(r.hardware.filter(h=>h.category==='опора'||h.category==='клипса').map(h=>h.category+' '+side(h.pos[0])+' '+key((h as {mesh:string}).mesh,(h as {quat:number[]}).quat)));
+  const st=new Set(ps.filter(p=>(p.id.startsWith('leg:')||p.id.startsWith('kitchen-clip:'))&&p.model).map(p=>(p.id.startsWith('leg:')?'опора':'клипса')+' '+side(p.model!.origin![0])+' '+key(p.model!.file.replace(/^.*\//,'').replace('.glb',''),p.model!.quat!)));
+  assert.deepEqual([...st].sort(),[...bz].sort());
+  assert.ok([...st].some(s=>s.startsWith('опора L cb84c30b57a5')),'левая опора — левая сетка');
+});
