@@ -5,7 +5,7 @@ import { initialModule, section, parts, scaleHingeY, type Module, type Groove, t
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
-import { AXIS_BACK, FIRMAX, VERSALITE, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
+import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -72,7 +72,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
+  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo|MODERN SLIDE/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
   const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name));
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
@@ -174,6 +174,41 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const std = mine.length === 2 && mine.every((h) => Math.abs(h.pos[0] - left.b.x1) < 0.05 && Math.abs(h.pos[1] - runY) < 0.05 && Math.abs(h.pos[2] - sideZ1) < 0.05);
       if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
+    });
+    if (kd.length) m.kdrawers = kd;
+  }
+  // ящики MODERN SLIDE: короб ЛДСП как у Firmax/Versalite, направляющие без сетки — точки Базиса храним как есть (по правилу Firmax)
+  const msRuns = ref.hardware.filter((h) => h.category === "направляющая" && /MODERN SLIDE/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);
+  if (msRuns.length && !axisRuns.length) {
+    const lefts = P.filter(({ p, b }) => /^Боковина ящика лев/i.test(p.name) && b.x0 < W / 2).sort((a, c) => a.b.y0 - c.b.y0);
+    const kd: KDrawer[] = [];
+    lefts.forEach((s) => {
+      const b = s.b, inBox = (q: { b: typeof b }) => q.b.y0 >= b.y0 - 0.5 && q.b.y1 <= b.y1 + 0.5 && q.b.x0 >= b.x1 - 0.5 && q.b.x0 < b.x1 + 30 && q.b.z0 >= b.z0 - 0.5 && q.b.z1 <= b.z1 + 0.5;
+      const ov = (q: { b: typeof b }) => Math.min(q.b.y1, b.y1) - Math.max(q.b.y0, b.y0);
+      const f = [...fronts].sort((a, c) => ov(c) - ov(a))[0];
+      const rs = P.find(({ p, b: q }) => /^Боковина ящика прав/i.test(p.name) && Math.abs(q.y0 - b.y0) < 0.6 && Math.abs(q.z0 - b.z0) < 0.6 && q.x0 > W / 2);
+      const bot = P.find((q) => /^Дно ящика/i.test(q.p.name) && inBox(q)), bk = P.find((q) => /^Задн/i.test(q.p.name) && /ящика/i.test(q.p.name) && inBox(q) && q.b.z0 < b.z0 + 1), fal = P.find((q) => /^Фальш/i.test(q.p.name) && inBox(q));
+      if (!f || !bot || !bk) { unsupported.push(`ящик MODERN SLIDE на ${r1(b.y0)}: нет фасада/дна/задней стенки`); return; }
+      for (const q of [f, s, rs, bot, bk, fal]) if (q && !drawerPanels.includes(q)) drawerPanels.push(q);
+      const box: FirmaxBox = { y: r1(b.y0), h: r1(b.y1 - b.y0), len: r1(b.z1 - b.z0) };
+      const gap = r1(b.x0 - left.b.x1), front = r1(sideZ1 - b.z1), bu = r1(bot.b.y0 - b.y0);
+      if (gap !== MODERN.gap) box.gap = gap;
+      if (Math.abs(front) > 0.05) box.front = front;
+      if (bu !== MODERN.bottomUp) box.bottomUp = bu;
+      const confs = ref.hardware.filter((h) => /онфирмат/.test(h.name)), side = confs.filter((h) => Math.abs(h.pos[0] - b.x0) < 0.6);
+      const cb = side.filter((h) => Math.abs(h.pos[2] - (bk.b.z0 + 8)) < 1 && h.pos[1] > bk.b.y0 - 1 && h.pos[1] < bk.b.y1 + 1).map((h) => r1(h.pos[1] - bk.b.y0)).sort((a, c) => a - c);
+      if (cb.length && JSON.stringify(cb) !== JSON.stringify(firmaxConf(r1(bk.b.y1 - bk.b.y0)))) box.conf = cb;
+      const cz = side.filter((h) => Math.abs(h.pos[1] - (bot.b.y0 + 8)) < 1).map((h) => r1(h.pos[2] - b.z0)).sort((a, c) => a - c);
+      if (cz.length && cz[0] !== MODERN.confBottom) box.confBottom = cz[0];
+      const cu = confs.filter((h) => Math.abs(h.pos[1] - bot.b.y0) < 0.3 && h.pos[0] > b.x1 && h.pos[0] < bot.b.x1 && h.pos[2] > b.z0 && h.pos[2] < b.z1).map((h) => r1(h.pos[0] - b.x1)).sort((a, c) => a - c);
+      if (cu.length && cu[0] !== MODERN.confUnder) box.confUnder = cu[0];
+      const fs = fal ? ref.hardware.filter((h) => /^Саморез 4х30/.test(h.name) && Math.abs(h.pos[2] - fal.b.z0) < 0.6 && h.pos[1] > fal.b.y0 - 0.5 && h.pos[1] < fal.b.y1 + 0.5) : [];
+      if (fs.length) box.faceScrews = fs.map((h) => [r1(h.pos[0] - b.x1), r1(h.pos[1] - fal!.b.y0)] as [number, number]);
+      if (!ref.hardware.some((h) => /^Саморез 3,5х16/.test(h.name) && Math.abs(h.pos[0] - left.b.x1) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.screws = false;
+      if (!ref.hardware.some((h) => h.name === "5x12" && Math.abs(h.pos[2] - b.z0) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.rearHoles = false;
+      const mine = msRuns.filter((h) => (lefts.find((q) => q.b.y0 >= h.pos[1] - 0.1) ?? lefts[lefts.length - 1]) === s);
+      box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
+      kd.push({ system: "modern-slide", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(b.y0), box });
     });
     if (kd.length) m.kdrawers = kd;
   }
