@@ -114,6 +114,11 @@ test("столешница над внешним краем: модуль не �
   const single = () => proj([at("s", 500, mod("Один", 600, { height: 800 })), { ...top, module: { ...top.module, width: 600 } }]);
   assert.throws(() => resizeInRow(single(), "s", 700), /из-под столешницы/);
   assert.throws(() => resizeInRow(single(), "s", 500), /торчать/);
+  // цоколь «Ряда» Базиса вдоль модуля: не удлиняется — модуль не выходит за него и он не торчит
+  const plinth = at("z", 500, mod("Цоколь · Фронтальная", 600, { height: 100, depth: 19, raw: { panels: [], hardware: [], row: true } as unknown as Module["raw"] }), { z: 500 });
+  const onPlinth = () => proj([at("s", 500, mod("Один", 600, { height: 800 })), plinth]);
+  assert.throws(() => resizeInRow(onPlinth(), "s", 700), /цоколь Базиса не удлиняется/);
+  assert.throws(() => resizeInRow(onPlinth(), "s", 500), /Цоколь «Цоколь · Фронтальная» будет торчать/);
   // внутри ряда (сосед компенсирует) столешница не мешает
   const p = resizeInRow(proj([base("a", 500), base("b", 1100), top]), "a", 700);
   assert.equal(get(p, "b").module.width, 500);

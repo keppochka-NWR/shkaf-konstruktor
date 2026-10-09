@@ -78,22 +78,24 @@ export function rowContext(p: Project, a: PlacedModule) {
   return { e, s, c, y, room, neighbor, wall };
 }
 
-/** Столешница над нижним модулем не должна начать висеть или торчать, когда меняется внешний край ряда. */
-function worktopCheck(p: Project, a: PlacedModule, ctx: ReturnType<typeof rowContext>, side: Side, delta: number) {
+/** Столешница над нижним модулем и цоколь ряда Базиса вдоль него не должны начать висеть или торчать, когда меняется внешний край ряда. */
+function rowObjectsCheck(p: Project, a: PlacedModule, ctx: ReturnType<typeof rowContext>, side: Side, delta: number) {
   const top = (a.y ?? 0) + a.module.height;
   for (const o of p.modules) {
-    if (o.id === a.id || !(o.module.worktop || (o.module.raw?.row && /столешн/i.test(o.module.name)))) continue;
-    const ob = bounds(o);
-    if (Math.abs(ob.y - top) > 3 || !overlaps(ctx.c, across(ob, ctx.e))) continue;
-    const ws = along(ob, ctx.e);
-    if (!overlaps(ctx.s, ws)) continue;
-    const edge = side === "right" ? ctx.s.hi : ctx.s.lo, end = side === "right" ? ws.hi : ws.lo;
+    if (o.id === a.id) continue;
+    const ob = bounds(o), os = along(ob, ctx.e), oc = across(ob, ctx.e);
+    const worktop = (!!o.module.worktop || (!!o.module.raw?.row && /столешн/i.test(o.module.name))) && Math.abs(ob.y - top) <= 3;
+    // цоколь «Ряда» Базиса — отдельный объект вдоль модулей (у своих кухонь цоколь — деталь модуля и идёт за его шириной)
+    const plinth = !!o.module.raw?.row && /цокол/i.test(o.module.name) && os.hi - os.lo > oc.hi - oc.lo && overlaps(ctx.y, yRange(ob));
+    if (!(worktop || plinth) || !overlaps(ctx.c, oc) || !overlaps(ctx.s, os)) continue;
+    const what = worktop ? "столешниц" : "цокол";
+    const edge = side === "right" ? ctx.s.hi : ctx.s.lo, end = side === "right" ? os.hi : os.lo;
     const out = side === "right" ? 1 : -1, moved = edge + out * delta;
     const inside = (v: number) => (side === "right" ? v <= end + TOUCH : v >= end - TOUCH);
     if (delta > 0 && inside(edge) && !inside(moved))
-      throw Error(`${quote(a.module)} выйдет из-под столешницы ${quote(o.module)} на ${r1(Math.abs(moved - end))} мм — столешница начнёт не доходить до края. Сначала удлините столешницу или поставьте модуль вплотную к соседу.`);
+      throw Error(`${quote(a.module)} выйдет за край ${what}${worktop ? "ы" : "я"} ${quote(o.module)} на ${r1(Math.abs(moved - end))} мм (${worktop ? "выйдет из-под столешницы" : "цоколь Базиса не удлиняется"}). Сначала удлините ${worktop ? "столешницу" : "цоколь"} или поставьте модуль вплотную к соседу.`);
     if (delta < 0 && Math.abs(edge - end) <= TOUCH)
-      throw Error(`Столешница ${quote(o.module)} будет торчать за ${quote(a.module)} на ${r1(-delta)} мм. Сначала укоротите столешницу.`);
+      throw Error(`${worktop ? "Столешница" : "Цоколь"} ${quote(o.module)} будет торчать за ${quote(a.module)} на ${r1(-delta)} мм. Сначала укоротите ${worktop ? "столешницу" : "цоколь"}.`);
   }
 }
 
@@ -132,11 +134,11 @@ export function resizeInRow(p: Project, placedId: string, width: number): Projec
     if (fresh) throw Error(`Сосед ${quote(n.module)} при ширине ${nw} мм: ${fresh}`);
     next.set(n.id, moved);
   } else {
-    // Внешний край ряда: в свободное место до стены; столешница сверху не должна повиснуть или торчать.
+    // Внешний край ряда: в свободное место до стены; столешница сверху и цоколь ряда не должны повиснуть или торчать.
     const edge = side === "right" ? ctx.s.hi + delta : ctx.s.lo - delta;
     if (delta > 0 && (side === "right" ? edge > ctx.room.hi + 0.1 : edge < ctx.room.lo - 0.1))
       throw Error(`${quote(a.module)} упирается в стену: ${side === "right" ? "справа" : "слева"} свободно ${r1(Math.max(0, side === "right" ? ctx.room.hi - ctx.s.hi : ctx.s.lo - ctx.room.lo))} мм, а нужно ${delta}.`);
-    worktopCheck(p, a, ctx, side, delta);
+    rowObjectsCheck(p, a, ctx, side, delta);
   }
   return { ...p, modules: p.modules.map((x) => next.get(x.id) ?? x) };
 }
