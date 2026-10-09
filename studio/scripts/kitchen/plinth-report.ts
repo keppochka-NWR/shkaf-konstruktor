@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import { parseProject, type Project } from "../../src/project";
 import { parts } from "../../src/model";
 import { estimate } from "../../src/pricing";
+import { nest } from "../../src/exports";
 
 const argv = process.argv.slice(2), opt = (n: string) => argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3);
 const ET = opt("et") ?? "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon";
@@ -23,12 +24,16 @@ function studio(dir: string, k: string) {
     if (d.external) ext++; else { cut++; cutLen += Math.max(d.size[0], d.size[2]); } // длина вдоль ряда, как у эталона
   }
   const e = estimate(p), q = (id: string) => e.lines.find((l) => l.id === id)?.quantity ?? 0;
-  return { cut, cutLen: r0(cutLen), ext, clips: q("kitchen-clip"), plinthFm: q("plinth-external") };
+  // листы раскроя по толщинам (кроме ХДФ): лишний лист под цоколь (k09: «16.7» от чуть повёрнутой детали) виден здесь
+  const th = new Map<number, number>();
+  for (const s of nest(p)) if (s.material !== "hdf") th.set(s.thickness ?? 16, (th.get(s.thickness ?? 16) ?? 0) + 1);
+  const sheets = [...th.entries()].sort((a, b) => a[0] - b[0]).map(([t, n]) => `${n}×${t}`).join(" ");
+  return { cut, cutLen: r0(cutLen), ext, clips: q("kitchen-clip"), plinthFm: q("plinth-external"), sheets };
 }
 
 const rows: string[] = [];
-rows.push("| кухня | клипс Базиса | цоколь Базиса: ряд / в модулях | длина ряда, мм | материал | студия до: деталей «Цоколь» в раскрое / внешн. | студия после: «Цоколь» в раскрое (длина, мм) / строка «Цоколь — фасадн. мат-л», м² | клипс в смете до → после | вывод |");
-rows.push("|---|---|---|---|---|---|---|---|---|");
+rows.push("| кухня | клипс Базиса | цоколь Базиса: ряд / в модулях | длина ряда, мм | материал | студия до: деталей «Цоколь» в раскрое / внешн. | студия после: «Цоколь» в раскрое (длина, мм) / строка «Цоколь — фасадн. мат-л», м² | клипс в смете до → после | листы плиты до → после (шт×мм) | вывод |");
+rows.push("|---|---|---|---|---|---|---|---|---|---|");
 for (const f of readdirSync(ET).filter((x) => /^k\d\d\.json$/.test(x)).sort()) {
   const k = f.slice(0, 3), e = JSON.parse(readFileSync(`${ET}/${f}`, "utf8"));
   const clips = (e.modules as { hardware: { category: string }[] }[]).reduce((s, m) => s + m.hardware.filter((h) => h.category === "клипса").length, 0);
@@ -39,7 +44,7 @@ for (const f of readdirSync(ET).filter((x) => /^k\d\d\.json$/.test(x)).sort()) {
   const has = rowP.length + inMod.length > 0;
   const verdict = !has && clips ? "в Базисе цоколь не заложен (только клипсы ПВХ-цоколя) — студия не добавляет"
     : !has ? "нет цоколя и клипс" : clips ? "цоколь Базиса + клипсы" : "цоколь Базиса без клипс";
-  rows.push(`| ${k} | ${clips} | ${rowP.length} / ${inMod.length} | ${rowP.length ? r0(rowP.reduce((s, p) => s + len(p.box), 0)) : "—"} | ${mats || "—"} | ${b ? `${b.cut} / ${b.ext}` : "—"} | ${a ? `${a.cut} (${a.cutLen}) / ${a.plinthFm}` : "—"} | ${b ? b.clips : "—"} → ${a ? a.clips : "—"} | ${verdict} |`);
+  rows.push(`| ${k} | ${clips} | ${rowP.length} / ${inMod.length} | ${rowP.length ? r0(rowP.reduce((s, p) => s + len(p.box), 0)) : "—"} | ${mats || "—"} | ${b ? `${b.cut} / ${b.ext}` : "—"} | ${a ? `${a.cut} (${a.cutLen}) / ${a.plinthFm}` : "—"} | ${b ? b.clips : "—"} → ${a ? a.clips : "—"} | ${b ? b.sheets : "—"} → ${a ? a.sheets : "—"} | ${verdict} |`);
 }
 const out = rows.join("\n");
 console.log(out);
