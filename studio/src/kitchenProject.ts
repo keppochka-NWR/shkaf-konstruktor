@@ -174,6 +174,8 @@ export function setLegHeight(p: Project, ids: string[], height: number): Project
     if (old === height) continue;
     a.module.feet = { height };
     a.module.height += height - old;
+    // ящики Axis PRO поднимаются вместе с корпусом
+    if (a.module.kdrawers) a.module.kdrawers = a.module.kdrawers.map((d) => ({ ...d, y0: d.y0 + height - old, y1: d.y1 + height - old, runnerY: d.runnerY + height - old }));
     // цоколь «по регламенту» (на 5 ниже дна) следует за опорами; свой — только не выше опор
     const ph = k.plinth?.height ?? KITCHEN.plinthHeight, auto = ph === old - (KITCHEN.legs - KITCHEN.plinthHeight);
     const nextPh = auto ? height - (KITCHEN.legs - KITCHEN.plinthHeight) : Math.min(ph, height);
@@ -223,6 +225,6 @@ export function kitchenItemOf(m: Module): KitchenItem | undefined {
   if (k.role === "wall") return m.doors ? "wall" : "wall-open";
   if (k.appliance === "sink") return "sink";
   if (k.appliance === "oven") return "oven";
-  if (m.sections.some((s) => s.drawers > 0)) return "base-drawers";
+  if (m.kdrawers?.length || m.sections.some((s) => s.drawers > 0)) return "base-drawers";
   return m.width < 250 ? "bottle" : "base-doors";
 }

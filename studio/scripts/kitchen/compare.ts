@@ -20,7 +20,7 @@ export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[
 export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
-export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; size: { ref: number[]; studio: number[] } };
+export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
 
 const AX = ["x", "y", "z"];
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -78,6 +78,9 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("dowel:")) return "шкант";
   if (id.startsWith("shp:")) return "полкодержатель";
   if (id.includes(":slide:")) return "направляющая";
+  if (id.startsWith("kd:") && id.includes(":sys:")) return "ящик-система";
+  if (id.startsWith("kd:") && id.includes(":cap:")) return "заглушка";
+  if (id.startsWith("kd:") && id.includes(":screw:")) return "прочее";
   if (p.role === "handle") return "ручка";
   return null;
 }
@@ -101,7 +104,11 @@ function matchPoints(a: number[][], b: number[][]): number | null {
   return r1(worst);
 }
 
-export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison {
+/** Отступления (реестр): профили-экструзии Базиса («Профиль», «Профиль1») — без сетки, контур в эталон не извлекается; не воспроизводятся, в отчёте — отдельной строкой. */
+export const isDeviation = (h: RefHardware) => /^Профиль/.test(h.name) && !h.mesh;
+
+export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison {
+  const deviations = ref0.hardware.filter(isDeviation).map((h) => h.name), ref: RefModule = { ...ref0, hardware: ref0.hardware.filter((h) => !isDeviation(h)) };
   const ps = parts(m), A0 = refItems(ref), B0 = studioItems(ps), pairs: PanelPair[] = [], missing: Item[] = [], extra: Item[] = [];
   // Общая точка отсчёта: минимальный угол габарита панелей (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0 и ХДФ на −3..0).
   const corner = (xs: Item[]) => [0, 1, 2].map((i) => Math.min(...xs.map((x) => x.box[i])));
@@ -136,8 +143,12 @@ export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison 
   if (ref.holes) {
     const sh = studioHoles(m, ps), used = new Set<number>(), pairOf = new Map(pairs.map((p) => [p.ref.id, p.studio.id]));
     const hc: HoleCheck = { ref: ref.holes.length, studio: sh.length, matched: 0, maxDelta: 0, missing: [], extra: [] };
+    const seenH = new Set<string>();
     for (const h of ref.holes) {
-      if (h.panel === null || h.panel === undefined) { hc.ref--; continue; } // отверстие в корпусе фурнитуры (навес), не в панели
+      if (h.panel === null || h.panel === undefined) { hc.ref--; continue; }
+      const hk = `${h.panel}|${h.at.map(r1).join(",")}|${h.d}|${h.depth}|${h.dir.join(",")}`;
+      if (seenH.has(hk)) { hc.ref--; continue; } // дубль Базиса: одно и то же отверстие от двух деталей фурнитуры
+      seenH.add(hk); // отверстие в корпусе фурнитуры (навес), не в панели
       const sid = pairOf.get("b" + h.panel), at = h.at.map((v, i) => v - oa[i]);
       let best = -1, bd = Infinity;
       sh.forEach((s, j) => {
@@ -175,7 +186,7 @@ export function compareModule(ref: RefModule, m: Module, tol = 0.5): Comparison 
   edgeCheck.bad.push(...grooveBad.map((x) => "пазы: " + x));
   const holesOk = !holeCheck || (!holeCheck.missing.length && !holeCheck.extra.length && holeCheck.maxDelta <= 0.5);
   const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length;
-  return { edges: edgeCheck, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
+  return { edges: edgeCheck, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, deviations, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
 }
 
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */

@@ -6,6 +6,7 @@
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
 import type { Module, Part } from "./model";
 import { setEdges } from "./edges";
+import { axisLayout } from "./kitchenDrawers";
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
@@ -140,9 +141,11 @@ export function kitchenEdges(m: Module, out: Part[]) {
     if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
     else if (p.id === "top") setEdges(p, ["+z", ...rear], t);
-    else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? ["+z", "-z"] : ["+y", "-y"], t);
+    else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
+    else if (p.id.startsWith("kd:") && p.id.endsWith(":back")) setEdges(p, ["+x", "-x", "+y", "-y"], t); // задняя стенка ящика Axis PRO — по кругу; дно — без кромки
+    else if (p.id.startsWith("kd:")) continue;
     else if (p.role === "body") setEdges(p, ["+z"], t);
   }
 }
@@ -189,7 +192,9 @@ export function kitchenBase(base: Module, width: number, kind: "doors" | "drawer
     ? [{ place: "front-top", height: 60 }, { place: "rear-top", height: 100 }]
     : [{ place: "front-top", height: KITCHEN.railWidth, lay: "flat" }, { place: "rear-top", height: KITCHEN.railWidth, lay: "flat" }];
   // полка: в 1 мм от задника и в 1,5 от лица корпуса (k25 «НМ600»)
-  m.sections = [{ ...m.sections[0], shelves: kind === "doors" ? [0.5] : [], drawers: kind === "drawers" ? 3 : 0, rod: false, shelfDepth: m.depth - 2.5 }];
+  m.sections = [{ ...m.sections[0], shelves: kind === "doors" ? [0.5] : [], drawers: 0, rod: false, shelfDepth: m.depth - 2.5 }];
+  // ящики — Axis PRO по Базису (дно и задняя стенка ЛДСП, металлические царги), три фасада: нижний крупнее
+  if (kind === "drawers") { m.doors = false; m.kdrawers = axisLayout(m, 3); }
   return m;
 }
 /** Навесной (Базис «ВМ (Стенка в паз)»): дно и крыша между боковинами, ХДФ в паз П16-4×8, навесы ABS L/R. */

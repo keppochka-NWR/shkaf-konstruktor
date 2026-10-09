@@ -8,6 +8,7 @@ import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions } from "./collisions";
+import { axisLayout, refitKDrawers, axisLabel, AXIS_HEIGHTS, AXIS_BACK } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
 import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, legModules, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
@@ -120,7 +121,7 @@ function CabinetPanel(props: KitchenPanelProps) {
   const hingeCount = list.filter((p) => p.id.includes(":hingecup:")).length;
   const auto = door ? hingePositions(door.size[1], door.size[0], true) : [];
   const legCount = list.filter((p) => p.id.startsWith("leg:")).length, clipCount = list.filter((p) => p.id.startsWith("kitchen-clip:")).length, plinthPart = list.find((p) => p.id === "kitchen-plinth");
-  const hasFronts = m.doors || m.sections.some((x) => x.drawers > 0);
+  const hasFronts = m.doors || m.sections.some((x) => x.drawers > 0) || !!m.kdrawers?.length;
   const legsAll = (v: number) => commit(setLegHeight(project, onlyThis ? [placed.id] : legModules(project), v));
   const legsToAll = () => commit({ ...project, modules: project.modules.map((a) => {
     const ak = a.module.kitchen;
@@ -147,8 +148,8 @@ function CabinetPanel(props: KitchenPanelProps) {
       {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (ширина, цвета, петли и ручки сохраняются).</p>}
       <label className="hardware-field">Название<input aria-label="Название кухонного модуля" key={m.name} defaultValue={m.name} maxLength={80} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) modify((n) => { n.name = v; }); }} /></label>
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxWidth} change={(v) => modify((n) => { n.width = v; })} />
-      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={RULES.maxH} change={(v) => modify((n) => { n.height = v; })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
-      <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
+      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={RULES.maxH} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
+      <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
       <Check label="Дно под боковинами (боковины стоят на дне)" checked={!!m.bottomUnder} change={(v) => modify((n) => { if (v) n.bottomUnder = true; else delete n.bottomUnder; })} />
       <Check label={role === "base" ? "Крыша (у нижних обычно нет — царги под столешницу)" : "Крыша"} checked={m.topType !== "none"} change={(v) => modify((n) => { if (v) delete n.topType; else n.topType = "none"; })} />
       <div className="kitchen-field"><span>Кромка открытых торцов</span>
@@ -230,7 +231,19 @@ function CabinetPanel(props: KitchenPanelProps) {
       </>}
     </Group>}
 
-    {!m.sections.every((x) => x.drawers > 0) && <Group icon={<Rows3 size={15} />} title="Полки" open={stage === "filling"} note={m.sections.reduce((n, x) => n + x.shelves.length, 0) + " шт."}>
+    {!!m.kdrawers?.length && <Group icon={<Rows3 size={15} />} title="Ящики Axis PRO" open={stage === "filling"} note={m.kdrawers.length + " шт."}>
+      <div className="kitchen-field"><span>Количество ящиков</span>
+        <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => <button key={c} type="button" aria-pressed={m.kdrawers!.length === c} onClick={() => modify((n) => { n.kdrawers = axisLayout(n, c); })}>{c}</button>)}</div></div>
+      {[...m.kdrawers].map((d, i) => ({ d, i })).reverse().map(({ d, i }) => <div key={i} className="kitchen-rail">
+        <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(d)} · направляющая на {d.runnerY} от пола модуля</p>
+        {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={700} step={0.5} change={(v) => modify((n) => { const r = n.kdrawers!.map((k) => k.y1 - k.y0); r[r.length - 1] = Math.max(100, r[r.length - 1] + r[i] - v); r[i] = v; n.kdrawers = axisLayout(n, r.length, r); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
+        <div className="kitchen-chips" role="group" aria-label={`Царга ящика ${i + 1}`}>{AXIS_HEIGHTS.map((h) => <button key={h} type="button" aria-pressed={d.h === h} disabled={d.runnerY - 22 + AXIS_BACK[h] > d.y1 - 5} title={d.runnerY - 22 + AXIS_BACK[h] > d.y1 - 5 ? "Не входит по высоте фасада" : undefined} onClick={() => modify((n) => { n.kdrawers![i] = { ...n.kdrawers![i], h }; delete n.kdrawers![i].backH; })}>H-{h}</button>)}</div>
+      </div>)}
+      <label className="hardware-field">Цвет Axis PRO<select aria-label="Цвет Axis PRO" value={m.kdrawers[0].color ?? "white"} onChange={(e) => modify((n) => { n.kdrawers = n.kdrawers!.map((k) => { const c = { ...k }; if (e.target.value === "anthracite") c.color = "anthracite"; else delete c.color; return c; }); })}><option value="white">Белый</option><option value="anthracite">Антрацит</option></select></label>
+      <p className="field-note">Как в проектах Базиса цеха: дно и задняя стенка ЛДСП 16, царги металлические, направляющие на боковинах (саморезы 3×3, фиксаторы D5), держатели фасада AB/CD. Высота корпуса или глубина меняются — ящики пересчитываются.</p>
+    </Group>}
+
+    {!m.kdrawers?.length && !m.sections.every((x) => x.drawers > 0) && <Group icon={<Rows3 size={15} />} title="Полки" open={stage === "filling"} note={m.sections.reduce((n, x) => n + x.shelves.length, 0) + " шт."}>
       {m.sections.length > 1 && <div className="kitchen-chips" role="group" aria-label="Секция модуля">{m.sections.map((x, i) => <button key={x.id} type="button" aria-pressed={i === sIdx} onClick={() => setSi(i)}>Секция {i + 1}</button>)}</div>}
       {s.drawers > 0 ? <p className="field-note">В секции ящики — полки настраиваются на вкладке «Секция».</p> : <>
         <label className="hardware-field">Количество полок<select aria-label="Количество полок кухонного модуля" value={s.shelves.length} onChange={(e) => modify((n) => { const sec = n.sections[sIdx], c = Number(e.target.value); sec.shelves = distribute(n, sec, c); if (sec.glassShelves) sec.glassShelves = sec.glassShelves.length ? sec.shelves.map((_, i) => i) : undefined; if (!sec.glassShelves?.length) delete sec.glassShelves; if (sec.fixed) sec.fixed = sec.fixed.filter((j) => j < c); })}>

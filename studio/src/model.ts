@@ -1,5 +1,6 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
+import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
@@ -215,10 +216,15 @@ export type Module = {
   glassGap?: number;
   /** Сырой модуль — детали проекта Базиса как есть (rawModule.ts): импорт кухонь/шкафов, которые параметрика пока не повторяет. */
   raw?: RawSpec;
+  /** Ящики кухни по Базису (Axis PRO): фасад, высота направляющей, царга, длина — kitchenDrawers.ts. */
+  kdrawers?: KDrawer[];
   /** Материал фасадов: ЛДСП (по умолчанию, в раскрое) или фасадный материал стороннего участка (МДФ/плёнка/эмаль — без раскроя и кромки). */
   facadeMaterial?: "ldsp" | "external";
+  /** Кромка фасадов из фасадного материала, мм (Базис: «Кромка фасадная 1х22»); нет — без кромки. */
+  facadeEdge?: number;
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
-  edgeScheme?: { t: number };
+  /** Кромка кухни: толщина; railBack:false — задняя царга заподлицо с задником без кромки по заднему торцу (18 из 80 нижних в базе). */
+  edgeScheme?: { t: number; railBack?: false };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
   grooves?: Groove[];
@@ -970,12 +976,13 @@ export function parts(m: Module): Part[] {
   }
   hardwareParts(m,out);
   kitchenExtraParts(m,out);
+  kitchenDrawerParts(m,out,fe(m),m.facadeT??RULES.panel,m.faceAir??2);
   kitchenEdges(m,out);
   // Пазы под подсветку и прочие (кроме паза под задник): тёмная полоса в панели; подсветка — в смете за пог. м (роль light).
   (m.grooves??[]).forEach((g,i)=>{const hostPart=out.find(p=>p.id===g.host);if(!hostPart)return;const b=grooveBox(hostPart,g);if(!b)return;const [x0,y0,z0,x1,y1,z1]=b,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
     out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
-  if(m.facadeMaterial==='external')for(const p of out)if(p.role==='door'||p.id.endsWith(':facade')){p.external=true;p.edge=[0,0,0,0];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
+  if(m.facadeMaterial==='external')for(const p of out)if(p.role==='door'||p.id.endsWith(':facade')){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
   if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
     if(p.material!=='board')continue;
@@ -1205,7 +1212,8 @@ export function validate(m: Module): string[] {
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
   if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m));
+  errors.push(...kitchenErrors(m),...kitchenDrawerErrors(m));
+  if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
     return [...errors, "Допустимо от 1 до 4 секций."];
@@ -1520,8 +1528,10 @@ export function parseModule(input: unknown): Module {
     ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
+    ...(x.kdrawers===undefined?{}:(()=>{const k=parseKDrawers(x.kdrawers);return k?{kdrawers:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
-    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t)}}),
+    ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{})}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),

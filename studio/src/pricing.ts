@@ -132,6 +132,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;
       add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',legs,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',clips,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+      // ящики Axis PRO: комплект на ящик (2 направляющие, 2 царги, держатели фасада и задней стенки, 2 заглушки); дно и стенка — в раскрое ЛДСП
+      for(const k of a.module.kdrawers??[])add(`axis-pro:${k.h}:${k.len}:${k.color??'white'}`,`Ящик Axis PRO H-${k.h}, ${k.len} мм${k.color==='anthracite'?', антрацит':', белый'} — комплект фурнитуры`,1,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     }
     const legs=a.module.kitchen?0:legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
     const allParts=parts(a.module);

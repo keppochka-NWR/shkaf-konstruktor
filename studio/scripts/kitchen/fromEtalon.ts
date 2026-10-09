@@ -5,6 +5,7 @@ import { initialModule, section, parts, type Module, type Groove } from "../../s
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
+import { AXIS_BACK, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -52,8 +53,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b));
-  const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h));
+  const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name));
+  const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
@@ -100,24 +101,45 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.grooveInset = r1(z0 - (gw - 3)); m.grooveWidth = gw; m.grooveDepth = gd;
     m.grooveClear = r1((W - 2 * t + 2 * gd - (back.b.x1 - back.b.x0)) / 2);
   }
-  // фасады (одна строка распашных)
+  // ящики Axis PRO: по каждой левой направляющей — её фасад (по держателю фасада), царга (высота, цвет), дно и задняя стенка
+  const axisRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Axis PRO Направляющая/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);
+  const drawerPanels: typeof P = [];
+  if (axisRuns.length) {
+    const kd: KDrawer[] = [];
+    for (const r of axisRuns) {
+      const [x, y] = r.pos, len = Number(/(\d+)\s*$/.exec(r.name)?.[1] ?? 500) as KDrawer["len"];
+      const side = ref.hardware.find((h) => /Axis PRO Царга H-\d+/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
+      const hh = Number(/H-(\d+)/.exec(side?.name ?? "")?.[1] ?? 86) as KDrawer["h"], anthr = /Антрацит/i.test(side?.name ?? "");
+      const f = fronts.find((q) => q.b.y0 <= y + 3.5 && q.b.y1 >= y + 3.5);
+      const bot = P.find(({ p, b }) => /Дно выдв/.test(p.name) && Math.abs(b.y0 - (y - 22)) < 0.6), bk = P.find(({ p, b }) => /Задн\. ст\. выдв/.test(p.name) && Math.abs(b.y0 - (y - 22)) < 0.6);
+      if (!f) { unsupported.push(`ящик Axis PRO на ${r1(y)} без фасада`); continue; }
+      for (const q of [f, bot, bk]) if (q) drawerPanels.push(q);
+      const backH = bk ? r1(bk.b.y1 - bk.b.y0) : undefined;
+      const faceScrews = ref.hardware.some((h) => h.name === "3x3" && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
+      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}) });
+    }
+    if (kd.length) m.kdrawers = kd;
+  }
+  // фасады (одна строка распашных; ящики — выше)
   const doors = fronts.filter((f) => hw("петля").length);
   if (fronts.length) {
     const f0 = fronts[0];
     if (f0.p.kind === "other" || f0.p.kind === "mdf") m.facadeMaterial = "external";
+    const fEdge = (f0.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
+    if (m.facadeMaterial === "external" && fEdge) m.facadeEdge = fEdge; // фасадный материал с кромкой «фасадная 1×22»
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
     m.faceGap = r1(f0.b.x0 - left.b.x0);
-    m.faceGapBetween = fronts.length > 1 ? r1(fronts[1].b.x0 - fronts[0].b.x1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
+    m.faceGapBetween = m.kdrawers ? 3 : fronts.length > 1 ? r1(fronts[1].b.x0 - fronts[0].b.x1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
-    if (rows.size > 1) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
+    if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;
     m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
     if (fronts.length === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
     }
-    if (fronts.length > 2) unsupported.push(`${fronts.length} фасадов в ряду`);
+    if (fronts.length > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
   } else m.doors = false;
   // высоты петель (от низа фасада) — как в проекте, если отличаются от правила 100 мм от краёв
   if (fronts.length && doors.length) {
@@ -163,6 +185,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et };
+  // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
+  const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
+  if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
@@ -180,7 +205,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     }
     if (out.length) m.grooves = out;
   }
-  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel].includes(x)).length;
+  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel, ...drawerPanels].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   return { module: m, notes, unsupported };
 }

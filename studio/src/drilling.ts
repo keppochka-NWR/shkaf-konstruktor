@@ -6,6 +6,7 @@
 //   петля накладная: чашка D35×13 в фасад (центр в 7,5 мм от внутренней плоскости стойки), планка — 2 × D3×3 в стойку (±16 от оси, 37 от фасада).
 import { parts, type Module, type Part } from "./model";
 import { qrot } from "./quat";
+import { kitchenDrawerHoles } from "./kitchenDrawers";
 
 export type Hole = { part: string; at: [number, number, number]; dir: [number, number, number]; d: number; depth: number; src: string };
 
@@ -54,5 +55,6 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       push(p.id.replace(":hingeplate:", ":hingecup:"), [sx + inward * 7.5, y, back], [0, 0, 1], 35, 13);
     }
   }
+  kitchenDrawerHoles(m, ps, push);
   return out;
 }
