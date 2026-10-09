@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { parts, initialModule, type Module } from "../src/model";
 import { parseProject } from "../src/project";
 import { createModule, type ModuleKind } from "../src/ModulePalette";
+import { isWardrobeImportFile } from "./wardrobe/files";
 
 const out = ".qa/parts-baseline.json";
 const sets = new Map<string, Module>();
@@ -18,7 +19,7 @@ const addProject = (label: string, file: string) => {
 };
 for (const dir of ["examples", "examples/orders", "public/local-projects"]) {
   if (!existsSync(dir)) continue;
-  for (const f of readdirSync(dir)) if (f.endsWith(".json") && !f.startsWith("kitchen") && !/^wardrobe/.test(f)) addProject(`${dir}/${f}`, join(dir, f));
+  for (const f of readdirSync(dir)) if (f.endsWith(".json") && !f.startsWith("kitchen") && !isWardrobeImportFile(f)) addProject(`${dir}/${f}`, join(dir, f));
 }
 const kinds: [ModuleKind, number, number, number][] = [["empty", 800, 2200, 600], ["shelves", 800, 2000, 400], ["wardrobe", 1000, 2200, 600], ["drawers", 600, 850, 550], ["corner", 1050, 2000, 450], ["desk", 1200, 750, 600], ["kupe", 1600, 2400, 100]];
 for (const [k, w, h, d] of kinds) { try { sets.set(`palette:${k}`, createModule(k, w, h, d, initialModule())); } catch (e) { console.error("палитра", k, (e as Error).message); } }
