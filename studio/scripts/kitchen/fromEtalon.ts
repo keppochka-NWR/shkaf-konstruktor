@@ -387,7 +387,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   for (const r of rails) {
     const front = r.b.z1 >= sideZ1 - 30, w = r1(r.b.z1 - r.b.z0);
     const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
-    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
+    // царга лёжа без крепежа в Базисе (k19 m10: передняя 69 — ни конфирмата, ни эксцентрика, ни шканта в её полосе) — студия не добавляет
+    const bare = role === "base" && !railFastened(r.b, ref.hardware, Infinity, -Infinity);
+    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}), ...(bare ? { fasten: false as const } : {}) });
   }
   for (const r of railsEdge) {
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
