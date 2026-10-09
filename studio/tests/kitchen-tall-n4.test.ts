@@ -233,3 +233,16 @@ test('k05 m01: «8x45» Базиса в нижнем торце опущенно
   // в Базисе их нет — студия не добавляет
   const r24=load('k24','m04');assert.equal(moduleFromEtalon(r24).module.kitchen?.sideScrews,undefined);
 });
+test('пенал на навесах — только когда они есть в Базисе (k23 m04, k18 m21: hangers true, навесы и заглушки 2/2); обычный пенал без навесов; пересечений у навесов нет',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+  for(const [k,key] of [['k23','m04'],['k18','m21']] as const){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.equal(m.kitchen?.hangers,true,`${k} ${key}`);
+    const c=compareModule(ref,m);
+    for(const cat of ['навес','заглушка']){const h=c.hardware.find(x=>x.category===cat)!;assert.equal(h.studio,h.ref,`${k} ${key} ${cat}`);}
+    const ps=parts(m);
+    assert.deepEqual(partCollisions(ps,m).filter(x=>x.names.some(n=>/Навес|Заглушка навеса/.test(n))),[],`${k} ${key}`);
+  }
+  const plain=moduleFromEtalon(load('k16','m01')).module;
+  assert.equal(plain.kitchen?.hangers,undefined);
+  assert.equal(parts(plain).filter(p=>p.id.startsWith('kitchen-hanger')).length,0);
+});

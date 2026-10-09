@@ -952,6 +952,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (!hg) m.kitchen.hangers = false;
     else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note) notes.push(hg.note); }
   }
+  // пенал на навесах (k23 m04, k18 m21) — только когда они есть в проекте, по тем же точкам (n4-tall)
+  if (role === "tall") {
+    const hg = hangersFromEtalon(ref.hardware, left.b.x1, right.b.x0, top, sideZ0);
+    if (hg && !hg.note) { m.kitchen.hangers = true; if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; }
+  }
   // сушка навесного: элементы с сеткой Базиса — в точке и с поворотом проекта; без сетки — только заметка
   if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
   if (fastenersAbsent(ref)) { m.kitchen.noFasteners = true; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }

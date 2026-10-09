@@ -54,7 +54,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   ecc?: { barrel?: number; stem?: [number, number]; side?: number; dowelSide?: number; bottomOut?: boolean };
   /** Вырез в заднем верхнем углу боковины навесного/антресоли (Базис k32: 100×20 — контур боковины из 6 точек): height — от верха, depth — от задней кромки. */
   sideNotch?: Partial<Record<"left" | "right", { height: number; depth: number }>>;
-  /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
+  /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов);
+   *  true у пенала — пенал на навесах, как в проекте Базиса (k23 m04, k18 m21). */
   hangers?: boolean;
   /** Положение навесов, как в проекте Базиса (если не по правилу 15 ниже верха / 20 от задней кромки / на внутренней грани боковины):
    *  [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины], мм — по каждой стороне. Отрицательное «ниже верха» —
@@ -280,7 +281,8 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
     out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
        { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) }));
   }
-  if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
+  // пенал на навесах — только если они есть в проекте Базиса (hangers: true, k23 m04, k18 m21; n4-tall)
+  if (((k.role === "wall" || k.role === "antresol") && k.hangers !== false) || (k.role === "tall" && k.hangers === true)) {
     for (const side of ["left", "right"] as const) {
       // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
       // сетка Базиса: −64..+20 к стене, −42..−1 по высоте, 0..23 внутрь корпуса.
