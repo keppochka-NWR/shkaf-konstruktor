@@ -21,6 +21,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   hangerAt?: { left: [number, number, number]; right: [number, number, number]; caps?: { left: [number, number, number]; right: [number, number, number] } };
   /** Крепёж корпуса в проекте Базиса не заложен (ни конфирматов, ни эксцентриков, ни шкантов) — студия его тоже не добавляет. */
   noFasteners?: boolean;
+  /** Модуль распознан из проекта Базиса: смета — только то, что есть в Базисе (без норматива «мелочёвка корпуса» и заглушек
+   *  под конфирматы — в проектах Базиса цеха их нет ни в одном модуле). */
+  bazis?: boolean;
   /** Дно под боковинами на эксцентриках (Базис k16, k28, k31; jointFastening bottom:left/right = eccentric): отступы стяжек
    *  от задней и передней кромки дна, мм (у Базиса несимметрично: сзади на 20 больше — за пазом ХДФ). */
   underEcc?: { back: number; front: number };

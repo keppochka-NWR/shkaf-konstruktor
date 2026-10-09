@@ -162,7 +162,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
-  m.kitchen = { role };
+  m.kitchen = { role, bazis: true }; // из проекта Базиса: смета — без того, чего в Базисе нет (pricing.ts)
   // опоры и дно
   if (bottom) {
     const under = bottom.b.x0 <= left.b.x0 + 0.5 && bottom.b.x1 >= right.b.x1 - 0.5;

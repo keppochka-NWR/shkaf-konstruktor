@@ -160,10 +160,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // кухня по Базису — конфирмат 7×50 (под него присадка D8+D5×35); шкафы — 5×50 по прайсу цеха
     if(a.module.kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
     else add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
-    add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
+    // модуль из проекта Базиса (kitchen.bazis): заглушек под конфирматы и норматива «мелочёвка корпуса» в Базисе нет — не добавляем
+    const fromBazis=!!a.module.kitchen?.bazis;
+    if(!fromBazis)add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
-    add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
+    if(!fromBazis)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
     if(a.module.kitchen){
       // Кухня: опоры и клипсы — по фактическим деталям сцены (kitchenLegs), как в спецификациях Базиса цеха.
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;

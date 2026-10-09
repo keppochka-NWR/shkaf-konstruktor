@@ -7,6 +7,8 @@ import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
+import {estimate} from '../src/pricing';
+import {newProject} from '../src/project';
 
 // Антресоль 600×400×350 (как Базис k12 «А 1»): дно и крыша между боковинами, ХДФ в паз, навесы ABS.
 const antresol=():Module=>{const m=kitchenWall(initialModule(),600);m.height=400;m.depth=350;m.kitchen={...m.kitchen!,role:'antresol'};return m;};
@@ -173,6 +175,15 @@ test('antresol with two rows of lift-up fronts (k13 m02): the lower row hangs on
   const c=compareModule(ref,m);
   assert.equal(c.hardware.find(h=>h.category==='петля')!.maxPosDelta,0);
   assert.ok(!c.missing.length&&!c.extra.length);
+});
+
+test('estimate of a module from Bazis: no "мелочёвка корпуса" norm and no confirmat caps (none in any Bazis project); studio kitchens keep them',()=>{
+  const lines=(m:Module)=>estimate(newProject(m)).lines.map(l=>l.id);
+  const own=antresol(),bz=antresol();bz.kitchen!.bazis=true;
+  assert.ok(lines(own).includes('kit')&&lines(own).includes('confirmat-cap'));
+  assert.ok(!lines(bz).includes('kit')&&!lines(bz).includes('confirmat-cap'));
+  assert.ok(lines(bz).includes('confirmat-7x50'),'confirmats themselves stay — they are in Bazis');
+  assert.equal(parseModule(JSON.parse(JSON.stringify(bz))).kitchen!.bazis,true);
 });
 
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
