@@ -16,7 +16,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
  *  «Петля под фальшпанель» у своей кромки. Г-образный фальш (планки поперёк в плоскости фасадов: k05 m05, k19 m01) — не этот случай.
  *  Возвращает ширины и панели фальша (их не считаем фасадами). */
 export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sideZ1: number, bottomY0: number, top: number):
-  { side: "left" | "right"; width: number; strip?: number; panels: Pb[] } | undefined {
+  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; panels: Pb[] } | undefined {
   const ffh = ref.hardware.filter((h) => /под фальшпанель/i.test(h.name));
   if (!ffh.length) return undefined;
   const front = P.filter(({ p, b }) => p.kind !== "hdf" && b.z0 >= sideZ1 - 1);
@@ -37,5 +37,7 @@ export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sid
   const near = doors.sort((a, c) => side === "left" ? a.b.x0 - c.b.x0 : c.b.x1 - a.b.x1)[0], ex = side === "left" ? near.b.x0 : near.b.x1;
   if (Math.abs(ex - edge) > 5 || !ffh.every((h) => Math.abs(h.pos[0] - ex) < 0.6)) return undefined;
   const width = r1(side === "left" ? fp.b.x1 - left.b.x0 : right.b.x1 - fp.b.x0);
-  return { side, width, ...(strip ? { strip: r1(strip.b.x1 - strip.b.x0) } : {}), panels: strip ? [fp, strip] : [fp] };
+  // планка по высоте фальша (k28 m17: 100..830), а не фасадов (k25 m02: 101,5..860,5)
+  const stripFull = !!strip && Math.abs(strip.b.y0 - fp.b.y0) < 0.6 && Math.abs(strip.b.y1 - fp.b.y1) < 0.6;
+  return { side, width, ...(strip ? { strip: r1(strip.b.x1 - strip.b.x0) } : {}), ...(stripFull ? { stripFull: true as const } : {}), panels: strip ? [fp, strip] : [fp] };
 }

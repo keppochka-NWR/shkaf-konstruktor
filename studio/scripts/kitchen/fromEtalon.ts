@@ -364,7 +364,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const zs = [...new Set(legs.map((l) => r1(l.pos[2] - sideZ0)))].sort((a, c) => a - c);
     // симметричная раскладка (отступ от торцов) — относительной: переживёт изменение ширины
     const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
-    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
+    // шире 1300 при двух рядах (мойки k28 m17 1480, k31 m22 1347, остров k30 m01 1324 — все широкие модули Базиса с правильной
+    // раскладкой) — без третьего ряда студии посередине: ряды точками xs (n4-base)
+    const wide2 = xs.length === 2 && W > 1300;
+    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym && !wide2 ? { side: xs[0] } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
     if (legScrews(ref.hardware)) m.kitchen.legs.screws = true;
     // левые опоры у большинства проектов — своя сетка (cb84c30b57a5); в части проектов (k26, k27) — та же, что у правых
@@ -657,7 +660,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       m.sections[0].doorRows = multi.rows;
       notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
     } else if (role === "base" && ffFlat && rows.size === 1) {
-      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}) };
+      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}) };
       // зазор фасадов — от дальнего края модуля (у фальша свой отступ)
       m.faceGap = ffFlat.side === "left" ? r1(right.b.x1 - Math.max(...fronts.map((q) => q.b.x1))) : r1(Math.min(...fronts.map((q) => q.b.x0)) - left.b.x0);
       notes.push(`угловая мойка: фальш ${ffFlat.width}${ffFlat.strip ? ` + планка из фасада ${ffFlat.strip}` : ""} ${ffFlat.side === "left" ? "слева" : "справа"}, петли под фальшпанель — как в Базисе`);

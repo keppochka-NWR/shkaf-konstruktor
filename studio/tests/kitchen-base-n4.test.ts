@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts,initialModule} from '../src/model';
+import {validate,parts,initialModule,parseModule} from '../src/model';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {faceGapsTB} from '../scripts/kitchen/recognize-base';
@@ -65,6 +65,18 @@ test('угловая мойка: Г-образный фальш (планки п
   const k01=moduleFromEtalon(load('k01','m03')).module;
   assert.deepEqual(k01.kitchen?.faceFiller,{side:'left',width:500});
   assert.equal(k01.sections[0].hingeSide,'left');
+});
+
+test('фальш мойки сохраняется в проекте (parseModule); планка по высоте фальша у k28 m17; кухня до 1650 мм шириной, шкаф — до 1300',{skip:!has('k25')||!has('k28')},()=>{
+  const m=moduleFromEtalon(load('k25','m02')).module;
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back.kitchen?.faceFiller,m.kitchen?.faceFiller);
+  assert.deepEqual(parts(back).map(p=>p.id),parts(m).map(p=>p.id));
+  const k28=moduleFromEtalon(load('k28','m17')).module;
+  assert.equal(k28.kitchen?.faceFiller?.stripFull,true);
+  assert.ok(!validate(k28).some(e=>e.startsWith('Ширина')),'мойка 1480 — без ошибки ширины');
+  const w=initialModule();w.width=1480;
+  assert.ok(validate(w).some(e=>e.startsWith('Ширина')),'шкаф 1480 — ошибка, как раньше');
 });
 
 test('фальш мойки только у кухни из Базиса с kitchen.faceFiller: шкаф студии и кухня палитры без флага — без фальша и петель под фальшпанель',()=>{
