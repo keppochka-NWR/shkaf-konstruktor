@@ -112,7 +112,14 @@ export type AxisDrawer = {
   backH?: number;
   /** Держатель фасада дополнительно на саморезах 3×3 (часть проектов Базиса: D3×3 в фасад в тех же точках). */
   faceScrews?: boolean;
+  /** Саморезы 3×3 держателя задней стенки — высоты от точки держателя, если не все по правилу REAR_SCREWS
+   *  (Базис k15, k18: только крайние, наколы D5×1 — все). */
+  rearScrews?: number[];
+  /** Кромка дна ящика как в проекте Базиса (по правилу дно без кромки): true — по кругу (k18, k30), иначе свои торцы
+   *  (k05, k29 — задний «-z»; k25 m11 — перед и зад). Та же форма, что у СТАРТ (StartDrawer.edge.bottom). */
+  edge?: { bottom?: true | AxisEdgeSide[] };
 };
+export type AxisEdgeSide = "+x" | "-x" | "+z" | "-z";
 
 export const AXIS_HEIGHTS = [86, 120, 168, 200] as const;
 export const AXIS_LENGTHS = [300, 400, 450, 500, 550] as const;
@@ -122,7 +129,9 @@ export const AXIS_BACK: Record<AxisDrawer["h"], number> = { 86: 84, 120: 116, 16
 const RUNNER_D5: Record<AxisDrawer["len"], number[]> = { 300: [37, 69, 165, 197], 400: [37, 69, 229, 261], 450: [37, 69, 261, 293], 500: [37, 69, 261, 293], 550: [37, 69, 261, 293] };
 const RUNNER_D3: Record<AxisDrawer["len"], number[]> = { 300: [37, 197], 400: [37, 261], 450: [37, 261], 500: [37, 261], 550: [37, 261] };
 /** Саморезы держателя задней стенки (по высоте от его точки): D3×3 + накол D5×1. */
-const REAR_SCREWS: Record<AxisDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32, 64], 168: [-13, 51, 115], 200: [19, 83, 147] };
+export const REAR_SCREWS: Record<AxisDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32, 64], 168: [-13, 51, 115], 200: [19, 83, 147] };
+/** Саморезы держателя задней стенки: как в проекте (только из точек правила), иначе все точки правила. */
+export function axisRearScrews(k: AxisDrawer): number[] { const all = REAR_SCREWS[k.h]; return k.rearScrews ? all.filter((dy) => k.rearScrews!.includes(dy)) : all; }
 /** Держатель фасада AB (H-86, H-120) — 2 самореза в фасад, CD (H-168, H-200) — 4; D3,5×4,5. */
 const FRONT_SCREWS: Record<AxisDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32], 168: [0, 32, 96, 128], 200: [0, 32, 96, 128] };
 
@@ -778,7 +787,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       out.push(metal(`${id}:cap:${lr}`, `Заглушка царги Axis PRO ${side}`, M.cap[col] ?? M.cap.white, [x + d * 20.1, ry + 24.5, F - 27.5], Q_RUN[s]));
       // саморезы 3×3: направляющая — в боковину корпуса, держатель — в заднюю стенку ящика
       for (const dz of RUNNER_D3[k.len]) out.push(screw(`${id}:screw:run${lr}:${dz}`, [x, ry, F - dz]));
-      for (const dy of REAR_SCREWS[k.h]) out.push(screw(`${id}:screw:rear${lr}:${dy}`, [x + d * 53, ry + 11 + dy, F - k.len + 8]));
+      for (const dy of axisRearScrews(k)) out.push(screw(`${id}:screw:rear${lr}:${dy}`, [x + d * 53, ry + 11 + dy, F - k.len + 8]));
       if (k.faceScrews) for (const dy of FRONT_SCREWS[k.h]) out.push(screw(`${id}:screw:front${lr}:${dy}`, [x + d * 15.5, ry + 3.5 + dy, F]));
     }
   });
@@ -869,7 +878,8 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
       for (const dz of RUNNER_D3[k.len]) push(`${id}:screw:run${lr}:${dz}`, [x, y, F - dz], into, 3, 3);
       // держатель задней стенки: накол D5×1 + саморез D3×3 в тыльную пласть задней стенки ящика
       const [rx, ryy, rz] = rear.model.origin;
-      for (const dy of REAR_SCREWS[k.h]) { push(`${id}:rear${lr}:${dy}`, [rx, ryy + dy, rz], [0, 0, 1], 5, 1); push(`${id}:screw:rear${lr}:${dy}`, [rx, ryy + dy, rz], [0, 0, 1], 3, 3); }
+      const rs = axisRearScrews(k);
+      for (const dy of REAR_SCREWS[k.h]) { push(`${id}:rear${lr}:${dy}`, [rx, ryy + dy, rz], [0, 0, 1], 5, 1); if (rs.includes(dy)) push(`${id}:screw:rear${lr}:${dy}`, [rx, ryy + dy, rz], [0, 0, 1], 3, 3); }
       // держатель фасада: саморезы D3,5×4,5 в тыльную пласть фасада
       const [fx, fy, fz] = front.model.origin;
       for (const dy of FRONT_SCREWS[k.h]) { push(`${id}:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3.5, 4.5); if (k.faceScrews) push(`${id}:screw:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3, 3); }
@@ -990,6 +1000,8 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     }
     const k = k0 as Partial<AxisDrawer>;
     return { system: "axis-pro" as const, y0: Number(k.y0), y1: Number(k.y1), runnerY: Number(k.runnerY), h: Number(k.h) as AxisDrawer["h"], len: Number(k.len) as AxisDrawer["len"],
-    ...(k.color === "anthracite" ? { color: "anthracite" as const } : {}), ...(k.backH === undefined ? {} : { backH: Number(k.backH) }), ...(k.faceScrews ? { faceScrews: true } : {}) };
+    ...(k.color === "anthracite" ? { color: "anthracite" as const } : {}), ...(k.backH === undefined ? {} : { backH: Number(k.backH) }), ...(k.faceScrews ? { faceScrews: true } : {}),
+    ...(Array.isArray(k.rearScrews) ? { rearScrews: k.rearScrews.slice(0, 4).map(Number) } : {}),
+    ...(k.edge?.bottom === true ? { edge: { bottom: true as const } } : Array.isArray(k.edge?.bottom) ? { edge: { bottom: k.edge!.bottom.filter((s): s is AxisEdgeSide => ["+x", "-x", "+z", "-z"].includes(s)) } } : {}) };
   });
 }

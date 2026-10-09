@@ -10,6 +10,7 @@ import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
+import { axisAsBazis } from "./recognize-drawers";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
@@ -917,6 +918,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (out.length) m.grooves = out;
   }
   notes.push(...recognizeBaseExtras(ref, m, fronts.length)); // как в Базисе: без петель / опор / крепежа (recognize-base.ts)
+  notes.push(...axisAsBazis(ref, m)); // ящики Axis PRO: саморезы держателя и кромка дна как в проекте (recognize-drawers.ts)
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
