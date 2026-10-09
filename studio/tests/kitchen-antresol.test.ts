@@ -64,6 +64,8 @@ test('raised hanging body (bottom 14 above the module bottom): no plinth panel, 
   assert.equal(facadeBottom(m),0);
   assert.ok(!validate(m).some(e=>/цоколя/.test(e)));
   const w=initialModule();w.plinthHeight=14;assert.ok(validate(w).some(e=>/цоколя/.test(e)),'wardrobe rule unchanged');
+  // поднятое дно выше крыши (k18 m17: распознано дно на 494 при высоте 510) — студия говорит об этом, а не молчит
+  const bad=antresol();bad.plinthHeight=380;assert.ok(validate(bad).some(e=>/выше крыши/.test(e)));
 });
 
 test('edge ends: top/bottom between sides edged at the ends only when Bazis edges them (k32)',()=>{
