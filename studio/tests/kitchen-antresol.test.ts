@@ -370,3 +370,20 @@ for(const [k,key] of [['k13','m03'],['k01','m14']] as const)
     assert.deepEqual(validate(m),[]);
     assert.equal(compareModule(ref,m).pass,true);
   });
+test('service through holes of the Bazis project (k28 m14: D10 for a wire) are drilled as in Bazis; screws and meshes are not taken',async()=>{
+  const {serviceHoles}=await import('../scripts/kitchen/recognize-common');
+  const hw2=[{i:0,name:'10',category:'прочее',pos:[0,200,10],service:true,mesh:null},{i:1,name:'3x3',category:'прочее',pos:[16,99,545],service:true,mesh:null},{i:2,name:'Гвоздь',category:'прочее',pos:[24,8,0],mesh:'281de529218b'}];
+  const hs=[{src:0,at:[0,200,10],dir:[1,0,0],d:10,depth:16,through:true},{src:1,at:[16,99,545],dir:[1,0,0],d:3,depth:3,through:false}];
+  assert.deepEqual(serviceHoles(hw2,hs,0,0),[{at:[0,200,10],dir:[1,0,0],d:10,depth:16}]);
+  const m=antresol();m.kitchen!.svcHoles=[{at:[0,200,10],dir:[1,0,0],d:10,depth:16}];
+  const h=holes(m).filter(x=>x.src==='kitchen-svc:0');
+  assert.equal(h.length,1);assert.equal(h[0].part,'left');assert.equal(h[0].d,10);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.svcHoles,m.kitchen!.svcHoles);
+});
+
+test('etalon k28/m14: service holes as in Bazis',{skip:!existsSync(ET+'k28.json')},()=>{
+  const ref=(JSON.parse(readFileSync(ET+'k28.json','utf8')).modules as RefModule[]).find(m=>m.key==='m14')!;
+  const {module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(compareModule(ref,m).pass,true);
+});

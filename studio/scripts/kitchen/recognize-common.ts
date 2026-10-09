@@ -52,6 +52,21 @@ export function hdfNails(hardware: (Hw & { quat?: number[]; mesh?: string | null
   return hardware.filter((h) => /^Гвозд/.test(h.name)).map((h) => ({ at: [r1(h.pos[0] - x0), r1(h.pos[1] - y0)] as [number, number], ...(h.quat ? { quat: h.quat.map((v) => Math.round(v * 1e4) / 1e4) } : {}) }));
 }
 
+/** Служебные сквозные отверстия проекта Базиса — как в Базисе (k28 m14: «10» из комплекта «Наполнение корпуса (Крыша)» — D10 насквозь
+ *  в боковине и в дне, под провод; во всей базе такие только там). Служебная запись без сетки с одним сквозным отверстием от D10:
+ *  точка входа в осях модуля студии (x — от левого наружного края, z — от задней кромки боковин), направление внутрь детали, D, глубина. */
+export function serviceHoles(hardware: (Hw & { i?: number; service?: boolean; mesh?: string | null })[], holes: { src: number; at: number[]; dir: number[]; d: number; depth: number; through?: boolean }[], x0: number, z0: number) {
+  const out: { at: [number, number, number]; dir: [number, number, number]; d: number; depth: number }[] = [];
+  for (const h of hardware) {
+    if (!h.service || h.mesh || h.category !== "прочее" || h.i === undefined) continue;
+    const hs = holes.filter((q) => q.src === h.i);
+    if (hs.length !== 1 || !hs[0].through || hs[0].d < 10) continue;
+    const q = hs[0];
+    out.push({ at: [r1(q.at[0] - x0), r1(q.at[1]), r1(q.at[2] - z0)], dir: q.dir.map((v) => Math.round(v)) as [number, number, number], d: q.d, depth: q.depth });
+  }
+  return out;
+}
+
 /** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */
 export const isEuro6 = (h: { name: string }) => /^Евровинт 6/.test(h.name);
 export function screwKind(hardware: Hw[]): "euro-6x50" | undefined {

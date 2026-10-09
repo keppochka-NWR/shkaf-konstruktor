@@ -102,5 +102,7 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     }
   }
   kitchenDrawerHoles(m, ps, push);
+  // служебные сквозные отверстия кухни Базиса (kitchen.svcHoles, k28 m14: D10 под провод), n4-antresol
+  for (const [i, h] of (m.kitchen?.svcHoles ?? []).entries()) push(`kitchen-svc:${i}`, [...h.at], [...h.dir], h.d, h.depth);
   return out;
 }

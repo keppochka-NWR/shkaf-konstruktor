@@ -99,6 +99,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.startsWith("kitchen-dryer:")) return "сушка";
   if (id.startsWith("kitchen-nail:")) return "прочее"; // гвоздь набивного ХДФ — у Базиса категория «прочее»
+  if (id.startsWith("kitchen-svc:")) return "прочее"; // служебное отверстие Базиса («10» k28 m14) — у Базиса «прочее»
   if (id.includes(":hingeplate:")) return "петля";
   if (id.startsWith("lift:")) return id.includes(":screw:") ? "прочее" : "газлифт";
   if (id.startsWith("fast:")) return "конфирмат"; // евровинт 6×50 тоже: у эталона его «прочее» переносит в конфирматы normalizeRefHardware (n3-wall)

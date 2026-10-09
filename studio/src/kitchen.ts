@@ -65,6 +65,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   nails?: { at: [number, number]; quat?: number[] }[];
   /** Набивной ХДФ стоит с зазором от задней кромки корпуса, мм (k01 m14, k01 m10 — 2, так в проекте Базиса). Без поля — вплотную. */
   backAir?: number;
+  /** Служебные сквозные отверстия, как в проекте Базиса (k28 m14: D10 под провод в боковине и дне): точка входа, направление внутрь
+   *  детали, диаметр, глубина. В смету не идут (у Базиса это служебная запись). */
+  svcHoles?: { at: [number, number, number]; dir: [number, number, number]; d: number; depth: number }[];
   /** Модуль распознан из проекта Базиса: смета — только то, что есть в Базисе (без норматива «мелочёвка корпуса» и заглушек
    *  под конфирматы — в проектах Базиса цеха их нет ни в одном модуле). */
   bazis?: boolean;
@@ -268,6 +271,8 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
     out.push(metal(`kitchen-nail:${n}`, "Гвоздь", [0.01, 0.01, 0.01], o,
       { file: "hardware/bazis/281de529218b.glb", length: "y", native: true, origin: o, quat: unitQuat((g.quat?.length === 4 ? g.quat : [1, 0, 0, 0]) as [number, number, number, number]) }));
   }
+  // служебные отверстия Базиса (kitchen.svcHoles): точка входа — привязка «прочего» для сверки; отверстие даёт drilling.ts
+  for (const [n, h] of (k.svcHoles ?? []).entries()) { const p = metal(`kitchen-svc:${n}`, `Отверстие D${h.d} сквозное (как в проекте Базиса)`, [0.01, 0.01, 0.01], [...h.at]); p.anchor = [...h.at]; out.push(p); }
   // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
   for (const [n, d] of (k.dryer ?? []).entries()) {
     const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
