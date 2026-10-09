@@ -352,3 +352,21 @@ for(const [k,key] of [['k03','m06'],['k03','m08']] as const)
     assert.deepEqual(validate(m),[]);
     assert.equal(compareModule(ref,m).pass,true);
   });
+
+test('nailed HDF with an air gap from the body (kitchen.backAir, k01 m14 — 2 mm as in Bazis): back and nails move back, body stays',()=>{
+  const m=antresol();m.backType='nailed';m.backGap=1;m.kitchen!.nails=[{at:[24,8.5]}];
+  const z0=(ps:ReturnType<typeof parts>)=>{const b=ps.find(p=>p.id==='back')!;return b.position[2]-b.size[2]/2;};
+  const a=parts(m);m.kitchen!.backAir=2;const b=parts(m);
+  assert.equal(z0(b),z0(a)-2);
+  assert.equal(b.find(p=>p.id==='kitchen-nail:0')!.position[2],z0(b));
+  assert.deepEqual(b.find(p=>p.id==='left')?.position,a.find(p=>p.id==='left')?.position);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.backAir,2);
+});
+
+for(const [k,key] of [['k13','m03'],['k01','m14']] as const)
+  test(`etalon ${k}/${key}: top in front of a deep HDF / HDF with air gap recognized as in Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+    const {module:m}=moduleFromEtalon(ref);
+    assert.deepEqual(validate(m),[]);
+    assert.equal(compareModule(ref,m).pass,true);
+  });

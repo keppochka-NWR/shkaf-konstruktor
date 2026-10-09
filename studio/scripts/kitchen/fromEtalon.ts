@@ -177,7 +177,12 @@ type Hw = { name: string; category: string; pos: number[] };
 /** Навесы Базиса → kitchen.hangerAt: [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины] по каждой стороне.
  *  null — навесов нет; {} — стоят по правилу студии (15 / 20 / 0, большинство навесов базы); иначе — как в проекте: у части проектов
  *  навесы выше корпуса (на 130–1000 мм, k12, k15, k26–k28, k31) или в 100 мм от боковины (k18) — повторяем как есть, отверстий в боковине
- *  тогда нет, как и у Базиса. */
+ *  тогда нет, как и у Базиса.
+ *  Проверено по цепочкам преобразований корпуса Базиса (n4-antresol): «+985» — не ошибка извлечения осей. В k26/k28 комплект «Навесы
+ *  мебельные (L+R) с заглушками» стоит в модуле верно (у боковины, 14 мм ниже верха), но навес внутри комплекта записан на [0, 1001, −1],
+ *  а в той же библиотечной копии комплекта и в 150 комплектах других проектов — на [0, 1, −1]: сдвиг +1000 по высоте хранится в самом
+ *  проекте. В k27/k31 и части k26/k28 навесы лежат прямо в модуле на одной мировой высоте «верх ряда + 985». Сетка навеса та же
+ *  (95a815598b07), что и у стоящих верно. */
 export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner: number, top: number, sideZ0: number): { hangerAt?: NonNullable<NonNullable<Module["kitchen"]>["hangerAt"]>; note?: string } | null {
   const hs = hardware.filter((h) => h.category === "навес");
   if (!hs.length) return null;
@@ -312,7 +317,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const legs = hw("опора");
   // дно — нижняя горизонталь; крыша — верхняя горизонталь во всю глубину
   const bottom0 = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6).sort((a, c) => a.b.y0 - c.b.y0)[0];
-  const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
+  // …или крыша перед ХДФ, утопленным вглубь корпуса: от лица боковин до лицевой плоскости ХДФ, хоть и мельче 0,6 глубины
+  // (k13 m03: ХДФ на 117–120 при глубине 300, крыша 180 — без этого крыша становилась жёсткой полкой вплотную к верху, n4-antresol)
+  const beforeHdf = (b: B) => b.z1 >= sideZ1 - 1 && hdf.some((h) => Math.abs(h.b.z1 - b.z0) <= 0.5 && h.b.y1 > b.y0);
+  const topPanel = horiz.filter(({ b }) => (b.z1 - b.z0 > d * 0.6 || beforeHdf(b)) && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
   // единственная горизонталь во всю глубину — наверху (k34 m04: сушка без дна, «Крышка» и ХДФ до низа): это крыша, дна нет
   const bottom = bottom0 && bottom0 === topPanel && bottom0.b.y0 > top / 2 ? undefined : bottom0;
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
@@ -407,6 +415,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (!m.raisedSides && (Math.abs(g0 - m.backGap) > 0.01 || Math.abs(g1 - m.backGap) > 0.01) && g0 >= 0 && g1 >= 0) m.kitchen.backGapY = [g0, g1];
     const nails = hdfNails(ref.hardware, left.b.x0, 0); // гвозди ХДФ — как в Базисе (n4-antresol)
     if (nails.length) m.kitchen.nails = nails;
+    const air = r1(sideZ0 - back.b.z1); // ХДФ с зазором от корпуса (k01 m10/m14 — 2 мм) — как в проекте
+    if (air >= 0.5) m.kitchen.backAir = air;
   }
   else {
     m.backType = "groove";
