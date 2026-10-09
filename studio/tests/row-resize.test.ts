@@ -182,6 +182,22 @@ test("подгонка ширины под сетку (fitMeshItem) идёт п�
   assert.deepEqual(projectErrors(next), []);
 });
 
+test("объект замера (колонна, короб) — как стена: модуль у него меняется от него, в свободное место до него — не дальше", () => {
+  const column = { id: "col", name: "Колонна", type: "column" as const, x: 1100, y: 0, z: 0, width: 300, depth: 300, height: 2700 };
+  const withColumn = (modules: PlacedModule[]): Project => { const p = proj(modules); p.room.obstacles = [column]; return p; };
+  // модуль вплотную справа к колонне (1100..1400): растёт вправо, правый сосед сужается, колонна не задета
+  const p = resizeInRow(withColumn([at("a", 1400, mod("У колонны")), at("b", 2000, mod("Сосед"))]), "a", 700);
+  assert.deepEqual([get(p, "a").x, get(p, "a").module.width, get(p, "b").x, get(p, "b").module.width], [1400, 700, 2100, 500]);
+  // одиночный слева от колонны в 50 мм: растёт вправо не дальше колонны
+  assert.throws(() => resizeInRow(withColumn([at("s", 450, mod("Один"))]), "s", 700), /упирается в объект замера «Колонна»: справа свободно 50 мм/);
+  const fits = resizeInRow(withColumn([at("s", 450, mod("Один"))]), "s", 650);
+  assert.deepEqual([get(fits, "s").x, get(fits, "s").module.width], [450, 650]);
+  // колонна на другой высоте (балка под потолком) нижнему модулю не мешает
+  const beam = { ...column, type: "beam" as const, y: 2400, height: 300 };
+  const q = proj([at("s", 450, mod("Один", 600, { height: 800 }))]); q.room.obstacles = [beam];
+  assert.equal(get(resizeInRow(q, "s", 700), "s").module.width, 700);
+});
+
 test("подсказка у ширины проёма не обещает, что соседние корпуса стоят на месте (их меняет правило ряда)", () => {
   const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(app, /Соседние корпуса сохраняют положение/);

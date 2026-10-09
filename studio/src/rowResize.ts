@@ -8,7 +8,7 @@
 //  или стык, где кончается столешница (цоколь «Ряда» Базиса), считается боком — как стена, модуль меняется от него.
 //  Столешница и объекты ряда Базиса (raw.row: цоколи, стеновые панели) соседями не считаются.
 //  Сосед из Базиса (сырой raw), угловой и купе не меняются — ошибка, правка не применяется.
-import { bounds, localToRoom, type PlacedModule, type Project } from "./project";
+import { bounds, localToRoom, obstacleBounds, type PlacedModule, type Project } from "./project";
 import { validate, RULES, type Module } from "./model";
 import { KITCHEN, APPLIANCES } from "./kitchen";
 
@@ -60,8 +60,17 @@ export function rowContext(p: Project, a: PlacedModule) {
   const e = widthAxis(a), b = bounds(a), s = along(b, e), c = across(b, e), y = yRange(b);
   const L = e.x ? p.room.width : p.room.depth, room = e.x > 0 || e.z > 0 ? { lo: 0, hi: L } : { lo: -L, hi: 0 };
   const neighbor: Partial<Record<Side, PlacedModule>> = {}, wall: Partial<Record<Side, string>> = {};
-  if (s.lo <= room.lo + TOUCH) wall.left = "стена";
-  if (s.hi >= room.hi - TOUCH) wall.right = "стена";
+  // Граница свободного места с каждой стороны: стена помещения или ближайший объект замера (колонна, короб, радиатор…) на высоте модуля.
+  const limit: Record<Side, { at: number; what: string }> = { left: { at: room.lo, what: "стена" }, right: { at: room.hi, what: "стена" } };
+  for (const o of p.room.obstacles ?? []) {
+    const ob = obstacleBounds(o);
+    if (!overlaps(y, yRange(ob)) || !overlaps(c, across(ob, e))) continue;
+    const os = along(ob, e), what = "объект замера «" + o.name + "»";
+    if (os.lo >= s.hi - TOUCH && os.lo < limit.right.at) limit.right = { at: os.lo, what };
+    if (os.hi <= s.lo + TOUCH && os.hi > limit.left.at) limit.left = { at: os.hi, what };
+  }
+  if (s.lo <= limit.left.at + TOUCH) wall.left = limit.left.what;
+  if (s.hi >= limit.right.at - TOUCH) wall.right = limit.right.what;
   const rot = a.rotation ?? 0, touching: Record<Side, PlacedModule[]> = { left: [], right: [] };
   for (const o of p.modules) {
     if (o.id === a.id || rowObject(o.module)) continue;
@@ -97,7 +106,7 @@ export function rowContext(p: Project, a: PlacedModule) {
     if (end) { wall[side] = end; continue; }
     neighbor[side] = n;
   }
-  return { e, s, c, y, room, neighbor, wall };
+  return { e, s, c, y, limit, neighbor, wall };
 }
 const cover = (a: { lo: number; hi: number }, b: { lo: number; hi: number }) => Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo);
 const isWorktop = (m: Module) => !!m.worktop || (!!m.raw?.row && /столешн/i.test(m.name));
@@ -176,8 +185,9 @@ export function resizeInRow(p: Project, placedId: string, width: number): Projec
   } else {
     // Внешний край ряда: в свободное место до стены; столешница сверху и цоколь ряда не должны повиснуть или торчать.
     const edge = side === "right" ? ctx.s.hi + delta : ctx.s.lo - delta;
-    if (delta > 0 && (side === "right" ? edge > ctx.room.hi + 0.1 : edge < ctx.room.lo - 0.1))
-      throw Error(`${quote(a.module)} упирается в стену: ${side === "right" ? "справа" : "слева"} свободно ${r1(Math.max(0, side === "right" ? ctx.room.hi - ctx.s.hi : ctx.s.lo - ctx.room.lo))} мм, а нужно ${delta}.`);
+    const lim = ctx.limit[side];
+    if (delta > 0 && (side === "right" ? edge > lim.at + 0.1 : edge < lim.at - 0.1))
+      throw Error(`${quote(a.module)} упирается в ${lim.what === "стена" ? "стену" : lim.what}: ${side === "right" ? "справа" : "слева"} свободно ${r1(Math.max(0, side === "right" ? lim.at - ctx.s.hi : ctx.s.lo - lim.at))} мм, а нужно ${delta}.`);
     rowObjectsCheck(p, a, ctx, side, delta);
   }
   return { ...p, modules: p.modules.map((x) => next.get(x.id) ?? x) };
