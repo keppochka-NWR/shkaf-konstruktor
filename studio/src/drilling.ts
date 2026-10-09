@@ -25,7 +25,7 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
       push(p.id, h, a, 8, t1);
-      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, t1 === 16 ? 35 : 40);
+      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : t1 === 16 ? 35 : 40); // короб ящика Firmax в Базисе — D5×37
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм

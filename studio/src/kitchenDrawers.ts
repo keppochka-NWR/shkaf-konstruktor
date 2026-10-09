@@ -6,15 +6,34 @@
 import type { Module, Part } from "./model";
 import { qrot, type Quat } from "./quat";
 
-export type KDrawerSystem = "axis-pro";
-export type KDrawer = {
-  system: KDrawerSystem;
+export type KDrawerSystem = "axis-pro" | "firmax-ldsp";
+/** Короб ящика Firmax скрытого монтажа (ЛДСП 16), по 37 ящикам Базиса (k03–k31): боковины в gap от боковин корпуса, длина len;
+ *  дно между боковинами на bottomUp выше их низа (10, у мелких 5); задняя стенка и фальшпанель — между боковинами на дне, до верха боковин.
+ *  Конфирматы ставятся в Базисе вручную (шаг разный), поэтому их высоты храним как в проекте: conf — от низа задней стенки
+ *  (фальшпанель — те же), confBottom — от торцов дна. По умолчанию — самые частые в базе. */
+export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; gap?: number; front?: number; conf?: number[]; confBottom?: number; screws?: boolean; rearHoles?: boolean;
+  /** Точки направляющих Базиса (у Firmax без сетки ставятся произвольно): [от внутренней грани левой боковины, от пола, от передней кромки]. По умолчанию — две в точке runnerY. */
+  runs?: [number, number, number][];
+  /** Шурупы 3,5×30 фальшпанели в фасад (часть проектов): [от внутренней грани левой боковины ящика, от низа фальшпанели]; true — по правилу
+   *  большинства (два в 60 от боковин и 40 ниже верха, один посередине в 60 над низом). */
+  faceScrews?: true | [number, number][] };
+export type FirmaxDrawer = { system: "firmax-ldsp"; y0: number; y1: number; runnerY: number; box: FirmaxBox;
+  /** Поля Axis PRO у Firmax не используются (остаются при смене системы, чтобы вернуть царгу/цвет). */
+  h?: 86 | 120 | 168 | 200; len?: 300 | 400 | 450 | 500 | 550; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
+export type KDrawer = AxisDrawer | FirmaxDrawer;
+export const isFirmax = (k: KDrawer): k is FirmaxDrawer => k.system === "firmax-ldsp";
+export const isAxis = (k: KDrawer): k is AxisDrawer => k.system !== "firmax-ldsp";
+/** Длина ящика (по направляющей / коробу). */
+export const kdLen = (k: KDrawer) => (isFirmax(k) ? k.box.len : k.len);
+export type AxisDrawer = {
+  system: "axis-pro";
   /** Фасад ящика: низ и верх от пола модуля (зазоры между фасадами — как в проекте). */
   y0: number; y1: number;
   /** Высота направляющей от пола модуля (точка Базиса: низ дна ящика + 22). */
   runnerY: number;
   /** Высота царги и длина ящика (направляющей). */
   h: 86 | 120 | 168 | 200; len: 300 | 400 | 450 | 500 | 550;
+  box?: undefined;
   color?: "white" | "anthracite";
   /** Высота задней стенки, если не по царге (с рейлингом выше). */
   backH?: number;
@@ -25,14 +44,14 @@ export type KDrawer = {
 export const AXIS_HEIGHTS = [86, 120, 168, 200] as const;
 export const AXIS_LENGTHS = [300, 400, 450, 500, 550] as const;
 /** Задняя стенка ЛДСП 16 по высоте царги (Базис). */
-export const AXIS_BACK: Record<KDrawer["h"], number> = { 86: 84, 120: 116, 168: 167, 200: 199 };
+export const AXIS_BACK: Record<AxisDrawer["h"], number> = { 86: 84, 120: 116, 168: 167, 200: 199 };
 /** Отверстия направляющей в боковине (от передней кромки): D5×2,1 под фиксаторы и D3×3 под саморезы. */
-const RUNNER_D5: Record<KDrawer["len"], number[]> = { 300: [37, 69, 165, 197], 400: [37, 69, 229, 261], 450: [37, 69, 261, 293], 500: [37, 69, 261, 293], 550: [37, 69, 261, 293] };
-const RUNNER_D3: Record<KDrawer["len"], number[]> = { 300: [37, 197], 400: [37, 261], 450: [37, 261], 500: [37, 261], 550: [37, 261] };
+const RUNNER_D5: Record<AxisDrawer["len"], number[]> = { 300: [37, 69, 165, 197], 400: [37, 69, 229, 261], 450: [37, 69, 261, 293], 500: [37, 69, 261, 293], 550: [37, 69, 261, 293] };
+const RUNNER_D3: Record<AxisDrawer["len"], number[]> = { 300: [37, 197], 400: [37, 261], 450: [37, 261], 500: [37, 261], 550: [37, 261] };
 /** Саморезы держателя задней стенки (по высоте от его точки): D3×3 + накол D5×1. */
-const REAR_SCREWS: Record<KDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32, 64], 168: [-13, 51, 115], 200: [19, 83, 147] };
+const REAR_SCREWS: Record<AxisDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32, 64], 168: [-13, 51, 115], 200: [19, 83, 147] };
 /** Держатель фасада AB (H-86, H-120) — 2 самореза в фасад, CD (H-168, H-200) — 4; D3,5×4,5. */
-const FRONT_SCREWS: Record<KDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32], 168: [0, 32, 96, 128], 200: [0, 32, 96, 128] };
+const FRONT_SCREWS: Record<AxisDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32], 168: [0, 32, 96, 128], 200: [0, 32, 96, 128] };
 
 type LR = [string, string];
 /** Сетки Базиса (studio/public/models/hardware/bazis): [левая, правая]. */
@@ -130,21 +149,21 @@ const BBOX: Record<string, number[]> = {
   "f824985e3ab9": [7.0, -44.0, 0.0, 547.0, 10.0, 37.5],
 };
 /** Верх деталей ящика над направляющей (по сеткам): царга, держатель задней стенки, держатель фасада. */
-const SIDE_TOP: Record<KDrawer["h"], number> = { 86: 3.5 + 59.5, 120: 3.5 + 91.5, 168: 3.5 + 142.5, 200: 3.5 + 174.5 };
-const REAR_TOP: Record<KDrawer["h"], number> = { 86: 11 + 52, 120: 11 + 84, 168: 11 + 135, 200: 11 + 167 };
+const SIDE_TOP: Record<AxisDrawer["h"], number> = { 86: 3.5 + 59.5, 120: 3.5 + 91.5, 168: 3.5 + 142.5, 200: 3.5 + 174.5 };
+const REAR_TOP: Record<AxisDrawer["h"], number> = { 86: 11 + 52, 120: 11 + 84, 168: 11 + 135, 200: 11 + 167 };
 /** Направляющая — 44 мм ниже своей точки (сетка Axis PRO). */
 export const AXIS_RUNNER_DOWN = 44;
 /** Запасы раскладки (по базе: верх ящика не ближе 21,5 к верху фасада; до царг корпуса — 5). */
 export const AXIS_FIT = { facadeTop: 21.5, ceiling: 5 };
 /** Верх короба ящика от пола модуля: задняя стенка, царга, держатель — что выше. */
-export function axisTop(k: KDrawer) { return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
+export function axisTop(k: KDrawer) { if (isFirmax(k)) return k.box.y + k.box.h; return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
 /** Низ под царгами/крышей корпуса (нижний кухонный: царги 16 лёжа у верха; на ребре — их высота). */
 export function axisCeiling(m: Module) {
   const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : r.height));
   return m.height - Math.max(m.topType === "none" ? 0 : 16, ...top, 0);
 }
 /** Ящик входит: верх короба не ближе запасов к верху своего фасада и к царгам корпуса. */
-export function axisFits(m: Module, k: KDrawer) { return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling) + 1e-6; }
+export function axisFits(m: Module, k: KDrawer) { if (isFirmax(k)) return firmaxFits(m, k); return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling) + 1e-6; }
 /** Габарит повёрнутой сетки в осях модуля: размер и центр. */
 function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, number]; position: [number, number, number] } {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -158,7 +177,7 @@ function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, 
 /** Раскладка ящиков Axis PRO по правилам из базы (40 ящиков): фасады от низа корпуса до верха с отступом faceGap и зазором 3;
  *  направляющая — в 59 мм над низом фасада (нижнего — над дном); царга — самая высокая, чья задняя стенка не выше фасада минус 10;
  *  длина — самая длинная, что входит в корпус с запасом 25. ratios — доли высот фасадов снизу вверх (по умолчанию нижний крупнее). */
-export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<KDrawer, "color" | "faceScrews">): KDrawer[] {
+export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<AxisDrawer, "color" | "faceScrews">): AxisDrawer[] {
   const color = keep?.color;
   const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
   const innerBottom = axisFloor(m), y0 = feet + g, y1 = m.height - g, avail = y1 - y0 - (n - 1) * gap;
@@ -169,10 +188,10 @@ export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<
   let y = y0;
   return hs.map((fh) => {
     const runnerY = Math.round(Math.max(y + 59, innerBottom + 59) * 10) / 10, y1r = Math.round((y + fh) * 10) / 10;
-    const at = (hh: KDrawer["h"], len: KDrawer["len"]): KDrawer => ({ system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len, ...(color ? { color } : {}), ...(keep?.faceScrews ? { faceScrews: true } : {}) });
+    const at = (hh: AxisDrawer["h"], len: AxisDrawer["len"]): AxisDrawer => ({ system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len, ...(color ? { color } : {}), ...(keep?.faceScrews ? { faceScrews: true } : {}) });
     // царга — самая высокая, что входит; длина — самая длинная из тех, на которые есть модели этой высоты (в цвете ящиков)
-    const pick = (hh: KDrawer["h"]): KDrawer | undefined => { const len = axisBestLen(m, hh, color); return len ? at(hh, len) : undefined; };
-    const cands = [...AXIS_HEIGHTS].reverse().map(pick).filter((c): c is KDrawer => !!c);
+    const pick = (hh: AxisDrawer["h"]): AxisDrawer | undefined => { const len = axisBestLen(m, hh, color); return len ? at(hh, len) : undefined; };
+    const cands = [...AXIS_HEIGHTS].reverse().map(pick).filter((c): c is AxisDrawer => !!c);
     // в цвете ящиков нет модели под эту глубину — цвет и саморезы НЕ меняются молча: ящик остаётся в своём цвете, проверка
     // покажет «нет модели», а кнопки, которые к этому ведут, отключены (critic qdrawers B2)
     const k = cands.find((c) => axisFits(m, c)) ?? cands[cands.length - 1] ?? at(120, [...AXIS_LENGTHS].reverse().find((l) => l <= axisMaxLen(m)) ?? 300);
@@ -184,33 +203,18 @@ export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<
 export const AXIS_DEPTH_SPARE = 25;
 export function axisMaxLen(m: Module) { return m.depth - AXIS_DEPTH_SPARE; }
 /** Самая длинная длина Axis PRO с моделью Базиса на эту царгу и цвет, что входит в глубину корпуса. */
-export function axisBestLen(m: Module, h: KDrawer["h"], color?: KDrawer["color"]): KDrawer["len"] | undefined {
+export function axisBestLen(m: Module, h: AxisDrawer["h"], color?: AxisDrawer["color"]): AxisDrawer["len"] | undefined {
   return [...AXIS_LENGTHS].reverse().find((l) => l <= axisMaxLen(m) && axisAvailable({ h, len: l, color }));
 }
 /** Ящик с другой царгой: длина подбирается заново под глубину корпуса (у H-200 нет 300, у H-86 и H-168 — короче 450). */
-export function withAxisH(m: Module, k: KDrawer, h: KDrawer["h"]): KDrawer {
+export function withAxisH(m: Module, k: AxisDrawer, h: AxisDrawer["h"]): AxisDrawer {
   const { backH: _b, ...rest } = k, len = axisBestLen(m, h, k.color);
   return { ...rest, h, ...(len ? { len } : {}) };
 }
-/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика при той же царге (по высоте ничего не двигается);
- *  если на эту царгу нет длины под новую глубину — раскладка заново с теми же долями фасадов (царга подбирается).
- *  Высота, опоры, нижние царги, отступы фасадов — раскладка заново с теми же долями. Цвет и саморезы сохраняются. */
-export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
-  const ks = m.kdrawers; if (!ks?.length) return ks;
-  const again = () => axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks[0]);
-  if (what === "depth") {
-    const lens = ks.map((k) => axisBestLen(m, k.h, k.color));
-    if (lens.some((l) => !l)) return again(); // critic qdrawers B1: H-200 на глубине 400 — длины 300 нет, ящик 500 оставался
-    return ks.map((k, i) => ({ ...k, len: lens[i]! }));
-  }
-  return again();
-}
-/** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков. */
-export function relayoutKDrawers(m: Module, n: number, ratios?: number[]) { return axisLayout(m, n, ratios, m.kdrawers?.[0]); }
 /** Наименьший фасад верхнего ящика, в который входит самая низкая царга с моделью под эту глубину и цвет:
  *  направляющая 59 над низом фасада + верх короба + запас 21,5 до верха фасада (H-86 → 143,5). */
 export function kdrawerMinTop(m: Module) {
-  const color = m.kdrawers?.[0]?.color;
+  const k0 = m.kdrawers?.[0], color = k0 && isAxis(k0) ? k0.color : undefined;
   const t = AXIS_HEIGHTS.filter((h) => !!axisBestLen(m, h, color)).map((h) => 59 + axisTop({ system: "axis-pro", y0: 0, y1: 0, runnerY: 0, h, len: 500 }) + AXIS_FIT.facadeTop);
   return t.length ? Math.ceil(Math.min(...t) * 2) / 2 : 100;
 }
@@ -230,21 +234,117 @@ export function setKDrawerFacade(m: Module, i: number, v: number): KDrawer[] | u
 /** Почему раскладка на n ящиков недоступна (для подсказки кнопки), или undefined. */
 export function relayoutProblem(m: Module, n: number): string | undefined {
   const ks = relayoutKDrawers(m, n);
-  if (!ks.every((k) => axisFits(m, k))) {
+  const fitsK = (mm: Module, k: KDrawer) => (isFirmax(k) ? firmaxFits(mm, k) : axisFits(mm, k));
+  if (!ks.every((k) => fitsK(m, k))) {
     // по высоте не входит из-за глубины: у низких царг (H-86, H-168) нет длин короче 450 — назвать глубину, с которой войдёт
-    const d = [325, 425, 475, 525, 575].find((dd) => dd > m.depth && relayoutKDrawers({ ...m, depth: dd }, n).every((k) => axisFits(m, k) && axisAvailable(k)));
+    const d = [325, 425, 475, 525, 575].find((dd) => dd > m.depth && relayoutKDrawers({ ...m, depth: dd }, n).every((k) => fitsK(m, k) && (!isAxis(k) || axisAvailable(k))));
     return d ? `На глубину ${m.depth} столько ящиков Axis PRO не входит (низких царг такой длины нет) — нужна глубина от ${d}` : "Столько ящиков Axis PRO по высоте корпуса не входит";
   }
-  const miss = ks.find((k) => !axisAvailable(k));
+  const miss = ks.filter(isAxis).find((k) => !axisAvailable(k));
   if (miss) return `Нет модели Axis PRO на H-${miss.h}, ${miss.len} мм${miss.color === "anthracite" ? ", антрацит" : ""} под эту глубину — смените цвет или глубину`;
-  if (ks.some((k) => k.len > axisMaxLen(m))) return "Ящик не входит в глубину корпуса";
+  if (ks.some((k) => isAxis(k) && k.len > axisMaxLen(m))) return "Ящик не входит в глубину корпуса";
   return undefined;
+}
+/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика (по высоте ничего не двигается); высота, опоры,
+ *  нижние царги — раскладка заново с теми же долями фасадов. Цвет и саморезы держателей сохраняются; у Firmax — саморезы 3×3,
+ *  шурупы фасада, 5×12, зазор, отступ от фронта, конфирматы дна (см. firmaxLayout). */
+export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
+  const ks = m.kdrawers; if (!ks?.length) return ks;
+  if (isFirmax(ks[0])) {
+    if (what === "depth") return ks.map((k) => (isFirmax(k) ? { ...k, box: { ...k.box, len: firmaxLen(m) } } : k));
+    return firmaxLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isFirmax));
+  }
+  const k0 = ks[0], again = () => axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), isAxis(k0) ? k0 : undefined);
+  if (what === "depth") {
+    // та же царга — только длина; если на эту царгу нет длины под новую глубину — раскладка заново (critic qdrawers B1)
+    const lens = ks.map((k) => (isAxis(k) ? axisBestLen(m, k.h, k.color) : undefined));
+    if (ks.some((k, i) => isAxis(k) && !lens[i])) return again();
+    return ks.map((k, i) => (isAxis(k) ? { ...k, len: lens[i]! } : k));
+  }
+  return again();
+}
+/** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков; система — как у текущих. */
+export function relayoutKDrawers(m: Module, n: number, ratios?: number[], system?: KDrawerSystem): KDrawer[] {
+  const k0 = m.kdrawers?.[0], sys = system ?? k0?.system ?? "axis-pro";
+  return sys === "firmax-ldsp" ? firmaxLayout(m, n, ratios, m.kdrawers?.filter(isFirmax)) : axisLayout(m, n, ratios, k0 && isAxis(k0) ? k0 : undefined);
+}
+
+/** Firmax: длины коробов в проектах Базиса цеха (390, 440, 490, 540); берём самую длинную, что входит с запасом 40 от задней кромки.
+ *  Мельче 430 запаса 40 нет ни у одной длины — тогда самая короткая 390 без запаса (например, D=407 — 17 мм до задней кромки):
+ *  короче коробов в базе нет. Такой ящик допустим, пока он входит в корпус — это ловят kitchenDrawerErrors (короб длиннее
+ *  глубины) и пересечения с задней стенкой корпуса. */
+export const FIRMAX_LENGTHS = [390, 440, 490, 540] as const;
+export const FIRMAX = { t: 16, gap: 5, bottomUp: 10, confBottom: 69, sideDown: 30, topUnder: 30, rail: { w: 12 } };
+export function firmaxLen(m: Module) { return [...FIRMAX_LENGTHS].reverse().find((l) => l <= m.depth - 40) ?? FIRMAX_LENGTHS[0]; }
+/** Конфирматы задней стенки по высоте (от её низа): до 90 — один посередине, выше — два, в 32–40 от краёв (частые в базе). */
+export function firmaxConf(backH: number): number[] {
+  if (backH < 90) return [Math.round(backH / 2 * 10) / 10];
+  const e = Math.min(40, Math.max(30, backH / 4));
+  return [Math.round(e * 10) / 10, Math.round((backH - e) * 10) / 10];
+}
+/** Раскладка Firmax: фасады — как у Axis PRO; короб — от фасада вниз на 30 (не ниже пола + 10), верх на 30 ниже верха фасада
+ *  и не ближе 5 к царгам корпуса. Точка направляющей — низ фасада (не ниже пола), как у большинства проектов Базиса.
+ *  Саморезы направляющих 3×3 в боковинах корпуса — по умолчанию есть (17 из 19 модулей Firmax в базе, как и 5×12).
+ *  keep — текущие ящики Firmax (смена высоты корпуса, числа ящиков, долей фасадов): присадка и посадка короба переносятся —
+ *  саморезы 3×3, шурупы фасада (свои точки — пока входят в новую фальшпанель, иначе по правилу большинства), 5×12, зазор
+ *  до корпуса, отступ от фронта, конфирматы дна; у того же ящика — дно над низом боковин и высоты конфирматов (другая высота
+ *  короба: нижний держит отступ от низа задней стенки, верхний — от её верха; не входят — по правилу большинства). Точки
+ *  направляющих Базиса (runs) не переносятся: они привязаны к старым фасадам, новая точка — низ фасада, по паре на ящик. */
+export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: FirmaxDrawer[]): FirmaxDrawer[] {
+  const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, len = firmaxLen(m);
+  return axisLayout(m, n, ratios).map((a, i) => {
+    const y = Math.round(Math.max(a.y0 + FIRMAX.sideDown, floor + 10) * 10) / 10, top = Math.round(Math.min(a.y1 - FIRMAX.topUnder, ceil) * 10) / 10;
+    const h = Math.round((top - y) * 10) / 10, box: FirmaxBox = { y, h, len, screws: true };
+    const own = keep?.[i], k = own ?? keep?.[0];
+    if (k) {
+      const o = k.box;
+      if (!o.screws) delete box.screws; // в проекте Базиса без 3×3 (2 из 19) — так и оставляем
+      if (o.rearHoles === false) box.rearHoles = false;
+      if (o.gap !== undefined) box.gap = o.gap;
+      if (o.front !== undefined) box.front = o.front;
+      if (o.confBottom !== undefined) box.confBottom = o.confBottom;
+      const same = own && Math.abs(own.box.h - h) < 0.05;
+      if (own?.box.bottomUp !== undefined && own.box.bottomUp < h - FIRMAX.t - 20) box.bottomUp = own.box.bottomUp;
+      const backH = h - (box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t;
+      if (own?.box.conf?.length) {
+        // высоты конфирматов Базиса: та же высота короба — как есть; иначе нижний держит отступ от низа, верхний — от верха
+        // задней стенки, если их столько же, сколько по правилу для новой высоты, и между ними не меньше 32
+        const oc = own.box.conf, oldH = own.box.h - (own.box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t, def = firmaxConf(backH);
+        const moved = oc.length === 2 ? [oc[0], Math.round((backH - (oldH - oc[1])) * 10) / 10] : oc.map((c) => Math.round(c / oldH * backH * 10) / 10);
+        if (same) box.conf = [...oc];
+        else if (oc.length === def.length && moved.every((c) => c >= 8 && c <= backH - 8) && (moved.length < 2 || moved[1] - moved[0] >= 32)) box.conf = moved;
+      }
+      if (o.faceScrews === true) box.faceScrews = true;
+      else if (Array.isArray(o.faceScrews)) box.faceScrews = same && o.faceScrews.every(([, sy]) => sy > 0 && sy < backH) ? o.faceScrews.map((p) => [p[0], p[1]] as [number, number]) : true;
+    }
+    return { system: "firmax-ldsp" as const, y0: a.y0, y1: a.y1, runnerY: Math.round(Math.max(a.y0, floor) * 10) / 10, box };
+  });
+}
+/** Переключатель панели: саморезы 3×3 направляющих (screws) или шурупы фальшпанели в фасад (faceScrews) у всех ящиков Firmax.
+ *  Включение шурупов фасада не трогает свои точки из Базиса, у остальных — правило большинства. */
+export function firmaxSetScrews(ks: KDrawer[], what: "screws" | "faceScrews", on: boolean): KDrawer[] {
+  return ks.map((k) => {
+    if (!isFirmax(k)) return k;
+    const box = { ...k.box };
+    if (!on) delete box[what]; else if (what === "screws") box.screws = true; else if (!box.faceScrews) box.faceScrews = true;
+    return { ...k, box };
+  });
+}
+export function firmaxFits(m: Module, k: FirmaxDrawer) {
+  return k.box.h >= 60 && k.box.y >= axisFloor(m) - 0.01 && k.box.y + k.box.h <= Math.min(k.y1, axisCeiling(m) - AXIS_FIT.ceiling) + 0.01;
+}
+/** Геометрия короба Firmax в осях модуля: x0/xr — внутренние грани боковин корпуса, F — передняя кромка корпуса. */
+function firmaxGeom(k: FirmaxDrawer, x0: number, xr: number, F: number) {
+  const b = k.box, t = FIRMAX.t, gap = b.gap ?? FIRMAX.gap, bu = b.bottomUp ?? FIRMAX.bottomUp;
+  const zf = F - (b.front ?? 0), zb = zf - b.len, sl = x0 + gap, sr = xr - gap, yb = b.y + bu, backY = yb + t, top = b.y + b.h;
+  return { t, gap, bu, zf, zb, sl, sr, yb, backY, top, backH: top - backY };
 }
 
 /** Есть ли модели Базиса на это сочетание (царга нужной длины и высоты, держатели, направляющая; антрацит — свои сетки). */
-export function axisAvailable(k: Pick<KDrawer, "h" | "len" | "color">) {
-  const col = k.color ?? "white";
-  return !!M.side[`${col}:${k.h}`]?.[k.len] && !!M.rear[`${col}:${k.h}`] && !!M.runner[col]?.[k.len];
+export function axisAvailable(k: Pick<AxisDrawer, "h" | "len" | "color"> | FirmaxDrawer) {
+  if ("system" in k && k.system === "firmax-ldsp") return true; // Firmax — короб ЛДСП, моделей Базиса не нужно
+  const a = k as Pick<AxisDrawer, "h" | "len" | "color">, col = a.color ?? "white";
+  return !!M.side[`${col}:${a.h}`]?.[a.len] && !!M.rear[`${col}:${a.h}`] && !!M.runner[col]?.[a.len];
 }
 /** Пол под ящиками: верх дна корпуса или нижних царг (лёжа 16, на ребре — их высота). */
 export function axisFloor(m: Module) {
@@ -253,7 +353,7 @@ export function axisFloor(m: Module) {
   return base + Math.max(0, ...low);
 }
 
-export function axisLabel(k: KDrawer) { return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
+export function axisLabel(k: KDrawer) { if (isFirmax(k)) return `Firmax ЛДСП, короб ${k.box.h}×${k.box.len} мм`; return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
 
 /** Детали ящиков кухонного модуля: фасады, дно и задняя стенка ЛДСП, фурнитура Axis PRO сетками Базиса. */
 export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, facadeT: number, faceAir: number) {
@@ -266,13 +366,53 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     return { id, name, size: g.size, position: g.position, length: Math.max(...g.size), width: [...g.size].sort((a, b) => b - a)[1], thickness: Math.min(...g.size), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0],
       model: { file: `hardware/bazis/${mesh}.glb`, length: "y", native: true, origin, quat: q } };
   };
+  const board = (id: string, name: string, lo: number[], hi: number[], grainAxis: 0 | 1 | 2): Part => {
+    const size: [number, number, number] = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]].map((v) => Math.round(v * 100) / 100) as [number, number, number];
+    const rest = size.filter((_, i) => i !== grainAxis);
+    return { id, name, size, position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], length: size[grainAxis], width: Math.max(...rest), thickness: Math.min(...rest),
+      role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis, edge: [0, 0, 0, 0] };
+  };
   m.kdrawers.forEach((k, j) => {
-    const id = `kd:${j}`, col = k.color ?? "white", key = `${col}:${k.h}`, ry = k.runnerY;
+    const id = `kd:${j}`;
     const sideIn = (s: 0 | 1) => (s ? xr : x0), dir = (s: 0 | 1) => (s ? -1 : 1);
     // фасад ящика (фасадный материал или ЛДСП — как у дверей модуля)
     const fw = m.width - 2 * faceGap, fh = k.y1 - k.y0;
     out.push({ id: `${id}:facade`, name: `Фасад ящика ${j + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (k.y0 + k.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
       role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+    if (isFirmax(k)) {
+      // Firmax скрытого монтажа: короб ЛДСП 16 (боковины, дно, задняя стенка, фальшпанель), направляющие под дном, конфирматы
+      const g = firmaxGeom(k, x0, xr, F), b = k.box;
+      out.push(board(`${id}:fx:side:L`, `Боковина ящика ${j + 1} левая (Firmax)`, [g.sl, b.y, g.zb], [g.sl + g.t, g.top, g.zf], 2));
+      out.push(board(`${id}:fx:side:R`, `Боковина ящика ${j + 1} правая (Firmax)`, [g.sr - g.t, b.y, g.zb], [g.sr, g.top, g.zf], 2));
+      out.push(board(`${id}:fx:bottom`, `Дно ящика ${j + 1} (Firmax)`, [g.sl + g.t, g.yb, g.zb], [g.sr - g.t, g.yb + g.t, g.zf], 0));
+      out.push(board(`${id}:fx:back`, `Задняя стенка ящика ${j + 1} (Firmax)`, [g.sl + g.t, g.backY, g.zb], [g.sr - g.t, g.top, g.zb + g.t], 0));
+      out.push(board(`${id}:fx:front`, `Фальшпанель ящика ${j + 1} (Firmax)`, [g.sl + g.t, g.backY, g.zf - g.t], [g.sr - g.t, g.top, g.zf], 0));
+      // направляющие Firmax в Базисе без сетки: тонкий металлический профиль под дном у боковины, по длине ящика; точка — как у Базиса
+      (b.runs ?? [[0, k.runnerY, 0], [0, k.runnerY, 0]]).forEach((r, i) => {
+        const s = (i % 2) as 0 | 1, lr = s ? "R" : "L", side = s ? "правая" : "левая", d = dir(s), inner = s ? g.sr - g.t : g.sl + g.t;
+        const rx0 = inner + d * 0.5, rx1 = inner + d * (0.5 + FIRMAX.rail.w);
+        out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая скрытого монтажа Firmax ${b.len} ${side}`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
+          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
+      });
+      if (b.faceScrews) {
+        // фальшпанель ниже 100 (низкий верхний ящик после смены высоты): 60 и «40 ниже верха» выходят за неё — все три посередине по высоте
+        const iw = g.sr - g.sl - 2 * g.t, lo = g.backH < 100, pts = b.faceScrews === true ? [[60, lo ? g.backH / 2 : g.backH - 40], [iw - 60, lo ? g.backH / 2 : g.backH - 40], [iw / 2, lo ? g.backH / 2 : 60]] : b.faceScrews;
+        pts.forEach(([dx, dy], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Шуруп 3,5×30 (фальшпанель в фасад)")));
+      }
+      for (const s of [0, 1] as const) {
+        const lr = s ? "R" : "L", d = dir(s);
+        // конфирматы короба: боковина → задняя стенка и фальшпанель (высоты как в проекте), боковина → дно (от торцов)
+        const head = s ? g.sr : g.sl, ax: "+x" | "-x" = s ? "-x" : "+x";
+        for (const dy of b.conf ?? firmaxConf(g.backH)) for (const [nm, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:${id}:fx:${nm}:${lr}:${dy}`, [head, g.backY + dy, z], ax));
+        const e = b.confBottom ?? FIRMAX.confBottom;
+        for (const z of [g.zb + e, g.zf - e]) out.push(conf(`fast:${id}:fx:bottom:${lr}:${Math.round(z)}`, [head, g.yb + 8, z], ax));
+        // «3x3» — саморезы направляющей в боковину корпуса; «5x12» — под зацеп направляющей в задний торец дна
+        if (b.screws) for (const dz of b.len >= 440 ? [37, 261] : [37, 165]) out.push(screwAt(`${id}:screw:fx3:${lr}:${dz}`, [sideIn(s), g.yb + 10, g.zf - dz], "Саморез 3×3 (направляющая Firmax)"));
+        if (b.rearHoles !== false) out.push(screwAt(`${id}:screw:fx5:${lr}`, [head + d * 23, g.yb + 11, g.zb], "Отверстие 5×12 (зацеп Firmax)"));
+      }
+      return;
+    }
+    const col = k.color ?? "white", key = `${col}:${k.h}`, ry = k.runnerY;
     // дно: между царгами (37,5 от боковин), от передней кромки на длину ящика − 24; задняя стенка — за дном, ширина на 12 меньше
     const bw = xr - x0 - 75, bd = k.len - 24;
     out.push({ id: `${id}:bottom`, name: `Дно ящика ${j + 1} (${axisLabel(k)})`, size: [bw, t, bd], position: [(x0 + xr) / 2, ry - 22 + t / 2, F - bd / 2], length: bw, width: bd, thickness: t,
@@ -298,6 +438,13 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     }
   });
 }
+function screwAt(id: string, at: [number, number, number], name: string): Part { return { ...screw(id, at), name }; }
+/** Конфирмат 7×50 короба Firmax: головка на наружной пласти боковины ящика, ось внутрь (модель «Евровинт 7х50» Базиса). */
+function conf(id: string, head: [number, number, number], axis: "+x" | "-x"): Part {
+  const s = axis === "-x" ? -1 : 1;
+  return { id, name: "Конфирмат 7×50 (короб ящика Firmax)", size: [50, 7, 7], position: [head[0] + s * 25, head[1], head[2]], length: 50, width: 7, thickness: 7, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0],
+    model: { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: s > 0 ? [1, 0, 0, 0] : [0, 0, 1, 0] } };
+}
 function screw(id: string, at: [number, number, number]): Part {
   return { id, name: "Саморез 3×3 (крепление Axis PRO)", size: [3, 3, 3], position: at, length: 3, width: 3, thickness: 3, role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] };
 }
@@ -307,6 +454,21 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
   if (!m.kdrawers?.length) return;
   m.kdrawers.forEach((k, j) => {
     const id = `kd:${j}`;
+    if (isFirmax(k)) {
+      // Firmax: D3×3 в боковину корпуса («3x3»), D5×12 в задний торец дна («5x12»); конфирматы (D8×16 + D5×37) — общей присадкой fast:
+      // шуруп 3,5×30 фальшпанели: D5×16 насквозь через фальшпанель + D3×3 в тыльную пласть фасада
+      const fac = ps.find((q) => q.id === `${id}:facade`);
+      for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:fxf:`))) {
+        push(p.id, p.position, [0, 0, 1], 5, 16);
+        if (fac) push(p.id + ":facade", [p.position[0], p.position[1], fac.position[2] - fac.size[2] / 2], [0, 0, 1], 3, 3);
+      }
+      for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:fx`) && !q.id.includes(":fxf:"))) {
+        const lr = p.id.split(":")[4];
+        if (p.id.includes(":fx3:")) push(p.id, p.position, [lr === "L" ? -1 : 1, 0, 0], 3, 3);
+        else push(p.id, p.position, [0, 0, 1], 5, 12);
+      }
+      return;
+    }
     for (const lr of ["L", "R"] as const) {
       const run = ps.find((p) => p.id === `${id}:slide:${lr}`), rear = ps.find((p) => p.id === `${id}:sys:rear:${lr}`), front = ps.find((p) => p.id === `${id}:sys:front:${lr}`);
       if (!run?.model?.origin || !rear?.model?.origin || !front?.model?.origin) continue;
@@ -330,7 +492,18 @@ export function kitchenDrawerErrors(m: Module): string[] {
   if (!Array.isArray(ks) || ks.length > 6) return ["Ящиков кухни — не больше шести."];
   ks.forEach((k, j) => {
     const p = `Ящик ${j + 1}: `;
-    if (k.system !== "axis-pro") e.push(p + "система ящиков — Axis PRO.");
+    if (isFirmax(k)) {
+      const b = k.box;
+      if (![k.y0, k.y1, k.runnerY, b?.y, b?.h, b?.len].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) { e.push(p + "фасад от 60 мм в пределах высоты модуля."); return; }
+      if (b.h < 60) e.push(p + "короб Firmax — боковины от 60 мм.");
+      if (b.len > m.depth - (b.front ?? 0) + 0.01 || b.len < 250) e.push(p + `короб Firmax ${b.len} не входит в глубину корпуса ${m.depth}.`);
+      if (m.width - 32 - 2 * (b.gap ?? FIRMAX.gap) - 32 < 100) e.push(p + "Firmax — узкий корпус: между боковинами ящика меньше 100 мм.");
+      if (b.y < axisFloor(m) - 0.01) e.push(p + `короб Firmax на ${b.y} уходит в дно корпуса (пол под ящиками ${axisFloor(m)}).`);
+      if (b.y + b.h > axisCeiling(m) + 0.01) e.push(p + `короб Firmax упирается в царги корпуса: верх ${Math.round((b.y + b.h) * 10) / 10}, царги с ${axisCeiling(m)}.`);
+      for (let i = 0; i < j; i++) { const o = ks[i]; if (k.y0 < o.y1 - 0.01 && o.y0 < k.y1 - 0.01) e.push(p + `фасад пересекается с ящиком ${i + 1}.`); if (isFirmax(o) && b.y < o.box.y + o.box.h - 0.01 && o.box.y < b.y + b.h - 0.01) e.push(p + `короб пересекается с коробом ящика ${i + 1}.`); }
+      return;
+    }
+    if (k.system !== "axis-pro") e.push(p + "система ящиков — Axis PRO или Firmax ЛДСП.");
     if (!AXIS_HEIGHTS.includes(k.h)) e.push(p + "высота царги Axis PRO — 86, 120, 168 или 200.");
     if (!AXIS_LENGTHS.includes(k.len)) e.push(p + "длина Axis PRO — 300, 400, 450, 500 или 550.");
     if (![k.y0, k.y1, k.runnerY].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) e.push(p + "фасад от 60 мм в пределах высоты модуля.");
@@ -352,10 +525,24 @@ export function kitchenDrawerErrors(m: Module): string[] {
 }
 
 /** Сочетания «H/длина», на которые есть модели (для подсказки). */
-export function axisCombos(color?: KDrawer["color"]) { return AXIS_HEIGHTS.flatMap((h) => AXIS_LENGTHS.filter((len) => axisAvailable({ h, len, color })).map((len) => `${h}/${len}`)); }
+export function axisCombos(color?: AxisDrawer["color"]) { return AXIS_HEIGHTS.flatMap((h) => AXIS_LENGTHS.filter((len) => axisAvailable({ h, len, color })).map((len) => `${h}/${len}`)); }
 
 export function parseKDrawers(x: unknown): KDrawer[] | undefined {
   if (!Array.isArray(x)) return undefined;
-  return x.slice(0, 6).map((k: Partial<KDrawer>) => ({ system: "axis-pro" as const, y0: Number(k.y0), y1: Number(k.y1), runnerY: Number(k.runnerY), h: Number(k.h) as KDrawer["h"], len: Number(k.len) as KDrawer["len"],
-    ...(k.color === "anthracite" ? { color: "anthracite" as const } : {}), ...(k.backH === undefined ? {} : { backH: Number(k.backH) }), ...(k.faceScrews ? { faceScrews: true } : {}) }));
+  return x.slice(0, 6).map((k0: Partial<AxisDrawer> | Partial<FirmaxDrawer>): KDrawer => {
+    if (k0.system === "firmax-ldsp") {
+      const b = (k0.box ?? {}) as Partial<FirmaxBox>, num = (v: unknown) => (v === undefined ? undefined : Number(v));
+      const box: FirmaxBox = { y: Number(b.y), h: Number(b.h), len: Number(b.len) };
+      for (const key of ["bottomUp", "gap", "front", "confBottom"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
+      if (Array.isArray(b.conf)) box.conf = b.conf.slice(0, 6).map(Number);
+      if (b.screws) box.screws = true;
+      if (b.rearHoles === false) box.rearHoles = false;
+      if (b.faceScrews === true) box.faceScrews = true; else if (Array.isArray(b.faceScrews)) box.faceScrews = b.faceScrews.slice(0, 8).map((r) => [Number(r[0]), Number(r[1])] as [number, number]);
+      if (Array.isArray(b.runs)) box.runs = b.runs.slice(0, 8).filter((r) => Array.isArray(r) && r.length === 3).map((r) => r.map(Number) as [number, number, number]);
+      return { system: "firmax-ldsp", y0: Number(k0.y0), y1: Number(k0.y1), runnerY: Number(k0.runnerY), box };
+    }
+    const k = k0 as Partial<AxisDrawer>;
+    return { system: "axis-pro" as const, y0: Number(k.y0), y1: Number(k.y1), runnerY: Number(k.runnerY), h: Number(k.h) as AxisDrawer["h"], len: Number(k.len) as AxisDrawer["len"],
+    ...(k.color === "anthracite" ? { color: "anthracite" as const } : {}), ...(k.backH === undefined ? {} : { backH: Number(k.backH) }), ...(k.faceScrews ? { faceScrews: true } : {}) };
+  });
 }

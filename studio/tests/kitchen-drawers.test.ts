@@ -4,7 +4,7 @@ import {initialModule,parts,validate,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers,withAxisH,relayoutProblem,axisMaxLen,kdrawerMinTop,kdrawerFacadeMax,setKDrawerFacade} from '../src/kitchenDrawers';
+import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers,withAxisH,relayoutProblem,axisMaxLen,kdrawerMinTop,kdrawerFacadeMax,setKDrawerFacade,firmaxSetScrews,type AxisDrawer} from '../src/kitchenDrawers';
 import {edgeByDir} from '../src/edges';
 
 // НМ 600 с тремя ящиками Axis PRO как в Базисе k06/m03 (2×H-86 + H-168, 500 мм)
@@ -102,7 +102,7 @@ const clean=(m:ReturnType<typeof k04>,tag:string)=>{
 test('critic qdrawers B1: depth 400 with H-200 (no 300 length) re-lays the drawers instead of leaving a 500 box; order of actions does not matter',()=>{
   const m=k04();assert.equal(m.kdrawers![0].h,200);
   const d400={...m,depth:400};d400.kdrawers=refitKDrawers(d400,'depth');
-  assert.ok(d400.kdrawers!.every(k=>k.len<=375),'all lengths fit 400');clean(d400,'400');
+  assert.ok(d400.kdrawers!.every(k=>(k.len??0)<=375),'all lengths fit 400');clean(d400,'400');
   // 4 ящика → 470 и высота 760 → 470 (H-168/H-86 без длин ≤445) — так же чисто, как 470 → 4 ящика
   // 4 ящика на 470 не входят ни в каком порядке (у H-86 нет длин ≤445) — результат тот же, что «470 → 4», и без ящика 500 в задней стенке
   const four={...m,kdrawers:relayoutKDrawers(m,4)};const f470:ReturnType<typeof k04>={...four,depth:470};f470.kdrawers=refitKDrawers(f470,'depth');
@@ -113,8 +113,8 @@ test('critic qdrawers B1: depth 400 with H-200 (no 300 length) re-lays the drawe
   const three={...m,kdrawers:relayoutKDrawers(m,3,[1,1,1])};const t470:ReturnType<typeof k04>={...three,depth:470};t470.kdrawers=refitKDrawers(t470,'depth');clean(t470,'3 equal→470');
   const h760={...m,height:760};h760.kdrawers=refitKDrawers(h760,'height');const hd={...h760,depth:470};hd.kdrawers=refitKDrawers(hd,'depth');clean(hd,'760→470');
   // кнопка царги подбирает длину заново: H-200 на 400 — нет длины ≤375, H-120 даёт 300
-  const k=withAxisH(d400,{...d400.kdrawers![0],len:500},120);assert.equal(k.len,300);
-  assert.equal(withAxisH(m,m.kdrawers![1],200).len,500);
+  const k=withAxisH(d400,{...(d400.kdrawers![0] as AxisDrawer),len:500},120);assert.equal(k.len,300);
+  assert.equal(withAxisH(m,m.kdrawers![1] as AxisDrawer,200).len,500);
 });
 test('critic qdrawers B2: no model in the drawer colour — colour and facade screws are kept (error / disabled button), never silently white',()=>{
   const m=k04();m.kdrawers=m.kdrawers!.map(k=>({...k,color:'anthracite' as const,faceScrews:true}));
@@ -142,7 +142,7 @@ test('critic qdrawers B4: bottom front rail confirmat steps aside from the botto
 });
 test('critic qdrawers minor: one depth-spare rule for layout and refit',()=>{
   const m={...k04(),depth:475};assert.equal(axisMaxLen(m),450);
-  assert.ok(axisLayout(m,3).every(k=>k.len<=axisMaxLen(m)));assert.ok(refitKDrawers({...k04(),depth:475},'depth')!.every(k=>k.len<=450));
+  assert.ok(axisLayout(m,3).every(k=>k.len<=axisMaxLen(m)));assert.ok(refitKDrawers({...k04(),depth:475},'depth')!.every(k=>(k.len??0)<=450));
 });
 test('critic qdrawers minor: facade field is capped so the top drawer keeps a facade its lowest rail fits; the entered value is kept',()=>{
   const m=k04();assert.equal(kdrawerMinTop(m),143.5);
@@ -151,4 +151,83 @@ test('critic qdrawers minor: facade field is capped so the top drawer keeps a fa
   assert.equal(r[1].y1-r[1].y0,max,'value = cap, not re-normalised');
   assert.ok(r.at(-1)!.y1-r.at(-1)!.y0>=143.5);clean(n,'facade 2 = 500');
   const s=setKDrawerFacade(m,0,300)!;assert.equal(s[0].y1-s[0].y0,300);
+});
+// Firmax скрытого монтажа: короб ЛДСП как в Базисе k14/m10 (НМВЯ 2, 800×820, три ящика)
+const firmax=()=>{const m=kitchenBase(initialModule(),800,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
+  m.kdrawers=[{system:'firmax-ldsp',y0:101.5,y1:471.5,runnerY:116,box:{y:152,h:264.5,len:490,screws:true}},{system:'firmax-ldsp',y0:474.5,y1:671,runnerY:474.5,box:{y:514.5,h:121.5,len:490,screws:true}},{system:'firmax-ldsp',y0:674,y1:819,runnerY:674,box:{y:704.5,h:92.5,len:490,bottomUp:5,screws:true}}];return m;};
+
+test('Firmax box: LDSP 16 sides 5 mm from the cabinet, bottom 10 (5) above their lower edge, back and false panel between sides on the bottom',()=>{
+  const m=firmax(),ps=parts(m),L=ps.find(p=>p.id==='left')!,x0=L.position[0]+L.size[0]/2,F=L.position[2]+L.size[2]/2;
+  const g=(id:string)=>{const p=ps.find(q=>q.id===id)!;return {lo:p.position.map((v,i)=>Math.round((v-p.size[i]/2)*10)/10),hi:p.position.map((v,i)=>Math.round((v+p.size[i]/2)*10)/10),p};};
+  const s=g('kd:0:fx:side:L');assert.deepEqual([s.lo[0]-x0,s.hi[0]-x0,s.lo[1],s.hi[1],F-s.lo[2],F-s.hi[2]],[5,21,152,416.5,490,0]);
+  const b=g('kd:0:fx:bottom');assert.deepEqual([b.lo[0]-x0,b.lo[1],b.hi[1],b.p.size[2]],[21,162,178,490]);assert.equal(b.p.size[0],800-32-2*21);
+  const k=g('kd:0:fx:back'),f=g('kd:0:fx:front');assert.deepEqual([k.lo[1],k.hi[1],F-k.lo[2]],[178,416.5,490]);assert.deepEqual([f.lo[1],f.hi[2]],[178,Math.round(F*10)/10]);
+  assert.equal(g('kd:2:fx:bottom').lo[1],709.5,'bottomUp 5');
+  assert.deepEqual(validate(m),[]);
+  assert.deepEqual(partCollisions(ps,m),[]);
+});
+
+test('Firmax edges by Bazis: box sides +-y and -z, back and false panel +y, bottom -z',()=>{
+  const m=firmax();m.edgeScheme={t:0.5} as never;const ps=parts(m),e=(id:string)=>Object.keys(edgeByDir(ps.find(p=>p.id===id)!)).sort();
+  assert.deepEqual(e('kd:1:fx:side:L'),['+y','-y','-z']);assert.deepEqual(e('kd:1:fx:back'),['+y']);assert.deepEqual(e('kd:1:fx:front'),['+y']);assert.deepEqual(e('kd:1:fx:bottom'),['-z']);
+});
+
+test('Firmax hardware and drilling: runners at the Bazis point, confirmats D8x16 + D5x37, 3x3 in cabinet sides, 5x12 in the bottom rear edge',()=>{
+  const m=firmax(),ps=parts(m),h=holes(m),L=ps.find(p=>p.id==='left')!,x0=L.position[0]+L.size[0]/2,F=L.position[2]+L.size[2]/2;
+  const runs=ps.filter(p=>p.id.startsWith('kd:2:slide:'));assert.equal(runs.length,2);assert.deepEqual(runs[0].anchor,[x0,674,F]);
+  assert.ok(runs.every(r=>r.material==='metal'&&!r.model&&r.position[1]+r.size[1]/2<=709.5),'rail under the bottom, no Bazis mesh');
+  const conf=ps.filter(p=>p.id.startsWith('fast:kd:0:'));assert.equal(conf.length,2*(2*2+2),'2 per back/false panel + 2 into the bottom, per side');
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:side:L'&&x.d===8&&x.depth===16).length,6);
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:back'&&x.d===5&&x.depth===37).length,4);
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:bottom'&&x.d===5&&x.depth===37).length,4);
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:bottom'&&x.d===5&&x.depth===12).length,2);
+  assert.equal(h.filter(x=>x.part==='left'&&x.d===3&&x.depth===3).length,6,'3x3: 2 per drawer');
+  assert.equal(ps.filter(p=>p.id.startsWith('kd:')&&p.id.includes(':screw:fx3:')).length,12);
+});
+
+test('Firmax: system switch keeps the facades, layout fits, save/load round trip, depth refit and validation',()=>{
+  const m=firmax(),back=parseModule(JSON.parse(JSON.stringify(m)))!;assert.deepEqual(back.kdrawers,m.kdrawers);
+  const r=relayoutKDrawers(m,3,m.kdrawers!.map(k=>k.y1-k.y0),'firmax-ldsp');assert.ok(r.every(k=>k.system==='firmax-ldsp'&&axisFits(m,k)));
+  const ax=relayoutKDrawers(m,3,undefined,'axis-pro');assert.ok(ax.every(k=>k.system==='axis-pro'));
+  const n={...m,kdrawers:r};assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
+  const deep={...m,depth:450};assert.equal(refitKDrawers(deep,'depth')!.every(k=>k.system==='firmax-ldsp'&&k.box.len<=410),true);
+  const bad={...m,kdrawers:[{system:'firmax-ldsp' as const,y0:101.5,y1:471.5,runnerY:116,box:{y:152,h:40,len:490}}]};assert.ok(validate(bad).some(x=>/боковины от 60/.test(x)));
+});
+
+// Критик Firmax р.1: ящик из панели или после смены высоты не должен уходить в цех без 3×3 направляющих и шурупов фасада
+const cnt=(m:ReturnType<typeof firmax>)=>{const h=holes(m);return {d3:h.filter(x=>x.d===3&&x.depth===3).length,d516:h.filter(x=>x.d===5&&x.depth===16).length};};
+test('Firmax height refit keeps runner screws D3x3, face screws D5x16, 5x12 choice, gap and front offset',()=>{
+  const m=firmax();m.kdrawers=m.kdrawers!.map((k,i)=>k.system==='firmax-ldsp'?{...k,box:{...k.box,faceScrews:i===1?[[60,50],[300,20]] as [number,number][]:true,gap:5,front:0,confBottom:53}}:k);
+  const c0=cnt(m);assert.ok(c0.d3>=12&&c0.d516>=8,'source has screws');
+  for(const dh of [-100,100]){
+    const n={...m,height:m.height+dh};n.kdrawers=refitKDrawers(n,'height');
+    const c=cnt(n);assert.ok(c.d3>=c0.d3,`height ${dh}: D3x3 ${c.d3} < ${c0.d3}`);assert.ok(c.d516>=c0.d516,`height ${dh}: D5x16 ${c.d516} < ${c0.d516}`);
+    assert.ok(n.kdrawers!.every(k=>k.system==='firmax-ldsp'&&k.box.screws&&k.box.faceScrews&&k.box.gap===5&&k.box.front===0&&k.box.confBottom===53));
+    assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
+  }
+  // высоты конфирматов и дно из Базиса: нижний держит отступ от низа задней стенки, верхний — от верха; bottomUp 5 остаётся
+  const mc=firmax();mc.kdrawers=mc.kdrawers!.map((k,i)=>k.system==='firmax-ldsp'&&i===0?{...k,box:{...k.box,conf:[43.2,195.2]}}:k);
+  for(const dh of [-100,100]){const n={...mc,height:mc.height+dh};n.kdrawers=refitKDrawers(n,'height');const [a,,c]=n.kdrawers!;assert.ok(a.system==='firmax-ldsp'&&c.system==='firmax-ldsp');
+    const bh=a.box.h-10-16;assert.equal(a.box.conf![0],43.2);assert.equal(Math.round((bh-a.box.conf![1])*10)/10,43.3);assert.equal(c.box.bottomUp,5);
+    assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);}
+  const no5={...m,kdrawers:m.kdrawers!.map(k=>k.system==='firmax-ldsp'?{...k,box:{...k.box,rearHoles:false,screws:false}}:k)};
+  const r=refitKDrawers({...no5,height:m.height-100},'height')!;assert.ok(r.every(k=>k.system==='firmax-ldsp'&&k.box.rearHoles===false&&!k.box.screws),'Bazis project without 3x3 / 5x12 stays so');
+});
+test('Firmax from the panel (system switch, count) has runner screws D3x3 by default, like 17 of 19 Bazis modules',()=>{
+  const ax=axis(),f=relayoutKDrawers(ax,3,ax.kdrawers!.map(k=>k.y1-k.y0),'firmax-ldsp');assert.ok(f.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
+  const n={...ax,kdrawers:f};assert.equal(cnt(n as never).d3,12,'2 per side per drawer');assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
+  const two=relayoutKDrawers(n,2);assert.ok(two.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
+});
+test('Firmax shallow cabinet: below 430 the shortest box 390 without the 40 reserve while it fits, deeper than the cabinet is an error',()=>{
+  const m=firmax(),a={...m,depth:407};a.kdrawers=refitKDrawers(a,'depth');assert.ok(a.kdrawers!.every(k=>k.system==='firmax-ldsp'&&k.box.len===390));
+  assert.deepEqual(validate(a).filter(x=>/Ящик|Firmax/.test(x)),[]);assert.deepEqual(partCollisions(parts(a),a),[]);
+  const b={...m,depth:380};b.kdrawers=refitKDrawers(b,'depth');assert.ok(validate(b).some(x=>/короб Firmax 390 не входит/.test(x)));
+});
+test('Firmax panel toggles bring back D3x3 runner screws and face screws D5x16; own Bazis points are kept',()=>{
+  const m=firmax();m.kdrawers=firmaxSetScrews(m.kdrawers!,'screws',false);assert.equal(cnt(m).d3,0);
+  m.kdrawers=firmaxSetScrews(m.kdrawers!,'screws',true);assert.equal(cnt(m).d3,12);
+  m.kdrawers=m.kdrawers!.map((k,i)=>i===1&&k.system==='firmax-ldsp'?{...k,box:{...k.box,faceScrews:[[60,50]] as [number,number][]}}:k);
+  m.kdrawers=firmaxSetScrews(m.kdrawers!,'faceScrews',true);const b=m.kdrawers!.map(k=>k.system==='firmax-ldsp'?k.box.faceScrews:undefined);
+  assert.deepEqual(b,[true,[[60,50]],true]);assert.equal(cnt(m).d516,3+1+3);assert.deepEqual(partCollisions(parts(m),m),[]);
+  m.kdrawers=firmaxSetScrews(m.kdrawers!,'faceScrews',false);assert.equal(cnt(m).d516,0);
 });
