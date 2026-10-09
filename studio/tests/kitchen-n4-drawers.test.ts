@@ -8,6 +8,8 @@ import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {kitHeaderIdx,normalizeRefHardware} from '../scripts/kitchen/refHardware';
 import {axisRearScrews,isAxis,isFirmax,parseKDrawers,type AxisDrawer,type FirmaxDrawer} from '../src/kitchenDrawers';
 import {partCollisions} from '../src/collisions';
+import {estimate} from '../src/pricing';
+import {newProject} from '../src/project';
 
 // n4-drawers: ящики кухонь Базиса (base-drawers) — ручная посадка из проекта и вложенные комплекты направляющих.
 // Эталоны лежат вне репозитория (Кухни\etalon) — на чужой машине тесты с эталонами пропускаются.
@@ -83,4 +85,14 @@ test('вложенные комплекты направляющих: член �
   // студия: по две направляющие на ящик MODERN SLIDE (было по четыре — две лишние в той же точке)
   const {m}=pass('k09','m05');
   for(const j of [0,1,2])assert.equal(parts(m).filter(p=>p.id.startsWith(`kd:${j}:slide:`)).length,2);
+});
+
+test('короб Firmax без направляющих в проекте Базиса (k22 m05): ящики распознаны, направляющих и их строки сметы нет — PASS',{skip:!has('k22')},()=>{
+  const {m,ok}=pass('k22','m05');
+  assert.ok(ok);
+  assert.equal(m.kdrawers?.length,2);assert.ok(m.kdrawers!.every(k=>isFirmax(k)&&Array.isArray(k.box.runs)&&k.box.runs.length===0));
+  assert.ok(!parts(m).some(p=>/Направляющая/.test(p.name)),'направляющих в Базисе нет — студия не добавляет');
+  assert.ok(!parts(m).some(p=>p.role==='shelf'),'дно ящика — не полка');
+  const lines=estimate(newProject({...m,bazis:true} as typeof m)).lines;
+  assert.ok(!lines.some(l=>/^firmax/.test(l.id)),JSON.stringify(lines.map(l=>l.id)));
 });

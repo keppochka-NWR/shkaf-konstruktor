@@ -318,7 +318,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const bottom = bottom0 && bottom0 === topPanel && bottom0.b.y0 > top / 2 ? undefined : bottom0;
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo|MODERN SLIDE/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
+  // короб Firmax без направляющих в проекте (k22 m05, k14 m08): «5x12» (зацеп Firmax) есть, направляющих в Базисе нет
+  const fxBare = !ref.hardware.some((h) => h.category === "направляющая") && ref.hardware.some((h) => h.name === "5x12") && P.some(({ p }) => /^Боковина ящика лев/i.test(p.name));
+  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && (fxBare || ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo|MODERN SLIDE/.test(h.name))); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
   // цоколь в модуле? (панель ЛДСП у пола под дном, как бы ни называлась в Базисе: «Цоколь», «Фронтальная» k20 m09) — самая передняя
   // в передней половине глубины: планка у задней стены (k04 m09, k14 m06) — не цоколь; у навесных и антресолей цоколя нет
   const floorRole = !ref.archetype.startsWith("wall") && ref.archetype !== "antresol";
@@ -450,7 +452,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // ящики Firmax скрытого монтажа: короб ЛДСП 16 по левой боковине ящика; направляющие (по 2 точки Базиса на ящик) — снизу вверх
   const fxRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Firmax/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);
-  if (fxRuns.length && !axisRuns.length) {
+  // короб Firmax без направляющих в проекте (fxBare) — короб без них (runs: []), студия направляющих не добавляет
+  if ((fxRuns.length || fxBare) && !axisRuns.length) {
     const lefts = P.filter(({ p, b }) => /^Боковина ящика лев/i.test(p.name) && b.x0 < W / 2).sort((a, c) => a.b.y0 - c.b.y0);
     const kd: KDrawer[] = [];
     lefts.forEach((s) => {
