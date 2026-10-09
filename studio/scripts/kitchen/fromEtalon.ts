@@ -415,7 +415,15 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
     const front = r.b.z1 >= sideZ1 - 30;
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
-    if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
+    // У Базиса без крепежа в боковинах (k04 m05/m06/m07/m09: стяжка на эксцентриках и шкантах в дно) студия конфирматы в боковины
+    // не ставит (их не было в Базисе: конфирмат 12/10); стяжку на эксцентриках в дно студия пока не строит — «не поддержано» (критик n4-antresol)
+    if (wallRailOnBottom(role, r, bottom)) {
+      const fx = railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
+      railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0), ...(fx ? {} : { fasten: false as const }) });
+      const inRail = ref.hardware.some((h) => /эксцентрик|шкант/.test(h.category) && h.pos[0] > left.b.x1 && h.pos[0] < right.b.x0 && h.pos[1] >= r.b.y0 - 1 && h.pos[1] <= r.b.y1 + 1 && h.pos[2] >= r.b.z0 - 1 && h.pos[2] <= r.b.z1 + 1);
+      if (!fx && inRail) unsupported.push("нижняя стяжка навесного крепится к дну эксцентриками и шкантами (не к боковинам) — пока не поддержано");
+      continue;
+    }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}), ...railConfirmats(r.b, ref.hardware, left.b.x0, right.b.x1, t, top) });
   }

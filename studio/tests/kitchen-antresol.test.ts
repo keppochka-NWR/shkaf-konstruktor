@@ -496,3 +496,14 @@ test('etalon k15/m12: neighbour confirmats as in Bazis',{skip:!existsSync(ET+'k1
   assert.deepEqual(validate(m),[]);
   assert.equal(compareModule(ref,m).pass,true);
 });
+// Нижняя стяжка навесного, стоящая на дне и закреплённая в Базисе эксцентриками и шкантами в дно (k04 m05): студия не ставит конфирматы
+// в боковины, которых в Базисе нет (было 12 при 10 у Базиса), а сама стяжка на эксцентриках — «не поддержано», модуль идёт как в Базисе.
+test('etalon k04/m05: a wall bottom rail fixed to the bottom in Bazis gets no studio confirmats into the sides',{skip:!existsSync(ET+'k04.json')},()=>{
+  const ref=refOf('k04','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
+  const rail=m.rails?.find(r=>r.place==='rear-bottom');
+  assert.ok(rail,'rear-bottom rail');assert.equal(rail!.fasten,false);
+  assert.ok(!parts(m).some(p=>p.id.startsWith('fast:rail:rear-bottom')),'no confirmats into the rail ends');
+  const c=compareModule(ref,m),conf=c.hardware.find(h=>h.category==='конфирмат')!;
+  assert.equal(conf.studio,conf.ref,'confirmats as in Bazis');
+  assert.ok(unsupported.some(u=>/нижняя стяжка навесного крепится к дну/.test(u)));
+});
