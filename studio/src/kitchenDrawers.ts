@@ -160,16 +160,18 @@ function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, 
  *  длина — самая длинная, что входит в корпус с запасом 25. ratios — доли высот фасадов снизу вверх (по умолчанию нижний крупнее). */
 export function axisLayout(m: Module, n: number, ratios?: number[]): KDrawer[] {
   const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
-  const innerBottom = feet + 16, y0 = feet + g, y1 = m.height - g, avail = y1 - y0 - (n - 1) * gap;
+  const innerBottom = axisFloor(m), y0 = feet + g, y1 = m.height - g, avail = y1 - y0 - (n - 1) * gap;
   const base = ratios?.length === n ? ratios : n === 1 ? [1] : n === 2 ? [0.5, 0.5] : n === 3 ? [0.44, 0.28, 0.28] : Array.from({ length: n }, (_, i) => (i === 0 ? 1.5 : 1));
-  const sum = base.reduce((s, v) => s + v, 0), len = ([...AXIS_LENGTHS].reverse().find((l) => l <= m.depth - 25) ?? 300) as KDrawer["len"];
+  const sum = base.reduce((s, v) => s + v, 0), maxLen = m.depth - 25;
   const hs = base.map((r) => Math.round((avail * r) / sum * 2) / 2);
   hs[n - 1] = Math.round((avail - hs.slice(0, -1).reduce((s, v) => s + v, 0)) * 10) / 10; // остаток — верхнему, сумма точно по корпусу
   let y = y0;
   return hs.map((fh, i) => {
     const runnerY = Math.round(Math.max(y + 59, innerBottom + 59) * 10) / 10, y1r = Math.round((y + fh) * 10) / 10;
-    const pick = (hh: KDrawer["h"]): KDrawer => ({ system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len });
-    const k = [...AXIS_HEIGHTS].reverse().map(pick).find((c) => axisFits(m, c)) ?? pick(86);
+    // царга — самая высокая, что входит; длина — самая длинная из тех, на которые есть модели этой высоты
+    const pick = (hh: KDrawer["h"]): KDrawer | undefined => { const len = [...AXIS_LENGTHS].reverse().find((l) => l <= maxLen && axisAvailable({ h: hh, len: l })); return len ? { system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len } : undefined; };
+    const cands = [...AXIS_HEIGHTS].reverse().map(pick).filter((c): c is KDrawer => !!c);
+    const k = cands.find((c) => axisFits(m, c)) ?? cands[cands.length - 1] ?? { system: "axis-pro" as const, y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: 120 as const, len: 300 as const };
     y += fh + gap;
     return k;
   });
@@ -179,6 +181,18 @@ export function refitKDrawers(m: Module): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
   const next = axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0));
   return next.map((k, i) => ({ ...k, ...(ks[i].color ? { color: ks[i].color } : {}), ...(ks[i].faceScrews ? { faceScrews: true } : {}) }));
+}
+
+/** Есть ли модели Базиса на это сочетание (царга нужной длины и высоты, держатели, направляющая; антрацит — свои сетки). */
+export function axisAvailable(k: Pick<KDrawer, "h" | "len" | "color">) {
+  const col = k.color ?? "white";
+  return !!M.side[`${col}:${k.h}`]?.[k.len] && !!M.rear[`${col}:${k.h}`] && !!M.runner[col]?.[k.len];
+}
+/** Пол под ящиками: верх дна корпуса или нижних царг (лёжа 16, на ребре — их высота). */
+export function axisFloor(m: Module) {
+  const base = (m.feet?.height ?? m.plinthHeight ?? 0) + (m.bottomType === "none" ? 0 : 16);
+  const low = (m.rails ?? []).filter((r) => r.place.endsWith("bottom")).map((r) => (r.lay === "flat" ? 16 : r.height));
+  return base + Math.max(0, ...low);
 }
 
 export function axisLabel(k: KDrawer) { return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
@@ -207,7 +221,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
     const backH = k.backH ?? AXIS_BACK[k.h], kw = xr - x0 - 87;
     out.push({ id: `${id}:back`, name: `Задняя стенка ящика ${j + 1}`, size: [kw, backH, t], position: [(x0 + xr) / 2, ry - 22 + backH / 2, F - k.len + 8 + t / 2], length: kw, width: backH, thickness: t,
-      role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+      role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 2, 2, 2] }); // без схемы кухни — как у шкафов 2 мм; со схемой — kitchenEdges
     for (const s of [0, 1] as const) {
       const x = sideIn(s), d = dir(s), lr = s ? "R" : "L", side = s ? "правая" : "левая";
       const run = (M.runner[col]?.[k.len] ?? M.runner.white[k.len])!;
@@ -265,7 +279,9 @@ export function kitchenDrawerErrors(m: Module): string[] {
     if (k.len > m.depth - 7) e.push(p + `ящик ${k.len} не входит в глубину корпуса ${m.depth}.`);
     if (k.backH !== undefined && (!Number.isFinite(k.backH) || k.backH < 60 || k.backH > 400)) e.push(p + "задняя стенка 60–400 мм.");
     for (let i = 0; i < j; i++) { const o = ks[i]; if (k.y0 < o.y1 - 0.01 && o.y0 < k.y1 - 0.01) e.push(p + `фасад пересекается с ящиком ${i + 1}.`); }
-    const floor = (m.feet?.height ?? m.plinthHeight ?? 0) + (m.bottomType === "none" ? 0 : 16);
+    const floor = axisFloor(m);
+    if (AXIS_HEIGHTS.includes(k.h) && AXIS_LENGTHS.includes(k.len) && !axisAvailable(k)) e.push(p + `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""} — нет модели в проектах Базиса цеха (есть: ${axisCombos(k.color).join(", ")}).`);
+    if (m.width - 32 < 180) e.push(p + "Axis PRO — внутренняя ширина корпуса от 180 мм (держатели задней стенки по 53 от боковин).");
     if (k.runnerY - AXIS_RUNNER_DOWN < floor - 0.01) e.push(p + `направляющая на ${k.runnerY} уходит в дно корпуса (низ направляющей ${k.runnerY - AXIS_RUNNER_DOWN}, дно до ${floor}).`);
     if (axisTop(k) > axisCeiling(m) + 0.01) e.push(p + `короб H-${k.h} упирается в царги корпуса: верх ${Math.round(axisTop(k) * 10) / 10}, царги с ${axisCeiling(m)}. Возьмите царгу ниже.`);
     const above = ks.filter((o) => o !== k && o.runnerY > k.runnerY).sort((a, b) => a.runnerY - b.runnerY)[0];
@@ -273,6 +289,9 @@ export function kitchenDrawerErrors(m: Module): string[] {
   });
   return e;
 }
+
+/** Сочетания «H/длина», на которые есть модели (для подсказки). */
+export function axisCombos(color?: KDrawer["color"]) { return AXIS_HEIGHTS.flatMap((h) => AXIS_LENGTHS.filter((len) => axisAvailable({ h, len, color })).map((len) => `${h}/${len}`)); }
 
 export function parseKDrawers(x: unknown): KDrawer[] | undefined {
   if (!Array.isArray(x)) return undefined;

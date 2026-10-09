@@ -67,7 +67,7 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     // Направляющая ящика — между своим коробом и стойкой корпуса.
     if (!p.id.startsWith("kd:") && p.id.includes(":slide:") && (q.role === "body" || q.role === "drawer") && (q.role === "body" || q.id.split(":slide:")[0] === q.id.replace(/:[a-z]+$/, ""))) return true;
     // Детали одного ящика стыкуются между собой (короб, дно в пазу, фасад на передней стенке).
-    if (p.role === "drawer" && q.role === "drawer" && p.id.replace(/:[a-z0-9]+(:\d+)?$/, "") === q.id.replace(/:[a-z0-9]+(:\d+)?$/, "")) return true;
+    if (p.role === "drawer" && q.role === "drawer" && !p.id.startsWith("kd:") && !q.id.startsWith("kd:") && p.id.replace(/:[a-z0-9]+(:\d+)?$/, "") === q.id.replace(/:[a-z0-9]+(:\d+)?$/, "")) return true;
     // ХДФ задника в пазу стоек/дна/крыши: проникновение не глубже паза.
     if (p.material === "hdf" && p.role === "body" && isBoard(q) && q.role === "body" && m?.backType === "groove" && depth <= (m.grooveDepth ?? 8) + 0.5) return true;
     // Штанга — в своих фланцах; фланец — на стойке.

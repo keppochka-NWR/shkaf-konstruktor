@@ -452,7 +452,7 @@ export function Scene(p: Props) {
           );
           const preview=state.drawerPreview;
           // ящики кухни Axis PRO: «открыть» выдвигает короб с фасадом на 3/4 длины (направляющие остаются)
-          if(active&&state.openDoors&&part.id.startsWith('kd:')&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd){const travel=kd.len*.75;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}}
+          if(active&&state.openDoors&&part.id.startsWith('kd:')&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd){const travel=kd.len*.9;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}}
           if(active&&preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')&&!part.id.includes(':slide:')){
             const section=m.sections.find(s=>s.id===preview.sid);if(section){const travel=drawerConfig(m,section,preview.index).length*.8;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}
           }

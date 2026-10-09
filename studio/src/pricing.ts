@@ -92,7 +92,7 @@ export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'
 export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
   if(/^(hinge|push-latch|lift-mechanism)/.test(id))return 'hinges';
-  if(/^(slide:|mesh:|pantograph|pullout)/.test(id))return 'slides';
+  if(/^(slide:|mesh:|pantograph|pullout|axis-pro)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
   if(id.startsWith('legs'))return 'legs';
   if(/^(confirmat|eccentric|shelf-holder|kit$|screw)/.test(id))return 'fasteners';
@@ -143,7 +143,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(!d.external)d.edge.forEach((edge,k)=>{const length=(k<2?d.width:d.length)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===0.5)edge05+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
-      if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e4)/100,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
+      if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       if(d.role==='door'&&d.id!=='slope-filler'){
         // Число петель — фактические петли сцены (как в 3D и присадке); без них (подъёмный, скос) — по правилу.
         const placedHinges=allParts.filter(p=>p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')).length;

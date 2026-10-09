@@ -8,7 +8,7 @@ import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions } from "./collisions";
-import { axisLayout, refitKDrawers, axisLabel, axisFits, AXIS_HEIGHTS } from "./kitchenDrawers";
+import { axisLayout, refitKDrawers, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
 import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, legModules, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
@@ -237,9 +237,9 @@ function CabinetPanel(props: KitchenPanelProps) {
       {[...m.kdrawers].map((d, i) => ({ d, i })).reverse().map(({ d, i }) => <div key={i} className="kitchen-rail">
         <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(d)} · направляющая на {d.runnerY} от пола модуля</p>
         {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={700} step={0.5} change={(v) => modify((n) => { const r = n.kdrawers!.map((k) => k.y1 - k.y0); r[r.length - 1] = Math.max(100, r[r.length - 1] + r[i] - v); r[i] = v; n.kdrawers = axisLayout(n, r.length, r); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
-        <div className="kitchen-chips" role="group" aria-label={`Царга ящика ${i + 1}`}>{AXIS_HEIGHTS.map((h) => <button key={h} type="button" aria-pressed={d.h === h} disabled={d.h !== h && !axisFits(m, { ...d, h, backH: undefined })} title={!axisFits(m, { ...d, h, backH: undefined }) ? "Не входит: короб ближе 21,5 мм к верху фасада или 5 мм к царгам корпуса" : undefined} onClick={() => modify((n) => { n.kdrawers![i] = { ...n.kdrawers![i], h }; delete n.kdrawers![i].backH; })}>H-{h}</button>)}</div>
+        <div className="kitchen-chips" role="group" aria-label={`Царга ящика ${i + 1}`}>{AXIS_HEIGHTS.map((h) => <button key={h} type="button" aria-pressed={d.h === h} disabled={d.h !== h && (!axisFits(m, { ...d, h, backH: undefined }) || !axisAvailable({ ...d, h }))} title={!axisFits(m, { ...d, h, backH: undefined }) ? "Не входит: короб ближе 21,5 мм к верху фасада или 5 мм к царгам корпуса" : undefined} onClick={() => modify((n) => { n.kdrawers![i] = { ...n.kdrawers![i], h }; delete n.kdrawers![i].backH; })}>H-{h}</button>)}</div>
       </div>)}
-      <label className="hardware-field">Цвет Axis PRO<select aria-label="Цвет Axis PRO" value={m.kdrawers[0].color ?? "white"} onChange={(e) => modify((n) => { n.kdrawers = n.kdrawers!.map((k) => { const c = { ...k }; if (e.target.value === "anthracite") c.color = "anthracite"; else delete c.color; return c; }); })}><option value="white">Белый</option><option value="anthracite">Антрацит</option></select></label>
+      <label className="hardware-field">Цвет Axis PRO<select aria-label="Цвет Axis PRO" value={m.kdrawers[0].color ?? "white"} onChange={(e) => modify((n) => { n.kdrawers = n.kdrawers!.map((k) => { const c = { ...k }; if (e.target.value === "anthracite") c.color = "anthracite"; else delete c.color; return c; }); })}><option value="white">Белый</option><option value="anthracite" disabled={!m.kdrawers.every((k) => axisAvailable({ ...k, color: "anthracite" }))}>Антрацит{m.kdrawers.every((k) => axisAvailable({ ...k, color: "anthracite" })) ? "" : " — нет моделей на эти размеры"}</option></select></label>
       <p className="field-note">Как в проектах Базиса цеха: дно и задняя стенка ЛДСП 16, царги металлические, направляющие на боковинах (саморезы 3×3, фиксаторы D5), держатели фасада AB/CD. Высота корпуса или глубина меняются — ящики пересчитываются.</p>
     </Group>}
 

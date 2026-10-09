@@ -170,6 +170,14 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
     const want: Record<string, number> = {}; for (const e of rp.edges) if (e.thick > 0) want[e.side] = e.thick;
     const have = edgeByDir(sp), keys = new Set([...Object.keys(want), ...Object.keys(have)]);
     const diff = [...keys].filter((k) => Math.abs((want[k] ?? 0) - (have[k] ?? 0)) > 0.01);
+    // длина кромки по стороне: у Базиса кромка — отрезками контура; сумма меньше стороны — вырез (Gola и т. п.), которого нет у прямоугольника студии
+    const AXI: Record<string, number> = { x: 0, y: 1, z: 2 }, t = sp.size.indexOf(Math.min(...sp.size));
+    for (const k of Object.keys(want)) {
+      const lens = (rp.edges as { side: string; thick: number; len?: number }[]).filter((e) => e.side === k && e.thick > 0 && e.len !== undefined).map((e) => e.len!);
+      if (!lens.length) continue;
+      const along = [0, 1, 2].find((i) => i !== t && i !== AXI[k[1]])!, sum = lens.reduce((s, v) => s + v, 0);
+      if (Math.abs(sum - sp.size[along]) > 1) edgeCheck.bad.push(`${pr.ref.name}: кромка ${k} у Базиса ${r1(sum)} мм (${lens.map(r1).join(" + ")}), у студии ${r1(sp.size[along])} — фигурный контур (вырез), в студии прямоугольник`);
+    }
     if (diff.length) edgeCheck.bad.push(`${pr.ref.name}: ${diff.map((k) => `${k} Базис ${want[k] ?? 0} / студия ${have[k] ?? 0}`).join(", ")}`);
   }
   // пазы (кроме паза под задник): у Базиса — по панелям эталона (проходы слиты), у студии — детали groove:*
