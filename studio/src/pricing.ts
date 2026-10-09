@@ -109,7 +109,7 @@ export function hardwareKind(id:string):HardwareKind{
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
   if(id.startsWith('legs'))return 'legs';
-  if(/^(confirmat|eccentric|shelf-holder|kit$|screw)/.test(id))return 'fasteners';
+  if(/^(confirmat|eccentric|shelf-holder|rafix|kit$|screw)/.test(id))return 'fasteners';
   if(/^(rod|flange)/.test(id))return 'rods';
   if(id.startsWith('kupe-'))return 'kupe';
   return 'other';
@@ -238,6 +238,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
     if(!kitchen&&!bz)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
     if(bz)addItems(a.module.bazisItems);
+    // рафиксы жёстких полок кухни Базиса (n3-tall) — той же строкой фурнитуры Базиса, что у сырых модулей (bazis:рафикс:…, n3-kitchens2)
+    if(fc.rafix)add('bazis:рафикс:Полкодержатель стяжка РАФИКС','Полкодержатель стяжка РАФИКС',fc.rafix,'шт',null,BZ);
     if(a.module.kitchen){
       // Кухня: опоры и клипсы — по фактическим деталям сцены (kitchenLegs), как в спецификациях Базиса цеха.
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;
@@ -268,7 +270,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.id.startsWith('gola:')&&!(bz&&rowGola))add(`gola-${d.id.split(':')[1]}`,`Профиль Gola ${d.id.split(':')[1]==='L'?'L (верхний)':'C (средний)'}, алюминий`,d.length/1000,'м',null,'Профиль-ручка Gola по Базису; цена не найдена — уточнить');
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
-      if(d.role==='door'&&d.id!=='slope-filler'&&a.module.kitchen?.hinges!==false){ // кухня из Базиса без петель — петель нет и в смете
+      // кухня из Базиса без петель (kitchen.hinges:false, n3-base) или фасад без петель (фасад холодильника на двери техники,
+      // sections.hingeless, n3-tall) — петель и толкателя в смете нет, как в Базисе
+      if(d.role==='door'&&d.id!=='slope-filler'&&a.module.kitchen?.hinges!==false&&!d.hingeless){
         // Число петель — фактические петли сцены (как в 3D и присадке); без них (подъёмный, скос) — по правилу.
         const placedHinges=allParts.filter(p=>p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')).length;
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);

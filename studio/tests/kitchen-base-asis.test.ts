@@ -127,9 +127,12 @@ test('фасад без петель — только если студия ст
   for(const [k,key] of [['k20','m09'],['k32','m04'],['k23','m15'],['k23','m16'],['k20','m02']]){
     const {m,n}=extraFacades(k,key);
     assert.equal(n,0,`${k} ${key}: лишних фасадов нет`);
-    assert.notEqual(m.kitchen?.hinges,false,`${k} ${key}: флаг «без петель» не ставится`);
-    assert.equal(m.doors,false,`${k} ${key}: распашных нет`);
-    assert.equal(partCollisions(parts(m),m).filter(c=>c.names.some(n=>/Фасад распашной/.test(n))).length,0,`${k} ${key}: распашного фасада нет — и пересечений с ним нет`);
+    // k23 m15/m16 (пенал с нишей под технику): распознаватель пенала (n3-tall) строит те же фасады, что в Базисе (два ряда, ниша,
+    // фасады без петель) — тогда «без петель» законно; остальные — фасадов по-прежнему нет
+    const same=k==='k23';
+    if(same){assert.equal(m.doors,true,`${k} ${key}: фасады пенала как в Базисе`);assert.ok(m.sections[0].doorNiche!==undefined&&m.sections[0].hingeless?.length,`${k} ${key}: ниша и фасады без петель`);}
+    else{assert.notEqual(m.kitchen?.hinges,false,`${k} ${key}: флаг «без петель» не ставится`);assert.equal(m.doors,false,`${k} ${key}: распашных нет`);}
+    assert.equal(partCollisions(parts(m),m).filter(c=>c.names.some(n=>/Фасад распашной/.test(n))).length,0,`${k} ${key}: ${same?'пересечений с фасадами нет':'распашного фасада нет — и пересечений с ним нет'}`);
   }
   // k32 m04: ЛДСП корпуса «4-ФП» — не фасад, ошибки «Фасад шире 700» больше нет
   assert.ok(!validate(extraFacades('k32','m04').m).some(e=>/Фасад шире/.test(e)));

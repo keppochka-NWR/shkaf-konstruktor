@@ -7,6 +7,7 @@
 import type { Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
+import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
@@ -77,12 +78,41 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   sideDown?: { side: "left" | "right"; y0: number };
   /** false — у петель нет наколок D3×3 под планку, только чашка Ø35 (26 модулей 11 кухонь Базиса). */
   plateHoles?: false;
-  /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2). */
+  /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2; n3-base).
+   *  faceBottom у корпуса без опор — низ фасадов от пола, мм, как в Базисе (над нишей под техникой — от дна; n3-tall). */
   faceTop?: number; faceBottom?: number;
   /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 модуля 13 кухонь Базиса; k32 m06: 2 и 4 при 1,5). */
   backGaps?: { bottom: number; top: number };
   /** Эксцентрик дна сверлится снизу (бочонок в нижней пласти): 56 из 380 эксцентриков дна Базиса, флаг — на 12 модулях 10 кухонь. */
-  eccBelow?: true };
+  eccBelow?: true;
+  /** Рафиксы жёстких полок по сетке Базиса (kitchenRafix.ts); без поля — жёсткие полки на конфирматах/эксцентриках, как у шкафов. */
+  rafix?: KitchenRafix;
+  /** Точек крепежа на стык дна/крыши со стойкой (2 или 3); без поля — по правилу kitchenJointPoints. */
+  jointPoints?: 2 | 3;
+  /** Жёсткие полки (номера секции 1), у которых в Базисе нет крепежа к стойкам: студия его не добавляет. */
+  bareShelves?: number[];
+  /** Низ корпуса приподнят без опор, а панели под дном (цоколя — детали, закрывающей низ) в Базисе нет: открытая ниша под техникой
+   *  или зазор. Студия не рисует цоколь под дном (правило шкафов «низ без ножек — цоколь» к такой кухне не применяется). */
+  bareBottom?: true;
+  /** Дно/крыша, у которых в Базисе нет крепежа к стойкам (ни конфирмата, ни эксцентрика, ни шканта): студия его не добавляет. */
+  bareJoints?: ("bottom" | "top")[];
+  /** Крепёж стыков со стойками по сетке Базиса, если она не как у модуля (отступы от заднего/переднего торца, штук на сторону):
+   *  ключ — bottom, top или shelf:N (жёсткая полка секции 1). Пример: k23 — у крыши 104,5/64,5, у дна 64,5/64,5. */
+  joints?: Record<string, RafixGrid> };
+
+/** Своя сетка крепежа стыка горизонтали (bottom/top/жёсткая полка) кухни Базиса; undefined — по общему правилу. */
+export function kitchenJointGrid(m: Module, hid: string): RafixGrid | undefined {
+  const j = m.kitchen?.joints; if (!j) return undefined;
+  const key = hid === "bottom" || hid === "top" ? hid : hid.includes(":shelf:") && hid.startsWith(m.sections[0]?.id + ":") ? "shelf:" + hid.split(":shelf:")[1] : undefined;
+  return key ? j[key] : undefined;
+}
+
+/** Крепёж стыка дна/крыши кухни со стойкой: 3 точки (третья посередине глубины) у корпусов глубже 600 мм — 21 из 25 глубоких
+ *  модулей Базиса с крепежом; до 600 — 2 точки (523 из 528). Свой счёт модуля (распознан из Базиса) — kitchen.jointPoints. */
+export function kitchenJointPoints(m: Module): 2 | 3 {
+  if (!m.kitchen) return 2;
+  return m.kitchen.jointPoints ?? (m.depth > 600 ? 3 : 2);
+}
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 

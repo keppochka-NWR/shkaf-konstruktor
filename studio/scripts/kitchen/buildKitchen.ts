@@ -65,7 +65,9 @@ export function markBazis(m: Module, ref: RefModule): Module {
   const runner = (n: string) => (sys.has("indigo") && /indigo/i.test(n)) || (sys.has("modern-slide") && /modern slide/i.test(n)) || (sys.has("start-sc") && /старт|start/i.test(n)) || (sys.has("versalite-h45") && /versalite/i.test(n));
   const items = bazisItems(normalizeRefHardware(ref.hardware), (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || runner(h.name) || (!!m.kitchenLift && /PD-G-N02/i.test(h.name)) || (!!m.gola && /gola/i.test(h.name))
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
-    || (/заглушк/i.test(h.name) && /навес/i.test(h.name)));
+    || (/заглушк/i.test(h.name) && /навес/i.test(h.name))
+    // рафиксы жёстких полок строит параметрика (kitchen.rafix, n3-tall) — строкой по деталям сцены, не второй раз по Базису
+    || (!!m.kitchen?.rafix && /рафикс/i.test(h.name)));
   const names = bazisNames(ref.hardware);
   return { ...m, bazis: true, ...(items.length ? { bazisItems: items } : {}), ...(Object.keys(names).length ? { bazisNames: names } : {}) };
 }

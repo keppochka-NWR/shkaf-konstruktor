@@ -24,8 +24,9 @@ export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[
  *  spin — отличается только вращением вокруг своей оси у осесимметричной (конфирмат, шкант…); noQuat — у ближайшей детали студии
  *  поворот не задан кватернионом (n3-additions).
  *  meshDiff / quatDiff — сколько деталей Базиса с сеткой стоят у ближайшей детали студии с другой сеткой / другим поворотом
- *  (одинаковая геометрия бывает под разными хэшами — зеркальные модули; n3-runners). */
-export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number }; meshDiff?: number; quatDiff?: number };
+ *  (одинаковая геометрия бывает под разными хэшами — зеркальные модули; n3-runners).
+ *  dups — дубли Базиса (та же деталь в той же точке), в ref не входят (n3-tall). */
+export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number }; meshDiff?: number; quatDiff?: number; dups?: number };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; /** Фигурные детали Базиса (контур с вырезами), которые в студии прямоугольник или с другим вырезом. */ contours?: string[]; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
@@ -87,6 +88,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("fast:")) return "конфирмат"; // евровинт 6×50 тоже: у эталона его «прочее» переносит в конфирматы normalizeRefHardware (n3-wall)
   if (id.startsWith("ecc:") && !id.endsWith(":pin")) return "эксцентрик";
   if (id.startsWith("dowel:")) return "шкант";
+  if (id.startsWith("rafix:") && !id.endsWith(":pin")) return "рафикс";
   if (id.startsWith("shp:")) return "полкодержатель";
   if (id.includes(":slide:")) return "направляющая";
   if (id.startsWith("kd:") && id.includes(":sys:")) return "ящик-система";
@@ -175,8 +177,12 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   for (const pr of [...pairs]) if (pr.delta > 50) { pairs.splice(pairs.indexOf(pr), 1); missing.push(pr.ref); extra.push(pr.studio); }
   const cats = new Set<string>([...ref.hardware.map((h) => h.category), ...ps.map(studioCategory).filter((x): x is string => !!x)]);
   const hardware: HardwareRow[] = [...cats].map((category) => {
-    const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
-    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
+    // дубль Базиса — опора в той же точке и с тем же поворотом дважды (k16: две опоры в одной точке); считаем один раз, как дубли отверстий.
+    // Только опоры: у направляющих Firmax две точки в одном месте — это пара направляющих, не дубль (n3-tall).
+    const seen = new Set<string>(), allRef = ref.hardware.filter((h) => h.category === category);
+    const uniq = category !== "опора" ? allRef : allRef.filter((h) => { const k = `${h.name}|${h.pos.map(r1).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    const rp = uniq.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
+    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp), ...(allRef.length > uniq.length ? { dups: allRef.length - uniq.length } : {}) };
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
     const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
@@ -225,7 +231,7 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     return row;
   });
   const tolOf = (p: PanelPair) => (p.ref.cls.startsWith("hdf") ? Math.max(1, tol) : tol);
-  const hwOk = hardware.every((h) => h.ref === h.studio && !h.note && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант"].includes(h.category) ? 2 : 1)));
+  const hwOk = hardware.every((h) => h.ref === h.studio && !h.note && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант", "рафикс"].includes(h.category) ? 2 : 1)));
   // Отверстия: на каждой сопоставленной паре панелей — тот же диаметр, глубина, направление; точка входа ±0,5 мм.
   let holeCheck: HoleCheck | undefined;
   if (ref.holes) {
@@ -337,7 +343,7 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   md += "\n| фурнитура | Базис | студия | max Δ точки, мм | поворот (справочно) | сетка / поворот ≠ (справочно) |\n|---|---|---|---|---|---|\n";
   const rot = (r: HardwareRow["rot"]) => !r ? "—" : `сверено ${r.checked}${r.bad ? `, **другой ${r.bad}**` : ""}${r.spin ? `, вокруг своей оси ${r.spin}` : ""}${r.noQuat ? `, без кватерниона ${r.noQuat}` : ""}`;
-  for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} | ${rot(h.rot)} | ${h.meshDiff || h.quatDiff ? `${h.meshDiff ?? 0} / ${h.quatDiff ?? 0}` : "—"} |\n`;
+  for (const h of c.hardware) md += `| ${h.category}${h.dups ? ` (+${h.dups} дубль Базиса)` : ""} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} | ${rot(h.rot)} | ${h.meshDiff || h.quatDiff ? `${h.meshDiff ?? 0} / ${h.quatDiff ?? 0}` : "—"} |\n`;
   if (c.contours?.length) md += `\n**Контур:** ${c.contours.join("; ")}\n`;
   if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
