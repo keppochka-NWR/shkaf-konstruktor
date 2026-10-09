@@ -40,7 +40,8 @@ export function rowFront(p: EtPanel): boolean {
 }
 
 /** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][] } {
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
-  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}) };
+  // mat — материал Базиса: столешница и элементы помещения (бетон, стена) узнаются по нему, а не по толщине
+  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}), ...(p.mat ? { mat: String(p.mat).slice(0, 60) } : {}) };
 }

@@ -5,7 +5,7 @@ import {isWardrobeImportFile} from '../scripts/wardrobe/files';
 import {packRows,splitWide} from '../scripts/wardrobe/pack';
 import {profileSection,snapToHolders} from '../scripts/wardrobe/profiles';
 import {initialModule,section,id,parts,type Module} from '../src/model';
-import {rawParts,parseRaw,type RawSpec} from '../src/rawModule';
+import {rawParts,parseRaw,rodCylinder,type RawSpec} from '../src/rawModule';
 import {rawCheck,RAW_JOINT} from '../src/collisions';
 import {collisionWarnings} from '../src/roomWarnings';
 import {newProject} from '../src/project';
@@ -79,6 +79,15 @@ test('профили: рисуется только труба Ø25 (сечен�
   assert.equal(rods.length,2);
   assert.deepEqual(rods[0].size,[1000,25,25]);assert.equal(rods[0].rotY,undefined);
   assert.equal(rods[1].rotY,90);
+  // вертикальная труба (125/126/216: «Труба 25мм» 1849 мм вверх) — цилиндр Ø25 высотой 1849 по Y, не диск Ø1849 (критик 09.10.2026)
+  const v=rawParts(rawM({panels:[],hardware:[],profiles:[{name:'Труба 25мм',len:1849,d:25,pos:[300,1000,280],dir:[0,1,0]}]})).find(p=>p.role==='rod')!;
+  assert.deepEqual(v.size,[25,1849,25],'габарит в модуле — вертикальный');
+  assert.equal(v.rotZ,undefined);
+  assert.deepEqual(rodCylinder(v.size),{r:12.5,h:1849,vertical:true});
+  // студийные штанга и фланец — как раньше: вдоль X, радиус по size[1]
+  assert.deepEqual(rodCylinder([968,25,25]),{r:12.5,h:968,vertical:false});
+  assert.deepEqual(rodCylinder([5,48,48]),{r:24,h:5,vertical:false});
+  assert.deepEqual(rodCylinder(rods[0].size),{r:12.5,h:1000,vertical:false});
 });
 
 test('051: модель из 19 мелких сборок верхнего уровня на 33 м делится по сборкам и раскладывается в помещение',()=>{

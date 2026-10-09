@@ -71,11 +71,35 @@ test('«Ряд»: столешница 38 мм — строка worktop (пог.
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'ряд — не корпус');
   assert.equal(nest(p).length,0);
   assert.equal(e.lines.find(l=>l.id==='worktop-cut:sink'),undefined,'нет мойки — нет выреза');
-  // k25: НММойка и НМВарка — вырезы под мойку и варку в столешнице ряда
+  // k25: НММойка и НМВарка рядом — вырезов в смете всё равно нет: в эталоне Базиса их нет (правило Макса, критик 09.10.2026)
   const sink={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НММойка'},hob={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НМВарка'};
   const e2=estimate(project(rawModule(raw,2600,900,910),sink,hob));
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink')?.quantity,1);
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob')?.quantity,1);
+  assert.equal(e2.lines.find(l=>l.id.startsWith('worktop-cut')),undefined,'сырой ряд Базиса — без выдуманных вырезов');
+});
+
+test('столешница сырого модуля — только названная так в Базисе; толщина и наклон не признак (критик 09.10.2026)',()=>{
+  // наклонная обувная полка ЛДСП 16 (повёрнута на 30°): габарит в модуле 158 мм, по своим осям 16 — в раскрой ЛДСП, не «столешница 158 мм»
+  const shoe:RawSpec={panels:[{name:'Полка обувная',kind:'ldsp',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,800,158,270],obb:{size:[800,16,300],ry:0,rz:0}},
+    // боковина ЛДСП 32 мм (так в Базисе) — в раскрой листом 32 мм, не столешница
+    {name:'Вертикальная',kind:'ldsp',mat:'ЛДСП Lamarty Орех Лугано (16мм)',box:[0,0,0,32,2500,560]},
+    // «ПФ» из материала «Столешница» — настоящая столешница Базиса
+    {name:'ПФ',kind:'other',mat:'Столешница',box:[0,900,0,1200,938,600]},
+    // стена помещения в модели Базиса — не мебель: ни раскроя, ни строки сметы
+    {name:'Стена',kind:'other',mat:'Стена',box:[0,0,600,3000,2700,700]}],hardware:[]};
+  const p=project(rawModule(shoe,3000,2700,700)),e=estimate(p),plan=nest(p);
+  const wt=e.lines.filter(l=>l.id.startsWith('worktop:'));
+  assert.deepEqual(wt.map(l=>[l.id,l.quantity]),[['worktop:raw:38',1.2]]);
+  const cut=plan.flatMap(s=>s.items.map(it=>JSON.stringify(it)));
+  assert.ok(cut.some(s=>s.includes('Полка обувная')),'наклонная полка — в раскрое ЛДСП');
+  assert.ok(cut.some(s=>s.includes('Вертикальная')),'ЛДСП 32 мм — в раскрое');
+  assert.ok(plan.some(s=>s.thickness===32),'лист 32 мм — как в Базисе');
+  assert.ok(!cut.some(s=>s.includes('Стена')||s.includes('"ПФ"')),'стена и столешница — не раскрой ЛДСП');
+  const ps=rawParts(rawModule(shoe,3000,2700,700));
+  assert.equal(ps.find(q=>q.name==='Полка обувная')!.thickness,16);
+  assert.ok(ps.find(q=>q.name==='Стена')!.external);
+  // старый проект без материала: деталь 38 мм без «столешн» в имени — не столешница
+  const old=estimate(project(rawModule({panels:[{name:'Горизонтальная',kind:'other',box:[0,0,0,1200,38,600]}],hardware:[]})));
+  assert.equal(old.lines.find(l=>l.id.startsWith('worktop:')),undefined);
 });
 
 test('дробная толщина Базиса (16.0999999) — целые мм, без отдельного листа 16.1',()=>{
@@ -106,6 +130,6 @@ test('«Ряд»: нет предупреждения «корпус не во �
 });
 
 test('импорт: фасадный материал и кромка Базиса переносятся в сырой модуль',()=>{
-  assert.deepEqual(panelExtras({name:'Цоколь',mat:'Фасадный мат-л 1',box:[0,0,0,1,1,1],edges:[{thick:1,len:597.5},{thick:0.4,len:0}]}),{fm:true,edges:[[1,597.5]]});
-  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,1,1,1]}),{});
+  assert.deepEqual(panelExtras({name:'Цоколь',mat:'Фасадный мат-л 1',box:[0,0,0,1,1,1],edges:[{thick:1,len:597.5},{thick:0.4,len:0}]}),{fm:true,edges:[[1,597.5]],mat:'Фасадный мат-л 1'});
+  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,1,1,1]}),{mat:'ЛДСП Lamarty Белый (16мм)'});
 });

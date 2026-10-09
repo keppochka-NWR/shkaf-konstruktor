@@ -50,6 +50,7 @@ import { catalog } from "./catalog";
 import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
 import {wallPanels} from './roomGeometry';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
+import {rodCylinder} from './rawModule';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
   isoDirection?: [number, number];
@@ -339,12 +340,7 @@ export function Scene(p: Props) {
             : part.role === "fastener"
               ? (() => { const f = fastenerAxis(part.size); return new THREE.CylinderGeometry(f.r, f.r, f.h, 20); })()
               : (part.role === "rod" || part.role === "flange")
-              ? new THREE.CylinderGeometry(
-                  part.size[1] / 2,
-                  part.size[1] / 2,
-                  part.size[0],
-                  24,
-                )
+              ? (() => { const c = rodCylinder(part.size); return new THREE.CylinderGeometry(c.r, c.r, c.h, 24); })()
               : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
@@ -437,7 +433,8 @@ export function Scene(p: Props) {
             const axis=part.size.indexOf(part.thickness),edgemat=new THREE.MeshStandardMaterial({color:part.edgeColor,roughness:.7});
             mesh.material=Array.from({length:6},(_,face)=>Math.floor(face/2)===axis?mat:edgemat);
           }
-          if (part.role === "rod" || part.role === "flange") mesh.rotation.z = Math.PI / 2;
+          // цилиндр three.js стоит по Y: студийная штанга/фланец ложится вдоль X, вертикальная труба Базиса остаётся по Y
+          if ((part.role === "rod" || part.role === "flange") && !rodCylinder(part.size).vertical) mesh.rotation.z = Math.PI / 2;
           // Металл без карты окружения при metalness ~0.85 выглядит чёрным: держим умеренный металл и светлый никель.
           if (roundAlongZ) { mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.includes(":latch:") ? 0x55595d : 0xdfe3e6); mat.metalness = 0.35; mat.roughness = 0.35; }
           else if (part.role === "hinge") { mat.color.set(0xd2d7db); mat.metalness = 0.35; mat.roughness = 0.38; }

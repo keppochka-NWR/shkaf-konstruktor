@@ -10,6 +10,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
+import {rawSize,rawIsWorktop,rawIsRoom} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -139,18 +140,15 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('hinge'+((a.module.hingeBrand??'gtv')==='gtv'?'':':'+a.module.hingeBrand),hb.soft.label,c.hinges??0,'шт',hb.soft.price,hb.soft.source);
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       add('axis-pro:raw','Ящик Axis PRO (по проекту Базиса) — комплект фурнитуры',c.drawers??0,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
-      // вырезы в столешнице ряда: в эталоне Базиса их нет — по модулям «Мойка»/«Варка» в проекте (как у параметрической столешницы)
-      if(r.row&&r.panels.some(q=>/столешн/i.test(q.name)||[q.box[3]-q.box[0],q.box[4]-q.box[1],q.box[5]-q.box[2]].sort((x,y)=>x-y)[0]>=26)){
-        const nm=(re:RegExp)=>p.modules.filter(b=>b!==a&&re.test(b.module.name)&&!b.module.worktop).length;
-        add('worktop-cut:sink','Вырез под мойку',nm(/мойк/i),'шт',null,'Цена работы не найдена; по модулю «Мойка» проекта');
-        add('worktop-cut:hob','Вырез под варочную панель',nm(/варк/i),'шт',null,'Цена работы не найдена; по модулю «Варка» проекта');
-      }
+      // Вырезов под мойку/варку в столешнице сырого ряда нет: в эталоне Базиса их нет (правило Макса — не добавлять того, чего нет в Базисе).
       for(const p of r.panels){
+        // размеры — по осям детали (у повёрнутой — obb), не габарит в модуле: наклонная полка 16 мм не «столешница 158 мм»
+        const s=rawSize(p).sort((x,y)=>y-x);
         // стекло Базиса (полки ВМКП) — как стеклянная полка студии, м²
-        if(p.kind==='glass'){const g=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);add('glass-shelf','Стеклянная полка · обработка и держатели',g[0]*g[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
-        if(p.kind==='hdf'||p.kind==='mirror')continue;
-        const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
-        if(/столешн/i.test(p.name)||s[2]>=26){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
+        if(p.kind==='glass'){add('glass-shelf','Стеклянная полка · обработка и держатели',s[0]*s[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
+        if(p.kind==='hdf'||p.kind==='mirror'||rawIsRoom(p))continue;
+        // столешница — только названная так в Базисе (имя/материал), толщина не признак: ЛДСП 25/32 мм идёт в раскрой своей толщиной
+        if(rawIsWorktop(p)){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
         for(const [t,len] of p.edges??[]){const L=len/1000;if(t===2)edge2+=L;else if(t===1)edge1+=L;else if(t===0.8)edge08+=L;else if(t===0.5)edge05+=L;else edge04+=L;}
         if(s[1]<70)small++;
