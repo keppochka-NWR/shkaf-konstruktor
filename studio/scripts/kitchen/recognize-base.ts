@@ -67,6 +67,15 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
       notes.push("фасады без петель не повторяются студией один в один (ряды, ниша, ширины) — не ставим, чтобы не добавить лишнего");
     }
   }
+  // нижний (и мойка): створка студии без своего фасада Базиса — лишняя (правило Макса 2). Створки делятся поровну, одну убрать нельзя,
+  // поэтому распашных фасадов не ставим вовсе: лучше «нет», чем лишнее. Модуль и так FAIL и в кухню идёт сырым (детали Базиса)
+  if (k.role === "base" && m.doors && !m.kdrawers?.length) {
+    const n = strayDoors(ref, m);
+    if (n > 0) {
+      m.doors = false; delete k.hinges; delete k.faceTop; delete k.faceBottom;
+      notes.push(`${n} створк${n === 1 ? "а" : "и"} студии без фасада Базиса — распашных не ставим, чтобы не добавить лишнего`);
+    }
+  }
   return notes;
 }
 
@@ -89,27 +98,40 @@ export function plainFronts(ref: RefModule): boolean {
 /** Студия строит те же фасады, что в Базисе: столько же, и каждый лежит внутри своего фасада Базиса (допуск tol мм — меньше зазора
  *  между фасадами 3), занимая не меньше половины его площади. */
 export function sameFronts(ref: RefModule, m: Module, tol = 1.5): boolean {
+  const r = matchFronts(ref, m, (p) => p.role === "door" || p.id.endsWith(":facade"), tol);
+  return !!r && r.fronts > 0 && r.studio === r.fronts && r.matched === r.fronts;
+}
+
+/** Распашные створки студии, которым нет своего фасада Базиса (та же проверка «внутри и не меньше половины площади», что в sameFronts,
+ *  один к одному). Угловая мойка с фальшем, не распознанная (k05 m05, k10 m13 …), три фасада в ряду (k22 m08), ниша — студия делит
+ *  ширину на свои створки, и одна из них ложится на фальш/планку или на пустое место: такой створки в Базисе нет. */
+export function strayDoors(ref: RefModule, m: Module, tol = 1.5): number {
+  const r = matchFronts(ref, m, (p) => p.role === "door", tol);
+  return r ? r.studio - r.matched : 0;
+}
+
+/** Сопоставление фасадов студии (отбор pick) с фасадами Базиса перед корпусом: сколько фасадов Базиса, сколько у студии, сколько пар. */
+function matchFronts(ref: RefModule, m: Module, pick: (p: ReturnType<typeof parts>[number]) => boolean, tol: number) {
   const { fronts } = frontPanels(ref);
   const box = (p: { position: number[]; size: number[] }) => [0, 1, 2].map((i) => p.position[i] - p.size[i] / 2).concat([0, 1, 2].map((i) => p.position[i] + p.size[i] / 2));
   let ps: ReturnType<typeof parts>;
-  try { ps = parts(m); } catch { return false; }
+  try { ps = parts(m); } catch { return undefined; }
   // общая точка отсчёта — минимальный угол панелей, как в compare.ts (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0)
   const sp = ps.filter((p) => (p.material === "board" || p.material === "hdf" || p.material === "glass") && (!p.external || p.role === "door" || p.id.endsWith(":facade"))).map(box);
   const rp = ref.panels.filter((p) => ["ldsp", "hdf", "mdf", "glass", "other"].includes(p.kind)).map((p) => p.box);
-  if (!sp.length || !rp.length) return false;
+  if (!sp.length || !rp.length) return undefined;
   const oS = [0, 1, 2].map((i) => Math.min(...sp.map((b) => b[i]))), oR = [0, 1, 2].map((i) => Math.min(...rp.map((b) => b[i])));
-  const st = ps.filter((p) => p.role === "door" || p.id.endsWith(":facade")).map(box);
-  if (!fronts.length || st.length !== fronts.length) return false;
+  const st = ps.filter(pick).map(box);
   const used = new Set<number>();
-  return fronts.every((f) => {
+  for (const f of fronts) {
     const fb = f.box.map((v, q) => v - oR[q % 3]), area = (b: number[]) => (b[3] - b[0]) * (b[4] - b[1]);
     // фасад студии не выходит за фасад Базиса (лишней площади нет) и занимает хотя бы половину его — тот же фасад, пусть и с Δ
     // (k27 m17: дверь Базиса до пола, у студии от 30 — Δ видна в сверке); вышел за него — другая деталь (k03 m01: 717 вместо 117)
     const j = st.findIndex((s0, i) => { if (used.has(i)) return false; const s = s0.map((v, q) => v - oS[q % 3]);
       return s.every((v, q) => (q < 3 ? v >= fb[q] - tol : v <= fb[q] + tol)) && area(s) >= area(fb) / 2; });
     if (j >= 0) used.add(j);
-    return j >= 0;
-  });
+  }
+  return { fronts: fronts.length, studio: st.length, matched: used.size };
 }
 
 /** Одна боковина опущена ниже другой (срабатывает на 8 модулях 5 кухонь): до низа дна (k22 m01) или до пола (k06 m01, k15 m06),

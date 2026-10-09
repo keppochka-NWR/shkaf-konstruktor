@@ -4,7 +4,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,initialModule,parseModule,faceFillerEdge} from '../src/model';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {faceGapsTB} from '../scripts/kitchen/recognize-base';
+import {faceGapsTB,strayDoors} from '../scripts/kitchen/recognize-base';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {railFastened} from '../scripts/kitchen/recognize-common';
@@ -158,6 +158,16 @@ test('стяжка с крепежом — только если в её пол�
   assert.equal(railFastened(band,[conf(0),conf(600)],0,600),true,'конфирматы через боковины корпуса — крепёж есть');
   assert.equal(railFastened(band,[{...conf(0),pos:[0,500,28]}],0,600),false,'крепёж вне полосы — без крепежа');
   if(has('k21')){const m=moduleFromEtalon(load('k21','m02')).module;assert.ok((m.rails??[]).some(r=>r.fasten===false),'k21 m02: передняя стяжка без крепежа — как в Базисе');}
+});
+
+test('лишние створки: нижний и мойка без своего фасада Базиса — распашных нет (угловые мойки k05 m05, k10 m13, k22 m06); распознанные — с дверьми (k25 m02, k14 m09)',{skip:!has('k05')||!has('k10')||!has('k22')||!has('k25')||!has('k14')},()=>{
+  for(const [k,key] of [['k05','m05'],['k10','m13'],['k22','m06']] as const){
+    const ref=load(k,key),m=moduleFromEtalon(ref).module,c=compareModule(ref,m);
+    assert.equal(m.doors,false,`${k} ${key}: створок студии без фасада Базиса не ставим`);
+    assert.ok(!c.extra.some(x=>/Фасад распашной/.test(x.name)),`${k} ${key}: лишних створок нет`);
+    assert.equal(strayDoors(ref,m),0);
+  }
+  for(const [k,key] of [['k25','m02'],['k14','m09']] as const){const ref=load(k,key),m=moduleFromEtalon(ref).module;assert.equal(m.doors,true,`${k} ${key}`);assert.equal(strayDoors(ref,m),0);}
 });
 
 test('стенки коробов ящиков (k01 m05, k02 m04, k07 m02, k11 m03, k04 m02): студия не сверлит отверстий, которых нет в Базисе, сверх прежнего',{skip:!has('k01')||!has('k02')||!has('k07')||!has('k11')||!has('k04')},()=>{
