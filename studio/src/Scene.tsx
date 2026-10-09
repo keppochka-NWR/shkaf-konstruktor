@@ -4,6 +4,7 @@ import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planConto
 import {aluProfile,aluInsert} from './alu';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
+import {procModel} from './hardwareModels';
 // Цвета профиля рамочного фасада для сцены.
 const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
@@ -297,7 +298,8 @@ export function Scene(p: Props) {
           active = placed.id === focus.id;
         const origin=localToRoom(placed,0,0),center=moduleCenter(focus);
         moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();
-        for (const part of parts(m)) {
+        const mParts = parts(m), byId = new Map(mParts.map((q) => [q.id, q]));
+        for (const part of mParts) {
           // «Скрыть фасады» убирает двери (распашные и полотна купе) с петлями и их ручками; ящики остаются с фасадами — это наполнение.
           if(state.hideFacades&&(part.role==='door'||part.role==='hinge'||(part.role==='handle'&&!part.id.includes(':drawer:'))||(part.id.endsWith(':facade')&&!part.id.includes(':drawer:'))))continue;
           const isMetal = part.material === "metal",
@@ -336,7 +338,14 @@ export function Scene(p: Props) {
           const isAlu = part.material === "alu" && !!m.alu;
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           const roundAlongZ = part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
-          const geometry = roundAlongZ
+          // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант —
+          // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)
+          const proc = procModel(part, { left: part.position[0] < m.width / 2, headSign: (() => {
+            if (!part.id.startsWith("ecc:") || !part.id.endsWith(":pin")) return undefined;
+            const cam = byId.get(part.id.slice(0, -4)), ax = part.size.indexOf(Math.max(...part.size));
+            return cam && cam.position[ax] < part.position[ax] ? -1 : 1;
+          })() });
+          const geometry = proc ? new THREE.BoxGeometry(...part.size) : roundAlongZ
             ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
             : part.role === "fastener"
               ? (() => { const f = fastenerAxis(part.size); return new THREE.CylinderGeometry(f.r, f.r, f.h, 20); })()
@@ -367,7 +376,7 @@ export function Scene(p: Props) {
           }
           const isMeshItem = part.id.endsWith(":mesh");
           const isHandle = part.role === "handle";
-          if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
+          if (isMeshItem || (isHandle&&!part.simpleHandle) || proc) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
           if (part.model?.node) {
             // узел Базиса без сетки («Петля под фальшпанель»): не рисуем — коробка выше прозрачная, остаётся только для выбора
@@ -409,6 +418,10 @@ export function Scene(p: Props) {
               holder.add(model); needsRender = true;
             }).catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
           }
+          if (proc) {
+            proc.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active }; });
+            mesh.add(proc);
+          }
           if (isMeshItem) {
             // Сетка Лемана: невидимый бокс для выбора + проволочная модель внутри.
             const section = m.sections.find((s) => s.id === part.sectionId);
@@ -437,11 +450,11 @@ export function Scene(p: Props) {
             mesh.material=Array.from({length:6},(_,face)=>Math.floor(face/2)===axis?mat:edgemat);
           }
           // цилиндр three.js стоит по Y: студийная штанга/фланец ложится вдоль X, вертикальная труба Базиса остаётся по Y
-          if ((part.role === "rod" || part.role === "flange") && !rodCylinder(part.size).vertical) mesh.rotation.z = Math.PI / 2;
+          if ((part.role === "rod" || part.role === "flange") && !proc && !rodCylinder(part.size).vertical) mesh.rotation.z = Math.PI / 2;
           // Металл без карты окружения при metalness ~0.85 выглядит чёрным: держим умеренный металл и светлый никель.
           if (roundAlongZ) { mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.includes(":latch:") ? 0x55595d : 0xdfe3e6); mat.metalness = 0.35; mat.roughness = 0.35; }
           else if (part.role === "hinge") { mat.color.set(0xd2d7db); mat.metalness = 0.35; mat.roughness = 0.38; }
-          if (part.role === "fastener" && !part.model?.native) { const ax = fastenerAxis(part.size).axis; if (ax === 0) mesh.rotation.z = Math.PI / 2; else if (ax === 2) mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : part.id.startsWith("shp:") ? 0xc9ced2 : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
+          if (part.role === "fastener" && !part.model?.native && !proc) { const ax = fastenerAxis(part.size).axis; if (ax === 0) mesh.rotation.z = Math.PI / 2; else if (ax === 2) mesh.rotation.x = Math.PI / 2; mat.color.set(part.id.startsWith("ecc:") ? 0x8d949a : part.id.startsWith("shp:") ? 0xc9ced2 : 0x2f3235); mat.metalness = 0.6; mat.roughness = 0.5; }
           if (part.rotZ) mesh.rotation.z = (part.rotZ * Math.PI) / 180;
           const rotY = part.rotY ? (part.rotY * Math.PI) / 180 : 0;
           if (rotY) mesh.rotation.y = rotY;

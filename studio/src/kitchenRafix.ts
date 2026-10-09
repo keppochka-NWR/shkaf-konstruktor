@@ -13,6 +13,8 @@ export type RafixGrid = { rear: number; front: number; n: number };
 export type KitchenRafix = RafixGrid & { per?: Record<string, RafixGrid>; /** крыша на рафиксах (k20 m09), а не на конфирматах */ top?: RafixGrid };
 
 export const RAFIX = { bodyD: 20, bodyDepth: 13, bodyInset: 9.5, pinD: 5, pinDepth: 13, pinUp: 8 } as const;
+/** Модели рафикса (GLB в мм, локальные оси = оси экземпляра Базиса: x — от стойки в полку, y — вниз, 0 — нижняя пласть полки у торца). */
+export const RAFIX_MODEL = { housing: "hardware/n5/rafix_housing.glb", pin: "hardware/n5/rafix_pin.glb" } as const;
 
 /** Сетка рафиксов полки: своя (per) или общая модуля; undefined — у модуля рафиксов нет. */
 export function rafixGrid(m: Module, shelfIndex: number): RafixGrid | undefined {
@@ -40,10 +42,14 @@ export function rafixSide(add: Add, out: Part[], hp: Part, side: "left" | "right
     add(id, "Рафикс · полкодержатель-стяжка", [RAFIX.bodyD, RAFIX.bodyDepth, RAFIX.bodyD], [edgeX + dir * RAFIX.bodyInset, yb + RAFIX.bodyDepth / 2, z], RAFIX.bodyD, RAFIX.bodyD, RAFIX.bodyDepth, "fastener", hp.sectionId, "metal");
     out.at(-1)!.anchor = [edgeX, yb, z];
     // поворот как в Базисе (по базе у полок: у левой стойки [0,1,0,0] — 103 из 105, у правой [0,0,0,1] — 101 из 103; n4-tall)
-    out.at(-1)!.quat = side === "left" ? [0, 1, 0, 0] : [0, 0, 0, 1];
+    const quat: [number, number, number, number] = side === "left" ? [0, 1, 0, 0] : [0, 0, 0, 1];
+    out.at(-1)!.quat = quat;
+    // 3D (n5-hardware3d): у Базиса сетки нет — своя модель (scripts/blender_n5_hardware.py, мм) в точке и повороте Базиса
+    out.at(-1)!.model = { file: RAFIX_MODEL.housing, length: "x", native: true, origin: [edgeX, yb, z], quat };
     // шток: от корпуса в стойку на глубину отверстия
     const x0 = edgeX - dir * RAFIX.pinDepth, x1 = edgeX + dir * RAFIX.bodyInset, L = Math.abs(x1 - x0);
     add(`${id}:pin`, "Рафикс · шток", [L, RAFIX.pinD, RAFIX.pinD], [(x0 + x1) / 2, yb + RAFIX.pinUp, z], L, RAFIX.pinD, RAFIX.pinD, "fastener", hp.sectionId, "metal");
+    out.at(-1)!.model = { file: RAFIX_MODEL.pin, length: "x", native: true, origin: [edgeX, yb, z], quat };
   });
 }
 
