@@ -3,7 +3,7 @@
 // Модуль — крупная сборка верхнего уровня; если таких меньше двух — вся модель одним модулем. Панели — боксы в осях модуля
 // (оси Базиса = оси студии, минимальный угол модуля — начало координат). Помещение — по габариту модели.
 // npx tsx scripts/wardrobe/import.ts [N]  → public/local-projects/wardrobe-NNN.json + wardrobes.json (только локально, не публикуется)
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, statSync } from "node:fs";
 import { initialModule, id, section, type Module } from "../../src/model";
 import { newProject, parseProject, projectErrors, type PlacedModule } from "../../src/project";
 import type { RawSpec, RawPanel } from "../../src/rawModule";
@@ -16,7 +16,7 @@ const look = { decor: "Белый", facadeDecor: "Белый" };
 
 type Trans = { x: number; y: number; z: number; q: [number, number, number, number] };
 type CPanel = { name: string; mat: string; thick: number; bbox?: number[]; trans: Trans };
-type CAsm = { name: string; trans?: Trans; panels?: CPanel[]; subs?: CAsm[] };
+type CAsm = { name: string; trans?: Trans; panels?: CPanel[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
 type M3 = number[]; // 3×3 по строкам
 type Xf = { R: M3; t: [number, number, number] };
@@ -48,7 +48,24 @@ function panelBox(p: CPanel, parent: Xf): [number, number, number, number, numbe
   return [mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]];
 }
 type WPanel = { name: string; kind: string; box: number[]; facade: boolean };
-function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean) {
+type WHw = { name: string; category: string; mesh: string; pos: number[]; quat: [number, number, number, number] };
+// фурнитура: имя Базиса -> сетка библиотеки (hardware-lib/manifest.json), показываем только видимую (без крепежа)
+const LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib", PUB = "public/models/hardware/bazis";
+const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль", "штанга", "штангодержатель"]);
+const manifest = JSON.parse(readFileSync(`${LIB}/manifest.json`, "utf8")) as Record<string, { names?: string[]; category?: string; glb?: string }>;
+const byName = new Map<string, { mesh: string; category: string }>();
+for (const [k, v] of Object.entries(manifest)) if (k !== "_about" && v.glb) for (const nm of v.names ?? []) if (!byName.has(nm)) byName.set(nm, { mesh: k, category: v.category ?? "" });
+const meshes = new Set<string>();
+const mat2q = (R: M3): [number, number, number, number] => {
+  const [a, b, c, d, e, f, g, h, i] = R, tr = a + e + i;
+  let w, x, y, z;
+  if (tr > 0) { const s = Math.sqrt(tr + 1) * 2; w = s / 4; x = (h - f) / s; y = (c - g) / s; z = (d - b) / s; }
+  else if (a > e && a > i) { const s = Math.sqrt(1 + a - e - i) * 2; w = (h - f) / s; x = s / 4; y = (b + d) / s; z = (c + g) / s; }
+  else if (e > i) { const s = Math.sqrt(1 + e - a - i) * 2; w = (c - g) / s; x = (b + d) / s; y = s / 4; z = (f + h) / s; }
+  else { const s = Math.sqrt(1 + i - a - e) * 2; w = (d - b) / s; x = (c + g) / s; y = (f + h) / s; z = s / 4; }
+  return [w, x, y, z].map((v) => Math.round(v * 1e6) / 1e6) as [number, number, number, number];
+};
+function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean, hw: WHw[]) {
   const me = compose(parent, xf(a.trans));
   const fc = facadeCtx || FACADE_RX.test(a.name || "");
   for (const p of a.panels ?? []) {
@@ -57,7 +74,14 @@ function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean) {
     const kind = matKind(p.mat);
     out.push({ name: (p.name || "деталь").slice(0, 60), kind, box, facade: kind !== "hdf" && (fc || FACADE_RX.test(p.name || "")) });
   }
-  for (const s of a.subs ?? []) collect(s, me, out, fc);
+  // цепочка сверления: сборка -> chain[0] -> chain[1] ... (проверено по евровинтам: попадают в стык панелей)
+  for (const dr of a.drills ?? []) {
+    const lib = byName.get(dr.name); if (!lib || !SHOW.has(lib.category)) continue;
+    let w = me; for (const c of dr.chain ?? []) w = compose(w, xf(c));
+    if (!w.t.every(Number.isFinite)) continue;
+    hw.push({ name: dr.name.slice(0, 80), category: lib.category, mesh: lib.mesh, pos: w.t, quat: mat2q(w.R) });
+  }
+  for (const s of a.subs ?? []) collect(s, me, out, fc, hw);
 }
 
 const all: IndexRow[] = JSON.parse(readFileSync(`${CORPUS}/index.json`, "utf8"));
@@ -65,7 +89,7 @@ const seen = new Set<string>();
 const picked = all.filter((r) => !(r.kitchen_hits?.length) && !r.kitchen_name && r.panels > 0 && !seen.has(r.sha) && seen.add(r.sha)).slice(0, LIMIT);
 console.log(`отобрано моделей: ${picked.length} (из ${all.length})`);
 if (!existsSync(OUTDIR)) mkdirSync(OUTDIR, { recursive: true });
-const index: { id: string; title: string; modules: number; panels: number; size: string; error?: string }[] = [];
+const index: { id: string; title: string; modules: number; panels: number; hardware?: number; size: string; error?: string }[] = [];
 
 picked.forEach((row, n) => {
   const wid = String(n + 1).padStart(3, "0");
@@ -74,7 +98,8 @@ picked.forEach((row, n) => {
   try {
     const doc = JSON.parse(readFileSync(row.json, "utf8")) as { assemblies?: CAsm[] };
     const top = doc.assemblies ?? [];
-    const groups: { name: string; panels: WPanel[] }[] = top.map((a) => { const out: WPanel[] = []; collect(a, xf(), out, false); return { name: a.name || "Сборка", panels: out }; });
+    const hwAll: WHw[] = [];
+    const groups: { name: string; panels: WPanel[] }[] = top.map((a) => { const out: WPanel[] = []; collect(a, xf(), out, false, hwAll); return { name: a.name || "Сборка", panels: out }; });
     const big = groups.filter((g) => g.panels.length >= 8);
     let mods: { name: string; panels: WPanel[] }[];
     if (big.length >= 2) {
@@ -88,10 +113,18 @@ picked.forEach((row, n) => {
     const allP = mods.flatMap((m) => m.panels);
     const g0 = [0, 1, 2].map((i) => Math.min(...allP.map((p) => p.box[i]))), g1 = [3, 4, 5].map((i) => Math.max(...allP.map((p) => p.box[i])));
     const M = 300; // отступ от стен помещения
-    const placed: PlacedModule[] = mods.map((g) => {
-      const o = [0, 1, 2].map((i) => Math.min(...g.panels.map((p) => p.box[i]))), e = [3, 4, 5].map((i) => Math.max(...g.panels.map((p) => p.box[i])));
+    const ext6 = mods.map((g) => [0, 1, 2].map((i) => Math.min(...g.panels.map((p) => p.box[i]))).concat([3, 4, 5].map((i) => Math.max(...g.panels.map((p) => p.box[i])))));
+    // фурнитура -> модуль, в чей габарит попадает (иначе ближайший); за пределами габарита модели на 300+ — отбрасываем
+    const gap = (b: number[], q: number[]) => Math.hypot(...[0, 1, 2].map((i) => Math.max(0, b[i] - q[i], q[i] - b[i + 3])));
+    const hwOf = mods.map(() => [] as WHw[]);
+    for (const h of hwAll) { const ds = ext6.map((b) => gap(b, h.pos)); const k = ds.indexOf(Math.min(...ds)); if (ds[k] <= 300) hwOf[k].push(h); }
+    let hwCount = 0;
+    const placed: PlacedModule[] = mods.map((g, gi) => {
+      const o = ext6[gi].slice(0, 3), e = ext6[gi].slice(3);
       const panels: RawPanel[] = g.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map((v, i) => Math.max(0, r1(v - o[i % 3]))) as RawPanel["box"], ...(p.facade ? { facade: true } : {}) }));
-      const raw: RawSpec = { panels, hardware: [], source: "bazis-corpus" };
+      const hardware = hwOf[gi].slice(0, 400).map((h) => { meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh, pos: h.pos.map((v, i) => r1(v - o[i])) as [number, number, number], quat: h.quat }; });
+      hwCount += hardware.length;
+      const raw: RawSpec = { panels, hardware, source: "bazis-corpus" };
       const m: Module = { ...initialModule(), name: g.name.slice(0, 60), width: Math.max(1, r1(e[0] - o[0])), height: Math.max(1, r1(e[1] - o[1])), depth: Math.max(1, r1(e[2] - o[2])), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, raw };
       return { id: id(), x: r1(o[0] - g0[0] + M), y: r1(o[1] - g0[1]), z: r1(o[2] - g0[2] + M), rotation: 0, module: m };
     });
@@ -105,7 +138,7 @@ picked.forEach((row, n) => {
     const txt = JSON.stringify(p);
     if (txt.length > 2000000) error = "файл больше 2 МБ";
     writeFileSync(`${OUTDIR}/wardrobe-${wid}.json`, txt);
-    index.push({ id: wid, title, modules: placed.length, panels: allP.length, size: ext.map((v) => Math.round(v)).join("×"), ...(error ? { error } : {}) });
+    index.push({ id: wid, title, modules: placed.length, panels: allP.length, hardware: hwCount, size: ext.map((v) => Math.round(v)).join("×"), ...(error ? { error } : {}) });
     if (error) console.log(`${wid} ${title}: ${error}`);
   } catch (x) {
     index.push({ id: wid, title, modules: 0, panels: 0, size: "", error: (x as Error).message });
@@ -114,4 +147,7 @@ picked.forEach((row, n) => {
 });
 writeFileSync(`${OUTDIR}/wardrobes.json`, JSON.stringify(index, null, 1));
 const bad = index.filter((x) => x.error).length;
+let copied = 0, bytes = 0;
+for (const mid of meshes) { const src = `${LIB}/glb/${mid}.glb`, dst = `${PUB}/${mid}.glb`; if (existsSync(src) && !existsSync(dst)) { copyFileSync(src, dst); copied++; bytes += statSync(src).size; } }
+console.log(`сетки фурнитуры: нужно ${meshes.size}, скопировано новых ${copied} (${Math.round(bytes / 1024)} КБ); фурнитуры всего ${index.reduce((s, x) => s + (x.hardware ?? 0), 0)}`);
 console.log(`готово: ${index.length} проектов, с ошибками ${bad}; модулей ${index.reduce((s, x) => s + x.modules, 0)}, панелей ${index.reduce((s, x) => s + x.panels, 0)}`);
