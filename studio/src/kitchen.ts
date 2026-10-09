@@ -170,6 +170,23 @@ export function golaSides(m: Module, out: Part[]) {
       top += c.depth - c.r;
     }
     p.edgeLen = { "+z": Math.round(front * 10) / 10, "+y": Math.round(top * 10) / 10 };
+    // проверка пересечений — по телу боковины без вырезов: задняя часть во всю высоту + передняя полоса между вырезами
+    const y0 = p.position[1] - H / 2, z0 = p.position[2] - D / 2, zf = z0 + D, dz = Math.max(...ok.map((c) => c.depth)), x = p.position[0];
+    const col: NonNullable<Part["collide"]> = [{ size: [p.size[0], H, D - dz], position: [x, y0 + H / 2, z0 + (D - dz) / 2] }];
+    const spans = ok.map((c) => [y0 + H - c.top1, y0 + H - c.top0]).sort((a, b) => a[0] - b[0]);
+    let ya = y0;
+    for (const [s0, s1] of [...spans, [y0 + H, y0 + H]]) { if (s0 - ya > 0.01) col.push({ size: [p.size[0], s0 - ya, dz], position: [x, (ya + s0) / 2, zf - dz / 2] }); ya = Math.max(ya, s1); }
+    p.collide = col;
+  }
+  // профили Gola (алюминий, вне раскроя): верхний вырез — профиль L, средний — C; по всей ширине модуля в вырезах боковин
+  const sideL = out.find((p) => p.id === "left" && p.golaCuts);
+  if (!sideL) return;
+  const H = sideL.size[1], y0 = sideL.position[1] - H / 2, zf = sideL.position[2] + sideL.size[2] / 2;
+  for (const [k, c] of sideL.golaCuts!.entries()) {
+    const L = c.top0 <= 0.01, h = c.top1 - c.top0, yc = y0 + H - (c.top0 + c.top1) / 2;
+    out.push({ id: `gola:${L ? "L" : "C"}:${k}`, name: `Профиль Gola ${L ? "L (верхний)" : "C (средний)"}, алюминий`, size: [m.width, h, c.depth], position: [m.width / 2, yc, zf - c.depth / 2],
+      length: m.width, width: h, thickness: c.depth, material: "alu", decor: "", role: "fastener", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true,
+      look: { color: 0xc4c8cc, metalness: 0.85, roughness: 0.35 } });
   }
 }
 

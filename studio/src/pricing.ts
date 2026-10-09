@@ -144,6 +144,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(!d.external)d.edge.forEach((edge,k)=>{const length=edgeLength(d,k)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===0.5)edge05+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
         if(Math.min(d.length,d.width)<70)small++;
       }
+      if(d.id.startsWith('gola:'))add(`gola-${d.id.split(':')[1]}`,`Профиль Gola ${d.id.split(':')[1]==='L'?'L (верхний)':'C (средний)'}, алюминий`,d.length/1000,'м',null,'Профиль-ручка Gola по Базису; цена не найдена — уточнить');
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       if(d.role==='door'&&d.id!=='slope-filler'){
         // Число петель — фактические петли сцены (как в 3D и присадке); без них (подъёмный, скос) — по правилу.
