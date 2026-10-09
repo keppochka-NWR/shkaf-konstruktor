@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts} from '../src/model';
+import {validate,parts,initialModule,parseModule} from '../src/model';
+import {kitchenBase} from '../src/kitchen';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 
@@ -29,4 +30,18 @@ test('пенал под духовку k23 m15: ниша 385 мм между ф�
   const {module:m,unsupported}=moduleFromEtalon(load('k23','m15'));
   assert.equal(m.sections[0].doorSplit,undefined);
   assert.ok(unsupported.some(u=>u.startsWith('ниша под технику между фасадами 385.5')),unsupported.join('; '));
+});
+
+test('пенал: hingeYUp — свои высоты петель у верхнего ряда (doorSplit), нижний ряд — по правилу; parseModule сохраняет поля',()=>{
+  const m=kitchenBase(initialModule(),600);m.kitchen={...m.kitchen!,role:'tall'};m.height=2100;
+  const s=m.sections[0];s.shelves=[];s.doorSplit=1000;
+  const up=parts(m).find(p=>p.id===`${s.id}:door:2`)!;assert.ok(up,'верхний фасад');
+  const dh=up.size[1];s.hingeYUp=[100,400,700,dh-100];s.hingeYUpFor=dh;
+  assert.deepEqual(validate(m),[]);
+  const ps=parts(m),cups=(k:number)=>ps.filter(p=>p.id.startsWith(`${s.id}:hingecup:${k}:`));
+  const y0=up.position[1]-dh/2;
+  assert.deepEqual(cups(2).map(p=>Math.round(p.position[1]-y0)).sort((a,b)=>a-b),[100,400,700,Math.round(dh-100)],'верхний ряд — по hingeYUp');
+  assert.ok(cups(0).length>=2&&cups(0).length<=3,'нижний ряд — по правилу кухни');
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back.sections[0].hingeYUp,s.hingeYUp);assert.equal(back.sections[0].hingeYUpFor,dh);
 });

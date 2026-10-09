@@ -120,6 +120,10 @@ export type Section = {
   hingeY?: number[];
   /** Высота фасада, при которой записаны hingeY (при другой высоте высоты пересчитываются). */
   hingeYFor?: number;
+  /** Кухня (пенал с doorSplit): высоты петель верхнего ряда фасадов от низа фасада; без поля верхний ряд берёт hingeY. */
+  hingeYUp?: number[];
+  /** Высота верхнего фасада, при которой записаны hingeYUp. */
+  hingeYUpFor?: number;
   hingeSide?: "left" | "right";
   removedDoors?: number[];
   doorGap?: number;
@@ -1060,7 +1064,8 @@ function hardwareParts(m: Module, out: Part[]) {
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
     const sec = m.sections.find((s) => s.id === door.sectionId);
-    (sec?.hingeY?.length ? scaleHingeY(sec.hingeY, sec.hingeYFor ?? dh, dh) : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
+    const upRow = !!m.kitchen && sec?.doorSplit !== undefined && Number(door.id.split(":door:")[1]) >= 2 && !!sec.hingeYUp?.length; // верхний ряд пенала — свои высоты
+    (upRow ? scaleHingeY(sec!.hingeYUp!, sec!.hingeYUpFor ?? dh, dh) : sec?.hingeY?.length ? scaleHingeY(sec.hingeY, sec.hingeYFor ?? dh, dh) : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
       for (const s of hingeShifts()) {
@@ -1561,6 +1566,8 @@ export function parseModule(input: unknown): Module {
       ...(s.doorHinges===undefined?{}:{doorHinges:Array.isArray(s.doorHinges)?[...s.doorHinges]:s.doorHinges}),
       ...(s.hingeY===undefined?{}:{hingeY:Array.isArray(s.hingeY)?s.hingeY.map(Number).filter(Number.isFinite):[]}),
       ...(s.hingeYFor===undefined?{}:{hingeYFor:Number(s.hingeYFor)}),
+      ...(s.hingeYUp===undefined?{}:{hingeYUp:Array.isArray(s.hingeYUp)?s.hingeYUp.map(Number).filter(Number.isFinite):[]}),
+      ...(s.hingeYUpFor===undefined?{}:{hingeYUpFor:Number(s.hingeYUpFor)}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),
