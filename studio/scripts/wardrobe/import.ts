@@ -15,6 +15,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 const look = { decor: "Белый", facadeDecor: "Белый" };
 
 import { xf, compose, chainXf, panelBox, type Trans, type CPanel, type M3, type Xf } from "./xform";
+import { packRows } from "./pack";
 type CAsm = { name: string; trans?: Trans; panels?: CPanel[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
 
@@ -65,7 +66,7 @@ const seen = new Set<string>();
 const picked = all.filter((r) => !(r.kitchen_hits?.length) && !r.kitchen_name && r.panels > 0 && !seen.has(r.sha) && seen.add(r.sha)).slice(0, LIMIT);
 console.log(`отобрано моделей: ${picked.length} (из ${all.length})`);
 if (!existsSync(OUTDIR)) mkdirSync(OUTDIR, { recursive: true });
-const index: { id: string; title: string; modules: number; panels: number; hardware?: number; size: string; error?: string }[] = [];
+const index: { id: string; title: string; modules: number; panels: number; hardware?: number; size: string; packed?: boolean; error?: string }[] = [];
 
 picked.forEach((row, n) => {
   const wid = String(n + 1).padStart(3, "0");
@@ -107,6 +108,12 @@ picked.forEach((row, n) => {
     const p = newProject({ ...initialModule(), sections: [section()] });
     const ext = [g1[0] - g0[0], g1[1] - g0[1], g1[2] - g0[2]];
     p.room = { ...p.room, width: Math.ceil(ext[0] + 2 * M), depth: Math.ceil(ext[2] + 2 * M), height: Math.max(2700, Math.ceil(ext[1] + 100)), openings: [] };
+    // сцена из нескольких изделий больше 20 м — раскладываем модули рядами (модули целиком, геометрия внутри не меняется)
+    let packed = false;
+    if (placed.length > 1 && (p.room.width > 20000 || p.room.depth > 20000 || p.room.height > 20000)) {
+      const pk = packRows(placed.map((pm) => ({ w: pm.module.width, h: pm.module.height, d: pm.module.depth, y: pm.y })));
+      if (pk) { placed.forEach((pm, i) => { pm.x = pk.pos[i].x; pm.y = pk.pos[i].y; pm.z = pk.pos[i].z; }); p.room = { ...p.room, ...pk.room }; packed = true; }
+    }
     p.modules = placed;
     const errs = projectErrors(p);
     let error: string | undefined = errs.length ? errs.slice(0, 2).join(" | ") : undefined;
@@ -114,7 +121,7 @@ picked.forEach((row, n) => {
     const txt = JSON.stringify(p);
     if (txt.length > 2000000) error = "файл больше 2 МБ";
     writeFileSync(`${OUTDIR}/wardrobe-${wid}.json`, txt);
-    index.push({ id: wid, title, modules: placed.length, panels: allP.length, hardware: hwCount, size: ext.map((v) => Math.round(v)).join("×"), ...(error ? { error } : {}) });
+    index.push({ id: wid, title, modules: placed.length, panels: allP.length, hardware: hwCount, size: ext.map((v) => Math.round(v)).join("×"), ...(packed ? { packed: true } : {}), ...(error ? { error } : {}) });
     if (error) console.log(`${wid} ${title}: ${error}`);
   } catch (x) {
     index.push({ id: wid, title, modules: 0, panels: 0, size: "", error: (x as Error).message });

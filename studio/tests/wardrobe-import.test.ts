@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {xf,compose,panelBox,type Trans,type CPanel} from '../scripts/wardrobe/xform';
 import {isWardrobeImportFile} from '../scripts/wardrobe/files';
+import {packRows} from '../scripts/wardrobe/pack';
+
+test('сцена Базиса шире 20 м раскладывается рядами в помещение до 20 000 мм, модули не пересекаются',()=>{
+  // как 025: 7 изделий, в сцене 23 м по ширине; одно висит на y=3500 (выше 2600 — на пол)
+  const items=[{w:2400,h:2500,d:616,y:0},{w:3800,h:416,d:420,y:0},{w:1200,h:600,d:450,y:200},{w:2502,h:180,d:420,y:281},{w:1830,h:2402,d:616,y:60},{w:9503,h:2500,d:585,y:3500},{w:2435,h:2500,d:638,y:0}];
+  const r=packRows(items)!;
+  assert.ok(r);
+  assert.ok(r.room.width<=20000&&r.room.depth<=20000&&r.room.height<=20000,JSON.stringify(r.room));
+  r.pos.forEach((p,i)=>{const it=items[i];assert.ok(p.x>=0&&p.z>=0&&p.x+it.w<=r.room.width&&p.z+it.d<=r.room.depth&&p.y+it.h<=r.room.height,`модуль ${i}`);});
+  assert.equal(r.pos[2].y,200); assert.equal(r.pos[5].y,0);
+  for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+    const a=r.pos[i],b=r.pos[j],A=items[i],B=items[j];
+    const sep=a.x+A.w<=b.x||b.x+B.w<=a.x||a.z+A.d<=b.z||b.z+B.d<=a.z;
+    assert.ok(sep,`модули ${i} и ${j} пересекаются`);
+  }
+  // один модуль шире лимита (как 051, 33 м) — не раскладываем
+  assert.equal(packRows([{w:33428,h:2665,d:16,y:0}]),null);
+});
 
 test('parts-snapshot исключает только импорт wardrobe-NNN.json и wardrobes.json',()=>{
   for(const f of ['wardrobe-001.json','wardrobe-271.json','wardrobes.json']) assert.ok(isWardrobeImportFile(f),f);
