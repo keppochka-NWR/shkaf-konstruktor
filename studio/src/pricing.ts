@@ -93,6 +93,8 @@ export const PULLOUT_PRICE=500;
 export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'kupe'|'other';
 export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
+  // прочая фурнитура сырого модуля кухни Базиса (bazis:<ед>:<наименование>) — по наименованию Базиса
+  if(id.startsWith('bazis:')){const n=id.toLowerCase();if(/ручк/.test(n))return 'handles';if(/направл|ящик|царг|indigo|firmax|старт|start|atira/.test(n))return 'slides';if(/газ|шток|подъ/.test(n))return 'hinges';if(/рафикс|шуруп|саморез|гвозд|винт|заглушк/.test(n))return 'fasteners';return 'other';}
   if(/^(hinge|push-latch|lift-mechanism|kitchen-lift)/.test(id))return 'hinges';
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
@@ -141,6 +143,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('hinge'+((a.module.hingeBrand??'gtv')==='gtv'?'':':'+a.module.hingeBrand),hb.soft.label,c.hinges??0,'шт',hb.soft.price,hb.soft.source);
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       add('axis-pro:raw','Ящик Axis PRO (по проекту Базиса) — комплект фурнитуры',c.drawers??0,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+      // прочая фурнитура Базиса (rawItems): рафиксы, заглушки навесов, ящики Indigo/Firmax/СТАРТ, газлифты PD-G, профили, шурупы — как в спецификации Базиса
+      if(kr)for(const [k,n] of Object.entries(r.items??{})){const i=k.indexOf(':'),unit=k.slice(0,i),name=k.slice(i+1);add('bazis:'+k,name+(unit==='компл'?' — комплект':'')+' (как в проекте Базиса)',n,unit,null,src+'; закупочная цена не найдена');}
       // Вырезов под мойку/варку в столешницах Базиса нет (в эталоне у столешниц только завалы и пазы) — по правилу Макса
       // 09.10.2026 студия их не добавляет (раньше домысливала по именам модулей «Мойка»/«Варка»).
       for(const p of r.panels){
@@ -219,7 +223,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
-      if(d.id.startsWith('kitchen-hanger:'))add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');
+      // навес кухни — с заглушкой ABS, как в Базисе (34 кухни: у параметрических модулей навесов 34, заглушек 34)
+      if(d.id.startsWith('kitchen-hanger:')){add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS',1,'шт',null,'Как в проектах Базиса: заглушка на каждый навес; цена не найдена');}
       if(d.material==='glass'&&d.role==='shelf')add('glass-shelf','Стеклянная полка · обработка и держатели',d.size[0]*d.size[2]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');
       if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){

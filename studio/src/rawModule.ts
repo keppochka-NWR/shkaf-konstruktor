@@ -13,8 +13,9 @@ export type RawHardware = { name: string; category: string; mesh?: string | null
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
 export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccentrics", "shelfHolders", "dowels", "hinges", "lifts", "drawers"] as const;
-/** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса». */
-export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean };
+/** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса».
+ *  items — прочая фурнитура Базиса, которой нет в counts (rawItems): ключ «компл:<комплект>», «шт:<наименование>», «м:<профиль>». */
+export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean; items?: Record<string, number> };
 
 /** Сырой модуль КУХНИ Базиса (scripts/kitchen/import.ts): у него есть счётчики фурнитуры Базиса (counts) или это объект «Ряд».
  *  Шкафы из корпуса Базиса (scripts/wardrobe/import.ts, source 'bazis-corpus', без counts) — не кухня: смета и фальши по правилам шкафов. */
@@ -49,6 +50,34 @@ export function rawCounts(hw: { name: string; category: string }[]): RawCounts {
   if (mech) c.lifts = Math.ceil(mech / 2);
   if (holders) c.drawers = Math.ceil(holders / 2);
   return c as RawCounts;
+}
+
+/** Прочая фурнитура Базиса для сметы сырого модуля кухни — всё, что не посчитано в rawCounts и не служебное (отверстия, зазоры):
+ *  рафиксы, заглушки навесов, ящики и направляющие не Axis PRO (Indigo, Firmax, СТАРТ…), газлифты PD-G, сушки, профили, шурупы.
+ *  Считаются физические объекты модели Базиса по наименованию (шт; профиль с длиной — м): в списке эталона деталь вложенного комплекта
+ *  повторяется на каждом уровне комплекта — один объект = одно наименование в одной точке (pos). Комплекты Базиса строкой не идут
+ *  (вложенность в эталоне не сохранена, «комплект» дал бы двойной счёт) — кроме изделий из безымянных тел моделирования
+ *  («Тело по траектории», «Вращение», «Основа»: сушка и т.п.) — они по имени комплекта, один на kitId.
+ *  Не входят: служебные (отверстия, зазоры), категории counts, «Петля …», детали ФриФолд (lifts), Axis PRO (drawers — комплект на ящик)
+ *  и модели окружения (духовка, розетка, счётчик и т.п. — не фурнитура). */
+export function rawItems(hw: { name: string; category: string; kit?: string | null; kitId?: number | null; service?: boolean; length?: number | null; pos?: number[] }[]): Record<string, number> {
+  const COUNTED = new Set(["опора", "клипса", "навес", "конфирмат", "эксцентрик", "полкодержатель", "шкант"]);
+  const ENV = /^(духовк|розетк|сч[её]тчик|холодильник|варочн|посудомо|вытяжк|микроволн|свч|мойка\b)/i;
+  // тела моделирования Базиса без своего наименования (части модели сушки, ручки…): изделие — по имени комплекта, один на kitId
+  const BODY = /^(тело по траектории|вращение|выталкивание\s*\d*|основа)$/i;
+  const out: Record<string, number> = {}, seen = new Set<string>(), kits = new Map<string, Set<number | string>>();
+  hw.forEach((h, i) => {
+    const n = (h.name ?? "").trim(), cat = h.category;
+    if (h.service || !n || COUNTED.has(cat) || ENV.test(n)) return;
+    if ((cat === "петля" || cat === "подъёмник" || cat === "газлифт") && /^петля/i.test(n)) return;
+    if (/фрифолд|freefold|axis\s*pro/i.test(n) || /axis\s*pro/i.test(h.kit ?? "")) return;
+    if (Array.isArray(h.pos)) { const key = n + "@" + h.pos.map((v) => Math.round(Number(v) * 10) / 10).join(","); if (seen.has(key)) return; seen.add(key); }
+    if (BODY.test(n)) { if (h.kit && !ENV.test(h.kit) && !BODY.test(h.kit.trim())) { const s = kits.get(h.kit) ?? new Set(); s.add(h.kitId ?? i); kits.set(h.kit, s); } return; }
+    if (cat === "профиль" && Number(h.length) > 0) { out["м:" + n] = Math.round(((out["м:" + n] ?? 0) + Number(h.length) / 1000) * 1000) / 1000; return; }
+    out["шт:" + n] = (out["шт:" + n] ?? 0) + 1;
+  });
+  for (const [k, s] of kits) if (!out["шт:" + k]) out["компл:" + k] = s.size;
+  return out;
 }
 
 /** Толщина детали Базиса: дробные хвосты бокса (16.0999999) — целые мм, иначе раскрой заводит отдельный лист «16.1». */
@@ -109,5 +138,6 @@ export function parseRaw(x: unknown): RawSpec | undefined {
     ...(r.source ? { source: String(r.source) } : {}),
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),
     ...(r.row ? { row: true } : {}),
+    ...(r.items && typeof r.items === "object" ? { items: Object.fromEntries(Object.entries(r.items).slice(0, 300).filter(([k, v]) => /^(компл|шт|м):/.test(k) && Number.isFinite(Number(v)) && Number(v) > 0).map(([k, v]) => [k.slice(0, 200), Number(v)])) } : {}),
   };
 }

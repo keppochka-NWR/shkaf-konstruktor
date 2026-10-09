@@ -11,7 +11,7 @@ const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LP = proce
 const arg = process.argv[2] ?? "all", out = process.argv[3] || undefined;
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 // строки сметы, которым соответствует фурнитура/панели Базиса (категория эталона или деталь раскроя)
-const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|eccentric$|shelf-holder$|dowel$|kitchen-leg$|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|firmax-ldsp|gola-|facade-external$|mat:|glass-shelf$|worktop(?!-cut)|handle:)/;
+const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|eccentric$|shelf-holder$|dowel$|kitchen-leg$|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|firmax-ldsp|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
 const LABOUR = /^(work$|small$|unplaced:)/;
 const agg = new Map<string, { label: string; kitchens: Set<string>; qty: number; sum: number }>();
 const partAgg = new Map<string, { kitchens: Set<string>; n: number }>();
@@ -45,6 +45,7 @@ for (const f of files) {
       ["опоры", qty(/^kitchen-leg$/), refN((h) => h.category === "опора")],
       ["клипсы", qty(/^kitchen-clip$/), refN((h) => h.category === "клипса")],
       ["навесы", qty(/^kitchen-hanger$/), refN((h) => h.category === "навес")],
+      ["заглушки навесов", qty(/^kitchen-hanger-cap$/), refN((h) => h.category === "заглушка" && /навес/i.test(h.name))],
       ["газлифты (комплект на боковину)", qty(/^kitchen-lift:/), Math.ceil(refN((h) => h.category === "газлифт") / 2)],
       ["ручки", qty(/^handle:/), refN((h) => h.category === "ручка")],
       ["толкатели", qty(/^push-latch$/), 0],

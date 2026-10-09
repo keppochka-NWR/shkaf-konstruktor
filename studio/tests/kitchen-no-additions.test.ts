@@ -7,7 +7,8 @@ import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {newProject,parseProject,applyAutoFillers,fromBazis,type Project} from '../src/project';
 import {estimate,lineGroup} from '../src/pricing';
 import {nest} from '../src/exports';
-import {rawKitchen,type RawSpec} from '../src/rawModule';
+import {existsSync,readFileSync} from 'node:fs';
+import {rawKitchen,rawItems,type RawSpec} from '../src/rawModule';
 
 const led=(m:Module):Module=>{m.grooves=['left','right'].map(h=>({host:h,face:(h==='left'?'+':'-') as '+'|'-',along:[16,16] as [number,number],across:[100,117] as [number,number],depth:8,name:'паз под подсветку'}));return m;};
 const k25wall=()=>{const m=led(kitchenWall(initialModule(),630));m.height=930;return m;};
@@ -138,4 +139,45 @@ test('пометка «кухня из Базиса» сохраняется в 
   const p=project(kitchenBase(initialModule(),600));p.source='bazis';
   assert.equal(parseProject(JSON.parse(JSON.stringify(p))).source,'bazis');
   assert.equal(parseProject(JSON.parse(JSON.stringify(newProject()))).source,undefined);
+});
+
+test('прочая фурнитура Базиса (rawItems): рафиксы, заглушки навесов, ящики не Axis — шт по объектам модели, без двойного счёта',()=>{
+  const at=(x:number)=>[x,0,0];
+  const hw=[
+    {name:'Навес мебельный регулируемый ABS левый',category:'навес',pos:at(1)},
+    {name:'Заглушка для мебельного навеса ABS левая',category:'заглушка',kit:'Навесы мебельные (L+R) с заглушками',kitId:0,pos:at(1)},
+    {name:'Полкодержатель стяжка РАФИКС',category:'рафикс',pos:at(2)},{name:'Полкодержатель стяжка РАФИКС',category:'рафикс',pos:at(3)},
+    // вложенный комплект: тот же объект дважды (уровни комплекта) — один
+    {name:'Направляющая Indigo, L=500, левая',category:'направляющая',kit:'Комплект ящика Indigo',kitId:1,pos:at(4)},
+    {name:'Направляющая Indigo, L=500, левая',category:'направляющая',kit:'Направляющая Indigo',kitId:2,pos:at(4)},
+    {name:'3x3',category:'прочее',service:true,pos:at(5)},{name:'Духовка',category:'прочее',pos:at(6)},
+    {name:'Axis PRO Направляющая, 500',category:'направляющая',pos:at(7)},{name:'Механизм ФриФолд Шорт',category:'петля',pos:at(8)},{name:'Петля накладная',category:'петля',pos:at(9)},
+    {name:'Тело по траектории',category:'сушка',kit:'Сушка L-900',kitId:3,pos:at(10)},{name:'Вращение',category:'сушка',kit:'Сушка L-900',kitId:3,pos:at(11)},
+    {name:'Профиль1',category:'профиль',length:1324,pos:at(12)},
+  ];
+  assert.deepEqual(rawItems(hw),{'шт:Заглушка для мебельного навеса ABS левая':1,'шт:Полкодержатель стяжка РАФИКС':2,'шт:Направляющая Indigo, L=500, левая':1,'м:Профиль1':1.324,'компл:Сушка L-900':1});
+  // смета: только у сырого модуля кухни; файл проекта сохраняет items
+  const k={...rawBody(),raw:{...rawBody().raw!,items:rawItems(hw)}},p=parseProject(JSON.parse(JSON.stringify(project(k)))),e=estimate(p);
+  assert.equal(e.lines.find(l=>l.id==='bazis:шт:Полкодержатель стяжка РАФИКС')?.quantity,2);
+  assert.equal(e.lines.find(l=>l.id==='bazis:м:Профиль1')?.unit,'м');
+  assert.equal(e.lines.find(l=>l.id==='bazis:компл:Сушка L-900')?.unit,'компл');
+  assert.ok(e.lines.filter(l=>l.id.startsWith('bazis:')).every(l=>l.unitPrice===null),'цены нет — строка без суммы');
+  const w=rawWardrobe();w.raw!.items={'шт:Полкодержатель стяжка РАФИКС':2};
+  assert.ok(!estimate(project(w)).lines.some(l=>l.id.startsWith('bazis:')),'сырой шкаф Базиса — как было');
+});
+
+test('кухня: навес — с заглушкой, как в Базисе (у параметрических модулей 34 кухонь навесов 34 и заглушек 34)',()=>{
+  const e=estimate(project(kitchenWall(initialModule(),600))),h=e.lines.find(l=>l.id==='kitchen-hanger')!;
+  assert.ok(h.quantity>0);assert.equal(e.lines.find(l=>l.id==='kitchen-hanger-cap')?.quantity,h.quantity);
+  assert.ok(!ids(newProject()).includes('kitchen-hanger-cap'),'шкаф студии — без изменений');
+});
+
+const K16='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/k16.json';
+test('k16: рафиксы 54 и ящики Indigo (14 направляющих) — как в Базисе',{skip:!existsSync(K16)},()=>{
+  // позиции фурнитуры в эталоне — в осях модуля: считаем по модулям и складываем
+  const e=JSON.parse(readFileSync(K16,'utf8')),it:Record<string,number>={};
+  for(const m of e.modules as {hardware:Parameters<typeof rawItems>[0]}[])for(const [k,n] of Object.entries(rawItems(m.hardware)))it[k]=(it[k]??0)+n;
+  assert.equal(it['шт:Полкодержатель стяжка РАФИКС'],54);
+  assert.equal((it['шт:Направляющая Indigo, L=500, левая']??0)+(it['шт:Направляющая Indigo, L=500, правая']??0),14);
+  assert.equal((it['шт:Заглушка для мебельного навеса ABS левая']??0)+(it['шт:Заглушка для мебельного навеса ABS правая']??0),10);
 });
