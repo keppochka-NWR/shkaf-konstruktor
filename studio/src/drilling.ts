@@ -6,7 +6,7 @@
 //   петля накладная: чашка D35×13 в фасад (центр в 7,5 мм от внутренней плоскости стойки), планка — 2 × D3×3 в стойку (±16 от оси, 37 от фасада).
 import { parts, type Module, type Part } from "./model";
 import { qrot } from "./quat";
-import { kitchenDrawerHoles } from "./kitchenDrawers";
+import { kitchenDrawerHoles, kdConfDepth } from "./kitchenDrawers";
 import { rafixHoles } from "./kitchenRafix";
 
 export type Hole = { part: string; at: [number, number, number]; dir: [number, number, number]; d: number; depth: number; src: string };
@@ -26,11 +26,11 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
       push(p.id, h, a, 8, t1);
-      // короб ящика Firmax в Базисе — D5×37 (у k31 со своей глубиной проекта kitchen.confDepth — D5×42, как и корпус);
+      // короб ящика Firmax в Базисе — D5×37 (k31 — D5×42 по проекту: box.confDepth);
       // кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall;
       // kitchen.confDepth, n3-antresol: k11 — 37, k31 — 42);
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
-      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? m.kitchen?.confDepth ?? 37 : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
+      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм

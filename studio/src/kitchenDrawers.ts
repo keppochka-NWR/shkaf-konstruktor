@@ -22,7 +22,14 @@ export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; 
    *  67 от правой). У Firmax по умолчанию их нет. */
   confUnder?: number | number[];
   /** Саморезы 3×3 направляющей Firmax в боковину корпуса — от передней кромки короба, если не по правилу (k31: 20 и 244). */
-  screwDz?: number[] };
+  screwDz?: number[];
+  /** Глубина D5 конфирматов короба, если не 37 (Базис k31 — 42). */
+  confDepth?: number };
+/** Глубина D5 конфирмата короба ящика по id крепежа «fast:kd:<j>:…»: как в проекте (box.confDepth), иначе 37 (Базис). */
+export function kdConfDepth(m: Module, id: string): number {
+  const k = m.kdrawers?.[Number(id.split(":")[2])];
+  return (k && "box" in k ? k.box?.confDepth : undefined) ?? 37;
+}
 export type FirmaxDrawer = { system: "firmax-ldsp"; y0: number; y1: number; runnerY: number; box: FirmaxBox;
   /** Поля Axis PRO у Firmax не используются (остаются при смене системы, чтобы вернуть царгу/цвет). */
   h?: 86 | 120 | 168 | 200; len?: 300 | 400 | 450 | 500 | 550; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
@@ -558,6 +565,7 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
       if (o.confBottom !== undefined) box.confBottom = o.confBottom;
       if (o.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder; // конфирматы снизу через дно (k31)
       if (o.screwDz && o.len === len) box.screwDz = [...o.screwDz]; // саморезы направляющей не по правилу — пока длина короба та же
+      if (o.confDepth !== undefined) box.confDepth = o.confDepth;
       const same = own && Math.abs(own.box.h - h) < 0.05;
       if (own?.box.bottomUp !== undefined && own.box.bottomUp < h - FIRMAX.t - 20) box.bottomUp = own.box.bottomUp;
       const backH = h - (box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t;
@@ -1000,7 +1008,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     if (k0.system === "firmax-ldsp" || k0.system === "versalite-h45" || k0.system === "modern-slide") {
       const b = (k0.box ?? {}) as Partial<FirmaxBox>, num = (v: unknown) => (v === undefined ? undefined : Number(v));
       const box: FirmaxBox = { y: Number(b.y), h: Number(b.h), len: Number(b.len) };
-      for (const key of ["bottomUp", "gap", "front", "confBottom"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
+      for (const key of ["bottomUp", "gap", "front", "confBottom", "confDepth"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
       if (Array.isArray(b.confUnder)) box.confUnder = b.confUnder.slice(0, 6).map(Number); else if (b.confUnder !== undefined) box.confUnder = Number(b.confUnder);
       if (Array.isArray(b.screwDz)) box.screwDz = b.screwDz.slice(0, 4).map(Number);
       if (k0.system === "versalite-h45") {
