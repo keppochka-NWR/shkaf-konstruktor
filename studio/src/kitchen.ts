@@ -61,9 +61,10 @@ export const APPLIANCES: Record<ApplianceKind, { label: string; niche: [number, 
 
 /** Модели фурнитуры Базиса (TriData → GLB, studio/public/models/hardware/bazis). Заполняется по manifest.json библиотеки.
  *  quat — поворот локальных осей фурнитуры Базиса в оси модуля (w, x, y, z). */
-export const KITCHEN_MODELS: Partial<Record<"leg" | "clip" | "hanger-left" | "hanger-right" | "hanger-cap-left" | "hanger-cap-right", { file: string; mirror?: boolean }>> = {
+export const KITCHEN_MODELS: Partial<Record<"leg" | "clip" | "clip-left" | "hanger-left" | "hanger-right" | "hanger-cap-left" | "hanger-cap-right", { file: string; mirror?: boolean }>> = {
   leg: { file: "hardware/bazis/ac675db9fc57.glb" },                // Опора кухонная регулируемая H100-120, чёрная (1 197 шт. в базе)
   clip: { file: "hardware/bazis/0d12888fb9df.glb" },               // Клипса для ПВХ цоколя, чёрная (611)
+  "clip-left": { file: "hardware/bazis/7ebcad9fda10.glb" },        // … у левой опоры — зеркальная сетка Базиса
   "hanger-left": { file: "hardware/bazis/95a815598b07.glb" },      // Навес мебельный регулируемый ABS левый
   "hanger-right": { file: "hardware/bazis/b8339a249124.glb" },     // … правый (своя сетка Базиса, Z −23..0 — без зеркала)
   "hanger-cap-left": { file: "hardware/bazis/ca74b45576fa.glb" },  // Заглушка для мебельного навеса ABS левая
@@ -85,6 +86,7 @@ export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }
 // Z внутрь корпуса). Кватернион [w, x, y, z].
 const Q_LEG: [number, number, number, number] = [0.5, 0.5, -0.5, 0.5];      // X→+Z, Y→−X, Z→−Y
 const Q_HANGER: [number, number, number, number] = [Math.SQRT1_2, 0, Math.SQRT1_2, 0]; // X→−Z, Y→+Y, Z→+X (оба навеса)
+const Q_CLIP_LEFT: [number, number, number, number] = [0.5, 0.5, 0.5, -0.5];  // левая клипса Базиса (сетка 7ebcad9fda10)
 
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
 export function kitchenExtraParts(m: Module, out: Part[]) {
@@ -100,9 +102,11 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       out.push(metal(`leg:${n}`, "Опора кухонная регулируемая H100-120, чёрная", [58, H, 58], [l.x, H / 2, l.z], lm ? { file: lm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: Q_LEG } : undefined));
       // клипсы на передних опорах — и когда цоколь у ряда, а не у модуля; нет только при clips: false
       if (l.front && k.plinth?.clips !== false) {
-        const cm = KITCHEN_MODELS.clip;
+        // Базис (34 кухни): у левой из нескольких клипс — своя зеркальная сетка и поворот (140 из 164 левых), у прочих — основная.
+        const fx = kitchenLegs(m).filter((q) => q.front).map((q) => q.x), left = fx.length > 1 && l.x === Math.min(...fx);
+        const cm = left ? KITCHEN_MODELS["clip-left"] : KITCHEN_MODELS.clip;
         // Клипса для ПВХ цоколя: на передней опоре, 45–52 мм ниже дна, от −10,9 до +29 к цоколю.
-        out.push(metal(`kitchen-clip:${n}`, "Клипса для ПВХ цоколя, чёрная", [32.3, 7, 39.9], [l.x, H - 49, l.z + 9.07], cm ? { file: cm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: Q_LEG } : undefined));
+        out.push(metal(`kitchen-clip:${n}`, "Клипса для ПВХ цоколя, чёрная", [32.3, 7, 39.9], [l.x, H - 49, l.z + 9.07], cm ? { file: cm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: left ? Q_CLIP_LEFT : Q_LEG } : undefined));
       }
     }
     if (!k.plinth?.off) {

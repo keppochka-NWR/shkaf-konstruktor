@@ -10,6 +10,7 @@ import {nest} from '../src/exports';
 import {existsSync,readFileSync} from 'node:fs';
 import {rawKitchen,rawItems,type RawSpec} from '../src/rawModule';
 import {panelExtras} from '../scripts/kitchen/rowWorktop';
+import {compareModule,refFromStudio} from '../scripts/kitchen/compare';
 
 const led=(m:Module):Module=>{m.grooves=['left','right'].map(h=>({host:h,face:(h==='left'?'+':'-') as '+'|'-',along:[16,16] as [number,number],across:[100,117] as [number,number],depth:8,name:'паз под подсветку'}));return m;};
 const k25wall=()=>{const m=led(kitchenWall(initialModule(),630));m.height=930;return m;};
@@ -190,4 +191,20 @@ test('цоколь k09 (ЛДСП 16, габарит 16,64 — деталь чу�
   const row:RawSpec={row:true,hardware:[],panels:[{name:'Цоколь',kind:'ldsp',box:[0,0,0,784,98.5,16.64],...panelExtras(et)},{name:'Бок',kind:'ldsp',box:[0,0,100,16,720,660]}]};
   const p=parseProject(JSON.parse(JSON.stringify(project({...rawBody(),name:'Ряд',raw:row}))));
   assert.ok(nest(p).every(s=>s.material==='hdf'||(s.thickness??16)===16),JSON.stringify(nest(p).map(s=>s.thickness)));
+});
+
+test('клипсы: у левой из двух — зеркальная сетка Базиса 7ebcad9fda10 и свой поворот (140 из 164 левых клипс в 34 кухнях)',()=>{
+  const cl=parts(kitchenBase(initialModule(),600)).filter(p=>p.id.startsWith('kitchen-clip:')).sort((a,b)=>a.position[0]-b.position[0]);
+  assert.equal(cl.length,2);
+  assert.equal(cl[0].model?.file,'hardware/bazis/7ebcad9fda10.glb');assert.deepEqual(cl[0].model?.quat,[0.5,0.5,0.5,-0.5]);
+  assert.equal(cl[1].model?.file,'hardware/bazis/0d12888fb9df.glb');assert.deepEqual(cl[1].model?.quat,[0.5,0.5,-0.5,0.5]);
+});
+
+test('сверка: поворот всей фурнитуры (справочно) — свой модуль сходится, поворот конфирмата вокруг своей оси — «spin», не ошибка',()=>{
+  const m=kitchenBase(initialModule(),600),ref=refFromStudio(m),c=compareModule(ref,m);
+  assert.ok(c.hardware.filter(h=>h.rot).every(h=>h.rot!.bad===0),JSON.stringify(c.hardware.map(h=>[h.category,h.rot])));
+  // клипса другой стороной (поворот 180° вокруг вертикали) — «другой поворот»
+  const r2={...ref,hardware:ref.hardware.map(h=>h.category==='клипса'&&h.quat?{...h,quat:[0.5,0.5,0.5,-0.5]}:h)};
+  const bad=compareModule(r2,m).hardware.find(h=>h.category==='клипса')!.rot!;
+  assert.ok(bad.bad>=1,JSON.stringify(bad));
 });
