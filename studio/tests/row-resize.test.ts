@@ -6,6 +6,7 @@ import { bounds, projectErrors, type PlacedModule, type Project } from "../src/p
 import { resizeInRow, placeInRow } from "../src/rowResize";
 import { fitMeshItem } from "../src/operations";
 import { DEFAULT_MESH } from "../src/mesh";
+import { kitchenTemplate, type KitchenItem } from "../src/kitchenProject";
 
 const mod = (name: string, width = 600, extra: Partial<Module> = {}): Module => ({ ...initialModule(), name, width, ...extra });
 const at = (id: string, x: number, m: Module, more: Partial<PlacedModule> = {}): PlacedModule => ({ id, x, z: 0, module: m, ...more });
@@ -153,6 +154,18 @@ test("столешница над внешним краем: модуль не �
   // внутри ряда (сосед компенсирует) столешница не мешает
   const p = resizeInRow(proj([base("a", 500), base("b", 1100), top]), "a", 700);
   assert.equal(get(p, "b").module.width, 500);
+});
+
+test("кухня: сосед не уходит за максимум 1200 и под технику — только ширины ниш", () => {
+  const k = (kind: KitchenItem, w: number) => kitchenTemplate(kind, w, initialModule());
+  // B 600 → 450 рядом с C 1100: C стал бы 1250 > 1200
+  const wide = proj([at("a", 500, k("base-doors", 600)), at("b", 1100, k("base-doors", 600)), at("c", 1700, { ...k("base-doors", 600), width: 1100 })]);
+  assert.throws(() => resizeInRow(wide, "b", 450), /расширится до 1250 мм, а больше 1200/);
+  // под духовку 600 → 500 и под мойку 600 → 300 — ошибка; под мойку 800 → 600 — можно (ширина ниши)
+  assert.throws(() => resizeInRow(proj([at("a", 500, k("base-doors", 600)), at("o", 1100, k("oven", 600))]), "a", 700), /под технику.*600 мм, а стала бы 500/);
+  assert.throws(() => resizeInRow(proj([at("a", 500, k("base-doors", 600)), at("s", 1100, k("sink", 600))]), "a", 900), /стала бы 300/);
+  const ok = resizeInRow(proj([at("a", 500, k("base-doors", 600)), at("s", 1100, k("sink", 800))]), "a", 800);
+  assert.deepEqual([get(ok, "s").x, get(ok, "s").module.width], [1300, 600]);
 });
 
 test("подгонка ширины под сетку (fitMeshItem) идёт по правилу ряда: без щели и без наезда", () => {

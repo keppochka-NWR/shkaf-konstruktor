@@ -10,7 +10,7 @@
 //  Сосед из Базиса (сырой raw), угловой и купе не меняются — ошибка, правка не применяется.
 import { bounds, localToRoom, type PlacedModule, type Project } from "./project";
 import { validate, RULES, type Module } from "./model";
-import { KITCHEN } from "./kitchen";
+import { KITCHEN, APPLIANCES } from "./kitchen";
 
 const TOUCH = 2;
 type Side = "left" | "right";
@@ -28,6 +28,7 @@ function locked(m: Module): string | undefined {
   return undefined;
 }
 const minWidth = (m: Module) => (m.kitchen && !m.desk ? KITCHEN.minWidth : RULES.minW);
+const maxWidth = (m: Module) => (m.kitchen && !m.desk ? KITCHEN.maxWidth : RULES.maxW);
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const quote = (m: Module) => "«" + m.name + "»";
 
@@ -162,8 +163,12 @@ export function resizeInRow(p: Project, placedId: string, width: number): Projec
   if (n) {
     const why = locked(n.module);
     if (why) throw Error(`${side === "right" ? "Справа" : "Слева"} вплотную ${quote(n.module)} — ${why}. Ширина ${quote(a.module)} не изменена.`);
-    const nw = r1(n.module.width - delta), min = minWidth(n.module);
-    if (nw < min) throw Error(`${quote(a.module)} шире на ${delta} мм не станет: сосед ${side === "right" ? "справа" : "слева"} ${quote(n.module)} сузится до ${nw} мм, а меньше ${min} мм нельзя.`);
+    const nw = r1(n.module.width - delta), min = minWidth(n.module), max = maxWidth(n.module), where = side === "right" ? "справа" : "слева";
+    if (nw < min) throw Error(`${quote(a.module)} шире на ${delta} мм не станет: сосед ${where} ${quote(n.module)} сузится до ${nw} мм, а меньше ${min} мм нельзя.`);
+    if (nw > max) throw Error(`${quote(a.module)} уже на ${-delta} мм не станет: сосед ${where} ${quote(n.module)} расширится до ${nw} мм, а больше ${max} мм нельзя.`);
+    // под технику (мойка, духовка, посудомойка) — только ширины ниш из APPLIANCES: сосед молча не уходит в ширину, куда техника не встанет
+    const tech = n.module.kitchen?.appliance && APPLIANCES[n.module.kitchen.appliance];
+    if (tech && !tech.widths.includes(nw)) throw Error(`Сосед ${where} ${quote(n.module)} — под технику («${tech.label}»): ширина ${tech.widths.join(" или ")} мм, а стала бы ${nw}. Сначала измените ширину соседа сами.`);
     const moved = setWidthKeeping(n, nw, side === "right" ? "right" : "left");
     const before = new Set(validate(n.module)), fresh = validate(moved.module).find((x) => !before.has(x));
     if (fresh) throw Error(`Сосед ${quote(n.module)} при ширине ${nw} мм: ${fresh}`);
