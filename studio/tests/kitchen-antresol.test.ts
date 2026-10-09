@@ -60,12 +60,13 @@ test('no fasteners in Bazis (k32): studio adds no confirmats, eccentrics or dowe
 });
 
 test('raised hanging body (bottom 14 above the module bottom): no plinth panel, facade down to the module bottom, no plinth-list error',()=>{
-  const m=antresol();m.plinthHeight=14;m.kitchen!.plinth={height:95,off:true}; // как ставит распознаватель: щита под дном в Базисе нет
+  const m=antresol();m.plinthHeight=14;m.kitchen!.plinth={height:95,off:true};m.kitchen!.bazis=true; // как ставит распознаватель: модуль из Базиса, щита под дном нет
   const ps=parts(m);
   assert.ok(!ps.some(p=>p.id==='plinth'),'hanging cabinets have no plinth');
   assert.equal(facadeBottom(m),0);
   assert.ok(!validate(m).some(e=>/цоколя/.test(e)));
   const w=initialModule();w.plinthHeight=14;assert.ok(validate(w).some(e=>/цоколя/.test(e)),'wardrobe rule unchanged');
+  const own=antresol();own.plinthHeight=14;assert.ok(validate(own).some(e=>/цоколя из списка/.test(e)),'studio kitchen (not from Bazis): plinth height from the list');
   // поднятое дно выше крыши (k18 m17: распознано дно на 494 при высоте 510) — студия говорит об этом, а не молчит
   const bad=antresol();bad.plinthHeight=380;assert.ok(validate(bad).some(e=>/выше крыши/.test(e)));
 });
@@ -199,6 +200,10 @@ test('estimate of a module from Bazis: no "мелочёвка корпуса" no
   assert.ok(lines(lift(false)).includes('lift-mechanism'));
   assert.ok(!lines(lift(true)).includes('lift-mechanism'));
   assert.equal(parseModule(JSON.parse(JSON.stringify(bz))).kitchen!.bazis,true);
+  // название фасада — как смета: у модуля из Базиса без подъёмника нет «механизм требует подбора»
+  const door=(b:boolean)=>parts(lift(b)).find(p=>p.role==='door'&&p.hinge==='top')!.name;
+  assert.match(door(false),/механизм требует подбора/);
+  assert.doesNotMatch(door(true),/механизм|подбор/);assert.match(door(true),/без подъёмника/);
 });
 
 test('HDF in the groove with its own bottom/top clearance as in Bazis (k28 m10: 2.5 / 1), symmetric case gives no override',()=>{
