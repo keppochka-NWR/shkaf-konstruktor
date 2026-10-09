@@ -8,6 +8,7 @@ import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions, rawCheck, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
+import { rawHangerSeats, RAW_HANGER_DROP } from "./rawModule";
 import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
@@ -348,6 +349,8 @@ function RawInfo(props: KitchenPanelProps) {
   const total = r.counts || r.items ? Object.values(r.counts ?? {}).reduce((s, v) => s + (v ?? 0), 0) + (r.items ?? []).reduce((s, i) => s + i.n, 0) : r.hardware.length;
   // проверка по политике сырого модуля (collisions.ts rawCheck): посадка фурнитуры и перекрытия панелей «как в Базисе» (n3-wardrobes2)
   const check = useMemo(() => rawCheck(parts(m), m), [m]);
+  // навесы кухни, висевшие в файле Базиса над своей боковиной (комплект со старыми координатами) — поставлены на боковину (n4-wardrobes)
+  const seated = useMemo(() => [...rawHangerSeats(r)].filter(([i]) => r.hardware[i].category === "навес").length, [r]);
   // figure + contour — внешний контур нарисован, внутренние вырезы нет; figure без контура или skew — габаритом
   const figures = r.panels.filter((p) => p.contour).length, boxes = r.panels.filter((p) => (p.figure && !p.contour) || p.skew).length, holes = r.panels.filter((p) => p.figure && p.contour).length, turned = r.panels.filter((p) => p.obb).length, rods = r.profiles?.length ?? 0;
   return <div className="kitchen-panel">
@@ -358,8 +361,9 @@ function RawInfo(props: KitchenPanelProps) {
       {check.deep.length > 0 && <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересечение: тело фурнитуры в материале панели — {check.deep.slice(0, 3).map((x) => `${x.name} (${-x.gap} мм)`).join("; ")}{check.deep.length > 3 ? ` и ещё ${check.deep.length - 3}` : ""}. Так стоит в проекте Базиса — исправить в Базисе.</p>}
       {check.deep.length === 0 && check.checked > 0 && <p className="kitchen-ok"><CircleCheck size={14} /> Пересечений фурнитуры с деталями нет; стоит на деталях {check.checked - check.outside.length - check.far.length} из {check.checked} по точкам крепления Базиса.</p>}
       {/* «в воздухе» — не пересечение: детали-хозяина нет в самой модели Базиса (модель неполная, деталь удалена, высота модуля
-          изменена без навесов — антресоли кухонь k12…k31 с навесами в 985 мм). Сведения, не тревога (n4-wardrobes). */}
+          изменена без навесов, а навеса над боковиной нет). Сведения, не тревога (n4-wardrobes). */}
       {check.far.length > 0 && <p className="field-note"><Info size={12} /> Без детали в модели Базиса (дальше {RAW_FAR} мм от деталей) — {check.far.length} шт.: {check.far.slice(0, 3).map((x) => `${x.name} (${x.gap} мм)`).join("; ")}{check.far.length > 3 ? " …" : ""}. Это не пересечение: в проекте Базиса нет детали, на которой она крепится (модель неполная или деталь удалена) — так в самом проекте.</p>}
+      {seated > 0 && <p className="field-note"><Info size={12} /> Навесы ({seated}) в файле Базиса висели над своей боковиной (комплект навесов со старыми координатами) — поставлены на боковину, {RAW_HANGER_DROP} мм ниже её верха, как остальные навесы кухонь.</p>}
       {check.outside.length > 0 && <p className="field-note">Рядом с деталями, но не на них ({RAW_SEAT_GAP}–{RAW_FAR} мм) — {check.outside.length} шт.: {check.outside.slice(0, 2).map((x) => x.name).join("; ")}{check.outside.length > 2 ? " …" : ""}. Так бывает, когда крепление — на профиле без сечения или детали соседнего модуля; сверьте с Базисом.</p>}
     </Group>}
     {check.overlaps.length > 0 && <div className="property-section kitchen-note raw"><Info size={14} /><p>Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет — правится в Базисе.</p></div>}
