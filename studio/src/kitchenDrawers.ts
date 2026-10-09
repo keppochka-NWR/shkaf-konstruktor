@@ -6,7 +6,7 @@
 import type { Module, Part } from "./model";
 import { qrot, type Quat } from "./quat";
 
-export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc";
+export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc" | "indigo";
 /** Короб ящика Firmax скрытого монтажа (ЛДСП 16), по 37 ящикам Базиса (k03–k31): боковины в gap от боковин корпуса, длина len;
  *  дно между боковинами на bottomUp выше их низа (10, у мелких 5); задняя стенка и фальшпанель — между боковинами на дне, до верха боковин.
  *  Конфирматы ставятся в Базисе вручную (шаг разный), поэтому их высоты храним как в проекте: conf — от низа задней стенки
@@ -41,14 +41,37 @@ export type StartDrawer = { system: "start-sc"; y0: number; y1: number; runnerY:
   edge?: { bottom?: boolean; back?: "y" | "all" };
   /** Поля Axis PRO не используются (остаются при смене системы). */
   h?: 86 | 120 | 168 | 200; color?: "white" | "anthracite"; faceScrews?: boolean };
+/** Ящик Indigo (Базис k16: 7 ящиков): металлические царги H=90 / H=175 (орион серый или белые), направляющие Indigo 500,
+ *  дно и задняя стенка ЛДСП 16. Точка Базиса — внутренняя грань боковины корпуса × ось направляющей × передняя кромка корпуса. */
+export type IndigoDrawer = { system: "indigo"; y0: number; y1: number; runnerY: number; hc: 90 | 175; len: 500; h?: 86 | 120 | 168 | 200; color?: "white" | "anthracite";
+  box?: undefined; backH?: number; faceScrews?: boolean };
 export type BoxDrawer = FirmaxDrawer | VersaliteDrawer;
-export type KDrawer = AxisDrawer | FirmaxDrawer | VersaliteDrawer | StartDrawer;
+export type KDrawer = AxisDrawer | FirmaxDrawer | VersaliteDrawer | StartDrawer | IndigoDrawer;
 export const isFirmax = (k: KDrawer): k is FirmaxDrawer => k.system === "firmax-ldsp";
 export const isVersalite = (k: KDrawer): k is VersaliteDrawer => k.system === "versalite-h45";
 /** Ящик с коробом ЛДСП (Firmax или Versalite). */
 export const isBox = (k: KDrawer): k is BoxDrawer => k.system === "firmax-ldsp" || k.system === "versalite-h45";
 export const isStart = (k: KDrawer): k is StartDrawer => k.system === "start-sc";
-export const isAxis = (k: KDrawer): k is AxisDrawer => k.system === "axis-pro" || (!isBox(k) && !isStart(k));
+export const isIndigo = (k: KDrawer): k is IndigoDrawer => k.system === "indigo";
+export const isAxis = (k: KDrawer): k is AxisDrawer => k.system === "axis-pro" || (!isBox(k) && !isStart(k) && !isIndigo(k));
+/** Indigo по Базису (k16, разброс 0): царга на 44 ниже оси, дно на 5 ниже оси (уже корпуса на 19, глубина 479,2 от 0,4),
+ *  задняя стенка на 11,4 выше оси (уже на 42, 147,2 / 62,2), «3x3» в боковину корпуса, заднюю стенку и фасад. */
+export const INDIGO = {
+  run65: [19, 28, 37, 51, 60, 69, 243, 252, 261, 275, 284, 293], side3: [37, 69, 261, 293],
+  175: { back: 147.2, back3: [23.2, 55.2, 119.2], front3: [22, 54, 118, 150], top: 160 },
+  90: { back: 62.2, back3: [24, 56], front3: [22, 54], top: 73.2 },
+  mesh: { runner: ["437755c651e6", "d49e8211a82d"] as LR, "175": ["c4b2a89adf2b", "5a8cbf34bbdc"] as LR, "175:white": ["5e4e4dbaf65f", "ac7784ef1cd3"] as LR, "90": ["b619d0529510", "13141e62e630"] as LR },
+};
+export function indigoTop(k: IndigoDrawer) { return k.runnerY + Math.max(INDIGO[k.hc].top, 11.4 + (k.backH ?? INDIGO[k.hc].back)); }
+export function indigoFits(m: Module, k: IndigoDrawer) { return k.runnerY - 44 >= axisFloor(m) - 0.01 && indigoTop(k) <= Math.min(k.y1 - 15, axisCeiling(m) - AXIS_FIT.ceiling) + 0.01; }
+/** Раскладка Indigo: ось на 44 над низом фасада, не ниже пола + 54 (царга на 10 над дном); царга H=175, если входит, иначе H=90. */
+export function indigoLayout(m: Module, n: number, ratios?: number[], keep?: IndigoDrawer[]): IndigoDrawer[] {
+  const floor = axisFloor(m), r1 = (v: number) => Math.round(v * 10) / 10;
+  return axisLayout(m, n, ratios).map((a) => {
+    const runnerY = r1(Math.max(a.y0 + 44, floor + 54)), at = (hc: 90 | 175): IndigoDrawer => ({ system: "indigo", y0: a.y0, y1: a.y1, runnerY, hc, len: 500, ...(keep?.[0]?.color === "white" ? { color: "white" as const } : {}) });
+    const big = at(175); return indigoFits(m, big) ? big : at(90);
+  });
+}
 /** СТАРТ по Базису: смещения от точки направляющей (side — низ боковины и дна, holder — держатель задней стенки, 3×3 держателя и
  *  крепления фасада, заглушка [x слева, x справа, y]); задняя стенка по умолчанию (SB20 — с рейлингом). Разброс 0 по 16 ящикам. */
 export const START = {
@@ -214,6 +237,10 @@ const BBOX: Record<string, number[]> = {
   "5e4f21fc2c6b": [0, -22, 0, 450.5, 22, 12.7], "7ab0422cefda": [-450.5, -22, 0, 0, 22, 12.7],
   "ed63f368aba0": [0, -22, 0, 500.5, 22, 12.7], "9f61c1d9d4d8": [-500.5, -22, 0, 0, 22, 12.7],
   "188b3778a7e0": [0, -22, 0, 550.5, 22, 12.7], "44ce2a52827c": [-550.5, -22, 0, 0, 22, 12.7],
+  // Indigo (k16)
+  "437755c651e6": [7, -44, 0, 503, 8, 45], "d49e8211a82d": [-503, -44, 0, -7, 8, 45],
+  "c4b2a89adf2b": [8.7, 27.2, -493, 46.5, 204, 0], "5a8cbf34bbdc": [-46.5, 27.2, -493, -8.7, 204, 0], "5e4e4dbaf65f": [8.7, 27.2, -493, 46.5, 204, 0], "ac7784ef1cd3": [-46.5, 27.2, -493, -8.7, 204, 0],
+  "b619d0529510": [8.7, 27.2, -493, 46.5, 117.2, 0], "13141e62e630": [-46.5, 27.2, -493, -8.7, 117.2, 0],
   // Boyard СТАРТ
   "de6b6792732b": [9, -33, 0, 400, 27, 32], "bf2604d3a957": [-400, -33, 0, -9, 27, 32], "02f8322e1c2d": [9, -33, 0, 500, 27, 32], "e1badd104edf": [-500, -33, 0, -9, 27, 32],
   "72a20437a230": [-18, -1, 0, 31, 86, 492], "a5bbfd825aec": [-31, -1, 0, 18, 86, 492], "02d2bd8953aa": [-18, -1, 0, 28.5, 118.5, 492], "0125df73e770": [-28.5, -1, 0, 18, 118.5, 492],
@@ -231,14 +258,14 @@ export const AXIS_RUNNER_DOWN = 44;
 /** Запасы раскладки (по базе: верх ящика не ближе 21,5 к верху фасада; до царг корпуса — 5). */
 export const AXIS_FIT = { facadeTop: 21.5, ceiling: 5 };
 /** Верх короба ящика от пола модуля: задняя стенка, царга, держатель — что выше. */
-export function axisTop(k: KDrawer) { if (isBox(k)) return k.box.y + k.box.h; if (isStart(k)) return startTop(k); return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
+export function axisTop(k: KDrawer) { if (isBox(k)) return k.box.y + k.box.h; if (isStart(k)) return startTop(k); if (isIndigo(k)) return indigoTop(k); return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
 /** Низ под царгами/крышей корпуса (нижний кухонный: царги 16 лёжа у верха; на ребре — их высота). */
 export function axisCeiling(m: Module) {
   const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : r.height));
   return m.height - Math.max(m.topType === "none" ? 0 : 16, ...top, 0);
 }
 /** Ящик входит: верх короба не ближе запасов к верху своего фасада и к царгам корпуса. */
-export function axisFits(m: Module, k: KDrawer) { if (isBox(k)) return firmaxFits(m, k); if (isStart(k)) return startFits(m, k); return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling) + 1e-6; }
+export function axisFits(m: Module, k: KDrawer) { if (isBox(k)) return firmaxFits(m, k); if (isStart(k)) return startFits(m, k); if (isIndigo(k)) return indigoFits(m, k); return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling) + 1e-6; }
 /** Габарит повёрнутой сетки в осях модуля: размер и центр. */
 function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, number]; position: [number, number, number] } {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -327,6 +354,7 @@ export function relayoutProblem(m: Module, n: number): string | undefined {
 export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
   if (isStart(ks[0])) return startLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isStart));
+  if (isIndigo(ks[0])) return what === "depth" ? ks : indigoLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isIndigo));
   if (isVersalite(ks[0])) {
     if (what === "depth") { const len = versaliteLen(m); return ks.map((k) => (isVersalite(k) ? { ...k, len, box: { ...k.box, len } } : k)); }
     return versaliteLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isVersalite));
@@ -349,6 +377,7 @@ export function relayoutKDrawers(m: Module, n: number, ratios?: number[], system
   const k0 = m.kdrawers?.[0], sys = system ?? k0?.system ?? "axis-pro";
   if (sys === "versalite-h45") return versaliteLayout(m, n, ratios, m.kdrawers?.filter(isVersalite));
   if (sys === "start-sc") return startLayout(m, n, ratios, m.kdrawers?.filter(isStart));
+  if (sys === "indigo") return indigoLayout(m, n, ratios, m.kdrawers?.filter(isIndigo));
   return sys === "firmax-ldsp" ? firmaxLayout(m, n, ratios, m.kdrawers?.filter(isFirmax)) : axisLayout(m, n, ratios, k0 && isAxis(k0) ? k0 : undefined);
 }
 /** Верх ящика СТАРТ от пола модуля: боковина, задняя стенка, рейлинг — что выше. */
@@ -459,8 +488,9 @@ function firmaxGeom(k: BoxDrawer, x0: number, xr: number, F: number) {
 }
 
 /** Есть ли модели Базиса на это сочетание (царга нужной длины и высоты, держатели, направляющая; антрацит — свои сетки). */
-export function axisAvailable(k: Pick<AxisDrawer, "h" | "len" | "color"> | BoxDrawer | StartDrawer) {
+export function axisAvailable(k: Pick<AxisDrawer, "h" | "len" | "color"> | BoxDrawer | StartDrawer | IndigoDrawer) {
   if ("system" in k && k.system === "start-sc") return startAvailable(k.sb, k.len);
+  if ("system" in k && k.system === "indigo") return k.len === 500 && (k.hc === 90 || k.hc === 175);
   if ("system" in k && (k.system === "firmax-ldsp" || k.system === "versalite-h45")) return true; // короб ЛДСП: Firmax без сеток, у Versalite сетки на все длины
   const a = k as Pick<AxisDrawer, "h" | "len" | "color">, col = a.color ?? "white";
   return !!M.side[`${col}:${a.h}`]?.[a.len] && !!M.rear[`${col}:${a.h}`] && !!M.runner[col]?.[a.len];
@@ -472,7 +502,7 @@ export function axisFloor(m: Module) {
   return base + Math.max(0, ...low);
 }
 
-export function axisLabel(k: KDrawer) { if (isStart(k)) return `СТАРТ ${k.sb} H${k.sb === "SB20" ? 167 : START[k.sb].back}, ${k.len} мм${k.rail ? ", рейлинг" : ""}`; if (isVersalite(k)) return `Versalite Light H45 ${k.len}, короб ЛДСП ${k.box.h}×${k.box.len} мм`; if (isFirmax(k)) return `Firmax ЛДСП, короб ${k.box.h}×${k.box.len} мм`; return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
+export function axisLabel(k: KDrawer) { if (isIndigo(k)) return `Indigo H=${k.hc}, ${k.len} мм${k.color === "white" ? ", белая" : ", орион серый"}`; if (isStart(k)) return `СТАРТ ${k.sb} H${k.sb === "SB20" ? 167 : START[k.sb].back}, ${k.len} мм${k.rail ? ", рейлинг" : ""}`; if (isVersalite(k)) return `Versalite Light H45 ${k.len}, короб ЛДСП ${k.box.h}×${k.box.len} мм`; if (isFirmax(k)) return `Firmax ЛДСП, короб ${k.box.h}×${k.box.len} мм`; return `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""}`; }
 
 /** Детали ящиков кухонного модуля: фасады, дно и задняя стенка ЛДСП, фурнитура Axis PRO сетками Базиса. */
 export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, facadeT: number, faceAir: number) {
@@ -498,6 +528,24 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     const fw = m.width - 2 * faceGap, fh = k.y1 - k.y0;
     if (!(isStart(k) && k.inner)) out.push({ id: `${id}:facade`, name: `Фасад ящика ${j + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (k.y0 + k.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
       role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+    if (isIndigo(k)) {
+      // Indigo: дно и задняя стенка ЛДСП 16, царги и направляющие сетками Базиса, «3x3» — как в проекте
+      const s0 = INDIGO[k.hc], y = k.runnerY, bd = 479.2, backH = k.backH ?? s0.back, bw = xr - x0 - 19, kw = xr - x0 - 42;
+      out.push({ id: `${id}:bottom`, name: `Дно ящика ${j + 1} (Indigo)`, size: [bw, t, bd], position: [(x0 + xr) / 2, y - 5 + t / 2, F - 0.4 - bd / 2], length: bw, width: bd, thickness: t,
+        role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+      out.push({ id: `${id}:back`, name: `Задняя стенка ящика ${j + 1} (Indigo)`, size: [kw, backH, t], position: [(x0 + xr) / 2, y + 11.4 + backH / 2, F - 490 + t / 2], length: kw, width: backH, thickness: t,
+        role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 2, 2, 2] });
+      const cm = k.hc === 175 && k.color === "white" ? INDIGO.mesh["175:white"] : INDIGO.mesh[String(k.hc) as "175" | "90"];
+      for (const s of [0, 1] as const) {
+        const x = sideIn(s), d = dir(s), lr = s ? "R" : "L", side = s ? "правая" : "левая";
+        out.push(metal(`${id}:slide:${lr}`, `Направляющая Indigo ${k.len} ${side}`, INDIGO.mesh.runner[s], [x, y, F], Q_RUN[s]));
+        out.push(metal(`${id}:sys:side:${lr}`, `Царга Indigo H=${k.hc} ${k.len} ${side}`, cm[s], [x, y - 44, F], [1, 0, 0, 0]));
+        for (const dz of INDIGO.side3) out.push(screwAt(`${id}:screw:run${lr}:${dz}`, [x, y, F - dz], "Саморез 3×3 (направляющая Indigo)"));
+        for (const dy of s0.back3) out.push(screwAt(`${id}:screw:ig:rear${lr}:${dy}`, [x + d * 29, y + dy, F - 490], "Саморез 3×3 (царга Indigo в заднюю стенку)"));
+        for (const dy of s0.front3) out.push(screwAt(`${id}:screw:ig:front${lr}:${dy}`, [x + d * 15, y + dy, F], "Саморез 3×3 (царга Indigo в фасад)"));
+      }
+      return;
+    }
     if (isStart(k)) {
       // Boyard СТАРТ: дно и задняя стенка ЛДСП 16, металлические боковины, держатели, крепления фасада, рейлинг — сетками Базиса
       const s0 = START[k.sb], Fk = F - (k.front ?? 0), y = k.runnerY, yb = y + s0.side, rz = Fk - k.len + 8;
@@ -628,6 +676,18 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
   if (!m.kdrawers?.length) return;
   m.kdrawers.forEach((k, j) => {
     const id = `kd:${j}`;
+    if (isIndigo(k)) {
+      // Indigo (FurnList.Holes Базиса): направляющая — 12 × D6,5×2 в боковину корпуса; «3x3» — D3×3 в боковину, заднюю стенку, фасад
+      for (const lr of ["L", "R"] as const) {
+        const run = ps.find((p) => p.id === `${id}:slide:${lr}`);
+        if (!run?.model?.origin) continue;
+        const [x, y, F] = run.model.origin, d = lr === "L" ? 1 : -1;
+        for (const dz of INDIGO.run65) push(`${id}:run${lr}:${dz}`, [x, y, F - dz], [-d, 0, 0], 6.5, 2);
+        for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:run${lr}:`))) push(p.id, p.position, [-d, 0, 0], 3, 3);
+        for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:ig:rear${lr}:`) || q.id.startsWith(`${id}:screw:ig:front${lr}:`))) push(p.id, p.position, [0, 0, 1], 3, 3);
+      }
+      return;
+    }
     if (isStart(k)) {
       // СТАРТ (FurnList.Holes Базиса): направляющая — D6×1,5 и шурупы D3×3 в боковину корпуса; держатель — D4,2×0,75 в пласть и
       // D3,5×0,75 в торец задней стенки; крепление фасада и рейлинг — D4×6 в фасад; держатель рейлинга — D4×3; «3x3» — D3×3
@@ -699,6 +759,15 @@ export function kitchenDrawerErrors(m: Module): string[] {
   if (!Array.isArray(ks) || ks.length > 6) return ["Ящиков кухни — не больше шести."];
   ks.forEach((k, j) => {
     const p = `Ящик ${j + 1}: `;
+    if (isIndigo(k)) {
+      if (![k.y0, k.y1, k.runnerY].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) { e.push(p + "фасад от 60 мм в пределах высоты модуля."); return; }
+      if (!axisAvailable(k)) { e.push(p + "Indigo — царга H=90 или H=175, длина 500 (модели Базиса цеха)."); return; }
+      if (k.len > m.depth - 7) e.push(p + `ящик Indigo ${k.len} не входит в глубину корпуса ${m.depth}.`);
+      if (k.runnerY - 44 < axisFloor(m) - 0.01) e.push(p + `ящик Indigo на ${k.runnerY} уходит в дно корпуса (пол под ящиками ${axisFloor(m)}).`);
+      if (indigoTop(k) > axisCeiling(m) + 0.01) e.push(p + `царга Indigo H=${k.hc} упирается в царги корпуса: верх ${Math.round(indigoTop(k) * 10) / 10}, царги с ${axisCeiling(m)}.`);
+      for (let i = 0; i < j; i++) { const o = ks[i]; if (k.y0 < o.y1 - 0.01 && o.y0 < k.y1 - 0.01) e.push(p + `фасад пересекается с ящиком ${i + 1}.`); }
+      return;
+    }
     if (isStart(k)) {
       if (![k.y0, k.y1, k.runnerY].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) { e.push(p + "фасад от 60 мм в пределах высоты модуля."); return; }
       if (!START[k.sb] || !(START_LENGTHS as readonly number[]).includes(k.len)) { e.push(p + "СТАРТ — боковины SB08/SB19/SB20, длина 400 или 500."); return; }
@@ -762,7 +831,11 @@ export function axisCombos(color?: AxisDrawer["color"]) { return AXIS_HEIGHTS.fl
 
 export function parseKDrawers(x: unknown): KDrawer[] | undefined {
   if (!Array.isArray(x)) return undefined;
-  return x.slice(0, 6).map((k0: Partial<AxisDrawer> | Partial<FirmaxDrawer> | Partial<VersaliteDrawer> | Partial<StartDrawer>): KDrawer => {
+  return x.slice(0, 6).map((k0: Partial<AxisDrawer> | Partial<FirmaxDrawer> | Partial<VersaliteDrawer> | Partial<StartDrawer> | Partial<IndigoDrawer>): KDrawer => {
+    if (k0.system === "indigo") {
+      const s = k0 as Partial<IndigoDrawer>;
+      return { system: "indigo", y0: Number(s.y0), y1: Number(s.y1), runnerY: Number(s.runnerY), hc: Number(s.hc) === 90 ? 90 : 175, len: 500, ...(s.color === "white" ? { color: "white" as const } : {}), ...(s.backH === undefined ? {} : { backH: Number(s.backH) }) };
+    }
     if (k0.system === "start-sc") {
       const s = k0 as Partial<StartDrawer>, sb = (["SB08", "SB19", "SB20"] as const).find((v) => v === s.sb) ?? "SB20";
       return { system: "start-sc", y0: Number(s.y0), y1: Number(s.y1), runnerY: Number(s.runnerY), len: Number(s.len) === 400 ? 400 : 500, sb,

@@ -72,7 +72,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
+  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
   const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name));
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
@@ -175,6 +175,22 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
     });
+    if (kd.length) m.kdrawers = kd;
+  }
+  // ящики Indigo: по каждой направляющей у левой боковины корпуса — царга (H=90/175, цвет), дно и задняя стенка ЛДСП
+  const igRuns = ref.hardware.filter((h) => h.category === "направляющая" && /^Направляющая Indigo/.test(h.name) && Math.abs(h.pos[0] - left.b.x1) < 0.6).sort((a, c) => a.pos[1] - c.pos[1]);
+  if (igRuns.length && !axisRuns.length) {
+    const kd: KDrawer[] = [];
+    for (const r of igRuns) {
+      const [x, y] = r.pos, cg = ref.hardware.find((h) => /^Царга Indigo H=\d+/.test(h.name) && Math.abs(h.pos[0] - x) < 0.6 && Math.abs(h.pos[1] - y + 44) < 1);
+      const hc = Number(/H=(\d+)/.exec(cg?.name ?? "")?.[1]);
+      const bot = P.find(({ p, b }) => /^Дно ящ/.test(p.name) && Math.abs(b.y0 - (y - 5)) < 0.6), bk = P.find(({ p, b }) => /^Зад\. ст\. ящ/.test(p.name) && Math.abs(b.y0 - (y + 11.4)) < 0.6);
+      const f = fronts.find((q) => q.b.y0 <= y && q.b.y1 >= y);
+      if (!cg || (hc !== 90 && hc !== 175) || !f || !bot || !bk) { unsupported.push(`ящик Indigo на ${r1(y)}: нет царги H=90/175, фасада, дна или задней стенки`); continue; }
+      drawerPanels.push(f, bot, bk);
+      const backH = r1(bk.b.y1 - bk.b.y0), def = hc === 175 ? 147.2 : 62.2;
+      kd.push({ system: "indigo", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), hc, len: 500, ...(/белая/.test(cg.name) ? { color: "white" as const } : {}), ...(Math.abs(backH - def) > 0.05 ? { backH } : {}) });
+    }
     if (kd.length) m.kdrawers = kd;
   }
   // ящики Boyard СТАРТ: по каждой левой направляющей — боковина SBxx (тип), дно и задняя стенка ЛДСП, рейлинг; фасад — по высоте оси.
