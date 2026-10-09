@@ -21,6 +21,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   bottomFront?: number;
   /** Крепёж стыков дна/крыши с боковинами по Базису: ключ «bottom:left» и т. п. → [от задней кромки, от передней кромки детали], мм. */
   jointZ?: Record<string, [number, number]>;
+  /** В проекте Базиса у модуля нет крепежа корпуса (конфирматов, эксцентриков, шкантов) — студия его не добавляет. */
+  noFasteners?: boolean;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
@@ -97,6 +99,8 @@ const Q_HANGER: [number, number, number, number] = [Math.SQRT1_2, 0, Math.SQRT1_
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
+  // Базис без крепежа корпуса (k32 целиком, отдельные модули k33, k34): студия его не добавляет — ни деталей, ни строк сметы
+  if (k.noFasteners) for (let i = out.length - 1; i >= 0; i--) if (/^(fast|ecc|dowel):/.test(out[i].id)) out.splice(i, 1);
   const t = 16;
   const metal = (id: string, name: string, size: Part["size"], position: Part["position"], model?: Part["model"]): Part =>
     ({ id, name, size, position, length: Math.max(...size), width: [...size].sort((a, b) => b - a)[1], thickness: Math.min(...size), role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], ...(model ? { model } : {}) });
@@ -151,7 +155,9 @@ export function kitchenEdges(m: Module, out: Part[]) {
     const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
     // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся
     const rearBase = m.backType === "none" ? ["-z"] : [];
-    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
+    const ends = (p.id === "bottom" || p.id === "top") ? m.edgeScheme?.ends?.[p.id] : undefined;
+    if (ends) setEdges(p, ends, t); // торцы дна/крыши — как в проекте Базиса (k32 — по кругу)
+    else if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
     else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);

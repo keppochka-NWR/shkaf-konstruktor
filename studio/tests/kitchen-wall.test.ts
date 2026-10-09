@@ -116,3 +116,13 @@ test('навесной: составной корпус (k26 m01, боковин
   assert.ok(unsupported.some(u=>/боковины начинаются/.test(u)));
   assert.deepEqual(plinthLike(m),[]);
 });
+test('навесной k32 m14: в Базисе нет крепежа и кромка дна/крыши по кругу — студия крепёж не добавляет, кромит как Базис',{skip:!existsSync(`${ETALON}/k32.json`)},()=>{
+  const ref=load('k32','m14'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.noFasteners,true);
+  assert.deepEqual(m.edgeScheme?.ends?.bottom?.slice().sort(),['+x','+z','-x','-z']);
+  const ps=parts(m);
+  assert.deepEqual(ps.filter(p=>/^(fast|ecc|dowel):/.test(p.id)).map(p=>p.id),[],'ни конфирматов, ни эксцентриков');
+  assert.ok(compareModule(ref,m).pass);
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.equal(back.kitchen?.noFasteners,true);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
+});

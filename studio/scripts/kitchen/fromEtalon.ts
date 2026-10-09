@@ -6,7 +6,7 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { wallRaise, bottomFrontRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
-import { wallJointZ, endGroove, wallShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { wallJointZ, endGroove, wallShelfEdges, wallEndEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -278,6 +278,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   }
   // крепёж по стыкам: эксцентрик (+шкант) или конфирмат — по фурнитуре у каждой стороны дна/крыши
   const ecc = hw("эксцентрик"), dow = hw("шкант");
+  // в проекте нет крепежа корпуса вовсе (k32: ни фурнитуры, ни присадки) — студия его не добавляет
+  if (!ecc.length && !dow.length && !hw("конфирмат").length) m.kitchen.noFasteners = true;
   for (const [id, q] of [["bottom", bottom], ["top", topPanel]] as const) {
     if (!q) continue;
     for (const [side, sx] of [["left", left.b.x1], ["right", right.b.x0]] as const) {
@@ -326,7 +328,13 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
   if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
   // навесные: кромка съёмных полок — своя толщина (k10: 0,5 при корпусе 0,4) и свои торцы (k22: только перед) — по первой полке на полкодержателях
-  if (et && m.edgeScheme && (role === "wall" || role === "antresol")) Object.assign(m.edgeScheme, wallShelfEdges(shelves, hw("полкодержатель"), et));
+  if (et && m.edgeScheme && (role === "wall" || role === "antresol")) {
+    Object.assign(m.edgeScheme, wallShelfEdges(shelves, hw("полкодержатель"), et));
+    // торцы дна и крыши: правило студии (kitchenEdges) — перед и (при пазе/без задника) зад; дно под боковинами — ещё концы
+    const rear: ("-z")[] = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
+    const ends = wallEndEdges(bottom, topPanel, { bottom: m.bottomUnder ? ["+z", "+x", "-x", ...rear] : ["+z", ...rear], top: ["+z", ...rear] });
+    if (Object.keys(ends).length) m.edgeScheme.ends = ends;
+  }
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)

@@ -30,6 +30,19 @@ export function bottomUnderDowelOffset(hardware: RefHardware[], bottom: PB): num
   return d0 ? r1(Math.abs(d0.pos[2] - e0.pos[2])) : null;
 }
 
+/** Торцы дна и крыши навесного, кромлёные в Базисе (k32 — по кругу, включая торцы у боковин): только если отличаются от правила студии. */
+export function wallEndEdges(bottom: PB | undefined, top: PB | undefined, def: { bottom: Side[]; top: Side[] }): Partial<Record<"bottom" | "top", Side[]>> {
+  const out: Partial<Record<"bottom" | "top", Side[]>> = {};
+  for (const [id, q] of [["bottom", bottom], ["top", top]] as const) {
+    if (!q) continue;
+    const ed = ((q.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0);
+    const sides = (["+x", "-x", "+z", "-z"] as Side[]).filter((d) => ed.some((e) => e.side === d));
+    const d0 = [...def[id]].sort().join(), d1 = [...sides].sort().join();
+    if (d0 !== d1) out[id] = sides;
+  }
+  return out;
+}
+
 /** Паз в торце детали (Базис «Паз торцевой» 2,5×10 в переднем торце дна — k06 m10, k10 m08–m10, k15 m09): коробка паза bb у торца ±W
  *  и внутри толщины → Groove с end. ax — оси детали студии (L, W, t), lo/hi — её границы. null — паз не торцевой. */
 export function endGroove(bb: number[], ax: { L: number; W: number; t: number }, lo: number[], hi: number[], name: string) {
