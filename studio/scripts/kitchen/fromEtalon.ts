@@ -80,6 +80,13 @@ export function liftHingeX(xs: number[], dw: number, dh: number): number[] | und
   return xs.length && (xs.length !== rule.length || xs.some((x, k) => Math.abs(x - rule[k]) > 0.05)) ? xs : undefined;
 }
 
+/** ХДФ в пазу дна и крыши: зазор до дна паза снизу и сверху, если он не тот же, что по ширине (grooveClear) — как в проекте
+ *  (k28 m10: снизу 2,5, сверху 1; k28 m11: 2,2 и 1). Иначе undefined. */
+export function backClearY(back: B, bottom: B, top: B, gd: number, gc: number): [number, number] | undefined {
+  const lo = r1(back.y0 - (bottom.y1 - gd)), hi = r1(top.y0 + gd - back.y1);
+  return lo >= 0 && hi >= 0 && (Math.abs(lo - gc) > 0.05 || Math.abs(hi - gc) > 0.05) ? [lo, hi] : undefined;
+}
+
 /** Дно/крыша между боковинами с кромкой на торцах у боковин (±x) — так в части проектов (k32: кромка по кругу у всех панелей). */
 export function endsEdged(hs: RefPanel[]): boolean {
   const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
@@ -204,6 +211,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const z0 = r1(back.b.z0 - sideZ0), gw = 4, gd = 8;
     m.grooveInset = r1(z0 - (gw - 3)); m.grooveWidth = gw; m.grooveDepth = gd;
     m.grooveClear = r1((W - 2 * t + 2 * gd - (back.b.x1 - back.b.x0)) / 2);
+    const cy = bottom && topPanel ? backClearY(back.b, bottom.b, topPanel.b, gd, m.grooveClear) : undefined;
+    if (cy) m.kitchen.backClearY = cy;
   }
   // ящики Axis PRO: по каждой левой направляющей — её фасад (по держателю фасада), царга (высота, цвет), дно и задняя стенка
   const axisRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Axis PRO Направляющая/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);

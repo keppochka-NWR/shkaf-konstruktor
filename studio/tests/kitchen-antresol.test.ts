@@ -5,7 +5,7 @@ import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from 
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,backClearY,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
@@ -190,9 +190,20 @@ test('estimate of a module from Bazis: no "мелочёвка корпуса" no
   assert.equal(parseModule(JSON.parse(JSON.stringify(bz))).kitchen!.bazis,true);
 });
 
+test('HDF in the groove with its own bottom/top clearance as in Bazis (k28 m10: 2.5 / 1), symmetric case gives no override',()=>{
+  const B=(x0:number,y0:number,z0:number,x1:number,y1:number,z1:number)=>({x0,y0,z0,x1,y1,z1});
+  assert.deepEqual(backClearY(B(9,24.5,17,741,359,20),B(0,14,0,750,30,345),B(16,352,0,734,368,345),8,1),[2.5,1]);
+  assert.equal(backClearY(B(9,9,17,591,391,20),B(16,0,0,584,16,350),B(16,384,0,584,400,350),8,1),undefined);
+  const m=antresol();m.backType='groove';m.kitchen!.backClearY=[2.5,1];
+  const back=parts(m).find(p=>p.id==='back')!;
+  assert.equal(back.position[1]-back.size[1]/2,16-8+2.5);assert.equal(back.position[1]+back.size[1]/2,400-16+8-1);
+  assert.deepEqual(partCollisions(parts(m),m),[]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.backClearY,[2.5,1]);
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
-for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05']] as const)
+for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05'],['k28','m10']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
     const {module:m}=moduleFromEtalon(ref);
