@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {existsSync,readFileSync} from 'node:fs';
+import {validate,parts} from '../src/model';
+import {compareModule,type RefModule} from '../scripts/kitchen/compare';
+import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+
+// Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тест пропускается.
+const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
+const load=(k:string,key:string)=>(JSON.parse(readFileSync(`${ETALON}/${k}.json`,'utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+
+test('пенал k12 m04: два ряда распашных = doorSplit, фикс. полки на эксцентриках со шкантом, кромка фикс. полок перед+зад — сверка с Базисом PASS',{skip:!existsSync(`${ETALON}/k12.json`)},()=>{
+  const ref=load('k12','m04');
+  const {module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(unsupported,[]);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(m.sections[0].doorSplit,1198.5,'разрез: от низа нижнего фасада 101.5 до середины зазора 1298.5…1301.5');
+  assert.equal(m.sections[0].doorLeaves,1);
+  assert.equal(m.faceGapBetween,3,'зазор между рядами 3');
+  const sid=m.sections[0].id;
+  for(const j of m.sections[0].fixed??[])for(const side of ['left','right'])assert.equal(m.jointFastening?.[`${sid}:shelf:${j}:${side}`],'eccentric');
+  const ps=parts(m);
+  for(const j of m.sections[0].fixed??[]){const sh=ps.find(p=>p.id===`${sid}:shelf:${j}`)!;assert.ok(sh,'фикс. полка '+j);}
+  const c=compareModule(ref,m);
+  assert.ok(c.pass,JSON.stringify({missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name),hw:c.hardware.filter(h=>h.ref!==h.studio),edges:c.edges?.bad.slice(0,3)}));
+});
+
+test('пенал под духовку k23 m15: ниша 385 мм между фасадами не выдаётся за разрез фасадов — честно «не поддержано»',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+  const {module:m,unsupported}=moduleFromEtalon(load('k23','m15'));
+  assert.equal(m.sections[0].doorSplit,undefined);
+  assert.ok(unsupported.some(u=>u.startsWith('ниша под технику между фасадами 385.5')),unsupported.join('; '));
+});
