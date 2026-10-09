@@ -269,8 +269,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const kd: KDrawer[] = [];
     lefts.forEach((s) => {
       const b = s.b, inBox = (q: { b: typeof b }) => q.b.y0 >= b.y0 - 0.5 && q.b.y1 <= b.y1 + 0.5 && q.b.x0 >= b.x1 - 0.5 && q.b.x0 < b.x1 + 30 && q.b.z0 >= b.z0 - 0.5 && q.b.z1 <= b.z1 + 0.5;
+      // цокольный ящик под дном корпуса (k07 m01/m04: короб с 10, фасад утоплен в цоколь) — в студии такого ящика нет: честно
+      // «не поддержано», а не ящик внутри корпуса с чужим фасадом и ошибкой «уходит в дно»
       const ov = (q: { b: typeof b }) => Math.min(q.b.y1, b.y1) - Math.max(q.b.y0, b.y0);
       const f = [...fronts].sort((a, c) => ov(c) - ov(a))[0];
+      if (f && ov(f) <= 0) { unsupported.push(`ящик Versalite на ${r1(b.y0)}: своего фасада в ряду фасадов нет (цокольный ящик под дном корпуса) — пока не поддержан`); return; }
       const run = vlRuns.find((h) => Math.abs(h.pos[0] - left.b.x1) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y1 + 0.5);
       const rs = P.find(({ p, b: q }) => /^Боковина ящика прав/i.test(p.name) && Math.abs(q.y0 - b.y0) < 0.6 && Math.abs(q.z0 - b.z0) < 0.6 && q.x0 > W / 2);
       const bot = P.find((q) => /^Дно ящика/i.test(q.p.name) && inBox(q)), bk = P.find((q) => /^Задн/i.test(q.p.name) && /ящика/i.test(q.p.name) && inBox(q) && q.b.z0 < b.z0 + 1), fal = P.find((q) => /^Фальш/i.test(q.p.name) && inBox(q));

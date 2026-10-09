@@ -107,6 +107,14 @@ test('k21 m03: lower СТАРТ and upper Axis PRO in one module are both recogn
   assert.equal((d.kdrawers![0] as StartDrawer).len,400);
 });
 
+test('k07 m01/m04: Versalite plinth drawer under the cabinet bottom is reported unsupported, not built inside with a borrowed facade',{skip:!existsSync(ETD+'k07.json')},()=>{
+  for(const key of ['m01','m04']){
+    const {module:m,unsupported}=moduleFromEtalon(ref('k07',key));
+    assert.ok(unsupported.some(x=>/цокольный ящик/.test(x)),key);
+    assert.deepEqual(validate(m).filter(x=>/^Ящик/.test(x)),[],key);
+  }
+});
+
 test('kitchen estimate has no rows the Bazis projects lack: no confirmat caps, no «мелочёвка корпуса»; wardrobes keep them',()=>{
   const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;m.kdrawers=relayoutKDrawers(m,3);
   const p=newProject();p.modules[0]={...p.modules[0],module:m};const e=estimate(p);
