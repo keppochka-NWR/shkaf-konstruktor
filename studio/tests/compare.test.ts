@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {kitchenBase,kitchenWall} from '../src/kitchen';
-import {compareModule,refFromStudio} from '../scripts/kitchen/compare';
+import {compareModule,refFromStudio,honestPass} from '../scripts/kitchen/compare';
 
 test('comparator self-check: a module against itself passes',()=>{
   for(const m of [kitchenBase(initialModule(),600),kitchenWall(initialModule(),800),kitchenBase(initialModule(),800,'sink')]){
@@ -24,6 +24,13 @@ test('сверщик видит фигурную деталь Базиса: вы
   assert.ok(compareModule(rect,m).pass,'прямоугольный контур — не вырез');
   const round=structuredClone(ref);Object.assign(round.panels.find(p=>p.i===side.i)!,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H-10,D],[H,D-10],[H,0]]});
   assert.ok(compareModule(round,m).pass,'срез угла 10×10 (50 мм²) — не вырез');
+});
+
+test('честный PASS: совпавшая сверка не делает модуль параметрическим, если у студии ошибки или распознаватель что-то не поддержал',()=>{
+  assert.equal(honestPass({pass:true},[],[]),true);
+  assert.equal(honestPass({pass:true},[],['1 панелей не распознано']),false);
+  assert.equal(honestPass({pass:true},['Параметр faceGap: 0–5 мм.'],[]),false);
+  assert.equal(honestPass({pass:false},[],[]),false);
 });
 
 test('comparator catches mutations: 1 mm shift, missing panel, extra hinge, moved leg, mirrored layout',()=>{

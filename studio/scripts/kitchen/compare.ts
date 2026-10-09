@@ -250,6 +250,10 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   return { edges: edgeCheck, contours, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, deviations, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
 }
 
+/** Модуль можно брать параметрическим (пакет — PASS, импорт — не сырой): сверка совпала, у студии нет ошибок
+ *  и распознаватель ничего не пометил «не поддержано» (иначе неподдержанное теряется молча, даже если сверка его не видит). */
+export const honestPass = (c: Pick<Comparison, "pass">, errors: string[], unsupported: string[]) => c.pass && !errors.length && !unsupported.length;
+
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */
 export function refFromStudio(m: Module, key = "self"): RefModule {
   const ps = parts(m);

@@ -5,7 +5,7 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, copyFileSync, statSync } from "node:fs";
 import { initialModule, id, validate, section, type Module } from "../../src/model";
 import { newProject, parseProject, projectErrors, type PlacedModule } from "../../src/project";
-import { compareModule, type RefModule } from "./compare";
+import { compareModule, honestPass, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, type RawSpec } from "../../src/rawModule";
 import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
@@ -47,7 +47,7 @@ for (const f of files) {
     let m: Module | undefined;
     try {
       const r = moduleFromEtalon(ref, look);
-      if (!validate(r.module).length && compareModule(ref, r.module).pass) { m = r.module; parametric++; }
+      if (honestPass(compareModule(ref, r.module), validate(r.module), r.unsupported)) { m = r.module; parametric++; }
     } catch { /* нераспознанный — сырой */ }
     if (!m) {
       m = { ...initialModule(), name: ref.name, width: r1(ref.size[0]), height: r1(ref.size[1]), depth: r1(ref.size[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, raw: rawFromRef(ref) };

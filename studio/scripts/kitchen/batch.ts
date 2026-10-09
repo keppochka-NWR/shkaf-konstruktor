@@ -2,7 +2,7 @@
 // npx tsx scripts/kitchen/batch.ts base-doors,wall [out.md]
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { validate } from "../../src/model";
-import { compareModule, type RefModule } from "./compare";
+import { compareModule, honestPass, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 
 const [archArg, out] = process.argv.slice(2);
@@ -30,9 +30,10 @@ for (const f of readdirSync(dir).filter((f) => /^k\d\d\.json$/.test(f)).sort()) 
       for (const h of c.hardware) if (h.ref !== h.studio || (h.maxPosDelta ?? 0) > 2 || h.note) why.push(`${h.category} ${h.ref}/${h.studio}${h.maxPosDelta ? " Δ" + h.maxPosDelta : ""}${h.note ? " " + h.note : ""}`);
       if (c.contours?.length) why.push(`контур: ${c.contours[0]}`);
       if (c.holes && (c.holes.missing.length || c.holes.extra.length)) why.push(`отв. ${c.holes.matched}/${c.holes.ref} (+${c.holes.extra.length})`);
-      if (c.pass && !err.length) pass++;
+      const ok = honestPass(c, err, unsupported);
+      if (ok) pass++;
       for (const w of why) { const k = w.replace(/[\d.]+/g, "#").slice(0, 60); reasons.set(k, (reasons.get(k) ?? 0) + 1); }
-      line += `${c.pass && !err.length ? "PASS" : "FAIL"} | ${why.join("; ").replace(/\|/g, "/")} |`;
+      line += `${ok ? "PASS" : "FAIL"} | ${why.join("; ").replace(/\|/g, "/")} |`;
     } catch (x) { line += `ОШИБКА | ${(x as Error).message} |`; reasons.set("ошибка распознавания", (reasons.get("ошибка распознавания") ?? 0) + 1); }
     rows.push(line);
   }
