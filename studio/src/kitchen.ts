@@ -60,6 +60,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины], мм — по каждой стороне. Отрицательное «ниже верха» —
    *  навес выше корпуса (так стоит в части проектов Базиса; отверстий в боковине тогда нет, как и у Базиса). */
   hangerAt?: { left: [number, number, number]; right: [number, number, number]; caps?: { left: [number, number, number]; right: [number, number, number] } };
+  /** Гвозди набивного ХДФ, как в проекте Базиса (k01, k03, k07, k24): точка на задней плоскости ХДФ [от левого наружного края, от низа
+   *  модуля], мм, и поворот сетки Базиса [w,x,y,z]. Без поля гвоздей нет (студия их не придумывает). */
+  nails?: { at: [number, number]; quat?: number[] }[];
   /** Модуль распознан из проекта Базиса: смета — только то, что есть в Базисе (без норматива «мелочёвка корпуса» и заглушек
    *  под конфирматы — в проектах Базиса цеха их нет ни в одном модуле). */
   bazis?: boolean;
@@ -254,6 +257,14 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       // Цоколь ЛДСП 16 на клипсах передних опор: задняя грань — по выступу клипсы, на 5 мм ниже дна.
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
+  }
+  // гвозди набивного ХДФ (Базис, kitchen.nails): на задней плоскости ХДФ, в точке и с поворотом проекта; габарит — точка привязки,
+  // геометрия из сетки Базиса (гвоздь проходит ХДФ в торец панели — это его работа, не пересечение)
+  const back = out.find((p) => p.id === "back");
+  if (back && m.backType === "nailed") for (const [n, g] of (k.nails ?? []).entries()) {
+    const o: [number, number, number] = [g.at[0], g.at[1], back.position[2] - back.size[2] / 2];
+    out.push(metal(`kitchen-nail:${n}`, "Гвоздь", [0.01, 0.01, 0.01], o,
+      { file: "hardware/bazis/281de529218b.glb", length: "y", native: true, origin: o, quat: unitQuat((g.quat?.length === 4 ? g.quat : [1, 0, 0, 0]) as [number, number, number, number]) }));
   }
   // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
   for (const [n, d] of (k.dryer ?? []).entries()) {

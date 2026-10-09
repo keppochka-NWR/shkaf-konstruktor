@@ -32,6 +32,26 @@ export function railFastened(b: Box, hardware: Hw[], xL: number, xR: number): bo
   return hardware.some((h) => /конфирмат|эксцентрик|шкант/.test(h.category) || /^Евровинт/.test(h.name) ? h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1 && (h.pos[0] <= xL + 1 || h.pos[0] >= xR - 1) : false);
 }
 
+/** Конфирматы стяжки на ребре — как в Базисе (только кухни):
+ *  conf — точки в боковинах по высоте стяжки от её низа, когда их в Базисе больше одной (k03: 34 и 66 у стяжки 100 — 10 модулей
+ *  базы; у остальных одна по центру — студия так и ставит, поле не пишется);
+ *  topConf — конфирматы через крышу в стяжку, стоящую под крышей: отступ от левой внутренней грани боковины вдоль стяжки
+ *  (k03, k04 — по 2, в 51–65 мм от боковин; у каждого проекта своё, поэтому по проекту, а не правилом). */
+export function railConfirmats(b: Box, hardware: Hw[], xL: number, xR: number, t: number, top: number): { conf?: number[]; topConf?: number[] } {
+  const c = hardware.filter((h) => h.category === "конфирмат"), inZ = (h: Hw) => h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
+  const side = c.filter((h) => inZ(h) && h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && (h.pos[0] <= xL + 1 || h.pos[0] >= xR - 1));
+  const ys = [...new Set(side.map((h) => r1(h.pos[1] - b.y0)))].sort((p, q) => p - q);
+  const underTop = b.y1 >= top - t - 1;
+  const xs = underTop ? c.filter((h) => inZ(h) && h.pos[1] >= top - 1 && h.pos[0] > xL + t + 1 && h.pos[0] < xR - t - 1).map((h) => r1(h.pos[0] - (xL + t))).sort((p, q) => p - q) : [];
+  return { ...(ys.length > 1 ? { conf: ys } : {}), ...(xs.length ? { topConf: xs } : {}) };
+}
+
+/** Гвозди набивного ХДФ — как в Базисе (k01, k03, k07, k24 — 19 модулей базы): точки на задней плоскости ХДФ от левого
+ *  наружного края и низа корпуса и поворот сетки Базиса. Шаг у проектов разный (138, 186…), поэтому по проекту. */
+export function hdfNails(hardware: (Hw & { quat?: number[]; mesh?: string | null })[], x0: number, y0: number): { at: [number, number]; quat?: number[] }[] {
+  return hardware.filter((h) => /^Гвозд/.test(h.name)).map((h) => ({ at: [r1(h.pos[0] - x0), r1(h.pos[1] - y0)] as [number, number], ...(h.quat ? { quat: h.quat.map((v) => Math.round(v * 1e4) / 1e4) } : {}) }));
+}
+
 /** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */
 export const isEuro6 = (h: { name: string }) => /^Евровинт 6/.test(h.name);
 export function screwKind(hardware: Hw[]): "euro-6x50" | undefined {

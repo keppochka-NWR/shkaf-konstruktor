@@ -310,3 +310,45 @@ for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['
     assert.deepEqual(validate(m),[]);
     assert.equal(compareModule(ref,m).pass,true);
   });
+
+// n4-antresol: конфирматы стяжки и гвозди ХДФ — как в Базисе (k03: стяжка 100 под крышей, по 2 конфирмата в боковинах и 2 через крышу)
+test('rail confirmats recognizer: two per side and through the top (k03), one centered gives no override',async()=>{
+  const {railConfirmats,hdfNails}=await import('../scripts/kitchen/recognize-common');
+  const b={x0:16,y0:274,z0:3,x1:584,y1:374,z1:19},c=(pos:number[])=>hw('Конфирмат 7х50 мм, Zn','конфирмат',pos);
+  const k03=[c([0,308,11]),c([0,340,11]),c([600,308,11]),c([600,340,11]),c([76,390,11]),c([524,390,11]),c([0,382,278.5]),c([600,8,54.5])];
+  assert.deepEqual(railConfirmats(b,k03,0,600,16,390),{conf:[34,66],topConf:[60,508]});
+  assert.deepEqual(railConfirmats(b,[c([0,324,11]),c([600,324,11])],0,600,16,390),{});
+  // стяжка не под крышей — конфирматы крыши к ней не относятся
+  assert.deepEqual(railConfirmats({...b,y0:100,y1:200},[c([76,390,11])],0,600,16,390),{});
+  const n=hdfNails([{name:'Гвоздь',category:'прочее',pos:[24,381.5,0],quat:[0.7071,0,-0.7071,0]},hw('Конфирмат 7х50 мм, Zn','конфирмат',[0,8,54.5])],0,0);
+  assert.deepEqual(n,[{at:[24,381.5],quat:[0.7071,0,-0.7071,0]}]);
+});
+
+test('studio places rail confirmats and HDF nails from the Bazis project, only for kitchens; fields survive save/load',()=>{
+  const m=antresol();m.kitchen!.hangers=false;m.backType='nailed';m.backGap=1;m.rails=[{place:'rear-top',height:100,conf:[34,66],topConf:[60,508]}];
+  m.kitchen!.nails=[{at:[24,8.5],quat:[0.7071,0,-0.7071,0]},{at:[576,391.5]}];
+  const ps=parts(m),o=(id:string)=>ps.find(p=>p.id===id)?.model?.origin;
+  const top=m.height-16,ry0=top-100;
+  assert.deepEqual(o('fast:rail:rear-top:left:0')?.slice(0,2),[0,ry0+34]);
+  assert.deepEqual(o('fast:rail:rear-top:right:1')?.slice(0,2),[600,ry0+66]);
+  assert.deepEqual(o('fast:rail:rear-top:top:0')?.slice(0,2),[76,m.height]);
+  assert.deepEqual(o('fast:rail:rear-top:top:1')?.slice(0,2),[524,m.height]);
+  const back=ps.find(p=>p.id==='back')!,nails=ps.filter(p=>p.id.startsWith('kitchen-nail:'));
+  assert.equal(nails.length,2);
+  assert.deepEqual(nails[0].position,[24,8.5,back.position[2]-back.size[2]/2]);
+  assert.deepEqual(partCollisions(ps,m).filter(c=>/kitchen-nail|rail:rear-top/.test(c.a+c.b)),[]);
+  const back2=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back2.rails,m.rails);assert.deepEqual(back2.kitchen!.nails,m.kitchen!.nails);
+  // шкаф студии (не кухня): поля стяжки Базиса не действуют — один конфирмат по центру, как раньше
+  const w=initialModule();w.rails=[{place:'rear-top',height:100,conf:[34,66],topConf:[60]}];
+  const wp=parts(w);
+  assert.equal(wp.some(p=>/^fast:rail:rear-top:(top|\w+:1)/.test(p.id)),false);
+});
+
+for(const [k,key] of [['k03','m06'],['k03','m08']] as const)
+  test(`etalon ${k}/${key}: rail confirmats and HDF nails as in Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+    const {module:m}=moduleFromEtalon(ref);
+    assert.deepEqual(validate(m),[]);
+    assert.equal(compareModule(ref,m).pass,true);
+  });
