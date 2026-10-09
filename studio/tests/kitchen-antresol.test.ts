@@ -265,7 +265,7 @@ for(const [k,key,name,h] of [['k14','m03','Фронтальная',255],['k32','
     assert.ok(pl,'plinth part');assert.equal(pl.size[1],h);
     const c=compareModule(ref,m);
     assert.ok(!c.missing.some(x=>x.name===name&&/ldsp/.test(x.cls)),'Bazis panel is not missing');
-    assert.ok(c.pairs.some(p=>p.ref.name===name&&p.studio.id==='plinth'&&p.delta<=2));
+    assert.ok(c.pairs.some(p=>p.ref.name===name&&p.studio.id==='plinth'&&p.delta===0),'flush with the side fronts, as in Bazis');
   });
 test('etalon k28/m10: antresol without a panel under the bottom has no plinth (plinth.off)',{skip:!existsSync(ET+'k28.json')},()=>{
   const {module:m}=moduleFromEtalon(refOf('k28','m10'));

@@ -679,7 +679,8 @@ export function parts(m: Module): Part[] {
     "plinth",
     "Цоколь",
     [m.width - 2 * t, bottom, t],
-    [m.width / 2, bottom / 2, d - RULES.plinthInset - t / 2],
+    // кухня, навесной/антресоль: щит под поднятым дном в Базисе заподлицо с передом боковин (k14 m03, k32 m13, k15 m08, k18 m12, k30 m09)
+    [m.width / 2, bottom / 2, d - (m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol") ? 0 : RULES.plinthInset) - t / 2],
     m.width - 2 * t,
     bottom,
     t,
