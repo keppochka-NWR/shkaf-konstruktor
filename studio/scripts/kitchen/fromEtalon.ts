@@ -74,8 +74,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
   const legs = hw("опора");
   // дно — нижняя горизонталь; крыша — верхняя горизонталь во всю глубину
-  const bottom = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6).sort((a, c) => a.b.y0 - c.b.y0)[0];
+  const bottom0 = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6).sort((a, c) => a.b.y0 - c.b.y0)[0];
   const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
+  // единственная горизонталь во всю глубину — наверху (k34 m04: сушка без дна, «Крышка» и ХДФ до низа): это крыша, дна нет
+  const bottom = bottom0 && bottom0 === topPanel && bottom0.b.y0 > top / 2 ? undefined : bottom0;
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
   const fxBox = (name: string) => /ящика/i.test(name) && ref.hardware.some((h) => /Firmax/.test(h.name)); // короб ящика Firmax — не царга и не полка
@@ -368,7 +370,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     }
     if (out.length) m.grooves = out;
   }
-  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel, wr?.panel, ...drawerPanels].includes(x)).length;
+  // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт лишь wallRaise (wr.panel),
+  // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
+  const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
+  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthUsed, wr?.panel, ...drawerPanels].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   // угловой навесной с диагональным фасадом — параметрики нет (см. wallCorner.ts), причина первой
   if (ref.archetype.startsWith("wall")) { const why = wallCornerRaw(ref); if (why) unsupported.unshift(why); }

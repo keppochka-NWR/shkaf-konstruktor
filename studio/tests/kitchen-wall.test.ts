@@ -131,6 +131,10 @@ test('навесной k32 m14: в Базисе нет крепежа и кро�
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.equal(back.kitchen?.noFasteners,true);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
 });
+test('антресоль k31 m20: задняя вертикаль под поднятым корпусом не теряется молча — «не распознано»',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
+  const {unsupported}=moduleFromEtalon(load('k31','m20'));
+  assert.ok(unsupported.some(u=>/1 панелей не распознано/.test(u)),unsupported.join('; '));
+});
 test('«Евровинт 6х50» из «прочего» эталона — конфирмат: k33 m03 и k34 m04 крепёж не снимается',{skip:!existsSync(`${ETALON}/k33.json`)||!existsSync(`${ETALON}/k34.json`)},()=>{
   assert.equal(refCategory({name:'Евровинт 6х50',category:'прочее'}),'конфирмат');
   assert.equal(refCategory({name:'Винт прямого крепления с потайной головкой, ø6,3х14 мм',category:'прочее'}),'прочее');
@@ -144,6 +148,10 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
     assert.ok(!c.hardware.some(h=>h.category==='прочее'&&h.ref>0),'в «прочем» евровинтов не осталось');
     assert.ok((c.holes?.matched??0)>0,`${k} ${key}: присадка крепежа совпадает хотя бы частично`);
   }
+  // сушка k34 m04 без дна: единственная горизонталь — «Крышка» наверху; дна студия не выдумывает, ХДФ не теряется
+  const r4=load('k34','m04'),m4=moduleFromEtalon(r4).module,c4=compareModule(r4,m4);
+  assert.equal(m4.bottomType,'none');
+  assert.deepEqual([c4.missing.map(x=>x.name),c4.extra.map(x=>x.name)],[[],[]]);
   // в k32 крепежа нет вовсе — правило «без крепежа» по-прежнему срабатывает
   assert.equal(moduleFromEtalon(load('k32','m14')).module.kitchen?.noFasteners,true);
 });
