@@ -209,6 +209,14 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
   assert.equal(refCategory({name:'Евровинт 6х50',category:'прочее'}),'конфирмат');
   assert.equal(refCategory({name:'Винт прямого крепления с потайной головкой, ø6,3х14 мм',category:'прочее'}),'прочее');
   assert.equal(refCategory({name:'Полкодержатель D5 никель',category:'полкодержатель'}),'полкодержатель');
+  // «Мебельная ручка рейлинг 128» — ручка, а не ящик-система: студия ручку не снимает (раньше noHandles)
+  assert.equal(refCategory({name:'Мебельная ручка рейлинг 128',category:'ящик-система'}),'ручка');
+  assert.equal(refCategory({name:'Axis PRO Держ. фасада',category:'ящик-система'}),'ящик-система');
+  if(existsSync(`${ETALON}/k09.json`)){
+    const r9=load('k09','m02'),m9=moduleFromEtalon(r9).module;
+    assert.notEqual(m9.noHandles,true);
+    const h9=compareModule(r9,m9).hardware.find(h=>h.category==='ручка')!;assert.deepEqual([h9.ref,h9.studio],[1,1]);
+  }
   for(const [k,key,n] of [['k33','m03',8],['k34','m03',8],['k34','m04',4],['k33','m01',8]] as const){
     const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
     assert.notEqual(m.kitchen?.noFasteners,true,`${k} ${key}: крепёж в Базисе есть`);

@@ -6,6 +6,8 @@ const CONFIRMAT = /евровинт|конфирмат/i;
 
 export function refCategory(h: { name: string; category: string }): string {
   if (h.category === "прочее" && CONFIRMAT.test(h.name ?? "")) return "конфирмат";
+  // «Мебельная ручка рейлинг 128» (k09): «рейлинг» стоит в правиле ящик-системы раньше ручки — это ручка
+  if (h.category === "ящик-система" && /^\s*(мебельная\s+)?ручк/i.test(h.name ?? "")) return "ручка";
   return h.category;
 }
 
