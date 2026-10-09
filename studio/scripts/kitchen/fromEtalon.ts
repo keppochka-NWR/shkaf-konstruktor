@@ -226,7 +226,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const z0 = r1(back.b.z0 - sideZ0), gw = 4, gd = 8;
     m.grooveInset = r1(z0 - (gw - 3)); m.grooveWidth = gw; m.grooveDepth = gd;
     m.grooveClear = r1((W - 2 * t + 2 * gd - (back.b.x1 - back.b.x0)) / 2);
-    const cy = bottom && topPanel ? backClearY(back.b, bottom.b, topPanel.b, gd, m.grooveClear) : undefined;
+    // крыша — та, что у студии (под верхом боковин): у k13 m04 «+ полка» верхняя горизонталь Базиса стоит над боковинами (1034 при высоте 705),
+    // зазор от неё давал ХДФ отрицательной высоты (−18)
+    const cy = bottom && topPanel ? backClearY(back.b, bottom.b, { ...topPanel.b, y0: Math.min(topPanel.b.y0, H - t) }, gd, m.grooveClear) : undefined;
     if (cy) m.kitchen.backClearY = cy;
   }
   // ящики Axis PRO: по каждой левой направляющей — её фасад (по держателю фасада), царга (высота, цвет), дно и задняя стенка

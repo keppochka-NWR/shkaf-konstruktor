@@ -261,6 +261,15 @@ test('etalon k28/m10: antresol without a panel under the bottom has no plinth (p
   assert.equal(m.kitchen!.plinth?.off,true);
   assert.ok(!parts(m).some(p=>p.id==='plinth'));
 });
+// ХДФ в пазу промежуточной горизонтали: зазор сверху считается от крыши студии (под верхом боковин), а не от горизонтали Базиса
+// над боковинами (k13 m04 «+ полка»: было −18 по высоте; k17 m07: 689,5 вместо 705,5) — размер как в Базисе.
+for(const [k,key,w,h] of [['k13','m04',682,327],['k17','m07',1014,705.5],['k21','m07',972,705.5]] as const)
+  test(`etalon ${k}/${key}: HDF size as in Bazis when the top horizontal stands above the sides`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=refOf(k,key),{module:m}=moduleFromEtalon(ref),b=parts(m).find(p=>p.id==='back')!;
+    assert.deepEqual([b.size[0],b.size[1]],[w,h]);
+    const hdf=ref.panels.filter(p=>p.kind==='hdf').map(p=>[p.box[1],p.box[4]]);
+    assert.ok(hdf.some(([y0,y1])=>Math.abs(y0-(b.position[1]-h/2))<0.05&&Math.abs(y1-(b.position[1]+h/2))<0.05),'same height position');
+  });
 // Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
 for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)
   test(`etalon ${k}/${key}: shelf confirmat does not hit the bottom confirmat`,{skip:!existsSync(ET+k+'.json')},()=>{
