@@ -63,7 +63,8 @@ export function worktopGroupRole(p: EtPanel): "worktop" | "panel" | "mock" {
 
 const BOARD_KINDS = ["ldsp", "mdf", "hdf", "glass", "mirror"];
 
-export type RowPanel = EtPanel & { front: boolean; wall?: true; group: string };
+/** parent — деталь Базиса, из которой получена часть (фигурная столешница — несколько прямоугольников): один объект в студии. */
+export type RowPanel = EtPanel & { front: boolean; wall?: true; group: string; parent: string };
 /** Детали «Ряда» кухни (столешница, цоколь, стеновые панели, профили, прочее вне модулей) в мировых координатах Базиса.
  *  - фигурная столешница — прямоугольники по контуру Базиса (не сплошной габарит);
  *  - фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»);
@@ -74,7 +75,7 @@ export type RowPanel = EtPanel & { front: boolean; wall?: true; group: string };
  *  - группа «столешницы» — по worktopGroupRole: «Столешница» только настоящая столешница Базиса. */
 export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[] {
   const grp = (g: string) => ((row?.[g] ?? []) as EtPanel[]).filter((p) => p && Array.isArray(p.box) && p.box.length === 6);
-  return (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => grp(g).flatMap((p): RowPanel[] => {
+  return (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => grp(g).flatMap((p, pi): RowPanel[] => {
     if (p.role === "appliance") return [];
     const wt = g === "worktops" ? worktopGroupRole(p) : null;
     if (wt === "mock") return [];
@@ -82,7 +83,7 @@ export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[
     const name = g === "plinths" ? plinthName(p.name) : wt === "worktop" && !/столешн/i.test(p.name) ? "Столешница"
       : wall && !/[сc]тенов/i.test(p.name) ? `Стеновая панель · ${p.name}` : p.name;
     const rs = rowRects(p);
-    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", group: g, front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
+    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", group: g, parent: `${g}:${pi}`, front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
   }));
 }
 

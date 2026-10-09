@@ -132,6 +132,8 @@ export function modulesOverlap(a:PlacedModule,b:PlacedModule){
  if(a.module.raw||b.module.raw)return false;
  if(a.module.corner||b.module.corner){if(!overlap(bounds(a),bounds(b)))return false;return polygonsOverlap(moduleFootprint(a),moduleFootprint(b));}
  const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
+/** Предел объектов в проекте: 40 у проектов студии; у кухни из Базиса — 200 (каждая деталь ряда — свой объект: цоколь, куски столешницы, стеновые панели). */
+export function maxModules(p:{source?:unknown}){return p.source==='bazis'?200:40;}
 export function projectErrors(p:Project):string[]{
   const errors:string[]=[];
   if(p.kind!==undefined&&p.kind!=='kitchen')return ['Неизвестный тип проекта.'];
@@ -145,7 +147,7 @@ export function projectErrors(p:Project):string[]{
   if(p.calculation&&((p.calculation.model!==undefined&&!['markup','sheet'].includes(p.calculation.model))||(p.calculation.sheetPrice!==undefined&&(!Number.isFinite(p.calculation.sheetPrice)||p.calculation.sheetPrice<5000||p.calculation.sheetPrice>100000))))return ['Проверьте модель цены и цену за лист (5 000–100 000 ₽).'];
   if(p.calculation&&(!Number.isFinite(p.calculation.markup)||p.calculation.markup<1||p.calculation.markup>10||!p.calculation.overrides||typeof p.calculation.overrides!=='object'||Array.isArray(p.calculation.overrides)||Object.keys(p.calculation.overrides).length>300||Object.values(p.calculation.overrides).some(v=>!Number.isFinite(v)||v<0||v>1e9)))return ['Проверьте цены и коэффициент сметы (от 1 до 10).'];
   if(p.offer&&(typeof p.offer.customer!=='string'||p.offer.customer.length>120||typeof p.offer.notes!=='string'||p.offer.notes.length>2000||typeof p.offer.price!=='string'||(p.offer.price!==''&&(!Number.isFinite(Number(p.offer.price))||Number(p.offer.price)<0||Number(p.offer.price)>1e12))))return ['Проверьте поля коммерческого предложения.'];
-  if(!p.modules.length||p.modules.length>40)return ['В проекте должно быть от 1 до 40 модулей.'];
+  if(!p.modules.length||p.modules.length>maxModules(p))return [`В проекте должно быть от 1 до ${maxModules(p)} модулей.`];
   if(new Set(p.modules.map(m=>m.id)).size!==p.modules.length)return ['Идентификаторы модулей повторяются.'];
   for(const v of [p.room.width,p.room.depth,p.room.height])if(!Number.isFinite(v)||v<500||v>20000)return ['Размеры помещения: от 500 до 20 000 мм.'];
   const obstacles=p.room.obstacles;
@@ -187,7 +189,7 @@ function legacyModules(raw:any,placement:{id:string;x:number;z:number;y?:number}
 export function parseProject(data:unknown):Project{
   const x=data as any;
   if(x?.version===1){const p=newProject();p.modules=legacyModules(x,{id:id(),x:50,y:0,z:30});const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;}
-  if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>40)throw Error('Нужен файл проекта редактора.');
+  if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>maxModules(x))throw Error('Нужен файл проекта редактора.');
   const p:Project={version:3,...(x.kind===undefined?{}:{kind:x.kind}),...(x.source==='bazis'?{source:'bazis' as const}:{}),room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill,
     ...(o?.casing===undefined?{}:{casing:o.casing}),...(o?.casingThick===undefined?{}:{casingThick:o.casingThick}),...(o?.hinge===undefined?{}:{hinge:o.hinge}),...(o?.reveal===undefined?{}:{reveal:o.reveal}),
@@ -256,7 +258,7 @@ export function copyModuleGroup(p:Project,ids:readonly string[]):{project:Projec
 
 export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=false):{project:Project;ids:string[]}{
  if(!selected.length)throw Error('В шаблоне нет корпусов.');
- if(p.modules.length+selected.length>40)throw Error('После копирования будет больше 40 корпусов. Уменьшите группу.');
+ if(p.modules.length+selected.length>maxModules(p))throw Error(`После копирования будет больше ${maxModules(p)} корпусов. Уменьшите группу.`);
  const errors=projectErrors(p);if(errors.length)throw Error(errors[0]);
  const sourceErrors=projectErrors({version:3,room:{width:20000,depth:20000,height:20000},modules:selected});if(sourceErrors.length)throw Error(sourceErrors[0]);
  const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();if(copyNames)copy.module.name=(copy.module.name.slice(0,72)+' · копия').slice(0,80);rekeySections(copy.module,id);return copy;});
