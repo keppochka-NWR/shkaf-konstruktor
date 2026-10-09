@@ -1033,7 +1033,7 @@ export function parts(m: Module): Part[] {
   kitchenExtraParts(m,out);
   kitchenDrawerParts(m,out,fe(m),m.facadeT??RULES.panel,m.faceAir??2);
   kitchenEdges(m,out);
-  // Пазы под подсветку и прочие (кроме паза под задник): тёмная полоса в панели; подсветка — в смете за пог. м (роль light).
+  // Пазы под подсветку и прочие (кроме паза под задник): тёмная полоса в панели (роль light); в смету не идут — в Базисе только паз, ленты нет.
   (m.grooves??[]).forEach((g,i)=>{const hostPart=out.find(p=>p.id===g.host);if(!hostPart)return;const b=grooveBox(hostPart,g);if(!b)return;const [x0,y0,z0,x1,y1,z1]=b,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
     out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.

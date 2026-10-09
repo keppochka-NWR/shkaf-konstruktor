@@ -223,7 +223,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         add('glass-top-temper','Закалка стекла 4 мм',area,'м²',RULES.glassTopTemper,'АТБ, прайс 01.01.2026');
         add('glass-top-polish','Полировка кромки стекла 4 мм',perimeter,'пог.м',RULES.glassTopPolishPerM,'Прайс МВМ стеклообработка 13.01.2026');
       }
-      if(d.role==='light')add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
+      // паз (groove:*) — фрезеровка в панели, а не лента: в Базисе есть только паз, подсветки в проекте нет — строки сметы не даёт
+      if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews,'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха');
