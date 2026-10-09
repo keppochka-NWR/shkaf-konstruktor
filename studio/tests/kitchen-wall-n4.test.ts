@@ -118,3 +118,16 @@ test('стяжка навесного k03 m08 на крепеже Базиса: 
   assert.equal(ok,true);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.railConf,m.kitchen?.railConf,'крепёж стяжки переживает сохранение');
 });
+
+test('бочонок эксцентрика крыши с наружной пласти, как в Базисе (k07 m06: D15×12 «+y» крыши) — kitchen.ecc.topOut',{skip:!has('k07')},()=>{
+  const {m,c,ok}=pass('k07','m06');
+  assert.equal(m.kitchen?.ecc?.topOut,true);
+  const top=parts(m).find(p=>p.id==='top')!;
+  const e=parts(m).filter(p=>p.id.startsWith('ecc:top:')&&!p.id.endsWith(':pin'));
+  assert.ok(e.length>0&&e.every(p=>Math.abs(p.anchor![1]-(top.position[1]+top.size[1]/2))<0.01),'точка бочонка — на верхней пласти крыши');
+  assert.ok(holes(m).filter(h=>h.src.startsWith('ecc:top:')&&h.d===15).every(h=>h.dir[1]===-1),'D15 сверлится сверху вниз');
+  assert.deepEqual(partCollisions(parts(m),m),[]);
+  assert.equal(c.holes?.matched,c.holes?.ref);
+  assert.equal(ok,true);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.ecc?.topOut,true,'topOut переживает сохранение');
+});

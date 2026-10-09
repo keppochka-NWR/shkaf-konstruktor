@@ -887,6 +887,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (dSide !== undefined && dSide !== 12) e.dowelSide = dSide;
       // бочонок дна снизу; под площадкой опоры (k22 m01) — не повторяем: это пересечение (n3-base, eccFromBelow «legs»)
       if (bottom && eh.some((h) => h.d === 15 && h.panel === bottom.p.i && h.face === "-y") && eccFromBelow(ref) !== "legs") e.bottomOut = true;
+      // бочонок крыши сверху, с наружной пласти (k07: D15×12 «+y» крыши) — как в Базисе (n4-wall)
+      if (topPanel && topPanel !== bottom && eh.some((h) => h.d === 15 && h.panel === topPanel.p.i && h.face === "+y")) e.topOut = true;
       if (Object.keys(e).length) { m.kitchen.ecc = e; notes.push(`эксцентрик по проекту: ${JSON.stringify(e)}`); }
     }
     if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }

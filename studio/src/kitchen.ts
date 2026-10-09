@@ -54,8 +54,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   drill?: { confirmat?: number; pin?: number };
   /** Присадка эксцентрика по проекту Базиса, если не типовая (k33/k34 «Стяжка Макмарт Ø15»): глубина бочонка D15 (13 вместо 12),
    *  шток [D, глубина] ([7, 28] вместо [8, 34]), в стойку D5 (9 вместо 12), шкант в стойку D8 (11 вместо 12);
-   *  bottomOut — бочонок дна с наружной (нижней) пласти. */
-  ecc?: { barrel?: number; stem?: [number, number]; side?: number; dowelSide?: number; bottomOut?: boolean };
+   *  bottomOut — бочонок дна с наружной (нижней) пласти; topOut — бочонок крыши с наружной (верхней) пласти (k07, n4-wall). */
+  ecc?: { barrel?: number; stem?: [number, number]; side?: number; dowelSide?: number; bottomOut?: boolean; topOut?: boolean };
   /** Вырез в заднем верхнем углу боковины навесного/антресоли (Базис k32: 100×20 — контур боковины из 6 точек): height — от верха, depth — от задней кромки. */
   sideNotch?: Partial<Record<"left" | "right", { height: number; depth: number }>>;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
