@@ -102,6 +102,10 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if (role === "base" || role === "tall") m.kitchen.plinth = { ...(plinthPanel ? { height: r1(plinthPanel.b.y1 - plinthPanel.b.y0) } : { height: 95, off: true }), ...(legs.length && !clips ? { clips: false } : {}) };
   if (fronts.length && !hw("ручка").length) m.noHandles = true;
   if (!plinthPanel && (role === "base" || role === "tall")) notes.push("цоколя в модуле нет (в Базисе — у ряда или отсутствует)");
+  // корпус приподнят без опор: фронтальная панель ЛДСП под дном в Базисе (цоколь/планка под другим именем) — студия ставит её «Цоколем»;
+  // нет такой панели — цоколя нет (навесной со свесом фасада ниже дна: правило Макса — не добавлять того, чего нет в Базисе)
+  const lowFront = !legs.length && bottom && bottom.b.y0 > 0.5 ? P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y1 <= bottom.b.y0 + 1 && b.z1 >= sideZ1 - 30 && !fronts.some((f) => f.b === b)) : undefined;
+  if (lowFront) m.kitchen.lowFront = true;
   // царги
   const railList: NonNullable<Module["rails"]> = [];
   for (const r of rails) {
@@ -316,7 +320,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     }
     if (out.length) m.grooves = out;
   }
-  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel, ...drawerPanels].includes(x)).length;
+  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthPanel, lowFront, ...drawerPanels].includes(x)).length;
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   return { module: m, notes, unsupported };
 }
