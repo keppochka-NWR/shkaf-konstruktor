@@ -47,8 +47,6 @@ export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; /** Фигурные детали Базиса (контур с вырезами), которые в студии прямоугольник или с другим вырезом. */ contours?: string[]; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
 
 const AX = ["x", "y", "z"];
-/** Дубли фурнитуры Базиса сверяются как есть: студия их повторяет (kitchen.dupParts, n4-tall). */
-const REPEAT_DUPS = true;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** Класс панели: вид материала, толщина (округлённо), ось толщины, фасад или корпус. */
@@ -194,13 +192,11 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   for (const pr of [...pairs]) if (pr.delta > 50) { pairs.splice(pairs.indexOf(pr), 1); missing.push(pr.ref); extra.push(pr.studio); }
   const cats = new Set<string>([...ref.hardware.map((h) => h.category), ...ps.map(studioCategory).filter((x): x is string => !!x)]);
   const hardware: HardwareRow[] = [...cats].map((category) => {
-    // дубль Базиса — опора в той же точке и с тем же поворотом дважды (k16: две опоры в одной точке); считаем один раз, как дубли отверстий.
-    // Только опоры: у направляющих Firmax две точки в одном месте — это пара направляющих, не дубль (n3-tall).
-    const seen = new Set<string>(), allRef = ref.hardware.filter((h) => h.category === category);
-    // n4-tall: дубли опор больше не схлопываем — студия повторяет Базис (kitchen.dupParts), в смете столько опор, сколько в Базисе
-    const uniq = category !== "опора" || REPEAT_DUPS ? allRef : allRef.filter((h) => { const k = `${h.name}|${h.pos.map(r1).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`; if (seen.has(k)) return false; seen.add(k); return true; });
-    const rp = uniq.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
-    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp), ...(allRef.length > uniq.length ? { dups: allRef.length - uniq.length } : {}) };
+    // Дубли Базиса (опора/конфирмат дважды в одной точке, k16, k23) сверяются как есть: студия их повторяет (kitchen.dupParts, n4-tall),
+    // в смете столько, сколько в Базисе. Раньше (n3-tall) дубли опор схлопывались здесь.
+    const allRef = ref.hardware.filter((h) => h.category === category);
+    const rp = allRef.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
+    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
     const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
