@@ -4,7 +4,7 @@ import { facadeGeometry } from '../src/vernissageGeometry';
 import { parts, parseVernissage, initialModule, type Module } from '../src/model';
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
-import { estimate } from '../src/pricing';
+import { estimate, lineGroup } from '../src/pricing';
 import { vernissageLayout, vernissageFacadePrice, vernissageMilling, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
@@ -95,6 +95,7 @@ test('Вернисаж в модуле: фасады — сторонний уч
   const area = facades.reduce((s, x) => s + Math.max(x.size[0] * x.size[1] / 1e6, 0.3), 0);
   assert.ok(Math.abs(line.quantity - area) < 0.01);
   assert.ok(!e.lines.some((l) => l.id === 'facade-external'));
+  assert.equal(lineGroup(line.id), 'material', 'фасады Вернисажа — в «Материалах», не в фурнитуре');
   const hinges = ps.filter((x) => x.id.includes(':hingecup:')).length, boring = e.lines.find((l) => l.id === 'vernissage-hinge-boring');
   assert.ok(hinges > 0 && boring?.quantity === hinges && boring.unitPrice === 40, 'присадка под петли 40 ₽/шт по числу петель');
   assert.deepEqual(parseVernissage(JSON.parse(JSON.stringify(m.vernissage))), m.vernissage);
