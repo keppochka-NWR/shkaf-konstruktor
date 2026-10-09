@@ -256,6 +256,16 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
     return { system: "firmax-ldsp" as const, y0: a.y0, y1: a.y1, runnerY: Math.round(Math.max(a.y0, floor) * 10) / 10, box };
   });
 }
+/** Переключатель панели: саморезы 3×3 направляющих (screws) или шурупы фальшпанели в фасад (faceScrews) у всех ящиков Firmax.
+ *  Включение шурупов фасада не трогает свои точки из Базиса, у остальных — правило большинства. */
+export function firmaxSetScrews(ks: KDrawer[], what: "screws" | "faceScrews", on: boolean): KDrawer[] {
+  return ks.map((k) => {
+    if (!isFirmax(k)) return k;
+    const box = { ...k.box };
+    if (!on) delete box[what]; else if (what === "screws") box.screws = true; else if (!box.faceScrews) box.faceScrews = true;
+    return { ...k, box };
+  });
+}
 export function firmaxFits(m: Module, k: FirmaxDrawer) {
   return k.box.h >= 60 && k.box.y >= axisFloor(m) - 0.01 && k.box.y + k.box.h <= Math.min(k.y1, axisCeiling(m) - AXIS_FIT.ceiling) + 0.01;
 }

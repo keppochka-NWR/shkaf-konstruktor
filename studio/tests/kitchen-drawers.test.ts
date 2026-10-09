@@ -4,7 +4,7 @@ import {initialModule,parts,validate,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers} from '../src/kitchenDrawers';
+import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers,firmaxSetScrews} from '../src/kitchenDrawers';
 import {edgeByDir} from '../src/edges';
 
 // НМ 600 с тремя ящиками Axis PRO как в Базисе k06/m03 (2×H-86 + H-168, 500 мм)
@@ -153,4 +153,12 @@ test('Firmax from the panel (system switch, count) has runner screws D3x3 by def
   const ax=axis(),f=relayoutKDrawers(ax,3,ax.kdrawers!.map(k=>k.y1-k.y0),'firmax-ldsp');assert.ok(f.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
   const n={...ax,kdrawers:f};assert.equal(cnt(n as never).d3,12,'2 per side per drawer');assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
   const two=relayoutKDrawers(n,2);assert.ok(two.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
+});
+test('Firmax panel toggles bring back D3x3 runner screws and face screws D5x16; own Bazis points are kept',()=>{
+  const m=firmax();m.kdrawers=firmaxSetScrews(m.kdrawers!,'screws',false);assert.equal(cnt(m).d3,0);
+  m.kdrawers=firmaxSetScrews(m.kdrawers!,'screws',true);assert.equal(cnt(m).d3,12);
+  m.kdrawers=m.kdrawers!.map((k,i)=>i===1&&k.system==='firmax-ldsp'?{...k,box:{...k.box,faceScrews:[[60,50]] as [number,number][]}}:k);
+  m.kdrawers=firmaxSetScrews(m.kdrawers!,'faceScrews',true);const b=m.kdrawers!.map(k=>k.system==='firmax-ldsp'?k.box.faceScrews:undefined);
+  assert.deepEqual(b,[true,[[60,50]],true]);assert.equal(cnt(m).d516,3+1+3);assert.deepEqual(partCollisions(parts(m),m),[]);
+  m.kdrawers=firmaxSetScrews(m.kdrawers!,'faceScrews',false);assert.equal(cnt(m).d516,0);
 });
