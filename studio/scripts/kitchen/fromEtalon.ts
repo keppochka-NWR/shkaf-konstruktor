@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
+import { edgeRail, isEuro6, legScrews, railConfY, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
@@ -399,7 +399,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
     if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
-    railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}) });
+    // и свои высоты конфирматов, если в проекте не один по центру (railConfY, n4-base)
+    const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
+    const confY = role === "base" && fastened ? railConfY(r.b, ref.hardware, left.b.x0, right.b.x1) : undefined;
+    railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...(confY ? { confY } : {}) });
   }
   if (railList.length) m.rails = railList;
   // задник

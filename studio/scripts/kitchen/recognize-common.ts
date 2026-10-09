@@ -37,6 +37,17 @@ export function railFastened(b: Box, hardware: Hw[], xL: number, xR: number): bo
   return hardware.some((h) => inBand(h) && (h.pos[0] <= xL + 1 || h.pos[0] >= xR - 1));
 }
 
+/** Высоты конфирматов стяжки на ребре от её низа (через боковины корпуса, x ≤ xL или x ≥ xR), если в проекте не один по центру.
+ *  По всем 34 кухням у стяжек на ребре между боковинами высотой 100: один по центру — 37 сторон, два (34 и 66) — 21 сторона, по проекту;
+ *  у стяжек 124–200 — всегда два. Берём, только если слева и справа одинаково; иначе — правило студии (один по центру). */
+export function railConfY(b: Box, hardware: Hw[], xL: number, xR: number): number[] | undefined {
+  const inBand = (h: Hw) => (h.category === "конфирмат" || /^Евровинт/.test(h.name)) && h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
+  const ys = (f: (h: Hw) => boolean) => hardware.filter((h) => inBand(h) && f(h)).map((h) => r1(h.pos[1] - b.y0)).sort((a, c) => a - c);
+  const L = ys((h) => h.pos[0] <= xL + 1), R = ys((h) => h.pos[0] >= xR - 1), mid = (b.y1 - b.y0) / 2;
+  if (!L.length || L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  return L.length === 1 && Math.abs(L[0] - mid) < 0.6 ? undefined : L;
+}
+
 /** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */
 export const isEuro6 = (h: { name: string }) => /^Евровинт 6/.test(h.name);
 export function screwKind(hardware: Hw[]): "euro-6x50" | undefined {

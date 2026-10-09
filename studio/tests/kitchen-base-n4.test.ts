@@ -7,7 +7,7 @@ import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {faceGapsTB,strayDoors} from '../scripts/kitchen/recognize-base';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {railFastened} from '../scripts/kitchen/recognize-common';
+import {railFastened,railConfY} from '../scripts/kitchen/recognize-common';
 import {cornerFillerSink,falsePanelHinges} from '../scripts/kitchen/recognize-sink';
 
 // Нижние модули кухни «как в Базисе» (поток n4). Эталоны вне репозитория — на чужой машине тесты с эталонами пропускаются.
@@ -158,6 +158,22 @@ test('стяжка с крепежом — только если в её пол�
   assert.equal(railFastened(band,[conf(0),conf(600)],0,600),true,'конфирматы через боковины корпуса — крепёж есть');
   assert.equal(railFastened(band,[{...conf(0),pos:[0,500,28]}],0,600),false,'крепёж вне полосы — без крепежа');
   if(has('k21')){const m=moduleFromEtalon(load('k21','m02')).module;assert.ok((m.rails??[]).some(r=>r.fasten===false),'k21 m02: передняя стяжка без крепежа — как в Базисе');}
+});
+
+test('стяжка на ребре со своими высотами конфирматов из Базиса (railConfY): два на сторону 34/66 (k01 m03) — как в проекте, один по центру — правило студии',()=>{
+  const band={x0:16,y0:418,z0:0,x1:934,y1:518,z1:16};
+  const conf=(x:number,y:number)=>({name:'Конфирмат 7х50 мм',category:'конфирмат',pos:[x,y,8]});
+  assert.deepEqual(railConfY(band,[conf(0,452),conf(0,484),conf(950,452),conf(950,484)],0,950),[34,66]);
+  assert.equal(railConfY(band,[conf(0,468),conf(950,468)],0,950),undefined,'один по центру — правило студии');
+  assert.equal(railConfY(band,[conf(0,452),conf(0,484),conf(950,468)],0,950),undefined,'слева и справа по-разному — не берём');
+  if(has('k01')){
+    const ref=load('k01','m03'),m=moduleFromEtalon(ref).module,ps=parts(m);
+    assert.deepEqual(m.rails?.find(r=>r.place==='rear-top')?.confY,[34,66]);
+    assert.equal(ps.filter(p=>p.id.startsWith('fast:rail:rear-top:')).length,4,'по два на сторону');
+    assert.equal(partCollisions(ps,m).filter(x=>/fast:rail/.test(x.a+' '+x.b)).length,0,'конфирматы стяжки ни с чем не пересекаются');
+    const back=parseModule(JSON.parse(JSON.stringify(m)));assert.deepEqual(back.rails?.find(r=>r.place==='rear-top')?.confY,[34,66],'сохраняется в проекте');
+  }
+  const w=initialModule();assert.ok(!(w.rails??[]).some(r=>r.confY),'шкаф студии — без confY');
 });
 
 test('лишние створки: нижний и мойка без своего фасада Базиса — распашных нет (угловые мойки k05 m05, k10 m13, k22 m06); распознанные — с дверьми (k25 m02, k14 m09)',{skip:!has('k05')||!has('k10')||!has('k22')||!has('k25')||!has('k14')},()=>{
