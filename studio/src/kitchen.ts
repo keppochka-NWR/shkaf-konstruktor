@@ -88,6 +88,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Место ручки распашного фасада по проекту Базиса (k07, k09: 36 ручек «рейлинг 128/160»): горизонтальная — по центру ширины,
    *  вертикальная — у свободного края; dy — от низа (from "bottom") или верха фасада до точки ручки на лицевой плоскости.
    *  holes — отверстия под ручку, если они есть в проекте (k07: 2 × D5×18 насквозь, межосевое 160; у k09 отверстий нет). */
+  /** Гвозди набивного ХДФ по Базису (11 навесных/антресолей k01, k03): ряды по периметру в 7,5 от края, round(W/125) и round(H/125)
+   *  гвоздей (см. scripts/kitchen/recognize-nails.ts); q — поворот сетки по рядам, mesh — сетка Базиса. Нет — студия гвоздей не ставит. */
+  nails?: { mesh?: string; q: Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> };
   handle?: { dy: number; from: "bottom" | "top"; horizontal: boolean; holes?: { d: number; depth: number; gap: number } };
   /** false — без крепежа (конфирматы, эксцентрики, шканты, полкодержатели): в проекте Базиса его нет (только k32 — 22 модуля). */
   fasteners?: false;
@@ -230,6 +233,13 @@ export function unitQuat(q: [number, number, number, number]): [number, number, 
 }
 
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
+/** Ряды гвоздей набивного ХДФ по Базису (в осях ХДФ: x от левого края, y от низа), см. kitchen.nails. */
+export function nailRows(W: number, H: number): { bottom: number[]; top: number[]; left: number[]; right: number[] } {
+  const row = (n: number, a: number, b: number) => Array.from({ length: n }, (_, i) => (n === 1 ? (a + b) / 2 : a + ((b - a) * i) / (n - 1)));
+  const nh = Math.round(W / 125), nv = Math.round(H / 125);
+  return { bottom: row(nh, 23, W - 23), top: row(nh, 23, W - 23), left: row(nv, 8, H - 8), right: row(nv, 8, H - 8) };
+}
+
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
   kitchenStrip(m, out);
@@ -258,6 +268,19 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       // Цоколь ЛДСП 16 на клипсах передних опор: задняя грань — по выступу клипсы, на 5 мм ниже дна.
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
+  }
+  // гвозди набивного ХДФ — только если они есть в проекте Базиса (kitchen.nails), точка — на тыльной пласти ХДФ
+  const nb = k.nails ? out.find((p) => p.id === "back" && p.material === "hdf" && !p.taper) : undefined;
+  if (k.nails && nb) {
+    const W = nb.size[0], H = nb.size[1], x0 = nb.position[0] - W / 2, y0 = nb.position[1] - H / 2, z = nb.position[2] - nb.size[2] / 2;
+    const r = nailRows(W, H), q = k.nails.q, pts: [number, number, [number, number, number, number]][] = [
+      ...r.bottom.map((x) => [x, 7.5, q.bottom] as [number, number, [number, number, number, number]]), ...r.top.map((x) => [x, H - 7.5, q.top] as [number, number, [number, number, number, number]]),
+      ...r.left.map((y) => [7.5, y, q.left] as [number, number, [number, number, number, number]]), ...r.right.map((y) => [W - 7.5, y, q.right] as [number, number, [number, number, number, number]])];
+    pts.forEach(([x, y, qq], n) => {
+      const o: [number, number, number] = [x0 + x, y0 + y, z];
+      const p = metal(`nail:${n}`, "Гвоздь", [0.01, 0.01, 0.01], o, k.nails!.mesh ? { file: `hardware/bazis/${k.nails!.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(qq) } : undefined);
+      p.anchor = o; out.push(p);
+    });
   }
   // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
   for (const [n, d] of (k.dryer ?? []).entries()) {

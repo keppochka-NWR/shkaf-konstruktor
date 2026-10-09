@@ -109,6 +109,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kd:") && id.includes(":sys:")) return "ящик-система";
   if (id.startsWith("kd:") && id.includes(":cap:")) return "заглушка";
   if (id.startsWith("kd:") && id.includes(":screw:")) return "прочее";
+  if (id.startsWith("nail:")) return "прочее"; // гвоздь набивного ХДФ — у Базиса «прочее» (n4-wall)
   if (p.role === "handle") return "ручка";
   return null;
 }
