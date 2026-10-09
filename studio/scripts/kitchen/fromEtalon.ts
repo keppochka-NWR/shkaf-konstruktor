@@ -15,6 +15,7 @@ import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
+import { handlePlace } from "./recognize-handle";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 
@@ -376,6 +377,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // спереди детали нет (задняя планка у стены k14 m06 — не цоколь), студия цоколь не ставит
   else if (!legs.length && (m.plinthHeight ?? 0) > 0 && !P.some(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.z1 >= sideZ1 - 40)) m.kitchen.plinth = { height: 95, off: true };
   if (fronts.length && !hw("ручка").length) m.noHandles = true;
+  else if (fronts.length) { const hp = handlePlace(ref, fronts.map(({ b }) => [b.x0, b.y0, b.z0, b.x1, b.y1, b.z1])); if (hp) m.kitchen.handle = hp; } // место ручки как в Базисе (n4-wall)
   if (!plinthPanel && (role === "base" || role === "tall")) notes.push("цоколя в модуле нет (в Базисе — у ряда или отсутствует)");
   // корпус приподнят без опор: фронтальная панель ЛДСП под дном в Базисе (цоколь/планка под другим именем) — студия ставит её «Цоколем»;
   // нет такой панели — цоколя нет (навесной со свесом фасада ниже дна: правило Макса — не добавлять того, чего нет в Базисе)
