@@ -337,8 +337,8 @@ function RawInfo(props: KitchenPanelProps) {
         ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Глубоко в детали: {check.deep.slice(0, 3).map((x) => `${x.name} (${-x.gap} мм)`).join("; ")}{check.deep.length > 3 ? ` и ещё ${check.deep.length - 3}` : ""}. Проверьте в Базисе.</p>
         : check.checked > 0 && <p className="kitchen-ok"><CircleCheck size={14} /> Фурнитура стоит на деталях: {check.checked - check.outside.length} из {check.checked} по точкам крепления Базиса.</p>}
       {check.outside.length > 0 && <p className="field-note">Вне деталей модуля (дальше {RAW_SEAT_GAP} мм) — {check.outside.length} шт.: {check.outside.slice(0, 2).map((x) => x.name).join("; ")}{check.outside.length > 2 ? " …" : ""}. Так бывает, когда крепление — на трубе, профиле или детали соседнего модуля; сверьте с Базисом.</p>}
-      {check.overlaps.length > 0 && <p className="field-note">Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет.</p>}
     </Group>}
+    {check.overlaps.length > 0 && <div className="property-section kitchen-note raw"><Info size={14} /><p>Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет — правится в Базисе.</p></div>}
     <Position {...props} open />
   </div>;
 }
