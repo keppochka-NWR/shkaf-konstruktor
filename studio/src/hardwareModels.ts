@@ -12,7 +12,7 @@ import type { Part } from "./model";
 //  - шариковая направляющая — GTV Versalite H45: высота 45, толщина 12,7 (каталог GTV); толщина металла 1,2 и губы 4 — оценка;
 //  - скрытая (Firmax/Unihopper/DTC) — внешний габарит = деталь студии/Базиса (12×9, 20×12), листовой металл 1,5 — оценка;
 //  - эксцентрик Ø15 (отв. Ø15×13), шток Ø7 с резьбой Ø5 на 13 мм в стойке (отв. Ø5×13 Базиса), шкант Ø8 с рифлением — по габариту детали.
-export type ProcKind = "gola-L" | "gola-C" | "rod-round" | "rod-oval" | "slide-ball" | "slide-hidden" | "ecc-cam" | "ecc-pin" | "dowel";
+export type ProcKind = "gola-L" | "gola-C" | "rod-round" | "rod-oval" | "slide-ball" | "slide-hidden" | "ecc-cam" | "ecc-pin" | "dowel" | "latch";
 
 type P = Pick<Part, "id" | "name" | "role" | "size"> & { model?: Part["model"]; material?: Part["material"] };
 
@@ -29,6 +29,7 @@ export function procKind(p: P): ProcKind | undefined {
   }
   if (p.id.startsWith("ecc:") && p.role === "fastener") return p.id.endsWith(":pin") ? "ecc-pin" : "ecc-cam";
   if (p.id.startsWith("dowel:") && p.role === "fastener") return "dowel";
+  if (p.id.includes(":latch:") && p.role === "hinge") return "latch";
   return undefined;
 }
 
@@ -120,14 +121,14 @@ function alongAxis(g: THREE.Object3D, axis: number, sign: 1 | -1 = 1) {
   return g;
 }
 
-/** Корпус эксцентрика Ø15: ось — короткая сторона детали; шлиц под отвёртку и стрелка — на обоих торцах. */
-export function eccCamModel(size: [number, number, number]): THREE.Group {
-  const order = [0, 1, 2].sort((a, b) => size[a] - size[b]), axis = order[0], H = size[axis], R = Math.min(size[order[1]], size[order[2]]) / 2;
+/** Корпус эксцентрика Ø15×H: ось — короткая сторона детали или заданная (axisOverride); шлиц под отвёртку — на обоих торцах. */
+export function eccCamModel(size: [number, number, number], axisOverride?: 0 | 1 | 2): THREE.Group {
+  const sorted = [...size].sort((a, b) => a - b), axis = axisOverride ?? size.indexOf(sorted[0]), H = sorted[0], R = Math.min(sorted[1], sorted[2]) / 2;
   const inner = new THREE.Group(), z = zinc(), dark = plastic(0x2a2d31);
   inner.add(lathe([[0, -H / 2], [R - 0.6, -H / 2], [R, -H / 2 + 0.6], [R, H / 2 - 0.6], [R - 0.6, H / 2], [0, H / 2]], z));
   for (const s of [-1, 1]) {
-    const slot = new THREE.Mesh(new THREE.BoxGeometry(R * 1.3, 0.8, 1.6), dark); slot.position.y = s * (H / 2 - 0.39); inner.add(slot);
-    const slot2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, R * 0.7), dark); slot2.position.set(R * 0.2, s * (H / 2 - 0.38), 0); inner.add(slot2);
+    const slot = new THREE.Mesh(new THREE.BoxGeometry(R * 1.3, 0.8, 1.6), dark); slot.position.y = s * (H / 2 - 0.4); inner.add(slot);
+    const slot2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, R * 0.7), dark); slot2.position.set(R * 0.2, s * (H / 2 - 0.4), 0); inner.add(slot2);
   }
   const g = new THREE.Group(); g.add(alongAxis(inner, axis));
   return g;
@@ -154,6 +155,17 @@ export function dowelModel(size: [number, number, number]): THREE.Group {
   return g;
 }
 
+/** Толкатель push-to-open (накладной, в корпусе): корпус по габариту детали, шток с резиновым наконечником — к фасаду (+Z детали). */
+export function latchModel(size: [number, number, number]): THREE.Group {
+  const [w, h, L] = size, R = Math.min(w, h) / 2, inner = new THREE.Group();
+  const body: [number, number][] = [[0, -L / 2], [R - 0.8, -L / 2], [R, -L / 2 + 0.8], [R, L / 2 - 12], [R * 0.75, L / 2 - 11], [R * 0.75, L / 2 - 10], [0, L / 2 - 10]];
+  inner.add(lathe(body, plastic(0x55595d)));
+  inner.add(lathe([[0, L / 2 - 10.2], [R * 0.45, L / 2 - 10.2], [R * 0.45, L / 2 - 3], [0, L / 2 - 3]], zinc(), 20));
+  inner.add(lathe([[0, L / 2 - 3], [R * 0.55, L / 2 - 3], [R * 0.55, L / 2 - 0.8], [R * 0.4, L / 2], [0, L / 2]], plastic(0x26292c), 20));
+  const g = new THREE.Group(); g.add(alongAxis(inner, 2));
+  return g;
+}
+
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
 export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1 } = {}): THREE.Group | undefined {
   const k = procKind(p);
@@ -161,8 +173,11 @@ export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean;
   const g = k === "gola-L" || k === "gola-C" ? golaModel(k === "gola-L" ? "L" : "C", p.size[0], p.size[1], p.size[2], p.look?.color)
     : k === "rod-round" || k === "rod-oval" ? rodModel(p.size, k === "rod-oval")
     : k === "slide-ball" || k === "slide-hidden" ? slideModel(k === "slide-ball" ? "ball" : "hidden", p.size, ctx.left === false ? 1 : -1)
-    : k === "ecc-cam" ? eccCamModel(p.size)
+    // бочонок в горизонтали (ecc:<полка/дно/крыша>:…) сверлится с пласти — ось по Y, хотя габарит детали студии [13,15,15] лежит осью по X
+    // (model.ts: [eccBarrelH, D, D]; габарит не трогаем — регрессия деталей); в боковине (ecc:under, ecc:bottom-under) — ось X, как габарит
+    : k === "ecc-cam" ? eccCamModel(p.size, /:(under|bottom-under):/.test(p.id) ? undefined : 1)
     : k === "ecc-pin" ? eccPinModel(p.size, ctx.headSign ?? 1)
+    : k === "latch" ? latchModel(p.size)
     : dowelModel(p.size);
   // тонкостенный профиль (Gola, направляющая) в собственной тени даёт полосы («shadow acne») — тень не отбрасывает, только принимает
   const thin = k.startsWith("gola") || k.startsWith("slide");

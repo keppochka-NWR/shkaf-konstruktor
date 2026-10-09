@@ -19,6 +19,7 @@ test('фурнитура без сетки: вид процедурной мод
   assert.equal(procKind(part('ecc:bottom:left:0','Эксцентрик D15 · бочонок','fastener',[13,15,15])),'ecc-cam');
   assert.equal(procKind(part('ecc:bottom:left:0:pin','Эксцентрик D15 · шток','fastener',[42,7,7])),'ecc-pin');
   assert.equal(procKind(part('dowel:bottom:left:0','Шкант 8×30','fastener',[30,8,8],'board')),'dowel');
+  assert.equal(procKind(part('s:latch:0','Толкатель push-to-open','hinge',[14,14,40])),'latch');
   // с моделью (Базис, Blender) — не трогаем; прочие детали — тоже
   assert.equal(procKind({...part('kd:0:slide:L','Axis PRO','drawer',[12,45,500]),model:{file:'hardware/bazis/x.glb',length:'x',native:true}}),undefined);
   assert.equal(procKind(part('left','Боковина','body',[16,720,560],'board')),undefined);
@@ -37,9 +38,10 @@ test('штанги, направляющие, эксцентрик, шкант: 
     [part('s:rod','Штанга овальная 15×30','rod',[868,15,30])],
     [part('s:drawer:0:slide:0','Направляющая · шариковая','drawer',[12,45,450]),{left:true}],[part('s:drawer:0:slide:1','Направляющая · шариковая','drawer',[12,45,450]),{left:false}],
     [part('kd:0:slide:L','Направляющая Firmax','drawer',[12,9,470]),{left:true}],[part('x:drawer:0:slide:1','Направляющая · скрытая','drawer',[20,12,350]),{left:false}],
-    [part('ecc:bottom:left:0','Эксцентрик D15 · бочонок','fastener',[13,15,15])],[part('ecc:top:left:0','Эксцентрик D15 · бочонок','fastener',[15,13,15])],
+    [part('ecc:under:left:0','Эксцентрик D15 · бочонок','fastener',[13,15,15])],[part('ecc:top:left:0','Эксцентрик D15 · бочонок','fastener',[15,13,15])],
     [part('ecc:bottom:left:0:pin','Эксцентрик D15 · шток','fastener',[42,7,7]),{headSign:-1}],[part('ecc:x:pin','Эксцентрик D15 · шток','fastener',[7,42,7])],
     [part('dowel:bottom:left:0','Шкант 8×30','fastener',[30,8,8],'board')],[part('dowel:x','Шкант 8×30','fastener',[8,8,30],'board')],
+    [part('s:latch:0','Толкатель push-to-open','hinge',[14,14,40])],
   ];
   for(const [p,ctx] of cases){
     const g=procModel(p,ctx as never)!;assert.ok(g,p.id);
@@ -47,6 +49,13 @@ test('штанги, направляющие, эксцентрик, шкант: 
     b.s.forEach((v,i)=>assert.ok(Math.abs(v-p.size[i])<=0.05,`${p.id} ${p.name}: ${b.s} ≠ ${p.size}`));
     b.c.forEach((v)=>assert.ok(Math.abs(v)<=0.05,`${p.id}: центр ${b.c}`));
   }
+});
+
+test('бочонок эксцентрика в горизонтали — ось по нормали пласти (Y), шток — по X к бочонку; в боковине (under) — ось X',()=>{
+  const cam=bbox(procModel(part('ecc:bottom:left:0','Эксцентрик D15 · бочонок','fastener',[13,15,15]))!);
+  assert.deepEqual(cam.s,[15,13,15]);
+  const under=bbox(procModel(part('ecc:bottom-under:left:0','Эксцентрик D15 · бочонок','fastener',[13,15,15]))!);
+  assert.deepEqual(under.s,[13,15,15]);
 });
 
 test('рафикс кухни: модель Blender (мм) в точке и повороте Базиса у корпуса и штока, файлы есть',()=>{

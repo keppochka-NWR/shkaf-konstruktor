@@ -337,14 +337,14 @@ export function Scene(p: Props) {
           }
           const isAlu = part.material === "alu" && !!m.alu;
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
-          const roundAlongZ = part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
-          // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант —
+          // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант, толкатель —
           // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)
           const proc = procModel(part, { left: part.position[0] < m.width / 2, headSign: (() => {
             if (!part.id.startsWith("ecc:") || !part.id.endsWith(":pin")) return undefined;
             const cam = byId.get(part.id.slice(0, -4)), ax = part.size.indexOf(Math.max(...part.size));
             return cam && cam.position[ax] < part.position[ax] ? -1 : 1;
           })() });
+          const roundAlongZ = !proc && part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
           const geometry = proc ? new THREE.BoxGeometry(...part.size) : roundAlongZ
             ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
             : part.role === "fastener"
