@@ -17,6 +17,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  (в Базисе «Фронтальная», «ФП» — закрывает низ, как цоколь) с утопанием от лица боковин; без front панели нет.
    *  doorsToFloor — фасады опущены до низа модуля (корпус поднят, фасад закрывает подсветку: k23, k28, k30). */
   raise?: { front?: number; doorsToFloor?: boolean };
+  /** Дно короче спереди на столько мм (Базис k06, k10, k15: 24,5 — ниша под подсветку у лица навесного); по умолчанию 0. */
+  bottomFront?: number;
+  /** Крепёж стыков дна/крыши с боковинами по Базису: ключ «bottom:left» и т. п. → [от задней кромки, от передней кромки детали], мм. */
+  jointZ?: Record<string, [number, number]>;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
@@ -225,6 +229,8 @@ export function kitchenErrors(m: Module): string[] {
     if (!["base", "wall", "tall", "antresol"].includes(k.role)) e.push("Кухня: тип корпуса — нижний, навесной, пенал или антресоль.");
     if (k.appliance && !(k.appliance in APPLIANCES)) e.push("Кухня: неизвестная техника.");
     if ((k.role === "base") && !m.feet) e.push("Нижний кухонный корпус ставится на опоры.");
+    if (k.jointZ && Object.values(k.jointZ).some((v) => !Array.isArray(v) || v.length !== 2 || v.some((x) => !Number.isFinite(x) || x < 5 || x > m.depth / 2 + 50))) e.push("Крепёж стыка: отступы от кромок 5 мм — до середины глубины.");
+    if (k.bottomFront !== undefined && (!Number.isFinite(k.bottomFront) || k.bottomFront < 0 || k.bottomFront > 100)) e.push("Дно короче спереди: 0–100 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
   }

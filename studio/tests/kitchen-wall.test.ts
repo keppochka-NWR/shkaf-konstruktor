@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts,initialModule,facadeBottom,parseModule} from '../src/model';
+import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '../src/model';
 import {kitchenWall} from '../src/kitchen';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
@@ -52,4 +52,37 @@ test('подъём дна — только у кухни: шкаф с цокол
   assert.deepEqual(plinthLike(r),[]);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(r))).kitchen?.raise,{doorsToFloor:true},'raise переживает сохранение');
   assert.ok(validate({...r,kitchen:{...r.kitchen,raise:{front:-5}}}).some(e=>/Подъём дна/.test(e)));
+});
+test('навесные: крепёж стыков по Базису (jointZ), паз в торце дна, дно короче спереди — k10 m09 и k24 m10 сходятся с Базисом',{skip:!existsSync(`${ETALON}/k10.json`)},()=>{
+  for(const [k,key] of [['k10','m09'],['k24','m10'],['k10','m10']] as const){
+    const ref=load(k,key),{module:m,unsupported}=moduleFromEtalon(ref);
+    assert.deepEqual(unsupported,[]);assert.deepEqual(validate(m),[]);
+    const c=compareModule(ref,m);
+    if(key!=='m10'||k!=='k10')assert.ok(c.pass,k+' '+key+' '+JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2),edges:c.edges?.bad.slice(0,3)}));
+  }
+  const {module:m9}=moduleFromEtalon(load('k10','m09'));
+  assert.deepEqual(m9.kitchen?.jointZ?.['bottom:left'],[56.8,56.8],'дно: свои отступы конфирматов от кромок дна');
+  assert.equal(m9.kitchen?.bottomFront,24.5);
+  const g=m9.grooves?.find(x=>x.end);assert.ok(g,'паз в переднем торце дна');assert.equal(g!.end,'+');assert.deepEqual(g!.across,[7.8,10.3]);assert.equal(g!.depth,10);
+  const {module:m10}=moduleFromEtalon(load('k10','m10'));
+  assert.deepEqual(m10.kitchen?.jointZ?.['bottom:left'],[53,28.5],'дно короче спереди, крепёж как у полного дна');
+});
+test('навесной k04 m05: нижняя задняя планка на дне — нижняя стяжка, без ошибки «одно место»',{skip:!existsSync(`${ETALON}/k04.json`)},()=>{
+  const {module:m}=moduleFromEtalon(load('k04','m05'));
+  assert.deepEqual(m.rails?.map(r=>r.place).sort(),['rear-bottom','rear-top']);
+  assert.ok(!validate(m).some(e=>/Стяжка/.test(e)),validate(m).join('; '));
+});
+test('паз в торце детали (end) и отступы крепежа стыка: геометрия и сохранение',()=>{
+  const m={...kitchenWall(initialModule(),600),kitchen:{role:'wall' as const,bottomFront:24.5,jointZ:{'bottom:left':[56.8,56.7] as [number,number]}},grooves:[{host:'bottom',face:'+' as const,end:'+' as const,along:[0,0] as [number,number],across:[7.8,10.3] as [number,number],depth:10,name:'паз'}]};
+  assert.deepEqual(validate(m),[]);
+  const p=parts(m),bot=p.find(x=>x.id==='bottom')!;
+  assert.equal(bot.size[2],m.depth-24.5);
+  const b=grooveBox(bot,m.grooves[0])!;
+  assert.deepEqual([b[1],b[4],b[5]-b[2]].map(v=>Math.round(v*10)/10),[7.8,10.3,10]);
+  assert.equal(Math.round(b[5]*10)/10,m.depth-24.5,'паз у переднего торца дна');
+  const zs=p.filter(x=>x.id.startsWith('fast:bottom:left:')).map(x=>Math.round(x.position[2]*10)/10).sort((a,c)=>a-c);
+  assert.deepEqual(zs,[56.8,m.depth-24.5-56.7].map(v=>Math.round(v*10)/10));
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back.kitchen?.jointZ,m.kitchen.jointZ);assert.equal(back.kitchen?.bottomFront,24.5);assert.equal(back.grooves?.[0].end,'+');
+  assert.ok(validate({...m,kitchen:{...m.kitchen,jointZ:{'top:left':[1,2] as [number,number]}}}).some(e=>/Крепёж стыка/.test(e)));
 });

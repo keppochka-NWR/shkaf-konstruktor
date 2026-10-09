@@ -13,6 +13,17 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 
 export type WallRaise = { plinthHeight: number; raisedSides: boolean; raise: NonNullable<KitchenSpec["raise"]>; panel?: PB; note: string };
 
+/** Планка на ребре навесного стоит на дне (низ планки = верх дна): это нижняя стяжка (k04 m05, m07, m08 — задние планки навески сверху и снизу). */
+export function wallRailOnBottom(role: string, rail: PB, bottom: PB | undefined): boolean {
+  return (role === "wall" || role === "antresol") && !!bottom && Math.abs(rail.b.y0 - bottom.b.y1) < 0.5;
+}
+
+/** Дно навесного короче спереди (k06 m07/m08/m10, k10 m09/m10, k15 m09: 24,5 — ниша под подсветку): от задней кромки боковин, не доходит до лица. */
+export function bottomFrontRecess(bottom: PB, sideZ0: number, sideZ1: number): number | null {
+  const gap = r1(sideZ1 - bottom.b.z1);
+  return bottom.b.z0 <= sideZ0 + 0.5 && gap > 0.5 && gap <= 100 ? gap : null;
+}
+
 /** Низ навесного с поднятым дном: подъём дна, боковины над ним или до низа, фронтальная панель под дном, фасады до низа. */
 export function wallRaise(P: PB[], left: PB, right: PB, bottom: PB, fronts: PB[], sideZ1: number): WallRaise | null {
   const lift = r1(bottom.b.y0);

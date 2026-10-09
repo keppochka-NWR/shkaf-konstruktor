@@ -5,7 +5,8 @@ import { initialModule, section, parts, scaleHingeY, type Module, type Groove, t
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
-import { wallRaise, type WallRaise } from "./wallRaise";
+import { wallRaise, bottomFrontRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
+import { wallJointZ, endGroove } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -85,6 +86,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if (bottom) {
     const under = bottom.b.x0 <= left.b.x0 + 0.5 && bottom.b.x1 >= right.b.x1 - 0.5;
     if (under) m.bottomUnder = true;
+    const bf = role === "wall" ? bottomFrontRecess(bottom, sideZ0, sideZ1) : null;
+    if (bf !== null) { m.kitchen.bottomFront = bf; notes.push(`дно короче спереди на ${bf}`); }
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
     else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1))) {
       m.plinthHeight = wr.plinthHeight; if (wr.raisedSides) m.raisedSides = true; m.kitchen.raise = wr.raise; notes.push(wr.note);
@@ -113,7 +116,12 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
     railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
   }
-  for (const r of railsEdge) { const atTop = r.b.y1 >= top - 0.5; railList.push({ place: r.b.z1 >= sideZ1 - 30 ? "front-top" : "rear-top", height: r1(r.b.y1 - r.b.y0), ...(atTop ? {} : { at: r1(r.b.y0) }) }); }
+  for (const r of railsEdge) {
+    const atTop = r.b.y1 >= top - 0.5, front = r.b.z1 >= sideZ1 - 30;
+    // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
+    if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
+    railList.push({ place: front ? "front-top" : "rear-top", height: r1(r.b.y1 - r.b.y0), ...(atTop ? {} : { at: r1(r.b.y0) }) });
+  }
   if (railList.length) m.rails = railList;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
@@ -289,6 +297,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const conf = [...hw("конфирмат"), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
+  // навесные: у каждого стыка дна/крыши свои отступы крепежа, если они не совпадают с общим
+  if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
+    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right, m.confirmatInset);
+    if (Object.keys(jz).length) m.kitchen.jointZ = jz;
+  }
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et };
@@ -316,6 +329,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const host = ps.find((p) => [0, 1, 2].every((i) => bb[i] >= p.position[i] - p.size[i] / 2 - 0.6 && bb[i + 3] <= p.position[i] + p.size[i] / 2 + 0.6));
       if (!host) { unsupported.push(`паз ${gr.name} без детали-носителя`); continue; }
       const ax = partAxes(host), lo = host.position.map((v, i) => v - host.size[i] / 2), hi = host.position.map((v, i) => v + host.size[i] / 2);
+      const eg = endGroove(bb, ax, lo, hi, gr.name); // паз в торце (под LED-профиль в переднем торце дна)
+      if (eg) { out.push({ host: host.id, ...eg }); continue; }
       const face = Math.abs(bb[ax.t + 3] - hi[ax.t]) < Math.abs(bb[ax.t] - lo[ax.t]) ? "+" : "-";
       out.push({ host: host.id, face, along: [r1(bb[ax.L] - lo[ax.L]), r1(hi[ax.L] - bb[ax.L + 3])], across: [r1(bb[ax.W] - lo[ax.W]), r1(bb[ax.W + 3] - lo[ax.W])], depth: r1(bb[ax.t + 3] - bb[ax.t]), name: gr.name });
     }
