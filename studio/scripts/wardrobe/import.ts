@@ -137,7 +137,7 @@ picked.forEach((row, n) => {
     // ось трубы — по её держателям (фланцам/штангодержателям); без держателей не рисуем
     const holders = hwAll.filter((h) => /штангодерж/.test(h.category)).map((h) => { const b = h.bbox ?? [0, 0, 0, 0, 0, 0], R = qmat(h.quat), c = app(R, [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2]); return [0, 1, 2].map((i) => c[i] + h.pos[i]) as [number, number, number]; });
     for (let i = profAll.length - 1; i >= 0; i--) { const q = profAll[i], s = snapToHolders(q.pos as [number, number, number], q.dir, q.len, holders); if (s) q.pos = s; else { STATS.profilesDrawn--; STATS.profilesSkipped.set(q.name + " (нет держателей у концов)", (STATS.profilesSkipped.get(q.name + " (нет держателей у концов)") ?? 0) + 1); profAll.splice(i, 1); } }
-    for (const h of profAll) { const ds = ext6.map((b) => gap(b, h.pos)); const k = ds.indexOf(Math.min(...ds)); if (ds[k] <= 300) profOf[k].push(h); }
+    for (const h of profAll) { const ds = ext6.map((b) => gap(b, h.pos)); const k = ds.indexOf(Math.min(...ds)); if (ds[k] <= 300) profOf[k].push(h); else { STATS.profilesDrawn--; const key = h.name + " (вне модели дальше 300 мм, как и фурнитура)"; STATS.profilesSkipped.set(key, (STATS.profilesSkipped.get(key) ?? 0) + 1); } }
     let hwCount = 0;
     const placed: PlacedModule[] = mods.map((g, gi) => {
       const o = ext6[gi].slice(0, 3), e = ext6[gi].slice(3);
@@ -180,6 +180,6 @@ let copied = 0, bytes = 0;
 for (const mid of meshes) { const src = `${LIB}/glb/${mid}.glb`, dst = `${PUB}/${mid}.glb`; if (existsSync(src) && !existsSync(dst)) { copyFileSync(src, dst); copied++; bytes += statSync(src).size; } }
 console.log(`сетки фурнитуры: нужно ${meshes.size}, скопировано новых ${copied} (${Math.round(bytes / 1024)} КБ); фурнитуры всего ${index.reduce((s, x) => s + (x.hardware ?? 0), 0)}`);
 console.log(`фигурных деталей ${STATS.figure}: по контуру ${STATS.figureDrawn}, габаритом ${STATS.figureSkipped}; повёрнутых не на 90° ${STATS.skew}: коробом по повороту ${STATS.skewObb}, габаритом ${STATS.skewAabb}`);
-console.log(`профилей ${STATS.profiles}: нарисовано ${STATS.profilesDrawn}, без сечения ${STATS.profiles - STATS.profilesDrawn}`);
+console.log(`профилей ${STATS.profiles}: нарисовано ${STATS.profilesDrawn}, не нарисовано ${STATS.profiles - STATS.profilesDrawn}`);
 for (const [n, c] of [...STATS.profilesSkipped].sort((a, b) => b[1] - a[1])) console.log(`  не нарисован: ${c} × ${n}`);
 console.log(`готово: ${index.length} проектов, с ошибками ${bad}; модулей ${index.reduce((s, x) => s + x.modules, 0)}, панелей ${index.reduce((s, x) => s + x.panels, 0)}`);
