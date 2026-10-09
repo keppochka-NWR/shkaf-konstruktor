@@ -12,6 +12,7 @@ import { cornerFillerSink } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { aluFacadeReason } from "./aluFacade";
+import { hoodBoxReason } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
@@ -315,6 +316,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // фасадов не убираем: по нему считается низ корпуса (подъём, фасады до низа), без него корпус съезжает (k21 m05: Δ3,5)
   const aluWhy = aluFacadeReason(ref);
   if (aluWhy) unsupported.push(aluWhy);
+  // короб под вытяжку у навесного (две стенки и фронт внутри корпуса, П-вырез в дне/крыше) — параметрики нет, честно сырой (hoodBox.ts)
+  const hoodWhy = ref.archetype.startsWith("wall") ? hoodBoxReason(ref) : null;
+  if (hoodWhy) unsupported.push(hoodWhy);
   const hdf = P.filter(({ p }) => p.kind === "hdf");
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
   const legs = hw("опора");

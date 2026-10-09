@@ -5,6 +5,7 @@ import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '.
 import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
+import {hoodBoxes} from '../scripts/kitchen/hoodBox';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {refCategory,confirmatName} from '../scripts/kitchen/refHardware';
 import {estimate} from '../src/pricing';
@@ -338,4 +339,11 @@ test('фасад в алюминиевом профиле Базиса (k20 m02,
   assert.match(q.unsupported.join(';'),/алюминиевом профиле/);
   assert.ok(!honestPass(compareModule(ref,q.module),validate(q.module),q.unsupported));
   assert.ok(!moduleFromEtalon(load('k23','m05')).unsupported.some(u=>/алюминиев/.test(u)));
+});
+test('короб под вытяжку (k25 m16 накладной фронт, k06 m09 вкладной) — по геометрии, честно «не поддержано»; навесной без короба (k08 m10) причины не получает',{skip:!existsSync(`${ETALON}/k25.json`)},()=>{
+  assert.deepEqual(hoodBoxes(load('k25','m16')),[{x0:179,x1:400,depth:250,y0:166,y1:714}]);
+  assert.equal(hoodBoxes(load('k06','m09')).length,1);
+  assert.match(moduleFromEtalon(load('k25','m16')).unsupported.join(';'),/короб под вытяжку/);
+  assert.equal(hoodBoxes(load('k08','m10')).length,0);
+  assert.ok(!moduleFromEtalon(load('k08','m10')).unsupported.some(u=>/короб/.test(u)));
 });
