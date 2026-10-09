@@ -39,6 +39,21 @@ export function rowFront(p: EtPanel): boolean {
   return sz < Math.min(sx, sy) && sz <= 25 && sy >= 300;
 }
 
+/** Столешница ряда — только то, что в Базисе столешница по имени или материалу («Столешница СКИФ…», «Столешница ПФ 600»).
+ *  ЛДСП-полки и «Дно ящика» над столешницей (k07: 7 деталей на 1190–2324) и хромированная полка (k09) попадают в группу столешниц
+ *  эталона по контейнеру Базиса — студия не называет их столешницей, имя остаётся как в Базисе. */
+export function isWorktop(p: EtPanel): boolean {
+  return /столешн/i.test(p.name) || /столешн/i.test(p.mat ?? "");
+}
+
+/** Имя сырого объекта «Ряд» — по тому, что в нём есть в проекте Базиса (столешницу в проект могли не закладывать). */
+export function rowTitle(groups: Partial<Record<"worktops" | "plinths" | "wallPanels" | "profiles" | "other", EtPanel[]>>): string {
+  const w = groups.worktops ?? [], has = (g: keyof typeof groups) => (groups[g] ?? []).length > 0;
+  const parts = [w.some(isWorktop) ? "столешница" : "", has("plinths") ? "цоколь" : "", has("wallPanels") ? "стеновые панели" : "",
+    has("profiles") ? "профили" : "", has("other") || w.some((p) => !isWorktop(p)) ? "прочее" : ""].filter(Boolean);
+  return "Ряд: " + (parts.length ? parts.join(", ") : "детали вне модулей");
+}
+
 /** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
 export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][] } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);

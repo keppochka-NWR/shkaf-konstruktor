@@ -60,7 +60,8 @@ export function rawParts(m: Module): Part[] {
     const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
     // Столешница (толщина ≥ 26) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
     // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов.
-    const worktop = /столешн/i.test(p.name) || dims[2] >= 26, long = dims[0] > 2726;
+    // «Ряд» кухни: деталь не из плиты (материал Базиса «прочее» — хром k09) — тоже стороннее изделие, не раскрой ЛДСП
+    const worktop = /столешн/i.test(p.name) || dims[2] >= 26 || (!!r.row && p.kind === "other"), long = dims[0] > 2726;
     out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",

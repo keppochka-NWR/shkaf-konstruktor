@@ -1,17 +1,18 @@
 // Импорт кухонь из эталонов Базиса в проекты студии: модуль, прошедший сверку (PASS), — параметрический; остальные — «сырые»
 // (детали Базиса как есть). Расстановка и повороты — из эталона (p_world = origin + Ry(yaw)·p_mod). Объекты ряда (столешница,
 // цоколь, стеновые панели, профили) — отдельный сырой объект «Ряд».
-// npx tsx scripts/kitchen/import.ts [k14,k25|all]  → public/local-projects/kitchen-kNN.json + kitchens.json (только локально, не публикуется)
+// npx tsx scripts/kitchen/import.ts [k14,k25|all] [outDir]  → public/local-projects/kitchen-kNN.json + kitchens.json (только локально, не публикуется);
+// outDir — своя папка вместо public/local-projects (проверка импорта, не трогая общие проекты)
 import { readFileSync, readdirSync, writeFileSync, existsSync, copyFileSync, statSync } from "node:fs";
 import { initialModule, id, validate, section, type Module } from "../../src/model";
 import { newProject, parseProject, projectErrors, type PlacedModule } from "../../src/project";
 import { compareModule, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, type RawSpec } from "../../src/rawModule";
-import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
+import { rowRects, panelExtras, rowFront, isWorktop, rowTitle, type EtPanel } from "./rowWorktop";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
-const OUTDIR = "public/local-projects";
+const OUTDIR = process.argv[3] ?? "public/local-projects";
 const arg = process.argv[2] ?? "all";
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль"]);
@@ -59,10 +60,11 @@ for (const f of files) {
   // фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»)
   const rowPanels = (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => ((e.row?.[g] ?? []) as EtPanel[]).map((p) => ({ ...p, front: g === "other" && rowFront(p) })))
     .filter((p) => Array.isArray(p.box))
-    .flatMap((p) => { const rs = rowRects(p), nm = (e.row?.worktops ?? []).some((w: EtPanel) => w.box === p.box) && !/столешн/i.test(p.name) ? "Столешница" : p.name; return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${nm} (часть ${i + 1}/${rs.length})` : nm, box, kind: p.kind ?? "ldsp" })); });
+    // «Столешница» — только если в Базисе это столешница по имени/материалу; полки ЛДСП и хром из группы столешниц эталона — с именем Базиса
+    .flatMap((p) => { const rs = rowRects(p), nm = (e.row?.worktops ?? []).some((w: EtPanel) => w.box === p.box) && !/столешн/i.test(p.name) && isWorktop(p) ? "Столешница" : p.name; return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${nm} (часть ${i + 1}/${rs.length})` : nm, box, kind: p.kind ?? "ldsp" })); });
   if (rowPanels.length) {
     const o = [0, 1, 2].map((i) => Math.min(...rowPanels.map((p) => p.box[i]))), M = [3, 4, 5].map((i) => Math.max(...rowPanels.map((p) => p.box[i])));
-    const m: Module = { ...initialModule(), name: "Ряд: столешница, цоколь, панели", width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0,
+    const m: Module = { ...initialModule(), name: rowTitle(e.row ?? {}), width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0,
       raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), row: true } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
   }
