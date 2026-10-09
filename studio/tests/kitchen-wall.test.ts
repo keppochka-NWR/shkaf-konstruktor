@@ -156,3 +156,8 @@ test('навесной с сушкой k05 m10: жёсткая полка над
   assert.deepEqual(m.edgeScheme?.fixedSides,['+z','-z']);
   assert.ok(compareModule(ref,m).pass);
 });
+test('угловой навесной с диагональным фасадом (k03 m10) — честно сырой, причина первой; прямоугольный навесной причины не получает',{skip:!existsSync(`${ETALON}/k03.json`)},()=>{
+  const {unsupported}=moduleFromEtalon(load('k03','m10'));
+  assert.match(unsupported[0],/диагональным фасадом/);
+  assert.ok(!moduleFromEtalon(load('k10','m09')).unsupported.some(u=>/диагональ/.test(u)));
+});
