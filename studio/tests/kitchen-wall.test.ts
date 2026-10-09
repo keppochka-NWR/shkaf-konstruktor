@@ -323,3 +323,11 @@ test('угловой навесной с диагональным фасадом
   assert.match(unsupported[0],/диагональным фасадом/);
   assert.ok(!moduleFromEtalon(load('k10','m09')).unsupported.some(u=>/диагональ/.test(u)));
 });
+test('навесной с поднятым дном и фасадами выше низа (k13 m05): низ фасадов из проекта главнее правила raise — петель как в Базисе, не больше',{skip:!existsSync(`${ETALON}/k13.json`)},()=>{
+  const ref=load('k13','m05'),{module:m}=moduleFromEtalon(ref);
+  assert.ok(m.kitchen?.raise);
+  assert.equal(m.kitchen?.faceBottom,361.5);
+  assert.equal(facadeBottom(m),361.5);
+  const h=compareModule(ref,m).hardware.find(x=>x.category==='петля')!;
+  assert.equal(h.studio,h.ref);
+});

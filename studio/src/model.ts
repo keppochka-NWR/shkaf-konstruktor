@@ -492,7 +492,8 @@ export function facadeBottom(m:Module){
     // Кухни Базиса: отступ фасада от низа дна такой же, как от остальных кромок (m.faceGap, 1,5); шкафы — вровень с низом дна.
     return (hasBottom(m)?m.feet.height:m.feet.height+rail)+(m.kitchen?.faceBottom??m.faceGap??0); // кухня Базиса: свой зазор снизу (kitchen.faceBottom)
   }
-  if(m.kitchen?.raise)return m.kitchen.raise.doorsToFloor?0:fe(m); // навесной Базиса с поднятым дном: фасад от низа модуля или с зазором
+  // навесной Базиса с поднятым дном: фасад от низа модуля или с зазором; низ фасадов из проекта (kitchen.faceBottom, k13 m05: 361,5) — главнее
+  if(m.kitchen?.raise)return m.kitchen.faceBottom??(m.kitchen.raise.doorsToFloor?0:fe(m));
   // кухня Базиса без опор: низ фасадов — как в проекте (kitchen.faceBottom: ниша под техникой — от дна, k30 m02 1815,5), а не у пола
   if(m.kitchen?.faceBottom!==undefined)return m.kitchen.faceBottom;
   // Кухни Базиса, навесной/антресоль с поднятым корпусом (дно выше низа модуля на 13–20 мм): фасад опущен до низа модуля —
