@@ -107,7 +107,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string,retail=false){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}lines.push({id,label,quantity,unit,unitPrice:settings.overrides[id]??unitPrice,source:settings.overrides[id]===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
   for(const sheet of plan){
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
-    const d=decorPrice(sheet.decor);add('sheet:'+sheet.decor,'Lamarty 16 мм · '+sheet.decor,1,'лист',d.price,d.source);
+    // толщина листа — из раскроя (у кухонь Базиса бывает 19 мм); строка 16 мм как раньше
+    const d=decorPrice(sheet.decor),t=sheet.thickness??16,t16=Math.abs(t-16)<.01;
+    add('sheet:'+sheet.decor+(t16?'':':'+t),'Lamarty '+(t16?16:t)+' мм · '+sheet.decor,1,'лист',d.price,t16?d.source:d.source+'; цена как у 16 мм — уточнить для '+t+' мм');
   }
   // Гильотина (флаг cuttingEngine): деталь длиннее рабочего поля листа в карты не попала — смета не завершена,
   // пока технолог не решит (сращивание / отдельная плита). Старый движок на такой детали падает целиком.

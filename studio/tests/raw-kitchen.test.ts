@@ -73,6 +73,11 @@ test('дробная толщина Базиса (16.0999999) — целые м�
   const raw:RawSpec={panels:[{name:'Планка карниза',kind:'ldsp',box:[0,2430,0,1990,2446.1,60]},{name:'Полка',kind:'ldsp',box:[0,0,0,564,16,500]}],hardware:[]};
   const plan=nest(project(rawModule(raw,2000,2500,560)));
   assert.deepEqual([...new Set(plan.map(s=>s.thickness))],[16]);
+  // ЛДСП 19 мм — отдельная строка с настоящей толщиной, не «Lamarty 16 мм»
+  const p19=project(rawModule({panels:[{name:'Полка 19',kind:'ldsp',box:[0,0,0,564,19,500]},{name:'Полка',kind:'ldsp',box:[0,100,0,564,116,500]}],hardware:[]},600,720,560));
+  const sheets=estimate(p19).lines.filter(l=>l.id.startsWith('sheet:'));
+  assert.deepEqual(sheets.map(l=>l.id).sort(),['sheet:Белый','sheet:Белый:19']);
+  assert.ok(sheets.find(l=>l.id==='sheet:Белый:19')!.label.includes('19 мм'));
 });
 
 test('пересечения: сырой модуль (геометрия Базиса) не даёт ложных предупреждений «сдвиньте полку или петлю»',()=>{
