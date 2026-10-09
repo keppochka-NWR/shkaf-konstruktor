@@ -15,6 +15,7 @@ const SIZES = [{ key: "narrow", w: 300, h: 760 }, { key: "normal", w: 450, h: 76
 for (const [id, open] of items) {
   const v: VernissageFacade = { milling: id, cover: "film", film: "Моно серый", thickness: 19, ...(open && open !== "solid" ? { open: open as VernissageFacade["open"] } : {}) };
   const p = newProject();
+  p.room = { ...p.room, width: 4000, depth: 6000 }; // глубокая комната: камера высокого фасада помещается в помещение
   let x = 100;
   p.modules = SIZES.map((s, i): PlacedModule => {
     const base = initialModule(), sec = { ...section(), doorLeaves: 1 as const };
@@ -30,7 +31,7 @@ for (const [id, open] of items) {
   cmds.push(`cam:${cx - 500},1500,${30 + 400 + 3600},${cx},950,${430}`, `shot:${tag}-all`);
   let xx = 100;
   for (const s of SIZES) {
-    const dx = xx + s.w / 2, dy = 60 + s.h / 2, D = Math.max(s.w, s.h) * 0.85 + 120;
+    const dx = xx + s.w / 2, dy = 60 + s.h / 2, D = Math.max(s.w * 1.7, s.h * 1.3) + 100;
     cmds.push(`cam:${dx - D * 0.3},${dy + D * 0.18},${430 + D},${dx},${dy},${430}`, `shot:${tag}-${s.key}`);
     xx += s.w + 250;
   }

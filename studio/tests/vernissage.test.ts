@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { facadeGeometry } from '../src/vernissageGeometry';
-import { parts, parseVernissage, type Module } from '../src/model';
+import { parts, parseVernissage, initialModule, type Module } from '../src/model';
+import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
 import { estimate } from '../src/pricing';
 import { vernissageLayout, vernissageFacadePrice, vernissageMilling, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
@@ -90,6 +91,15 @@ test('Вернисаж в модуле: фасады — сторонний уч
   assert.ok(Math.abs(line.quantity - area) < 0.01);
   assert.ok(!e.lines.some((l) => l.id === 'facade-external'));
   assert.deepEqual(parseVernissage(JSON.parse(JSON.stringify(m.vernissage))), m.vernissage);
+});
+
+test('Вернисаж на кухне: двери и фасады ящиков нижнего модуля получают фрезеровку, раскладка строится под их размер', () => {
+  const v: VernissageFacade = { milling: '3', cover: 'enamel-matte', enamelColor: 'RAL 9003', thickness: 19 };
+  for (const kind of ['doors', 'drawers'] as const) {
+    const m = { ...kitchenBase(initialModule(), 600, kind), vernissage: v, facadeT: 19 }, fs = parts(m).filter((x) => x.role === 'door' || x.id.endsWith(':facade'));
+    assert.ok(fs.length > 0 && fs.every((x) => x.vernissage && x.external), kind);
+    for (const f of fs) { const g = facadeGeometry(vernissageLayout(v, f.size[0], f.size[1], f.size[2])), bb = g.boundingBox!; assert.ok(Math.abs(bb.max.x - bb.min.x - f.size[0]) < 1e-3 && Math.abs(bb.max.y - bb.min.y - f.size[1]) < 1e-3, f.id); }
+  }
 });
 
 test('Вернисаж: каталог — все фрезеровки прайса со своей раскладкой', () => {
