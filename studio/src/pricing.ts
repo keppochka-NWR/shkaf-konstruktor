@@ -96,7 +96,7 @@ export function hardwareKind(id:string):HardwareKind{
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
   if(id.startsWith('legs'))return 'legs';
-  if(/^(confirmat|eccentric|shelf-holder|kit$|screw)/.test(id))return 'fasteners';
+  if(/^(confirmat|eccentric|shelf-holder|rafix|kit$|screw)/.test(id))return 'fasteners';
   if(/^(rod|flange)/.test(id))return 'rods';
   if(id.startsWith('kupe-'))return 'kupe';
   return 'other';
@@ -132,6 +132,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',c.eccentrics??0,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
       add('shelf-holder','Полкодержатель Boyard p521',c.shelfHolders??0,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
       add('dowel','Шкант 8×30',c.dowels??0,'шт',null,src+'; закупочная цена шканта не найдена');
+      add('rafix','Полкодержатель-стяжка РАФИКС',c.rafix??0,'шт',null,src+'; закупочная цена не найдена — уточнить');
       add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',c.legs??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',c.clips??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-hanger','Навес мебельный регулируемый',c.hangers??0,'шт',null,'Закупочная цена навеса не найдена');
@@ -163,6 +164,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
+    if(fc.rafix)add('rafix','Полкодержатель-стяжка РАФИКС',fc.rafix,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
     if(a.module.kitchen){
       // Кухня: опоры и клипсы — по фактическим деталям сцены (kitchenLegs), как в спецификациях Базиса цеха.

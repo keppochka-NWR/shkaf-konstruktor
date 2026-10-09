@@ -7,6 +7,7 @@
 import type { Module, Part } from "./model";
 import { setEdges } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
+import type { KitchenRafix } from "./kitchenRafix";
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
@@ -16,7 +17,18 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
-  legs?: { back: number; front: number; side?: number; xs?: number[] } };
+  legs?: { back: number; front: number; side?: number; xs?: number[] };
+  /** Рафиксы жёстких полок по сетке Базиса (kitchenRafix.ts); без поля — жёсткие полки на конфирматах/эксцентриках, как у шкафов. */
+  rafix?: KitchenRafix;
+  /** Точек крепежа на стык дна/крыши со стойкой (2 или 3); без поля — по правилу kitchenJointPoints. */
+  jointPoints?: 2 | 3 };
+
+/** Крепёж стыка дна/крыши кухни со стойкой: 3 точки (третья посередине глубины) у корпусов глубже 600 мм — 21 из 25 глубоких
+ *  модулей Базиса с крепежом; до 600 — 2 точки (523 из 528). Свой счёт модуля (распознан из Базиса) — kitchen.jointPoints. */
+export function kitchenJointPoints(m: Module): 2 | 3 {
+  if (!m.kitchen) return 2;
+  return m.kitchen.jointPoints ?? (m.depth > 600 ? 3 : 2);
+}
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 

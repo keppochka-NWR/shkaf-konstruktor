@@ -10,7 +10,7 @@ export type RawPanel = { name: string; kind: string; box: [number, number, numbe
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
-export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccentrics", "shelfHolders", "dowels", "hinges", "lifts", "drawers"] as const;
+export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccentrics", "shelfHolders", "dowels", "rafix", "hinges", "lifts", "drawers"] as const;
 /** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса». */
 export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean };
 
@@ -29,6 +29,7 @@ export function rawCounts(hw: { name: string; category: string }[]): RawCounts {
     else if (cat === "эксцентрик") inc("eccentrics");
     else if (cat === "полкодержатель") inc("shelfHolders");
     else if (cat === "шкант") inc("dowels");
+    else if (cat === "рафикс") inc("rafix"); // «Полкодержатель стяжка РАФИКС» — в смете, как в Базисе
     if ((cat === "петля" || cat === "подъёмник" || cat === "газлифт") && /^петля/i.test(n.trim())) inc("hinges");
     if ((cat === "петля" || cat === "подъёмник" || cat === "газлифт") && /механизм/i.test(n) && /фрифолд|freefold|подъ|lift/i.test(n)) mech++;
     if (/axis\s*pro/i.test(n) && /держ\.?\s*фасада/i.test(n)) holders++;

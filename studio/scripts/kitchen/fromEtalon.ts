@@ -6,6 +6,7 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
+import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -31,6 +32,45 @@ export function refGrooves(ref: RefModule, backZ0: number | null): { box: [numbe
   return out;
 }
 export type Recognized = { module: Module; notes: string[]; unsupported: string[] };
+
+/** Точек крепежа (конфирмат/эксцентрик) по глубине на стыке дна и крыши с левой стойкой: наибольшее из двух; 2 или 3, иначе undefined. */
+export function jointPointsFromEtalon(ref: RefModule, hosts: (B | undefined)[], left: B): 2 | 3 | undefined {
+  let n = 0;
+  for (const q of hosts) {
+    if (!q) continue;
+    const fs = ref.hardware.filter((h) => (h.category === "конфирмат" || h.category === "эксцентрик") && (Math.abs(h.pos[1] - q.y0) < 1 || (h.pos[1] > q.y0 && h.pos[1] < q.y1)) && h.pos[0] >= left.x0 - 1 && h.pos[0] <= left.x1 + 1);
+    n = Math.max(n, new Set(fs.map((h) => Math.round(h.pos[2]))).size);
+  }
+  return n === 2 || n === 3 ? n : undefined;
+}
+
+/** Рафиксы Базиса у жёстких полок: точка — торец полки у стойки × нижняя пласть; сетка по глубине от торцов полки.
+ *  Общая сетка — самая частая среди полок, у остальных — своя (per). confirmat — жёсткие полки без рафиксов (их крепёж не меняем).
+ *  shelves — коробы полок снизу вверх (номера как в section.shelves), fixed — номера жёстких полок. */
+export function rafixFromEtalon(ref: RefModule, shelves: B[], fixed: number[]): { rafix?: KitchenRafix; confirmat: number[]; notes: string[] } {
+  const rf = ref.hardware.filter((h) => h.category === "рафикс"), notes: string[] = [];
+  if (!rf.length) return { confirmat: [], notes };
+  const grids = new Map<number, RafixGrid>(), confirmat: number[] = [];
+  for (const j of fixed) {
+    const b = shelves[j]; if (!b) continue;
+    const mine = rf.filter((h) => Math.abs(h.pos[1] - b.y0) < 1 && h.pos[0] >= b.x0 - 1 && h.pos[0] <= b.x1 + 1);
+    if (!mine.length) { confirmat.push(j); continue; }
+    // сторона с большим числом точек (у Базиса обе стороны одинаковые; k27 m13 — разные, берём левую)
+    const left = mine.filter((h) => h.pos[0] < (b.x0 + b.x1) / 2), right = mine.filter((h) => h.pos[0] >= (b.x0 + b.x1) / 2);
+    const zs = (left.length >= right.length ? left : right).map((h) => h.pos[2]).sort((a, c) => a - c);
+    const g: RafixGrid = { rear: r1(zs[0] - b.z0), front: r1(b.z1 - zs[zs.length - 1]), n: zs.length };
+    const even = rafixZs(g, b.z0, b.z1).every((z, k) => Math.abs(z - zs[k]) < 0.6);
+    if (!even) notes.push(`рафиксы полки ${j + 1}: шаг неравный (${zs.map((z) => r1(z - b.z0)).join(", ")})`);
+    if (left.length !== right.length || left.some((h, k) => Math.abs(h.pos[2] - (right[k]?.pos[2] ?? h.pos[2])) > 0.6)) notes.push(`рафиксы полки ${j + 1}: стороны разные (${left.length}/${right.length})`);
+    grids.set(j, g);
+  }
+  if (!grids.size) return { confirmat: [], notes };
+  const key = (g: RafixGrid) => `${g.rear}|${g.front}|${g.n}`, freq = new Map<string, number>();
+  for (const g of grids.values()) freq.set(key(g), (freq.get(key(g)) ?? 0) + 1);
+  const top = [...freq].sort((a, c) => c[1] - a[1])[0][0], base = [...grids.values()].find((g) => key(g) === top)!;
+  const per = Object.fromEntries([...grids].filter(([, g]) => key(g) !== top).map(([j, g]) => [String(j), g]));
+  return { rafix: { ...base, ...(Object.keys(per).length ? { per } : {}) }, confirmat, notes };
+}
 
 /** Вырезы Gola по контуру боковины Базиса: участки контура, ушедшие вглубь от переднего торца (z < zFront) не дальше 100 мм.
  *  top0/top1 — от верха боковины, depth — глубина, r — скругление (переход от вертикали выреза к его дну). */
@@ -276,6 +316,16 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     for (const [side, sx] of [["left", left.b.x1], ["right", right.b.x0]] as const)
       if (ecc.some((h) => Math.abs(h.pos[0] - sx) < 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1)) (m.jointFastening ??= {})[`${m.sections[0].id}:shelf:${j}:${side}`] = "eccentric";
   }
+  // рафиксы жёстких полок (Базис): сетка по полкам; жёсткие полки на конфирматах при этом — явно в jointFastening
+  const rfx = rafixFromEtalon(ref, sh.map((q) => q.b), m.sections[0].fixed ?? []);
+  if (rfx.rafix) {
+    m.kitchen.rafix = rfx.rafix;
+    for (const j of rfx.confirmat) for (const side of ["left", "right"] as const) {
+      const key = `${m.sections[0].id}:shelf:${j}:${side}`;
+      if (!m.jointFastening?.[key]) (m.jointFastening ??= {})[key] = "confirmat";
+    }
+  }
+  notes.push(...rfx.notes);
   if (m.jointFastening && dow.length && ecc.length) {
     const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
     if (d0) m.dowels = { offset: r1(Math.abs(d0.pos[2] - e0.pos[2])) };
@@ -284,6 +334,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const conf = [...hw("конфирмат"), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
+  // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
+  const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b);
+  if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et };

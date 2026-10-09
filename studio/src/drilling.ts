@@ -7,6 +7,7 @@
 import { parts, type Module, type Part } from "./model";
 import { qrot } from "./quat";
 import { kitchenDrawerHoles } from "./kitchenDrawers";
+import { rafixHoles } from "./kitchenRafix";
 
 export type Hole = { part: string; at: [number, number, number]; dir: [number, number, number]; d: number; depth: number; src: string };
 
@@ -37,6 +38,8 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       push(p.id, [ex + inward * 34, ey, ez], [0, down, 0], 15, 12);
       push(p.id + ":pin", [ex, hpY, ez], [inward, 0, 0], 8, 34);
       push(p.id + ":side", [ex, hpY, ez], [-inward, 0, 0], 5, 12);
+    } else if (p.id.startsWith("rafix:")) {
+      rafixHoles(p, push); // рафикс кухни: D20×13 в полку, D5×13 в стойку (kitchenRafix.ts)
     } else if (p.id.startsWith("dowel:")) {
       // шкант 8×30: D8×22 в торец горизонтали, D8×12 в стойку
       const inward = p.id.includes(":left:") ? 1 : -1, ex = p.position[0] - inward * 3;

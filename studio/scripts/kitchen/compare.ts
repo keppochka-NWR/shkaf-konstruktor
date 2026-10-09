@@ -17,7 +17,8 @@ export type RefModule = { key: string; name: string; archetype: string; size: nu
 type Box = [number, number, number, number, number, number];
 type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
-export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
+/** dups — дубли Базиса (та же деталь в той же точке), в ref не входят. */
+export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; dups?: number };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
@@ -77,6 +78,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("fast:")) return "конфирмат";
   if (id.startsWith("ecc:") && !id.endsWith(":pin")) return "эксцентрик";
   if (id.startsWith("dowel:")) return "шкант";
+  if (id.startsWith("rafix:") && !id.endsWith(":pin")) return "рафикс";
   if (id.startsWith("shp:")) return "полкодержатель";
   if (id.includes(":slide:")) return "направляющая";
   if (id.startsWith("kd:") && id.includes(":sys:")) return "ящик-система";
@@ -134,8 +136,12 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
   for (const pr of [...pairs]) if (pr.delta > 50) { pairs.splice(pairs.indexOf(pr), 1); missing.push(pr.ref); extra.push(pr.studio); }
   const cats = new Set<string>([...ref.hardware.map((h) => h.category), ...ps.map(studioCategory).filter((x): x is string => !!x)]);
   const hardware: HardwareRow[] = [...cats].map((category) => {
-    const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
-    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
+    // дубль Базиса — опора в той же точке и с тем же поворотом дважды (k16: две опоры в одной точке); считаем один раз, как дубли отверстий.
+    // Только опоры: у направляющих Firmax две точки в одном месте — это пара направляющих, не дубль.
+    const seen = new Set<string>(), all = ref.hardware.filter((h) => h.category === category);
+    const uniq = category !== "опора" ? all : all.filter((h) => { const k = `${h.name}|${h.pos.map(r1).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    const rp = uniq.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
+    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp), ...(all.length > uniq.length ? { dups: all.length - uniq.length } : {}) };
     // Газлифт: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
     const sq = category === "газлифт" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
@@ -151,7 +157,7 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
     return row;
   });
   const tolOf = (p: PanelPair) => (p.ref.cls.startsWith("hdf") ? Math.max(1, tol) : tol);
-  const hwOk = hardware.every((h) => h.ref === h.studio && !h.note && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант"].includes(h.category) ? 2 : 1)));
+  const hwOk = hardware.every((h) => h.ref === h.studio && !h.note && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант", "рафикс"].includes(h.category) ? 2 : 1)));
   // Отверстия: на каждой сопоставленной паре панелей — тот же диаметр, глубина, направление; точка входа ±0,5 мм.
   let holeCheck: HoleCheck | undefined;
   if (ref.holes) {
@@ -231,7 +237,7 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   if (c.missing.length) md += `\n**Нет в студии:** ${c.missing.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   md += "\n| фурнитура | Базис | студия | max Δ точки, мм |\n|---|---|---|---|\n";
-  for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} |\n`;
+  for (const h of c.hardware) md += `| ${h.category}${h.dups ? ` (+${h.dups} дубль Базиса)` : ""} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} |\n`;
   if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;
