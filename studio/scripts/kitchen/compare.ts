@@ -11,7 +11,7 @@ import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 
-export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
+export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string; grp?: string };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
 export type RefHole = { panel: number; face: string; at: number[]; dir: number[]; d: number; depth: number; src?: number | null };
 export type RefModule = { key: string; name: string; archetype: string; size: number[]; panels: RefPanel[]; hardware: RefHardware[]; holes?: RefHole[] };

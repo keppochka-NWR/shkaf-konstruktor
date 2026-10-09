@@ -4,7 +4,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '../src/model';
 import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
-import {compareModule,type RefModule} from '../scripts/kitchen/compare';
+import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {refCategory,confirmatName} from '../scripts/kitchen/refHardware';
 import {estimate} from '../src/pricing';
@@ -330,4 +330,12 @@ test('навесной с поднятым дном и фасадами выше
   assert.equal(facadeBottom(m),361.5);
   const h=compareModule(ref,m).hardware.find(x=>x.category==='петля')!;
   assert.equal(h.studio,h.ref);
+});
+test('фасад в алюминиевом профиле Базиса (k20 m02, k21 m05): рамки в проекте нет — модуль честно сырой, без молчаливого PASS',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
+  const r=moduleFromEtalon(load('k20','m02'));
+  assert.match(r.unsupported[0],/алюминиевом профиле/);
+  const ref=load('k21','m05'),q=moduleFromEtalon(ref);
+  assert.match(q.unsupported.join(';'),/алюминиевом профиле/);
+  assert.ok(!honestPass(compareModule(ref,q.module),validate(q.module),q.unsupported));
+  assert.ok(!moduleFromEtalon(load('k23','m05')).unsupported.some(u=>/алюминиев/.test(u)));
 });

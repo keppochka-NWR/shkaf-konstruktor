@@ -11,6 +11,7 @@ import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } f
 import { cornerFillerSink } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
+import { aluFacadeReason } from "./aluFacade";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
@@ -310,6 +311,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const H = r1(top);
   const horiz = P.filter(({ p }) => p.axis === "y" && board(p.kind));
   const fronts = P.filter(({ p, b }) => p.axis === "z" && p.kind !== "hdf" && b.z0 >= sideZ1 - 1).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
+  // фасад в алюминиевом профиле: рамки в проекте нет (профиль без сетки) — модуль честно сырой (aluFacade.ts); наполнение из рядов
+  // фасадов не убираем: по нему считается низ корпуса (подъём, фасады до низа), без него корпус съезжает (k21 m05: Δ3,5)
+  const aluWhy = aluFacadeReason(ref);
+  if (aluWhy) unsupported.push(aluWhy);
   const hdf = P.filter(({ p }) => p.kind === "hdf");
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
   const legs = hw("опора");
