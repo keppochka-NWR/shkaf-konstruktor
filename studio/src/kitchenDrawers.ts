@@ -13,7 +13,10 @@ export type KDrawerSystem = "axis-pro" | "firmax-ldsp";
  *  (фальшпанель — те же), confBottom — от торцов дна. По умолчанию — самые частые в базе. */
 export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; gap?: number; front?: number; conf?: number[]; confBottom?: number; screws?: boolean; rearHoles?: boolean;
   /** Точки направляющих Базиса (у Firmax без сетки ставятся произвольно): [от внутренней грани левой боковины, от пола, от передней кромки]. По умолчанию — две в точке runnerY. */
-  runs?: [number, number, number][] };
+  runs?: [number, number, number][];
+  /** Шурупы 3,5×30 фальшпанели в фасад (часть проектов): [от внутренней грани левой боковины ящика, от низа фальшпанели]; true — по правилу
+   *  большинства (два в 60 от боковин и 40 ниже верха, один посередине в 60 над низом). */
+  faceScrews?: true | [number, number][] };
 export type FirmaxDrawer = { system: "firmax-ldsp"; y0: number; y1: number; runnerY: number; box: FirmaxBox;
   /** Поля Axis PRO у Firmax не используются (остаются при смене системы, чтобы вернуть царгу/цвет). */
   h?: 86 | 120 | 168 | 200; len?: 300 | 400 | 450 | 500 | 550; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
@@ -294,6 +297,10 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая скрытого монтажа Firmax ${b.len} ${side}`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
           length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
       });
+      if (b.faceScrews) {
+        const iw = g.sr - g.sl - 2 * g.t, pts = b.faceScrews === true ? [[60, g.backH - 40], [iw - 60, g.backH - 40], [iw / 2, 60]] : b.faceScrews;
+        pts.forEach(([dx, dy], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Шуруп 3,5×30 (фальшпанель в фасад)")));
+      }
       for (const s of [0, 1] as const) {
         const lr = s ? "R" : "L", d = dir(s);
         // конфирматы короба: боковина → задняя стенка и фальшпанель (высоты как в проекте), боковина → дно (от торцов)
@@ -351,7 +358,13 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
     const id = `kd:${j}`;
     if (isFirmax(k)) {
       // Firmax: D3×3 в боковину корпуса («3x3»), D5×12 в задний торец дна («5x12»); конфирматы (D8×16 + D5×37) — общей присадкой fast:
-      for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:fx`))) {
+      // шуруп 3,5×30 фальшпанели: D5×16 насквозь через фальшпанель + D3×3 в тыльную пласть фасада
+      const fac = ps.find((q) => q.id === `${id}:facade`);
+      for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:fxf:`))) {
+        push(p.id, p.position, [0, 0, 1], 5, 16);
+        if (fac) push(p.id + ":facade", [p.position[0], p.position[1], fac.position[2] - fac.size[2] / 2], [0, 0, 1], 3, 3);
+      }
+      for (const p of ps.filter((q) => q.id.startsWith(`${id}:screw:fx`) && !q.id.includes(":fxf:"))) {
         const lr = p.id.split(":")[4];
         if (p.id.includes(":fx3:")) push(p.id, p.position, [lr === "L" ? -1 : 1, 0, 0], 3, 3);
         else push(p.id, p.position, [0, 0, 1], 5, 12);
@@ -423,6 +436,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
       if (Array.isArray(b.conf)) box.conf = b.conf.slice(0, 6).map(Number);
       if (b.screws) box.screws = true;
       if (b.rearHoles === false) box.rearHoles = false;
+      if (b.faceScrews === true) box.faceScrews = true; else if (Array.isArray(b.faceScrews)) box.faceScrews = b.faceScrews.slice(0, 8).map((r) => [Number(r[0]), Number(r[1])] as [number, number]);
       if (Array.isArray(b.runs)) box.runs = b.runs.slice(0, 8).filter((r) => Array.isArray(r) && r.length === 3).map((r) => r.map(Number) as [number, number, number]);
       return { system: "firmax-ldsp", y0: Number(k0.y0), y1: Number(k0.y1), runnerY: Number(k0.runnerY), box };
     }
