@@ -37,7 +37,9 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
-  const fg = faceGapsTB(ref, m.faceGap ?? 0);
+  // фасад без петель под нишей техники (k03 m01, k06 m04: глухой «Фасад ящика»/«Дверь» под духовкой) — верх фасада ниже верха корпуса
+  // на высоту ниши; с петлями не берём (k22 m06: петли считаются от двери, ниша — не зазор)
+  const fg = faceGapsTB(ref, m.faceGap ?? 0, noHinges);
   if (fg && k.role === "base" && m.feet && m.doors && !m.kdrawers?.length && !m.gola && !m.sections[0].doorSplit) {
     if (fg.top !== undefined) k.faceTop = fg.top;
     if (fg.bottom !== undefined) k.faceBottom = fg.bottom;
@@ -142,7 +144,7 @@ export function hingePlateHoles(ref: RefModule): boolean | undefined {
 }
 
 /** Один ряд фасадов: зазор верха от верха боковин и низа от низа дна, если отличается от бокового (side). */
-export function faceGapsTB(ref: RefModule, side: number): { top?: number; bottom?: number } | undefined {
+export function faceGapsTB(ref: RefModule, side: number, niche = false): { top?: number; bottom?: number } | undefined {
   const r1 = (v: number) => Math.round(v * 10) / 10;
   const sides = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200);
   if (sides.length < 2) return undefined;
@@ -153,7 +155,8 @@ export function faceGapsTB(ref: RefModule, side: number): { top?: number; bottom
   const t = r1(top - fr[0].box[4]), b = r1(fr[0].box[1] - bot.box[1]);
   const out: { top?: number; bottom?: number } = {};
   // только зазор (до 10 мм); фасад ниже на сотни мм (k22 m06: 598 — ниша/второй ряд) — не зазор, не трогаем
-  if (t > 10 || b > 10 || t < 0 || b < 0) return undefined;
+  // niche — фасад без петель: верх ниже на высоту ниши под технику (низ — по-прежнему зазор); проверяет sameFronts
+  if ((t > 10 && !(niche && t < top - bot.box[1] - 50)) || b > 10 || t < 0 || b < 0) return undefined;
   if (Math.abs(t - side) > 0.05) out.top = t;
   if (Math.abs(b - side) > 0.05) out.bottom = b;
   return out.top !== undefined || out.bottom !== undefined ? out : undefined;

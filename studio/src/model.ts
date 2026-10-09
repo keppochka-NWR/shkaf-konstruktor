@@ -1666,7 +1666,8 @@ export function validate(m: Module): string[] {
       errors.push(`Фасад шире ${doorWMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`);
     // кухонные антресоли Базиса — фасады от 247 мм (корпус 250–400); шкафы — правило цеха doorMinH
     const doorHMin = m.kitchen ? 200 : RULES.doorMinH;
-    if (p.role === "door" && p.length < doorHMin)
+    // глухой фасад кухни без петель (k03 m01, k06 m04: под нишей духовки, 116–117 мм) — петли не ставятся, минимум высоты не нужен
+    if (p.role === "door" && p.length < doorHMin && m.kitchen?.hinges !== false)
       errors.push(`Распашной фасад ниже ${doorHMin} мм. Увеличьте высоту корпуса или уберите фасады.`);
     if (p.role === "door" && p.material === "alu" && (p.length > ALU_EXTRAS.maxH || p.width > ALU_EXTRAS.maxW))
       errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: по СТП не выше ${ALU_EXTRAS.maxH} и не шире ${ALU_EXTRAS.maxW} мм. Разделите секцию или уменьшите высоту.`);
