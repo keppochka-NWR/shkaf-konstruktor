@@ -48,6 +48,12 @@ test('studio places hangers and caps from kitchen.hangerAt; a hanger off the sid
   assert.deepEqual(back.kitchen!.hangerAt,k18.kitchen!.hangerAt);
 });
 
+test('hanger pressed up to 2 mm into the roof underside (Bazis k14 m04 1.2, k18 m09 2) is a contact, deeper is a collision',()=>{
+  const at=(down:number)=>{const m=antresol();m.kitchen!.hangerAt={left:[down,20,0],right:[15,20,0]};return partCollisions(parts(m),m).filter(c=>/kitchen-hanger/.test(c.a+c.b));};
+  assert.deepEqual(at(13),[]);
+  assert.ok(at(5).some(c=>/kitchen-hanger:left/.test(c.a+c.b)&&(c.a==='top'||c.b==='top')),'10 mm into the roof is reported');
+});
+
 test('no fasteners in Bazis (k32): studio adds no confirmats, eccentrics or dowels',()=>{
   assert.equal(fastenersAbsent({key:'x',name:'x',archetype:'antresol',size:[600,690,560],panels:[],hardware:[],holes:[]}),true);
   assert.equal(fastenersAbsent({key:'x',name:'x',archetype:'antresol',size:[600,690,560],panels:[],hardware:[{i:0,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,8,63]}]}),false);
