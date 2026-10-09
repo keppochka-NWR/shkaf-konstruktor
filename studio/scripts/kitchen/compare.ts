@@ -201,7 +201,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
     const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
-      const bad = ref.hardware.filter((h) => h.category === category && h.quat).filter((h) => {
+      // сушка Базиса без сетки (k01, k02, k06, k08) — тела нет, поворот не сверяется (n4-wall)
+      const bad = ref.hardware.filter((h) => h.category === category && h.quat && (category !== "сушка" || h.mesh)).filter((h) => {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
         sq.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
         const q = best?.model?.quat; if (!q) return true;

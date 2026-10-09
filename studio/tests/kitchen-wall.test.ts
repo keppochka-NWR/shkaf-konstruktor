@@ -296,7 +296,9 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   assert.match(compareModule(ref,turned).hardware.find(h=>h.category==='сушка')!.note??'',/поворот ≠ ×1/);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...kitchenWall(initialModule(),600),kitchen:{role:'wall',dryer:m.kitchen?.dryer}}))).kitchen?.dryer,m.kitchen?.dryer,'сушка переживает сохранение');
   const k6=moduleFromEtalon(load('k06','m07'));
-  assert.equal(k6.module.kitchen?.dryer,undefined);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
+  // n4-wall: сушка без сетки — точка проекта без тела (как в Базисе), геометрия не выдумывается
+  assert.deepEqual(k6.module.kitchen?.dryer?.map(d=>d.mesh),[undefined]);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
+  assert.ok(parts(k6.module).filter(p=>p.id.startsWith('kitchen-dryer:')).every(p=>!p.model));
 });
 test('навесной под вытяжку k08 m10: дно короче сзади (перед ХДФ) и без крепежа, как в Базисе — сверка PASS',{skip:!existsSync(`${ETALON}/k08.json`)},()=>{
   const ref=load('k08','m10'),{module:m}=moduleFromEtalon(ref);

@@ -43,7 +43,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** В проекте Базиса у модуля нет крепежа корпуса (конфирматов, эксцентриков, шкантов) — студия его не добавляет (n3-wall, n3-antresol). */
   noFasteners?: boolean;
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
-  dryer?: { name: string; mesh: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  dryer?: { name: string; /** сетка библиотеки Базиса; нет — у Базиса элемент без геометрии (k01, k02, k06, k08): точка и строка спецификации */ mesh?: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
   /** Имя крепежа корпуса по проекту Базиса, если это не «Конфирмат 7х50» (k33, k34: «Евровинт 6х50») — в деталях и смете. */
   confirmatName?: string;
   /** Глубина присадки по проекту Базиса, если она не типовая: confirmat — D5 в торец (обычно 35; k33/k34 «Евровинт 6х50» — 36), pin — D5 под полкодержатель (обычно 12; k33/k34 — 9). */
@@ -263,7 +263,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
   for (const [n, d] of (k.dryer ?? []).entries()) {
     const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
     out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
-       { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) }));
+       d.mesh ? { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) } : undefined)); // без сетки — как в Базисе: только точка
   }
   if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
     for (const side of ["left", "right"] as const) {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,parseModule} from '../src/model';
 import {holes} from '../src/drilling';
+import {partCollisions} from '../src/collisions';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {handlePlace} from '../scripts/kitchen/recognize-handle';
@@ -68,4 +69,17 @@ test('шкаф студии: место ручки по-прежнему по п
   const h=parts(plain).find(p=>p.role==='handle');
   assert.ok(h);
   assert.equal(h!.anchor,undefined);
+});
+
+test('сушка Базиса без сетки (k02 m03 «Сушка тарелки/чашки»): точка проекта без тела, сверка 2/2, пересечений нет',{skip:!has('k02')},()=>{
+  const {m,c,ok}=pass('k02','m03');
+  const d=parts(m).filter(p=>p.id.startsWith('kitchen-dryer:'));
+  assert.deepEqual(d.map(p=>p.name),['Сушка тарелки','Сушка чашки']);
+  assert.ok(d.every(p=>!p.model),'геометрию не выдумываем');
+  assert.deepEqual(partCollisions(parts(m),m),[]);
+  const row=c.hardware.find(h=>h.category==='сушка')!;
+  assert.deepEqual([row.ref,row.studio,row.maxPosDelta,row.note],[2,2,0,undefined]);
+  assert.equal(ok,true);
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.equal(back.kitchen?.dryer?.length,2,'сушка без сетки сохраняется в проекте');
 });
