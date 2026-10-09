@@ -137,6 +137,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('hinge'+((a.module.hingeBrand??'gtv')==='gtv'?'':':'+a.module.hingeBrand),hb.soft.label,c.hinges??0,'шт',hb.soft.price,hb.soft.source);
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       add('axis-pro:raw','Ящик Axis PRO (по проекту Базиса) — комплект фурнитуры',c.drawers??0,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+      // вырезы в столешнице ряда: в эталоне Базиса их нет — по модулям «Мойка»/«Варка» в проекте (как у параметрической столешницы)
+      if(r.row&&r.panels.some(q=>/столешн/i.test(q.name)||[q.box[3]-q.box[0],q.box[4]-q.box[1],q.box[5]-q.box[2]].sort((x,y)=>x-y)[0]>=26)){
+        const nm=(re:RegExp)=>p.modules.filter(b=>b!==a&&re.test(b.module.name)&&!b.module.worktop).length;
+        add('worktop-cut:sink','Вырез под мойку',nm(/мойк/i),'шт',null,'Цена работы не найдена; по модулю «Мойка» проекта');
+        add('worktop-cut:hob','Вырез под варочную панель',nm(/варк/i),'шт',null,'Цена работы не найдена; по модулю «Варка» проекта');
+      }
       for(const p of r.panels){
         if(p.kind==='hdf'||p.kind==='glass'||p.kind==='mirror')continue;
         const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
