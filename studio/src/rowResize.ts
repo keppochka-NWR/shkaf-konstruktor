@@ -4,6 +4,8 @@
 //  • Сужение — то же самое: сосед с той стороны расширяется на ту же величину.
 //  «Справа/слева» — как смотрит человек на фасад: +u локальной оси ширины (localToRoom), для поворота 0 это +x.
 //  «Ряд» — модули с тем же поворотом, перекрытые по высоте и по глубине, стоящие вплотную (±2 мм).
+//  Нижние и навесные не путаются: стык, к которому примыкают модули разных уровней (пенал рядом с нижним и навесным),
+//  или стык, где кончается столешница (цоколь «Ряда» Базиса), считается боком — как стена, модуль меняется от него.
 //  Столешница и объекты ряда Базиса (raw.row: цоколи, стеновые панели) соседями не считаются.
 //  Сосед из Базиса (сырой raw), угловой и купе не меняются — ошибка, правка не применяется.
 import { bounds, localToRoom, type PlacedModule, type Project } from "./project";
@@ -59,23 +61,56 @@ export function rowContext(p: Project, a: PlacedModule) {
   const neighbor: Partial<Record<Side, PlacedModule>> = {}, wall: Partial<Record<Side, string>> = {};
   if (s.lo <= room.lo + TOUCH) wall.left = "стена";
   if (s.hi >= room.hi - TOUCH) wall.right = "стена";
-  let best: Partial<Record<Side, number>> = {};
+  const rot = a.rotation ?? 0, touching: Record<Side, PlacedModule[]> = { left: [], right: [] };
   for (const o of p.modules) {
     if (o.id === a.id || rowObject(o.module)) continue;
     const ob = bounds(o);
     if (!overlaps(y, yRange(ob))) continue;
     const oc = across(ob, e);
     if (!overlaps(c, oc)) continue;
-    const os = along(ob, e), cover = Math.min(c.hi, oc.hi) - Math.max(c.lo, oc.lo);
-    const sameRow = (o.rotation ?? 0) === (a.rotation ?? 0);
+    const os = along(ob, e);
     for (const side of ["left", "right"] as const) {
       const touch = side === "right" ? Math.abs(os.lo - s.hi) <= TOUCH : Math.abs(os.hi - s.lo) <= TOUCH;
       if (!touch) continue;
-      if (sameRow) { if ((best[side] ?? -1) < cover) { best = { ...best, [side]: cover }; neighbor[side] = o; } }
+      if ((o.rotation ?? 0) === rot) touching[side].push(o);
       else wall[side] = "бок модуля " + quote(o.module); // модуль под 90° — как стена
     }
   }
+  // Сосед — только из своего уровня (нижние и навесные не путаются). Стык считается боком (как стена), если правка соседа
+  // задела бы другой уровень: к стыку примыкают модули разных уровней (пенал рядом с нижним и навесным) или кончается столешница.
+  for (const side of ["left", "right"] as const) {
+    const list = touching[side];
+    if (!list.length || wall[side]) continue;
+    const E = side === "right" ? s.hi : s.lo;
+    const n = list.reduce((m, o) => (cover(c, across(bounds(o), e)) > cover(c, across(bounds(m), e)) ? o : m));
+    const other = list.find((o) => !overlaps(yRange(bounds(o)), yRange(bounds(n))));
+    if (other) { wall[side] = `бок, к которому примыкают ${quote(n.module)} и ${quote(other.module)} разных уровней`; continue; }
+    const nb = bounds(n), ny = yRange(nb);
+    const shared = p.modules.find((o) => {
+      if (o.id === a.id || o.id === n.id || rowObject(o.module) || (o.rotation ?? 0) !== rot) return false;
+      const ob = bounds(o), os = along(ob, e);
+      return overlaps(ny, yRange(ob)) && !overlaps(y, yRange(ob)) && overlaps(across(nb, e), across(ob, e)) && Math.abs((side === "right" ? os.hi : os.lo) - E) <= TOUCH;
+    });
+    if (shared) { wall[side] = `бок ${quote(n.module)}, к которому примыкает и ${quote(shared.module)} другого уровня`; continue; }
+    const end = rowObjectEnd(p, [a, n], c, e, E);
+    if (end) { wall[side] = end; continue; }
+    neighbor[side] = n;
+  }
   return { e, s, c, y, room, neighbor, wall };
+}
+const cover = (a: { lo: number; hi: number }, b: { lo: number; hi: number }) => Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo);
+const isWorktop = (m: Module) => !!m.worktop || (!!m.raw?.row && /столешн/i.test(m.name));
+const isRowPlinth = (m: Module) => !!m.raw?.row && /цокол/i.test(m.name);
+/** Кончается ли на стыке E столешница (над любым из модулей стыка) или цоколь «Ряда» Базиса — тогда стык не двигаем. */
+function rowObjectEnd(p: Project, mods: PlacedModule[], c: { lo: number; hi: number }, e: { x: number; z: number }, E: number) {
+  for (const o of p.modules) {
+    const ob = bounds(o), os = along(ob, e);
+    if (!overlaps(c, across(ob, e)) || (Math.abs(os.lo - E) > TOUCH && Math.abs(os.hi - E) > TOUCH)) continue;
+    const top = (m: PlacedModule) => (m.y ?? 0) + m.module.height;
+    if (isWorktop(o.module) && mods.some((m) => Math.abs(ob.y - top(m)) <= 3)) return `край столешницы ${quote(o.module)}`;
+    if (isRowPlinth(o.module) && mods.some((m) => overlaps(yRange(bounds(m)), yRange(ob)))) return `край цоколя ${quote(o.module)}`;
+  }
+  return undefined;
 }
 
 /** Столешница над нижним модулем и цоколь ряда Базиса вдоль него не должны начать висеть или торчать, когда меняется внешний край ряда. */
@@ -84,9 +119,9 @@ function rowObjectsCheck(p: Project, a: PlacedModule, ctx: ReturnType<typeof row
   for (const o of p.modules) {
     if (o.id === a.id) continue;
     const ob = bounds(o), os = along(ob, ctx.e), oc = across(ob, ctx.e);
-    const worktop = (!!o.module.worktop || (!!o.module.raw?.row && /столешн/i.test(o.module.name))) && Math.abs(ob.y - top) <= 3;
+    const worktop = isWorktop(o.module) && Math.abs(ob.y - top) <= 3;
     // цоколь «Ряда» Базиса — отдельный объект вдоль модулей (у своих кухонь цоколь — деталь модуля и идёт за его шириной)
-    const plinth = !!o.module.raw?.row && /цокол/i.test(o.module.name) && os.hi - os.lo > oc.hi - oc.lo && overlaps(ctx.y, yRange(ob));
+    const plinth = isRowPlinth(o.module) && os.hi - os.lo > oc.hi - oc.lo && overlaps(ctx.y, yRange(ob));
     if (!(worktop || plinth) || !overlaps(ctx.c, oc) || !overlaps(ctx.s, os)) continue;
     const what = worktop ? "столешниц" : "цокол";
     const edge = side === "right" ? ctx.s.hi : ctx.s.lo, end = side === "right" ? os.hi : os.lo;

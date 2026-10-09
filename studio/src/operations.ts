@@ -4,6 +4,7 @@ import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors} from './project';
+import {placeInRow} from './rowResize';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
@@ -252,12 +253,13 @@ export function fitMeshItem(p:Project,mid:string,sid:string,meshId:string,worldY
  const widths=Array.from({length:RULES.maxW-RULES.minW+1},(_,i)=>RULES.minW+i).sort((a,b)=>Math.abs(a-original.width)-Math.abs(b-original.width));
  for(const width of widths){
    const opening=target.width+width-original.width;if(opening<RULES.minSection)continue;
-   const next=structuredClone(p),m=next.modules.find(a=>a.id===mid)!.module;m.width=width;
+   const m=structuredClone(original);m.width=width;
    m.sections.forEach(s=>s.weight=s.id===sid?opening:before.find(b=>b.id===s.id)!.width);
    const sec=m.sections.find(s=>s.id===sid)!;
    const inner=boxes(m).find(b=>b.id===sid)!.width-fillerSides(m,sec).left-fillerSides(m,sec).right;
    if(inner<item.reqW-0.001||inner>item.reqW+MESH_WIDTH_TOLERANCE+0.001)continue;
-   try{return insertItem(next,'mesh',mid,sid,worldY,undefined,meshId);}catch(e){failure=(e as Error).message;}
+   // ширина корпуса меняется по правилу ряда (rowResize): сосед сужается, у стены — от стены
+   try{return insertItem(placeInRow(p,mid,m),'mesh',mid,sid,worldY,undefined,meshId);}catch(e){failure=(e as Error).message;}
  }
  throw Error('Не удалось подобрать корпус: '+failure+' Размеры и наполнение сохранены.');
 }

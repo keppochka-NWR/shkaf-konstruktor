@@ -1,9 +1,11 @@
 // Ширина модуля в ряду (правило Макса 09.10.2026): сосед сужается, у стены — от стены.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialModule, type Module } from "../src/model";
-import { bounds, type PlacedModule, type Project } from "../src/project";
+import { initialModule, section, boxes, type Module } from "../src/model";
+import { bounds, projectErrors, type PlacedModule, type Project } from "../src/project";
 import { resizeInRow, placeInRow } from "../src/rowResize";
+import { fitMeshItem } from "../src/operations";
+import { DEFAULT_MESH } from "../src/mesh";
 
 const mod = (name: string, width = 600, extra: Partial<Module> = {}): Module => ({ ...initialModule(), name, width, ...extra });
 const at = (id: string, x: number, m: Module, more: Partial<PlacedModule> = {}): PlacedModule => ({ id, x, z: 0, module: m, ...more });
@@ -98,6 +100,35 @@ test("два уровня: нижний и навесной ряды не вли
   assert.deepEqual(["u", "v", "w"].map((id) => get(p, id).x), [500, 1100, 1700]);
 });
 
+test("пенал рядом с нижним и навесным — бок для обоих уровней: правка одного ряда не трогает пенал и другой ряд", () => {
+  const low = (id: string, x: number, w = 600) => at(id, x, mod("Н" + id, w, { height: 800 }));
+  const up = (id: string, x: number, w = 600) => at(id, x, mod("В" + id, w, { height: 700 }), { y: 1400 });
+  const tall = (id: string, x: number) => at(id, x, mod("Пенал" + id, 600, { height: 2100 }));
+  const top = (x: number, w: number) => at("t", x, mod("Столешница", w, { height: 38, worktop: { material: "postforming", thickness: 38 } as unknown as Module["worktop"] }), { y: 800 });
+  // […][Нижний Т @2021][Пенал @2621], навесной над нижним 2021..2621, столешница до пенала
+  const kitchen = () => proj([low("l", 1421), low("t1", 2021), tall("p", 2621), up("u", 2021), top(1421, 1200)]);
+  const p = resizeInRow(kitchen(), "t1", 700);
+  assert.deepEqual([get(p, "t1").x, get(p, "t1").module.width], [1921, 700], "нижний растёт от пенала");
+  assert.deepEqual([get(p, "l").x, get(p, "l").module.width], [1421, 500], "левый нижний сужается");
+  assert.deepEqual([get(p, "p").x, get(p, "p").module.width, get(p, "u").x, get(p, "u").module.width], [2621, 600, 2021, 600], "пенал и навесной на месте");
+  // [Мойка 800][Пенал 600], навесной 800 над мойкой: навесной +100 — растёт от пенала влево, пенал не сужается
+  const sink = () => proj([at("m", 500, mod("Мойка", 800, { height: 800 })), tall("p", 1300), up("u", 500, 800)]);
+  const q = resizeInRow(sink(), "u", 900);
+  assert.deepEqual([get(q, "u").x, get(q, "u").module.width, get(q, "p").x, get(q, "p").module.width], [400, 900, 1300, 600]);
+  // навесной справа от пенала, справа никого: растёт вправо, пенал (к нему справа примыкает нижний) не трогаем
+  const right = () => proj([tall("p", 1000), up("u", 1600), low("b", 1600)]);
+  const r = resizeInRow(right(), "u", 700);
+  assert.deepEqual([get(r, "u").x, get(r, "u").module.width, get(r, "p").x, get(r, "p").module.width, get(r, "b").module.width], [1600, 700, 1000, 600, 600]);
+  // сам пенал между двумя уровнями с обеих сторон: шире — ошибка с понятным текстом
+  assert.throws(() => resizeInRow(proj([low("a", 400), up("v", 400), tall("p", 1000), low("b", 1600), up("w", 1600)]), "p", 700), /разных уровней/);
+  // пенал без навесного над соседом, но столешница кончается у пенала: нижний не выходит из-под неё — растёт от пенала
+  const noUp = resizeInRow(proj([low("l", 1421), low("t1", 2021), tall("p", 2621), top(1421, 1200)]), "t1", 700);
+  assert.deepEqual([get(noUp, "t1").x, get(noUp, "l").module.width, get(noUp, "p").module.width], [1921, 500, 600]);
+  // два пенала рядом — один уровень, сосед сужается как обычно
+  const two = resizeInRow(proj([tall("a", 1000), tall("b", 1600)]), "a", 700);
+  assert.deepEqual([get(two, "b").x, get(two, "b").module.width], [1700, 500]);
+});
+
 test("модуль под 90° у бока считается стеной: растём от него", () => {
   // угловой модуль повёрнут на 90° у левой стены, ряд начинается вплотную к его боку
   const corner: PlacedModule = { id: "k", x: 0, z: 0, rotation: 90, module: mod("Поворотный", 1200) };
@@ -122,6 +153,19 @@ test("столешница над внешним краем: модуль не �
   // внутри ряда (сосед компенсирует) столешница не мешает
   const p = resizeInRow(proj([base("a", 500), base("b", 1100), top]), "a", 700);
   assert.equal(get(p, "b").module.width, 500);
+});
+
+test("подгонка ширины под сетку (fitMeshItem) идёт по правилу ряда: без щели и без наезда", () => {
+  const empty = (name: string) => mod(name, 600, { depth: 650, sections: [section()] });
+  const z = { z: 30 }; // задняя стенка внакладку — корпус на 3 мм от стены, иначе «выходит за границы помещения»
+  const p = proj([at("a", 500, empty("Левый"), z), at("b", 1100, empty("Средний"), z), at("c", 1700, empty("Правый"), z)]);
+  const b = get(p, "b"), sid = b.module.sections[0].id;
+  const next = fitMeshItem(p, "b", sid, DEFAULT_MESH, boxes(b.module)[0].bottom);
+  const w = get(next, "b").module.width;
+  assert.notEqual(w, 600, "ширина подогнана");
+  assert.equal(get(next, "b").x, 1100);
+  assert.deepEqual([get(next, "c").x, get(next, "c").x + get(next, "c").module.width], [1100 + w, 2300], "правый сосед вплотную, правый край ряда на месте");
+  assert.deepEqual(projectErrors(next), []);
 });
 
 test("placeInRow: правка модуля из панели с той же шириной — просто замена; угловой — по-старому", () => {
