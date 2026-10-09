@@ -316,7 +316,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const fixedJ = (m.sections[0].fixed ?? []).map((j) => [`${m.sections[0].id}:shelf:${j}`, sh[j]] as [string, (typeof sh)[number] | undefined]);
     const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right, m.confirmatInset);
     if (Object.keys(jz).length) m.kitchen.jointZ = jz;
-    const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right);
+    // жёсткая полка без крепежа в проекте (k21 m05: полка над сушкой на 724 — в Базисе ни конфирматов, ни эксцентриков) — студия его не добавляет
+    const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right);
     if (jn.length) m.kitchen.jointNone = jn;
     // дно под боковинами на эксцентриках (k30, k31): шкант на нижней пласти дна — своё смещение от эксцентрика
     if (m.bottomUnder && bottom && !m.dowels && (m.jointFastening?.["bottom:left"] === "eccentric" || m.jointFastening?.["bottom:right"] === "eccentric")) {

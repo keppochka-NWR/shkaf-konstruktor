@@ -167,6 +167,11 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   assert.ok(ref.hardware.some(h=>h.category==='сушка'&&h.quat&&Math.abs(Math.hypot(...h.quat)-1)>1e-3),'в эталоне есть неединичные');
   assert.ok(ps.every(p=>Math.abs(Math.hypot(...p.model!.quat!)-1)<1e-9),'у студии единичные');
   assert.equal(row.note,undefined,'повороты сушки совпадают');
+  // жёсткая полка над сушкой (724) в Базисе без крепежа — студия конфирматов в неё не ставит
+  const fixedShelf=`${m.sections[0].id}:shelf:${m.sections[0].fixed![0]}`;
+  assert.deepEqual(m.kitchen?.jointNone?.filter(j=>j.startsWith(fixedShelf)).sort(),[`${fixedShelf}:left`,`${fixedShelf}:right`]);
+  assert.deepEqual(parts(m).filter(p=>/^(fast|ecc):/.test(p.id)&&p.id.includes(':shelf:')).map(p=>p.id),[]);
+  const cf=compareModule(ref,m).hardware.find(h=>h.category==='конфирмат')!;assert.deepEqual([cf.ref,cf.studio],[8,8]);
   // сверщик видит поворот сушки: элемент без поворота Базиса (на 90° вокруг Y от проекта) — расхождение
   const turned={...m,kitchen:{...m.kitchen!,dryer:m.kitchen!.dryer!.map((d,i)=>i?d:{...d,quat:[1,0,0,0] as [number,number,number,number]})}};
   assert.match(compareModule(ref,turned).hardware.find(h=>h.category==='сушка')!.note??'',/поворот ≠ ×1/);
