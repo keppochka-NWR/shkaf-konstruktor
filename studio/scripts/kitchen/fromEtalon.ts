@@ -9,7 +9,7 @@ import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
-import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon } from "./recognize-tall";
+import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
@@ -338,7 +338,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (under) m.bottomUnder = true;
     const bf = role === "wall" ? bottomFrontRecess(bottom, sideZ0, sideZ1) : null;
     if (bf !== null) { m.kitchen.bottomFront = bf; notes.push(`дно короче спереди на ${bf}`); }
-    const bb = role === "wall" ? bottomBackRecess(bottom, sideZ0) : null;
+    // пенал под холодильник (k25 m10): дно перед ХДФ, короче сзади — то же поле, что у навесных (n4-tall)
+    const bb = role === "wall" || role === "tall" ? bottomBackRecess(bottom, sideZ0) : null;
     if (bb !== null) { m.kitchen.bottomBack = bb; notes.push(`дно короче сзади на ${bb}`); }
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
     else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1))) {
@@ -416,7 +417,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     m.grooveInset = r1(z0 - (gw - 3)); m.grooveWidth = gw; m.grooveDepth = gd;
     m.grooveClear = r1((W - 2 * t + 2 * gd - (back.b.x1 - back.b.x0)) / 2);
     // крыша перед ХДФ (k33, k34): крыша короче сзади, ХДФ проходит за ней почти до верха модуля
-    if ((role === "wall" || role === "antresol") && topPanel && topPanel !== bottom && topPanel.b.z0 - sideZ0 > 0.5 && back.b.z1 <= topPanel.b.z0 + 0.5) {
+    // пенал под холодильник (k25 m10): так же — крыша перед ХДФ в пазу (n4-tall)
+    if ((role === "wall" || role === "antresol" || role === "tall") && topPanel && topPanel !== bottom && topPanel.b.z0 - sideZ0 > 0.5 && back.b.z1 <= topPanel.b.z0 + 0.5) {
       m.kitchen.topBack = r1(topPanel.b.z0 - sideZ0);
       if (back.b.y1 > topPanel.b.y0 + 0.5) m.kitchen.backTopGap = r1(top - back.b.y1);
       if (!bottom && m.kitchen.backTopGap !== undefined) m.kitchen.backBottomGap = r1(back.b.y0 - Math.min(left.b.y0, right.b.y0)); // без дна (k34 m04): ХДФ от низа модуля
@@ -746,6 +748,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const fixed = noPins.filter((j) => !looseBare.includes(j));
     if (fixed.length) m.sections[0].fixed = fixed;
   }
+  // пенал под холодильник (k25 m10): ХДФ в пазу только над жёсткой полкой, ниша под технику без задника (recognize-tall.ts)
+  if (role === "tall" && m.backType === "groove" && m.kitchen.backTopGap !== undefined && back && bottom && back.b.y0 > bottom.b.y1 + 20) {
+    const j = backFromShelfOf(back.b, sh.map((q) => q.b), m.sections[0].fixed ?? [], m.grooveClear ?? 0);
+    if (j !== undefined) { m.kitchen.backFromShelf = j; notes.push(`ХДФ от жёсткой полки ${j + 1} до верха (ниже — ниша без задника)`); }
+    else unsupported.push("ХДФ на части высоты не от жёсткой полки — пока не поддержано");
+  }
   // крепёж по стыкам: эксцентрик (+шкант) или конфирмат — по фурнитуре у каждой стороны дна/крыши
   const ecc = hw("эксцентрик"), dow = hw("шкант");
   // в проекте нет крепежа корпуса вовсе (k32: ни фурнитуры, ни присадки) — студия его не добавляет
@@ -843,6 +851,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const eccShelf = (j: number) => (["left", "right"] as const).some((s) => m.jointFastening?.[`${m.sections[0].id}:shelf:${j}:${s}`] === "eccentric");
   const fixedSh = (m.sections[0].fixed ?? []).filter((j) => !eccShelf(j)).map((j) => sh[j]).filter((q) => !!q && !glassSh.includes(q));
   if (m.edgeScheme && m.edgeScheme.t > 0 && fixedSh.length && fixedSh.every((q) => { const e = ((q.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((x) => x.thick > 0).map((x) => x.side); return e.length > 0 && !e.includes("+x") && !e.includes("-x"); })) m.edgeScheme.fixedEnds = false;
+  // пенал: торцы жёстких полок (не на эксцентриках) — как в Базисе, если у всех одинаковые и не «по кругу» (k25 m10: только перед —
+  // задний торец за ХДФ закрыт); то же поле fixedSides, что у навесных (n4-tall)
+  if (role === "tall" && m.edgeScheme && m.edgeScheme.t > 0 && fixedSh.length && fixedSh.length === (m.sections[0].fixed ?? []).length) {
+    const fx = wallFixedShelfEdges(fixedSh[0]);
+    if (fx && fixedSh.every((q) => (wallFixedShelfEdges(q) ?? []).join() === fx.join())) m.edgeScheme.fixedSides = fx;
+  }
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
     const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);

@@ -119,7 +119,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   dupParts?: string[];
   /** Фигурный контур Базиса в плане у горизонтальной детали (id детали → точки [x, z] от её заднего левого угла): вырез под вентиляцию
    *  в дне пенала (k23 m15/m16). Ставится, только если габарит контура совпадает с деталью; после смены размера — прямоугольник. */
-  planContours?: Record<string, [number, number][]> };
+  planContours?: Record<string, [number, number][]>;
+  /** ХДФ в пазу только от жёсткой полки (номер в секции 1) до верха: пенал под холодильник (k25 m10), ниже полки — ниша без задника.
+   *  Низ ХДФ — низ полки плюс зазор паза (grooveClear), как в Базисе. Работает вместе с topBack/backTopGap и bottomBack. */
+  backFromShelf?: number };
 
 /** Своя сетка крепежа стыка горизонтали (bottom/top/жёсткая полка) кухни Базиса; undefined — по общему правилу. */
 export function kitchenJointGrid(m: Module, hid: string): RafixGrid | undefined {
@@ -321,7 +324,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     // дно под боковинами без кромки по торцам (underEnds, k28); торцы дна/крыши между боковинами у боковин (endsX, k31 m13) — n3-antresol
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", ...(m.edgeScheme?.underEnds === false ? [] : ["+x", "-x"]), ...(wall ? rear : rearBase)] : ["+z", ...rear, ...endsB], t);
     else if (p.id === "top") setEdges(p, tall ? ["+z", "-z", ...endsT] : ["+z", ...rear, ...endsT], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
-    else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
+    // торцы жёсткой полки по проекту Базиса (fixedSides) главнее правила «перед и зад» (k25 m10: только перед, n4-tall)
+    else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, m.edgeScheme?.fixedSides ?? ["+z", "-z"], t);
     else if (p.role === "shelf" && m.edgeScheme?.fixedSides && fixedAll.has(p.id)) setEdges(p, m.edgeScheme.fixedSides, t); // жёсткая полка навесного — торцы как в Базисе (k05: перед и зад)
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, m.edgeScheme?.shelfSides ?? m.edgeScheme?.shelf ?? ["+x", "-x", "+z", "-z"], m.edgeScheme?.shelfT ?? t); // съёмная полка: по кругу или по Базису (shelfSides / shelf), толщина корпуса — если Базис не задал иначе

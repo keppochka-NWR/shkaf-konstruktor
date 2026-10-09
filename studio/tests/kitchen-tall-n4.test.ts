@@ -100,6 +100,27 @@ test('контур в плане: не совпал с деталью после
   assert.equal(topBackTall('tall',box(3),undefined,3),undefined);
 });
 
+test('k25 m10 пенал под холодильник: дно и крыша перед ХДФ (bottomBack/topBack 50), ХДФ в пазу только от жёсткой полки до верха (backFromShelf), торец полки — только перед — PASS',{skip:!existsSync(`${ETALON}/k25.json`)},()=>{
+  const ref=load('k25','m10');
+  const {module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(unsupported,[]);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(m.kitchen?.bottomBack,50);
+  assert.equal(m.kitchen?.topBack,50);
+  assert.equal(m.kitchen?.backFromShelf,0);
+  assert.deepEqual(m.edgeScheme?.fixedSides,['+z']);
+  const ps=parts(m),back=ps.find(p=>p.id==='back')!,sh=ps.find(p=>p.id===`${m.sections[0].id}:shelf:0`)!;
+  assert.ok(Math.abs(back.position[1]-back.size[1]/2-(sh.position[1]-sh.size[1]/2+(m.grooveClear??0)))<1e-6,'низ ХДФ — низ полки + зазор паза');
+  assert.equal(back.length,back.size[1]);
+  assert.deepEqual(partCollisions(ps,m),[]);
+  const c=compareModule(ref,m);
+  assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio),edges:c.edges?.bad,missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name)}));
+  // без жёсткой полки (убрали в студии) — ХДФ снова на всю высоту
+  const m2=structuredClone(m);m2.sections[0].fixed=[];
+  const b2=parts(m2).find(p=>p.id==='back')!;
+  assert.ok(b2.size[1]>back.size[1]+1000);
+});
+
 test('shelfAtFromEtalon: полки одной глубины — нет записи; другая глубина или отступ — запись по номеру полки',()=>{
   const b=(z0:number,z1:number)=>({x0:0,y0:0,z0,x1:1,y1:16,z1});
   assert.equal(shelfAtFromEtalon([b(4,579),b(4,579)],575,1,3),undefined);

@@ -74,6 +74,12 @@ export function planContoursFromEtalon(P: { p: { axis: string; kind: string; fig
   return Object.keys(out).length ? out : undefined;
 }
 
+/** ХДФ в пазу только над жёсткой полкой (пенал под холодильник k25 m10: ХДФ 1907…2429 за полкой 1906…1922 и крышей, ниже — ниша без задника):
+ *  номер жёсткой полки, от низа которой (плюс зазор паза gc ±1) начинается ХДФ. Нет такой полки — undefined. */
+export function backFromShelfOf(back: B, shelves: B[], fixed: number[], gc: number): number | undefined {
+  return fixed.find((j) => shelves[j] && Math.abs(back.y0 - (shelves[j].y0 + gc)) <= 1 && back.z1 <= shelves[j].z0 + 0.5);
+}
+
 /** Полки, у которых в Базисе своя глубина или отступ от задника (не как у первой полки секции): номер → { rear, depth }.
  *  rear — от зоны задника студии (rear0 — z начала полок в координатах Базиса). k23 m14/m17: жёсткая полка 577 на всю глубину корпуса
  *  при съёмных 575 с отступом 1. */
