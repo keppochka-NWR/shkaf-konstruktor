@@ -154,7 +154,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
 /** Gola по Базису (k06/m03 и др.): вырезы в переднем торце боковин нижнего модуля. Кромка идёт отрезками контура:
  *  перед = высота боковины − длины вырезов, верх = глубина − глубина верхнего (открытого) выреза; торцы самих вырезов не кромятся. */
 export function golaSides(m: Module, out: Part[]) {
-  const cuts = m.kitchen && m.kitchen.role === "base" ? m.gola?.cuts : undefined;
+  const cuts = m.kitchen && (m.kitchen.role === "base" || m.kitchen.role === "tall") ? m.gola?.cuts : undefined; // навесные — без Gola
   if (!cuts?.length) return;
   for (const p of out) {
     if (p.id !== "left" && p.id !== "right") continue;
