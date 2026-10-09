@@ -2,6 +2,8 @@ import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
 import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
+import {facadeGeometry} from './vernissageGeometry';
+import {vernissageLayout,vernissageColor,vernissageGlossy} from './facadesVernissage';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
 // Цвета профиля рамочного фасада для сцены.
@@ -326,7 +328,10 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
-          if (texture && (!isBack || m.casework) && !isMetal && part.material !== "alu" && part.material !== "glass") {
+          if (part.vernissage && m.vernissage) {
+            // цвет плёнки/эмали приблизительный (текстур плёнок производителя в студии нет); глянец — низкая шероховатость
+            mat.color.set(vernissageColor(m.vernissage)); mat.roughness = vernissageGlossy(m.vernissage) ? 0.14 : 0.62;
+          } else if (texture && (!isBack || m.casework) && !isMetal && part.material !== "alu" && part.material !== "glass") {
             pendingTextures++;
             cachedTexture(texture).then(map=>{
               if(disposed||gen!==generation)return;
@@ -334,6 +339,8 @@ export function Scene(p: Props) {
             }).catch(()=>{}).finally(()=>{if(gen===generation)pendingTextures--;});
           }
           const isAlu = part.material === "alu" && !!m.alu;
+          // Фасад «Вернисаж»: сетка по фрезеровке строится заново под габарит детали (рамка постоянной ширины, филёнка тянется)
+          const vern = part.vernissage && m.vernissage && !part.rotZ ? m.vernissage : undefined;
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           const roundAlongZ = part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
           const geometry = roundAlongZ
@@ -342,6 +349,7 @@ export function Scene(p: Props) {
               ? (() => { const f = fastenerAxis(part.size); return new THREE.CylinderGeometry(f.r, f.r, f.h, 20); })()
               : (part.role === "rod" || part.role === "flange")
               ? (() => { const c = rodCylinder(part.size); return new THREE.CylinderGeometry(c.r, c.r, c.h, 24); })()
+              : vern ? facadeGeometry(vernissageLayout(vern, part.size[0], part.size[1], part.size[2]), part.grainAxis)
               : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.topNotches ? topNotchGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
@@ -368,7 +376,9 @@ export function Scene(p: Props) {
           const isMeshItem = part.id.endsWith(":mesh");
           const isHandle = part.role === "handle";
           if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
-          const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
+          const vGlass = vern && geometry.groups.some((g) => g.materialIndex === 1)
+            ? new THREE.MeshStandardMaterial({ color: 0xdfe8ec, transparent: true, opacity: state.clearFacades ? 0.25 : 0.42, roughness: 0.05, metalness: 0.1, depthWrite: false }) : null;
+          const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, vGlass ? [mat, vGlass] : mat);
           if (part.model?.node) {
             // узел Базиса без сетки («Петля под фальшпанель»): не рисуем — коробка выше прозрачная, остаётся только для выбора
           } else if (part.model?.native) {
@@ -432,7 +442,7 @@ export function Scene(p: Props) {
             glass.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active };
             mesh.add(glass);
           }
-          if(part.edgeColor&&part.material==='board'){
+          if(part.edgeColor&&part.material==='board'&&!vern){
             const axis=part.size.indexOf(part.thickness),edgemat=new THREE.MeshStandardMaterial({color:part.edgeColor,roughness:.7});
             mesh.material=Array.from({length:6},(_,face)=>Math.floor(face/2)===axis?mat:edgemat);
           }
@@ -498,7 +508,7 @@ export function Scene(p: Props) {
           const picked=!!selectedPart&&(drawerPrefix?part.id.startsWith(drawerPrefix):part.id===selectedPart);
           if (!isMetal || picked) {
             const edge = new THREE.LineSegments(
-              new THREE.EdgesGeometry(geometry),
+              new THREE.EdgesGeometry(geometry, vern ? 30 : 1),
               new THREE.LineBasicMaterial({
                 color: picked?0x087f94:0x4a4b40,
                 transparent: true,

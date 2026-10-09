@@ -11,6 +11,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
+import {vernissageFacadePrice,vernissageLabel,VERNISSAGE_NOTES} from './facadesVernissage';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
@@ -285,7 +286,11 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(Math.min(d.length,d.width)<70)small++;
       }
       if(d.id.startsWith('gola:')&&!(bz&&rowGola))add(`gola-${d.id.split(':')[1]}`,`Профиль Gola ${d.id.split(':')[1]==='L'?'L (верхний)':'C (средний)'}, алюминий`,d.length/1000,'м',null,'Профиль-ручка Gola по Базису; цена не найдена — уточнить');
-      if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
+      // фасады «Вернисаж»: м² по прайсу (серия фрезеровки × колонка покрытия × толщина), ПВХ меньше 0,3 м² — как 0,3, наценки прайса
+      if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const v=a.module.vernissage,pr=vernissageFacadePrice(v,d.size[0],d.size[1]);
+        add(`vernissage:${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,`Фасады МДФ ${vernissageLabel(v)} — сторонний участок, без раскроя ЛДСП`,Math.round(pr.billArea*1e4)/1e4,'м²',pr.perM2,
+          `Прайс Вернисаж от ${VERNISSAGE_NOTES.priceDate}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}; ПВХ меньше 0,3 м² — как 0,3 м²${pr.notes.filter(n=>!n.startsWith('меньше')).map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`);}
+      else if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       // кухня из Базиса без петель (kitchen.hinges:false, n3-base) или фасад без петель (фасад холодильника на двери техники,
       // sections.hingeless, n3-tall) — петель и толкателя в смете нет, как в Базисе
       if(d.role==='door'&&d.id!=='slope-filler'&&a.module.kitchen?.hinges!==false&&!d.hingeless){
@@ -294,6 +299,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);
         // СТП: с ручками — петля с доводчиком; push-to-open — петля без пружины + толкатель. Бренд — выбор клиента (GTV по умолчанию).
         const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
+        if(d.vernissage&&d.hinge!=='top'||d.vernissage&&placedHinges)add('vernissage-hinge-boring','Присадка под петли на фасадах Вернисаж',n,'шт',VERNISSAGE_NOTES.hingeBoringPerPc,`Прайс Вернисаж от ${VERNISSAGE_NOTES.priceDate}: присадка под петли`);
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         if(d.hinge==='top'&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм

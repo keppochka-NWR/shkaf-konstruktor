@@ -234,7 +234,7 @@ export function layoutFacade(w: number, h: number, t: number, s: MillShape, open
     // шаг постоянный, число пазов — по габариту; крайние пазы не ближе половины шага к кромке
     const grooves: [number, number][] = [];
     for (let i = 0; i < n; i++) { const c = start + i * rv.pitch; if (c - gw / 2 > -U / 2 + 3 && c + gw / 2 < U / 2 - 3) grooves.push([c - gw / 2, c + gw / 2]); }
-    L.rails = { dir: rv.dir, grooves, depth: Math.min(rv.d, t / 3), ch: Math.min(1.5, gw / 4) };
+    L.rails = { dir: rv.dir === 'h' ? 'h' : 'v', grooves, depth: Math.min(rv.d, t / 3), ch: Math.min(1.5, gw / 4) };
     return L;
   }
   if (s.kind === 'relief' && s.relief?.dir === 'diamond') {

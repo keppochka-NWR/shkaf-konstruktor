@@ -16,6 +16,7 @@ import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
 import { handleById, handleKind, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
+import type { VernissageFacade } from "./facadesVernissage";
 export const RULES = {
   panel: 16,
   back: 3,
@@ -262,6 +263,9 @@ export type Module = {
   kitchenLift?: KitchenLift;
   /** Материал фасадов: ЛДСП (по умолчанию, в раскрое) или фасадный материал стороннего участка (МДФ/плёнка/эмаль — без раскроя и кромки). */
   facadeMaterial?: "ldsp" | "external";
+  /** Фасады МДФ «Вернисаж» (facadesVernissage.ts): фрезеровка, покрытие, толщина. Распашные, фасады ящиков и кухонные фасады —
+   *  сторонний участок, вне раскроя ЛДСП; в 3D — геометрия по фрезеровке, в смете — цена по прайсу Вернисажа. */
+  vernissage?: VernissageFacade;
   /** Кромка фасадов из фасадного материала, мм (Базис: «Кромка фасадная 1х22»); нет — без кромки. */
   facadeEdge?: number;
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
@@ -331,6 +335,14 @@ export type Module = {
 };
 /** Паз в панели-носителе (не под задник): привязан к детали и идёт за ней при изменении размеров модуля.
  *  face — сторона толщины детали (+/−), along — отступы от концов по длине детали, across — от минимальной грани по ширине (от/до), depth — глубина. */
+/** Разбор фасада «Вернисаж» из сохранённого проекта: только известные поля. */
+export function parseVernissage(x: unknown): VernissageFacade {
+  const v = x as Record<string, unknown>, cover = ['film', 'enamel-matte', 'enamel-gloss', 'none'].includes(String(v.cover)) ? String(v.cover) as VernissageFacade['cover'] : 'film';
+  return { milling: String(v.milling ?? '1'), cover, thickness: Number(v.thickness) === 16 ? 16 : 19,
+    ...(typeof v.film === 'string' ? { film: v.film } : {}), ...(typeof v.enamelColor === 'string' ? { enamelColor: v.enamelColor } : {}),
+    ...(v.open === 'glass' || v.open === 'grille' ? { open: v.open } : {}), ...(v.patina === true ? { patina: true } : {}),
+    ...(v.twoSided === true ? { twoSided: true } : {}), ...(v.lacquer === true ? { lacquer: true } : {}) };
+}
 export type Groove = { host: string; face: "+" | "-"; along: [number, number]; across: [number, number]; depth: number; name: string;
   /** Паз в торце детали (Базис «Паз торцевой», k10, k15, k06 — под LED-профиль в переднем торце дна): торец +W или −W; across — по толщине от нижней пласти, depth — вглубь от торца. */
   end?: "+" | "-";
@@ -358,6 +370,8 @@ export type Part = {
   contourEdges?: number[];
   /** Изделие стороннего участка (двери-купе): не идёт в раскрой ЛДСП, деталировку и бирки. */
   external?: boolean;
+  /** Фасад МДФ «Вернисаж» (m.vernissage): геометрия по фрезеровке (vernissageGeometry.ts), цена по прайсу Вернисажа. */
+  vernissage?: true;
   /** Готовый вид материала в 3D (цвет, прозрачность, металл) — для наполнений купе и профиля. */
   look?: { color: number; opacity?: number; metalness?: number; roughness?: number };
   /** Модель профиля из Blender (public/models/<file>): вписывается в габарит детали, length — ось длины. */
@@ -1279,6 +1293,8 @@ export function parts(m: Module): Part[] {
     out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
   if(m.facadeMaterial==='external')for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.id!=='face-filler:panel:facade'){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
+  // Фасады «Вернисаж» (МДФ с фрезеровкой) — сторонний участок: не в раскрой ЛДСП, без кромки цеха; 3D и цена — по фрезеровке и прайсу.
+  if(m.vernissage)for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.material==='board'&&!p.id.startsWith('face-filler')&&!p.taper&&!p.look&&!p.model){p.external=true;p.vernissage=true;p.edge=[0,0,0,0];if(!p.name.includes('Вернисаж'))p.name+=` · Вернисаж №${m.vernissage.milling}`;}
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
   if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
     if(p.material!=='board')continue;
@@ -1949,6 +1965,7 @@ export function parseModule(input: unknown): Module {
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
+    ...(x.vernissage&&typeof x.vernissage==='object'?{vernissage:parseVernissage(x.vernissage)}:{}),
     ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {endsX?:unknown}).endsX?{endsX:(x.edgeScheme as {endsX?:unknown}).endsX==='bottom'?'bottom' as const:(x.edgeScheme as {endsX?:unknown}).endsX==='top'?'top' as const:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{}),...((x.edgeScheme as {fixedEnds?:boolean}).fixedEnds===false?{fixedEnds:false as const}:{}),...((x.edgeScheme as {all?:boolean}).all===true?{all:true as const}:{}),...((x.edgeScheme as {sideTop?:boolean}).sideTop===false?{sideTop:false as const}:{}),...((x.edgeScheme as {front?:number}).front!==undefined?{front:Number((x.edgeScheme as {front?:number}).front)}:{}),...(Array.isArray((x.edgeScheme as {shelf?:unknown}).shelf)?{shelf:((x.edgeScheme as {shelf:unknown[]}).shelf).map(String)}:{}),...(()=>{const e=x.edgeScheme as {shelfT?:number;shelfSides?:string[]};return {...(e.shelfT===undefined?{}:{shelfT:Number(e.shelfT)}),...(Array.isArray(e.shelfSides)?{shelfSides:e.shelfSides.filter(s=>['+x','-x','+z','-z'].includes(s)) as ('+x'|'-x'|'+z'|'-z')[]}:{}),...(Array.isArray((e as {fixedSides?:string[]}).fixedSides)?{fixedSides:(e as {fixedSides:string[]}).fixedSides.filter(s=>['+x','-x','+z','-z'].includes(s)) as ('+x'|'-x'|'+z'|'-z')[]}:{}),...((x.edgeScheme as {ends?:Record<string,string[]>}).ends?{ends:Object.fromEntries(Object.entries((x.edgeScheme as {ends:Record<string,string[]>}).ends).filter(([k,v])=>(k==='bottom'||k==='top')&&Array.isArray(v)).map(([k,v])=>[k,v.filter(s=>['+x','-x','+z','-z'].includes(s))]))}:{}),...((x.edgeScheme as {parts?:Record<string,string[]>}).parts&&typeof (x.edgeScheme as {parts?:unknown}).parts==='object'?{parts:Object.fromEntries(Object.entries((x.edgeScheme as {parts:Record<string,string[]>}).parts).filter(([,v])=>Array.isArray(v)).map(([k,v])=>[k,v.filter(s=>['+x','-x','+y','-y','+z','-z'].includes(s)) as ('+x'|'-x'|'+y'|'-y'|'+z'|'-z')[]]))}:{}),...((x.edgeScheme as {partsT?:unknown}).partsT&&typeof (x.edgeScheme as {partsT?:unknown}).partsT==='object'?{partsT:Object.fromEntries(Object.entries((x.edgeScheme as {partsT:Record<string,unknown>}).partsT).filter(([,v])=>Number.isFinite(Number(v))&&Number(v)>0).map(([k,v])=>[k,Number(v)]))}:{})};})()}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),

@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { facadeGeometry } from '../src/vernissageGeometry';
+import { parts, parseVernissage, type Module } from '../src/model';
+import { newProject } from '../src/project';
+import { estimate } from '../src/pricing';
 import { vernissageLayout, vernissageFacadePrice, vernissageMilling, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
@@ -73,6 +76,20 @@ test('Вернисаж: цена по прайсу 10.08.2026 — три руч�
   // ограничения прайса — предупреждения
   assert.ok(vernissageFacadePrice({ milling: '72', cover: 'film', film: 'Моно белый', thickness: 16 }, 400, 700).warnings.some((w) => w.includes('19')));
   assert.ok(vernissageFacadePrice({ milling: '78', cover: 'enamel-gloss', thickness: 19 }, 400, 700).warnings.some((w) => w.includes('матовая')));
+});
+
+test('Вернисаж в модуле: фасады — сторонний участок со своей ценой; без выбора детали шкафа не меняются', () => {
+  const p = newProject(), base = parts(p.modules[0].module);
+  const m: Module = { ...p.modules[0].module, vernissage: { milling: '54', cover: 'film', film: 'Моно белый', thickness: 19 }, facadeT: 19 };
+  const ps = parts(m), facades = ps.filter((x) => x.role === 'door' || x.id.endsWith(':facade'));
+  assert.ok(facades.length > 0 && facades.every((x) => x.vernissage && x.external && x.edge.every((e) => e === 0)));
+  assert.ok(base.every((x) => !x.vernissage));
+  const e = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] }), line = e.lines.find((l) => l.id.startsWith('vernissage:54'));
+  assert.ok(line && line.unitPrice === 7580, 'Престиж 19 мм, кат. 2 → «Категория ПВХ 2,3» 7580 ₽/м²');
+  const area = facades.reduce((s, x) => s + Math.max(x.size[0] * x.size[1] / 1e6, 0.3), 0);
+  assert.ok(Math.abs(line.quantity - area) < 0.01);
+  assert.ok(!e.lines.some((l) => l.id === 'facade-external'));
+  assert.deepEqual(parseVernissage(JSON.parse(JSON.stringify(m.vernissage))), m.vernissage);
 });
 
 test('Вернисаж: каталог — все фрезеровки прайса со своей раскладкой', () => {

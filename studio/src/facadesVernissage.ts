@@ -84,7 +84,7 @@ export function openings(m: VernissageMilling): Opening[] {
   return out;
 }
 
-export function vernissageLayout(v: VernissageFacade, w: number, h: number, t = v.thickness): FacadeLayout {
+export function vernissageLayout(v: VernissageFacade, w: number, h: number, t: number = v.thickness): FacadeLayout {
   const m = vernissageMilling(v.milling) ?? VERNISSAGE_MILLINGS[0];
   return layoutFacade(w, h, t, m.shape, v.open && openings(m).includes(v.open) ? v.open : 'solid');
 }
