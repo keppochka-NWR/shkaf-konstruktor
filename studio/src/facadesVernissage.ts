@@ -42,6 +42,8 @@ export function millingShape(m: VMillingRow): { shape: MillShape; note: string }
   const P = PROVISIONAL, inner = (m.inner ?? '').toLowerCase(), note = (m.note ?? '').toLowerCase();
   const top: MillShape['top'] = inner.includes('плечик') ? 'shoulders' : inner.includes('арк') ? 'arch' : 'rect';
   const base = { edgeR: P.edgeR, top, archRise: P.archRise, shoulder: P.shoulder };
+  // №15 «мыло» (прайс) — гладкое полотно с крупным скруглением кромки по периметру (радиус условный)
+  if (m.id === '15') return { shape: { kind: 'smooth', ...base, edgeR: 5 }, note: '«мыло» — гладкий, крупное скругление кромки' };
   if (m.type === 'гладкий') return { shape: { kind: 'smooth', ...base }, note: 'гладкий, скруглённая кромка' };
   if (!m.type) return { shape: { kind: 'smooth', ...base }, note: m.grafika ? 'Графика — рисунок не определён (нет карточки) — показан гладким' : 'рисунок не определён по каталогу — показан гладким' };
   if (m.type === 'фрезеровка по полотну') {

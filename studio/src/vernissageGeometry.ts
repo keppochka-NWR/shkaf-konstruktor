@@ -226,7 +226,8 @@ function openingContour(x0: number, y0: number, x1: number, y1: number, s: MillS
 export function layoutFacade(w: number, h: number, t: number, s: MillShape, open: Opening = 'solid'): FacadeLayout {
   const zf = t / 2, r = Math.max(0, Math.min(s.edgeR, t / 3, w / 4, h / 4)), notes: string[] = [];
   const edgePath: P[] = [[0, -t / 2], [0, zf - r]];
-  if (r > 0.05) for (let k = 1; k <= 4; k++) { const a = (k / 4) * Math.PI / 2; edgePath.push([-r + r * Math.cos(a), zf - r + r * Math.sin(a)]); }
+  const rs = r > 3 ? 6 : 3;
+  if (r > 0.05) for (let k = 1; k <= rs; k++) { const a = (k / rs) * Math.PI / 2; edgePath.push([-r + r * Math.cos(a), zf - r + r * Math.sin(a)]); }
   const root: Feature = { c: rectContour(-w / 2, -h / 2, w / 2, h / 2), path: edgePath, kids: [] };
   const L: FacadeLayout = { w, h, t, root, bars: [], frame: null, opening: null, panelZ: null, notes };
   if (s.kind === 'relief' && s.relief && s.relief.dir !== 'diamond') {
