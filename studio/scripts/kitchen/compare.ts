@@ -181,7 +181,9 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
     const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id) as (RefPanel & { edges?: { side: string; thick: number }[] }) | undefined, sp = byId.get(pr.studio.id);
     if (!rp || !sp || !rp.edges) continue;
     edgeCheck.checked++;
-    const want: Record<string, number> = {}; for (const e of rp.edges) if (e.thick > 0) want[e.side] = e.thick;
+    // кромка на несуществующем элементе контура (k19 m05: elem 4 у прямоугольника из 4 элементов — без стороны и без длины) —
+    // в Базисе это пустая запись, длины у неё нет; не сверяем
+    const want: Record<string, number> = {}; for (const e of rp.edges as { side: string | null; thick: number; len?: number | null }[]) if (e.thick > 0 && (e.side || (e.len ?? 0) > 0)) want[String(e.side)] = e.thick;
     const have = edgeByDir(sp), keys = new Set([...Object.keys(want), ...Object.keys(have)]);
     const diff = [...keys].filter((k) => Math.abs((want[k] ?? 0) - (have[k] ?? 0)) > 0.01);
     // длина кромки по стороне: у Базиса кромка — отрезками контура; сумма меньше стороны — вырез (Gola и т. п.), которого нет у прямоугольника студии
