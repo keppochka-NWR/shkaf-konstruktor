@@ -210,6 +210,26 @@ test('цоколь — деталь под дном: у кухни без опо
   assert.ok(!validate(moduleFromEtalon(load('k18','m21')).module).some(e=>e.includes('высоту цоколя')));
 });
 
+test('корпус без опор: низ фасадов как в Базисе (faceBottom) — над нишей под техникой от дна, а не у пола; дубль петли Базиса — одна высота (критик n3)',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{
+  const ref=load('k30','m02'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.faceBottom,1815.5);
+  const dd=parts(m).filter(p=>p.role==='door');
+  assert.ok(dd.length>0&&dd.every(d=>Math.abs(d.position[1]-d.size[1]/2-1815.5)<0.01&&Math.abs(d.size[1]-643)<0.6),dd.map(d=>d.size[1]).join(','));
+  const h=compareModule(ref,m).hardware.find(x=>x.category==='петля')!;
+  assert.deepEqual([h.ref,h.studio],[4,4],'было 4/12: двери до пола');
+  // чужая «Фронтальная» вне габарита модуля (k18 m09) низ фасадов не сдвигает
+  assert.equal(moduleFromEtalon(load('k18','m09')).module.kitchen?.faceBottom,undefined);
+  // k01 m09: петля Базиса дважды в одной точке — студия ставит по 2 на створку (4), а не по 3 (6)
+  const r1=load('k01','m09'),{module:m1}=moduleFromEtalon(r1);
+  assert.deepEqual(m1.sections[0].hingeY,[219,375.5]);
+  assert.equal(compareModule(r1,m1).hardware.find(x=>x.category==='петля')!.studio,4);
+  // поле: только у кухни без опор
+  const w={...initialModule(),kitchen:{role:'wall' as const,faceBottom:300}};
+  assert.ok(!validate(w).some(e=>e.includes('Низ фасадов')));
+  assert.ok(Math.abs(Math.min(...parts(w).filter(p=>p.role==='door').map(d=>d.position[1]-d.size[1]/2))-300)<0.01);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(w))).kitchen?.faceBottom,300);
+});
+
 test('дно/крыша без крепежа и отверстий у торцов в Базисе (k32 m01 — корпус под холодильник): студия не добавляет конфирматов (bareJoints, критик n3)',{skip:!existsSync(`${ETALON}/k32.json`)},()=>{
   const ref=load('k32','m01'),{module:m}=moduleFromEtalon(ref);
   assert.deepEqual(m.kitchen?.bareJoints,['bottom','top']);
