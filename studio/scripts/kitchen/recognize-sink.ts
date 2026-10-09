@@ -18,7 +18,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
  *  «Петля под фальшпанель» у своей кромки. Г-образный фальш (планки поперёк в плоскости фасадов: k05 m05, k19 m01) — не этот случай.
  *  Возвращает ширины и панели фальша (их не считаем фасадами). */
 export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sideZ1: number, bottomY0: number, top: number):
-  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; panels: Pb[] } | undefined {
+  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; conf?: { bottom?: number[]; side?: number[] }; panels: Pb[] } | undefined {
   const ffh = falsePanelHinges(ref);
   if (!ffh.length) return undefined;
   const front = P.filter(({ p, b }) => p.kind !== "hdf" && b.z0 >= sideZ1 - 1);
@@ -41,5 +41,22 @@ export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sid
   const width = r1(side === "left" ? fp.b.x1 - left.b.x0 : right.b.x1 - fp.b.x0);
   // планка по высоте фальша (k28 m17: 100..830), а не фасадов (k25 m02: 101,5..860,5)
   const stripFull = !!strip && Math.abs(strip.b.y0 - fp.b.y0) < 0.6 && Math.abs(strip.b.y1 - fp.b.y1) < 0.6;
-  return { side, width, ...(strip ? { strip: r1(strip.b.x1 - strip.b.x0) } : {}), ...(stripFull ? { stripFull: true as const } : {}), panels: strip ? [fp, strip] : [fp] };
+  const conf = fillerConf(ref, fp, side === "left" ? left : right, side, bottomY0);
+  return { side, width, ...(strip ? { strip: r1(strip.b.x1 - strip.b.x0) } : {}), ...(stripFull ? { stripFull: true as const } : {}), ...(conf ? { conf } : {}), panels: strip ? [fp, strip] : [fp] };
+}
+
+/** Конфирматы через фальш (головка на лицевой пласти фальша): в передний торец дна (по середине толщины дна) и в передний торец
+ *  боковины со стороны фальша (по середине её толщины). k01 m03: два в дно (58 от краёв фальша) и три в боковину (80 / 368 / 64 от верха).
+ *  Любой другой конфирмат на фальше — не распознан, крепёж фальша не ставим (как было). */
+export function fillerConf(ref: Pick<RefModule, "hardware">, fp: Pb, sidePanel: Pb, side: "left" | "right", bottomY0: number, t = 16): { bottom?: number[]; side?: number[] } | undefined {
+  const cs = ref.hardware.filter((h) => (h.category === "конфирмат" || /^Евровинт/.test(h.name)) && Math.abs(h.pos[2] - fp.b.z1) < 0.6 && h.pos[0] >= fp.b.x0 - 0.5 && h.pos[0] <= fp.b.x1 + 0.5);
+  if (!cs.length) return undefined;
+  const sx = (sidePanel.b.x0 + sidePanel.b.x1) / 2, edge = side === "left" ? sidePanel.b.x0 : sidePanel.b.x1;
+  const bottom: number[] = [], sd: number[] = [];
+  for (const h of cs) {
+    if (Math.abs(h.pos[0] - sx) < 0.6 && h.pos[1] > bottomY0 + t) sd.push(r1(h.pos[1] - fp.b.y0));
+    else if (Math.abs(h.pos[1] - (bottomY0 + t / 2)) < 0.6) bottom.push(r1(Math.abs(h.pos[0] - edge)));
+    else return undefined;
+  }
+  return { ...(bottom.length ? { bottom: bottom.sort((a, c) => a - c) } : {}), ...(sd.length ? { side: sd.sort((a, c) => a - c) } : {}) };
 }

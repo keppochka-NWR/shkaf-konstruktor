@@ -662,7 +662,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       m.sections[0].doorRows = multi.rows;
       notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
     } else if (role === "base" && ffFlat && rows.size === 1) {
-      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}) };
+      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}), ...(ffFlat.conf ? { conf: ffFlat.conf } : {}) };
       // зазор фасадов — от дальнего края модуля (у фальша свой отступ)
       m.faceGap = ffFlat.side === "left" ? r1(right.b.x1 - Math.max(...fronts.map((q) => q.b.x1))) : r1(Math.min(...fronts.map((q) => q.b.x0)) - left.b.x0);
       notes.push(`угловая мойка: фальш ${ffFlat.width}${ffFlat.strip ? ` + планка из фасада ${ffFlat.strip}` : ""} ${ffFlat.side === "left" ? "слева" : "справа"}, петли под фальшпанель — как в Базисе`);

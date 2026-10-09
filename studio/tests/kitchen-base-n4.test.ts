@@ -65,7 +65,7 @@ test('угловая мойка: Г-образный фальш (планки п
   assert.equal(r.module.kitchen?.faceFiller,undefined);
   assert.ok(r.unsupported.some(u=>u.includes('угловая мойка')));
   const k01=moduleFromEtalon(load('k01','m03')).module;
-  assert.deepEqual(k01.kitchen?.faceFiller,{side:'left',width:500});
+  assert.deepEqual(k01.kitchen?.faceFiller,{side:'left',width:500,conf:{bottom:[58,442],side:[80,368,656]}});
   assert.equal(k01.sections[0].hingeSide,'left');
 });
 
@@ -175,6 +175,18 @@ test('стяжка на ребре со своими высотами конфи
     const back=parseModule(JSON.parse(JSON.stringify(m)));assert.deepEqual(back.rails?.find(r=>r.place==='rear-top')?.confY,[34,66],'сохраняется в проекте');
   }
   const w=initialModule();assert.ok(!(w.rails??[]).some(r=>r.confY),'шкаф студии — без confY');
+});
+
+test('крепёж фальша угловой мойки — только если он есть в Базисе (faceFiller.conf): k01 m03 два в дно и три в боковину; k25 m02, k28 m17 — без',{skip:!has('k01')||!has('k25')||!has('k28')},()=>{
+  const ref=load('k01','m03'),m=moduleFromEtalon(ref).module,ps=parts(m),c=compareModule(ref,m);
+  assert.deepEqual(m.kitchen?.faceFiller?.conf,{bottom:[58,442],side:[80,368,656]});
+  const ff=ps.filter(p=>p.id.startsWith('fast:face-filler:'));
+  assert.equal(ff.length,5);
+  const h=c.hardware.find(x=>x.category==='конфирмат')!;assert.equal(h.ref,h.studio,'конфирматов столько же, сколько в Базисе');
+  assert.ok(!(c.holes?.missing??[]).length,'все отверстия Базиса есть');
+  assert.equal(partCollisions(ps,m).filter(x=>/face-filler/.test(x.a+' '+x.b)).length,0,'крепёж фальша ни с чем не пересекается');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.faceFiller?.conf,m.kitchen?.faceFiller?.conf,'сохраняется в проекте');
+  for(const [k,key] of [['k25','m02'],['k28','m17']] as const){const mm=moduleFromEtalon(load(k,key)).module;assert.equal(mm.kitchen?.faceFiller?.conf,undefined,`${k} ${key}`);assert.ok(!parts(mm).some(p=>p.id.startsWith('fast:face-filler:')));}
 });
 
 test('глубокое дно и глубокий корпус — один порог (kitchenJointPoints/jointPointsRule): 600 — 2 точки, глубже — 3; свой счёт из Базиса главнее; шкаф — 2',()=>{
