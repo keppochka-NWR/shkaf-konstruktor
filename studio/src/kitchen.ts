@@ -21,6 +21,11 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   bottomFront?: number;
   /** Дно короче сзади (Базис: навесной под вытяжку, дно перед ХДФ — k08 m10, k04, k13, k14: 20). */
   bottomBack?: number;
+  /** Крыша короче сзади (Базис k33, k34: 20 — крыша перед ХДФ, ХДФ проходит за ней); backTopGap — ХДФ в паз до верха модуля минус столько мм (k33/k34: 1). */
+  topBack?: number;
+  backTopGap?: number;
+  /** Вырезы в обоих верхних углах ХДФ (Базис k33, k34: 25×45 — ХДФ проходит за крышей): ширина по X, высота от верха ХДФ. */
+  backNotch?: { width: number; height: number };
   /** Стыки дна/крыши без крепежа в проекте Базиса («bottom:left» и т. п., k08 m10, k14 m06) — студия крепёж не ставит. */
   jointNone?: string[];
   /** Крепёж стыков дна/крыши с боковинами по Базису: ключ «bottom:left» и т. п. → [от задней кромки, от передней кромки детали], мм. */
@@ -203,7 +208,15 @@ export function kitchenEdges(m: Module, out: Part[]) {
 /** Вырез в заднем верхнем углу боковин навесного/антресоли (Базис k32: 100×20). Раскрой — по габариту; кромка по контуру
  *  (отрезки выреза кромятся, сумма по сторонам равна стороне — как у Базиса 310 + 20 = 330); пересечения — по телу без выреза. */
 export function rearNotches(m: Module, out: Part[]) {
-  const sn = m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol") ? m.kitchen.sideNotch : undefined;
+  const wallish = !!m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol");
+  // ХДФ с вырезами в верхних углах (k33, k34): раскрой — по габариту, пересечения — по телу без углов
+  const bn = wallish ? m.kitchen!.backNotch : undefined, bp = bn ? out.find((p) => p.id === "back" && p.material === "hdf") : undefined;
+  if (bn && bp && bn.width > 0 && bn.height > 0 && 2 * bn.width < bp.size[0] && bn.height < bp.size[1]) {
+    bp.topNotches = { width: bn.width, height: bn.height };
+    const [w, h] = bp.size, [x, y, z] = bp.position;
+    bp.collide = [{ size: [w, h - bn.height, bp.size[2]], position: [x, y - bn.height / 2, z] }, { size: [w - 2 * bn.width, bn.height, bp.size[2]], position: [x, y + h / 2 - bn.height / 2, z] }];
+  }
+  const sn = wallish ? m.kitchen!.sideNotch : undefined;
   if (!sn) return;
   for (const p of out) {
     if (p.id !== "left" && p.id !== "right") continue;
@@ -282,6 +295,8 @@ export function kitchenErrors(m: Module): string[] {
     if (k.jointZ && Object.values(k.jointZ).some((v) => !Array.isArray(v) || v.length !== 2 || v.some((x) => !Number.isFinite(x) || x < 5 || x > m.depth / 2 + 50))) e.push("Крепёж стыка: отступы от кромок 5 мм — до середины глубины.");
     if (k.bottomFront !== undefined && (!Number.isFinite(k.bottomFront) || k.bottomFront < 0 || k.bottomFront > 100)) e.push("Дно короче спереди: 0–100 мм.");
     if (k.bottomBack !== undefined && (!Number.isFinite(k.bottomBack) || k.bottomBack < 0 || k.bottomBack > 120)) e.push("Дно короче сзади: 0–120 мм.");
+    if (k.topBack !== undefined && (!Number.isFinite(k.topBack) || k.topBack < 0 || k.topBack > 120)) e.push("Крыша короче сзади: 0–120 мм.");
+    if (k.backTopGap !== undefined && (!Number.isFinite(k.backTopGap) || k.backTopGap < 0 || k.backTopGap > 20)) e.push("Зазор ХДФ до верха: 0–20 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
   }

@@ -11,7 +11,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {parseRaw} from '../src/rawModule';
 import {section} from '../src/model';
-import {rearNotchFromContour} from '../scripts/kitchen/sideNotch';
+import {rearNotchFromContour,topCornerNotchFromContour} from '../scripts/kitchen/sideNotch';
 import {partCollisions} from '../src/collisions';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тесты по эталонам пропускаются.
@@ -146,6 +146,25 @@ test('навесной k32 m14: в Базисе нет крепежа и кро�
   assert.deepEqual(back.kitchen?.sideNotch,m.kitchen?.sideNotch,'вырез переживает сохранение');
   // пересечения — по телу боковины без выреза
   assert.deepEqual(partCollisions(parts(m),m).map(x=>x.names.join(' × ')),[]);
+});
+test('навесной k33 m03: крыша перед ХДФ (короче сзади на 20), ХДФ за крышей до верха минус 1 с вырезами 25×45 в верхних углах — сверка PASS',{skip:!existsSync(`${ETALON}/k33.json`)},()=>{
+  const ref=load('k33','m03'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual([m.kitchen?.topBack,m.kitchen?.backTopGap,m.kitchen?.backNotch],[20,1,{width:25,height:45}]);
+  assert.deepEqual(validate(m),[]);assert.deepEqual(unsupported,[]);
+  const ps=parts(m),top=ps.find(p=>p.id==='top')!,back=ps.find(p=>p.id==='back')!;
+  assert.deepEqual([top.position[2]-top.size[2]/2,top.size[2]],[20,295]);
+  assert.equal(back.position[1]+back.size[1]/2,m.height-1);assert.deepEqual(back.topNotches,{width:25,height:45});
+  const c=compareModule(ref,m);assert.ok(c.pass,String(c.contours));
+  assert.deepEqual(partCollisions(ps,m).map(x=>x.names.join(' × ')),[]);
+  // без вырезов ХДФ — FAIL по контуру; без укороченной крыши — FAIL по крыше
+  assert.ok(compareModule(ref,{...m,kitchen:{...m.kitchen!,backNotch:undefined}}).contours?.some(x=>/Задняя стенка: фигурный контур/.test(x)));
+  assert.equal(compareModule(ref,{...m,kitchen:{...m.kitchen!,topBack:undefined}}).pass,false);
+  const sv=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual([sv.kitchen?.topBack,sv.kitchen?.backTopGap,sv.kitchen?.backNotch],[20,1,{width:25,height:45}]);
+  assert.deepEqual(topCornerNotchFromContour({figure:true,contourPlane:'xy',contour:[[10,10],[440,10],[440,624],[415,624],[415,669],[35,669],[35,624],[10,624]]}),{width:25,height:45});
+  assert.equal(topCornerNotchFromContour({figure:true,contourPlane:'xy',contour:[[10,10],[440,10],[440,669],[10,669]]}),null);
+  // у обычного навесного студии ничего этого нет
+  const w=parts(kitchenWall(initialModule(),600));assert.ok(!w.some(p=>p.topNotches||p.rearNotch));
 });
 test('вырез в заднем верхнем углу боковины по контуру Базиса: только ровно такой контур',()=>{
   const C=(c:number[][])=>({figure:true,contourPlane:'yz',contour:c});

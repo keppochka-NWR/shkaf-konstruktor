@@ -52,6 +52,14 @@ export function rearNotchSideGeometry(part:Part):THREE.BufferGeometry{
  uv.needsUpdate=true;g.computeBoundingBox();return g;
 }
 
+/** Панель в плоскости XY с вырезами в обоих верхних углах (ХДФ кухонь Базиса k33/k34): контур выдавлен на толщину по Z. */
+export function topNotchGeometry(part:Part):THREE.BufferGeometry{
+ const [w,h,t]=part.size,n=part.topNotches!,s=new THREE.Shape(),X=w/2,Y=h/2;
+ const pts:[number,number][]=[[-X,-Y],[X,-Y],[X,Y-n.height],[X-n.width,Y-n.height],[X-n.width,Y],[-X+n.width,Y],[-X+n.width,Y-n.height],[-X,Y-n.height]];
+ pts.forEach(([x,y],i)=>i?s.lineTo(x,y):s.moveTo(x,y));s.closePath();
+ const g=new THREE.ExtrudeGeometry(s,{depth:t,bevelEnabled:false});g.translate(0,0,-t/2);g.computeBoundingBox();return g;
+}
+
 /** Рамка алюминиевого фасада: контур фасада с прямоугольным вырезом под вставку, выдавленный на толщину рамки. */
 export function aluFrameGeometry(part:Part,face:number):THREE.BufferGeometry{
  const [w,h,t]=part.size,f=Math.min(face,w/2-1,h/2-1);

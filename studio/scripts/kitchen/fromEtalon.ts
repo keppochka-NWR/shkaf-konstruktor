@@ -10,7 +10,7 @@ import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
-import { rearNotchFromContour } from "./sideNotch";
+import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -144,6 +144,15 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const z0 = r1(back.b.z0 - sideZ0), gw = 4, gd = 8;
     m.grooveInset = r1(z0 - (gw - 3)); m.grooveWidth = gw; m.grooveDepth = gd;
     m.grooveClear = r1((W - 2 * t + 2 * gd - (back.b.x1 - back.b.x0)) / 2);
+    // крыша перед ХДФ (k33, k34): крыша короче сзади, ХДФ проходит за ней почти до верха модуля
+    if ((role === "wall" || role === "antresol") && topPanel && topPanel !== bottom && topPanel.b.z0 - sideZ0 > 0.5 && back.b.z1 <= topPanel.b.z0 + 0.5) {
+      m.kitchen.topBack = r1(topPanel.b.z0 - sideZ0);
+      if (back.b.y1 > topPanel.b.y0 + 0.5) m.kitchen.backTopGap = r1(top - back.b.y1);
+      notes.push(`крыша короче сзади на ${m.kitchen.topBack} (перед ХДФ)${m.kitchen.backTopGap !== undefined ? `, ХДФ до верха минус ${m.kitchen.backTopGap}` : ""}`);
+    }
+    // ХДФ с вырезами в обоих верхних углах (k33, k34: 25×45) — контур Базиса из 8 точек
+    const bn = role === "wall" || role === "antresol" ? topCornerNotchFromContour(back.p as unknown as { figure?: boolean; contour?: number[][]; contourPlane?: string }) : null;
+    if (bn) { m.kitchen.backNotch = bn; notes.push(`ХДФ: вырезы ${bn.width}×${bn.height} в верхних углах`); }
   }
   // ящики Axis PRO: по каждой левой направляющей — её фасад (по держателю фасада), царга (высота, цвет), дно и задняя стенка
   const axisRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Axis PRO Направляющая/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);

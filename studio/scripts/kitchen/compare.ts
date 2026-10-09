@@ -9,7 +9,7 @@ import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
-import { rearNotchFromContour } from "./sideNotch";
+import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
@@ -229,9 +229,18 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id), sp = byId.get(pr.studio.id);
     if (!rp || !sp) continue;
     const cut = refCutArea(rp);
-    if (!cut) { if (sp.rearNotch) contours.push(`${pr.ref.name}: у Базиса без выреза, у студии вырез ${sp.rearNotch.height}×${sp.rearNotch.depth}`); continue; }
+    if (!cut) {
+      if (sp.rearNotch) contours.push(`${pr.ref.name}: у Базиса без выреза, у студии вырез ${sp.rearNotch.height}×${sp.rearNotch.depth}`);
+      if (sp.topNotches) contours.push(`${pr.ref.name}: у Базиса без вырезов, у студии верхние углы ${sp.topNotches.width}×${sp.topNotches.height}`);
+      continue;
+    }
     const sc = studioCut(sp);
     if (sc === "gola") continue;
+    if (sp.topNotches) { // вырезы в верхних углах ХДФ — сверяем сами углы
+      const tn = topCornerNotchFromContour(rp);
+      if (!tn || Math.abs(tn.width - sp.topNotches.width) > 0.5 || Math.abs(tn.height - sp.topNotches.height) > 0.5) contours.push(`${pr.ref.name}: вырезы у Базиса ${tn ? `${tn.width}×${tn.height} в верхних углах` : `другой формы (${rp.contour!.length} точек, ${cut} мм²)`}, у студии ${sp.topNotches.width}×${sp.topNotches.height}`);
+      continue;
+    }
     if (sp.rearNotch) { // вырез в заднем верхнем углу боковины — сверяем сам угол, а не только площадь
       const rn = rearNotchFromContour(rp);
       if (!rn || Math.abs(rn.height - sp.rearNotch.height) > 0.5 || Math.abs(rn.depth - sp.rearNotch.depth) > 0.5) contours.push(`${pr.ref.name}: вырез у Базиса ${rn ? `${rn.height}×${rn.depth} в заднем верхнем углу` : `другой формы (${rp.contour!.length} точек, ${cut} мм²)`}, у студии ${sp.rearNotch.height}×${sp.rearNotch.depth}`);
