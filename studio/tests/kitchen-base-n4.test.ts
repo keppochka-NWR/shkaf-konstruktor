@@ -5,6 +5,7 @@ import {validate,parts,initialModule} from '../src/model';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {faceGapsTB} from '../scripts/kitchen/recognize-base';
+import {railFastened} from '../scripts/kitchen/recognize-common';
 
 // Нижние модули кухни «как в Базисе» (поток n4). Эталоны вне репозитория — на чужой машине тесты с эталонами пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -37,4 +38,14 @@ test('минимум высоты распашного фасада 200 снят
     const withHinges={...k.module,kitchen:{...k.module.kitchen!,hinges:undefined}};
     assert.ok(validate(withHinges).some(e=>e.includes('ниже 200')),'с петлями фасад 117 мм — ошибка, как раньше');
   }
+});
+
+test('стяжка «без крепежа» — только если крепежа нет в её полосе вовсе: стенка короба ящика с конфирматами в его боковинах — с крепежом',()=>{
+  const band={x0:16,y0:120,z0:20,x1:584,y1:220,z1:36};
+  const conf=(x:number)=>({name:'Конфирмат 7х50 мм',category:'конфирмат',pos:[x,170,28]});
+  assert.equal(railFastened(band,[conf(29),conf(571)],0,600),true,'конфирматы в боковинах короба (x=29/571) — крепёж есть');
+  assert.equal(railFastened(band,[conf(0),conf(600)],0,600),true);
+  assert.equal(railFastened(band,[{...conf(0),pos:[0,500,28]}],0,600),false,'крепёж вне полосы — без крепежа');
+  if(has('k01')){const m=moduleFromEtalon(load('k01','m04')).module;assert.ok(!(m.rails??[]).some(r=>r.fasten===false),'k01 m04: у стенок ящика крепёж есть');}
+  if(has('k21')){const m=moduleFromEtalon(load('k21','m02')).module;assert.ok((m.rails??[]).some(r=>r.fasten===false),'k21 m02: передняя стяжка без крепежа — как в Базисе');}
 });
