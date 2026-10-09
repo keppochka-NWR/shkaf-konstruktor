@@ -345,7 +345,7 @@ export function relayoutProblem(m: Module, n: number): string | undefined {
   if (!ks.every((k) => fitsK(m, k))) {
     // по высоте не входит из-за глубины: у низких царг (H-86, H-168) нет длин короче 450 — назвать глубину, с которой войдёт
     const d = [325, 425, 475, 525, 575].find((dd) => dd > m.depth && relayoutKDrawers({ ...m, depth: dd }, n).every((k) => fitsK(m, k) && (!isAxis(k) || axisAvailable(k))));
-    const sn = ks[0] && isVersalite(ks[0]) ? "Versalite" : ks[0] && isFirmax(ks[0]) ? "Firmax" : "Axis PRO";
+    const sn = ({ "versalite-h45": "Versalite", "firmax-ldsp": "Firmax", "start-sc": "СТАРТ", indigo: "Indigo", "modern-slide": "MODERN SLIDE", "axis-pro": "Axis PRO" } as Record<string, string>)[ks[0]?.system ?? "axis-pro"] ?? "Axis PRO";
     return d && sn === "Axis PRO" ? `На глубину ${m.depth} столько ящиков Axis PRO не входит (низких царг такой длины нет) — нужна глубина от ${d}` : `Столько ящиков ${sn} по высоте корпуса не входит`;
   }
   const miss = ks.filter(isAxis).find((k) => !axisAvailable(k));
