@@ -75,6 +75,8 @@ test('«Ряд»: столешница 38 мм — строка worktop (пог.
   const e2=estimate(project(rawModule(raw,2600,900,910),sink,hob));
   assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink'),undefined);
   assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob'),undefined);
+  // Критик р.2 (правило 1): вырезов под мойку/варку в Базисе нет — по названиям модулей «Мойка»/«Варка» строки не добавляются
+  assert.equal(e2.lines.find(l=>l.id.startsWith('worktop-cut')),undefined,'вырезов нет в Базисе — нет и в смете');
 });
 
 test('кухня из Базиса: в смете нет того, чего нет в Базисе — заглушек конфирмата, подсветки по пазу; шкафы как раньше',()=>{

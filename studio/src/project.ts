@@ -53,13 +53,22 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
 /** Кухня из Базиса: импорт помечен source 'bazis'; ранние импорты без пометки узнаются по сырым модулям кухни (rawKitchen).
  *  Сырые шкафы из корпуса Базиса (wardrobe-NNN) — не кухня: фальши по правилам шкафов, как было. */
 export function fromBazis(p:Project):boolean{return p.source==='bazis'||p.modules.some(a=>rawKitchen(a.module.raw));}
+/** Модуль из проекта Базиса (импорт кухонь): размеры, состав и расстановка — как в Базисе, правила шкафов студии не применяются.
+ *  Признак — m.bazis (импорт с признаком) или сырой модуль кухни; кухонный модуль в проекте с сырыми модулями Базиса — тоже из Базиса
+ *  (файлы, импортированные до признака: в каждой кухне из Базиса есть сырой «Ряд» или сырые модули).
+ *  Сырой шкаф из корпуса Базиса (source 'bazis-corpus') — не кухня: правила шкафов, как было. */
+export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;if(m.bazis)return true;if(m.raw)return m.raw.source!=='bazis-corpus';
+  // старый файл (ни одного признака): кухонный модуль рядом с сырыми модулями Базиса — из Базиса; в новом файле модуль без признака — свой (палитра)
+  return !!(m.kitchen&&!p.modules.some(b=>b.module.bazis)&&p.modules.some(b=>rawKitchen(b.module.raw)));}
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner)continue;
-    // Кухня из Базиса (правило Макса 09.10.2026): фальши и сдвиги студии не добавляются — фальши, если нужны, уже деталями в Базисе.
-    if(bazis&&(a.module.kitchen||rawKitchen(a.module.raw)))continue;
+    // Кухня из Базиса (правило Макса 09.10.2026): фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней
+    // не относится). Модуль с признаком bazis или сырой модуль кухни; в проекте с пометкой source 'bazis' без признаков модулей
+    // (ранний импорт) — все кухонные модули. Модуль палитры, добавленный в кухню из Базиса с признаками, — свой.
+    if(isBazisModule(n,a)||(bazis&&!n.modules.some(b=>b.module.bazis)&&(a.module.kitchen||rawKitchen(a.module.raw))))continue;
     const rot=a.rotation??0;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
     const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;

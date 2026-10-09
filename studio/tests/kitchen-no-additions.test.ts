@@ -8,7 +8,7 @@ import {newProject,parseProject,applyAutoFillers,fromBazis,type Project} from '.
 import {estimate,lineGroup} from '../src/pricing';
 import {nest} from '../src/exports';
 import {existsSync,readFileSync} from 'node:fs';
-import {rawKitchen,rawItems,type RawSpec} from '../src/rawModule';
+import {rawKitchen,bazisItems,type RawSpec} from '../src/rawModule';
 import {panelExtras} from '../scripts/kitchen/rowWorktop';
 import {compareModule,refFromStudio} from '../scripts/kitchen/compare';
 
@@ -68,17 +68,25 @@ test('сырой шкаф Базиса — не «кухня из Базиса»
   assert.ok(!rawKitchen(undefined));
 });
 
-test('кухня Базиса: плита МДФ (k30 «Плита IDM ETERNO Libra 18мм») — не лист ЛДСП Lamarty: вне раскроя, в смете м² материала Базиса',()=>{
+// Слияние n3: плита МДФ кухни Базиса — в раскрое своей плитой с материалом Базиса (n3-kitchens2: «Плита 18 мм · IDM ETERNO Libra»,
+// как раскрой Базиса), а не лист Lamarty «Белый/Слэйт 18 мм» (n3-additions); прочие не плитные материалы — м² вне раскроя.
+test('кухня Базиса: плита МДФ (k30 «Плита IDM ETERNO Libra 18мм») — не лист ЛДСП Lamarty: своя плита Базиса в раскрое, цена — уточнить',()=>{
   const door:RawSpec['panels'][number]={name:'Дверь',kind:'mdf',box:[0,0,560,596,716,578],facade:true,mat:'Плита IDM ETERNO Libra 18мм',edges:[[1,2624]]};
   const k={...rawBody(),raw:{...rawBody().raw!,panels:[...rawBody().raw!.panels,door]}};
   const back=parseProject(JSON.parse(JSON.stringify(project(k)))),kk=back.modules[0].module;
   assert.equal(kk.raw!.panels[2].mat,'Плита IDM ETERNO Libra 18мм','материал Базиса сохраняется в файле проекта');
   const plan=nest(back),e=estimate(back,plan);
-  assert.ok(!plan.some(s=>(s.thickness??16)===18),'МДФ 18 мм не попадает в листы ЛДСП');
-  const l=e.lines.find(x=>x.id==='mat:Плита IDM ETERNO Libra 18мм')!;
-  assert.ok(l&&l.unit==='м²'&&l.unitPrice===null&&l.quantity===0.427&&lineGroup(l.id)==='material',JSON.stringify(l));
+  const mdf=plan.filter(s=>(s.thickness??16)===18);
+  assert.ok(mdf.length&&mdf.every(s=>s.decor==='Плита IDM ETERNO Libra 18мм'),'МДФ — своя плита Базиса, не «Слэйт»/«Белый» Lamarty: '+JSON.stringify(mdf.map(s=>s.decor)));
+  const l=e.lines.find(x=>x.id==='sheet:Плита IDM ETERNO Libra 18мм:18')!;
+  assert.ok(l&&l.label.startsWith('Плита 18 мм')&&l.unitPrice===null&&lineGroup(l.id)==='material',JSON.stringify(l));
+  assert.ok(!e.lines.some(x=>x.id.startsWith('mat:')),'МДФ не считается второй раз м²');
   assert.equal(e.lines.find(x=>x.id==='edge1')?.quantity,2.624,'кромка Базиса на МДФ — как в Базисе');
-  assert.ok(parts(kk).find(p=>p.name==='Дверь')!.external,'деталь в 3D есть, в раскрой ЛДСП не идёт');
+  // не плитный материал Базиса (пластик) — вне раскроя, м² материала Базиса
+  const plast:RawSpec['panels'][number]={name:'Панель',kind:'other',box:[0,0,0,596,716,4],mat:'Пластик'};
+  const kp={...rawBody(),raw:{...rawBody().raw!,panels:[...rawBody().raw!.panels,plast]}},pp=project(kp),ep=estimate(pp,nest(pp));
+  assert.ok(parts(kp).find(p=>p.name==='Панель')!.external,'деталь в 3D есть, в раскрой ЛДСП не идёт');
+  assert.equal(ep.lines.find(x=>x.id==='mat:Пластик')?.quantity,0.427);
   // сырой шкаф Базиса с МДФ — как было: деталь в раскрое, без строки МДФ
   const w=rawWardrobe();w.raw!.panels.push({...door});const wp=project(w),wplan=nest(wp);
   assert.ok(wplan.some(s=>(s.thickness??16)===18));assert.ok(!estimate(wp,wplan).lines.some(x=>x.id.startsWith('mat:')));
@@ -145,28 +153,31 @@ test('пометка «кухня из Базиса» сохраняется в 
   assert.equal(parseProject(JSON.parse(JSON.stringify(newProject()))).source,undefined);
 });
 
-test('прочая фурнитура Базиса (rawItems): рафиксы, заглушки навесов, ящики не Axis — шт по объектам модели, без двойного счёта',()=>{
+// Слияние n3: прочая фурнитура Базиса — общая bazisItems (n3-kitchens2: категория × наименование, Firmax парами, профили по длине)
+// с правилом n3-additions для изделий из безымянных тел моделирования (сушка — по имени комплекта, одна на kitId).
+test('прочая фурнитура Базиса (bazisItems): рафиксы, заглушки навесов, ящики не Axis, сушка из тел — шт по объектам модели',()=>{
   const at=(x:number)=>[x,0,0];
   const hw=[
     {name:'Навес мебельный регулируемый ABS левый',category:'навес',pos:at(1)},
     {name:'Заглушка для мебельного навеса ABS левая',category:'заглушка',kit:'Навесы мебельные (L+R) с заглушками',kitId:0,pos:at(1)},
     {name:'Полкодержатель стяжка РАФИКС',category:'рафикс',pos:at(2)},{name:'Полкодержатель стяжка РАФИКС',category:'рафикс',pos:at(3)},
-    // вложенный комплект: тот же объект дважды (уровни комплекта) — один
     {name:'Направляющая Indigo, L=500, левая',category:'направляющая',kit:'Комплект ящика Indigo',kitId:1,pos:at(4)},
-    {name:'Направляющая Indigo, L=500, левая',category:'направляющая',kit:'Направляющая Indigo',kitId:2,pos:at(4)},
     {name:'3x3',category:'прочее',service:true,pos:at(5)},{name:'Духовка',category:'прочее',pos:at(6)},
     {name:'Axis PRO Направляющая, 500',category:'направляющая',pos:at(7)},{name:'Механизм ФриФолд Шорт',category:'петля',pos:at(8)},{name:'Петля накладная',category:'петля',pos:at(9)},
     {name:'Тело по траектории',category:'сушка',kit:'Сушка L-900',kitId:3,pos:at(10)},{name:'Вращение',category:'сушка',kit:'Сушка L-900',kitId:3,pos:at(11)},
-    {name:'Профиль1',category:'профиль',length:1324,pos:at(12)},
+    {name:'Профиль1',category:'профиль',mat:'Профиль врезной для верхних баз',length:1324,pos:at(12)},
   ];
-  assert.deepEqual(rawItems(hw),{'шт:Заглушка для мебельного навеса ABS левая':1,'шт:Полкодержатель стяжка РАФИКС':2,'шт:Направляющая Indigo, L=500, левая':1,'м:Профиль1':1.324,'компл:Сушка L-900':1});
+  const items=bazisItems(hw,(h)=>/axis\s*pro/i.test(h.name));
+  assert.deepEqual(items.map(i=>[i.category,i.name,i.n,i.len]).sort(),[
+    ['заглушка','Заглушка для мебельного навеса ABS левая',1,undefined],['направляющая','Направляющая Indigo, L=500, левая',1,undefined],
+    ['профиль','Профиль врезной для верхних баз',1,1324],['рафикс','Полкодержатель стяжка РАФИКС',2,undefined],['сушка','Сушка L-900',1,undefined]].sort());
   // смета: только у сырого модуля кухни; файл проекта сохраняет items
-  const k={...rawBody(),raw:{...rawBody().raw!,items:rawItems(hw)}},p=parseProject(JSON.parse(JSON.stringify(project(k)))),e=estimate(p);
-  assert.equal(e.lines.find(l=>l.id==='bazis:шт:Полкодержатель стяжка РАФИКС')?.quantity,2);
-  assert.equal(e.lines.find(l=>l.id==='bazis:м:Профиль1')?.unit,'м');
-  assert.equal(e.lines.find(l=>l.id==='bazis:компл:Сушка L-900')?.unit,'компл');
+  const k={...rawBody(),raw:{...rawBody().raw!,items}},p=parseProject(JSON.parse(JSON.stringify(project(k)))),e=estimate(p);
+  assert.equal(e.lines.find(l=>l.id==='bazis:рафикс:Полкодержатель стяжка РАФИКС')?.quantity,2);
+  assert.equal(e.lines.find(l=>l.id==='bazis:профиль:Профиль врезной для верхних баз:m')?.unit,'м');
+  assert.equal(e.lines.find(l=>l.id==='bazis:сушка:Сушка L-900')?.quantity,1);
   assert.ok(e.lines.filter(l=>l.id.startsWith('bazis:')).every(l=>l.unitPrice===null),'цены нет — строка без суммы');
-  const w=rawWardrobe();w.raw!.items={'шт:Полкодержатель стяжка РАФИКС':2};
+  const w=rawWardrobe();w.raw!.items=items;
   assert.ok(!estimate(project(w)).lines.some(l=>l.id.startsWith('bazis:')),'сырой шкаф Базиса — как было');
 });
 
@@ -180,10 +191,10 @@ const K16='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/k16.json';
 test('k16: рафиксы 54 и ящики Indigo (14 направляющих) — как в Базисе',{skip:!existsSync(K16)},()=>{
   // позиции фурнитуры в эталоне — в осях модуля: считаем по модулям и складываем
   const e=JSON.parse(readFileSync(K16,'utf8')),it:Record<string,number>={};
-  for(const m of e.modules as {hardware:Parameters<typeof rawItems>[0]}[])for(const [k,n] of Object.entries(rawItems(m.hardware)))it[k]=(it[k]??0)+n;
-  assert.equal(it['шт:Полкодержатель стяжка РАФИКС'],54);
-  assert.equal((it['шт:Направляющая Indigo, L=500, левая']??0)+(it['шт:Направляющая Indigo, L=500, правая']??0),14);
-  assert.equal((it['шт:Заглушка для мебельного навеса ABS левая']??0)+(it['шт:Заглушка для мебельного навеса ABS правая']??0),10);
+  for(const m of e.modules as {hardware:Parameters<typeof bazisItems>[0]}[])for(const i of bazisItems(m.hardware,(h)=>/axis\s*pro/i.test(h.name)))it[i.name]=(it[i.name]??0)+i.n;
+  assert.equal(it['Полкодержатель стяжка РАФИКС'],54);
+  assert.equal((it['Направляющая Indigo, L=500, левая']??0)+(it['Направляющая Indigo, L=500, правая']??0),14);
+  assert.equal((it['Заглушка для мебельного навеса ABS левая']??0)+(it['Заглушка для мебельного навеса ABS правая']??0),10);
 });
 
 test('цоколь k09 (ЛДСП 16, габарит 16,64 — деталь чуть повёрнута): раскрой по толщине Базиса, без отдельного листа «16,7»',()=>{

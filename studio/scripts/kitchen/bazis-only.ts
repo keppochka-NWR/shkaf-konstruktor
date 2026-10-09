@@ -38,13 +38,16 @@ for (const f of readdirSync(ET).filter((x) => /^k\d\d\.json$/.test(x)).sort()) {
   const bPanels = mods.reduce((s, m) => s + m.panels.length, 0) + rowP.length;
   const bThick = new Set([...mods.flatMap((m) => m.panels), ...rowP].filter((q) => isBoard(q.kind) && !/фасадн/i.test(q.mat ?? "")).map((q) => rawThickness(Number(q.thick) > 0 ? Number(q.thick) : Math.min(q.box[3] - q.box[0], q.box[4] - q.box[1], q.box[5] - q.box[2]))));
   const bWt = new Set(((e.row?.worktops ?? []) as EtPanel[]).filter((q) => worktopGroupRole(q) === "worktop").map((q) => Math.round(Number(q.thick))));
-  const hw = [...mods.flatMap((m) => m.hardware), ...((e.row?.hardware ?? []) as H[])];
+  // фурнитура ряда — и объекты «прочего»/профилей без габарита с категорией (k07 «Пенал на столешку»: навесы, петли, конфирматы)
+  const rowLoose = (["other", "profiles"] as const).flatMap((g) => ((e.row?.[g] ?? []) as (H & { box?: number[] })[]).filter((x) => !Array.isArray(x.box) && x.category));
+  const hw = [...mods.flatMap((m) => m.hardware), ...((e.row?.hardware ?? []) as H[]), ...rowLoose];
   const cnt = (c: string, rx?: RegExp) => hw.filter((h) => h.category === c && (!rx || rx.test(h.name.trim()))).length;
   const bHw: Record<string, number> = { "kitchen-leg": cnt("опора"), "kitchen-clip": cnt("клипса"), "kitchen-hanger": cnt("навес"), "confirmat-7x50": cnt("конфирмат"), dowel: cnt("шкант"), eccentric: cnt("эксцентрик"), "shelf-holder": cnt("полкодержатель"),
     hinge: cnt("петля", /^петля/i) + cnt("подъёмник", /^петля/i) + cnt("газлифт", /^петля/i) };
   // студия
   const sParts = p.modules.flatMap((a) => parts(a.module)).filter((d) => d.material === "board" || d.material === "hdf" || d.material === "glass");
-  const est = estimate(p), q = (id: string) => est.lines.filter((l) => l.id === id || l.id.startsWith(id + ":")).reduce((s, l) => s + l.quantity, 0);
+  // петли — все строки петель (тип по Базису: hinge-inset, hinge-bazis:<тип>)
+  const est = estimate(p), q = (id: string) => est.lines.filter((l) => l.id === id || l.id.startsWith(id + ":") || (id === "hinge" && /^hinge-(inset|bazis)/.test(l.id))).reduce((s, l) => s + l.quantity, 0);
   const sThick = [...new Set(nest(p).filter((s) => s.material !== "hdf").map((s) => s.thickness ?? 16))];
   const sWt = est.lines.filter((l) => l.id.startsWith("worktop:raw:")).map((l) => Number(l.id.slice(12)));
   const forb = est.lines.filter((l) => FORBIDDEN.test(l.id)).map((l) => `${l.id} ${r1(l.quantity)}`);

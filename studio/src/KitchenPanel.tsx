@@ -320,16 +320,28 @@ function WorktopPanel(props: KitchenPanelProps) {
   </div>;
 }
 
+const RAW_COUNT_LABEL = { legs: "опоры", clips: "клипсы цоколя", hangers: "навесы", confirmats: "конфирматы", eccentrics: "эксцентрики", shelfHolders: "полкодержатели", dowels: "шканты", hinges: "петли", lifts: "подъёмники (компл.)", drawers: "ящики Axis PRO (компл.)" } as const;
 /** Сырой модуль из Базиса: детали как в проекте, правится в Базисе — здесь сведения, положение и удаление. */
 function RawInfo(props: KitchenPanelProps) {
   const { m } = props, r = m.raw!;
   const panels = r.panels.length, fronts = r.panels.filter((p) => p.facade).length;
-  const byCat = useMemo(() => { const map = new Map<string, number>(); for (const h of r.hardware) map.set(h.category || "прочее", (map.get(h.category || "прочее") ?? 0) + 1); return [...map].sort((a, b) => b[1] - a[1]); }, [r]);
+  // вся фурнитура Базиса, что идёт в смету (счётчики, петли по типам, позиции по названию), а не только показанная в 3D
+  const rows = useMemo(() => {
+    const out: [string, string][] = [], c = r.counts ?? {}, names = r.names ?? {};
+    for (const [k, label] of Object.entries(RAW_COUNT_LABEL) as [keyof typeof RAW_COUNT_LABEL, string][]) {
+      if (k === "hinges" && names.hinges) { for (const [n, v] of Object.entries(names.hinges)) out.push([n, String(v)]); continue; }
+      if (k === "shelfHolders" && names.shelfHolders) { for (const [n, v] of Object.entries(names.shelfHolders)) out.push([n, String(v)]); continue; }
+      if (c[k]) out.push([label, String(c[k])]);
+    }
+    for (const i of r.items ?? []) out.push([i.name, i.len ? `${Math.round(i.len) / 1000} м` : String(i.n)]);
+    return out;
+  }, [r]);
+  const total = Object.values(r.counts ?? {}).reduce((s, v) => s + (v ?? 0), 0) + (r.items ?? []).reduce((s, i) => s + i.n, 0);
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
-    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура — {r.hardware.length} шт. Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
-    {byCat.length > 0 && <Group icon={<Wrench size={15} />} title="Фурнитура из Базиса" open note={r.hardware.length + " шт."}>
-      <ul className="kitchen-hardware">{byCat.map(([c, n]) => <li key={c}><span>{c}</span><b>{n}</b></li>)}</ul>
+    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура по Базису — {total} шт. (в 3D показано {r.hardware.length}). Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
+    {rows.length > 0 && <Group icon={<Wrench size={15} />} title="Фурнитура из Базиса" open note={total + " шт."}>
+      <ul className="kitchen-hardware">{rows.map(([c, n], i) => <li key={c + i}><span>{c}</span><b>{n}</b></li>)}</ul>
     </Group>}
     <Position {...props} open />
   </div>;
