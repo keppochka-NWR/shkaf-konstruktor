@@ -80,7 +80,9 @@ export function jointGridsFromEtalon(ref: RefModule, hosts: [string, B][], left:
     const at = (s: B) => fs.filter((h) => (Math.abs(h.pos[1] - q.y0) < 1 || (h.pos[1] > q.y0 && h.pos[1] < q.y1)) && h.pos[0] >= s.x0 - 1 && h.pos[0] <= s.x1 + 1 && h.pos[2] >= q.z0 - 1 && h.pos[2] <= q.z1 + 1);
     const pts = at(left).length ? at(left) : at(right);
     const zs = [...new Set(pts.map((h) => r1(h.pos[2])))].sort((a, c) => a - c);
-    if (zs.length < 2) continue;
+    // узкая жёсткая полка (глубина до 100, у задника под ящиками: k17 m02, k18 m06, k25 m05, k27 m02, k28 m04, k29 m05, k31 m16 —
+    // 7 из 7) — один конфирмат посередине на сторону, как в Базисе; у дна/крыши одиночную точку сеткой не считаем
+    if (zs.length < (key.startsWith("shelf:") ? 1 : 2)) continue;
     const g: RafixGrid = { rear: r1(zs[0] - q.z0), front: r1(q.z1 - zs[zs.length - 1]), n: zs.length };
     if (rafixZs(g, q.z0, q.z1).every((z, k) => Math.abs(z - zs[k]) < 0.6)) out[key] = g;
   }

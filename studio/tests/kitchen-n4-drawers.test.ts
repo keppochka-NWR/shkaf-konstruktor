@@ -111,3 +111,12 @@ test('релинг Axis PRO (k05 m04/m06, k08 m05): сетки Базиса, с�
   // без релинга в проекте (k04 m01) — его нет ни в 3D, ни в смете
   const {m}=pass('k04','m01');assert.ok(!parts(m).some(p=>/:sys:rail:/.test(p.id)));assert.ok(!estimate(newProject(m)).lines.some(l=>l.id.startsWith('axis-rail:')));
 });
+
+test('узкая жёсткая полка у задника (глубина 100, k27 m02, k31 m16): один конфирмат посередине на сторону — как в Базисе',{skip:!has('k27')||!has('k31')},()=>{
+  for(const [k,key] of [['k27','m02'],['k31','m16']] as const){
+    const {m,c}=pass(k,key);
+    const hw=c.hardware.find(h=>h.category==='конфирмат')!;assert.equal(hw.studio,hw.ref,k+key);
+    const sh=parts(m).filter(p=>/^fast:S:shelf:\d+:left/.test(p.id)||/^fast:.*:shelf:\d+:left/.test(p.id));
+    assert.equal(sh.length,1,k+key+' '+sh.map(p=>p.id).join());
+  }
+});
