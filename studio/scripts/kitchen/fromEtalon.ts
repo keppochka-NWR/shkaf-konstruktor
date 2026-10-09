@@ -61,6 +61,32 @@ export function doorRowsFromFronts(rows: B[][], single = 3): { gap: number; spli
   return { gap, split: r1(rs[0][0].y1 - rs[0][0].y0 + gap / 2), ...(niche !== undefined ? { niche } : {}), rows: rs.slice(1, -1).map((r) => r1(r[0].y1 - r[0].y0)) };
 }
 
+/** Жёсткие полки без крепежа к стойкам в Базисе (ни конфирмата, ни эксцентрика, ни шканта, ни рафикса у торцов полки на её высоте). */
+export function bareShelvesFromEtalon(ref: RefModule, shelves: B[], fixed: number[]): number[] {
+  const fs = ref.hardware.filter((h) => ["конфирмат", "эксцентрик", "шкант", "рафикс"].includes(h.category));
+  return fixed.filter((j) => {
+    const b = shelves[j];
+    if (!b) return false;
+    return !fs.some((h) => h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1 && (h.pos[0] <= b.x0 + 20 || h.pos[0] >= b.x1 - 20));
+  });
+}
+
+/** Створки без петель (номер row*2+col, ряды снизу, створки слева): у фасада холодильника петель в Базисе нет — он на двери техники. */
+export function hingelessDoors(rows: B[][], hinges: { pos: number[] }[]): number[] {
+  const out: number[] = [];
+  rows.forEach((r, row) => [...r].sort((a, c) => a.x0 - c.x0).forEach((q, col) => {
+    if (!hinges.some((h) => h.pos[1] >= q.y0 - 0.5 && h.pos[1] <= q.y1 + 0.5 && h.pos[0] >= q.x0 - 30 && h.pos[0] <= q.x1 + 30)) out.push(row * 2 + col);
+  }));
+  return out;
+}
+
+/** Позиции опор по ширине: точки ближе 2 мм — одна позиция (среднее), иначе студия поставила бы лишние опоры в каждый ряд. */
+export function clusterLegXs(xs: number[]): number[] {
+  const out: number[][] = [];
+  for (const x of [...xs].sort((a, c) => a - c)) { const g = out[out.length - 1]; if (g && x - g[g.length - 1] <= 2) g.push(x); else out.push([x]); }
+  return out.map((g) => r1(g.reduce((s, v) => s + v, 0) / g.length));
+}
+
 /** Точек крепежа (конфирмат/эксцентрик) по глубине на стыке дна и крыши с левой стойкой: наибольшее из двух; 2 или 3, иначе undefined. */
 export function jointPointsFromEtalon(ref: RefModule, hosts: (B | undefined)[], left: B): 2 | 3 | undefined {
   let n = 0;
@@ -158,7 +184,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   } else { m.bottomType = "none"; m.plinthHeight = 0; }
   if (!topPanel) m.topType = "none";
   if (legs.length) {
-    const xs = [...new Set(legs.map((l) => r1(l.pos[0])))].sort((a, c) => a - c);
+    // ряды опор Базиса бывают сдвинуты на 1 мм (k25 m10: зад 69/531, перед 70/530) — это те же позиции по ширине, а не 4 опоры в ряду
+    const xs = clusterLegXs(legs.map((l) => l.pos[0]));
     const zs = [...new Set(legs.map((l) => r1(l.pos[2] - sideZ0)))].sort((a, c) => a - c);
     // симметричная раскладка (отступ от торцов) — относительной: переживёт изменение ширины
     const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
@@ -295,7 +322,14 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
     } else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     const perRow = split || niche || multi ? lowRow.length : fronts.length;
-    m.doors = doors.length > 0;
+    // пенал без петель в Базисе, но с дверями (k23 «Пустой»): двери есть, петель нет — не добавляем их (hingeless)
+    const bareDoors = role === "tall" && !doors.length && !m.kdrawers && !hw("направляющая").length && fronts.every((q) => /^Дверь/i.test(q.p.name));
+    m.doors = doors.length > 0 || bareDoors;
+    if (role === "tall" && m.doors) {
+      const rowsB = (m.sections[0].doorSplit !== undefined ? rowYs.map(inRow) : [fronts]).map((r) => r.map((q) => q.b));
+      const hl = hingelessDoors(rowsB, hw("петля"));
+      if (hl.length) { m.sections[0].hingeless = hl; notes.push(`фасады без петель (как в Базисе): ${hl.join(", ")}`); }
+    }
     m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
     // подъёмный фасад: «Петля накладная» на нижней плоскости крыши (кватернион Базиса [0,−0,71,0,0,71]), выше середины фасада
     const topHinge = (h: { pos: number[]; quat?: number[] }) => !!h.quat && Math.abs(h.quat[0]) < 0.1 && Math.abs(h.quat[2]) < 0.1 && Math.abs(Math.abs(h.quat[1]) - Math.SQRT1_2) < 0.05 && h.pos[1] > (f0.b.y0 + f0.b.y1) / 2;
@@ -373,6 +407,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     }
   }
   notes.push(...rfx.notes);
+  // жёсткие полки без крепежа в Базисе — студия его не добавляет
+  const bare = bareShelvesFromEtalon(ref, sh.map((q) => q.b), m.sections[0].fixed ?? []);
+  if (bare.length) { m.kitchen.bareShelves = bare; notes.push(`жёсткие полки без крепежа (как в Базисе): ${bare.map((j) => j + 1).join(", ")}`); }
   if (m.jointFastening && dow.length && ecc.length) {
     const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
     if (d0) m.dowels = { offset: r1(Math.abs(d0.pos[2] - e0.pos[2])) };

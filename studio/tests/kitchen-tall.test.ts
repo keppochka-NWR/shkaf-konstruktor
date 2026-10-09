@@ -5,7 +5,9 @@ import {validate,parts,initialModule,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {edgeByDir} from '../src/edges';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
-import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {moduleFromEtalon,clusterLegXs} from '../scripts/kitchen/fromEtalon';
+import {estimate} from '../src/pricing';
+import {newProject} from '../src/project';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тест пропускается.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -78,6 +80,39 @@ test('распознавание рядов: k05 m01 — 3 ряда по одн�
   assert.equal(b.module.sections[0].doorRows?.length,1);
   const c=moduleFromEtalon(load('k28','m03'));
   assert.equal(c.module.sections[0].doorRows,undefined,'ящики Axis + двери — не ряды распашных');
+});
+
+test('фасад без петель (hingeless, кухня): петли не ставятся и не идут в смету; жёсткая полка без крепежа (bareShelves) — без конфирматов',()=>{
+  const t={...initialModule(),height:2100,kitchen:{role:'tall' as const}};t.sections=[{...t.sections[0],doorLeaves:1 as const,doorSplit:1300,hingeless:[0],shelves:[0.5],fixed:[0]}];
+  assert.deepEqual(validate(t),[]);
+  const ps=parts(t),sid=t.sections[0].id;
+  assert.equal(ps.filter(p=>p.id.startsWith(`${sid}:hingeplate:0:`)).length,0,'нижний фасад (холодильник) без петель');
+  assert.ok(ps.filter(p=>p.id.startsWith(`${sid}:hingeplate:2:`)).length>0,'верхний — на петлях');
+  assert.ok(ps.find(p=>p.id===`${sid}:door:0`)?.hingeless);
+  const nHinges=(m:typeof t)=>estimate(newProject(m)).lines.filter(l=>l.id.startsWith('hinge')).reduce((s,l)=>s+l.quantity,0);
+  const withHinges={...t,sections:[{...t.sections[0],hingeless:undefined}]};
+  assert.ok(nHinges(t)<nHinges(withHinges),'смета: петель нижнего фасада нет');
+  assert.ok(ps.some(p=>p.id.startsWith('fast:')&&p.id.includes(':shelf:0:')));
+  const bare={...t,kitchen:{...t.kitchen,bareShelves:[0]}};
+  assert.equal(parts(bare).filter(p=>p.id.includes(':shelf:0:')&&/^(fast|ecc|rafix):/.test(p.id)).length,0);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(bare))).kitchen?.bareShelves,[0]);
+  const w={...t};delete (w as Partial<typeof t>).kitchen;
+  assert.ok(validate(w as typeof t).some(e=>e.includes('без петель')),'у шкафа hingeless нет');
+});
+
+test('распознавание: фасад холодильника без петель k25 m10 (петли 2/2, опоры 4/4 — ряды опор со сдвигом 1 мм не удваиваются), пустой пенал k23 m14 — двери без петель, полки без крепежа',{skip:!existsSync(`${ETALON}/k25.json`)},()=>{
+  assert.deepEqual(clusterLegXs([69,70,530,531]),[69.5,530.5]);
+  const ref=load('k25','m10'),{module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(m.sections[0].hingeless,[0]);
+  const c=compareModule(ref,m),row=(k:string)=>c.hardware.find(h=>h.category===k)!;
+  assert.deepEqual([row('петля').ref,row('петля').studio],[2,2]);
+  assert.deepEqual([row('опора').ref,row('опора').studio],[4,4]);
+  const r2=load('k23','m14'),{module:m2}=moduleFromEtalon(r2);
+  assert.equal(m2.doors,true);
+  assert.ok((m2.kitchen?.bareShelves?.length??0)>0);
+  const c2=compareModule(r2,m2);
+  assert.ok(!c2.missing.some(x=>x.cls.startsWith('фасад')),'двери есть');
+  assert.equal(c2.hardware.find(h=>h.category==='петля'),undefined,'петель нет ни в Базисе, ни в студии');
 });
 
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
