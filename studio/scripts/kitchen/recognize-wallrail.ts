@@ -24,3 +24,15 @@ export function railConf(hw: RefHardware[], b: B, xL: number, xR: number, hz?: B
   }
   return { side: L, top };
 }
+
+/** Стяжка на дне на эксцентриках и шкантах снизу (Базис k04 m08, k31 m07/m09/m11): эксцентрик — точка «пласть стяжки × верх дна»,
+ *  шкант — «низ дна × ось стяжки». Нет эксцентриков — undefined (правило студии). */
+export function railUnder(hw: RefHardware[], b: B, bottom: B): { ecc: number[]; dowel: number[]; face: "front" | "back" } | undefined {
+  const inX = (x: number) => x > b.x0 + 0.5 && x < b.x1 - 0.5, zc = (b.z0 + b.z1) / 2;
+  const ecc = hw.filter((h) => h.category === "эксцентрик" && inX(h.pos[0]) && Math.abs(h.pos[1] - bottom.y1) < 0.6 && (Math.abs(h.pos[2] - b.z0) < 0.6 || Math.abs(h.pos[2] - b.z1) < 0.6));
+  if (!ecc.length) return undefined;
+  const faces = new Set(ecc.map((h) => (Math.abs(h.pos[2] - b.z1) < 0.6 ? "front" : "back")));
+  if (faces.size !== 1) return undefined;
+  const dowel = hw.filter((h) => h.category === "шкант" && inX(h.pos[0]) && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[2] - zc) < 0.6);
+  return { ecc: ecc.map((h) => r1(h.pos[0] - b.x0)).sort((a, c) => a - c), dowel: dowel.map((h) => r1(h.pos[0] - b.x0)).sort((a, c) => a - c), face: [...faces][0] as "front" | "back" };
+}

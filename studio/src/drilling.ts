@@ -29,6 +29,22 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       for (const s of [-1, 1]) push(`${p.id}:${s}`, hh.horizontal ? [x + s * g, y, z] : [x, y + s * g, z], [0, 0, -1], hh.holes.d, hh.holes.depth);
       continue;
     }
+    if (p.id.startsWith("ecc:rail-under:") && p.anchor) {
+      // стяжка на дне (Базис k04 m08, k31): бочонок D15×12 в пласть стяжки в 34 над дном, шток D8×34 вверх в торец стяжки,
+      // D5×12 вниз в дно (n4-wall)
+      const [x, yb, zf] = p.anchor, into = p.position[2] < zf ? -1 : 1, zc = zf + into * 8;
+      push(p.id, [x, yb + 34, zf], [0, 0, into], 15, 12);
+      push(p.id + ":pin", [x, yb, zc], [0, 1, 0], 8, 34);
+      push(p.id + ":bottom", [x, yb, zc], [0, -1, 0], 5, 12);
+      continue;
+    }
+    if (p.id.startsWith("dowel:rail-under:") && p.anchor) {
+      // шкант 8×30 стяжки на дне: D8×22 вверх в торец стяжки, D8×12 вниз в дно — из плоскости стыка (верх дна)
+      const yb = p.position[1] - 3;
+      push(p.id, [p.anchor[0], yb, p.anchor[2]], [0, 1, 0], 8, 22);
+      push(p.id + ":bottom", [p.anchor[0], yb, p.anchor[2]], [0, -1, 0], 8, 12);
+      continue;
+    }
     if (p.id.startsWith("fast:") && p.model?.origin && p.model.quat) {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;

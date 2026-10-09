@@ -17,7 +17,7 @@ import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wal
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
-import { railConf } from "./recognize-wallrail";
+import { railConf, railUnder } from "./recognize-wallrail";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 
@@ -396,7 +396,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
     const front = r.b.z1 >= sideZ1 - 30;
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
-    if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
+    if (wallRailOnBottom(role, r, bottom)) {
+      const place = front ? "front-bottom" : "rear-bottom";
+      railList.push({ place, height: r1(r.b.y1 - r.b.y0) });
+      const ru = bottom ? railUnder(ref.hardware, r.b, bottom.b) : undefined; if (ru) m.kitchen.railUnder = { ...m.kitchen.railUnder, [place]: ru }; // эксцентрики и шканты снизу (n4-wall)
+      continue;
+    }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}) });
     if ((role === "wall" || role === "antresol") && !m.kitchen.noFasteners) { // крепёж стяжки по проекту Базиса (n4-wall)

@@ -131,3 +131,15 @@ test('бочонок эксцентрика крыши с наружной пл�
   assert.equal(ok,true);
   assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.ecc?.topOut,true,'topOut переживает сохранение');
 });
+
+test('стяжка на дне на эксцентриках и шкантах снизу, как в Базисе (k04 m08: kitchen.railUnder) — присадка 55/55',{skip:!has('k04')},()=>{
+  const {m,c,ok}=pass('k04','m08');
+  assert.deepEqual(m.kitchen?.railUnder?.['front-bottom']??m.kitchen?.railUnder?.['rear-bottom'],{ecc:[65,353],dowel:[97,321],face:'front'});
+  const e=parts(m).filter(p=>p.id.startsWith('ecc:rail-under:')),d=parts(m).filter(p=>p.id.startsWith('dowel:rail-under:'));
+  assert.deepEqual([e.length,d.length],[2,2]);
+  assert.ok(holes(m).filter(h=>h.src.startsWith('ecc:rail-under:')&&h.d===15).every(h=>h.dir[2]===-1&&h.depth===12),'бочонок с лицевой пласти стяжки');
+  assert.deepEqual(partCollisions(parts(m),m),[]);
+  assert.equal(c.holes?.matched,c.holes?.ref);
+  assert.equal(ok,true);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.railUnder,m.kitchen?.railUnder,'переживает сохранение');
+});
