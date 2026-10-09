@@ -518,12 +518,16 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
   // Угловая фальш-планка из фасада занимает край проёма: фасады крайней секции сдвигаются на планку + зазор 3.
   if(cornerStrip(m)&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
   if(cornerStrip(m)&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
-  // угловая мойка Базиса: фальш ЛДСП + планка из фасада у края модуля, фасады — через зазор faceGap (kitchen.faceFiller, n4-base)
-  const ff=m.kitchen?.faceFiller;
-  if(ff&&ff.side==='left'&&i===0)left=ff.width+(ff.strip??0)+fe(m);
-  if(ff&&ff.side==='right'&&i===m.sections.length-1)right=m.width-ff.width-(ff.strip??0)-fe(m);
+  // угловая мойка Базиса: фальш ЛДСП + планка из фасада у края модуля, фасады — через зазор faceGap (kitchen.faceFiller, n4-base).
+  // Отдельно от cornerFiller/cornerKind 'strip' (планка шкафа студии RULES.fillerStrip): правила Базиса — только кухне (правило 3).
+  const ff=m.kitchen?.faceFiller,fx=faceFillerEdge(m);
+  if(ff&&fx!==undefined&&ff.side==='left'&&i===0)left=fx;
+  if(ff&&fx!==undefined&&ff.side==='right'&&i===m.sections.length-1)right=fx;
   return {left,right};
 }
+/** Кромка фасадов у фальша угловой мойки Базиса (kitchen.faceFiller): x = фальш + планка + зазор faceGap от края модуля.
+ *  Одно место для размаха фасадов (facadeSpan) и точки «Петля под фальшпанель» (hardwareParts). */
+export function faceFillerEdge(m:Module):number|undefined{const ff=m.kitchen?.faceFiller;if(!ff)return undefined;const w=ff.width+(ff.strip??0)+fe(m);return ff.side==='left'?w:m.width-w;}
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
 export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+(c.tray?10:RULES.drawerStep);return c.facadeH?Math.max(box,c.facadeH+gap):box;}
@@ -1262,7 +1266,7 @@ function hardwareParts(m: Module, out: Part[]) {
       .filter((fx) => dir * (fx - edgeX) >= -fe(m) - 1 && dir * (fx - edgeX) <= 40)
       .sort((a, b) => Math.abs(a - guess) - Math.abs(b - guess))[0];
     // угловая мойка Базиса (kitchen.faceFiller): дверь у фальша — на «Петля под фальшпанель»: точка петли — кромка двери, чашка в 22 от неё
-    const ffk = m.kitchen?.faceFiller, ffEdge = ffk ? (ffk.side === "left" ? ffk.width + (ffk.strip ?? 0) + fe(m) : m.width - ffk.width - (ffk.strip ?? 0) - fe(m)) : NaN;
+    const ffk = m.kitchen?.faceFiller, ffEdge = faceFillerEdge(m) ?? NaN;
     const ffHinge = !inset && !!ffk && (ffk.side === "left" ? dir > 0 : dir < 0) && Math.abs(edgeX - ffEdge) < 1;
     const sideX = ffHinge ? edgeX : stand ?? guess;
     const mirror = dir < 0 ? { mirror: true } : {};

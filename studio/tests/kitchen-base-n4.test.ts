@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts,initialModule,parseModule} from '../src/model';
+import {validate,parts,initialModule,parseModule,faceFillerEdge} from '../src/model';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {faceGapsTB} from '../scripts/kitchen/recognize-base';
@@ -126,6 +126,18 @@ test('петля под фальшпанель — узел как в Базис
       assert.ok(hs.some(h=>Math.abs(h.at[0]-cupX)<0.01&&Math.abs(h.at[1]-n.model!.origin![1])<0.01&&h.depth===13),'чашка в точке чашки');}
     assert.equal(partCollisions(ps,r.module).filter(x=>/hinge/.test(x.a+' '+x.b)).length,0,`${k} ${key}: петли ни с чем не пересекаются`);
   }
+});
+
+test('кромка фасадов у фальша — одно место (faceFillerEdge): размах двери и точка петли под фальшпанель совпадают; без фальша — нет',{skip:!has('k25')||!has('k28')},()=>{
+  for(const [k,key,x] of [['k25','m02',333.5],['k28','m17',531]] as const){
+    const m=moduleFromEtalon(load(k,key)).module,ps=parts(m),fx=faceFillerEdge(m)!;
+    const nodes=ps.filter(p=>p.id.includes(':hingeplate:')&&p.falsePanelHinge);
+    assert.ok(nodes.length>0&&nodes.every(p=>Math.abs(p.model!.origin![0]-fx)<0.01),`${k} ${key}: точка петли = кромка фасадов`);
+    // в общей системе Базиса (минимум панелей) кромка — как у петли Базиса
+    const x0=Math.min(...ps.filter(p=>p.material==='board'||p.material==='hdf').map(p=>p.position[0]-p.size[0]/2));
+    assert.equal(Math.round((fx-x0)*10)/10,Math.round((x-Math.min(...load(k,key).panels.map(p=>p.box[0])))*10)/10);
+  }
+  assert.equal(faceFillerEdge(initialModule()),undefined);
 });
 
 test('петли под фальшпанель — один фильтр для признака угловой мойки и плоского фальша (falsePanelHinges)',()=>{
