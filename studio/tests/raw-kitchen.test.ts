@@ -50,6 +50,9 @@ test('смета сырого модуля: фурнитура по Базису
   const plan=nest(project(rawModule(raw)));
   assert.ok(!plan.some(s=>s.items.some(it=>/Фасад ящика|Фальшпанель/.test(JSON.stringify(it)))),'фасадный материал не в раскрое ЛДСП');
   assert.equal(rawParts(rawModule(raw)).find(p=>p.name==='Фальшпанель')!.decor,'Слэйт');
+  // ЛДСП корпуса спереди (планка) — декор корпуса, не лист «Слэйт»
+  assert.equal(rawParts(rawModule(raw)).find(p=>p.name==='Планка')!.decor,'Белый');
+  assert.ok(!plan.some(s=>s.decor==='Слэйт'),'нет листа ЛДСП в декоре фасадов');
   // с петлями Базиса — ровно их число
   const e2=estimate(project(rawModule({...raw,counts:{hinges:3}})));
   assert.equal(e2.lines.find(l=>l.id==='hinge')?.quantity,3);
