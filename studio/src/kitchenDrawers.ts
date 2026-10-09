@@ -215,7 +215,10 @@ export function relayoutKDrawers(m: Module, n: number, ratios?: number[], system
   return sys === "firmax-ldsp" ? firmaxLayout(m, n, ratios, m.kdrawers?.filter(isFirmax)) : axisLayout(m, n, ratios, k0 && isAxis(k0) ? k0 : undefined);
 }
 
-/** Firmax: длины коробов в проектах Базиса цеха (390, 440, 490, 540); берём самую длинную, что входит с запасом 40 от задней кромки. */
+/** Firmax: длины коробов в проектах Базиса цеха (390, 440, 490, 540); берём самую длинную, что входит с запасом 40 от задней кромки.
+ *  Мельче 430 запаса 40 нет ни у одной длины — тогда самая короткая 390 без запаса (например, D=407 — 17 мм до задней кромки):
+ *  короче коробов в базе нет. Такой ящик допустим, пока он входит в корпус — это ловят kitchenDrawerErrors (короб длиннее
+ *  глубины) и пересечения с задней стенкой корпуса. */
 export const FIRMAX_LENGTHS = [390, 440, 490, 540] as const;
 export const FIRMAX = { t: 16, gap: 5, bottomUp: 10, confBottom: 69, sideDown: 30, topUnder: 30, rail: { w: 12 } };
 export function firmaxLen(m: Module) { return [...FIRMAX_LENGTHS].reverse().find((l) => l <= m.depth - 40) ?? FIRMAX_LENGTHS[0]; }

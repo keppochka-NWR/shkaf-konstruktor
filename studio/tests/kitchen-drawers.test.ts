@@ -154,6 +154,11 @@ test('Firmax from the panel (system switch, count) has runner screws D3x3 by def
   const n={...ax,kdrawers:f};assert.equal(cnt(n as never).d3,12,'2 per side per drawer');assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
   const two=relayoutKDrawers(n,2);assert.ok(two.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
 });
+test('Firmax shallow cabinet: below 430 the shortest box 390 without the 40 reserve while it fits, deeper than the cabinet is an error',()=>{
+  const m=firmax(),a={...m,depth:407};a.kdrawers=refitKDrawers(a,'depth');assert.ok(a.kdrawers!.every(k=>k.system==='firmax-ldsp'&&k.box.len===390));
+  assert.deepEqual(validate(a).filter(x=>/Ящик|Firmax/.test(x)),[]);assert.deepEqual(partCollisions(parts(a),a),[]);
+  const b={...m,depth:380};b.kdrawers=refitKDrawers(b,'depth');assert.ok(validate(b).some(x=>/короб Firmax 390 не входит/.test(x)));
+});
 test('Firmax panel toggles bring back D3x3 runner screws and face screws D5x16; own Bazis points are kept',()=>{
   const m=firmax();m.kdrawers=firmaxSetScrews(m.kdrawers!,'screws',false);assert.equal(cnt(m).d3,0);
   m.kdrawers=firmaxSetScrews(m.kdrawers!,'screws',true);assert.equal(cnt(m).d3,12);
