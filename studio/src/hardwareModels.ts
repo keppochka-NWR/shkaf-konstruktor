@@ -12,7 +12,7 @@ import type { Part } from "./model";
 //  - шариковая направляющая — GTV Versalite H45: высота 45, толщина 12,7 (каталог GTV); толщина металла 1,2 и губы 4 — оценка;
 //  - скрытая (Firmax/Unihopper/DTC) — внешний габарит = деталь студии/Базиса (12×9, 20×12), листовой металл 1,5 — оценка;
 //  - эксцентрик Ø15 (отв. Ø15×13), шток Ø7 с резьбой Ø5 на 13 мм в стойке (отв. Ø5×13 Базиса), шкант Ø8 с рифлением — по габариту детали.
-export type ProcKind = "gola-L" | "gola-C" | "rod-round" | "rod-oval" | "slide-ball" | "slide-hidden" | "ecc-cam" | "ecc-pin" | "dowel" | "latch" | "flange";
+export type ProcKind = "gola-L" | "gola-C" | "rod-round" | "rod-oval" | "slide-ball" | "slide-hidden" | "ecc-cam" | "ecc-pin" | "dowel" | "latch" | "flange" | "screw" | "hole";
 
 type P = Pick<Part, "id" | "name" | "role" | "size"> & { model?: Part["model"]; material?: Part["material"] };
 
@@ -31,7 +31,44 @@ export function procKind(p: P): ProcKind | undefined {
   if (p.id.startsWith("dowel:") && p.role === "fastener") return "dowel";
   if (p.id.includes(":latch:") && p.role === "hinge") return "latch";
   if (p.role === "flange" && Math.min(...p.size) * 3 <= Math.max(...p.size)) return "flange";
+  if ((p.id.includes(":screw:") || p.id.startsWith("kitchen-leg-screw:")) && Math.max(...p.size) <= 5) return /^Отверстие/i.test(p.name) ? "hole" : "screw";
   return undefined;
+}
+
+/** Диаметр и длина крепежа из названия («Саморез 3,5×16 (…)», «Шуруп 4x30», «Отверстие 5×12»); без чисел — 3,5×16. */
+export function screwSpec(name: string): { d: number; L: number } {
+  const m = name.match(/(\d+(?:[.,]\d+)?)\s*[×xх]\s*(\d+(?:[.,]\d+)?)/);
+  return m ? { d: parseFloat(m[1].replace(",", ".")), L: parseFloat(m[2].replace(",", ".")) } : { d: 3.5, L: 16 };
+}
+type FaceHost = Pick<Part, "size" | "position" | "material"> & { rotY?: number; rotZ?: number };
+/** Пласть доски, на которой лежит точка крепежа (саморез Базиса — точка без поворота): ось толщины и направление внутрь доски.
+ *  Точка должна быть в пределах доски по двум другим осям и не дальше tol от её грани; из нескольких — ближайшая. */
+export function faceAt(pt: [number, number, number], hosts: FaceHost[], tol = 1.5): { axis: 0 | 1 | 2; dir: 1 | -1 } | undefined {
+  let best: { axis: 0 | 1 | 2; dir: 1 | -1 } | undefined, bd = Infinity;
+  for (const q of hosts) {
+    if ((q.material !== "board" && q.material !== "hdf") || q.rotY || q.rotZ) continue;
+    const ax = q.size.indexOf(Math.min(...q.size)) as 0 | 1 | 2;
+    if (![0, 1, 2].every((i) => i === ax || Math.abs(pt[i] - q.position[i]) <= q.size[i] / 2 + 0.01)) continue;
+    for (const s of [-1, 1] as const) {
+      const d = Math.abs(pt[ax] - (q.position[ax] + s * q.size[ax] / 2));
+      if (d <= tol && d < bd) { bd = d; best = { axis: ax, dir: (-s) as 1 | -1 }; }
+    }
+  }
+  return best;
+}
+
+/** Саморез/шуруп: полукруглая головка Ø2d с крестовым шлицем над пластью, стержень d на длину L в доску (dir — внутрь доски по axis).
+ *  Отверстие (hole) — тёмный круг d на пласти. Начало координат — точка крепежа (центр детали). */
+export function screwModel(spec: { d: number; L: number }, axis: 0 | 1 | 2, dir: 1 | -1, hole = false): THREE.Group {
+  const { d, L } = spec, inner = new THREE.Group(), dark = plastic(0x1e2124);
+  if (hole) inner.add(lathe([[0, -0.15], [d / 2, -0.15], [d / 2, 0.6], [0, 0.6]], dark, 20));
+  else {
+    const hr = d, hh = Math.max(1.2, d * 0.6), z = zinc(), prof: [number, number][] = [[0, -hh], [hr * 0.7, -hh], [hr * 0.93, -hh * 0.55], [hr, -0.15], [hr, 0], [d * 0.42, 0], [d * 0.42, Math.max(0.5, L - d)], [0.3, Math.max(1, L)], [0, Math.max(1, L)]];
+    inner.add(lathe(prof, z, 24));
+    for (const r of [0, Math.PI / 2]) { const sl = new THREE.Mesh(new THREE.BoxGeometry(hr * 1.1, 0.5, hr * 0.28), dark); sl.position.y = -hh + 0.15; sl.rotation.y = r; inner.add(sl); }
+  }
+  const g = new THREE.Group(); g.add(alongAxis(inner, axis, dir));
+  return g;
 }
 
 // Металл без карты окружения при высоком metalness выглядит чёрным (см. Scene.tsx) — умеренный металл, светлый цвет.
@@ -178,9 +215,16 @@ export function flangeModel(size: [number, number, number], baseAt: -1 | 1): THR
 }
 
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
-export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1 } = {}): THREE.Group | undefined {
+export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
   const k = procKind(p);
   if (!k) return undefined;
+  if (k === "screw" || k === "hole") {
+    // саморез без пласти рядом (точка Базиса в теле детали) — как раньше, точкой
+    if (!ctx.face) return undefined;
+    const g = screwModel(screwSpec(p.name), ctx.face.axis, ctx.face.dir, k === "hole");
+    g.traverse((o) => { if (o instanceof THREE.Mesh) { o.castShadow = false; o.receiveShadow = true; } });
+    return g;
+  }
   const g = k === "gola-L" || k === "gola-C" ? golaModel(k === "gola-L" ? "L" : "C", p.size[0], p.size[1], p.size[2], p.look?.color)
     : k === "rod-round" || k === "rod-oval" ? rodModel(p.size, k === "rod-oval")
     : k === "slide-ball" || k === "slide-hidden" ? slideModel(k === "slide-ball" ? "ball" : "hidden", p.size, ctx.left === false ? 1 : -1)

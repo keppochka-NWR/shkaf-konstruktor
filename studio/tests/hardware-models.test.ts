@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import * as THREE from 'three';
-import {procKind,procModel,golaModel} from '../src/hardwareModels';
+import {procKind,procModel,golaModel,screwSpec,faceAt,screwModel} from '../src/hardwareModels';
 import {parts,initialModule,section,type Module,type Part} from '../src/model';
 import {RAFIX_MODEL} from '../src/kitchenRafix';
 
@@ -57,6 +57,23 @@ test('бочонок эксцентрика в горизонтали — ось
   assert.deepEqual(cam.s,[15,13,15]);
   const under=bbox(procModel(part('ecc:bottom-under:left:0','Эксцентрик D15 · бочонок','fastener',[13,15,15]))!);
   assert.deepEqual(under.s,[13,15,15]);
+});
+
+test('саморезы Базиса (точка без поворота): размер из названия, пласть под точкой, стержень уходит в доску',()=>{
+  assert.deepEqual(screwSpec('Саморез 3,5×16 (направляющая MODERN SLIDE)'),{d:3.5,L:16});
+  assert.deepEqual(screwSpec('Шуруп 4x30 (фальшпанель в фасад)'),{d:4,L:30});
+  assert.deepEqual(screwSpec('Саморез (без размера)'),{d:3.5,L:16});
+  // боковина 16×720×560, внутренняя пласть x = 16: саморез на ней идёт в −X; на наружной (x = 0) — в +X
+  const side=part('left','Боковина','body',[16,720,560],'board');side.position=[8,360,280];
+  assert.deepEqual(faceAt([16,100,300],[side]),{axis:0,dir:-1});
+  assert.deepEqual(faceAt([0,100,300],[side]),{axis:0,dir:1});
+  assert.equal(faceAt([8,100,300],[side]),undefined); // в теле доски
+  assert.equal(faceAt([16,100,600],[side]),undefined); // вне доски по глубине
+  const g=screwModel({d:3.5,L:16},0,-1),b=bbox(g);
+  assert.ok(b.s[0]>=16+2.1&&b.s[0]<=16+2.5,`${b.s}`);assert.ok(b.c[0]<0,'стержень в −X'); // 16 в доске + головка 0,6·d со шлицем
+  assert.equal(procKind(part('kd:0:screw:runL:37','Саморез 4×16 (крепление Axis PRO)','drawer',[3,3,3])),'screw');
+  assert.equal(procKind(part('kd:0:screw:fx5:L','Отверстие 5×12 (зацеп Firmax)','drawer',[3,3,3])),'hole');
+  assert.equal(procModel(part('kd:0:screw:runL:37','Саморез 4×16','drawer',[3,3,3])),undefined); // без пласти — как раньше
 });
 
 test('рафикс кухни: модель Blender (мм) в точке и повороте Базиса у корпуса и штока, файлы есть',()=>{

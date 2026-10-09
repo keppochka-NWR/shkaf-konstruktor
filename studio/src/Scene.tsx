@@ -4,7 +4,7 @@ import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planConto
 import {aluProfile,aluInsert} from './alu';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
-import {procModel} from './hardwareModels';
+import {procModel,faceAt} from './hardwareModels';
 // Цвета профиля рамочного фасада для сцены.
 const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
@@ -343,7 +343,7 @@ export function Scene(p: Props) {
             if (!part.id.startsWith("ecc:") || !part.id.endsWith(":pin")) return undefined;
             const cam = byId.get(part.id.slice(0, -4)), ax = part.size.indexOf(Math.max(...part.size));
             return cam && cam.position[ax] < part.position[ax] ? -1 : 1;
-          })() });
+          })(), face: (part.id.includes(":screw:") || part.id.startsWith("kitchen-leg-screw:")) && Math.max(...part.size) <= 5 ? faceAt(part.position, mParts) : undefined });
           const roundAlongZ = !proc && part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
           const geometry = proc ? new THREE.BoxGeometry(...part.size) : roundAlongZ
             ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
