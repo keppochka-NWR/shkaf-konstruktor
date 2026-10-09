@@ -79,6 +79,13 @@ test('Versalite depth refit keeps the Bazis runner while it fits (k10 m12: 550 a
   assert.ok((d.kdrawers as VersaliteDrawer[]).every(x=>x.len===350));assert.ok(validate(d).some(x=>/Versalite 350 \(350\.5 по модели Базиса\) не входит/.test(x)));
 });
 
+test('kitchen estimate has no rows the Bazis projects lack: no confirmat caps, no «мелочёвка корпуса»; wardrobes keep them',()=>{
+  const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;m.kdrawers=relayoutKDrawers(m,3);
+  const p=newProject();p.modules[0]={...p.modules[0],module:m};const e=estimate(p);
+  assert.ok(e.lines.some(l=>l.id==='confirmat-7x50'));assert.equal(e.lines.find(l=>l.id==='confirmat-cap'),undefined);assert.equal(e.lines.find(l=>l.id==='kit'),undefined);
+  const w=estimate(newProject());assert.ok(w.lines.some(l=>l.id==='confirmat-cap')&&w.lines.some(l=>l.id==='kit'));
+});
+
 test('СТАРТ estimate: second railing on each side (k27 m01 railYs 206.5/260.5) — a separate row for the extra pairs',{skip:!existsSync(ETD+'k27.json')},()=>{
   const {module:m}=moduleFromEtalon(ref('k27','m01'));const p=newProject();p.modules[0]={...p.modules[0],module:m};
   const e=estimate(p) as unknown as {lines?:{id:string;quantity:number}[]};const s=JSON.stringify(e);
