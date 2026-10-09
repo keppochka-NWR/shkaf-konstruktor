@@ -95,6 +95,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2; n3-base).
    *  faceBottom у корпуса без опор — низ фасадов от пола, мм, как в Базисе (над нишей под техникой — от дна; n3-tall). */
   faceTop?: number; faceBottom?: number;
+  /** Угловая мойка Базиса с фальшпанелью (n4-base): у края модуля в плоскости фасадов — фальш ЛДСП корпуса width мм (от низа дна до верха),
+   *  рядом планка из фасадного материала strip мм; фасады — после них через faceGap, дверь у фальша на «Петля под фальшпанель»
+   *  (точка — кромка двери, чашка в 22 от кромки, без наколок под планку). Только плоский фальш (k25 m02, k01 m03); Г-образный — нет. */
+  faceFiller?: { side: "left" | "right"; width: number; strip?: number };
   /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 модуля 13 кухонь Базиса; k32 m06: 2 и 4 при 1,5). */
   backGaps?: { bottom: number; top: number };
   /** Эксцентрик дна сверлится снизу (бочонок в нижней пласти): 56 из 380 эксцентриков дна Базиса, флаг — на 12 модулях 10 кухонь. */
@@ -285,6 +289,9 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
 export function kitchenEdges(m: Module, out: Part[]) {
   // кухня Базиса без кромки вовсе (k23 — 15 модулей: ни одной кромки на деталях корпуса) — снимаем кромку студии по умолчанию
   if (m.kitchen && m.edgeScheme?.t === 0) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade")) p.edge = [0, 0, 0, 0];
+  // фальш угловой мойки (kitchen.faceFiller) — ЛДСП корпуса, кромка корпуса по кругу (k25 m02: 1, k01 m03 и k28 m17: 0,5)
+  const ffp = out.find((p) => p.id === "face-filler:panel:facade");
+  if (ffp && m.edgeScheme?.t !== undefined) setEdges(ffp, edgeDirs(ffp), m.edgeScheme.t);
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
   // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32 — оба, k31 m13 — только дно; edgeScheme.endsX, n3-antresol);

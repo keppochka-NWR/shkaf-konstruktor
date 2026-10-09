@@ -5,6 +5,8 @@ import {validate,parts,initialModule} from '../src/model';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {faceGapsTB} from '../scripts/kitchen/recognize-base';
+import {holes} from '../src/drilling';
+import {partCollisions} from '../src/collisions';
 import {railFastened} from '../scripts/kitchen/recognize-common';
 
 // Нижние модули кухни «как в Базисе» (поток n4). Эталоны вне репозитория — на чужой машине тесты с эталонами пропускаются.
@@ -38,6 +40,36 @@ test('минимум высоты распашного фасада 200 снят
     const withHinges={...k.module,kitchen:{...k.module.kitchen!,hinges:undefined}};
     assert.ok(validate(withHinges).some(e=>e.includes('ниже 200')),'с петлями фасад 117 мм — ошибка, как раньше');
   }
+});
+
+test('угловая мойка с плоским фальшем (k25 m02): фальш ЛДСП + планка из фасада + дверь на петлях под фальшпанель — сверка PASS',{skip:!has('k25')},()=>{
+  const r=pass('k25','m02');
+  assert.ok(r.ok,r.info);
+  assert.deepEqual(r.m.kitchen?.faceFiller,{side:'left',width:273,strip:59});
+  const ps=parts(r.m);
+  assert.ok(ps.some(p=>p.id==='face-filler:panel:facade'&&!p.external),'фальш — ЛДСП корпуса, в раскрое');
+  assert.ok(ps.some(p=>p.id==='face-filler:strip:facade'&&p.external),'планка — фасадный материал');
+  const plates=ps.filter(p=>p.id.includes(':hingeplate:'));
+  assert.equal(plates.length,3);
+  assert.ok(plates.every(p=>p.name.startsWith('Петля под фальшпанель')&&Math.abs(p.model!.origin![0]-333.5)<0.01),'точка петли — кромка двери');
+  const hs=holes(r.m);
+  assert.equal(hs.filter(h=>h.d===35).length,3,'чашки Ø35');
+  assert.equal(hs.filter(h=>h.d===3&&h.depth===3&&h.src.includes(':hingeplate:')).length,0,'наколок под планку нет');
+  assert.equal(partCollisions(ps,r.m).filter(c=>/face-filler|hinge/.test(c.a+' '+c.b)).length,0,'фальш и петли ни с чем не пересекаются');
+});
+
+test('угловая мойка: Г-образный фальш (планки поперёк, k05 m05) — не плоский, честно не поддержано; дверь у k01 m03 — на стороне фальша',{skip:!has('k05')||!has('k01')},()=>{
+  const r=moduleFromEtalon(load('k05','m05'));
+  assert.equal(r.module.kitchen?.faceFiller,undefined);
+  assert.ok(r.unsupported.some(u=>u.includes('угловая мойка')));
+  const k01=moduleFromEtalon(load('k01','m03')).module;
+  assert.deepEqual(k01.kitchen?.faceFiller,{side:'left',width:500});
+  assert.equal(k01.sections[0].hingeSide,'left');
+});
+
+test('фальш мойки только у кухни из Базиса с kitchen.faceFiller: шкаф студии и кухня палитры без флага — без фальша и петель под фальшпанель',()=>{
+  const m=initialModule();
+  assert.ok(!parts(m).some(p=>p.id.startsWith('face-filler')||p.name.startsWith('Петля под фальшпанель')));
 });
 
 test('стяжка «без крепежа» — только если крепежа нет в её полосе вовсе: стенка короба ящика с конфирматами в его боковинах — с крепежом',()=>{

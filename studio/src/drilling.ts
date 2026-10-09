@@ -97,8 +97,10 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin) {
       const [sx, y, back] = p.model.origin, inward = p.position[0] > sx ? 1 : -1; // плечо — внутрь корпуса от стойки
       // кухня Базиса без наколок под планку (kitchen.plateHoles: false — 89 из 261 модулей с петлями) — только чашка
-      if (m.kitchen?.plateHoles !== false) for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
-      push(p.id.replace(":hingeplate:", ":hingecup:"), [sx + inward * 7.5, y, back], [0, 0, 1], 35, 13);
+      // «Петля под фальшпанель» (угловая мойка Базиса, kitchen.faceFiller): точка — кромка двери, чашка в 22 от неё, наколок нет
+      const ffh = p.name.startsWith("Петля под фальшпанель");
+      if (m.kitchen?.plateHoles !== false && !ffh) for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
+      push(p.id.replace(":hingeplate:", ":hingecup:"), [sx + inward * (ffh ? 22 : 7.5), y, back], [0, 0, 1], 35, 13);
     }
   }
   kitchenDrawerHoles(m, ps, push);

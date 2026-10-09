@@ -512,6 +512,10 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
   // Угловая фальш-планка из фасада занимает край проёма: фасады крайней секции сдвигаются на планку + зазор 3.
   if(cornerStrip(m)&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
   if(cornerStrip(m)&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
+  // угловая мойка Базиса: фальш ЛДСП + планка из фасада у края модуля, фасады — через зазор faceGap (kitchen.faceFiller, n4-base)
+  const ff=m.kitchen?.faceFiller;
+  if(ff&&ff.side==='left'&&i===0)left=ff.width+(ff.strip??0)+fe(m);
+  if(ff&&ff.side==='right'&&i===m.sections.length-1)right=m.width-ff.width-(ff.strip??0)-fe(m);
   return {left,right};
 }
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
@@ -1183,6 +1187,18 @@ export function parts(m: Module): Part[] {
     if(drawer||face.hinge==='top')handle.position[1]=face.position[1]+(drawer?1:-1)*(face.size[1]/2-2);
     else{const off=(face.hinge==='right'?-1:1)*(face.size[0]/2-2),angle=(face.rotY??0)*Math.PI/180;handle.position[0]=face.position[0]+off*Math.cos(angle);handle.position[2]=face.position[2]-off*Math.sin(angle)+face.size[2]/2+3;}
   }
+  // угловая мойка Базиса (kitchen.faceFiller): фальш ЛДСП корпуса у края модуля в плоскости фасадов — от низа дна до верха корпуса,
+  // рядом планка из фасадного материала по высоте фасадов (k25 m02: 273 + 59, k01 m03: 500 без планки)
+  const ffl=m.kitchen?.faceFiller;
+  if(ffl){
+    const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,L=ffl.side==='left';
+    add('face-filler:panel:facade','Фальшпанель мойки',[ffl.width,m.height-yb,t],[L?ffl.width/2:m.width-ffl.width/2,(yb+m.height)/2,d+t/2],m.height-yb,ffl.width,t,'body');
+    if(ffl.strip){
+      const ft=m.facadeT??t,y0=facadeBottom(m),y1=facadeTop(m),x=L?ffl.width+ffl.strip/2:m.width-ffl.width-ffl.strip/2;
+      add('face-filler:strip:facade','Планка фальша из фасада',[ffl.strip,y1-y0,ft],[x,(y0+y1)/2,d+ft/2+(m.faceAir??2)],y1-y0,ffl.strip,ft,'body');
+      out.at(-1)!.decor=m.facadeDecor;
+    }
+  }
   hardwareParts(m,out);
   kitchenExtraParts(m,out);
   kitchenDrawerParts(m,out,fe(m),m.facadeT??RULES.panel,m.faceAir??2);
@@ -1192,7 +1208,7 @@ export function parts(m: Module): Part[] {
   (m.grooves??[]).forEach((g,i)=>{const hostPart=out.find(p=>p.id===g.host);if(!hostPart)return;const b=grooveBox(hostPart,g);if(!b)return;const [x0,y0,z0,x1,y1,z1]=b,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
     out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
-  if(m.facadeMaterial==='external')for(const p of out)if(p.role==='door'||p.id.endsWith(':facade')){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
+  if(m.facadeMaterial==='external')for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.id!=='face-filler:panel:facade'){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.
   if((m.edgeBody??2)!==2||(m.edgeFacade??2)!==2)for(const p of out){
     if(p.material!=='board')continue;
@@ -1239,7 +1255,10 @@ function hardwareParts(m: Module, out: Part[]) {
       .map((p) => dir > 0 ? p.position[0] + p.size[0] / 2 : p.position[0] - p.size[0] / 2)
       .filter((fx) => dir * (fx - edgeX) >= -fe(m) - 1 && dir * (fx - edgeX) <= 40)
       .sort((a, b) => Math.abs(a - guess) - Math.abs(b - guess))[0];
-    const sideX = stand ?? guess;
+    // угловая мойка Базиса (kitchen.faceFiller): дверь у фальша — на «Петля под фальшпанель»: точка петли — кромка двери, чашка в 22 от неё
+    const ffk = m.kitchen?.faceFiller, ffEdge = ffk ? (ffk.side === "left" ? ffk.width + (ffk.strip ?? 0) + fe(m) : m.width - ffk.width - (ffk.strip ?? 0) - fe(m)) : NaN;
+    const ffHinge = !inset && !!ffk && (ffk.side === "left" ? dir > 0 : dir < 0) && Math.abs(edgeX - ffEdge) < 1;
+    const sideX = ffHinge ? edgeX : stand ?? guess;
     const mirror = dir < 0 ? { mirror: true } : {};
     const obstacles = out.filter((p) => p !== door);
     const placed: Part[] = [];
@@ -1251,12 +1270,12 @@ function hardwareParts(m: Module, out: Part[]) {
         // петли — как в моделях Базиса. Чашка — по преобразованию из моделей: поворот Ry 90°, сдвиг 4,5 по Y.
         const qb: Quat = dir > 0 ? [0.5, 0.5, 0.5, -0.5] : [0.5, -0.5, 0.5, 0.5], o: [number, number, number] = [sideX, y, back];
         // Центр чашки — в 7,5 мм от внутренней плоскости стойки (присадка «Петля накладная» в проектах Базиса цеха).
-        const co = qrot(qb, [0, 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
+        const co = qrot(qb, [0, ffHinge ? 22 : 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
         const cup: Part = { ...metal(cupId, "Петля " + brand + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
           model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qb, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
           collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }] };
         // Плечо с планкой: по сетке ECHC 0..70 от фасада вглубь, 0..23,7 от стойки внутрь, ±26,5 по высоте.
-        const plate: Part = { ...metal(plateId, "Петля " + brand + " · плечо и планка", [23.7, 53, 70], [sideX + dir * 11.85, y, back - 35], "hinge", door.sectionId),
+        const plate: Part = { ...metal(plateId, ffHinge ? "Петля под фальшпанель · плечо и планка" : "Петля " + brand + " · плечо и планка", [23.7, 53, 70], [sideX + dir * 11.85, y, back - 35], "hinge", door.sectionId),
           model: { file: "hardware/bazis/d7e1d3957ebe.glb", length: "y", native: true, origin: o, quat: qb },
           collide: [{ size: [23.7, 53, 70], position: [sideX + dir * 11.85, y, back - 35] }] };
         return [cup, plate];
