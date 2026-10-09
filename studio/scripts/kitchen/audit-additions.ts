@@ -43,6 +43,10 @@ for (const f of files) {
       ["конфирматы", qty(/^confirmat/) - qty(/^confirmat-cap$/), refN((h) => h.category === "конфирмат")],
       ["шканты", qty(/^dowel$/), refN((h) => h.category === "шкант")],
       ["опоры", qty(/^kitchen-leg$/), refN((h) => h.category === "опора")],
+      ["клипсы", qty(/^kitchen-clip$/), refN((h) => h.category === "клипса")],
+      ["навесы", qty(/^kitchen-hanger$/), refN((h) => h.category === "навес")],
+      ["газлифты (комплект на боковину)", qty(/^kitchen-lift:/), Math.ceil(refN((h) => h.category === "газлифт") / 2)],
+      ["ручки", qty(/^handle:/), refN((h) => h.category === "ручка")],
       ["толкатели", qty(/^push-latch$/), 0],
       ["подъёмный механизм (без газлифта Базиса)", qty(/^lift-mechanism$/), 0],
     ];
