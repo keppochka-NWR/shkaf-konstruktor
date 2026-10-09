@@ -6,7 +6,7 @@
 import type { Module, Part } from "./model";
 import { qrot, type Quat } from "./quat";
 
-export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45";
+export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc";
 /** Короб ящика Firmax скрытого монтажа (ЛДСП 16), по 37 ящикам Базиса (k03–k31): боковины в gap от боковин корпуса, длина len;
  *  дно между боковинами на bottomUp выше их низа (10, у мелких 5); задняя стенка и фальшпанель — между боковинами на дне, до верха боковин.
  *  Конфирматы ставятся в Базисе вручную (шаг разный), поэтому их высоты храним как в проекте: conf — от низа задней стенки
