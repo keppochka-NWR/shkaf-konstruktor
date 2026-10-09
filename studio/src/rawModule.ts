@@ -2,7 +2,7 @@
 // пока не воспроизводит деталь-в-деталь (угловые, скошенные, острова, нестандартные наполнения). Панели — коробки в осях модуля
 // (X вправо, Y вверх, Z от стены к фасаду, начало — минимальный угол), фурнитура — сетки Базиса (TriData → GLB) по позиции и повороту.
 // Раскрой и смета панелей работают как обычно; правила студии (петли, крепёж, полки) к сырому модулю не применяются.
-import type { Module, Part } from "./model";
+import type { BazisItem, Module, Part } from "./model";
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона). */
@@ -11,8 +11,48 @@ export type RawHardware = { name: string; category: string; mesh?: string | null
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
 export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccentrics", "shelfHolders", "dowels", "hinges", "lifts", "drawers"] as const;
-/** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса». */
-export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean };
+/** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса».
+ *  items — фурнитура Базиса, которой нет в counts (направляющие Firmax/Indigo, РАФИКС, сушка, профили, штанга…): строки сметы как в Базисе.
+ *  names — названия петель и полкодержателей Базиса с количеством (тип петли и артикул полкодержателя в смете — как в Базисе). */
+export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean; items?: BazisItem[];
+  names?: BazisNames };
+/** Названия Базиса с количеством: петли, полкодержатели, направляющие Firmax (артикул «L - 500» — длина направляющей, не короба). */
+export type BazisNames = { hinges?: Record<string, number>; shelfHolders?: Record<string, number>; slides?: Record<string, number>; legs?: Record<string, number> };
+
+/** Служебные объекты Базиса без изделия (отверстия, тела, зазоры, счётчики, розетки, стена, логотипы) и безымянные размеры («3x3», «8»). */
+const NOT_PRODUCT = /^(отверстие|тело по траектории|зазор|сч[её]тчик|розетка|стена|logo|выталкивание|вращение|духовка|передняя панель|основа$|профиль\d*$)/i;
+const DIMS_ONLY = /^[\d\s.,xх×]*$/i;
+/** Категории, которые смета считает отдельно (counts / параметрика): опоры, клипсы, навесы, конфирматы, эксцентрики, полкодержатели,
+ *  шканты, петли и детали ФриФолд (комплект подъёмника). */
+const COUNTED = new Set(["опора", "клипса", "навес", "конфирмат", "эксцентрик", "полкодержатель", "шкант", "петля"]);
+/** Фурнитура Базиса для сметы по названию, кроме посчитанной отдельно: skip — что ещё покрыто (Axis PRO, Firmax, газлифт параметрики). */
+export function bazisItems(hw: { name: string; category: string; length?: number; mat?: string | null }[], skip: (h: { name: string; category: string }) => boolean = () => false): BazisItem[] {
+  const out = new Map<string, BazisItem>();
+  for (const h of hw) {
+    // «Профиль»/«Профиль1» — имя элемента Базиса, изделие — в материале («Профиль врезной для верхних баз…», «KB 91 MODUS»);
+    // с материалом-цветом («Хром», «Белый», «Пластик…») — это части моделей техники (вытяжка, холодильник), не фурнитура
+    const generic = /^профиль\d*$/i.test((h.name ?? "").trim()), mat = (h.mat ?? "").trim();
+    const name = generic && /профиль/i.test(mat) ? mat : (h.name ?? "").trim(), cat = h.category ?? "";
+    if (!name || COUNTED.has(cat) || NOT_PRODUCT.test(name) || DIMS_ONLY.test(name) || skip(h)) continue;
+    const key = cat + "|" + name, it = out.get(key) ?? { name, category: cat, n: 0 };
+    it.n++;
+    if (Number.isFinite(h.length) && (h.length ?? 0) > 0) it.len = Math.round(((it.len ?? 0) + h.length!) * 10) / 10;
+    out.set(key, it);
+  }
+  return [...out.values()];
+}
+/** Названия петель («Петля …») и полкодержателей Базиса с количеством. */
+export function bazisNames(hw: { name: string; category: string }[]): BazisNames {
+  const hinges: Record<string, number> = {}, shelfHolders: Record<string, number> = {}, slides: Record<string, number> = {}, legs: Record<string, number> = {};
+  for (const h of hw) {
+    const n = (h.name ?? "").trim();
+    if (h.category === "опора" && n) legs[n] = (legs[n] ?? 0) + 1;
+    if ((h.category === "петля" || h.category === "подъёмник" || h.category === "газлифт") && /^петля/i.test(n)) hinges[n] = (hinges[n] ?? 0) + 1;
+    if (h.category === "полкодержатель") shelfHolders[n || "Полкодержатель"] = (shelfHolders[n || "Полкодержатель"] ?? 0) + 1;
+    if (h.category === "направляющая" && /firmax/i.test(n)) slides[n] = (slides[n] ?? 0) + 1;
+  }
+  return { ...(Object.keys(hinges).length ? { hinges } : {}), ...(Object.keys(shelfHolders).length ? { shelfHolders } : {}), ...(Object.keys(slides).length ? { slides } : {}), ...(Object.keys(legs).length ? { legs } : {}) };
+}
 
 /** Счётчики фурнитуры по списку Базиса: петли — только «Петля …» (детали ФриФолд в Базисе тоже в категории «петля»),
  *  подъёмник — пара механизмов ФриФолд/подъёмника на комплект, ящик Axis PRO — пара держателей фасада на ящик. */
@@ -83,6 +123,11 @@ export function rawErrors(m: Module): string[] {
   return [];
 }
 
+export function parseItems(x: unknown): BazisItem[] {
+  if (!Array.isArray(x)) return [];
+  return x.slice(0, 400).filter((i) => i && typeof i === "object" && typeof i.name === "string" && Number.isFinite(Number(i.n)) && Number(i.n) > 0)
+    .map((i) => ({ name: String(i.name).slice(0, 200), category: String(i.category ?? ""), n: Math.round(Number(i.n)), ...(Number.isFinite(Number(i.len)) && Number(i.len) > 0 ? { len: Number(i.len) } : {}) }));
+}
 export function parseRaw(x: unknown): RawSpec | undefined {
   const r = x as RawSpec;
   if (!r || typeof r !== "object" || !Array.isArray(r.panels)) return undefined;
@@ -93,5 +138,8 @@ export function parseRaw(x: unknown): RawSpec | undefined {
     ...(r.source ? { source: String(r.source) } : {}),
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),
     ...(r.row ? { row: true } : {}),
+    ...(Array.isArray(r.items) ? { items: parseItems(r.items) } : {}),
+    ...(r.names && typeof r.names === "object" ? { names: Object.fromEntries((["hinges", "shelfHolders", "slides", "legs"] as const).filter((k) => r.names![k] && typeof r.names![k] === "object")
+      .map((k) => [k, Object.fromEntries(Object.entries(r.names![k]!).filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0).slice(0, 50).map(([n, v]) => [String(n).slice(0, 200), Math.round(Number(v))]))])) } : {}),
   };
 }

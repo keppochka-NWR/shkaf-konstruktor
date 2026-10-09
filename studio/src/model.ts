@@ -1,5 +1,5 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
-import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
+import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
 import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
@@ -221,6 +221,14 @@ export type Module = {
   glassGap?: number;
   /** Сырой модуль — детали проекта Базиса как есть (rawModule.ts): импорт кухонь/шкафов, которые параметрика пока не повторяет. */
   raw?: RawSpec;
+  /** Модуль из проекта Базиса (импорт кухонь): состав и размеры — как в Базисе; правила шкафов студии (автофальши, мелочёвка,
+   *  заглушки в смете) к нему не применяются. См. isBazisModule в project.ts. */
+  bazis?: true;
+  /** Фурнитура Базиса, которую параметрика студии не строит (сушка, РАФИКС, профили, штанга…): строки сметы «как в Базисе». */
+  bazisItems?: BazisItem[];
+  /** Петли и полкодержатели по Базису: название → количество («Петля вкладная», «Петля под фальшпанель», «металлический», MV05…).
+   *  Смета берёт тип/артикул отсюда (а не GTV накладную и Boyard p521 по умолчанию). */
+  bazisNames?: BazisNames;
   /** Ящики кухни по Базису (Axis PRO): фасад, высота направляющей, царга, длина — kitchenDrawers.ts. */
   kdrawers?: KDrawer[];
   /** Gola (профиль-ручка) по Базису: вырезы в переднем торце боковин нижнего модуля. top0/top1 — расстояние от верха боковины
@@ -293,6 +301,8 @@ export type Module = {
 export type Groove = { host: string; face: "+" | "-"; along: [number, number]; across: [number, number]; depth: number; name: string };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
+/** Позиция фурнитуры Базиса для сметы: название как в Базисе, категория, количество (шт) и суммарная длина профилей (мм), если есть. */
+export type BazisItem = { name: string; category: string; n: number; len?: number };
 export type GolaCut = { top0: number; top1: number; depth: number; r: number; /** Кромка и по контуру самого выреза (стенка, дуга, дно) — как в части кухонь Базиса. */ edged?: boolean };
 export type Part = {
   /** Вырезы Gola в боковине (координаты детали: от её верха вниз по Y, глубина — от переднего торца +Z); раскрой — по габариту. */
@@ -1586,6 +1596,11 @@ export function parseModule(input: unknown): Module {
     ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
+    ...(x.bazis===true?{bazis:true as const}:{}),
+    ...(Array.isArray(x.bazisItems)?{bazisItems:parseBazisItems(x.bazisItems)}:{}),
+    ...(x.bazisNames&&typeof x.bazisNames==='object'?(()=>{const r=parseRaw({panels:[],names:x.bazisNames});return r?.names?{bazisNames:r.names}:{};})():{}),
+    // Gola по Базису: вырезы в боковинах и опущенный верх фасадов (без разбора — фасады и петли уезжают на 28,5 мм вверх)
+    ...(x.gola===undefined||!x.gola||typeof x.gola!=='object'?{}:{gola:(()=>{const g=x.gola as NonNullable<Module['gola']>;return {cuts:Array.isArray(g.cuts)?g.cuts.filter(c=>c&&typeof c==='object').map(c=>({top0:Number(c.top0),top1:Number(c.top1),depth:Number(c.depth),r:Number(c.r),...(c.edged?{edged:true}:{})})):[],...(g.faceTop===undefined?{}:{faceTop:Number(g.faceTop)})};})()}),
     ...(x.kdrawers===undefined?{}:(()=>{const k=parseKDrawers(x.kdrawers);return k?{kdrawers:k}:{};})()),
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),

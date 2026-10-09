@@ -70,11 +70,10 @@ test('«Ряд»: столешница 38 мм — строка worktop (пог.
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'ряд — не корпус');
   assert.equal(nest(p).length,0);
   assert.equal(e.lines.find(l=>l.id==='worktop-cut:sink'),undefined,'нет мойки — нет выреза');
-  // k25: НММойка и НМВарка — вырезы под мойку и варку в столешнице ряда
+  // Критик р.2 (правило 1): вырезов под мойку/варку в Базисе нет — по названиям модулей «Мойка»/«Варка» строки не добавляются
   const sink={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НММойка'},hob={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НМВарка'};
   const e2=estimate(project(rawModule(raw,2600,900,910),sink,hob));
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink')?.quantity,1);
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob')?.quantity,1);
+  assert.equal(e2.lines.find(l=>l.id.startsWith('worktop-cut')),undefined,'вырезов нет в Базисе — нет и в смете');
 });
 
 test('дробная толщина Базиса (16.0999999) — целые мм, без отдельного листа 16.1',()=>{

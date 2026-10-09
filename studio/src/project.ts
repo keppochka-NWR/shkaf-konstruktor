@@ -48,11 +48,17 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
  * — боковина у стены при наличии фасадов/ящиков: планка торцом 100×16 (ширину менеджер может изменить), +5 мм к стене.
  * Корпус отодвигается от стены на вылет фальши. Если стык или стена больше не рядом — фальш убирается.
  */
+/** Модуль из проекта Базиса (импорт кухонь): размеры, состав и расстановка — как в Базисе, правила шкафов студии не применяются.
+ *  Признак — m.bazis (импорт с признаком) или сырой модуль; кухонный модуль в проекте с сырыми модулями Базиса — тоже из Базиса
+ *  (файлы, импортированные до признака: в каждой кухне из Базиса есть сырой «Ряд» или сырые модули). */
+export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;return !!(m.bazis||m.raw||(m.kitchen&&p.modules.some(b=>b.module.raw)));}
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room;
   for(const a of n.modules){
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner)continue;
+    // Кухня из Базиса: фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней не относится).
+    if(isBazisModule(n,a))continue;
     const rot=a.rotation??0;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
     const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
