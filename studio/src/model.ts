@@ -1059,6 +1059,9 @@ export function parts(m: Module): Part[] {
       const all = rafixZs(g, a, b);
       return all.length <= 1 ? all : [all[0], all[all.length - 1], ...all.slice(1, -1)];
     }
+    // кухня: узкая горизонталь (до 120 мм) в корпусе глубже неё — одна точка посередине, как в Базисе (по базе 402 из 422 таких
+    // стыков с крепежом; две — 20). Мелкий корпус целиком (k08 m07, 80–100 мм) — две, по правилу. k27 m14: студия ставила по две (n4-tall)
+    if (mm.kitchen && front - a <= KITCHEN.narrowJoint && mm.depth - (front - a) > KITCHEN.narrowJoint) return [(a + front) / 2];
     const ins = mm.confirmatInset ?? RULES.confirmatInset, zs = [a + ins, front - ins];
     const third = !!mm.kitchen && (hid === "bottom" || hid === "top") && (mm.kitchen.jointPoints ? mm.kitchen.jointPoints === 3 : hid === "bottom" && mm.bottomUnder ? b - a > KITCHEN.deepBottom + 0.5 : kitchenJointPoints(mm) === 3);
     if (third) zs.push((a + b) / 2);

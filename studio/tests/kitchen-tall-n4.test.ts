@@ -178,3 +178,12 @@ test('боковина до плоскости фасадов (k23 m04, k29 m02,
     assert.equal(parts(m).filter(p=>p.role==='door').length,n,`${k} ${key}: дверей ${n}`);
   }
 });
+
+test('узкий стык (до 120 мм) в корпусе глубже — одна точка крепежа посередине, как в Базисе (k27 m14: 6 конфирматов, k10 m07); мелкий корпус целиком (k08 m07) — по-прежнему две',{skip:!existsSync(`${ETALON}/k27.json`)},()=>{
+  const n=(k:string,key:string)=>{const ref=load(k,key);const c=compareModule(ref,moduleFromEtalon(ref).module);return c.hardware.find(h=>h.category==='конфирмат')!;};
+  const a=n('k27','m14');assert.equal(a.studio,a.ref,'k27 m14');assert.equal(a.ref,6);
+  const b=n('k10','m07');assert.equal(b.studio,b.ref,'k10 m07');
+  const c=n('k08','m07');assert.equal(c.studio,c.ref,'k08 m07');
+  const ref=load('k27','m14'),ps=parts(moduleFromEtalon(ref).module);
+  for(const p of ps.filter(p=>p.id.startsWith('fast:')))assert.equal(Math.round(p.model!.origin![2]),330,p.id);
+});
