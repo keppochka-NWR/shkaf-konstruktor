@@ -172,6 +172,14 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   assert.deepEqual(m.kitchen?.jointNone?.filter(j=>j.startsWith(fixedShelf)).sort(),[`${fixedShelf}:left`,`${fixedShelf}:right`]);
   assert.deepEqual(parts(m).filter(p=>/^(fast|ecc):/.test(p.id)&&p.id.includes(':shelf:')).map(p=>p.id),[]);
   const cf=compareModule(ref,m).hardware.find(h=>h.category==='конфирмат')!;assert.deepEqual([cf.ref,cf.studio],[8,8]);
+  // k21 m05 сам по себе не проходит проверку (алюминиевый фасад) — сохранение стыков полки без крепежа проверяем на обычном навесном
+  const w=kitchenWall(initialModule(),600),sid=w.sections[0].id;
+  w.sections[0].shelves=[0.5];w.sections[0].fixed=[0];
+  assert.ok(parts(w).some(p=>p.id.startsWith('fast:')&&p.id.includes(':shelf:')),'без правила полка на конфирматах');
+  w.kitchen={...w.kitchen!,jointNone:[`${sid}:shelf:0:left`,`${sid}:shelf:0:right`]};
+  const saved=parseModule(JSON.parse(JSON.stringify(w)));
+  assert.deepEqual(saved.kitchen?.jointNone,w.kitchen.jointNone,'стыки полки без крепежа переживают сохранение');
+  assert.deepEqual(parts(saved).filter(p=>/^(fast|ecc):/.test(p.id)&&p.id.includes(':shelf:')).map(p=>p.id),[]);
   // сверщик видит поворот сушки: элемент без поворота Базиса (на 90° вокруг Y от проекта) — расхождение
   const turned={...m,kitchen:{...m.kitchen!,dryer:m.kitchen!.dryer!.map((d,i)=>i?d:{...d,quat:[1,0,0,0] as [number,number,number,number]})}};
   assert.match(compareModule(ref,turned).hardware.find(h=>h.category==='сушка')!.note??'',/поворот ≠ ×1/);
