@@ -51,6 +51,10 @@ const area = (pts: number[][]) => pts.reduce((s, p, i) => { const q = pts[(i + 1
 /** Внешняя петля контура Базиса (элементы идут не по порядку и бывают развёрнуты — собираем по концам, как etalon.py chain_loops).
  *  null — в контуре есть элементы неизвестного вида (kind17/kind20) или петля не замкнулась: тогда деталь рисуется габаритом. */
 export function contourLoop(elems: CElem[] | undefined, seg = 16, tol = 0.05): [number, number][] | null {
+  return contourLoops(elems, seg, tol)?.outer ?? null;
+}
+/** Внешняя петля и число внутренних (вырезы площадью больше 1 мм²): студия рисует только внешнюю — деталь с вырезами помечается. */
+export function contourLoops(elems: CElem[] | undefined, seg = 16, tol = 0.05): { outer: [number, number][]; holes: number } | null {
   if (!Array.isArray(elems) || !elems.length) return null;
   const segs: [number, number][][] = [];
   for (const e of elems) { const p = elemPoly(e, seg); if (!p) return null; segs.push(p); }
@@ -70,8 +74,9 @@ export function contourLoop(elems: CElem[] | undefined, seg = 16, tol = 0.05): [
     if (dist(pts[0], pts[pts.length - 1]) >= tol) return null;
     loops.push(pts.slice(0, -1));
   }
-  const best = loops.filter((l) => l.length >= 3).sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)))[0];
-  return best ?? null;
+  const real = loops.filter((l) => l.length >= 3).sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)));
+  if (!real.length) return null;
+  return { outer: real[0], holes: real.slice(1).filter((l) => Math.abs(area(l)) > 1).length };
 }
 /** Прямоугольник ли контур (совпадает с bbox) — такой не храним, деталь рисуется габаритом. */
 export function isRectLoop(pts: [number, number][], bbox: number[]): boolean {
@@ -113,10 +118,13 @@ export function panelObb(p: CPanel, parent: Xf): { size: [number, number, number
 }
 
 /** Контур фигурной детали в плоскости модуля: точки (локальные x, y Базиса при z = 0) в мировые координаты, затем две оси плоскости —
- *  xz у горизонтальной (тонкая по Y), xy у тонкой по Z, yz у тонкой по X. Только для деталей, повёрнутых на 90°. */
+ *  xz у горизонтальной (тонкая по Y), xy у тонкой по Z, yz у тонкой по X. Только для деталей, повёрнутых на 90°.
+ *  Тонкая ось — локальная Z детали (направление толщины), а не наименьший размер бокса: у вырожденной детали (бокс высотой 0,
+ *  контур из отрезка и дуги — 021) наименьший размер лежит в плоскости контура. */
 export function planeContour(loop: [number, number][], w: Xf, box: number[]): { plane: "xz" | "xy" | "yz"; pts: [number, number][] } | null {
   if (!isAxisAligned(w.R)) return null;
-  const size = [box[3] - box[0], box[4] - box[1], box[5] - box[2]], thin = size.indexOf(Math.min(...size));
+  const nz = app(w.R, [0, 0, 1]).map(Math.abs), thin = nz.indexOf(Math.max(...nz));
+  void box;
   const plane = thin === 1 ? "xz" : thin === 2 ? "xy" : "yz", ax: Record<string, [number, number]> = { xz: [0, 2], xy: [0, 1], yz: [1, 2] }, [a, c] = ax[plane];
   const pts = loop.map(([x, y]) => { const q = app(w.R, [x, y, 0]); return [q[a] + w.t[a], q[c] + w.t[c]] as [number, number]; });
   return { plane, pts };

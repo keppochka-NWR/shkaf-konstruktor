@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {xf,compose,panelBox,contourLoop,isRectLoop,ryRz,panelObb,planeContour,panelXf,qmat,mul,type Trans,type CPanel,type CElem} from '../scripts/wardrobe/xform';
-import {isWardrobeImportFile} from '../scripts/wardrobe/files';
+import {xf,compose,panelBox,contourLoop,contourLoops,isRectLoop,ryRz,panelObb,planeContour,panelXf,qmat,mul,type Trans,type CPanel,type CElem} from '../scripts/wardrobe/xform';
+import {isWardrobeImportFile,maskPhones} from '../scripts/wardrobe/files';
 import {packRows,splitWide} from '../scripts/wardrobe/pack';
 import {profileSection,snapToHolders} from '../scripts/wardrobe/profiles';
 import {initialModule,section,id,parts,type Module} from '../src/model';
@@ -43,6 +43,16 @@ test('фигурная вертикальная деталь: контур в п
   assert.equal(part.planContour,undefined);
   // повторное чтение проекта контур сохраняет
   assert.equal(parseRaw(JSON.parse(JSON.stringify(m.raw)))!.panels[0].contour!.length,5);
+  // тонкая ось — локальная Z детали, не наименьший размер бокса: у вырожденной детали (021: бокс высотой 0) плоскость та же 'yz'
+  assert.equal(planeContour(loop,w,[box[0],box[1],box[2],box[3],box[1],box[5]])!.plane,'yz');
+});
+
+test('контур с внутренним вырезом (163, 220, 221): внешняя петля рисуется, вырез считается — деталь помечается',()=>{
+  const sq=(x0:number,y0:number,x1:number,y1:number):CElem[]=>[{t:'line',p1:[x0,y0],p2:[x1,y0]},{t:'line',p1:[x1,y0],p2:[x1,y1]},{t:'line',p1:[x1,y1],p2:[x0,y1]},{t:'line',p1:[x0,y1],p2:[x0,y0]}];
+  const r=contourLoops([...sq(100,100,200,300),...sq(0,0,500,800)])!;
+  assert.equal(r.holes,1);assert.equal(r.outer.length,4);
+  assert.deepEqual(contourLoop([...sq(100,100,200,300),...sq(0,0,500,800)]),r.outer,'внешняя — наибольшая по площади');
+  assert.equal(contourLoops(sq(0,0,500,800))!.holes,0);
 });
 
 test('повёрнутая не на 90° деталь: честный короб по повороту (rotY/rotZ студии), а не раздутый габарит',()=>{
@@ -162,6 +172,13 @@ test('сцена Базиса шире 20 м раскладывается ряд
 test('parts-snapshot исключает только импорт wardrobe-NNN.json и wardrobes.json',()=>{
   for(const f of ['wardrobe-001.json','wardrobe-271.json','wardrobes.json']) assert.ok(isWardrobeImportFile(f),f);
   for(const f of ['wardrobe.json','wardrobe-ivanov.json','wardrobe-12-copy.json','wardrobe-001.json.bak','my-wardrobe-001.json']) assert.ok(!isWardrobeImportFile(f),f);
+});
+
+test('импорт: телефоны в названиях сборок Базиса маскируются, размеры — нет',()=>{
+  assert.equal(maskPhones('Шкаф 8 900 000-00-00'),'Шкаф тел. скрыт');
+  assert.equal(maskPhones('Прихожая +7(900)0000000'),'Прихожая тел. скрыт');
+  assert.equal(maskPhones('Шкаф 2400 1200 600'),'Шкаф 2400 1200 600');
+  assert.equal(maskPhones('Модуль 800 2000 450'),'Модуль 800 2000 450');
 });
 
 const T=(x:number,y:number,z:number,q:[number,number,number,number]=[1,0,0,0]):Trans=>({x,y,z,q});

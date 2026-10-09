@@ -8,7 +8,8 @@ import type { Module, Part } from "./model";
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона).
  *  contour — фигурный контур Базиса в плоскости детали (plane: xz — горизонтальная, xy/yz — вертикальные), в координатах модуля.
  *  obb — деталь повёрнута не на 90°: размеры по своим осям и углы (R = Ry·Rz, как в сцене), box — её габарит в модуле.
- *  skew — повёрнута так, что поворот не выражается (нарисована габаритом); figure — фигурная, но контур не перенесён (габарит). */
+ *  skew — повёрнута так, что поворот не выражается (нарисована габаритом); figure — фигурная, но контур не перенесён (габарит)
+ *  или перенесён без внутренних вырезов (есть contour). */
 export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; contour?: [number, number][]; plane?: "xz" | "xy" | "yz";
   obb?: { size: [number, number, number]; ry: number; rz: number }; skew?: boolean; figure?: boolean; mat?: string };
 

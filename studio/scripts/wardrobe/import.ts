@@ -15,10 +15,11 @@ const LIMIT = Number(process.argv[2] ?? 0) || Infinity;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const look = { decor: "Белый", facadeDecor: "Белый" };
 
-import { xf, compose, chainXf, panelBox, panelXf, panelObb, isAxisAligned, contourLoop, isRectLoop, planeContour, app, qmat, type Trans, type CPanel, type CElem, type M3, type Xf } from "./xform";
+import { xf, compose, chainXf, panelBox, panelXf, panelObb, isAxisAligned, contourLoops, isRectLoop, planeContour, app, qmat, type Trans, type CPanel, type CElem, type M3, type Xf } from "./xform";
 import { packRows, splitWide } from "./pack";
 import { profileSection, snapToHolders } from "./profiles";
 import { panelExtras } from "../kitchen/rowWorktop";
+import { maskPhones } from "./files";
 type CProf = { name: string; length: number; width?: number; trans: Trans; chain?: Trans[] };
 type CAsm = { name: string; trans?: Trans; panels?: (CPanel & { contour?: CElem[] })[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[]; profiles?: CProf[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
@@ -32,7 +33,7 @@ type WPanel = { name: string; kind: string; box: number[]; facade: boolean; cont
 type WHw = { name: string; category: string; mesh: string; pos: number[]; quat: [number, number, number, number]; bbox?: number[] };
 /** Профиль Базиса (штанга, рельс, цоколь…): сечение — только если однозначно следует из имени (./profiles), иначе в список «не нарисованы». */
 type WProf = { name: string; len: number; pos: number[]; dir: [number, number, number]; d: number };
-const STATS = { figure: 0, figureDrawn: 0, figureSkipped: 0, skew: 0, skewObb: 0, skewAabb: 0, profiles: 0, profilesDrawn: 0, profilesSkipped: new Map<string, number>() };
+const STATS = { figure: 0, figureDrawn: 0, figureSkipped: 0, figureHoles: 0, skew: 0, skewObb: 0, skewAabb: 0, profiles: 0, profilesDrawn: 0, profilesSkipped: new Map<string, number>() };
 // фурнитура: имя Базиса -> сетка библиотеки (hardware-lib/manifest.json), показываем только видимую (без крепежа)
 const LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib", PUB = "public/models/hardware/bazis";
 const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль", "штанга", "штангодержатель"]);
@@ -69,11 +70,13 @@ function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean, hw: WHw
       else { w.skew = true; STATS.skewAabb++; }
     }
     // фигурная деталь — контур Базиса (дуги дискретизированы); прямоугольник не храним
-    const loop = Array.isArray(p.contour) && p.contour.length ? contourLoop(p.contour) : null;
-    if (p.contour?.length && !(loop && p.bbox && isRectLoop(loop, p.bbox))) {
+    const cl = Array.isArray(p.contour) && p.contour.length ? contourLoops(p.contour) : null, loop = cl?.outer ?? null;
+    if (p.contour?.length && !(loop && !cl?.holes && p.bbox && isRectLoop(loop, p.bbox))) {
       STATS.figure++;
       const pc = loop && !w.obb && !w.skew ? planeContour(loop, W, box) : null;
       if (pc && pc.pts.length <= 400) { w.contour = pc.pts; w.plane = pc.plane; STATS.figureDrawn++; } else { w.figure = true; STATS.figureSkipped++; }
+      // внутренние вырезы (163, 220, 221) студия не рисует — деталь помечается, панель модуля говорит об этом
+      if (cl?.holes) { w.figure = true; STATS.figureHoles++; }
     }
     out.push(w);
   }
@@ -109,7 +112,7 @@ const index: { id: string; title: string; modules: number; panels: number; hardw
 picked.forEach((row, n) => {
   const wid = String(n + 1).padStart(3, "0");
   const parts = row.path.split(/[\\/]/), file = parts[parts.length - 1].replace(/\.b3d$/i, ""), folder = parts[parts.length - 2] ?? "";
-  const title = `${folder} · ${file}`.slice(0, 80);
+  const title = maskPhones(`${folder} · ${file}`).slice(0, 80);
   try {
     const doc = JSON.parse(readFileSync(row.json, "utf8")) as { assemblies?: CAsm[] };
     const top = doc.assemblies ?? [];
@@ -152,7 +155,7 @@ picked.forEach((row, n) => {
       hwCount += hardware.length;
       const profiles = profOf[gi].map((q) => ({ name: q.name, len: r1(q.len), d: q.d, pos: q.pos.map((v, i) => r1(v - o[i])) as [number, number, number], dir: q.dir }));
       const raw: RawSpec = { panels, hardware, source: "bazis-corpus", ...(profiles.length ? { profiles } : {}) };
-      const m: Module = { ...initialModule(), name: g.name.slice(0, 60), width: Math.max(1, r1(e[0] - o[0])), height: Math.max(1, r1(e[1] - o[1])), depth: Math.max(1, r1(e[2] - o[2])), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, raw };
+      const m: Module = { ...initialModule(), name: maskPhones(g.name).slice(0, 60), width: Math.max(1, r1(e[0] - o[0])), height: Math.max(1, r1(e[1] - o[1])), depth: Math.max(1, r1(e[2] - o[2])), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, raw };
       return { id: id(), x: r1(o[0] - g0[0] + M), y: r1(o[1] - g0[1]), z: r1(o[2] - g0[2] + M), rotation: 0, module: m };
     });
     const p = newProject({ ...initialModule(), sections: [section()] });
@@ -183,7 +186,7 @@ const bad = index.filter((x) => x.error).length;
 let copied = 0, bytes = 0;
 for (const mid of meshes) { const src = `${LIB}/glb/${mid}.glb`, dst = `${PUB}/${mid}.glb`; if (existsSync(src) && !existsSync(dst)) { copyFileSync(src, dst); copied++; bytes += statSync(src).size; } }
 console.log(`сетки фурнитуры: нужно ${meshes.size}, скопировано новых ${copied} (${Math.round(bytes / 1024)} КБ); фурнитуры всего ${index.reduce((s, x) => s + (x.hardware ?? 0), 0)}`);
-console.log(`фигурных деталей ${STATS.figure}: по контуру ${STATS.figureDrawn}, габаритом ${STATS.figureSkipped}; повёрнутых не на 90° ${STATS.skew}: коробом по повороту ${STATS.skewObb}, габаритом ${STATS.skewAabb}`);
+console.log(`фигурных деталей ${STATS.figure}: по контуру ${STATS.figureDrawn}, габаритом ${STATS.figureSkipped}, с внутренними вырезами (не нарисованы) ${STATS.figureHoles}; повёрнутых не на 90° ${STATS.skew}: коробом по повороту ${STATS.skewObb}, габаритом ${STATS.skewAabb}`);
 console.log(`профилей ${STATS.profiles}: нарисовано ${STATS.profilesDrawn}, не нарисовано ${STATS.profiles - STATS.profilesDrawn}`);
 for (const [n, c] of [...STATS.profilesSkipped].sort((a, b) => b[1] - a[1])) console.log(`  не нарисован: ${c} × ${n}`);
 console.log(`готово: ${index.length} проектов, с ошибками ${bad}; модулей ${index.reduce((s, x) => s + x.modules, 0)}, панелей ${index.reduce((s, x) => s + x.panels, 0)}`);
