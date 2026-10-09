@@ -1188,7 +1188,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             >
               <RotateCcw size={19} />
             </button>
-            {m.doors && (
+            {(m.doors || !!m.kdrawers?.length) && (
               <button
                 aria-label="Открыть фасады"
                 title="Открыть фасады"
