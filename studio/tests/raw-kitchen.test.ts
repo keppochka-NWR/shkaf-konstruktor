@@ -43,6 +43,7 @@ test('смета сырого модуля: фурнитура по Базису
   const e=estimate(project(rawModule(raw)));
   const q=(id:string)=>e.lines.find(l=>l.id===id)?.quantity??0;
   assert.equal(e.lines.filter(l=>l.id.startsWith('hinge')).length,0,'петель в Базисе нет — в смете тоже');
+  assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'«мелочёвки корпуса» в Базисе нет — сырому модулю её не добавляем');
   assert.equal(q('kitchen-leg'),4);assert.equal(q('kitchen-clip'),2);assert.equal(q('confirmat-7x50'),12);assert.equal(q('eccentric'),2);
   assert.equal(q('shelf-holder'),4);assert.equal(q('dowel'),6);assert.equal(q('axis-pro:raw'),1);assert.equal(q('lift-mechanism'),1);
   // фасадный материал — фасады поставщика (м²), не лист ЛДСП «Белый»; кромка по длинам Базиса
