@@ -448,7 +448,8 @@ export function facadeBottom(m:Module){
     return (hasBottom(m)?m.feet.height:m.feet.height+rail)+(m.faceGap??0);
   }
   // Кухни Базиса, навесной/антресоль с поднятым корпусом (дно выше низа модуля на 13–20 мм): фасад опущен до низа модуля —
-  // у всех 18 таких модулей базы (k17, k21, k23, k28, k30) низ фасада = 0; цоколя у навесных нет.
+  // у таких модулей базы (k17, k21, k23, k28, k30) низ фасада = 0; цоколя у навесных нет. Ниша с дном выше 100 мм при боковинах
+  // от низа (вытяжка, сушка) — в Базисе низ фасада 1,5–2, здесь пока 0 (модули расходятся и по другим причинам).
   if(m.kitchen&&(m.kitchen.role==='wall'||m.kitchen.role==='antresol')&&plinth(m)>0)return 0;
   return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):fe(m);
 }
@@ -1327,7 +1328,7 @@ export function validate(m: Module): string[] {
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
     // кухня: фасады от 200 мм (как правило фасадов кухни ниже — антресоль Базиса k13 m02 в два ряда по 342); шкафы — doorMinH
     const splitMin=m.kitchen?200:RULES.doorMinH;
-  if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
+    if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
     if(s.doorHinges!==undefined&&(!Array.isArray(s.doorHinges)||s.doorHinges.length>4||s.doorHinges.some(v=>v!==null&&!['left','right','top'].includes(v))))errors.push(prefix+'неверное открывание фасада.');
     if(s.drawerGap!==undefined&&(!Number.isFinite(s.drawerGap)||s.drawerGap<2||s.drawerGap>10))errors.push(prefix+'зазор фасадов ящиков от 2 до 10 мм.');
     if(s.doorLeaves!==undefined&&s.doorLeaves!==1&&s.doorLeaves!==2)errors.push(prefix+'число створок: 1 или 2.');
