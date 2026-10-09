@@ -13,6 +13,7 @@ import { estimate } from "../../src/pricing";
 import { worktopGroupRole } from "./rowWorktop";
 import { allowedContact } from "../../src/collisions";
 import { etalonHoleItems, holeSig, supplierEdgeKind } from "./wholeChecks";
+import { kitHeaderIdx } from "./refHardware";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon";
 const keys = (process.argv[2] ?? "").split(",").filter(Boolean);
@@ -126,8 +127,9 @@ for (const k of keys) {
 
   // 6. фурнитура и смета
   const names: Record<string, number> = {};
-  for (const m of mods) for (const h of m.hardware as { name: string; category: string; mat?: string | null }[]) { const n = `${h.category} | ${h.name}${h.mat && h.mat !== h.name && /^профиль\d*$/i.test(h.name) ? " (" + h.mat + ")" : ""}`; names[n] = (names[n] ?? 0) + 1; }
-  // сушка из безымянных тел моделирования («Вращение», «Тело по траектории») — изделие по имени комплекта, одно на kitId (k08)
+  // член вложенного комплекта направляющих (refHardware.kitHeaderIdx) — та же направляющая второй записью, не считаем
+  for (const m of mods) { const kh = kitHeaderIdx(m.hardware); for (const [hi, h] of (m.hardware as { name: string; category: string; mat?: string | null }[]).entries()) { if (kh.has(hi)) continue; const n = `${h.category} | ${h.name}${h.mat && h.mat !== h.name && /^профиль\d*$/i.test(h.name) ? " (" + h.mat + ")" : ""}`; names[n] = (names[n] ?? 0) + 1; } }
+// сушка из безымянных тел моделирования («Вращение», «Тело по траектории») — изделие по имени комплекта, одно на kitId (k08)
   for (const m of mods) {
     const hw = m.hardware as { name: string; category: string; kit?: string | null; kitId?: number | null }[], named = new Set(hw.map((h) => (h.name ?? "").trim())), kits = new Map<string, Set<number | string>>();
     hw.forEach((h, i) => { const kit = (h.kit ?? "").trim(); if (/^(тело по траектории|вращение|выталкивание\s*\d*|основа)$/i.test((h.name ?? "").trim()) && /^сушк/i.test(kit) && !named.has(kit)) { const s = kits.get(kit) ?? new Set(); s.add(h.kitId ?? i); kits.set(kit, s); } });
@@ -166,8 +168,9 @@ for (const k of keys) {
     ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
     ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
     ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
-    // Firmax кухни из Базиса — штуками (n4-kitchens3), студийный firmax-ldsp — парами
-    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), est.filter((l) => /^firmax/.test(l.id)).reduce((s, l) => s + l.quantity * (l.unit === "пара" ? 2 : 1), 0)],
+    // Firmax кухни из Базиса — штуками (n4-kitchens3), студийный firmax-ldsp — парами. Axis PRO — комплект на ящик (2 направляющие);
+    // строка внутреннего ящика axis-pro:inner (передняя панель, держатели, стабилизатор — n4-drawers) направляющих не добавляет
+    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro(?!:inner:)/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), est.filter((l) => /^firmax/.test(l.id)).reduce((s, l) => s + l.quantity * (l.unit === "пара" ? 2 : 1), 0)],
     // отверстия-крепёж Базиса («3x3», «5x12», «Отверстие 3х2», «Отверстие глухое_d2x10 мм.»…) — строки «Отверстие …» (n4-kitchens3).
     // Счёт Базиса — не по правилу имени bazisHoles, а по признакам эталона: см. holesBazis выше
     ["отверстия-крепёж", holesBazis, sum(/^bazis:отверстие:/)],

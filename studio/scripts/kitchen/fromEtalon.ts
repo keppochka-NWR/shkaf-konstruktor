@@ -10,6 +10,7 @@ import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type
 import { edgeRail, isEuro6, legScrews, railConfY, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
+import { axisAsBazis, firmaxAsBazis } from "./recognize-drawers";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
@@ -79,7 +80,9 @@ export function jointGridsFromEtalon(ref: RefModule, hosts: [string, B][], left:
     const at = (s: B) => fs.filter((h) => (Math.abs(h.pos[1] - q.y0) < 1 || (h.pos[1] > q.y0 && h.pos[1] < q.y1)) && h.pos[0] >= s.x0 - 1 && h.pos[0] <= s.x1 + 1 && h.pos[2] >= q.z0 - 1 && h.pos[2] <= q.z1 + 1);
     const pts = at(left).length ? at(left) : at(right);
     const zs = [...new Set(pts.map((h) => r1(h.pos[2])))].sort((a, c) => a - c);
-    if (zs.length < 2) continue;
+    // узкая жёсткая полка (глубина до 100, у задника под ящиками: k17 m02, k18 m06, k25 m05, k27 m02, k28 m04, k29 m05, k31 m16 —
+    // 7 из 7) — один конфирмат посередине на сторону, как в Базисе; у дна/крыши одиночную точку сеткой не считаем
+    if (zs.length < (key.startsWith("shelf:") ? 1 : 2)) continue;
     const g: RafixGrid = { rear: r1(zs[0] - q.z0), front: r1(q.z1 - zs[zs.length - 1]), n: zs.length };
     if (rafixZs(g, q.z0, q.z1).every((z, k) => Math.abs(z - zs[k]) < 0.6)) out[key] = g;
   }
@@ -320,7 +323,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const bottom = bottom0 && bottom0 === topPanel && bottom0.b.y0 > top / 2 ? undefined : bottom0;
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo|MODERN SLIDE/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
+  // короб Firmax без направляющих в проекте (k22 m05, k14 m08): «5x12» (зацеп Firmax) есть, направляющих в Базисе нет
+  const fxBare = !ref.hardware.some((h) => h.category === "направляющая") && ref.hardware.some((h) => h.name === "5x12") && P.some(({ p }) => /^Боковина ящика лев/i.test(p.name));
+  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && (fxBare || ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo|MODERN SLIDE/.test(h.name))); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
   // цоколь в модуле? (панель ЛДСП у пола под дном, как бы ни называлась в Базисе: «Цоколь», «Фронтальная» k20 m09) — самая передняя
   // в передней половине глубины: планка у задней стены (k04 m09, k14 m06) — не цоколь; у навесных и антресолей цоколя нет
   const floorRole = !ref.archetype.startsWith("wall") && ref.archetype !== "antresol";
@@ -391,7 +396,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   for (const r of rails) {
     const front = r.b.z1 >= sideZ1 - 30, w = r1(r.b.z1 - r.b.z0);
     const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
-    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
+    // царга лёжа без крепежа в Базисе (k19 m10: передняя 69 — ни конфирмата, ни эксцентрика, ни шканта в её полосе) — студия не добавляет
+    const bare = role === "base" && !railFastened(r.b, ref.hardware, Infinity, -Infinity);
+    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}), ...(bare ? { fasten: false as const } : {}) });
   }
   for (const r of railsEdge) {
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
@@ -438,7 +445,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const axisRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Axis PRO Направляющая/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);
   const drawerPanels: typeof P = [];
   if (axisRuns.length) {
-    const kd: KDrawer[] = [];
+    const kd: KDrawer[] = [], axOwners = new Set<unknown>();
     for (const r of axisRuns) {
       const [x, y] = r.pos, len = Number(/(\d+)\s*$/.exec(r.name)?.[1] ?? 500) as AxisDrawer["len"];
       const side = ref.hardware.find((h) => /Axis PRO Царга H-\d+/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
@@ -446,16 +453,26 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       const f = fronts.find((q) => q.b.y0 <= y + 3.5 && q.b.y1 >= y + 3.5);
       const bot = P.find(({ p, b }) => /Дно выдв/.test(p.name) && Math.abs(b.y0 - (y - 22)) < 0.6), bk = P.find(({ p, b }) => /Задн\. ст\. выдв/.test(p.name) && Math.abs(b.y0 - (y - 22)) < 0.6);
       if (!f) { unsupported.push(`ящик Axis PRO на ${r1(y)} без фасада`); continue; }
-      for (const q of [f, bot, bk]) if (q) drawerPanels.push(q);
+      // внутренний ящик (8 модулей базы, k21 m03 и др.): держатели передней панели в точке держателя фасада, направляющая утоплена
+      // от передней кромки корпуса (9) — своего фасада нет, стоит за фасадом ящика ниже или за дверью
+      const pp = ref.hardware.some((h) => /Держатель ПП/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
+      const front = r1(sideZ1 - r.pos[2]), inner = pp && front > 0.05;
+      if (inner) notes.push(`ящик Axis PRO на ${r1(y)}: внутренний, за фасадом ящика ниже, утоплен на ${front} — как в Базисе`);
+      axOwners.add(f);
+      for (const q of [inner ? undefined : f, bot, bk]) if (q) drawerPanels.push(q);
       const backH = bk ? r1(bk.b.y1 - bk.b.y0) : undefined;
       const faceScrews = ref.hardware.some((h) => h.name === "3x3" && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
-      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}) });
+      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}), ...(inner ? { inner: true as const, front } : front > 0.05 ? { front } : {}), // утоплен — как в Базисе (k25 m05: 1,5)
+        ...(ref.hardware.some((h) => h.name.trim() === "Logo" && Math.abs(h.pos[0] - x - 37.5) < 1 && Math.abs(h.pos[1] - y - 9.6) < 0.5) ? { logo: true as const } : {}) });
     }
     if (kd.length) m.kdrawers = kd;
   }
   // ящики Firmax скрытого монтажа: короб ЛДСП 16 по левой боковине ящика; направляющие (по 2 точки Базиса на ящик) — снизу вверх
   const fxRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Firmax/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);
-  if (fxRuns.length && !axisRuns.length) {
+  // короб Firmax без направляющих в проекте (fxBare) — короб без них (runs: []), студия направляющих не добавляет
+  // Firmax вместе с внутренним ящиком Axis PRO (k30 m12/m13: два короба Firmax, за верхним фасадом — внутренний Axis) — каждый своей системой
+  const axisInnerOnly = axisRuns.length > 0 && !!m.kdrawers?.length && m.kdrawers.every((k) => k.system === "axis-pro" && !!k.inner);
+  if ((fxRuns.length || fxBare) && (!axisRuns.length || axisInnerOnly)) {
     const lefts = P.filter(({ p, b }) => /^Боковина ящика лев/i.test(p.name) && b.x0 < W / 2).sort((a, c) => a.b.y0 - c.b.y0);
     const kd: KDrawer[] = [];
     lefts.forEach((s) => {
@@ -488,7 +505,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
     });
-    if (kd.length) m.kdrawers = kd;
+    if (kd.length) m.kdrawers = axisInnerOnly ? [...m.kdrawers!, ...kd].sort((x, y) => x.runnerY - y.runnerY) : kd;
   }
   // ящики MODERN SLIDE: короб ЛДСП как у Firmax/Versalite, направляющие без сетки — точки Базиса храним как есть (по правилу Firmax)
   const msRuns = ref.hardware.filter((h) => h.category === "направляющая" && /MODERN SLIDE/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);
@@ -537,7 +554,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (!cg || (hc !== 90 && hc !== 175) || !f || !bot || !bk) { unsupported.push(`ящик Indigo на ${r1(y)}: нет царги H=90/175, фасада, дна или задней стенки`); continue; }
       drawerPanels.push(f, bot, bk);
       const backH = r1(bk.b.y1 - bk.b.y0), def = hc === 175 ? 147.2 : 62.2;
-      kd.push({ system: "indigo", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), hc, len: 500, ...(/белая/.test(cg.name) ? { color: "white" as const } : {}), ...(Math.abs(backH - def) > 0.05 ? { backH } : {}) });
+      kd.push({ system: "indigo", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), hc, len: 500, ...(/белая/.test(cg.name) ? { color: "white" as const } : {}), ...(Math.abs(backH - def) > 0.05 ? { backH } : {}), ...(/правая/.test(r.name) ? { mirror: true as const } : {}) });
+      // зеркальный модуль Базиса (k16 m05): у левой боковины корпуса «правая» направляющая — сетки зеркального набора
+      if (/правая/.test(r.name)) notes.push(`ящик Indigo на ${r1(y)}: модуль в Базисе зеркальный — сетки зеркального набора`);
     }
     if (kd.length) m.kdrawers = kd;
   }
@@ -937,6 +956,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (out.length) m.grooves = out;
   }
   notes.push(...recognizeBaseExtras(ref, m, fronts.length)); // как в Базисе: без петель / опор / крепежа (recognize-base.ts)
+  notes.push(...axisAsBazis(ref, m), ...firmaxAsBazis(ref, m)); // ящики Axis PRO и Firmax: ручная посадка как в проекте (recognize-drawers.ts)
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;

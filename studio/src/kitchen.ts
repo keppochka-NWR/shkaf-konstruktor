@@ -345,6 +345,11 @@ export function kitchenEdges(m: Module, out: Part[]) {
       else setEdges(p, (k.edge?.back ?? (k.sb === "SB08" ? "y" : "all")) === "y" ? ["+y", "-y"] : ["+x", "-x", "+y", "-y"], t);
     }
     else if (p.id.startsWith("kd:") && p.id.endsWith(":back")) setEdges(p, ["+x", "-x", "+y", "-y"], t); // задняя стенка ящика Axis PRO — по кругу; дно — без кромки
+    else if (p.id.startsWith("kd:") && p.id.endsWith(":bottom")) {
+      // дно Axis PRO с кромкой, если так в проекте Базиса (kdrawers[i].edge.bottom: k18/k30 по кругу, k05/k29 задний торец)
+      const eb = (m.kdrawers?.[Number(p.id.split(":")[1])] as { edge?: { bottom?: true | string[] } } | undefined)?.edge?.bottom;
+      if (eb) setEdges(p, eb === true ? ["+x", "-x", "+z", "-z"] : eb, t);
+    }
     else if (p.id.startsWith("kd:")) continue;
     else if (p.role === "body") setEdges(p, ["+z"], t);
   }

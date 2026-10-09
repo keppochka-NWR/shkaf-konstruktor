@@ -1579,8 +1579,9 @@ export function validate(m: Module): string[] {
     else if(s.doorRows!==undefined&&m.doorMount!=='inset'&&!s.externalDrawers){const g=s.doorGap??fb(m),y=facadeBottom(m)+s.doorSplit!-g/2+(s.doorNiche??g)+s.doorRows.reduce((a,h)=>a+h+g,0);if(facadeTop(m)-y<200)errors.push(prefix+`верхний ряд фасадов ${Math.round(facadeTop(m)-y)} мм — меньше 200 мм: уменьшите средние ряды или увеличьте высоту.`);}
     if(s.hingeYMid!==undefined&&(!m.kitchen||!Array.isArray(s.hingeYMid)||s.hingeYMid.length>(s.doorRows?.length??0)||s.hingeYMid.some(r=>!Array.isArray(r)||r.some(y=>!Number.isFinite(y)))))errors.push(prefix+'высоты петель средних рядов: только у кухни с рядами фасадов.');
     if(s.shelfDepth!==undefined){
-      const max=shelfMaxDepth(m);
-      if(!Number.isFinite(s.shelfDepth)||s.shelfDepth<100||s.shelfDepth>max)errors.push(prefix+`глубина полок должна быть от 100 до ${max} мм. Уменьшите глубину полки или увеличьте корпус.`);
+      // кухня: узкая жёсткая полка-планка у задника под ящиками бывает 70 (Базис k18 m06, k10 m13) — шкафы студии по-прежнему от 100
+      const max=shelfMaxDepth(m),min=m.kitchen?60:100;
+      if(!Number.isFinite(s.shelfDepth)||s.shelfDepth<min||s.shelfDepth>max)errors.push(prefix+`глубина полок должна быть от ${min} до ${max} мм. Уменьшите глубину полки или увеличьте корпус.`);
       if(m.skew)errors.push(prefix+'при скосе фронта используйте автоматическую глубину полок.');
     }
     const minSection = m.kitchen ? KITCHEN.minWidth - 2 * RULES.panel : RULES.minSection; // кухонная бутылочница 150: 118 внутри
