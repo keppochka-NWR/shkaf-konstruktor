@@ -121,7 +121,7 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
     sets.forEach((ps, gi) => {
       const o = ps.length ? [0, 1, 2].map((i) => Math.min(...ps.map((p) => p.box[i]))) : [0, 0, 0], M = ps.length ? [3, 4, 5].map((i) => Math.max(...ps.map((p) => p.box[i]))) : [10, 10, 10];
       const look = { decor: most(ps.filter((p) => p.kind === "ldsp").map((p) => bazisDecor((p as unknown as EtPanelRef).decor))) ?? LOOK.decor, facadeDecor: LOOK.facadeDecor };
-      const first = gi === 0, title = ps.length ? ps[0].name.replace(/ \(часть \d+\/\d+\)$/, "") : rowTitle(ps);
+      const first = gi === 0, title = ps.length > 1 && ps[0].block ? ps[0].block : ps.length ? ps[0].name.replace(/ \(часть \d+\/\d+\)$/, "") : rowTitle(ps);
       const m: Module = { ...initialModule(), name: title, width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
         raw: { panels: ps.map((p) => { const dec = bazisDecor((p as unknown as EtPanelRef).decor); return { name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p), ...(p.front ? { facade: true } : {}), ...(p.wall ? { wall: true } : {}) }; }),
           hardware: [], ...(first ? { counts: rawCounts(normalizeRefHardware(rowHw)), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}) } : { counts: rawCounts([]) }), row: true, source: "bazis-kitchen" } };

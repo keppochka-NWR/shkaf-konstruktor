@@ -6,10 +6,11 @@ import { localToRoom, type Project } from "../../src/project";
 /** Нормаль фасада для поворота модуля (как localToRoom: поворот 0 — фасад к +z, 90 — к +x, 180 — к −z, 270 — к −x), [x, z]. */
 export const FRONT_NORMAL: Record<number, [number, number]> = { 0: [0, 1], 90: [1, 0], 180: [0, -1], 270: [-1, 0] };
 
-/** Поворот главного ряда: у какого поворота больше всего ширины модулей (при равенстве — меньший поворот). */
+/** Поворот главного ряда: у какого поворота больше всего ширины модулей (при равенстве — меньший поворот). Объекты «Ряда» (raw.row:
+ *  цоколи, столешницы, стеновые панели — с 1a7d673 каждый отдельно, все с поворотом 0) — не модули ряда, их ширина не в счёт. */
 export function mainRowRotation(p: Project): number {
   const byRot = new Map<number, number>();
-  for (const a of p.modules) byRot.set(a.rotation ?? 0, (byRot.get(a.rotation ?? 0) ?? 0) + a.module.width);
+  for (const a of p.modules) if (!a.module.raw?.row) byRot.set(a.rotation ?? 0, (byRot.get(a.rotation ?? 0) ?? 0) + a.module.width);
   return [...byRot].sort((u, v) => v[1] - u[1] || u[0] - v[0])[0]?.[0] ?? 0;
 }
 

@@ -41,7 +41,9 @@ const isBoard = (q: Part) => q.material === "board" || q.material === "hdf" || q
 function interModule(p: Project, off: number[] = [0, 0, 0]) {
   // фурнитура сырых модулей (raw:h*) в студии — точка Базиса с условным кубом 10 мм, а не форма изделия; у Базиса фурнитура
   // в пересечения не входит — сравниваем одинаково (иначе петля/навес/клипса у соседней детали дают «пересечение» 3–5 мм)
-  const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu" && !q.id.startsWith("raw:h")).map((q) => ({ i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
+  // объекты «Ряда» (с 1a7d673 каждый цоколь, стеновая панель, столешница — свой объект) — одна группа, как «ряд» у Базиса ниже:
+  // стык цоколя фронтального и бокового внутри ряда — не пересечение разных модулей
+  const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu" && !q.id.startsWith("raw:h")).map((q) => ({ i: a.module.raw?.row ? -1 : i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
   const out: string[] = [];
   // разрешённые контакты — тот же реестр, что у проверки студии (collisions.allowedContact): опора под дном до 3 мм, клипса на цоколе.
   // У Базиса фурнитура в пересечения не входит, а её сетки там те же: k23 «Нижний модуль» — опора Ø58 в точке z 493 доходит до 522,
@@ -189,20 +191,27 @@ for (const k of keys) {
   for (const l of est) if (eid[l.id]) se[eid[l.id]] = (se[eid[l.id]] ?? 0) + l.quantity;
   const ed = [...new Set([...Object.keys(edge), ...Object.keys(se)])].filter((t) => Math.abs((se[t] ?? 0) - (edge[t] ?? 0)) > 0.05).map((t) => `${t} мм: Базис ${r3(edge[t] ?? 0)}, смета ${r3(se[t] ?? 0)}`);
   const edgeWhy: string[] = [], edgeBad: string[] = [];
-  p.modules.forEach((a, i) => {
-    const isRow = !!a.module.raw?.row, ps = (isRow ? ROW.flatMap((g) => e.row?.[g] ?? []) : (mods[i]?.panels ?? [])) as { name?: string; kind?: string; mat?: string | null; edges?: { thick: number; len: number }[] }[];
+  // «Ряд» с 1a7d673 — много объектов (каждый цоколь, стеновая панель, столешница): все они против всех деталей ряда Базиса — одной
+  // группой, иначе каждый объект сравнивался бы со всей кромкой ряда
+  const rowMods = p.modules.filter((a) => a.module.raw?.row);
+  const groupsE: { name: string; mods: PlacedModule[]; ps: unknown[]; param: boolean }[] = [
+    ...p.modules.map((a, i) => ({ a, i })).filter(({ a }) => !a.module.raw?.row).map(({ a, i }) => ({ name: a.module.name, mods: [a], ps: mods[i]?.panels ?? [], param: !a.module.raw })),
+    ...(rowMods.length ? [{ name: `Ряд (${rowMods.length} об.)`, mods: rowMods, ps: ROW.flatMap((g) => e.row?.[g] ?? []), param: false }] : []),
+  ];
+  groupsE.forEach((gE) => {
+    const ps = gE.ps as { name?: string; kind?: string; mat?: string | null; edges?: { thick: number; len: number }[] }[];
     const be: Record<string, number> = {}, sup: Record<string, Record<string, number>> = {}, sm: Record<string, number> = {};
-    for (const l of estimate({ ...p, modules: [a] }).lines) if (eid[l.id]) sm[eid[l.id]] = (sm[eid[l.id]] ?? 0) + l.quantity;
+    for (const l of estimate({ ...p, modules: gE.mods }).lines) if (eid[l.id]) sm[eid[l.id]] = (sm[eid[l.id]] ?? 0) + l.quantity;
     for (const x of ps) {
       if (/фасадн/i.test(x.mat ?? "")) continue;
-      const kind = supplierEdgeKind(x, !a.module.raw);
+      const kind = supplierEdgeKind(x, gE.param);
       for (const g of x.edges ?? []) if (g.len > 0) { const t = String(g.thick); be[t] = (be[t] ?? 0) + g.len / 1000; if (kind) (sup[t] ??= {})[kind] = (sup[t][kind] ?? 0) + g.len / 1000; }
     }
     for (const t of new Set([...Object.keys(be), ...Object.keys(sm)])) {
       const d = (be[t] ?? 0) - (sm[t] ?? 0), s = Object.values(sup[t] ?? {}).reduce((u, v) => u + v, 0);
       if (Math.abs(d) <= 0.05) continue;
-      if (Math.abs(d - s) <= 0.05) edgeWhy.push(`${a.module.name} ${t} мм ${r3(d)} — ${Object.entries(sup[t]!).map(([c, v]) => `${c} ${r3(v)}`).join(", ")}`);
-      else edgeBad.push(`${a.module.name} ${t} мм: Базис ${r3(be[t] ?? 0)}, смета ${r3(sm[t] ?? 0)}${s ? `, изделия поставщика ${r3(s)}` : ""}`);
+      if (Math.abs(d - s) <= 0.05) edgeWhy.push(`${gE.name} ${t} мм ${r3(d)} — ${Object.entries(sup[t]!).map(([c, v]) => `${c} ${r3(v)}`).join(", ")}`);
+      else edgeBad.push(`${gE.name} ${t} мм: Базис ${r3(be[t] ?? 0)}, смета ${r3(sm[t] ?? 0)}${s ? `, изделия поставщика ${r3(s)}` : ""}`);
     }
   });
   log(`кромка Базис ↔ смета: ${ed.length ? ed.join("; ") : "сходится"}`);

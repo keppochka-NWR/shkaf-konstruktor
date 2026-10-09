@@ -155,3 +155,21 @@ test('шкаф студии: смета без строк отверстий и 
   const p=newProject();
   assert.ok(p.modules.length>0&&!estimate(p).lines.some(l=>/^(bazis:|hinge-bazis:)/.test(l.id)),'у шкафа студии нет строк Базиса');
 });
+
+test('«Ряд» по объектам (1a7d673): блок Базиса «прочего» — один объект на месте Базиса (k16 «Отдельный ящик»), цоколи — каждый отдельно, фурнитура ряда — один раз',()=>{
+  if(!has('k16'))return;
+  const p=kitchen('k16'),rows=p.modules.filter(a=>a.module.raw?.row);
+  // «Отдельный ящик» — блок Базиса из 6 деталей в мировых координатах ряда (x 6348,5…6968,5, в Базисе он и стоит отдельно справа
+  // от «Пенал 1», trans блока нулевой) — один объект студии, не 6
+  const box=rows.filter(a=>a.module.name==='Отдельный ящик');
+  assert.equal(box.length,1);assert.equal(box[0].module.raw!.panels.length,6);assert.equal(box[0].x,6348.5);assert.equal(box[0].y,1998.5);
+  assert.equal(rows.filter(a=>/^Цоколь/.test(a.module.name)).length,2);
+  // счётчики и изделия ряда — только у первого объекта: в смете не задваиваются
+  assert.equal(rows.filter(a=>a.module.raw!.items?.length||Object.values(a.module.raw!.counts??{}).some(v=>Number(v)>0)).length<=1,true);
+});
+
+test('главный ряд для снимка «спереди» — без объектов «Ряда» (они все с поворотом 0)',()=>{
+  const p=newProject();const m=(w:number,rot:number,row=false)=>({id:String(Math.random()),x:0,z:0,rotation:rot,module:{...p.modules[0].module,width:w,...(row?{raw:{panels:[],row:true}}:{})}}) as unknown as Project['modules'][number];
+  p.modules=[m(600,90),m(600,90),m(3000,0,true)];
+  assert.equal(mainRowRotation(p),90);
+});
