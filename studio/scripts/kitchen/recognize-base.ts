@@ -28,11 +28,29 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
   else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
+  const sd = sideDown(ref);
+  if (sd && (k.role === "base") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
   if (pf !== undefined) { m.shelfPinInsetFront = pf; notes.push(`передние полкодержатели в ${pf} от переднего торца полки (задние в ${m.shelfPinInset}) — как в Базисе`); }
   return notes;
+}
+
+/** Одна боковина опущена ниже другой (11 из 150 нижних Базиса): до низа дна (k22 m01, k26 m05) или до пола (k06 m01, k15 m06),
+ *  а дно — под второй боковиной (от опущенной до наружной грани второй). */
+export function sideDown(ref: RefModule): { side: "left" | "right"; y0: number } | undefined {
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const sides = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200).sort((a, b) => a.box[0] - b.box[0]);
+  if (sides.length < 2) return undefined;
+  const L = sides[0], R = sides[sides.length - 1];
+  const bot = ref.panels.filter((p) => p.axis === "y" && (p.kind === "ldsp" || p.kind === "mdf") && p.box[3] - p.box[0] > (R.box[0] - L.box[3]) * 0.9).sort((a, b) => a.box[1] - b.box[1])[0];
+  if (!bot || Math.abs(L.box[1] - R.box[1]) < 0.5) return undefined;
+  const low = L.box[1] < R.box[1] ? L : R, high = low === L ? R : L, side = low === L ? "left" : "right";
+  // дно между опущенной боковиной и наружной гранью второй, вторая стоит на дне, опущенная — не выше низа дна
+  const underHigh = side === "left" ? bot.box[3] >= R.box[3] - 0.5 && Math.abs(bot.box[0] - L.box[3]) < 0.6 : bot.box[0] <= L.box[0] + 0.5 && Math.abs(bot.box[3] - R.box[0]) < 0.6;
+  if (!underHigh || Math.abs(high.box[1] - bot.box[4]) > 0.6 || low.box[1] > bot.box[1] + 0.5) return undefined;
+  return { side, y0: r1(low.box[1]) };
 }
 
 /** Опоры не сеткой «ряды по ширине × перед/зад» (18 из 174 модулей с опорами, k15 m02: правая задняя глубже левой на 23) —

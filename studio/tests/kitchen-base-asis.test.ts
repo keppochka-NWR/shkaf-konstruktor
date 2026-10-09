@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown} from '../scripts/kitchen/recognize-base';
 import {edgeByDir} from '../src/edges';
 
 // Правило Макса: в кухню из Базиса студия не добавляет того, чего нет в Базисе (петли, опоры, крепёж, кромка, строки сметы).
@@ -148,6 +148,25 @@ test('опоры не сеткой (k15 m02: правая задняя на 23 �
   if(has('k25'))assert.equal(irregularLegs(load('k25','m07')),undefined,'сетка — без точек');
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.deepEqual(back.kitchen?.legs?.pts,m.kitchen?.legs?.pts);
+});
+
+test('опущенная боковина (k22 m01: левая до низа дна, дно под правой; k06 m01: левая до пола) — детали корпуса совпали с Базисом',{skip:!has('k22')||!has('k06')},()=>{
+  const ref=load('k22','m01');
+  assert.deepEqual(sideDown(ref),{side:'left',y0:100});
+  const {module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.sideDown,{side:'left',y0:100});
+  const L=parts(m).find(p=>p.id==='left')!,B=parts(m).find(p=>p.id==='bottom')!;
+  assert.equal(L.position[1]-L.size[1]/2,100);
+  assert.equal(B.size[0],484);
+  assert.ok(edgeByDir(L)['-y']>0,'нижний торец опущенной боковины кромится');
+  const c=compareModule(ref,m);
+  assert.deepEqual([c.missing.length,c.extra.length],[0,0],why(c));
+  assert.ok(c.pairs.every(p=>p.delta<=0.5),JSON.stringify(c.pairs.filter(p=>p.delta>0.5).map(p=>p.ref.name)));
+  assert.ok(parts(m).filter(p=>p.id.startsWith('fast:bottom:right:')).length===2,'под правой — конфирматы снизу');
+  assert.deepEqual(sideDown(load('k06','m01')),{side:'left',y0:10});
+  if(has('k25'))assert.equal(sideDown(load('k25','m07')),undefined,'обычный нижний — без опущенной боковины');
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back.kitchen?.sideDown,{side:'left',y0:100});
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{

@@ -24,7 +24,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Корпус без опор (34 из 207 нижних и пеналов Базиса: дно на полу или на своём цоколе) — не ошибка для кухни из Базиса. */
   noLegs?: true;
   /** false — без крепежа (конфирматы, эксцентрики, шканты, полкодержатели): в проекте Базиса его нет (k32 — 10 модулей без фурнитуры). */
-  fasteners?: false };
+  fasteners?: false;
+  /** Дно под одной боковиной, другая опущена (11 из 150 нижних Базиса): до низа дна (y0 = низ дна, k22 m01) или до пола (y0 = 10, k06 m01 —
+   *  торцевая боковина закрывает опоры). Действует только с дном под боковинами (bottomUnder). */
+  sideDown?: { side: "left" | "right"; y0: number } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
@@ -170,7 +173,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
     // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся
     const rearBase = m.backType === "none" ? ["-z"] : [];
-    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase], t);
+    // опущенная боковина (sideDown, k22 m01): нижний торец открыт снизу — кромится
+    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase, ...(m.kitchen.sideDown?.side === p.id ? ["-y"] : [])], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
     else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
