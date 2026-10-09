@@ -6,6 +6,8 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
+import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
+import { cornerFillerSink } from "./recognize-sink";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -79,6 +81,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
   m.kitchen = { role };
+  const sk = screwKind(ref.hardware); if (sk) m.kitchen.screw = sk;
   // опоры и дно
   if (bottom) {
     const under = bottom.b.x0 <= left.b.x0 + 0.5 && bottom.b.x1 >= right.b.x1 - 0.5;
@@ -95,6 +98,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
     m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
+    if (legScrews(ref.hardware)) m.kitchen.legs.screws = true;
   }
   // цоколь в модуле? (панель у пола перед опорами)
   const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
@@ -109,7 +113,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
     railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
   }
-  for (const r of railsEdge) { const atTop = r.b.y1 >= top - 0.5; railList.push({ place: r.b.z1 >= sideZ1 - 30 ? "front-top" : "rear-top", height: r1(r.b.y1 - r.b.y0), ...(atTop ? {} : { at: r1(r.b.y0) }) }); }
+  for (const r of railsEdge) railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}) });
   if (railList.length) m.rails = railList;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
@@ -206,7 +210,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const gapY = r1(upRow[0].b.y0 - lowRow[0].b.y1);
       m.sections[0].doorSplit = r1(lowRow[0].b.y1 + gapY / 2 - lowRow[0].b.y0); // от низа нижнего фасада до середины зазора между рядами
       if (lowRow.length === 1) m.faceGapBetween = gapY;
-    } else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
+    } else if (role === "base" && cornerFillerSink(ref)) unsupported.push("угловая мойка с фальшпанелью (петли под фальшпанель, фальш в плоскости фасадов) — пока не поддержано");
+    else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     const perRow = split ? lowRow.length : fronts.length;
     m.doors = doors.length > 0;
     m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
@@ -281,7 +286,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     if (d0) m.dowels = { offset: r1(Math.abs(d0.pos[2] - e0.pos[2])) };
   }
   // крепёж дна/крыши: отступ конфирматов от концов стыка (снизу через дно — у дна под боковинами; через боковину — в пределах толщины дна/крыши)
-  const conf = [...hw("конфирмат"), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
+  const conf = [...hw("конфирмат"), ...ref.hardware.filter(isEuro6), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
@@ -299,6 +304,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
   if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
+  // верх боковин низа без кромки (k03, k20, k23) — как в Базисе
+  if (m.edgeScheme && role === "base" && !topPanel && !sideTopEdged(left.p as unknown as { edges?: { side: string; thick: number }[] })) m.edgeScheme.sideTop = false;
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)

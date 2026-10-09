@@ -158,7 +158,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     }
     const fc=fastenerCounts(a.module);
     // кухня по Базису — конфирмат 7×50 (под него присадка D8+D5×35); шкафы — 5×50 по прайсу цеха
-    if(a.module.kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
+    if(a.module.kitchen?.screw==='euro-6x50')add('confirmat-euro-6x50','Евровинт 6×50 (как в проекте Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у конфирмата 5×50 — уточнить по счёту');
+    else if(a.module.kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
     else add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
     add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);

@@ -193,7 +193,7 @@ export type Module = {
   topType?: "panel" | "none";
   /** Стяжки — планки между боковинами сзади или спереди, снизу или сверху (высота 60–300). По умолчанию стоят на ребре (вертикально);
    *  lay 'flat' — лёжа, как царги кухонных низов Базиса (ширина height в глубину, заподлицо с верхом); setback — утопание от фронта (под Gola). */
-  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number; at?: number }[];
+  rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number; at?: number; /** кухни Базиса: false — без конфирматов (k21 m02: передняя стяжка мойки без крепежа в проекте) */ fasten?: false }[];
   /** Дно под боковинами на всю ширину (кухонные низы и пеналы Базиса: боковины стоят на дне). По умолчанию дно между боковинами. */
   bottomUnder?: boolean;
   /** Отступ фасадов от кромок корпуса и зазор между фасадами, мм (по умолчанию RULES.faceGap; кухни Базиса цеха — 1,5 и 3). */
@@ -235,7 +235,8 @@ export type Module = {
   facadeEdge?: number;
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
   /** Кромка кухни: толщина; railBack:false — задняя царга заподлицо с задником без кромки по заднему торцу (18 из 80 нижних в базе). */
-  edgeScheme?: { t: number; railBack?: false };
+  /** sideTop:false — верхний торец боковин низа без кромки (кухни k03, k20, k23 — 13 из 151 нижних). */
+  edgeScheme?: { t: number; railBack?: false; sideTop?: false };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
   grooves?: Groove[];
@@ -513,6 +514,8 @@ export function boxes(m: Module): SectionBox[] {
     return b;
   });
 }
+/** Кухни Базиса: дно под боковинами глубже этого — третий конфирмат на стык посередине глубины. */
+export const KITCHEN_CONF_MID_DEPTH = 600;
 export function parts(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
   if(m.raw)return rawParts(m);
@@ -623,7 +626,9 @@ export function parts(m: Module): Part[] {
     }
     // at — низ стяжки на ребре от пола модуля (мойка Базиса: задняя стяжка посередине высоты, под трубы)
     const y0 = r.at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
-    add("rail:" + r.place, r.at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(r.at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
+    // кухни Базиса: стяжка на ребре бывает отступлена от кромки боковин на 1–2 мм (setback — от задней кромки у задней, от лица у передней)
+    const esb = m.kitchen ? r.setback ?? 0 : 0;
+    add("rail:" + r.place, r.at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(r.at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - esb - t / 2 : esb + t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
   if (m.topStrip) {
@@ -934,7 +939,7 @@ export function parts(m: Module): Part[] {
   const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y", sid?: string) => {
     const L = RULES.confirmatL, D = RULES.confirmatD, s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y");
     const c: [number, number, number] = vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]];
-    add(key, "Конфирмат 7×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
+    add(key, m.kitchen?.screw === "euro-6x50" ? "Евровинт 6×50" : "Конфирмат 7×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
   const horizontals = out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
@@ -944,9 +949,12 @@ export function parts(m: Module): Part[] {
     if (hp.id === "bottom" && m.bottomUnder) {
       // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
       const yb = hp.position[1] - t / 2;
-      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
+      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) {
         for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] - (m.confirmatInset ?? RULES.confirmatInset)].entries())
           confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
+        // Кухни Базиса: дно глубже 600 — третий конфирмат посередине глубины (34 кухни: все днища >600 — по 3, все ≤600 — по 2)
+        if (m.kitchen && hp.size[2] > KITCHEN_CONF_MID_DEPTH) confirmat(`fast:${hp.id}:${side}:mid`, [x, yb, z0 + hp.size[2] / 2], "+y", hp.sectionId);
+      }
       continue;
     }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
@@ -970,12 +978,12 @@ export function parts(m: Module): Part[] {
     }
   }
   // Царги лёжа (кухни Базиса) и стяжки кухни на ребре: по одному конфирмату с каждой стороны через боковину в торец царги.
-  for (const r of out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen))) {
+  for (const r of out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen) && !(m.kitchen && railsOf(m).some((q) => "rail:" + q.place === p.id && q.fasten === false)))) {
     for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const) {
       // Конфирмат царги по центру её торца; если там уже конфирмат дна/крыши в той же боковине (дно под боковинами,
       // отступ 54 у k04 — z 503 против 507), сдвигаем по ширине царги до чистого места: 16 мм между осями (critic qdrawers B4).
       const hx = edgeX - dir * t, xs = [Math.min(hx, hx + dir * 50), Math.max(hx, hx + dir * 50)], y = r.position[1];
-      const others = out.filter((p) => p.name.startsWith("Конфирмат") && p.position[0] + p.size[0] / 2 > xs[0] && p.position[0] - p.size[0] / 2 < xs[1] && Math.abs(p.position[1] - y) < p.size[1] / 2 + 3.5);
+      const others = out.filter((p) => /^(Конфирмат|Евровинт)/.test(p.name) && p.position[0] + p.size[0] / 2 > xs[0] && p.position[0] - p.size[0] / 2 < xs[1] && Math.abs(p.position[1] - y) < p.size[1] / 2 + 3.5);
       const hits = (z: number, gap: number) => others.some((p) => Math.abs(p.position[2] - z) < p.size[2] / 2 + 3.5 + gap);
       let z = r.position[2];
       if (hits(z, 0)) {
@@ -1570,7 +1578,7 @@ export function parseModule(input: unknown): Module {
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
-    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)})})):[]}),
+    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)}),...((r as {fasten?:boolean})?.fasten===false?{fasten:false as const}:{})})):[]}),
     ...(x.bottomUnder===undefined?{}:{bottomUnder:x.bottomUnder===true}),
     ...(x.faceGap===undefined?{}:{faceGap:Number(x.faceGap)}),
     ...(x.faceGapBetween===undefined?{}:{faceGapBetween:Number(x.faceGapBetween)}),
@@ -1590,7 +1598,7 @@ export function parseModule(input: unknown): Module {
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
-    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{})}}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {sideTop?:boolean}).sideTop===false?{sideTop:false as const}:{})}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),
@@ -1602,7 +1610,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(k.legs.screws?{screws:true as const}:{})}}:{}),...(k.screw==="euro-6x50"?{screw:"euro-6x50" as const}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
