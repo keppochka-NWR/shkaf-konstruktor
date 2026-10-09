@@ -71,8 +71,8 @@ test('B3: смета кухни из Базиса без мелочёвки, з�
 
 test('B4: фурнитура Базиса у сырых модулей и в ряду — в смете (Firmax, Indigo, РАФИКС, сушка, штанга, профили)',{skip},()=>{
   const k22=kitchen('k22'),k30=kitchen('k30'),k16=kitchen('k16'),k06=kitchen('k06');
-  assert.equal(qty(k22,/^firmax/),7,'k22: Firmax 14 шт = 7 пар');
-  assert.equal(qty(k30,/^firmax/),19.5,'k30: Firmax 39 шт');
+  assert.equal(qty(k22,/^firmax/),14,'k22: Firmax 14 шт, как в Базисе (штуками, n4-kitchens3)');
+  assert.equal(qty(k30,/^firmax/),39,'k30: Firmax 39 шт');
   // слияние n3: ящики Indigo, которые строит параметрика (n3-runners: k16 m04/m05), — комплект на ящик (2 направляющие, 2 царги)
   assert.equal(qty(k16,/^bazis:направляющая:Направляющая Indigo/)+2*qty(k16,/^indigo:/),14,'k16: Indigo 14 направляющих');
   assert.equal(qty(k16,/^bazis:ящик-система:Царга Indigo/)+2*qty(k16,/^indigo:/),14,'k16: 14 царг Indigo');
@@ -96,7 +96,7 @@ test('B5: артикулы — по Базису: тип петель, полк�
   const k14=kitchen('k14'),k22=kitchen('k22'),k30=kitchen('k30');
   assert.equal(qty(k14,/^hinge-inset/),4,'k14 НМ: вкладные ×4');
   assert.equal(qty(k22,/^hinge-bazis:под фальшпанель/),4);assert.equal(qty(k22,/^hinge-bazis:полунакладная/),2);
-  assert.equal(qty(k14,/^firmax:.*L - 500/),5,'k14: 5 пар L - 500, как в Базисе (не 6 пар «490»)');
+  assert.equal(qty(k14,/^firmax:.*L - 500/),10,'k14: 10 шт L - 500 (5 пар), как в Базисе (не 6 пар «490»)');
   assert.ok(!estimate(k22).lines.some(l=>/Firmax (390|490) мм/.test(l.label)),'длина короба вместо артикула');
   assert.equal(qty(k30,/^shelf-holder:Полкодержатель для стеклянных полок MV05/),24);
   assert.ok(!estimate(k30).lines.some(l=>l.label==='Полкодержатель Boyard p521'));

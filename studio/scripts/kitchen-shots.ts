@@ -2,12 +2,19 @@
 // npx tsx scripts/kitchen-shots.ts <url> <project.json> <outDir> "<команды через ;>"
 // Команды: view:3D|Спереди|Сбоку|Сверху|План · free (свободная камера) · orbit:dx,dy · zoom:fx,fy,ticks · facades (скрыть/показать фасады)
 //          open (открыть фасады) · fit (приблизить выбранный) · shot:имя · wait:мс
+//          front[:запас] — спереди ГЛАВНОГО РЯДА кухни (поворот, у которого больше всего ширины модулей), перспектива на всю кухню;
+//            не зависит от выбранного модуля (view:Спереди студии смотрит на фасад выбранного: у k01/k06 это вид сбоку, у k30 «Остров» — сзади)
+//          present — режим «Показать клиенту» (без рамки выбранного модуля и панелей; open в нём тоже работает)
+//          clean — дальше снимки без элементов интерфейса поверх сцены (панель снизу не закрывает цоколь и опоры)
 // Каждый снимок — только после загрузки текстур и моделей фурнитуры (window.__pending() === 0), проект — из файла, без правок в браузере.
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
+import { parseProject } from "../src/project";
+import { frontCamera } from "./kitchen/frontCamera";
 
 const [url, file, out, script] = process.argv.slice(2);
 const project = readFileSync(file, "utf8");
+let clean = false;
 const W = Number(process.env.W ?? 1600), H = Number(process.env.H ?? 1000);
 const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const page = await browser.newPage({ viewport: { width: W, height: H } });
@@ -48,8 +55,27 @@ for (const cmd of (script ?? "view:3D;shot:3d").split(";").map((s) => s.trim()).
     const v = arg.split(",").map(Number);
     await page.evaluate((v) => (window as unknown as { __camera?: (p: number[], l: number[]) => void }).__camera?.(v.slice(0, 3), v.slice(3, 6)), v);
     await settle();
-  } else if (op === "wait") await page.waitForTimeout(Number(arg));
-  else if (op === "shot") { await settle(); await page.screenshot({ path: `${out}/${arg}.png`, clip: await canvas() }); console.log("снимок", arg); }
+  } else if (op === "front") {
+    const c = await canvas(), v = frontCamera(parseProject(JSON.parse(project)), c.width / c.height, Number(arg) || 1.2);
+    await page.evaluate((v) => (window as unknown as { __camera?: (p: number[], l: number[]) => void }).__camera?.(v.slice(0, 3), v.slice(3, 6)), v);
+    await settle();
+  } else if (op === "present") { const b = page.getByRole("button", { name: /Показать клиенту|Вернуться к редактору/ }); if (await b.count()) await b.first().click(); await settle(); }
+  else if (op === "clean") clean = !clean;
+  else if (op === "wait") await page.waitForTimeout(Number(arg));
+  else if (op === "shot") {
+    await settle();
+    // clean: элементы интерфейса поверх сцены прячутся на время снимка (visibility), потом возвращаются
+    if (clean) await page.evaluate(() => {
+      const cv = document.querySelector("canvas")!, r = cv.getBoundingClientRect();
+      for (const e of Array.from(document.body.querySelectorAll<HTMLElement>("*"))) {
+        if (e === cv || e.contains(cv)) continue;
+        const b = e.getBoundingClientRect();
+        if (b.width && b.height && b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) { e.dataset.shotVis = e.style.visibility || "-"; e.style.visibility = "hidden"; }
+      }
+    });
+    await page.screenshot({ path: `${out}/${arg}.png`, clip: await canvas() }); console.log("снимок", arg);
+    if (clean) await page.evaluate(() => { for (const e of Array.from(document.querySelectorAll<HTMLElement>("[data-shot-vis]"))) { e.style.visibility = e.dataset.shotVis === "-" ? "" : e.dataset.shotVis!; delete e.dataset.shotVis; } });
+  }
   else console.log("неизвестная команда", cmd);
 }
 if (errors.length) console.log("ошибки страницы:", errors.slice(0, 5).join(" | "));

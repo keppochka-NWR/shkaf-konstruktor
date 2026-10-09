@@ -63,8 +63,9 @@ export function worktopGroupRole(p: EtPanel): "worktop" | "panel" | "mock" {
 
 const BOARD_KINDS = ["ldsp", "mdf", "hdf", "glass", "mirror"];
 
-/** parent — деталь Базиса, из которой получена часть (фигурная столешница — несколько прямоугольников): один объект в студии. */
-export type RowPanel = EtPanel & { front: boolean; wall?: true; group: string; parent: string };
+/** parent — деталь Базиса, из которой получена часть (фигурная столешница — несколько прямоугольников), или блок Базиса «прочего»
+ *  (block — имя блока): один объект в студии. */
+export type RowPanel = EtPanel & { front: boolean; wall?: true; group: string; parent: string; block?: string };
 /** Детали «Ряда» кухни (столешница, цоколь, стеновые панели, профили, прочее вне модулей) в мировых координатах Базиса.
  *  - фигурная столешница — прямоугольники по контуру Базиса (не сплошной габарит);
  *  - фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»);
@@ -83,7 +84,10 @@ export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[
     const name = g === "plinths" ? plinthName(p.name) : wt === "worktop" && !/столешн/i.test(p.name) ? "Столешница"
       : wall && !/[сc]тенов/i.test(p.name) ? `Стеновая панель · ${p.name}` : p.name;
     const rs = rowRects(p);
-    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", group: g, parent: `${g}:${pi}`, front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
+    // «прочее» из одного блока Базиса (grp: «Отдельный ящик» k16 — 6 деталей корпуса, «Карнизы», «Шаблон») — один объект, как блок
+    // в Базисе; цоколи, стеновые панели и столешницы — каждая деталь отдельно (1a7d673)
+    const block = g === "other" ? ((p as { grp?: string | null }).grp ?? "").trim() : "";
+    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", group: g, parent: block ? `${g}:блок:${block}` : `${g}:${pi}`, ...(block ? { block } : {}), front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
   }));
 }
 

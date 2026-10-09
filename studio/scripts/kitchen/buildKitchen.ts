@@ -14,7 +14,7 @@ import { newProject, projectErrors, type PlacedModule, type Project } from "../.
 import { compareModule, honestPass, type RefModule } from "./compare";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { moduleFromEtalon } from "./fromEtalon";
-import { rawCounts, bazisItems, bazisNames, type RawSpec } from "../../src/rawModule";
+import { rawCounts, bazisItems, bazisNames, bazisHoles, type RawSpec } from "../../src/rawModule";
 import { panelExtras, plinthName, rowPanelsOf, rowTitle, type EtPanel } from "./rowWorktop";
 import { catalog } from "../../src/catalog";
 
@@ -52,7 +52,8 @@ export function rawFromRef(ref: RefModule, meshes?: Set<string>): RawSpec {
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes?.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
     counts,
     // Axis PRO — комплектом на ящик (counts.drawers); всё остальное — по названию Базиса
-    items: bazisItems(normalizeRefHardware(ref.hardware), (h) => !!counts.drawers && /axis\s*pro/i.test(h.name)),
+    // + отверстия-крепёж Базиса («3x3» и т. п.: FurnList с позицией) — строками «Отверстие …», как в Базисе (n4-kitchens3)
+    items: [...bazisItems(normalizeRefHardware(ref.hardware), (h) => !!counts.drawers && /axis\s*pro/i.test(h.name)), ...bazisHoles(ref.hardware)],
     ...(Object.keys(names).length ? { names } : {}),
     ...(cn ? { confirmatName: cn } : {}),
     source: "bazis-kitchen", // смета: только то, что есть в Базисе (без заглушек конфирмата и т.п.)
@@ -67,7 +68,7 @@ export function markBazis(m: Module, ref: RefModule): Module {
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
     || (/заглушк/i.test(h.name) && /навес/i.test(h.name))
     // рафиксы жёстких полок строит параметрика (kitchen.rafix, n3-tall) — строкой по деталям сцены, не второй раз по Базису
-    || (!!m.kitchen?.rafix && /рафикс/i.test(h.name)));
+    || (!!m.kitchen?.rafix && /рафикс/i.test(h.name))).concat(bazisHoles(ref.hardware));
   const names = bazisNames(ref.hardware);
   return { ...m, bazis: true, ...(items.length ? { bazisItems: items } : {}), ...(Object.keys(names).length ? { bazisNames: names } : {}) };
 }
@@ -107,9 +108,10 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
   const row = (e.row ?? {}) as Record<string, EtPanel[]>;
   const rowPanels = rowPanelsOf(e.row);
   // профили ряда (Gola, крепления) без габарита — не детали, а фурнитура Базиса: в смету по названию и длине
-  const rowHw = (["profiles", "other"] as const).flatMap((g) => (row[g] ?? []) as unknown as { name: string; category?: string; box?: number[]; length?: number; mat?: string | null }[]).filter((p) => !Array.isArray(p.box))
-    .map((p) => ({ name: p.name, category: p.category ?? "профиль", mat: p.mat ?? null, ...(Number.isFinite(p.length) ? { length: p.length } : {}) }));
-  const rowItems = bazisItems(rowHw);
+  const rowHw = (["profiles", "other"] as const).flatMap((g) => (row[g] ?? []) as unknown as { name: string; category?: string; box?: number[]; length?: number; mat?: string | null; pos?: number[] }[]).filter((p) => !Array.isArray(p.box))
+    .map((p) => ({ name: p.name, category: p.category ?? "профиль", mat: p.mat ?? null, ...(Number.isFinite(p.length) ? { length: p.length } : {}), ...(Array.isArray(p.pos) ? { pos: p.pos } : {}) }));
+  // + отверстия-крепёж ряда (k19: два «8x30» в «прочем» ряда) — как у модулей (n4-kitchens3)
+  const rowItems = [...bazisItems(rowHw), ...bazisHoles(rowHw)];
   if (rowPanels.length || rowItems.length) {
     // каждая деталь ряда — свой объект (Макс 09.10: тянешь цоколь — ехал весь «Ряд» на всю кухню); части одной фигурной столешницы —
     // один объект; профили без габарита (в смету по названию и длине) — к первому объекту ряда
@@ -119,7 +121,7 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
     sets.forEach((ps, gi) => {
       const o = ps.length ? [0, 1, 2].map((i) => Math.min(...ps.map((p) => p.box[i]))) : [0, 0, 0], M = ps.length ? [3, 4, 5].map((i) => Math.max(...ps.map((p) => p.box[i]))) : [10, 10, 10];
       const look = { decor: most(ps.filter((p) => p.kind === "ldsp").map((p) => bazisDecor((p as unknown as EtPanelRef).decor))) ?? LOOK.decor, facadeDecor: LOOK.facadeDecor };
-      const first = gi === 0, title = ps.length ? ps[0].name.replace(/ \(часть \d+\/\d+\)$/, "") : rowTitle(ps);
+      const first = gi === 0, title = ps.length > 1 && ps[0].block ? ps[0].block : ps.length ? ps[0].name.replace(/ \(часть \d+\/\d+\)$/, "") : rowTitle(ps);
       const m: Module = { ...initialModule(), name: title, width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
         raw: { panels: ps.map((p) => { const dec = bazisDecor((p as unknown as EtPanelRef).decor); return { name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p), ...(p.front ? { facade: true } : {}), ...(p.wall ? { wall: true } : {}) }; }),
           hardware: [], ...(first ? { counts: rawCounts(normalizeRefHardware(rowHw)), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}) } : { counts: rawCounts([]) }), row: true, source: "bazis-kitchen" } };

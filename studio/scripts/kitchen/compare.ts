@@ -9,6 +9,7 @@ import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
+import { legDupKey } from "../../src/rawModule";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
@@ -195,7 +196,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     // дубль Базиса — опора в той же точке и с тем же поворотом дважды (k16: две опоры в одной точке); считаем один раз, как дубли отверстий.
     // Только опоры: у направляющих Firmax две точки в одном месте — это пара направляющих, не дубль (n3-tall).
     const seen = new Set<string>(), allRef = ref.hardware.filter((h) => h.category === category);
-    const uniq = category !== "опора" ? allRef : allRef.filter((h) => { const k = `${h.name}|${h.pos.map(r1).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    // ключ дубля — общий со сметой (rawModule.legDupKey → bazisNames.legsDup), чтобы сверка и смета не расходились (n4-kitchens3)
+    const uniq = category !== "опора" ? allRef : allRef.filter((h) => { const k = legDupKey(h); if (k && seen.has(k)) return false; seen.add(k); return true; });
     const rp = uniq.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
     const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp), ...(allRef.length > uniq.length ? { dups: allRef.length - uniq.length } : {}) };
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
