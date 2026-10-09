@@ -161,8 +161,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   const hardware: HardwareRow[] = [...cats].map((category) => {
     const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
     const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
-    // Газлифт: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
-    const sq = category === "газлифт" ? ps.filter((p) => studioCategory(p) === category) : [];
+    // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
+    const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
       const bad = ref.hardware.filter((h) => h.category === category && h.quat).filter((h) => {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;

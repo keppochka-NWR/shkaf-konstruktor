@@ -101,6 +101,11 @@ export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }
 // Z внутрь корпуса). Кватернион [w, x, y, z].
 const Q_LEG: [number, number, number, number] = [0.5, 0.5, -0.5, 0.5];      // X→+Z, Y→−X, Z→−Y
 const Q_HANGER: [number, number, number, number] = [Math.SQRT1_2, 0, Math.SQRT1_2, 0]; // X→−Z, Y→+Y, Z→+X (оба навеса)
+/** Единичный кватернион: в эталоне Базиса компоненты округлены до 0,01 (0,71 вместо √½, |q|² = 1,0082) — без нормировки сетка растянута на ~0,8 %. */
+export function unitQuat(q: [number, number, number, number]): [number, number, number, number] {
+  const n = Math.hypot(...q);
+  return n > 1e-9 ? (q.map((v) => v / n) as [number, number, number, number]) : [1, 0, 0, 0];
+}
 
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
 export function kitchenExtraParts(m: Module, out: Part[]) {
@@ -133,7 +138,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
   for (const [n, d] of (k.dryer ?? []).entries()) {
     const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
     out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
-       { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: d.quat }));
+       { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) }));
   }
   if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
     for (const side of ["left", "right"] as const) {

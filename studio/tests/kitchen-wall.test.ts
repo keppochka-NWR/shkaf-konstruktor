@@ -155,6 +155,13 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   assert.ok(ps.every(p=>p.model?.native&&/^hardware\/bazis\/[0-9a-f]{12}\.glb$/.test(p.model.file)));
   const row=compareModule(ref,m).hardware.find(h=>h.category==='сушка')!;
   assert.deepEqual([row.ref,row.studio],[8,8]);assert.ok((row.maxPosDelta??0)<=1,'точки сушки как в Базисе');
+  // кватернионы Базиса округлены до 0,01 (|q|² = 1,0082) — у студии единичные, сетка не растянута
+  assert.ok(ref.hardware.some(h=>h.category==='сушка'&&h.quat&&Math.abs(Math.hypot(...h.quat)-1)>1e-3),'в эталоне есть неединичные');
+  assert.ok(ps.every(p=>Math.abs(Math.hypot(...p.model!.quat!)-1)<1e-9),'у студии единичные');
+  assert.equal(row.note,undefined,'повороты сушки совпадают');
+  // сверщик видит поворот сушки: элемент без поворота Базиса (на 90° вокруг Y от проекта) — расхождение
+  const turned={...m,kitchen:{...m.kitchen!,dryer:m.kitchen!.dryer!.map((d,i)=>i?d:{...d,quat:[1,0,0,0] as [number,number,number,number]})}};
+  assert.match(compareModule(ref,turned).hardware.find(h=>h.category==='сушка')!.note??'',/поворот ≠ ×1/);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...kitchenWall(initialModule(),600),kitchen:{role:'wall',dryer:m.kitchen?.dryer}}))).kitchen?.dryer,m.kitchen?.dryer,'сушка переживает сохранение');
   const k6=moduleFromEtalon(load('k06','m07'));
   assert.equal(k6.module.kitchen?.dryer,undefined);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
