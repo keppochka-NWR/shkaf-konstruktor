@@ -64,6 +64,17 @@ test("повёрнутый ряд (rotation 90): «справа» — по ло�
   assert.deepEqual(span(p, "c").slice(2), [1700, 2300]);
 });
 
+test("повороты 180 и 270: правый сосед — по оси ширины (−x и +z)", () => {
+  const r180 = (id: string, x: number): PlacedModule => ({ id, x, z: 2300, rotation: 180, module: mod(id) });
+  const p = resizeInRow(proj([r180("a", 500), r180("b", 1100), r180("c", 1700)]), "b", 700);
+  assert.deepEqual(span(p, "b").slice(0, 2), [1000, 1700]);
+  assert.deepEqual([span(p, "a").slice(0, 2), get(p, "a").module.width], [[500, 1000], 500]);
+  const r270 = (id: string, z: number): PlacedModule => ({ id, x: 3400, z, rotation: 270, module: mod(id) });
+  const q = resizeInRow(proj([r270("a", 500), r270("b", 1100), r270("c", 1700)]), "b", 700);
+  assert.deepEqual(span(q, "b").slice(2), [1100, 1800]);
+  assert.deepEqual([span(q, "c").slice(2), get(q, "c").module.width], [[1800, 2300], 500]);
+});
+
 test("сосед стал бы меньше минимума — ошибка, ничего не меняется", () => {
   const p = proj([at("a", 500, mod("Левый")), at("b", 1100, mod("Средний")), at("c", 1700, mod("Узкий", 300))]);
   assert.throws(() => resizeInRow(p, "b", 700), /«Узкий» сузится до 200 мм, а меньше 250/);
