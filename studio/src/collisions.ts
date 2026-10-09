@@ -172,18 +172,22 @@ function pointBox(pt: number[], B: Box): { out: number; depth: number } {
 }
 /** Зазор от точки крепления фурнитуры (начало сетки Базиса, без сетки — центр) до ближайшего короба-хозяина, мм; 0 — на нём или внутри. */
 const seatGap = (h: Part, bx: Box[]) => Math.min(...bx.map((B) => pointBox(h.model?.origin ?? h.position, B).out));
-/** Модуль из Базиса, повторённый параметрически (m.kitchen.bazis): фурнитура дальше RAW_FAR мм от всех досок модуля — висит в воздухе,
- *  как в самом проекте Базиса (навесы на «верх боковины + 985» у k26–k28, k31: сдвиг записан в файле Базиса, сверловок нет).
- *  Студия положение не меняет (всё как в Базисе), а показывает ту же тревогу, что у сырого модуля (rawCheck far). Шкафы студии
- *  и модули без пометки Базиса не проверяются. */
-export function bazisAirHardware(ps: Part[], m?: Module): RawCheck["far"] {
+/** Модуль из Базиса, повторённый параметрически (m.kitchen.bazis): фурнитура с сеткой дальше BAZIS_AIR мм от всех досок модуля —
+ *  висит в воздухе, как в самом проекте Базиса (навесы на «верх боковины + 985» у k26–k28, k31: сдвиг записан в файле Базиса, сверловок нет).
+ *  Студия положение не меняет (всё как в Базисе), а показывает тревогу, как у сырого модуля (rawCheck far). Порог — RAW_SEAT_GAP, а не
+ *  RAW_FAR: у параметрического модуля крепёж студии всегда на досках, а по всей базе дальше 30 мм стоят только эти навесы (k12, k15 — 115–285,
+ *  k26–k28, k31 — 985; следующие — колпачки Axis PRO на металлической царге, 20–24 мм). Так видно и то, что поля «как в Базисе»
+ *  (гвозди ХДФ, навесы, сушка — координаты проекта) после смены размера модуля остались без своей детали. Шкафы студии и модули
+ *  без пометки Базиса не проверяются. */
+export const BAZIS_AIR = RAW_SEAT_GAP;
+export function bazisAirHardware(ps: Part[], m?: Module, limit = BAZIS_AIR): RawCheck["far"] {
   if (!m?.kitchen?.bazis || m.raw) return [];
   const bx = ps.filter(isBoard).map(box), far: RawCheck["far"] = [];
   if (!bx.length) return far;
   for (const h of ps) {
     if (h.material !== "metal" || !h.model) continue; // фурнитура с сеткой Базиса — у неё есть точка крепления
     const gap = seatGap(h, bx);
-    if (gap > RAW_FAR) far.push({ id: h.id, name: h.name, gap: Math.round(gap) });
+    if (gap > limit) far.push({ id: h.id, name: h.name, gap: Math.round(gap) });
   }
   return far;
 }

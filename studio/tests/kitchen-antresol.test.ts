@@ -465,10 +465,14 @@ test('hangers of a Bazis module hanging in the air above the body (+985) are rep
   const far=bazisAirHardware(ps,m);
   assert.deepEqual(far.map(x=>[x.id,x.gap]),[['kitchen-hanger:left',985],['kitchen-hanger-cap:left',985],['kitchen-hanger:right',985],['kitchen-hanger-cap:right',985]]);
   const w=collisionWarnings(inProject(m));
-  assert.equal(w.length,1);assert.match(w[0].message,/висит в воздухе дальше 100 мм.*Навес мебельный регулируемый ABS левый \(985 мм\).*Проверьте в проекте Базиса/);
-  // по правилу (15 ниже верха) и навес на 85 мм выше — не в воздухе (порог RAW_FAR, как у сырого модуля)
+  assert.equal(w.length,1);assert.match(w[0].message,/висит в воздухе дальше 30 мм.*Навес мебельный регулируемый ABS левый \(985 мм\).*Проверьте в проекте Базиса/);
+  // по правилу (15 ниже верха) и навес на 25 мм выше — не в воздухе (порог RAW_SEAT_GAP: дальше 30 мм в базе только эти навесы)
   const std=antresol();std.kitchen!.bazis=true;assert.deepEqual(bazisAirHardware(parts(std),std),[]);assert.deepEqual(collisionWarnings(inProject(std)),[]);
-  const near=antresol();near.kitchen!.bazis=true;near.kitchen!.hangerAt={left:[-85,20,0],right:[-85,20,0]};assert.deepEqual(bazisAirHardware(parts(near),near),[]);
+  const near=antresol();near.kitchen!.bazis=true;near.kitchen!.hangerAt={left:[-25,20,0],right:[-25,20,0]};assert.deepEqual(bazisAirHardware(parts(near),near),[]);
+  // поля «как в Базисе» заданы координатами проекта: гвоздь ХДФ у правого края после сужения модуля на 100 мм — без детали, тревога
+  const nl=antresol();nl.kitchen!.bazis=true;nl.backType='nailed';nl.backGap=1;nl.kitchen!.nails=[{at:[24,8.5]},{at:[576,391.5]}];
+  assert.deepEqual(bazisAirHardware(parts(nl),nl),[],'nails on the HDF');
+  nl.width=500;assert.deepEqual(bazisAirHardware(parts(nl),nl).map(x=>[x.id,x.gap]),[['kitchen-nail:1',76]],'576 − 500: 76 mm past the right side');
   // модуль студии (не из Базиса) и шкаф — не проверяются
   const own=antresol();own.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};assert.deepEqual(bazisAirHardware(parts(own),own),[]);
   const wr=initialModule();assert.deepEqual(bazisAirHardware(parts(wr),wr),[]);

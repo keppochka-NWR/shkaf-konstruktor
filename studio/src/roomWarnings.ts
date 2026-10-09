@@ -2,7 +2,7 @@ import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts} from './model';
-import {partCollisions,rawCheck,bazisAirHardware,RAW_FAR} from './collisions';
+import {partCollisions,rawCheck,bazisAirHardware,RAW_FAR,BAZIS_AIR} from './collisions';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
 /** Что советуем по каждому типу объекта на стене, если его перекрывает мебель. */
@@ -79,14 +79,14 @@ export function collisionWarnings(project:Project):RoomWarning[]{
   // совет «сдвиньте полку или петлю» к ней неприменим. Тревоги по политике rawCheck: тело фурнитуры внутри корпусной панели и фурнитура
   // дальше RAW_FAR от любой детали (так не крепят — ошибка положения); остальное (рядом с деталями, перекрытия как в Базисе) — сведения.
   const list=(xs:{name:string;gap:number}[])=>xs.slice(0,3).map(x=>`${x.name} (${Math.abs(x.gap)} мм)`).join("; ")+(xs.length>3?` и ещё ${xs.length-3}`:"");
-  const air=(a:Project['modules'][number],far:{name:string;gap:number}[])=>{if(far.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса висит в воздухе дальше ${RAW_FAR} мм от деталей — ${list(far)}. Проверьте в проекте Базиса: нет детали, на которой она крепится.`});};
+  const air=(a:Project['modules'][number],far:{name:string;gap:number}[],limit=RAW_FAR)=>{if(far.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса висит в воздухе дальше ${limit} мм от деталей — ${list(far)}. Проверьте в проекте Базиса: нет детали, на которой она крепится.`});};
   for(const a of project.modules){if(a.module.raw){const r=rawCheck(parts(a.module),a.module,false);
     if(r.deep.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса внутри детали — ${list(r.deep)}. Проверьте положение в проекте Базиса.`});
     air(a,r.far);
     continue;}const ps=parts(a.module);
     // параметрический модуль из Базиса повторяет его положение фурнитуры как есть — в том числе навесы над корпусом (k26–k28, k31: +1000):
     // та же тревога, что у сырого модуля (collisions.ts bazisAirHardware)
-    air(a,bazisAirHardware(ps,a.module));
+    air(a,bazisAirHardware(ps,a.module),BAZIS_AIR);
     const c=partCollisions(ps,a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм${x.bazis?", как в проекте Базиса":""})`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. ${c.every(x=>x.bazis)?"Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе.":"Сдвиньте полку или петлю, измените наполнение."}`});}
   return out;
 }
