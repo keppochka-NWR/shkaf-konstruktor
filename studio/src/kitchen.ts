@@ -12,7 +12,9 @@ export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
-  plinth?: { height: number; off?: boolean; clips?: boolean };
+  plinth?: { height: number; off?: boolean; clips?: boolean;
+    /** Корпус без опор (цоколь — деталь самого модуля): отступ цоколя от переда корпуса, если не RULES.plinthInset 2 (Базис k20 m09: 16). */
+    inset?: number };
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */

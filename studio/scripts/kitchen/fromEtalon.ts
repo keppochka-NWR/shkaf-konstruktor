@@ -74,7 +74,12 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
   const fxBox = (name: string) => /ящика/i.test(name) && ref.hardware.some((h) => /Firmax/.test(h.name)); // короб ящика Firmax — не царга и не полка
-  const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name));
+  // цоколь в модуле? (панель ЛДСП у пола под дном, как бы ни называлась в Базисе: «Цоколь», «Фронтальная» k20 m09) — самая передняя
+  // в передней половине глубины: планка у задней стены (k04 m09, k14 m06) — не цоколь; у навесных и антресолей цоколя нет
+  const floorRole = !ref.archetype.startsWith("wall") && ref.archetype !== "antresol";
+  const plinthPanel = floorRole ? P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40 && b.z1 > (sideZ0 + sideZ1) / 2).sort((a, c) => c.b.z1 - a.b.z1)[0] : undefined;
+  // цоколь — не стяжка на ребре (k20 m09: «Фронтальная» 0–70 была и стяжкой «на высоте 0», и цоколем — студия ставила деталь дважды)
+  const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name) && plinthPanel?.b !== b);
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
@@ -97,12 +102,13 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
   }
-  // цоколь в модуле? (панель у пола перед опорами)
-  const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
   const clips = hw("клипса").length > 0;
-  if (role === "base" || role === "tall") m.kitchen.plinth = { ...(plinthPanel ? { height: r1(plinthPanel.b.y1 - plinthPanel.b.y0) } : { height: 95, off: true }), ...(legs.length && !clips ? { clips: false } : {}) };
-  // навесной/антресоль: дно выше низа боковин (боковины свисают на 18,5–28) — у Базиса под дном спереди детали нет, студия цоколь не ставит
-  else if (!legs.length && (m.plinthHeight ?? 0) > 0 && !P.some(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1)) m.kitchen.plinth = { height: 95, off: true };
+  // цоколь модуля без опор — деталь ЛДСП под дном спереди, как бы она ни называлась в Базисе («Фронтальная» k20 m09): отступ от переда — как в Базисе
+  const plInset = plinthPanel && !legs.length ? r1(sideZ1 - plinthPanel.b.z1) : undefined;
+  if (role === "base" || role === "tall") m.kitchen.plinth = { ...(plinthPanel ? { height: r1(plinthPanel.b.y1 - plinthPanel.b.y0) } : { height: 95, off: true }), ...(legs.length && !clips ? { clips: false } : {}), ...(plInset !== undefined && Math.abs(plInset - 2) > 0.05 ? { inset: plInset } : {}) };
+  // навесной/антресоль: дно выше низа боковин (боковины свисают на 18,5–28, или «дно» — верхняя горизонталь) — у Базиса под дном
+  // спереди детали нет (задняя планка у стены k14 m06 — не цоколь), студия цоколь не ставит
+  else if (!legs.length && (m.plinthHeight ?? 0) > 0 && !P.some(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.z1 >= sideZ1 - 40)) m.kitchen.plinth = { height: 95, off: true };
   if (fronts.length && !hw("ручка").length) m.noHandles = true;
   if (!plinthPanel && (role === "base" || role === "tall")) notes.push("цоколя в модуле нет (в Базисе — у ряда или отсутствует)");
   // царги

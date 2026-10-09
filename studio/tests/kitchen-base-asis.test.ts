@@ -313,6 +313,25 @@ test('навесной с дном выше низа боковин (k30 m06: с
   assert.ok(parts(w).some(p=>p.id==='plinth'));
   const kb=kitchenBase(initialModule(),600),nf={...kb,feet:undefined,plinthHeight:100,kitchen:{...kb.kitchen!,noLegs:true as const}};
   assert.ok(parts(nf).some(p=>p.id==='plinth'),'кухня без опор с цоколем — цоколь есть');
+  // «дно» навесного — верхняя горизонталь (k14 m06: 658), а у пола только планка у задней стены — это не цоколь, студия цоколь 16×658 не ставит
+  if(has('k14')){const ref=load('k14','m06'),{module:m}=moduleFromEtalon(ref);assert.ok(!parts(m).some(p=>p.id==='plinth'));assert.ok(!compareModule(ref,m).extra.some(x=>x.name==='Цоколь'));}
+});
+
+test('цоколь пенала без опор назван в Базисе «Фронтальная» (k20 m09) — студия ставит одну деталь на его месте (отступ 16), а не цоколь плюс «стяжку на высоте 0»',{skip:!has('k20')},()=>{
+  const ref=load('k20','m09'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.plinth?.inset,16);
+  const pl=parts(m).find(p=>p.id==='plinth')!;
+  assert.deepEqual([pl.position[2]-pl.size[2]/2,pl.position[2]+pl.size[2]/2,pl.size[1]],[428,444,70]);
+  assert.ok(!(m.rails??[]).some(r=>r.at===0&&r.place.startsWith('front')),'цоколь не стяжка спереди (задняя «Фронтальная» 0–70 у стены — стяжка сзади, как была)');
+  const c=compareModule(ref,m);
+  assert.ok(!c.extra.some(x=>x.name==='Цоколь'),why(c));
+  assert.ok(c.pairs.some(p=>p.studio.name==='Цоколь'&&p.ref.name==='Фронтальная'&&p.delta===0),'цоколь студии — та же деталь Базиса');
+  // сохранение проекта не теряет отступ
+  const kb=kitchenBase(initialModule(),600);
+  assert.equal(parseModule(JSON.parse(JSON.stringify({...kb,kitchen:{...kb.kitchen!,plinth:{height:95,inset:16}}}))).kitchen?.plinth?.inset,16);
+  // шкаф — цоколь утоплен на RULES.plinthInset, как было
+  const w={...initialModule(),plinthHeight:100},wp=parts(w).find(p=>p.id==='plinth')!;
+  assert.equal(w.depth-(wp.position[2]+wp.size[2]/2),2);
 });
 
 test('флаги «без петель» / «без крепежа» видны во вкладке «Кухня» и снимаются: петли и полкодержатели возвращаются в 3D, присадку и смету',()=>{
