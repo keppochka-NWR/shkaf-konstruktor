@@ -70,12 +70,12 @@ export const INDIGO = {
   mesh: { runner: ["437755c651e6", "d49e8211a82d"] as LR, "175": ["c4b2a89adf2b", "5a8cbf34bbdc"] as LR, "175:white": ["5e4e4dbaf65f", "ac7784ef1cd3"] as LR, "90": ["b619d0529510", "13141e62e630"] as LR },
 };
 export function indigoTop(k: IndigoDrawer) { return k.runnerY + Math.max(INDIGO[k.hc].top, 11.4 + (k.backH ?? INDIGO[k.hc].back)); }
-export function indigoFits(m: Module, k: IndigoDrawer) { return k.runnerY - 44 >= axisFloor(m) - 0.01 && indigoTop(k) <= Math.min(k.y1 - 15, axisCeiling(m) - AXIS_FIT.ceiling) + 0.01; }
+export function indigoFits(m: Module, k: IndigoDrawer) { const [lo, hi] = golaBand(m, k.y0, k.y1); return k.runnerY - 44 >= Math.max(axisFloor(m), lo) - 0.01 && indigoTop(k) <= Math.min(k.y1 - 15, axisCeiling(m) - AXIS_FIT.ceiling, hi) + 0.01; }
 /** Раскладка Indigo: ось на 44 над низом фасада, не ниже пола + 54 (царга на 10 над дном); царга H=175, если входит, иначе H=90. */
 export function indigoLayout(m: Module, n: number, ratios?: number[], keep?: IndigoDrawer[]): IndigoDrawer[] {
   const floor = axisFloor(m), r1 = (v: number) => Math.round(v * 10) / 10;
   return axisLayout(m, n, ratios).map((a) => {
-    const runnerY = r1(Math.max(a.y0 + 44, floor + 54)), at = (hc: 90 | 175): IndigoDrawer => ({ system: "indigo", y0: a.y0, y1: a.y1, runnerY, hc, len: 500, ...(keep?.[0]?.color === "white" ? { color: "white" as const } : {}) });
+    const runnerY = r1(Math.max(a.y0 + 44, floor + 54, golaBand(m, a.y0, a.y1)[0] + 44)), at = (hc: 90 | 175): IndigoDrawer => ({ system: "indigo", y0: a.y0, y1: a.y1, runnerY, hc, len: 500, ...(keep?.[0]?.color === "white" ? { color: "white" as const } : {}) });
     const big = at(175); return indigoFits(m, big) ? big : at(90);
   });
 }
@@ -271,8 +271,25 @@ export function axisCeiling(m: Module) {
   const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : r.height));
   return m.height - Math.max(m.topType === "none" ? 0 : 16, ...top, 0);
 }
-/** Ящик входит: верх короба не ближе запасов к верху своего фасада и к царгам корпуса. */
-export function axisFits(m: Module, k: KDrawer) { if (isBox(k)) return firmaxFits(m, k); if (isStart(k)) return startFits(m, k); if (isIndigo(k)) return indigoFits(m, k); return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling) + 1e-6; }
+/** Полоса по высоте для фурнитуры ящика с фасадом [y0, y1] в модуле с Gola: профиль в вырезах боковин стоит по всей ширине
+ *  у фронта, поэтому короб, направляющие и царги ящика его не пересекают (правило 3): профиль ниже середины фасада — под ящиком
+ *  (низ ящика выше верха профиля), выше — над ним (верх ящика ниже низа профиля); 1 мм — чтобы не касаться. Без Gola — без границ. */
+export function golaBand(m: Module, y0: number, y1: number): [number, number] {
+  const cuts = m.kitchen && (m.kitchen.role === "base" || m.kitchen.role === "tall") ? m.gola?.cuts ?? [] : [];
+  let lo = -Infinity, hi = Infinity;
+  for (const c of cuts) {
+    if (!(c.top1 > c.top0)) continue;
+    const pb = m.height - c.top1, pt = m.height - c.top0;
+    if ((pb + pt) / 2 < (y0 + y1) / 2) lo = Math.max(lo, pt + 1); else hi = Math.min(hi, pb - 1);
+  }
+  return [lo, hi];
+}
+/** Ящик входит: верх короба не ближе запасов к верху своего фасада и к царгам корпуса, не заходит в профили Gola. */
+export function axisFits(m: Module, k: KDrawer) {
+  if (isBox(k)) return firmaxFits(m, k); if (isStart(k)) return startFits(m, k); if (isIndigo(k)) return indigoFits(m, k);
+  const [lo, hi] = golaBand(m, k.y0, k.y1);
+  return axisTop(k) <= Math.min(k.y1 - AXIS_FIT.facadeTop, axisCeiling(m) - AXIS_FIT.ceiling, hi) + 1e-6 && k.runnerY - AXIS_RUNNER_DOWN >= lo - 1e-6;
+}
 /** Габарит повёрнутой сетки в осях модуля: размер и центр. */
 function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, number]; position: [number, number, number] } {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
@@ -296,7 +313,7 @@ export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<
   hs[n - 1] = Math.round((avail - hs.slice(0, -1).reduce((s, v) => s + v, 0)) * 10) / 10; // остаток — верхнему, сумма точно по корпусу
   let y = y0;
   return hs.map((fh) => {
-    const runnerY = Math.round(Math.max(y + 59, innerBottom + 59) * 10) / 10, y1r = Math.round((y + fh) * 10) / 10;
+    const y1r = Math.round((y + fh) * 10) / 10, runnerY = Math.round(Math.max(y + 59, innerBottom + 59, golaBand(m, y, y1r)[0] + AXIS_RUNNER_DOWN) * 10) / 10;
     const at = (hh: AxisDrawer["h"], len: AxisDrawer["len"]): AxisDrawer => ({ system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len, ...(color ? { color } : {}), ...(keep?.faceScrews ? { faceScrews: true } : {}) });
     // царга — самая высокая, что входит; длина — самая длинная из тех, на которые есть модели этой высоты (в цвете ящиков)
     const pick = (hh: AxisDrawer["h"]): AxisDrawer | undefined => { const len = axisBestLen(m, hh, color); return len ? at(hh, len) : undefined; };
@@ -364,6 +381,16 @@ export function relayoutProblem(m: Module, n: number): string | undefined {
  *  глубина её не меняет; у СТАРТ и Versalite длина Базиса остаётся, пока входит (см. startDepthLen, versaliteDepthLen). */
 export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
+  if (what === "height") {
+    // ящики только внизу, над ними жёсткая полка или двери (Базис k05 m03, k08 m04): стопка не растягивается на всю высоту
+    // (короб упирался в «Полку жёсткую»). Пока ящики входят — остаются как в Базисе; нет — раскладка в пределах прежней стопки.
+    const g = m.faceGap ?? 1.5, top = Math.max(...ks.map((k) => k.y1));
+    if (top < m.height - g - 60 && (m.doors !== false || m.sections.some((s) => (s.shelves?.length ?? 0) > 0))) {
+      if (ks.every((k) => axisFits(m, k)) && !kitchenDrawerErrors(m).length) return ks;
+      const stack: Module = { ...m, height: top + g, topType: "none", rails: (m.rails ?? []).filter((r) => r.place.endsWith("bottom")), gola: undefined, doors: false, sections: m.sections.map((s) => ({ ...s, shelves: [] })) };
+      return refitKDrawers(stack, "height");
+    }
+  }
   if (isStart(ks[0])) {
     if (what === "depth") return ks.map((k) => { if (!isStart(k)) return k; const len = startDepthLen(m, k); return len === k.len ? k : { ...k, len }; });
     return startLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isStart));
@@ -409,7 +436,7 @@ export function modernDepthNeed(k: ModernDrawer) { return (k.box.front ?? 0) + M
 export function modernLayout(m: Module, n: number, ratios?: number[], keep?: ModernDrawer[]): ModernDrawer[] {
   const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, r1 = (v: number) => Math.round(v * 10) / 10, len = MODERN.box;
   return axisLayout(m, n, ratios).map((a, i) => {
-    const y = r1(Math.max(a.y0 + 35, floor + 10)), top = r1(Math.min(a.y1 - 35, ceil)), box: FirmaxBox = { y, h: r1(top - y), len };
+    const [lo, hi] = golaBand(m, a.y0, a.y1), y = r1(Math.max(a.y0 + 35, floor + 10, lo)), top = r1(Math.min(a.y1 - 35, ceil, hi)), box: FirmaxBox = { y, h: r1(top - y), len };
     const o = (keep?.[i] ?? keep?.[0])?.box;
     if (o) for (const key of ["gap", "front", "confBottom", "confUnder"] as const) if (o[key] !== undefined) box[key] = o[key];
     if (o?.faceScrews) box.faceScrews = true;
@@ -419,14 +446,16 @@ export function modernLayout(m: Module, n: number, ratios?: number[], keep?: Mod
 /** Верх ящика СТАРТ от пола модуля: боковина, задняя стенка, рейлинг — что выше. */
 export function startTop(k: StartDrawer) { const s = START[k.sb]; return k.runnerY + Math.max(s.top, s.side + (k.backH ?? s.back), ...(k.rail ? (k.railYs ?? [206.5]).map((dy) => dy + 6.9) : [])); }
 /** Ящик СТАРТ входит: верх не ближе 20 к верху фасада и 5 к царгам, низ боковины не ниже пола. */
-export function startFits(m: Module, k: StartDrawer) { return k.runnerY + START[k.sb].side >= axisFloor(m) - 0.01 && startTop(k) <= Math.min(k.y1 - 20, axisCeiling(m) - AXIS_FIT.ceiling) + 0.01; }
+export function startFits(m: Module, k: StartDrawer) { const [lo, hi] = golaBand(m, k.y0, k.y1); return k.runnerY + START[k.sb].side >= axisFloor(m) - 0.01 && k.runnerY - START_RUN_DOWN >= lo - 0.01 && startTop(k) <= Math.min(k.y1 - 20, axisCeiling(m) - AXIS_FIT.ceiling, hi) + 0.01; }
+/** Низ направляющей СТАРТ под её осью (сетка Базиса −33..27). */
+export const START_RUN_DOWN = 33;
 /** Раскладка СТАРТ по базе: фасады — как у Axis PRO; ось направляющей на 64 над низом фасада (медиана 16 ящиков), но не ниже
  *  пола + 54 (низ боковины SB20 на 7 ниже оси); боковина — самая высокая, что входит (SB20 с рейлингом → SB19 → SB08);
  *  длина 500, если входит с запасом 20 от задней кромки, иначе 400 (SB08/SB19 в базе только 500). keep — утопание и рейлинг. */
 export function startLayout(m: Module, n: number, ratios?: number[], keep?: StartDrawer[]): StartDrawer[] {
   const floor = axisFloor(m), r1 = (v: number) => Math.round(v * 10) / 10, len: 400 | 500 = m.depth - 20 >= 500 ? 500 : 400;
   return axisLayout(m, n, ratios).map((a, i) => {
-    const runnerY = r1(Math.max(a.y0 + 64, floor + 54)), own = keep?.[i];
+    const runnerY = r1(Math.max(a.y0 + 64, floor + 54, golaBand(m, a.y0, a.y1)[0] + START_RUN_DOWN)), own = keep?.[i];
     const at = (sb: StartDrawer["sb"]): StartDrawer => ({ system: "start-sc", y0: a.y0, y1: a.y1, runnerY, len, sb, ...(sb === "SB20" ? { rail: true } : {}), ...(own?.edge ? { edge: { ...own.edge } } : {}) });
     const cands = (["SB20", "SB19", "SB08"] as const).filter((sb) => startAvailable(sb, len)).map(at);
     return cands.find((c) => startFits(m, c)) ?? cands[cands.length - 1] ?? at("SB20");
@@ -454,7 +483,7 @@ export function versaliteDepthLen(m: Module, k: VersaliteDrawer): VersaliteLen {
 export function versaliteLayout(m: Module, n: number, ratios?: number[], keep?: VersaliteDrawer[]): VersaliteDrawer[] {
   const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, len = versaliteLen(m), r1 = (v: number) => Math.round(v * 10) / 10;
   return axisLayout(m, n, ratios).map((a, i) => {
-    const y = r1(Math.max(a.y0 + VERSALITE.below, floor + 10)), top = r1(Math.min(a.y1 - VERSALITE.above, ceil)), h = r1(top - y);
+    const [lo, hi] = golaBand(m, a.y0, a.y1), y = r1(Math.max(a.y0 + VERSALITE.below, floor + 10, lo)), top = r1(Math.min(a.y1 - VERSALITE.above, ceil, hi)), h = r1(top - y);
     const box: FirmaxBox = { y, h, len };
     const own = keep?.[i], k = own ?? keep?.[0];
     if (k) {
@@ -490,7 +519,7 @@ export function firmaxConf(backH: number): number[] {
 export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: FirmaxDrawer[]): FirmaxDrawer[] {
   const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, len = firmaxLen(m);
   return axisLayout(m, n, ratios).map((a, i) => {
-    const y = Math.round(Math.max(a.y0 + FIRMAX.sideDown, floor + 10) * 10) / 10, top = Math.round(Math.min(a.y1 - FIRMAX.topUnder, ceil) * 10) / 10;
+    const [lo, hi] = golaBand(m, a.y0, a.y1), y = Math.round(Math.max(a.y0 + FIRMAX.sideDown, floor + 10, lo) * 10) / 10, top = Math.round(Math.min(a.y1 - FIRMAX.topUnder, ceil, hi) * 10) / 10;
     const h = Math.round((top - y) * 10) / 10, box: FirmaxBox = { y, h, len, screws: true };
     const own = keep?.[i], k = own ?? keep?.[0];
     if (k) {
@@ -528,7 +557,8 @@ export function firmaxSetScrews(ks: KDrawer[], what: "screws" | "faceScrews", on
   });
 }
 export function firmaxFits(m: Module, k: BoxDrawer) {
-  return k.box.h >= 60 && k.box.y >= axisFloor(m) - 0.01 && k.box.y + k.box.h <= Math.min(k.y1, axisCeiling(m) - AXIS_FIT.ceiling) + 0.01;
+  const [lo, hi] = golaBand(m, k.y0, k.y1);
+  return k.box.h >= 60 && k.box.y >= Math.max(axisFloor(m), lo) - 0.01 && k.box.y + k.box.h <= Math.min(k.y1, axisCeiling(m) - AXIS_FIT.ceiling, hi) + 0.01;
 }
 /** Геометрия короба Firmax в осях модуля: x0/xr — внутренние грани боковин корпуса, F — передняя кромка корпуса. */
 function firmaxGeom(k: BoxDrawer, x0: number, xr: number, F: number) {

@@ -4,6 +4,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {initialModule,parts,validate} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {estimate} from '../src/pricing';
+import {partCollisions} from '../src/collisions';
 import {newProject} from '../src/project';
 import {relayoutKDrawers,refitKDrawers,relayoutProblem,MODERN,type KDrawer,type StartDrawer,type ModernDrawer,type VersaliteDrawer} from '../src/kitchenDrawers';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
@@ -77,6 +78,25 @@ test('Versalite depth refit keeps the Bazis runner while it fits (k10 m12: 550 a
   }
   const {module:m}=moduleFromEtalon(ref('k10','m12'));const d=deep(m,350);
   assert.ok((d.kdrawers as VersaliteDrawer[]).every(x=>x.len===350));assert.ok(validate(d).some(x=>/Versalite 350 \(350\.5 по модели Базиса\) не входит/.test(x)));
+});
+
+test('height refit with Gola: drawer hardware stays out of the Gola profiles (Versalite k10 m12 same height, СТАРТ k27 m01 +30)',{skip:!existsSync(ETD+'k10.json')},()=>{
+  for(const [k,key,dh] of [['k10','m12',0],['k27','m01',30],['k27','m01',0],['k10','m12',-40]] as const){
+    const {module:m}=moduleFromEtalon(ref(k,key));assert.ok(m.gola?.cuts?.length);
+    const n={...m,height:m.height+dh};n.kdrawers=refitKDrawers(n,'height');
+    const bad=partCollisions(parts(n),n).filter(x=>/Gola/.test(JSON.stringify(x)));assert.deepEqual(bad,[],`${k} ${key} ${dh}`);
+  }
+});
+
+test('height refit of a drawer only at the bottom (fixed shelf above, k05 m03 / k08 m04): the stack is not stretched to the full height',{skip:!existsSync(ETD+'k05.json')},()=>{
+  for(const [k,key] of [['k05','m03'],['k08','m04']] as const){
+    const {module:m}=moduleFromEtalon(ref(k,key));
+    for(const dh of [0,40,-30]){
+      const n={...m,height:m.height+dh};n.kdrawers=refitKDrawers(n,'height');
+      assert.deepEqual(n.kdrawers,m.kdrawers,`${k} ${key} ${dh}: Bazis drawers kept`);
+      assert.deepEqual(partCollisions(parts(n),n).filter(x=>/Полка|ящик/i.test(JSON.stringify(x))&&/Полка/.test(JSON.stringify(x))),[],`${k} ${key} ${dh}`);
+    }
+  }
 });
 
 test('kitchen estimate has no rows the Bazis projects lack: no confirmat caps, no «мелочёвка корпуса»; wardrobes keep them',()=>{
