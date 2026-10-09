@@ -12,6 +12,7 @@ import { parseProject, localToRoom, applyAutoFillers, projectErrors, type Placed
 import { estimate } from "../../src/pricing";
 import { worktopGroupRole } from "./rowWorktop";
 import { allowedContact } from "../../src/collisions";
+import { etalonHoleItems, holeSig, supplierEdgeKind } from "./wholeChecks";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon";
 const keys = (process.argv[2] ?? "").split(",").filter(Boolean);
@@ -153,12 +154,9 @@ for (const k of keys) {
   // строки «как в Базисе» (n3): bazis:<категория>:<название>, firmax:<артикул> (пары), shelf-holder:<название>, kitchen-leg:<название>
   const pipes = est.some((l) => /^bazis:прочее:Труба/i.test(l.id)) ? cnt(/труба/i) : 0;
   const prodProfiles = cnt(/gola|kb \d|врезной|фасадный профиль|алюминиев/i, "профиль");
-  // отверстия-крепёж Базиса — независимо от правила имени в bazisHoles и от категории: элемент FurnList с позицией и без модели (mesh),
-  // который Базис пометил служебным (service), — любое имя («3x3», «Отверстие 3х2», «Отверстие глухое_d10x12 мм.»); у «прочего» ряда
-  // флага service нет — там безымянный размер («8x30» k19). Пропуск именованного отверстия смета↔Базис теперь виден (n4-kitchens3)
-  type HwX = { name?: string; pos?: unknown; mesh?: string | null; service?: boolean; box?: unknown };
-  const holeHw = [...mods.flatMap((m) => m.hardware as HwX[]), ...(["profiles", "other"] as const).flatMap((g) => ((e.row?.[g] ?? []) as HwX[]).filter((x) => !Array.isArray(x.box)))]
-    .filter((h) => Array.isArray(h.pos) && !h.mesh && (h.service === true || /^\s*\d[\d\s.,xх×*]*$/i.test(h.name ?? "")));
+  // отверстия-крепёж Базиса — независимо от правила имени в bazisHoles и от категории (wholeChecks.etalonHoleItems: service без модели
+  // + безымянный размер «прочего» ряда). Пропуск именованного отверстия смета↔Базис теперь виден (n4-kitchens3)
+  const holeHw = etalonHoleItems(e);
   const holesBazis = holeHw.length, holeNames: Record<string, number> = {};
   for (const h of holeHw) holeNames[(h.name ?? "").trim()] = (holeNames[(h.name ?? "").trim()] ?? 0) + 1;
   if (holesBazis) log(`отверстия-крепёж Базиса (service без модели): ${holesBazis} — ${Object.entries(holeNames).map(([n, c]) => `${c} × ${n}`).join(", ")}`);
@@ -179,17 +177,37 @@ for (const k of keys) {
   const est2: string[] = [];
   for (const [n, b, s] of pairs) if (Math.abs(b - s) > 0.01) est2.push(`${n}: Базис ${b}, смета ${r3(s)}`);
   // отверстия ещё и по размерам (цифры имени: «3х2» и «Отверстие 3x2» — «3x2»): строка с другим размером не прячется за общей суммой
-  const holeSig = (s: string) => (s.match(/\d+(?:[.,]\d+)?/g) ?? []).join("x"), hb: Record<string, number> = {}, hs: Record<string, number> = {};
+  const hb: Record<string, number> = {}, hs: Record<string, number> = {};
   for (const [n, c] of Object.entries(holeNames)) hb[holeSig(n)] = (hb[holeSig(n)] ?? 0) + c;
   for (const l of est) if (l.id.startsWith("bazis:отверстие:")) hs[holeSig(l.id.slice(16))] = (hs[holeSig(l.id.slice(16))] ?? 0) + l.quantity;
   for (const g of new Set([...Object.keys(hb), ...Object.keys(hs)])) if ((hb[g] ?? 0) !== (hs[g] ?? 0)) est2.push(`отверстия ${g || "без размера"}: Базис ${hb[g] ?? 0}, смета ${hs[g] ?? 0}`);
   const ids = est.map((l) => l.id), added = ["kit", "confirmat-cap", "worktop-cut:sink", "worktop-cut:hob", "small", "work"].filter((x) => ids.includes(x));
-  // кромка по толщинам (справочно, не замечание): разница — кромка изделий поставщика, которые смета считает м²/пог. м
-  // (фасады из МДФ «external», столешница, стеновая панель, стекло) — решение «кромка фасадов — у поставщика» (n4-kitchens3)
+  // кромка по толщинам: разница допустима, только если это кромка изделий поставщика, которые смета считает м²/пог. м, — и это
+  // проверяется по деталям Базиса каждого модуля (n4-kitchens3): в параметрическом модуле — плита МДФ (фасад «external»), в любом —
+  // стекло, зеркало, столешница, стеновая панель. Остаток, не объяснённый такими деталями, — замечание
   const eid: Record<string, string> = { edge04: "0.4", edge05: "0.5", edge08: "0.8", edge1: "1", edge2: "2" }, se: Record<string, number> = {};
   for (const l of est) if (eid[l.id]) se[eid[l.id]] = (se[eid[l.id]] ?? 0) + l.quantity;
   const ed = [...new Set([...Object.keys(edge), ...Object.keys(se)])].filter((t) => Math.abs((se[t] ?? 0) - (edge[t] ?? 0)) > 0.05).map((t) => `${t} мм: Базис ${r3(edge[t] ?? 0)}, смета ${r3(se[t] ?? 0)}`);
-  log(`кромка Базис ↔ смета (справочно): ${ed.length ? ed.join("; ") + " — кромка изделий поставщика (МДФ-фасады, столешница, стеновая панель, стекло)" : "сходится"}`);
+  const edgeWhy: string[] = [], edgeBad: string[] = [];
+  p.modules.forEach((a, i) => {
+    const isRow = !!a.module.raw?.row, ps = (isRow ? ROW.flatMap((g) => e.row?.[g] ?? []) : (mods[i]?.panels ?? [])) as { name?: string; kind?: string; mat?: string | null; edges?: { thick: number; len: number }[] }[];
+    const be: Record<string, number> = {}, sup: Record<string, Record<string, number>> = {}, sm: Record<string, number> = {};
+    for (const l of estimate({ ...p, modules: [a] }).lines) if (eid[l.id]) sm[eid[l.id]] = (sm[eid[l.id]] ?? 0) + l.quantity;
+    for (const x of ps) {
+      if (/фасадн/i.test(x.mat ?? "")) continue;
+      const kind = supplierEdgeKind(x, !a.module.raw);
+      for (const g of x.edges ?? []) if (g.len > 0) { const t = String(g.thick); be[t] = (be[t] ?? 0) + g.len / 1000; if (kind) (sup[t] ??= {})[kind] = (sup[t][kind] ?? 0) + g.len / 1000; }
+    }
+    for (const t of new Set([...Object.keys(be), ...Object.keys(sm)])) {
+      const d = (be[t] ?? 0) - (sm[t] ?? 0), s = Object.values(sup[t] ?? {}).reduce((u, v) => u + v, 0);
+      if (Math.abs(d) <= 0.05) continue;
+      if (Math.abs(d - s) <= 0.05) edgeWhy.push(`${a.module.name} ${t} мм ${r3(d)} — ${Object.entries(sup[t]!).map(([c, v]) => `${c} ${r3(v)}`).join(", ")}`);
+      else edgeBad.push(`${a.module.name} ${t} мм: Базис ${r3(be[t] ?? 0)}, смета ${r3(sm[t] ?? 0)}${s ? `, изделия поставщика ${r3(s)}` : ""}`);
+    }
+  });
+  log(`кромка Базис ↔ смета: ${ed.length ? ed.join("; ") : "сходится"}`);
+  if (edgeWhy.length) log(`  кромка изделий поставщика (по деталям Базиса): ${edgeWhy.join("; ")}`);
+  if (edgeBad.length) { log(`  кромка не объяснена изделиями поставщика: ${edgeBad.join("; ")}`); issues.push(`кромка ≠ смета (${edgeBad.length})`); }
   log(`\nфурнитура Базис ↔ смета: ${est2.length ? est2.join("; ") : "сходится"}`);
   log(`строки сметы не из Базиса: ${added.join(", ") || "нет"}`);
   if (est2.length) issues.push(`фурнитура ≠ смета (${est2.length})`);

@@ -10,18 +10,37 @@ import {estimate} from '../src/pricing';
 import {allowedContact} from '../src/collisions';
 import {bazisHoleName,bazisHoles,bazisNames,legDupKey} from '../src/rawModule';
 import {buildKitchen} from '../scripts/kitchen/buildKitchen';
+import {etalonHoleItems,holeSig,supplierEdgeKind} from '../scripts/kitchen/wholeChecks';
 
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
 const has=(k:string)=>existsSync(`${ET}/${k}.json`);
 const kitchen=(k:string)=>buildKitchen(JSON.parse(readFileSync(`${ET}/${k}.json`,'utf8'))).project;
 const lines=(p:Project,re:RegExp)=>estimate(p).lines.filter(l=>re.test(l.id));
 const qty=(p:Project,re:RegExp)=>Math.round(lines(p,re).reduce((s,l)=>s+l.quantity,0)*1000)/1000;
-// Отверстия Базиса — не по правилу имени bazisHoles, а по признакам эталона: элемент FurnList с позицией без модели, помеченный service
-// (любое имя: «3x3», «Отверстие 3х2», «Отверстие глухое_d2x10 мм.»), и безымянный размер в «прочем» ряда (там флага service нет: k19 «8x30»)
-type EtHw={name?:string;pos?:unknown;mesh?:string|null;service?:boolean;box?:unknown};
-const etalonHoles=(k:string)=>{const e=JSON.parse(readFileSync(`${ET}/${k}.json`,'utf8'));
-  const hw:EtHw[]=[...e.modules.flatMap((m:{hardware:EtHw[]})=>m.hardware),...['profiles','other'].flatMap(g=>((e.row?.[g]??[]) as EtHw[]).filter(x=>!Array.isArray(x.box)))];
-  return hw.filter(h=>Array.isArray(h.pos)&&!h.mesh&&(h.service===true||/^\s*\d[\d\s.,xх×*]*$/i.test(h.name??''))).length;};
+// Отверстия Базиса — не по правилу имени bazisHoles, а по признакам эталона (та же независимая проверка, что у whole.ts): элемент FurnList
+// с позицией без модели, помеченный service (любое имя), и безымянный размер в «прочем» ряда (там флага service нет: k19 «8x30»)
+const etalonHoles=(k:string)=>etalonHoleItems(JSON.parse(readFileSync(`${ET}/${k}.json`,'utf8'))).length;
+
+test('независимая проверка отверстий (whole.ts) видит и именованные: service без модели, любая категория; изделие с моделью — не отверстие',()=>{
+  const e={modules:[{hardware:[{name:'3x3',pos:[0,0,0],service:true},{name:'Отверстие 3х2',pos:[0,0,0],service:true},{name:'Зазор 0 мм',pos:[0,0,0],service:true,mesh:'b00d'},
+    {name:'Шуруп 3,5х16',pos:[0,0,0]},{name:'Отверстие глухое_d2x10 мм.',service:true}]}],row:{other:[{name:'8x30',pos:[0,0,0]},{name:'8x30',pos:[0,0,0],box:[0,0,0,1,1,1]}]}};
+  assert.deepEqual(etalonHoleItems(e).map(h=>h.name),['3x3','Отверстие 3х2','8x30']);
+  assert.equal(holeSig('Отверстие 3х2'),holeSig('3x2'));assert.equal(holeSig('Отверстие глухое_d2x10 мм.'),'2x10');
+});
+
+test('кромка изделий поставщика (whole.ts): стекло, зеркало, столешница, стеновая панель; МДФ — только в параметрическом модуле',{skip:!has('k30')},()=>{
+  assert.equal(supplierEdgeKind({kind:'glass'},false),'стекло');assert.equal(supplierEdgeKind({kind:'other',mat:'Столешница 38 мм'},false),'столешница');
+  assert.equal(supplierEdgeKind({kind:'mdf',mat:'Плита IDM ETERNO Libra 18мм'},true),'МДФ-фасад параметрики');
+  assert.equal(supplierEdgeKind({kind:'mdf',mat:'Плита IDM ETERNO Libra 18мм'},false),'','сырой модуль: плита МДФ в раскрое, её кромка — в смете');
+  assert.equal(supplierEdgeKind({kind:'ldsp',mat:'ЛДСП Lamarty'},true),'');
+  // k30: разница 1 мм Базис − смета — ровно кромка плит МДФ параметрических модулей (14,98 м), МДФ сырых модулей — в смете
+  const e=JSON.parse(readFileSync(`${ET}/k30.json`,'utf8')),p=kitchen('k30');
+  const bz=(ps:{kind?:string;mat?:string|null;edges?:{thick:number;len:number}[]}[],f:(x:{kind?:string;mat?:string|null})=>boolean)=>ps.filter(x=>!/фасадн/i.test(x.mat??'')&&f(x)).flatMap(x=>x.edges??[]).filter(g=>g.thick===1).reduce((s,g)=>s+g.len/1000,0);
+  const all=bz([...e.modules.flatMap((m:{panels:never[]})=>m.panels),...['worktops','plinths','wallPanels','profiles','other'].flatMap(g=>e.row?.[g]??[])],()=>true);
+  const mdfPar=p.modules.reduce((s,a,i)=>a.module.raw?s:s+bz(e.modules[i].panels,x=>supplierEdgeKind(x,true)!==''),0);
+  assert.ok(Math.abs(all-qty(p,/^edge1$/)-mdfPar)<0.005,`разница ${all-qty(p,/^edge1$/)} = МДФ параметрики ${mdfPar}`);
+  assert.equal(Math.round(mdfPar*100)/100,14.98);
+});
 
 test('bazisHoles: крепёж Базиса в точке — названный размером или словом «Отверстие…» — строка «Отверстие …» с количеством',()=>{
   const hw=[{name:'3x3',category:'прочее',pos:[1,2,3]},{name:'3х3',category:'прочее',pos:[4,5,6]},{name:'5x12',category:'прочее',pos:[0,0,0]},
