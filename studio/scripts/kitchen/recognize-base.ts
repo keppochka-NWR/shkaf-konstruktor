@@ -30,6 +30,7 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
   const sd = sideDown(ref);
   if (sd && (k.role === "base") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
+  if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
@@ -51,6 +52,19 @@ export function sideDown(ref: RefModule): { side: "left" | "right"; y0: number }
   const underHigh = side === "left" ? bot.box[3] >= R.box[3] - 0.5 && Math.abs(bot.box[0] - L.box[3]) < 0.6 : bot.box[0] <= L.box[0] + 0.5 && Math.abs(bot.box[3] - R.box[0]) < 0.6;
   if (!underHigh || Math.abs(high.box[1] - bot.box[4]) > 0.6 || low.box[1] > bot.box[1] + 0.5) return undefined;
   return { side, y0: r1(low.box[1]) };
+}
+
+/** Наколки D3×3 под планку петли (±16 от оси петли, 37 вглубь от тыльной плоскости фасада): у всех петель — true, ни у одной — false
+ *  (89 из 261 модулей Базиса с петлями), часть — undefined (не повторяем, студия ставит как обычно). */
+export function hingePlateHoles(ref: RefModule): boolean | undefined {
+  const hs = ref.hardware.filter((h) => h.category === "петля");
+  if (!hs.length || !ref.holes?.length) return undefined;
+  const n = hs.filter((h) => {
+    const [x, y, z] = h.pos;
+    return ref.holes!.filter((o) => o.d === 3 && Math.abs(o.at[0] - x) < 1 && Math.abs(Math.abs(o.at[1] - y) - 16) < 1.5 && Math.abs(o.at[2] - (z - 37)) < 1.5).length >= 2
+      || ref.holes!.filter((o) => o.d === 3 && Math.abs(o.at[1] - y) < 1 && Math.abs(Math.abs(o.at[0] - x) - 16) < 1.5 && Math.abs(o.at[2] - (z - 37)) < 1.5).length >= 2;
+  }).length;
+  return n === hs.length ? true : n === 0 ? false : undefined;
 }
 
 /** Опоры не сеткой «ряды по ширине × перед/зад» (18 из 174 модулей с опорами, k15 m02: правая задняя глубже левой на 23) —

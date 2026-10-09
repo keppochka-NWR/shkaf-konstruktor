@@ -59,11 +59,12 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin && p.size[0] > p.size[1]) {
       // подъёмный фасад: планка на нижней плоскости крыши (две наколки D3×3 вверх), чашка Ø35×13 в 7,5 мм под крышей
       const [x, y, back] = p.model.origin;
-      for (const dx of [16, -16]) push(p.id, [x + dx, y, back - 37], [0, 1, 0], 3, 3);
+      if (m.kitchen?.plateHoles !== false) for (const dx of [16, -16]) push(p.id, [x + dx, y, back - 37], [0, 1, 0], 3, 3);
       push(p.id.replace(":hingeplate:", ":hingecup:"), [x, y - 7.5, back], [0, 0, 1], 35, 13);
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin) {
       const [sx, y, back] = p.model.origin, inward = p.position[0] > sx ? 1 : -1; // плечо — внутрь корпуса от стойки
-      for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
+      // кухня Базиса без наколок под планку (kitchen.plateHoles: false — 89 из 261 модулей с петлями) — только чашка
+      if (m.kitchen?.plateHoles !== false) for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
       push(p.id.replace(":hingeplate:", ":hingecup:"), [sx + inward * 7.5, y, back], [0, 0, 1], 35, 13);
     }
   }

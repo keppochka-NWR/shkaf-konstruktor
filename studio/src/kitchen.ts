@@ -27,7 +27,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   fasteners?: false;
   /** Дно под одной боковиной, другая опущена (11 из 150 нижних Базиса): до низа дна (y0 = низ дна, k22 m01) или до пола (y0 = 10, k06 m01 —
    *  торцевая боковина закрывает опоры). Действует только с дном под боковинами (bottomUnder). */
-  sideDown?: { side: "left" | "right"; y0: number } };
+  sideDown?: { side: "left" | "right"; y0: number };
+  /** false — у петель нет наколок D3×3 под планку, только чашка Ø35 (89 из 261 модулей Базиса с петлями). */
+  plateHoles?: false };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 

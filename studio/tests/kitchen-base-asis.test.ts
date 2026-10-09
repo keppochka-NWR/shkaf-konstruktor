@@ -7,7 +7,8 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles} from '../scripts/kitchen/recognize-base';
+import {holes} from '../src/drilling';
 import {edgeByDir} from '../src/edges';
 
 // Правило Макса: в кухню из Базиса студия не добавляет того, чего нет в Базисе (петли, опоры, крепёж, кромка, строки сметы).
@@ -167,6 +168,21 @@ test('опущенная боковина (k22 m01: левая до низа д�
   if(has('k25'))assert.equal(sideDown(load('k25','m07')),undefined,'обычный нижний — без опущенной боковины');
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.deepEqual(back.kitchen?.sideDown,{side:'left',y0:100});
+});
+
+test('петли без наколок под планку (k29 m04): у Базиса только чашка Ø35 — у студии тоже, лишних отверстий нет; обычная кухня — наколки есть',{skip:!has('k29')},()=>{
+  const ref=load('k29','m04');
+  assert.equal(hingePlateHoles(ref),false);
+  const {module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.plateHoles,false);
+  const c=compareModule(ref,m);
+  assert.deepEqual([c.holes?.missing.length,c.holes?.extra.length],[0,0],JSON.stringify(c.holes?.extra.slice(0,4)));
+  if(has('k25'))assert.equal(hingePlateHoles(load('k25','m07')),true);
+  const pal=kitchenBase(initialModule(),600);
+  const d3=(x:typeof pal)=>holes(x,parts(x)).filter(h=>h.d===3).length;
+  const plates=parts(pal).filter(p=>p.id.includes(':hingeplate:')).length;
+  assert.ok(plates>0);
+  assert.equal(d3(pal)-d3({...pal,kitchen:{...pal.kitchen!,plateHoles:false}}),2*plates,'палитра — по 2 наколки на петлю; без флага не трогаем');
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{
