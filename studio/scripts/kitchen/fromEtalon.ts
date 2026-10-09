@@ -138,7 +138,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
   if (!back) m.backType = "none";
-  else if (back.b.z1 <= sideZ0 + 0.5) { m.backType = "nailed"; m.backGap = r1(back.b.x0 - left.b.x0); }
+  else if (back.b.z1 <= sideZ0 + 0.5) {
+    m.backType = "nailed"; m.backGap = r1(back.b.x0 - left.b.x0);
+    // отступы снизу и сверху не как сбоку (k32 m06: 2 и 4 при 1,5) — по проекту; низ — от низа корпуса (у модуля на опорах — от дна)
+    const yb = legs.length && bottom ? bottom.b.y0 : Math.min(left.b.y0, right.b.y0, bottom?.b.y0 ?? Infinity), g0 = r1(back.b.y0 - yb), g1 = r1(top - back.b.y1);
+    if (!m.raisedSides && (Math.abs(g0 - m.backGap) > 0.01 || Math.abs(g1 - m.backGap) > 0.01) && g0 >= 0 && g1 >= 0) m.kitchen.backGapY = [g0, g1];
+  }
   else {
     m.backType = "groove";
     const z0 = r1(back.b.z0 - sideZ0), gw = 4, gd = 8;

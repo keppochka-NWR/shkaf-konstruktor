@@ -186,6 +186,11 @@ test('нижний k32 m09: кромка боковин, дна и царг по
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).edgeScheme?.parts,m.edgeScheme?.parts);
   // без переопределения — правило студии, сверка видит разницу
   assert.equal(compareModule(ref,{...m,edgeScheme:{...m.edgeScheme!,parts:undefined}}).pass,false);
+  // k32 m06: набивной ХДФ с отступами 2 снизу и 4 сверху (сбоку 1,5) — по проекту
+  const r6=load('k32','m06'),m6=moduleFromEtalon(r6).module;
+  assert.deepEqual([m6.backGap,m6.kitchen?.backGapY],[1.5,[2,4]]);
+  const b6=parts(m6).find(p=>p.id==='back')!;assert.deepEqual([b6.position[1]-b6.size[1]/2,b6.position[1]+b6.size[1]/2],[2,m6.height-4]);
+  assert.ok(compareModule(r6,m6).pass);assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m6))).kitchen?.backGapY,[2,4]);
   // у модулей, где кромка студии и так как в Базисе (k30 m06), переопределений нет
   assert.equal(moduleFromEtalon(load('k30','m06')).module.edgeScheme?.parts,undefined);
 });
