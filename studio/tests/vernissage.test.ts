@@ -101,6 +101,19 @@ test('Вернисаж в модуле: фасады — сторонний уч
   assert.deepEqual(parseVernissage(JSON.parse(JSON.stringify(m.vernissage))), m.vernissage);
 });
 
+test('Вернисаж: при «цене за лист» фасады входят в цену клиента (закупка × коэффициент сверху листов)', () => {
+  const p = newProject(), m: Module = { ...p.modules[0].module, vernissage: { milling: '86', cover: 'enamel-matte', thickness: 19, twoSided: true }, facadeT: 19 };
+  const base = { ...p, calculation: { ...(p.calculation ?? { markup: 2.2, overrides: {} }), model: 'sheet' as const } };
+  const plain = estimate(base), withV = estimate({ ...base, modules: [{ ...p.modules[0], module: m }] });
+  const cost = withV.lines.filter((l) => l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0);
+  assert.ok(cost > 20000, `закупка фасадов ${cost}`);
+  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * withV.markup / 100) * 100);
+  assert.ok(withV.bySheet > plain.bySheet, `цена по листам ${plain.bySheet} → ${withV.bySheet}: фасады не должны удешевлять шкаф`);
+  // модель наценки не меняется: фасады в «Материалах» по коэффициенту
+  const mk = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] });
+  assert.ok(mk.byMarkup !== null && mk.byMarkup > estimate(p).byMarkup!);
+});
+
 test('Вернисаж на кухне: двери и фасады ящиков нижнего модуля получают фрезеровку, раскладка строится под их размер', () => {
   const v: VernissageFacade = { milling: '3', cover: 'enamel-matte', enamelColor: 'RAL 9003', thickness: 19 };
   for (const kind of ['doors', 'drawers'] as const) {

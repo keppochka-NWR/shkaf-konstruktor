@@ -373,7 +373,11 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const byMarkup=missing.length?null:split.material+split.hardware;
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
   const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana;
+  // Фасады «Вернисаж» (и присадка под петли на них) — закупка стороннего участка, в раскрой ЛДСП не идут, значит в цену листа не входят:
+  // сверху по тому же коэффициенту, что и в модели наценки (иначе при «цене за лист» фасады пропадали из цены клиента)
+  const vernissageCost=lines.filter(l=>!l.retail&&l.id.startsWith('vernissage')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
+  const vernissageSheet=vernissageCost?Math.round(vernissageCost*settings.markup/100)*100:0;
+  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageSheet;
   return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:unplaced.length?null:model==='sheet'?bySheet:byMarkup};
 }
 
