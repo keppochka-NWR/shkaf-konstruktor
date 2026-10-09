@@ -167,7 +167,8 @@ export const isDeviation = (h: RefHardware) => (/^Профиль/.test(h.name) |
 
 export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Comparison {
   const ref0: RefModule = { ...ref00, hardware: normalizeRefHardware(ref00.hardware) }; // «Евровинт 6х50» из «прочего» — конфирмат
-  const deviations = ref0.hardware.filter(isDeviation).map((h) => h.name), ref: RefModule = { ...ref0, hardware: ref0.hardware.filter((h) => !isDeviation(h)) };
+  // член вложенного комплекта направляющих (refHardware.kitHeaderIdx) — та же направляющая второй записью, не сверяется
+  const deviations = ref0.hardware.filter(isDeviation).map((h) => h.name), ref: RefModule = { ...ref0, hardware: ref0.hardware.filter((h) => !isDeviation(h) && !(h as { kitHeader?: boolean }).kitHeader) };
   const ps = parts(m), A0 = refItems(ref), B0 = studioItems(ps), pairs: PanelPair[] = [], missing: Item[] = [], extra: Item[] = [];
   // Общая точка отсчёта: минимальный угол габарита панелей (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0 и ХДФ на −3..0).
   const corner = (xs: Item[]) => [0, 1, 2].map((i) => Math.min(...xs.map((x) => x.box[i])));

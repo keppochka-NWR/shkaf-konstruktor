@@ -11,6 +11,7 @@ import { parts, type Part } from "../../src/model";
 import { parseProject, localToRoom, applyAutoFillers, projectErrors, type PlacedModule, type Project } from "../../src/project";
 import { estimate } from "../../src/pricing";
 import { worktopGroupRole } from "./rowWorktop";
+import { kitHeaderIdx } from "./refHardware";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon";
 const keys = (process.argv[2] ?? "").split(",").filter(Boolean);
@@ -119,8 +120,9 @@ for (const k of keys) {
 
   // 6. фурнитура и смета
   const names: Record<string, number> = {};
-  for (const m of mods) for (const h of m.hardware as { name: string; category: string; mat?: string | null }[]) { const n = `${h.category} | ${h.name}${h.mat && h.mat !== h.name && /^профиль\d*$/i.test(h.name) ? " (" + h.mat + ")" : ""}`; names[n] = (names[n] ?? 0) + 1; }
-  // сушка из безымянных тел моделирования («Вращение», «Тело по траектории») — изделие по имени комплекта, одно на kitId (k08)
+  // член вложенного комплекта направляющих (refHardware.kitHeaderIdx) — та же направляющая второй записью, не считаем
+  for (const m of mods) { const kh = kitHeaderIdx(m.hardware); for (const [hi, h] of (m.hardware as { name: string; category: string; mat?: string | null }[]).entries()) { if (kh.has(hi)) continue; const n = `${h.category} | ${h.name}${h.mat && h.mat !== h.name && /^профиль\d*$/i.test(h.name) ? " (" + h.mat + ")" : ""}`; names[n] = (names[n] ?? 0) + 1; } }
+// сушка из безымянных тел моделирования («Вращение», «Тело по траектории») — изделие по имени комплекта, одно на kitId (k08)
   for (const m of mods) {
     const hw = m.hardware as { name: string; category: string; kit?: string | null; kitId?: number | null }[], named = new Set(hw.map((h) => (h.name ?? "").trim())), kits = new Map<string, Set<number | string>>();
     hw.forEach((h, i) => { const kit = (h.kit ?? "").trim(); if (/^(тело по траектории|вращение|выталкивание\s*\d*|основа)$/i.test((h.name ?? "").trim()) && /^сушк/i.test(kit) && !named.has(kit)) { const s = kits.get(kit) ?? new Set(); s.add(h.kitId ?? i); kits.set(kit, s); } });

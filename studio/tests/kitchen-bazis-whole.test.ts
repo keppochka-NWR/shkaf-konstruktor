@@ -72,7 +72,9 @@ test('B3: смета кухни из Базиса без мелочёвки, з�
 test('B4: фурнитура Базиса у сырых модулей и в ряду — в смете (Firmax, Indigo, РАФИКС, сушка, штанга, профили)',{skip},()=>{
   const k22=kitchen('k22'),k30=kitchen('k30'),k16=kitchen('k16'),k06=kitchen('k06');
   assert.equal(qty(k22,/^firmax/),7,'k22: Firmax 14 шт = 7 пар');
-  assert.equal(qty(k30,/^firmax/),19.5,'k30: Firmax 39 шт');
+  // n4-drawers: в k30 направляющие Firmax — вложенные комплекты: 18 из 39 записей Базиса — члены комплекта в точке-якоре
+  // (та же направляющая второй записью, refHardware.kitHeaderIdx); направляющих 21 — 10,5 пары, а не 19,5
+  assert.equal(qty(k30,/^firmax/),10.5,'k30: Firmax 21 шт (39 записей Базиса минус 18 членов вложенных комплектов)');
   // слияние n3: ящики Indigo, которые строит параметрика (n3-runners: k16 m04/m05), — комплект на ящик (2 направляющие, 2 царги)
   assert.equal(qty(k16,/^bazis:направляющая:Направляющая Indigo/)+2*qty(k16,/^indigo:/),14,'k16: Indigo 14 направляющих');
   assert.equal(qty(k16,/^bazis:ящик-система:Царга Indigo/)+2*qty(k16,/^indigo:/),14,'k16: 14 царг Indigo');
@@ -86,7 +88,8 @@ test('B4: фурнитура Базиса у сырых модулей и в р�
   assert.ok(qty(k06,/Профиль врезной для верхних баз/)>0,'k06: «Профиль1» навесных');
   assert.equal(line(k06,/^gola-/).length,0,'Gola считается один раз — по ряду Базиса');
   // направляющие — штуками (length Базиса у них не погонаж); фурнитура объектов ряда без габарита (k07 «Пенал на столешку») — в смете
-  if(has('k02')){const k02=kitchen('k02');assert.equal(qty(k02,/^bazis:направляющая:/),24);assert.ok(line(k02,/^bazis:направляющая:/).every(l=>l.unit==='шт'));}
+  // n4-drawers: в k02 направляющие Versalite — вложенные комплекты (24 записи Базиса, из них 12 — члены комплекта в точке-якоре): 12 шт
+  if(has('k02')){const k02=kitchen('k02');assert.equal(qty(k02,/^bazis:направляющая:/),12);assert.ok(line(k02,/^bazis:направляющая:/).every(l=>l.unit==='шт'));}
   if(has('k07')){const row=kitchen('k07').modules.find(a=>a.module.raw?.row)!.module.raw!;assert.equal(row.counts?.hinges,3);assert.ok(row.items?.some(i=>/РАФИКС/.test(i.name)&&i.n===4));}
   // служебные объекты Базиса (отверстия «35x13», «3x3» — диаметр×глубина, тела, зазоры) — не фурнитура
   assert.deepEqual(bazisItems([{name:'3x3',category:'прочее'},{name:'Отверстие 3х2',category:'прочее'},{name:'Тело по траектории',category:'сушка'},{name:'Профиль',category:'профиль',mat:'Хром'},{name:'Гвоздь',category:'прочее'}]).map(i=>i.name),['Гвоздь']);
