@@ -31,6 +31,14 @@ export function rowRects(p: EtPanel): Box[] {
   return out.length ? out : [b];
 }
 
+/** Фронтальная деталь фасадного материала ряда (фасад посудомойки ПМ): плоскость xy (тонкая по z), высота ≥ 300. */
+export function rowFront(p: EtPanel): boolean {
+  const b = p.box;
+  if (!Array.isArray(b) || b.length !== 6 || !/фасадн/i.test(p.mat ?? "")) return false;
+  const sx = b[3] - b[0], sy = b[4] - b[1], sz = b[5] - b[2];
+  return sz < Math.min(sx, sy) && sz <= 25 && sy >= 300;
+}
+
 /** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
 export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][] } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);

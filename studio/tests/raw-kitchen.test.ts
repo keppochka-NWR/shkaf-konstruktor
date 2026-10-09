@@ -2,13 +2,14 @@
 // дробная толщина, пересечения — блокеры критика кухонь k25/k12/k04 (09.10.2026).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule,section,id,type Module} from '../src/model';
+import {initialModule,section,id,parts,type Module} from '../src/model';
+import {kitchenWall} from '../src/kitchen';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {rawCounts,rawParts,rawThickness,type RawSpec} from '../src/rawModule';
-import {collisionWarnings} from '../src/roomWarnings';
-import {rowRects,panelExtras} from '../scripts/kitchen/rowWorktop';
+import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
+import {rowRects,panelExtras,rowFront} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
 function project(...ms:Module[]):Project{const p=newProject({...initialModule(),sections:[section()]});p.modules=ms.map((m,i)=>({id:id(),x:i*1000,y:0,z:0,rotation:0,module:m}));return p;}
@@ -77,6 +78,16 @@ test('дробная толщина Базиса (16.0999999) — целые м�
 test('пересечения: сырой модуль (геометрия Базиса) не даёт ложных предупреждений «сдвиньте полку или петлю»',()=>{
   const raw:RawSpec={panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]},{name:'ХДФ в пазу',kind:'hdf',box:[10,0,10,590,720,13]},{name:'Бок правый',kind:'ldsp',box:[584,0,0,600,720,560]}],hardware:[]};
   assert.equal(collisionWarnings(project(rawModule(raw))).length,0);
+});
+
+test('«Ряд»: нет предупреждения «корпус не во все лифты»; ПМ фасадного материала — фасад; шканты кухни в смете',()=>{
+  const row=rawModule({row:true,panels:[{name:'Цоколь',kind:'other',box:[0,0,0,4470,100,19],fm:true}],hardware:[]},4470,100,19);
+  assert.ok(!roomWarnings(project(row)).some(w=>w.kind==='logistics'));
+  assert.equal(rowFront({name:'ПМ',mat:'Фасадный мат-л 1',box:[0,100,580,446,816,599]}),true);
+  assert.equal(rowFront({name:'Торцевая',mat:'Фасадный мат-л 1',box:[0,100,0,19,862,342]}),false);
+  assert.equal(rowFront({name:'Цоколь',mat:'ЛДСП',box:[0,100,580,446,816,599]}),false);
+  const k=kitchenWall(initialModule(),800),dowels=parts(k).filter(p=>p.id.startsWith('dowel:')).length;
+  assert.equal(estimate(project(k)).lines.find(l=>l.id==='dowel')?.quantity??0,dowels);
 });
 
 test('импорт: фасадный материал и кромка Базиса переносятся в сырой модуль',()=>{

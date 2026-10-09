@@ -158,6 +158,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;
       add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',legs,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',clips,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+      // шканты 8×30 — по деталям сцены (в Базисе они в спецификации); только кухня, смета шкафов не меняется
+      add('dowel','Шкант 8×30',ps.filter(p=>p.id.startsWith('dowel:')).length,'шт',null,'Как в проектах Базиса; закупочная цена шканта не найдена');
       // ящики Axis PRO: комплект на ящик (2 направляющие, 2 царги, держатели фасада и задней стенки, 2 заглушки); дно и стенка — в раскрое ЛДСП
       for(const k of a.module.kdrawers??[])add(`axis-pro:${k.h}:${k.len}:${k.color??'white'}`,`Ящик Axis PRO H-${k.h}, ${k.len} мм${k.color==='anthracite'?', антрацит':', белый'} — комплект фурнитуры`,1,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     }
