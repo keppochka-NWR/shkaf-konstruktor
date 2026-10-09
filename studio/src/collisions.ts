@@ -134,7 +134,7 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
  *    Винты профиля купе и прочее, что крепится к профилям (их сечений нет), не проверяются.
  *  - панели: перекрытие глубже RAW_JOINT мм (паз ХДФ, накладка фасада, стык — мельче) — «как в проекте Базиса», сведения, не тревога:
  *    студия геометрию сырого модуля не меняет, правится она в Базисе. */
-export const RAW_SEAT_GAP = 30, RAW_FAR = 100, RAW_SEAT_DEPTH = 5, RAW_JOINT = 10;
+export const RAW_SEAT_GAP = 30, RAW_FAR = 100, RAW_SEAT_DEPTH = 5, RAW_JOINT = 10, RAW_SHEET_MAX = 40;
 /** outside — точка крепления дальше RAW_SEAT_GAP, но не дальше RAW_FAR (сведения «сверьте с Базисом»); far — дальше RAW_FAR (тревога);
  *  deep — тело фурнитуры внутри панели глубже RAW_SEAT_DEPTH (тревога, gap < 0 — глубина). */
 export type RawCheck = { checked: number; outside: { id: string; name: string; gap: number }[]; far: { id: string; name: string; gap: number }[]; deep: { id: string; name: string; gap: number }[]; overlaps: Collision[] };
@@ -150,8 +150,9 @@ export function rawCheck(ps: Part[], m?: Module, withOverlaps = true): RawCheck 
   const boards = ps.filter((p) => p.id.startsWith("raw:p") && p.material !== "metal"), hw = ps.filter((p) => p.id.startsWith("raw:h"));
   // хозяева крепления: панели и нарисованные трубы (держатели и соединители штанг сидят на трубах)
   const bx = [...boards, ...ps.filter((p) => p.id.startsWith("raw:r"))].map(box);
-  // где тело фурнитуры не должно сидеть: корпусные панели (не фасады — в них чашка петли и винты ручки)
-  const body = boards.filter((p) => p.role !== "door").map(box);
+  // где тело фурнитуры не должно сидеть: корпусные листовые панели (не фасады — в них чашка петли и винты ручки; не толще 40 мм —
+  // объёмный габарит повёрнутой двери углового модуля кухни (k07, k09: 262×917×261), бетонного короба и т. п. — не материал)
+  const body = boards.filter((p) => p.role !== "door" && Math.min(...p.size) <= RAW_SHEET_MAX).map(box);
   const outside: RawCheck["outside"] = [], far: RawCheck["far"] = [], deep: RawCheck["deep"] = [];
   let checked = 0;
   for (const h of hw) {

@@ -136,9 +136,12 @@ test('пересечения сырого модуля: политика без 
   const air=rawM({...raw,hardware:[{name:'Петля',category:'петля',mesh:'x',pos:[500,1500,300],quat:[1,0,0,0]}]});
   assert.deepEqual(rawCheck(parts(air),air).far.map(x=>x.gap),[293]);
   assert.match(collisionWarnings(project(air))[0]?.message??'',/висит в воздухе/);
-  const deep=rawM({...raw,panels:[...raw.panels,{name:'Тумба',kind:'ldsp',box:[100,0,0,900,200,600]}],hardware:[{name:'Опора',category:'опора',mesh:'x',pos:[500,100,300],quat:[1,0,0,0]}]});
+  // опора серединой в полке 16 мм — внутри детали; объёмный габарит (повёрнутая дверь углового, 262 мм) — не материал, не тревога
+  const deep=rawM({...raw,hardware:[{name:'Опора',category:'опора',mesh:'x',pos:[500,1008,300],quat:[1,0,0,0]}]});
   assert.equal(rawCheck(parts(deep),deep).deep.length,1);
   assert.equal(collisionWarnings(project(deep)).length,1);
+  const bulk=rawM({...raw,panels:[...raw.panels,{name:'Дверь',kind:'ldsp',box:[100,0,0,362,917,261]}],hardware:[{name:'Ручка рейлинг',category:'ручка',mesh:'x',pos:[230,450,130],quat:[1,0,0,0]}]});
+  assert.equal(rawCheck(parts(bulk),bulk).deep.length,0);
   // класс исходной ошибки — направляющая в стойке 16 мм: тело сетки (13 мм) внутри боковины → тревога (раньше порог 40 мм был
   // недостижим на панели 16 мм: глубина от ближайшей грани не больше 8). Конфирмат по назначению сидит в материале — не тревога.
   const inStand=rawM({...raw,hardware:[{name:'Направляющая',category:'направляющая',mesh:'x',pos:[1.5,500,10],quat:[1,0,0,0],bbox:[0,0,0,13,45,450]},
