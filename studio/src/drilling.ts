@@ -46,14 +46,15 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;
       const hpY = ey + down * 8; // середина горизонтали 16
-      push(p.id, [ex + inward * 34, ey, ez], [0, down, 0], 15, 12);
-      push(p.id + ":pin", [ex, hpY, ez], [inward, 0, 0], 8, 34);
-      push(p.id + ":side", [ex, hpY, ez], [-inward, 0, 0], 5, 12);
+      const e = m.kitchen?.ecc; // кухня Базиса со своей стяжкой (k33/k34 «Макмарт Ø15»): глубины и шток по проекту
+      push(p.id, [ex + inward * 34, ey, ez], [0, down, 0], 15, e?.barrel ?? 12);
+      push(p.id + ":pin", [ex, hpY, ez], [inward, 0, 0], e?.stem?.[0] ?? 8, e?.stem?.[1] ?? 34);
+      push(p.id + ":side", [ex, hpY, ez], [-inward, 0, 0], 5, e?.side ?? 12);
     } else if (p.id.startsWith("dowel:")) {
       // шкант 8×30: D8×22 в торец горизонтали, D8×12 в стойку
       const inward = p.id.includes(":left:") ? 1 : -1, ex = p.position[0] - inward * 3;
       push(p.id, [ex, p.position[1], p.position[2]], [inward, 0, 0], 8, 22);
-      push(p.id + ":side", [ex, p.position[1], p.position[2]], [-inward, 0, 0], 8, 12);
+      push(p.id + ":side", [ex, p.position[1], p.position[2]], [-inward, 0, 0], 8, m.kitchen?.ecc?.dowelSide ?? 12);
     } else if (p.id.startsWith("leg:") && p.model?.origin) {
       const o = p.model.origin;
       for (const [dx, dz] of [[-15.5, -15.5], [15.5, -15.5], [-15.5, 15.5], [15.5, 15.5]]) push(p.id, [o[0] + dx, o[1], o[2] + dz], [0, 1, 0], 4, 3);

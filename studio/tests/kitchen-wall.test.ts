@@ -166,6 +166,18 @@ test('навесной k33 m03: крыша перед ХДФ (короче сз�
   // у обычного навесного студии ничего этого нет
   const w=parts(kitchenWall(initialModule(),600));assert.ok(!w.some(p=>p.topNotches||p.rearNotch));
 });
+test('навесной k34 m02 на «Стяжке Макмарт Ø15»: присадка эксцентрика и шканта по проекту, бочонок дна снизу — сверка PASS',{skip:!existsSync(`${ETALON}/k34.json`)},()=>{
+  const ref=load('k34','m02'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.ecc,{barrel:13,stem:[7,28],side:9,dowelSide:11,bottomOut:true});
+  assert.deepEqual(validate(m),[]);assert.deepEqual(unsupported,[]);
+  const hs=holes(m),bot=parts(m).find(p=>p.id==='bottom')!;
+  assert.ok(hs.filter(h=>h.d===15&&h.part==='bottom').every(h=>h.at[1]===bot.position[1]-bot.size[1]/2&&h.dir[1]===1),'бочонок дна — с нижней пласти');
+  assert.ok(hs.some(h=>h.d===7&&h.depth===28)&&!hs.some(h=>h.d===8&&h.depth===34),'шток D7×28');
+  const c=compareModule(ref,m);assert.ok(c.pass);assert.deepEqual([c.holes?.matched,c.holes?.ref],[48,48]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.ecc,m.kitchen?.ecc);
+  // k30 m06 (эксцентрики под боковинами) — типовая присадка, без ecc
+  assert.equal(moduleFromEtalon(load('k30','m06')).module.kitchen?.ecc,undefined);
+});
 test('вырез в заднем верхнем углу боковины по контуру Базиса: только ровно такой контур',()=>{
   const C=(c:number[][])=>({figure:true,contourPlane:'yz',contour:c});
   assert.deepEqual(rearNotchFromContour(C([[0,0],[0,330],[1080,330],[1080,20],[980,20],[980,0]])),{height:100,depth:20});

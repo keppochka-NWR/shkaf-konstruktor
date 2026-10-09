@@ -374,6 +374,20 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const drill: NonNullable<NonNullable<Module["kitchen"]>["drill"]> = {};
     if (conf !== undefined && Math.abs(t - 16) < 0.1 && conf !== 35) drill.confirmat = conf;
     if (pin !== undefined && pin !== 12) drill.pin = pin;
+    // эксцентрик со своей присадкой (k33/k34 «Стяжка Макмарт Ø15»): бочонок D15×13, шток D7×28, в стойку D5×9, шкант в стойку D8×11, бочонок дна снизу
+    const eh = hs.filter((h) => srcCat(h) === "эксцентрик"), dh = hs.filter((h) => srcCat(h) === "шкант" && h.d === 8);
+    if (eh.length && !m.bottomUnder) {
+      const e: NonNullable<NonNullable<Module["kitchen"]>["ecc"]> = {};
+      const barrel = mode(eh.filter((h) => h.d === 15).map((h) => r1(h.depth))), side = mode(eh.filter((h) => h.d === 5).map((h) => r1(h.depth)));
+      const stems = eh.filter((h) => (h.d === 7 || h.d === 8) && h.depth > 20), stemD = mode(stems.map((h) => h.d)), stemL = mode(stems.map((h) => r1(h.depth)));
+      const dSide = mode(dh.filter((h) => h.depth < 20).map((h) => r1(h.depth)));
+      if (barrel !== undefined && barrel !== 12) e.barrel = barrel;
+      if (stemD !== undefined && stemL !== undefined && (stemD !== 8 || stemL !== 34)) e.stem = [stemD, stemL];
+      if (side !== undefined && side !== 12) e.side = side;
+      if (dSide !== undefined && dSide !== 12) e.dowelSide = dSide;
+      if (bottom && eh.some((h) => h.d === 15 && h.panel === bottom.p.i && h.face === "-y")) e.bottomOut = true;
+      if (Object.keys(e).length) { m.kitchen.ecc = e; notes.push(`эксцентрик по проекту: ${JSON.stringify(e)}`); }
+    }
     if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }
   }
   // навесные/антресоли: вырез в заднем верхнем углу боковины (k32: 100×20, контур из 6 точек) — у каждой боковины свой (k32 m14: только у правой)
