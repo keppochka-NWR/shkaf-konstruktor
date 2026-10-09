@@ -76,7 +76,7 @@ test('k16: опоры-дубли Базиса (две пары опор в од�
 
 test('k23: клипса и опора у цоколя ряда — разрешённый контакт до 3 мм (как в Базисе: сетка опоры Ø58 в z 493 доходит до 522, цоколь — с 520)',()=>{
   const box=(id:string,name:string):Part=>({id,name,size:[10,10,10],position:[0,0,0],length:10,width:10,thickness:10,role:'body',material:'board',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0]} as Part);
-  const clip={...box('kitchen-clip:1','Клипса для ПВХ цоколя, чёрная'),material:'plastic',role:'fastener'} as Part,leg={...box('leg:1','Опора'),material:'plastic',role:'fastener'} as Part;
+  const clip:Part={...box('kitchen-clip:1','Клипса для ПВХ цоколя, чёрная'),material:'metal',role:'fastener'},leg:Part={...box('leg:1','Опора'),material:'metal',role:'fastener'};
   const plinth=box('raw:p3','Цоколь · Фронтальная'),side=box('raw:p4','Боковина');
   assert.ok(allowedContact(clip,plinth,2));assert.ok(allowedContact(leg,plinth,2));
   assert.ok(!allowedContact(clip,plinth,5),'глубже 3 мм — ошибка');
