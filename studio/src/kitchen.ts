@@ -162,7 +162,13 @@ export function golaSides(m: Module, out: Part[]) {
     const ok = cuts.filter((c) => c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
     if (!ok.length) continue;
     p.golaCuts = ok.map((c) => ({ ...c }));
-    const front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth));
+    let front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth));
+    // кромка по самому вырезу (k15, k17 и др.): стенка выреза и дуга скругления — к переднему торцу, дно выреза — к верхнему
+    for (const c of ok) if (c.edged) {
+      const open = c.top0 <= 0.01, L = c.top1 - c.top0;
+      front += (open ? L - c.r + Math.PI * c.r / 2 : L - 2 * c.r + Math.PI * c.r);
+      top += c.depth - c.r;
+    }
     p.edgeLen = { "+z": Math.round(front * 10) / 10, "+y": Math.round(top * 10) / 10 };
   }
 }

@@ -221,7 +221,7 @@ export type Module = {
   /** Gola (профиль-ручка) по Базису: вырезы в переднем торце боковин нижнего модуля. top0/top1 — расстояние от верха боковины
    *  до верхнего/нижнего края выреза (мм), depth — глубина от переднего торца, r — радиус скругления внутренних углов.
    *  Вырез с top0 = 0 открыт сверху (верхний профиль L), остальные — средние (профиль C). Только для кухонь (m.kitchen). */
-  gola?: { cuts: GolaCut[] };
+  gola?: { cuts: GolaCut[]; /** Верх фасадов ниже верха корпуса на столько мм (Базис: 28–33 под верхний профиль L). */ faceTop?: number };
   /** Материал фасадов: ЛДСП (по умолчанию, в раскрое) или фасадный материал стороннего участка (МДФ/плёнка/эмаль — без раскроя и кромки). */
   facadeMaterial?: "ldsp" | "external";
   /** Кромка фасадов из фасадного материала, мм (Базис: «Кромка фасадная 1х22»); нет — без кромки. */
@@ -286,7 +286,7 @@ export type Module = {
 export type Groove = { host: string; face: "+" | "-"; along: [number, number]; across: [number, number]; depth: number; name: string };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
-export type GolaCut = { top0: number; top1: number; depth: number; r: number };
+export type GolaCut = { top0: number; top1: number; depth: number; r: number; /** Кромка и по контуру самого выреза (стенка, дуга, дно) — как в части кухонь Базиса. */ edged?: boolean };
 export type Part = {
   /** Вырезы Gola в боковине (координаты детали: от её верха вниз по Y, глубина — от переднего торца +Z); раскрой — по габариту. */
   golaCuts?: GolaCut[];
@@ -439,7 +439,7 @@ export function facadeBottom(m:Module){
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
 /** Верх накладных фасадов: под скосом — по низкой стороне (крыша плоская на её высоте), выше идёт фальш из фасадного материала. */
-export function facadeTop(m:Module){return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
+export function facadeTop(m:Module){if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
