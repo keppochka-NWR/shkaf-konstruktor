@@ -42,6 +42,7 @@ test('штанги, направляющие, эксцентрик, шкант: 
     [part('ecc:bottom:left:0:pin','Эксцентрик D15 · шток','fastener',[42,7,7]),{headSign:-1}],[part('ecc:x:pin','Эксцентрик D15 · шток','fastener',[7,42,7])],
     [part('dowel:bottom:left:0','Шкант 8×30','fastener',[30,8,8],'board')],[part('dowel:x','Шкант 8×30','fastener',[8,8,30],'board')],
     [part('s:latch:0','Толкатель push-to-open','hinge',[14,14,40])],
+    [part('s:flange:0','Фланец штанги D25','flange',[5,48,48]),{left:true}],[part('s:flange:1','Фланец штанги D25','flange',[5,48,48]),{left:false}],
   ];
   for(const [p,ctx] of cases){
     const g=procModel(p,ctx as never)!;assert.ok(g,p.id);

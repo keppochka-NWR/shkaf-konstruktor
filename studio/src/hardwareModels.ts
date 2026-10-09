@@ -12,7 +12,7 @@ import type { Part } from "./model";
 //  - шариковая направляющая — GTV Versalite H45: высота 45, толщина 12,7 (каталог GTV); толщина металла 1,2 и губы 4 — оценка;
 //  - скрытая (Firmax/Unihopper/DTC) — внешний габарит = деталь студии/Базиса (12×9, 20×12), листовой металл 1,5 — оценка;
 //  - эксцентрик Ø15 (отв. Ø15×13), шток Ø7 с резьбой Ø5 на 13 мм в стойке (отв. Ø5×13 Базиса), шкант Ø8 с рифлением — по габариту детали.
-export type ProcKind = "gola-L" | "gola-C" | "rod-round" | "rod-oval" | "slide-ball" | "slide-hidden" | "ecc-cam" | "ecc-pin" | "dowel" | "latch";
+export type ProcKind = "gola-L" | "gola-C" | "rod-round" | "rod-oval" | "slide-ball" | "slide-hidden" | "ecc-cam" | "ecc-pin" | "dowel" | "latch" | "flange";
 
 type P = Pick<Part, "id" | "name" | "role" | "size"> & { model?: Part["model"]; material?: Part["material"] };
 
@@ -30,6 +30,7 @@ export function procKind(p: P): ProcKind | undefined {
   if (p.id.startsWith("ecc:") && p.role === "fastener") return p.id.endsWith(":pin") ? "ecc-pin" : "ecc-cam";
   if (p.id.startsWith("dowel:") && p.role === "fastener") return "dowel";
   if (p.id.includes(":latch:") && p.role === "hinge") return "latch";
+  if (p.role === "flange" && Math.min(...p.size) * 3 <= Math.max(...p.size)) return "flange";
   return undefined;
 }
 
@@ -166,6 +167,16 @@ export function latchModel(size: [number, number, number]): THREE.Group {
   return g;
 }
 
+/** Фланец штанги: шайба по габариту детали (ось — тонкая сторона) у стойки и стакан под трубу Ø25 к середине секции; два шурупа.
+ *  baseAt −1 — шайба на минимальной грани по оси (левая стойка), +1 — на максимальной. Стакан Ø31 и толщина шайбы 1,6 — оценка. */
+export function flangeModel(size: [number, number, number], baseAt: -1 | 1): THREE.Group {
+  const axis = size.indexOf(Math.min(...size)), T = size[axis], R = Math.min(...size.filter((_, i) => i !== axis)) / 2, b = 1.6, inner = new THREE.Group(), c = chrome();
+  inner.add(lathe([[0, -T / 2], [R - 0.8, -T / 2], [R, -T / 2 + 0.8], [R, -T / 2 + b], [Math.min(15.5, R * 0.65), -T / 2 + b], [Math.min(15.5, R * 0.65), T / 2], [12.6, T / 2], [12.6, -T / 2 + b], [0, -T / 2 + b]], c, 36));
+  for (const s of [-1, 1]) { const sc = lathe([[0, -T / 2 + b], [2.6, -T / 2 + b], [2.6, -T / 2 + b + 0.6], [0, -T / 2 + b + 0.9]], plastic(0x6b7076), 16); sc.position.x = s * (R - 5.5); inner.add(sc); }
+  const g = new THREE.Group(); g.add(alongAxis(inner, axis, baseAt > 0 ? -1 : 1));
+  return g;
+}
+
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
 export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1 } = {}): THREE.Group | undefined {
   const k = procKind(p);
@@ -178,6 +189,7 @@ export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean;
     : k === "ecc-cam" ? eccCamModel(p.size, /:(under|bottom-under):/.test(p.id) ? undefined : 1)
     : k === "ecc-pin" ? eccPinModel(p.size, ctx.headSign ?? 1)
     : k === "latch" ? latchModel(p.size)
+    : k === "flange" ? flangeModel(p.size, ctx.left === false ? 1 : -1)
     : dowelModel(p.size);
   // тонкостенный профиль (Gola, направляющая) в собственной тени даёт полосы («shadow acne») — тень не отбрасывает, только принимает
   const thin = k.startsWith("gola") || k.startsWith("slide");
