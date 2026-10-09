@@ -1,7 +1,7 @@
 // Распознаватель: модуль эталона Базиса (Кухни\etalon\kNN.json) → параметрический кухонный модуль студии.
 // Все размеры читаются из эталона (ширина, высота, глубина боковины, опоры, дно, царги, задник, фасады, полки, крепёж),
 // а не подставляются типовые — так модуль студии можно сверить деталь в деталь (compare.ts).
-import { initialModule, section, parts, scaleHingeY, type Module, type Groove, type GolaCut } from "../../src/model";
+import { initialModule, section, parts, scaleHingeY, doorRowCount, type Module, type Groove, type GolaCut } from "../../src/model";
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
@@ -86,11 +86,18 @@ export function bareShelvesFromEtalon(ref: RefModule, shelves: B[], fixed: numbe
   });
 }
 
-/** Створки без петель (номер row*2+col, ряды снизу, створки слева): у фасада холодильника петель в Базисе нет — он на двери техники. */
-export function hingelessDoors(rows: B[][], hinges: { pos: number[] }[]): number[] {
+/** Створки без петель (номер row*2+col, ряды снизу, створки слева): у фасада холодильника петель в Базисе нет — он на двери техники.
+ *  rows — фасады Базиса по рядам створок студии, leaves — створок в ряду студии, total — всего фасадов Базиса.
+ *  Номер row*2+col указывает на дверь студии, только если ряды и створки совпадают один в один и других фасадов нет
+ *  (фасады ящиков, «Фронтальная», «Front» в общем ряду сбили бы номера — k30 m15, k28 m15). Иначе и если какая-то петля Базиса
+ *  не на этих створках — пусто: студия не снимает петли, которые в Базисе есть. */
+export function hingelessDoors(rows: B[][], hinges: { pos: number[] }[], leaves = 2, total = rows.flat().length): number[] {
+  if (rows.some((r) => r.length !== leaves) || rows.flat().length !== total) return [];
+  const on = (h: { pos: number[] }, q: B) => h.pos[1] >= q.y0 - 0.5 && h.pos[1] <= q.y1 + 0.5 && h.pos[0] >= q.x0 - 30 && h.pos[0] <= q.x1 + 30;
+  if (hinges.some((h) => !rows.flat().some((q) => on(h, q)))) return [];
   const out: number[] = [];
   rows.forEach((r, row) => [...r].sort((a, c) => a.x0 - c.x0).forEach((q, col) => {
-    if (!hinges.some((h) => h.pos[1] >= q.y0 - 0.5 && h.pos[1] <= q.y1 + 0.5 && h.pos[0] >= q.x0 - 30 && h.pos[0] <= q.x1 + 30)) out.push(row * 2 + col);
+    if (!hinges.some((h) => on(h, q))) out.push(row * 2 + col);
   }));
   return out;
 }
@@ -341,8 +348,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const bareDoors = role === "tall" && !doors.length && !m.kdrawers && !hw("направляющая").length && fronts.every((q) => /^Дверь/i.test(q.p.name));
     m.doors = doors.length > 0 || bareDoors;
     if (role === "tall" && m.doors) {
+      // ряды фасадов Базиса = ряды створок студии (doorRowCount): иначе номера створок не те
       const rowsB = (m.sections[0].doorSplit !== undefined ? rowYs.map(inRow) : [fronts]).map((r) => r.map((q) => q.b));
-      const hl = hingelessDoors(rowsB, hw("петля"));
+      const hl = rowsB.length === doorRowCount(m, m.sections[0]) ? hingelessDoors(rowsB, hw("петля"), perRow >= 2 ? 2 : 1, fronts.length) : [];
       if (hl.length) { m.sections[0].hingeless = hl; notes.push(`фасады без петель (как в Базисе): ${hl.join(", ")}`); }
     }
     m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)

@@ -5,7 +5,7 @@ import {validate,parts,initialModule,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {edgeByDir} from '../src/edges';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
-import {moduleFromEtalon,clusterLegXs} from '../scripts/kitchen/fromEtalon';
+import {moduleFromEtalon,clusterLegXs,hingelessDoors} from '../scripts/kitchen/fromEtalon';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 
@@ -117,6 +117,24 @@ test('распознавание: фасад холодильника без п�
   assert.equal(c2.hardware.find(h=>h.category==='полкодержатель'),undefined);
   assert.equal(parts(m2).filter(p=>p.id.startsWith('shp:')).length,0);
   assert.ok((m2.sections[0].fixed??[]).length<m2.sections[0].shelves.length,'съёмные полки не записаны в жёсткие');
+});
+
+test('фасады без петель — только когда ряды и створки Базиса совпадают с дверями студии: фасад ящика, «Front», «Фронтальная» в общем ряду не снимают петли (критик n3)',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{
+  const B=(x0:number,y0:number,x1:number,y1:number)=>({x0,y0,z0:0,x1,y1,z1:18});
+  const doorL=B(0,100,500,2000),doorR=B(503,100,1000,2000),drawer=B(300,100,700,300);
+  assert.deepEqual(hingelessDoors([[doorL,drawer,doorR]],[{pos:[16,200,0]},{pos:[984,200,0]}],2),[],'фасад ящика в ряду — номера не те, петли не снимаем');
+  assert.deepEqual(hingelessDoors([[doorL,doorR]],[{pos:[16,200,0]}],2,3),[],'есть другие фасады — не снимаем');
+  assert.deepEqual(hingelessDoors([[doorL,doorR]],[{pos:[16,200,0]}],2),[1],'две створки, петли только у левой');
+  assert.deepEqual(hingelessDoors([[doorL],[B(0,2003,500,2400)]],[{pos:[16,200,0]},{pos:[100,5000,0]}],1),[],'петля Базиса не на створках — распознавание неоднозначно');
+  // было: k30 m15 петли 12/6, k28 m15 6/0, k28 m03 4/0, k27 m08 3/0 — студия снимала петли, которые в Базисе есть
+  for(const [k,key] of [['k30','m15'],['k28','m15'],['k28','m03'],['k27','m08']]){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.equal(m.sections[0].hingeless,undefined,k+key);
+    const h=compareModule(ref,m).hardware.find(x=>x.category==='петля')!;
+    assert.ok(h.studio>=h.ref,`${k} ${key}: петли ${h.ref}/${h.studio}`);
+  }
+  const ref=load('k30','m15'),h30=compareModule(ref,moduleFromEtalon(ref).module).hardware.find(x=>x.category==='петля')!;
+  assert.deepEqual([h30.ref,h30.studio],[12,12]);
 });
 
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
