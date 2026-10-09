@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from '../src/model';
-import {kitchenWall} from '../src/kitchen';
+import {kitchenWall,hardwareRows} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions,bazisAirHardware} from '../src/collisions';
 import {collisionWarnings} from '../src/roomWarnings';
@@ -409,6 +409,10 @@ test('service through holes of the Bazis project (k28 m14: D10 for a wire) are d
   const h=holes(m).filter(x=>x.src==='kitchen-svc:0');
   assert.equal(h.length,1);assert.equal(h[0].part,'left');assert.equal(h[0].d,10);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.svcHoles,m.kitchen!.svcHoles);
+  // служебное отверстие — не изделие: ни в смете, ни в списке «Фурнитура модуля» панели кухни (критик n4-antresol: стояло строкой ×2)
+  const rows=hardwareRows(parts(m));
+  assert.ok(!rows.some(([n])=>/Отверстие/.test(n)),'no service hole row');
+  assert.ok(rows.some(([n])=>/Навес/.test(n)),'real hardware is listed');
 });
 
 test('etalon k28/m14: service holes as in Bazis',{skip:!existsSync(ET+'k28.json')},()=>{

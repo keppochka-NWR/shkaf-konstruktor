@@ -236,6 +236,14 @@ export function unitQuat(q: [number, number, number, number]): [number, number, 
   return n > 1e-9 ? (q.map((v) => v / n) as [number, number, number, number]) : [1, 0, 0, 0];
 }
 
+/** Список «Фурнитура модуля» в панели кухни: имя → штук. Без выреза под мойку и служебных отверстий Базиса (kitchen-svc — точка
+ *  привязки сквозного отверстия, не изделие: в смету не идёт, в список фурнитуры тоже). */
+export function hardwareRows(list: Part[]): [string, number][] {
+  const map = new Map<string, number>();
+  for (const p of list) if (p.material === "metal" && (p.role === "fastener" || p.role === "hinge" || p.role === "handle") && !p.id.startsWith("worktop-cut") && !p.id.startsWith("kitchen-svc:")) map.set(p.name, (map.get(p.name) ?? 0) + 1);
+  return [...map].sort((a, b) => b[1] - a[1]);
+}
+
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
