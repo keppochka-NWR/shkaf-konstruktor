@@ -95,6 +95,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
     m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
+    // левые опоры у большинства проектов — своя сетка (cb84c30b57a5); в части проектов (k26, k27) — та же, что у правых
+    const lefts = legs.filter((l) => l.pos[0] < W / 2 - 0.6);
+    if (lefts.length && lefts.every((l) => l.mesh === "ac675db9fc57")) m.kitchen.legs.same = true;
   }
   // цоколь в модуле? (панель у пола перед опорами)
   const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
