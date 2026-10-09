@@ -136,6 +136,10 @@ export type Section = {
   doorNiche?: number;
   /** Кухня (пенал с doorSplit в 3+ ряда): высоты фасадов средних рядов снизу вверх, мм; верхний ряд — до верха фасадов. */
   doorRows?: number[];
+  /** Кухня (doorRows): высоты петель средних рядов от низа фасада, по ряду doorRows; пустой ряд — по правилу (не hingeY нижнего). */
+  hingeYMid?: number[][];
+  /** Высоты средних фасадов, при которых записаны hingeYMid. */
+  hingeYMidFor?: number[];
   /** Кухня: номера створок (row*2+col) без петель — фасад холодильника крепится к двери техники, в Базисе петель нет. */
   hingeless?: number[];
   /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
@@ -1130,8 +1134,18 @@ function hardwareParts(m: Module, out: Part[]) {
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
     const sec = m.sections.find((s) => s.id === door.sectionId);
-    const upRow = !!m.kitchen && sec?.doorSplit !== undefined && Number(door.id.split(":door:")[1]) >= 2 && !!sec.hingeYUp?.length; // верхний ряд пенала — свои высоты
-    (upRow ? scaleHingeY(sec!.hingeYUp!, sec!.hingeYUpFor ?? dh, dh) : sec?.hingeY?.length ? scaleHingeY(sec.hingeY, sec.hingeYFor ?? dh, dh) : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
+    // ряд створки (номер row*2+col): у пенала кухни нижний — hingeY, средние (doorRows) — hingeYMid или правило, верхний — hingeYUp или hingeY
+    const row = Math.floor(Number(door.id.split(":door:")[1]) / 2), rowsN = sec ? doorRowCount(m, sec) : 1;
+    const tallRows = !!m.kitchen && sec?.doorSplit !== undefined && row > 0;
+    const midRow = tallRows && row < rowsN - 1, upRow = tallRows && !midRow && !!sec!.hingeYUp?.length;
+    const midYs = midRow ? sec!.hingeYMid?.[row - 1] : undefined;
+    const src: [number[], number] | undefined = upRow ? [sec!.hingeYUp!, sec!.hingeYUpFor ?? dh] : midRow ? (midYs?.length ? [midYs, sec!.hingeYMidFor?.[row - 1] ?? dh] : undefined)
+      : sec?.hingeY?.length ? [sec.hingeY, sec.hingeYFor ?? dh] : undefined;
+    let hys = src ? scaleHingeY(src[0], src[1], dh) : hingePositions(dh, dw, !!m.kitchen || midRow);
+    // кухня: высоты проекта, пересчитанные под другую высоту фасада, сбились (не по порядку, ближе планки 53 мм, вне фасада) — по правилу.
+    // При высоте фасада как в проекте высоты Базиса не трогаем.
+    if (m.kitchen && src && Math.abs(src[1] - dh) >= 0.5 && !hys.every((y, k) => y > 0 && y < dh && (k === 0 || y - hys[k - 1] >= 53))) hys = hingePositions(dh, dw, true);
+    hys.forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
       for (const s of hingeShifts()) {
@@ -1341,6 +1355,9 @@ export function validate(m: Module): string[] {
     if(s.removedDoors!==undefined&&(!Array.isArray(s.removedDoors)||s.removedDoors.some(k=>!Number.isInteger(k)||k<0||k>2*doorRowCount(m,s)-1)))errors.push(prefix+'неверный список снятых фасадов.');
     if(s.hingeless!==undefined&&(!m.kitchen||!Array.isArray(s.hingeless)||s.hingeless.some(k=>!Number.isInteger(k)||k<0||k>2*doorRowCount(m,s)-1)))errors.push(prefix+'фасады без петель: только у кухни, номера створок секции.');
     if(s.doorRows!==undefined&&(!m.kitchen||s.doorSplit===undefined||!Array.isArray(s.doorRows)||s.doorRows.length>3||s.doorRows.some(h=>!Number.isFinite(h)||h<100)||s.doorSplit+(s.doorNiche??0)+s.doorRows.reduce((a,h)=>a+h+3,0)>m.height-200))errors.push(prefix+'ряды фасадов: только у кухни с разделёнными фасадами, средний ряд от 100 мм, верхний не ниже 200 мм.');
+    // верхний ряд — по фактической высоте фасада (от верха средних рядов до верха фасадов), а не от высоты корпуса
+    else if(s.doorRows!==undefined&&m.doorMount!=='inset'&&!s.externalDrawers){const g=s.doorGap??fb(m),y=facadeBottom(m)+s.doorSplit!-g/2+(s.doorNiche??g)+s.doorRows.reduce((a,h)=>a+h+g,0);if(facadeTop(m)-y<200)errors.push(prefix+`верхний ряд фасадов ${Math.round(facadeTop(m)-y)} мм — меньше 200 мм: уменьшите средние ряды или увеличьте высоту.`);}
+    if(s.hingeYMid!==undefined&&(!m.kitchen||!Array.isArray(s.hingeYMid)||s.hingeYMid.length>(s.doorRows?.length??0)||s.hingeYMid.some(r=>!Array.isArray(r)||r.some(y=>!Number.isFinite(y)))))errors.push(prefix+'высоты петель средних рядов: только у кухни с рядами фасадов.');
     if(s.shelfDepth!==undefined){
       const max=shelfMaxDepth(m);
       if(!Number.isFinite(s.shelfDepth)||s.shelfDepth<100||s.shelfDepth>max)errors.push(prefix+`глубина полок должна быть от 100 до ${max} мм. Уменьшите глубину полки или увеличьте корпус.`);
@@ -1674,6 +1691,8 @@ export function parseModule(input: unknown): Module {
       ...(s.doorSplit===undefined?{}:{doorSplit:s.doorSplit}),
       ...(s.doorNiche===undefined?{}:{doorNiche:s.doorNiche}),
       ...(Array.isArray(s.doorRows)?{doorRows:s.doorRows.map(Number)}:{}),
+      ...(Array.isArray(s.hingeYMid)?{hingeYMid:s.hingeYMid.map((r:unknown)=>Array.isArray(r)?r.map(Number).filter(Number.isFinite):[])}:{}),
+      ...(Array.isArray(s.hingeYMidFor)?{hingeYMidFor:s.hingeYMidFor.map(Number)}:{}),
       ...(Array.isArray(s.hingeless)?{hingeless:s.hingeless.map(Number)}:{}),
       ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
       ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),

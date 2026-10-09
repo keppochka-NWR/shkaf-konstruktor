@@ -382,7 +382,15 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const lo = rowHinges(fronts[0]);
     if (lo.custom) { m.sections[0].hingeY = lo.ys; m.sections[0].hingeYFor = lo.dh; }
     if (twoRows) {
-      const fu = fronts.filter((q) => q.b.y0 > fronts[0].b.y1 - 1).sort((a, c) => a.b.x0 - c.b.x0)[0], up = rowHinges(fu);
+      // ряды снизу вверх (левая створка ряда): верхний — hingeYUp, средние (doorRows) — hingeYMid, если не по правилу
+      const ysR = [...new Set(fronts.map((f) => Math.round(f.b.y0)))].sort((a, c) => a - c);
+      const rowF = (y: number) => fronts.filter((q) => Math.abs(Math.round(q.b.y0) - y) < 1).sort((a, c) => a.b.x0 - c.b.x0)[0];
+      const fu = rowF(ysR[ysR.length - 1]), up = rowHinges(fu);
+      const midN = m.sections[0].doorRows?.length ?? 0;
+      if (midN && ysR.length === midN + 2) {
+        const mids = ysR.slice(1, -1).map((y) => rowHinges(rowF(y)));
+        if (mids.some((r) => r.custom)) { m.sections[0].hingeYMid = mids.map((r) => (r.custom ? r.ys : [])); m.sections[0].hingeYMidFor = mids.map((r) => r.dh); }
+      }
       // верхний ряд: свои высоты, если не совпадают с тем, что студия дала бы сама (правило или масштаб нижних)
       const scaled = lo.custom ? scaleHingeY(lo.ys, lo.dh, up.dh) : null;
       if (up.custom || (scaled && (scaled.length !== up.ys.length || scaled.some((y, k) => Math.abs(y - up.ys[k]) > 0.5)))) { m.sections[0].hingeYUp = up.ys; m.sections[0].hingeYUpFor = up.dh; }
