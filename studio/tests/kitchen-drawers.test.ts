@@ -93,3 +93,44 @@ test('critic r3: adding a bottom front rail lifts the drawers (refit) instead of
   assert.deepEqual(validate(m).filter(x=>/Ящик/.test(x)),[]);
   assert.deepEqual(partCollisions(parts(m),m).filter(c=>/Axis|ящик/i.test(c.names.join(' '))),[]);
 });
+// Firmax скрытого монтажа: короб ЛДСП как в Базисе k14/m10 (НМВЯ 2, 800×820, три ящика)
+const firmax=()=>{const m=kitchenBase(initialModule(),800,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
+  m.kdrawers=[{system:'firmax-ldsp',y0:101.5,y1:471.5,runnerY:116,box:{y:152,h:264.5,len:490,screws:true}},{system:'firmax-ldsp',y0:474.5,y1:671,runnerY:474.5,box:{y:514.5,h:121.5,len:490,screws:true}},{system:'firmax-ldsp',y0:674,y1:819,runnerY:674,box:{y:704.5,h:92.5,len:490,bottomUp:5,screws:true}}];return m;};
+
+test('Firmax box: LDSP 16 sides 5 mm from the cabinet, bottom 10 (5) above their lower edge, back and false panel between sides on the bottom',()=>{
+  const m=firmax(),ps=parts(m),L=ps.find(p=>p.id==='left')!,x0=L.position[0]+L.size[0]/2,F=L.position[2]+L.size[2]/2;
+  const g=(id:string)=>{const p=ps.find(q=>q.id===id)!;return {lo:p.position.map((v,i)=>Math.round((v-p.size[i]/2)*10)/10),hi:p.position.map((v,i)=>Math.round((v+p.size[i]/2)*10)/10),p};};
+  const s=g('kd:0:fx:side:L');assert.deepEqual([s.lo[0]-x0,s.hi[0]-x0,s.lo[1],s.hi[1],F-s.lo[2],F-s.hi[2]],[5,21,152,416.5,490,0]);
+  const b=g('kd:0:fx:bottom');assert.deepEqual([b.lo[0]-x0,b.lo[1],b.hi[1],b.p.size[2]],[21,162,178,490]);assert.equal(b.p.size[0],800-32-2*21);
+  const k=g('kd:0:fx:back'),f=g('kd:0:fx:front');assert.deepEqual([k.lo[1],k.hi[1],F-k.lo[2]],[178,416.5,490]);assert.deepEqual([f.lo[1],f.hi[2]],[178,Math.round(F*10)/10]);
+  assert.equal(g('kd:2:fx:bottom').lo[1],709.5,'bottomUp 5');
+  assert.deepEqual(validate(m),[]);
+  assert.deepEqual(partCollisions(ps,m),[]);
+});
+
+test('Firmax edges by Bazis: box sides +-y and -z, back and false panel +y, bottom -z',()=>{
+  const m=firmax();m.edgeScheme={t:0.5} as never;const ps=parts(m),e=(id:string)=>Object.keys(edgeByDir(ps.find(p=>p.id===id)!)).sort();
+  assert.deepEqual(e('kd:1:fx:side:L'),['+y','-y','-z']);assert.deepEqual(e('kd:1:fx:back'),['+y']);assert.deepEqual(e('kd:1:fx:front'),['+y']);assert.deepEqual(e('kd:1:fx:bottom'),['-z']);
+});
+
+test('Firmax hardware and drilling: runners at the Bazis point, confirmats D8x16 + D5x37, 3x3 in cabinet sides, 5x12 in the bottom rear edge',()=>{
+  const m=firmax(),ps=parts(m),h=holes(m),L=ps.find(p=>p.id==='left')!,x0=L.position[0]+L.size[0]/2,F=L.position[2]+L.size[2]/2;
+  const runs=ps.filter(p=>p.id.startsWith('kd:2:slide:'));assert.equal(runs.length,2);assert.deepEqual(runs[0].anchor,[x0,674,F]);
+  assert.ok(runs.every(r=>r.material==='metal'&&!r.model&&r.position[1]+r.size[1]/2<=709.5),'rail under the bottom, no Bazis mesh');
+  const conf=ps.filter(p=>p.id.startsWith('fast:kd:0:'));assert.equal(conf.length,2*(2*2+2),'2 per back/false panel + 2 into the bottom, per side');
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:side:L'&&x.d===8&&x.depth===16).length,6);
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:back'&&x.d===5&&x.depth===37).length,4);
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:bottom'&&x.d===5&&x.depth===37).length,4);
+  assert.equal(h.filter(x=>x.part==='kd:0:fx:bottom'&&x.d===5&&x.depth===12).length,2);
+  assert.equal(h.filter(x=>x.part==='left'&&x.d===3&&x.depth===3).length,6,'3x3: 2 per drawer');
+  assert.equal(ps.filter(p=>p.id.startsWith('kd:')&&p.id.includes(':screw:fx3:')).length,12);
+});
+
+test('Firmax: system switch keeps the facades, layout fits, save/load round trip, depth refit and validation',()=>{
+  const m=firmax(),back=parseModule(JSON.parse(JSON.stringify(m)))!;assert.deepEqual(back.kdrawers,m.kdrawers);
+  const r=relayoutKDrawers(m,3,m.kdrawers!.map(k=>k.y1-k.y0),'firmax-ldsp');assert.ok(r.every(k=>k.system==='firmax-ldsp'&&axisFits(m,k)));
+  const ax=relayoutKDrawers(m,3,undefined,'axis-pro');assert.ok(ax.every(k=>k.system==='axis-pro'));
+  const n={...m,kdrawers:r};assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
+  const deep={...m,depth:450};assert.equal(refitKDrawers(deep,'depth')!.every(k=>k.system==='firmax-ldsp'&&k.box.len<=410),true);
+  const bad={...m,kdrawers:[{system:'firmax-ldsp' as const,y0:101.5,y1:471.5,runnerY:116,box:{y:152,h:40,len:490}}]};assert.ok(validate(bad).some(x=>/боковины от 60/.test(x)));
+});
