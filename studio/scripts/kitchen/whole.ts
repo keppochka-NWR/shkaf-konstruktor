@@ -41,7 +41,10 @@ function interModule(p: Project, off: number[] = [0, 0, 0]) {
   // в пересечения не входит — сравниваем одинаково (иначе петля/навес/клипса у соседней детали дают «пересечение» 3–5 мм)
   const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu" && !q.id.startsWith("raw:h")).map((q) => ({ i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
   const out: string[] = [];
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i) continue; const d = pen(A.b, B.b); if (d > 0.5) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
+  // стяжка с соседним корпусом (kitchen.outConf, k15 m12 «А 1» → «Пенал 1»): конфирмат по назначению сидит в доске соседа — как в Базисе
+  // (у Базиса фурнитура в счёт не входит), это не пересечение (n4-antresol)
+  const tie = (x: Part, y: Part) => x.id.startsWith("fast:out:") && (y.material === "board" || y.material === "hdf");
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i || tie(A.q, B.q) || tie(B.q, A.q)) continue; const d = pen(A.b, B.b); if (d > 0.5) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
   return out;
 }
 
