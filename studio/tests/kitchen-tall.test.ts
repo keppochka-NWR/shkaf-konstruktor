@@ -113,6 +113,10 @@ test('распознавание: фасад холодильника без п�
   const c2=compareModule(r2,m2);
   assert.ok(!c2.missing.some(x=>x.cls.startsWith('фасад')),'двери есть');
   assert.equal(c2.hardware.find(h=>h.category==='петля'),undefined,'петель нет ни в Базисе, ни в студии');
+  // полки с зазором у стоек без полкодержателей и крепежа — съёмные без фурнитуры, полкодержателей студия не добавляет
+  assert.equal(c2.hardware.find(h=>h.category==='полкодержатель'),undefined);
+  assert.equal(parts(m2).filter(p=>p.id.startsWith('shp:')).length,0);
+  assert.ok((m2.sections[0].fixed??[]).length<m2.sections[0].shelves.length,'съёмные полки не записаны в жёсткие');
 });
 
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{

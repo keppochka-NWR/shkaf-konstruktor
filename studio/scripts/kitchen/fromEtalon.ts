@@ -383,7 +383,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // полки (ЛДСП и стекло)
   const glassSh = P.filter(({ p }) => p.axis === "y" && p.kind === "glass");
   const innerBottom = bottom ? bottom.b.y1 : 0, innerTop = topPanel ? topPanel.b.y0 : top;
-  const sh = [...shelves, ...glassSh].sort((a, c) => a.b.y0 - c.b.y0);
+  const sh = [...shelves, ...glassSh].sort((a, c) => a.b.y0 - c.b.y0), looseBare: number[] = [];
   m.sections[0].shelves = sh.map((s) => (s.b.y0 + s.b.y1) / 2).map((cy) => (cy - innerBottom) / (innerTop - innerBottom));
   const gl = sh.map((s, j) => (glassSh.includes(s) ? j : -1)).filter((j) => j >= 0);
   if (gl.length) { m.sections[0].glassShelves = gl; m.glassT = r1(glassSh[0].b.y1 - glassSh[0].b.y0); m.glassGap = r1(glassSh[0].b.x0 - left.b.x1); }
@@ -393,7 +393,10 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.shelfRear = r1(s0.b.z0 - sideZ0 - rear);
     const pins = hw("полкодержатель").filter((h) => Math.abs(h.pos[1] - s0.b.y0) < 2);
     if (pins.length) m.shelfPinInset = r1(Math.min(...pins.map((h) => h.pos[2] - s0.b.z0)));
-    const fixed = sh.map((s, j) => (hw("полкодержатель").some((h) => Math.abs(h.pos[1] - s.b.y0) < 2) ? -1 : j)).filter((j) => j >= 0);
+    const noPins = sh.map((s, j) => (hw("полкодержатель").some((h) => Math.abs(h.pos[1] - s.b.y0) < 2) ? -1 : j)).filter((j) => j >= 0);
+    // полка с зазорами у стоек (как съёмная), но без полкодержателей и крепежа в Базисе (k23 «Пустой») — съёмная без фурнитуры, не жёсткая
+    looseBare.push(...noPins.filter((j) => !glassSh.includes(sh[j]) && sh[j].b.x0 - left.b.x1 >= 0.9 && right.b.x0 - sh[j].b.x1 >= 0.9 && bareShelvesFromEtalon(ref, sh.map((q) => q.b), [j]).length > 0));
+    const fixed = noPins.filter((j) => !looseBare.includes(j));
     if (fixed.length) m.sections[0].fixed = fixed;
   }
   // крепёж по стыкам: эксцентрик (+шкант) или конфирмат — по фурнитуре у каждой стороны дна/крыши
@@ -423,7 +426,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   }
   notes.push(...rfx.notes);
   // жёсткие полки без крепежа в Базисе — студия его не добавляет
-  const bare = bareShelvesFromEtalon(ref, sh.map((q) => q.b), m.sections[0].fixed ?? []);
+  const bare = [...bareShelvesFromEtalon(ref, sh.map((q) => q.b), m.sections[0].fixed ?? []), ...looseBare].sort((a, c) => a - c);
   if (bare.length) { m.kitchen.bareShelves = bare; notes.push(`жёсткие полки без крепежа (как в Базисе): ${bare.map((j) => j + 1).join(", ")}`); }
   if (m.jointFastening && dow.length && ecc.length) {
     const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];

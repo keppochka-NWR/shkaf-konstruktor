@@ -1065,7 +1065,9 @@ function hardwareParts(m: Module, out: Part[]) {
   const brand = HINGE_BRANDS[m.hingeBrand ?? "gtv"].label;
   // Полкодержатели — до петель: петля не должна сесть на полкодержатель (проверка пересечений ниже их видит).
   const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
-  for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
+  // кухня Базиса: съёмная полка без полкодержателей в проекте (kitchen.bareShelves) — студия их не добавляет
+  const bareSh = new Set((m.kitchen?.bareShelves ?? []).map((j) => `${m.sections[0].id}:shelf:${j}`));
+  for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !bareSh.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     const pi = m.shelfPinInset ?? 40, sg = sh.material === "glass" ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap; // держатель — на грани стойки
     [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pi], [x + w / 2 - 4, z + dd / 2 - pi]].forEach(([px, pz], k) =>
@@ -1228,6 +1230,7 @@ export function fastenerCounts(m: Module) {
   const ps = parts(m);
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   const rafix = m.kitchen ? rafixCount(ps) : 0; // рафиксы — только у кухонь Базиса (kitchenRafix.ts)
+  for (const j of m.kitchen?.bareShelves ?? []) fixedIds.add(`${m.sections[0].id}:shelf:${j}`); // полка без крепежа в Базисе — без полкодержателей
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
