@@ -210,6 +210,21 @@ test('цоколь — деталь под дном: у кухни без опо
   assert.ok(!validate(moduleFromEtalon(load('k18','m21')).module).some(e=>e.includes('высоту цоколя')));
 });
 
+test('дно/крыша без крепежа и отверстий у торцов в Базисе (k32 m01 — корпус под холодильник): студия не добавляет конфирматов (bareJoints, критик n3)',{skip:!existsSync(`${ETALON}/k32.json`)},()=>{
+  const ref=load('k32','m01'),{module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.bareJoints,['bottom','top']);
+  assert.equal(parts(m).filter(p=>/^(fast|ecc|dowel):(bottom|top):/.test(p.id)).length,0);
+  const c=compareModule(ref,m);
+  assert.equal(c.hardware.find(h=>h.category==='конфирмат'),undefined,'конфирматов нет ни в Базисе, ни в студии');
+  const w={...initialModule(),kitchen:{role:'wall' as const,bareJoints:['top' as const]}};
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(w))).kitchen?.bareJoints,['top']);
+  assert.equal(parts(w).filter(p=>/^(fast|ecc|dowel):top:/.test(p.id)).length,0,'крыша без крепежа');
+  assert.ok(parts(w).some(p=>/^(fast|ecc|dowel):bottom:/.test(p.id)),'дно — с крепежом');
+  // у стыка есть крепёж другой категории или отверстия (k33 m03) — не «голый»
+  const {module:m33}=moduleFromEtalon(load('k33','m03'));
+  assert.equal(m33.kitchen?.bareJoints,undefined);
+});
+
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
   const m=initialModule();m.sections[0].doorNiche=500;
   assert.ok(validate(m).some(e=>e.includes('ниша под технику')));

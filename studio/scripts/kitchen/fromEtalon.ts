@@ -86,6 +86,13 @@ export function bareShelvesFromEtalon(ref: RefModule, shelves: B[], fixed: numbe
   });
 }
 
+/** Стык горизонтали (дно/крыша) со стойками без крепежа в Базисе: ни одной фурнитуры любой категории (конфирмат, эксцентрик, шкант,
+ *  «крепёж» и др.) и ни одного отверстия у торцов горизонтали на её высоте. Осторожно: что-то есть — стык не «голый». */
+export function bareJointFromEtalon(ref: RefModule, b: B): boolean {
+  const near = (p: number[]) => p[1] >= b.y0 - 1 && p[1] <= b.y1 + 1 && p[2] >= b.z0 - 1 && p[2] <= b.z1 + 1 && (p[0] <= b.x0 + 20 || p[0] >= b.x1 - 20);
+  return !ref.hardware.some((h) => near(h.pos)) && !(ref.holes ?? []).some((h) => near(h.at));
+}
+
 /** Створки без петель (номер row*2+col, ряды снизу, створки слева): у фасада холодильника петель в Базисе нет — он на двери техники.
  *  rows — фасады Базиса по рядам створок студии, leaves — створок в ряду студии, total — всего фасадов Базиса.
  *  Номер row*2+col указывает на дверь студии, только если ряды и створки совпадают один в один и других фасадов нет
@@ -469,6 +476,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
   const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b, right.b);
   if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;
+  // дно/крыша без крепежа к стойкам в Базисе (k32 m01/m02 — корпус под холодильник без фурнитуры): студия крепёж не добавляет
+  const bareJ = (["bottom", "top"] as const).filter((k) => { const q = k === "bottom" ? bottom : topPanel; return !!q && bareJointFromEtalon(ref, q.b); });
+  if (bareJ.length) m.kitchen.bareJoints = [...bareJ];
   // своя сетка крепежа у стыков, где Базис поставил его иначе, чем у модуля (k23: крыша 104,5/64,5 при 64,5/64,5 у дна)
   if (m.confirmatInset !== undefined) {
     const nDef = jp ?? (d > 600 ? 3 : 2), ins = m.confirmatInset, hosts: [string, B][] = [];
