@@ -27,7 +27,10 @@ function rawFromRef(ref: RefModule): RawSpec {
   };
 }
 function place(ref: RefModule, m: Module): PlacedModule {
-  const [ox, oy, oz] = (ref as unknown as { world: { origin: number[] } }).world.origin, yaw = (ref as unknown as { world: { yaw: number } }).world.yaw;
+  const o0 = (ref as unknown as { world: { origin: number[] } }).world.origin, yaw = (ref as unknown as { world: { yaw: number } }).world.yaw;
+  // параметрический модуль с накладным ХДФ: у студии боковины с z = 0 (ХДФ на −3), у Базиса начало — по ХДФ: сдвиг на 3 вдоль оси модуля
+  const s = !m.raw && m.backType === "nailed" ? 3 : 0, a = ((yaw || 0) * Math.PI) / 180;
+  const [ox, oy, oz] = [o0[0] + s * Math.sin(a), o0[1], o0[2] + s * Math.cos(a)];
   const w = m.width, d = m.depth;
   const [x, z] = yaw === 90 ? [ox, oz - w] : yaw === 180 ? [ox - w, oz - d] : yaw === 270 ? [ox - d, oz] : [ox, oz];
   return { id: id(), x: r1(x), y: r1(oy), z: r1(z), rotation: (yaw || 0) as PlacedModule["rotation"], module: m };
