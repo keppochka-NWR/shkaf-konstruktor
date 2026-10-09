@@ -120,3 +120,8 @@ test('узкая жёсткая полка у задника (глубина 100
     assert.equal(sh.length,1,k+key+' '+sh.map(p=>p.id).join());
   }
 });
+
+test('кухня: узкая жёсткая полка-планка 70 у задника (k18 m06) допустима, у шкафа студии — по-прежнему от 100',{skip:!has('k18')},()=>{
+  const {m,ok}=pass('k18','m06');assert.ok(ok);assert.equal(m.sections[0].shelfDepth,70);
+  const w=initialModule();w.sections[0].shelfDepth=70;assert.ok(validate(w).some(e=>/глубина полок должна быть от 100/.test(e)));
+});
