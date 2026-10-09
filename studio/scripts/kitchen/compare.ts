@@ -8,6 +8,7 @@ import { parseProject } from "../../src/project";
 import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
+import { normalizeRefHardware } from "./refHardware";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
@@ -109,7 +110,8 @@ function matchPoints(a: number[][], b: number[][]): number | null {
 /** Отступления (реестр): профили-экструзии Базиса («Профиль», «Профиль1») — без сетки, контур в эталон не извлекается; не воспроизводятся, в отчёте — отдельной строкой. */
 export const isDeviation = (h: RefHardware) => /^Профиль/.test(h.name) && !h.mesh;
 
-export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison {
+export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Comparison {
+  const ref0: RefModule = { ...ref00, hardware: normalizeRefHardware(ref00.hardware) }; // «Евровинт 6х50» из «прочего» — конфирмат
   const deviations = ref0.hardware.filter(isDeviation).map((h) => h.name), ref: RefModule = { ...ref0, hardware: ref0.hardware.filter((h) => !isDeviation(h)) };
   const ps = parts(m), A0 = refItems(ref), B0 = studioItems(ps), pairs: PanelPair[] = [], missing: Item[] = [], extra: Item[] = [];
   // Общая точка отсчёта: минимальный угол габарита панелей (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0 и ХДФ на −3..0).

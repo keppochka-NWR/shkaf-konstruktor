@@ -9,6 +9,7 @@ import { compareModule, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, type RawSpec } from "../../src/rawModule";
 import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
+import { normalizeRefHardware } from "./refHardware";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
 const OUTDIR = "public/local-projects";
@@ -25,7 +26,7 @@ function rawFromRef(ref: RefModule): RawSpec {
   return {
     panels: ref.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
-    counts: rawCounts(ref.hardware),
+    counts: rawCounts(normalizeRefHardware(ref.hardware)), // «Евровинт 6х50» из «прочего» — в смете конфирмат
   };
 }
 function place(ref: RefModule, m: Module): PlacedModule {
@@ -63,7 +64,7 @@ for (const f of files) {
   if (rowPanels.length) {
     const o = [0, 1, 2].map((i) => Math.min(...rowPanels.map((p) => p.box[i]))), M = [3, 4, 5].map((i) => Math.max(...rowPanels.map((p) => p.box[i])));
     const m: Module = { ...initialModule(), name: "Ряд: столешница, цоколь, панели", width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0,
-      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), row: true } };
+      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts(normalizeRefHardware((e.row?.hardware ?? []) as { name: string; category: string }[])), row: true } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
   }
   // помещение по габариту кухни

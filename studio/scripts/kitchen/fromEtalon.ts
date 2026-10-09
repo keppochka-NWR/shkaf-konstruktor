@@ -9,6 +9,7 @@ import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type 
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { normalizeRefHardware } from "./refHardware";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -55,7 +56,8 @@ export function golaFromContour(p: { contour?: [number, number][]; contourPlane?
   return out.sort((a, b) => a.top0 - b.top0);
 }
 
-export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
+export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
+  const ref: RefModule = { ...ref0, hardware: normalizeRefHardware(ref0.hardware) }; // «Евровинт 6х50» из «прочего» — конфирмат
   const notes: string[] = [], unsupported: string[] = [];
   const W = ref.size[0], P = ref.panels.map((p) => ({ p, b: bx(p) }));
   const board = (k: string) => k === "ldsp" || k === "mdf";

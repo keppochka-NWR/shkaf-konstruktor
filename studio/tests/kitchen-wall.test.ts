@@ -5,6 +5,7 @@ import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '.
 import {kitchenWall} from '../src/kitchen';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {refCategory} from '../scripts/kitchen/refHardware';
 import {partCollisions} from '../src/collisions';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тесты по эталонам пропускаются.
@@ -130,6 +131,22 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   const ref=load('k21','m05'),{module:m}=moduleFromEtalon(ref);
   assert.equal(m.kitchen?.dryer?.length,8);
   const ps=parts(m).filter(p=>p.id.startsWith('kitchen-dryer:'));
+test('«Евровинт 6х50» из «прочего» эталона — конфирмат: k33 m03 и k34 m04 крепёж не снимается',{skip:!existsSync(`${ETALON}/k33.json`)||!existsSync(`${ETALON}/k34.json`)},()=>{
+  assert.equal(refCategory({name:'Евровинт 6х50',category:'прочее'}),'конфирмат');
+  assert.equal(refCategory({name:'Винт прямого крепления с потайной головкой, ø6,3х14 мм',category:'прочее'}),'прочее');
+  assert.equal(refCategory({name:'Полкодержатель D5 никель',category:'полкодержатель'}),'полкодержатель');
+  for(const [k,key,n] of [['k33','m03',8],['k34','m03',8],['k34','m04',4],['k33','m01',8]] as const){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.notEqual(m.kitchen?.noFasteners,true,`${k} ${key}: крепёж в Базисе есть`);
+    assert.ok(parts(m).filter(p=>p.id.startsWith('fast:')).length>=n,`${k} ${key}: конфирматы студии`);
+    const c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='конфирмат')!;
+    assert.equal(row.ref,n,`${k} ${key}: евровинты Базиса посчитаны конфирматами`);
+    assert.ok(!c.hardware.some(h=>h.category==='прочее'&&h.ref>0),'в «прочем» евровинтов не осталось');
+    assert.ok((c.holes?.matched??0)>0,`${k} ${key}: присадка крепежа совпадает хотя бы частично`);
+  }
+  // в k32 крепежа нет вовсе — правило «без крепежа» по-прежнему срабатывает
+  assert.equal(moduleFromEtalon(load('k32','m14')).module.kitchen?.noFasteners,true);
+});
   assert.equal(ps.length,8);
   assert.ok(ps.every(p=>p.model?.native&&/^hardware\/bazis\/[0-9a-f]{12}\.glb$/.test(p.model.file)));
   const row=compareModule(ref,m).hardware.find(h=>h.category==='сушка')!;
