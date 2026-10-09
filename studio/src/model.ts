@@ -1368,12 +1368,14 @@ export function validate(m: Module): string[] {
       );
     if (p.id === "slope-filler") continue; // фальш над фасадами — не створка: без ограничений ширины/высоты двери
     // Кухня: фасады до 700 (в проектах Базиса цеха навесные 627–650 мм при высоте 927); шкафы — правило цеха doorMax.
-    if (p.role === "door" && p.width > (m.kitchen ? Math.max(700, RULES.doorMax) : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax))
-      errors.push(
-        `Фасад шире ${m.kitchen ? Math.max(700, RULES.doorMax) : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`,
-      );
-    if (p.role === "door" && p.length < RULES.doorMinH)
-      errors.push(`Распашной фасад ниже ${RULES.doorMinH} мм. Увеличьте высоту корпуса или уберите фасады.`);
+    // антресоль кухни с подъёмным фасадом (петли сверху) — до ширины кухонного корпуса 1200, как в Базисе (А 975×357)
+    const doorWMax = m.kitchen ? (p.hinge === "top" ? KITCHEN.maxWidth : Math.max(700, RULES.doorMax)) : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax;
+    if (p.role === "door" && p.width > doorWMax)
+      errors.push(`Фасад шире ${doorWMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`);
+    // кухонные антресоли Базиса — фасады от 247 мм (корпус 250–400); шкафы — правило цеха doorMinH
+    const doorHMin = m.kitchen ? 200 : RULES.doorMinH;
+    if (p.role === "door" && p.length < doorHMin)
+      errors.push(`Распашной фасад ниже ${doorHMin} мм. Увеличьте высоту корпуса или уберите фасады.`);
     if (p.role === "door" && p.material === "alu" && (p.length > ALU_EXTRAS.maxH || p.width > ALU_EXTRAS.maxW))
       errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: по СТП не выше ${ALU_EXTRAS.maxH} и не шире ${ALU_EXTRAS.maxW} мм. Разделите секцию или уменьшите высоту.`);
   }
