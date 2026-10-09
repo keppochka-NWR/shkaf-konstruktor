@@ -19,6 +19,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   raise?: { front?: number; doorsToFloor?: boolean };
   /** Дно короче спереди на столько мм (Базис k06, k10, k15: 24,5 — ниша под подсветку у лица навесного); по умолчанию 0. */
   bottomFront?: number;
+  /** Дно короче сзади (Базис: навесной под вытяжку, дно перед ХДФ — k08 m10, k04, k13, k14: 20). */
+  bottomBack?: number;
+  /** Стыки дна/крыши без крепежа в проекте Базиса («bottom:left» и т. п., k08 m10, k14 m06) — студия крепёж не ставит. */
+  jointNone?: string[];
   /** Крепёж стыков дна/крыши с боковинами по Базису: ключ «bottom:left» и т. п. → [от задней кромки, от передней кромки детали], мм. */
   jointZ?: Record<string, [number, number]>;
   /** В проекте Базиса у модуля нет крепежа корпуса (конфирматов, эксцентриков, шкантов) — студия его не добавляет. */
@@ -245,6 +249,7 @@ export function kitchenErrors(m: Module): string[] {
     if ((k.role === "base") && !m.feet) e.push("Нижний кухонный корпус ставится на опоры.");
     if (k.jointZ && Object.values(k.jointZ).some((v) => !Array.isArray(v) || v.length !== 2 || v.some((x) => !Number.isFinite(x) || x < 5 || x > m.depth / 2 + 50))) e.push("Крепёж стыка: отступы от кромок 5 мм — до середины глубины.");
     if (k.bottomFront !== undefined && (!Number.isFinite(k.bottomFront) || k.bottomFront < 0 || k.bottomFront > 100)) e.push("Дно короче спереди: 0–100 мм.");
+    if (k.bottomBack !== undefined && (!Number.isFinite(k.bottomBack) || k.bottomBack < 0 || k.bottomBack > 120)) e.push("Дно короче сзади: 0–120 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
   }

@@ -5,9 +5,9 @@ import { initialModule, section, parts, scaleHingeY, type Module, type Groove, t
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
-import { wallRaise, bottomFrontRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
+import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
-import { wallJointZ, endGroove, wallShelfEdges, wallEndEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -89,6 +89,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     if (under) m.bottomUnder = true;
     const bf = role === "wall" ? bottomFrontRecess(bottom, sideZ0, sideZ1) : null;
     if (bf !== null) { m.kitchen.bottomFront = bf; notes.push(`дно короче спереди на ${bf}`); }
+    const bb = role === "wall" ? bottomBackRecess(bottom, sideZ0) : null;
+    if (bb !== null) { m.kitchen.bottomBack = bb; notes.push(`дно короче сзади на ${bb}`); }
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
     else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1))) {
       m.plinthHeight = wr.plinthHeight; if (wr.raisedSides) m.raisedSides = true; m.kitchen.raise = wr.raise; notes.push(wr.note); if (wr.unsupported) unsupported.push(wr.unsupported);
@@ -307,6 +309,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right, m.confirmatInset);
     if (Object.keys(jz).length) m.kitchen.jointZ = jz;
+    const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right);
+    if (jn.length) m.kitchen.jointNone = jn;
     // дно под боковинами на эксцентриках (k30, k31): шкант на нижней пласти дна — своё смещение от эксцентрика
     if (m.bottomUnder && bottom && !m.dowels && (m.jointFastening?.["bottom:left"] === "eccentric" || m.jointFastening?.["bottom:right"] === "eccentric")) {
       const off = bottomUnderDowelOffset(ref.hardware, bottom);

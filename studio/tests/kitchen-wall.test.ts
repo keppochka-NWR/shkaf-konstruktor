@@ -138,3 +138,14 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   const k6=moduleFromEtalon(load('k06','m07'));
   assert.equal(k6.module.kitchen?.dryer,undefined);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
 });
+test('навесной под вытяжку k08 m10: дно короче сзади (перед ХДФ) и без крепежа, как в Базисе — сверка PASS',{skip:!existsSync(`${ETALON}/k08.json`)},()=>{
+  const ref=load('k08','m10'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.bottomBack,20);
+  assert.deepEqual(m.kitchen?.jointNone,['bottom:left','bottom:right']);
+  const ps=parts(m);
+  assert.equal(ps.filter(p=>p.id.startsWith('fast:bottom:')).length,0);
+  const b=ps.find(p=>p.id==='bottom')!;assert.equal(b.position[2]-b.size[2]/2,20);
+  assert.ok(compareModule(ref,m).pass);
+  assert.deepEqual(partCollisions(ps,m).map(x=>x.names.join(' × ')),[]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.jointNone,['bottom:left','bottom:right']);
+});

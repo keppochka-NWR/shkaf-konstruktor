@@ -53,6 +53,19 @@ export function endGroove(bb: number[], ax: { L: number; W: number; t: number },
     across: [r1(bb[ax.t] - lo[ax.t]), r1(bb[ax.t + 3] - lo[ax.t])] as [number, number], depth: r1(bb[ax.W + 3] - bb[ax.W]), name };
 }
 
+/** Стыки дна/крыши, у которых в проекте нет ни конфирмата, ни эксцентрика (k08 m10, k14 m06, k34 m04: дно под вытяжку перед ХДФ). */
+export function wallJointNone(hardware: RefHardware[], joints: [string, PB | undefined][], left: PB, right: PB): string[] {
+  const fast = hardware.filter((h) => h.category === "конфирмат" || h.category === "эксцентрик");
+  if (!fast.length) return [];
+  const out: string[] = [];
+  for (const [id, q] of joints) {
+    if (!q) continue;
+    for (const [side, s] of [["left", left], ["right", right]] as const)
+      if (!fast.some((h) => h.pos[0] >= s.b.x0 - 1 && h.pos[0] <= s.b.x1 + 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1 && h.pos[2] >= q.b.z0 - 1 && h.pos[2] <= q.b.z1 + 1)) out.push(`${id}:${side}`);
+  }
+  return out;
+}
+
 /** Отступы крепежа стыков «горизонталь × боковина» [от задней кромки, от передней] там, где они отличаются от общего inset. */
 export function wallJointZ(hardware: RefHardware[], joints: [string, PB | undefined][], left: PB, right: PB, inset: number): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};

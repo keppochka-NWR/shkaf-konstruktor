@@ -24,6 +24,12 @@ export function bottomFrontRecess(bottom: PB, sideZ0: number, sideZ1: number): n
   return bottom.b.z0 <= sideZ0 + 0.5 && gap > 0.5 && gap <= 100 ? gap : null;
 }
 
+/** Дно навесного короче сзади: стоит перед ХДФ, задник проходит за ним в пазах боковин (k08 m10, k04 m06/m09, k13 m05, k14 m06: 20–21). */
+export function bottomBackRecess(bottom: PB, sideZ0: number): number | null {
+  const gap = r1(bottom.b.z0 - sideZ0);
+  return gap > 0.5 && gap <= 120 ? gap : null;
+}
+
 /** Низ навесного с поднятым дном: подъём дна, боковины над ним или до низа, фронтальная панель под дном, фасады до низа. */
 export function wallRaise(P: PB[], left: PB, right: PB, bottom: PB, fronts: PB[], sideZ1: number): WallRaise | null {
   const lift = r1(bottom.b.y0);
