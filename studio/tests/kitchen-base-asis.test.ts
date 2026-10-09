@@ -29,6 +29,9 @@ test('фасад без петель (k13 m06): фасад есть, петел�
   assert.ok(!priced(m).some(id=>id.startsWith('hinge')),'в смете нет петель');
   const c=compareModule(ref,m);
   assert.ok(c.pass,why(c));
+  // ящик без направляющих (k20 m11, TANDEMBOX в «ящик-система») и подъёмный на газлифте (k11 m09) — не «фасад без петель»
+  if(has('k20'))assert.equal(moduleFromEtalon(load('k20','m11')).module.kitchen?.hinges,undefined);
+  if(has('k11'))assert.equal(moduleFromEtalon(load('k11','m09')).module.kitchen?.hinges,undefined);
 });
 
 test('без опор и без крепежа, кромка по кругу (k32 m09): нет ошибки «на опоры», нет конфирматов/полкодержателей и мелочёвки — сверка PASS',{skip:!has('k32')},()=>{

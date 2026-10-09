@@ -14,7 +14,10 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (!k) return notes;
   const has = (c: string) => ref.hardware.some((h) => h.category === c);
   // фасады есть, петель и ящиков нет — фасады без петель (не подъёмный: у него петли тоже есть)
-  if (fronts > 0 && !has("петля") && !has("направляющая") && !m.kdrawers?.length) {
+  // ящик без направляющих (k20 m11: царги TANDEMBOX в «ящик-система») и подъёмный на газлифте (k11 m09–m11) — не распашной фасад;
+  // ручка-рейлинг в «ящик-система» (k09 m04) — не ящик
+  const drawerKit = ref.hardware.some((h) => h.category === "ящик-система" && !/ручк/i.test(h.name));
+  if (fronts > 0 && !has("петля") && !has("направляющая") && !has("газлифт") && !drawerKit && !m.kdrawers?.length) {
     m.doors = true; k.hinges = false;
     notes.push("фасады без петель — как в Базисе");
   }
