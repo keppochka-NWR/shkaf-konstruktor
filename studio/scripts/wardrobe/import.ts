@@ -14,39 +14,15 @@ const LIMIT = Number(process.argv[2] ?? 0) || Infinity;
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const look = { decor: "Белый", facadeDecor: "Белый" };
 
-type Trans = { x: number; y: number; z: number; q: [number, number, number, number] };
-type CPanel = { name: string; mat: string; thick: number; bbox?: number[]; trans: Trans };
+import { xf, compose, chainXf, panelBox, type Trans, type CPanel, type M3, type Xf } from "./xform";
 type CAsm = { name: string; trans?: Trans; panels?: CPanel[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
-type M3 = number[]; // 3×3 по строкам
-type Xf = { R: M3; t: [number, number, number] };
-
-const qmat = ([w, x, y, z]: number[]): M3 => [
-  1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w),
-  2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w),
-  2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y),
-];
-const mul = (a: M3, b: M3): M3 => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j]));
-const app = (R: M3, p: number[]): [number, number, number] => [0, 1, 2].map((i) => R[i * 3] * p[0] + R[i * 3 + 1] * p[1] + R[i * 3 + 2] * p[2]) as [number, number, number];
-const xf = (t?: Trans): Xf => (t ? { R: qmat(t.q ?? [1, 0, 0, 0]), t: [t.x ?? 0, t.y ?? 0, t.z ?? 0] } : { R: [1, 0, 0, 0, 1, 0, 0, 0, 1], t: [0, 0, 0] });
-const compose = (a: Xf, b: Xf): Xf => { const tb = app(a.R, b.t); return { R: mul(a.R, b.R), t: [tb[0] + a.t[0], tb[1] + a.t[1], tb[2] + a.t[2]] }; };
 
 const MAT_KIND: [string, RegExp][] = [["mirror", /зеркал/], ["glass", /стекл|glass/], ["hdf", /хдф|двп|hdf|оргалит/], ["mdf", /мдф|mdf|evogloss|eterno|idm/], ["ldsp", /лдсп|дсп|egger|kronospan|lamarty|увадрев|gtv board/]];
 const matKind = (mat: string) => { const m = (mat || "").toLowerCase(); for (const [k, rx] of MAT_KIND) if (rx.test(m)) return k; return "other"; };
 const FACADE_RX = /фасад|двер|дверк|ящик.*лицев|лицев/i;
 
-/** мировой бокс панели: локальный прямоугольник контура (bbox) × толщина 0..thick, через цепочку сборок */
-function panelBox(p: CPanel, parent: Xf): [number, number, number, number, number, number] | null {
-  const b = p.bbox; if (!b || b.length !== 4 || !b.every(Number.isFinite)) return null;
-  const w = compose(parent, xf(p.trans));
-  const lo = Math.min(0, p.thick || 0), hi = Math.max(0, p.thick || 0);
-  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
-  for (const x of [b[0], b[2]]) for (const y of [b[1], b[3]]) for (const z of [lo, hi]) {
-    const q = app(w.R, [x, y, z]);
-    for (let i = 0; i < 3; i++) { const v = q[i] + w.t[i]; mn[i] = Math.min(mn[i], v); mx[i] = Math.max(mx[i], v); }
-  }
-  return [mn[0], mn[1], mn[2], mx[0], mx[1], mx[2]];
-}
+// panelBox (сборки ∘ chain панели ∘ trans) — в ./xform, там же тест
 type WPanel = { name: string; kind: string; box: number[]; facade: boolean };
 type WHw = { name: string; category: string; mesh: string; pos: number[]; quat: [number, number, number, number] };
 // фурнитура: имя Базиса -> сетка библиотеки (hardware-lib/manifest.json), показываем только видимую (без крепежа)
@@ -77,7 +53,7 @@ function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean, hw: WHw
   // цепочка сверления: сборка -> chain[0] -> chain[1] ... (проверено по евровинтам: попадают в стык панелей)
   for (const dr of a.drills ?? []) {
     const lib = byName.get(dr.name); if (!lib || !SHOW.has(lib.category)) continue;
-    let w = me; for (const c of dr.chain ?? []) w = compose(w, xf(c));
+    const w = chainXf(me, dr.chain);
     if (!w.t.every(Number.isFinite)) continue;
     hw.push({ name: dr.name.slice(0, 80), category: lib.category, mesh: lib.mesh, pos: w.t, quat: mat2q(w.R) });
   }
