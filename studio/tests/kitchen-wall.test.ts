@@ -361,3 +361,7 @@ test('паз Gola в переднем торце узкого дна (k06 m10, �
   const c=compareModule(ref,m);assert.ok(c.pass,JSON.stringify(c.edges?.bad));
   assert.equal(parseModule(JSON.parse(JSON.stringify(m))).grooves?.find(x=>x.end)?.endL,true);
 });
+test('k23 m07: полка из фасадного материала 19 мм без полкодержателей — причина названа прямо, модуль честно сырой; k23 m05/m09 — без неё',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+  assert.match(moduleFromEtalon(load('k23','m07')).unsupported[0],/полка из фасадного материала 19/);
+  for(const k of ['m05','m09'])assert.deepEqual(moduleFromEtalon(load('k23',k)).unsupported,[]);
+});

@@ -946,7 +946,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthUsed, lowFront, wr?.panel, ...drawerPanels].includes(x)).length;
+  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, plinthUsed, lowFront, wr?.panel, ...drawerPanels];
+  const other = ref.panels.length - P.filter((x) => known.includes(x)).length;
+  // полка из фасадного материала внутри корпуса (k23 m07: «Горизонтальная» 19 мм, «Фасадный мат-л», без полкодержателей) — причина прямо
+  const facShelf = P.find((x) => !known.includes(x) && x.p.axis === "y" && x.p.kind === "other" && x.b.x0 >= left.b.x1 - 0.6 && x.b.x1 <= right.b.x0 + 0.6 && x.b.z1 <= sideZ1 + 0.5);
+  if (facShelf) unsupported.push(`полка из фасадного материала ${r1(facShelf.b.y1 - facShelf.b.y0)} мм на ${r1(facShelf.b.y0)} — пока не поддержано`);
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   // кромка: торцы детали — как в проекте, если правило студии кромит иначе (k32 низ: боковины, дно и царги по кругу).
   // Деталь студии сопоставляется с панелью Базиса по габариту (±0,6); полки — своей схемой (shelfSides/shelfT), фасады — без кромки.
