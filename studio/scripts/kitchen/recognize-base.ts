@@ -33,6 +33,12 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
+  const fg = faceGapsTB(ref, m.faceGap ?? 0);
+  if (fg && k.role === "base" && m.feet && m.doors && !m.kdrawers?.length && !m.gola && !m.sections[0].doorSplit) {
+    if (fg.top !== undefined) k.faceTop = fg.top;
+    if (fg.bottom !== undefined) k.faceBottom = fg.bottom;
+    notes.push(`зазор фасадов сверху/снизу ${fg.top ?? m.faceGap}/${fg.bottom ?? m.faceGap} (сбоку ${m.faceGap}) — как в Базисе`);
+  }
   const fe = frontEdge(ref);
   if (fe && m.edgeScheme?.t) { m.edgeScheme = { ...m.edgeScheme, t: fe.other, front: fe.front }; notes.push(`передние торцы корпуса — кромка ${fe.front}, остальные ${fe.other} — как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
@@ -67,6 +73,22 @@ export function hingePlateHoles(ref: RefModule): boolean | undefined {
       || ref.holes!.filter((o) => o.d === 3 && Math.abs(o.at[1] - y) < 1 && Math.abs(Math.abs(o.at[0] - x) - 16) < 1.5 && Math.abs(o.at[2] - (z - 37)) < 1.5).length >= 2;
   }).length;
   return n === hs.length ? true : n === 0 ? false : undefined;
+}
+
+/** Один ряд фасадов: зазор верха от верха боковин и низа от низа дна, если отличается от бокового (side). */
+export function faceGapsTB(ref: RefModule, side: number): { top?: number; bottom?: number } | undefined {
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const sides = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200);
+  if (sides.length < 2) return undefined;
+  const top = Math.max(...sides.map((p) => p.box[4])), z1 = Math.max(...sides.map((p) => p.box[5]));
+  const fr = ref.panels.filter((p) => p.axis === "z" && p.kind !== "hdf" && p.box[2] >= z1 - 1);
+  const bot = ref.panels.filter((p) => p.axis === "y" && (p.kind === "ldsp" || p.kind === "mdf")).sort((a, b) => a.box[1] - b.box[1])[0];
+  if (!fr.length || !bot || new Set(fr.map((p) => r1(p.box[1]))).size > 1 || new Set(fr.map((p) => r1(p.box[4]))).size > 1) return undefined;
+  const t = r1(top - fr[0].box[4]), b = r1(fr[0].box[1] - bot.box[1]);
+  const out: { top?: number; bottom?: number } = {};
+  if (Math.abs(t - side) > 0.05) out.top = t;
+  if (Math.abs(b - side) > 0.05) out.bottom = b;
+  return out.top !== undefined || out.bottom !== undefined ? out : undefined;
 }
 
 /** Передний торец боковин кромлен толще остальных (k29 — 7, k27 — 1 из 383 модулей): { front, other } или undefined. */

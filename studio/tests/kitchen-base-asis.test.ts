@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB} from '../scripts/kitchen/recognize-base';
 import {holes} from '../src/drilling';
 import {edgeByDir} from '../src/edges';
 
@@ -190,6 +190,21 @@ test('петли без наколок под планку (k29 m04): у Баз�
   const plates=parts(pal).filter(p=>p.id.includes(':hingeplate:')).length;
   assert.ok(plates>0);
   assert.equal(d3(pal)-d3({...pal,kitchen:{...pal.kitchen!,plateHoles:false}}),2*plates,'палитра — по 2 наколки на петлю; без флага не трогаем');
+});
+
+test('зазор фасадов сверху/снизу не как сбоку (k18 m03: 3 и 1,5 при 2; k29 m06: 4 и 2) — как в Базисе, PASS; палитра — как была',{skip:!has('k18')||!has('k29')},()=>{
+  for(const [k,key,top,bottom] of [['k18','m03',3,1.5],['k29','m06',4,undefined]] as const){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.equal(m.kitchen?.faceTop,top,k+key);
+    assert.equal(m.kitchen?.faceBottom,bottom,k+key);
+    const c=compareModule(ref,m);
+    assert.ok(c.pass,k+key+' '+why(c));
+  }
+  assert.equal(faceGapsTB(load('k18','m03'),2)?.top,3);
+  const pal=kitchenBase(initialModule(),600);
+  assert.equal(pal.kitchen?.faceTop,undefined);
+  const door=parts(pal).find(p=>p.role==='door')!;
+  assert.equal(door.position[1]+door.size[1]/2,pal.height-pal.faceGap!,'палитра — верх фасада по faceGap');
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{

@@ -442,13 +442,13 @@ export function facadeBottom(m:Module){
     // На ножках: накладной фасад закрывает торец дна; без дна — начинается над передней/задней нижней стяжкой.
     const rail=Math.max(railHeight(m,'front-bottom'),hasBottom(m)?0:railHeight(m,'rear-bottom'));
     // Кухни Базиса: отступ фасада от низа дна такой же, как от остальных кромок (m.faceGap, 1,5); шкафы — вровень с низом дна.
-    return (hasBottom(m)?m.feet.height:m.feet.height+rail)+(m.faceGap??0);
+    return (hasBottom(m)?m.feet.height:m.feet.height+rail)+(m.kitchen?.faceBottom??m.faceGap??0); // кухня Базиса: свой зазор снизу (kitchen.faceBottom)
   }
   return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):fe(m);
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
 /** Верх накладных фасадов: под скосом — по низкой стороне (крыша плоская на её высоте), выше идёт фальш из фасадного материала. */
-export function facadeTop(m:Module){if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
+export function facadeTop(m:Module){if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;if(m.kitchen?.faceTop!==undefined&&m.feet)return m.height-m.kitchen.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
@@ -1617,7 +1617,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hinges===false?{hinges:false}:{}),...(k.noLegs?{noLegs:true}:{}),...(k.fasteners===false?{fasteners:false}:{}),...(k.plateHoles===false?{plateHoles:false}:{}),...(k.sideDown&&(k.sideDown.side==='left'||k.sideDown.side==='right')?{sideDown:{side:k.sideDown.side,y0:Number(k.sideDown.y0)}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(Array.isArray(k.legs.pts)?{pts:k.legs.pts.map(q=>[Number(q?.[0]),Number(q?.[1])] as [number,number])}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hinges===false?{hinges:false}:{}),...(k.noLegs?{noLegs:true}:{}),...(k.fasteners===false?{fasteners:false}:{}),...(k.plateHoles===false?{plateHoles:false}:{}),...(k.faceTop!==undefined?{faceTop:Number(k.faceTop)}:{}),...(k.faceBottom!==undefined?{faceBottom:Number(k.faceBottom)}:{}),...(k.sideDown&&(k.sideDown.side==='left'||k.sideDown.side==='right')?{sideDown:{side:k.sideDown.side,y0:Number(k.sideDown.y0)}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(Array.isArray(k.legs.pts)?{pts:k.legs.pts.map(q=>[Number(q?.[0]),Number(q?.[1])] as [number,number])}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

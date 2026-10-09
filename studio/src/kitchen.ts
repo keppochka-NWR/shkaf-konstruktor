@@ -29,7 +29,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  торцевая боковина закрывает опоры). Действует только с дном под боковинами (bottomUnder). */
   sideDown?: { side: "left" | "right"; y0: number };
   /** false — у петель нет наколок D3×3 под планку, только чашка Ø35 (89 из 261 модулей Базиса с петлями). */
-  plateHoles?: false };
+  plateHoles?: false;
+  /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2). */
+  faceTop?: number; faceBottom?: number };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
