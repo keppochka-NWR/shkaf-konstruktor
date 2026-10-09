@@ -1572,7 +1572,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   onChange={resizeSection}
                 />
                 <p className="field-note">
-                  {m.sections.length===1?'Изменение проёма изменит ширину корпуса. Соседние корпуса сохраняют положение.':`Изменится только соседняя секция ${idx<m.sections.length-1?'справа':'слева'}. Остальные проёмы сохранят ширину.`}
+                  {m.sections.length===1?'Изменение проёма изменит ширину корпуса: сосед вплотную в ряду сузится или расширится на ту же величину (справа, а если справа никого — слева; у стены корпус меняется от стены).':`Изменится только соседняя секция ${idx<m.sections.length-1?'справа':'слева'}. Остальные проёмы сохранят ширину.`}
                 </p>
                 <button
                   className="outline full"

@@ -1,5 +1,6 @@
 // Ширина модуля в ряду (правило Макса 09.10.2026): сосед сужается, у стены — от стены.
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { initialModule, section, boxes, type Module } from "../src/model";
 import { bounds, projectErrors, type PlacedModule, type Project } from "../src/project";
@@ -179,6 +180,12 @@ test("подгонка ширины под сетку (fitMeshItem) идёт п�
   assert.equal(get(next, "b").x, 1100);
   assert.deepEqual([get(next, "c").x, get(next, "c").x + get(next, "c").module.width], [1100 + w, 2300], "правый сосед вплотную, правый край ряда на месте");
   assert.deepEqual(projectErrors(next), []);
+});
+
+test("подсказка у ширины проёма не обещает, что соседние корпуса стоят на месте (их меняет правило ряда)", () => {
+  const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /Соседние корпуса сохраняют положение/);
+  assert.match(app, /сосед вплотную в ряду сузится или расширится на ту же величину/);
 });
 
 test("placeInRow: правка модуля из панели с той же шириной — просто замена; угловой — по-старому", () => {
