@@ -307,8 +307,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const H = r1(top);
   const horiz = P.filter(({ p }) => p.axis === "y" && board(p.kind));
   // угловая мойка с плоским фальшем (recognize-sink.ts, n4-base): фальш и планка — не фасады, а kitchen.faceFiller
-  const lowRole = !/^(wall|tall)/.test(ref.archetype) && ref.archetype !== "antresol"; // нижний (role base), как role ниже
-  const ffFlat = lowRole && horiz.length ? faceFillerFlat(ref, P, left, right, sideZ1, Math.min(...horiz.map((h) => h.b.y0)), top) : undefined;
+  const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
+  const ffFlat = role === "base" && horiz.length ? faceFillerFlat(ref, P, left, right, sideZ1, Math.min(...horiz.map((h) => h.b.y0)), top) : undefined;
   const fronts = P.filter((x) => x.p.axis === "z" && x.p.kind !== "hdf" && x.b.z0 >= sideZ1 - 1 && !ffFlat?.panels.includes(x)).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
   const hdf = P.filter(({ p }) => p.kind === "hdf");
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
@@ -330,7 +330,6 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
-  const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
   m.kitchen = { role, bazis: true }; // из проекта Базиса: смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.screw = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно

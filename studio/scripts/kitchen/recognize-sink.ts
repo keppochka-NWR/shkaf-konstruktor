@@ -5,8 +5,10 @@ import type { RefModule } from "./compare";
  *  материалом в плоскости фасадов (иногда Г-образным, с планками поперёк). 9 из 24 моек базы (k01, k05, k06, k10, k15, k19,
  *  k22, k25, k28). Это не «ряды фасадов», а отдельный тип корпуса — пока не поддержан, помечаем честно. */
 export function cornerFillerSink(ref: Pick<RefModule, "hardware">): boolean {
-  return ref.hardware.some((h) => /под фальшпанель/i.test(h.name));
+  return falsePanelHinges(ref).length > 0;
 }
+/** Петли «под фальшпанель» проекта Базиса — признак угловой мойки (cornerFillerSink) и точки двери у фальша (faceFillerFlat). */
+export const falsePanelHinges = (ref: Pick<RefModule, "hardware">) => ref.hardware.filter((h) => /под фальшпанель/i.test(h.name));
 
 type Pb = { p: RefModule["panels"][number]; b: { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number } };
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -17,7 +19,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
  *  Возвращает ширины и панели фальша (их не считаем фасадами). */
 export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sideZ1: number, bottomY0: number, top: number):
   { side: "left" | "right"; width: number; strip?: number; stripFull?: true; panels: Pb[] } | undefined {
-  const ffh = ref.hardware.filter((h) => /под фальшпанель/i.test(h.name));
+  const ffh = falsePanelHinges(ref);
   if (!ffh.length) return undefined;
   const front = P.filter(({ p, b }) => p.kind !== "hdf" && b.z0 >= sideZ1 - 1);
   if (front.some(({ p }) => p.axis !== "z")) return undefined; // планки поперёк — Г-образный фальш

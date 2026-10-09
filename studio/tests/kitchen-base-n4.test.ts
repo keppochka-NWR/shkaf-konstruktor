@@ -8,6 +8,7 @@ import {faceGapsTB} from '../scripts/kitchen/recognize-base';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {railFastened} from '../scripts/kitchen/recognize-common';
+import {cornerFillerSink,falsePanelHinges} from '../scripts/kitchen/recognize-sink';
 
 // Нижние модули кухни «как в Базисе» (поток n4). Эталоны вне репозитория — на чужой машине тесты с эталонами пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -125,6 +126,12 @@ test('петля под фальшпанель — узел как в Базис
       assert.ok(hs.some(h=>Math.abs(h.at[0]-cupX)<0.01&&Math.abs(h.at[1]-n.model!.origin![1])<0.01&&h.depth===13),'чашка в точке чашки');}
     assert.equal(partCollisions(ps,r.module).filter(x=>/hinge/.test(x.a+' '+x.b)).length,0,`${k} ${key}: петли ни с чем не пересекаются`);
   }
+});
+
+test('петли под фальшпанель — один фильтр для признака угловой мойки и плоского фальша (falsePanelHinges)',()=>{
+  const hw=[{i:0,name:'Петля под фальшпанель',category:'петля',pos:[502,201,560]},{i:1,name:'Петля накладная',category:'петля',pos:[934,201,560]}] as RefModule['hardware'];
+  assert.deepEqual(falsePanelHinges({hardware:hw}).map(h=>h.i),[0]);
+  assert.equal(cornerFillerSink({hardware:hw}),true);assert.equal(cornerFillerSink({hardware:[hw[1]]}),false);
 });
 
 test('фальш мойки только у кухни из Базиса с kitchen.faceFiller: шкаф студии и кухня палитры без флага — без фальша и петель под фальшпанель',()=>{
