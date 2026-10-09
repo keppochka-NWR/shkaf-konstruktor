@@ -21,6 +21,8 @@ export function rawSize(p: Pick<RawPanel, "box" | "obb">): [number, number, numb
 export const rawIsWorktop = (p: Pick<RawPanel, "name" | "mat">) => /столешн/i.test(p.name) || /столешн/i.test(p.mat ?? "");
 /** Элемент помещения в модели Базиса (материал «Стена», «Пол», «Потолок», «Бетон»): не мебель — без раскроя и сметы, только вид. */
 export const rawIsRoom = (p: Pick<RawPanel, "mat">) => /^\s*(стена|пол|потолок|бетон)(?![а-яё])/i.test(p.mat ?? "");
+/** Не плитный материал Базиса (пластик, хром, стеновая панель, металл): не раскрой ЛДСП — строка сметы по материалу Базиса, м². */
+export const rawIsNonBoard = (p: Pick<RawPanel, "kind" | "fm" | "mat">) => p.kind === "other" && !p.fm && /пластик|хром|[сc]тенов|металл|алюмин/i.test(p.mat ?? "");
 /** bbox — габарит сетки Базиса в её локальных осях [x0,y0,z0,x1,y1,z1] (hardware-lib manifest), для проверки пересечений. */
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number]; bbox?: number[] };
 /** Профиль Базиса с однозначным сечением (труба Ø25): центр, ось (единичный вектор по осям модуля), длина. */
@@ -77,7 +79,7 @@ export function rawParts(m: Module): Part[] {
     const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
     // Столешница (по имени/материалу Базиса) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
     // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов. Стена/пол помещения — не мебель.
-    const worktop = rawIsWorktop(p), room = rawIsRoom(p), long = dims[0] > 2726;
+    const worktop = rawIsWorktop(p), room = rawIsRoom(p) || rawIsNonBoard(p), long = dims[0] > 2726;
     out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm && !room ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm || room ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",

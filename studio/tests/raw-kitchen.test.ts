@@ -97,6 +97,13 @@ test('столешница сырого модуля — только назва
   const ps=rawParts(rawModule(shoe,3000,2700,700));
   assert.equal(ps.find(q=>q.name==='Полка обувная')!.thickness,16);
   assert.ok(ps.find(q=>q.name==='Стена')!.external);
+  // стеновая панель 26 мм (в Базисе «Cтеновая панель 26мм», первая C латинская) и пластик — не столешница и не лист ЛДСП: строка по материалу Базиса
+  const wall=project(rawModule({row:true,panels:[{name:'стеновая 26',kind:'other',mat:'Cтеновая панель 26мм',box:[0,900,0,2000,1500,26]},{name:'горизонтальная',kind:'other',mat:'Пластик ___________',box:[0,0,0,500,10,300]}],hardware:[]},2000,1500,300));
+  const ew=estimate(wall);
+  assert.equal(ew.lines.find(l=>l.id.startsWith('worktop')),undefined);
+  assert.equal(ew.lines.find(l=>l.id==='material:Cтеновая панель 26мм')?.quantity,1.2);
+  assert.equal(ew.lines.find(l=>l.id==='material:Пластик ___________')?.quantity,0.15);
+  assert.equal(nest(wall).length,0,'не раскрой ЛДСП');
   // старый проект без материала: деталь 38 мм без «столешн» в имени — не столешница
   const old=estimate(project(rawModule({panels:[{name:'Горизонтальная',kind:'other',box:[0,0,0,1200,38,600]}],hardware:[]})));
   assert.equal(old.lines.find(l=>l.id.startsWith('worktop:')),undefined);

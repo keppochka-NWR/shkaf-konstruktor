@@ -18,6 +18,7 @@ const look = { decor: "Белый", facadeDecor: "Белый" };
 import { xf, compose, chainXf, panelBox, panelXf, panelObb, isAxisAligned, contourLoop, isRectLoop, planeContour, app, qmat, type Trans, type CPanel, type CElem, type M3, type Xf } from "./xform";
 import { packRows, splitWide } from "./pack";
 import { profileSection, snapToHolders } from "./profiles";
+import { panelExtras } from "../kitchen/rowWorktop";
 type CProf = { name: string; length: number; width?: number; trans: Trans; chain?: Trans[] };
 type CAsm = { name: string; trans?: Trans; panels?: (CPanel & { contour?: CElem[] })[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[]; profiles?: CProf[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
@@ -27,7 +28,7 @@ const matKind = (mat: string) => { const m = (mat || "").toLowerCase(); for (con
 const FACADE_RX = /фасад|двер|дверк|ящик.*лицев|лицев/i;
 
 // panelBox (сборки ∘ chain панели ∘ trans) — в ./xform, там же тест
-type WPanel = { name: string; kind: string; box: number[]; facade: boolean; contour?: [number, number][]; plane?: "xz" | "xy" | "yz"; obb?: { size: [number, number, number]; ry: number; rz: number }; skew?: boolean; figure?: boolean; mat?: string };
+type WPanel = { name: string; kind: string; box: number[]; facade: boolean; contour?: [number, number][]; plane?: "xz" | "xy" | "yz"; obb?: { size: [number, number, number]; ry: number; rz: number }; skew?: boolean; figure?: boolean; mat?: string; fm?: boolean };
 type WHw = { name: string; category: string; mesh: string; pos: number[]; quat: [number, number, number, number]; bbox?: number[] };
 /** Профиль Базиса (штанга, рельс, цоколь…): сечение — только если однозначно следует из имени (./profiles), иначе в список «не нарисованы». */
 type WProf = { name: string; len: number; pos: number[]; dir: [number, number, number]; d: number };
@@ -55,8 +56,10 @@ function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean, hw: WHw
     const box = panelBox(p, me); if (!box) continue;
     if (box[3] - box[0] < 0.5 && box[4] - box[1] < 0.5) continue;
     const kind = matKind(p.mat);
-    // mat — материал Базиса: по нему (а не по толщине) студия узнаёт столешницу и элементы помещения (стена, пол)
-    const w: WPanel = { name: (p.name || "деталь").slice(0, 60), kind, box, facade: kind !== "hdf" && (fc || FACADE_RX.test(p.name || "")), ...(p.mat ? { mat: p.mat.slice(0, 60) } : {}) };
+    // mat — материал Базиса: по нему (а не по толщине) студия узнаёт столешницу и элементы помещения (стена, пол);
+    // «Фасадный мат-л» — fm, как у кухонь: изделие поставщика фасадов, не раскрой ЛДСП (rowWorktop.panelExtras)
+    const { fm, mat } = panelExtras({ name: p.name, mat: p.mat, box });
+    const w: WPanel = { name: (p.name || "деталь").slice(0, 60), kind, box, facade: kind !== "hdf" && (fc || FACADE_RX.test(p.name || "")), ...(mat ? { mat } : {}), ...(fm ? { fm } : {}) };
     const W = panelXf(p, me);
     // повёрнутая не на 90° — ориентированный короб (rotY/rotZ студии); если поворот так не выражается — габарит и пометка
     if (!isAxisAligned(W.R)) {
@@ -144,7 +147,7 @@ picked.forEach((row, n) => {
       const o = ext6[gi].slice(0, 3), e = ext6[gi].slice(3);
       const panels: RawPanel[] = g.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map((v, i) => Math.max(0, r1(v - o[i % 3]))) as RawPanel["box"], ...(p.facade ? { facade: true } : {}),
         ...(p.contour && p.plane ? { contour: p.contour.map(([u, v]) => { const ax = { xz: [0, 2], xy: [0, 1], yz: [1, 2] }[p.plane!]; return [r1(u - o[ax[0]]), r1(v - o[ax[1]])] as [number, number]; }), plane: p.plane } : {}),
-        ...(p.obb ? { obb: p.obb } : {}), ...(p.skew ? { skew: true } : {}), ...(p.figure ? { figure: true } : {}), ...(p.mat ? { mat: p.mat } : {}) }));
+        ...(p.obb ? { obb: p.obb } : {}), ...(p.skew ? { skew: true } : {}), ...(p.figure ? { figure: true } : {}), ...(p.mat ? { mat: p.mat } : {}), ...(p.fm ? { fm: true } : {}) }));
       const hardware = hwOf[gi].slice(0, 400).map((h) => { meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh, pos: h.pos.map((v, i) => r1(v - o[i])) as [number, number, number], quat: h.quat, ...(h.bbox ? { bbox: h.bbox } : {}) }; });
       hwCount += hardware.length;
       const profiles = profOf[gi].map((q) => ({ name: q.name, len: r1(q.len), d: q.d, pos: q.pos.map((v, i) => r1(v - o[i])) as [number, number, number], dir: q.dir }));

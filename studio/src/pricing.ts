@@ -10,7 +10,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
-import {rawSize,rawIsWorktop,rawIsRoom} from './rawModule';
+import {rawSize,rawIsWorktop,rawIsRoom,rawIsNonBoard} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -149,6 +149,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(p.kind==='hdf'||p.kind==='mirror'||rawIsRoom(p))continue;
         // столешница — только названная так в Базисе (имя/материал), толщина не признак: ЛДСП 25/32 мм идёт в раскрой своей толщиной
         if(rawIsWorktop(p)){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
+        // пластик, хром, стеновая панель Базиса — не лист ЛДСП: строка по материалу Базиса
+        if(rawIsNonBoard(p)){add('material:'+p.mat,(p.mat??'').trim()+' — по проекту Базиса',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Не ЛДСП: материал как в Базисе, цена по прайсу поставщика — уточнить');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
         for(const [t,len] of p.edges??[]){const L=len/1000;if(t===2)edge2+=L;else if(t===1)edge1+=L;else if(t===0.8)edge08+=L;else if(t===0.5)edge05+=L;else edge04+=L;}
         if(s[1]<70)small++;

@@ -11,7 +11,8 @@ import { rawCounts, type RawSpec } from "../../src/rawModule";
 import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
-const OUTDIR = "public/local-projects";
+// npx tsx scripts/kitchen/import.ts all [outDir] — outDir по умолчанию public/local-projects (проверочный прогон — в свою папку)
+const OUTDIR = process.argv[3] || "public/local-projects";
 const arg = process.argv[2] ?? "all";
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль"]);
