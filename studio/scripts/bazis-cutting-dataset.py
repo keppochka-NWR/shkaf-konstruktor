@@ -2,7 +2,7 @@
 """Обезличенный датасет раскроев Базиса из PDF «Раскрой…» базы заказов.
 
 Запуск (из папки studio):
-    py -P scripts/bazis-cutting-dataset.py "C:\\Users\\My PC\\Desktop\\Пистос" tests/fixtures/cutting-bazis.json
+    py -P scripts/bazis-cutting-dataset.py "<папка базы заказов цеха>" tests/fixtures/cutting-bazis.json
 
 Что берётся из PDF (текст через fitz/PyMuPDF):
   * страница карты: «Материал: …», «Размер плиты AxB», «Карта N из M. Количество плит материала K»,
@@ -27,7 +27,10 @@
 """
 import fitz, os, re, sys, json, hashlib, collections
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else r"C:\Users\My PC\Desktop\Пистос"
+# папка базы заказов — только аргументом: имя клиентской папки в код не пишем
+if len(sys.argv) < 2:
+    sys.exit("usage: py -P scripts/bazis-cutting-dataset.py <папка базы заказов цеха> [out.json]")
+ROOT = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else "tests/fixtures/cutting-bazis.json"
 CATALOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "catalog.ts")
 EXCLUDE = [os.sep + "пример" + os.sep]  # дубли учебных раскроев
