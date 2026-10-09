@@ -196,7 +196,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     // дубль Базиса — опора в той же точке и с тем же поворотом дважды (k16: две опоры в одной точке); считаем один раз, как дубли отверстий.
     // Только опоры: у направляющих Firmax две точки в одном месте — это пара направляющих, не дубль (n3-tall).
     const seen = new Set<string>(), allRef = ref.hardware.filter((h) => h.category === category);
-    const uniq = category !== "опора" ? allRef : allRef.filter((h) => { const k = `${h.name}|${h.pos.map(r1).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    // Петля — так же: две одинаковые петли в одной точке с одним поворотом (по всей базе один случай, k01 m09) — дубль Базиса (n4-wall).
+    const uniq = category !== "опора" && category !== "петля" ? allRef : allRef.filter((h) => { const k = `${h.name}|${h.pos.map(r1).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`; if (seen.has(k)) return false; seen.add(k); return true; });
     const rp = uniq.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
     const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp), ...(allRef.length > uniq.length ? { dups: allRef.length - uniq.length } : {}) };
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
