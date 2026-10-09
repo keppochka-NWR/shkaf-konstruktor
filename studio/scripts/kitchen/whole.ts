@@ -44,7 +44,11 @@ function interModule(p: Project, off: number[] = [0, 0, 0]) {
   // стяжка с соседним корпусом (kitchen.outConf, k15 m12 «А 1» → «Пенал 1»): конфирмат по назначению сидит в доске соседа — как в Базисе
   // (у Базиса фурнитура в счёт не входит), это не пересечение (n4-antresol)
   const tie = (x: Part, y: Part) => x.id.startsWith("fast:out:") && (y.material === "board" || y.material === "hdf");
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i || tie(A.q, B.q) || tie(B.q, A.q)) continue; const d = pen(A.b, B.b); if (d > 0.5) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
+  // опора и клипса нижнего модуля у цоколя «Ряда» (k23 m12: опоры и клипсы как в Базисе, цоколь ряда — на 2 мм в габарите круглой
+  // пяты опоры; клипса по назначению на цоколе) — тот же разрешённый контакт, что внутри модуля (collisions.ts: опора в доске до 3 мм,
+  // клипса на цоколе)
+  const atPlinth = (x: Part, y: Part, d: number) => (x.id.startsWith("leg:") && isBoard(y) && d <= 3) || (x.id.startsWith("kitchen-clip:") && /цокол/i.test(y.name) && d <= 3);
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i || tie(A.q, B.q) || tie(B.q, A.q)) continue; const d = pen(A.b, B.b); if (d > 0.5 && !atPlinth(A.q, B.q, d) && !atPlinth(B.q, A.q, d)) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
   return out;
 }
 
