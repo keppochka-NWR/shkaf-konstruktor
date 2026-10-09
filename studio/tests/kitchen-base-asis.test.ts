@@ -295,3 +295,19 @@ test('флаги «как в Базисе» переживают сохране�
   assert.equal(back.edgeScheme?.sideTop,false);
   assert.equal(parseModule(JSON.parse(JSON.stringify({...m,edgeScheme:{t:0}}))).edgeScheme?.t,0);
 });
+
+test('флаги «без петель» / «без крепежа» видны во вкладке «Кухня» и снимаются: петли и полкодержатели возвращаются в 3D, присадку и смету',()=>{
+  const m=kitchenBase(initialModule(),600);
+  const off={...m,kitchen:{...m.kitchen!,hinges:false as const,fasteners:false as const}};
+  assert.equal(hingeIds(off).length,0);
+  assert.equal(fastenerCounts(off).shelfHolders,0);
+  // кнопка «Поставить петли» / «Поставить крепёж» удаляет флаг — модуль снова как обычная кухня
+  const {hinges:_h,fasteners:_f,...k}=off.kitchen; void _h; void _f;
+  const on={...off,kitchen:k};
+  assert.deepEqual(hingeIds(on).map(p=>p.id),hingeIds(m).map(p=>p.id));
+  assert.deepEqual(fastenerCounts(on),fastenerCounts(m));
+  assert.ok(priced(on).some(id=>id.startsWith('hinge')),'петли снова в смете');
+  const src=readFileSync(new URL('../src/KitchenPanel.tsx',import.meta.url),'utf8');
+  assert.match(src,/k\.hinges === false && <p[^>]*>Как в проекте Базиса[^]*?delete n\.kitchen!\.hinges[^]*?Поставить петли/);
+  assert.match(src,/k\.fasteners === false && <p[^>]*>Как в проекте Базиса[^]*?delete n\.kitchen!\.fasteners[^]*?Поставить крепёж/);
+});

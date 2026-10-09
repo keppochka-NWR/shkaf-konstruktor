@@ -1,8 +1,13 @@
-// Распознавание нижних модулей и пеналов Базиса: «как в Базисе, ничего сверх» — флаги кухни по составу фурнитуры проекта.
-// Отдельный файл, чтобы не конфликтовать с соседями по fromEtalon.ts. Правила выведены статистикой по 34 кухням (207 нижних и пеналов):
-//  - фасады без петель и без направляющих — 42 модуля: фасад есть, петель нет (фальш-фасад, «забыли», фасад ящика без ящика);
-//  - без опор — 34 модуля: дно на полу или на своём цоколе;
-//  - без крепежа — 10 модулей (k32): в проекте нет ни конфирматов, ни эксцентриков, ни шкантов, ни полкодержателей.
+// Распознавание модулей Базиса: «как в Базисе, ничего сверх» — флаги кухни по составу проекта. Отдельный файл, чтобы не конфликтовать
+// с соседями по fromEtalon.ts. Каждое правило читает сам проект Базиса: флаг ставится, только если так в этом проекте. Срабатывание —
+// прогон по всем 422 модулям 34 кухонь (09.10.2026), «модулей / кухонь»:
+//  - фасад без петель — 15 / 12: фасад есть, петель и направляющих нет, и студия строит ровно те же фасады (иначе фасадов не ставим);
+//  - без опор — 33 / 13: дно на полу или на своём цоколе;
+//  - без крепежа — 22 / 1 (только k32): нет ни конфирматов, ни эксцентриков, ни шкантов, ни полкодержателей;
+//  - без наколок под планку 26 / 11; зазоры ХДФ 24 / 13; опоры не сеткой 17 / 10; эксцентрик дна снизу 12 / 10;
+//    передние полкодержатели 12 / 8; полки кромятся не по кругу 14 / 6; опущенная боковина 8 / 5; зазор фасадов сверху/снизу 3 / 3;
+//  - одна-две кухни (статистической опоры нет — это чтение конкретного проекта, не обобщение): кромка по кругу 33 / 2 (k11, k32),
+//    без кромки 15 / 1 (k23), верх боковин без кромки 9 / 2 (k03, k20), толстый передний торец 8 / 2 (k27, k29).
 import { parts, type Module } from "../../src/model";
 import type { RefModule } from "./compare";
 
@@ -105,7 +110,7 @@ export function sameFronts(ref: RefModule, m: Module, tol = 1.5): boolean {
   });
 }
 
-/** Одна боковина опущена ниже другой (11 из 150 нижних Базиса): до низа дна (k22 m01, k26 m05) или до пола (k06 m01, k15 m06),
+/** Одна боковина опущена ниже другой (срабатывает на 8 модулях 5 кухонь): до низа дна (k22 m01) или до пола (k06 m01, k15 m06),
  *  а дно — под второй боковиной (от опущенной до наружной грани второй). */
 export function sideDown(ref: RefModule): { side: "left" | "right"; y0: number } | undefined {
   const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -124,7 +129,7 @@ export function sideDown(ref: RefModule): { side: "left" | "right"; y0: number }
 }
 
 /** Наколки D3×3 под планку петли (±16 от оси петли, 37 вглубь от тыльной плоскости фасада): у всех петель — true, ни у одной — false
- *  (89 из 261 модулей Базиса с петлями), часть — undefined (не повторяем, студия ставит как обычно). */
+ *  (false срабатывает на 26 модулях 11 кухонь), часть — undefined (не повторяем, студия ставит как обычно). */
 export function hingePlateHoles(ref: RefModule): boolean | undefined {
   const hs = ref.hardware.filter((h) => h.category === "петля");
   if (!hs.length || !ref.holes?.length) return undefined;
@@ -167,7 +172,7 @@ export function backGapsTB(ref: RefModule, side: number): { bottom: number; top:
   return Math.abs(bottom - side) > 0.05 || Math.abs(tp - side) > 0.05 ? { bottom, top: tp } : undefined;
 }
 
-/** Все эксцентрики дна — на нижней пласти (сверлятся снизу): 56 из 380 эксцентриков дна Базиса (у нижних модулей 18 из 31).
+/** Все эксцентрики дна — на нижней пласти (сверлятся снизу): 56 из 380 эксцентриков дна Базиса; флаг — на 12 модулях 10 кухонь.
  *  "legs" — бочонок (Ø15 в 34 от стойки) под площадкой опоры (±29): так у Базиса бывает (k22 m01), но это пересечение — не повторяем. */
 export function eccFromBelow(ref: RefModule): boolean | "legs" {
   const bot = ref.panels.filter((p) => p.axis === "y" && (p.kind === "ldsp" || p.kind === "mdf")).sort((a, b) => a.box[1] - b.box[1])[0];
@@ -179,7 +184,8 @@ export function eccFromBelow(ref: RefModule): boolean | "legs" {
   return hit ? "legs" : true;
 }
 
-/** Съёмные полки (на полкодержателях) кромлены не по кругу (18 из 219 полок Базиса — только перед): торцы, одинаковые у всех полок модуля. */
+/** Съёмные полки (на полкодержателях) кромлены не по кругу (18 из 219 полок Базиса — только перед; флаг — на 14 модулях 6 кухонь):
+ *  торцы, одинаковые у всех полок модуля. */
 export function shelfEdges(ref: RefModule): string[] | undefined {
   type P = RefModule["panels"][number] & { edges?: { side: string; thick: number }[] };
   const pins = ref.hardware.filter((h) => h.category === "полкодержатель");
@@ -189,7 +195,7 @@ export function shelfEdges(ref: RefModule): string[] | undefined {
   return sets[0].split(",");
 }
 
-/** Передний торец боковин кромлен толще остальных (k29 — 7, k27 — 1 из 383 модулей): { front, other } или undefined. */
+/** Передний торец боковин кромлен толще остальных (8 модулей двух кухонь: k29 — 7, k27 — 1): { front, other } или undefined. */
 export function frontEdge(ref: RefModule): { front: number; other: number } | undefined {
   type P = RefModule["panels"][number] & { edges?: { side: string; thick: number }[] };
   const L = (ref.panels as P[]).filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200).sort((a, b) => a.box[0] - b.box[0])[0];
@@ -197,7 +203,7 @@ export function frontEdge(ref: RefModule): { front: number; other: number } | un
   return f && o.length === 1 && Math.abs(o[0] - f.thick) > 0.01 ? { front: f.thick, other: o[0] } : undefined;
 }
 
-/** Опоры не сеткой «ряды по ширине × перед/зад» (18 из 174 модулей с опорами, k15 m02: правая задняя глубже левой на 23) —
+/** Опоры не сеткой «ряды по ширине × перед/зад» (17 модулей 10 кухонь, k15 m02: правая задняя глубже левой на 23) —
  *  точки [x, z от задней кромки боковин]. Сетка или опоры внахлёст (ближе площадки 58 по обеим осям) — undefined. */
 export function irregularLegs(ref: RefModule): [number, number][] | undefined {
   const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -214,7 +220,7 @@ export function irregularLegs(ref: RefModule): [number, number][] | undefined {
   return L.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
-/** Полкодержатели не симметричны по глубине полки (61 из 244 полок Базиса): отступ передних от переднего торца нижней полки с держателями,
+/** Полкодержатели не симметричны по глубине полки (61 из 244 полок Базиса; поле — на 12 модулях 8 кухонь): отступ передних от переднего торца нижней полки с держателями,
  *  если он не равен заднему (back — shelfPinInset, распознанный по той же полке). */
 export function pinInsetFront(ref: RefModule, back: number | undefined): number | undefined {
   if (back === undefined) return undefined;
@@ -230,7 +236,7 @@ export function pinInsetFront(ref: RefModule, back: number | undefined): number 
   return undefined;
 }
 
-/** Нижний: боковины кромлены, но верхний торец — нет (k03, k20 — 16 из 290 боковин нижних модулей). */
+/** Нижний: боковины кромлены, но верхний торец — нет (9 модулей двух кухонь: k03, k20). */
 export function sideTopBare(ref: RefModule): boolean {
   type P = RefModule["panels"][number] & { edges?: { side: string; thick: number }[] };
   const sides = (ref.panels as P[]).filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200).sort((a, b) => a.box[0] - b.box[0]);
@@ -251,7 +257,7 @@ export function edgesNone(ref: RefModule): boolean {
   return body.length > 0 && body.every((p) => !(p.edges ?? []).some((e) => e.thick > 0));
 }
 
-/** Кромка по кругу (k11, k32 — 36 из 422 модулей): у каждой детали корпуса ЛДСП кромлены все четыре торца. Возвращает толщину кромки или 0. */
+/** Кромка по кругу (33 из 422 модулей, две кухни: k11, k32): у каждой детали корпуса ЛДСП кромлены все четыре торца. Возвращает толщину кромки или 0. */
 export function edgesAllAround(ref: RefModule): number {
   const body = bodyPanels(ref);
   if (!body.length || !body.every((p) => new Set((p.edges ?? []).filter((e) => e.thick > 0).map((e) => e.side)).size >= 4)) return 0;
