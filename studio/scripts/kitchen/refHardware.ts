@@ -6,6 +6,10 @@ const CONFIRMAT = /евровинт|конфирмат/i;
 
 export function refCategory(h: { name: string; category: string }): string {
   if (h.category === "прочее" && CONFIRMAT.test(h.name ?? "")) return "конфирмат";
+  // Axis PRO: передняя панель внутреннего ящика и «Logo» на царге — в проектах Базиса то «ящик-система»/«заглушка», то «прочее»
+  // (k25); сверяем одной категорией: панель — ящик-система (7 из 8), Logo — заглушка
+  if (/^Передняя панель внутр/.test(h.name ?? "")) return "ящик-система";
+  if ((h.name ?? "").trim() === "Logo") return "заглушка";
   // «Мебельная ручка рейлинг 128» (k09): «рейлинг» стоит в правиле ящик-системы раньше ручки — это ручка
   if (h.category === "ящик-система" && /^\s*(мебельная\s+)?ручк/i.test(h.name ?? "")) return "ручка";
   return h.category;

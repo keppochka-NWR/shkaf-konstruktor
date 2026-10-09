@@ -454,7 +454,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       for (const q of [inner ? undefined : f, bot, bk]) if (q) drawerPanels.push(q);
       const backH = bk ? r1(bk.b.y1 - bk.b.y0) : undefined;
       const faceScrews = ref.hardware.some((h) => h.name === "3x3" && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
-      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}), ...(inner ? { inner: true as const, front } : front > 0.05 ? { front } : {}) }); // утоплен — как в Базисе (k25 m05: 1,5)
+      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}), ...(inner ? { inner: true as const, front } : front > 0.05 ? { front } : {}), // утоплен — как в Базисе (k25 m05: 1,5)
+        ...(ref.hardware.some((h) => h.name.trim() === "Logo" && Math.abs(h.pos[0] - x - 37.5) < 1 && Math.abs(h.pos[1] - y - 9.6) < 0.5) ? { logo: true as const } : {}) });
     }
     if (kd.length) m.kdrawers = kd;
   }

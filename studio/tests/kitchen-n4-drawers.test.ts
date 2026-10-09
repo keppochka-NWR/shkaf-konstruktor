@@ -196,6 +196,9 @@ test('Axis PRO внутренний ящик (k21 m03, k25 m05, k29 m03): без
   const k25=moduleFromEtalon(load('k25','m05')).module;
   assert.deepEqual(validate(k25).filter(e=>/глубину/.test(e)),[]);
   assert.equal((k25.kdrawers![0] as AxisDrawer).front,1.5);assert.ok(!(k25.kdrawers![0] as AxisDrawer).inner);
+  // «Logo» на царге - как в проекте (все 3 ящика k25 m05), модуль проходит сверку целиком
+  assert.ok(k25.kdrawers!.every(k=>(k as AxisDrawer).logo));assert.ok(pass('k25','m05').ok,'k25 m05 PASS');
+  assert.ok(!moduleFromEtalon(load('k29','m03')).module.kdrawers!.some(k=>(k as AxisDrawer).logo),'без Logo в Базисе - студия его не ставит');
   // k21 m03: ящики 500 в корпусе 447 - ошибка проекта Базиса (короба выходят за задник), проверка её показывает
   assert.ok(validate(moduleFromEtalon(load('k21','m03')).module).some(e=>/не входит в глубину корпуса 447/.test(e)));
 });

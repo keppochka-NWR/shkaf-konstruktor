@@ -164,6 +164,8 @@ export type AxisDrawer = {
   /** Внутренний ящик за фасадом ящика ниже (Базис k21 m03): своего фасада нет, утоплен от передней кромки корпуса на front.
    *  Только из проекта Базиса. */
   inner?: true; front?: number;
+  /** «Logo» Axis PRO на левой царге у задней стенки — только как в проекте Базиса (k21 m03, k25 m01/m05/m11), позиция без модели. */
+  logo?: true;
   /** Саморезы 3×3 держателя задней стенки — высоты от точки держателя, если не все по правилу REAR_SCREWS
    *  (Базис k15, k18: только крайние, наколы D5×1 — все). */
   rearScrews?: number[];
@@ -863,6 +865,8 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       // ящика); в студии — точка-метка для сметы и сверки, без своей геометрии
       out.push({ ...screw(`${id}:sys:ppanel`, [x0 + 50, ry + 61.7, Fk - 7.2]), name: `Передняя панель внутреннего ящика Axis PRO H-${k.h} (в Базисе без модели)` });
     }
+    // «Logo» на левой царге (как в проекте Базиса, 9 из 9: 37,5 от боковины, +9,6 над осью, 112,3 от задней стенки ящика)
+    if (k.logo) out.push({ ...screw(`${id}:cap:logo`, [x0 + 37.5, ry + 9.6, Fk - k.len + 120.3]), name: "Logo Axis PRO (в Базисе без модели)" });
     for (const s of [0, 1] as const) {
       const x = sideIn(s), d = dir(s), lr = s ? "R" : "L", side = s ? "правая" : "левая";
       const run = (M.runner[col]?.[k.len] ?? M.runner.white[k.len])!;
@@ -1132,7 +1136,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     return { system: "axis-pro" as const, y0: Number(k.y0), y1: Number(k.y1), runnerY: Number(k.runnerY), h: Number(k.h) as AxisDrawer["h"], len: Number(k.len) as AxisDrawer["len"],
     ...(k.color === "anthracite" ? { color: "anthracite" as const } : {}), ...(k.backH === undefined ? {} : { backH: Number(k.backH) }), ...(k.faceScrews ? { faceScrews: true } : {}),
     ...(Array.isArray(k.rearScrews) ? { rearScrews: k.rearScrews.slice(0, 4).map(Number) } : {}), ...(k.rail ? { rail: true } : {}),
-    ...(k.inner ? { inner: true as const } : {}), ...(k.front ? { front: Number(k.front) } : {}),
+    ...(k.inner ? { inner: true as const } : {}), ...(k.front ? { front: Number(k.front) } : {}), ...(k.logo ? { logo: true as const } : {}),
     ...(k.edge?.bottom === true ? { edge: { bottom: true as const } } : Array.isArray(k.edge?.bottom) ? { edge: { bottom: k.edge!.bottom.filter((s): s is AxisEdgeSide => ["+x", "-x", "+z", "-z"].includes(s)) } } : {}) };
   });
 }
