@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule} from '../src/model';
+import {initialModule,parts} from '../src/model';
 import {kitchenBase,kitchenWall} from '../src/kitchen';
 import {compareModule,refFromStudio,honestPass,sameTurn} from '../scripts/kitchen/compare';
 
@@ -63,6 +63,27 @@ test('comparator checks gas lift rotation (quaternion), not only the point',()=>
   assert.match(c.hardware.find(h=>h.category==='газлифт')!.note??'',/поворот ≠ ×2/);
   const neg={...ref,hardware:ref.hardware.map(h=>h.quat?{...h,quat:h.quat.map(v=>-v)}:h)};
   assert.ok(compareModule(neg,m).pass,'q and -q are the same rotation');
+});
+
+test('поворот всей фурнитуры (не только газлифта): та же сетка Базиса и другой кватернион — FAIL; другая сетка — только сведения',()=>{
+  const m=kitchenWall(initialModule(),600);m.height=300;m.depth=600;m.kitchen={...m.kitchen!,role:'antresol'};
+  m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top']}];m.kitchenLift={system:'pd-g-n02'};
+  const ref=refFromStudio(m),ps=parts(m);
+  const meshOf=(p:{pos:number[]})=>{const best=ps.filter(x=>x.model?.quat&&/([0-9a-f]{12})\.glb$/.test(x.model.file??'')).map(x=>({x,d:Math.hypot(...(x.model!.origin??x.position).map((v,i)=>v-p.pos[i]))})).sort((a,b)=>a.d-b.d)[0];return best&&best.d<1e-6?/([0-9a-f]{12})\.glb$/.exec(best.x.model!.file)![1]:undefined;};
+  // не газлифт и не крепёж с осью симметрии (конфирмат, опора — поворот вокруг своей оси не считается)
+  const k=ref.hardware.findIndex(h=>!['газлифт','конфирмат','опора'].includes(h.category)&&h.quat&&meshOf(h));
+  assert.ok(k>=0,'в модуле есть фурнитура с сеткой и кватернионом, кроме газлифта');
+  const cat=ref.hardware[k].category,mesh=meshOf(ref.hardware[k])!,c2=Math.SQRT1_2;
+  // q·r, r — 90° вокруг локальной Y
+  const mulQ=([a,b,c,d]:number[],[e,f,g,h]:number[])=>[a*e-b*f-c*g-d*h,a*f+b*e+c*h-d*g,a*g-b*h+c*e+d*f,a*h+b*g-c*f+d*e];
+  const turn=(h:typeof ref.hardware[number],withMesh:boolean)=>({...h,...(withMesh?{mesh}:{}),quat:mulQ(h.quat!,[c2,0,c2,0])});
+  const same={...ref,hardware:ref.hardware.map((h,i)=>i===k?turn(h,true):h)};
+  const c=compareModule(same,m);
+  assert.equal(c.pass,false);
+  assert.match(c.hardware.find(h=>h.category===cat)!.note??'',/поворот ≠ Базису ×1 \(та же сетка\)/);
+  // сетки у ссылки нет (или другая сетка) — локальные оси разные, поворот только в сведениях, PASS не трогаем
+  const other={...ref,hardware:ref.hardware.map((h,i)=>i===k?turn(h,false):h)};
+  assert.ok(compareModule(other,m).pass);
 });
 
 test('rotation check (info, not PASS): q and -q are one turn; a confirmat turned about its own axis (k13 m02 [0,-1,0,0] vs [1,0,0,0]) and a leg about its vertical axis are the same',()=>{
