@@ -52,9 +52,19 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 /** Класс панели: вид материала, толщина (округлённо), ось толщины, фасад или корпус. */
 function cls(kind: string, thick: number, axis: string, facade: boolean) { return facade ? `фасад|${Math.round(thick)}|${axis}` : `${kind}|${Math.round(thick)}|${axis}|корпус`; }
 
+/** Крайняя боковина до плоскости фасадов (k23 m04 «стенка в паз», декоративная МДФ k29 m02, k27 m13): крайние стойки ЛДСП/МДФ
+ *  разной глубины и прямо перед мелкой стоят фасады — перед корпуса по мелкой. Возвращает её передний торец; иначе undefined.
+ *  Одно правило и для сверки (что фасад), и для распознавания (глубина корпуса) — n4-tall. */
+export function proudSideFront(panels: RefPanel[]): number | undefined {
+  const sides = panels.filter((p) => p.axis === "x" && (p.kind === "ldsp" || p.kind === "mdf") && p.box[4] - p.box[1] > 200).sort((a, c) => a.box[0] - c.box[0]);
+  if (sides.length < 2) return undefined;
+  const z1 = [sides[0].box[5], sides[sides.length - 1].box[5]], zMin = Math.min(...z1), zMax = Math.max(...z1);
+  return zMax - zMin > 1 && panels.some((p) => p.axis === "z" && p.kind !== "hdf" && Math.abs(p.box[2] - zMin) <= 1 && p.box[4] - p.box[1] > 100) ? zMin : undefined;
+}
+
 function refItems(m: RefModule): Item[] {
   // Фасад Базиса — панель перед боковинами (её задняя грань не глубже передней кромки корпуса минус 1 мм)
-  const bodyFront = Math.max(...m.panels.filter((p) => p.axis === "x" && p.kind !== "hdf").map((p) => p.box[5]), 0);
+  const bodyFront = proudSideFront(m.panels) ?? Math.max(...m.panels.filter((p) => p.axis === "x" && p.kind !== "hdf").map((p) => p.box[5]), 0);
   return m.panels.filter((p) => ["ldsp", "hdf", "mdf", "glass", "other"].includes(p.kind)).map((p) => {
     const facade = p.axis === "z" && p.box[2] >= bodyFront - 1 && p.kind !== "hdf";
     const kind = p.kind === "mdf" || p.kind === "other" ? "ldsp" : p.kind;

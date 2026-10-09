@@ -167,3 +167,14 @@ test('shelfAtFromEtalon: полки одной глубины — нет зап�
   assert.equal(shelfAtFromEtalon([b(4,579),b(4,579)],575,1,3),undefined);
   assert.deepEqual(shelfAtFromEtalon([b(4,579),b(3,580)],575,1,3),{1:{rear:0,depth:577}});
 });
+
+test('боковина до плоскости фасадов (k23 m04, k29 m02, k27 m13): двери перед мелкой боковиной находятся и сверяются как фасады; выступ — «не поддержано»',{skip:!existsSync(`${ETALON}/k29.json`)},()=>{
+  for(const [k,key,n] of [['k23','m04',2],['k29','m02',3],['k27','m13',1]] as const){
+    const ref=load(k,key);
+    const {module:m,unsupported}=moduleFromEtalon(ref);
+    assert.ok(unsupported.some(u=>/выступает до плоскости фасадов/.test(u)),`${k} ${key}: ${unsupported.join('; ')}`);
+    const c=compareModule(ref,m);
+    assert.equal(c.missing.filter(x=>/Дверь/.test(x.name)).length,0,`${k} ${key}: двери Базиса не потеряны`);
+    assert.equal(parts(m).filter(p=>p.role==='door').length,n,`${k} ${key}: дверей ${n}`);
+  }
+});

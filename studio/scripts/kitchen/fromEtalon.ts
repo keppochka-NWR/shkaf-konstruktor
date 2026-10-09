@@ -4,7 +4,7 @@
 import { initialModule, section, parts, scaleHingeY, doorRowCount, facadeBottom, type Module, type Groove, type GolaCut } from "../../src/model";
 import { partAxes, edgeByDir } from "../../src/edges";
 import { hingePositions } from "../../src/hardware";
-import type { RefModule, RefPanel } from "./compare";
+import { proudSideFront, type RefModule, type RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
@@ -303,7 +303,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const left = sides[0], right = sides[sides.length - 1];
   if (!left || left === right) throw Error("нет двух боковин");
   const t = left.b.x1 - left.b.x0;
-  const sideZ0 = Math.min(left.b.z0, right.b.z0), sideZ1 = Math.max(left.b.z1, right.b.z1), d = r1(sideZ1 - sideZ0);
+  // боковина до плоскости фасадов (k23 m04, k29 m02, k27 m13): перед корпуса — по мелкой боковине, иначе двери оказывались «внутри»
+  // корпуса и терялись (n4-tall). Сам выступ студия не строит — честно «не поддержано»
+  const zMax = Math.max(left.b.z1, right.b.z1), proud = proudSideFront(ref.panels);
+  if (proud !== undefined) unsupported.push(`боковина выступает до плоскости фасадов на ${r1(zMax - proud)} мм — пока не поддержано`);
+  const sideZ0 = Math.min(left.b.z0, right.b.z0), sideZ1 = proud ?? zMax, d = r1(sideZ1 - sideZ0);
   const top = Math.max(left.b.y1, right.b.y1);
   const H = r1(top);
   const horiz = P.filter(({ p }) => p.axis === "y" && board(p.kind));
