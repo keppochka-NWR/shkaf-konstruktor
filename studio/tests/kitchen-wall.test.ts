@@ -178,6 +178,17 @@ test('навесной k34 m02 на «Стяжке Макмарт Ø15»: при
   // k30 m06 (эксцентрики под боковинами) — типовая присадка, без ecc
   assert.equal(moduleFromEtalon(load('k30','m06')).module.kitchen?.ecc,undefined);
 });
+test('нижний k32 m09: кромка боковин, дна и царг по кругу — как в проекте Базиса (edgeScheme.parts), сверка PASS',{skip:!existsSync(`${ETALON}/k32.json`)},()=>{
+  const ref=load('k32','m09'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.ok(m.edgeScheme?.parts?.left?.includes('-y')&&m.edgeScheme.parts.left.includes('-z'),JSON.stringify(m.edgeScheme?.parts));
+  assert.deepEqual(validate(m),[]);assert.deepEqual(unsupported,[]);
+  const c=compareModule(ref,m);assert.ok(c.pass,JSON.stringify(c.edges?.bad));
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).edgeScheme?.parts,m.edgeScheme?.parts);
+  // без переопределения — правило студии, сверка видит разницу
+  assert.equal(compareModule(ref,{...m,edgeScheme:{...m.edgeScheme!,parts:undefined}}).pass,false);
+  // у модулей, где кромка студии и так как в Базисе (k30 m06), переопределений нет
+  assert.equal(moduleFromEtalon(load('k30','m06')).module.edgeScheme?.parts,undefined);
+});
 test('вырез в заднем верхнем углу боковины по контуру Базиса: только ровно такой контур',()=>{
   const C=(c:number[][])=>({figure:true,contourPlane:'yz',contour:c});
   assert.deepEqual(rearNotchFromContour(C([[0,0],[0,330],[1080,330],[1080,20],[980,20],[980,0]])),{height:100,depth:20});
