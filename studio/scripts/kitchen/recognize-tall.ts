@@ -80,6 +80,16 @@ export function backFromShelfOf(back: B, shelves: B[], fixed: number[], gc: numb
   return fixed.find((j) => shelves[j] && Math.abs(back.y0 - (shelves[j].y0 + gc)) <= 1 && back.z1 <= shelves[j].z0 + 0.5);
 }
 
+/** Пенал с ящиками внизу и распашными выше (k16 m13: фасад ящика 101,5…458,5, ниша, дверь 1509…2298,5): фронты, которые не фасады
+ *  ящиков (не в drawerPanels) и все выше верха фасадов ящиков, в одном ряду (одинаковый низ) — распашные. Иначе undefined. */
+export function doorsAboveDrawers<T extends { b: B }>(fronts: T[], drawerPanels: T[]): T[] | undefined {
+  const dr = fronts.filter((q) => drawerPanels.includes(q)), rest = fronts.filter((q) => !drawerPanels.includes(q));
+  if (!dr.length || !rest.length) return undefined;
+  const top = Math.max(...dr.map((q) => q.b.y1));
+  if (rest.some((q) => q.b.y0 < top - 0.5 || Math.abs(q.b.y0 - rest[0].b.y0) > 0.5)) return undefined;
+  return rest.length <= 2 ? rest : undefined;
+}
+
 /** Полки, у которых в Базисе своя глубина или отступ от задника (не как у первой полки секции): номер → { rear, depth }.
  *  rear — от зоны задника студии (rear0 — z начала полок в координатах Базиса). k23 m14/m17: жёсткая полка 577 на всю глубину корпуса
  *  при съёмных 575 с отступом 1. */

@@ -9,7 +9,7 @@ import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
-import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf } from "./recognize-tall";
+import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
@@ -604,6 +604,15 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       kd.push({ system: "versalite-h45", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(run.pos[1]), len, box });
     });
     if (kd.length) m.kdrawers = kd;
+  }
+  // пенал: ящики внизу, выше (через нишу) — один ряд распашных на петлях (k16 m13): фасады ящиков ведут ящики (kdrawers),
+  // распашные — свой ряд от низа kitchen.faceBottom, как в Базисе (recognize-tall.ts)
+  const tallDoors = role === "tall" && m.kdrawers && hw("петля").length ? doorsAboveDrawers(fronts, drawerPanels) : undefined;
+  if (tallDoors) {
+    fronts.splice(0, fronts.length, ...tallDoors);
+    const y0 = Math.min(...tallDoors.map((q) => q.b.y0));
+    m.kitchen.faceBottom = r1(y0 - (m.feet ? (bottom ? m.feet.height : 0) : 0));
+    notes.push(`распашные над ящиками: низ фасадов ${r1(y0)}`);
   }
   // фасады (одна строка распашных; ящики — выше)
   const doors = fronts.filter((f) => hw("петля").length);

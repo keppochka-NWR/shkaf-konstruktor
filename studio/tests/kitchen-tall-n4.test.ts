@@ -7,7 +7,7 @@ import {partCollisions} from '../src/collisions';
 import {edgeByDir} from '../src/edges';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {shelfAtFromEtalon,topBackTall} from '../scripts/kitchen/recognize-tall';
+import {shelfAtFromEtalon,topBackTall,doorsAboveDrawers} from '../scripts/kitchen/recognize-tall';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тест пропускается.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -119,6 +119,31 @@ test('k25 m10 пенал под холодильник: дно и крыша п�
   const m2=structuredClone(m);m2.sections[0].fixed=[];
   const b2=parts(m2).find(p=>p.id==='back')!;
   assert.ok(b2.size[1]>back.size[1]+1000);
+});
+
+test('k16 m13: ящик внизу, ниша, одна распашная дверь сверху (faceBottom по Базису) — без перекрытия фасада ящика, петли 3 справа, опор 7 (дубль) — PASS',{skip:!existsSync(`${ETALON}/k16.json`)},()=>{
+  const ref=load('k16','m13');
+  const {module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(unsupported,[]);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(m.sections[0].doorLeaves,1);
+  assert.equal(m.sections[0].hingeSide,'right');
+  const ps=parts(m),doors=ps.filter(p=>p.role==='door'&&p.id.includes(':door:'));
+  assert.equal(doors.length,1);
+  assert.ok(Math.abs(doors[0].position[1]-doors[0].size[1]/2-1509)<0.6,'низ двери 1509, как в Базисе');
+  assert.deepEqual(partCollisions(ps,m),[]);
+  assert.equal(ps.filter(p=>p.id.startsWith('leg:')).length,7);
+  const c=compareModule(ref,m);
+  assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2),missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name)}));
+});
+
+test('doorsAboveDrawers: распашные — только если все выше фасадов ящиков и в одном ряду',()=>{
+  const q=(y0:number,y1:number)=>({b:{x0:0,y0,z0:0,x1:600,y1,z1:16}});
+  const d=q(101,458),u=q(1509,2298),u2=q(800,1500);
+  assert.deepEqual(doorsAboveDrawers([d,u],[d]),[u]);
+  assert.equal(doorsAboveDrawers([d,u,u2],[d]),undefined,'два ряда — не этот случай');
+  assert.equal(doorsAboveDrawers([q(101,458),q(300,2298)],[d]),undefined);
+  assert.equal(doorsAboveDrawers([u],[]),undefined);
 });
 
 test('shelfAtFromEtalon: полки одной глубины — нет записи; другая глубина или отступ — запись по номеру полки',()=>{
