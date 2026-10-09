@@ -66,6 +66,8 @@ export function sideDown(ref: RefModule): { side: "left" | "right"; y0: number }
   // дно между опущенной боковиной и наружной гранью второй, вторая стоит на дне, опущенная — не выше низа дна
   const underHigh = side === "left" ? bot.box[3] >= R.box[3] - 0.5 && Math.abs(bot.box[0] - L.box[3]) < 0.6 : bot.box[0] <= L.box[0] + 0.5 && Math.abs(bot.box[3] - R.box[0]) < 0.6;
   if (!underHigh || Math.abs(high.box[1] - bot.box[4]) > 0.6 || low.box[1] > bot.box[1] + 0.5) return undefined;
+  // конфирмат снизу в торец второй боковины (50 мм) упрётся в горизонталь над дном ближе 50 мм (k26 m05: дно ящика в 7 мм) — не повторяем
+  if (ref.panels.some((p) => p !== bot && p.axis === "y" && p.box[1] > bot.box[4] - 0.5 && p.box[1] < bot.box[4] + 50)) return undefined;
   return { side, y0: r1(low.box[1]) };
 }
 
@@ -93,6 +95,8 @@ export function faceGapsTB(ref: RefModule, side: number): { top?: number; bottom
   if (!fr.length || !bot || new Set(fr.map((p) => r1(p.box[1]))).size > 1 || new Set(fr.map((p) => r1(p.box[4]))).size > 1) return undefined;
   const t = r1(top - fr[0].box[4]), b = r1(fr[0].box[1] - bot.box[1]);
   const out: { top?: number; bottom?: number } = {};
+  // только зазор (до 10 мм); фасад ниже на сотни мм (k22 m06: 598 — ниша/второй ряд) — не зазор, не трогаем
+  if (t > 10 || b > 10 || t < 0 || b < 0) return undefined;
   if (Math.abs(t - side) > 0.05) out.top = t;
   if (Math.abs(b - side) > 0.05) out.bottom = b;
   return out.top !== undefined || out.bottom !== undefined ? out : undefined;
@@ -168,7 +172,8 @@ export function pinInsetFront(ref: RefModule, back: number | undefined): number 
     const ps = pins.filter((h) => Math.abs(h.pos[1] - s.box[1]) < 2);
     if (ps.length < 2 || Math.abs(r1(Math.min(...ps.map((h) => h.pos[2] - s.box[2]))) - back) > 0.05) continue;
     const front = r1(s.box[5] - Math.max(...ps.map((h) => h.pos[2])));
-    return Math.abs(front - back) > 0.5 ? front : undefined;
+    // держатель за передним торцом полки (k25 m08: −1,5) упрётся в фасад — не повторяем
+    return Math.abs(front - back) > 0.5 && front >= 10 ? front : undefined;
   }
   return undefined;
 }
