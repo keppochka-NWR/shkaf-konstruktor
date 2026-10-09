@@ -90,6 +90,12 @@ export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: Ref
   return out;
 }
 
+/** Кромка в проекте Базиса не заложена вовсе: у всех панелей ЛДСП список кромки есть и пуст (по базе — только k23, 15 модулей). */
+export function noEdges(panels: RefPanel[]): boolean {
+  const ldsp = panels.filter((p) => p.kind === "ldsp");
+  return ldsp.length > 0 && ldsp.every((p) => { const e = (p as unknown as { edges?: { thick: number }[] }).edges; return Array.isArray(e) && !e.some((x) => x.thick > 0); });
+}
+
 /** Крепёж корпуса в проекте Базиса не заложен вовсе (ни конфирматов, ни эксцентриков, ни шкантов, ни отверстий) — студия его не добавляет. */
 export function fastenersAbsent(ref: RefModule): boolean {
   return !ref.hardware.some((h) => ["конфирмат", "эксцентрик", "шкант"].includes(h.category)) && !(ref.holes ?? []).length;
@@ -357,6 +363,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et, ...edgeFlags(left.p, bottom?.p, topPanel?.p, !!m.bottomUnder, m.backType) };
+  else if (noEdges(ref.panels)) { m.edgeScheme = { t: 0 }; notes.push("кромка в Базисе не заложена — студия не добавляет"); }
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
     const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);

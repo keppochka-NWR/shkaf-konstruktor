@@ -142,7 +142,10 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
  *  (1 или 0,5 мм ПВХ в цвет). Боковины низа — верх и перед; навесных — все четыре; дно под боковинами — перед и концы; дно и крыша между
  *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
 export function kitchenEdges(m: Module, out: Part[]) {
-  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
+  const t = m.edgeScheme?.t;
+  // кромка в проекте Базиса не заложена вовсе (k23: ни на одной панели) — студия её не добавляет
+  if (m.kitchen && t === 0) { for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade")) setEdges(p, [], 0); golaSides(m, out); return; }
+  if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
   const ends = m.edgeScheme?.ends ? ["+x", "-x"] : []; // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32)
   // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;

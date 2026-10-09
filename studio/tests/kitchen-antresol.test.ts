@@ -5,7 +5,7 @@ import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from 
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 
 // Антресоль 600×400×350 (как Базис k12 «А 1»): дно и крыша между боковинами, ХДФ в паз, навесы ABS.
@@ -105,9 +105,19 @@ test('edge flags follow the Bazis edging: under-bottom ends not edged (k28), rea
   assert.equal(left.edge.filter(x=>x>0).length,4,'side: all four with rear');
 });
 
+test('no edging in the Bazis project at all (k23): studio carcass has no edging either; wardrobes keep theirs',()=>{
+  const P=(edges:unknown):RefPanel=>({i:0,name:'',mat:'',thick:16,kind:'ldsp',box:[0,0,0,1,1,1],axis:'y',edges} as unknown as RefPanel);
+  assert.equal(noEdges([P([]),P([])]),true);
+  assert.equal(noEdges([P([]),P([{side:'+z',thick:1}])]),false);
+  assert.equal(noEdges([P(undefined)]),false,'no edge data is not "no edging"');
+  const m=antresol();m.edgeScheme={t:0};
+  assert.ok(parts(m).filter(p=>p.material==='board'&&p.role!=='door').every(p=>p.edge.every(x=>x===0)));
+  assert.ok(parts(initialModule()).some(p=>p.edge.some(x=>x>0)),'wardrobe default edging unchanged');
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
-for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03']] as const)
+for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
     const {module:m}=moduleFromEtalon(ref);
