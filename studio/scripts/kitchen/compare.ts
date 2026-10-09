@@ -135,10 +135,23 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
   const cats = new Set<string>([...ref.hardware.map((h) => h.category), ...ps.map(studioCategory).filter((x): x is string => !!x)]);
   const hardware: HardwareRow[] = [...cats].map((category) => {
     const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
-    return { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
+    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
+    // Газлифт: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
+    const sq = category === "газлифт" ? ps.filter((p) => studioCategory(p) === category) : [];
+    if (sq.length) {
+      const bad = ref.hardware.filter((h) => h.category === category && h.quat).filter((h) => {
+        const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
+        sq.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
+        const q = best?.model?.quat; if (!q) return true;
+        const n = Math.hypot(...h.quat!) * Math.hypot(...q);
+        return Math.abs(h.quat!.reduce((s, v, i) => s + v * q[i], 0)) / n < 0.999;
+      }).length;
+      if (bad) row.note = `поворот ≠ ×${bad}`;
+    }
+    return row;
   });
   const tolOf = (p: PanelPair) => (p.ref.cls.startsWith("hdf") ? Math.max(1, tol) : tol);
-  const hwOk = hardware.every((h) => h.ref === h.studio && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант"].includes(h.category) ? 2 : 1)));
+  const hwOk = hardware.every((h) => h.ref === h.studio && !h.note && (h.maxPosDelta === null || h.maxPosDelta <= (["конфирмат", "полкодержатель", "эксцентрик", "шкант"].includes(h.category) ? 2 : 1)));
   // Отверстия: на каждой сопоставленной паре панелей — тот же диаметр, глубина, направление; точка входа ±0,5 мм.
   let holeCheck: HoleCheck | undefined;
   if (ref.holes) {
@@ -206,7 +219,7 @@ export function refFromStudio(m: Module, key = "self"): RefModule {
     return { i, name: p.name, mat: p.material, thick: Math.min(...p.size), kind: p.material === "board" ? "ldsp" : p.material, axis: AX[ax], box: [0, 1, 2].map((k) => p.position[k] - p.size[k] / 2).concat([0, 1, 2].map((k) => p.position[k] + p.size[k] / 2)) };
   });
   // фасад студии — тоже «перед боковинами», как у Базиса
-  const hardware: RefHardware[] = ps.map((p) => ({ p, c: studioCategory(p) })).filter((x) => x.c).map((x, i) => ({ i, name: x.p.name, category: x.c!, pos: studioAnchor(x.p) }));
+  const hardware: RefHardware[] = ps.map((p) => ({ p, c: studioCategory(p) })).filter((x) => x.c).map((x, i) => ({ i, name: x.p.name, category: x.c!, pos: studioAnchor(x.p), ...(x.p.model?.quat ? { quat: [...x.p.model.quat] } : {}) }));
   return { key, name: m.name, archetype: "self", size: [m.width, m.height, m.depth], panels, hardware };
 }
 
