@@ -86,3 +86,10 @@ test('паз в торце детали (end) и отступы крепежа �
   assert.deepEqual(back.kitchen?.jointZ,m.kitchen.jointZ);assert.equal(back.kitchen?.bottomFront,24.5);assert.equal(back.grooves?.[0].end,'+');
   assert.ok(validate({...m,kitchen:{...m.kitchen,jointZ:{'top:left':[1,2] as [number,number]}}}).some(e=>/Крепёж стыка/.test(e)));
 });
+test('навесные: кромка съёмных полок по Базису — своя толщина (k10 m10: 0,5 при корпусе 0,4) и свои торцы (k22 m11: только перед)',{skip:!existsSync(`${ETALON}/k22.json`)},()=>{
+  const a=moduleFromEtalon(load('k10','m10')).module,b=moduleFromEtalon(load('k22','m11')).module;
+  assert.equal(a.edgeScheme?.shelfT,0.5);assert.equal(a.edgeScheme?.shelfSides,undefined);
+  assert.deepEqual(b.edgeScheme?.shelfSides,['+z']);
+  for(const [k,key] of [['k10','m10'],['k22','m11'],['k10','m08']] as const){const ref=load(k,key),{module:m}=moduleFromEtalon(ref),c=compareModule(ref,m);assert.ok(c.pass,k+' '+key+' '+JSON.stringify(c.edges?.bad.slice(0,3)));}
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(b))).edgeScheme?.shelfSides,['+z'],'схема полок переживает сохранение');
+});

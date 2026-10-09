@@ -6,7 +6,7 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { wallRaise, bottomFrontRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
-import { wallJointZ, endGroove } from "./wallJoints";
+import { wallJointZ, endGroove, wallShelfEdges } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -317,6 +317,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
   if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
+  // навесные: кромка съёмных полок — своя толщина (k10: 0,5 при корпусе 0,4) и свои торцы (k22: только перед) — по первой полке на полкодержателях
+  if (et && m.edgeScheme && (role === "wall" || role === "antresol")) Object.assign(m.edgeScheme, wallShelfEdges(shelves, hw("полкодержатель"), et));
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)

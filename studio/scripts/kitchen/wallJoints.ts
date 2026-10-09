@@ -8,6 +8,18 @@ type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: numbe
 type PB = { p: RefPanel; b: B };
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
+type Side = "+x" | "-x" | "+z" | "-z";
+/** Кромка съёмных полок навесного по Базису (статистика по навесным: 111 полок по кругу, 26 — перед и зад, 18 — только перед;
+ *  10 полок k10 — 0,5 при корпусе 0,4): толщина и торцы первой полки на полкодержателях, если отличаются от «по кругу, как корпус». */
+export function wallShelfEdges(shelves: PB[], pins: RefHardware[], bodyT: number): { shelfT?: number; shelfSides?: Side[] } {
+  const s = shelves.find((q) => pins.some((h) => Math.abs(h.pos[1] - q.b.y0) < 2));
+  if (!s) return {};
+  const ed = ((s.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0);
+  const sides = (["+x", "-x", "+z", "-z"] as Side[]).filter((d) => ed.some((e) => e.side === d));
+  const th = ed.length ? Math.max(...ed.map((e) => e.thick)) : bodyT;
+  return { ...(Math.abs(th - bodyT) > 0.01 ? { shelfT: th } : {}), ...(sides.length !== 4 ? { shelfSides: sides } : {}) };
+}
+
 /** Паз в торце детали (Базис «Паз торцевой» 2,5×10 в переднем торце дна — k06 m10, k10 m08–m10, k15 m09): коробка паза bb у торца ±W
  *  и внутри толщины → Groove с end. ax — оси детали студии (L, W, t), lo/hi — её границы. null — паз не торцевой. */
 export function endGroove(bb: number[], ax: { L: number; W: number; t: number }, lo: number[], hi: number[], name: string) {
