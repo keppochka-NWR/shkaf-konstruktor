@@ -22,12 +22,13 @@ test('kitchen legs: left half — Bazis left leg cb84c30b57a5 / clip 7ebcad9fda1
   assert.equal(parseModule(JSON.parse(JSON.stringify(s)))!.kitchen!.legs!.same,true);
 });
 
-test('compare reports model/rotation differences for reference (k04 m01 none; k27 m01 left legs like the right ones in Bazis — none; k16 m05 mirrored Indigo — counted, PASS unchanged)',{skip:!existsSync(ETD+'k04.json')},()=>{
+test('compare reports model/rotation differences for reference (k04 m01 none; k27 m01 left legs like the right ones in Bazis — none; k16 m05 mirrored Indigo — mirrored meshes as in Bazis, PASS unchanged)',{skip:!existsSync(ETD+'k04.json')},()=>{
   for(const [k,key] of [['k04','m01'],['k27','m01'],['k14','m10']] as const){
     const r=ref(k,key),{module:m}=moduleFromEtalon(r),c=compareModule(r,m);assert.ok(c.pass,k+key);
     assert.deepEqual(c.hardware.filter(h=>h.meshDiff||h.quatDiff).map(h=>h.category),[],k+key);
   }
   assert.equal(moduleFromEtalon(ref('k27','m01')).module.kitchen!.legs!.same,true);
   const r=ref('k16','m05'),{module:m}=moduleFromEtalon(r),c=compareModule(r,m);
-  assert.ok(c.pass);assert.ok(c.hardware.some(h=>h.category==='направляющая'&&h.meshDiff===6));
+  // зеркальный модуль Indigo: сетки зеркального набора Базиса (n4-drawers) — расхождений сетки больше нет
+  assert.ok(c.pass);assert.deepEqual(c.hardware.filter(h=>(h.category==='направляющая'||h.category==='ящик-система')&&h.meshDiff).map(h=>h.category),[]);
 });

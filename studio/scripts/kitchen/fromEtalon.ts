@@ -437,7 +437,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const axisRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Axis PRO Направляющая/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);
   const drawerPanels: typeof P = [];
   if (axisRuns.length) {
-    const kd: KDrawer[] = [];
+    const kd: KDrawer[] = [], axOwners = new Set<unknown>();
     for (const r of axisRuns) {
       const [x, y] = r.pos, len = Number(/(\d+)\s*$/.exec(r.name)?.[1] ?? 500) as AxisDrawer["len"];
       const side = ref.hardware.find((h) => /Axis PRO Царга H-\d+/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
@@ -445,10 +445,16 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       const f = fronts.find((q) => q.b.y0 <= y + 3.5 && q.b.y1 >= y + 3.5);
       const bot = P.find(({ p, b }) => /Дно выдв/.test(p.name) && Math.abs(b.y0 - (y - 22)) < 0.6), bk = P.find(({ p, b }) => /Задн\. ст\. выдв/.test(p.name) && Math.abs(b.y0 - (y - 22)) < 0.6);
       if (!f) { unsupported.push(`ящик Axis PRO на ${r1(y)} без фасада`); continue; }
-      for (const q of [f, bot, bk]) if (q) drawerPanels.push(q);
+      // внутренний ящик (8 модулей базы, k21 m03 и др.): держатели передней панели в точке держателя фасада, направляющая утоплена
+      // от передней кромки корпуса (9) — своего фасада нет, стоит за фасадом ящика ниже или за дверью
+      const pp = ref.hardware.some((h) => /Держатель ПП/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
+      const front = r1(sideZ1 - r.pos[2]), inner = (pp || axOwners.has(f)) && front > 0.05;
+      if (inner) notes.push(`ящик Axis PRO на ${r1(y)}: внутренний, за фасадом ящика ниже, утоплен на ${front} — как в Базисе`);
+      axOwners.add(f);
+      for (const q of [inner ? undefined : f, bot, bk]) if (q) drawerPanels.push(q);
       const backH = bk ? r1(bk.b.y1 - bk.b.y0) : undefined;
       const faceScrews = ref.hardware.some((h) => h.name === "3x3" && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
-      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}) });
+      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}), ...(inner ? { inner: true as const, front } : {}) });
     }
     if (kd.length) m.kdrawers = kd;
   }

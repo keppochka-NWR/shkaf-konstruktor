@@ -76,7 +76,7 @@ const fxKitchen=(w:number)=>{const m=kitchenBase(initialModule(),w,'drawers' as 
 
 test('Firmax: конфирматы снизу через дно списком держатся за свои боковины при смене ширины (отступ / середина / отступ от правой), за дном — ошибка проверки',()=>{
   const m=fxKitchen(720),iw0=underXs(parts({...m,kdrawers:m.kdrawers!.map(k=>({...k,box:{...(k as FirmaxDrawer).box,confUnder:[1]}}))} as typeof m),0).iw;
-  m.kdrawers=m.kdrawers!.map(k=>({...k,box:{...(k as FirmaxDrawer).box,confUnder:[63.5,iw0/2,iw0-63.5],confUnderW:iw0}}));
+  m.kdrawers=m.kdrawers!.map(k=>({...(k as FirmaxDrawer),box:{...(k as FirmaxDrawer).box,confUnder:[63.5,iw0/2,iw0-63.5],confUnderW:iw0}}));
   for(const w of [720,600,450,900]){
     const n={...m,width:w};
     for(const j of [0,1]){const {iw,xs}=underXs(parts(n),j);assert.deepEqual(xs,[63.5,iw/2,iw-63.5],`ширина ${w}`);}
@@ -89,7 +89,7 @@ test('Firmax: конфирматы снизу через дно списком �
   // узкий корпус: точки от боковин сходятся — проверка пишет, а не молчит
   assert.ok(validate({...m,width:200}).some(e=>/снизу через дно/.test(e)),validate({...m,width:200}).join('; '));
   // старый проект без ширины точек: точка за дном — ошибка проверки
-  const old={...m,width:600,kdrawers:m.kdrawers!.map(k=>({...k,box:{...(k as FirmaxDrawer).box,confUnder:[63.5,iw0/2,iw0-63.5],confUnderW:undefined}}))};
+  const old={...m,width:600,kdrawers:m.kdrawers!.map(k=>({...(k as FirmaxDrawer),box:{...(k as FirmaxDrawer).box,confUnder:[63.5,iw0/2,iw0-63.5],confUnderW:undefined}}))};
   assert.ok(validate(old).some(e=>/снизу через дно/.test(e)));
   // сохранение и загрузка, смена высоты корпуса — ширина точек не теряется
   assert.equal((roundTrip(m).kdrawers![0] as FirmaxDrawer).box.confUnderW,iw0);
@@ -173,4 +173,22 @@ test('Indigo k16 m05 (зеркальный модуль Базиса): сетк�
   assert.equal(partCollisions(ps,m).length,0);
   assert.ok(roundTrip(m).kdrawers!.every(k=>(k as {mirror?:true}).mirror===true),'зеркальность не теряется при сохранении');
   const r4=pass('k16','m04');assert.ok(r4.ok);assert.ok(r4.m.kdrawers!.every(k=>!(k as {mirror?:true}).mirror));
+});
+
+test('Axis PRO внутренний ящик (k21 m03, k25 m05, k29 m03): без своего фасада, утоплен на 9, держатели передней панели и стабилизатор - как в Базисе',{skip:!has('k21')||!has('k25')||!has('k29')},()=>{
+  for(const [k,key] of [['k21','m03'],['k25','m05'],['k29','m03']] as const){
+    const ref=load(k,key),r=moduleFromEtalon(ref),m=r.module,c=compareModule(ref,m);
+    const inn=m.kdrawers!.filter(d=>isAxis(d)&&(d as AxisDrawer).inner) as AxisDrawer[];
+    assert.equal(inn.length,1,`${k} ${key}`);assert.equal(inn[0].front,9);
+    const ps=parts(m),j=m.kdrawers!.indexOf(inn[0]);
+    assert.ok(!ps.some(p=>p.id===`kd:${j}:facade`),`${k} ${key}: у внутреннего ящика нет своего фасада`);
+    assert.equal(ps.filter(p=>p.id.startsWith(`kd:${j}:sys:pp:`)).length,2);assert.ok(ps.some(p=>p.id===`kd:${j}:sys:stab`));
+    assert.equal(c.holes!.matched,c.holes!.ref,`${k} ${key}: отверстия ${c.holes!.matched}/${c.holes!.ref}`);
+    assert.ok(!validate(m).some(e=>/фасад пересекается/.test(e)),validate(m).join('; '));
+    const rt=parseKDrawers(JSON.parse(JSON.stringify(m.kdrawers)))![j] as AxisDrawer;assert.ok(rt.inner&&rt.front===9,'внутренний ящик не теряется при сохранении');
+  }
+  // k25 m05: задняя стенка внутреннего ящика в 6 мм от края боковин - в Базисе так, проверка не ругается
+  assert.deepEqual(validate(moduleFromEtalon(load('k25','m05')).module).filter(e=>/глубину/.test(e)),[]);
+  // k21 m03: ящики 500 в корпусе 447 - ошибка проекта Базиса (короба выходят за задник), проверка её показывает
+  assert.ok(validate(moduleFromEtalon(load('k21','m03')).module).some(e=>/не входит в глубину корпуса 447/.test(e)));
 });
