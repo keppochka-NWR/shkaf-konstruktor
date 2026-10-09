@@ -7,7 +7,8 @@ import { initialModule, id, validate, section, type Module } from "../../src/mod
 import { newProject, parseProject, projectErrors, type PlacedModule } from "../../src/project";
 import { compareModule, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
-import type { RawSpec } from "../../src/rawModule";
+import { rawCounts, type RawSpec } from "../../src/rawModule";
+import { rowRects, panelExtras, type EtPanel } from "./rowWorktop";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
 const OUTDIR = "public/local-projects";
@@ -22,8 +23,9 @@ const meshes = new Set<string>();
 function rawFromRef(ref: RefModule): RawSpec {
   const D = ref.size[2];
   return {
-    panels: ref.panels.filter((p) => p.kind !== "mirror" || true).map((p) => ({ name: p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}) })),
+    panels: ref.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
+    counts: rawCounts(ref.hardware),
   };
 }
 function place(ref: RefModule, m: Module): PlacedModule {
@@ -53,11 +55,13 @@ for (const f of files) {
     placed.push(place(ref, m));
   }
   // ряд: столешница, цоколь, стеновые панели, профили и прочее вне модулей — один сырой объект в мировых координатах
-  const rowPanels = (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => (e.row?.[g] ?? []) as { name: string; kind: string; box: number[] }[]).filter((p) => Array.isArray(p.box));
+  // фигурная столешница — прямоугольники по контуру Базиса (не сплошной габарит)
+  const rowPanels = (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => (e.row?.[g] ?? []) as EtPanel[]).filter((p) => Array.isArray(p.box))
+    .flatMap((p) => { const rs = rowRects(p), nm = (e.row?.worktops ?? []).includes(p) && !/столешн/i.test(p.name) ? "Столешница" : p.name; return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${nm} (часть ${i + 1}/${rs.length})` : nm, box, kind: p.kind ?? "ldsp" })); });
   if (rowPanels.length) {
     const o = [0, 1, 2].map((i) => Math.min(...rowPanels.map((p) => p.box[i]))), M = [3, 4, 5].map((i) => Math.max(...rowPanels.map((p) => p.box[i])));
     const m: Module = { ...initialModule(), name: "Ряд: столешница, цоколь, панели", width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0,
-      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"] })), hardware: [] } };
+      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), row: true } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
   }
   // помещение по габариту кухни

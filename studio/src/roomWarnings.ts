@@ -74,6 +74,8 @@ export function roomWarnings(project:Project){
  *  Отдельно от roomWarnings (размещение в помещении); панель предупреждений студии показывает оба списка. */
 export function collisionWarnings(project:Project):RoomWarning[]{
   const out:RoomWarning[]=[];
-  for(const a of project.modules){const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм)`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. Сдвиньте полку или петлю, измените наполнение.`});}
+  // Сырой модуль — геометрия Базиса как есть (ХДФ в пазу, чашки петель, опоры в днище, Axis PRO): реестра контактов студии для неё нет,
+  // совет «сдвиньте полку или петлю» к ней неприменим — не проверяем.
+  for(const a of project.modules){if(a.module.raw)continue;const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм)`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. Сдвиньте полку или петлю, измените наполнение.`});}
   return out;
 }
