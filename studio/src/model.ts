@@ -939,7 +939,7 @@ export function parts(m: Module): Part[] {
   const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y", sid?: string) => {
     const L = RULES.confirmatL, D = RULES.confirmatD, s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y");
     const c: [number, number, number] = vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]];
-    add(key, "Конфирмат 7×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
+    add(key, m.kitchen?.screw === "euro-6x50" ? "Евровинт 6×50" : "Конфирмат 7×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
   const horizontals = out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
@@ -983,7 +983,7 @@ export function parts(m: Module): Part[] {
       // Конфирмат царги по центру её торца; если там уже конфирмат дна/крыши в той же боковине (дно под боковинами,
       // отступ 54 у k04 — z 503 против 507), сдвигаем по ширине царги до чистого места: 16 мм между осями (critic qdrawers B4).
       const hx = edgeX - dir * t, xs = [Math.min(hx, hx + dir * 50), Math.max(hx, hx + dir * 50)], y = r.position[1];
-      const others = out.filter((p) => p.name.startsWith("Конфирмат") && p.position[0] + p.size[0] / 2 > xs[0] && p.position[0] - p.size[0] / 2 < xs[1] && Math.abs(p.position[1] - y) < p.size[1] / 2 + 3.5);
+      const others = out.filter((p) => /^(Конфирмат|Евровинт)/.test(p.name) && p.position[0] + p.size[0] / 2 > xs[0] && p.position[0] - p.size[0] / 2 < xs[1] && Math.abs(p.position[1] - y) < p.size[1] / 2 + 3.5);
       const hits = (z: number, gap: number) => others.some((p) => Math.abs(p.position[2] - z) < p.size[2] / 2 + 3.5 + gap);
       let z = r.position[2];
       if (hits(z, 0)) {
@@ -1610,7 +1610,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(k.legs.screws?{screws:true as const}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(k.legs.screws?{screws:true as const}:{})}}:{}),...(k.screw==="euro-6x50"?{screw:"euro-6x50" as const}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

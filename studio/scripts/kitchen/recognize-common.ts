@@ -31,3 +31,9 @@ export function sideTopEdged(side: { edges?: { side: string; thick: number }[] }
 export function railFastened(b: Box, hardware: Hw[], xL: number, xR: number): boolean {
   return hardware.some((h) => /конфирмат|эксцентрик|шкант/.test(h.category) || /^Евровинт/.test(h.name) ? h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1 && (h.pos[0] <= xL + 1 || h.pos[0] >= xR - 1) : false);
 }
+
+/** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */
+export const isEuro6 = (h: { name: string }) => /^Евровинт 6/.test(h.name);
+export function screwKind(hardware: Hw[]): "euro-6x50" | undefined {
+  return hardware.some(isEuro6) && !hardware.some((h) => h.category === "конфирмат") ? "euro-6x50" : undefined;
+}

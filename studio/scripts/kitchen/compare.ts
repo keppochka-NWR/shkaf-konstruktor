@@ -75,7 +75,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.includes(":hingeplate:")) return "петля";
   if (id.startsWith("lift:")) return id.includes(":screw:") ? "прочее" : "газлифт";
-  if (id.startsWith("fast:")) return "конфирмат";
+  if (id.startsWith("fast:")) return p.name.startsWith("Евровинт") ? "прочее" : "конфирмат"; // евровинт у Базиса — «прочее»
   if (id.startsWith("ecc:") && !id.endsWith(":pin")) return "эксцентрик";
   if (id.startsWith("dowel:")) return "шкант";
   if (id.startsWith("shp:")) return "полкодержатель";

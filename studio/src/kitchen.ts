@@ -18,7 +18,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
   legs?: { back: number; front: number; side?: number; xs?: number[];
     /** Площадка опоры на 4 самореза 3×3 по квадрату 31×31 (Базис «3x3» у опор: k21, k24 — 6 модулей из 174 с опорами). */
-    screws?: true } };
+    screws?: true };
+  /** Крепёж корпуса: по умолчанию «Конфирмат 7×50»; euro-6x50 — «Евровинт 6х50» (шаблоны «Т_» k33, k34: D8×16 + D5×36). */
+  screw?: "euro-6x50" };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
