@@ -6,6 +6,7 @@ import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import {resizeOpening} from './sectionLayout';
+import {placeInRow} from './rowResize';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
 import {StageBar} from './StageBar';
@@ -448,12 +449,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     return true;
   }
   function commit(next: Module) {
-    return commitProject({
-      ...project,
-      modules: project.modules.map((a) =>
-        a.id === placed.id ? { ...a, module: next } : a,
-      ),
-    });
+    // Ширина изменилась — по правилу ряда (rowResize): сосед сужается, у стены — от стены; иначе просто замена модуля.
+    let p: Project;
+    try{p=placeInRow(project,placed.id,next);}catch(e){setError((e as Error).message);return false;}
+    return commitProject(p);
   }
   useEffect(()=>{setMaterialScope("active");},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
@@ -491,8 +490,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
     const next=structuredClone(a.module);
-    try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next);}catch(e){setError((e as Error).message);return false;}
-    return commitProject({...project,modules:project.modules.map(x=>x.id===mid?{...x,module:next}:x)});
+    try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
   }
   function radialMenu(c:NonNullable<typeof ctxMenu>):{title:string;subtitle:string;items:RadialItem[]}{
     const a=project.modules.find(x=>x.id===c.mid)!,mod=a.module,sidx=Math.max(0,mod.sections.findIndex(s=>s.id===c.sid)),sec=mod.sections[sidx];
