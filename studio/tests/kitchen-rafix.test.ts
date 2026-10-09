@@ -111,3 +111,14 @@ test('распознавание: рафиксы k10 m01 — у полок ра�
   const {module:m}=moduleFromEtalon(load('k10','m01'));
   assert.ok(m.kitchen?.rafix,'k10 m01: рафиксы распознаны');
 });
+
+test('точки стыка — самое частое число по стыкам обеих стоек: один стык с 3 эксцентриками (k10 m02) не даёт лишний конфирмат и шкант на остальных (критик n3)',{skip:!existsSync(`${ETALON}/k10.json`)},()=>{
+  const ref=load('k10','m02'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.jointPoints,undefined,'глубина 581 — по правилу 2 точки');
+  const c=compareModule(ref,m),h=(k:string)=>c.hardware.find(x=>x.category===k)!;
+  assert.deepEqual([h('конфирмат').ref,h('конфирмат').studio],[4,4]);
+  assert.deepEqual([h('шкант').ref,h('шкант').studio],[4,4]);
+  const r16=load('k16','m01'),{module:m16}=moduleFromEtalon(r16);
+  assert.equal(m16.kitchen?.jointPoints,undefined,'k16 m01 глубже 600 — 3 точки по правилу');
+  assert.ok(compareModule(r16,m16).pass,'k16 m01 PASS');
+});

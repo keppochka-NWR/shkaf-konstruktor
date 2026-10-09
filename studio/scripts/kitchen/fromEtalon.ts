@@ -109,14 +109,21 @@ export function clusterLegXs(xs: number[]): number[] {
   return out.map((g) => r1(g.reduce((s, v) => s + v, 0) / g.length));
 }
 
-/** Точек крепежа (конфирмат/эксцентрик) по глубине на стыке дна и крыши с левой стойкой: наибольшее из двух; 2 или 3, иначе undefined. */
-export function jointPointsFromEtalon(ref: RefModule, hosts: (B | undefined)[], left: B): 2 | 3 | undefined {
-  let n = 0;
+/** Точек крепежа (конфирмат/эксцентрик) по глубине на стыках дна и крыши со стойками: самое частое число по стыкам (обе стойки, если
+ *  передана правая; при равенстве — большее); 2 или 3, иначе undefined. Один стык с лишней точкой (k10 m02: у крыши слева 3 эксцентрика,
+ *  на остальных трёх стыках по 2) не переносит своё число на все стыки — студия не добавляет крепёж, которого в Базисе нет. */
+export function jointPointsFromEtalon(ref: RefModule, hosts: (B | undefined)[], left: B, right?: B): 2 | 3 | undefined {
+  const ns: number[] = [];
   for (const q of hosts) {
     if (!q) continue;
-    const fs = ref.hardware.filter((h) => (h.category === "конфирмат" || h.category === "эксцентрик") && (Math.abs(h.pos[1] - q.y0) < 1 || (h.pos[1] > q.y0 && h.pos[1] < q.y1)) && h.pos[0] >= left.x0 - 1 && h.pos[0] <= left.x1 + 1);
-    n = Math.max(n, new Set(fs.map((h) => Math.round(h.pos[2]))).size);
+    for (const s of right ? [left, right] : [left]) {
+      const fs = ref.hardware.filter((h) => (h.category === "конфирмат" || h.category === "эксцентрик") && (Math.abs(h.pos[1] - q.y0) < 1 || (h.pos[1] > q.y0 && h.pos[1] < q.y1)) && h.pos[0] >= s.x0 - 1 && h.pos[0] <= s.x1 + 1);
+      const n = new Set(fs.map((h) => Math.round(h.pos[2]))).size;
+      if (n) ns.push(n);
+    }
   }
+  const cnt = (v: number) => ns.filter((n) => n === v).length;
+  const n = ns.length ? [...new Set(ns)].sort((a, c) => cnt(c) - cnt(a) || c - a)[0] : 0;
   return n === 2 || n === 3 ? n : undefined;
 }
 
@@ -460,7 +467,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
   // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
-  const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b);
+  const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b, right.b);
   if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;
   // своя сетка крепежа у стыков, где Базис поставил его иначе, чем у модуля (k23: крыша 104,5/64,5 при 64,5/64,5 у дна)
   if (m.confirmatInset !== undefined) {
