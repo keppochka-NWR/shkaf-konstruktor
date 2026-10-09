@@ -72,7 +72,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const fxBox = (name: string) => /ящика/i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
+  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
   const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name));
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
@@ -175,6 +175,36 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
     });
+    if (kd.length) m.kdrawers = kd;
+  }
+  // ящики Boyard СТАРТ: по каждой левой направляющей — боковина SBxx (тип), дно и задняя стенка ЛДСП, рейлинг; фасад — по высоте оси.
+  // Внутренний ящик (за чужим фасадом, утоплен) — без своего фасада, как в Базисе.
+  const stRuns = ref.hardware.filter((h) => h.category === "направляющая" && /СТАРТ Soft-Closing/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);
+  if (stRuns.length && !axisRuns.length) {
+    const kd: KDrawer[] = [], owners = new Map<unknown, number>();
+    for (const r of stRuns) {
+      const [x, y, z] = r.pos, len = (Number(/(\d+)\s*мм/.exec(r.name)?.[1] ?? 500) === 400 ? 400 : 500) as 400 | 500;
+      const side = ref.hardware.find((h) => /^Боковина СТАРТ SB\d+/.test(h.name) && Math.abs(h.pos[0] - x - 37.5) < 1 && Math.abs(h.pos[2] - z) < 1 && Math.abs(h.pos[1] - y) < 30);
+      const sb = (/SB(08|19|20)/.exec(side?.name ?? "")?.[0] ?? "") as "SB08" | "SB19" | "SB20" | "";
+      if (!sb) { unsupported.push(`ящик СТАРТ на ${r1(y)}: нет боковины SB08/SB19/SB20`); continue; }
+      const sy = side!.pos[1], front = r1(sideZ1 - z);
+      const bot = P.find(({ p, b }) => /^Дно ящ/.test(p.name) && Math.abs(b.y0 - sy) < 0.6 && b.x0 < W / 2), bk = P.find(({ p, b }) => /^Зад\. ст\. ящ/.test(p.name) && Math.abs(b.y0 - sy) < 0.6);
+      const f = fronts.find((q) => q.b.y0 <= y && q.b.y1 >= y) ?? fronts.find((q) => q.b.y0 <= y + 14.5 && q.b.y1 >= y + 14.5);
+      if (!f || !bot || !bk) { unsupported.push(`ящик СТАРТ на ${r1(y)}: нет фасада/дна/задней стенки`); continue; }
+      const prev = owners.get(f), inner = prev !== undefined && front > 0.05;
+      if (!inner) { owners.set(f, kd.length); drawerPanels.push(f); }
+      drawerPanels.push(bot, bk);
+      const backH = r1(bk.b.y1 - bk.b.y0), rys = ref.hardware.filter((h) => /^Рейлинг продольный.*СТАРТ/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && h.pos[1] > y + 150 && h.pos[1] < y + 320).map((h) => r1(h.pos[1] - y)).sort((a, c) => a - c), rail = rys.length > 0;
+      const rh = ref.hardware.find((h) => /^Держатель рейлинга СТАРТ/.test(h.name) && Math.abs(h.pos[0] - x - 52.5) < 1 && h.pos[1] > y && h.pos[1] < y + 300);
+      const def = { SB08: 84, SB19: 118, SB20: 220 }[sb];
+      // кромка дна и задней стенки — как в проекте (у k17 дно по кругу, у k27 SB19 задняя только ±y)
+      const eSides = (q: typeof bot) => ((q.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
+      const be = eSides(bot), ke = new Set(eSides(bk)), backAll = ke.has("+x") || ke.has("-x"), edge: { bottom?: boolean; back?: "y" | "all" } = {};
+      if (be.length) edge.bottom = true;
+      if (backAll !== (sb !== "SB08")) edge.back = backAll ? "all" : "y";
+      kd.push({ system: "start-sc", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), len, sb, ...(rail ? { rail: true } : {}), ...(rail && JSON.stringify(rys) !== "[206.5]" ? { railYs: rys } : {}), ...(rh && Math.abs(rh.pos[1] - y - 201.4) > 0.05 ? { railDy: r1(rh.pos[1] - y) } : {}),
+        ...(backH !== def ? { backH } : {}), ...(front > 0.05 ? { front } : {}), ...(inner ? { inner: true } : {}), ...(edge.bottom || edge.back ? { edge } : {}) });
+    }
     if (kd.length) m.kdrawers = kd;
   }
   // ящики Versalite Light H45: короб ЛДСП 16 по левой боковине ящика, левая направляющая — на внутренней грани левой боковины корпуса

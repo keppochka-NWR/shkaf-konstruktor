@@ -151,6 +151,12 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
     else if (p.id.startsWith("kd:") && p.id.includes(":fx:")) setEdges(p, p.id.includes(":fx:side:") ? ["+y", "-y", "-z"] : p.id.endsWith(":bottom") ? ["-z"] : ["+y"], t); // короб Firmax (Базис): боковины ±y и задний торец, задняя/фальшпанель — верх, дно — задний торец
+    else if (p.id.startsWith("kd:") && /:(bottom|back)$/.test(p.id) && m.kdrawers?.[Number(p.id.split(":")[1])]?.system === "start-sc") {
+      // ящик СТАРТ (Базис k17/k21/k27): дно без кромки (4 проекта из 5), задняя стенка по кругу, у SB08 — по ±y
+      const k = m.kdrawers[Number(p.id.split(":")[1])] as { sb?: string; edge?: { bottom?: boolean; back?: "y" | "all" } }, back = p.id.endsWith(":back");
+      if (!back) { if (k.edge?.bottom) setEdges(p, ["+x", "-x", "+z", "-z"], t); else continue; }
+      else setEdges(p, (k.edge?.back ?? (k.sb === "SB08" ? "y" : "all")) === "y" ? ["+y", "-y"] : ["+x", "-x", "+y", "-y"], t);
+    }
     else if (p.id.startsWith("kd:") && p.id.endsWith(":back")) setEdges(p, ["+x", "-x", "+y", "-y"], t); // задняя стенка ящика Axis PRO — по кругу; дно — без кромки
     else if (p.id.startsWith("kd:")) continue;
     else if (p.role === "body") setEdges(p, ["+z"], t);
