@@ -116,3 +116,9 @@ test('Bazis k33/k34 templates: euro screw 6x50 instead of confirmat 7x50 - name,
   assert.equal(screwKind([{name:'Евровинт 6х50',category:'прочее',pos:[0,0,0]}]),'euro-6x50');
   assert.equal(screwKind([{name:'Евровинт 6х50',category:'прочее',pos:[0,0,0]},{name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,0,0]}]),undefined);
 });
+
+test('recognize-sink: corner sink with false panel is detected by "Петля под фальшпанель", plain sink is not',async()=>{
+  const {cornerFillerSink}=await import('../scripts/kitchen/recognize-sink');
+  assert.equal(cornerFillerSink({hardware:[{i:0,name:'Петля под фальшпанель',category:'петля',pos:[502,201,560]}]}),true);
+  assert.equal(cornerFillerSink({hardware:[{i:0,name:'Петля накладная',category:'петля',pos:[16,201,560]}]}),false);
+});
