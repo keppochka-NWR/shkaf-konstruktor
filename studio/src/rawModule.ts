@@ -106,16 +106,26 @@ export function bazisItems(hw: { name: string; category: string; length?: number
   for (const [kit, k] of kits) if (![...out.values()].some((it) => it.name === kit)) out.set(k.category + "|" + kit, { name: kit, category: k.category, n: k.ids.size });
   return [...out.values()];
 }
-/** Отверстия-крепёж Базиса (n4-kitchens3): элемент FurnList с FastID и позицией, названный только размером «D×L» («3x3» — под саморезы
- *  площадки опоры и направляющих, «5x12», «35x13», «8»…; в эталоне service). Изделия у них нет, но в Базисе это крепёж с позицией —
- *  в смете кухни строкой «Отверстие <размер>» с количеством, как в Базисе (цена — в работе цеха). Только кухни (buildKitchen). */
+/** Строка сметы отверстия-крепежа Базиса по имени элемента или null: названное только размером «D×L» («3x3», «3х3», «8») —
+ *  «Отверстие 3x3»; названное словом «Отверстие…» («Отверстие 3х2» сушки k08, «Отверстие глухое_d2x10 мм.» TANDEMBOX k20) — имя
+ *  Базиса, «х/×/*» между цифрами → «x». По природе одно и то же: элемент FurnList с позицией, без модели, service (n4-kitchens3). */
+export function bazisHoleName(name: string | null | undefined): string | null {
+  const s = (name ?? "").trim();
+  if (/^отверсти/i.test(s)) return s.replace(/(\d)\s*[хx×*]\s*(\d)/gi, "$1x$2");
+  const n = s.replace(/[хx×*]/gi, "x");
+  return n && /\d/.test(n) && DIMS_ONLY.test(n) ? "Отверстие " + n : null;
+}
+/** Отверстия-крепёж Базиса (n4-kitchens3): элемент FurnList с FastID и позицией, без изделия — названный размером «D×L» («3x3» — под
+ *  саморезы площадки опоры и направляющих, «5x12», «35x13», «8»…) или словом «Отверстие…» (в эталоне service, часто дочерний объект
+ *  комплекта). Изделия у них нет, но в Базисе это крепёж с позицией — в смете кухни строкой «Отверстие …» с количеством, как в Базисе
+ *  (цена — в работе цеха). Только кухни (buildKitchen). */
 export function bazisHoles(hw: { name: string; category: string; pos?: number[] | null }[]): BazisItem[] {
   const out = new Map<string, BazisItem>();
   for (const h of hw) {
-    const n = (h.name ?? "").trim().replace(/[хx×*]/gi, "x");
-    if (!n || !/\d/.test(n) || !DIMS_ONLY.test(n) || !Array.isArray(h.pos)) continue;
-    const it = out.get(n) ?? { name: "Отверстие " + n, category: "отверстие", n: 0 };
-    it.n++; out.set(n, it);
+    const name = Array.isArray(h.pos) ? bazisHoleName(h.name) : null;
+    if (!name) continue;
+    const it = out.get(name) ?? { name, category: "отверстие", n: 0 };
+    it.n++; out.set(name, it);
   }
   return [...out.values()];
 }

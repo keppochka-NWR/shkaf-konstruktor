@@ -8,7 +8,7 @@ import {type Part} from '../src/model';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {allowedContact} from '../src/collisions';
-import {bazisHoles,bazisNames} from '../src/rawModule';
+import {bazisHoleName,bazisHoles,bazisNames} from '../src/rawModule';
 import {buildKitchen} from '../scripts/kitchen/buildKitchen';
 
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -16,18 +16,35 @@ const has=(k:string)=>existsSync(`${ET}/${k}.json`);
 const kitchen=(k:string)=>buildKitchen(JSON.parse(readFileSync(`${ET}/${k}.json`,'utf8'))).project;
 const lines=(p:Project,re:RegExp)=>estimate(p).lines.filter(l=>re.test(l.id));
 const qty=(p:Project,re:RegExp)=>Math.round(lines(p,re).reduce((s,l)=>s+l.quantity,0)*1000)/1000;
-const etalonHoles=(k:string)=>{const e=JSON.parse(readFileSync(`${ET}/${k}.json`,'utf8'));let n=0;
-  const hw=[...e.modules.flatMap((m:{hardware:{name:string;pos?:number[]}[]})=>m.hardware),...['profiles','other'].flatMap(g=>(e.row?.[g]??[]).filter((x:{box?:unknown})=>!Array.isArray(x.box)))];
-  for(const h of hw)if(/^\s*\d[\d\s.,xх×*]*$/i.test(h.name??'')&&Array.isArray(h.pos))n++;return n;};
+// Отверстия Базиса — не по правилу имени bazisHoles, а по признакам эталона: элемент FurnList с позицией без модели, помеченный service
+// (любое имя: «3x3», «Отверстие 3х2», «Отверстие глухое_d2x10 мм.»), и безымянный размер в «прочем» ряда (там флага service нет: k19 «8x30»)
+type EtHw={name?:string;pos?:unknown;mesh?:string|null;service?:boolean;box?:unknown};
+const etalonHoles=(k:string)=>{const e=JSON.parse(readFileSync(`${ET}/${k}.json`,'utf8'));
+  const hw:EtHw[]=[...e.modules.flatMap((m:{hardware:EtHw[]})=>m.hardware),...['profiles','other'].flatMap(g=>((e.row?.[g]??[]) as EtHw[]).filter(x=>!Array.isArray(x.box)))];
+  return hw.filter(h=>Array.isArray(h.pos)&&!h.mesh&&(h.service===true||/^\s*\d[\d\s.,xх×*]*$/i.test(h.name??''))).length;};
 
-test('bazisHoles: крепёж Базиса, названный только размером и стоящий в точке, — строка «Отверстие …» с количеством',()=>{
+test('bazisHoles: крепёж Базиса в точке — названный размером или словом «Отверстие…» — строка «Отверстие …» с количеством',()=>{
   const hw=[{name:'3x3',category:'прочее',pos:[1,2,3]},{name:'3х3',category:'прочее',pos:[4,5,6]},{name:'5x12',category:'прочее',pos:[0,0,0]},
-    {name:'3x3',category:'прочее'},{name:'Гвоздь',category:'прочее',pos:[0,0,0]},{name:'Шуруп 3,5х16',category:'прочее',pos:[0,0,0]},{name:'',category:'прочее',pos:[0,0,0]}];
-  assert.deepEqual(bazisHoles(hw),[{name:'Отверстие 3x3',category:'отверстие',n:2},{name:'Отверстие 5x12',category:'отверстие',n:1}]);
+    {name:'3x3',category:'прочее'},{name:'Гвоздь',category:'прочее',pos:[0,0,0]},{name:'Шуруп 3,5х16',category:'прочее',pos:[0,0,0]},{name:'',category:'прочее',pos:[0,0,0]},
+    // именованные отверстия Базиса — дочерние объекты комплектов (сушка NORWIG k08, TANDEMBOX k20): то же, что «3x3»
+    {name:'Отверстие 3х2',category:'прочее',pos:[0,0,0]},{name:'Отверстие глухое_d2x10 мм.',category:'прочее',pos:[0,0,0]},{name:'Отверстие глухое_d2x10 мм.',category:'прочее',pos:[1,0,0]},
+    {name:'Отверстие 3х2',category:'прочее'}];
+  assert.deepEqual(bazisHoles(hw),[{name:'Отверстие 3x3',category:'отверстие',n:2},{name:'Отверстие 5x12',category:'отверстие',n:1},
+    {name:'Отверстие 3x2',category:'отверстие',n:1},{name:'Отверстие глухое_d2x10 мм.',category:'отверстие',n:2}]);
+  assert.equal(bazisHoleName('Отверстие'),'Отверстие');assert.equal(bazisHoleName('Шуруп 3,5х16'),null);assert.equal(bazisHoleName('8'),'Отверстие 8');
 });
 
-test('отверстия «3x3» и др. — в смете кухни из Базиса, сколько в Базисе, цена 0 (сверловка — в работе цеха)',{skip:!has('k01')},()=>{
-  for(const k of ['k01','k16','k19','k30']){
+test('именованные отверстия Базиса — в смете: k08 «Отверстие 3x2» 8 (сушка NORWIG), k20 d2x10 8 и d10x12 4 (TANDEMBOX)',{skip:!has('k08')||!has('k20')},()=>{
+  const k08=kitchen('k08'),k20=kitchen('k20');
+  assert.equal(qty(k08,/^bazis:отверстие:Отверстие 3x2$/),8);
+  assert.equal(qty(k20,/^bazis:отверстие:Отверстие глухое_d2x10 мм\.$/),8);
+  assert.equal(qty(k20,/^bazis:отверстие:Отверстие глухое_d10x12 мм\.$/),4);
+  // и «3x3» на месте: k08 56, k20 12 (как раньше)
+  assert.equal(qty(k08,/^bazis:отверстие:Отверстие 3x3$/),56);assert.equal(qty(k20,/^bazis:отверстие:Отверстие 3x3$/),12);
+});
+
+test('отверстия «3x3», «Отверстие …» — в смете кухни из Базиса, сколько в Базисе, цена 0 (сверловка — в работе цеха)',{skip:!has('k01')},()=>{
+  for(const k of ['k01','k08','k16','k19','k20','k30']){
     const p=kitchen(k),hl=lines(p,/^bazis:отверстие:/);
     assert.equal(hl.reduce((s,l)=>s+l.quantity,0),etalonHoles(k),k+': отверстий столько же, сколько в Базисе');
     assert.ok(hl.every(l=>l.unitPrice===0),k+': цена отверстия 0 — смета не становится «без цены»');
@@ -44,11 +61,17 @@ test('кромка на ХДФ: k30 «Пенал 1» — 7,534 м кромки 1
   const one=(m:typeof pen.module)=>qty({...p,modules:[{...pen,module:m}]},/^edge1$/);
   const noHdfEdge=structuredClone(pen.module);for(const q of noHdfEdge.raw!.panels)if(q.kind==='hdf')delete q.edges;
   assert.equal(Math.round((one(pen.module)-one(noHdfEdge))*1000)/1000,7.534,'кромка ХДФ — в смете');
-  // ХДФ без кромки в Базисе (все остальные кухни) — без кромки: прочие ХДФ k30 кромки не добавляют
+  // ХДФ без кромки в Базисе — без кромки: прочие ХДФ k30 кромки не добавляют (в k30 кромка только на ХДФ «Пенал 1»)
   assert.equal(p.modules.flatMap(a=>a.module.raw?.panels??[]).filter(q=>q.kind==='hdf'&&q.edges?.length).length,1);
   // сырой шкаф из корпуса Базиса (source bazis-corpus) — правила кухни к нему не применяются (правило 3)
   const wr=structuredClone(pen.module);wr.raw!.source='bazis-corpus';delete wr.raw!.counts;delete wr.raw!.items;delete wr.raw!.names;
   assert.equal(one(wr),one({...wr,raw:{...wr.raw!,panels:wr.raw!.panels.map(q=>q.kind==='hdf'?{...q,edges:undefined}:q)}}),'шкаф: ХДФ не кромится');
+});
+
+test('кромка на ХДФ не только в k30: k05 «ВМ 1 (вытяжка)» — две ХДФ с кромкой 0,5 мм по 1,912 м (3,824 м), как в Базисе',{skip:!has('k05')},()=>{
+  const p=kitchen('k05'),hdf=p.modules.flatMap(a=>a.module.raw?.panels??[]).filter(q=>q.kind==='hdf'&&q.edges?.length);
+  assert.equal(hdf.length,2);
+  assert.equal(Math.round(hdf.flatMap(q=>q.edges!).filter(([t])=>t===0.5).reduce((s,[,l])=>s+l,0)),3824);
 });
 
 test('Firmax — штуками, как в Базисе: k30 L-350 7 шт (не 3,5 пары), строки без дробей',{skip:!has('k30')},()=>{

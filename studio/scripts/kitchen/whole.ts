@@ -153,14 +153,24 @@ for (const k of keys) {
   // строки «как в Базисе» (n3): bazis:<категория>:<название>, firmax:<артикул> (пары), shelf-holder:<название>, kitchen-leg:<название>
   const pipes = est.some((l) => /^bazis:прочее:Труба/i.test(l.id)) ? cnt(/труба/i) : 0;
   const prodProfiles = cnt(/gola|kb \d|врезной|фасадный профиль|алюминиев/i, "профиль");
+  // отверстия-крепёж Базиса — независимо от правила имени в bazisHoles и от категории: элемент FurnList с позицией и без модели (mesh),
+  // который Базис пометил служебным (service), — любое имя («3x3», «Отверстие 3х2», «Отверстие глухое_d10x12 мм.»); у «прочего» ряда
+  // флага service нет — там безымянный размер («8x30» k19). Пропуск именованного отверстия смета↔Базис теперь виден (n4-kitchens3)
+  type HwX = { name?: string; pos?: unknown; mesh?: string | null; service?: boolean; box?: unknown };
+  const holeHw = [...mods.flatMap((m) => m.hardware as HwX[]), ...(["profiles", "other"] as const).flatMap((g) => ((e.row?.[g] ?? []) as HwX[]).filter((x) => !Array.isArray(x.box)))]
+    .filter((h) => Array.isArray(h.pos) && !h.mesh && (h.service === true || /^\s*\d[\d\s.,xх×*]*$/i.test(h.name ?? "")));
+  const holesBazis = holeHw.length, holeNames: Record<string, number> = {};
+  for (const h of holeHw) holeNames[(h.name ?? "").trim()] = (holeNames[(h.name ?? "").trim()] ?? 0) + 1;
+  if (holesBazis) log(`отверстия-крепёж Базиса (service без модели): ${holesBazis} — ${Object.entries(holeNames).map(([n, c]) => `${c} × ${n}`).join(", ")}`);
   const pairs: [string, number, number][] = [
     ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
     ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
     ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
     // Firmax кухни из Базиса — штуками (n4-kitchens3), студийный firmax-ldsp — парами
     ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), est.filter((l) => /^firmax/.test(l.id)).reduce((s, l) => s + l.quantity * (l.unit === "пара" ? 2 : 1), 0)],
-    // отверстия-крепёж Базиса («3x3», «5x12»…: FurnList с позицией, без изделия) — строки «Отверстие …» (n4-kitchens3)
-    ["отверстия-крепёж", cnt(/^\s*\d[\d\s.,xх×*]*$/i, "прочее"), sum(/^bazis:отверстие:/)],
+    // отверстия-крепёж Базиса («3x3», «5x12», «Отверстие 3х2», «Отверстие глухое_d2x10 мм.»…) — строки «Отверстие …» (n4-kitchens3).
+    // Счёт Базиса — не по правилу имени bazisHoles, а по признакам эталона: см. holesBazis выше
+    ["отверстия-крепёж", holesBazis, sum(/^bazis:отверстие:/)],
     // ящики параметрики n3-runners (MODERN SLIDE, Versalite — пара; Indigo, СТАРТ — комплект на ящик: 2 направляющие)
     ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), sum(/^bazis:направляющая:/) + sum(/^(modern-slide|versalite-h45|indigo):/, 2) + sum(/^start-sc:(?!rail)/, 2)], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
     // профили — изделия (GOLA, KB, врезной, узкий фасадный); в смете — строками с длиной: сверяем наличие
@@ -168,6 +178,11 @@ for (const k of keys) {
   ];
   const est2: string[] = [];
   for (const [n, b, s] of pairs) if (Math.abs(b - s) > 0.01) est2.push(`${n}: Базис ${b}, смета ${r3(s)}`);
+  // отверстия ещё и по размерам (цифры имени: «3х2» и «Отверстие 3x2» — «3x2»): строка с другим размером не прячется за общей суммой
+  const holeSig = (s: string) => (s.match(/\d+(?:[.,]\d+)?/g) ?? []).join("x"), hb: Record<string, number> = {}, hs: Record<string, number> = {};
+  for (const [n, c] of Object.entries(holeNames)) hb[holeSig(n)] = (hb[holeSig(n)] ?? 0) + c;
+  for (const l of est) if (l.id.startsWith("bazis:отверстие:")) hs[holeSig(l.id.slice(16))] = (hs[holeSig(l.id.slice(16))] ?? 0) + l.quantity;
+  for (const g of new Set([...Object.keys(hb), ...Object.keys(hs)])) if ((hb[g] ?? 0) !== (hs[g] ?? 0)) est2.push(`отверстия ${g || "без размера"}: Базис ${hb[g] ?? 0}, смета ${hs[g] ?? 0}`);
   const ids = est.map((l) => l.id), added = ["kit", "confirmat-cap", "worktop-cut:sink", "worktop-cut:hob", "small", "work"].filter((x) => ids.includes(x));
   // кромка по толщинам (справочно, не замечание): разница — кромка изделий поставщика, которые смета считает м²/пог. м
   // (фасады из МДФ «external», столешница, стеновая панель, стекло) — решение «кромка фасадов — у поставщика» (n4-kitchens3)
