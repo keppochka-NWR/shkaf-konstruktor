@@ -198,6 +198,19 @@ test("объект замера (колонна, короб) — как стен
   assert.equal(get(resizeInRow(q, "s", 700), "s").module.width, 700);
 });
 
+test("«у стены» и «стык под 90°» — с допусками автофальшей (wallSnap, cornerSnap), а не только вплотную", () => {
+  // одиночный в 21 мм от правой стены (место под фальш торцом): у стены — растёт влево, а не «упирается»
+  const p = resizeInRow(proj([at("s", 4000 - 21 - 600, mod("Один"))]), "s", 700);
+  assert.deepEqual([get(p, "s").x, get(p, "s").module.width], [4000 - 21 - 700, 700]);
+  // модуль под 90° в 40 мм слева (стык с угловой фальшью): бок как стена — растём вправо, правый сосед сужается
+  const corner: PlacedModule = { id: "k", x: 0, z: 0, rotation: 90, module: mod("Поворотный", 1200) };
+  const x0 = bounds(corner).x + bounds(corner).w + 40;
+  const q = resizeInRow(proj([corner, at("a", x0, mod("Первый")), at("b", x0 + 600, mod("Второй")), at("c", x0 + 1200, mod("Третий"))]), "b", 700);
+  assert.deepEqual([get(q, "b").x, get(q, "c").x, get(q, "c").module.width, get(q, "a").module.width], [x0 + 600, x0 + 1300, 500, 600]);
+  const r = resizeInRow(proj([corner, at("a", x0, mod("Первый")), at("b", x0 + 600, mod("Второй"))]), "a", 700);
+  assert.deepEqual([get(r, "a").x, get(r, "a").module.width, get(r, "b").module.width], [x0, 700, 500]);
+});
+
 test("подсказка у ширины проёма не обещает, что соседние корпуса стоят на месте (их меняет правило ряда)", () => {
   const app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(app, /Соседние корпуса сохраняют положение/);

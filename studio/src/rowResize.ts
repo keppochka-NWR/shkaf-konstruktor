@@ -69,8 +69,9 @@ export function rowContext(p: Project, a: PlacedModule) {
     if (os.lo >= s.hi - TOUCH && os.lo < limit.right.at) limit.right = { at: os.lo, what };
     if (os.hi <= s.lo + TOUCH && os.hi > limit.left.at) limit.left = { at: os.hi, what };
   }
-  if (s.lo <= limit.left.at + TOUCH) wall.left = limit.left.what;
-  if (s.hi >= limit.right.at - TOUCH) wall.right = limit.right.what;
+  // «У стены» — с тем же допуском, что фальш к стене в applyAutoFillers (RULES.wallSnap; bounds уже с вылетом фальши)
+  if (s.lo <= limit.left.at + RULES.wallSnap) wall.left = limit.left.what;
+  if (s.hi >= limit.right.at - RULES.wallSnap) wall.right = limit.right.what;
   const rot = a.rotation ?? 0, touching: Record<Side, PlacedModule[]> = { left: [], right: [] };
   for (const o of p.modules) {
     if (o.id === a.id || rowObject(o.module)) continue;
@@ -79,10 +80,12 @@ export function rowContext(p: Project, a: PlacedModule) {
     const oc = across(ob, e);
     if (!overlaps(c, oc)) continue;
     const os = along(ob, e);
+    const sameRow = (o.rotation ?? 0) === rot;
     for (const side of ["left", "right"] as const) {
-      const touch = side === "right" ? Math.abs(os.lo - s.hi) <= TOUCH : Math.abs(os.hi - s.lo) <= TOUCH;
-      if (!touch) continue;
-      if ((o.rotation ?? 0) === rot) touching[side].push(o);
+      const gap = side === "right" ? os.lo - s.hi : s.lo - os.hi;
+      // сосед ряда — вплотную (±2 мм); модуль под 90° — стык с тем же допуском, что угловая фальш (RULES.cornerSnap)
+      if (sameRow ? Math.abs(gap) > TOUCH : gap < -TOUCH || gap > RULES.cornerSnap) continue;
+      if (sameRow) touching[side].push(o);
       else wall[side] = "бок модуля " + quote(o.module); // модуль под 90° — как стена
     }
   }
