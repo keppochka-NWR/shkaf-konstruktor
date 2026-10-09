@@ -1,3 +1,4 @@
+import { refitKDrawers } from "./kitchenDrawers";
 import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
@@ -1069,7 +1070,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     ? "Высота"
                     : "Глубина",
                 m[key],
-                (v) => modify((n) => {n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}}),
+                (v) => modify((n) => {n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}),
               )
             }
             onGap={(index) => {

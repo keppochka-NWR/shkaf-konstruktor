@@ -158,7 +158,8 @@ function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, 
 /** Раскладка ящиков Axis PRO по правилам из базы (40 ящиков): фасады от низа корпуса до верха с отступом faceGap и зазором 3;
  *  направляющая — в 59 мм над низом фасада (нижнего — над дном); царга — самая высокая, чья задняя стенка не выше фасада минус 10;
  *  длина — самая длинная, что входит в корпус с запасом 25. ratios — доли высот фасадов снизу вверх (по умолчанию нижний крупнее). */
-export function axisLayout(m: Module, n: number, ratios?: number[]): KDrawer[] {
+export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<KDrawer, "color" | "faceScrews">): KDrawer[] {
+  const color = keep?.color;
   const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
   const innerBottom = axisFloor(m), y0 = feet + g, y1 = m.height - g, avail = y1 - y0 - (n - 1) * gap;
   const base = ratios?.length === n ? ratios : n === 1 ? [1] : n === 2 ? [0.5, 0.5] : n === 3 ? [0.44, 0.28, 0.28] : Array.from({ length: n }, (_, i) => (i === 0 ? 1.5 : 1));
@@ -169,19 +170,22 @@ export function axisLayout(m: Module, n: number, ratios?: number[]): KDrawer[] {
   return hs.map((fh, i) => {
     const runnerY = Math.round(Math.max(y + 59, innerBottom + 59) * 10) / 10, y1r = Math.round((y + fh) * 10) / 10;
     // царга — самая высокая, что входит; длина — самая длинная из тех, на которые есть модели этой высоты
-    const pick = (hh: KDrawer["h"]): KDrawer | undefined => { const len = [...AXIS_LENGTHS].reverse().find((l) => l <= maxLen && axisAvailable({ h: hh, len: l })); return len ? { system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len } : undefined; };
+    const pick = (hh: KDrawer["h"]): KDrawer | undefined => { const len = [...AXIS_LENGTHS].reverse().find((l) => l <= maxLen && axisAvailable({ h: hh, len: l, color })); return len ? { system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len, ...(color ? { color } : {}), ...(keep?.faceScrews ? { faceScrews: true } : {}) } : undefined; };
     const cands = [...AXIS_HEIGHTS].reverse().map(pick).filter((c): c is KDrawer => !!c);
     const k = cands.find((c) => axisFits(m, c)) ?? cands[cands.length - 1] ?? { system: "axis-pro" as const, y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: 120 as const, len: 300 as const };
     y += fh + gap;
     return k;
   });
 }
-/** Пересчитать ящики под новую высоту или глубину корпуса: число и доли фасадов сохраняются. */
-export function refitKDrawers(m: Module): KDrawer[] | undefined {
+/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика (по высоте ничего не двигается); высота, опоры,
+ *  нижние царги — раскладка заново с теми же долями фасадов. Цвет и саморезы держателей сохраняются. */
+export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
-  const next = axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0));
-  return next.map((k, i) => ({ ...k, ...(ks[i].color ? { color: ks[i].color } : {}), ...(ks[i].faceScrews ? { faceScrews: true } : {}) }));
+  if (what === "depth") return ks.map((k) => { const len = [...AXIS_LENGTHS].reverse().find((l) => l <= m.depth - 25 && axisAvailable({ ...k, len: l })); return len ? { ...k, len } : k; });
+  return axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks[0]);
 }
+/** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков. */
+export function relayoutKDrawers(m: Module, n: number, ratios?: number[]) { return axisLayout(m, n, ratios, m.kdrawers?.[0]); }
 
 /** Есть ли модели Базиса на это сочетание (царга нужной длины и высоты, держатели, направляющая; антрацит — свои сетки). */
 export function axisAvailable(k: Pick<KDrawer, "h" | "len" | "color">) {

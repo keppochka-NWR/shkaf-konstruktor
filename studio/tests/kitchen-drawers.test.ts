@@ -4,7 +4,8 @@ import {initialModule,parts,validate,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {axisLayout,axisFits,axisTop,axisCeiling} from '../src/kitchenDrawers';
+import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers} from '../src/kitchenDrawers';
+import {edgeByDir} from '../src/edges';
 
 // НМ 600 с тремя ящиками Axis PRO как в Базисе k06/m03 (2×H-86 + H-168, 500 мм)
 const axis=()=>{const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
@@ -66,4 +67,29 @@ test('critic r1: Axis PRO runner may only touch its cabinet side — a runner su
   const m=axis();m.kdrawers![2]={...m.kdrawers![2],runnerY:150};
   assert.ok(validate(m).some(x=>/уходит в дно/.test(x)));
   assert.ok(partCollisions(parts(m),m).some(c=>/Направляющая Axis PRO/.test(c.names.join(' '))&&/Дно/.test(c.names.join(' '))));
+});
+test('critic r3: bottom 400×557 under the sides — edges on the front and both 557 sides in 3D AND in the length/width convention of estimate and labels',()=>{
+  const m=axis();m.width=400;m.edgeScheme={t:0.5};m.kdrawers=axisLayout(m,3);
+  const b=parts(m).find(p=>p.id==='bottom')!;
+  assert.deepEqual(Object.keys(edgeByDir(b)).sort(),['+x','+z','-x']);
+  const byConvention=b.edge.reduce((s,e,k)=>s+(e>0?(k<2?b.width:b.length):0),0);
+  assert.equal(byConvention,557+557+400);
+});
+
+test('critic r3: number of drawers and facade heights keep anthracite and facade screws; depth change does not move drawers in height',()=>{
+  const m=axis();m.kdrawers=m.kdrawers!.map(k=>({...k,color:'anthracite' as const,faceScrews:true,h:(k.h===168?120:k.h) as 86|120}));
+  const two=relayoutKDrawers(m,2);assert.ok(two.every(k=>k.color==='anthracite'&&k.faceScrews));
+  // глубина: белые — есть 400/450 на все высоты; антрацит H-86 короче 500 нет — длина остаётся, проверка ругается
+  const anth={...m,depth:470};assert.ok(validate({...anth,kdrawers:refitKDrawers(anth,'depth')}).some(x=>/не входит в глубину|нет модели/.test(x)));
+  const d={...m,kdrawers:m.kdrawers!.map(({color:_c,...k})=>k),depth:520};const r=refitKDrawers(d,'depth')!;
+  assert.deepEqual(r.map(k=>[k.y0,k.y1,k.runnerY]),m.kdrawers!.map(k=>[k.y0,k.y1,k.runnerY]));
+  assert.ok(r.every(k=>k.len===450),'H-86/120 white: 450 at depth 520');
+});
+
+test('critic r3: adding a bottom front rail lifts the drawers (refit) instead of rejecting the change',()=>{
+  const m=kitchenBase(initialModule(),600,'drawers' as never);m.rails=[...(m.rails??[]),{place:'front-bottom',height:100,lay:'flat'}];
+  assert.ok(validate(m).some(x=>/уходит в дно/.test(x)),'without refit — error');
+  m.kdrawers=refitKDrawers(m);
+  assert.deepEqual(validate(m).filter(x=>/Ящик/.test(x)),[]);
+  assert.deepEqual(partCollisions(parts(m),m).filter(c=>/Axis|ящик/i.test(c.names.join(' '))),[]);
 });
