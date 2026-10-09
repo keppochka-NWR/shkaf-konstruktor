@@ -87,6 +87,13 @@ export function backClearY(back: B, bottom: B, top: B, gd: number, gc: number): 
   return lo >= 0 && hi >= 0 && (Math.abs(lo - gc) > 0.05 || Math.abs(hi - gc) > 0.05) ? [lo, hi] : undefined;
 }
 
+/** Отступ одиночного фасада от кромок корпуса: у Базиса фасад бывает несимметричным (k23 m08: слева 2,5, справа и сверху 2) —
+ *  берём отступ, общий хотя бы для двух сторон из трёх (лево, право, верх); все разные — левый, как раньше. */
+export function faceGapOf(f: B, x0: number, x1: number, top: number): number {
+  const g = [r1(f.x0 - x0), r1(x1 - f.x1), r1(top - f.y1)];
+  return g.find((v, i) => g.some((w, j) => j !== i && Math.abs(w - v) < 0.05)) ?? g[0];
+}
+
 /** Дно/крыша между боковинами с кромкой на торцах у боковин (±x) — так в части проектов (k32: кромка по кругу у всех панелей). */
 export function endsEdged(hs: RefPanel[]): boolean {
   const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
@@ -279,7 +286,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     if (m.facadeMaterial === "external" && fEdge) m.facadeEdge = fEdge; // фасадный материал с кромкой «фасадная 1×22»
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
-    m.faceGap = r1(f0.b.x0 - left.b.x0);
+    m.faceGap = fronts.length === 1 ? faceGapOf(f0.b, left.b.x0, right.b.x1, top) : r1(f0.b.x0 - left.b.x0);
     // зазор между фасадами: сосед в том же ряду (по x); если рядов несколько, а в ряду один фасад — зазор между рядами (по y)
     const sameRow = fronts.find((q) => q !== f0 && Math.abs(q.b.y0 - f0.b.y0) < 1 && q.b.x0 > f0.b.x1 - 1);
     const above = fronts.filter((q) => q.b.y0 > f0.b.y1 - 1).sort((a, c) => a.b.y0 - c.b.y0)[0];

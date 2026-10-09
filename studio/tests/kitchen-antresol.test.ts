@@ -5,7 +5,7 @@ import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from 
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,backClearY,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,backClearY,faceGapOf,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
@@ -212,9 +212,16 @@ test('HDF in the groove with its own bottom/top clearance as in Bazis (k28 m10: 
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.backClearY,[2.5,1]);
 });
 
+test('single front gap: the gap shared by two of three edges (k23 m08: left 2.5, right and top 2 -> 2), symmetric -> unchanged',()=>{
+  const B=(x0:number,y0:number,z0:number,x1:number,y1:number,z1:number)=>({x0,y0,z0,x1,y1,z1});
+  assert.equal(faceGapOf(B(2.5,2,330,898,398,349),0,900,400),2);
+  assert.equal(faceGapOf(B(1.5,1.5,330,598.5,398.5,349),0,600,400),1.5);
+  assert.equal(faceGapOf(B(1,1,330,597,396,349),0,600,400),1,'all different -> left');
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
-for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05'],['k28','m10']] as const)
+for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05'],['k28','m10'],['k23','m08']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
     const {module:m}=moduleFromEtalon(ref);
