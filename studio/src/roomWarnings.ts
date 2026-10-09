@@ -3,6 +3,7 @@ import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Proje
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts} from './model';
 import {partCollisions,rawCheck,RAW_FAR} from './collisions';
+import {rawHangerSeats,RAW_HANGER_DROP} from './rawModule';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
 /** Что советуем по каждому типу объекта на стене, если его перекрывает мебель. */
@@ -73,15 +74,28 @@ export function roomWarnings(project:Project){
 }
 /** Пересечения деталей внутри корпусов (петли, полки, царги, крепёж, фурнитура) — правило Макса 09.10.2026: ничего не должно пересекаться.
  *  Отдельно от roomWarnings (размещение в помещении); панель предупреждений студии показывает оба списка. */
+const list=(xs:{name:string;gap:number}[])=>xs.slice(0,3).map(x=>`${x.name} (${Math.abs(x.gap)} мм)`).join("; ")+(xs.length>3?` и ещё ${xs.length-3}`:"");
+/** Фурнитура сырого модуля дальше RAW_FAR от любой его детали — это не пересечение, а модель Базиса без детали-хозяина: статистика по 271
+ *  шкафу и эталонам кухонь — у всех таких точек в САМОЙ модели Базиса (все панели, без отбора импорта) детали ближе 100 мм нет
+ *  (194, 189: петли без дверей; 239: в модели 2 детали из корпуса навесного; 187, 207: подпятники в 165 мм под дном). Сведения
+ *  «как в Базисе», не тревога (n4-wardrobes). Навесы кухонь над своей боковиной (k12…k31, до 985 мм) студия ставит на боковину
+ *  (rawHangerSeats) — об этом тоже сведения. */
+export function bazisHostNotes(project:Project):RoomWarning[]{
+  const out:RoomWarning[]=[];
+  for(const a of project.modules){if(!a.module.raw)continue;const r=rawCheck(parts(a.module),a.module,false);
+    // навесы кухни, висевшие над своей боковиной (комплект Базиса со старыми координатами), поставлены на боковину — сказать об этом
+    const raw=a.module.raw,seat=[...rawHangerSeats(raw)].filter(([i])=>raw.hardware[i].category==="навес");
+    if(seat.length)out.push({moduleId:a.id,kind:"bazis-host",message:`«${a.module.name}»: навесы (${seat.length}) в файле Базиса висят над боковиной на ${[...new Set(seat.map(([,d])=>Math.round(-d)))].join(", ")} мм — комплект навесов со старыми координатами. Поставлены на свою боковину, ${RAW_HANGER_DROP} мм ниже её верха, как остальные навесы кухонь.`});
+    if(r.far.length)out.push({moduleId:a.id,kind:"bazis-host",message:`«${a.module.name}»: фурнитура без детали в модели Базиса (дальше ${RAW_FAR} мм от деталей) — ${list(r.far)}. Не пересечение: в проекте Базиса нет детали, на которой она крепится.`});}
+  return out;
+}
 export function collisionWarnings(project:Project):RoomWarning[]{
   const out:RoomWarning[]=[];
   // Сырой модуль — геометрия Базиса как есть (ХДФ в пазу, чашки петель, опоры в днище, Axis PRO): реестра контактов студии для неё нет,
-  // совет «сдвиньте полку или петлю» к ней неприменим. Тревоги по политике rawCheck: тело фурнитуры внутри корпусной панели и фурнитура
-  // дальше RAW_FAR от любой детали (так не крепят — ошибка положения); остальное (рядом с деталями, перекрытия как в Базисе) — сведения.
-  const list=(xs:{name:string;gap:number}[])=>xs.slice(0,3).map(x=>`${x.name} (${Math.abs(x.gap)} мм)`).join("; ")+(xs.length>3?` и ещё ${xs.length-3}`:"");
+  // совет «сдвиньте полку или петлю» к ней неприменим. Пересечение по политике rawCheck — только тело фурнитуры внутри корпусной панели
+  // (186: фланец штанги развёрнут в стойку — так в Базисе). Фурнитура без детали в модели Базиса — не пересечение: bazisHostNotes.
   for(const a of project.modules){if(a.module.raw){const r=rawCheck(parts(a.module),a.module,false);
-    if(r.deep.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса внутри детали — ${list(r.deep)}. Проверьте положение в проекте Базиса.`});
-    if(r.far.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса висит в воздухе дальше ${RAW_FAR} мм от деталей — ${list(r.far)}. Проверьте в проекте Базиса: нет детали, на которой она крепится.`});
+    if(r.deep.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса внутри детали — ${list(r.deep)}. Так стоит в проекте Базиса — исправить в Базисе.`});
     continue;}const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм)`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. Сдвиньте полку или петлю, измените наполнение.`});}
   return out;
 }

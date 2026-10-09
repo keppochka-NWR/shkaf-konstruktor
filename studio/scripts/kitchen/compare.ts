@@ -20,7 +20,8 @@ export type RefModule = { key: string; name: string; archetype: string; size: nu
 type Box = [number, number, number, number, number, number];
 type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
-/** Справочно, на PASS не влияет (кроме поворота газлифта):
+/** Поворот на PASS влияет у газлифта и у ВСЕЙ фурнитуры с той же сеткой, что в Базисе (note «поворот ≠ Базису … (та же сетка)», n4).
+ *  Справочно, на PASS не влияет:
  *  rot — сверка поворота: checked — фурнитура Базиса с кватернионом и деталью студии с кватернионом рядом; bad — поворот другой;
  *  spin — отличается только вращением вокруг своей оси у осесимметричной (конфирмат, шкант…); noQuat — у ближайшей детали студии
  *  поворот не задан кватернионом (n3-additions).
@@ -249,17 +250,22 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     // (конфирмат — локальная X Базиса) — тот же поворот; разные id сетки при почти одинаковой модели тоже видны здесь.
     if (category !== "газлифт") {
       const own = ps.filter((p) => studioCategory(p) === category && p.model);
-      let rot = 0, mesh = 0;
+      let rot = 0, mesh = 0, rotSame = 0;
       for (const h of ref.hardware.filter((x) => x.category === category)) {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
         own.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
         if (!best || bd > 5) continue;
         const sm = /([0-9a-f]{12})\.glb$/.exec(best.model!.file ?? "")?.[1];
         if (h.mesh && sm && sm !== h.mesh) mesh++;
-        if (h.quat && best.model!.quat && !sameTurn(h.quat as Quat4, best.model!.quat as Quat4, SYM_AXIS[category])) rot++;
+        const turned = !!(h.quat && best.model!.quat && !sameTurn(h.quat as Quat4, best.model!.quat as Quat4, SYM_AXIS[category]));
+        if (turned) rot++;
+        // та же сетка Базиса, другой поворот — деталь стоит не так, как в Базисе: влияет на PASS у всей фурнитуры, не только у газлифта.
+        // При другой сетке (левая/правая под разными хэшами, k08 m09) локальные оси сеток разные — поворот только для сведения.
+        if (turned && h.mesh && sm === h.mesh) rotSame++;
       }
       const info = [rot ? `поворот ≠ ×${rot}` : "", mesh ? `сетка ≠ ×${mesh}` : ""].filter(Boolean).join(", ");
       if (info) row.info = info;
+      if (rotSame) row.note = (row.note ? row.note + "; " : "") + `поворот ≠ Базису ×${rotSame} (та же сетка)`;
     }
     return row;
   });

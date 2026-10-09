@@ -7,8 +7,8 @@ import {kitchenWall} from '../src/kitchen';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
-import {rawCounts,rawParts,rawThickness,rawPanelDims,parseRaw,type RawSpec} from '../src/rawModule';
-import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
+import {rawCounts,rawParts,rawThickness,rawPanelDims,parseRaw,rawHangerSeats,RAW_HANGER_DROP,type RawSpec} from '../src/rawModule';
+import {collisionWarnings,roomWarnings,bazisHostNotes} from '../src/roomWarnings';
 import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole,rowPanelName,rowTitle,isWorktop} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
@@ -354,4 +354,21 @@ test('«Ряд»: полка ЛДСП из группы столешниц — �
   // сырой шкаф Базиса (source 'bazis-corpus'; без source и со счётчиками — старый файл кухни, rawKitchen n3-additions)
   const cab:RawSpec={panels:[{name:'Профиль',kind:'other',box:[0,0,0,600,6,40]}],hardware:[],counts:{},source:'bazis-corpus'};
   assert.equal(rawParts(rawModule(cab)).at(0)!.external,undefined,'raw wardrobe/module: unchanged');
+});
+
+test('навесы кухни Базиса над своей боковиной (комплект со старыми координатами, +985 мм) — на боковину, 15 мм ниже верха; шкафы и навесы на месте не трогаем',()=>{
+  const side=(x0:number,x1:number)=>({name:'Боковина',kind:'ldsp',box:[x0,0,0,x1,400,369] as [number,number,number,number,number,number]});
+  const hw=(name:string,category:string,pos:[number,number,number])=>({name,category,mesh:'abc',pos,quat:[0.71,0,0.71,0] as [number,number,number,number]});
+  const spec=(source:string):RawSpec=>({panels:[side(0,16),side(584,600),{name:'Крыша',kind:'ldsp',box:[16,384,0,584,400,369]}],source,
+    hardware:[hw('Навес мебельный регулируемый ABS левый','навес',[16,1385,20]),hw('Заглушка для мебельного навеса ABS левая','заглушка',[16,1385,20]),hw('Навес мебельный регулируемый ABS правый','навес',[584,385,20])]});
+  const k=spec('bazis-kitchen'),seats=rawHangerSeats(k);
+  assert.deepEqual([...seats],[[0,-1000],[1,-1000]]); // навес над боковиной и его заглушка; навес на боковине — как в Базисе
+  const m:Module={...initialModule(),name:'А 1',width:600,height:400,depth:369,sections:[section()],doors:false,raw:k};
+  const ps=rawParts(m),y=(i:number)=>ps.find(p=>p.id===`raw:h${i}`)?.model?.origin?.[1];
+  assert.equal(y(0),400-RAW_HANGER_DROP);assert.equal(y(1),400-RAW_HANGER_DROP);assert.equal(y(2),385);
+  assert.equal(k.hardware[0].pos[1],1385); // данные Базиса не меняются — только положение в сцене
+  const p=newProject({...initialModule(),sections:[section()]});p.modules=[{id:'a',x:0,y:1700,z:0,rotation:0,module:m}];
+  assert.ok(bazisHostNotes(p).some(w=>/навесы \(1\).*1000 мм/.test(w.message)));
+  // шкаф из корпуса Базиса — единого отступа навеса нет, не трогаем
+  assert.equal(rawHangerSeats(spec('bazis-corpus')).size,0);
 });

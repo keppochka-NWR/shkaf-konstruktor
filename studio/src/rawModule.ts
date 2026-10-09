@@ -3,6 +3,7 @@
 // (X вправо, Y вверх, Z от стены к фасаду, начало — минимальный угол), фурнитура — сетки Базиса (TriData → GLB) по позиции и повороту.
 // Раскрой и смета панелей работают как обычно; правила студии (петли, крепёж, полки) к сырому модулю не применяются.
 import type { BazisItem, Module, Part } from "./model";
+import { RAW_SEAT_GAP } from "./collisions";
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона).
@@ -224,8 +225,36 @@ export function rawWorktop(p: RawPanel, r: RawSpec, dims = rawDims(p)): boolean 
   return rawIsWorktop(p) || (rawKitchen(r) && r.source !== "bazis-kitchen" && !p.mat && !rawIsRoom(p) && dims[2] >= 26);
 }
 
+/** Навес кухни Базиса ниже верха своей боковины: 157 из 182 навесов, стоящих на боковине в эталонах кухонь, — 15 мм (ещё 14 — 16 мм). */
+export const RAW_HANGER_DROP = 15;
+/** Навесы кухни Базиса, висящие НАД своей боковиной (комплект «Навесы мебельные (L+R)» со старыми координатами: высоту модуля
+ *  уменьшили, навесы остались — k26/k27/k28/k31 на 985 мм выше, k12 на 285, k28 на 615…): X и Z навеса совпадают с боковиной, неверна
+ *  только высота. Такой навес ставится на свою боковину — RAW_HANGER_DROP ниже её верха (статистика по эталонам), заглушка навеса
+ *  в той же точке Базиса — вместе с ним. Навес без боковины под ним не трогаем (сведения «как в Базисе»). Только кухни (правило 3):
+ *  у навесов шкафов единого отступа нет (49, 28, 61, 15, 44 мм). Возвращает сдвиг по Y по индексу фурнитуры (n4-wardrobes). */
+export function rawHangerSeats(r: RawSpec): Map<number, number> {
+  const out = new Map<number, number>();
+  if (!rawKitchen(r) || !r.panels.length) return out;
+  const gapTo = (pt: number[], b: number[]) => Math.hypot(...[0, 1, 2].map((k) => Math.max(0, b[k] - pt[k], pt[k] - b[k + 3])));
+  const sides = r.panels.filter((p) => p.box[3] - p.box[0] < 40 && p.box[4] - p.box[1] > 200);
+  r.hardware.forEach((h, i) => {
+    if (h.category !== "навес" || !/навес/i.test(h.name)) return;
+    const [x, y, z] = h.pos;
+    if (Math.min(...r.panels.map((p) => gapTo(h.pos, p.box))) <= RAW_SEAT_GAP) return; // стоит на детали — как в Базисе
+    const s = sides.filter((p) => x >= p.box[0] - 2 && x <= p.box[3] + 2 && z >= p.box[2] - 2 && z <= p.box[5] + 2 && y > p.box[4]);
+    if (s.length) out.set(i, Math.max(...s.map((p) => p.box[4])) - RAW_HANGER_DROP - y);
+  });
+  const hangers = [...out];
+  r.hardware.forEach((h, i) => {
+    if (h.category !== "заглушка") return;
+    const hit = hangers.find(([j]) => Math.hypot(...h.pos.map((v, k) => v - r.hardware[j].pos[k])) < 1);
+    if (hit) out.set(i, hit[1]);
+  });
+  return out;
+}
+
 export function rawParts(m: Module): Part[] {
-  const r = m.raw!, out: Part[] = [], kitchenRaw = rawKitchen(r);
+  const r = m.raw!, out: Part[] = [], kitchenRaw = rawKitchen(r), seats = rawHangerSeats(r);
   r.panels.forEach((p, i) => {
     const [x0, y0, z0, x1, y1, z1] = p.box, size = rawSize(p);
     const dims = rawDims(p), thin = size.indexOf(Math.min(...size));
@@ -243,7 +272,9 @@ export function rawParts(m: Module): Part[] {
     const own = kitchenRaw && rawOwnMaterial(p), room = rawIsRoom(p) || rawIsNonBoard(p);
     out.push({ id: `raw:p${i}`, name: p.name + (rawIsRoom(p) ? " · помещение (не мебель)" : long && !worktop && !p.fm && !wall && !own && !room ? " · больше листа — сращивание" : ""), ...(worktop || long || p.fm || wall || flat || own || room ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: p.thick ?? rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
-      role: p.facade ? "door" : "body", material, decor: p.decor ?? (kitchenRaw && p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
+      // плита МДФ Базиса — своим материалом и в сыром шкафу (092, 135, 177–180, 224: «Плита Evogloss 18мм», «МДФ 19мм Эмаль…»), а не лист
+      // Lamarty «Белый» декора корпуса/фасадов студии (n4-wardrobes)
+      role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
     // повёрнутая не на 90° деталь Базиса — ориентированный короб вокруг центра габарита
     if (p.obb) { const q = out[out.length - 1]; if (p.obb.ry) q.rotY = p.obb.ry; if (p.obb.rz) q.rotZ = p.obb.rz; }
@@ -255,9 +286,11 @@ export function rawParts(m: Module): Part[] {
       else if ((p.plane === "xy" && thin === 2) || (p.plane === "yz" && thin === 0)) q.faceContour = rel;
     }
   });
-  r.hardware.forEach((h, i) => {
-    const mesh = h.mesh ?? RAW_FALLBACK_MESH[h.category];
+  r.hardware.forEach((h0, i) => {
+    const mesh = h0.mesh ?? RAW_FALLBACK_MESH[h0.category];
     if (!mesh) return;
+    // навес кухни над своей боковиной — на боковину (rawHangerSeats); остальная фурнитура — точка Базиса как есть
+    const dy = seats.get(i), h = dy === undefined ? h0 : { ...h0, pos: [h0.pos[0], h0.pos[1] + dy, h0.pos[2]] as [number, number, number] };
     // габарит сетки Базиса по позиции и повороту — для проверки пересечений (без него — точка 10 мм у начала координат сетки)
     const bb = Array.isArray(h.bbox) && h.bbox.length === 6 ? rotatedBox(h.bbox, h.quat, h.pos) : undefined;
     out.push({ id: `raw:h${i}`, name: h.name, size: [10, 10, 10], position: h.pos, length: 10, width: 10, thickness: 10, role: h.category === "петля" ? "hinge" : "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0],
