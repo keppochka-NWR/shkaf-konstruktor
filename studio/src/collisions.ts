@@ -45,6 +45,10 @@ const doorOf = (id: string) => id.replace(/:(hingecup|hingeplate|hingearm|handle
 /** Разрешён ли контакт пары (порядок не важен). depth — глубина проникновения, мм. */
 export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boolean {
   for (const [p, q] of [[a, b], [b, a]] as const) {
+    // Дубль Базиса (kitchen.dupParts): второй экземпляр детали в той же точке — как в проекте Базиса, с собой не сталкивается;
+    // с остальным — те же правила, что у оригинала.
+    if (p.id === q.id + ":dup") return true;
+    if (p.id.endsWith(":dup") && allowedContact({ ...p, id: p.id.slice(0, -4) }, q, depth, m)) return true;
     // Крепёж корпуса (конфирмат, эксцентрик, полкодержатель, шкант) сидит в отверстиях досок корпуса и полок.
     if (isFastener(p) && isBoard(q) && q.role !== "door" && !q.id.endsWith(":facade")) return true;
     // Шток эксцентрика проходит через свой бочонок.

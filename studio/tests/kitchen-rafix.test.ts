@@ -83,7 +83,9 @@ test('пенал k16 m01: рафиксы 36 и крепёж стыков 3 то�
   const row=(k:string)=>c.hardware.find(h=>h.category===k)!;
   assert.deepEqual([row('рафикс').ref,row('рафикс').studio],[36,36]);
   assert.deepEqual([row('конфирмат').ref,row('конфирмат').studio],[9,9]);
-  assert.equal(row('опора').dups,2,'две опоры Базиса в одной точке — дубль');
+  // n4-tall: две опоры Базиса в одной точке — студия повторяет Базис (kitchen.dupParts), в смете 10 опор, как в Базисе
+  assert.equal(m.kitchen?.dupParts?.length,2);
+  assert.deepEqual([row('опора').ref,row('опора').studio],[10,10]);
   assert.ok(c.pass,JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2),holes:c.holes?.missing.slice(0,3)}));
 });
 

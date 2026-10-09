@@ -9,6 +9,7 @@ import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
+import { dupPartsFromEtalon, shelfAtFromEtalon } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
@@ -731,6 +732,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const s0 = sh[0], rear = m.backType === "groove" ? (m.grooveInset ?? 16) + 3 + 1 : 0;
     m.sections[0].shelfDepth = r1(s0.b.z1 - s0.b.z0);
     m.shelfRear = r1(s0.b.z0 - sideZ0 - rear);
+    // своя глубина/отступ у отдельных полок, как в Базисе (recognize-tall.ts)
+    const own = shelfAtFromEtalon(sh.map((q) => q.b), m.sections[0].shelfDepth, m.shelfRear, sideZ0 + rear);
+    if (own) m.sections[0].shelfAt = own;
     const pins = hw("полкодержатель").filter((h) => Math.abs(h.pos[1] - s0.b.y0) < 2);
     if (pins.length) m.shelfPinInset = r1(Math.min(...pins.map((h) => h.pos[2] - s0.b.z0)));
     const noPins = sh.map((s, j) => (hw("полкодержатель").some((h) => Math.abs(h.pos[1] - s.b.y0) < 2) ? -1 : j)).filter((j) => j >= 0);
@@ -941,5 +945,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // угловой навесной с диагональным фасадом — параметрики нет (см. wallCorner.ts), причина первой
   if (ref.archetype.startsWith("wall")) { const why = wallCornerRaw(ref); if (why) unsupported.unshift(why); }
+  // дубли Базиса (опора/конфирмат дважды в одной точке) — повторяем, как в Базисе (recognize-tall.ts)
+  const dupP = dupPartsFromEtalon(ref, m);
+  if (dupP.length) { m.kitchen.dupParts = dupP; notes.push(`дубли Базиса: ${dupP.join(", ")}`); }
   return { module: m, notes, unsupported };
 }

@@ -112,7 +112,11 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   bareJoints?: ("bottom" | "top")[];
   /** Крепёж стыков со стойками по сетке Базиса, если она не как у модуля (отступы от заднего/переднего торца, штук на сторону):
    *  ключ — bottom, top или shelf:N (жёсткая полка секции 1). Пример: k23 — у крыши 104,5/64,5, у дна 64,5/64,5. */
-  joints?: Record<string, RafixGrid> };
+  joints?: Record<string, RafixGrid>;
+  /** Дубли Базиса: фурнитура (опора, конфирмат), которая в проекте Базиса стоит дважды в одной точке (k16 m01 — две опоры,
+   *  k23 m14 — два конфирмата полки). Повторяем Базис: id детали студии, у которой есть второй экземпляр — в 3D и смете их столько же,
+   *  сколько в Базисе; отверстие одно (второй раз то же отверстие не сверлится). Нет детали с таким id (после правки) — дубль не ставится. */
+  dupParts?: string[] };
 
 /** Своя сетка крепежа стыка горизонтали (bottom/top/жёсткая полка) кухни Базиса; undefined — по общему правилу. */
 export function kitchenJointGrid(m: Module, hid: string): RafixGrid | undefined {
@@ -284,7 +288,8 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
  *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
 export function kitchenEdges(m: Module, out: Part[]) {
   // кухня Базиса без кромки вовсе (k23 — 15 модулей: ни одной кромки на деталях корпуса) — снимаем кромку студии по умолчанию
-  if (m.kitchen && m.edgeScheme?.t === 0) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade")) p.edge = [0, 0, 0, 0];
+  // и двери из ЛДСП корпуса там тоже без кромки (k23: 8 из 8 дверей ЛДСП без кромки, n4-tall); фасадный материал — своей кромкой (facadeEdge)
+  if (m.kitchen && m.edgeScheme?.t === 0) for (const p of out) if (p.material === "board" && !p.external && (p.role !== "door" || p.id.includes(":door:")) && !p.id.endsWith(":facade")) p.edge = [0, 0, 0, 0];
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
   // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32 — оба, k31 m13 — только дно; edgeScheme.endsX, n3-antresol);

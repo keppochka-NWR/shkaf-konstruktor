@@ -22,6 +22,7 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     if (part) out.push({ part, at: at.map((v) => Math.round(v * 100) / 100) as [number, number, number], dir, d, depth, src });
   };
   for (const p of ps) {
+    if (p.id.endsWith(":dup")) continue; // дубль Базиса (kitchen.dupParts) — отверстие уже есть от оригинала
     if (p.id.startsWith("fast:") && p.model?.origin && p.model.quat) {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
