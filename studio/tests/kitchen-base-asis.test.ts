@@ -7,7 +7,8 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare} from '../scripts/kitchen/recognize-base';
+import {edgeByDir} from '../src/edges';
 
 // Правило Макса: в кухню из Базиса студия не добавляет того, чего нет в Базисе (петли, опоры, крепёж, кромка, строки сметы).
 // Эталоны лежат вне репозитория (Кухни\etalon) — на чужой машине тесты с эталонами пропускаются.
@@ -56,6 +57,19 @@ test('без кромки (k23 m12): у Базиса на корпусе ни о
   assert.ok(c.pass,why(c));
 });
 
+test('верх боковин без кромки (k20 m08, k03): у нижнего Базиса верхний торец боковин не кромлен — у студии тоже, сверка k20 m08 PASS',{skip:!has('k20')||!has('k03')},()=>{
+  const ref=load('k20','m08');
+  assert.equal(sideTopBare(ref),true);
+  const {module:m}=moduleFromEtalon(ref);
+  assert.equal(m.edgeScheme?.sideTop,false);
+  for(const id of ['left','right']){const p=parts(m).find(x=>x.id===id)!;assert.equal(edgeByDir(p)['+y'],undefined,id);assert.ok(edgeByDir(p)['+z']>0,id);}
+  const c=compareModule(ref,m);
+  assert.ok(c.pass,why(c));
+  assert.equal(moduleFromEtalon(load('k03','m02')).module.edgeScheme?.sideTop,false);
+  // обычный нижний Базиса (k25 m07) — верх боковин кромится, как раньше
+  if(has('k25'))assert.equal(moduleFromEtalon(load('k25','m07')).module.edgeScheme?.sideTop,undefined);
+});
+
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{
   const m=kitchenBase(initialModule(),600);
   assert.ok(hingeIds(m).length>0,'петли есть');
@@ -72,11 +86,12 @@ test('флаги «как в Базисе» не трогают обычную �
 
 test('флаги «как в Базисе» переживают сохранение проекта (parseModule)',()=>{
   const m=kitchenBase(initialModule(),600);
-  const x={...m,kitchen:{...m.kitchen!,hinges:false as const,noLegs:true as const,fasteners:false as const},edgeScheme:{t:1,all:true as const}};
+  const x={...m,kitchen:{...m.kitchen!,hinges:false as const,noLegs:true as const,fasteners:false as const},edgeScheme:{t:1,all:true as const,sideTop:false as const}};
   const back=parseModule(JSON.parse(JSON.stringify(x)));
   assert.equal(back.kitchen?.hinges,false);
   assert.equal(back.kitchen?.noLegs,true);
   assert.equal(back.kitchen?.fasteners,false);
   assert.equal(back.edgeScheme?.all,true);
+  assert.equal(back.edgeScheme?.sideTop,false);
   assert.equal(parseModule(JSON.parse(JSON.stringify({...m,edgeScheme:{t:0}}))).edgeScheme?.t,0);
 });

@@ -162,7 +162,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
     const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
     // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся
     const rearBase = m.backType === "none" ? ["-z"] : [];
-    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
+    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
     else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);

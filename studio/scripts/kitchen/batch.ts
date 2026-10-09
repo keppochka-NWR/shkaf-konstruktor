@@ -29,6 +29,7 @@ for (const f of readdirSync(dir).filter((f) => /^k\d\d\.json$/.test(f)).sort()) 
       if (bad.length) why.push(`Δ>0.5: ${bad.slice(0, 2).map((p) => p.ref.name + " " + p.delta).join(", ")}`);
       for (const h of c.hardware) if (h.ref !== h.studio || (h.maxPosDelta ?? 0) > 2 || h.note) why.push(`${h.category} ${h.ref}/${h.studio}${h.maxPosDelta ? " Δ" + h.maxPosDelta : ""}${h.note ? " " + h.note : ""}`);
       if (c.holes && (c.holes.missing.length || c.holes.extra.length)) why.push(`отв. ${c.holes.matched}/${c.holes.ref} (+${c.holes.extra.length})`);
+      else if (c.holes && c.holes.maxDelta > 0.5) why.push(`отв. Δ${c.holes.maxDelta}`);
       if (c.edges?.bad.length) why.push(`кромка ${c.edges.bad.length}: ${c.edges.bad[0].slice(0, 70)}`);
       if (c.pass && !err.length) pass++;
       for (const w of why) { const k = w.replace(/[\d.]+/g, "#").slice(0, 60); reasons.set(k, (reasons.get(k) ?? 0) + 1); }

@@ -23,7 +23,17 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   const all = edgesAllAround(ref);
   if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
+  else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
   return notes;
+}
+
+/** Нижний: боковины кромлены, но верхний торец — нет (k03, k20 — 16 из 290 боковин нижних модулей). */
+export function sideTopBare(ref: RefModule): boolean {
+  type P = RefModule["panels"][number] & { edges?: { side: string; thick: number }[] };
+  const sides = (ref.panels as P[]).filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200).sort((a, b) => a.box[0] - b.box[0]);
+  if (sides.length < 2) return false;
+  const ed = [sides[0], sides[sides.length - 1]].map((s) => new Set((s.edges ?? []).filter((e) => e.thick > 0).map((e) => e.side)));
+  return ed.every((e) => e.size > 0 && !e.has("+y"));
 }
 
 /** Детали корпуса ЛДСП (без фасадов) с их кромкой. */
