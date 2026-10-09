@@ -4,7 +4,7 @@ import {initialModule,parts,validate,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers,withAxisH,relayoutProblem,axisMaxLen} from '../src/kitchenDrawers';
+import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers,withAxisH,relayoutProblem,axisMaxLen,kdrawerMinTop,kdrawerFacadeMax,setKDrawerFacade} from '../src/kitchenDrawers';
 import {edgeByDir} from '../src/edges';
 
 // НМ 600 с тремя ящиками Axis PRO как в Базисе k06/m03 (2×H-86 + H-168, 500 мм)
@@ -143,4 +143,12 @@ test('critic qdrawers B4: bottom front rail confirmat steps aside from the botto
 test('critic qdrawers minor: one depth-spare rule for layout and refit',()=>{
   const m={...k04(),depth:475};assert.equal(axisMaxLen(m),450);
   assert.ok(axisLayout(m,3).every(k=>k.len<=axisMaxLen(m)));assert.ok(refitKDrawers({...k04(),depth:475},'depth')!.every(k=>k.len<=450));
+});
+test('critic qdrawers minor: facade field is capped so the top drawer keeps a facade its lowest rail fits; the entered value is kept',()=>{
+  const m=k04();assert.equal(kdrawerMinTop(m),143.5);
+  const max=kdrawerFacadeMax(m,1);assert.ok(max<500,'500 is above the cap '+max);
+  const r=setKDrawerFacade(m,1,500)!;const n={...m,kdrawers:r};
+  assert.equal(r[1].y1-r[1].y0,max,'value = cap, not re-normalised');
+  assert.ok(r.at(-1)!.y1-r.at(-1)!.y0>=143.5);clean(n,'facade 2 = 500');
+  const s=setKDrawerFacade(m,0,300)!;assert.equal(s[0].y1-s[0].y0,300);
 });

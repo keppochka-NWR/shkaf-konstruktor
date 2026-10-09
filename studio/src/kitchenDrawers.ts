@@ -207,6 +207,26 @@ export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): K
 }
 /** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков. */
 export function relayoutKDrawers(m: Module, n: number, ratios?: number[]) { return axisLayout(m, n, ratios, m.kdrawers?.[0]); }
+/** Наименьший фасад верхнего ящика, в который входит самая низкая царга с моделью под эту глубину и цвет:
+ *  направляющая 59 над низом фасада + верх короба + запас 21,5 до верха фасада (H-86 → 143,5). */
+export function kdrawerMinTop(m: Module) {
+  const color = m.kdrawers?.[0]?.color;
+  const t = AXIS_HEIGHTS.filter((h) => !!axisBestLen(m, h, color)).map((h) => 59 + axisTop({ system: "axis-pro", y0: 0, y1: 0, runnerY: 0, h, len: 500 }) + AXIS_FIT.facadeTop);
+  return t.length ? Math.ceil(Math.min(...t) * 2) / 2 : 100;
+}
+/** Наибольший фасад ящика i (не верхнего): верхнему остаётся kdrawerMinTop, иначе доли перенормируются, введённое
+ *  не выполняется и верхний ящик не входит (critic qdrawers minor: фасад 2 = 500 давал 417 и верхний 83,5). */
+export function kdrawerFacadeMax(m: Module, i: number) {
+  const ks = m.kdrawers ?? [], top = ks[ks.length - 1], k = ks[i];
+  return !k || !top ? 100 : Math.max(100, Math.floor(Math.min(700, k.y1 - k.y0 + top.y1 - top.y0 - kdrawerMinTop(m))));
+}
+/** Фасад ящика i = v (не больше kdrawerFacadeMax), остаток — верхнему; раскладка заново с цветом и саморезами. */
+export function setKDrawerFacade(m: Module, i: number, v: number): KDrawer[] | undefined {
+  const ks = m.kdrawers; if (!ks?.length || i >= ks.length - 1) return ks;
+  const r = ks.map((k) => k.y1 - k.y0), x = Math.max(100, Math.min(v, kdrawerFacadeMax(m, i)));
+  r[r.length - 1] += r[i] - x; r[i] = x;
+  return relayoutKDrawers(m, r.length, r);
+}
 /** Почему раскладка на n ящиков недоступна (для подсказки кнопки), или undefined. */
 export function relayoutProblem(m: Module, n: number): string | undefined {
   const ks = relayoutKDrawers(m, n);
