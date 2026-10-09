@@ -104,6 +104,11 @@ test('столешница сырого модуля — только назва
   assert.equal(ew.lines.find(l=>l.id==='material:Cтеновая панель 26мм')?.quantity,1.2);
   assert.equal(ew.lines.find(l=>l.id==='material:Пластик ___________')?.quantity,0.15);
   assert.equal(nest(wall).length,0,'не раскрой ЛДСП');
+  // деталь больше листа (136: ХДФ задника 2198×2588, 010: ЛДСП 1820×2565) — раскрой не падает, в смете строка «больше листа» без цены
+  const big=project(rawModule({panels:[{name:'Задняя стенка',kind:'hdf',box:[0,0,0,2198,2588,3]},{name:'Фронтальная',kind:'ldsp',box:[0,0,10,1820,2565,26]},{name:'Полка',kind:'ldsp',box:[0,500,30,800,516,530]}],hardware:[]},2200,2600,600));
+  const eb=estimate(big);
+  assert.equal(eb.lines.filter(l=>l.id.startsWith('unplaced-raw:')).length,2);
+  assert.ok(nest(big).some(s=>s.items.some(it=>JSON.stringify(it).includes('Полка'))),'остальное — в раскрое');
   // старый проект без материала: деталь 38 мм без «столешн» в имени — не столешница
   const old=estimate(project(rawModule({panels:[{name:'Горизонтальная',kind:'other',box:[0,0,0,1200,38,600]}],hardware:[]})));
   assert.equal(old.lines.find(l=>l.id.startsWith('worktop:')),undefined);

@@ -10,7 +10,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
-import {rawSize,rawIsWorktop,rawIsRoom,rawIsNonBoard} from './rawModule';
+import {rawSize,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -146,6 +146,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const s=rawSize(p).sort((x,y)=>y-x);
         // стекло Базиса (полки ВМКП) — как стеклянная полка студии, м²
         if(p.kind==='glass'){add('glass-shelf','Стеклянная полка · обработка и держатели',s[0]*s[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
+        // больше листа (как в Базисе, в т. ч. ХДФ задника): в раскрой не попала — строка без цены, как «не помещается в лист» у гильотины
+        if(p.kind!=='mirror'&&!p.fm&&!rawIsRoom(p)&&!rawIsWorktop(p)&&!rawIsNonBoard(p)&&rawOversize(p))add('unplaced-raw:'+a.id+':'+r.panels.indexOf(p),`Больше листа — сращивание или отдельная плита: ${p.name} ${s.map(Math.round).join(' × ')}`,1,'шт',null,'Как в проекте Базиса; раскрой такой детали — решение технолога');
         if(p.kind==='hdf'||p.kind==='mirror'||rawIsRoom(p))continue;
         // столешница — только названная так в Базисе (имя/материал), толщина не признак: ЛДСП 25/32 мм идёт в раскрой своей толщиной
         if(rawIsWorktop(p)){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
