@@ -6,7 +6,7 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { wallRaise, bottomFrontRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
-import { wallJointZ, endGroove, wallShelfEdges } from "./wallJoints";
+import { wallJointZ, endGroove, wallShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -90,7 +90,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     if (bf !== null) { m.kitchen.bottomFront = bf; notes.push(`дно короче спереди на ${bf}`); }
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
     else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1))) {
-      m.plinthHeight = wr.plinthHeight; if (wr.raisedSides) m.raisedSides = true; m.kitchen.raise = wr.raise; notes.push(wr.note);
+      m.plinthHeight = wr.plinthHeight; if (wr.raisedSides) m.raisedSides = true; m.kitchen.raise = wr.raise; notes.push(wr.note); if (wr.unsupported) unsupported.push(wr.unsupported);
     } else if (bottom.b.y0 > 0.5) { m.plinthHeight = r1(bottom.b.y0); notes.push(`низ корпуса на ${r1(bottom.b.y0)} без опор — как цоколь`); }
     else m.plinthHeight = 0;
   } else { m.bottomType = "none"; m.plinthHeight = 0; }
@@ -117,6 +117,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
   }
   for (const r of railsEdge) {
+    if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка
     const atTop = r.b.y1 >= top - 0.5, front = r.b.z1 >= sideZ1 - 30;
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
     if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
@@ -210,7 +211,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const rowsGap = upRow.length && lowRow.length ? upRow[0].b.y0 - lowRow[0].b.y1 : 0;
     // только пенал (role tall) и только если верхний ряд в пределах корпуса: пенал из двух корпусов (k30 m05: боковины 850, фасады до 2469) — не разрез
     // навесной: два ряда распашных (нижний и верхний фасад, k23, k07, k04) — тот же разрез doorSplit
-    const tallRows = (role === "tall" || role === "wall") && rowYs.length === 2 && !m.kdrawers;
+    // навесной — только распашные на боковых петлях: складной подъёмник (ФриФолд, k07 m08/m10) и петли на крыше — не разрез фасадов
+    const wallSwing = role === "wall" && !ref.hardware.some((h) => /фри\s*фолд|free\s*fold|подъемник|подъёмник/i.test(h.name)) && hw("петля").every((h) => h.pos[0] <= left.b.x1 + 1 || h.pos[0] >= right.b.x0 - 1);
+    const tallRows = (role === "tall" || wallSwing) && rowYs.length === 2 && !m.kdrawers;
     const upOver = tallRows && upRow.length ? r1(Math.max(...upRow.map((q) => q.b.y1)) - top) : 0;
     const split = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5 && rowsGap <= 10;
     if (tallRows && rowsGap > 10) unsupported.push(`ниша под технику между фасадами ${r1(rowsGap)} мм (пенал под духовку/СВЧ) — пока не поддержано`);
@@ -301,6 +304,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right, m.confirmatInset);
     if (Object.keys(jz).length) m.kitchen.jointZ = jz;
+    // дно под боковинами на эксцентриках (k30, k31): шкант на нижней пласти дна — своё смещение от эксцентрика
+    if (m.bottomUnder && bottom && !m.dowels && (m.jointFastening?.["bottom:left"] === "eccentric" || m.jointFastening?.["bottom:right"] === "eccentric")) {
+      const off = bottomUnderDowelOffset(ref.hardware, bottom);
+      if (off !== null) m.dowels = { offset: off };
+    }
   }
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;

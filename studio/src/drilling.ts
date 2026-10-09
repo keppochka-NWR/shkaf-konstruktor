@@ -30,6 +30,17 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм
       push(p.id, [o[0], o[1] - (p.name.includes("стекл") ? 5 : 2.5), o[2]], [into, 0, 0], 5, 12);
+    } else if (p.id.startsWith("ecc:bottom-under:") && !p.id.endsWith(":pin") && p.anchor) {
+      // эксцентрик над дном под боковинами (Базис k30): D15×12 в пласть боковины в 34 над дном, шток D8×34 в торец боковины, D5×12 в дно
+      const [ex, ey, ez] = p.anchor, inward = p.id.includes(":left:") ? 1 : -1, sx = ex - inward * 8;
+      push(p.id, [ex, ey + 34, ez], [-inward, 0, 0], 15, 12);
+      push(p.id + ":pin", [sx, ey, ez], [0, 1, 0], 8, 34);
+      push(p.id + ":side", [sx, ey, ez], [0, -1, 0], 5, 12);
+    } else if (p.id.startsWith("dowel:bottom-under:") && p.anchor) {
+      // шкант стыка «дно под боковинами»: D8×22 в торец боковины, D8×12 в дно — из плоскости стыка
+      const [x, yb, z] = p.anchor, yt = yb + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16]));
+      push(p.id, [x, yt, z], [0, 1, 0], 8, 22);
+      push(p.id + ":side", [x, yt, z], [0, -1, 0], 8, 12);
     } else if (p.id.startsWith("ecc:") && !p.id.endsWith(":pin") && p.anchor) {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;

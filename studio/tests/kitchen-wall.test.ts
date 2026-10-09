@@ -5,6 +5,7 @@ import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '.
 import {kitchenWall} from '../src/kitchen';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {partCollisions} from '../src/collisions';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тесты по эталонам пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -92,4 +93,26 @@ test('навесные: кромка съёмных полок по Базису
   assert.deepEqual(b.edgeScheme?.shelfSides,['+z']);
   for(const [k,key] of [['k10','m10'],['k22','m11'],['k10','m08']] as const){const ref=load(k,key),{module:m}=moduleFromEtalon(ref),c=compareModule(ref,m);assert.ok(c.pass,k+' '+key+' '+JSON.stringify(c.edges?.bad.slice(0,3)));}
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(b))).edgeScheme?.shelfSides,['+z'],'схема полок переживает сохранение');
+});
+test('навесной k30 m06: дно под боковинами на эксцентриках со шкантами — крепёж, отверстия и сверка как в Базисе, без пересечений',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{
+  const ref=load('k30','m06'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.jointFastening?.['bottom:left'],'eccentric');
+  assert.deepEqual(m.dowels,{offset:32});
+  assert.deepEqual(m.kitchen?.jointZ?.['bottom:left'],[74,54]);
+  const ps=parts(m),ecc=ps.filter(p=>p.id.startsWith('ecc:bottom-under:')&&!p.id.endsWith(':pin'));
+  assert.equal(ecc.length,4);assert.equal(ps.filter(p=>p.id.startsWith('dowel:bottom-under:')).length,4);
+  assert.equal(ps.filter(p=>p.id.startsWith('fast:bottom:')).length,0,'конфирматов в дне нет — как в Базисе');
+  const c=compareModule(ref,m);
+  assert.ok(c.pass,JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2),holes:c.holes&&[c.holes.matched,c.holes.ref]}));
+  assert.deepEqual(partCollisions(ps,m).map(x=>x.names.join(' × ')),[]);
+});
+test('навесной: складной подъёмник ФриФолд в два ряда (k07 m10) — не выдаётся за два ряда распашных',{skip:!existsSync(`${ETALON}/k07.json`)},()=>{
+  const {module:m,unsupported}=moduleFromEtalon(load('k07','m10'));
+  assert.equal(m.sections[0].doorSplit,undefined);
+  assert.ok(unsupported.some(u=>/2 ряда/.test(u)));
+});
+test('навесной: составной корпус (k26 m01, боковины от 602, дно на 767) — честно не поддержан, цоколя не выдумываем',{skip:!existsSync(`${ETALON}/k26.json`)},()=>{
+  const {module:m,unsupported}=moduleFromEtalon(load('k26','m01'));
+  assert.ok(unsupported.some(u=>/боковины начинаются/.test(u)));
+  assert.deepEqual(plinthLike(m),[]);
 });

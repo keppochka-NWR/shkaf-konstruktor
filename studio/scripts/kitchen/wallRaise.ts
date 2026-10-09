@@ -11,7 +11,7 @@ type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: numbe
 type PB = { p: RefPanel; b: B };
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
-export type WallRaise = { plinthHeight: number; raisedSides: boolean; raise: NonNullable<KitchenSpec["raise"]>; panel?: PB; note: string };
+export type WallRaise = { plinthHeight: number; raisedSides: boolean; raise: NonNullable<KitchenSpec["raise"]>; panel?: PB; note: string; unsupported?: string };
 
 /** Планка на ребре навесного стоит на дне (низ планки = верх дна): это нижняя стяжка (k04 m05, m07, m08 — задние планки навески сверху и снизу). */
 export function wallRailOnBottom(role: string, rail: PB, bottom: PB | undefined): boolean {
@@ -35,6 +35,8 @@ export function wallRaise(P: PB[], left: PB, right: PB, bottom: PB, fronts: PB[]
     // A: боковины стоят на уровне дна (или на дне) — весь корпус поднят
     return { plinthHeight: lift, raisedSides: true, raise: doorsToFloor ? { doorsToFloor: true } : {}, note: `корпус поднят на ${lift}${doorsToFloor ? ", фасады до низа модуля" : ""}` };
   }
+  // боковины начинаются выше низа модуля, но ниже дна (k26 m01: составной навесной) — честно не поддержано, цоколь не выдумываем
+  if (sideY0 > 0.5) return { plinthHeight: lift, raisedSides: false, raise: {}, note: `боковины от ${r1(sideY0)}, дно на ${lift}`, unsupported: `боковины начинаются на ${r1(sideY0)} мм, дно на ${lift} мм (составной навесной) — пока не поддержано` };
   // B: фронтальная ЛДСП под дном: от низа боковин до дна, у лица корпуса, между боковинами
   const panel = P.find(({ p, b }) => p.axis === "z" && (p.kind === "ldsp" || p.kind === "mdf") && b.y0 <= sideY0 + 1 && Math.abs(b.y1 - lift) <= 1 && b.z1 >= sideZ1 - 40 && b.z1 <= sideZ1 + 0.5 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5);
   const raise: NonNullable<KitchenSpec["raise"]> = { ...(panel ? { front: r1(sideZ1 - panel.b.z1) } : {}), ...(doorsToFloor ? { doorsToFloor: true } : {}) };

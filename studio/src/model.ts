@@ -955,8 +955,21 @@ export function parts(m: Module): Part[] {
       // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
       const yb = hp.position[1] - t / 2;
       for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
-        for (const [k, z] of (jointZs(m, `${hp.id}:${side}`, z0, z0 + hp.size[2]) ?? [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] + (m.kitchen?.bottomFront ?? 0) - (m.confirmatInset ?? RULES.confirmatInset)]).entries())
-          confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
+        for (const [k, z] of (jointZs(m, `${hp.id}:${side}`, z0, z0 + hp.size[2]) ?? [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] + (m.kitchen?.bottomFront ?? 0) - (m.confirmatInset ?? RULES.confirmatInset)]).entries()) {
+          if (m.kitchen && m.jointFastening?.[`${hp.id}:${side}`] === "eccentric") {
+            // Кухня Базиса (k30, k31): эксцентрик над дном под боковинами — бочонок в боковине в 34 мм над дном, шток в торец боковины,
+            // шкант 8×30 рядом (внутрь стыка): 22 в торец боковины, 12 в дно.
+            const dir = side === "left" ? 1 : -1, ex = side === "left" ? t : m.width - t, yt = yb + t;
+            add(`ecc:bottom-under:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [ex - dir * (RULES.eccBarrelH / 2 - 0.3), yt + RULES.eccCenter, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+            out.at(-1)!.anchor = [ex, yt, z];
+            add(`ecc:bottom-under:${side}:${k}:pin`, "Эксцентрик D15 · шток", [7, RULES.eccCenter + t / 2, 7], [x, yt + (RULES.eccCenter - t / 2) / 2, z], RULES.eccCenter + t / 2, 7, 7, "fastener", hp.sectionId, "metal");
+            if (m.dowels) {
+              const dz = k === 0 ? m.dowels.offset : -m.dowels.offset;
+              add(`dowel:bottom-under:${side}:${k}`, "Шкант 8×30", [8, 30, 8], [x, yt + 3, z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
+              out.at(-1)!.anchor = [x, yb, z + dz]; // Базис ставит шкант на нижней пласти дна
+            }
+          } else confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
+        }
       continue;
     }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок

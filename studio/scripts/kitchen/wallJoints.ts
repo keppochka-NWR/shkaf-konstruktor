@@ -20,6 +20,16 @@ export function wallShelfEdges(shelves: PB[], pins: RefHardware[], bodyT: number
   return { ...(Math.abs(th - bodyT) > 0.01 ? { shelfT: th } : {}), ...(sides.length !== 4 ? { shelfSides: sides } : {}) };
 }
 
+/** Шкант рядом с эксцентриком стыка «дно под боковинами» (k30: эксцентрик на верхней пласти дна, шкант на нижней, 32 мм внутрь стыка):
+ *  смещение шканта от эксцентрика по глубине. Общий поиск по высоте эксцентрика его не находит — шкант на 16 ниже. */
+export function bottomUnderDowelOffset(hardware: RefHardware[], bottom: PB): number | null {
+  const ecc = hardware.filter((h) => h.category === "эксцентрик" && Math.abs(h.pos[1] - bottom.b.y1) < 1);
+  const dow = hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.b.y0) < 1);
+  if (!ecc.length || !dow.length) return null;
+  const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[0] - e0.pos[0]) <= 9).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
+  return d0 ? r1(Math.abs(d0.pos[2] - e0.pos[2])) : null;
+}
+
 /** Паз в торце детали (Базис «Паз торцевой» 2,5×10 в переднем торце дна — k06 m10, k10 m08–m10, k15 m09): коробка паза bb у торца ±W
  *  и внутри толщины → Groove с end. ax — оси детали студии (L, W, t), lo/hi — её границы. null — паз не торцевой. */
 export function endGroove(bb: number[], ax: { L: number; W: number; t: number }, lo: number[], hi: number[], name: string) {
