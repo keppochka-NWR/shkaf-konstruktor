@@ -4,6 +4,8 @@ import {initialModule,parts,validate,parseModule,type Module} from '../src/model
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
+import {syncKitchenLift} from '../src/kitchenLift';
+import {readFileSync} from 'node:fs';
 
 // Antresol 600x300x600 with a lift-up front, as in Bazis k10/m03 "A 2": 2 overlay hinges on the roof, gas lift PD-G-N02 on both sides.
 const antresol=(lift=true):Module=>{
@@ -56,4 +58,36 @@ test('kitchenLift: parsed and validated; only for a kitchen lift-up front',()=>{
   assert.ok(validate(bad).some(e=>e.includes('Газлифт')));
   assert.equal(parts(antresol(false)).filter(p=>p.id.startsWith('lift:')).length,0);
   assert.equal(parts(antresol(false)).filter(p=>p.id.includes(':hingeplate:')).length,2,'hinges without a lift too');
+});
+
+test('gas lift: validate rejects heights where the lift enters the bottom (critic: H=280/270/250); every accepted height is collision-free',()=>{
+  for(const H of [250,270,280])assert.ok(validate({...antresol(),height:H}).some(e=>e.includes('входит в дно')),'H='+H);
+  for(let H=250;H<=330;H+=5){
+    const m={...antresol(),height:H},ok=validate(m).length===0;
+    const ps=parts(m),lift=ps.filter(p=>p.id.startsWith('lift:')).map(p=>p.id);
+    const bad=partCollisions(ps,m).filter(c=>lift.includes(c.a)||lift.includes(c.b));
+    const low=Math.min(...ps.filter(p=>p.id.startsWith('lift:')).map(p=>p.position[1]-p.size[1]/2));
+    if(ok){assert.deepEqual(bad,[],'H='+H);assert.ok(low>=16-1e-6,'H='+H+' low '+low);}
+    else assert.ok(bad.length>0||low<16,'rejected only when it really collides, H='+H);
+  }
+  assert.deepEqual(validate({...antresol(),height:290}),[]);
+});
+
+test('gas lift: inset front and two lift-up leaves are rejected',()=>{
+  assert.ok(validate({...antresol(),doorMount:'inset'}).some(e=>e.includes('накладного')));
+  const two=antresol();two.sections=[{...two.sections[0],doorLeaves:2,doorHinges:['top','top']}];
+  assert.ok(validate(two).some(e=>e.includes('одну створку')));
+  const twoNoLift=antresol(false);twoNoLift.sections=[{...twoNoLift.sections[0],doorLeaves:2,doorHinges:['top','top']}];
+  assert.ok(!validate(twoNoLift).some(e=>e.includes('Газлифт')));
+});
+
+test('gas lift: switching the front from top to side hinges drops the lift (no dead end); App has the lift checkbox',()=>{
+  const m=antresol();m.sections[0].doorHinges=['left'];
+  assert.ok(validate(m).some(e=>e.includes('Газлифт')));
+  syncKitchenLift(m);
+  assert.equal(m.kitchenLift,undefined);assert.deepEqual(validate(m),[]);
+  const keep=antresol();syncKitchenLift(keep);assert.deepEqual(keep.kitchenLift,{system:'pd-g-n02'});
+  const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
+  assert.ok(app.includes('aria-label="Газлифт PD-G-N02 подъёмного фасада"'),'checkbox to switch the lift on/off');
+  assert.ok(/a\.doorHinges\[k\]=e\.target\.value[^}]*syncKitchenLift\(next\)/.test(app),'hinge change drops a lift without a lift-up front');
 });

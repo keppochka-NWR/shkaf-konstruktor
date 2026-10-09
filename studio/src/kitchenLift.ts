@@ -66,14 +66,29 @@ export function kitchenLiftParts(m: Module, out: Part[]) {
     ([[-5, -8.66], [10, 0], [-5, 8.66]] as const).forEach(([dy, dz], n) => { const o: V3 = [inner, yS + dy, zS + dz]; out.push(part(`lift:${side}:screw:s${n}`, "Саморез 3×3 (фиксатор газлифта на боковину)", { size: [3, 3, 3], position: [inner + dir * 0.75, o[1], o[2]] }, undefined, o)); });
   }
 }
-/** Ошибки поля kitchenLift (validate): только кухня и только при фасаде с петлями по верху. */
-export function kitchenLiftErrors(m: Module): string[] {
+/** Низ комплекта от верха фасада: фиксатор на боковину (254,5 ниже верха + половина сетки 14,5) — самая низкая деталь (шток ниже верха на 266,86). */
+export const LIFT_DROP = LIFT.sideDown + Math.max(-MESH.side.lo[1], LIFT.rodDown - MESH.rod.lo[1], 5 + 1.5);
+/** Геометрия корпуса для проверки газлифта (из model.ts, чтобы не тянуть цикл импорта). */
+export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number };
+/** Ошибки поля kitchenLift (validate): только кухня, один накладной подъёмный фасад в одну створку, и газлифт не входит в дно. */
+export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (!m.kitchenLift) return [];
   const e: string[] = [];
   if (!m.kitchen) e.push("Газлифт задаётся только кухонному модулю.");
   if (!(m.kitchenLift.system in LIFT_SYSTEMS)) e.push("Неизвестная система газлифта.");
-  if (!m.sections.some((s) => s.doorHinges?.includes("top"))) e.push("Газлифт нужен фасаду с петлями по верху (подъёмному).");
+  const tops = m.doors ? m.sections.reduce((n, s) => n + (s.doorHinges ?? []).slice(0, g ? g.leaves(s) : 4).filter((h) => h === "top").length, 0) : 0;
+  if (!tops) e.push("Газлифт нужен фасаду с петлями по верху (подъёмному).");
+  else if (tops > 1) e.push("Газлифт PD-G-N02 по Базису ставится на один подъёмный фасад в одну створку (комплект на каждую боковину).");
+  if (m.doorMount === "inset") e.push("Газлифт PD-G-N02 по Базису — только для накладного подъёмного фасада (у вкладного петли на крыше не ставятся).");
+  if (g && g.facadeTop - LIFT_DROP < g.innerBottom - 1e-6) {
+    const minH = Math.ceil(m.height + g.innerBottom - (g.facadeTop - LIFT_DROP));
+    e.push(`Газлифт PD-G-N02: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха фасада и входит в дно — высота корпуса от ${minH} мм.`);
+  }
   return e;
+}
+/** После смены открывания: газлифт без подъёмного фасада снимается (иначе правку нельзя сохранить). */
+export function syncKitchenLift(m: Module) {
+  if (m.kitchenLift && !m.sections.some((s) => s.doorHinges?.includes("top"))) delete m.kitchenLift;
 }
 export function parseKitchenLift(x: unknown): KitchenLift | undefined {
   if (!x || typeof x !== "object") return undefined;
