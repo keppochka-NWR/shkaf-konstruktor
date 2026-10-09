@@ -183,6 +183,10 @@ test('estimate of a module from Bazis: no "мелочёвка корпуса" no
   assert.ok(lines(own).includes('kit')&&lines(own).includes('confirmat-cap'));
   assert.ok(!lines(bz).includes('kit')&&!lines(bz).includes('confirmat-cap'));
   assert.ok(lines(bz).includes('confirmat-7x50'),'confirmats themselves stay — they are in Bazis');
+  // подъёмный фасад без подъёмника в проекте и паз под подсветку без подсветки: у кухни студии — строки есть, у модуля из Базиса — нет
+  const lift=(b:boolean)=>{const m=antresol();m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top']}];if(b)m.kitchen!.bazis=true;return m;};
+  assert.ok(lines(lift(false)).includes('lift-mechanism'));
+  assert.ok(!lines(lift(true)).includes('lift-mechanism'));
   assert.equal(parseModule(JSON.parse(JSON.stringify(bz))).kitchen!.bazis,true);
 });
 
