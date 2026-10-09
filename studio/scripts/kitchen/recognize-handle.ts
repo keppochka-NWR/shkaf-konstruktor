@@ -2,6 +2,7 @@
 // В базе ручки есть только у k07 и k09 («Мебельная ручка рейлинг 128/160», 36 шт.): у навесных — горизонтально по центру
 // ширины в 30/40 мм от низа фасада, у нижних — в 31,5 от верха, у части навесных и пеналов — вертикально у свободного края
 // в 120 от низа. Правило студии (вертикально посередине высоты) с Базисом не совпадает — место берётся из проекта.
+import type { KitchenSpec } from "../../src/kitchen";
 import type { RefModule } from "./compare";
 
 type Box = number[];
@@ -9,7 +10,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** Место ручек распашных фасадов модуля: одно на все фасады (иначе undefined — правило студии).
  *  doors — боксы фасадов-дверей модуля в осях Базиса. */
-export function handlePlace(ref: RefModule, doors: Box[]): { dy: number; from: "bottom" | "top"; horizontal: boolean } | undefined {
+export function handlePlace(ref: RefModule, doors: Box[]): KitchenSpec["handle"] {
   const hs = ref.hardware.filter((h) => h.category === "ручка");
   if (!hs.length || !doors.length) return undefined;
   const out: { dy: number; from: "bottom" | "top"; horizontal: boolean }[] = [];
