@@ -461,7 +461,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // ящики Firmax скрытого монтажа: короб ЛДСП 16 по левой боковине ящика; направляющие (по 2 точки Базиса на ящик) — снизу вверх
   const fxRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Firmax/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);
   // короб Firmax без направляющих в проекте (fxBare) — короб без них (runs: []), студия направляющих не добавляет
-  if ((fxRuns.length || fxBare) && !axisRuns.length) {
+  // Firmax вместе с внутренним ящиком Axis PRO (k30 m12/m13: два короба Firmax, за верхним фасадом — внутренний Axis) — каждый своей системой
+  const axisInnerOnly = axisRuns.length > 0 && !!m.kdrawers?.length && m.kdrawers.every((k) => k.system === "axis-pro" && !!k.inner);
+  if ((fxRuns.length || fxBare) && (!axisRuns.length || axisInnerOnly)) {
     const lefts = P.filter(({ p, b }) => /^Боковина ящика лев/i.test(p.name) && b.x0 < W / 2).sort((a, c) => a.b.y0 - c.b.y0);
     const kd: KDrawer[] = [];
     lefts.forEach((s) => {
@@ -494,7 +496,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
     });
-    if (kd.length) m.kdrawers = kd;
+    if (kd.length) m.kdrawers = axisInnerOnly ? [...m.kdrawers!, ...kd].sort((x, y) => x.runnerY - y.runnerY) : kd;
   }
   // ящики MODERN SLIDE: короб ЛДСП как у Firmax/Versalite, направляющие без сетки — точки Базиса храним как есть (по правилу Firmax)
   const msRuns = ref.hardware.filter((h) => h.category === "направляющая" && /MODERN SLIDE/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);

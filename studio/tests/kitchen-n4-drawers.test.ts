@@ -196,3 +196,16 @@ test('Axis PRO внутренний ящик (k21 m03, k25 m05, k29 m03): без
   // k21 m03: ящики 500 в корпусе 447 - ошибка проекта Базиса (короба выходят за задник), проверка её показывает
   assert.ok(validate(moduleFromEtalon(load('k21','m03')).module).some(e=>/не входит в глубину корпуса 447/.test(e)));
 });
+
+test('Firmax вместе с внутренним Axis PRO (k30 m12/m13): короба и внутренний ящик распознаны, конфирматы снизу через дно D5x35 как в Базисе',{skip:!has('k30')},()=>{
+  for(const key of ['m12','m13']){
+    const ref=load('k30',key),r=moduleFromEtalon(ref),m=r.module,c=compareModule(ref,m);
+    assert.deepEqual(m.kdrawers!.map(k=>k.system),['firmax-ldsp','firmax-ldsp','axis-pro'],key);
+    assert.ok((m.kdrawers![2] as AxisDrawer).inner);
+    assert.equal(c.missing.length,0,key);assert.equal(c.extra.length,0,key);
+    assert.ok(c.holes!.matched>=c.holes!.ref-2,`${key}: отверстия ${c.holes!.matched}/${c.holes!.ref}`);
+    const d5=holes(m).filter(h=>h.part.startsWith('kd:0:fx:back')&&h.d===5&&Math.abs(h.dir?.[1]??0)>0.5);
+    assert.ok(d5.length>0&&d5.every(h=>h.depth===35),`${key}: D5 снизу ${d5.map(h=>h.depth)}`);
+    assert.ok(!validate(m).length,validate(m).join('; '));
+  }
+});
