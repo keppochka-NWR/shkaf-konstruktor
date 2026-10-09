@@ -32,6 +32,18 @@ test('пенал под духовку k23 m15: ниша 385 мм между ф�
   assert.ok(unsupported.some(u=>u.startsWith('ниша под технику между фасадами 385.5')),unsupported.join('; '));
 });
 
+test('разрез фасадов (doorSplit) и «ниша под технику» распознаются только у пенала: антресоль/нижний — «не поддержано», пенал из двух корпусов — не разрез (критик n2)',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{
+  for(const [k,key] of [['k13','m02'],['k27','m12'],['k10','m11']]){
+    const {module:m,unsupported}=moduleFromEtalon(load(k,key));
+    assert.equal(m.sections[0].doorSplit,undefined,k+key);
+    assert.ok(unsupported.some(u=>u.startsWith('фасады в 2 ряда')),k+key+': '+unsupported.join('; '));
+    assert.ok(!unsupported.some(u=>u.startsWith('ниша под технику')),k+key+': ниша — только у пенала');
+  }
+  const {module:p,unsupported:u30}=moduleFromEtalon(load('k30','m05'));
+  assert.equal(p.sections[0].doorSplit,undefined,'боковины 850, фасады до 2469 — не разрез');
+  assert.ok(u30.some(u=>u.startsWith('фасады пенала выше боковин')),u30.join('; '));
+});
+
 test('пенал: hingeYUp — свои высоты петель у верхнего ряда (doorSplit), нижний ряд — по правилу; parseModule сохраняет поля',()=>{
   const m=kitchenBase(initialModule(),600);m.kitchen={...m.kitchen!,role:'tall'};m.height=2100;
   const s=m.sections[0];s.shelves=[];s.doorSplit=1000;
