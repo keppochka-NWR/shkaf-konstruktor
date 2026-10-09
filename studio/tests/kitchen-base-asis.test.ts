@@ -87,6 +87,38 @@ test('полкодержатели не симметричны по глубин
   assert.equal(Math.round((Math.min(...zs)-(sh.position[2]-sh.size[2]/2))*10)/10,Math.round(((sh.position[2]+sh.size[2]/2)-Math.max(...zs))*10)/10);
 });
 
+test('дно под боковинами глубиной от 600 — 3 конфирмата на сторону, третий посередине (k16 m06, k20 m01 PASS); мельче 600 — два',{skip:!has('k16')||!has('k20')},()=>{
+  for(const [k,key] of [['k16','m06'],['k20','m01']]){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    const bot=parts(m).find(p=>p.id==='bottom')!;
+    assert.ok(bot.size[2]>=600,k+key);
+    const zs=parts(m).filter(p=>p.id.startsWith('fast:bottom:left:')).map(p=>p.model!.origin![2]).sort((a,b)=>a-b);
+    assert.equal(zs.length,3,k+key);
+    assert.ok(Math.abs(zs[1]-bot.position[2])<0.01,'середина дна');
+    const c=compareModule(ref,m);
+    assert.ok(c.pass,k+key+' '+why(c));
+  }
+  const pal=kitchenBase(initialModule(),600);
+  assert.equal(parts(pal).filter(p=>p.id.startsWith('fast:bottom:left:')).length,2,'палитра 557 — два');
+  const deep={...pal,depth:650};
+  assert.equal(parts(deep).filter(p=>p.id.startsWith('fast:bottom:left:')).length,3,'кухня глубиной 650 — три');
+  const w={...initialModule(),depth:650,bottomUnder:true};
+  assert.equal(parts(w).filter(p=>p.id.startsWith('fast:bottom:left:')).length,2,'не кухня — как было');
+});
+
+test('узкий нижний (200, k05 m02): опоры в два ряда в 70 от торцов, как в Базисе (PASS); внахлёст (150, k16 m07: 70 и 80) — не повторяем, один ряд',{skip:!has('k05')||!has('k16')},()=>{
+  const ref=load('k05','m02'),{module:m}=moduleFromEtalon(ref);
+  assert.ok(m.width<250);
+  assert.equal(parts(m).filter(p=>p.id.startsWith('leg:')).length,4);
+  const c=compareModule(ref,m);
+  assert.ok(c.pass,why(c));
+  const {module:n}=moduleFromEtalon(load('k16','m07'));
+  const legs=parts(n).filter(p=>p.id.startsWith('leg:'));
+  assert.equal(legs.length,2,'один ряд по центру — без пересечения опор');
+  const pal=kitchenBase(initialModule(),200);
+  assert.equal(parts(pal).filter(p=>p.id.startsWith('leg:')).length,2,'палитра 200 — один ряд');
+});
+
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{
   const m=kitchenBase(initialModule(),600);
   assert.ok(hingeIds(m).length>0,'петли есть');

@@ -30,6 +30,7 @@ export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thicknes
 export const KITCHEN = {
   legs: 100,            // «Опора кухонная регулируемая H100-120, чёрная» — 1 197 шт. в базе; дно на высоте 100
   legInset: 70,         // опоры в 70 мм от краёв дна по ширине и глубине (340 из 1 196 — самый частый вариант)
+  legPad: 58,           // площадка опоры (сетка Базиса ±29): ряды опор ближе 58 мм пересекаются
   clipReach: 29,        // клипса цоколя выступает от оси опоры к цоколю на 29 (сетка «Клипса для ПВХ цоколя»: X −10,9..+29 к цоколю)
   plinthHeight: 95,     // цоколь ЛДСП 16, на 5 мм ниже дна
   baseBody: 720,        // нижний корпус без опор (15 модулей; 740–840 — под клиента)
@@ -50,6 +51,7 @@ export const KITCHEN = {
   faceGapBetween: 3,    // зазор между фасадами 3
   backGap: 1.5,         // накладной ХДФ низа (W−3)×(H−3)
   groove: { inset: 16, width: 4, depth: 8, clear: 1 }, // П16-4×8, ХДФ (W−18)×(H−18), заходит на 7
+  deepBottom: 600,      // дно под боковинами глубиной от 600 — 3 конфирмата на сторону (третий посередине): 6 из 6 днищ Базиса, мельче — 2 (128 из 128)
   minWidth: 150, maxWidth: 1200,
   maxHeight: 2900,      // пеналы в Базисе до 2869 (k30 m15), 2850 (k31 m05), 2820 (k27); у шкафов студии лимит RULES.maxH 2500 не меняется
 } as const;
@@ -83,7 +85,10 @@ export const kitchenRole = (m: Module) => m.kitchen?.role;
 export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }[] {
   const w = m.width, d = m.depth, a = KITCHEN.legInset, L = m.kitchen?.legs;
   // отступ от торцов (side) — относительный, переживает изменение ширины; xs — абсолютные позиции нестандартной раскладки
-  const s = L?.side ?? a, xs = L?.xs ?? (w < 250 ? [w / 2] : w > 1300 ? [s, w / 2, w - s] : [s, w - s]);
+  // узкий (< 250) — один ряд по центру, если отступ от торцов не задан явно (Базис k05 m02: 200 мм, ряды в 70 от торцов) или ряды
+  // легли бы внахлёст (площадка опоры 58: Базис k16 m07 — 150 мм, опоры на 70 и 80 пересекаются; студия так не ставит)
+  const s = L?.side ?? a, narrow = w < 250 && (L?.side === undefined || w - 2 * s < KITCHEN.legPad);
+  const xs = L?.xs ?? (narrow ? [w / 2] : w > 1300 ? [s, w / 2, w - s] : [s, w - s]);
   return xs.flatMap((x) => [{ x, z: L?.back ?? a, front: false }, { x, z: d - (L?.front ?? a), front: true }]);
 }
 
