@@ -96,3 +96,18 @@ test('короб Firmax без направляющих в проекте Баз
   const lines=estimate(newProject({...m,bazis:true} as typeof m)).lines;
   assert.ok(!lines.some(l=>/^firmax/.test(l.id)),JSON.stringify(lines.map(l=>l.id)));
 });
+
+test('релинг Axis PRO (k05 m04/m06, k08 m05): сетки Базиса, саморезы и присадка в заднюю стенку и фасад, строка сметы — PASS, без пересечений',{skip:!has('k05')||!has('k08')},()=>{
+  for(const [k,key,n] of [['k05','m04',1],['k05','m06',2],['k08','m05',1]] as const){
+    const {m,ok,c}=pass(k,key);
+    assert.ok(ok,k+key+' '+JSON.stringify(c.hardware.filter(h=>h.ref!==h.studio)));
+    assert.equal(m.kdrawers!.filter(d=>isAxis(d)&&(d as AxisDrawer).rail).length,n);
+    assert.equal(parts(m).filter(p=>/:sys:rail:/.test(p.id)).length,2*n);
+    assert.deepEqual(partCollisions(parts(m),m),[]);
+    const hs=holes(m).filter(h=>/:rail[FB]/.test(h.src));assert.equal(hs.filter(h=>h.d===3.5).length,2*n);assert.equal(hs.filter(h=>h.d===5).length,4*n);
+    const lines=estimate(newProject(m)).lines.filter(l=>l.id.startsWith('axis-rail:'));assert.equal(lines.reduce((s,l)=>s+l.quantity,0),n);
+    assert.equal((roundTrip(m).kdrawers!.find(d=>isAxis(d)&&(d as AxisDrawer).rail) as AxisDrawer|undefined)?.rail,true);
+  }
+  // без релинга в проекте (k04 m01) — его нет ни в 3D, ни в смете
+  const {m}=pass('k04','m01');assert.ok(!parts(m).some(p=>/:sys:rail:/.test(p.id)));assert.ok(!estimate(newProject(m)).lines.some(l=>l.id.startsWith('axis-rail:')));
+});

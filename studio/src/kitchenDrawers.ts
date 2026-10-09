@@ -129,6 +129,9 @@ export type AxisDrawer = {
   /** Кромка дна ящика как в проекте Базиса (по правилу дно без кромки): true — по кругу (k18, k30), иначе свои торцы
    *  (k05, k29 — задний «-z»; k25 m11 — перед и зад). Та же форма, что у СТАРТ (StartDrawer.edge.bottom). */
   edge?: { bottom?: true | AxisEdgeSide[] };
+  /** Релинг Axis PRO с обеих сторон (Базис: у H-200 с высокой задней стенкой — k05 m04/m06/m07, k08 m05, k25 m05, k29 m05):
+   *  сетка Базиса, 2 самореза 3×3 с наколами D5×4 в заднюю стенку, D3,5×4,5 в фасад. Только как в проекте. */
+  rail?: boolean;
 };
 export type AxisEdgeSide = "+x" | "-x" | "+z" | "-z";
 
@@ -141,6 +144,8 @@ const RUNNER_D5: Record<AxisDrawer["len"], number[]> = { 300: [37, 69, 165, 197]
 const RUNNER_D3: Record<AxisDrawer["len"], number[]> = { 300: [37, 197], 400: [37, 261], 450: [37, 261], 500: [37, 261], 550: [37, 261] };
 /** Саморезы держателя задней стенки (по высоте от его точки): D3×3 + накол D5×1. */
 export const REAR_SCREWS: Record<AxisDrawer["h"], number[]> = { 86: [0, 32], 120: [0, 32, 64], 168: [-13, 51, 115], 200: [19, 83, 147] };
+/** Саморезы релинга Axis PRO в заднюю стенку ящика — от точки релинга по высоте (Базис: +1 и −15). */
+const AXIS_RAIL_SCREWS = [1, -15];
 /** Саморезы держателя задней стенки: как в проекте (только из точек правила), иначе все точки правила. */
 export function axisRearScrews(k: AxisDrawer): number[] { const all = REAR_SCREWS[k.h]; return k.rearScrews ? all.filter((dy) => k.rearScrews!.includes(dy)) : all; }
 /** Держатель фасада AB (H-86, H-120) — 2 самореза в фасад, CD (H-168, H-200) — 4; D3,5×4,5. */
@@ -164,7 +169,11 @@ const M = {
     "white:168": ["2cd91ccf14f7", "8bb977634a44"], "white:200": ["b568b4be44b0", "36895ea7ccb5"], "anthracite:200": ["e92a7d65f086", "9ef861805a9d"] } as Record<string, LR>,
   frontAB: ["62c7f38d07a5", "eb6669539ac7"] as LR, frontCD: ["d523f301821f", "db8cd4e72974"] as LR,
   cap: { white: "b01bfd1a40d6", anthracite: "e05d5e178312" } as Record<string, string>,
+  /** Релинг Axis PRO (белый) у высокой задней стенки H-200 — сетки Базиса [левый, правый] по длине (k05, k08, k25, k29). */
+  railing: { 450: ["39f01cf289d4", "976da790e157"], 500: ["6aaabb22cd6d", "b0a48a0ebf99"], 550: ["1bd5a56bc8fb", "0d9b91663e5c"] } as Record<number, LR>,
 };
+/** Релинг Axis PRO: высота над точкой направляющей — верх задней стенки ящика минус 10,5 (Базис: 7 релингов из 7, разброс 0). */
+export function axisRailY(k: AxisDrawer) { return (k.backH ?? AXIS_BACK[k.h]) - 32.5; }
 /** Versalite Light H45: сетки Базиса [левая, правая] по длине; присадка и шурупы 3,5×16 — по FurnList.Holes (одинаковы во всех
  *  проектах): в боковину корпуса D6×1 и D3×3 от передней кромки короба, в боковину ящика (на 12,7 от корпуса) D3×1,2, D5×1,2, D3×3. */
 const VL: Record<VersaliteLen, { mesh: LR; corp6: number[]; corp3: number[]; box3: number[]; box12: number[]; box5: number[] }> = {
@@ -188,6 +197,9 @@ const Q_RUN: [Quat, Quat] = [[S, 0, S, 0], [S, 0, -S, 0]]; // ось напра�
 const Q_BOX: Quat = [0, 0, 1, 0];                           // царга и держатели: разворот на 180° вокруг Y
 /** Габариты сеток Базиса в их осях [x0,y0,z0,x1,y1,z1] — из GLB (POSITION min/max), для проверки пересечений и посадки. */
 const BBOX: Record<string, number[]> = {
+  // релинг Axis PRO 450/500/550 [левый, правый]
+  "39f01cf289d4": [-52, -24.5, 0, 7.2, 11.6, 446], "976da790e157": [-7.2, -24.5, 0, 52, 11.6, 446], "6aaabb22cd6d": [-52, -24.5, 0, 7.2, 11.6, 496],
+  "b0a48a0ebf99": [-7.2, -24.5, 0, 52, 11.6, 496], "1bd5a56bc8fb": [-52, -24.5, 0, 7.2, 11.6, 546], "0d9b91663e5c": [-7.2, -24.5, 0, 52, 11.6, 546],
   "01b741cf2532": [7.0, -44.0, 0.0, 497.0, 10.0, 37.5],
   "04284d10e0ba": [-497.0, -44.0, 0.0, -7.0, 10.0, 37.5],
   "0ace9d8ac766": [-38.5, -26.0, -0.0, 8.4, 174.5, 493.0],
@@ -805,6 +817,14 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       for (const dz of RUNNER_D3[k.len]) out.push(screw(`${id}:screw:run${lr}:${dz}`, [x, ry, F - dz]));
       for (const dy of axisRearScrews(k)) out.push(screw(`${id}:screw:rear${lr}:${dy}`, [x + d * 53, ry + 11 + dy, F - k.len + 8]));
       if (k.faceScrews) for (const dy of FRONT_SCREWS[k.h]) out.push(screw(`${id}:screw:front${lr}:${dy}`, [x + d * 15.5, ry + 3.5 + dy, F]));
+      // релинг (как в проекте Базиса): точка — у фасада над держателем, саморезы 3×3 — в заднюю стенку ящика (57,5 от боковины, +1 и −15)
+      const railM = k.rail ? M.railing[k.len] : undefined;
+      if (railM) {
+        const yr = ry + axisRailY(k);
+        out.push(metal(`${id}:sys:rail:${lr}`, `Релинг Axis PRO ${k.len} ${side}`, railM[s], [x + d * 15.5, yr, F], Q_BOX));
+        for (const dy of AXIS_RAIL_SCREWS) out.push(screw(`${id}:screw:rail${lr}:${dy}`, [x + d * 57.5, yr + dy, F - k.len + 8]));
+        if (k.faceScrews) out.push(screw(`${id}:screw:railf${lr}`, [x + d * 15.5, yr, F]));
+      }
     }
   });
 }
@@ -905,6 +925,14 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
       // держатель фасада: саморезы D3,5×4,5 в тыльную пласть фасада
       const [fx, fy, fz] = front.model.origin;
       for (const dy of FRONT_SCREWS[k.h]) { push(`${id}:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3.5, 4.5); if (k.faceScrews) push(`${id}:screw:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3, 3); }
+      // релинг (FurnList.Holes Базиса): D3,5×4,5 в фасад; D5×4 + саморез D3×3 в тыльную пласть задней стенки ящика
+      const rl = ps.find((p) => p.id === `${id}:sys:rail:${lr}`);
+      if (rl?.model?.origin) {
+        const [qx, qy, qz] = rl.model.origin, d = lr === "L" ? 1 : -1;
+        push(`${id}:railF${lr}`, [qx, qy, qz], [0, 0, 1], 3.5, 4.5);
+        if (k.faceScrews) push(`${id}:screw:railf${lr}`, [qx, qy, qz], [0, 0, 1], 3, 3);
+        for (const dy of AXIS_RAIL_SCREWS) { push(`${id}:railB${lr}:${dy}`, [x + d * 57.5, qy + dy, F - k.len + 8], [0, 0, 1], 5, 4); push(`${id}:screw:rail${lr}:${dy}`, [x + d * 57.5, qy + dy, F - k.len + 8], [0, 0, 1], 3, 3); }
+      }
     }
   });
 }
@@ -1025,7 +1053,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     const k = k0 as Partial<AxisDrawer>;
     return { system: "axis-pro" as const, y0: Number(k.y0), y1: Number(k.y1), runnerY: Number(k.runnerY), h: Number(k.h) as AxisDrawer["h"], len: Number(k.len) as AxisDrawer["len"],
     ...(k.color === "anthracite" ? { color: "anthracite" as const } : {}), ...(k.backH === undefined ? {} : { backH: Number(k.backH) }), ...(k.faceScrews ? { faceScrews: true } : {}),
-    ...(Array.isArray(k.rearScrews) ? { rearScrews: k.rearScrews.slice(0, 4).map(Number) } : {}),
+    ...(Array.isArray(k.rearScrews) ? { rearScrews: k.rearScrews.slice(0, 4).map(Number) } : {}), ...(k.rail ? { rail: true } : {}),
     ...(k.edge?.bottom === true ? { edge: { bottom: true as const } } : Array.isArray(k.edge?.bottom) ? { edge: { bottom: k.edge!.bottom.filter((s): s is AxisEdgeSide => ["+x", "-x", "+z", "-z"].includes(s)) } } : {}) };
   });
 }

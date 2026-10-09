@@ -6,7 +6,10 @@
 //  - Axis PRO, кромка дна: без кромки (правило) — 27 доньев / 13 модулей; по кругу — 14 (k18, k30); только задний торец — 11 (k05, k29);
 //    перед и зад — 1 (k25 m11).
 import type { Module } from "../../src/model";
-import { isAxis, isFirmax, REAR_SCREWS, FIRMAX, type AxisEdgeSide } from "../../src/kitchenDrawers";
+import { isAxis, isFirmax, axisRailY, REAR_SCREWS, FIRMAX, type AxisEdgeSide } from "../../src/kitchenDrawers";
+
+/** Длины, на которые есть сетки релинга Базиса (kitchenDrawers M.railing). */
+const M_RAIL_LENS: number[] = [450, 500, 550];
 import type { RefModule } from "./compare";
 
 type Edge = { side: string; thick: number };
@@ -63,6 +66,9 @@ export function axisAsBazis(ref: RefModule, m: Module): string[] {
       // свои саморезы — только подмножество точек правила (накол D5×1 у всех точек правила есть всегда)
       if (dys.length && dys.length < rule.length && dys.every((dy) => rule.includes(dy))) { out.rearScrews = [...dys].sort((a, b) => a - b); notes.push(`ящик ${j + 1}: саморезы держателя задней стенки ${out.rearScrews.join(", ")} — как в Базисе`); }
     }
+    // релинг Axis PRO: у фасада над левой направляющей, на верхе задней стенки минус 10,5 (axisRailY)
+    const rail = ref.hardware.find((h) => /Axis PRO Релинг/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[2] - r.pos[2]) < 1 && Math.abs(h.pos[1] - y - axisRailY(k)) < 0.6);
+    if (rail && M_RAIL_LENS.includes(k.len)) { out.rail = true; notes.push(`ящик ${j + 1}: релинг Axis PRO — как в Базисе`); }
     // дно ящика: по высоте runnerY − 22, кромка — как в проекте
     const bot = ref.panels.find((p) => /Дно выдв/.test(p.name) && Math.abs(p.box[1] - (y - 22)) < 0.6);
     const ed = ((bot as unknown as { edges?: Edge[] } | undefined)?.edges ?? []).filter((e) => e.thick > 0).map((e) => e.side as AxisEdgeSide);
