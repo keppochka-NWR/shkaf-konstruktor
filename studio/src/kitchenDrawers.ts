@@ -913,7 +913,7 @@ function screw(id: string, at: [number, number, number]): Part {
 }
 
 /** Присадка ящиков Axis PRO (по FurnList.Holes Базиса). */
-export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number) => void) {
+export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number, probe?: number) => void) {
   if (!m.kdrawers?.length) return;
   m.kdrawers.forEach((k, j) => {
     const id = `kd:${j}`;
@@ -990,13 +990,15 @@ export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at
       for (const dy of REAR_SCREWS[k.h]) { push(`${id}:rear${lr}:${dy}`, [rx, ryy + dy, rz], [0, 0, 1], 5, 1); if (rs.includes(dy)) push(`${id}:screw:rear${lr}:${dy}`, [rx, ryy + dy, rz], [0, 0, 1], 3, 3); }
       // держатель фасада: саморезы D3,5×4,5 в тыльную пласть фасада
       const [fx, fy, fz] = front.model.origin;
-      for (const dy of FRONT_SCREWS[k.h]) { push(`${id}:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3.5, 4.5); if (k.faceScrews) push(`${id}:screw:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3, 3); }
+      // ящик утоплен со своим фасадом (k25 m05: 1,5) — Базис всё равно сверлит фасад в точке держателя: щуп на величину утопания
+      const pr = 0.5 + (k.inner ? 0 : k.front ?? 0);
+      for (const dy of FRONT_SCREWS[k.h]) { push(`${id}:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3.5, 4.5, pr); if (k.faceScrews) push(`${id}:screw:front${lr}:${dy}`, [fx, fy + dy, fz], [0, 0, 1], 3, 3, pr); }
       // релинг (FurnList.Holes Базиса): D3,5×4,5 в фасад; D5×4 + саморез D3×3 в тыльную пласть задней стенки ящика
       const rl = ps.find((p) => p.id === `${id}:sys:rail:${lr}`);
       if (rl?.model?.origin) {
         const [qx, qy, qz] = rl.model.origin, d = lr === "L" ? 1 : -1;
-        push(`${id}:railF${lr}`, [qx, qy, qz], [0, 0, 1], 3.5, 4.5);
-        if (k.faceScrews) push(`${id}:screw:railf${lr}`, [qx, qy, qz], [0, 0, 1], 3, 3);
+        push(`${id}:railF${lr}`, [qx, qy, qz], [0, 0, 1], 3.5, 4.5, pr);
+        if (k.faceScrews) push(`${id}:screw:railf${lr}`, [qx, qy, qz], [0, 0, 1], 3, 3, pr);
         for (const dy of AXIS_RAIL_SCREWS) { push(`${id}:railB${lr}:${dy}`, [x + d * 57.5, qy + dy, F - k.len + 8], [0, 0, 1], 5, 4); push(`${id}:screw:rail${lr}:${dy}`, [x + d * 57.5, qy + dy, F - k.len + 8], [0, 0, 1], 3, 3); }
       }
     }
@@ -1074,7 +1076,7 @@ export function kitchenDrawerErrors(m: Module): string[] {
     if (![k.y0, k.y1, k.runnerY].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) e.push(p + "фасад от 60 мм в пределах высоты модуля.");
     // внутренний ящик: задняя стенка ящика (front + len − 8 от передней кромки) — в пределах корпуса (Базис k25 m05: 6 мм до края боковин);
     // обычный — запас 7, как было
-    if (k.inner ? (k.front ?? 0) + k.len - 8 > m.depth + 0.01 : k.len > m.depth - (k.front ?? 0) - 7) e.push(p + `ящик ${k.len} не входит в глубину корпуса ${m.depth}${k.front ? ` (утоплен на ${k.front})` : ""}.`);
+    if (k.inner || k.front ? (k.front ?? 0) + k.len - 8 > m.depth + 0.01 : k.len > m.depth - 7) e.push(p + `ящик ${k.len} не входит в глубину корпуса ${m.depth}${k.front ? ` (утоплен на ${k.front})` : ""}.`);
     if (k.front !== undefined && (!Number.isFinite(k.front) || k.front < 0 || k.front > 100)) e.push(p + "утопание внутреннего ящика 0–100 мм.");
     if (k.backH !== undefined && (!Number.isFinite(k.backH) || k.backH < 60 || k.backH > 400)) e.push(p + "задняя стенка 60–400 мм.");
     // внутренний ящик (inner) стоит за фасадом ящика ниже — своего фасада нет, пересекаться нечему

@@ -448,13 +448,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       // внутренний ящик (8 модулей базы, k21 m03 и др.): держатели передней панели в точке держателя фасада, направляющая утоплена
       // от передней кромки корпуса (9) — своего фасада нет, стоит за фасадом ящика ниже или за дверью
       const pp = ref.hardware.some((h) => /Держатель ПП/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
-      const front = r1(sideZ1 - r.pos[2]), inner = (pp || axOwners.has(f)) && front > 0.05;
+      const front = r1(sideZ1 - r.pos[2]), inner = pp && front > 0.05;
       if (inner) notes.push(`ящик Axis PRO на ${r1(y)}: внутренний, за фасадом ящика ниже, утоплен на ${front} — как в Базисе`);
       axOwners.add(f);
       for (const q of [inner ? undefined : f, bot, bk]) if (q) drawerPanels.push(q);
       const backH = bk ? r1(bk.b.y1 - bk.b.y0) : undefined;
       const faceScrews = ref.hardware.some((h) => h.name === "3x3" && Math.abs(h.pos[0] - x - 15.5) < 1 && Math.abs(h.pos[1] - y - 3.5) < 1);
-      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}), ...(inner ? { inner: true as const, front } : {}) });
+      kd.push({ system: "axis-pro", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), h: hh, len, ...(anthr ? { color: "anthracite" as const } : {}), ...(backH !== undefined && backH !== AXIS_BACK[hh] ? { backH } : {}), ...(faceScrews ? { faceScrews } : {}), ...(inner ? { inner: true as const, front } : front > 0.05 ? { front } : {}) }); // утоплен — как в Базисе (k25 m05: 1,5)
     }
     if (kd.length) m.kdrawers = kd;
   }

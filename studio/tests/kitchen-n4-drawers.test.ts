@@ -191,8 +191,11 @@ test('Axis PRO внутренний ящик (k21 m03, k25 m05, k29 m03): без
     assert.ok(!validate(m).some(e=>/фасад пересекается/.test(e)),validate(m).join('; '));
     const rt=parseKDrawers(JSON.parse(JSON.stringify(m.kdrawers)))![j] as AxisDrawer;assert.ok(rt.inner&&rt.front===9,'внутренний ящик не теряется при сохранении');
   }
-  // k25 m05: задняя стенка внутреннего ящика в 6 мм от края боковин - в Базисе так, проверка не ругается
-  assert.deepEqual(validate(moduleFromEtalon(load('k25','m05')).module).filter(e=>/глубину/.test(e)),[]);
+  // k25 m05: задняя стенка внутреннего ящика в 6 мм от края боковин - в Базисе так, проверка не ругается;
+  // нижний ящик со своим фасадом утоплен на 1,5 (как в Базисе), присадка держателя фасада - в фасад, как в Базисе
+  const k25=moduleFromEtalon(load('k25','m05')).module;
+  assert.deepEqual(validate(k25).filter(e=>/глубину/.test(e)),[]);
+  assert.equal((k25.kdrawers![0] as AxisDrawer).front,1.5);assert.ok(!(k25.kdrawers![0] as AxisDrawer).inner);
   // k21 m03: ящики 500 в корпусе 447 - ошибка проекта Базиса (короба выходят за задник), проверка её показывает
   assert.ok(validate(moduleFromEtalon(load('k21','m03')).module).some(e=>/не входит в глубину корпуса 447/.test(e)));
 });
