@@ -31,6 +31,7 @@ function rawFromRef(ref: RefModule): RawSpec {
     panels: ref.panels.map((p) => ({ name: (p as { role?: string }).role === "plinth" ? plinthName(p.name) : p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
     counts: rawCounts(ref.hardware),
+    source: "bazis-kitchen", // смета: только то, что есть в Базисе (без заглушек конфирмата и т.п.)
   };
 }
 function place(ref: RefModule, m: Module): PlacedModule {
@@ -64,12 +65,14 @@ for (const f of files) {
   // фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»)
   // цоколь ряда (row.plinths) — «Цоколь · <имя Базиса>»: в раскрое ЛДСП и в смете — цоколем, клипсы — у опор модулей (как в Базисе)
   const rowPanels = (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => ((e.row?.[g] ?? []) as EtPanel[]).map((p) => ({ ...p, ...(g === "plinths" ? { name: plinthName(p.name) } : {}), front: g === "other" && rowFront(p) })))
-    .filter((p) => Array.isArray(p.box))
+    // стены помещения («Бетон», замер) и макеты техники («Пластик») — обстановка модели Базиса, не изделие: в ряд не берём,
+    // иначе смета считала стену 80 мм «столешницей», а пластик холодильника — листом ЛДСП (etalon.py: роль appliance)
+    .filter((p) => Array.isArray(p.box) && p.role !== "appliance")
     .flatMap((p) => { const rs = rowRects(p), nm = (e.row?.worktops ?? []).some((w: EtPanel) => w.box === p.box) && !/столешн/i.test(p.name) ? "Столешница" : p.name; return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${nm} (часть ${i + 1}/${rs.length})` : nm, box, kind: p.kind ?? "ldsp" })); });
   if (rowPanels.length) {
     const o = [0, 1, 2].map((i) => Math.min(...rowPanels.map((p) => p.box[i]))), M = [3, 4, 5].map((i) => Math.max(...rowPanels.map((p) => p.box[i])));
     const m: Module = { ...initialModule(), name: "Ряд: столешница, цоколь, панели", width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0,
-      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), row: true } };
+      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), row: true, source: "bazis-kitchen" } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
   }
   // помещение по габариту кухни

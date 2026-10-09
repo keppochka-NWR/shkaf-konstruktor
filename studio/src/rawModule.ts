@@ -6,7 +6,7 @@ import type { Module, Part } from "./model";
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона). */
-export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][] };
+export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; t?: number; lw?: [number, number] };
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
@@ -52,11 +52,19 @@ export const RAW_FALLBACK_MESH: Record<string, string> = {
   клипса: "0d12888fb9df",
 };
 
+/** Размеры детали [длина, ширина, толщина] по убыванию. Повёрнутая не по осям панель Базиса (угловая дверь под 45°) — по её
+ *  собственным длине/ширине/толщине (t, lw эталона): габарит такой двери 947×261×261 — не «столешница 261 мм». */
+export function rawDims(p: RawPanel): [number, number, number] {
+  if (p.t && p.lw && p.lw.every((v) => v > 0)) return [Math.max(...p.lw), Math.min(...p.lw), p.t];
+  const s = [p.box[3] - p.box[0], p.box[4] - p.box[1], p.box[5] - p.box[2]].sort((a, b) => b - a);
+  return [s[0], s[1], s[2]];
+}
+
 export function rawParts(m: Module): Part[] {
   const r = m.raw!, out: Part[] = [];
   r.panels.forEach((p, i) => {
     const [x0, y0, z0, x1, y1, z1] = p.box, size: [number, number, number] = [x1 - x0, y1 - y0, z1 - z0];
-    const dims = [...size].sort((a, b) => b - a), thin = size.indexOf(Math.min(...size));
+    const dims = rawDims(p), thin = size.indexOf(Math.min(...size));
     const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
     // Столешница (толщина ≥ 26) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
     // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов.
@@ -64,7 +72,7 @@ export function rawParts(m: Module): Part[] {
     out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
-      grainAxis: (size.indexOf(dims[0]) === thin ? 1 : size.indexOf(dims[0])) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
+      grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
   });
   r.hardware.forEach((h, i) => {
     const mesh = h.mesh ?? RAW_FALLBACK_MESH[h.category];
@@ -88,7 +96,8 @@ export function parseRaw(x: unknown): RawSpec | undefined {
   if (!r || typeof r !== "object" || !Array.isArray(r.panels)) return undefined;
   return {
     panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}),
-      ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}) })),
+      ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}),
+      ...(Number(p.t) > 0 && Array.isArray(p.lw) && p.lw.length === 2 && p.lw.every((v) => Number(v) > 0) ? { t: Number(p.t), lw: [Number(p.lw[0]), Number(p.lw[1])] as [number, number] } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"] })),
     ...(r.source ? { source: String(r.source) } : {}),
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),

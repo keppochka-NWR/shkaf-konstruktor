@@ -70,11 +70,44 @@ test('«Ряд»: столешница 38 мм — строка worktop (пог.
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'ряд — не корпус');
   assert.equal(nest(p).length,0);
   assert.equal(e.lines.find(l=>l.id==='worktop-cut:sink'),undefined,'нет мойки — нет выреза');
-  // k25: НММойка и НМВарка — вырезы под мойку и варку в столешнице ряда
+  // k25: НММойка и НМВарка — в столешнице Базиса вырезов нет; студия их не придумывает по именам модулей (как в Базисе)
   const sink={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НММойка'},hob={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НМВарка'};
   const e2=estimate(project(rawModule(raw,2600,900,910),sink,hob));
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink')?.quantity,1);
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob')?.quantity,1);
+  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink'),undefined);
+  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob'),undefined);
+});
+
+test('кухня из Базиса: в смете нет того, чего нет в Базисе — заглушек конфирмата, подсветки по пазу; шкафы как раньше',()=>{
+  const kr:RawSpec={source:'bazis-kitchen',panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[],counts:{confirmats:12}};
+  const ek=estimate(project(rawModule(kr)));
+  assert.equal(ek.lines.find(l=>l.id==='confirmat-7x50')?.quantity,12);
+  assert.equal(ek.lines.find(l=>l.id==='confirmat-cap'),undefined,'в Базисе заглушек конфирмата нет');
+  // сырой шкаф из корпуса Базиса — заглушки как раньше
+  const wr:RawSpec={source:'bazis-corpus',panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[],counts:{confirmats:12}};
+  assert.equal(estimate(project(rawModule(wr))).lines.find(l=>l.id==='confirmat-cap')?.quantity,12);
+  // параметрический кухонный корпус — без заглушек; обычный шкаф — с заглушками
+  const k=kitchenWall(initialModule(),800);
+  assert.equal(estimate(project(k)).lines.find(l=>l.id==='confirmat-cap'),undefined);
+  assert.ok((estimate(newProject()).lines.find(l=>l.id==='confirmat-cap')?.quantity??0)>0);
+  // паз под подсветку Базиса в кухонном корпусе — без строки «Подсветка врезная»
+  const kg={...k,grooves:[{host:'left',face:'+' as const,along:[16,16] as [number,number],across:[100,117] as [number,number],depth:8,name:'паз под подсветку'}]};
+  assert.ok(parts(kg).some(p=>p.role==='light'),'паз есть в деталях');
+  assert.equal(estimate(project(kg)).lines.find(l=>l.id==='light-stand'),undefined);
+});
+
+test('повёрнутая панель Базиса (угловая дверь под 45°): толщина и размеры свои, не «столешница 275 мм»',()=>{
+  // эталон: Дверь ЛДСП 16, lw 765×372, габарит 765×276×275
+  const ex=panelExtras({name:'Дверь',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,100,300,276,865,575],thick:16,lw:[765,372]});
+  assert.deepEqual(ex,{t:16,lw:[765,372]});
+  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП',box:[0,0,0,16,720,560],thick:16,lw:[720,560]}),{},'панель по осям — без t/lw');
+  const raw:RawSpec={source:'bazis-kitchen',panels:[{name:'Дверь',kind:'ldsp',box:[0,100,300,276,865,575],facade:true,...ex}],hardware:[]};
+  const d=rawParts(rawModule(raw))[0];
+  assert.equal(d.thickness,16);assert.equal(d.length,765);assert.equal(d.width,372);assert.ok(!d.external,'ЛДСП-дверь — в раскрой');
+  const e=estimate(project(rawModule(raw)));
+  assert.ok(!e.lines.some(l=>l.id.startsWith('worktop')),'не столешница');
+  // фасадный материал под 45° — площадь по своим размерам
+  const fm:RawSpec={source:'bazis-kitchen',panels:[{name:'Дверь',kind:'other',fm:true,facade:true,box:[0,100,300,261,1047,561],t:16,lw:[947,369]}],hardware:[]};
+  assert.ok(Math.abs((estimate(project(rawModule(fm))).lines.find(l=>l.id==='facade-external')?.quantity??0)-0.947*0.369)<0.001);
 });
 
 test('дробная толщина Базиса (16.0999999) — целые мм, без отдельного листа 16.1',()=>{

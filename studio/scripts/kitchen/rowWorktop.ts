@@ -1,7 +1,7 @@
 // Детали «Ряда» и сырых модулей из эталона Базиса: фигурная панель (столешница с контуром в плоскости xz) → прямоугольники
 // по контуру вместо сплошного габарита (k25: Г/П-образная столешница 4470×1250 выступала на 650 мм перед нижними модулями
 // и заходила в пенал), фасадный материал и кромка Базиса.
-export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string; role?: string };
+export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string; role?: string; thick?: number; lw?: number[] };
 type Box = [number, number, number, number, number, number];
 
 /** Прямолинейный контур в плоскости xz → прямоугольники (полосы по x, соседние с одинаковыми интервалами по z склеены).
@@ -48,7 +48,11 @@ export function plinthName(name: string): string {
 }
 
 /** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][] } {
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; t?: number; lw?: [number, number] } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
-  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}) };
+  // панель не по осям (угловая дверь под 45°): габарит не равен толщине — собственные толщина и длина×ширина Базиса
+  const b = p.box, minBox = Array.isArray(b) && b.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : NaN;
+  const rot = Number(p.thick) > 0 && Array.isArray(p.lw) && p.lw.length === 2 && Math.abs(minBox - Number(p.thick)) > 1;
+  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}),
+    ...(rot ? { t: Math.round(Number(p.thick) * 10) / 10, lw: [Math.round(p.lw![0] * 10) / 10, Math.round(p.lw![1] * 10) / 10] as [number, number] } : {}) };
 }
