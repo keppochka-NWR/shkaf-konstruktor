@@ -19,7 +19,7 @@ import { xf, compose, chainXf, panelBox, panelXf, panelObb, isAxisAligned, conto
 import { packRows, splitWide } from "./pack";
 import { profileSection, snapToHolders } from "./profiles";
 import { panelExtras } from "../kitchen/rowWorktop";
-import { maskPhones } from "./files";
+import { maskPersonal } from "./files";
 type CProf = { name: string; length: number; width?: number; trans: Trans; chain?: Trans[] };
 type CAsm = { name: string; trans?: Trans; panels?: (CPanel & { contour?: CElem[] })[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[]; profiles?: CProf[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
@@ -33,7 +33,7 @@ type WPanel = { name: string; kind: string; box: number[]; facade: boolean; cont
 type WHw = { name: string; category: string; mesh: string; pos: number[]; quat: [number, number, number, number]; bbox?: number[] };
 /** Профиль Базиса (штанга, рельс, цоколь…): сечение — только если однозначно следует из имени (./profiles), иначе в список «не нарисованы». */
 type WProf = { name: string; len: number; pos: number[]; dir: [number, number, number]; d: number };
-const STATS = { figure: 0, figureDrawn: 0, figureSkipped: 0, figureHoles: 0, skew: 0, skewObb: 0, skewAabb: 0, profiles: 0, profilesDrawn: 0, profilesSkipped: new Map<string, number>() };
+const STATS = { figure: 0, figureDrawn: 0, figureSkipped: 0, figureHoles: 0, skew: 0, skewObb: 0, skewAabb: 0, profiles: 0, profilesDrawn: 0, profilesSkipped: new Map<string, number>(), quatChecked: 0, quatBad: 0, quatBadNames: new Map<string, number>() };
 // фурнитура: имя Базиса -> сетка библиотеки (hardware-lib/manifest.json), показываем только видимую (без крепежа)
 const LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib", PUB = "public/models/hardware/bazis";
 const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль", "штанга", "штангодержатель"]);
@@ -59,7 +59,9 @@ function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean, hw: WHw
     const kind = matKind(p.mat);
     // mat — материал Базиса: по нему (а не по толщине) студия узнаёт столешницу и элементы помещения (стена, пол);
     // «Фасадный мат-л» — fm, как у кухонь: изделие поставщика фасадов, не раскрой ЛДСП (rowWorktop.panelExtras)
-    const { fm, mat } = panelExtras({ name: p.name, mat: p.mat, box });
+    // mat — у ВСЕХ деталей (как в n3-wardrobes2): после слияния panelExtras отдаёт mat только плите МДФ / «прочему» с переданным kind,
+    // а без kind — никому; без материала шкафы теряли «Стена»/«Пол»/«Бетон» (помещение), «Столешница» и плиту МДФ (n4-wardrobes)
+    const { fm } = panelExtras({ name: p.name, mat: p.mat, box }), mat = p.mat ? String(p.mat).trim().slice(0, 60) : "";
     const w: WPanel = { name: (p.name || "деталь").slice(0, 60), kind, box, facade: kind !== "hdf" && (fc || FACADE_RX.test(p.name || "")), ...(mat ? { mat } : {}), ...(fm ? { fm } : {}) };
     const W = panelXf(p, me);
     // повёрнутая не на 90° — ориентированный короб (rotY/rotZ студии); если поворот так не выражается — габарит и пометка
@@ -96,8 +98,13 @@ function collect(a: CAsm, parent: Xf, out: WPanel[], facadeCtx: boolean, hw: WHw
     const lib = byName.get(dr.name); if (!lib || !SHOW.has(lib.category)) continue;
     const w = chainXf(me, dr.chain);
     if (!w.t.every(Number.isFinite)) continue;
-    const bb = manifest[lib.mesh]?.bbox as number[] | undefined;
-    hw.push({ name: dr.name.slice(0, 80), category: lib.category, mesh: lib.mesh, pos: w.t, quat: mat2q(w.R), ...(Array.isArray(bb) && bb.length === 6 ? { bbox: bb.map(r1) } : {}) });
+    const bb = manifest[lib.mesh]?.bbox as number[] | undefined, quat = mat2q(w.R);
+    // сверка поворота со своей матрицей Базиса у ВСЕЙ фурнитуры: кватернион сцены (qmat) должен дать ту же матрицу; зеркальная
+    // матрица (det < 0) кватернионом не выражается — такая деталь встала бы повёрнутой не так, как в Базисе (n4-wardrobes)
+    const back = qmat(quat), dq = Math.max(...back.map((v, i) => Math.abs(v - w.R[i])));
+    STATS.quatChecked++;
+    if (dq > 1e-3) { STATS.quatBad++; STATS.quatBadNames.set(dr.name, (STATS.quatBadNames.get(dr.name) ?? 0) + 1); }
+    hw.push({ name: dr.name.slice(0, 80), category: lib.category, mesh: lib.mesh, pos: w.t, quat, ...(Array.isArray(bb) && bb.length === 6 ? { bbox: bb.map(r1) } : {}) });
   }
   for (const s of a.subs ?? []) collect(s, me, out, fc, hw, prof);
 }
@@ -112,7 +119,7 @@ const index: { id: string; title: string; modules: number; panels: number; hardw
 picked.forEach((row, n) => {
   const wid = String(n + 1).padStart(3, "0");
   const parts = row.path.split(/[\\/]/), file = parts[parts.length - 1].replace(/\.b3d$/i, ""), folder = parts[parts.length - 2] ?? "";
-  const title = maskPhones(`${folder} · ${file}`).slice(0, 80);
+  const title = maskPersonal(`${folder} · ${file}`).slice(0, 80);
   try {
     const doc = JSON.parse(readFileSync(row.json, "utf8")) as { assemblies?: CAsm[] };
     const top = doc.assemblies ?? [];
@@ -155,7 +162,7 @@ picked.forEach((row, n) => {
       hwCount += hardware.length;
       const profiles = profOf[gi].map((q) => ({ name: q.name, len: r1(q.len), d: q.d, pos: q.pos.map((v, i) => r1(v - o[i])) as [number, number, number], dir: q.dir }));
       const raw: RawSpec = { panels, hardware, source: "bazis-corpus", ...(profiles.length ? { profiles } : {}) };
-      const m: Module = { ...initialModule(), name: maskPhones(g.name).slice(0, 60), width: Math.max(1, r1(e[0] - o[0])), height: Math.max(1, r1(e[1] - o[1])), depth: Math.max(1, r1(e[2] - o[2])), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, raw };
+      const m: Module = { ...initialModule(), name: maskPersonal(g.name).slice(0, 60), width: Math.max(1, r1(e[0] - o[0])), height: Math.max(1, r1(e[1] - o[1])), depth: Math.max(1, r1(e[2] - o[2])), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, raw };
       return { id: id(), x: r1(o[0] - g0[0] + M), y: r1(o[1] - g0[1]), z: r1(o[2] - g0[2] + M), rotation: 0, module: m };
     });
     const p = newProject({ ...initialModule(), sections: [section()] });
@@ -189,4 +196,6 @@ console.log(`сетки фурнитуры: нужно ${meshes.size}, скоп�
 console.log(`фигурных деталей ${STATS.figure}: по контуру ${STATS.figureDrawn}, габаритом ${STATS.figureSkipped}, с внутренними вырезами (не нарисованы) ${STATS.figureHoles}; повёрнутых не на 90° ${STATS.skew}: коробом по повороту ${STATS.skewObb}, габаритом ${STATS.skewAabb}`);
 console.log(`профилей ${STATS.profiles}: нарисовано ${STATS.profilesDrawn}, не нарисовано ${STATS.profiles - STATS.profilesDrawn}`);
 for (const [n, c] of [...STATS.profilesSkipped].sort((a, b) => b[1] - a[1])) console.log(`  не нарисован: ${c} × ${n}`);
+console.log(`поворот фурнитуры против матрицы Базиса: сверено ${STATS.quatChecked}, расходится ${STATS.quatBad}`);
+for (const [n, c] of [...STATS.quatBadNames].sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`  поворот ≠ Базису: ${c} × ${n}`);
 console.log(`готово: ${index.length} проектов, с ошибками ${bad}; модулей ${index.reduce((s, x) => s + x.modules, 0)}, панелей ${index.reduce((s, x) => s + x.panels, 0)}`);

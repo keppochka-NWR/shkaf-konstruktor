@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {xf,compose,panelBox,contourLoop,contourLoops,isRectLoop,ryRz,panelObb,planeContour,panelXf,qmat,mul,type Trans,type CPanel,type CElem} from '../scripts/wardrobe/xform';
-import {isWardrobeImportFile,maskPhones} from '../scripts/wardrobe/files';
+import {isWardrobeImportFile,maskPhones,maskNames,maskPersonal} from '../scripts/wardrobe/files';
 import {packRows,splitWide} from '../scripts/wardrobe/pack';
 import {profileSection,snapToHolders} from '../scripts/wardrobe/profiles';
 import {initialModule,section,id,parts,type Module} from '../src/model';
 import {rawParts,parseRaw,rodCylinder,type RawSpec} from '../src/rawModule';
 import {rawCheck,RAW_JOINT} from '../src/collisions';
-import {collisionWarnings} from '../src/roomWarnings';
+import {collisionWarnings,bazisHostNotes} from '../src/roomWarnings';
 import {newProject} from '../src/project';
 
 const rawM=(raw:RawSpec,w=1000,h=2000,d=600):Module=>({...initialModule(),name:'Шкаф из базы',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Белый',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw});
@@ -135,7 +135,10 @@ test('пересечения сырого модуля: политика без 
   assert.equal(collisionWarnings(project(near)).length,0);
   const air=rawM({...raw,hardware:[{name:'Петля',category:'петля',mesh:'x',pos:[500,1500,300],quat:[1,0,0,0]}]});
   assert.deepEqual(rawCheck(parts(air),air).far.map(x=>x.gap),[293]);
-  assert.match(collisionWarnings(project(air))[0]?.message??'',/висит в воздухе/);
+  // детали-хозяина нет в модели Базиса — не пересечение (n4-wardrobes): не в «Пересечениях», а в сведениях «как в Базисе»
+  assert.equal(collisionWarnings(project(air)).length,0);
+  assert.match(bazisHostNotes(project(air))[0]?.message??'',/без детали в модели Базиса/);
+  assert.equal(bazisHostNotes(project(m)).length,0);
   // опора серединой в полке 16 мм — внутри детали; объёмный габарит (повёрнутая дверь углового, 262 мм) — не материал, не тревога
   const deep=rawM({...raw,hardware:[{name:'Опора',category:'опора',mesh:'x',pos:[500,1008,300],quat:[1,0,0,0]}]});
   assert.equal(rawCheck(parts(deep),deep).deep.length,1);
@@ -182,6 +185,45 @@ test('импорт: телефоны в названиях сборок Бази
   assert.equal(maskPhones('Прихожая +7(900)0000000'),'Прихожая тел. скрыт');
   assert.equal(maskPhones('Шкаф 2400 1200 600'),'Шкаф 2400 1200 600');
   assert.equal(maskPhones('Модуль 800 2000 450'),'Модуль 800 2000 450');
+});
+
+test('импорт: имена и фамилии в названиях маскируются словарём мебели, номера и слова мебели остаются',()=>{
+  // вымышленные имена — не клиенты цеха
+  assert.equal(maskNames('1234 Клиентова рекламация · Переделка рекламация'),'1234 … рекламация · Переделка рекламация');
+  assert.equal(maskPersonal('ТЗ · Тестимир, 8 900 000-00-00 шкаф купе после замера'),'ТЗ · …, тел. скрыт шкаф купе после замера');
+  assert.equal(maskNames('0556 Ё Сервис 3887362 · Шкаф 2'),'0556 Ё Сервис 3887362 · Шкаф 2');
+  assert.equal(maskNames('Тумба в ванную, прихожая, стол письменный'),'Тумба в ванную, прихожая, стол письменный');
+  // основы, с которых начинаются фамилии: слово мебели остаётся, фамилия с той же основой — нет
+  assert.equal(maskNames('стол Столяров'),'стол …');
+  assert.equal(maskNames('блок Блохина труба Трубин'),'блок … труба …');
+  // соседние маски склеиваются; инициалы (одна буква) остаются
+  assert.equal(maskNames('Тестов Тестович М.А · Модель4'),'… М.А · Модель4');
+});
+
+test('сырой шкаф: материал Базиса у всех деталей, плита МДФ — своим материалом в раскрое, не Lamarty «Белый»',()=>{
+  const raw:RawSpec={source:'bazis-corpus',panels:[
+    {name:'Дверь',kind:'mdf',box:[0,0,600,500,2000,618],facade:true,mat:'Плита Evogloss 18мм'},
+    {name:'Стойка',kind:'ldsp',box:[0,0,0,16,2000,600],mat:'ЛДСП Lamarty Белый 16мм'},
+    {name:'Стена',kind:'other',box:[0,0,-100,1000,2000,-1],mat:'Стена'},
+  ],hardware:[]};
+  const ps=rawParts(rawM(raw));
+  assert.equal(ps[0].decor,'Плита Evogloss 18мм');
+  assert.equal(ps[1].decor,'Белый');
+  assert.ok(ps[2].external,'стена помещения из модели Базиса — не в раскрой');
+});
+
+test('поворот фурнитуры шкафов — кватернион Базиса (статистика по базе): штангодержатель на стойке телом наружу, не в стойку',()=>{
+  // фланец D25 на правой грани стойки x 966..982, сетка Базиса: локальная z 0..16 — толщина фланца от грани крепления.
+  // В Базисе у левого фланца q = поворот +90° вокруг Y: тело уходит в +X, из стойки к штанге. Сопряжённый кватернион развернул бы
+  // тело в стойку — по 271 шкафу так было бы у 286 из 416 держателей, по кватерниону Базиса — у 1 (186, так в самом проекте).
+  const s=Math.SQRT1_2,near=(a:number[],b:number[])=>a.forEach((v,i)=>assert.ok(Math.abs(v-b[i])<1e-6,`[${i}] ${v} != ${b[i]}`));
+  const stand={name:'Стойка',kind:'ldsp',box:[966,0,0,982,2000,460] as [number,number,number,number,number,number]};
+  const ok=rawM({panels:[stand],hardware:[{name:'Фланец D25 мм',category:'штангодержатель',mesh:'x',pos:[982,1742,230],quat:[s,0,s,0],bbox:[-26,-26,0,26,26,16]}]},2000);
+  assert.equal(rawCheck(parts(ok),ok).deep.length,0);
+  const turned=rawM({panels:[stand],hardware:[{name:'Фланец D25 мм',category:'штангодержатель',mesh:'x',pos:[982,1742,230],quat:[s,0,-s,0],bbox:[-26,-26,0,26,26,16]}]},2000);
+  assert.deepEqual(rawCheck(parts(turned),turned).deep.map(x=>x.gap),[-8]);
+  // кватернион из матрицы Базиса и обратно (импорт mat2q ↔ сцена qmat) — тот же поворот
+  near(qmat([s,0,s,0]),[0,0,1,0,1,0,-1,0,0]);
 });
 
 const T=(x:number,y:number,z:number,q:[number,number,number,number]=[1,0,0,0]):Trans=>({x,y,z,q});

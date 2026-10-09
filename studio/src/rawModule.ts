@@ -208,7 +208,9 @@ export function rawParts(m: Module): Part[] {
     const own = kitchenRaw && rawOwnMaterial(p), room = rawIsRoom(p) || rawIsNonBoard(p);
     out.push({ id: `raw:p${i}`, name: p.name + (rawIsRoom(p) ? " · помещение (не мебель)" : long && !worktop && !p.fm && !wall && !own && !room ? " · больше листа — сращивание" : ""), ...(worktop || long || p.fm || wall || flat || own || room ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: p.thick ?? rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
-      role: p.facade ? "door" : "body", material, decor: p.decor ?? (kitchenRaw && p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
+      // плита МДФ Базиса — своим материалом и в сыром шкафу (092, 135, 177–180, 224: «Плита Evogloss 18мм», «МДФ 19мм Эмаль…»), а не лист
+      // Lamarty «Белый» декора корпуса/фасадов студии (n4-wardrobes)
+      role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
     // повёрнутая не на 90° деталь Базиса — ориентированный короб вокруг центра габарита
     if (p.obb) { const q = out[out.length - 1]; if (p.obb.ry) q.rotY = p.obb.ry; if (p.obb.rz) q.rotZ = p.obb.rz; }
