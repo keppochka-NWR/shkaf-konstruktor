@@ -31,7 +31,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** false — у петель нет наколок D3×3 под планку, только чашка Ø35 (89 из 261 модулей Базиса с петлями). */
   plateHoles?: false;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2). */
-  faceTop?: number; faceBottom?: number };
+  faceTop?: number; faceBottom?: number;
+  /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 из 110 набивных задников Базиса; k32 m06: 2 и 4 при 1,5). */
+  backGaps?: { bottom: number; top: number } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 

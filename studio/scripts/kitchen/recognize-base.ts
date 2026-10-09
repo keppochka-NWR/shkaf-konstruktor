@@ -39,6 +39,8 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
     if (fg.bottom !== undefined) k.faceBottom = fg.bottom;
     notes.push(`зазор фасадов сверху/снизу ${fg.top ?? m.faceGap}/${fg.bottom ?? m.faceGap} (сбоку ${m.faceGap}) — как в Базисе`);
   }
+  const bgs = m.backType === "nailed" ? backGapsTB(ref, m.backGap ?? 0) : undefined;
+  if (bgs) { k.backGaps = bgs; notes.push(`ХДФ: зазор снизу ${bgs.bottom}, сверху ${bgs.top} (сбоку ${m.backGap}) — как в Базисе`); }
   const fe = frontEdge(ref);
   if (fe && m.edgeScheme?.t) { m.edgeScheme = { ...m.edgeScheme, t: fe.other, front: fe.front }; notes.push(`передние торцы корпуса — кромка ${fe.front}, остальные ${fe.other} — как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
@@ -89,6 +91,19 @@ export function faceGapsTB(ref: RefModule, side: number): { top?: number; bottom
   if (Math.abs(t - side) > 0.05) out.top = t;
   if (Math.abs(b - side) > 0.05) out.bottom = b;
   return out.top !== undefined || out.bottom !== undefined ? out : undefined;
+}
+
+/** Накладной ХДФ (за задней кромкой боковин): зазоры от низа корпуса и от верха боковин, если хоть один отличается от бокового. */
+export function backGapsTB(ref: RefModule, side: number): { bottom: number; top: number } | undefined {
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const sides = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200);
+  if (sides.length < 2) return undefined;
+  const z0 = Math.min(...sides.map((p) => p.box[2])), top = Math.max(...sides.map((p) => p.box[4]));
+  const hd = ref.panels.filter((p) => p.kind === "hdf").sort((a, b) => (b.box[3] - b.box[0]) * (b.box[4] - b.box[1]) - (a.box[3] - a.box[0]) * (a.box[4] - a.box[1]))[0];
+  if (!hd || hd.box[5] > z0 + 0.5) return undefined;
+  const ylo = Math.min(...ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && (p.axis === "y" || sides.includes(p))).map((p) => p.box[1]));
+  const bottom = r1(hd.box[1] - ylo), tp = r1(top - hd.box[4]);
+  return Math.abs(bottom - side) > 0.05 || Math.abs(tp - side) > 0.05 ? { bottom, top: tp } : undefined;
 }
 
 /** Передний торец боковин кромлен толще остальных (k29 — 7, k27 — 1 из 383 модулей): { front, other } или undefined. */

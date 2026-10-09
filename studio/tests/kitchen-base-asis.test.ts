@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB,backGapsTB} from '../scripts/kitchen/recognize-base';
 import {holes} from '../src/drilling';
 import {edgeByDir} from '../src/edges';
 
@@ -205,6 +205,20 @@ test('зазор фасадов сверху/снизу не как сбоку (
   assert.equal(pal.kitchen?.faceTop,undefined);
   const door=parts(pal).find(p=>p.role==='door')!;
   assert.equal(door.position[1]+door.size[1]/2,pal.height-pal.faceGap!,'палитра — верх фасада по faceGap');
+});
+
+test('накладной ХДФ с зазорами снизу/сверху не как сбоку (k32 m06: 2 и 4 при 1,5) — как в Базисе, PASS; палитра — как была',{skip:!has('k32')},()=>{
+  const ref=load('k32','m06'),{module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.backGaps,{bottom:2,top:4});
+  const b=parts(m).find(p=>p.id==='back')!;
+  assert.deepEqual([b.position[1]-b.size[1]/2,b.position[1]+b.size[1]/2],[2,744]);
+  const c=compareModule(ref,m);
+  assert.ok(c.pass,why(c));
+  assert.equal(backGapsTB(load('k32','m09'),1.5)?.top,2);
+  const pal=kitchenBase(initialModule(),600);
+  assert.equal(pal.kitchen?.backGaps,undefined);
+  const pb=parts(pal).find(p=>p.id==='back')!;
+  assert.equal(pb.position[1]+pb.size[1]/2,pal.height-pal.backGap!,'палитра — по backGap');
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{
