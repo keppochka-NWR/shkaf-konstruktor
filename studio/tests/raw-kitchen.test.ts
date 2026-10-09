@@ -54,6 +54,9 @@ test('смета сырого модуля: фурнитура по Базису
   // ЛДСП корпуса спереди (планка) — декор корпуса, не лист «Слэйт»
   assert.equal(rawParts(rawModule(raw)).find(p=>p.name==='Планка')!.decor,'Белый');
   assert.ok(!plan.some(s=>s.decor==='Слэйт'),'нет листа ЛДСП в декоре фасадов');
+  // стекло Базиса (полка ВМКП 495×4×298) — строка стеклянной полки, м²
+  const eg=estimate(project(rawModule({panels:[{name:'вторая стяжка в навесную',kind:'glass',box:[0,300,0,495,304,298]}],hardware:[]})));
+  assert.equal(eg.lines.find(l=>l.id==='glass-shelf')?.quantity,Math.round(0.495*0.298*1000)/1000);
   // с петлями Базиса — ровно их число
   const e2=estimate(project(rawModule({...raw,counts:{hinges:3}})));
   assert.equal(e2.lines.find(l=>l.id==='hinge')?.quantity,3);

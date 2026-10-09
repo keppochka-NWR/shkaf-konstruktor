@@ -144,7 +144,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         add('worktop-cut:hob','Вырез под варочную панель',nm(/варк/i),'шт',null,'Цена работы не найдена; по модулю «Варка» проекта');
       }
       for(const p of r.panels){
-        if(p.kind==='hdf'||p.kind==='glass'||p.kind==='mirror')continue;
+        // стекло Базиса (полки ВМКП) — как стеклянная полка студии, м²
+        if(p.kind==='glass'){const g=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);add('glass-shelf','Стеклянная полка · обработка и держатели',g[0]*g[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
+        if(p.kind==='hdf'||p.kind==='mirror')continue;
         const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
         if(/столешн/i.test(p.name)||s[2]>=26){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
