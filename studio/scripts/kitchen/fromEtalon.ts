@@ -3,6 +3,7 @@
 // а не подставляются типовые — так модуль студии можно сверить деталь в деталь (compare.ts).
 import { initialModule, section, parts, scaleHingeY, type Module, type Groove, type GolaCut } from "../../src/model";
 import { partAxes } from "../../src/edges";
+import { hingePositions } from "../../src/hardware";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
@@ -72,6 +73,13 @@ export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B)
   return { at, sides: [...sides], ...(d0 ? { dowel: r1(Math.abs(d0.pos[2] - e0.pos[2])) } : {}) };
 }
 
+/** Петли подъёмного фасада (по крыше): позиции от левой кромки фасада, если в проекте не по правилу студии (число и 100 мм от кромок);
+ *  иначе undefined. По антресолям базы: k31 m13 — 114,5 от кромок, k01 — своё число петель. */
+export function liftHingeX(xs: number[], dw: number, dh: number): number[] | undefined {
+  const rule = hingePositions(dw, dh, true);
+  return xs.length && (xs.length !== rule.length || xs.some((x, k) => Math.abs(x - rule[k]) > 0.05)) ? xs : undefined;
+}
+
 /** Дно/крыша между боковинами с кромкой на торцах у боковин (±x) — так в части проектов (k32: кромка по кругу у всех панелей). */
 export function endsEdged(hs: RefPanel[]): boolean {
   const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
@@ -80,11 +88,11 @@ export function endsEdged(hs: RefPanel[]): boolean {
 
 /** Отличия кромки проекта Базиса от схемы студии (kitchenEdges): торцы дна/крыши между боковинами (k32), торцы дна под боковинами
  *  без кромки (k28), задние торцы при набивном ХДФ (k31). Только то, что видно в кромке эталона. */
-export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: RefPanel | undefined, bottomUnder: boolean, backType: Module["backType"]): { ends?: true; underEnds?: false; rear?: true } {
+export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: RefPanel | undefined, bottomUnder: boolean, backType: Module["backType"]): { ends?: true | "bottom" | "top"; underEnds?: false; rear?: true } {
   const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
-  const between = [bottomUnder ? undefined : bottom, top].filter((q): q is RefPanel => !!q);
-  const out: { ends?: true; underEnds?: false; rear?: true } = {};
-  if (endsEdged(between)) out.ends = true;
+  const out: { ends?: true | "bottom" | "top"; underEnds?: false; rear?: true } = {};
+  const eb = !bottomUnder && !!bottom && endsEdged([bottom]), etp = !!top && endsEdged([top]);
+  if (eb || etp) out.ends = eb && etp ? true : eb ? "bottom" : "top";
   if (bottomUnder && bottom && !ed(bottom).includes("+x") && !ed(bottom).includes("-x")) out.underEnds = false;
   if (backType === "nailed" && ed(side).includes("-z")) out.rear = true;
   return out;
@@ -94,6 +102,13 @@ export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: Ref
 export function noEdges(panels: RefPanel[]): boolean {
   const ldsp = panels.filter((p) => p.kind === "ldsp");
   return ldsp.length > 0 && ldsp.every((p) => { const e = (p as unknown as { edges?: { thick: number }[] }).edges; return Array.isArray(e) && !e.some((x) => x.thick > 0); });
+}
+
+/** Глубина D5 конфирмата в торце второй детали: одна на весь модуль и не 35 (по базе: k11 — 37, k31 — 42) — иначе undefined. */
+export function confDepthFromEtalon(ref: RefModule): number | undefined {
+  const ds = new Set((ref.holes ?? []).filter((h) => h.d === 5 && h.src !== null && h.src !== undefined && ref.hardware.find((x) => x.i === h.src)?.category === "конфирмат").map((h) => h.depth));
+  const [d] = [...ds];
+  return ds.size === 1 && d !== 35 ? d : undefined;
 }
 
 /** Крепёж корпуса в проекте Базиса не заложен вовсе (ни конфирматов, ни эксцентриков, ни шкантов, ни отверстий) — студия его не добавляет. */
@@ -286,8 +301,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       // газлифт PD-G-N02 Базиса (шток, газблок, фиксаторы) — комплект на боковину
       if (hw("газлифт").some((h) => /PD-G-N02/.test(h.name))) m.kitchenLift = { system: "pd-g-n02" };
       if (hw("газлифт").some((h) => !/PD-G-N02/.test(h.name))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !/PD-G-N02/.test(h.name))!.name}`);
-      const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = f0.b.x1 - f0.b.x0;
-      if (xs.length !== 2 || Math.abs(xs[0] - 100) > 0.5 || Math.abs(xs[1] - (dw - 100)) > 0.5) notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")}`);
+      const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = r1(f0.b.x1 - f0.b.x0);
+      const hx = liftHingeX(xs, dw, r1(f0.b.y1 - f0.b.y0));
+      if (hx) { m.sections[0].hingeX = hx; m.sections[0].hingeXFor = dw; notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")} — как в проекте`); }
     } else if (perRow === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
@@ -383,6 +399,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note) notes.push(hg.note); }
   }
   if (fastenersAbsent(ref)) { m.kitchen.noFasteners = true; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }
+  const cd = confDepthFromEtalon(ref);
+  if (cd !== undefined) m.kitchen.confDepth = cd;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
   // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
   const g = refGrooves(ref, back ? r1(back.b.z0) : null);

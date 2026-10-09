@@ -5,7 +5,7 @@ import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from 
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 
 // Антресоль 600×400×350 (как Базис k12 «А 1»): дно и крыша между боковинами, ХДФ в паз, навесы ABS.
@@ -115,9 +115,38 @@ test('no edging in the Bazis project at all (k23): studio carcass has no edging 
   assert.ok(parts(initialModule()).some(p=>p.edge.some(x=>x>0)),'wardrobe default edging unchanged');
 });
 
+test('lift-up front hinges at Bazis positions (k31 m13: 114.5 from the edges), rule positions give no override',()=>{
+  assert.equal(liftHingeX([100,497],597,397),undefined,'rule: 100 mm from the edges');
+  assert.deepEqual(liftHingeX([114.5,666.5],781,387),[114.5,666.5]);
+  const m=antresol();m.width=784;m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top'],hingeX:[114.5,666.5],hingeXFor:781}];
+  const ps=parts(m),door=ps.find(p=>p.role==='door'&&p.hinge==='top')!,x0=door.position[0]-door.size[0]/2;
+  const xs=ps.filter(p=>p.id.includes(':hingeplate:')).map(p=>Math.round((p.model!.origin![0]-x0)*10)/10).sort((a,b)=>a-b);
+  assert.deepEqual(xs,[114.5,666.5]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).sections[0].hingeX,[114.5,666.5]);
+});
+
+test('confirmat D5 depth as in the Bazis project (k31: 42), single value only',()=>{
+  const ref=(depths:number[]):RefModule=>({key:'x',name:'x',archetype:'antresol',size:[1,1,1],panels:[],hardware:[{i:0,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,0,0]}],holes:depths.map(depth=>({panel:1,face:'-x',at:[0,0,0],dir:[1,0,0],d:5,depth,src:0}))});
+  assert.equal(confDepthFromEtalon(ref([42,42])),42);
+  assert.equal(confDepthFromEtalon(ref([35,35])),undefined);
+  assert.equal(confDepthFromEtalon(ref([35,42])),undefined,'mixed depths are not one rule');
+  const m=antresol();m.kitchen!.confDepth=42;
+  assert.ok(holes(m).filter(h=>h.src.startsWith('fast:')&&h.d===5).every(h=>h.depth===42));
+  assert.ok(holes(antresol()).filter(h=>h.src.startsWith('fast:')&&h.d===5).every(h=>h.depth===35));
+});
+
+test('edge ends per panel: only the bottom edged at the ends (k31 m13)',()=>{
+  const P=(edges:[string,number][]):RefPanel=>({i:0,name:'',mat:'',thick:16,kind:'ldsp',box:[0,0,0,1,1,1],axis:'y',edges:edges.map(([side,thick])=>({side,thick}))} as unknown as RefPanel);
+  assert.deepEqual(edgeFlags(P([['+z',1]]),P([['+z',1],['-z',1],['+x',1],['-x',1]]),P([['+z',1],['-z',1]]),false,'groove'),{ends:'bottom'});
+  const m=antresol();m.edgeScheme={t:1,ends:'bottom'};
+  const ps=parts(m);
+  assert.equal(ps.find(p=>p.id==='bottom')!.edge.filter(x=>x>0).length,4);
+  assert.equal(ps.find(p=>p.id==='top')!.edge.filter(x=>x>0).length,2);
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
-for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06']] as const)
+for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
     const {module:m}=moduleFromEtalon(ref);

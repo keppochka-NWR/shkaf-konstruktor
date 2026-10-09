@@ -24,6 +24,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Дно под боковинами на эксцентриках (Базис k16, k28, k31; jointFastening bottom:left/right = eccentric): отступы стяжек
    *  от задней и передней кромки дна, мм (у Базиса несимметрично: сзади на 20 больше — за пазом ХДФ). */
   underEcc?: { back: number; front: number };
+  /** Глубина отверстия D5 конфирмата в торце второй детали, как в проекте Базиса (по умолчанию 35; k11 — 37, k31 — 42). */
+  confDepth?: number;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
   legs?: { back: number; front: number; side?: number; xs?: number[] } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
@@ -147,7 +149,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
   if (m.kitchen && t === 0) { for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade")) setEdges(p, [], 0); golaSides(m, out); return; }
   if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
-  const ends = m.edgeScheme?.ends ? ["+x", "-x"] : []; // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32)
+  // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32 — оба, k31 m13 — только дно)
+  const en = m.edgeScheme?.ends, endsB = en === true || en === "bottom" ? ["+x", "-x"] : [], endsT = en === true || en === "top" ? ["+x", "-x"] : [];
   // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
   // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
   const ecc = (id: string) => m.jointFastening?.[`${id}:left`] === "eccentric" || m.jointFastening?.[`${id}:right`] === "eccentric";
@@ -160,8 +163,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     // edgeScheme.rear — задние торцы кромятся и при набивном ХДФ, как в проекте Базиса (k31 m03/m04)
     const rearBase = m.backType === "none" || m.edgeScheme?.rear ? ["-z"] : [];
     if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
-    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", ...(m.edgeScheme?.underEnds === false ? [] : ["+x", "-x"]), ...(wall ? rear : rearBase)] : ["+z", ...rear, ...ends], t);
-    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z", ...ends] : ["+z", ...rear, ...ends], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", ...(m.edgeScheme?.underEnds === false ? [] : ["+x", "-x"]), ...(wall ? rear : rearBase)] : ["+z", ...rear, ...endsB], t);
+    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z", ...endsT] : ["+z", ...rear, ...endsT], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);

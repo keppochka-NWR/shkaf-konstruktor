@@ -125,6 +125,10 @@ export type Section = {
   hingeYUp?: number[];
   /** Высота верхнего фасада, при которой записаны hingeYUp. */
   hingeYUpFor?: number;
+  /** Кухня, подъёмный фасад (doorHinges top): позиции петель от левой кромки фасада, как в проекте Базиса (без поля — 100 мм от кромок). */
+  hingeX?: number[];
+  /** Ширина фасада, при которой записаны hingeX. */
+  hingeXFor?: number;
   hingeSide?: "left" | "right";
   removedDoors?: number[];
   doorGap?: number;
@@ -235,7 +239,7 @@ export type Module = {
   facadeEdge?: number;
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
   /** Кромка кухни: толщина; railBack:false — задняя царга заподлицо с задником без кромки по заднему торцу (18 из 80 нижних в базе). */
-  edgeScheme?: { t: number; railBack?: false; /** дно и крыша между боковинами кромятся и по торцам у боковин (k32: все торцы) */ ends?: true;
+  edgeScheme?: { t: number; railBack?: false; /** дно и/или крыша между боковинами кромятся и по торцам у боковин (k32: обе, k31 m13: дно) */ ends?: true | "bottom" | "top";
     /** дно под боковинами без кромки по торцам (k28 m10–m12) */ underEnds?: false; /** задние торцы кромятся и при набивном ХДФ (k31 m03/m04) */ rear?: true };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
@@ -1140,7 +1144,9 @@ function hardwareParts(m: Module, out: Part[]) {
     if (roof === undefined) continue;
     // Кватернион узла Базиса [w,x,y,z] = [0,−0,71,0,0,71]: X петли → −Z (вглубь от фасада), Y → −Y (вниз от крыши), Z → −X (вдоль кромки).
     const qv: Quat = [0, -Math.SQRT1_2, 0, Math.SQRT1_2];
-    hingePositions(dw, dh, true).forEach((hx, n) => {
+    const sec = m.sections.find((s) => s.id === door.sectionId);
+    // позиции петель по ширине — как в проекте Базиса (hingeX), иначе правило 100 мм от кромок
+    (sec?.hingeX?.length ? scaleHingeY(sec.hingeX, sec.hingeXFor ?? dw, dw) : hingePositions(dw, dh, true)).forEach((hx, n) => {
       const x = cx - dw / 2 + hx, o: [number, number, number] = [x, roof, back];
       const cupId = door.id.replace(":door:", ":hingecup:") + ":" + n, plateId = door.id.replace(":door:", ":hingeplate:") + ":" + n;
       const cupO: [number, number, number] = [x, roof - 7.5, back];
@@ -1614,7 +1620,7 @@ export function parseModule(input: unknown): Module {
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
-    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:boolean}).ends?{ends:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{})}}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:unknown}).ends?{ends:(x.edgeScheme as {ends?:unknown}).ends==='bottom'?'bottom' as const:(x.edgeScheme as {ends?:unknown}).ends==='top'?'top' as const:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{})}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),
@@ -1626,7 +1632,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hangerAt&&Array.isArray(k.hangerAt.left)&&Array.isArray(k.hangerAt.right)?{hangerAt:{left:k.hangerAt.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.right.slice(0,3).map(Number) as [number,number,number],...(k.hangerAt.caps&&Array.isArray(k.hangerAt.caps.left)&&Array.isArray(k.hangerAt.caps.right)?{caps:{left:k.hangerAt.caps.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.caps.right.slice(0,3).map(Number) as [number,number,number]}}:{})}}:{}),...(k.noFasteners?{noFasteners:true}:{}),...(k.underEcc?{underEcc:{back:Number(k.underEcc.back),front:Number(k.underEcc.front)}}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hangerAt&&Array.isArray(k.hangerAt.left)&&Array.isArray(k.hangerAt.right)?{hangerAt:{left:k.hangerAt.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.right.slice(0,3).map(Number) as [number,number,number],...(k.hangerAt.caps&&Array.isArray(k.hangerAt.caps.left)&&Array.isArray(k.hangerAt.caps.right)?{caps:{left:k.hangerAt.caps.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.caps.right.slice(0,3).map(Number) as [number,number,number]}}:{})}}:{}),...(k.noFasteners?{noFasteners:true}:{}),...(k.underEcc?{underEcc:{back:Number(k.underEcc.back),front:Number(k.underEcc.front)}}:{}),...(k.confDepth!==undefined&&Number.isFinite(Number(k.confDepth))?{confDepth:Number(k.confDepth)}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
@@ -1644,6 +1650,8 @@ export function parseModule(input: unknown): Module {
       ...(s.hingeYFor===undefined?{}:{hingeYFor:Number(s.hingeYFor)}),
       ...(s.hingeYUp===undefined?{}:{hingeYUp:Array.isArray(s.hingeYUp)?s.hingeYUp.map(Number).filter(Number.isFinite):[]}),
       ...(s.hingeYUpFor===undefined?{}:{hingeYUpFor:Number(s.hingeYUpFor)}),
+      ...(s.hingeX===undefined?{}:{hingeX:Array.isArray(s.hingeX)?s.hingeX.map(Number).filter(Number.isFinite):[]}),
+      ...(s.hingeXFor===undefined?{}:{hingeXFor:Number(s.hingeXFor)}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),
