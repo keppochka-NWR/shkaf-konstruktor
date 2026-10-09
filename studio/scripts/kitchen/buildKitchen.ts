@@ -113,13 +113,20 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
   // + отверстия-крепёж ряда (k19: два «8x30» в «прочем» ряда) — как у модулей (n4-kitchens3)
   const rowItems = [...bazisItems(rowHw), ...bazisHoles(rowHw)];
   if (rowPanels.length || rowItems.length) {
-    const ps = rowPanels.length ? rowPanels : [];
-    const o = ps.length ? [0, 1, 2].map((i) => Math.min(...ps.map((p) => p.box[i]))) : [0, 0, 0], M = ps.length ? [3, 4, 5].map((i) => Math.max(...ps.map((p) => p.box[i]))) : [10, 10, 10];
-    const look = { decor: most(ps.filter((p) => p.kind === "ldsp").map((p) => bazisDecor((p as unknown as EtPanelRef).decor))) ?? LOOK.decor, facadeDecor: LOOK.facadeDecor };
-    const m: Module = { ...initialModule(), name: rowTitle(ps), width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
-      raw: { panels: ps.map((p) => { const dec = bazisDecor((p as unknown as EtPanelRef).decor); return { name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p), ...(p.front ? { facade: true } : {}), ...(p.wall ? { wall: true } : {}) }; }),
-        hardware: [], counts: rawCounts(normalizeRefHardware(rowHw)), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}), row: true, source: "bazis-kitchen" } };
-    placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
+    // каждая деталь ряда — свой объект (Макс 09.10: тянешь цоколь — ехал весь «Ряд» на всю кухню); части одной фигурной столешницы —
+    // один объект; профили без габарита (в смету по названию и длине) — к первому объекту ряда
+    const groups = new Map<string, typeof rowPanels>();
+    for (const p of rowPanels) { const g = groups.get(p.parent) ?? []; g.push(p); groups.set(p.parent, g); }
+    const sets: (typeof rowPanels)[] = groups.size ? [...groups.values()] : [[]];
+    sets.forEach((ps, gi) => {
+      const o = ps.length ? [0, 1, 2].map((i) => Math.min(...ps.map((p) => p.box[i]))) : [0, 0, 0], M = ps.length ? [3, 4, 5].map((i) => Math.max(...ps.map((p) => p.box[i]))) : [10, 10, 10];
+      const look = { decor: most(ps.filter((p) => p.kind === "ldsp").map((p) => bazisDecor((p as unknown as EtPanelRef).decor))) ?? LOOK.decor, facadeDecor: LOOK.facadeDecor };
+      const first = gi === 0, title = ps.length ? ps[0].name.replace(/ \(часть \d+\/\d+\)$/, "") : rowTitle(ps);
+      const m: Module = { ...initialModule(), name: title, width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
+        raw: { panels: ps.map((p) => { const dec = bazisDecor((p as unknown as EtPanelRef).decor); return { name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p), ...(p.front ? { facade: true } : {}), ...(p.wall ? { wall: true } : {}) }; }),
+          hardware: [], ...(first ? { counts: rawCounts(normalizeRefHardware(rowHw)), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}) } : { counts: rawCounts([]) }), row: true, source: "bazis-kitchen" } };
+      placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
+    });
   }
   // помещение по габариту кухни
   const ext = placed.map((a) => { const rot = a.rotation === 90 || a.rotation === 270; return { x1: a.x + (rot ? a.module.depth : a.module.width), z1: a.z + (rot ? a.module.width : a.module.depth), y1: (a.y ?? 0) + a.module.height }; });

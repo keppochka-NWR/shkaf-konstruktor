@@ -4,7 +4,7 @@
 import { initialModule, section, distribute, validate, id, RULES, type Module } from "./model";
 import { KITCHEN, kitchenBase, kitchenWall, kitchenWorktop } from "./kitchen";
 import { createKitchenRow } from "./ModulePalette";
-import { applyAutoFillers, projectErrors, bounds, overlap, type Project, type PlacedModule } from "./project";
+import { maxModules, applyAutoFillers, projectErrors, bounds, overlap, type Project, type PlacedModule } from "./project";
 
 /** Ключ хранилища вкладки ?order=kitchen (module-studio-v3:kitchen-workspace). */
 export const KITCHEN_WORKSPACE = "kitchen-workspace";
@@ -85,7 +85,7 @@ const top = (list: PlacedModule[]) => list.length ? Math.max(...list.map((a) => 
  *  (тем же путём, что commitProject). Возвращает проект с добавленными модулями (автофальши поставит commitProject) и id добавленных.
  *  Места нет — понятная ошибка: что не встало и что сделать (палитра покажет её у кнопок). */
 function placeAt(p: Project, group: PlacedModule[], xs: number[], what: string): { project: Project; ids: string[] } {
-  if (p.modules.length + group.length > 40) throw Error("В проекте не больше 40 модулей. Удалите лишние или начните новую кухню.");
+  if (p.modules.length + group.length > maxModules(p)) throw Error(`В проекте не больше ${maxModules(p)} модулей. Удалите лишние или начните новую кухню.`);
   const gx = Math.min(...group.map((a) => bounds(a).x)), gw = Math.max(...group.map((a) => { const b = bounds(a); return b.x + b.w; })) - gx;
   // сырые модули Базиса студия не проверяет на пересечение (modulesOverlap) — и здесь их не считаем занятым местом
   const occupied = p.modules.filter((a) => !a.module.raw).map(bounds), room = p.room;
