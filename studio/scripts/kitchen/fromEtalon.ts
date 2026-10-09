@@ -813,6 +813,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (off !== null) m.dowels = { offset: off };
     }
   }
+  // нижние: свои отступы конфирматов дна по сторонам, если в Базисе они не по общему отступу (k28 m17: справа 252/52 при 56) — n4-base
+  else if (role === "base" && m.confirmatInset !== undefined && m.bottomUnder) {
+    const jz = wallJointZ(ref.hardware, [["bottom", bottom]], left, right, m.confirmatInset);
+    if (Object.keys(jz).length) m.kitchen.jointZ = jz;
+  }
   // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
   const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b, right.b);
   if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;

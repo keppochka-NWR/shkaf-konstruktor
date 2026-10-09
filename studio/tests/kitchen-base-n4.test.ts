@@ -79,6 +79,13 @@ test('фальш мойки сохраняется в проекте (parseModul
   assert.ok(validate(w).some(e=>e.startsWith('Ширина')),'шкаф 1480 — ошибка, как раньше');
 });
 
+test('мойка 1480 с фальшем и планкой во всю высоту (k28 m17): два ряда опор, свои отступы конфирматов дна справа — сверка PASS',{skip:!has('k28')},()=>{
+  const r=pass('k28','m17');
+  assert.ok(r.ok,r.info);
+  assert.deepEqual(r.m.kitchen?.legs?.xs,[70,1410]);
+  assert.deepEqual(r.m.kitchen?.jointZ,{'bottom:right':[252,52]});
+});
+
 test('фальш мойки только у кухни из Базиса с kitchen.faceFiller: шкаф студии и кухня палитры без флага — без фальша и петель под фальшпанель',()=>{
   const m=initialModule();
   assert.ok(!parts(m).some(p=>p.id.startsWith('face-filler')||p.name.startsWith('Петля под фальшпанель')));
