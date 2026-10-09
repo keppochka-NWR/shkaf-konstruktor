@@ -36,7 +36,9 @@ const union = (bs: Box[]): Box => [0, 1, 2].map((i) => Math.min(...bs.map((b) =>
 const pen = (A: Box, B: Box) => Math.min(...[0, 1, 2].map((i) => Math.min(A[i + 3], B[i + 3]) - Math.max(A[i], B[i])));
 const isBoard = (q: Part) => q.material === "board" || q.material === "hdf" || q.material === "glass";
 function interModule(p: Project, off: number[] = [0, 0, 0]) {
-  const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu").map((q) => ({ i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
+  // фурнитура сырых модулей (raw:h*) в студии — точка Базиса с условным кубом 10 мм, а не форма изделия; у Базиса фурнитура
+  // в пересечения не входит — сравниваем одинаково (иначе петля/навес/клипса у соседней детали дают «пересечение» 3–5 мм)
+  const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu" && !q.id.startsWith("raw:h")).map((q) => ({ i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
   const out: string[] = [];
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i) continue; const d = pen(A.b, B.b); if (d > 0.5) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
   return out;
@@ -69,9 +71,19 @@ for (const k of keys) {
 
   // 2. детали
   const extra: string[] = [];
-  for (const a of p.modules) for (const q of parts(a.module).filter(isBoard)) {
-    const b = studioBox(a, q).map((v, t) => v - off![t % 3]), hit = bazis.find((z) => !z.used && z.b.every((v, t) => Math.abs(v - b[t]) <= 1.01));
-    if (hit) hit.used = true; else extra.push(`${a.module.name} / ${q.name} ${fmt(b)}`);
+  // фигурная столешница ряда разбита на прямоугольники «(часть i/n)» по контуру Базиса — сверяем их габарит с деталью Базиса
+  const studioBoxes: { name: string; b: Box }[] = [];
+  for (const a of p.modules) {
+    const groups = new Map<string, Box[]>();
+    for (const q of parts(a.module).filter(isBoard)) {
+      const b = studioBox(a, q).map((v, t) => v - off![t % 3]), m = / \(часть \d+\/\d+\)$/.exec(q.name);
+      if (m) { const k = `${a.module.name} / ${q.name.slice(0, m.index)}`; groups.set(k, [...(groups.get(k) ?? []), b]); } else studioBoxes.push({ name: `${a.module.name} / ${q.name}`, b });
+    }
+    for (const [name, bs] of groups) studioBoxes.push({ name: name + " (по контуру)", b: union(bs) });
+  }
+  for (const s of studioBoxes) {
+    const hit = bazis.find((z) => !z.used && z.b.every((v, t) => Math.abs(v - s.b[t]) <= 1.01));
+    if (hit) hit.used = true; else extra.push(`${s.name} ${fmt(s.b)}`);
   }
   const miss = bazis.filter((z) => !z.used).map((z) => `${z.mod} / ${z.name} ${fmt(z.b)}`);
   log(`\n## 2. Детали: лишних в студии ${extra.length}, нет в студии ${miss.length}`);
