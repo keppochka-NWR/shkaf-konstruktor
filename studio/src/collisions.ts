@@ -60,7 +60,7 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     // Газлифт кухни: детали одного комплекта собраны друг с другом (шток в газблоке), фиксатор и саморезы — на своём фасаде
     // и на своей боковине (касание-вдавливание до 4 мм — длина самореза).
     if (p.id.startsWith("lift:") && q.id.startsWith("lift:") && p.id.split(":")[1] === q.id.split(":")[1]) return true;
-    if (p.id.startsWith("lift:") && (q.role === "door" || q.id === p.id.split(":")[1]) && depth <= 4) return true;
+    if (p.id.startsWith("lift:") && ((q.role === "door" && q.hinge === "top" && q.sectionId === p.sectionId) || q.id === p.id.split(":")[1]) && depth <= 4) return true;
     // Подъёмный фасад кухни: планка петли привинчена к нижней плоскости крыши — то же касание до 3 мм.
     if (p.id.includes(":hingeplate:") && p.size[0] > p.size[1] && isBoard(q) && q.role === "body" && q.size[1] <= 40 && q.size[0] > 60 && depth <= 3) return true;
     // Ручка — на своём фасаде (винты через фасад); ручка ящика — на фасаде своего ящика.

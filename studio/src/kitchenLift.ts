@@ -19,7 +19,8 @@ const MESH = {
   rod: { right: "ee29a9ca1bcc", left: "7fec98cf9820", lo: [-8.3, -12, 9.9] as V3, hi: [8.3, 117.5, 26.2] as V3, name: "Шток" },
   block: { right: "0f84fad7cdd0", left: "fb6defba5e8e", lo: [-8.3, -139.5, 9.9] as V3, hi: [8.3, 12, 26.2] as V3, name: "Газблок" },
   face: { right: "6d1bb0395602", left: "f248f3ccf279", lo: [-7.5, -25.5, 0] as V3, hi: [7.5, 25.5, 21] as V3, name: "Фиксатор на фасад" },
-  side: { right: "554528e96219", left: "36e6ccc7f223", lo: [-14.5, -14.5, 0] as V3, hi: [14.5, 14.5, 9.9] as V3, name: "Фиксатор на боковину" },
+  // левый фиксатор на боковину: в эталонах cd44e1c91574 — 18 из 28 (k15/m12 и др.), 36e6ccc7f223 — 10 (k10); геометрия одна (manifest sameGeometry)
+  side: { right: "554528e96219", left: "cd44e1c91574", lo: [-14.5, -14.5, 0] as V3, hi: [14.5, 14.5, 9.9] as V3, name: "Фиксатор на боковину" },
 } as const;
 const Q: Record<"left" | "right", Record<keyof typeof MESH, Quat>> = {
   right: { rod: n4([0.71, 0.02, -0.71, -0.02]), block: n4([0.71, 0.02, -0.71, -0.02]), face: [0, 0, -1, 0], side: [Math.SQRT1_2, 0, -Math.SQRT1_2, 0] },

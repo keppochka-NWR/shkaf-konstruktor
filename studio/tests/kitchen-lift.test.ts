@@ -5,7 +5,7 @@ import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {syncKitchenLift} from '../src/kitchenLift';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 
 // Antresol 600x300x600 with a lift-up front, as in Bazis k10/m03 "A 2": 2 overlay hinges on the roof, gas lift PD-G-N02 on both sides.
 const antresol=(lift=true):Module=>{
@@ -90,4 +90,20 @@ test('gas lift: switching the front from top to side hinges drops the lift (no d
   const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
   assert.ok(app.includes('aria-label="Газлифт PD-G-N02 подъёмного фасада"'),'checkbox to switch the lift on/off');
   assert.ok(/a\.doorHinges\[k\]=e\.target\.value[^}]*syncKitchenLift\(next\)/.test(app),'hinge change drops a lift without a lift-up front');
+});
+
+test('gas lift minor: left side bracket uses the majority Bazis mesh cd44e1c91574 (same geometry), GLB is present',()=>{
+  const ps=parts(antresol()),l=ps.find(p=>p.id==='lift:left:side')!,r=ps.find(p=>p.id==='lift:right:side')!;
+  assert.equal(l.model!.file,'hardware/bazis/cd44e1c91574.glb');
+  assert.equal(r.model!.file,'hardware/bazis/554528e96219.glb');
+  assert.ok(existsSync(new URL('../public/models/hardware/bazis/cd44e1c91574.glb',import.meta.url)));
+});
+
+test('gas lift minor: allowed contact only with its own lift-up front, not with any door',()=>{
+  const m=antresol(),ps=parts(m),door=ps.find(p=>p.role==='door'&&p.hinge==='top')!;
+  const lift=(c:{a:string;b:string})=>c.a.startsWith('lift:')||c.b.startsWith('lift:');
+  assert.deepEqual(partCollisions(ps,m).filter(lift),[]);
+  const alien={...door,id:'other:door:0',sectionId:'other',hinge:'left' as const};
+  const hits=partCollisions([...ps,alien],m).filter(c=>lift(c)&&(c.a===alien.id||c.b===alien.id));
+  assert.ok(hits.length>0,'lift screws pressed into a foreign door are reported');
 });
