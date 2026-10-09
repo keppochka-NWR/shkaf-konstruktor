@@ -31,9 +31,9 @@ for (const [id, open] of items) {
   cmds.push(`cam:${cx - 500},1500,${30 + 400 + 3600},${cx},950,${430}`, `shot:${tag}-all`);
   let xx = 100;
   for (const s of SIZES) {
-    const dx = xx + s.w / 2, dy = 60 + s.h / 2, D = Math.max(s.w * 1.7, s.h * 1.3) + 100;
+    const dx = xx + s.w / 2, dy = 60 + s.h / 2, D = Math.max(s.w * 1.7, s.h * 2.1) + 100;
     cmds.push(`cam:${dx - D * 0.3},${dy + D * 0.18},${430 + D},${dx},${dy},${430}`, `shot:${tag}-${s.key}`);
     xx += s.w + 250;
   }
-  execSync(`npx tsx scripts/kitchen-shots.ts "${url}" "${file}" "${out}" "${cmds.join(";")}"`, { stdio: "inherit" });
+  execSync(`npx tsx scripts/kitchen-shots.ts "${url}" "${file}" "${out}" "${cmds.join(";")}"`, { stdio: "inherit", env: { ...process.env, H: process.env.H ?? "1300" } });
 }
