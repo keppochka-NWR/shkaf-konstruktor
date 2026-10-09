@@ -67,6 +67,21 @@ export function serviceHoles(hardware: (Hw & { i?: number; service?: boolean; me
   return out;
 }
 
+/** Конфирматы стяжки с соседним корпусом — как в Базисе (k15 m12: два изнутри через левую боковину наружу; в базе такие ещё
+ *  в 7 модулях): головка на внутренней грани боковины, D8 насквозь наружу. Точка — [высота, от задней кромки боковин] по стороне. */
+export function outConfirmats(hardware: (Hw & { i?: number })[], holes: { src: number; at: number[]; dir: number[]; d: number; face?: string }[], xL: number, xR: number, t: number, z0: number) {
+  const out: { side: "left" | "right"; y: number; z: number }[] = [];
+  for (const h of hardware) {
+    if (h.category !== "конфирмат" || h.i === undefined) continue;
+    const side = Math.abs(h.pos[0] - (xL + t)) < 0.6 ? "left" : Math.abs(h.pos[0] - (xR - t)) < 0.6 ? "right" : null;
+    if (!side) continue;
+    const d8 = holes.find((q) => q.src === h.i && q.d === 8 && Math.abs(q.at[0] - h.pos[0]) < 0.6);
+    if (!d8 || (side === "left" ? d8.dir[0] > -0.99 : d8.dir[0] < 0.99)) continue; // сверлится наружу из корпуса
+    out.push({ side, y: r1(h.pos[1]), z: r1(h.pos[2] - z0) });
+  }
+  return out;
+}
+
 /** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */
 export const isEuro6 = (h: { name: string }) => /^Евровинт 6/.test(h.name);
 export function screwKind(hardware: Hw[]): "euro-6x50" | undefined {

@@ -387,3 +387,23 @@ test('etalon k28/m14: service holes as in Bazis',{skip:!existsSync(ET+'k28.json'
   assert.deepEqual(validate(m),[]);
   assert.equal(compareModule(ref,m).pass,true);
 });
+test('confirmats tying the body to its neighbour (k15 m12: from inside through the left side outward) are placed and drilled as in Bazis',async()=>{
+  const {outConfirmats}=await import('../scripts/kitchen/recognize-common');
+  const hw3=[{i:0,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[16,52,371]},{i:1,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,8,61.5]}];
+  const hs=[{src:0,at:[16,52,371],dir:[-1,0,0],d:8},{src:0,at:[0,52,371],dir:[1,0,0],d:5},{src:1,at:[0,8,61.5],dir:[1,0,0],d:8}];
+  assert.deepEqual(outConfirmats(hw3,hs,0,975,16,0),[{side:'left',y:52,z:371}]);
+  const m=antresol();m.kitchen!.outConf=[{side:'left',y:52,z:300}];
+  const ps=parts(m),c=ps.find(p=>p.id==='fast:out:left:0')!;
+  assert.deepEqual(c.model?.origin,[16,52,300]);
+  const h=holes(m,ps).filter(x=>x.src==='fast:out:left:0');
+  assert.deepEqual(h.map(x=>[x.part,x.d,x.at[0],x.dir[0]]),[['left',8,16,-1],['left',5,0,1]]);
+  assert.deepEqual(partCollisions(ps,m).filter(x=>/fast:out/.test(x.a+x.b)),[]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.outConf,m.kitchen!.outConf);
+});
+
+test('etalon k15/m12: neighbour confirmats as in Bazis',{skip:!existsSync(ET+'k15.json')},()=>{
+  const ref=(JSON.parse(readFileSync(ET+'k15.json','utf8')).modules as RefModule[]).find(m=>m.key==='m12')!;
+  const {module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(compareModule(ref,m).pass,true);
+});

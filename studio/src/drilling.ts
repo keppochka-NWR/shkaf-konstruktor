@@ -29,7 +29,10 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // короб ящика Firmax в Базисе — D5×37; кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall;
       // kitchen.confDepth, n3-antresol: k11 — 37, k31 — 42);
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
-      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
+      const d5 = p.id.startsWith("fast:kd:") ? 37 : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
+      // стяжка с соседним корпусом (kitchen.outConf): D5 — в соседа; у Базиса оно записано на наружной грани своей боковины навстречу
+      if (p.id.startsWith("fast:out:")) push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], [-a[0], -a[1], -a[2]], 5, d5);
+      else push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, d5);
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм

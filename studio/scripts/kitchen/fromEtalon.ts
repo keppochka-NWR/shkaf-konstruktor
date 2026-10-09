@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, hdfNails, isEuro6, legScrews, railConfirmats, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
+import { edgeRail, hdfNails, isEuro6, legScrews, outConfirmats, railConfirmats, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
@@ -408,6 +408,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // служебные сквозные отверстия проекта (k28 m14: D10 под провод) — как в Базисе (n4-antresol)
   const svc = serviceHoles(ref.hardware as Parameters<typeof serviceHoles>[0], (ref.holes ?? []) as Parameters<typeof serviceHoles>[1], left.b.x0, sideZ0);
   if (svc.length) m.kitchen.svcHoles = svc;
+  // стяжка с соседним корпусом: конфирмат изнутри через боковину наружу (k15 m12) — как в Базисе (n4-antresol)
+  const oc = outConfirmats(ref.hardware as Parameters<typeof outConfirmats>[0], (ref.holes ?? []) as Parameters<typeof outConfirmats>[1], left.b.x0, right.b.x1, t, sideZ0);
+  if (oc.length) m.kitchen.outConf = oc;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
   if (!back) m.backType = "none";
