@@ -4,10 +4,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
 import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, type Module, type Part } from "./model";
-import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from "./kitchen";
+import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
-import { partCollisions, rawCheck, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
+import { partCollisions, rawCheck, bazisAirHardware, BAZIS_AIR, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
 import { rawHangerSeats, RAW_HANGER_DROP } from "./rawModule";
 import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
@@ -85,18 +85,18 @@ function Position({ placed, project, position, room, move, rotate, commit, open 
 
 /** Фурнитура модуля списком (то, что видно в 3D моделями Базиса) и проверка пересечений деталей. */
 function Hardware({ list, m, showInside }: { list: Part[]; m: Module; showInside: () => void }) {
-  const rows = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const p of list) if (p.material === "metal" && (p.role === "fastener" || p.role === "hinge" || p.role === "handle") && !p.id.startsWith("worktop-cut")) map.set(p.name, (map.get(p.name) ?? 0) + 1);
-    return [...map].sort((a, b) => b[1] - a[1]);
-  }, [list]);
+  const rows = useMemo(() => hardwareRows(list), [list]);
   const collisions = useMemo(() => partCollisions(list, m), [list, m]);
+  // фурнитура в воздухе, как в проекте Базиса (навесы над корпусом: k26–k28, k31) — студия положение не меняет, но говорит о нём
+  const air = useMemo(() => bazisAirHardware(list, m), [list, m]);
   return <Group icon={<Wrench size={15} />} title="Фурнитура модуля" note={rows.reduce((s, r) => s + r[1], 0) + " шт."}>
     <ul className="kitchen-hardware">{rows.map(([name, n]) => <li key={name}><span>{name}</span><b>{n}</b></li>)}</ul>
     <button className="outline full" onClick={showInside}>Открыть фасады — увидеть петли, опоры, навесы</button>
     {collisions.length
-      ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересекаются детали: {collisions.slice(0, 3).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{collisions.length > 3 ? ` и ещё ${collisions.length - 3}` : ""}.</p>
+      ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересекаются детали: {collisions.slice(0, 3).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм${c.bazis ? ", как в проекте Базиса" : ""})`).join("; ")}{collisions.length > 3 ? ` и ещё ${collisions.length - 3}` : ""}.{collisions.every((c) => c.bazis) ? " Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе." : ""}</p>
       : <p className="kitchen-ok"><CircleCheck size={14} /> Детали и фурнитура не пересекаются.</p>}
+    {/* «в воздухе» — не пересечение: сведения «как в проекте Базиса», как у сырого модуля (RawInfo; слияние n4-wardrobes и n4-antresol) */}
+    {air.length > 0 && <p className="field-note"><Info size={12} /> Висит в воздухе (дальше {BAZIS_AIR} мм от деталей) — {air.length} шт.: {air.slice(0, 3).map((x) => `${x.name} (${x.gap} мм)`).join("; ")}{air.length > 3 ? " …" : ""}. Стоит по координатам проекта Базиса — детали, на которой она крепится, в модели нет: проверьте в Базисе или после смены размера модуля.</p>}
   </Group>;
 }
 

@@ -66,6 +66,17 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины], мм — по каждой стороне. Отрицательное «ниже верха» —
    *  навес выше корпуса (так стоит в части проектов Базиса; отверстий в боковине тогда нет, как и у Базиса). */
   hangerAt?: { left: [number, number, number]; right: [number, number, number]; caps?: { left: [number, number, number]; right: [number, number, number] } };
+  /** Набивной ХДФ стоит с зазором от задней кромки корпуса, мм (k01 m14, k01 m10 — 2, так в проекте Базиса). Без поля — вплотную. */
+  backAir?: number;
+  /** Служебные сквозные отверстия, как в проекте Базиса (k28 m14: D10 под провод в боковине и дне): точка входа, направление внутрь
+   *  детали, диаметр, глубина. В смету не идут (у Базиса это служебная запись). */
+  svcHoles?: { at: [number, number, number]; dir: [number, number, number]; d: number; depth: number }[];
+  /** Конфирматы стяжки с соседним корпусом, как в проекте Базиса (k15 m12): изнутри через боковину наружу — сторона, высота,
+   *  от задней кромки боковин. Без поля их нет. */
+  outConf?: { side: "left" | "right"; y: number; z: number }[];
+  /** Точки крепления крепежа, чьё отверстие и в проекте Базиса вскрывает паз подсветки (k31, k28 m12): только это пересечение
+   *  подписывается «как в проекте Базиса» (collisions.ts). Ставит импорт по двойнику в Базисе (compare.ts grooveTwins). */
+  grooveHoles?: [number, number, number][];
   /** Модуль распознан из проекта Базиса: смета — только то, что есть в Базисе (без норматива «мелочёвка корпуса» и заглушек
    *  под конфирматы — в проектах Базиса цеха их нет ни в одном модуле). */
   bazis?: boolean;
@@ -274,6 +285,14 @@ export function unitQuat(q: [number, number, number, number]): [number, number, 
   return n > 1e-9 ? (q.map((v) => v / n) as [number, number, number, number]) : [1, 0, 0, 0];
 }
 
+/** Список «Фурнитура модуля» в панели кухни: имя → штук. Без выреза под мойку и служебных отверстий Базиса (kitchen-svc — точка
+ *  привязки сквозного отверстия, не изделие: в смету не идёт, в список фурнитуры тоже). */
+export function hardwareRows(list: Part[]): [string, number][] {
+  const map = new Map<string, number>();
+  for (const p of list) if (p.material === "metal" && (p.role === "fastener" || p.role === "hinge" || p.role === "handle") && !p.id.startsWith("worktop-cut") && !p.id.startsWith("kitchen-svc:")) map.set(p.name, (map.get(p.name) ?? 0) + 1);
+  return [...map].sort((a, b) => b[1] - a[1]);
+}
+
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
 /** Ряды гвоздей набивного ХДФ по Базису (в осях ХДФ: x от левого края, y от низа), см. kitchen.nails. */
 export function nailRows(W: number, H: number): { bottom: number[]; top: number[]; left: number[]; right: number[] } {
@@ -330,6 +349,8 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       p.anchor = o; out.push(p);
     });
   }
+  // служебные отверстия Базиса (kitchen.svcHoles): точка входа — привязка «прочего» для сверки; отверстие даёт drilling.ts
+  for (const [n, h] of (k.svcHoles ?? []).entries()) { const p = metal(`kitchen-svc:${n}`, `Отверстие D${h.d} сквозное (как в проекте Базиса)`, [0.01, 0.01, 0.01], [...h.at]); p.anchor = [...h.at]; out.push(p); }
   // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
   for (const [n, d] of (k.dryer ?? []).entries()) {
     const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];

@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from '../src/model';
-import {kitchenWall} from '../src/kitchen';
+import {kitchenWall,hardwareRows} from '../src/kitchen';
 import {holes} from '../src/drilling';
-import {partCollisions} from '../src/collisions';
+import {partCollisions,bazisAirHardware} from '../src/collisions';
+import {collisionWarnings,bazisHostNotes} from '../src/roomWarnings';
 import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,backClearY,faceGapOf,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
+import {compareModule,grooveTwins,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 
@@ -294,6 +295,57 @@ for(const [k,key,w,h] of [['k13','m04',682,327],['k17','m07',1014,705.5],['k21',
     const hdf=ref.panels.filter(p=>p.kind==='hdf').map(p=>[p.box[1],p.box[4]]);
     assert.ok(hdf.some(([y0,y1])=>Math.abs(y0-(b.position[1]-h/2))<0.05&&Math.abs(y1-(b.position[1]+h/2))<0.05),'same height position');
   });
+// Крыша Базиса на боковинах (над торцами, во всю ширину; k17 m07, k21 m07): студия так не строит — «не поддержано» (модуль идёт как
+// в Базисе), без ложной заметки «навесы выше корпуса на 16 мм»; крыша между боковинами (k12 m05) — без этой причины (n4-antresol).
+for(const [k,key,over] of [['k17','m07',true],['k21','m07',true],['k12','m05',false]] as const)
+  test(`etalon ${k}/${key}: roof on top of the sides is ${over?'':'not '}reported as unsupported`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const {unsupported,notes}=moduleFromEtalon(refOf(k,key));
+    assert.equal(unsupported.some(u=>/крыша на боковинах/.test(u)),over);
+    if(over) assert.ok(!notes.some(n=>/навесы Базиса выше корпуса/.test(n)),'hangers under a roof on the sides are not «above the carcass»');
+  });
+// Шкант под боковиной вскрывает паз подсветки дна (k31 m03/m04 — 3 мм, как в самом проекте Базиса: D8×12 сверху, паз 8 снизу):
+// студия повторяет как есть и помечает пересечение «как в проекте Базиса», не прячет его; у модуля не из Базиса пометки нет.
+for(const key of ['m03','m04'])
+  test(`etalon k31/${key}: dowel hole opening into the light groove is shown as a Bazis project defect`,{skip:!existsSync(ET+'k31.json')},()=>{
+    const ref=refOf('k31',key),m=grooveTwins(ref,moduleFromEtalon(ref).module);
+    assert.equal(m.kitchen!.grooveHoles?.length,2,'both dowels have a twin hole in Bazis');
+    const c=partCollisions(parts(m),m);
+    assert.ok(c.length>0&&c.every(x=>x.bazis&&/dowel:under:/.test(x.a+' '+x.b)&&/groove:/.test(x.a+' '+x.b)),'only the Bazis dowel × groove, flagged');
+    assert.ok(c.every(x=>x.depth<=3.05),'no deeper than in Bazis');
+    const own={...m,kitchen:{...m.kitchen!,bazis:undefined}} as Module;
+    assert.ok(partCollisions(parts(own),own).every(x=>!x.bazis),'not flagged for a module that is not from Bazis');
+  });
+// Лишний (третий) эксцентрик Базиса в углу у левой боковины (k28 m12, z=8) не отменяет эксцентрики боковины: обе боковины на стяжках
+// с той же парой, что справа, а не на конфирматах студии (их нет в Базисе, и они выходили в паз подсветки на 8 мм).
+test('etalon k28/m12: a stray corner eccentric keeps both sides on eccentrics, no studio confirmat in the light groove',{skip:!existsSync(ET+'k28.json')},()=>{
+  const ref=refOf('k28','m12'),m=grooveTwins(ref,moduleFromEtalon(ref).module);
+  assert.equal(m.jointFastening?.['bottom:left'],'eccentric');
+  assert.equal(m.jointFastening?.['bottom:right'],'eccentric');
+  assert.deepEqual([m.kitchen!.underEcc!.back,m.kitchen!.underEcc!.front],[70.5,50.5],'the regular pair, not the stray corner eccentric');
+  const c=partCollisions(parts(m),m);
+  assert.ok(c.every(x=>x.bazis),'only the Bazis dowel × groove remains');
+});
+// Подпись «как в проекте Базиса» — только крепежу с двойником-отверстием в Базисе в том же пазу (kitchen.grooveHoles, compare.ts grooveTwins):
+// k16 m11 — эксцентрик полки студии, у Базиса отверстия нет; k06 m06 — у Базиса вместо паза вырез контура дна (критик n4-antresol).
+for(const [k,key] of [['k16','m11'],['k06','m06']] as const)
+  test(`etalon ${k}/${key}: a studio fastener in the light groove without a Bazis twin is not labelled «as in Bazis»`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=refOf(k,key),m=grooveTwins(ref,moduleFromEtalon(ref).module);
+    assert.equal(m.kitchen!.grooveHoles,undefined);
+    const c=partCollisions(parts(m),m).filter(x=>/groove:/.test(x.a+' '+x.b));
+    // слияние n4: k06 m06 у n4-tall — боковина до плоскости фасадов «не поддержано», пазы без детали-носителя: попадания в паз нет вовсе
+    if(k==='k16')assert.ok(c.length>0,'the hit is shown');
+    assert.ok(c.every(x=>!x.bazis),'without the Bazis label');
+  });
+test('the «as in Bazis» label follows the recorded fastener point: a fastener moved by an edit loses it',()=>{
+  const m=antresol();m.kitchen!.bazis=true;
+  const ps=parts(m),f=ps.find(p=>/^fast:/.test(p.id)&&p.model?.origin)!,o=f.model!.origin!;
+  const g={...f,id:'groove:0',name:'паз под подсветку',role:'light' as const,material:'metal' as const,size:[20,20,20] as [number,number,number],position:[o[0],o[1],o[2]] as [number,number,number],collide:undefined,model:undefined};
+  const hit=(mm:Module)=>partCollisions([f,g],mm).find(x=>x.a===f.id||x.b===f.id)!;
+  assert.equal(hit(m).bazis,undefined,'no recorded point — plain collision');
+  m.kitchen!.grooveHoles=[[o[0],o[1],o[2]]];assert.equal(hit(m).bazis,true);
+  m.kitchen!.grooveHoles=[[o[0],o[1]+10,o[2]]];assert.equal(hit(m).bazis,undefined,'the point moved 10 mm — not the Bazis hole');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.grooveHoles,m.kitchen!.grooveHoles);
+});
 // Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
 for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)
   test(`etalon ${k}/${key}: shelf confirmat does not hit the bottom confirmat`,{skip:!existsSync(ET+k+'.json')},()=>{
@@ -310,3 +362,155 @@ for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['
     assert.deepEqual(validate(m),[]);
     assert.equal(compareModule(ref,m).pass,true);
   });
+
+// n4-antresol: конфирматы стяжки и гвозди ХДФ — как в Базисе (k03: стяжка 100 под крышей, по 2 конфирмата в боковинах и 2 через крышу)
+// слияние n4: одно правило крепежа стяжки для нижних, навесных и антресолей — recognize-common.railConf → rails[].confY / topConf
+// (было railConfirmats n4-antresol, railConf n4-wall, railConfY n4-base); гвозди ХДФ — правило раскладки Базиса n4-wall (kitchen.nails)
+test('rail confirmats recognizer: two per side and through the top (k03), one centered gives no override',async()=>{
+  const {railConf}=await import('../scripts/kitchen/recognize-common');
+  const b={x0:16,y0:274,z0:3,x1:584,y1:374,z1:19},roof={x0:16,y0:374,z0:0,x1:584,y1:390,z1:350},c=(pos:number[])=>hw('Конфирмат 7х50 мм, Zn','конфирмат',pos);
+  const k03=[c([0,308,11]),c([0,340,11]),c([600,308,11]),c([600,340,11]),c([76,390,11]),c([524,390,11]),c([0,382,278.5]),c([600,8,54.5])];
+  assert.deepEqual(railConf(b,k03,0,600,roof),{confY:[34,66],topConf:[60,508]});
+  assert.deepEqual(railConf(b,[c([0,324,11]),c([600,324,11])],0,600,roof),{});
+  // стяжка не под крышей — конфирматы крыши к ней не относятся
+  assert.equal(railConf({...b,y0:100,y1:200},[c([76,390,11])],0,600,undefined).topConf,undefined);
+});
+
+test('studio places rail confirmats and HDF nails from the Bazis project, only for kitchens; fields survive save/load',()=>{
+  const m=antresol();m.kitchen!.hangers=false;m.backType='nailed';m.backGap=1;m.rails=[{place:'rear-top',height:100,confY:[34,66],topConf:[60,508]}];
+  const q=[0.7071,0,-0.7071,0] as [number,number,number,number];
+  m.kitchen!.nails={q:{bottom:q,top:q,left:q,right:q}}; // правило раскладки Базиса (n4-wall): ряды в 7,5 от края, первый — в 23 от края ХДФ
+  const ps=parts(m),o=(id:string)=>ps.find(p=>p.id===id)?.model?.origin;
+  const top=m.height-16,ry0=top-100;
+  assert.deepEqual(o('fast:rail:rear-top:left:0')?.slice(0,2),[0,ry0+34]);
+  assert.deepEqual(o('fast:rail:rear-top:right:1')?.slice(0,2),[600,ry0+66]);
+  assert.deepEqual(o('fast:rail:rear-top:top:0')?.slice(0,2),[76,m.height]);
+  assert.deepEqual(o('fast:rail:rear-top:top:1')?.slice(0,2),[524,m.height]);
+  const back=ps.find(p=>p.id==='back')!,nails=ps.filter(p=>p.id.startsWith('nail:'));
+  assert.ok(nails.length>2);
+  assert.deepEqual(nails[0].position,[24,8.5,back.position[2]-back.size[2]/2]);
+  assert.deepEqual(partCollisions(ps,m).filter(c=>/nail:|rail:rear-top/.test(c.a+c.b)),[]);
+  const back2=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back2.rails,m.rails);assert.deepEqual(back2.kitchen!.nails,m.kitchen!.nails);
+  // шкаф студии (не кухня): поля стяжки Базиса не действуют — один конфирмат по центру, как раньше
+  const w=initialModule();w.rails=[{place:'rear-top',height:100,confY:[34,66],topConf:[60]}];
+  const wp=parts(w);
+  assert.equal(wp.some(p=>/^fast:rail:rear-top:(top|\w+:1)/.test(p.id)),false);
+});
+
+for(const [k,key] of [['k03','m06'],['k03','m08']] as const)
+  test(`etalon ${k}/${key}: rail confirmats and HDF nails as in Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+    const {module:m}=moduleFromEtalon(ref);
+    assert.deepEqual(validate(m),[]);
+    assert.equal(compareModule(ref,m).pass,true);
+  });
+
+test('nailed HDF with an air gap from the body (kitchen.backAir, k01 m14 — 2 mm as in Bazis): back and nails move back, body stays',()=>{
+  const m=antresol();m.backType='nailed';m.backGap=1;m.kitchen!.nails={q:{bottom:[1,0,0,0],top:[1,0,0,0],left:[1,0,0,0],right:[1,0,0,0]}};
+  const z0=(ps:ReturnType<typeof parts>)=>{const b=ps.find(p=>p.id==='back')!;return b.position[2]-b.size[2]/2;};
+  const a=parts(m);m.kitchen!.backAir=2;const b=parts(m);
+  assert.equal(z0(b),z0(a)-2);
+  assert.equal(b.find(p=>p.id==='nail:0')!.position[2],z0(b));
+  assert.deepEqual(b.find(p=>p.id==='left')?.position,a.find(p=>p.id==='left')?.position);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.backAir,2);
+});
+
+for(const [k,key] of [['k13','m03'],['k01','m14']] as const)
+  test(`etalon ${k}/${key}: top in front of a deep HDF / HDF with air gap recognized as in Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+    const {module:m}=moduleFromEtalon(ref);
+    assert.deepEqual(validate(m),[]);
+    assert.equal(compareModule(ref,m).pass,true);
+  });
+test('service through holes of the Bazis project (k28 m14: D10 for a wire) are drilled as in Bazis; screws and meshes are not taken',async()=>{
+  const {serviceHoles}=await import('../scripts/kitchen/recognize-common');
+  const hw2=[{i:0,name:'10',category:'прочее',pos:[0,200,10],service:true,mesh:null},{i:1,name:'3x3',category:'прочее',pos:[16,99,545],service:true,mesh:null},{i:2,name:'Гвоздь',category:'прочее',pos:[24,8,0],mesh:'281de529218b'}];
+  const hs=[{src:0,at:[0,200,10],dir:[1,0,0],d:10,depth:16,through:true},{src:1,at:[16,99,545],dir:[1,0,0],d:3,depth:3,through:false}];
+  assert.deepEqual(serviceHoles(hw2,hs,0,0),[{at:[0,200,10],dir:[1,0,0],d:10,depth:16}]);
+  const m=antresol();m.kitchen!.svcHoles=[{at:[0,200,10],dir:[1,0,0],d:10,depth:16}];
+  const h=holes(m).filter(x=>x.src==='kitchen-svc:0');
+  assert.equal(h.length,1);assert.equal(h[0].part,'left');assert.equal(h[0].d,10);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.svcHoles,m.kitchen!.svcHoles);
+  // служебное отверстие — не изделие: ни в смете, ни в списке «Фурнитура модуля» панели кухни (критик n4-antresol: стояло строкой ×2)
+  const rows=hardwareRows(parts(m));
+  assert.ok(!rows.some(([n])=>/Отверстие/.test(n)),'no service hole row');
+  assert.ok(rows.some(([n])=>/Навес/.test(n)),'real hardware is listed');
+});
+
+test('etalon k28/m14: service holes as in Bazis',{skip:!existsSync(ET+'k28.json')},()=>{
+  const ref=(JSON.parse(readFileSync(ET+'k28.json','utf8')).modules as RefModule[]).find(m=>m.key==='m14')!;
+  const {module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(compareModule(ref,m).pass,true);
+});
+test('confirmats tying the body to its neighbour (k15 m12: from inside through the left side outward) are placed and drilled as in Bazis',async()=>{
+  const {outConfirmats}=await import('../scripts/kitchen/recognize-common');
+  const hw3=[{i:0,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[16,52,371]},{i:1,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,8,61.5]}];
+  const hs=[{src:0,at:[16,52,371],dir:[-1,0,0],d:8},{src:0,at:[0,52,371],dir:[1,0,0],d:5},{src:1,at:[0,8,61.5],dir:[1,0,0],d:8}];
+  assert.deepEqual(outConfirmats(hw3,hs,0,975,16,0),[{side:'left',y:52,z:371}]);
+  const m=antresol();m.kitchen!.outConf=[{side:'left',y:52,z:300}];
+  const ps=parts(m),c=ps.find(p=>p.id==='fast:out:left:0')!;
+  assert.deepEqual(c.model?.origin,[16,52,300]);
+  const h=holes(m,ps).filter(x=>x.src==='fast:out:left:0');
+  assert.deepEqual(h.map(x=>[x.part,x.d,x.at[0],x.dir[0]]),[['left',8,16,-1],['left',5,0,1]]);
+  assert.deepEqual(partCollisions(ps,m).filter(x=>/fast:out/.test(x.a+x.b)),[]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.outConf,m.kitchen!.outConf);
+});
+
+// Навесы над корпусом, как в самом проекте Базиса (k26–k28, k31: «верх боковины + 985», сверловок нет): студия повторяет положение,
+// но параметрический модуль из Базиса получает те же сведения «висит в воздухе», что сырой (раньше — 0 предупреждений, критик n4-antresol).
+// Слияние n4: «в воздухе» — не пересечение, а сведения «как в проекте Базиса» (roomWarnings.bazisHostNotes, политика n4-wardrobes).
+const inProject=(mm:Module)=>{const p=newProject({...initialModule()});p.modules=[{id:'a',x:0,y:0,z:0,rotation:0,module:mm}];return p;};
+test('hangers of a Bazis module hanging in the air above the body (+985) are reported, position kept as in Bazis',()=>{
+  const m=antresol();m.kitchen!.bazis=true;m.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};
+  const ps=parts(m);
+  assert.deepEqual(ps.find(p=>p.id==='kitchen-hanger:left')!.model!.origin,[16,1385,20],'position as in Bazis');
+  const far=bazisAirHardware(ps,m);
+  assert.deepEqual(far.map(x=>[x.id,x.gap]),[['kitchen-hanger:left',985],['kitchen-hanger-cap:left',985],['kitchen-hanger:right',985],['kitchen-hanger-cap:right',985]]);
+  const w=bazisHostNotes(inProject(m));
+  assert.equal(w.length,1);assert.match(w[0].message,/висит в воздухе дальше 30 мм.*Навес мебельный регулируемый ABS левый \(985 мм\).*Проверьте в проекте Базиса/);
+  assert.deepEqual(collisionWarnings(inProject(m)),[],'не пересечение');
+  // по правилу (15 ниже верха) и навес на 25 мм выше — не в воздухе (порог RAW_SEAT_GAP: дальше 30 мм в базе только эти навесы)
+  const std=antresol();std.kitchen!.bazis=true;assert.deepEqual(bazisAirHardware(parts(std),std),[]);assert.deepEqual(collisionWarnings(inProject(std)),[]);assert.deepEqual(bazisHostNotes(inProject(std)),[]);
+  const near=antresol();near.kitchen!.bazis=true;near.kitchen!.hangerAt={left:[-25,20,0],right:[-25,20,0]};assert.deepEqual(bazisAirHardware(parts(near),near),[]);
+  // гвозди ХДФ — по правилу раскладки Базиса от размеров ХДФ (n4-wall): после сужения модуля на 100 мм остаются на ХДФ
+  const nl=antresol();nl.kitchen!.bazis=true;nl.backType='nailed';nl.backGap=1;nl.kitchen!.nails={mesh:'281de529218b',q:{bottom:[1,0,0,0],top:[1,0,0,0],left:[1,0,0,0],right:[1,0,0,0]}};
+  assert.deepEqual(bazisAirHardware(parts(nl),nl),[],'nails on the HDF');
+  nl.width=500;assert.deepEqual(bazisAirHardware(parts(nl),nl),[],'narrower module: nails follow the HDF');
+  // модуль студии (не из Базиса) и шкаф — не проверяются
+  const own=antresol();own.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};assert.deepEqual(bazisAirHardware(parts(own),own),[]);
+  const wr=initialModule();assert.deepEqual(bazisAirHardware(parts(wr),wr),[]);
+});
+test('etalon k28: parametric modules with hangers at +1000 carry the "in the air" warning in the built kitchen',{skip:!existsSync(ET+'k28.json')},async()=>{
+  const {buildKitchen}=await import('../scripts/kitchen/buildKitchen');
+  const {project}=buildKitchen(JSON.parse(readFileSync(ET+'k28.json','utf8')));
+  const w=bazisHostNotes(project);
+  for(const name of ['Вм 5','ВМ 6','Над холодильником']){
+    const a=project.modules.find(x=>x.module.name===name&&!x.module.raw);
+    assert.ok(a,`${name}: parametric`);assert.equal(a.module.kitchen!.hangerAt!.left[0],-985,`${name}: as in Bazis`);
+    assert.ok(w.some(x=>x.moduleId===a.id&&/висит в воздухе/.test(x.message)&&/Навес/.test(x.message)),`${name}: warned`);
+  }
+  // параметрические модули с навесами по правилу — без этой тревоги
+  assert.ok(project.modules.filter(a=>!a.module.raw&&!a.module.kitchen?.hangerAt).every(a=>!w.some(x=>x.moduleId===a.id&&/висит в воздухе/.test(x.message))));
+});
+
+test('etalon k15/m12: neighbour confirmats as in Bazis',{skip:!existsSync(ET+'k15.json')},()=>{
+  const ref=(JSON.parse(readFileSync(ET+'k15.json','utf8')).modules as RefModule[]).find(m=>m.key==='m12')!;
+  const {module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(compareModule(ref,m).pass,true);
+});
+// Нижняя стяжка навесного, стоящая на дне и закреплённая в Базисе эксцентриками и шкантами в дно (k04 m05): студия не ставит конфирматы
+// в боковины, которых в Базисе нет (было 12 при 10 у Базиса), а сама стяжка на эксцентриках — «не поддержано», модуль идёт как в Базисе.
+test('etalon k04/m05: a wall bottom rail fixed to the bottom in Bazis gets no studio confirmats into the sides',{skip:!existsSync(ET+'k04.json')},()=>{
+  const ref=refOf('k04','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
+  const rail=m.rails?.find(r=>r.place==='rear-bottom');
+  assert.ok(rail,'rear-bottom rail');assert.equal(rail!.fasten,false);
+  assert.ok(!parts(m).some(p=>p.id.startsWith('fast:rail:rear-bottom')),'no confirmats into the rail ends');
+  const c=compareModule(ref,m),conf=c.hardware.find(h=>h.category==='конфирмат')!;
+  assert.equal(conf.studio,conf.ref,'confirmats as in Bazis');
+  // слияние n4: эксцентрики и шканты этой стяжки в дно студия теперь ставит по проекту (kitchen.railUnder, n4-wall) — «не поддержано»
+  // остаётся только для тех, которых railUnder не повторяет
+  assert.ok(m.kitchen?.railUnder?.['rear-bottom']||unsupported.some(u=>/нижняя стяжка навесного крепится к дну/.test(u)));
+});

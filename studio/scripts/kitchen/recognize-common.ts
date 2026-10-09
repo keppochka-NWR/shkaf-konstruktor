@@ -62,11 +62,42 @@ export function railTopConf(b: Box, hardware: Hw[], hz?: Box): number[] | undefi
   return xs.length ? xs : undefined;
 }
 
-/** Крепёж стяжки на ребре по проекту Базиса — одно правило для нижних, навесных и антресолей (слияние n4-base railConfY, n4-wall railConf):
+/** Крепёж стяжки на ребре по проекту Базиса — одно правило для нижних, навесных и антресолей (слияние n4-base railConfY, n4-wall railConf,
+ *  n4-antresol railConfirmats):
  *  confY — конфирматы через боковины (Module.rails[].confY), topConf — через крышу/дно (rails[].topConf). Без полей — правило студии. */
 export function railConf(b: Box, hardware: Hw[], xL: number, xR: number, hz?: Box): Pick<Rail, "confY" | "topConf"> {
   const confY = railConfY(b, hardware, xL, xR), topConf = railTopConf(b, hardware, hz);
   return { ...(confY ? { confY } : {}), ...(topConf ? { topConf } : {}) };
+}
+
+/** Служебные сквозные отверстия проекта Базиса — как в Базисе (k28 m14: «10» из комплекта «Наполнение корпуса (Крыша)» — D10 насквозь
+ *  в боковине и в дне, под провод; во всей базе такие только там). Служебная запись без сетки с одним сквозным отверстием от D10:
+ *  точка входа в осях модуля студии (x — от левого наружного края, z — от задней кромки боковин), направление внутрь детали, D, глубина. */
+export function serviceHoles(hardware: (Hw & { i?: number; service?: boolean; mesh?: string | null })[], holes: { src: number; at: number[]; dir: number[]; d: number; depth: number; through?: boolean }[], x0: number, z0: number) {
+  const out: { at: [number, number, number]; dir: [number, number, number]; d: number; depth: number }[] = [];
+  for (const h of hardware) {
+    if (!h.service || h.mesh || h.category !== "прочее" || h.i === undefined) continue;
+    const hs = holes.filter((q) => q.src === h.i);
+    if (hs.length !== 1 || !hs[0].through || hs[0].d < 10) continue;
+    const q = hs[0];
+    out.push({ at: [r1(q.at[0] - x0), r1(q.at[1]), r1(q.at[2] - z0)], dir: q.dir.map((v) => Math.round(v)) as [number, number, number], d: q.d, depth: q.depth });
+  }
+  return out;
+}
+
+/** Конфирматы стяжки с соседним корпусом — как в Базисе (k15 m12: два изнутри через левую боковину наружу; в базе такие ещё
+ *  в 7 модулях): головка на внутренней грани боковины, D8 насквозь наружу. Точка — [высота, от задней кромки боковин] по стороне. */
+export function outConfirmats(hardware: (Hw & { i?: number })[], holes: { src: number; at: number[]; dir: number[]; d: number; face?: string }[], xL: number, xR: number, t: number, z0: number) {
+  const out: { side: "left" | "right"; y: number; z: number }[] = [];
+  for (const h of hardware) {
+    if (h.category !== "конфирмат" || h.i === undefined) continue;
+    const side = Math.abs(h.pos[0] - (xL + t)) < 0.6 ? "left" : Math.abs(h.pos[0] - (xR - t)) < 0.6 ? "right" : null;
+    if (!side) continue;
+    const d8 = holes.find((q) => q.src === h.i && q.d === 8 && Math.abs(q.at[0] - h.pos[0]) < 0.6);
+    if (!d8 || (side === "left" ? d8.dir[0] > -0.99 : d8.dir[0] < 0.99)) continue; // сверлится наружу из корпуса
+    out.push({ side, y: r1(h.pos[1]), z: r1(h.pos[2] - z0) });
+  }
+  return out;
 }
 
 /** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */

@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { parts, type Module, type Part } from "../../src/model";
 import { parseProject } from "../../src/project";
 import { holes as studioHoles } from "../../src/drilling";
+import { partCollisions } from "../../src/collisions";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
@@ -43,7 +44,8 @@ export function sameTurn(a: Quat4, b: Quat4, axis?: 0 | 1 | 2): boolean {
   const r = [aw * bx - ax * bw - ay * bz + az * by, aw * by + ax * bz - ay * bw - az * bx, aw * bz - ax * by + ay * bx - az * bw];
   return r.every((v, i) => i === axis || Math.abs(v) < 0.02);
 }
-export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
+/** near / off — src отверстий студии, совпавших с отверстием Базиса не дальше 0,5 мм / без такого двойника. */
+export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[]; near: string[]; off: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; /** Фигурные детали Базиса (контур с вырезами), которые в студии прямоугольник или с другим вырезом. */ contours?: string[]; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
 
@@ -110,6 +112,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.startsWith("kitchen-dryer:")) return "сушка";
+  if (id.startsWith("kitchen-svc:")) return "прочее"; // служебное отверстие Базиса («10» k28 m14) — у Базиса «прочее»
   if (id.includes(":hingeplate:")) return "петля";
   if (id.startsWith("lift:")) return id.includes(":screw:") ? "прочее" : "газлифт";
   if (id.startsWith("fast:")) return "конфирмат"; // евровинт 6×50 тоже: у эталона его «прочее» переносит в конфирматы normalizeRefHardware (n3-wall)
@@ -286,7 +289,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   let holeCheck: HoleCheck | undefined;
   if (ref.holes) {
     const sh = studioHoles(m, ps), used = new Set<number>(), pairOf = new Map(pairs.map((p) => [p.ref.id, p.studio.id]));
-    const hc: HoleCheck = { ref: ref.holes.length, studio: sh.length, matched: 0, maxDelta: 0, missing: [], extra: [] };
+    const hc: HoleCheck = { ref: ref.holes.length, studio: sh.length, matched: 0, maxDelta: 0, missing: [], extra: [], near: [], off: [] };
+    const near = new Set<number>(); // отверстия студии, совпавшие с Базисом не дальше 0,5 мм
     const seenH = new Set<string>();
     for (const h of ref.holes) {
       if (h.panel === null || h.panel === undefined) { hc.ref--; continue; }
@@ -299,10 +303,11 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
         if (used.has(j) || s.part !== sid || s.d !== h.d || Math.abs(s.depth - h.depth) > 0.5 || s.dir[0] * h.dir[0] + s.dir[1] * h.dir[1] + s.dir[2] * h.dir[2] < 0.99) return;
         const dd = Math.hypot(...s.at.map((v, i) => v - ob[i] - at[i])); if (dd < bd) { bd = dd; best = j; }
       });
-      if (best >= 0 && bd <= 5) { used.add(best); hc.matched++; hc.maxDelta = Math.max(hc.maxDelta, r1(bd)); }
+      if (best >= 0 && bd <= 5) { used.add(best); hc.matched++; hc.maxDelta = Math.max(hc.maxDelta, r1(bd)); if (bd <= 0.5) near.add(best); }
       else hc.missing.push(`D${h.d}×${h.depth} ${h.face} панель ${h.panel} (${at.map(r1).join(",")})`);
     }
     sh.forEach((s, j) => { if (!used.has(j)) hc.extra.push(`D${s.d}×${s.depth} ${s.part.replace(/^[0-9a-f-]{36}/, "S")} (${s.at.map((v, i) => r1(v - ob[i])).join(",")})`); });
+    sh.forEach((s, j) => (near.has(j) ? hc.near : hc.off).push(s.src));
     holeCheck = hc;
   }
   // кромка: у каждой пары панелей — те же кромленые торцы и толщина (фасады из фасадного материала и ХДФ — без кромки)
@@ -374,6 +379,27 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
 /** Модуль можно брать параметрическим (пакет — PASS, импорт — не сырой): сверка совпала, у студии нет ошибок
  *  и распознаватель ничего не пометил «не поддержано» (иначе неподдержанное теряется молча, даже если сверка его не видит). */
 export const honestPass = (c: Pick<Comparison, "pass">, errors: string[], unsupported: string[]) => c.pass && !errors.length && !unsupported.length;
+
+/** Крепёж студии, вскрывающий паз подсветки, у которого в проекте Базиса то же отверстие (двойник, ±0,5 мм): его точки крепления —
+ *  в kitchen.grooveHoles, и только такое пересечение подписывается «как в проекте Базиса» (collisions.ts). Крепёж без двойника
+ *  (k16 m11 — у Базиса отверстия нет) или в пазу, которого у Базиса нет (k06 m06, k31 m11/m24 — у Базиса вырез контура дна), остаётся
+ *  обычным пересечением (критик n4-antresol). */
+export function grooveTwins(ref: RefModule, m: Module, c: Comparison = compareModule(ref, m)): Module {
+  if (!m.kitchen) return m;
+  const ps = parts(m), at: [number, number, number][] = [];
+  // и паз должен быть тем же, что у Базиса: пазы и фигурные контуры деталей сверились (k06 m06 — у Базиса вместо паза вырез контура дна)
+  const same = !c.contours?.length && !c.edges?.bad.some((b) => b.startsWith("пазы:"));
+  // отверстия крепежа: src — id детали или id с суффиксом (:pin, :side, :bottom); шток эксцентрика (…:pin) — того же крепежа
+  const own = (f: string) => { const b = f.replace(/:pin$/, ""); return (s: string) => s === b || s.startsWith(b + ":"); };
+  const twin = (f: string) => same && !!c.holes && c.holes.near.some(own(f)) && !c.holes.off.some(own(f));
+  for (const x of partCollisions(ps, m)) for (const [f, g] of [[x.a, x.b], [x.b, x.a]]) {
+    if (!g.startsWith("groove:") || !twin(f)) continue;
+    const p = ps.find((q) => q.id === f)!, o = p.model?.origin ?? p.position;
+    if (!at.some((a) => a.every((v, i) => v === o[i]))) at.push([o[0], o[1], o[2]]);
+  }
+  const { grooveHoles: _, ...k } = m.kitchen;
+  return { ...m, kitchen: { ...k, ...(at.length ? { grooveHoles: at } : {}) } };
+}
 
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */
 export function refFromStudio(m: Module, key = "self"): RefModule {

@@ -2,7 +2,7 @@ import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts} from './model';
-import {partCollisions,rawCheck,RAW_FAR} from './collisions';
+import {partCollisions,rawCheck,bazisAirHardware,RAW_FAR,BAZIS_AIR} from './collisions';
 import {rawHangerSeats,RAW_HANGER_DROP} from './rawModule';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
@@ -79,10 +79,17 @@ const list=(xs:{name:string;gap:number}[])=>xs.slice(0,3).map(x=>`${x.name} (${M
  *  шкафу и эталонам кухонь — у всех таких точек в САМОЙ модели Базиса (все панели, без отбора импорта) детали ближе 100 мм нет
  *  (194, 189: петли без дверей; 239: в модели 2 детали из корпуса навесного; 187, 207: подпятники в 165 мм под дном). Сведения
  *  «как в Базисе», не тревога (n4-wardrobes). Навесы кухонь над своей боковиной (k12…k31, до 985 мм) студия ставит на боковину
- *  (rawHangerSeats) — об этом тоже сведения. */
+ *  (rawHangerSeats) — об этом тоже сведения.
+ *  Параметрический модуль из Базиса повторяет положение фурнитуры как есть (сверка с Базисом) — навесы над корпусом (k26–k28, k31: +985,
+ *  k12, k15) он не переставляет: фурнитура дальше BAZIS_AIR от его досок (collisions.ts bazisAirHardware) — те же сведения
+ *  «как в проекте Базиса», что у сырого модуля (одна политика «висит в воздухе — не пересечение»; слияние n4-wardrobes и n4-antresol). */
 export function bazisHostNotes(project:Project):RoomWarning[]{
   const out:RoomWarning[]=[];
-  for(const a of project.modules){if(!a.module.raw)continue;const r=rawCheck(parts(a.module),a.module,false);
+  for(const a of project.modules){
+    if(!a.module.raw){const far=bazisAirHardware(parts(a.module),a.module);
+      if(far.length)out.push({moduleId:a.id,kind:"bazis-host",message:`«${a.module.name}»: фурнитура Базиса висит в воздухе дальше ${BAZIS_AIR} мм от деталей — ${list(far)}. Стоит по координатам проекта Базиса. Проверьте в проекте Базиса: нет детали, на которой она крепится.`});
+      continue;}
+    const r=rawCheck(parts(a.module),a.module,false);
     // навесы кухни, висевшие над своей боковиной (комплект Базиса со старыми координатами), поставлены на боковину — сказать об этом
     const raw=a.module.raw,seat=[...rawHangerSeats(raw)].filter(([i])=>raw.hardware[i].category==="навес");
     if(seat.length)out.push({moduleId:a.id,kind:"bazis-host",message:`«${a.module.name}»: навесы (${seat.length}) в файле Базиса висят над боковиной на ${[...new Set(seat.map(([,d])=>Math.round(-d)))].join(", ")} мм — комплект навесов со старыми координатами. Поставлены на свою боковину, ${RAW_HANGER_DROP} мм ниже её верха, как остальные навесы кухонь.`});
@@ -96,6 +103,10 @@ export function collisionWarnings(project:Project):RoomWarning[]{
   // (186: фланец штанги развёрнут в стойку — так в Базисе). Фурнитура без детали в модели Базиса — не пересечение: bazisHostNotes.
   for(const a of project.modules){if(a.module.raw){const r=rawCheck(parts(a.module),a.module,false);
     if(r.deep.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса внутри детали — ${list(r.deep)}. Так стоит в проекте Базиса — исправить в Базисе.`});
-    continue;}const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм)`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. Сдвиньте полку или петлю, измените наполнение.`});}
+    continue;}const ps=parts(a.module);
+    // «висит в воздухе» у параметрического модуля из Базиса (навесы над корпусом, k26–k28, k31) — не пересечение: сведения
+    // «как в проекте Базиса», как у сырого модуля (bazisHostNotes; слияние n4-wardrobes и n4-antresol). Пересечение крепежа с пазом,
+    // которое есть в самом проекте Базиса (двойник отверстия, kitchen.grooveHoles), — с подписью (n4-antresol)
+    const c=partCollisions(ps,a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм${x.bazis?", как в проекте Базиса":""})`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. ${c.every(x=>x.bazis)?"Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе.":"Сдвиньте полку или петлю, измените наполнение."}`});}
   return out;
 }

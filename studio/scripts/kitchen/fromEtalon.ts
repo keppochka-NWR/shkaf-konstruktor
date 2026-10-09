@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
 import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, isEuro6, legScrews, railConf, railFastened, screwKind, sideTopEdged } from "./recognize-common";
+import { edgeRail, isEuro6, legScrews, outConfirmats, railConf, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
@@ -196,7 +196,15 @@ type Hw = { name: string; category: string; pos: number[] };
 /** Навесы Базиса → kitchen.hangerAt: [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины] по каждой стороне.
  *  null — навесов нет; {} — стоят по правилу студии (15 / 20 / 0, большинство навесов базы); иначе — как в проекте: у части проектов
  *  навесы выше корпуса (на 130–1000 мм, k12, k15, k26–k28, k31) или в 100 мм от боковины (k18) — повторяем как есть, отверстий в боковине
- *  тогда нет, как и у Базиса. */
+ *  тогда нет, как и у Базиса.
+ *  Проверено по цепочкам преобразований корпуса Базиса (n4-antresol): «+985» — не ошибка извлечения осей. В k26/k28 комплект «Навесы
+ *  мебельные (L+R) с заглушками» стоит в модуле верно (у боковины, 14 мм ниже верха), но навес внутри комплекта записан на [0, 1001, −1],
+ *  а в той же библиотечной копии комплекта и в 150 комплектах других проектов — на [0, 1, −1]: сдвиг +1000 по высоте хранится в самом
+ *  проекте. В k28 «ВМ 1» и k27 «А 2» наоборот: навесы в комплекте на [0, 1, −1], а на +1000 сдвинут сам комплект в модуле; в k31
+ *  навесы лежат прямо в модуле, без комплекта, — мировая высота везде та же, «верх боковины + 985». Цепочка преобразований (модуль → комплект → навес) та же, что у панелей модуля, и у верно
+ *  стоящих комплектов (k15, k27 «ВМ 3») даёт «−15 от верха»; Габаритная рамка комплекта (858×55×90) стоит у боковины, а навесы —
+ *  на 1000 мм над ней. Значит, сдвиг записан в самом файле Базиса (ошибка шаблона «ВМ (Стенка в паз)» проектировщика), Базис
+ *  сверловок под такие навесы не даёт. Сетка навеса та же (95a815598b07), что и у стоящих верно. */
 export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner: number, top: number, sideZ0: number): { hangerAt?: NonNullable<NonNullable<Module["kitchen"]>["hangerAt"]>; note?: string } | null {
   const hs = hardware.filter((h) => h.category === "навес");
   if (!hs.length) return null;
@@ -218,7 +226,9 @@ export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner:
   const caps = same(capL, left) && same(capR, right) ? {} : { caps: { left: capL, right: capR } };
   if (std(left) && std(right) && !caps.caps) return {};
   const out = Math.max(-left[0], -right[0]);
-  return { hangerAt: { left, right, ...caps }, ...(out > 0 ? { note: `навесы Базиса выше корпуса на ${r1(out + 15)} мм — повторено как в проекте` } : {}) };
+  // ровно +1000 (верх боковины + 985) — сдвиг записан в файле Базиса (см. выше), а не ошибка извлечения: говорим об этом в заметке
+  const k1000 = Math.abs(out + 15 - 1000) < 0.6 ? " (сдвиг +1000 записан в самом файле Базиса — комплект навесов над модулем, сверловок нет)" : "";
+  return { hangerAt: { left, right, ...caps }, ...(out > 0 ? { note: `навесы Базиса выше корпуса на ${r1(out + 15)} мм${k1000} — повторено как в проекте` } : {}) };
 }
 
 /** Боковины стоят на дне (дно под боковинами) на эксцентриках: стяжка Базиса — на наружной пласти боковины на уровне верха дна
@@ -227,11 +237,16 @@ export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B)
   const outer = { left: left.x0, right: right.x1 };
   const ecc = hardware.filter((h) => h.category === "эксцентрик" && Math.abs(h.pos[1] - bottom.y1) < 0.6);
   const bySide = (s: "left" | "right") => ecc.filter((h) => Math.abs(h.pos[0] - outer[s]) < 0.6);
-  const sides = (["left", "right"] as const).filter((s) => bySide(s).length === 2);
+  // третий эксцентрик Базиса в углу (k28 m12: z=8 у левой боковины — ошибка проекта, не повторяем): боковина с той же парой стяжек, что
+  // у другой, тоже стоит на эксцентриках — иначе студия ставила там конфирматы, которых нет в Базисе, и они выходили в паз подсветки (n4-antresol)
+  const two = (["left", "right"] as const).filter((s) => bySide(s).length === 2);
+  const samePair = (s: "left" | "right") => two.length === 1 && s !== two[0] && bySide(s).length > 2 && bySide(two[0]).every((h) => bySide(s).some((g) => Math.abs(g.pos[2] - h.pos[2]) < 0.6));
+  const sides = (["left", "right"] as const).filter((s) => two.includes(s) || samePair(s));
   if (!sides.length) return null;
-  const zs = sides.flatMap((s) => bySide(s).map((h) => h.pos[2]));
+  const pairOf = (s: "left" | "right") => two.includes(s) ? bySide(s) : bySide(s).filter((g) => bySide(two[0]).some((h) => Math.abs(g.pos[2] - h.pos[2]) < 0.6));
+  const zs = sides.flatMap((s) => pairOf(s).map((h) => h.pos[2]));
   const at = { back: r1(Math.min(...zs) - bottom.z0), front: r1(bottom.z1 - Math.max(...zs)) };
-  const e0 = bySide(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0], cx = sides[0] === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2;
+  const e0 = pairOf(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0], cx = sides[0] === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2;
   const d0 = hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[0] - cx) < 0.6).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
   return { at, sides: [...sides], ...(d0 ? { dowel: r1(Math.abs(d0.pos[2] - e0.pos[2])) } : {}) };
 }
@@ -345,7 +360,15 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const legs = hw("опора");
   // дно — нижняя горизонталь; крыша — верхняя горизонталь во всю глубину
   const bottom0 = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6).sort((a, c) => a.b.y0 - c.b.y0)[0];
-  const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
+  // …или крыша перед ХДФ, утопленным вглубь корпуса: от лица боковин до лицевой плоскости ХДФ, хоть и мельче 0,6 глубины
+  // (k13 m03: ХДФ на 117–120 при глубине 300, крыша 180 — без этого крыша становилась жёсткой полкой вплотную к верху, n4-antresol)
+  const beforeHdf = (b: B) => b.z1 >= sideZ1 - 1 && hdf.some((h) => Math.abs(h.b.z1 - b.z0) <= 0.5 && h.b.y1 > b.y0);
+  const topPanel = horiz.filter(({ b }) => (b.z1 - b.z0 > d * 0.6 || beforeHdf(b)) && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
+  // крыша на боковинах — над их торцами во всю ширину корпуса (k17 m07, k21 m07: боковины 31–999, крыша 999–1015): у студии крыша
+  // между боковинами, корпус выходил на 16 мм ниже, а навес Базиса под крышей (у торца боковины) — «выше корпуса» и в крыше студии
+  // на 16 мм. Пока не поддержано — модуль идёт в проект как в Базисе (n4-antresol).
+  const roofOver = horiz.find(({ b }) => b.y0 >= top - 0.5 && b.x0 <= left.b.x0 + 0.5 && b.x1 >= right.b.x1 - 0.5 && b.z1 - b.z0 > d * 0.6);
+  if (roofOver) unsupported.push(`крыша на боковинах (над их торцами, ${r1(roofOver.b.y1 - roofOver.b.y0)} мм) — пока не поддержано: у студии крыша между боковинами`);
   // единственная горизонталь во всю глубину — наверху (k34 m04: сушка без дна, «Крышка» и ХДФ до низа): это крыша, дна нет
   const bottom = bottom0 && bottom0 === topPanel && bottom0.b.y0 > top / 2 ? undefined : bottom0;
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
@@ -433,10 +456,16 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
     const front = r.b.z1 >= sideZ1 - 30;
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
+    // У Базиса без крепежа в боковинах (k04 m05/m06/m07/m09) студия конфирматы в боковины не ставит (n4-antresol: fasten false);
+    // эксцентрики и шканты снизу в дно — по проекту (kitchen.railUnder, n4-wall: k04 m08, k31); другой их раскладки студия пока
+    // не строит — «не поддержано» (критик n4-antresol)
     if (wallRailOnBottom(role, r, bottom)) {
-      const place = front ? "front-bottom" : "rear-bottom";
-      railList.push({ place, height: r1(r.b.y1 - r.b.y0) });
+      const place = front ? "front-bottom" : "rear-bottom", fx = railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
+      railList.push({ place, height: r1(r.b.y1 - r.b.y0), ...(fx ? {} : { fasten: false as const }) });
       const ru = bottom ? railUnder(ref.hardware, r.b, bottom.b) : undefined; if (ru) m.kitchen.railUnder = { ...m.kitchen.railUnder, [place]: ru }; // эксцентрики и шканты снизу (n4-wall)
+      // эксцентрики и шканты стяжки в дно, которых railUnder не повторяет (k04 m05: 6 эксцентриков у Базиса, railUnder — 2 из них)
+      const inRail = ref.hardware.filter((h) => /эксцентрик|шкант/.test(h.category) && h.pos[0] > left.b.x1 && h.pos[0] < right.b.x0 && h.pos[1] >= r.b.y0 - 1 && h.pos[1] <= r.b.y1 + 1 && h.pos[2] >= r.b.z0 - 1 && h.pos[2] <= r.b.z1 + 1).length;
+      if (!fx && inRail > (ru ? ru.ecc.length + ru.dowel.length : 0)) unsupported.push("нижняя стяжка навесного крепится к дну эксцентриками и шкантами (не к боковинам) — пока не поддержано");
       continue;
     }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
@@ -444,10 +473,16 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // railConf для нижних, навесных и антресолей (слияние n4-base railConfY и n4-wall railConf)
     const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
     const hz = topPanel && Math.abs(topPanel.b.y0 - r.b.y1) < 0.6 ? topPanel.b : bottom && Math.abs(bottom.b.y1 - r.b.y0) < 0.6 ? bottom.b : undefined;
-    const rc = fastened && !m.kitchen.noFasteners && role !== "tall" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
+    const rc = fastened && !m.kitchen.noFasteners ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...rc });
   }
   if (railList.length) m.rails = railList;
+  // служебные сквозные отверстия проекта (k28 m14: D10 под провод) — как в Базисе (n4-antresol)
+  const svc = serviceHoles(ref.hardware as Parameters<typeof serviceHoles>[0], (ref.holes ?? []) as Parameters<typeof serviceHoles>[1], left.b.x0, sideZ0);
+  if (svc.length) m.kitchen.svcHoles = svc;
+  // стяжка с соседним корпусом: конфирмат изнутри через боковину наружу (k15 m12) — как в Базисе (n4-antresol)
+  const oc = outConfirmats(ref.hardware as Parameters<typeof outConfirmats>[0], (ref.holes ?? []) as Parameters<typeof outConfirmats>[1], left.b.x0, right.b.x1, t, sideZ0);
+  if (oc.length) m.kitchen.outConf = oc;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
   if (!back) {
@@ -465,6 +500,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // пенал с набивным ХДФ: крыша короче сзади (вентзазор над техникой, k23 m15/m16) — то же поле topBack, что у навесных (recognize-tall.ts)
     const tbk = topBackTall(role, topPanel, bottom, sideZ0);
     if (tbk !== undefined) { m.kitchen.topBack = tbk; notes.push(`крыша короче сзади на ${tbk} (вентзазор)`); }
+    const air = r1(sideZ0 - back.b.z1); // ХДФ с зазором от корпуса (k01 m10/m14 — 2 мм) — как в проекте
+    if (air >= 0.5) m.kitchen.backAir = air;
   }
   else {
     m.backType = "groove";
@@ -1012,7 +1049,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   if (role === "wall" || role === "antresol") {
     const hg = hangersFromEtalon(ref.hardware, left.b.x1, right.b.x0, top, sideZ0);
     if (!hg) m.kitchen.hangers = false;
-    else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note) notes.push(hg.note); }
+    else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note && !roofOver) notes.push(hg.note); } // под крышей на боковинах навес не «выше корпуса»
   }
   // пенал на навесах (k23 m04, k18 m21) — только когда они есть в проекте, по тем же точкам (n4-tall)
   if (role === "tall") {

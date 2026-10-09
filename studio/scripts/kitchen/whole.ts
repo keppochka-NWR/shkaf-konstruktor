@@ -8,10 +8,10 @@
 // npx tsx scripts/kitchen/whole.ts k06,k22 [папка проектов] [отчёт.md]
 import { readFileSync, writeFileSync } from "node:fs";
 import { parts, type Part } from "../../src/model";
-import { parseProject, localToRoom, applyAutoFillers, projectErrors, type PlacedModule, type Project } from "../../src/project";
+import { parseProject, applyAutoFillers, projectErrors, type PlacedModule, type Project } from "../../src/project";
 import { estimate } from "../../src/pricing";
+import { interModule, studioBox, pen, isBoard } from "./interModule";
 import { worktopGroupRole } from "./rowWorktop";
-import { allowedContact } from "../../src/collisions";
 import { etalonHoleItems, holeSig, supplierEdgeKind } from "./wholeChecks";
 import { kitHeaderIdx } from "./refHardware";
 
@@ -32,26 +32,7 @@ function bazisBox(o: number[], yaw: number, b: number[]): Box {
   for (const x of [b[0], b[3]]) for (const z of [b[2], b[5]]) { xs.push(o[0] + x * c + z * s); zs.push(o[2] - x * s + z * c); }
   return [Math.min(...xs), o[1] + b[1], Math.min(...zs), Math.max(...xs), o[1] + b[4], Math.max(...zs)];
 }
-function studioBox(a: PlacedModule, q: Part): Box {
-  const [cx, cy, cz] = q.position, [sx, sy, sz] = q.size, p0 = localToRoom(a, cx - sx / 2, cz - sz / 2), p1 = localToRoom(a, cx + sx / 2, cz + sz / 2), y = a.y ?? 0;
-  return [Math.min(p0.x, p1.x), y + cy - sy / 2, Math.min(p0.z, p1.z), Math.max(p0.x, p1.x), y + cy + sy / 2, Math.max(p0.z, p1.z)];
-}
 const union = (bs: Box[]): Box => [0, 1, 2].map((i) => Math.min(...bs.map((b) => b[i]))).concat([3, 4, 5].map((i) => Math.max(...bs.map((b) => b[i]))));
-const pen = (A: Box, B: Box) => Math.min(...[0, 1, 2].map((i) => Math.min(A[i + 3], B[i + 3]) - Math.max(A[i], B[i])));
-const isBoard = (q: Part) => q.material === "board" || q.material === "hdf" || q.material === "glass";
-function interModule(p: Project, off: number[] = [0, 0, 0]) {
-  // фурнитура сырых модулей (raw:h*) в студии — точка Базиса с условным кубом 10 мм, а не форма изделия; у Базиса фурнитура
-  // в пересечения не входит — сравниваем одинаково (иначе петля/навес/клипса у соседней детали дают «пересечение» 3–5 мм)
-  // объекты «Ряда» (с 1a7d673 каждый цоколь, стеновая панель, столешница — свой объект) — одна группа, как «ряд» у Базиса ниже:
-  // стык цоколя фронтального и бокового внутри ряда — не пересечение разных модулей
-  const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu" && !q.id.startsWith("raw:h")).map((q) => ({ i: a.module.raw?.row ? -1 : i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
-  const out: string[] = [];
-  // разрешённые контакты — тот же реестр, что у проверки студии (collisions.allowedContact): опора под дном до 3 мм, клипса на цоколе.
-  // У Базиса фурнитура в пересечения не входит, а её сетки там те же: k23 «Нижний модуль» — опора Ø58 в точке z 493 доходит до 522,
-  // цоколь ряда Базиса начинается с 520 — те же 2 мм, что у студии (n4-kitchens3)
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i) continue; const d = pen(A.b, B.b); if (d > 0.5 && !allowedContact(A.q, B.q, d)) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
-  return out;
-}
 
 let total = 0;
 for (const k of keys) {

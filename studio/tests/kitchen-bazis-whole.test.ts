@@ -115,3 +115,19 @@ test('B6: материалы — из Базиса: ЛДСП «Черный»/«
   assert.ok(!d30.has('Белый:18')&&!d30.has('Слэйт:18'),'МДФ не превращается в «Lamarty 18 мм · Белый/Слэйт»');
   assert.ok(estimate(k30).lines.some(l=>l.label==='Плита 18 мм · IDM ETERNO Libra'));
 });
+
+// Пересечения разных модулей (whole.ts → interModule.ts): опора и клипса нижнего модуля разрешены только у цоколя «Ряда» — правилом
+// allowedContact, как внутри модуля, а не в любой доске; конфирмат стяжки (kitchen.outConf) — только сам, в доске соседа (критик n4-antresol).
+test('whole kitchen: a leg may touch only the Row plinth (k23), the neighbour tie confirmat only a board (k15)',{skip:!has('k23')||!has('k15')},async()=>{
+  const {interModule}=await import('../scripts/kitchen/interModule');
+  const p=kitchen('k23');
+  assert.deepEqual(interModule(p),[],'k23: legs and clips at the Row plinth, as in Bazis');
+  const q=structuredClone(p);
+  for(const a of q.modules)for(const x of a.module.raw?.panels??[])if(/цокол/i.test(x.name))x.name='Панель';
+  assert.ok(interModule(q).length>0,'the same contact with a board that is not a plinth is reported');
+  const k15=kitchen('k15'),n=interModule(k15).length;
+  const r=structuredClone(k15);
+  for(const a of r.modules)if(a.module.kitchen?.outConf)delete a.module.kitchen.outConf;
+  assert.equal(interModule(r).length,n,'k15: the tie confirmats add nothing');
+  assert.ok(k15.modules.some(a=>a.module.kitchen?.outConf?.length),'k15 has tie confirmats');
+});
