@@ -33,7 +33,7 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
   else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
   const sd = sideDown(ref);
-  if (sd && (k.role === "base") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
+  if (sd && (k.role === "base" || k.role === "tall") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }

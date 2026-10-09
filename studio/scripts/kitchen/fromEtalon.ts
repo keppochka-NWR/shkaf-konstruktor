@@ -975,6 +975,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (out.length) m.grooves = out;
   }
   notes.push(...recognizeBaseExtras(ref, m, fronts.length)); // как в Базисе: без петель / опор / крепежа (recognize-base.ts)
+  // пенал с опущенной боковиной (sideDown, k05 m01): стык дна с ней в Базисе бывает без крепежа — то же поле jointNone (n4-tall)
+  const sdSide = m.kitchen.sideDown?.side;
+  if (role === "tall" && sdSide && bottom) {
+    const jn = wallJointNone(ref.hardware, [["bottom", bottom]], left, right).filter((k) => k === `bottom:${sdSide}`);
+    if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык дна с опущенной боковиной без крепежа (как в Базисе)`); }
+  }
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;

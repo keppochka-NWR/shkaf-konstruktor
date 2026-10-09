@@ -210,3 +210,15 @@ test('k20 m09: крыша на рафиксах, как в Базисе (kitchen
   assert.equal(ps.filter(p=>p.id.startsWith('rafix:top:')&&!p.id.endsWith(':pin')).length,4);
   assert.deepEqual(parseKitchenRafix(JSON.parse(JSON.stringify(m.kitchen!.rafix)))?.top,m.kitchen!.rafix!.top);
 });
+test('пенал с опущенной боковиной (sideDown, как у нижних): k05 m01 — корпус на месте (было всё со сдвигом 90), стык дна с опущенной боковиной без крепежа, как в Базисе; k24 m04 — панели и конфирматы на месте',{skip:!existsSync(`${ETALON}/k05.json`)},()=>{
+  const ref=load('k05','m01'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.sideDown?.side,'left');
+  assert.ok(m.kitchen?.jointNone?.includes('bottom:left'));
+  const c=compareModule(ref,m);
+  assert.deepEqual(c.missing,[]);assert.deepEqual(c.extra,[]);
+  for(const h of c.hardware.filter(h=>h.category!=='прочее'))assert.ok(h.ref===h.studio&&(h.maxPosDelta??0)<=2,JSON.stringify(h));
+  const r24=load('k24','m04'),m24=moduleFromEtalon(r24).module,c24=compareModule(r24,m24);
+  assert.equal(m24.kitchen?.sideDown?.side,'right');
+  const cf=c24.hardware.find(h=>h.category==='конфирмат')!;assert.equal(cf.studio,cf.ref);
+  assert.ok(c24.missing.length<=2,c24.missing.map(x=>x.name).join(', '));
+});
