@@ -17,7 +17,10 @@ export type RefModule = { key: string; name: string; archetype: string; size: nu
 type Box = [number, number, number, number, number, number];
 type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
-export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
+/** rot — сверка поворота (справочно, на PASS не влияет, кроме газлифта): checked — фурнитура Базиса с кватернионом и деталью студии
+ *  с кватернионом рядом; bad — поворот другой; spin — отличается только вращением вокруг своей оси у осесимметричной (конфирмат, шкант…);
+ *  noQuat — у ближайшей детали студии поворот не задан кватернионом. */
+export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number } };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
@@ -106,6 +109,14 @@ function matchPoints(a: number[][], b: number[][]): number | null {
   return r1(worst);
 }
 
+/** Осесимметричная фурнитура: поворот вокруг своей оси (оси детали) — тот же крепёж. */
+const AXIAL = new Set(["конфирмат", "шкант", "полкодержатель", "эксцентрик", "опора", "рафикс"]);
+/** Относительный поворот conj(a)·b для кватернионов [w,x,y,z] (нормированный). */
+function quatRel(a: number[], b: number[]): number[] {
+  const na = Math.hypot(...a) || 1, nb = Math.hypot(...b) || 1, [aw, ax, ay, az] = [a[0] / na, -a[1] / na, -a[2] / na, -a[3] / na], [bw, bx, by, bz] = b.map((v) => v / nb);
+  return [aw * bw - ax * bx - ay * by - az * bz, aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw];
+}
+
 /** Отступления (реестр): профили-экструзии Базиса («Профиль», «Профиль1») — без сетки, контур в эталон не извлекается; не воспроизводятся, в отчёте — отдельной строкой. */
 export const isDeviation = (h: RefHardware) => /^Профиль/.test(h.name) && !h.mesh;
 
@@ -148,6 +159,22 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
         return Math.abs(h.quat!.reduce((s, v, i) => s + v * q[i], 0)) / n < 0.999;
       }).length;
       if (bad) row.note = `поворот ≠ ×${bad}`;
+    }
+    // Поворот всей фурнитуры категории (справочно): ближайшая деталь студии, q и −q — один поворот.
+    const all = ps.filter((p) => studioCategory(p) === category), refQ = ref.hardware.filter((h) => h.category === category && h.quat);
+    if (all.length && refQ.length) {
+      const rot = { checked: 0, bad: 0, spin: 0, noQuat: 0 };
+      for (const h of refQ) {
+        const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
+        all.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
+        const q = best?.model?.quat; if (!q) { rot.noQuat++; continue; }
+        rot.checked++;
+        const r = quatRel(h.quat!, q);
+        if (Math.abs(r[0]) >= 0.9995) continue;
+        const v = Math.hypot(r[1], r[2], r[3]), ax = [r[1] / v, r[2] / v, r[3] / v];
+        if (AXIAL.has(category) && ax.some((c) => Math.abs(c) >= 0.999)) rot.spin++; else rot.bad++;
+      }
+      row.rot = rot;
     }
     return row;
   });
@@ -231,8 +258,9 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   for (const p of [...c.pairs].sort((a, b) => b.delta - a.delta)) md += `| ${p.ref.name} (${p.ref.cls}) | ${p.studio.name} | ${p.delta > c.tol ? "**" + p.delta + "**" : p.delta} | ${p.faces.join(" ")} |\n`;
   if (c.missing.length) md += `\n**Нет в студии:** ${c.missing.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
-  md += "\n| фурнитура | Базис | студия | max Δ точки, мм |\n|---|---|---|---|\n";
-  for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} |\n`;
+  md += "\n| фурнитура | Базис | студия | max Δ точки, мм | поворот (справочно) |\n|---|---|---|---|---|\n";
+  const rot = (r: HardwareRow["rot"]) => !r ? "—" : `сверено ${r.checked}${r.bad ? `, **другой ${r.bad}**` : ""}${r.spin ? `, вокруг своей оси ${r.spin}` : ""}${r.noQuat ? `, без кватерниона ${r.noQuat}` : ""}`;
+  for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} | ${rot(h.rot)} |\n`;
   if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;

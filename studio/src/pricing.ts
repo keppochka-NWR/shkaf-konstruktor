@@ -10,6 +10,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
+import {rawKitchen,rawOwnMaterial} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -86,12 +87,14 @@ export const HARDWARE_KIT={label:'Мелочёвка корпуса (шуруп�
 
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы. Всё остальное — фурнитура. */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|edge|small$|work$|alu-|glass-|kupe-(fill|profile|track|work|film))/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|alu-|glass-|kupe-(fill|profile|track|work|film))/.test(id)?'material':'hardware';}
 /** Выдвижной тремпель GTV: решение Макса 07.10.2026 — 500 ₽ за штуку, пока нет счёта поставщика. */
 export const PULLOUT_PRICE=500;
 export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'kupe'|'other';
 export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
+  // прочая фурнитура сырого модуля кухни Базиса (bazis:<ед>:<наименование>) — по наименованию Базиса
+  if(id.startsWith('bazis:')){const n=id.toLowerCase();if(/ручк/.test(n))return 'handles';if(/направл|ящик|царг|indigo|firmax|старт|start|atira/.test(n))return 'slides';if(/газ|шток|подъ/.test(n))return 'hinges';if(/рафикс|шуруп|саморез|гвозд|винт|заглушк/.test(n))return 'fasteners';return 'other';}
   if(/^(hinge|push-latch|lift-mechanism|kitchen-lift)/.test(id))return 'hinges';
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
@@ -125,10 +128,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // Сырой модуль (импорт Базиса): фурнитура — по счётчикам Базиса (raw.counts), а не по правилам студии (без фантомных петель
     // на фасадах ящиков и планках); фасадный материал — фасады поставщика (м²); столешница — пог.м; кромка — по длинам Базиса.
     if(a.module.raw){
-      const r=a.module.raw,c=r.counts??{},hb=HINGE_BRANDS[a.module.hingeBrand??'gtv'],src='Как в проекте Базиса';
-      if(!r.row)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
+      const r=a.module.raw,c=r.counts??{},hb=HINGE_BRANDS[a.module.hingeBrand??'gtv'],src='Как в проекте Базиса',kr=rawKitchen(r);
+      // Правило Макса 09.10.2026: в кухню из Базиса студия ничего не добавляет. Норматива «Мелочёвка корпуса» и заглушек
+      // под конфирмат в спецификациях Базиса нет — этих строк у сырого модуля КУХНИ нет. Сырой шкаф Базиса (корпус) — как было.
+      if(!kr)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
       add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
-      add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',c.confirmats??0,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
+      if(!kr)add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',c.confirmats??0,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
       add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',c.eccentrics??0,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
       add('shelf-holder','Полкодержатель Boyard p521',c.shelfHolders??0,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
       add('dowel','Шкант 8×30',c.dowels??0,'шт',null,src+'; закупочная цена шканта не найдена');
@@ -138,12 +143,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('hinge'+((a.module.hingeBrand??'gtv')==='gtv'?'':':'+a.module.hingeBrand),hb.soft.label,c.hinges??0,'шт',hb.soft.price,hb.soft.source);
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       add('axis-pro:raw','Ящик Axis PRO (по проекту Базиса) — комплект фурнитуры',c.drawers??0,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
-      // вырезы в столешнице ряда: в эталоне Базиса их нет — по модулям «Мойка»/«Варка» в проекте (как у параметрической столешницы)
-      if(r.row&&r.panels.some(q=>/столешн/i.test(q.name)||[q.box[3]-q.box[0],q.box[4]-q.box[1],q.box[5]-q.box[2]].sort((x,y)=>x-y)[0]>=26)){
-        const nm=(re:RegExp)=>p.modules.filter(b=>b!==a&&re.test(b.module.name)&&!b.module.worktop).length;
-        add('worktop-cut:sink','Вырез под мойку',nm(/мойк/i),'шт',null,'Цена работы не найдена; по модулю «Мойка» проекта');
-        add('worktop-cut:hob','Вырез под варочную панель',nm(/варк/i),'шт',null,'Цена работы не найдена; по модулю «Варка» проекта');
-      }
+      // прочая фурнитура Базиса (rawItems): рафиксы, заглушки навесов, ящики Indigo/Firmax/СТАРТ, газлифты PD-G, профили, шурупы — как в спецификации Базиса
+      if(kr)for(const [k,n] of Object.entries(r.items??{})){const i=k.indexOf(':'),unit=k.slice(0,i),name=k.slice(i+1);add('bazis:'+k,name+(unit==='компл'?' — комплект':'')+' (как в проекте Базиса)',n,unit,null,src+'; закупочная цена не найдена');}
+      // Вырезов под мойку/варку в столешницах Базиса нет (в эталоне у столешниц только завалы и пазы) — по правилу Макса
+      // 09.10.2026 студия их не добавляет (раньше домысливала по именам модулей «Мойка»/«Варка»).
       for(const p of r.panels){
         // стекло Базиса (полки ВМКП) — как стеклянная полка студии, м²
         if(p.kind==='glass'){const g=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);add('glass-shelf','Стеклянная полка · обработка и держатели',g[0]*g[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
@@ -151,6 +154,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
         if(/столешн/i.test(p.name)||s[2]>=26){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
+        // плита МДФ и прочие материалы кухни Базиса (не лист Lamarty): м² по деталям Базиса, материал — как в Базисе; кромка Базиса на них считается ниже
+        if(kr&&rawOwnMaterial(p)){const t=Math.round(s[2]),mdf=p.kind==='mdf',name=p.mat??(mdf?'Плита МДФ ':'Материал Базиса ')+t+' мм';
+          add('mat:'+name,name+(mdf?' (МДФ, как в проекте Базиса)':' (как в проекте Базиса)')+', без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Площадь деталей Базиса; раскрой и цена материала — уточнить');}
         for(const [t,len] of p.edges??[]){const L=len/1000;if(t===2)edge2+=L;else if(t===1)edge1+=L;else if(t===0.8)edge08+=L;else if(t===0.5)edge05+=L;else edge04+=L;}
         if(s[1]<70)small++;
       }
@@ -158,13 +164,15 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     }
     const fc=fastenerCounts(a.module);
     // кухня по Базису — конфирмат 7×50 (под него присадка D8+D5×35); шкафы — 5×50 по прайсу цеха
+    // кухня (правила Базиса): только то, что есть в спецификации Базиса — без заглушек под конфирмат и норматива «Мелочёвка корпуса»
+    const kitchen=!!a.module.kitchen;
     if(a.module.kitchen?.screw==='euro-6x50')add('confirmat-euro-6x50','Евровинт 6×50 (как в проекте Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у конфирмата 5×50 — уточнить по счёту');
-    else if(a.module.kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
+    else if(kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
     else add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
-    add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
+    if(!kitchen)add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
-    add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
+    if(!kitchen)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
     if(a.module.kitchen){
       // Кухня: опоры и клипсы — по фактическим деталям сцены (kitchenLegs), как в спецификациях Базиса цеха.
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;
@@ -194,7 +202,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);
         // СТП: с ручками — петля с доводчиком; push-to-open — петля без пружины + толкатель. Бренд — выбор клиента (GTV по умолчанию).
         const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
-        if(d.hinge==='top'&&!a.module.kitchenLift)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
+        // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
+        if(d.hinge==='top'&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
@@ -215,7 +224,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
-      if(d.id.startsWith('kitchen-hanger:'))add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');
+      // навес кухни — с заглушкой ABS, как в Базисе (34 кухни: у параметрических модулей навесов 34, заглушек 34)
+      if(d.id.startsWith('kitchen-hanger:')){add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS',1,'шт',null,'Как в проектах Базиса: заглушка на каждый навес; цена не найдена');}
       if(d.material==='glass'&&d.role==='shelf')add('glass-shelf','Стеклянная полка · обработка и держатели',d.size[0]*d.size[2]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');
       if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){
@@ -224,7 +234,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         add('glass-top-temper','Закалка стекла 4 мм',area,'м²',RULES.glassTopTemper,'АТБ, прайс 01.01.2026');
         add('glass-top-polish','Полировка кромки стекла 4 мм',perimeter,'пог.м',RULES.glassTopPolishPerM,'Прайс МВМ стеклообработка 13.01.2026');
       }
-      if(d.role==='light')add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
+      // паз Базиса (groove:*) — обработка детали, не подсветка: в 3D тёмной полосой, в смете его нет. Ленты подсветки в спецификациях Базиса нет.
+      // Настоящая подсветка (опция «Подсветка в стойках», в т.ч. в кухне студии) — считается как раньше.
+      if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews,'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха');
@@ -238,7 +250,11 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
     }
   }
-  add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('edge05','Кромка 0,5 мм (как в проекте Базиса)',edge05,'м',15,'Цена как у кромки 0,4 — уточнить по счёту');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');add('work','Работа цеха',plan.length,'лист',2500,'База расчёта шкафа');
+  add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('edge05','Кромка 0,5 мм (как в проекте Базиса)',edge05,'м',15,'Цена как у кромки 0,4 — уточнить по счёту');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха');
+  // Работа цеха — за лист ЛДСП. У кухни (все объекты — кухонные модули, сырые модули кухни Базиса, столешницы) лист ХДФ работой
+  // не считается; у шкафов, в т.ч. сырых шкафов из корпуса Базиса, — как было (решение не менять правила шкафов).
+  const kitchenOnly=p.modules.length>0&&p.modules.every(a=>a.module.kitchen||rawKitchen(a.module.raw)||a.module.worktop);
+  add('work','Работа цеха',kitchenOnly?plan.filter(s=>s.material!=='hdf').length:plan.length,'лист',2500,kitchenOnly?'База расчёта: 2 500 ₽ за лист ЛДСП (лист ХДФ без работы)':'База расчёта шкафа');
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));

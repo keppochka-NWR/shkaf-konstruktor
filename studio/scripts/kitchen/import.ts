@@ -1,17 +1,18 @@
 // Импорт кухонь из эталонов Базиса в проекты студии: модуль, прошедший сверку (PASS), — параметрический; остальные — «сырые»
 // (детали Базиса как есть). Расстановка и повороты — из эталона (p_world = origin + Ry(yaw)·p_mod). Объекты ряда (столешница,
 // цоколь, стеновые панели, профили) — отдельный сырой объект «Ряд».
-// npx tsx scripts/kitchen/import.ts [k14,k25|all]  → public/local-projects/kitchen-kNN.json + kitchens.json (только локально, не публикуется)
+// npx tsx scripts/kitchen/import.ts [k14,k25|all] [outDir]  → <outDir|public/local-projects>/kitchen-kNN.json + kitchens.json (только локально, не публикуется)
 import { readFileSync, readdirSync, writeFileSync, existsSync, copyFileSync, statSync } from "node:fs";
 import { initialModule, id, validate, section, type Module } from "../../src/model";
 import { newProject, parseProject, projectErrors, type PlacedModule } from "../../src/project";
 import { compareModule, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
-import { rawCounts, type RawSpec } from "../../src/rawModule";
+import { rawCounts, rawItems, type RawSpec } from "../../src/rawModule";
 import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
-const OUTDIR = "public/local-projects";
+// третий аргумент — своя папка вывода (рабочие копии не пишут в общую public/local-projects)
+const OUTDIR = process.argv[3] ?? "public/local-projects";
 const arg = process.argv[2] ?? "all";
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль"]);
@@ -26,7 +27,13 @@ function rawFromRef(ref: RefModule): RawSpec {
     panels: ref.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
     counts: rawCounts(ref.hardware),
+    ...items(ref.hardware),
   };
+}
+// прочая фурнитура Базиса (рафиксы, заглушки навесов, ящики не Axis PRO, газлифты PD-G, профили, шурупы) — в смету как в Базисе
+function items(hw: unknown[]): { items?: Record<string, number> } {
+  const it = rawItems(hw as Parameters<typeof rawItems>[0]);
+  return Object.keys(it).length ? { items: it } : {};
 }
 function place(ref: RefModule, m: Module): PlacedModule {
   const o0 = (ref as unknown as { world: { origin: number[] } }).world.origin, yaw = (ref as unknown as { world: { yaw: number } }).world.yaw;
@@ -63,7 +70,7 @@ for (const f of files) {
   if (rowPanels.length) {
     const o = [0, 1, 2].map((i) => Math.min(...rowPanels.map((p) => p.box[i]))), M = [3, 4, 5].map((i) => Math.max(...rowPanels.map((p) => p.box[i])));
     const m: Module = { ...initialModule(), name: "Ряд: столешница, цоколь, панели", width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0,
-      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), row: true } };
+      raw: { panels: rowPanels.map((p) => ({ name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...panelExtras(p), ...(p.front ? { facade: true } : {}) })), hardware: [], counts: rawCounts((e.row?.hardware ?? []) as { name: string; category: string }[]), ...items(e.row?.hardware ?? []), row: true } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
   }
   // помещение по габариту кухни
@@ -74,6 +81,7 @@ for (const f of files) {
   for (const a of placed) { a.x = r1(a.x - Math.min(0, minX) + (minX < 0 ? 5 : 0)); a.z = r1(a.z - Math.min(0, minZ) + (minZ < 0 ? 5 : 0)); a.y = r1((a.y ?? 0) - Math.min(0, minY)); }
   if (minY < 0) notes.push(`низ кухни в Базисе на ${r1(minY)} — поднято до пола`);
   const p = newProject({ ...initialModule(), sections: [section()] });
+  p.source = "bazis"; // кухня из Базиса: студия не добавляет фальши и строки сметы сверх Базиса
   p.room = { ...p.room, width: Math.ceil(Math.max(...ext.map((x) => x.x1)) - Math.min(0, minX) + 400), depth: Math.ceil(Math.max(...ext.map((x) => x.z1)) - Math.min(0, minZ) + 400), height: Math.max(2700, Math.ceil(Math.max(...ext.map((x) => x.y1)) + dy + 60)), openings: [] };
   p.modules = placed;
   const errs = projectErrors(p);
