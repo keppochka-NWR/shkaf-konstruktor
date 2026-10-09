@@ -11,7 +11,9 @@ export type KDrawerSystem = "axis-pro" | "firmax-ldsp";
  *  дно между боковинами на bottomUp выше их низа (10, у мелких 5); задняя стенка и фальшпанель — между боковинами на дне, до верха боковин.
  *  Конфирматы ставятся в Базисе вручную (шаг разный), поэтому их высоты храним как в проекте: conf — от низа задней стенки
  *  (фальшпанель — те же), confBottom — от торцов дна. По умолчанию — самые частые в базе. */
-export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; gap?: number; front?: number; conf?: number[]; confBottom?: number; screws?: boolean; rearHoles?: boolean };
+export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; gap?: number; front?: number; conf?: number[]; confBottom?: number; screws?: boolean; rearHoles?: boolean;
+  /** Точки направляющих Базиса (у Firmax без сетки ставятся произвольно): [от внутренней грани левой боковины, от пола, от передней кромки]. По умолчанию — две в точке runnerY. */
+  runs?: [number, number, number][] };
 export type FirmaxDrawer = { system: "firmax-ldsp"; y0: number; y1: number; runnerY: number; box: FirmaxBox;
   /** Поля Axis PRO у Firmax не используются (остаются при смене системы, чтобы вернуть царгу/цвет). */
   h?: 86 | 120 | 168 | 200; len?: 300 | 400 | 450 | 500 | 550; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
@@ -285,12 +287,15 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       out.push(board(`${id}:fx:bottom`, `Дно ящика ${j + 1} (Firmax)`, [g.sl + g.t, g.yb, g.zb], [g.sr - g.t, g.yb + g.t, g.zf], 0));
       out.push(board(`${id}:fx:back`, `Задняя стенка ящика ${j + 1} (Firmax)`, [g.sl + g.t, g.backY, g.zb], [g.sr - g.t, g.top, g.zb + g.t], 0));
       out.push(board(`${id}:fx:front`, `Фальшпанель ящика ${j + 1} (Firmax)`, [g.sl + g.t, g.backY, g.zf - g.t], [g.sr - g.t, g.top, g.zf], 0));
-      for (const s of [0, 1] as const) {
-        const lr = s ? "R" : "L", side = s ? "правая" : "левая", d = dir(s), inner = s ? g.sr - g.t : g.sl + g.t;
-        // направляющая Firmax в Базисе без сетки: тонкий металлический профиль под дном у боковины, по длине ящика; точка — как у Базиса
+      // направляющие Firmax в Базисе без сетки: тонкий металлический профиль под дном у боковины, по длине ящика; точка — как у Базиса
+      (b.runs ?? [[0, k.runnerY, 0], [0, k.runnerY, 0]]).forEach((r, i) => {
+        const s = (i % 2) as 0 | 1, lr = s ? "R" : "L", side = s ? "правая" : "левая", d = dir(s), inner = s ? g.sr - g.t : g.sl + g.t;
         const rx0 = inner + d * 0.5, rx1 = inner + d * (0.5 + FIRMAX.rail.w);
-        out.push({ id: `${id}:slide:${lr}`, name: `Направляющая скрытого монтажа Firmax ${b.len} ${side}`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
-          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0, k.runnerY, F] });
+        out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая скрытого монтажа Firmax ${b.len} ${side}`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
+          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
+      });
+      for (const s of [0, 1] as const) {
+        const lr = s ? "R" : "L", d = dir(s);
         // конфирматы короба: боковина → задняя стенка и фальшпанель (высоты как в проекте), боковина → дно (от торцов)
         const head = s ? g.sr : g.sl, ax: "+x" | "-x" = s ? "-x" : "+x";
         for (const dy of b.conf ?? firmaxConf(g.backH)) for (const [nm, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:${id}:fx:${nm}:${lr}:${dy}`, [head, g.backY + dy, z], ax));
@@ -418,6 +423,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
       if (Array.isArray(b.conf)) box.conf = b.conf.slice(0, 6).map(Number);
       if (b.screws) box.screws = true;
       if (b.rearHoles === false) box.rearHoles = false;
+      if (Array.isArray(b.runs)) box.runs = b.runs.slice(0, 8).filter((r) => Array.isArray(r) && r.length === 3).map((r) => r.map(Number) as [number, number, number]);
       return { system: "firmax-ldsp", y0: Number(k0.y0), y1: Number(k0.y1), runnerY: Number(k0.runnerY), box };
     }
     const k = k0 as Partial<AxisDrawer>;
