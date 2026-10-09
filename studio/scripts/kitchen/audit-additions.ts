@@ -48,7 +48,7 @@ for (const f of files) {
       ["навесы", qty(/^kitchen-hanger$/), refN((h) => h.category === "навес")],
       ["заглушки навесов", qty(/^kitchen-hanger-cap$/), refN((h) => h.category === "заглушка" && /навес/i.test(h.name))],
       ["газлифты (комплект на боковину)", qty(/^kitchen-lift:/), Math.ceil(refN((h) => h.category === "газлифт") / 2)],
-      ["ручки", qty(/^handle:/), refN((h) => h.category === "ручка")],
+      ["ручки", qty(/^handle:/), refN((h) => refCategory(h) === "ручка")], // «рейлинг» из «ящик-системы» эталона — ручка (refHardware, n4-wall)
       ["толкатели", qty(/^push-latch$/), 0],
       ["подъёмный механизм (без газлифта Базиса)", qty(/^lift-mechanism$/), 0],
     ];
