@@ -7,7 +7,7 @@ import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, type M
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
-import { partCollisions, rawCheck, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
+import { partCollisions, rawCheck, bazisAirHardware, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
 import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
@@ -90,12 +90,15 @@ function Hardware({ list, m, showInside }: { list: Part[]; m: Module; showInside
     return [...map].sort((a, b) => b[1] - a[1]);
   }, [list]);
   const collisions = useMemo(() => partCollisions(list, m), [list, m]);
+  // фурнитура в воздухе, как в проекте Базиса (навесы над корпусом: k26–k28, k31) — студия положение не меняет, но говорит о нём
+  const air = useMemo(() => bazisAirHardware(list, m), [list, m]);
   return <Group icon={<Wrench size={15} />} title="Фурнитура модуля" note={rows.reduce((s, r) => s + r[1], 0) + " шт."}>
     <ul className="kitchen-hardware">{rows.map(([name, n]) => <li key={name}><span>{name}</span><b>{n}</b></li>)}</ul>
     <button className="outline full" onClick={showInside}>Открыть фасады — увидеть петли, опоры, навесы</button>
     {collisions.length
       ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересекаются детали: {collisions.slice(0, 3).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм${c.bazis ? ", как в проекте Базиса" : ""})`).join("; ")}{collisions.length > 3 ? ` и ещё ${collisions.length - 3}` : ""}.{collisions.every((c) => c.bazis) ? " Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе." : ""}</p>
       : <p className="kitchen-ok"><CircleCheck size={14} /> Детали и фурнитура не пересекаются.</p>}
+    {air.length > 0 && <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Висит в воздухе (дальше {RAW_FAR} мм от деталей) — {air.length} шт.: {air.slice(0, 3).map((x) => `${x.name} (${x.gap} мм)`).join("; ")}{air.length > 3 ? " …" : ""}. Так стоит в самом проекте Базиса — проверьте в Базисе: детали, на которой она крепится, в модели нет.</p>}
   </Group>;
 }
 

@@ -164,6 +164,23 @@ function pointBox(pt: number[], B: Box): { out: number; depth: number } {
   const out = Math.hypot(...l.map((v, i) => Math.max(0, Math.abs(v) - B.h[i])));
   return { out, depth: out > 0 ? 0 : Math.min(...l.map((v, i) => B.h[i] - Math.abs(v))) };
 }
+/** Зазор от точки крепления фурнитуры (начало сетки Базиса, без сетки — центр) до ближайшего короба-хозяина, мм; 0 — на нём или внутри. */
+const seatGap = (h: Part, bx: Box[]) => Math.min(...bx.map((B) => pointBox(h.model?.origin ?? h.position, B).out));
+/** Модуль из Базиса, повторённый параметрически (m.kitchen.bazis): фурнитура дальше RAW_FAR мм от всех досок модуля — висит в воздухе,
+ *  как в самом проекте Базиса (навесы на «верх боковины + 985» у k26–k28, k31: сдвиг записан в файле Базиса, сверловок нет).
+ *  Студия положение не меняет (всё как в Базисе), а показывает ту же тревогу, что у сырого модуля (rawCheck far). Шкафы студии
+ *  и модули без пометки Базиса не проверяются. */
+export function bazisAirHardware(ps: Part[], m?: Module): RawCheck["far"] {
+  if (!m?.kitchen?.bazis || m.raw) return [];
+  const bx = ps.filter(isBoard).map(box), far: RawCheck["far"] = [];
+  if (!bx.length) return far;
+  for (const h of ps) {
+    if (h.material !== "metal" || !h.model) continue; // фурнитура с сеткой Базиса — у неё есть точка крепления
+    const gap = seatGap(h, bx);
+    if (gap > RAW_FAR) far.push({ id: h.id, name: h.name, gap: Math.round(gap) });
+  }
+  return far;
+}
 export function rawCheck(ps: Part[], m?: Module, withOverlaps = true): RawCheck {
   const boards = ps.filter((p) => p.id.startsWith("raw:p") && p.material !== "metal"), hw = ps.filter((p) => p.id.startsWith("raw:h"));
   // хозяева крепления: панели и нарисованные трубы (держатели и соединители штанг сидят на трубах)
@@ -178,7 +195,7 @@ export function rawCheck(ps: Part[], m?: Module, withOverlaps = true): RawCheck 
     if (RAW_NO_SEAT.test(cat) || RAW_NO_SEAT.test(h.name) || !bx.length) continue;
     checked++;
     const pt = h.model?.origin ?? h.position;
-    const gap = Math.min(...bx.map((B) => pointBox(pt, B).out));
+    const gap = seatGap(h, bx);
     if (gap > RAW_FAR) { far.push({ id: h.id, name: h.name, gap: Math.round(gap) }); continue; }
     if (gap > RAW_SEAT_GAP) { outside.push({ id: h.id, name: h.name, gap: Math.round(gap) }); continue; }
     if (RAW_IN_PANEL.test(cat) || RAW_IN_PANEL.test(h.name)) continue;

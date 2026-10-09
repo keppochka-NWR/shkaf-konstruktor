@@ -4,7 +4,8 @@ import {existsSync,readFileSync} from 'node:fs';
 import {initialModule,parts,validate,parseModule,facadeBottom,type Module} from '../src/model';
 import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
-import {partCollisions} from '../src/collisions';
+import {partCollisions,bazisAirHardware} from '../src/collisions';
+import {collisionWarnings} from '../src/roomWarnings';
 import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,backClearY,faceGapOf,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 import {estimate} from '../src/pricing';
@@ -428,6 +429,37 @@ test('confirmats tying the body to its neighbour (k15 m12: from inside through t
   assert.deepEqual(h.map(x=>[x.part,x.d,x.at[0],x.dir[0]]),[['left',8,16,-1],['left',5,0,1]]);
   assert.deepEqual(partCollisions(ps,m).filter(x=>/fast:out/.test(x.a+x.b)),[]);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.outConf,m.kitchen!.outConf);
+});
+
+// Навесы над корпусом, как в самом проекте Базиса (k26–k28, k31: «верх боковины + 985», сверловок нет): студия повторяет положение,
+// но параметрический модуль из Базиса получает ту же тревогу «висит в воздухе», что сырой (раньше — 0 предупреждений, критик n4-antresol).
+const inProject=(mm:Module)=>{const p=newProject({...initialModule()});p.modules=[{id:'a',x:0,y:0,z:0,rotation:0,module:mm}];return p;};
+test('hangers of a Bazis module hanging in the air above the body (+985) are reported, position kept as in Bazis',()=>{
+  const m=antresol();m.kitchen!.bazis=true;m.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};
+  const ps=parts(m);
+  assert.deepEqual(ps.find(p=>p.id==='kitchen-hanger:left')!.model!.origin,[16,1385,20],'position as in Bazis');
+  const far=bazisAirHardware(ps,m);
+  assert.deepEqual(far.map(x=>[x.id,x.gap]),[['kitchen-hanger:left',985],['kitchen-hanger-cap:left',985],['kitchen-hanger:right',985],['kitchen-hanger-cap:right',985]]);
+  const w=collisionWarnings(inProject(m));
+  assert.equal(w.length,1);assert.match(w[0].message,/висит в воздухе дальше 100 мм.*Навес мебельный регулируемый ABS левый \(985 мм\).*Проверьте в проекте Базиса/);
+  // по правилу (15 ниже верха) и навес на 85 мм выше — не в воздухе (порог RAW_FAR, как у сырого модуля)
+  const std=antresol();std.kitchen!.bazis=true;assert.deepEqual(bazisAirHardware(parts(std),std),[]);assert.deepEqual(collisionWarnings(inProject(std)),[]);
+  const near=antresol();near.kitchen!.bazis=true;near.kitchen!.hangerAt={left:[-85,20,0],right:[-85,20,0]};assert.deepEqual(bazisAirHardware(parts(near),near),[]);
+  // модуль студии (не из Базиса) и шкаф — не проверяются
+  const own=antresol();own.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};assert.deepEqual(bazisAirHardware(parts(own),own),[]);
+  const wr=initialModule();assert.deepEqual(bazisAirHardware(parts(wr),wr),[]);
+});
+test('etalon k28: parametric modules with hangers at +1000 carry the "in the air" warning in the built kitchen',{skip:!existsSync(ET+'k28.json')},async()=>{
+  const {buildKitchen}=await import('../scripts/kitchen/buildKitchen');
+  const {project}=buildKitchen(JSON.parse(readFileSync(ET+'k28.json','utf8')));
+  const w=collisionWarnings(project);
+  for(const name of ['Вм 5','ВМ 6','Над холодильником']){
+    const a=project.modules.find(x=>x.module.name===name&&!x.module.raw);
+    assert.ok(a,`${name}: parametric`);assert.equal(a.module.kitchen!.hangerAt!.left[0],-985,`${name}: as in Bazis`);
+    assert.ok(w.some(x=>x.moduleId===a.id&&/висит в воздухе/.test(x.message)&&/Навес/.test(x.message)),`${name}: warned`);
+  }
+  // параметрические модули с навесами по правилу — без этой тревоги
+  assert.ok(project.modules.filter(a=>!a.module.raw&&!a.module.kitchen?.hangerAt).every(a=>!w.some(x=>x.moduleId===a.id&&/висит в воздухе/.test(x.message))));
 });
 
 test('etalon k15/m12: neighbour confirmats as in Bazis',{skip:!existsSync(ET+'k15.json')},()=>{
