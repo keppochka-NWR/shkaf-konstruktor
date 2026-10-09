@@ -118,13 +118,24 @@ test('пересечения сырого модуля: политика без 
   assert.deepEqual(slide.collide?.[0].size,[18,45,450]);
   const project=(mm:Module)=>{const p=newProject({...initialModule(),sections:[section()]});p.modules=[{id:id(),x:0,y:0,z:0,rotation:0,module:mm}];return p;};
   assert.equal(collisionWarnings(project(m)).length,0);
-  // фурнитура в воздухе — сведения (outside), не тревога; глубоко в детали — тревога
-  const air=rawM({...raw,hardware:[{name:'Навес',category:'навес',mesh:'x',pos:[500,1500,300],quat:[1,0,0,0]}]});
-  assert.equal(rawCheck(parts(air),air).outside.length,1);
-  assert.equal(collisionWarnings(project(air)).length,0);
+  // рядом с деталью (30–100 мм) — сведения (outside), не тревога; дальше 100 мм (здесь 293 до ХДФ) — тревога far (194: петли в 0,1–1,5 м от деталей)
+  const near=rawM({...raw,hardware:[{name:'Навес',category:'навес',mesh:'x',pos:[66,1500,300],quat:[1,0,0,0]}]});
+  const rn=rawCheck(parts(near),near);
+  assert.equal(rn.outside.length,1);assert.equal(rn.far.length,0);
+  assert.equal(collisionWarnings(project(near)).length,0);
+  const air=rawM({...raw,hardware:[{name:'Петля',category:'петля',mesh:'x',pos:[500,1500,300],quat:[1,0,0,0]}]});
+  assert.deepEqual(rawCheck(parts(air),air).far.map(x=>x.gap),[293]);
+  assert.match(collisionWarnings(project(air))[0]?.message??'',/висит в воздухе/);
   const deep=rawM({...raw,panels:[...raw.panels,{name:'Тумба',kind:'ldsp',box:[100,0,0,900,200,600]}],hardware:[{name:'Опора',category:'опора',mesh:'x',pos:[500,100,300],quat:[1,0,0,0]}]});
   assert.equal(rawCheck(parts(deep),deep).deep.length,1);
   assert.equal(collisionWarnings(project(deep)).length,1);
+  // класс исходной ошибки — направляющая в стойке 16 мм: тело сетки (13 мм) внутри боковины → тревога (раньше порог 40 мм был
+  // недостижим на панели 16 мм: глубина от ближайшей грани не больше 8). Конфирмат по назначению сидит в материале — не тревога.
+  const inStand=rawM({...raw,hardware:[{name:'Направляющая',category:'направляющая',mesh:'x',pos:[1.5,500,10],quat:[1,0,0,0],bbox:[0,0,0,13,45,450]},
+    {name:'Конфирмат 7х50',category:'конфирмат',mesh:'x',pos:[8,1008,300],quat:[1,0,0,0],bbox:[-3.5,-3.5,0,3.5,3.5,50]}]});
+  const ri=rawCheck(parts(inStand),inStand);
+  assert.deepEqual(ri.deep.map(x=>[x.name,x.gap]),[['Направляющая',-8]]);
+  assert.match(collisionWarnings(project(inStand))[0]?.message??'',/внутри детали/);
   // перекрытие панелей глубже 10 мм — сведения «как в Базисе»
   const ov=rawM({...raw,panels:[...raw.panels,{name:'Вставка',kind:'ldsp',box:[0,500,0,100,516,600]}],hardware:[]});
   assert.ok(rawCheck(parts(ov),ov).overlaps.length>=1);
