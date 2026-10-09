@@ -99,7 +99,7 @@ export function hardwareKind(id:string):HardwareKind{
     if(/ручк/.test(n))return 'handles';
     if(c==='газлифт'||c==='подъёмник')return 'hinges';
     if(c==='направляющая'||c==='ящик-система'||c==='сушка'||c==='карго')return 'slides';
-    if(c==='рафикс'||c==='заглушка')return 'fasteners';
+    if(c==='рафикс'||c==='заглушка'||c==='отверстие')return 'fasteners';
     if(/направл|ящик|царг|indigo|firmax|старт|start|atira/.test(n))return 'slides';
     if(/газ|шток|подъ/.test(n))return 'hinges';
     if(c==='прочее'||/рафикс|шуруп|саморез|гвозд|винт|заглушк/.test(n))return 'fasteners';
@@ -116,6 +116,8 @@ export function hardwareKind(id:string):HardwareKind{
 }
 export {hingeCount};
 /** Количество студии по названиям Базиса: одно название — всё ему; сумма совпала — как в Базисе; иначе — самому частому в Базисе. */
+/** Направляющие Firmax кухни из Базиса — штуками, как в спецификации Базиса (n4-kitchens3). */
+const FIRMAX_PCS=' — направляющая, шт (как в Базисе: по одной на сторону; короб ЛДСП — в раскрое)';
 export function byNames(total:number,names:Record<string,number>):Record<string,number>{
   const es=Object.entries(names);if(!es.length||!total)return {};
   if(es.length===1)return {[es[0][0]]:total};
@@ -145,16 +147,21 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // Gola ряда Базиса (профили с длинами) — та же Gola, что студия рисует в параметрических модулях: считаем один раз, по Базису.
   const rowGola=p.modules.some(b=>b.module.raw?.row&&b.module.raw.items?.some(i=>/gola|[LC]-\s*образн/i.test(i.name)));
   function addItems(items?:BazisItem[]){for(const it of items??[]){const prof=it.len!==undefined;
-    // Firmax в Базисе — по направляющей на сторону: в смету парами, одной строкой с параметрическими модулями
-    if(it.category==='направляющая'&&/firmax/i.test(it.name)){add('firmax:'+it.name,it.name+' — пара (короб ЛДСП — в раскрое)',it.n/2,'пара',null,BZ);continue;}
+    // Firmax в Базисе — по направляющей на сторону: в смету ШТУКАМИ, как в спецификации Базиса (k30 «Остров»: 3 направляющие L-350 —
+    // не «1,5 пары»), одной строкой с параметрическими модулями (n4-kitchens3)
+    if(it.category==='направляющая'&&/firmax/i.test(it.name)){add('firmax:'+it.name,it.name+FIRMAX_PCS,it.n,'шт',null,BZ);continue;}
+    // отверстие-крепёж Базиса («3x3», «5x12»…): изделия нет — строка с количеством, как в Базисе, цена 0 (сверловка — в «Работе цеха»)
+    if(it.category==='отверстие'){add('bazis:отверстие:'+it.name,it.name+' (крепёж Базиса без изделия)',it.n,'шт',0,'Как в проекте Базиса: отверстие-крепёж с позицией; изделия нет, сверловка — в «Работе цеха»');continue;}
     add('bazis:'+it.category+':'+it.name+(prof?':m':''),it.name,prof?it.len!/1000:it.n,prof?'м':'шт',null,BZ);}}
   const hingeType=(name:string)=>name.replace(/^петля\s*/i,'').trim()||'накладная';
-  /** Петли по названиям Базиса: накладная — стандарт цеха (GTV с доводчиком), другие типы — тот же бренд с типом из Базиса. */
+  /** Петли по названиям Базиса: накладная — стандарт цеха (GTV с доводчиком, цена по счёту), вкладная — как у шкафов студии (hinge-inset).
+   *  Другие типы Базиса («под фальшпанель», «полунакладная», «накладная 180гр») — другое изделие: закупочной цены типа в прайсах нет,
+   *  цену накладной не подставляем — строка «уточнить» (n4-kitchens3; раньше шла цена накладной). */
   function addHinges(names:Record<string,number>,bk:string){const hb=HINGE_BRANDS[bk as keyof typeof HINGE_BRANDS]??HINGE_BRANDS.gtv,suffix=bk==='gtv'?'':':'+bk;
     for(const [name,n] of Object.entries(names)){const t=hingeType(name);
       if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
       else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',hb.soft.price,hb.soft.source);
-      else add('hinge-bazis:'+t+suffix,hb.soft.label+' · '+t+' (тип как в Базисе)',n,'шт',hb.soft.price,hb.soft.source+'; тип петли — по Базису, цену типа подтвердить');}}
+      else add('hinge-bazis:'+t+suffix,'Петля '+hb.label+' · '+t+' (тип как в Базисе)',n,'шт',null,'Тип петли — по Базису; закупочной цены этого типа в прайсах нет (есть только накладная '+hb.soft.price+' ₽) — уточнить');}}
   function addShelfHolders(names:Record<string,number>){for(const [name,n] of Object.entries(names))add('shelf-holder:'+name,/^полкодержатель/i.test(name)?name:'Полкодержатель '+name,n,'шт',FASTENERS.shelfHolder.price,'Артикул — как в Базисе; цена — оценка как у Boyard p521, подтвердить');}
   function addLegs(names:Record<string,number>){for(const [name,n] of Object.entries(names)){if(/^опора кухонная регулируемая/i.test(name))add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',n,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else add('kitchen-leg:'+name,name,n,'шт',null,BZ);}}
   for(const a of p.modules){
@@ -196,7 +203,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(p.kind==='glass'){add('glass-shelf','Стеклянная полка · обработка и держатели',s[0]*s[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
         // больше листа (как в Базисе, в т. ч. ХДФ задника): в раскрой не попала — строка без цены, как «не помещается в лист» у гильотины
         if(p.kind!=='mirror'&&!p.fm&&!rawIsRoom(p)&&!wt&&!rawIsNonBoard(p)&&!(kr&&rawOwnMaterial(p))&&!(r.row&&p.wall)&&rawOversize(p))add('unplaced-raw:'+a.id+':'+r.panels.indexOf(p),`Больше листа — сращивание или отдельная плита: ${p.name} ${s.map(Math.round).join(' × ')}`,1,'шт',null,'Как в проекте Базиса; раскрой такой детали — решение технолога');
-        // ХДФ, зеркало и элементы помещения (стена, пол, бетон) — не в смету деталей
+        // ХДФ, зеркало и элементы помещения (стена, пол, бетон) — не в смету деталей. ХДФ кухни не кромится, но если кромка на нём
+        // есть в Базисе (k30 «Пенал 1»: 1 мм по контуру задника, 7,534 м) — она в смете, как в Базисе (n4-kitchens3; шкафы не меняются)
+        if(p.kind==='hdf'&&kr)for(const [t,len] of p.edges??[]){const L=len/1000;if(t===2)edge2+=L;else if(t===1)edge1+=L;else if(t===0.8)edge08+=L;else if(t===0.5)edge05+=L;else if(t>0)edge04+=L;}
         if(p.kind==='hdf'||p.kind==='mirror'||rawIsRoom(p))continue;
         // стеновая панель «Ряда» кухни (материал Базиса «Стеновая панель», фартук) — изделие поставщика, м² по деталям Базиса:
         // не лист Lamarty 6 мм и не «столешница 26 мм». Только ряд кухни (r.row) — сырые шкафы не меняются.
@@ -243,16 +252,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(a.module.kitchen){
       // Кухня: опоры и клипсы — по фактическим деталям сцены (kitchenLegs), как в спецификациях Базиса цеха.
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;
-      if(nm?.legs&&legs)addLegs(byNames(legs,nm.legs));else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',legs,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+      // + опоры Базиса, стоящие в точке другой опоры (legsDup, k16 Пенал1): в 3D одна, в спецификации Базиса — обе (n4-kitchens3)
+      if(nm?.legs&&legs){const by=byNames(legs,nm.legs);for(const [n,d] of Object.entries(nm.legsDup??{}))by[n]=(by[n]??0)+d;addLegs(by);}else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',legs,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',clips,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       // шканты 8×30 — по деталям сцены (в Базисе они в спецификации); только кухня, смета шкафов не меняется
       add('dowel','Шкант 8×30',ps.filter(p=>p.id.startsWith('dowel:')).length,'шт',null,'Как в проектах Базиса; закупочная цена шканта не найдена');
-      // Firmax из Базиса: пары по направляющим сцены (у ящика без своих точек Базиса направляющих нет), артикул — по Базису («L - 500»
-      // — длина направляющей, не короба)
+      // Firmax из Базиса: штуками по направляющим сцены (у ящика без своих точек Базиса направляющих нет), артикул — по Базису («L - 500»
+      // — длина направляющей, не короба); штуками, как в спецификации Базиса (n4-kitchens3)
       const fx=(a.module.kdrawers??[]).filter(k=>k.system==='firmax-ldsp'),fxNames=Object.keys(nm?.slides??{});
-      if(bz&&fx.length&&fxNames.length){const runs=ps.filter(q=>/^Направляющая скрытого монтажа Firmax/.test(q.name)).length,pairs=Math.ceil(runs/2);
-        if(fxNames.length===1)add('firmax:'+fxNames[0],fxNames[0]+' — пара (короб ЛДСП — в раскрое)',pairs,'пара',null,BZ);
-        else for(const [name,n] of Object.entries(byNames(runs,nm!.slides!)))add('firmax:'+name,name+' — пара (короб ЛДСП — в раскрое)',Math.ceil(n/2),'пара',null,BZ);}
+      if(bz&&fx.length&&fxNames.length){const runs=ps.filter(q=>/^Направляющая скрытого монтажа Firmax/.test(q.name)).length;
+        if(fxNames.length===1)add('firmax:'+fxNames[0],fxNames[0]+FIRMAX_PCS,runs,'шт',null,BZ);
+        else for(const [name,n] of Object.entries(byNames(runs,nm!.slides!)))add('firmax:'+name,name+FIRMAX_PCS,n,'шт',null,BZ);}
       // ящики Axis PRO: комплект на ящик (2 направляющие, 2 царги, держатели фасада и задней стенки, 2 заглушки); дно и стенка — в раскрое ЛДСП
       for(const k of a.module.kdrawers??[])if(k.system==='modern-slide')add(`modern-slide:500`,`Направляющие MODERN SLIDE 500 мм с доводчиком — пара (короб ЛДСП — в раскрое)`,1,'пара',null,'Как в проектах Базиса цеха (только 500); закупочная цена не найдена — уточнить');else if(k.system==='indigo')add(`indigo:${k.hc}:${k.len}:${k.color??'grey'}`,`Ящик Indigo H=${k.hc}, ${k.len} мм${k.color==='white'?', белый':', орион серый'} — комплект (направляющие, царги; дно и стенка — в раскрое)`,1,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else if(k.system==='start-sc'){add(`start-sc:${k.sb}:${k.len}`,`Ящик Boyard СТАРТ ${k.sb}, ${k.len} мм${k.rail?' с рейлингом':''} — комплект (направляющие Soft-Closing, боковины, держатели, крепления фасада, заглушки; дно и стенка — в раскрое)`,1,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');if(k.rail&&(k.railYs?.length??1)>1)add(`start-sc:rail:${k.len}`,`Рейлинг Boyard СТАРТ ${k.len} мм — дополнительный, пара (сверх комплекта; в проекте Базиса по ${k.railYs!.length} с каждой стороны)`,k.railYs!.length-1,'пара',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');}else if(k.system==='versalite-h45')add(`versalite-h45:${k.len}`,`Направляющие шариковые Versalite Light H45 ${k.len} мм — пара (короб ЛДСП — в раскрое; шурупы 3,5×16 и конфирматы — по проекту)`,1,'пара',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else if(k.system==='firmax-ldsp'){if(!(bz&&fxNames.length))add(`firmax-ldsp:${k.box.len}`,`Направляющие скрытого монтажа Firmax ${k.box.len} мм — пара (короб ЛДСП — в раскрое)`,1,'пара',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');}else add(`axis-pro:${k.h}:${k.len}:${k.color??'white'}`,`Ящик Axis PRO H-${k.h}, ${k.len} мм${k.color==='anthracite'?', антрацит':', белый'} — комплект фурнитуры`,1,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     }

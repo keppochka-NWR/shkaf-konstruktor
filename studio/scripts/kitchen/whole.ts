@@ -11,6 +11,7 @@ import { parts, type Part } from "../../src/model";
 import { parseProject, localToRoom, applyAutoFillers, projectErrors, type PlacedModule, type Project } from "../../src/project";
 import { estimate } from "../../src/pricing";
 import { worktopGroupRole } from "./rowWorktop";
+import { allowedContact } from "../../src/collisions";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon";
 const keys = (process.argv[2] ?? "").split(",").filter(Boolean);
@@ -41,7 +42,10 @@ function interModule(p: Project, off: number[] = [0, 0, 0]) {
   // в пересечения не входит — сравниваем одинаково (иначе петля/навес/клипса у соседней детали дают «пересечение» 3–5 мм)
   const all = p.modules.flatMap((a, i) => parts(a.module).filter((q) => q.material !== "alu" && !q.id.startsWith("raw:h")).map((q) => ({ i, n: a.module.name, q, b: studioBox(a, q).map((v, t) => v - off[t % 3]) })));
   const out: string[] = [];
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i) continue; const d = pen(A.b, B.b); if (d > 0.5) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
+  // разрешённые контакты — тот же реестр, что у проверки студии (collisions.allowedContact): опора под дном до 3 мм, клипса на цоколе.
+  // У Базиса фурнитура в пересечения не входит, а её сетки там те же: k23 «Нижний модуль» — опора Ø58 в точке z 493 доходит до 522,
+  // цоколь ряда Базиса начинается с 520 — те же 2 мм, что у студии (n4-kitchens3)
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) { const A = all[i], B = all[j]; if (A.i === B.i) continue; const d = pen(A.b, B.b); if (d > 0.5 && !allowedContact(A.q, B.q, d)) out.push(`${A.n} / ${A.q.name} × ${B.n} / ${B.q.name}: ${r1(d)} мм`); }
   return out;
 }
 
@@ -153,7 +157,10 @@ for (const k of keys) {
     ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
     ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
     ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
-    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), sum(/^firmax/, 2)],
+    // Firmax кухни из Базиса — штуками (n4-kitchens3), студийный firmax-ldsp — парами
+    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), est.filter((l) => /^firmax/.test(l.id)).reduce((s, l) => s + l.quantity * (l.unit === "пара" ? 2 : 1), 0)],
+    // отверстия-крепёж Базиса («3x3», «5x12»…: FurnList с позицией, без изделия) — строки «Отверстие …» (n4-kitchens3)
+    ["отверстия-крепёж", cnt(/^\s*\d[\d\s.,xх×*]*$/i, "прочее"), sum(/^bazis:отверстие:/)],
     // ящики параметрики n3-runners (MODERN SLIDE, Versalite — пара; Indigo, СТАРТ — комплект на ящик: 2 направляющие)
     ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), sum(/^bazis:направляющая:/) + sum(/^(modern-slide|versalite-h45|indigo):/, 2) + sum(/^start-sc:(?!rail)/, 2)], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
     // профили — изделия (GOLA, KB, врезной, узкий фасадный); в смете — строками с длиной: сверяем наличие
@@ -162,6 +169,12 @@ for (const k of keys) {
   const est2: string[] = [];
   for (const [n, b, s] of pairs) if (Math.abs(b - s) > 0.01) est2.push(`${n}: Базис ${b}, смета ${r3(s)}`);
   const ids = est.map((l) => l.id), added = ["kit", "confirmat-cap", "worktop-cut:sink", "worktop-cut:hob", "small", "work"].filter((x) => ids.includes(x));
+  // кромка по толщинам (справочно, не замечание): разница — кромка изделий поставщика, которые смета считает м²/пог. м
+  // (фасады из МДФ «external», столешница, стеновая панель, стекло) — решение «кромка фасадов — у поставщика» (n4-kitchens3)
+  const eid: Record<string, string> = { edge04: "0.4", edge05: "0.5", edge08: "0.8", edge1: "1", edge2: "2" }, se: Record<string, number> = {};
+  for (const l of est) if (eid[l.id]) se[eid[l.id]] = (se[eid[l.id]] ?? 0) + l.quantity;
+  const ed = [...new Set([...Object.keys(edge), ...Object.keys(se)])].filter((t) => Math.abs((se[t] ?? 0) - (edge[t] ?? 0)) > 0.05).map((t) => `${t} мм: Базис ${r3(edge[t] ?? 0)}, смета ${r3(se[t] ?? 0)}`);
+  log(`кромка Базис ↔ смета (справочно): ${ed.length ? ed.join("; ") + " — кромка изделий поставщика (МДФ-фасады, столешница, стеновая панель, стекло)" : "сходится"}`);
   log(`\nфурнитура Базис ↔ смета: ${est2.length ? est2.join("; ") : "сходится"}`);
   log(`строки сметы не из Базиса: ${added.join(", ") || "нет"}`);
   if (est2.length) issues.push(`фурнитура ≠ смета (${est2.length})`);

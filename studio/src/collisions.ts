@@ -83,6 +83,9 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     // саморез площадки опоры — в своём отверстии D3×3 в нижней пласти дна
     if (p.id.startsWith("kitchen-leg-screw:") && isBoard(q) && q.role === "body" && depth <= 3.5) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
+    // клипса — и на цоколе ряда кухни из Базиса (сырая деталь «Цоколь · …»): касание-вдавливание до 3 мм, как опора под дном
+    // (k23: цоколь Базиса на 2 мм ближе к опоре, чем вылет её сетки — так в самом Базисе; n4-kitchens3)
+    if (p.id.startsWith("kitchen-clip:") && isBoard(q) && /^цокол/i.test(q.name) && depth <= 3) return true;
     if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body" && (q.material === "hdf" || (q.size[0] <= 40 && q.size[1] > 60))) return true;
     if (p.id.startsWith("kitchen-hanger-cap:") && q.id === p.id.replace("-cap", "")) return true;
     // навес верхней гранью упирается в нижнюю плоскость крыши: в проектах Базиса он стоит на 0,6–2 мм выше (k14 m04 — 1,2, k14 m06 — 0,6,

@@ -53,7 +53,7 @@ export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: st
   /** Имя крепежа корпуса Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50») — строка сметы под этим именем (n3-wall). */
   confirmatName?: string };
 /** Названия Базиса с количеством: петли, полкодержатели, направляющие Firmax (артикул «L - 500» — длина направляющей, не короба). */
-export type BazisNames = { hinges?: Record<string, number>; shelfHolders?: Record<string, number>; slides?: Record<string, number>; legs?: Record<string, number> };
+export type BazisNames = { hinges?: Record<string, number>; shelfHolders?: Record<string, number>; slides?: Record<string, number>; legs?: Record<string, number>; legsDup?: Record<string, number> };
 
 /** Сырой модуль КУХНИ Базиса (scripts/kitchen/import.ts): помечен source 'bazis-kitchen', у него есть счётчики фурнитуры Базиса
  *  (counts — ранние импорты без пометки) или это объект «Ряд».
@@ -106,17 +106,36 @@ export function bazisItems(hw: { name: string; category: string; length?: number
   for (const [kit, k] of kits) if (![...out.values()].some((it) => it.name === kit)) out.set(k.category + "|" + kit, { name: kit, category: k.category, n: k.ids.size });
   return [...out.values()];
 }
-/** Названия петель («Петля …») и полкодержателей Базиса с количеством. */
-export function bazisNames(hw: { name: string; category: string }[]): BazisNames {
-  const hinges: Record<string, number> = {}, shelfHolders: Record<string, number> = {}, slides: Record<string, number> = {}, legs: Record<string, number> = {};
+/** Отверстия-крепёж Базиса (n4-kitchens3): элемент FurnList с FastID и позицией, названный только размером «D×L» («3x3» — под саморезы
+ *  площадки опоры и направляющих, «5x12», «35x13», «8»…; в эталоне service). Изделия у них нет, но в Базисе это крепёж с позицией —
+ *  в смете кухни строкой «Отверстие <размер>» с количеством, как в Базисе (цена — в работе цеха). Только кухни (buildKitchen). */
+export function bazisHoles(hw: { name: string; category: string; pos?: number[] | null }[]): BazisItem[] {
+  const out = new Map<string, BazisItem>();
+  for (const h of hw) {
+    const n = (h.name ?? "").trim().replace(/[хx×*]/gi, "x");
+    if (!n || !/\d/.test(n) || !DIMS_ONLY.test(n) || !Array.isArray(h.pos)) continue;
+    const it = out.get(n) ?? { name: "Отверстие " + n, category: "отверстие", n: 0 };
+    it.n++; out.set(n, it);
+  }
+  return [...out.values()];
+}
+/** Названия петель («Петля …») и полкодержателей Базиса с количеством. legsDup — опоры Базиса, стоящие в точке другой опоры
+ *  (k16 Пенал1: две пары опор по две в одной точке): в 3D одна, в спецификации Базиса — обе. */
+export function bazisNames(hw: { name: string; category: string; pos?: number[] | null }[]): BazisNames {
+  const hinges: Record<string, number> = {}, shelfHolders: Record<string, number> = {}, slides: Record<string, number> = {}, legs: Record<string, number> = {}, legsDup: Record<string, number> = {};
+  const legAt = new Set<string>();
   for (const h of hw) {
     const n = (h.name ?? "").trim();
-    if (h.category === "опора" && n) legs[n] = (legs[n] ?? 0) + 1;
+    if (h.category === "опора" && n) {
+      legs[n] = (legs[n] ?? 0) + 1;
+      const at = Array.isArray(h.pos) ? h.pos.map((v) => Math.round(v)).join(",") : "";
+      if (at && legAt.has(at)) legsDup[n] = (legsDup[n] ?? 0) + 1; else if (at) legAt.add(at);
+    }
     if ((h.category === "петля" || h.category === "подъёмник" || h.category === "газлифт") && /^петля/i.test(n)) hinges[n] = (hinges[n] ?? 0) + 1;
     if (h.category === "полкодержатель") shelfHolders[n || "Полкодержатель"] = (shelfHolders[n || "Полкодержатель"] ?? 0) + 1;
     if (h.category === "направляющая" && /firmax/i.test(n)) slides[n] = (slides[n] ?? 0) + 1;
   }
-  return { ...(Object.keys(hinges).length ? { hinges } : {}), ...(Object.keys(shelfHolders).length ? { shelfHolders } : {}), ...(Object.keys(slides).length ? { slides } : {}), ...(Object.keys(legs).length ? { legs } : {}) };
+  return { ...(Object.keys(hinges).length ? { hinges } : {}), ...(Object.keys(shelfHolders).length ? { shelfHolders } : {}), ...(Object.keys(slides).length ? { slides } : {}), ...(Object.keys(legs).length ? { legs } : {}), ...(Object.keys(legsDup).length ? { legsDup } : {}) };
 }
 
 /** Счётчики фурнитуры по списку Базиса: петли — только «Петля …» (детали ФриФолд в Базисе тоже в категории «петля»),
@@ -289,7 +308,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),
     ...(r.row ? { row: true } : {}),
     ...(Array.isArray(r.items) ? { items: parseItems(r.items) } : {}),
-    ...(r.names && typeof r.names === "object" ? { names: Object.fromEntries((["hinges", "shelfHolders", "slides", "legs"] as const).filter((k) => r.names![k] && typeof r.names![k] === "object")
+    ...(r.names && typeof r.names === "object" ? { names: Object.fromEntries((["hinges", "shelfHolders", "slides", "legs", "legsDup"] as const).filter((k) => r.names![k] && typeof r.names![k] === "object")
       .map((k) => [k, Object.fromEntries(Object.entries(r.names![k]!).filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0).slice(0, 50).map(([n, v]) => [String(n).slice(0, 200), Math.round(Number(v))]))])) } : {}),
     ...(typeof r.confirmatName === "string" && r.confirmatName.trim() ? { confirmatName: r.confirmatName.trim().slice(0, 80) } : {}),
   };
