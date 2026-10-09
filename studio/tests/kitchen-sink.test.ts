@@ -77,3 +77,27 @@ test('Bazis sinks without legs (k21 m02): base on the floor with explicit plinth
   m.plinthHeight=0;
   assert.ok(!kitchenErrors(m).some(e=>/на опоры/.test(e)));
 });
+
+test('Bazis k20: base side top edge without edging when the project has none (edgeScheme.sideTop false)',async()=>{
+  const {sideTopEdged}=await import('../scripts/kitchen/recognize-common');
+  const m=sink();m.edgeScheme={t:0.5};
+  assert.ok(parts(m).find(p=>p.id==='left')!.edge.some(e=>e>0));
+  const before=parts(m).find(p=>p.id==='left')!.edge.filter(e=>e>0).length;
+  m.edgeScheme={t:0.5,sideTop:false};
+  assert.equal(parts(m).find(p=>p.id==='left')!.edge.filter(e=>e>0).length,before-1);
+  assert.equal(sideTopEdged({edges:[{side:'+z',thick:0.5},{side:'-z',thick:0.5}]}),false);
+  assert.equal(sideTopEdged({edges:[{side:'+y',thick:0.5}]}),true);
+});
+
+test('Bazis k21 m02: rail without fasteners in the project gets no confirmats (fasten false), others keep theirs',async()=>{
+  const {railFastened}=await import('../scripts/kitchen/recognize-common');
+  const m=sink();m.rails=[{place:'front-top',height:60,at:663,fasten:false},{place:'rear-top',height:80,at:378}];
+  const ps=parts(m);
+  assert.equal(ps.filter(p=>p.id.startsWith('fast:rail:front-top')).length,0);
+  assert.equal(ps.filter(p=>p.id.startsWith('fast:rail:rear-top')).length,2);
+  const conf=(x:number,y:number,z:number)=>({name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[x,y,z]});
+  const front={x0:16,y0:663,z0:565,x1:584,y1:723,z1:581},rear={x0:16,y0:378,z0:0,x1:584,y1:458,z1:16};
+  const hw=[conf(0,418,8),conf(600,418,8),conf(8,0,50.5)];
+  assert.equal(railFastened(front,hw,0,600),false);
+  assert.equal(railFastened(rear,hw,0,600),true);
+});

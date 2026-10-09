@@ -20,3 +20,14 @@ export function legScrews(hardware: Hw[]): boolean {
   const legs = hardware.filter((h) => h.category === "опора"), s = hardware.filter((h) => h.name === "3x3");
   return legs.length > 0 && legs.every((l) => s.filter((h) => Math.abs(h.pos[1] - l.pos[1]) < 0.6 && Math.abs(Math.abs(h.pos[0] - l.pos[0]) - 15.5) < 0.6 && Math.abs(Math.abs(h.pos[2] - l.pos[2]) - 15.5) < 0.6).length === 4);
 }
+
+/** Кромится ли верхний торец боковины низа: в большинстве кухонь да, в k03, k20, k23 — нет (13 из 151 нижних). */
+export function sideTopEdged(side: { edges?: { side: string; thick: number }[] }): boolean {
+  return (side.edges ?? []).some((e) => e.side === "+y" && e.thick > 0);
+}
+
+/** Есть ли у стяжки/царги крепёж в боковинах: любой конфирмат/евровинт/эксцентрик/шкант в её полосе по высоте и глубине у наружной
+ *  грани боковин (x ≤ xL или x ≥ xR). k21 m02: передняя стяжка мойки в проекте без крепежа — студия его не добавляет. */
+export function railFastened(b: Box, hardware: Hw[], xL: number, xR: number): boolean {
+  return hardware.some((h) => /конфирмат|эксцентрик|шкант/.test(h.category) || /^Евровинт/.test(h.name) ? h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1 && (h.pos[0] <= xL + 1 || h.pos[0] >= xR - 1) : false);
+}

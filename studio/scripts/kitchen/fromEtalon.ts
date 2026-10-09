@@ -6,7 +6,7 @@ import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
-import { edgeRail, legScrews } from "./recognize-common";
+import { edgeRail, legScrews, railFastened, sideTopEdged } from "./recognize-common";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -111,7 +111,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
     railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}) });
   }
-  for (const r of railsEdge) railList.push(edgeRail(r.b, top, sideZ0, sideZ1));
+  for (const r of railsEdge) railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}) });
   if (railList.length) m.rails = railList;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
@@ -301,6 +301,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
   if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
+  // верх боковин низа без кромки (k03, k20, k23) — как в Базисе
+  if (m.edgeScheme && role === "base" && !topPanel && !sideTopEdged(left.p as unknown as { edges?: { side: string; thick: number }[] })) m.edgeScheme.sideTop = false;
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
