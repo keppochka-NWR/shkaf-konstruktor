@@ -133,8 +133,10 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
 export function kitchenEdges(m: Module, out: Part[]) {
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) return;
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
-  // фиксированная полка (пенал k12 m04, k30 m05) стоит между боковинами: торцы у боковин закрыты — кромка только перед и зад
-  const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
+  // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
+  // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
+  const ecc = (id: string) => m.jointFastening?.[`${id}:left`] === "eccentric" || m.jointFastening?.[`${id}:right`] === "eccentric";
+  const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)).filter(ecc));
   for (const p of out) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
     // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)

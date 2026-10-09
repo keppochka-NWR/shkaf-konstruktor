@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,initialModule,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
+import {edgeByDir} from '../src/edges';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 
@@ -42,6 +43,18 @@ test('разрез фасадов (doorSplit) и «ниша под техник�
   const {module:p,unsupported:u30}=moduleFromEtalon(load('k30','m05'));
   assert.equal(p.sections[0].doorSplit,undefined,'боковины 850, фасады до 2469 — не разрез');
   assert.ok(u30.some(u=>u.startsWith('фасады пенала выше боковин')),u30.join('; '));
+});
+
+test('кромка фикс. полки «перед+зад» — только у полки на эксцентриках (k12 m04); фикс. полки k16 m01 (P8–P14) — по кругу, кромка сходится с Базисом (критик n2)',{skip:!existsSync(`${ETALON}/k16.json`)},()=>{
+  const ref16=load('k16','m01'),{module:m16}=moduleFromEtalon(ref16);
+  const c16=compareModule(ref16,m16);
+  assert.deepEqual(c16.edges?.bad??[],[],'кромка k16 m01 совпадает с Базисом');
+  const {module:m12}=moduleFromEtalon(load('k12','m04'));
+  const s=m12.sections[0],ids=(s.fixed??[]).map(j=>`${s.id}:shelf:${j}`);
+  assert.ok(ids.length>0);
+  for(const id of ids)assert.deepEqual(Object.keys(edgeByDir(parts(m12).find(p=>p.id===id)!)).sort(),['+z','-z'],'эксцентрики: перед и зад');
+  const conf={...m12,jointFastening:Object.fromEntries(Object.entries(m12.jointFastening??{}).map(([k])=>[k,'confirmat' as const]))};
+  for(const id of ids)assert.deepEqual(Object.keys(edgeByDir(parts(conf).find(p=>p.id===id)!)).sort(),['+x','+z','-x','-z'],'не эксцентрики: по кругу');
 });
 
 test('пенал: hingeYUp — свои высоты петель у верхнего ряда (doorSplit), нижний ряд — по правилу; parseModule сохраняет поля',()=>{
