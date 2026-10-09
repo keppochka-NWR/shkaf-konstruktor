@@ -10,7 +10,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
-import {rawKitchen} from './rawModule';
+import {rawKitchen,rawOwnMaterial} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -87,7 +87,7 @@ export const HARDWARE_KIT={label:'Мелочёвка корпуса (шуруп�
 
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы. Всё остальное — фурнитура. */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|edge|small$|work$|alu-|glass-|kupe-(fill|profile|track|work|film))/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|alu-|glass-|kupe-(fill|profile|track|work|film))/.test(id)?'material':'hardware';}
 /** Выдвижной тремпель GTV: решение Макса 07.10.2026 — 500 ₽ за штуку, пока нет счёта поставщика. */
 export const PULLOUT_PRICE=500;
 export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'kupe'|'other';
@@ -150,6 +150,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
         if(/столешн/i.test(p.name)||s[2]>=26){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
+        // плита МДФ и прочие материалы кухни Базиса (не лист Lamarty): м² по деталям Базиса, материал — как в Базисе; кромка Базиса на них считается ниже
+        if(kr&&rawOwnMaterial(p)){const t=Math.round(s[2]),mdf=p.kind==='mdf',name=p.mat??(mdf?'Плита МДФ ':'Материал Базиса ')+t+' мм';
+          add('mat:'+name,name+(mdf?' (МДФ, как в проекте Базиса)':' (как в проекте Базиса)')+', без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Площадь деталей Базиса; раскрой и цена материала — уточнить');}
         for(const [t,len] of p.edges??[]){const L=len/1000;if(t===2)edge2+=L;else if(t===1)edge1+=L;else if(t===0.8)edge08+=L;else if(t===0.5)edge05+=L;else edge04+=L;}
         if(s[1]<70)small++;
       }

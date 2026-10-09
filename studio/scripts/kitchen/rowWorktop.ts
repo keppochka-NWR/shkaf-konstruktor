@@ -39,8 +39,8 @@ export function rowFront(p: EtPanel): boolean {
   return sz < Math.min(sx, sy) && sz <= 25 && sy >= 300;
 }
 
-/** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][] } {
+/** Фасадный материал Базиса («Фасадный мат-л N»), кромка [толщина, длина] и материал плиты МДФ — для сметы сырого модуля. */
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
-  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}) };
+  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}), ...((p.kind === "mdf" || p.kind === "other") && p.mat && !/фасадн/i.test(p.mat) ? { mat: p.mat } : {}) };
 }

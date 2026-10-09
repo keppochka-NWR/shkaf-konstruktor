@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule,section,id,parts,type Module} from '../src/model';
 import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {newProject,parseProject,applyAutoFillers,fromBazis,type Project} from '../src/project';
-import {estimate} from '../src/pricing';
+import {estimate,lineGroup} from '../src/pricing';
 import {nest} from '../src/exports';
 import {rawKitchen,type RawSpec} from '../src/rawModule';
 
@@ -63,6 +63,30 @@ test('сырой шкаф Базиса — не «кухня из Базиса»
   // «Ряд» кухни — сырой модуль кухни, даже без счётчиков фурнитуры
   assert.ok(rawKitchen({row:true,panels:[],hardware:[]}));
   assert.ok(!rawKitchen(undefined));
+});
+
+test('кухня Базиса: плита МДФ (k30 «Плита IDM ETERNO Libra 18мм») — не лист ЛДСП Lamarty: вне раскроя, в смете м² материала Базиса',()=>{
+  const door:RawSpec['panels'][number]={name:'Дверь',kind:'mdf',box:[0,0,560,596,716,578],facade:true,mat:'Плита IDM ETERNO Libra 18мм',edges:[[1,2624]]};
+  const k={...rawBody(),raw:{...rawBody().raw!,panels:[...rawBody().raw!.panels,door]}};
+  const back=parseProject(JSON.parse(JSON.stringify(project(k)))),kk=back.modules[0].module;
+  assert.equal(kk.raw!.panels[2].mat,'Плита IDM ETERNO Libra 18мм','материал Базиса сохраняется в файле проекта');
+  const plan=nest(back),e=estimate(back,plan);
+  assert.ok(!plan.some(s=>(s.thickness??16)===18),'МДФ 18 мм не попадает в листы ЛДСП');
+  const l=e.lines.find(x=>x.id==='mat:Плита IDM ETERNO Libra 18мм')!;
+  assert.ok(l&&l.unit==='м²'&&l.unitPrice===null&&l.quantity===0.427&&lineGroup(l.id)==='material',JSON.stringify(l));
+  assert.equal(e.lines.find(x=>x.id==='edge1')?.quantity,2.624,'кромка Базиса на МДФ — как в Базисе');
+  assert.ok(parts(kk).find(p=>p.name==='Дверь')!.external,'деталь в 3D есть, в раскрой ЛДСП не идёт');
+  // сырой шкаф Базиса с МДФ — как было: деталь в раскрое, без строки МДФ
+  const w=rawWardrobe();w.raw!.panels.push({...door});const wp=project(w),wplan=nest(wp);
+  assert.ok(wplan.some(s=>(s.thickness??16)===18));assert.ok(!estimate(wp,wplan).lines.some(x=>x.id.startsWith('mat:')));
+});
+
+test('кухня Базиса: стеновая панель 6 мм в «Ряду» (kind other, не фасадный мат-л) — не лист Lamarty 6 мм',()=>{
+  const row:RawSpec={row:true,hardware:[],panels:[{name:'Стеновая маленькая',kind:'other',box:[0,0,0,6,600,1480],mat:'Cтеновая панель 6мм'},{name:'Цоколь',kind:'other',box:[0,0,0,1200,100,16],fm:true}]};
+  const p=project({...rawBody(),name:'Ряд',raw:row}),plan=nest(p),e=estimate(p,plan);
+  assert.ok(!plan.some(s=>(s.thickness??16)===6),'нет листа Lamarty 6 мм');
+  assert.equal(e.lines.find(x=>x.id==='mat:Cтеновая панель 6мм')?.quantity,0.888);
+  assert.equal(e.lines.find(x=>x.id==='facade-external')?.quantity,0.12,'цоколь из фасадного материала — как было');
 });
 
 test('кухня студии: опция «Подсветка в стойках» по-прежнему в смете (пазы Базиса — нет)',()=>{
