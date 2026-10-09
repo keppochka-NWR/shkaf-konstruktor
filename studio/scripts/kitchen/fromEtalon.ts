@@ -281,7 +281,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const lowRow = inRow(rowYs[0]), upRow = rowYs.length > 1 ? inRow(rowYs[1]) : [];
     const rowsGap = upRow.length && lowRow.length ? upRow[0].b.y0 - lowRow[0].b.y1 : 0;
     // только пенал (role tall) и только если верхний ряд в пределах корпуса: пенал из двух корпусов (k30 m05: боковины 850, фасады до 2469) — не разрез
-    const tallRows = role === "tall" && rowYs.length === 2 && !m.kdrawers;
+    // антресоль в два ряда подъёмных фасадов (k13 m02: все петли — на нижних плоскостях горизонталей) — тот же разрез фасадов по высоте,
+    // что у пенала; два ряда распашных у антресоли (k27 m12) — по-прежнему «не поддержано»
+    const liftQ = (h: { quat?: number[] }) => !!h.quat && Math.abs(h.quat[0]) < 0.1 && Math.abs(h.quat[2]) < 0.1 && Math.abs(Math.abs(h.quat[1]) - Math.SQRT1_2) < 0.05;
+    const liftRows = role === "antresol" && hw("петля").length > 0 && hw("петля").every(liftQ);
+    const tallRows = (role === "tall" || liftRows) && rowYs.length === 2 && !m.kdrawers;
     const upOver = tallRows && upRow.length ? r1(Math.max(...upRow.map((q) => q.b.y1)) - top) : 0;
     const split = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5 && rowsGap <= 10;
     if (tallRows && rowsGap > 10) unsupported.push(`ниша под технику между фасадами ${r1(rowsGap)} мм (пенал под духовку/СВЧ) — пока не поддержано`);
@@ -304,6 +308,10 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = r1(f0.b.x1 - f0.b.x0);
       const hx = liftHingeX(xs, dw, r1(f0.b.y1 - f0.b.y0));
       if (hx) { m.sections[0].hingeX = hx; m.sections[0].hingeXFor = dw; notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")} — как в проекте`); }
+    } else if (split && role === "antresol" && hw("петля").length && hw("петля").every(topHinge)) {
+      // антресоль в два ряда подъёмных фасадов (k13 m02): каждый ряд — на петлях по своей горизонтали (полка, крыша)
+      m.sections[0].doorHinges = Array.from({ length: 4 }, () => "top" as const);
+      if (hw("газлифт").length) unsupported.push(`газлифт у двух рядов подъёмных фасадов — пока не поддержано`);
     } else if (perRow === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";

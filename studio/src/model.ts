@@ -1138,7 +1138,9 @@ function hardwareParts(m: Module, out: Part[]) {
   if (m.kitchen && !inset) for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && p.hinge === "top")) {
     const [cx, cy, dz] = door.position, [dw, dh] = door.size, back = dz - door.size[2] / 2, topY = cy + dh / 2;
     // Крыша/горизонталь над фасадом: нижняя плоскость в пределах кромки фасада
-    const roof = out.filter((p) => p.material === "board" && p.role === "body" && p.size[1] <= 40 && p.size[0] > 60 && p.size[2] > 60 && !p.rotY && !p.rotZ
+    // нижний ряд подъёмных фасадов (антресоль в два ряда, Базис k13 m02) висит на жёсткой полке — она тоже «крыша» для петель
+    const fixedShelf = (p: Part) => p.role === "shelf" && m.sections.some((s) => (s.fixed ?? []).some((j) => p.id === `${s.id}:shelf:${j}`));
+    const roof = out.filter((p) => p.material === "board" && (p.role === "body" || fixedShelf(p)) && p.size[1] <= 40 && p.size[0] > 60 && p.size[2] > 60 && !p.rotY && !p.rotZ
       && p.position[0] - p.size[0] / 2 <= cx && p.position[0] + p.size[0] / 2 >= cx && p.position[2] + p.size[2] / 2 >= back - 30)
       .map((p) => p.position[1] - p.size[1] / 2).filter((y) => y <= topY + 1 && y >= topY - 40).sort((a, b) => b - a)[0];
     if (roof === undefined) continue;
@@ -1149,7 +1151,9 @@ function hardwareParts(m: Module, out: Part[]) {
     (sec?.hingeX?.length ? scaleHingeY(sec.hingeX, sec.hingeXFor ?? dw, dw) : hingePositions(dw, dh, true)).forEach((hx, n) => {
       const x = cx - dw / 2 + hx, o: [number, number, number] = [x, roof, back];
       const cupId = door.id.replace(":door:", ":hingecup:") + ":" + n, plateId = door.id.replace(":door:", ":hingeplate:") + ":" + n;
-      const cupO: [number, number, number] = [x, roof - 7.5, back];
+      // центр чашки — 22 мм от верхней кромки фасада (по всем подъёмным фасадам базы: k10, k12, k13, k23, k28, k31); при накладке
+      // на крышу 14,5 это те же «7,5 под крышей», при накладке 14 (k23, k28) и на полку 6,5 (k13 m02, нижний ряд) — нет
+      const cupO: [number, number, number] = [x, topY - 22, back];
       out.push({ ...metal(cupId, "Петля " + brand + " · чашка Ø35", [35, 35, 12.5], [x, cupO[1], back + 6.25], "hinge", door.sectionId),
         model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qv, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
         collide: [{ size: [35, 35, 12.5], position: [x, cupO[1], back + 6.25] }] });
@@ -1317,7 +1321,9 @@ export function validate(m: Module): string[] {
     if(s.rodClearance!==undefined&&(!Number.isFinite(s.rodClearance)||s.rodClearance<300||s.rodClearance>1500))errors.push(prefix+'просвет под штангой: 300–1500 мм.');
     if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
-    if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<RULES.doorMinH||s.doorSplit>m.height-RULES.doorMinH))errors.push(prefix+'недопустимая высота разделения фасадов.');
+    // кухня: фасады от 200 мм (как правило фасадов кухни ниже — антресоль Базиса k13 m02 в два ряда по 342); шкафы — doorMinH
+    const splitMin=m.kitchen?200:RULES.doorMinH;
+  if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
     if(s.doorHinges!==undefined&&(!Array.isArray(s.doorHinges)||s.doorHinges.length>4||s.doorHinges.some(v=>v!==null&&!['left','right','top'].includes(v))))errors.push(prefix+'неверное открывание фасада.');
     if(s.drawerGap!==undefined&&(!Number.isFinite(s.drawerGap)||s.drawerGap<2||s.drawerGap>10))errors.push(prefix+'зазор фасадов ящиков от 2 до 10 мм.');
     if(s.doorLeaves!==undefined&&s.doorLeaves!==1&&s.doorLeaves!==2)errors.push(prefix+'число створок: 1 или 2.');

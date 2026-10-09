@@ -151,6 +151,28 @@ test('kitchen back groove may sit deep in the body (k20 m05: 119 mm), wardrobe l
   assert.ok(validate(w).some(e=>/Паз/.test(e)),'wardrobe rule unchanged');
 });
 
+test('lift-up hinge cup centre 22 mm below the top edge of the front (Bazis k10/k12/k13/k23/k28/k31), drilled there',()=>{
+  const m=antresol();m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top']}];m.faceGap=2;
+  const ps=parts(m),door=ps.find(p=>p.role==='door'&&p.hinge==='top')!,top=door.position[1]+door.size[1]/2;
+  const cups=ps.filter(p=>p.id.includes(':hingecup:'));
+  assert.equal(cups.length,2);
+  for(const c of cups)assert.equal(c.model!.origin![1],top-22);
+  const hs=holes(m,ps).filter(h=>h.d===35);
+  assert.equal(hs.length,2);for(const h of hs)assert.equal(h.at[1],top-22);
+});
+
+test('antresol with two rows of lift-up fronts (k13 m02): the lower row hangs on the fixed shelf, 2 hinges per front',{skip:!existsSync('C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/k13.json')},()=>{
+  const ref=(JSON.parse(readFileSync('C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/k13.json','utf8')).modules as RefModule[]).find(m=>m.key==='m02')!;
+  const {module:m}=moduleFromEtalon(ref),ps=parts(m);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(ps.filter(p=>p.role==='door'&&p.hinge==='top').length,2);
+  assert.equal(ps.filter(p=>p.id.includes(':hingeplate:')).length,4);
+  assert.deepEqual(partCollisions(ps,m),[]);
+  const c=compareModule(ref,m);
+  assert.equal(c.hardware.find(h=>h.category==='петля')!.maxPosDelta,0);
+  assert.ok(!c.missing.length&&!c.extra.length);
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
 for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05']] as const)
