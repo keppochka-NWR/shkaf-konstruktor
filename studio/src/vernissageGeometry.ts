@@ -25,13 +25,44 @@ export type FacadeLayout = {
 };
 
 /* ---------- контуры ---------- */
+/** Параметрические контуры: точное смещение с тем же числом точек (дуги скругления не выворачиваются, когда смещение внутрь
+ *  больше радиуса — радиус уходит в ноль, точки угла совпадают). Смещение остальных контуров — на ус (offsetContour). */
+const OFFSET = new WeakMap<P[], (o: number) => P[]>();
+function parametric(gen: (o: number) => P[]): P[] { const c = gen(0); OFFSET.set(c, gen); return c; }
 export function rectContour(x0: number, y0: number, x1: number, y1: number, r = 0, seg = 6): P[] {
   r = Math.max(0, Math.min(r, (x1 - x0) / 2 - 0.01, (y1 - y0) / 2 - 0.01));
   if (r < 0.05) return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
-  const out: P[] = [];
-  const corner = (cx: number, cy: number, a0: number) => { for (let k = 0; k <= seg; k++) { const a = a0 + (k / seg) * Math.PI / 2; out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } };
-  corner(x1 - r, y0 + r, -Math.PI / 2); corner(x1 - r, y1 - r, 0); corner(x0 + r, y1 - r, Math.PI / 2); corner(x0 + r, y0 + r, Math.PI);
-  return out;
+  return parametric((o) => {
+    const X0 = x0 - o, Y0 = y0 - o, X1 = x1 + o, Y1 = y1 + o, R = Math.max(0, Math.min(r + o, (X1 - X0) / 2 - 0.01, (Y1 - Y0) / 2 - 0.01)), out: P[] = [];
+    const corner = (cx: number, cy: number, a0: number) => { for (let k = 0; k <= seg; k++) { const a = a0 + (k / seg) * Math.PI / 2; out.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]); } };
+    corner(X1 - R, Y0 + R, -Math.PI / 2); corner(X1 - R, Y1 - R, 0); corner(X0 + R, Y1 - R, Math.PI / 2); corner(X0 + R, Y0 + R, Math.PI);
+    return out;
+  });
+}
+/** Проём с вогнутыми углами («фигурные углы» №59): из филёнки по углам вырезана четверть круга радиуса r с центром в углу проёма. CCW.
+ *  Смещение внутрь — дуга того же центра радиуса r + d до пересечения со смещёнными сторонами; наружу — радиус r − d и стык «на ус».
+ *  На угол — 2 + seg + 1 точек при любом смещении (на нулевом и внутренних смещениях крайние точки совпадают с концами дуги). */
+export function concaveRectContour(x0: number, y0: number, x1: number, y1: number, r: number, seg = 8): P[] {
+  // угол, направление прихода (u_in) и ухода (u_out) по контуру
+  const corners: [P, P, P][] = [[[x1, y0], [1, 0], [0, 1]], [[x1, y1], [0, 1], [-1, 0]], [[x0, y1], [-1, 0], [0, -1]], [[x0, y0], [0, -1], [1, 0]]];
+  return parametric((o) => {
+    const d = -o, out: P[] = [];
+    for (const [C, ui, uo] of corners) {
+      const at = (a: number, b: number): P => [C[0] - a * ui[0] + b * uo[0], C[1] - a * ui[1] + b * uo[1]];
+      if (d >= 0) {
+        const R = r + d, q = Math.sqrt(R * R - d * d), t1 = Math.atan2(d, q), t2 = Math.atan2(q, d);
+        out.push(at(q, d));
+        for (let k = 0; k <= seg; k++) { const t = t1 + ((t2 - t1) * k) / seg; out.push(at(R * Math.cos(t), R * Math.sin(t))); }
+        out.push(at(d, q));
+      } else {
+        const e = -d, R = Math.max(0, r - e);
+        out.push(at(r - e, -e));
+        for (let k = 0; k <= seg; k++) { const t = ((Math.PI / 2) * k) / seg; out.push(at(R * Math.cos(t), R * Math.sin(t))); }
+        out.push(at(-e, r - e));
+      }
+    }
+    return out;
+  });
 }
 /** Проём с аркой по верху: rise — подъём арки, shoulder — «плечики» (горизонтальные полочки у начала арки). CCW. */
 export function archContour(x0: number, y0: number, x1: number, y1: number, rise: number, shoulder = 0, seg = 28): P[] {
@@ -49,6 +80,8 @@ export function archContour(x0: number, y0: number, x1: number, y1: number, rise
 export function signedArea(c: P[]): number { let a = 0; for (let i = 0; i < c.length; i++) { const [x0, y0] = c[i], [x1, y1] = c[(i + 1) % c.length]; a += x0 * y1 - x1 * y0; } return a / 2; }
 /** Смещение замкнутого контура (CCW): o > 0 — наружу, o < 0 — внутрь; углы — на ус (как у профиля рамки). */
 export function offsetContour(c: P[], o: number): P[] {
+  const gen = OFFSET.get(c);
+  if (gen) { const res = Math.abs(o) < 1e-9 ? c.map(p => [p[0], p[1]] as P) : gen(o); OFFSET.set(res, (o2) => gen(o + o2)); return res; }
   if (Math.abs(o) < 1e-9) return c.map(p => [p[0], p[1]] as P);
   const n = c.length, out: P[] = [];
   const nrm = (a: P, b: P): P => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [dy / l, -dx / l]; };
@@ -79,7 +112,9 @@ class MeshBuilder {
   quad(a: V3, b: V3, c: V3, d: V3, want: V3) { this.tri(a, b, c, want); this.tri(a, c, d, want); }
   /** Плоская крышка: контур с дырами на высоте z, нормаль ±Z. */
   cap(outer: P[], holes: P[][], z: number, up: boolean) {
-    const o = outer.map(([x, y]) => new THREE.Vector2(x, y)), hs = holes.map(h => h.map(([x, y]) => new THREE.Vector2(x, y)));
+    // совпадающие соседние точки (угол параметрического контура с нулевым радиусом) — убрать до триангуляции
+    const uniq = (c: P[]) => c.filter((p, i) => { const q = c[(i + 1) % c.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6; });
+    const o = uniq(outer).map(([x, y]) => new THREE.Vector2(x, y)), hs = holes.map(h => uniq(h).map(([x, y]) => new THREE.Vector2(x, y)));
     const faces = THREE.ShapeUtils.triangulateShape(o, hs), all = [...o, ...hs.flat()], w: V3 = [0, 0, up ? 1 : -1];
     for (const [i, j, k] of faces) this.tri([all[i].x, all[i].y, z], [all[j].x, all[j].y, z], [all[k].x, all[k].y, z], w);
   }
@@ -87,7 +122,9 @@ class MeshBuilder {
   sweep(c: P[], a: P, b: P) {
     const A = offsetContour(c, a[0]), B = offsetContour(c, b[0]), to = b[0] - a[0], tz = b[1] - a[1], n = c.length;
     for (let i = 0; i < n; i++) {
-      const j = (i + 1) % n, dx = c[j][0] - c[i][0], dy = c[j][1] - c[i][1], l = Math.hypot(dx, dy) || 1;
+      // направление стороны — по самой длинной из трёх копий (у параметрического контура сторона может выродиться в точку)
+      const j = (i + 1) % n, cand = [[c[j][0] - c[i][0], c[j][1] - c[i][1]], [A[j][0] - A[i][0], A[j][1] - A[i][1]], [B[j][0] - B[i][0], B[j][1] - B[i][1]]];
+      const [dx, dy] = cand.reduce((m, v) => (Math.hypot(v[0], v[1]) > Math.hypot(m[0], m[1]) ? v : m)), l = Math.hypot(dx, dy) || 1;
       const want: V3 = [tz * dy / l, tz * -dx / l, -to];
       this.quad([A[i][0], A[i][1], a[1]], [A[j][0], A[j][1], a[1]], [B[j][0], B[j][1], b[1]], [B[i][0], B[i][1], b[1]], want);
     }
@@ -168,6 +205,8 @@ export type MillShape = {
   top?: 'rect' | 'arch' | 'shoulders';
   /** Радиус углов контура паза/проёма. */
   cornerR?: number;
+  /** Углы проёма: скругление (по умолчанию) или вогнутая четверть круга («фигурные углы»). */
+  cornerKind?: 'round' | 'concave';
   groove?: { w: number; d: number };
   /** Профиль рамки к филёнке: ширина и глубина филёнки от лица; step — прямой уступ «шейкер». */
   profile?: { w: number; d: number; step?: boolean };
@@ -210,8 +249,11 @@ function grooveFeature(c: P[], z: number, g: { w: number; d: number }, kids: Fea
   const ch = Math.min(1.2, g.w / 4);
   return { c, path: [[g.w / 2, z], [g.w / 2 - ch, z - g.d], [-g.w / 2 + ch, z - g.d], [-g.w / 2, z]], kids };
 }
-function openingContour(x0: number, y0: number, x1: number, y1: number, s: MillShape): P[] {
+function openingContour(x0: number, y0: number, x1: number, y1: number, s: MillShape, minConcave = 7): P[] {
   const W = x1 - x0, H = y1 - y0;
+  // вогнутые углы: радиус не больше 0,1 меньшей стороны проёма (иначе дуги соседних углов сойдутся на смещении филёнки);
+  // меньше профиля рамки + 3 мм — углы прямые (узкий проём)
+  if (s.cornerKind === 'concave' && s.cornerR) { const rc = Math.min(s.cornerR, 0.1 * Math.min(W, H)); return rc >= minConcave ? concaveRectContour(x0, y0, x1, y1, rc) : rectContour(x0, y0, x1, y1); }
   // узкий проём (бутылочница, ящик): арка вырождается в мелкие сегменты — рисуем прямоугольный контур (правило студии, уточнить по тех. PDF)
   if ((s.top === 'arch' || s.top === 'shoulders') && W >= 80) {
     const rise = Math.min((s.archRise ?? 0.18) * W, H * 0.35), sh = s.top === 'shoulders' ? (s.shoulder ?? 18) : 0;
@@ -264,7 +306,7 @@ export function layoutFacade(w: number, h: number, t: number, s: MillShape, open
   // рамка с филёнкой
   const pr = s.profile ?? { w: 12, d: 5 }, F = inset, x0 = -w / 2 + F, y0 = -h / 2 + F, x1 = w / 2 - F, y1 = h / 2 - F;
   if (x1 - x0 < GRILLE.minPanel || y1 - y0 < GRILLE.minPanel) { notes.push(`Филёнка не помещается при рамке ${F} мм — фасад с наружным профилем, без рисунка`); return L; }
-  const c1 = openingContour(x0, y0, x1, y1, s), pd = Math.min(pr.d, t - 8), zp = zf - pd;
+  const c1 = openingContour(x0, y0, x1, y1, s, pr.w + 3), pd = Math.min(pr.d, t - 8), zp = zf - pd;
   L.frame = F; L.opening = { x0, y0, x1, y1 };
   // профиль рамки: фаска 45° у лица, крутая выкружка, плавный выход на филёнку (условный, до тех. PDF)
   const path: P[] = pr.step ? [[1, zf], [0, zf - 1], [0, zp]] : [[pr.w, zf], [pr.w * 0.82, zf - pd * 0.2], [pr.w * 0.5, zf - pd * 0.62], [pr.w * 0.18, zf - pd * 0.92], [0, zp]];

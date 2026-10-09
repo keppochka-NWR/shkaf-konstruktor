@@ -5,7 +5,7 @@ import { parts, parseVernissage, initialModule, type Module } from '../src/model
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
 import { estimate, lineGroup } from '../src/pricing';
-import { vernissageLayout, vernissageFacadePrice, vernissageMilling, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
+import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
 const KINDS: [string, VernissageFacade['open']][] = [['15', 'solid'], ['1', 'solid'], ['3', 'solid'], ['54', 'solid'], ['52', 'solid'], ['W1', 'solid'], ['46', 'solid'], ['100', 'solid'], ['79', 'solid'], ['78/1', 'solid'], ['109', 'solid'], ['25', 'glass'], ['54', 'grille'], ['93', 'solid']];
@@ -40,6 +40,28 @@ test('Вернисаж: геометрия строится под габари�
     if (r.open || r.dup) bad.push(`${label}: незамкнутых рёбер ${r.open}, повторных ${r.dup}`);
   }
   assert.deepEqual(bad, []);
+});
+
+/** Лицевая площадь: проекция треугольников с нормалью к лицу (+Z). У рельефа без наложений равна w×h. */
+function faceArea(g: ReturnType<typeof facadeGeometry>) {
+  const p = g.getAttribute('position'); let s = 0;
+  for (let i = 0; i < p.count; i += 3) { const z = ((p.getX(i + 1) - p.getX(i)) * (p.getY(i + 2) - p.getY(i)) - (p.getY(i + 1) - p.getY(i)) * (p.getX(i + 2) - p.getX(i))) / 2; if (z > 0) s += z; }
+  return s;
+}
+
+test('Вернисаж: все фрезеровки каталога × 5 габаритов × исполнения — сетка замкнута, лицо без наложений (№59 «фигурные углы»)', () => {
+  const bad: string[] = [];
+  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[300, 300], [450, 716], [597, 2000], [150, 716], [597, 140]] as const) {
+    const L = vernissageLayout({ milling: m.id, cover: 'film', film: 'Моно белый', thickness: 19, open }, w, h), g = facadeGeometry(L, 1), r = checkMesh(g, `№${m.id} ${open} ${w}×${h}`);
+    if (r.open || r.dup) bad.push(`№${m.id} ${open} ${w}×${h}: незамкнутых рёбер ${r.open}, повторных ${r.dup}`);
+    if (open === 'solid') { const a = faceArea(g); if (Math.abs(a - w * h) > w * h * 1e-6) bad.push(`№${m.id} ${w}×${h}: лицевая площадь ${a.toFixed(0)} при ${w * h}`); }
+  }
+  assert.deepEqual(bad, []);
+  // №59: вогнутые углы филёнки — контур проёма в углу уходит внутрь (точка проёма на диагонали угла дальше от угла, чем у прямоугольника)
+  const L = vernissageLayout({ milling: '59', cover: 'film', film: 'Моно белый', thickness: 19 }, 597, 2000), c = L.root.kids![0].c, F = L.frame!;
+  assert.ok(vernissageMilling('59')!.shape.cornerKind === 'concave');
+  const cx = -597 / 2 + F, cy = -2000 / 2 + F;
+  assert.ok(!c.some(([x, y]) => Math.hypot(x - cx, y - cy) < 13.9), 'у угла проёма вырезана четверть круга');
 });
 
 test('Вернисаж: рамка не меняет ширину при любом габарите, филёнка растягивается', () => {

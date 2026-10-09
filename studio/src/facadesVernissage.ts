@@ -64,8 +64,10 @@ export function millingShape(m: VMillingRow): { shape: MillShape; note: string }
     if (inner.includes('вертикальные пазы внизу')) shape.slots = { dir: 'v', ...P.slots, zone: 'bottom' };
     else if (inner.includes('вертикальные пазы') || m.panel === 'с пазами') shape.slots = { dir: 'v', ...P.slots, zone: 'all' };
     if (inner.includes('горизонтальные пазы')) shape.slots = { dir: 'h', ...P.slots, zone: 'ends' };
-    if (inner.includes('фигурные углы')) shape.cornerR = 14;
-    return { shape, note: shaker ? 'рамка «шейкер» с прямым уступом' : m.panel === 'выпуклая' ? 'рамка с выпуклой филёнкой' : 'рамка с профилем и филёнкой' };
+    // №59: «углы филёнки фигурные (вогнутые)» (фото каталога) — вогнутая четверть круга в углах проёма, радиус условный
+    if (inner.includes('фигурные углы')) { shape.cornerR = 14; shape.cornerKind = note.includes('вогнут') ? 'concave' : 'round'; }
+    const corners = shape.cornerKind === 'concave' ? ', вогнутые углы' : '';
+    return { shape, note: (shaker ? 'рамка «шейкер» с прямым уступом' : m.panel === 'выпуклая' ? 'рамка с выпуклой филёнкой' : 'рамка с профилем и филёнкой') + corners };
   }
   if (m.type === 'рельеф по всему полотну') {
     if (inner.includes('ромб')) return { shape: { kind: 'relief', ...base, relief: { dir: 'diamond', ...P.diamond } }, note: 'рельеф ромбами' };
