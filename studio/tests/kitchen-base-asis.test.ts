@@ -119,6 +119,19 @@ test('узкий нижний (200, k05 m02): опоры в два ряда в 7
   assert.equal(parts(pal).filter(p=>p.id.startsWith('leg:')).length,2,'палитра 200 — один ряд');
 });
 
+test('стяжка на ребре в 1 мм от задней кромки боковин (мойки k17 m04, k14 m09) — как в Базисе, PASS; у шкафа утопание стяжки на ребре не действует',{skip:!has('k17')||!has('k14')},()=>{
+  for(const [k,key] of [['k17','m04'],['k14','m09']]){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    const rr=m.rails!.find(r=>r.place==='rear-top'&&r.lay!=='flat');
+    if(rr){assert.equal(rr.setback,1,k+key);const p=parts(m).find(x=>x.id==='rail:rear-top')!;assert.equal(p.position[2]-p.size[2]/2,1);}
+    const c=compareModule(ref,m);
+    assert.ok(c.pass,k+key+' '+why(c));
+  }
+  const w={...initialModule(),rails:[{place:'rear-top' as const,height:100,setback:5}]};
+  const p=parts(w).find(x=>x.id==='rail:rear-top')!;
+  assert.equal(p.position[2]-p.size[2]/2,0,'шкаф — как было');
+});
+
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{
   const m=kitchenBase(initialModule(),600);
   assert.ok(hingeIds(m).length>0,'петли есть');
