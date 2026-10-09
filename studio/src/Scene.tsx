@@ -508,7 +508,7 @@ export function Scene(p: Props) {
           const picked=!!selectedPart&&(drawerPrefix?part.id.startsWith(drawerPrefix):part.id===selectedPart);
           if (!isMetal || picked) {
             const edge = new THREE.LineSegments(
-              new THREE.EdgesGeometry(geometry, vern ? 30 : 1),
+              new THREE.EdgesGeometry(geometry, vern ? 20 : 1),
               new THREE.LineBasicMaterial({
                 color: picked?0x087f94:0x4a4b40,
                 transparent: true,

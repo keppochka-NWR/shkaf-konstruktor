@@ -265,7 +265,8 @@ export function layoutFacade(w: number, h: number, t: number, s: MillShape, open
   if (x1 - x0 < GRILLE.minPanel || y1 - y0 < GRILLE.minPanel) { notes.push(`Филёнка не помещается при рамке ${F} мм — фасад с наружным профилем, без рисунка`); return L; }
   const c1 = openingContour(x0, y0, x1, y1, s), pd = Math.min(pr.d, t - 8), zp = zf - pd;
   L.frame = F; L.opening = { x0, y0, x1, y1 };
-  const path: P[] = pr.step ? [[1, zf], [0, zf - 1], [0, zp]] : [[pr.w, zf], [pr.w * 0.62, zf - pd * 0.18], [pr.w * 0.3, zf - pd * 0.55], [pr.w * 0.1, zf - pd * 0.9], [0, zp]];
+  // профиль рамки: фаска 45° у лица, крутая выкружка, плавный выход на филёнку (условный, до тех. PDF)
+  const path: P[] = pr.step ? [[1, zf], [0, zf - 1], [0, zp]] : [[pr.w, zf], [pr.w * 0.82, zf - pd * 0.2], [pr.w * 0.5, zf - pd * 0.62], [pr.w * 0.18, zf - pd * 0.92], [0, zp]];
   if (open !== 'solid') {
     path.push([0, -t / 2]);
     root.kids!.push({ c: c1, path, through: true });

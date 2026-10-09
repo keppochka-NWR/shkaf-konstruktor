@@ -30,7 +30,7 @@ export const SERIES_LABEL: Record<VSeriesId, string> = { standart: 'Станда
 export const PROVISIONAL = {
   source: 'условно: размеров на сайте нет, геометрия — в тех. PDF Вернисажа (не скачаны); тип рисунка — по фото каталога',
   edgeR: 2, grooveInset: 50, groove: { w: 8, d: 3 }, frame: 60, frameNarrow: 45, frameWide: 80,
-  profile: { w: 12, d: 5 }, shaker: { w: 1, d: 4, step: true }, raised: { w: 25, h: 3 }, second: 22,
+  profile: { w: 9, d: 6 }, shaker: { w: 1, d: 4, step: true }, raised: { w: 25, h: 3.5 }, second: 22,
   slots: { pitch: 28, w: 8, d: 2.5 }, rails: { pitch: 30, w: 12, d: 3 }, railsFine: { pitch: 18, w: 7, d: 2.5 }, railsVeryFine: { pitch: 12, w: 5, d: 2 },
   flutes: { pitch: 48, w: 30, d: 4 }, diamond: { pitch: 70, w: 8, d: 3 }, archRise: 0.18, shoulder: 18,
 } as const;
