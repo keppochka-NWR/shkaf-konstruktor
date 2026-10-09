@@ -5,7 +5,7 @@ import { initialModule, section, parts, scaleHingeY, type Module, type Groove, t
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
-import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
+import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
 
@@ -74,7 +74,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const topPanel = horiz.filter(({ b }) => b.z1 - b.z0 > d * 0.6 && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
   // стяжки на ребре — на любой высоте (у мойки задняя бывает посередине, под трубы), между боковинами
-  const fxBox = (name: string) => /ящика/i.test(name) && ref.hardware.some((h) => /Firmax/.test(h.name)); // короб ящика Firmax — не царга и не полка
+  const fxBox = (name: string) => /ящика|ящ\./i.test(name) && ref.hardware.some((h) => /Firmax|Versalite Light H45|СТАРТ Soft-Closing|Направляющая Indigo|MODERN SLIDE/.test(h.name)); // короб ящика ЛДСП (Firmax, Versalite) — не царга и не полка
   const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name));
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
@@ -99,6 +99,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
     if (legScrews(ref.hardware)) m.kitchen.legs.screws = true;
+    // левые опоры у большинства проектов — своя сетка (cb84c30b57a5); в части проектов (k26, k27) — та же, что у правых
+    const lefts = legs.filter((l) => l.pos[0] < W / 2 - 0.6);
+    if (lefts.length && lefts.every((l) => l.mesh === "ac675db9fc57")) m.kitchen.legs.same = true;
   }
   // цоколь в модуле? (панель у пола перед опорами)
   const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
@@ -178,6 +181,123 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const std = mine.length === 2 && mine.every((h) => Math.abs(h.pos[0] - left.b.x1) < 0.05 && Math.abs(h.pos[1] - runY) < 0.05 && Math.abs(h.pos[2] - sideZ1) < 0.05);
       if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
+    });
+    if (kd.length) m.kdrawers = kd;
+  }
+  // ящики MODERN SLIDE: короб ЛДСП как у Firmax/Versalite, направляющие без сетки — точки Базиса храним как есть (по правилу Firmax)
+  const msRuns = ref.hardware.filter((h) => h.category === "направляющая" && /MODERN SLIDE/.test(h.name)).sort((a, c) => a.pos[1] - c.pos[1]);
+  if (msRuns.length && !axisRuns.length) {
+    const lefts = P.filter(({ p, b }) => /^Боковина ящика лев/i.test(p.name) && b.x0 < W / 2).sort((a, c) => a.b.y0 - c.b.y0);
+    const kd: KDrawer[] = [];
+    lefts.forEach((s) => {
+      const b = s.b, inBox = (q: { b: typeof b }) => q.b.y0 >= b.y0 - 0.5 && q.b.y1 <= b.y1 + 0.5 && q.b.x0 >= b.x1 - 0.5 && q.b.x0 < b.x1 + 30 && q.b.z0 >= b.z0 - 0.5 && q.b.z1 <= b.z1 + 0.5;
+      const ov = (q: { b: typeof b }) => Math.min(q.b.y1, b.y1) - Math.max(q.b.y0, b.y0);
+      const f = [...fronts].sort((a, c) => ov(c) - ov(a))[0];
+      const rs = P.find(({ p, b: q }) => /^Боковина ящика прав/i.test(p.name) && Math.abs(q.y0 - b.y0) < 0.6 && Math.abs(q.z0 - b.z0) < 0.6 && q.x0 > W / 2);
+      const bot = P.find((q) => /^Дно ящика/i.test(q.p.name) && inBox(q)), bk = P.find((q) => /^Задн/i.test(q.p.name) && /ящика/i.test(q.p.name) && inBox(q) && q.b.z0 < b.z0 + 1), fal = P.find((q) => /^Фальш/i.test(q.p.name) && inBox(q));
+      if (!f || !bot || !bk) { unsupported.push(`ящик MODERN SLIDE на ${r1(b.y0)}: нет фасада/дна/задней стенки`); return; }
+      for (const q of [f, s, rs, bot, bk, fal]) if (q && !drawerPanels.includes(q)) drawerPanels.push(q);
+      const box: FirmaxBox = { y: r1(b.y0), h: r1(b.y1 - b.y0), len: r1(b.z1 - b.z0) };
+      const gap = r1(b.x0 - left.b.x1), front = r1(sideZ1 - b.z1), bu = r1(bot.b.y0 - b.y0);
+      if (gap !== MODERN.gap) box.gap = gap;
+      if (Math.abs(front) > 0.05) box.front = front;
+      if (bu !== MODERN.bottomUp) box.bottomUp = bu;
+      const confs = ref.hardware.filter((h) => /онфирмат/.test(h.name)), side = confs.filter((h) => Math.abs(h.pos[0] - b.x0) < 0.6);
+      const cb = side.filter((h) => Math.abs(h.pos[2] - (bk.b.z0 + 8)) < 1 && h.pos[1] > bk.b.y0 - 1 && h.pos[1] < bk.b.y1 + 1).map((h) => r1(h.pos[1] - bk.b.y0)).sort((a, c) => a - c);
+      if (cb.length && JSON.stringify(cb) !== JSON.stringify(firmaxConf(r1(bk.b.y1 - bk.b.y0)))) box.conf = cb;
+      const cz = side.filter((h) => Math.abs(h.pos[1] - (bot.b.y0 + 8)) < 1).map((h) => r1(h.pos[2] - b.z0)).sort((a, c) => a - c);
+      if (cz.length && cz[0] !== MODERN.confBottom) box.confBottom = cz[0];
+      const cu = confs.filter((h) => Math.abs(h.pos[1] - bot.b.y0) < 0.3 && h.pos[0] > b.x1 && h.pos[0] < bot.b.x1 && h.pos[2] > b.z0 && h.pos[2] < b.z1).map((h) => r1(h.pos[0] - b.x1)).sort((a, c) => a - c);
+      if (cu.length && cu[0] !== MODERN.confUnder) box.confUnder = cu[0];
+      const fs = fal ? ref.hardware.filter((h) => /^Саморез 4х30/.test(h.name) && Math.abs(h.pos[2] - fal.b.z0) < 0.6 && h.pos[1] > fal.b.y0 - 0.5 && h.pos[1] < fal.b.y1 + 0.5) : [];
+      if (fs.length) box.faceScrews = fs.map((h) => [r1(h.pos[0] - b.x1), r1(h.pos[1] - fal!.b.y0)] as [number, number]);
+      if (!ref.hardware.some((h) => /^Саморез 3,5х16/.test(h.name) && Math.abs(h.pos[0] - left.b.x1) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.screws = false;
+      if (!ref.hardware.some((h) => h.name === "5x12" && Math.abs(h.pos[2] - b.z0) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.rearHoles = false;
+      const mine = msRuns.filter((h) => (lefts.find((q) => q.b.y0 >= h.pos[1] - 0.1) ?? lefts[lefts.length - 1]) === s);
+      box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
+      kd.push({ system: "modern-slide", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(b.y0), box });
+    });
+    if (kd.length) m.kdrawers = kd;
+  }
+  // ящики Indigo: по каждой направляющей у левой боковины корпуса — царга (H=90/175, цвет), дно и задняя стенка ЛДСП
+  const igRuns = ref.hardware.filter((h) => h.category === "направляющая" && /^Направляющая Indigo/.test(h.name) && Math.abs(h.pos[0] - left.b.x1) < 0.6).sort((a, c) => a.pos[1] - c.pos[1]);
+  if (igRuns.length && !axisRuns.length) {
+    const kd: KDrawer[] = [];
+    for (const r of igRuns) {
+      const [x, y] = r.pos, cg = ref.hardware.find((h) => /^Царга Indigo H=\d+/.test(h.name) && Math.abs(h.pos[0] - x) < 0.6 && Math.abs(h.pos[1] - y + 44) < 1);
+      const hc = Number(/H=(\d+)/.exec(cg?.name ?? "")?.[1]);
+      const bot = P.find(({ p, b }) => /^Дно ящ/.test(p.name) && Math.abs(b.y0 - (y - 5)) < 0.6), bk = P.find(({ p, b }) => /^Зад\. ст\. ящ/.test(p.name) && Math.abs(b.y0 - (y + 11.4)) < 0.6);
+      const f = fronts.find((q) => q.b.y0 <= y && q.b.y1 >= y);
+      if (!cg || (hc !== 90 && hc !== 175) || !f || !bot || !bk) { unsupported.push(`ящик Indigo на ${r1(y)}: нет царги H=90/175, фасада, дна или задней стенки`); continue; }
+      drawerPanels.push(f, bot, bk);
+      const backH = r1(bk.b.y1 - bk.b.y0), def = hc === 175 ? 147.2 : 62.2;
+      kd.push({ system: "indigo", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), hc, len: 500, ...(/белая/.test(cg.name) ? { color: "white" as const } : {}), ...(Math.abs(backH - def) > 0.05 ? { backH } : {}) });
+    }
+    if (kd.length) m.kdrawers = kd;
+  }
+  // ящики Boyard СТАРТ: по каждой левой направляющей — боковина SBxx (тип), дно и задняя стенка ЛДСП, рейлинг; фасад — по высоте оси.
+  // Внутренний ящик (за чужим фасадом, утоплен) — без своего фасада, как в Базисе.
+  const stRuns = ref.hardware.filter((h) => h.category === "направляющая" && /СТАРТ Soft-Closing/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);
+  // в одном модуле бывают СТАРТ и Axis PRO вместе (k21 m03: нижний СТАРТ, верхний Axis) — каждый ящик своей системой
+  if (stRuns.length) {
+    const kd: KDrawer[] = [], owners = new Map<unknown, number>();
+    for (const r of stRuns) {
+      const [x, y, z] = r.pos, len = (Number(/(\d+)\s*мм/.exec(r.name)?.[1] ?? 500) === 400 ? 400 : 500) as 400 | 500;
+      const side = ref.hardware.find((h) => /^Боковина СТАРТ SB\d+/.test(h.name) && Math.abs(h.pos[0] - x - 37.5) < 1 && Math.abs(h.pos[2] - z) < 1 && Math.abs(h.pos[1] - y) < 30);
+      const sb = (/SB(08|19|20)/.exec(side?.name ?? "")?.[0] ?? "") as "SB08" | "SB19" | "SB20" | "";
+      if (!sb) { unsupported.push(`ящик СТАРТ на ${r1(y)}: нет боковины SB08/SB19/SB20`); continue; }
+      const sy = side!.pos[1], front = r1(sideZ1 - z);
+      const bot = P.find(({ p, b }) => /^Дно ящ/.test(p.name) && Math.abs(b.y0 - sy) < 0.6 && b.x0 < W / 2), bk = P.find(({ p, b }) => /^Зад\. ст\. ящ/.test(p.name) && Math.abs(b.y0 - sy) < 0.6);
+      const f = fronts.find((q) => q.b.y0 <= y && q.b.y1 >= y) ?? fronts.find((q) => q.b.y0 <= y + 14.5 && q.b.y1 >= y + 14.5);
+      if (!f || !bot || !bk) { unsupported.push(`ящик СТАРТ на ${r1(y)}: нет фасада/дна/задней стенки`); continue; }
+      const prev = owners.get(f), inner = prev !== undefined && front > 0.05;
+      if (!inner) { owners.set(f, kd.length); drawerPanels.push(f); }
+      drawerPanels.push(bot, bk);
+      const backH = r1(bk.b.y1 - bk.b.y0), rys = ref.hardware.filter((h) => /^Рейлинг продольный.*СТАРТ/.test(h.name) && Math.abs(h.pos[0] - x - 15.5) < 1 && h.pos[1] > y + 150 && h.pos[1] < y + 320).map((h) => r1(h.pos[1] - y)).sort((a, c) => a - c), rail = rys.length > 0;
+      const rh = ref.hardware.find((h) => /^Держатель рейлинга СТАРТ/.test(h.name) && Math.abs(h.pos[0] - x - 52.5) < 1 && h.pos[1] > y && h.pos[1] < y + 300);
+      const def = { SB08: 84, SB19: 118, SB20: 220 }[sb];
+      // кромка дна и задней стенки — как в проекте (у k17 дно по кругу, у k27 SB19 задняя только ±y)
+      const eSides = (q: typeof bot) => ((q.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
+      const be = eSides(bot), ke = new Set(eSides(bk)), backAll = ke.has("+x") || ke.has("-x"), edge: { bottom?: boolean; back?: "y" | "all" } = {};
+      if (be.length) edge.bottom = true;
+      if (backAll !== (sb !== "SB08")) edge.back = backAll ? "all" : "y";
+      kd.push({ system: "start-sc", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), len, sb, ...(rail ? { rail: true } : {}), ...(rail && JSON.stringify(rys) !== "[206.5]" ? { railYs: rys } : {}), ...(rh && Math.abs(rh.pos[1] - y - 201.4) > 0.05 ? { railDy: r1(rh.pos[1] - y) } : {}),
+        ...(backH !== def ? { backH } : {}), ...(front > 0.05 ? { front } : {}), ...(inner ? { inner: true } : {}), ...(edge.bottom || edge.back ? { edge } : {}) });
+    }
+    if (kd.length) m.kdrawers = axisRuns.length && m.kdrawers?.length ? [...m.kdrawers, ...kd].sort((a, c) => a.runnerY - c.runnerY) : kd;
+  }
+  // ящики Versalite Light H45: короб ЛДСП 16 по левой боковине ящика, левая направляющая — на внутренней грани левой боковины корпуса
+  const vlRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Versalite Light H45/.test(h.name));
+  if (vlRuns.length && !axisRuns.length && !fxRuns.length) {
+    const lefts = P.filter(({ p, b }) => /^Боковина ящика лев/i.test(p.name) && b.x0 < W / 2).sort((a, c) => a.b.y0 - c.b.y0);
+    const kd: KDrawer[] = [];
+    lefts.forEach((s) => {
+      const b = s.b, inBox = (q: { b: typeof b }) => q.b.y0 >= b.y0 - 0.5 && q.b.y1 <= b.y1 + 0.5 && q.b.x0 >= b.x1 - 0.5 && q.b.x0 < b.x1 + 30 && q.b.z0 >= b.z0 - 0.5 && q.b.z1 <= b.z1 + 0.5;
+      // цокольный ящик под дном корпуса (k07 m01/m04: короб с 10, фасад утоплен в цоколь) — в студии такого ящика нет: честно
+      // «не поддержано», а не ящик внутри корпуса с чужим фасадом и ошибкой «уходит в дно»
+      const ov = (q: { b: typeof b }) => Math.min(q.b.y1, b.y1) - Math.max(q.b.y0, b.y0);
+      const f = [...fronts].sort((a, c) => ov(c) - ov(a))[0];
+      if (f && ov(f) <= 0) { unsupported.push(`ящик Versalite на ${r1(b.y0)}: своего фасада в ряду фасадов нет (цокольный ящик под дном корпуса) — пока не поддержан`); return; }
+      const run = vlRuns.find((h) => Math.abs(h.pos[0] - left.b.x1) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y1 + 0.5);
+      const rs = P.find(({ p, b: q }) => /^Боковина ящика прав/i.test(p.name) && Math.abs(q.y0 - b.y0) < 0.6 && Math.abs(q.z0 - b.z0) < 0.6 && q.x0 > W / 2);
+      const bot = P.find((q) => /^Дно ящика/i.test(q.p.name) && inBox(q)), bk = P.find((q) => /^Задн/i.test(q.p.name) && /ящика/i.test(q.p.name) && inBox(q) && q.b.z0 < b.z0 + 1), fal = P.find((q) => /^Фальш/i.test(q.p.name) && inBox(q));
+      if (!f || !bot || !bk || !run) { unsupported.push(`ящик Versalite на ${r1(b.y0)}: нет фасада/дна/задней стенки/направляющей у левой боковины корпуса`); return; }
+      for (const q of [f, s, rs, bot, bk, fal]) if (q && !drawerPanels.includes(q)) drawerPanels.push(q);
+      const len = Number(/(\d+)\s*$/.exec(run.name)?.[1] ?? 500) as VersaliteLen;
+      const box: FirmaxBox = { y: r1(b.y0), h: r1(b.y1 - b.y0), len: r1(b.z1 - b.z0) };
+      const gap = r1(b.x0 - left.b.x1), front = r1(sideZ1 - b.z1), bu = r1(bot.b.y0 - b.y0);
+      if (gap !== VERSALITE.gap) box.gap = gap;
+      if (Math.abs(front) > 0.05) box.front = front;
+      if (bu !== VERSALITE.bottomUp) box.bottomUp = bu;
+      const confs = ref.hardware.filter((h) => /онфирмат/.test(h.name));
+      const side = confs.filter((h) => Math.abs(h.pos[0] - b.x0) < 0.6);
+      const cb = side.filter((h) => Math.abs(h.pos[2] - (bk.b.z0 + 8)) < 1 && h.pos[1] > bk.b.y0 - 1 && h.pos[1] < bk.b.y1 + 1).map((h) => r1(h.pos[1] - bk.b.y0)).sort((a, c) => a - c);
+      if (cb.length && JSON.stringify(cb) !== JSON.stringify(firmaxConf(r1(bk.b.y1 - bk.b.y0)))) box.conf = cb;
+      const cz = side.filter((h) => Math.abs(h.pos[1] - (bot.b.y0 + 8)) < 1).map((h) => r1(h.pos[2] - b.z0)).sort((a, c) => a - c);
+      if (cz.length && cz[0] !== VERSALITE.confBottom) box.confBottom = cz[0];
+      const cu = confs.filter((h) => Math.abs(h.pos[1] - bot.b.y0) < 0.3 && h.pos[0] > b.x1 && h.pos[0] < bot.b.x1 && h.pos[2] > b.z0 && h.pos[2] < b.z1).map((h) => r1(h.pos[0] - b.x1)).sort((a, c) => a - c);
+      if (cu.length && cu[0] !== VERSALITE.confUnder) box.confUnder = cu[0];
+      kd.push({ system: "versalite-h45", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(run.pos[1]), len, box });
     });
     if (kd.length) m.kdrawers = kd;
   }

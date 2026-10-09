@@ -57,8 +57,10 @@ export function rawFromRef(ref: RefModule, meshes?: Set<string>): RawSpec {
 }
 /** Параметрический модуль из Базиса: признак, названия петель/полкодержателей и фурнитура, которую параметрика не строит. */
 export function markBazis(m: Module, ref: RefModule): Module {
-  const axis = m.kdrawers?.some((k) => k.system !== "firmax-ldsp"), firmax = m.kdrawers?.some((k) => k.system === "firmax-ldsp");
-  const items = bazisItems(ref.hardware, (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || (!!m.kitchenLift && /PD-G-N02/i.test(h.name)) || (!!m.gola && /gola/i.test(h.name))
+  const sys = new Set((m.kdrawers ?? []).map((k) => k.system ?? "axis-pro")), axis = sys.has("axis-pro"), firmax = sys.has("firmax-ldsp");
+  // ящики, которые строит параметрика (n3-runners: Indigo, MODERN SLIDE, СТАРТ, Versalite), считаются комплектом/парой своей строкой сметы
+  const runner = (n: string) => (sys.has("indigo") && /indigo/i.test(n)) || (sys.has("modern-slide") && /modern slide/i.test(n)) || (sys.has("start-sc") && /старт|start/i.test(n)) || (sys.has("versalite-h45") && /versalite/i.test(n));
+  const items = bazisItems(ref.hardware, (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || runner(h.name) || (!!m.kitchenLift && /PD-G-N02/i.test(h.name)) || (!!m.gola && /gola/i.test(h.name))
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
     || (/заглушк/i.test(h.name) && /навес/i.test(h.name)));
   const names = bazisNames(ref.hardware);

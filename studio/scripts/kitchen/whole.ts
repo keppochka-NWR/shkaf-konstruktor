@@ -154,7 +154,8 @@ for (const k of keys) {
     ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
     ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
     ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), sum(/^firmax/, 2)],
-    ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), sum(/^bazis:направляющая:/)], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
+    // ящики параметрики n3-runners (MODERN SLIDE, Versalite — пара; Indigo, СТАРТ — комплект на ящик: 2 направляющие)
+    ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), sum(/^bazis:направляющая:/) + sum(/^(modern-slide|versalite-h45|indigo):/, 2) + sum(/^start-sc:(?!rail)/, 2)], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
     // профили — изделия (GOLA, KB, врезной, узкий фасадный); в смете — строками с длиной: сверяем наличие
     ["профили-изделия: строки сметы есть", prodProfiles ? 1 : 0, est.some((l) => /^(gola-|bazis:профиль:)/.test(l.id)) || !prodProfiles ? (prodProfiles ? 1 : 0) : 0],
   ];

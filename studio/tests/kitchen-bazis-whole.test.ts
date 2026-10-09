@@ -73,8 +73,9 @@ test('B4: фурнитура Базиса у сырых модулей и в р�
   const k22=kitchen('k22'),k30=kitchen('k30'),k16=kitchen('k16'),k06=kitchen('k06');
   assert.equal(qty(k22,/^firmax/),7,'k22: Firmax 14 шт = 7 пар');
   assert.equal(qty(k30,/^firmax/),19.5,'k30: Firmax 39 шт');
-  assert.equal(qty(k16,/^bazis:направляющая:Направляющая Indigo/),14,'k16: Indigo 14 направляющих');
-  assert.equal(qty(k16,/^bazis:ящик-система:Царга Indigo/),14,'k16: 14 царг Indigo');
+  // слияние n3: ящики Indigo, которые строит параметрика (n3-runners: k16 m04/m05), — комплект на ящик (2 направляющие, 2 царги)
+  assert.equal(qty(k16,/^bazis:направляющая:Направляющая Indigo/)+2*qty(k16,/^indigo:/),14,'k16: Indigo 14 направляющих');
+  assert.equal(qty(k16,/^bazis:ящик-система:Царга Indigo/)+2*qty(k16,/^indigo:/),14,'k16: 14 царг Indigo');
   assert.equal(qty(k16,/РАФИКС/),54);assert.equal(qty(k30,/РАФИКС/),40);
   assert.equal(qty(k06,/Сушка двухуровневая/),1);
   assert.equal(qty(k30,/^bazis:прочее:Фланец/),4);assert.ok(qty(k30,/^bazis:прочее:Труба Д25/)>1.5);

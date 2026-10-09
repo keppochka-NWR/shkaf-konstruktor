@@ -17,10 +17,13 @@ export type RefModule = { key: string; name: string; archetype: string; size: nu
 type Box = [number, number, number, number, number, number];
 type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
-/** rot — сверка поворота (справочно, на PASS не влияет, кроме газлифта): checked — фурнитура Базиса с кватернионом и деталью студии
- *  с кватернионом рядом; bad — поворот другой; spin — отличается только вращением вокруг своей оси у осесимметричной (конфирмат, шкант…);
- *  noQuat — у ближайшей детали студии поворот не задан кватернионом. */
-export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number } };
+/** Справочно, на PASS не влияет (кроме поворота газлифта):
+ *  rot — сверка поворота: checked — фурнитура Базиса с кватернионом и деталью студии с кватернионом рядом; bad — поворот другой;
+ *  spin — отличается только вращением вокруг своей оси у осесимметричной (конфирмат, шкант…); noQuat — у ближайшей детали студии
+ *  поворот не задан кватернионом (n3-additions).
+ *  meshDiff / quatDiff — сколько деталей Базиса с сеткой стоят у ближайшей детали студии с другой сеткой / другим поворотом
+ *  (одинаковая геометрия бывает под разными хэшами — зеркальные модули; n3-runners). */
+export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number }; meshDiff?: number; quatDiff?: number };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
@@ -176,6 +179,23 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
       }
       row.rot = rot;
     }
+    // сетка и поворот у всей фурнитуры с сеткой Базиса: ближайшая деталь студии той же категории (справочно)
+    const sps = ps.filter((p) => studioCategory(p) === category), withMesh = ref.hardware.filter((h) => h.category === category && h.mesh);
+    if (sps.length && withMesh.length) {
+      let md = 0, qd = 0;
+      for (const h of withMesh) {
+        // в одной точке бывает несколько деталей (царга и держатель фасада Axis PRO) — из ближайших берём ту же сетку, если есть
+        const pt = h.pos.map((v, i) => v - oa[i]), meshOf = (p?: Part) => p?.model?.file.split("/").pop()?.replace(/\.glb$/, "");
+        const dist = sps.map((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]); return { p, d: Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]) }; }).sort((a, b) => a.d - b.d);
+        const near = dist.filter((x) => x.d <= dist[0].d + 0.6), best = (near.find((x) => meshOf(x.p) === h.mesh) ?? near[0]).p;
+        const file = meshOf(best);
+        if (file !== h.mesh) md++;
+        const q = best?.model?.quat;
+        if (h.quat && q) { const n = Math.hypot(...h.quat) * Math.hypot(...q); if (Math.abs(h.quat.reduce((s, v, i) => s + v * q[i], 0)) / n < 0.999) qd++; }
+      }
+      if (md) row.meshDiff = md;
+      if (qd) row.quatDiff = qd;
+    }
     return row;
   });
   const tolOf = (p: PanelPair) => (p.ref.cls.startsWith("hdf") ? Math.max(1, tol) : tol);
@@ -258,9 +278,9 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   for (const p of [...c.pairs].sort((a, b) => b.delta - a.delta)) md += `| ${p.ref.name} (${p.ref.cls}) | ${p.studio.name} | ${p.delta > c.tol ? "**" + p.delta + "**" : p.delta} | ${p.faces.join(" ")} |\n`;
   if (c.missing.length) md += `\n**Нет в студии:** ${c.missing.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
-  md += "\n| фурнитура | Базис | студия | max Δ точки, мм | поворот (справочно) |\n|---|---|---|---|---|\n";
+  md += "\n| фурнитура | Базис | студия | max Δ точки, мм | поворот (справочно) | сетка / поворот ≠ (справочно) |\n|---|---|---|---|---|---|\n";
   const rot = (r: HardwareRow["rot"]) => !r ? "—" : `сверено ${r.checked}${r.bad ? `, **другой ${r.bad}**` : ""}${r.spin ? `, вокруг своей оси ${r.spin}` : ""}${r.noQuat ? `, без кватерниона ${r.noQuat}` : ""}`;
-  for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} | ${rot(h.rot)} |\n`;
+  for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} | ${rot(h.rot)} | ${h.meshDiff || h.quatDiff ? `${h.meshDiff ?? 0} / ${h.quatDiff ?? 0}` : "—"} |\n`;
   if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;
