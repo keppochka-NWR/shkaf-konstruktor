@@ -51,7 +51,9 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
 /** Модуль из проекта Базиса (импорт кухонь): размеры, состав и расстановка — как в Базисе, правила шкафов студии не применяются.
  *  Признак — m.bazis (импорт с признаком) или сырой модуль; кухонный модуль в проекте с сырыми модулями Базиса — тоже из Базиса
  *  (файлы, импортированные до признака: в каждой кухне из Базиса есть сырой «Ряд» или сырые модули). */
-export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;return !!(m.bazis||m.raw||(m.kitchen&&p.modules.some(b=>b.module.raw)));}
+export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;if(m.bazis||m.raw)return true;
+  // старый файл (ни одного признака): кухонный модуль рядом с сырыми модулями Базиса — из Базиса; в новом файле модуль без признака — свой (палитра)
+  return !!(m.kitchen&&!p.modules.some(b=>b.module.bazis)&&p.modules.some(b=>b.module.raw));}
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room;
   for(const a of n.modules){

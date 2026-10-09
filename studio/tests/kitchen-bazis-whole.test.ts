@@ -28,6 +28,9 @@ test('B1: первая правка не двигает кухню из Бази
     assert.deepEqual(applyAutoFillers(old),old,k+': старый файл без признака');
     assert.ok(p.modules.every(a=>isBazisModule(p,a)),k+': все объекты — из Базиса');
   }
+  // модуль из палитры, добавленный в кухню из Базиса (файл с признаком), — свой: правила студии к нему применяются
+  const p=kitchen('k06'),own=kitchenProject().modules.find(a=>a.module.kitchen?.role==='base')!;
+  assert.ok(!isBazisModule({modules:[...p.modules,own]},own));
 });
 
 test('B1: кухня из палитры студии (не Базис) по-прежнему получает фальшь к стене',()=>{
