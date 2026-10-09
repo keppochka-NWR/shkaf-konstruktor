@@ -29,6 +29,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   noFasteners?: boolean;
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
   dryer?: { name: string; mesh: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  /** Вырез в заднем верхнем углу боковины навесного/антресоли (Базис k32: 100×20 — контур боковины из 6 точек): height — от верха, depth — от задней кромки. */
+  sideNotch?: Partial<Record<"left" | "right", { height: number; depth: number }>>;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
@@ -160,7 +162,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
  *  (1 или 0,5 мм ПВХ в цвет). Боковины низа — верх и перед; навесных — все четыре; дно под боковинами — перед и концы; дно и крыша между
  *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
 export function kitchenEdges(m: Module, out: Part[]) {
-  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
   // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
   // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
@@ -189,6 +191,23 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.role === "body") setEdges(p, ["+z"], t);
   }
   golaSides(m, out);
+  rearNotches(m, out);
+}
+
+/** Вырез в заднем верхнем углу боковин навесного/антресоли (Базис k32: 100×20). Раскрой — по габариту; кромка по контуру
+ *  (отрезки выреза кромятся, сумма по сторонам равна стороне — как у Базиса 310 + 20 = 330); пересечения — по телу без выреза. */
+export function rearNotches(m: Module, out: Part[]) {
+  const sn = m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol") ? m.kitchen.sideNotch : undefined;
+  if (!sn) return;
+  for (const p of out) {
+    if (p.id !== "left" && p.id !== "right") continue;
+    const n = sn[p.id], H = p.size[1], D = p.size[2];
+    if (!n || !(n.height > 0 && n.height < H && n.depth > 0 && n.depth < D)) continue;
+    p.rearNotch = { height: n.height, depth: n.depth };
+    const x = p.position[0], y0 = p.position[1] - H / 2, z0 = p.position[2] - D / 2;
+    p.collide = [{ size: [p.size[0], H - n.height, D], position: [x, y0 + (H - n.height) / 2, z0 + D / 2] },
+      { size: [p.size[0], n.height, D - n.depth], position: [x, y0 + H - n.height / 2, z0 + n.depth + (D - n.depth) / 2] }];
+  }
 }
 
 /** Gola по Базису (k06/m03 и др.): вырезы в переднем торце боковин нижнего модуля. Кромка идёт отрезками контура:

@@ -1,6 +1,6 @@
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
-import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry} from './boardGeometry';
+import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,rearNotchSideGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
@@ -345,7 +345,7 @@ export function Scene(p: Props) {
                   part.size[0],
                   24,
                 )
-              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
+              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;

@@ -6,6 +6,7 @@ import {kitchenWall} from '../src/kitchen';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {refCategory} from '../scripts/kitchen/refHardware';
+import {rearNotchFromContour} from '../scripts/kitchen/sideNotch';
 import {partCollisions} from '../src/collisions';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тесты по эталонам пропускаются.
@@ -123,13 +124,30 @@ test('навесной k32 m14: в Базисе нет крепежа и кро�
   assert.deepEqual(m.edgeScheme?.ends?.bottom?.slice().sort(),['+x','+z','-x','-z']);
   const ps=parts(m);
   assert.deepEqual(ps.filter(p=>/^(fast|ecc|dowel):/.test(p.id)).map(p=>p.id),[],'ни конфирматов, ни эксцентриков');
-  // боковины k32 — фигурные (вырез 100×20 в заднем верхнем углу): студия даёт прямоугольник, сверка это видит — PASS нечестный
+  // правая боковина k32 m14 — фигурная (вырез 100×20 в заднем верхнем углу), левая — прямоугольник: у студии так же
+  assert.deepEqual(m.kitchen?.sideNotch,{right:{height:100,depth:20}});
+  assert.deepEqual(ps.find(p=>p.id==='right')?.rearNotch,{height:100,depth:20});assert.equal(ps.find(p=>p.id==='left')?.rearNotch,undefined);
   const c=compareModule(ref,m);
-  assert.equal(c.pass,false);
-  assert.ok(c.contours?.some(x=>/фигурный контур Базиса \(6 точек, вырез 2000 мм²\)/.test(x)),String(c.contours));
-  assert.deepEqual([c.missing.length,c.extra.length,c.pairs.filter(p=>p.delta>0.5).length],[0,0,0],'остальное совпадает');
+  assert.ok(c.pass,String(c.contours));assert.deepEqual(c.contours,[]);
+  // без выреза у студии сверка это видит (прежний нечестный PASS)
+  const plain={...m,kitchen:{...m.kitchen!,sideNotch:undefined}};
+  const cp=compareModule(ref,plain);
+  assert.equal(cp.pass,false);assert.ok(cp.contours?.some(x=>/фигурный контур Базиса \(6 точек, вырез 2000 мм²\)/.test(x)),String(cp.contours));
+  // вырез не той боковины или не того размера — тоже FAIL
+  assert.equal(compareModule(ref,{...m,kitchen:{...m.kitchen!,sideNotch:{left:{height:100,depth:20}}}}).pass,false);
+  assert.equal(compareModule(ref,{...m,kitchen:{...m.kitchen!,sideNotch:{right:{height:100,depth:30}}}}).pass,false);
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.equal(back.kitchen?.noFasteners,true);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
+  assert.deepEqual(back.kitchen?.sideNotch,m.kitchen?.sideNotch,'вырез переживает сохранение');
+  // пересечения — по телу боковины без выреза
+  assert.deepEqual(partCollisions(parts(m),m).map(x=>x.names.join(' × ')),[]);
+});
+test('вырез в заднем верхнем углу боковины по контуру Базиса: только ровно такой контур',()=>{
+  const C=(c:number[][])=>({figure:true,contourPlane:'yz',contour:c});
+  assert.deepEqual(rearNotchFromContour(C([[0,0],[0,330],[1080,330],[1080,20],[980,20],[980,0]])),{height:100,depth:20});
+  assert.equal(rearNotchFromContour(C([[0,0],[0,330],[1080,330],[1080,0]])),null,'прямоугольник');
+  assert.equal(rearNotchFromContour(C([[0,0],[0,310],[100,310],[100,330],[1080,330],[1080,0]])),null,'вырез спереди внизу — не задний верхний');
+  assert.equal(rearNotchFromContour({...C([[0,0],[0,330],[1080,330],[1080,20],[980,20],[980,0]]),contourPlane:'xz'}),null,'не боковина');
 });
 test('антресоль k31 m20: задняя вертикаль под поднятым корпусом не теряется молча — «не распознано»',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
   const {unsupported}=moduleFromEtalon(load('k31','m20'));

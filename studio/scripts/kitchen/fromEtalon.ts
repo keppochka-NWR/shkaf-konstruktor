@@ -10,6 +10,7 @@ import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { normalizeRefHardware } from "./refHardware";
+import { rearNotchFromContour } from "./sideNotch";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -349,6 +350,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (Object.keys(ends).length) m.edgeScheme.ends = ends;
     const fx = m.sections[0].fixed?.length ? wallFixedShelfEdges(sh[m.sections[0].fixed[0]]) : undefined;
     if (fx) m.edgeScheme.fixedSides = fx;
+  }
+  // навесные/антресоли: вырез в заднем верхнем углу боковины (k32: 100×20, контур из 6 точек) — у каждой боковины свой (k32 m14: только у правой)
+  if (role === "wall" || role === "antresol") {
+    for (const [side, s] of [["left", left], ["right", right]] as const) {
+      const n = rearNotchFromContour(s.p as unknown as { figure?: boolean; contour?: number[][]; contourPlane?: string });
+      if (n) { (m.kitchen.sideNotch ??= {})[side] = n; notes.push(`вырез ${n.height}×${n.depth} в заднем верхнем углу боковины (${side === "left" ? "левой" : "правой"})`); }
+    }
   }
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;

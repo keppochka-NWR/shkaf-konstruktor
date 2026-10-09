@@ -38,6 +38,20 @@ export function golaSideGeometry(part:Part):THREE.BufferGeometry{
  uv.needsUpdate=true;g.computeBoundingBox();return g;
 }
 
+/** Боковина с вырезом в заднем верхнем углу (kitchen.ts rearNotches, Базис k32): контур в плоскости Z–Y, выдавлен на толщину по X. */
+export function rearNotchSideGeometry(part:Part):THREE.BufferGeometry{
+ const [t,H,D]=part.size,zf=D/2,yt=H/2,n=part.rearNotch!,s=new THREE.Shape();
+ const P=(z:number,y:number):[number,number]=>[-z,y]; // как в golaSideGeometry: ось X формы = −Z детали
+ const pts:[number,number][]=[[-zf,-yt],[zf,-yt],[zf,yt],[-zf+n.depth,yt],[-zf+n.depth,yt-n.height],[-zf,yt-n.height]];
+ pts.forEach(([z,y],i)=>i?s.lineTo(...P(z,y)):s.moveTo(...P(z,y)));s.closePath();
+ const g=new THREE.ExtrudeGeometry(s,{depth:t,bevelEnabled:false});
+ g.translate(0,0,-t/2);g.rotateY(Math.PI/2);
+ const pos=g.getAttribute('position'),normal=g.getAttribute('normal'),uv=g.getAttribute('uv');
+ const L=part.grainAxis,W=L===1?2:1;
+ for(let i=0;i<pos.count;i++)if(Math.abs(normal.getX(i))>.99)uv.setXY(i,pos.getComponent(i,W)/part.size[W]+.5,pos.getComponent(i,L)/part.size[L]+.5);
+ uv.needsUpdate=true;g.computeBoundingBox();return g;
+}
+
 /** Рамка алюминиевого фасада: контур фасада с прямоугольным вырезом под вставку, выдавленный на толщину рамки. */
 export function aluFrameGeometry(part:Part,face:number):THREE.BufferGeometry{
  const [w,h,t]=part.size,f=Math.min(face,w/2-1,h/2-1);

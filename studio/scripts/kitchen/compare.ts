@@ -9,6 +9,7 @@ import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
+import { rearNotchFromContour } from "./sideNotch";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
@@ -125,6 +126,7 @@ export function refCutArea(p: { figure?: boolean; contour?: number[][] }): numbe
 /** Вырезы детали студии, мм²: контур в плане (planContour) — по площади; Gola в боковине — есть (геометрию сверяет кромка выреза). */
 function studioCut(p: Part): number | "gola" {
   if (p.golaCuts?.length) return "gola";
+  if (p.rearNotch) return Math.round(p.rearNotch.height * p.rearNotch.depth);
   if (p.planContour && p.planContour.length >= 4) { const { area, box } = polyArea(p.planContour); return Math.round(box - area); }
   return 0;
 }
@@ -227,9 +229,14 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id), sp = byId.get(pr.studio.id);
     if (!rp || !sp) continue;
     const cut = refCutArea(rp);
-    if (!cut) continue;
+    if (!cut) { if (sp.rearNotch) contours.push(`${pr.ref.name}: у Базиса без выреза, у студии вырез ${sp.rearNotch.height}×${sp.rearNotch.depth}`); continue; }
     const sc = studioCut(sp);
     if (sc === "gola") continue;
+    if (sp.rearNotch) { // вырез в заднем верхнем углу боковины — сверяем сам угол, а не только площадь
+      const rn = rearNotchFromContour(rp);
+      if (!rn || Math.abs(rn.height - sp.rearNotch.height) > 0.5 || Math.abs(rn.depth - sp.rearNotch.depth) > 0.5) contours.push(`${pr.ref.name}: вырез у Базиса ${rn ? `${rn.height}×${rn.depth} в заднем верхнем углу` : `другой формы (${rp.contour!.length} точек, ${cut} мм²)`}, у студии ${sp.rearNotch.height}×${sp.rearNotch.depth}`);
+      continue;
+    }
     if (!sc) contours.push(`${pr.ref.name}: фигурный контур Базиса (${rp.contour!.length} точек, вырез ${cut} мм²) — в студии прямоугольник`);
     else if (Math.abs(sc - cut) > Math.max(200, cut * 0.02)) contours.push(`${pr.ref.name}: вырез у Базиса ${cut} мм², у студии ${sc} мм²`);
   }
