@@ -144,9 +144,16 @@ test('edge ends per panel: only the bottom edged at the ends (k31 m13)',()=>{
   assert.equal(ps.find(p=>p.id==='top')!.edge.filter(x=>x>0).length,2);
 });
 
+test('kitchen back groove may sit deep in the body (k20 m05: 119 mm), wardrobe limit 8–30 unchanged',()=>{
+  const m=antresol();m.backType='groove';m.grooveInset=119;
+  assert.ok(!validate(m).some(e=>/Паз/.test(e)));
+  const w=initialModule();w.backType='groove';w.grooveInset=119;
+  assert.ok(validate(w).some(e=>/Паз/.test(e)),'wardrobe rule unchanged');
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
-for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13']] as const)
+for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
     const {module:m}=moduleFromEtalon(ref);
