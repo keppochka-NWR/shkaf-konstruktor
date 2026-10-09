@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { initialModule, section, boxes, type Module } from "../src/model";
-import { bounds, projectErrors, type PlacedModule, type Project } from "../src/project";
+import { bounds, projectErrors, applyAutoFillers, type PlacedModule, type Project } from "../src/project";
 import { resizeInRow, placeInRow } from "../src/rowResize";
 import { fitMeshItem } from "../src/operations";
 import { DEFAULT_MESH } from "../src/mesh";
@@ -209,6 +209,22 @@ test("«у стены» и «стык под 90°» — с допусками а
   assert.deepEqual([get(q, "b").x, get(q, "c").x, get(q, "c").module.width, get(q, "a").module.width], [x0 + 600, x0 + 1300, 500, 600]);
   const r = resizeInRow(proj([corner, at("a", x0, mod("Первый")), at("b", x0 + 600, mod("Второй"))]), "a", 700);
   assert.deepEqual([get(r, "a").x, get(r, "a").module.width, get(r, "b").module.width], [x0, 700, 500]);
+});
+
+test("кухонный ряд при поворотах 0/90/180/270: вплотную без ошибок проекта до и после правки ширины", () => {
+  const k = (n: string) => ({ ...kitchenTemplate("base-doors", 600, initialModule()), name: n });
+  const place = (rot: 0 | 90 | 180 | 270, n: string, i: number): PlacedModule => {
+    const t = 500 + 600 * i;
+    return rot === 0 ? { id: n, x: t, z: 3, rotation: 0, module: k(n) } : rot === 90 ? { id: n, x: 3, z: t, rotation: 90, module: k(n) }
+      : rot === 180 ? { id: n, x: t, z: 2400, rotation: 180, module: k(n) } : { id: n, x: 3000, z: t, rotation: 270, module: k(n) };
+  };
+  for (const rot of [0, 90, 180, 270] as const) {
+    const p: Project = { version: 3, kind: "kitchen", room: { width: 3600, depth: 3000, height: 2700, openings: [] }, modules: ["A", "B", "C"].map((n, i) => place(rot, n, i)) };
+    assert.deepEqual(projectErrors(applyAutoFillers(p)), [], `поворот ${rot}: до правки`);
+    const q = applyAutoFillers(resizeInRow(p, "B", 700));
+    assert.deepEqual(projectErrors(q), [], `поворот ${rot}: после правки`);
+    assert.deepEqual(["A", "B", "C"].map((id) => get(q, id).module.width).sort(), [500, 600, 700], `поворот ${rot}: сосед сузился`);
+  }
 });
 
 test("подсказка у ширины проёма не обещает, что соседние корпуса стоят на месте (их меняет правило ряда)", () => {
