@@ -82,7 +82,10 @@ export type StartDrawer = { system: "start-sc"; y0: number; y1: number; runnerY:
 /** Ящик Indigo (Базис k16: 7 ящиков): металлические царги H=90 / H=175 (орион серый или белые), направляющие Indigo 500,
  *  дно и задняя стенка ЛДСП 16. Точка Базиса — внутренняя грань боковины корпуса × ось направляющей × передняя кромка корпуса. */
 export type IndigoDrawer = { system: "indigo"; y0: number; y1: number; runnerY: number; hc: 90 | 175; len: 500; h?: 86 | 120 | 168 | 200; color?: "white" | "anthracite";
-  box?: undefined; backH?: number; faceScrews?: boolean };
+  box?: undefined; backH?: number; faceScrews?: boolean;
+  /** Модуль в Базисе зеркальный (k16 m05): у левой боковины корпуса стоят «правые» направляющая и царга — сетки зеркального
+   *  набора Базиса (INDIGO.mirror), а не обычного. Только из проекта Базиса. */
+  mirror?: true };
 /** Короб ЛДСП 16 на направляющих MODERN SLIDE (Базис k09: 4 ящика, без сетки направляющей — в студии процедурная деталь):
  *  боковины в 8,5 от корпуса, дно на 13 выше их низа, задняя стенка и фальшпанель на дне, конфирматы D5×35. */
 export type ModernDrawer = { system: "modern-slide"; y0: number; y1: number; runnerY: number; box: FirmaxBox; h?: 86 | 120 | 168 | 200; len?: number; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
@@ -106,6 +109,9 @@ export const INDIGO = {
   175: { back: 147.2, back3: [23.2, 55.2, 119.2], front3: [22, 54, 118, 150], top: 160 },
   90: { back: 62.2, back3: [24, 56], front3: [22, 54], top: 73.2 },
   mesh: { runner: ["437755c651e6", "d49e8211a82d"] as LR, "175": ["c4b2a89adf2b", "5a8cbf34bbdc"] as LR, "175:white": ["5e4e4dbaf65f", "ac7784ef1cd3"] as LR, "90": ["b619d0529510", "13141e62e630"] as LR },
+  /** Сетки зеркального модуля Базиса (k16 m05) по стороне корпуса: слева «правая», справа «левая». Белой царги 175 в зеркальном
+   *  модуле в базе нет — у неё остаётся обычный набор. */
+  mirror: { runner: ["104e9c34d36a", "0c33809e9ab3"] as LR, "175": ["b179b3b4cb30", "85fdb19cfc76"] as LR, "90": ["44c331eef18c", "f4f2a9e34f13"] as LR },
 };
 export function indigoTop(k: IndigoDrawer) { return k.runnerY + Math.max(INDIGO[k.hc].top, 11.4 + (k.backH ?? INDIGO[k.hc].back)); }
 export function indigoFits(m: Module, k: IndigoDrawer) { const [lo, hi] = golaBand(m, k.y0, k.y1); return k.runnerY - 44 >= Math.max(axisFloor(m), lo) - 0.01 && indigoTop(k) <= Math.min(k.y1 - 15, axisCeiling(m) - AXIS_FIT.ceiling, hi) + 0.01; }
@@ -113,7 +119,7 @@ export function indigoFits(m: Module, k: IndigoDrawer) { const [lo, hi] = golaBa
 export function indigoLayout(m: Module, n: number, ratios?: number[], keep?: IndigoDrawer[]): IndigoDrawer[] {
   const floor = axisFloor(m), r1 = (v: number) => Math.round(v * 10) / 10;
   return axisLayout(m, n, ratios).map((a) => {
-    const runnerY = r1(Math.max(a.y0 + 44, floor + 54, golaBand(m, a.y0, a.y1)[0] + 44)), at = (hc: 90 | 175): IndigoDrawer => ({ system: "indigo", y0: a.y0, y1: a.y1, runnerY, hc, len: 500, ...(keep?.[0]?.color === "white" ? { color: "white" as const } : {}) });
+    const runnerY = r1(Math.max(a.y0 + 44, floor + 54, golaBand(m, a.y0, a.y1)[0] + 44)), at = (hc: 90 | 175): IndigoDrawer => ({ system: "indigo", y0: a.y0, y1: a.y1, runnerY, hc, len: 500, ...(keep?.[0]?.color === "white" ? { color: "white" as const } : {}), ...(keep?.[0]?.mirror ? { mirror: true as const } : {}) });
     const big = at(175); return indigoFits(m, big) ? big : at(90);
   });
 }
@@ -307,6 +313,10 @@ const BBOX: Record<string, number[]> = {
   "437755c651e6": [7, -44, 0, 503, 8, 45], "d49e8211a82d": [-503, -44, 0, -7, 8, 45],
   "c4b2a89adf2b": [8.7, 27.2, -493, 46.5, 204, 0], "5a8cbf34bbdc": [-46.5, 27.2, -493, -8.7, 204, 0], "5e4e4dbaf65f": [8.7, 27.2, -493, 46.5, 204, 0], "ac7784ef1cd3": [-46.5, 27.2, -493, -8.7, 204, 0],
   "b619d0529510": [8.7, 27.2, -493, 46.5, 117.2, 0], "13141e62e630": [-46.5, 27.2, -493, -8.7, 117.2, 0],
+  // Indigo зеркального модуля Базиса (k16 m05): габариты GLB те же, что у сетки своей стороны корпуса
+  "104e9c34d36a": [7, -44, 0, 503, 8, 45], "0c33809e9ab3": [-503, -44, 0, -7, 8, 45],
+  "b179b3b4cb30": [8.7, 27.2, -493, 46.5, 204, 0], "85fdb19cfc76": [-46.5, 27.2, -493, -8.7, 204, 0],
+  "44c331eef18c": [8.7, 27.2, -493, 46.5, 117.2, 0], "f4f2a9e34f13": [-46.5, 27.2, -493, -8.7, 117.2, 0],
   // Boyard СТАРТ
   "de6b6792732b": [9, -33, 0, 400, 27, 32], "bf2604d3a957": [-400, -33, 0, -9, 27, 32], "02f8322e1c2d": [9, -33, 0, 500, 27, 32], "e1badd104edf": [-500, -33, 0, -9, 27, 32],
   "72a20437a230": [-18, -1, 0, 31, 86, 492], "a5bbfd825aec": [-31, -1, 0, 18, 86, 492], "02d2bd8953aa": [-18, -1, 0, 28.5, 118.5, 492], "0125df73e770": [-28.5, -1, 0, 18, 118.5, 492],
@@ -691,10 +701,11 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
       out.push({ id: `${id}:back`, name: `Задняя стенка ящика ${j + 1} (Indigo)`, size: [kw, backH, t], position: [(x0 + xr) / 2, y + 11.4 + backH / 2, F - 490 + t / 2], length: kw, width: backH, thickness: t,
         role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 2, 2, 2] });
-      const cm = k.hc === 175 && k.color === "white" ? INDIGO.mesh["175:white"] : INDIGO.mesh[String(k.hc) as "175" | "90"];
+      const white = k.hc === 175 && k.color === "white", ms = k.mirror ? INDIGO.mirror : INDIGO.mesh;
+      const cm = white ? INDIGO.mesh["175:white"] : ms[String(k.hc) as "175" | "90"], rm = white ? INDIGO.mesh.runner : ms.runner;
       for (const s of [0, 1] as const) {
         const x = sideIn(s), d = dir(s), lr = s ? "R" : "L", side = s ? "правая" : "левая";
-        out.push(metal(`${id}:slide:${lr}`, `Направляющая Indigo ${k.len} ${side}`, INDIGO.mesh.runner[s], [x, y, F], Q_RUN[s]));
+        out.push(metal(`${id}:slide:${lr}`, `Направляющая Indigo ${k.len} ${side}`, rm[s], [x, y, F], Q_RUN[s]));
         out.push(metal(`${id}:sys:side:${lr}`, `Царга Indigo H=${k.hc} ${k.len} ${side}`, cm[s], [x, y - 44, F], [1, 0, 0, 0]));
         for (const dz of INDIGO.side3) out.push(screwAt(`${id}:screw:run${lr}:${dz}`, [x, y, F - dz], "Саморез 3×3 (направляющая Indigo)"));
         for (const dy of s0.back3) out.push(screwAt(`${id}:screw:ig:rear${lr}:${dy}`, [x + d * 29, y + dy, F - 490], "Саморез 3×3 (царга Indigo в заднюю стенку)"));
@@ -1056,7 +1067,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
   return x.slice(0, 6).map((k0: Partial<AxisDrawer> | Partial<FirmaxDrawer> | Partial<VersaliteDrawer> | Partial<StartDrawer> | Partial<IndigoDrawer> | Partial<ModernDrawer>): KDrawer => {
     if (k0.system === "indigo") {
       const s = k0 as Partial<IndigoDrawer>;
-      return { system: "indigo", y0: Number(s.y0), y1: Number(s.y1), runnerY: Number(s.runnerY), hc: Number(s.hc) === 90 ? 90 : 175, len: 500, ...(s.color === "white" ? { color: "white" as const } : {}), ...(s.backH === undefined ? {} : { backH: Number(s.backH) }) };
+      return { system: "indigo", y0: Number(s.y0), y1: Number(s.y1), runnerY: Number(s.runnerY), hc: Number(s.hc) === 90 ? 90 : 175, len: 500, ...(s.color === "white" ? { color: "white" as const } : {}), ...(s.backH === undefined ? {} : { backH: Number(s.backH) }), ...(s.mirror ? { mirror: true as const } : {}) };
     }
     if (k0.system === "start-sc") {
       const s = k0 as Partial<StartDrawer>, sb = (["SB08", "SB19", "SB20"] as const).find((v) => v === s.sb) ?? "SB20";

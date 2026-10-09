@@ -164,3 +164,13 @@ test('кухня: узкая жёсткая полка-планка 70 у зад
   const {m,ok}=pass('k18','m06');assert.ok(ok);assert.equal(m.sections[0].shelfDepth,70);
   const w=initialModule();w.sections[0].shelfDepth=70;assert.ok(validate(w).some(e=>/глубина полок должна быть от 100/.test(e)));
 });
+
+test('Indigo k16 m05 (зеркальный модуль Базиса): сетки зеркального набора, как в Базисе, без пересечений; k16 m04 - обычный набор',{skip:!has('k16')},()=>{
+  const ref=load('k16','m05'),{m,ok}=pass('k16','m05');assert.ok(ok);
+  assert.ok(m.kdrawers!.every(k=>(k as {mirror?:true}).mirror===true));
+  const ps=parts(m),meshes=new Set(ps.filter(p=>/Indigo/.test(p.name)&&p.model).map(p=>/([0-9a-f]{12})\.glb/.exec(p.model!.file)?.[1]));
+  for(const h of ref.hardware.filter(h=>/Indigo/.test(h.name)&&h.mesh)) assert.ok(meshes.has(h.mesh!),`сетка Базиса ${h.mesh} (${h.name})`);
+  assert.equal(partCollisions(ps,m).length,0);
+  assert.ok(roundTrip(m).kdrawers!.every(k=>(k as {mirror?:true}).mirror===true),'зеркальность не теряется при сохранении');
+  const r4=pass('k16','m04');assert.ok(r4.ok);assert.ok(r4.m.kdrawers!.every(k=>!(k as {mirror?:true}).mirror));
+});

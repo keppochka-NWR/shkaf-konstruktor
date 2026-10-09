@@ -537,7 +537,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (!cg || (hc !== 90 && hc !== 175) || !f || !bot || !bk) { unsupported.push(`ящик Indigo на ${r1(y)}: нет царги H=90/175, фасада, дна или задней стенки`); continue; }
       drawerPanels.push(f, bot, bk);
       const backH = r1(bk.b.y1 - bk.b.y0), def = hc === 175 ? 147.2 : 62.2;
-      kd.push({ system: "indigo", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), hc, len: 500, ...(/белая/.test(cg.name) ? { color: "white" as const } : {}), ...(Math.abs(backH - def) > 0.05 ? { backH } : {}) });
+      kd.push({ system: "indigo", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), hc, len: 500, ...(/белая/.test(cg.name) ? { color: "white" as const } : {}), ...(Math.abs(backH - def) > 0.05 ? { backH } : {}), ...(/правая/.test(r.name) ? { mirror: true as const } : {}) });
+      // зеркальный модуль Базиса (k16 m05): у левой боковины корпуса «правая» направляющая — сетки зеркального набора
+      if (/правая/.test(r.name)) notes.push(`ящик Indigo на ${r1(y)}: модуль в Базисе зеркальный — сетки зеркального набора`);
     }
     if (kd.length) m.kdrawers = kd;
   }
