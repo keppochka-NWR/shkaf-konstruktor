@@ -74,6 +74,11 @@ test('Вернисаж: цена по прайсу 10.08.2026 — три руч�
   // 3) Престиж №72, эмаль мат 19 мм, с двух сторон (+50 %) и лак (+800): 12630 × 1,5 + 800 = 19745; 0,597×2 = 1,194 м² → 23575,53 (эмаль — без минимума)
   const c = vernissageFacadePrice({ milling: '72', cover: 'enamel-matte', thickness: 19, twoSided: true, lacquer: true }, 597, 2000);
   assert.equal(c.perM2, 19745); assert.equal(c.total, 23575.53);
+  // 4) Адилет: Оптима №22, «Плёнка мат. Carbon CBR-1 Эгрет» (кат. 3), 19 мм: 7470 ₽/м² (лист «Прайс Адилет» R22)
+  const d = vernissageFacadePrice({ milling: '22', cover: 'adilet', film: 'Плёнка мат. Carbon CBR-1 Эгрет', thickness: 19 }, 450, 716);
+  assert.equal(d.perM2, 7470); assert.ok(d.notes.some((n) => n.includes('+5')));
+  // 5) МДФ 25 мм: +40 % к 16 мм — Стандарт №1, Моно белый: 4600 × 1,4 = 6440
+  assert.equal(vernissageFacadePrice({ milling: '1', cover: 'film', film: 'Моно белый', thickness: 25 }, 450, 716).perM2, 6440);
   // ограничения прайса — предупреждения
   assert.ok(vernissageFacadePrice({ milling: '72', cover: 'film', film: 'Моно белый', thickness: 16 }, 400, 700).warnings.some((w) => w.includes('19')));
   assert.ok(vernissageFacadePrice({ milling: '78', cover: 'enamel-gloss', thickness: 19 }, 400, 700).warnings.some((w) => w.includes('матовая')));

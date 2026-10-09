@@ -1,17 +1,18 @@
-import { V_FILMS, V_MILLINGS, V_NOTES, V_SERIES, type VMillingRow, type VSeriesId } from './vernissageData';
+import { V_ADILET_FILMS, V_ADILET_PRICES, V_FILMS, V_MILLINGS, V_NOTES, V_SERIES, type VMillingRow, type VSeriesId } from './vernissageData';
 import { layoutFacade, type FacadeLayout, type MillShape, type Opening } from './vernissageGeometry';
 
 /** Фасады МДФ «Вернисаж» (г. Бор): каталог фрезеровок, плёнки, эмаль, цены по прайсу от 10.08.2026.
  *  Сторонний участок: фасады не идут в раскрой ЛДСП, цена — м² по серии, категории покрытия и толщине (примечания прайса — ниже). */
-export type VernissageCover = 'film' | 'enamel-matte' | 'enamel-gloss' | 'none';
+export type VernissageCover = 'film' | 'adilet' | 'enamel-matte' | 'enamel-gloss' | 'none';
 export type VernissageFacade = {
   milling: string;
   cover: VernissageCover;
-  /** Плёнка ПВХ (название из прайса, лист «Разделение плёнок по категориям»). */
+  /** Плёнка ПВХ (название из прайса, лист «Разделение плёнок по категориям»; для cover 'adilet' — лист «Плёнка Адилет»). */
   film?: string;
   /** Цвет эмали — подпись (RAL/NCS по заказу) и цвет в 3D. */
   enamelColor?: string;
-  thickness: 16 | 19;
+  /** МДФ 16 или 19 мм по прайсу; 25 мм — «+40 % к 16 мм» (примечание 8 прайса). */
+  thickness: 16 | 19 | 25;
   open?: Opening;
   patina?: boolean;
   /** Эмаль: покраска с двух сторон (+50 %), лак на матовую (+800 ₽/м²). */
@@ -21,6 +22,7 @@ export type VernissageFacade = {
 export const DEFAULT_VERNISSAGE: VernissageFacade = { milling: '1', cover: 'film', film: 'Моно белый', thickness: 19 };
 export const VERNISSAGE_SERIES = V_SERIES;
 export const VERNISSAGE_FILMS = V_FILMS;
+export const ADILET_FILMS = V_ADILET_FILMS;
 export const VERNISSAGE_NOTES = V_NOTES;
 export const SERIES_LABEL: Record<VSeriesId, string> = { standart: 'Стандарт', optima: 'Оптима', prestige: 'Престиж', premium: 'Премиум' };
 
@@ -95,6 +97,10 @@ export function vernissageLayout(v: VernissageFacade, w: number, h: number, t: n
 export function priceColumn(v: VernissageFacade): { key: string; label: string } | null {
   const s = seriesOf(v.milling);
   let key: string | null = null;
+  if (v.cover === 'adilet') {
+    const cat = V_ADILET_FILMS.find((f) => f.name === v.film)?.cat;
+    return cat && V_ADILET_PRICES[s.id]?.['16']?.['cat' + cat] !== undefined ? { key: 'adilet:cat' + cat, label: `Плёнка Адилет, категория ${cat}` } : null;
+  }
   if (v.cover === 'enamel-matte') key = 'enamel_matte';
   else if (v.cover === 'enamel-gloss') key = 'enamel_gloss';
   else if (v.cover === 'none') key = 'no_film';
@@ -114,15 +120,20 @@ export type VernissagePrice = { area: number; billArea: number; perM2: number | 
  *  эмаль с двух сторон +50 % к прайсу; лак на матовую эмаль +800 ₽/м²; патина +2500 ₽/м². Присадка под петли — отдельной строкой. */
 export function vernissageFacadePrice(v: VernissageFacade, wMm: number, hMm: number): VernissagePrice {
   const m = vernissageMilling(v.milling), s = seriesOf(v.milling), col = priceColumn(v), notes: string[] = [], warnings: string[] = [];
-  const area = (wMm * hMm) / 1e6, pvc = v.cover === 'film' || v.cover === 'none';
+  const area = (wMm * hMm) / 1e6, pvc = v.cover === 'film' || v.cover === 'adilet' || v.cover === 'none';
   const billArea = pvc ? Math.max(area, V_NOTES.minAreaM2Pvc) : area;
   if (pvc && area < V_NOTES.minAreaM2Pvc) notes.push(`меньше ${V_NOTES.minAreaM2Pvc} м² — считается как ${V_NOTES.minAreaM2Pvc}`);
-  if (m?.mdf19Only && v.thickness !== 19) warnings.push(`№${v.milling} — только МДФ 19 мм (с петлями)`);
+  if (m?.mdf19Only && v.thickness === 16) warnings.push(`№${v.milling} — только МДФ 19 мм (с петлями)`);
+  if (v.cover === 'adilet') { notes.push('плёнка Адилет: срок +5 раб. дней'); if (V_ADILET_FILMS.find((f) => f.name === v.film)?.out) warnings.push(`Плёнка «${v.film}» выводится из ассортимента («[Выводим]» в прайсе)`); }
   if (v.cover.startsWith('enamel') && m && m.enamel === 'none') warnings.push(`№${v.milling} в эмали не исполняется по прайсу`);
   if (v.cover === 'enamel-gloss' && m?.enamel === 'matte') warnings.push(`№${v.milling} — эмаль только матовая`);
   const film = V_FILMS.find((f) => f.name === v.film);
   if (v.cover === 'film' && m?.lineSienaNo && /^(Лайн|Сиена)/.test(v.film ?? '')) warnings.push(`№${v.milling} не рекомендуется в плёнках Лайн и Сиена`);
-  const base = col ? s.prices[String(v.thickness) as '16' | '19']?.[col.key] ?? null : null;
+  // МДФ 25 мм: прайсовая цена 16 мм + 40 % (примечание 8 прайса)
+  const t = v.thickness === 25 ? '16' : (String(v.thickness) as '16' | '19');
+  const raw = !col ? null : col.key.startsWith('adilet:') ? V_ADILET_PRICES[s.id]?.[t]?.[col.key.slice(7)] ?? null : s.prices[t]?.[col.key] ?? null;
+  const base = raw === null ? null : v.thickness === 25 ? Math.round(raw * (1 + V_NOTES.mdf25MarkupPctVs16 / 100) * 100) / 100 : raw;
+  if (v.thickness === 25 && raw !== null) notes.push(`МДФ 25 мм: +${V_NOTES.mdf25MarkupPctVs16} % к 16 мм`);
   if (base === null) { warnings.push('Нет цены в прайсе для этого сочетания серии и покрытия'); return { area, billArea, perM2: null, base: null, column: col?.label ?? null, total: null, notes, warnings }; }
   let perM2 = base;
   const frame = v.open === 'glass' || v.open === 'grille';
@@ -130,7 +141,9 @@ export function vernissageFacadePrice(v: VernissageFacade, wMm: number, hMm: num
   if (v.twoSided && v.cover.startsWith('enamel')) { perM2 *= 1 + V_NOTES.enamelTwoSidedMarkupPct / 100; notes.push(`покраска с 2 сторон +${V_NOTES.enamelTwoSidedMarkupPct} %`); }
   if (v.lacquer && v.cover === 'enamel-matte') { perM2 += V_NOTES.enamelMatteLacquerPerM2; notes.push(`лак +${V_NOTES.enamelMatteLacquerPerM2} ₽/м²`); }
   if (v.patina) {
-    if (v.cover === 'film' && film?.patina === false) warnings.push(`Плёнка «${v.film}» не патинируется`);
+    const ad = v.cover === 'adilet' ? V_ADILET_FILMS.find((f) => f.name === v.film) : undefined;
+    if (ad && (/глян|софт|soft|металл/i.test(ad.name + ' ' + (ad.finish ?? '')))) warnings.push(`Плёнка «${v.film}» — софт/металлик/глянец не патинируются`);
+    else if (v.cover === 'film' && film?.patina === false) warnings.push(`Плёнка «${v.film}» не патинируется`);
     else { perM2 += V_NOTES.patinaPerM2; notes.push(`патина +${V_NOTES.patinaPerM2} ₽/м²`); }
   }
   perM2 = Math.round(perM2 * 100) / 100;
@@ -139,19 +152,19 @@ export function vernissageFacadePrice(v: VernissageFacade, wMm: number, hMm: num
 
 export function vernissageLabel(v: VernissageFacade): string {
   const m = vernissageMilling(v.milling), s = seriesOf(v.milling);
-  const cover = v.cover === 'film' ? `плёнка ${v.film ?? '—'}` : v.cover === 'enamel-matte' ? `эмаль мат${v.enamelColor ? ' ' + v.enamelColor : ''}` : v.cover === 'enamel-gloss' ? `эмаль глянец${v.enamelColor ? ' ' + v.enamelColor : ''}` : 'без плёнки';
+  const cover = v.cover === 'film' ? `плёнка ${v.film ?? '—'}` : v.cover === 'adilet' ? `плёнка Адилет ${v.film ?? '—'}` : v.cover === 'enamel-matte' ? `эмаль мат${v.enamelColor ? ' ' + v.enamelColor : ''}` : v.cover === 'enamel-gloss' ? `эмаль глянец${v.enamelColor ? ' ' + v.enamelColor : ''}` : 'без плёнки';
   const open = v.open === 'glass' ? ', под стекло' : v.open === 'grille' ? ', решётка' : '';
   return `Вернисаж ${s.name} №${m?.id ?? v.milling}${open}, ${cover}, МДФ ${v.thickness}`;
 }
 
 /** Цвет в 3D по названию плёнки/эмали — приблизительный (текстур плёнок производителя нет). */
 export function vernissageColor(v: VernissageFacade): number {
-  if (v.cover !== 'film' && v.enamelColor && /^#?[0-9a-f]{6}$/i.test(v.enamelColor)) return parseInt(v.enamelColor.replace('#', ''), 16);
-  const n = (v.cover === 'film' ? v.film ?? '' : v.enamelColor ?? '').toLowerCase();
+  if (v.cover.startsWith('enamel') && v.enamelColor && /^#?[0-9a-f]{6}$/i.test(v.enamelColor)) return parseInt(v.enamelColor.replace('#', ''), 16);
+  const n = (v.cover === 'film' || v.cover === 'adilet' ? v.film ?? '' : v.enamelColor ?? '').toLowerCase();
   const table: [RegExp, number][] = [[/графит|антрацит|чёрн|черн|венге|обсидиан/, 0x3d3f42], [/сер|грей|grey|бетон|маренго/, 0x9a9c99], [/мят|олив|фисташ|зел|грин|green|шалфей|эвкалипт|мирт|базилик|мелисс/, 0xa9b8a0],
     [/голуб|скай|синий|деним|азур|индиго|аквамарин|океан/, 0x93a7b8], [/лаванд|пудр|pink|розм|фламинго/, 0xc9b3b8], [/орех|тик|каштан|шоколад|кофе|мокко|трюфель|брауни|темн|тёмн/, 0x7a5a42],
     [/дуб|ясень|сосна|акаци|вяз|лиственниц|сандал|клен|клён|дерев/, 0xc9a982], [/беж|латте|капучино|крем|ваниль|карамель|песок|кашемир|миндаль|лён|лен|сафари|имбир/, 0xd9c9ad], [/бел|айс|милк|слонов|бьянк|магнол|фарфор|иней/, 0xf1efe9]];
   for (const [re, c] of table) if (re.test(n)) return c;
   return 0xe6e4dc;
 }
-export function vernissageGlossy(v: VernissageFacade): boolean { return v.cover === 'enamel-gloss' || (v.cover === 'film' && /глянец/i.test(v.film ?? '')); }
+export function vernissageGlossy(v: VernissageFacade): boolean { return v.cover === 'enamel-gloss' || ((v.cover === 'film' || v.cover === 'adilet') && /глянец|глянц|gloss|HG/i.test(v.film ?? '')); }

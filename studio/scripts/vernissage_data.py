@@ -71,6 +71,13 @@ for cat, c in price['filmCategories']['categories'].items():
     for i in c['items']:
         films.append({'name': i['name'], 'cat': cat, 'patina': i.get('patina'), 'v5': i.get('v5IntegratedHandle')})
 
+AD_SERIES = {'Стандарт': 'standart', 'Оптима': 'optima', 'Престиж': 'prestige', 'Премиум': 'premium'}
+adilet_prices = {AD_SERIES[s['name']]: {t: {k: v for k, v in row.items() if not k.startswith('_')} for t, row in s['prices'].items()} for s in price['adilet']['series']}
+adilet_films = []
+for cat, items in price['adiletFilms']['categories'].items():
+    for i in items:
+        adilet_films.append({'name': i['name'], 'cat': cat, 'collection': i.get('collection'), 'finish': i.get('finish'), 'out': bool(i.get('withdrawing'))})
+
 np = price['notesParsed']
 notes = {
     'priceDate': price['source']['priceDate'],
@@ -99,4 +106,9 @@ with open(out, 'w', encoding='utf-8', newline='\n') as f:
     f.write('export const V_MILLINGS:VMillingRow[]=' + js(millings) + ';\n')
     f.write('export const V_FILMS:VFilmRow[]=' + js(films) + ';\n')
     f.write('export const V_NOTES=' + js(notes) + ' as const;\n')
+    f.write('/** Плёнки Адилет (лист «Плёнка Адилет»): категория 3–6, коллекция; out — «[Выводим]» из ассортимента. */\n')
+    f.write('export type VAdiletFilm={name:string;cat:string;collection:string|null;finish:string|null;out:boolean};\n')
+    f.write('export const V_ADILET_FILMS:VAdiletFilm[]=' + js(adilet_films) + ';\n')
+    f.write('/** Прайс Адилет: серия → толщина → cat3..cat6, ₽/м². Срок +5 раб. дней к стандартному. */\n')
+    f.write('export const V_ADILET_PRICES:Record<VSeriesId,Record<"16"|"19",Record<string,number>>>=' + js(adilet_prices) + ';\n')
 print(len(series), len(millings), len(films))

@@ -337,8 +337,8 @@ export type Module = {
  *  face — сторона толщины детали (+/−), along — отступы от концов по длине детали, across — от минимальной грани по ширине (от/до), depth — глубина. */
 /** Разбор фасада «Вернисаж» из сохранённого проекта: только известные поля. */
 export function parseVernissage(x: unknown): VernissageFacade {
-  const v = x as Record<string, unknown>, cover = ['film', 'enamel-matte', 'enamel-gloss', 'none'].includes(String(v.cover)) ? String(v.cover) as VernissageFacade['cover'] : 'film';
-  return { milling: String(v.milling ?? '1'), cover, thickness: Number(v.thickness) === 16 ? 16 : 19,
+  const v = x as Record<string, unknown>, cover = ['film', 'adilet', 'enamel-matte', 'enamel-gloss', 'none'].includes(String(v.cover)) ? String(v.cover) as VernissageFacade['cover'] : 'film';
+  return { milling: String(v.milling ?? '1'), cover, thickness: Number(v.thickness) === 16 ? 16 : Number(v.thickness) === 25 ? 25 : 19,
     ...(typeof v.film === 'string' ? { film: v.film } : {}), ...(typeof v.enamelColor === 'string' ? { enamelColor: v.enamelColor } : {}),
     ...(v.open === 'glass' || v.open === 'grille' ? { open: v.open } : {}), ...(v.patina === true ? { patina: true } : {}),
     ...(v.twoSided === true ? { twoSided: true } : {}), ...(v.lacquer === true ? { lacquer: true } : {}) };
