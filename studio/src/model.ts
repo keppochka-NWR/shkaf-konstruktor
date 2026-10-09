@@ -956,8 +956,8 @@ export function parts(m: Module): Part[] {
       const yb = hp.position[1] - t / 2;
       const sdn = m.kitchen?.sideDown;
       for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
-        // кухня Базиса: дно глубиной от 600 — третий конфирмат посередине (6 из 6 таких днищ; мельче 600 — два, 128 из 128)
-        for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] - (m.confirmatInset ?? RULES.confirmatInset), ...(m.kitchen && hp.size[2] >= KITCHEN.deepBottom ? [z0 + hp.size[2] / 2] : [])].entries())
+        // кухня Базиса: дно глубже 600 — третий конфирмат посередине (602–700: 9 из 9 днищ под боковинами; ровно 600, k30 m03 — два)
+        for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] - (m.confirmatInset ?? RULES.confirmatInset), ...(m.kitchen && hp.size[2] > KITCHEN.deepBottom + 0.5 ? [z0 + hp.size[2] / 2] : [])].entries())
           if (sdn?.side !== side) confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
       // опущенная боковина (kitchen.sideDown): дно примыкает к ней торцом — стык как у дна между боковинами (конфирмат или эксцентрик)
       if (!sdn) continue;

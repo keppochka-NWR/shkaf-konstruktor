@@ -3,7 +3,7 @@
 //  - фасады без петель и без направляющих — 42 модуля: фасад есть, петель нет (фальш-фасад, «забыли», фасад ящика без ящика);
 //  - без опор — 34 модуля: дно на полу или на своём цоколе;
 //  - без крепежа — 10 модулей (k32): в проекте нет ни конфирматов, ни эксцентриков, ни шкантов, ни полкодержателей.
-import type { Module } from "../../src/model";
+import { parts, type Module } from "../../src/model";
 import type { RefModule } from "./compare";
 
 const FASTENERS = ["конфирмат", "эксцентрик", "шкант", "полкодержатель"];
@@ -17,10 +17,9 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   // ящик без направляющих (k20 m11: царги TANDEMBOX в «ящик-система») и подъёмный на газлифте (k11 m09–m11) — не распашной фасад;
   // ручка-рейлинг в «ящик-система» (k09 m04) — не ящик
   const drawerKit = ref.hardware.some((h) => h.category === "ящик-система" && !/ручк/i.test(h.name));
-  if (fronts > 0 && !has("петля") && !has("направляющая") && !has("газлифт") && !drawerKit && !m.kdrawers?.length) {
-    m.doors = true; k.hinges = false;
-    notes.push("фасады без петель — как в Базисе");
-  }
+  // фасады перед корпусом не из стекла/зеркала («Наполнение» рамочного фасада) и не ЛДСП корпуса (фальшпанель «ФП», «Фронтальная»)
+  const noHinges = fronts > 0 && !has("петля") && !has("направляющая") && !has("газлифт") && !drawerKit && !m.kdrawers?.length && plainFronts(ref);
+  if (noHinges) { m.doors = true; k.hinges = false; }
   if ((k.role === "base" || k.role === "tall") && !has("опора")) { k.noLegs = true; notes.push("без опор — как в Базисе"); }
   // крепёж и под другим разделом: «Евровинт 6х50» Базис кладёт в «прочее» (k33, k34) — это тоже конфирмат, крепёж есть
   if (!FASTENERS.some(has) && !ref.hardware.some((h) => /евровинт|конфирмат|эксцентрик|шкант|полкодерж/i.test(h.name))) { k.fasteners = false; notes.push("без крепежа — как в Базисе"); }
@@ -50,7 +49,60 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (fe && m.edgeScheme?.t) { m.edgeScheme = { ...m.edgeScheme, t: fe.other, front: fe.front }; notes.push(`передние торцы корпуса — кромка ${fe.front}, остальные ${fe.other} — как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
   if (pf !== undefined) { m.shelfPinInsetFront = pf; notes.push(`передние полкодержатели в ${pf} от переднего торца полки (задние в ${m.shelfPinInset}) — как в Базисе`); }
+  // фасады без петель — только если студия строит ровно фасады Базиса (число и габариты, после зазоров faceTop/faceBottom выше).
+  // Несколько рядов, ниша под технику, фасады ящиков разной ширины — студия поставила бы распашные, которых в Базисе нет
+  // (k20 m09: два фасада по 2398 вместо двери 597×330 и стёкол) → фасадов не ставим: лучше «нет», чем лишнее (правило Макса)
+  if (noHinges) {
+    if (sameFronts(ref, m)) notes.push("фасады без петель — как в Базисе");
+    else {
+      m.doors = false; delete k.hinges; delete k.faceTop; delete k.faceBottom;
+      const i = notes.findIndex((n) => n.startsWith("зазор фасадов сверху/снизу")); if (i >= 0) notes.splice(i, 1);
+      notes.push("фасады без петель не повторяются студией один в один (ряды, ниша, ширины) — не ставим, чтобы не добавить лишнего");
+    }
+  }
   return notes;
+}
+
+/** Две крайние боковины (высотой больше 200) и фасады перед ними — как в fromEtalon. */
+function frontPanels(ref: RefModule) {
+  const sides = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200).sort((a, b) => a.box[0] - b.box[0]);
+  if (sides.length < 2) return { sides, fronts: [] as RefModule["panels"] };
+  const z1 = Math.max(sides[0].box[5], sides[sides.length - 1].box[5]);
+  return { sides, fronts: ref.panels.filter((p) => p.axis === "z" && p.kind !== "hdf" && p.box[2] >= z1 - 1) };
+}
+
+/** Фасады — не стекло/зеркало («Наполнение» рамочного фасада: k08 m01, k20 m02–m04, k21 m05) и не ЛДСП корпуса (фальшпанель:
+ *  k32 m04 «4-ФП», угловые «Фронтальная» k02 m06, k03 m04). Такие студия не превращает в распашной фасад. */
+export function plainFronts(ref: RefModule): boolean {
+  const { sides, fronts } = frontPanels(ref);
+  const bodyMat = new Set(sides.map((p) => p.mat));
+  return fronts.length > 0 && fronts.every((p) => p.kind !== "glass" && p.kind !== "mirror" && !(p.kind === "ldsp" && bodyMat.has(p.mat)));
+}
+
+/** Студия строит те же фасады, что в Базисе: столько же, и каждый лежит внутри своего фасада Базиса (допуск tol мм — меньше зазора
+ *  между фасадами 3), занимая не меньше половины его площади. */
+export function sameFronts(ref: RefModule, m: Module, tol = 1.5): boolean {
+  const { fronts } = frontPanels(ref);
+  const box = (p: { position: number[]; size: number[] }) => [0, 1, 2].map((i) => p.position[i] - p.size[i] / 2).concat([0, 1, 2].map((i) => p.position[i] + p.size[i] / 2));
+  let ps: ReturnType<typeof parts>;
+  try { ps = parts(m); } catch { return false; }
+  // общая точка отсчёта — минимальный угол панелей, как в compare.ts (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0)
+  const sp = ps.filter((p) => (p.material === "board" || p.material === "hdf" || p.material === "glass") && (!p.external || p.role === "door" || p.id.endsWith(":facade"))).map(box);
+  const rp = ref.panels.filter((p) => ["ldsp", "hdf", "mdf", "glass", "other"].includes(p.kind)).map((p) => p.box);
+  if (!sp.length || !rp.length) return false;
+  const oS = [0, 1, 2].map((i) => Math.min(...sp.map((b) => b[i]))), oR = [0, 1, 2].map((i) => Math.min(...rp.map((b) => b[i])));
+  const st = ps.filter((p) => p.role === "door" || p.id.endsWith(":facade")).map(box);
+  if (!fronts.length || st.length !== fronts.length) return false;
+  const used = new Set<number>();
+  return fronts.every((f) => {
+    const fb = f.box.map((v, q) => v - oR[q % 3]), area = (b: number[]) => (b[3] - b[0]) * (b[4] - b[1]);
+    // фасад студии не выходит за фасад Базиса (лишней площади нет) и занимает хотя бы половину его — тот же фасад, пусть и с Δ
+    // (k27 m17: дверь Базиса до пола, у студии от 30 — Δ видна в сверке); вышел за него — другая деталь (k03 m01: 717 вместо 117)
+    const j = st.findIndex((s0, i) => { if (used.has(i)) return false; const s = s0.map((v, q) => v - oS[q % 3]);
+      return s.every((v, q) => (q < 3 ? v >= fb[q] - tol : v <= fb[q] + tol)) && area(s) >= area(fb) / 2; });
+    if (j >= 0) used.add(j);
+    return j >= 0;
+  });
 }
 
 /** Одна боковина опущена ниже другой (11 из 150 нижних Базиса): до низа дна (k22 m01, k26 m05) или до пола (k06 m01, k15 m06),

@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB,backGapsTB,eccFromBelow,shelfEdges} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB,backGapsTB,eccFromBelow,shelfEdges,plainFronts,sameFronts} from '../scripts/kitchen/recognize-base';
 import {partCollisions} from '../src/collisions';
 import {holes} from '../src/drilling';
 import {edgeByDir} from '../src/edges';
@@ -94,11 +94,11 @@ test('полкодержатели не симметричны по глубин
   assert.equal(Math.round((Math.min(...zs)-(sh.position[2]-sh.size[2]/2))*10)/10,Math.round(((sh.position[2]+sh.size[2]/2)-Math.max(...zs))*10)/10);
 });
 
-test('дно под боковинами глубиной от 600 — 3 конфирмата на сторону, третий посередине (k16 m06, k20 m01 PASS); мельче 600 — два',{skip:!has('k16')||!has('k20')},()=>{
+test('дно под боковинами глубже 600 — 3 конфирмата на сторону, третий посередине (k16 m06, k20 m01 PASS); ровно 600 (k30 m03) и мельче — два',{skip:!has('k16')||!has('k20')},()=>{
   for(const [k,key] of [['k16','m06'],['k20','m01']]){
     const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
     const bot=parts(m).find(p=>p.id==='bottom')!;
-    assert.ok(bot.size[2]>=600,k+key);
+    assert.ok(bot.size[2]>600,k+key);
     const zs=parts(m).filter(p=>p.id.startsWith('fast:bottom:left:')).map(p=>p.model!.origin![2]).sort((a,b)=>a-b);
     assert.equal(zs.length,3,k+key);
     assert.ok(Math.abs(zs[1]-bot.position[2])<0.01,'середина дна');
@@ -111,6 +111,39 @@ test('дно под боковинами глубиной от 600 — 3 кон�
   assert.equal(parts(deep).filter(p=>p.id.startsWith('fast:bottom:left:')).length,3,'кухня глубиной 650 — три');
   const w={...initialModule(),depth:650,bottomUnder:true};
   assert.equal(parts(w).filter(p=>p.id.startsWith('fast:bottom:left:')).length,2,'не кухня — как было');
+  // ровно 600 — два на сторону (Базис: 9 из 9 днищ 602–700 — по три, единственное ровно 600 — по два)
+  assert.equal(parts({...pal,depth:600}).filter(p=>p.id.startsWith('fast:bottom:left:')).length,2,'кухня глубиной 600 — два');
+  assert.equal(parts({...pal,depth:602}).filter(p=>p.id.startsWith('fast:bottom:left:')).length,3,'кухня глубиной 602 — три');
+  if(has('k30')){
+    const ref=load('k30','m03'),c=compareModule(ref,moduleFromEtalon(ref).module);
+    const cf=c.hardware.find(h=>h.category==='конфирмат')!;
+    assert.deepEqual([cf.ref,cf.studio],[26,26],'k30 m03: дно ровно 600 — лишних конфирматов нет');
+  }
+});
+
+test('фасад без петель — только если студия строит те же фасады, что в Базисе: несколько рядов, ниша, стекло, ЛДСП корпуса — фасадов не добавляем',{skip:!has('k20')||!has('k32')||!has('k23')},()=>{
+  const extraFacades=(k:string,key:string)=>{const ref=load(k,key),{module:m}=moduleFromEtalon(ref);return {m,n:compareModule(ref,m).extra.filter(x=>x.cls.startsWith('фасад|')).length};};
+  // k20 m09: дверь 597×330 и два стекла «Наполнение» в 3 ряда — раньше студия ставила два распашных по 2398 и 12 пересечений с конфирматами
+  for(const [k,key] of [['k20','m09'],['k32','m04'],['k23','m15'],['k23','m16'],['k20','m02']]){
+    const {m,n}=extraFacades(k,key);
+    assert.equal(n,0,`${k} ${key}: лишних фасадов нет`);
+    assert.notEqual(m.kitchen?.hinges,false,`${k} ${key}: флаг «без петель» не ставится`);
+    assert.equal(m.doors,false,`${k} ${key}: распашных нет`);
+    assert.equal(partCollisions(parts(m),m).filter(c=>c.names.some(n=>/Фасад распашной/.test(n))).length,0,`${k} ${key}: распашного фасада нет — и пересечений с ним нет`);
+  }
+  // k32 m04: ЛДСП корпуса «4-ФП» — не фасад, ошибки «Фасад шире 700» больше нет
+  assert.ok(!validate(extraFacades('k32','m04').m).some(e=>/Фасад шире/.test(e)));
+  assert.equal(plainFronts(load('k32','m04')),false,'ЛДСП корпуса');
+  assert.equal(plainFronts(load('k20','m02')),false,'стекло «Наполнение»');
+  // ящики без направляющих разной ширины (k29 m07: 296 и 44) — не две равные створки
+  if(has('k29'))assert.equal(extraFacades('k29','m07').n,0);
+  // а где студия повторяет фасады Базиса один в один — правило работает, как раньше (k13 m06, k29 m06, k23 m14: два ряда пенала)
+  for(const [k,key] of [['k13','m06'],['k29','m06'],['k23','m14']]){
+    if(!has(k))continue;
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.equal(m.kitchen?.hinges,false,`${k} ${key}`);
+    assert.equal(sameFronts(ref,m),true,`${k} ${key}`);
+  }
 });
 
 test('узкий нижний (200, k05 m02): опоры в два ряда в 70 от торцов, как в Базисе (PASS); внахлёст (150, k16 m07: 70 и 80) — не повторяем, один ряд',{skip:!has('k05')||!has('k16')},()=>{
