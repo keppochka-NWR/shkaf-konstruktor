@@ -54,7 +54,7 @@ export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: st
   /** Имя крепежа корпуса Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50») — строка сметы под этим именем (n3-wall). */
   confirmatName?: string };
 /** Названия Базиса с количеством: петли, полкодержатели, направляющие Firmax (артикул «L - 500» — длина направляющей, не короба). */
-export type BazisNames = { hinges?: Record<string, number>; shelfHolders?: Record<string, number>; slides?: Record<string, number>; legs?: Record<string, number>; legsDup?: Record<string, number> };
+export type BazisNames = { hinges?: Record<string, number>; shelfHolders?: Record<string, number>; slides?: Record<string, number>; legs?: Record<string, number> };
 
 /** Сырой модуль КУХНИ Базиса (scripts/kitchen/import.ts): помечен source 'bazis-kitchen', у него есть счётчики фурнитуры Базиса
  *  (counts — ранние импорты без пометки) или это объект «Ряд».
@@ -130,29 +130,18 @@ export function bazisHoles(hw: { name: string; category: string; pos?: number[] 
   }
   return [...out.values()];
 }
-/** Ключ дубля опоры Базиса: та же опора (имя), та же точка (0,1 мм) и тот же поворот (кватернион, 0,01). Одно правило для сметы
- *  (bazisNames.legsDup) и для сверки модуля (scripts/kitchen/compare.ts: дубль в ref не входит). Без позиции — "" (не дубль). */
-export function legDupKey(h: { name?: string | null; pos?: number[] | null; quat?: number[] | null }): string {
-  if (!Array.isArray(h.pos)) return "";
-  return `${(h.name ?? "").trim()}|${h.pos.map((v) => Math.round(v * 10) / 10).join(",")}|${(h.quat ?? []).map((v) => Math.round(v * 100)).join(",")}`;
-}
-/** Названия петель («Петля …») и полкодержателей Базиса с количеством. legsDup — опоры Базиса, стоящие в точке другой такой же опоры
- *  с тем же поворотом (k16 Пенал1: две пары опор по две в одной точке; legDupKey): в 3D одна, в спецификации Базиса — обе. */
-export function bazisNames(hw: { name: string; category: string; pos?: number[] | null; quat?: number[] | null }[]): BazisNames {
-  const hinges: Record<string, number> = {}, shelfHolders: Record<string, number> = {}, slides: Record<string, number> = {}, legs: Record<string, number> = {}, legsDup: Record<string, number> = {};
-  const legAt = new Set<string>();
+/** Названия петель («Петля …») и полкодержателей Базиса с количеством. Опоры — все записи Базиса: дубль опоры в одной точке
+ *  (k16 Пенал1) у параметрического модуля студия повторяет деталью (kitchen.dupParts, n4-tall), поэтому в смете он есть и так. */
+export function bazisNames(hw: { name: string; category: string }[]): BazisNames {
+  const hinges: Record<string, number> = {}, shelfHolders: Record<string, number> = {}, slides: Record<string, number> = {}, legs: Record<string, number> = {};
   for (const h of hw) {
     const n = (h.name ?? "").trim();
-    if (h.category === "опора" && n) {
-      legs[n] = (legs[n] ?? 0) + 1;
-      const at = legDupKey(h);
-      if (at && legAt.has(at)) legsDup[n] = (legsDup[n] ?? 0) + 1; else if (at) legAt.add(at);
-    }
+    if (h.category === "опора" && n) legs[n] = (legs[n] ?? 0) + 1;
     if ((h.category === "петля" || h.category === "подъёмник" || h.category === "газлифт") && /^петля/i.test(n)) hinges[n] = (hinges[n] ?? 0) + 1;
     if (h.category === "полкодержатель") shelfHolders[n || "Полкодержатель"] = (shelfHolders[n || "Полкодержатель"] ?? 0) + 1;
     if (h.category === "направляющая" && /firmax/i.test(n)) slides[n] = (slides[n] ?? 0) + 1;
   }
-  return { ...(Object.keys(hinges).length ? { hinges } : {}), ...(Object.keys(shelfHolders).length ? { shelfHolders } : {}), ...(Object.keys(slides).length ? { slides } : {}), ...(Object.keys(legs).length ? { legs } : {}), ...(Object.keys(legsDup).length ? { legsDup } : {}) };
+  return { ...(Object.keys(hinges).length ? { hinges } : {}), ...(Object.keys(shelfHolders).length ? { shelfHolders } : {}), ...(Object.keys(slides).length ? { slides } : {}), ...(Object.keys(legs).length ? { legs } : {}) };
 }
 
 /** Счётчики фурнитуры по списку Базиса: петли — только «Петля …» (детали ФриФолд в Базисе тоже в категории «петля»),
@@ -357,7 +346,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),
     ...(r.row ? { row: true } : {}),
     ...(Array.isArray(r.items) ? { items: parseItems(r.items) } : {}),
-    ...(r.names && typeof r.names === "object" ? { names: Object.fromEntries((["hinges", "shelfHolders", "slides", "legs", "legsDup"] as const).filter((k) => r.names![k] && typeof r.names![k] === "object")
+    ...(r.names && typeof r.names === "object" ? { names: Object.fromEntries((["hinges", "shelfHolders", "slides", "legs"] as const).filter((k) => r.names![k] && typeof r.names![k] === "object")
       .map((k) => [k, Object.fromEntries(Object.entries(r.names![k]!).filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0).slice(0, 50).map(([n, v]) => [String(n).slice(0, 200), Math.round(Number(v))]))])) } : {}),
     ...(typeof r.confirmatName === "string" && r.confirmatName.trim() ? { confirmatName: r.confirmatName.trim().slice(0, 80) } : {}),
   };

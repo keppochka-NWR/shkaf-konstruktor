@@ -4,11 +4,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {type Part} from '../src/model';
+import {parts,type Part} from '../src/model';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {allowedContact} from '../src/collisions';
-import {bazisHoleName,bazisHoles,bazisNames,legDupKey} from '../src/rawModule';
+import {bazisHoleName,bazisHoles} from '../src/rawModule';
 import {buildKitchen} from '../scripts/kitchen/buildKitchen';
 import {etalonHoleItems,holeSig,supplierEdgeKind} from '../scripts/kitchen/wholeChecks';
 import {FRONT_NORMAL,frontCamera,mainRowRotation} from '../scripts/kitchen/frontCamera';
@@ -117,16 +117,10 @@ test('петли: тип Базиса «под фальшпанель», «по�
 test('k16: опоры-дубли Базиса (две пары опор в одной точке у «Пенал1») — в смете 41, как в Базисе',{skip:!has('k16')},()=>{
   const p=kitchen('k16');
   assert.equal(qty(p,/^kitchen-leg/),41);
+  // слияние n4: дубль опоры студия повторяет деталью (kitchen.dupParts, n4-tall) — одно решение для сверки, 3D и сметы
   const pen=p.modules.find(a=>a.module.name==='Пенал1')!;
-  assert.deepEqual(pen.module.bazisNames?.legsDup,{'Опора кухонная регулируемая, H100-120мм, чёрная':2});
-  // одна опора в точке — дублей нет
-  assert.equal(bazisNames([{name:'Опора',category:'опора',pos:[0,0,0]},{name:'Опора',category:'опора',pos:[100,0,0]}]).legsDup,undefined);
-  // правило дубля — общее со сверкой модуля (legDupKey, compare.ts): точка 0,1 мм и поворот; другой поворот в той же точке — не дубль
-  const q1=[1,0,0,0],q2=[0.5,0.5,0.5,-0.5];
-  assert.equal(bazisNames([{name:'Опора',category:'опора',pos:[0,0,0],quat:q1},{name:'Опора',category:'опора',pos:[0,0,0],quat:q2}]).legsDup,undefined);
-  assert.deepEqual(bazisNames([{name:'Опора',category:'опора',pos:[0,0,0],quat:q1},{name:'Опора',category:'опора',pos:[0.02,0,0],quat:q1}]).legsDup,{'Опора':1});
-  assert.equal(legDupKey({name:' Опора ',pos:[0.04,1,2],quat:q1}),legDupKey({name:'Опора',pos:[0,1,2],quat:q1}));
-  assert.notEqual(legDupKey({name:'Опора',pos:[0.6,1,2],quat:q1}),legDupKey({name:'Опора',pos:[0,1,2],quat:q1}));
+  assert.equal(pen.module.kitchen?.dupParts?.filter(id=>id.startsWith('leg:')).length,2);
+  assert.equal(parts(pen.module).filter(q=>q.id.startsWith('leg:')&&q.id.endsWith(':dup')).length,2);
 });
 
 test('k23: клипса и опора у цоколя ряда — разрешённый контакт до 3 мм (как в Базисе: сетка опоры Ø58 в z 493 доходит до 522, цоколь — с 520)',()=>{

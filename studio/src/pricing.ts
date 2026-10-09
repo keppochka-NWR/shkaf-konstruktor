@@ -254,8 +254,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(a.module.kitchen){
       // Кухня: опоры и клипсы — по фактическим деталям сцены (kitchenLegs), как в спецификациях Базиса цеха.
       const ps=parts(a.module),legs=ps.filter(p=>p.id.startsWith('leg:')).length,clips=ps.filter(p=>p.id.startsWith('kitchen-clip:')).length;
-      // + опоры Базиса, стоящие в точке другой опоры (legsDup, k16 Пенал1): в 3D одна, в спецификации Базиса — обе (n4-kitchens3)
-      if(nm?.legs&&legs){const by=byNames(legs,nm.legs);for(const [n,d] of Object.entries(nm.legsDup??{}))by[n]=(by[n]??0)+d;addLegs(by);}else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',legs,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+      // опоры Базиса в одной точке (k16 Пенал1) студия повторяет деталью (kitchen.dupParts, n4-tall) — в смете они уже есть, как в Базисе
+      if(nm?.legs&&legs)addLegs(byNames(legs,nm.legs));else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',legs,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',clips,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       // шканты 8×30 — по деталям сцены (в Базисе они в спецификации); только кухня, смета шкафов не меняется
       add('dowel','Шкант 8×30',ps.filter(p=>p.id.startsWith('dowel:')).length,'шт',null,'Как в проектах Базиса; закупочная цена шканта не найдена');

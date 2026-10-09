@@ -10,7 +10,7 @@ import type { Module, Part } from "./model";
 
 export type RafixGrid = { rear: number; front: number; n: number };
 /** Рафиксы кухни: сетка по умолчанию для жёстких полок без своего крепежа и сетки отдельных полок (ключ — номер полки секции, как s.fixed). */
-export type KitchenRafix = RafixGrid & { per?: Record<string, RafixGrid> };
+export type KitchenRafix = RafixGrid & { per?: Record<string, RafixGrid>; /** крыша на рафиксах (k20 m09), а не на конфирматах */ top?: RafixGrid };
 
 export const RAFIX = { bodyD: 20, bodyDepth: 13, bodyInset: 9.5, pinD: 5, pinDepth: 13, pinUp: 8 } as const;
 
@@ -39,6 +39,8 @@ export function rafixSide(add: Add, out: Part[], hp: Part, side: "left" | "right
     const id = `rafix:${hp.id}:${side}:${k}`;
     add(id, "Рафикс · полкодержатель-стяжка", [RAFIX.bodyD, RAFIX.bodyDepth, RAFIX.bodyD], [edgeX + dir * RAFIX.bodyInset, yb + RAFIX.bodyDepth / 2, z], RAFIX.bodyD, RAFIX.bodyD, RAFIX.bodyDepth, "fastener", hp.sectionId, "metal");
     out.at(-1)!.anchor = [edgeX, yb, z];
+    // поворот как в Базисе (по базе у полок: у левой стойки [0,1,0,0] — 103 из 105, у правой [0,0,0,1] — 101 из 103; n4-tall)
+    out.at(-1)!.quat = side === "left" ? [0, 1, 0, 0] : [0, 0, 0, 1];
     // шток: от корпуса в стойку на глубину отверстия
     const x0 = edgeX - dir * RAFIX.pinDepth, x1 = edgeX + dir * RAFIX.bodyInset, L = Math.abs(x1 - x0);
     add(`${id}:pin`, "Рафикс · шток", [L, RAFIX.pinD, RAFIX.pinD], [(x0 + x1) / 2, yb + RAFIX.pinUp, z], L, RAFIX.pinD, RAFIX.pinD, "fastener", hp.sectionId, "metal");
@@ -78,6 +80,8 @@ export function parseKitchenRafix(x: unknown): KitchenRafix | undefined {
     const e = Object.entries(per).flatMap(([k, v]) => { const q = grid(v); return q && /^\d+$/.test(k) ? [[k, q] as const] : []; });
     if (e.length) out.per = Object.fromEntries(e);
   }
+  const top = grid((x as KitchenRafix).top);
+  if (top) out.top = top;
   return out;
 }
 
@@ -85,6 +89,6 @@ export function parseKitchenRafix(x: unknown): KitchenRafix | undefined {
 export function rafixErrors(m: Module): string[] {
   const r = m.kitchen?.rafix;
   if (!r) return [];
-  const all = [r, ...Object.values(r.per ?? {})];
+  const all = [r, ...Object.values(r.per ?? {}), ...(r.top ? [r.top] : [])];
   return all.some((g) => g.rear < RAFIX.bodyD / 2 || g.front < RAFIX.bodyD / 2 || g.rear + g.front > m.depth - RAFIX.bodyD) ? ["Рафиксы: отступ от торца полки — от 10 мм и в пределах глубины."] : [];
 }

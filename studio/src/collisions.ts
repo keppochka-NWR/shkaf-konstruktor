@@ -45,6 +45,10 @@ const doorOf = (id: string) => id.replace(/:(hingecup|hingeplate|hingearm|handle
 /** Разрешён ли контакт пары (порядок не важен). depth — глубина проникновения, мм. */
 export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boolean {
   for (const [p, q] of [[a, b], [b, a]] as const) {
+    // Дубль Базиса (kitchen.dupParts): второй экземпляр детали в той же точке — как в проекте Базиса, с собой не сталкивается;
+    // с остальным — те же правила, что у оригинала.
+    if (p.id === q.id + ":dup") return true;
+    if (p.id.endsWith(":dup") && allowedContact({ ...p, id: p.id.slice(0, -4) }, q, depth, m)) return true;
     // Сушка кухни Базиса без сетки (k01, k02, k06, k08) — точка проекта без тела: пересекать нечего (n4-wall).
     if (p.id.startsWith("kitchen-dryer:") && !p.model) return true;
     // Крепёж корпуса (конфирмат, эксцентрик, полкодержатель, шкант) сидит в отверстиях досок корпуса и полок.
@@ -86,6 +90,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.id.startsWith("leg:") && isBoard(q) && depth <= 3) return true;
     // саморез площадки опоры — в своём отверстии D3×3 в нижней пласти дна
     if (p.id.startsWith("kitchen-leg-screw:") && isBoard(q) && q.role === "body" && depth <= 3.5) return true;
+    // «8x45» в нижнем торце опущенной боковины — в своём отверстии D8×45 (n4-tall)
+    if (p.id.startsWith("kitchen-side-screw:") && isBoard(q) && q.role === "body" && q.id === p.id.split(":")[1]) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
     // клипса — и на цоколе ряда кухни из Базиса (сырая деталь Базиса «raw:…» с именем «Цоколь · …»): касание-вдавливание до 3 мм,
     // как опора под дном (k23: цоколь Базиса на 2 мм ближе к опоре, чем вылет её сетки — так в самом Базисе; n4-kitchens3).

@@ -9,7 +9,6 @@ import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
-import { legDupKey } from "../../src/rawModule";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 
 export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string; grp?: string };
@@ -54,9 +53,19 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 /** Класс панели: вид материала, толщина (округлённо), ось толщины, фасад или корпус. */
 function cls(kind: string, thick: number, axis: string, facade: boolean) { return facade ? `фасад|${Math.round(thick)}|${axis}` : `${kind}|${Math.round(thick)}|${axis}|корпус`; }
 
+/** Крайняя боковина до плоскости фасадов (k23 m04 «стенка в паз», декоративная МДФ k29 m02, k27 m13): крайние стойки ЛДСП/МДФ
+ *  разной глубины и прямо перед мелкой стоят фасады — перед корпуса по мелкой. Возвращает её передний торец; иначе undefined.
+ *  Одно правило и для сверки (что фасад), и для распознавания (глубина корпуса) — n4-tall. */
+export function proudSideFront(panels: RefPanel[]): number | undefined {
+  const sides = panels.filter((p) => p.axis === "x" && (p.kind === "ldsp" || p.kind === "mdf") && p.box[4] - p.box[1] > 200).sort((a, c) => a.box[0] - c.box[0]);
+  if (sides.length < 2) return undefined;
+  const z1 = [sides[0].box[5], sides[sides.length - 1].box[5]], zMin = Math.min(...z1), zMax = Math.max(...z1);
+  return zMax - zMin > 1 && panels.some((p) => p.axis === "z" && p.kind !== "hdf" && Math.abs(p.box[2] - zMin) <= 1 && p.box[4] - p.box[1] > 100) ? zMin : undefined;
+}
+
 function refItems(m: RefModule): Item[] {
   // Фасад Базиса — панель перед боковинами (её задняя грань не глубже передней кромки корпуса минус 1 мм)
-  const bodyFront = Math.max(...m.panels.filter((p) => p.axis === "x" && p.kind !== "hdf").map((p) => p.box[5]), 0);
+  const bodyFront = proudSideFront(m.panels) ?? Math.max(...m.panels.filter((p) => p.axis === "x" && p.kind !== "hdf").map((p) => p.box[5]), 0);
   return m.panels.filter((p) => ["ldsp", "hdf", "mdf", "glass", "other"].includes(p.kind)).map((p) => {
     const facade = p.axis === "z" && p.box[2] >= bodyFront - 1 && p.kind !== "hdf";
     const kind = p.kind === "mdf" || p.kind === "other" ? "ldsp" : p.kind;
@@ -97,6 +106,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("leg:")) return "опора";
   if (id.startsWith("kitchen-clip:")) return "клипса";
   if (id.startsWith("kitchen-leg-screw:")) return "прочее";
+  if (id.startsWith("kitchen-side-screw:")) return "прочее"; // «8x45» Базиса в торце опущенной боковины
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.startsWith("kitchen-dryer:")) return "сушка";
@@ -196,13 +206,11 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   for (const pr of [...pairs]) if (pr.delta > 50) { pairs.splice(pairs.indexOf(pr), 1); missing.push(pr.ref); extra.push(pr.studio); }
   const cats = new Set<string>([...ref.hardware.map((h) => h.category), ...ps.map(studioCategory).filter((x): x is string => !!x)]);
   const hardware: HardwareRow[] = [...cats].map((category) => {
-    // дубль Базиса — опора в той же точке и с тем же поворотом дважды (k16: две опоры в одной точке); считаем один раз, как дубли отверстий.
-    // Только опоры: у направляющих Firmax две точки в одном месте — это пара направляющих, не дубль (n3-tall).
-    const seen = new Set<string>(), allRef = ref.hardware.filter((h) => h.category === category);
-    // ключ дубля — общий со сметой (rawModule.legDupKey → bazisNames.legsDup), чтобы сверка и смета не расходились (n4-kitchens3)
-    const uniq = category !== "опора" ? allRef : allRef.filter((h) => { const k = legDupKey(h); if (k && seen.has(k)) return false; seen.add(k); return true; });
-    const rp = uniq.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
-    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp), ...(allRef.length > uniq.length ? { dups: allRef.length - uniq.length } : {}) };
+    // Дубли Базиса (опора/конфирмат дважды в одной точке, k16, k23) сверяются как есть: студия их повторяет (kitchen.dupParts, n4-tall),
+    // в смете столько, сколько в Базисе. Раньше (n3-tall) дубли опор схлопывались здесь.
+    const allRef = ref.hardware.filter((h) => h.category === category);
+    const rp = allRef.map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
+    const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
     const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
@@ -223,7 +231,7 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
       for (const h of refQ) {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
         all.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
-        const q = best?.model?.quat; if (!q) { rot.noQuat++; continue; }
+        const q = best?.model?.quat ?? best?.quat; if (!q) { rot.noQuat++; continue; } // рафикс: сетки нет, поворот — Part.quat (n4-tall)
         rot.checked++;
         const r = quatRel(h.quat!, q);
         if (Math.abs(r[0]) >= 0.9995) continue;
@@ -375,7 +383,7 @@ export function refFromStudio(m: Module, key = "self"): RefModule {
     return { i, name: p.name, mat: p.material, thick: Math.min(...p.size), kind: p.material === "board" ? "ldsp" : p.material, axis: AX[ax], box: [0, 1, 2].map((k) => p.position[k] - p.size[k] / 2).concat([0, 1, 2].map((k) => p.position[k] + p.size[k] / 2)) };
   });
   // фасад студии — тоже «перед боковинами», как у Базиса
-  const hardware: RefHardware[] = ps.map((p) => ({ p, c: studioCategory(p) })).filter((x) => x.c).map((x, i) => ({ i, name: x.p.name, category: x.c!, pos: studioAnchor(x.p), ...(x.p.model?.quat ? { quat: [...x.p.model.quat] } : {}) }));
+  const hardware: RefHardware[] = ps.map((p) => ({ p, c: studioCategory(p) })).filter((x) => x.c).map((x, i) => ({ i, name: x.p.name, category: x.c!, pos: studioAnchor(x.p), ...(x.p.model?.quat ?? x.p.quat ? { quat: [...(x.p.model?.quat ?? x.p.quat)!] } : {}) }));
   return { key, name: m.name, archetype: "self", size: [m.width, m.height, m.depth], panels, hardware };
 }
 
