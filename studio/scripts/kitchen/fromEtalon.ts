@@ -130,7 +130,10 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
     m.faceGap = r1(f0.b.x0 - left.b.x0);
-    m.faceGapBetween = m.kdrawers ? 3 : fronts.length > 1 ? r1(fronts[1].b.x0 - fronts[0].b.x1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
+    // зазор между фасадами: сосед в том же ряду (по x); если рядов несколько, а в ряду один фасад — зазор между рядами (по y)
+    const sameRow = fronts.find((q) => q !== f0 && Math.abs(q.b.y0 - f0.b.y0) < 1 && q.b.x0 > f0.b.x1 - 1);
+    const above = fronts.filter((q) => q.b.y0 > f0.b.y1 - 1).sort((a, c) => a.b.y0 - c.b.y0)[0];
+    m.faceGapBetween = m.kdrawers ? 3 : sameRow ? r1(sameRow.b.x0 - f0.b.x1) : above ? r1(above.b.y0 - f0.b.y1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
     if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;

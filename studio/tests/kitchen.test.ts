@@ -98,3 +98,11 @@ test('straight kitchen row fits a room: bases, worktop on top, wall cabinets at 
   assert.ok(walls.every(a=>(a.y??0)+a.module.height<=2700));
   assert.equal(parseProject(JSON.parse(JSON.stringify(r.project))).modules.filter(a=>a.module.kitchen||a.module.worktop).length,placed.length,'kitchen fields survive save/load');
 });
+
+test('kitchen tall (пенал): height up to KITCHEN.maxHeight 2900 like Bazis (k30 m15 = 2869); wardrobe limit stays RULES.maxH 2500',()=>{
+  const k=kitchenBase(initialModule(),600);k.height=2869;
+  assert.ok(!validate(k).some(e=>e.startsWith('Высота')),'kitchen 2869 is allowed');
+  k.height=2901;assert.ok(validate(k).some(e=>e.startsWith('Высота: допустимо от')),'kitchen above 2900 is rejected');
+  const w=initialModule();w.height=2600;assert.ok(validate(w).some(e=>e.startsWith('Высота: допустимо от')),'wardrobe 2600 still rejected');
+  assert.equal(KITCHEN.maxHeight,2900);
+});

@@ -1154,7 +1154,7 @@ export function validate(m: Module): string[] {
     ["depth", "Глубина стола", RULES.minD, RULES.maxD],
   ] : [
     ["width", "Ширина", m.kitchen ? KITCHEN.minWidth : RULES.minW, RULES.maxW], // кухня: бутылочница 150 (вкладка «Кухня»)
-    ["height", "Высота", RULES.minH, RULES.maxH],
+    ["height", "Высота", RULES.minH, m.kitchen ? KITCHEN.maxHeight : RULES.maxH], // кухня: пеналы до 2900 (Базис)
     ["depth", "Глубина", RULES.minD, RULES.maxD],
   ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
     const n = m[key];
