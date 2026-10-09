@@ -123,14 +123,14 @@ test('навесной k32 m14: в Базисе нет крепежа и кро�
   assert.deepEqual(m.edgeScheme?.ends?.bottom?.slice().sort(),['+x','+z','-x','-z']);
   const ps=parts(m);
   assert.deepEqual(ps.filter(p=>/^(fast|ecc|dowel):/.test(p.id)).map(p=>p.id),[],'ни конфирматов, ни эксцентриков');
-  assert.ok(compareModule(ref,m).pass);
+  // боковины k32 — фигурные (вырез 100×20 в заднем верхнем углу): студия даёт прямоугольник, сверка это видит — PASS нечестный
+  const c=compareModule(ref,m);
+  assert.equal(c.pass,false);
+  assert.ok(c.contours?.some(x=>/фигурный контур Базиса \(6 точек, вырез 2000 мм²\)/.test(x)),String(c.contours));
+  assert.deepEqual([c.missing.length,c.extra.length,c.pairs.filter(p=>p.delta>0.5).length],[0,0,0],'остальное совпадает');
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.equal(back.kitchen?.noFasteners,true);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
 });
-test('сушка навесного k21 m05: набор SU01/03 с сеткой Базиса — в точках и с поворотами проекта; без сетки (k06 m07) — только заметка',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
-  const ref=load('k21','m05'),{module:m}=moduleFromEtalon(ref);
-  assert.equal(m.kitchen?.dryer?.length,8);
-  const ps=parts(m).filter(p=>p.id.startsWith('kitchen-dryer:'));
 test('«Евровинт 6х50» из «прочего» эталона — конфирмат: k33 m03 и k34 m04 крепёж не снимается',{skip:!existsSync(`${ETALON}/k33.json`)||!existsSync(`${ETALON}/k34.json`)},()=>{
   assert.equal(refCategory({name:'Евровинт 6х50',category:'прочее'}),'конфирмат');
   assert.equal(refCategory({name:'Винт прямого крепления с потайной головкой, ø6,3х14 мм',category:'прочее'}),'прочее');
@@ -147,6 +147,10 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
   // в k32 крепежа нет вовсе — правило «без крепежа» по-прежнему срабатывает
   assert.equal(moduleFromEtalon(load('k32','m14')).module.kitchen?.noFasteners,true);
 });
+test('сушка навесного k21 m05: набор SU01/03 с сеткой Базиса — в точках и с поворотами проекта; без сетки (k06 m07) — только заметка',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
+  const ref=load('k21','m05'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.dryer?.length,8);
+  const ps=parts(m).filter(p=>p.id.startsWith('kitchen-dryer:'));
   assert.equal(ps.length,8);
   assert.ok(ps.every(p=>p.model?.native&&/^hardware\/bazis\/[0-9a-f]{12}\.glb$/.test(p.model.file)));
   const row=compareModule(ref,m).hardware.find(h=>h.category==='сушка')!;

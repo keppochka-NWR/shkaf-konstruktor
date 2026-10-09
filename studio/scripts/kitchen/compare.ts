@@ -10,7 +10,7 @@ import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
 
-export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean };
+export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
 export type RefHole = { panel: number; face: string; at: number[]; dir: number[]; d: number; depth: number; src?: number | null };
 export type RefModule = { key: string; name: string; archetype: string; size: number[]; panels: RefPanel[]; hardware: RefHardware[]; holes?: RefHole[] };
@@ -21,7 +21,7 @@ export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[
 export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
-export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
+export type Comparison = { edges?: EdgeCheck; /** Фигурные детали Базиса (контур с вырезами), которые в студии прямоугольник или с другим вырезом. */ contours?: string[]; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
 
 const AX = ["x", "y", "z"];
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -105,6 +105,28 @@ function matchPoints(a: number[][], b: number[][]): number | null {
     if (best >= 0) { used.add(best); worst = Math.max(worst, bd); }
   }
   return r1(worst);
+}
+
+/** Площадь многоугольника (мм²) и его габарит. */
+function polyArea(c: number[][]): { area: number; box: number } {
+  let s = 0;
+  for (let i = 0; i < c.length; i++) { const a = c[i], b = c[(i + 1) % c.length]; s += a[0] * b[1] - b[0] * a[1]; }
+  const xs = c.map((q) => q[0]), ys = c.map((q) => q[1]);
+  return { area: Math.abs(s) / 2, box: (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)) };
+}
+/** Вырезы фигурной детали Базиса: габарит контура минус его площадь, мм² (0 — прямоугольник или контура нет).
+ *  Скругления углов до R30 (≤ 200 мм²) вырезом не считаются. */
+export function refCutArea(p: { figure?: boolean; contour?: number[][] }): number {
+  const c = p.contour;
+  if (!p.figure || !Array.isArray(c) || c.length < 4 || c.some((q) => !Array.isArray(q) || q.length < 2 || !q.every(Number.isFinite))) return 0;
+  const { area, box } = polyArea(c), cut = box - area;
+  return cut > 200 ? Math.round(cut) : 0;
+}
+/** Вырезы детали студии, мм²: контур в плане (planContour) — по площади; Gola в боковине — есть (геометрию сверяет кромка выреза). */
+function studioCut(p: Part): number | "gola" {
+  if (p.golaCuts?.length) return "gola";
+  if (p.planContour && p.planContour.length >= 4) { const { area, box } = polyArea(p.planContour); return Math.round(box - area); }
+  return 0;
 }
 
 /** Отступления (реестр): профили-экструзии Базиса («Профиль», «Профиль1») — без сетки, контур в эталон не извлекается; не воспроизводятся, в отчёте — отдельной строкой. */
@@ -198,6 +220,19 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     }
     if (diff.length) edgeCheck.bad.push(`${pr.ref.name}: ${diff.map((k) => `${k} Базис ${want[k] ?? 0} / студия ${have[k] ?? 0}`).join(", ")}`);
   }
+  // фигурные детали: вырез в контуре Базиса (k32: боковины с вырезом 100×20 в заднем верхнем углу) — у студии должен быть тот же вырез.
+  // Кромка его не ловит: сумма длин отрезков контура по стороне равна стороне (310 + 20 = 330).
+  const contours: string[] = [];
+  for (const pr of pairs) {
+    const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id), sp = byId.get(pr.studio.id);
+    if (!rp || !sp) continue;
+    const cut = refCutArea(rp);
+    if (!cut) continue;
+    const sc = studioCut(sp);
+    if (sc === "gola") continue;
+    if (!sc) contours.push(`${pr.ref.name}: фигурный контур Базиса (${rp.contour!.length} точек, вырез ${cut} мм²) — в студии прямоугольник`);
+    else if (Math.abs(sc - cut) > Math.max(200, cut * 0.02)) contours.push(`${pr.ref.name}: вырез у Базиса ${cut} мм², у студии ${sc} мм²`);
+  }
   // пазы (кроме паза под задник): у Базиса — по панелям эталона (проходы слиты), у студии — детали groove:*
   const backPanel = ref.panels.filter((p) => p.kind === "hdf").sort((a, b) => (b.box[3] - b.box[0]) * (b.box[4] - b.box[1]) - (a.box[3] - a.box[0]) * (a.box[4] - a.box[1]))[0];
   const rg = refGroovesOf(ref, backPanel ? r1(backPanel.box[2]) : null).map((g) => g.box.map((v, i) => v - oa[i % 3]));
@@ -211,8 +246,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
   sg.forEach((s, k) => { if (!usedG.has(k)) grooveBad.push(`лишний паз ${s.map(r1).join(",")}`); });
   edgeCheck.bad.push(...grooveBad.map((x) => "пазы: " + x));
   const holesOk = !holeCheck || (!holeCheck.missing.length && !holeCheck.extra.length && holeCheck.maxDelta <= 0.5);
-  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length;
-  return { edges: edgeCheck, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, deviations, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
+  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length && !contours.length;
+  return { edges: edgeCheck, contours, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, deviations, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
 }
 
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */
@@ -235,6 +270,7 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   if (c.extra.length) md += `\n**Лишнее в студии:** ${c.extra.map((x) => `${x.name} [${x.cls}] ${x.box.join(",")}`).join("; ")}\n`;
   md += "\n| фурнитура | Базис | студия | max Δ точки, мм |\n|---|---|---|---|\n";
   for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} |\n`;
+  if (c.contours?.length) md += `\n**Контур:** ${c.contours.join("; ")}\n`;
   if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;

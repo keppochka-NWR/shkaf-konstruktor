@@ -11,6 +11,21 @@ test('comparator self-check: a module against itself passes',()=>{
   }
 });
 
+test('сверщик видит фигурную деталь Базиса: вырез в контуре при прямоугольнике студии — FAIL; прямоугольный контур и скругления — нет',()=>{
+  const m=kitchenWall(initialModule(),600),ref=refFromStudio(m);
+  assert.ok(compareModule(ref,m).pass);
+  const side=ref.panels.find(p=>p.axis==='x')!,[,y0,z0,,y1,z1]=side.box,H=y1-y0,D=z1-z0;
+  const cut=structuredClone(ref),cs=cut.panels.find(p=>p.i===side.i)!;
+  // вырез 100×20 в заднем верхнем углу, как у боковин k32 (точки [y, z] в плоскости yz)
+  Object.assign(cs,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H,D],[H,20],[H-100,20],[H-100,0]]});
+  const c=compareModule(cut,m);
+  assert.equal(c.pass,false);assert.equal(c.contours?.length,1);assert.match(c.contours![0],/вырез 2000 мм²/);
+  const rect=structuredClone(ref);Object.assign(rect.panels.find(p=>p.i===side.i)!,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H,D],[H,0]]});
+  assert.ok(compareModule(rect,m).pass,'прямоугольный контур — не вырез');
+  const round=structuredClone(ref);Object.assign(round.panels.find(p=>p.i===side.i)!,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H-10,D],[H,D-10],[H,0]]});
+  assert.ok(compareModule(round,m).pass,'срез угла 10×10 (50 мм²) — не вырез');
+});
+
 test('comparator catches mutations: 1 mm shift, missing panel, extra hinge, moved leg, mirrored layout',()=>{
   const m=kitchenBase(initialModule(),600),ref=refFromStudio(m);
   const shifted=structuredClone(ref);shifted.panels[0].box=shifted.panels[0].box.map((v,i)=>i===0||i===3?v+1:v);
