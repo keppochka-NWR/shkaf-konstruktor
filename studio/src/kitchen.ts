@@ -130,7 +130,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
  *  (1 или 0,5 мм ПВХ в цвет). Боковины низа — верх и перед; навесных — все четыре; дно под боковинами — перед и концы; дно и крыша между
  *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
 export function kitchenEdges(m: Module, out: Part[]) {
-  const t = m.edgeScheme?.t; if (!t || !m.kitchen) return;
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
   for (const p of out) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
@@ -147,6 +147,46 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.id.startsWith("kd:") && p.id.endsWith(":back")) setEdges(p, ["+x", "-x", "+y", "-y"], t); // задняя стенка ящика Axis PRO — по кругу; дно — без кромки
     else if (p.id.startsWith("kd:")) continue;
     else if (p.role === "body") setEdges(p, ["+z"], t);
+  }
+  golaSides(m, out);
+}
+
+/** Gola по Базису (k06/m03 и др.): вырезы в переднем торце боковин нижнего модуля. Кромка идёт отрезками контура:
+ *  перед = высота боковины − длины вырезов, верх = глубина − глубина верхнего (открытого) выреза; торцы самих вырезов не кромятся. */
+export function golaSides(m: Module, out: Part[]) {
+  const cuts = m.kitchen && (m.kitchen.role === "base" || m.kitchen.role === "tall") ? m.gola?.cuts : undefined; // навесные — без Gola
+  if (!cuts?.length) return;
+  for (const p of out) {
+    if (p.id !== "left" && p.id !== "right") continue;
+    const H = p.size[1], D = p.size[2];
+    const ok = cuts.filter((c) => c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
+    if (!ok.length) continue;
+    p.golaCuts = ok.map((c) => ({ ...c }));
+    let front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth));
+    // кромка по самому вырезу (k15, k17 и др.): стенка выреза и дуга скругления — к переднему торцу, дно выреза — к верхнему
+    for (const c of ok) if (c.edged) {
+      const open = c.top0 <= 0.01, L = c.top1 - c.top0;
+      front += (open ? L - c.r + Math.PI * c.r / 2 : L - 2 * c.r + Math.PI * c.r);
+      top += c.depth - c.r;
+    }
+    p.edgeLen = { "+z": Math.round(front * 10) / 10, "+y": Math.round(top * 10) / 10 };
+    // проверка пересечений — по телу боковины без вырезов: задняя часть во всю высоту + передняя полоса между вырезами
+    const y0 = p.position[1] - H / 2, z0 = p.position[2] - D / 2, zf = z0 + D, dz = Math.max(...ok.map((c) => c.depth)), x = p.position[0];
+    const col: NonNullable<Part["collide"]> = [{ size: [p.size[0], H, D - dz], position: [x, y0 + H / 2, z0 + (D - dz) / 2] }];
+    const spans = ok.map((c) => [y0 + H - c.top1, y0 + H - c.top0]).sort((a, b) => a[0] - b[0]);
+    let ya = y0;
+    for (const [s0, s1] of [...spans, [y0 + H, y0 + H]]) { if (s0 - ya > 0.01) col.push({ size: [p.size[0], s0 - ya, dz], position: [x, (ya + s0) / 2, zf - dz / 2] }); ya = Math.max(ya, s1); }
+    p.collide = col;
+  }
+  // профили Gola (алюминий, вне раскроя): верхний вырез — профиль L, средний — C; по всей ширине модуля в вырезах боковин
+  const sideL = out.find((p) => p.id === "left" && p.golaCuts);
+  if (!sideL) return;
+  const H = sideL.size[1], y0 = sideL.position[1] - H / 2, zf = sideL.position[2] + sideL.size[2] / 2;
+  for (const [k, c] of sideL.golaCuts!.entries()) {
+    const L = c.top0 <= 0.01, h = c.top1 - c.top0, yc = y0 + H - (c.top0 + c.top1) / 2;
+    out.push({ id: `gola:${L ? "L" : "C"}:${k}`, name: `Профиль Gola ${L ? "L (верхний)" : "C (средний)"}, алюминий`, size: [m.width, h, c.depth], position: [m.width / 2, yc, zf - c.depth / 2],
+      length: m.width, width: h, thickness: c.depth, material: "alu", decor: "", role: "fastener", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true,
+      look: { color: 0xc4c8cc, metalness: 0.85, roughness: 0.35 } });
   }
 }
 

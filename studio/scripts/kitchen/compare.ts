@@ -176,7 +176,8 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
       const lens = (rp.edges as { side: string; thick: number; len?: number }[]).filter((e) => e.side === k && e.thick > 0 && e.len !== undefined).map((e) => e.len!);
       if (!lens.length) continue;
       const along = [0, 1, 2].find((i) => i !== t && i !== AXI[k[1]])!, sum = lens.reduce((s, v) => s + v, 0);
-      if (Math.abs(sum - sp.size[along]) > 1) edgeCheck.bad.push(`${pr.ref.name}: кромка ${k} у Базиса ${r1(sum)} мм (${lens.map(r1).join(" + ")}), у студии ${r1(sp.size[along])} — фигурный контур (вырез), в студии прямоугольник`);
+      const sl = sp.edgeLen?.[k] ?? sp.size[along];
+      if (Math.abs(sum - sl) > 1) edgeCheck.bad.push(`${pr.ref.name}: кромка ${k} у Базиса ${r1(sum)} мм (${lens.map(r1).join(" + ")}), у студии ${r1(sl)}${sp.edgeLen?.[k] !== undefined ? " (контур с вырезами)" : " — фигурный контур (вырез), в студии прямоугольник"}`);
     }
     if (diff.length) edgeCheck.bad.push(`${pr.ref.name}: ${diff.map((k) => `${k} Базис ${want[k] ?? 0} / студия ${have[k] ?? 0}`).join(", ")}`);
   }

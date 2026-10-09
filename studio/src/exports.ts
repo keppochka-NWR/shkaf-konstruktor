@@ -9,6 +9,7 @@ import {aluLabel,aluProfile,aluInsertSize} from './alu';
 import { grooveText, parts, RULES, boxes, drawerConfig, drawerOffsets, plinth, cornerStrip, type Part } from "./model";
 import { bounds, projectErrors, type Project } from "./project";
 import {packRectangles} from './packing';
+import {edgeLength} from './edges';
 import {catalog} from './catalog';
 import {guillotinePack,type GuillotineCut,type GuillotineResult,type Offcut} from './guillotine';
 /** Деталь без направления текстуры: ЛХДФ или однотонный декор без картинки в каталоге — на карте можно класть поперёк. */
@@ -318,7 +319,7 @@ export function labelDetails(p:Project){
 /** Бирка по производственному шаблону цеха «Birka Лёха.brx» (Базис, FastReport): 120 × 75 мм на Xprinter XP-365B, одна деталь на этикетку.
  *  Поля: № заказа, материал, наименование (модуль), поз. (код), № детали (обозначение), пазование, паз, торец (отверстия),
  *  длина × ширина крупно; по четырём сторонам — кромка: обозначение и линия (тонкая < 0,8, толстая ≥ 0,8). */
-export type LabelData={order:string;material:string;module:string;code:string;name:string;groove:string;notches:string;endHoles:string;length:number;width:number;edges:{L1:number;L2:number;W1:number;W2:number}};
+export type LabelData={order:string;material:string;module:string;code:string;name:string;groove:string;notches:string;endHoles:string;length:number;width:number;edges:{L1:number;L2:number;W1:number;W2:number};/** Длины кромки по контуру (мм) у фигурной детали (вырезы Gola): на бирке рядом с толщиной. */edgeLens?:{L1:number;L2:number;W1:number;W2:number}};
 export function labelData(p:Project):LabelData[]{
   const order=labelOrder(p);
   return p.modules.flatMap((a,i)=>{
@@ -331,13 +332,13 @@ export function labelData(p:Project):LabelData[]{
       return {order,material:(d.material==='hdf'?'ЛХДФ ':'ЛДСП ')+d.decor+' '+d.thickness+' мм'+(d.material==='hdf'?'':' (Lamarty)'),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
         groove:grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:grooveText(m,d.id)||'—', // «Пазование» — паз под ЛХДФ, «Паз» — пазы под подсветку (каждая строка влезает в бирку)
         endHoles:endHoles?`${endHoles} отв.`:'—',
-        length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]}};
+        length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]},...(d.edgeLen?{edgeLens:{W1:edgeLength(d,0),W2:edgeLength(d,1),L1:edgeLength(d,2),L2:edgeLength(d,3)}}:{})};
     });
   });
 }
 export function labelsHTML(p:Project){
   const data=labelData(p),stamp=new Date().toLocaleString('ru-RU');
-  const edgeBox=(v:number,cls:string)=>v>0?`<div class="edge ${cls} ${v>=0.8?'thick':'thin'}">${String(v).replace('.',',')}</div>`:'';
+  const edgeBox=(v:number,cls:string,len?:number)=>v>0?`<div class="edge ${cls} ${v>=0.8?'thick':'thin'}">${String(v).replace('.',',')}${len!==undefined?' · '+String(Math.round(len*10)/10).replace('.',',')+' мм':''}</div>`:'';
   const f=(v:string)=>esc(v);
   return htmlDocument('Бирки деталей',`<style>
   @page{size:120mm 75mm;margin:0}
@@ -355,7 +356,7 @@ export function labelsHTML(p:Project){
   .birka .edge.W2{left:114mm;top:19.5mm;width:5mm;height:36mm;border-left:0.3mm solid #000;writing-mode:vertical-rl}
   .birka .edge.thick{border-width:1.2mm}
   @media print{body{margin:0;padding:0;max-width:none}.label-heading{display:none}.birka{margin:0;border:0}.birka:last-child{break-after:auto}}
-  </style><div class="label-heading"><h1>Бирки деталей · шаблон цеха 120 × 75</h1><p>Одна деталь на этикетку, принтер Xprinter XP-365B (лента 120 × 75 мм), масштаб 100%, без полей и колонтитулов браузера. ${data.length} деталей. Сформировано ${esc(stamp)}.</p><p>Кромка по сторонам бирки: цифра — толщина, тонкая линия до 0,8 мм, толстая — 2 мм. Длина детали — по горизонтали бирки, вдоль текстуры. Коды деталей совпадают с картами листов и деталировкой текущего проекта.</p></div>${data.map(d=>`<article class="birka">${edgeBox(d.edges.L1,'L1')}${edgeBox(d.edges.L2,'L2')}${edgeBox(d.edges.W1,'W1')}${edgeBox(d.edges.W2,'W2')}<div class="frame"></div>
+  </style><div class="label-heading"><h1>Бирки деталей · шаблон цеха 120 × 75</h1><p>Одна деталь на этикетку, принтер Xprinter XP-365B (лента 120 × 75 мм), масштаб 100%, без полей и колонтитулов браузера. ${data.length} деталей. Сформировано ${esc(stamp)}.</p><p>Кромка по сторонам бирки: цифра — толщина, тонкая линия до 0,8 мм, толстая — 2 мм. Длина детали — по горизонтали бирки, вдоль текстуры. Коды деталей совпадают с картами листов и деталировкой текущего проекта.</p></div>${data.map(d=>`<article class="birka">${edgeBox(d.edges.L1,'L1',d.edgeLens?.L1)}${edgeBox(d.edges.L2,'L2',d.edgeLens?.L2)}${edgeBox(d.edges.W1,'W1',d.edgeLens?.W1)}${edgeBox(d.edges.W2,'W2',d.edgeLens?.W2)}<div class="frame"></div>
 <div class="row" style="top:12mm;width:96mm">№ заказа &nbsp;<b>${f(d.order)}</b></div>
 <div class="row" style="top:17mm;width:96mm">${f(d.material)}</div>
 <div class="row" style="top:23mm;width:96mm">${f(d.module)}</div>

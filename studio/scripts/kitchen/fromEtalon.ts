@@ -1,7 +1,7 @@
 // Распознаватель: модуль эталона Базиса (Кухни\etalon\kNN.json) → параметрический кухонный модуль студии.
 // Все размеры читаются из эталона (ширина, высота, глубина боковины, опоры, дно, царги, задник, фасады, полки, крепёж),
 // а не подставляются типовые — так модуль студии можно сверить деталь в деталь (compare.ts).
-import { initialModule, section, parts, type Module, type Groove } from "../../src/model";
+import { initialModule, section, parts, type Module, type Groove, type GolaCut } from "../../src/model";
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
@@ -31,6 +31,25 @@ export function refGrooves(ref: RefModule, backZ0: number | null): { box: [numbe
   return out;
 }
 export type Recognized = { module: Module; notes: string[]; unsupported: string[] };
+
+/** Вырезы Gola по контуру боковины Базиса: участки контура, ушедшие вглубь от переднего торца (z < zFront) не дальше 100 мм.
+ *  top0/top1 — от верха боковины, depth — глубина, r — скругление (переход от вертикали выреза к его дну). */
+export function golaFromContour(p: { contour?: [number, number][]; contourPlane?: string }, yTop: number, zFront: number): GolaCut[] {
+  const c = p.contour; if (!c || p.contourPlane !== "yz" || c.length < 6) return [];
+  const inCut = (q: [number, number]) => q[1] < zFront - 0.5 && q[1] > zFront - 100;
+  const out: GolaCut[] = []; let grp: [number, number][] = [];
+  const flush = () => {
+    if (grp.length >= 2) {
+      const ys = grp.map((q) => q[0]), zMin = Math.min(...grp.map((q) => q[1])), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const zEdge = Math.max(grp[0][1], grp[grp.length - 1][1]);
+      if (y1 - y0 > 10 && y1 - y0 < 300) out.push({ top0: r1(yTop - y1), top1: r1(yTop - y0), depth: r1(zFront - zMin), r: r1(Math.max(0, zEdge - zMin)) });
+    }
+    grp = [];
+  };
+  for (const q of c) { if (inCut(q)) grp.push(q); else flush(); }
+  flush();
+  return out.sort((a, b) => a.top0 - b.top0);
+}
 
 export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
   const notes: string[] = [], unsupported: string[] = [];
@@ -185,6 +204,15 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et };
+  // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
+  if (role === "base") {
+    const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);
+    const fTop = fronts.length ? Math.max(...fronts.map((f) => f.b.y1)) : null;
+    // кромка по самому вырезу: сумма кромки переднего торца у Базиса больше прямых участков
+    const ze = ((left.p as unknown as { edges?: { side: string; thick: number; len?: number }[] }).edges ?? []).filter((e) => e.side === "+z" && e.thick > 0 && e.len !== undefined).reduce((s, e) => s + e.len!, 0);
+    if (gc.length && ze > left.b.y1 - left.b.y0 - gc.reduce((s, c) => s + c.top1 - c.top0, 0) + 1) gc.forEach((c) => (c.edged = true));
+    if (gc.length) { m.gola = { cuts: gc }; if (fTop !== null && gc.some((c) => c.top0 === 0)) m.gola.faceTop = r1(top - fTop); notes.push(`Gola: ${gc.length} выреза в боковинах (${gc.map((c) => `${c.top0}–${c.top1} от верха, глуб. ${c.depth}, R${c.r}`).join("; ")})`); }
+  }
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
   if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
