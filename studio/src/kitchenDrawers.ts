@@ -852,7 +852,12 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     out.push({ id: `${id}:back`, name: `Задняя стенка ящика ${j + 1}`, size: [kw, backH, t], position: [(x0 + xr) / 2, ry - 22 + backH / 2, Fk - k.len + 8 + t / 2], length: kw, width: backH, thickness: t,
       role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 2, 2, 2] }); // без схемы кухни — как у шкафов 2 мм; со схемой — kitchenEdges
     // нижний стабилизатор передней панели внутреннего ящика: посередине между боковинами корпуса, под дном, у фронта ящика
-    if (k.inner && (M.pp[key] ?? M.pp[`white:${k.h}`])) out.push(metal(`${id}:sys:stab`, "Нижний стабилизатор передней панели Axis PRO", M.ppStab, [(x0 + xr) / 2, ry - 22, Fk], Q_STAB));
+    if (k.inner && (M.pp[key] ?? M.pp[`white:${k.h}`])) {
+      out.push(metal(`${id}:sys:stab`, "Нижний стабилизатор передней панели Axis PRO", M.ppStab, [(x0 + xr) / 2, ry - 22, Fk], Q_STAB));
+      // сама передняя панель: в Базисе — позиция фурнитуры без модели (8 из 8: 50 от левой боковины, +61,7 над осью, 7,2 за фронтом
+      // ящика); в студии — точка-метка для сметы и сверки, без своей геометрии
+      out.push({ ...screw(`${id}:sys:ppanel`, [x0 + 50, ry + 61.7, Fk - 7.2]), name: `Передняя панель внутреннего ящика Axis PRO H-${k.h} (в Базисе без модели)` });
+    }
     for (const s of [0, 1] as const) {
       const x = sideIn(s), d = dir(s), lr = s ? "R" : "L", side = s ? "правая" : "левая";
       const run = (M.runner[col]?.[k.len] ?? M.runner.white[k.len])!;

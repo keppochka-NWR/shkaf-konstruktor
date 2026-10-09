@@ -183,6 +183,10 @@ test('Axis PRO внутренний ящик (k21 m03, k25 m05, k29 m03): без
     const ps=parts(m),j=m.kdrawers!.indexOf(inn[0]);
     assert.ok(!ps.some(p=>p.id===`kd:${j}:facade`),`${k} ${key}: у внутреннего ящика нет своего фасада`);
     assert.equal(ps.filter(p=>p.id.startsWith(`kd:${j}:sys:pp:`)).length,2);assert.ok(ps.some(p=>p.id===`kd:${j}:sys:stab`));
+    // передняя панель - позиция Базиса без модели: точка-метка в студии, строка сметы «внутренний ящик» одна на ящик
+    assert.ok(ps.some(p=>p.id===`kd:${j}:sys:ppanel`),'метка передней панели');
+    if(k!=='k25'){const hs=c.hardware.find(h=>h.category==='ящик-система')!;assert.equal(hs.studio,hs.ref,`${k} ${key}: ящик-система`);assert.ok((hs.maxPosDelta??0)<0.5);}
+    if(k!=='k21'){const lines=estimate(newProject(m)).lines.filter(l=>l.id.startsWith('axis-pro:inner:'));assert.equal(lines.reduce((s,l)=>s+l.quantity,0),1);}
     assert.equal(c.holes!.matched,c.holes!.ref,`${k} ${key}: отверстия ${c.holes!.matched}/${c.holes!.ref}`);
     assert.ok(!validate(m).some(e=>/фасад пересекается/.test(e)),validate(m).join('; '));
     const rt=parseKDrawers(JSON.parse(JSON.stringify(m.kdrawers)))![j] as AxisDrawer;assert.ok(rt.inner&&rt.front===9,'внутренний ящик не теряется при сохранении');
