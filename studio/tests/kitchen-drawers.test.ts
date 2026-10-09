@@ -146,6 +146,11 @@ test('Firmax height refit keeps runner screws D3x3, face screws D5x16, 5x12 choi
     assert.ok(n.kdrawers!.every(k=>k.system==='firmax-ldsp'&&k.box.screws&&k.box.faceScrews&&k.box.gap===5&&k.box.front===0&&k.box.confBottom===53));
     assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
   }
+  // высоты конфирматов и дно из Базиса: нижний держит отступ от низа задней стенки, верхний — от верха; bottomUp 5 остаётся
+  const mc=firmax();mc.kdrawers=mc.kdrawers!.map((k,i)=>k.system==='firmax-ldsp'&&i===0?{...k,box:{...k.box,conf:[43.2,195.2]}}:k);
+  for(const dh of [-100,100]){const n={...mc,height:mc.height+dh};n.kdrawers=refitKDrawers(n,'height');const [a,,c]=n.kdrawers!;assert.ok(a.system==='firmax-ldsp'&&c.system==='firmax-ldsp');
+    const bh=a.box.h-10-16;assert.equal(a.box.conf![0],43.2);assert.equal(Math.round((bh-a.box.conf![1])*10)/10,43.3);assert.equal(c.box.bottomUp,5);
+    assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);}
   const no5={...m,kdrawers:m.kdrawers!.map(k=>k.system==='firmax-ldsp'?{...k,box:{...k.box,rearHoles:false,screws:false}}:k)};
   const r=refitKDrawers({...no5,height:m.height-100},'height')!;assert.ok(r.every(k=>k.system==='firmax-ldsp'&&k.box.rearHoles===false&&!k.box.screws),'Bazis project without 3x3 / 5x12 stays so');
 });

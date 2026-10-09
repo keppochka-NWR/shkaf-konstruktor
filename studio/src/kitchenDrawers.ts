@@ -233,9 +233,9 @@ export function firmaxConf(backH: number): number[] {
  *  Саморезы направляющих 3×3 в боковинах корпуса — по умолчанию есть (17 из 19 модулей Firmax в базе, как и 5×12).
  *  keep — текущие ящики Firmax (смена высоты корпуса, числа ящиков, долей фасадов): присадка и посадка короба переносятся —
  *  саморезы 3×3, шурупы фасада (свои точки — пока входят в новую фальшпанель, иначе по правилу большинства), 5×12, зазор
- *  до корпуса, отступ от фронта, конфирматы дна; дно над низом боковин и высоты конфирматов — у того же ящика, пока высота
- *  его короба не изменилась (иначе по правилу большинства). Точки направляющих Базиса (runs) не переносятся: они привязаны
- *  к старым фасадам, новая точка — низ фасада. */
+ *  до корпуса, отступ от фронта, конфирматы дна; у того же ящика — дно над низом боковин и высоты конфирматов (другая высота
+ *  короба: нижний держит отступ от низа задней стенки, верхний — от её верха; не входят — по правилу большинства). Точки
+ *  направляющих Базиса (runs) не переносятся: они привязаны к старым фасадам, новая точка — низ фасада, по паре на ящик. */
 export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: FirmaxDrawer[]): FirmaxDrawer[] {
   const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, len = firmaxLen(m);
   return axisLayout(m, n, ratios).map((a, i) => {
@@ -250,9 +250,16 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
       if (o.front !== undefined) box.front = o.front;
       if (o.confBottom !== undefined) box.confBottom = o.confBottom;
       const same = own && Math.abs(own.box.h - h) < 0.05;
-      if (same && own.box.bottomUp !== undefined) box.bottomUp = own.box.bottomUp;
-      if (same && own.box.conf) box.conf = [...own.box.conf];
+      if (own?.box.bottomUp !== undefined && own.box.bottomUp < h - FIRMAX.t - 20) box.bottomUp = own.box.bottomUp;
       const backH = h - (box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t;
+      if (own?.box.conf?.length) {
+        // высоты конфирматов Базиса: та же высота короба — как есть; иначе нижний держит отступ от низа, верхний — от верха
+        // задней стенки, если их столько же, сколько по правилу для новой высоты, и между ними не меньше 32
+        const oc = own.box.conf, oldH = own.box.h - (own.box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t, def = firmaxConf(backH);
+        const moved = oc.length === 2 ? [oc[0], Math.round((backH - (oldH - oc[1])) * 10) / 10] : oc.map((c) => Math.round(c / oldH * backH * 10) / 10);
+        if (same) box.conf = [...oc];
+        else if (oc.length === def.length && moved.every((c) => c >= 8 && c <= backH - 8) && (moved.length < 2 || moved[1] - moved[0] >= 32)) box.conf = moved;
+      }
       if (o.faceScrews === true) box.faceScrews = true;
       else if (Array.isArray(o.faceScrews)) box.faceScrews = same && o.faceScrews.every(([, sy]) => sy > 0 && sy < backH) ? o.faceScrews.map((p) => [p[0], p[1]] as [number, number]) : true;
     }
