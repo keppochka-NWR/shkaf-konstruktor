@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {kitchenBase,kitchenWall} from '../src/kitchen';
-import {compareModule,refFromStudio} from '../scripts/kitchen/compare';
+import {compareModule,refFromStudio,sameTurn} from '../scripts/kitchen/compare';
 
 test('comparator self-check: a module against itself passes',()=>{
   for(const m of [kitchenBase(initialModule(),600),kitchenWall(initialModule(),800),kitchenBase(initialModule(),800,'sink')]){
@@ -41,4 +41,15 @@ test('comparator checks gas lift rotation (quaternion), not only the point',()=>
   assert.match(c.hardware.find(h=>h.category==='газлифт')!.note??'',/поворот ≠ ×2/);
   const neg={...ref,hardware:ref.hardware.map(h=>h.quat?{...h,quat:h.quat.map(v=>-v)}:h)};
   assert.ok(compareModule(neg,m).pass,'q and -q are the same rotation');
+});
+
+test('rotation check (info, not PASS): q and -q are one turn; a confirmat turned about its own axis (k13 m02 [0,-1,0,0] vs [1,0,0,0]) and a leg about its vertical axis are the same',()=>{
+  assert.equal(sameTurn([1,0,0,0],[-1,0,0,0]),true);
+  assert.equal(sameTurn([0,-1,0,0],[1,0,0,0]),false,'not symmetric: different');
+  assert.equal(sameTurn([0,-1,0,0],[1,0,0,0],0),true,'confirmat: about local X');
+  assert.equal(sameTurn([0.5,0.5,-0.5,0.5],[0.5,0.5,0.5,-0.5],2),true,'leg: about local Z');
+  assert.equal(sameTurn([0.5,0.5,-0.5,0.5],[0.5,0.5,0.5,-0.5],0),false);
+  // студийный модуль против самого себя — без сведений о повороте и сетке
+  const m=kitchenWall(initialModule(),600),c=compareModule(refFromStudio(m),m);
+  assert.ok(c.hardware.every(h=>!h.info),JSON.stringify(c.hardware.filter(h=>h.info)));
 });

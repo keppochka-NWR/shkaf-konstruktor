@@ -17,7 +17,21 @@ export type RefModule = { key: string; name: string; archetype: string; size: nu
 type Box = [number, number, number, number, number, number];
 type Item = { id: string; name: string; cls: string; box: Box };
 export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[] };
-export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string };
+export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; /** для сведения, на PASS не влияет: поворот/сетка у ближайшей детали студии */ info?: string };
+
+type Quat4 = [number, number, number, number];
+/** Ось симметрии крепежа в локальных осях Базиса: поворот вокруг неё не меняет деталь (k13 m02: конфирмат [0,−1,0,0] против [1,0,0,0]). */
+const SYM_AXIS: Record<string, 0 | 1 | 2> = { конфирмат: 0, опора: 2 }; // опора: ось — локальная Z (вниз); левый ряд опор Базиса повёрнут на 180° вокруг неё
+/** Один ли поворот (кватернионы [w,x,y,z]; q и −q — одно; при оси симметрии — с точностью до поворота вокруг неё). */
+export function sameTurn(a: Quat4, b: Quat4, axis?: 0 | 1 | 2): boolean {
+  const na = Math.hypot(...a), nb = Math.hypot(...b);
+  if (Math.abs(a.reduce((s, v, i) => s + v * b[i], 0)) / (na * nb) >= 0.999) return true;
+  if (axis === undefined) return false;
+  // r = conj(a)·b — поворот из a в b в локальных осях детали; вокруг оси симметрии — векторная часть r вдоль этой оси
+  const [aw, ax, ay, az] = a.map((v) => v / na), [bw, bx, by, bz] = b.map((v) => v / nb);
+  const r = [aw * bx - ax * bw - ay * bz + az * by, aw * by + ax * bz - ay * bw - az * bx, aw * bz - ax * by + ay * bx - az * bw];
+  return r.every((v, i) => i === axis || Math.abs(v) < 0.02);
+}
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
@@ -147,6 +161,22 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
         return Math.abs(h.quat!.reduce((s, v, i) => s + v * q[i], 0)) / n < 0.999;
       }).length;
       if (bad) row.note = `поворот ≠ ×${bad}`;
+    }
+    // Остальная фурнитура: поворот и сетка — для сведения (на PASS не влияет). Поворот вокруг собственной оси осесимметричного крепежа
+    // (конфирмат — локальная X Базиса) — тот же поворот; разные id сетки при почти одинаковой модели тоже видны здесь.
+    if (category !== "газлифт") {
+      const own = ps.filter((p) => studioCategory(p) === category && p.model);
+      let rot = 0, mesh = 0;
+      for (const h of ref.hardware.filter((x) => x.category === category)) {
+        const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
+        own.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
+        if (!best || bd > 5) continue;
+        const sm = /([0-9a-f]{12})\.glb$/.exec(best.model!.file ?? "")?.[1];
+        if (h.mesh && sm && sm !== h.mesh) mesh++;
+        if (h.quat && best.model!.quat && !sameTurn(h.quat as Quat4, best.model!.quat as Quat4, SYM_AXIS[category])) rot++;
+      }
+      const info = [rot ? `поворот ≠ ×${rot}` : "", mesh ? `сетка ≠ ×${mesh}` : ""].filter(Boolean).join(", ");
+      if (info) row.info = info;
     }
     return row;
   });
