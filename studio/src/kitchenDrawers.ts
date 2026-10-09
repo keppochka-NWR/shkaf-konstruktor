@@ -48,7 +48,9 @@ export type IndigoDrawer = { system: "indigo"; y0: number; y1: number; runnerY: 
 /** Короб ЛДСП 16 на направляющих MODERN SLIDE (Базис k09: 4 ящика, без сетки направляющей — в студии процедурная деталь):
  *  боковины в 8,5 от корпуса, дно на 13 выше их низа, задняя стенка и фальшпанель на дне, конфирматы D5×35. */
 export type ModernDrawer = { system: "modern-slide"; y0: number; y1: number; runnerY: number; box: FirmaxBox; h?: 86 | 120 | 168 | 200; len?: number; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
-export const MODERN = { gap: 8.5, bottomUp: 13, confBottom: 37, confUnder: 83.5 };
+/** runner/box — в проектах Базиса MODERN SLIDE только направляющая 500 и короб 490 (k09: m03 при глубине 560 и m05 при 515 —
+ *  одинаково), поэтому длина не подбирается под глубину: не входит — ошибка проверки, а не выдуманная длина. */
+export const MODERN = { gap: 8.5, bottomUp: 13, confBottom: 37, confUnder: 83.5, runner: 500, box: 490 };
 export type BoxDrawer = FirmaxDrawer | VersaliteDrawer | ModernDrawer;
 export type KDrawer = AxisDrawer | FirmaxDrawer | VersaliteDrawer | StartDrawer | IndigoDrawer | ModernDrawer;
 export const isFirmax = (k: KDrawer): k is FirmaxDrawer => k.system === "firmax-ldsp";
@@ -341,6 +343,8 @@ export function setKDrawerFacade(m: Module, i: number, v: number): KDrawer[] | u
 /** Почему раскладка на n ящиков недоступна (для подсказки кнопки), или undefined. */
 export function relayoutProblem(m: Module, n: number): string | undefined {
   const ks = relayoutKDrawers(m, n);
+  const ms = ks.find(isModern);
+  if (ms && modernDepthNeed(ms) > m.depth + 0.01) return `MODERN SLIDE в проектах Базиса только с направляющей ${MODERN.runner} — нужна глубина корпуса от ${modernDepthNeed(ms)}`;
   const fitsK = (mm: Module, k: KDrawer) => axisFits(mm, k);
   if (!ks.every((k) => fitsK(m, k))) {
     // по высоте не входит из-за глубины: у низких царг (H-86, H-168) нет длин короче 450 — назвать глубину, с которой войдёт
@@ -353,16 +357,26 @@ export function relayoutProblem(m: Module, n: number): string | undefined {
   if (ks.some((k) => isAxis(k) && k.len > axisMaxLen(m))) return "Ящик не входит в глубину корпуса";
   return undefined;
 }
-/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика (по высоте ничего не двигается); высота, опоры,
- *  нижние царги — раскладка заново с теми же долями фасадов. Цвет и саморезы держателей сохраняются; у Firmax — саморезы 3×3,
- *  шурупы фасада, 5×12, зазор, отступ от фронта, конфирматы дна (см. firmaxLayout). */
+/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика (по высоте ничего не двигается: фасады, оси,
+ *  рейлинги, задние стенки, внутренние ящики — как были); высота, опоры, нижние царги — раскладка заново с теми же долями
+ *  фасадов. Цвет и саморезы держателей сохраняются; у Firmax — саморезы 3×3, шурупы фасада, 5×12, зазор, отступ от фронта,
+ *  конфирматы дна (см. firmaxLayout). Длины — только те, что есть в проектах Базиса: у MODERN SLIDE одна (500/490), поэтому
+ *  глубина её не меняет; у СТАРТ и Versalite длина Базиса остаётся, пока входит (см. startDepthLen, versaliteDepthLen). */
 export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
-  if (isStart(ks[0])) return startLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isStart));
+  if (isStart(ks[0])) {
+    if (what === "depth") return ks.map((k) => { if (!isStart(k)) return k; const len = startDepthLen(m, k); return len === k.len ? k : { ...k, len }; });
+    return startLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isStart));
+  }
   if (isIndigo(ks[0])) return what === "depth" ? ks : indigoLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isIndigo));
-  if (isModern(ks[0])) return what === "depth" ? ks.map((k) => (isModern(k) ? { ...k, box: { ...k.box, len: Math.min(k.box.len, m.depth) } } : k)) : modernLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isModern));
+  if (isModern(ks[0])) return what === "depth" ? ks : modernLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isModern));
   if (isVersalite(ks[0])) {
-    if (what === "depth") { const len = versaliteLen(m); return ks.map((k) => (isVersalite(k) ? { ...k, len, box: { ...k.box, len } } : k)); }
+    if (what === "depth") return ks.map((k) => {
+      if (!isVersalite(k)) return k;
+      const len = versaliteDepthLen(m, k);
+      if (len === k.len) return k.box.len + (k.box.front ?? 0) <= m.depth + 0.01 ? k : { ...k, box: { ...k.box, len } };
+      return { ...k, len, box: { ...k.box, len } };
+    });
     return versaliteLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isVersalite));
   }
   if (isFirmax(ks[0])) {
@@ -388,9 +402,12 @@ export function relayoutKDrawers(m: Module, n: number, ratios?: number[], system
   return sys === "firmax-ldsp" ? firmaxLayout(m, n, ratios, m.kdrawers?.filter(isFirmax)) : axisLayout(m, n, ratios, k0 && isAxis(k0) ? k0 : undefined);
 }
 /** Раскладка MODERN SLIDE (Базис k09): короб от низа фасада +35 до верха фасада −35 (не ниже пола + 10, не ближе 5 к царгам),
- *  короб 490 под направляющую 500 (в базе только она), если входит в глубину, иначе на 28 короче глубины. */
+ *  короб 490 под направляющую 500 — в базе только она (k09 m03 и m05), другой длины не придумываем: если направляющая 500 не
+ *  входит в глубину, раскладка недоступна (relayoutProblem), а проверка пишет, с какой глубины войдёт. */
+/** Глубина корпуса, в которую входит направляющая MODERN SLIDE 500 (от передней кромки короба). */
+export function modernDepthNeed(k: ModernDrawer) { return (k.box.front ?? 0) + MODERN.runner; }
 export function modernLayout(m: Module, n: number, ratios?: number[], keep?: ModernDrawer[]): ModernDrawer[] {
-  const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, r1 = (v: number) => Math.round(v * 10) / 10, len = Math.min(490, r1(m.depth - 28));
+  const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, r1 = (v: number) => Math.round(v * 10) / 10, len = MODERN.box;
   return axisLayout(m, n, ratios).map((a, i) => {
     const y = r1(Math.max(a.y0 + 35, floor + 10)), top = r1(Math.min(a.y1 - 35, ceil)), box: FirmaxBox = { y, h: r1(top - y), len };
     const o = (keep?.[i] ?? keep?.[0])?.box;
@@ -415,8 +432,22 @@ export function startLayout(m: Module, n: number, ratios?: number[], keep?: Star
     return cands.find((c) => startFits(m, c)) ?? cands[cands.length - 1] ?? at("SB20");
   });
 }
+/** СТАРТ при смене глубины: самая длинная длина с моделью Базиса на эту боковину, что входит с запасом 20 от задней кромки
+ *  (правило раскладки, у всех 9 модулей базы так); без запаса 20 — что входит с запасом 7 (порог проверки); иначе текущая —
+ *  SB08/SB19 в базе только 500, короче не выдумываем, проверка покажет «не входит». */
+export function startDepthLen(m: Module, k: StartDrawer): StartDrawer["len"] {
+  const ls = [...START_LENGTHS].reverse(), ok = (l: number, spare: number) => l <= m.depth - (k.front ?? 0) - spare && startAvailable(k.sb, l);
+  return ls.find((l) => ok(l, 20)) ?? ls.find((l) => ok(l, 7)) ?? k.len;
+}
 /** Versalite: самая длинная направляющая, что входит с запасом 20 от задней кромки; мельче 370 — самая короткая 350. */
 export function versaliteLen(m: Module): VersaliteLen { return [...VERSALITE_LENGTHS].reverse().find((l) => l <= m.depth - VERSALITE.spare) ?? VERSALITE_LENGTHS[0]; }
+/** Versalite при смене глубины: длина из Базиса остаётся, пока направляющая (сетка на 0,5 длиннее) входит в корпус и правило
+ *  раскладки не даёт длиннее — запас в Базисе ручной (k08 m04: 450 при 7, k10 m11/m12: 550 при 18, k24 m02: 500 при 15),
+ *  поэтому правило «запас 20» на той же глубине меняло бы длину Базиса. Не входит — по правилу раскладки. */
+export function versaliteDepthLen(m: Module, k: VersaliteDrawer): VersaliteLen {
+  const rule = versaliteLen(m);
+  return VERSALITE_LENGTHS.includes(k.len) && k.len + 0.5 <= m.depth - (k.box.front ?? 0) + 0.01 && k.len >= rule ? k.len : rule;
+}
 /** Раскладка Versalite: фасады — как у Axis PRO; короб от низа фасада +24 (не ниже пола + 10) до верха фасада −21 (не ближе 5
  *  к царгам корпуса), короб по длине направляющей, ось направляющей — середина боковины. keep — текущие ящики Versalite: зазор,
  *  отступ от фронта, конфирматы дна (от торцов и снизу) переносятся; высоты конфирматов задней стенки — у той же высоты короба. */
@@ -627,9 +658,11 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       out.push(board(`${id}:fx:bottom`, `Дно ящика ${j + 1} (${nm})`, [g.sl + g.t, g.yb, g.zb], [g.sr - g.t, g.yb + g.t, g.zf], 0));
       out.push(board(`${id}:fx:back`, `Задняя стенка ящика ${j + 1} (${nm})`, [g.sl + g.t, g.backY, g.zb], [g.sr - g.t, g.top, g.zb + g.t], 0));
       out.push(board(`${id}:fx:front`, `Фальшпанель ящика ${j + 1} (${nm})`, [g.sl + g.t, g.backY, g.zf - g.t], [g.sr - g.t, g.top, g.zf], 0));
-      (b.runs ?? [[g.gap, b.y, -b.len - 10], [xr - x0 - g.gap, b.y, -b.len - 10]]).forEach((r, i) => {
+      // точка Базиса — задний конец направляющей 500 от передней кромки короба (k09: z 18 при фронте 518, 60 при 560)
+      const rz = -(b.front ?? 0) - MODERN.runner;
+      (b.runs ?? [[g.gap, b.y, rz], [xr - x0 - g.gap, b.y, rz]]).forEach((r, i) => {
         const s = (i % 2) as 0 | 1, lr = s ? "R" : "L", side = s ? "правая" : "левая", d = dir(s), inner = s ? g.sr - g.t : g.sl + g.t, rx0 = inner + d * 0.5, rx1 = inner + d * (0.5 + FIRMAX.rail.w);
-        out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая MODERN SLIDE ${b.len + 10} ${side} (процедурная: в Базисе без сетки)`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
+        out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая MODERN SLIDE ${MODERN.runner} ${side} (процедурная: в Базисе без сетки)`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
           length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
       });
       if (b.faceScrews) {
@@ -836,6 +869,8 @@ export function kitchenDrawerErrors(m: Module): string[] {
       if (b.h < 60) e.push(p + "короб Versalite — боковины от 60 мм.");
       if (k.runnerY - 22 < b.y - 0.01 || k.runnerY + 22 > b.y + b.h + 0.01) e.push(p + `направляющая H45 на ${k.runnerY} выходит за боковину ящика (${b.y}–${Math.round((b.y + b.h) * 10) / 10}).`);
       if (b.len < k.len - 0.01) e.push(p + `короб ${b.len} короче направляющей ${k.len}.`);
+      // сетка направляющей Базиса на 0,5 длиннее номинала (350 → 350,5): при D=350 заходила в задник корпуса
+      if (VERSALITE_LENGTHS.includes(k.len) && k.len + 0.5 > m.depth - (b.front ?? 0) + 0.01) e.push(p + `направляющая Versalite ${k.len} (${k.len + 0.5} по модели Базиса) не входит в глубину корпуса ${m.depth}.`);
       if (b.len > m.depth - (b.front ?? 0) + 0.01) e.push(p + `короб Versalite ${b.len} не входит в глубину корпуса ${m.depth}.`);
       if (m.width - 32 - 2 * (b.gap ?? VERSALITE.gap) - 32 < 100) e.push(p + "Versalite — узкий корпус: между боковинами ящика меньше 100 мм.");
       if (b.y < axisFloor(m) - 0.01) e.push(p + `короб Versalite на ${b.y} уходит в дно корпуса (пол под ящиками ${axisFloor(m)}).`);
@@ -847,6 +882,11 @@ export function kitchenDrawerErrors(m: Module): string[] {
       const b = k.box, fx = isModern(k) ? "MODERN SLIDE" : "Firmax";
       if (![k.y0, k.y1, k.runnerY, b?.y, b?.h, b?.len].every(Number.isFinite) || k.y1 - k.y0 < 60 || k.y0 < 0 || k.y1 > m.height) { e.push(p + "фасад от 60 мм в пределах высоты модуля."); return; }
       if (b.h < 60) e.push(p + `короб ${fx} — боковины от 60 мм.`);
+      if (isModern(k)) {
+        // в проектах Базиса MODERN SLIDE — только направляющая 500 и короб 490: других длин не придумываем
+        if (Math.abs(b.len - MODERN.box) > 0.05) e.push(p + `короб MODERN SLIDE ${b.len}: в проектах Базиса только ${MODERN.box} под направляющую ${MODERN.runner}.`);
+        if (modernDepthNeed(k) > m.depth + 0.01) e.push(p + `направляющая MODERN SLIDE ${MODERN.runner} (другой длины в проектах Базиса нет) не входит в глубину корпуса ${m.depth} — нужна глубина от ${modernDepthNeed(k)}.`);
+      }
       if (b.len > m.depth - (b.front ?? 0) + 0.01 || b.len < 250) e.push(p + `короб ${fx} ${b.len} не входит в глубину корпуса ${m.depth}.`);
       if (m.width - 32 - 2 * (b.gap ?? FIRMAX.gap) - 32 < 100) e.push(p + `${fx} — узкий корпус: между боковинами ящика меньше 100 мм.`);
       if (b.y < axisFloor(m) - 0.01) e.push(p + `короб ${fx} на ${b.y} уходит в дно корпуса (пол под ящиками ${axisFloor(m)}).`);
