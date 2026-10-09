@@ -240,7 +240,8 @@ export type Module = {
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
   /** Кромка кухни: толщина; railBack:false — задняя царга заподлицо с задником без кромки по заднему торцу (18 из 80 нижних в базе). */
   edgeScheme?: { t: number; railBack?: false; /** дно и/или крыша между боковинами кромятся и по торцам у боковин (k32: обе, k31 m13: дно) */ ends?: true | "bottom" | "top";
-    /** дно под боковинами без кромки по торцам (k28 m10–m12) */ underEnds?: false; /** задние торцы кромятся и при набивном ХДФ (k31 m03/m04) */ rear?: true };
+    /** дно под боковинами без кромки по торцам (k28 m10–m12) */ underEnds?: false; /** задние торцы кромятся и при набивном ХДФ (k31 m03/m04) */ rear?: true;
+    /** жёсткие полки без кромки по торцам у боковин, на любом крепеже (k13 m02) */ fixedEnds?: false };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
   grooves?: Groove[];
@@ -997,7 +998,12 @@ export function parts(m: Module): Part[] {
             const dz = k === 0 ? m.dowels.offset : -m.dowels.offset;
             add(`dowel:${hp.id}:${side}:${k}`, "Шкант 8×30", [30, 8, 8], [edgeX + dir * 3, hp.position[1], z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
           }
-        } else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], z], dir > 0 ? "+x" : "-x", hp.sectionId);
+        } else {
+          // кухня по Базису: задний конфирмат жёсткой полки, отодвинутой от задней кромки (за ХДФ), — от задней кромки боковины,
+          // как у дна и крыши (k13 m02: полка с 20, конфирматы на 54 у всех горизонталей)
+          const ins = m.confirmatInset ?? RULES.confirmatInset, zc = k === 0 && !!m.kitchen && fixedIds.has(hp.id) && ins - z0 >= 20 ? ins : z;
+          confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], zc], dir > 0 ? "+x" : "-x", hp.sectionId);
+        }
       }
     }
   }
@@ -1632,7 +1638,7 @@ export function parseModule(input: unknown): Module {
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
-    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:unknown}).ends?{ends:(x.edgeScheme as {ends?:unknown}).ends==='bottom'?'bottom' as const:(x.edgeScheme as {ends?:unknown}).ends==='top'?'top' as const:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{})}}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:unknown}).ends?{ends:(x.edgeScheme as {ends?:unknown}).ends==='bottom'?'bottom' as const:(x.edgeScheme as {ends?:unknown}).ends==='top'?'top' as const:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{}),...((x.edgeScheme as {fixedEnds?:boolean}).fixedEnds===false?{fixedEnds:false as const}:{})}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),

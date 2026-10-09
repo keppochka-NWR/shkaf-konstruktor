@@ -175,6 +175,17 @@ test('antresol with two rows of lift-up fronts (k13 m02): the lower row hangs on
   const c=compareModule(ref,m);
   assert.equal(c.hardware.find(h=>h.category==='петля')!.maxPosDelta,0);
   assert.ok(!c.missing.length&&!c.extra.length);
+  // жёсткая полка с 20 мм (за ХДФ): задний конфирмат — от задней кромки боковины, как у дна и крыши; торцы полки без кромки
+  assert.equal(c.hardware.find(h=>h.category==='конфирмат')!.maxPosDelta,0);
+  assert.equal(m.edgeScheme?.fixedEnds,false);
+  assert.equal(c.pass,true);
+});
+
+test('fixed shelf confirmats: studio wardrobes keep the inset from the shelf edges',()=>{
+  const w=initialModule();w.sections=[{...w.sections[0],shelves:[0.5],fixed:[0]}];
+  const sh=parts(w).find(p=>p.id===`${w.sections[0].id}:shelf:0`)!,z0=sh.position[2]-sh.size[2]/2;
+  const cz=parts(w).filter(p=>p.id.startsWith(`fast:${sh.id}:left:`)).map(p=>p.model!.origin![2]).sort((a,b)=>a-b);
+  if(cz.length)assert.equal(cz[0],z0+(w.confirmatInset??50));
 });
 
 test('estimate of a module from Bazis: no "мелочёвка корпуса" norm and no confirmat caps (none in any Bazis project); studio kitchens keep them',()=>{

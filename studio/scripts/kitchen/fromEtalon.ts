@@ -397,6 +397,11 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et, ...edgeFlags(left.p, bottom?.p, topPanel?.p, !!m.bottomUnder, m.backType) };
   else if (noEdges(ref.panels)) { m.edgeScheme = { t: 0 }; notes.push("кромка в Базисе не заложена — студия не добавляет"); }
+  // жёсткие полки не на эксцентриках без кромки по торцам у боковин (k13 m02 — на конфирматах, только перед и зад); на эксцентриках
+  // «перед и зад» студия ставит и так (k12 m04)
+  const eccShelf = (j: number) => (["left", "right"] as const).some((s) => m.jointFastening?.[`${m.sections[0].id}:shelf:${j}:${s}`] === "eccentric");
+  const fixedSh = (m.sections[0].fixed ?? []).filter((j) => !eccShelf(j)).map((j) => sh[j]).filter((q) => !!q && !glassSh.includes(q));
+  if (m.edgeScheme && m.edgeScheme.t > 0 && fixedSh.length && fixedSh.every((q) => { const e = ((q.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((x) => x.thick > 0).map((x) => x.side); return e.length > 0 && !e.includes("+x") && !e.includes("-x"); })) m.edgeScheme.fixedEnds = false;
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
     const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);
