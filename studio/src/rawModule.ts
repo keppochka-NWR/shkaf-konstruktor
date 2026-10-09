@@ -5,8 +5,9 @@
 import type { Module, Part } from "./model";
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
- *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона). */
-export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; t?: number; lw?: [number, number] };
+ *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона).
+ *  wall — стеновая панель (фартук) Базиса из материала «Стеновая панель» в «Ряду» кухни: изделие поставщика, не лист ЛДСП. */
+export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; wall?: boolean; edges?: [number, number][]; t?: number; lw?: [number, number] };
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
@@ -67,9 +68,12 @@ export function rawParts(m: Module): Part[] {
     const dims = rawDims(p), thin = size.indexOf(Math.min(...size));
     const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
     // Столешница (толщина ≥ 26) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
-    // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов.
-    const worktop = /столешн/i.test(p.name) || dims[2] >= 26, long = dims[0] > 2726;
-    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
+    // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов. Стеновая панель «Ряда» кухни (wall) —
+    // изделие поставщика, не лист ЛДСП «6 мм» (k07, k15, k19, k21: раньше отдельный лист Lamarty 6 мм, которого в Базисе нет).
+    // Деталь «Ряда» нулевой толщины (k33: «З/С AQ LineBox» без материала, толщина 0) — в раскрой Базиса не попадает: не лист «0 мм»;
+    // кромка Базиса у неё остаётся в смете.
+    const worktop = /столешн/i.test(p.name) || dims[2] >= 26, long = dims[0] > 2726, wall = !!(p.wall && r.row), flat = !!r.row && dims[2] < 0.5;
+    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm && !wall ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm || wall || flat ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
@@ -95,7 +99,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
   const r = x as RawSpec;
   if (!r || typeof r !== "object" || !Array.isArray(r.panels)) return undefined;
   return {
-    panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}),
+    panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}), ...(p.wall ? { wall: true } : {}),
       ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}),
       ...(Number(p.t) > 0 && Array.isArray(p.lw) && p.lw.length === 2 && p.lw.every((v) => Number(v) > 0) ? { t: Number(p.t), lw: [Number(p.lw[0]), Number(p.lw[1])] as [number, number] } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"] })),

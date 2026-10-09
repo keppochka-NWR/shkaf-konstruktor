@@ -177,8 +177,40 @@ test('цоколь ряда кухни: ЛДСП — в раскрое цоко�
 // «Ряд» кухни так, как его собирает import.ts: детали rowPanelsOf в осях объекта + panelExtras
 function rowModule(row:Record<string,unknown>):Module{
   const ps=rowPanelsOf(row),o=[0,1,2].map(i=>Math.min(...ps.map(p=>p.box[i]))),M=[3,4,5].map(i=>Math.max(...ps.map(p=>p.box[i])));
-  return rawModule({row:true,source:'bazis-kitchen',hardware:[],panels:ps.map(p=>({name:p.name,kind:p.kind??'ldsp',box:p.box.map((v,i)=>v-o[i%3]) as RawSpec['panels'][number]['box'],...panelExtras(p),...(p.front?{facade:true}:{})}))},M[0]-o[0],M[1]-o[1],M[2]-o[2]);
+  return rawModule({row:true,source:'bazis-kitchen',hardware:[],panels:ps.map(p=>({name:p.name,kind:p.kind??'ldsp',box:p.box.map((v,i)=>v-o[i%3]) as RawSpec['panels'][number]['box'],...panelExtras(p),...(p.front?{facade:true}:{}),...(p.wall?{wall:true}:{})}))},M[0]-o[0],M[1]-o[1],M[2]-o[2]);
 }
+
+test('стеновая панель Базиса (фартук 6/26 мм) — изделие поставщика, м²: не лист Lamarty 6 мм и не «столешница 26 мм»',()=>{
+  // у Базиса материал «Cтеновая панель» (латинская C), детали «Фронтальная/Вертикальная»; ХДФ в группе стеновых — как есть
+  const row={wallPanels:[
+    {name:'Фронтальная',mat:'Cтеновая панель',kind:'other',thick:6,box:[0,900,594,1292,1462,600]},
+    {name:'стеновая 26',mat:'Cтеновая панель 26мм',kind:'other',thick:26,box:[1300,900,0,2264,1500,26]},
+    {name:'Задняя',mat:'ХДФ Белый (3мм)',kind:'hdf',thick:3,box:[2270,900,0,2470,1500,3]}]};
+  const rp=rowPanelsOf(row);
+  assert.deepEqual(rp.map(p=>[p.name,!!p.wall]),[['Стеновая панель · Фронтальная',true],['стеновая 26',true],['Задняя',false]]);
+  const m=rowModule(row),ps=rawParts(m);
+  assert.ok(ps.filter(p=>/стенов/i.test(p.name)).every(p=>p.external),'стеновые — вне раскроя ЛДСП');
+  const e=estimate(project(m)),ids=e.lines.map(l=>l.id);
+  assert.ok(!ids.some(id=>/^sheet:Белый:6$/.test(id)),'нет листа Lamarty 6 мм');
+  assert.ok(!ids.some(id=>id.startsWith('worktop')),'стеновая 26 мм — не столешница');
+  assert.ok(Math.abs((e.lines.find(l=>l.id==='wallpanel:raw:6')?.quantity??0)-1.292*0.562)<0.001);
+  assert.ok(Math.abs((e.lines.find(l=>l.id==='wallpanel:raw:26')?.quantity??0)-0.964*0.6)<0.001);
+  // вне ряда кухни (сырой шкаф) флаг не действует — как раньше
+  const wr=rawParts(rawModule({hardware:[],panels:[{name:'Панель',kind:'other',wall:true,box:[0,0,0,600,562,6]}]}));
+  assert.ok(!wr[0].external);
+});
+
+test('деталь ряда нулевой толщины без материала (k33: «З/С AQ LineBox») — не лист «0 мм», кромка Базиса остаётся',()=>{
+  const z={name:'З/С AQ LineBox',mat:'',kind:'other',thick:0,lw:[681,260],box:[0,400,18,681,660,18],edges:[{thick:0.5,len:681},{thick:0.5,len:260},{thick:0.5,len:681},{thick:0.5,len:260}]};
+  const shelf={name:'Полка',mat:'ЛДСП Lamarty Белый (16мм)',kind:'ldsp',thick:16,box:[0,0,0,600,16,300]};
+  const m=rowModule({other:[z,shelf]}),ps=rawParts(m);
+  assert.ok(ps[0].external&&!ps[1].external);
+  const e=estimate(project(m));
+  assert.deepEqual(e.lines.filter(l=>l.id.startsWith('sheet:')).map(l=>l.id),['sheet:Белый'],'нет листа «Белый 0»');
+  assert.ok(Math.abs((e.lines.find(l=>l.id==='edge05')?.quantity??0)-1.882)<1e-9,'кромка Базиса 1,882 м');
+  // вне ряда (сырой шкаф) — как раньше
+  assert.ok(!rawParts(rawModule({hardware:[],panels:[{name:'Плоская',kind:'other',box:[0,0,0,600,300,0]}]}))[0].external);
+});
 
 test('k09: чуть повёрнутый цоколь ЛДСП 16 (габарит 16,64) — толщина Базиса 16, без отдельного листа «16.7»',()=>{
   const side={name:'Цоколь',mat:'ЛДСП Lamarty Дуб Вотан (16мм)',kind:'ldsp',thick:16,lw:[98.5,783.99],box:[499.4,0,-684,516.04,98.5,100]};
