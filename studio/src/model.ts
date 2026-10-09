@@ -121,6 +121,10 @@ export type Section = {
   hingeY?: number[];
   /** Высота фасада, при которой записаны hingeY (при другой высоте высоты пересчитываются). */
   hingeYFor?: number;
+  /** Кухня (пенал с doorSplit): высоты петель верхнего ряда фасадов от низа фасада; без поля верхний ряд берёт hingeY. */
+  hingeYUp?: number[];
+  /** Высота верхнего фасада, при которой записаны hingeYUp. */
+  hingeYUpFor?: number;
   hingeSide?: "left" | "right";
   removedDoors?: number[];
   doorGap?: number;
@@ -1072,7 +1076,8 @@ function hardwareParts(m: Module, out: Part[]) {
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
     const sec = m.sections.find((s) => s.id === door.sectionId);
-    (sec?.hingeY?.length ? scaleHingeY(sec.hingeY, sec.hingeYFor ?? dh, dh) : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
+    const upRow = !!m.kitchen && sec?.doorSplit !== undefined && Number(door.id.split(":door:")[1]) >= 2 && !!sec.hingeYUp?.length; // верхний ряд пенала — свои высоты
+    (upRow ? scaleHingeY(sec!.hingeYUp!, sec!.hingeYUpFor ?? dh, dh) : sec?.hingeY?.length ? scaleHingeY(sec.hingeY, sec.hingeYFor ?? dh, dh) : hingePositions(dh, dw, !!m.kitchen)).forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
       for (const s of hingeShifts()) {
@@ -1172,6 +1177,10 @@ export function fastenerCounts(m: Module) {
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0) };
 }
+/** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
+export function maxHeightOf(m: Module): number {
+  return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : RULES.maxH;
+}
 export function validate(m: Module): string[] {
   if(m.kupe)return kupeErrors(m);
   if(m.raw)return rawErrors(m);
@@ -1190,7 +1199,7 @@ export function validate(m: Module): string[] {
     ["depth", "Глубина стола", RULES.minD, RULES.maxD],
   ] : [
     ["width", "Ширина", m.kitchen ? KITCHEN.minWidth : RULES.minW, RULES.maxW], // кухня: бутылочница 150 (вкладка «Кухня»)
-    ["height", "Высота", RULES.minH, RULES.maxH],
+    ["height", "Высота", RULES.minH, maxHeightOf(m)], // кухонный пенал до 2900 (Базис), остальное до 2500
     ["depth", "Глубина", RULES.minD, RULES.maxD],
   ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
     const n = m[key];
@@ -1598,6 +1607,8 @@ export function parseModule(input: unknown): Module {
       ...(s.doorHinges===undefined?{}:{doorHinges:Array.isArray(s.doorHinges)?[...s.doorHinges]:s.doorHinges}),
       ...(s.hingeY===undefined?{}:{hingeY:Array.isArray(s.hingeY)?s.hingeY.map(Number).filter(Number.isFinite):[]}),
       ...(s.hingeYFor===undefined?{}:{hingeYFor:Number(s.hingeYFor)}),
+      ...(s.hingeYUp===undefined?{}:{hingeYUp:Array.isArray(s.hingeYUp)?s.hingeYUp.map(Number).filter(Number.isFinite):[]}),
+      ...(s.hingeYUpFor===undefined?{}:{hingeYUpFor:Number(s.hingeYUpFor)}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),

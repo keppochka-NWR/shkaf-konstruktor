@@ -45,6 +45,7 @@ export const KITCHEN = {
   backGap: 1.5,         // накладной ХДФ низа (W−3)×(H−3)
   groove: { inset: 16, width: 4, depth: 8, clear: 1 }, // П16-4×8, ХДФ (W−18)×(H−18), заходит на 7
   minWidth: 150, maxWidth: 1200,
+  maxHeight: 2900,      // пеналы в Базисе до 2869 (k30 m15), 2850 (k31 m05), 2820 (k27); у шкафов студии лимит RULES.maxH 2500 не меняется
 } as const;
 
 /** Техника: размеры ниши/корпуса по паспортам типовых встраиваемых моделей (ширина × высота × глубина, мм). */
@@ -131,7 +132,11 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
  *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
 export function kitchenEdges(m: Module, out: Part[]) {
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
-  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
+  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
+  // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
+  // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
+  const ecc = (id: string) => m.jointFastening?.[`${id}:left`] === "eccentric" || m.jointFastening?.[`${id}:right`] === "eccentric";
+  const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)).filter(ecc));
   for (const p of out) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
     // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)
@@ -140,7 +145,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     const rearBase = m.backType === "none" ? ["-z"] : [];
     if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
-    else if (p.id === "top") setEdges(p, ["+z", ...rear], t);
+    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
+    else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)

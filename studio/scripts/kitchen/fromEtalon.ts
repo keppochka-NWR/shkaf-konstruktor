@@ -1,7 +1,7 @@
 // Распознаватель: модуль эталона Базиса (Кухни\etalon\kNN.json) → параметрический кухонный модуль студии.
 // Все размеры читаются из эталона (ширина, высота, глубина боковины, опоры, дно, царги, задник, фасады, полки, крепёж),
 // а не подставляются типовые — так модуль студии можно сверить деталь в деталь (compare.ts).
-import { initialModule, section, parts, type Module, type Groove, type GolaCut } from "../../src/model";
+import { initialModule, section, parts, scaleHingeY, type Module, type Groove, type GolaCut } from "../../src/model";
 import { partAxes } from "../../src/edges";
 import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
@@ -149,11 +149,29 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.facadeT = r1(f0.b.z1 - f0.b.z0);
     m.faceAir = r1(f0.b.z0 - sideZ1);
     m.faceGap = r1(f0.b.x0 - left.b.x0);
-    m.faceGapBetween = m.kdrawers ? 3 : fronts.length > 1 ? r1(fronts[1].b.x0 - fronts[0].b.x1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
+    // зазор между фасадами: сосед в том же ряду (по x); если рядов несколько, а в ряду один фасад — зазор между рядами (по y)
+    const sameRow = fronts.find((q) => q !== f0 && Math.abs(q.b.y0 - f0.b.y0) < 1 && q.b.x0 > f0.b.x1 - 1);
+    const above = fronts.filter((q) => q.b.y0 > f0.b.y1 - 1).sort((a, c) => a.b.y0 - c.b.y0)[0];
+    m.faceGapBetween = m.kdrawers ? 3 : sameRow ? r1(sameRow.b.x0 - f0.b.x1) : above ? r1(above.b.y0 - f0.b.y1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
-    if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
+    // пенал: два ряда распашных (низ + верх, по одной или по две створки) = section.doorSplit студии (разрез фасадов по высоте)
+    const rowYs = [...rows].sort((a, c) => a - c), inRow = (y: number) => fronts.filter((q) => Math.abs(Math.round(q.b.y0) - y) < 1);
+    const lowRow = inRow(rowYs[0]), upRow = rowYs.length > 1 ? inRow(rowYs[1]) : [];
+    const rowsGap = upRow.length && lowRow.length ? upRow[0].b.y0 - lowRow[0].b.y1 : 0;
+    // только пенал (role tall) и только если верхний ряд в пределах корпуса: пенал из двух корпусов (k30 m05: боковины 850, фасады до 2469) — не разрез
+    const tallRows = role === "tall" && rowYs.length === 2 && !m.kdrawers;
+    const upOver = tallRows && upRow.length ? r1(Math.max(...upRow.map((q) => q.b.y1)) - top) : 0;
+    const split = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5 && rowsGap <= 10;
+    if (tallRows && rowsGap > 10) unsupported.push(`ниша под технику между фасадами ${r1(rowsGap)} мм (пенал под духовку/СВЧ) — пока не поддержано`);
+    else if (tallRows && upOver > 20) unsupported.push(`фасады пенала выше боковин на ${upOver} мм (пенал из нескольких корпусов) — пока не поддержано`);
+    else if (split) {
+      const gapY = r1(upRow[0].b.y0 - lowRow[0].b.y1);
+      m.sections[0].doorSplit = r1(lowRow[0].b.y1 + gapY / 2 - lowRow[0].b.y0); // от низа нижнего фасада до середины зазора между рядами
+      if (lowRow.length === 1) m.faceGapBetween = gapY;
+    } else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
+    const perRow = split ? lowRow.length : fronts.length;
     m.doors = doors.length > 0;
-    m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
+    m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
     // подъёмный фасад: «Петля накладная» на нижней плоскости крыши (кватернион Базиса [0,−0,71,0,0,71]), выше середины фасада
     const topHinge = (h: { pos: number[]; quat?: number[] }) => !!h.quat && Math.abs(h.quat[0]) < 0.1 && Math.abs(h.quat[2]) < 0.1 && Math.abs(Math.abs(h.quat[1]) - Math.SQRT1_2) < 0.05 && h.pos[1] > (f0.b.y0 + f0.b.y1) / 2;
     if (fronts.length === 1 && hw("петля").length && hw("петля").every(topHinge)) {
@@ -163,19 +181,30 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       if (hw("газлифт").some((h) => !/PD-G-N02/.test(h.name))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !/PD-G-N02/.test(h.name))!.name}`);
       const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = f0.b.x1 - f0.b.x0;
       if (xs.length !== 2 || Math.abs(xs[0] - 100) > 0.5 || Math.abs(xs[1] - (dw - 100)) > 0.5) notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")}`);
-    } else if (fronts.length === 1) {
+    } else if (perRow === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
     }
-    if (fronts.length > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
+    if (perRow > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
   } else m.doors = false;
   // высоты петель (от низа фасада) — как в проекте, если отличаются от правила 100 мм от краёв
   if (fronts.length && doors.length && !m.sections[0].doorHinges?.includes("top")) {
-    const f = fronts[0], ys = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30).map((h) => r1(h.pos[1] - f.b.y0)).sort((a, c) => a - c);
-    const def = (() => { const n = ys.length, dh = f.b.y1 - f.b.y0, off = Math.min(100, Math.max(40, dh / 4)); return Array.from({ length: n }, (_, k) => n === 1 ? dh / 2 : off + (dh - 2 * off) * k / (n - 1)); })();
-    // число петель по правилу кухни — по высоте фасада; если в проекте другое число или другие высоты — берём высоты проекта
-    const n0 = (f.b.y1 - f.b.y0) <= 900 ? 2 : (f.b.y1 - f.b.y0) <= 1300 ? 3 : (f.b.y1 - f.b.y0) <= 1700 ? 4 : (f.b.y1 - f.b.y0) <= 2100 ? 5 : 6;
-    if (ys.length && (ys.length !== n0 || ys.some((y, k) => Math.abs(y - def[k]) > 0.5))) { m.sections[0].hingeY = ys; m.sections[0].hingeYFor = r1(f.b.y1 - f.b.y0); }
+    const twoRows = m.sections[0].doorSplit !== undefined; // два ряда (пенал): петли нижнего фасада — hingeY, верхнего — hingeYUp
+    const rowHinges = (f: (typeof fronts)[number]) => {
+      const ys = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30 && (!twoRows || (h.pos[1] >= f.b.y0 && h.pos[1] <= f.b.y1))).map((h) => r1(h.pos[1] - f.b.y0)).sort((a, c) => a - c);
+      const def = (() => { const n = ys.length, dh = f.b.y1 - f.b.y0, off = Math.min(100, Math.max(40, dh / 4)); return Array.from({ length: n }, (_, k) => n === 1 ? dh / 2 : off + (dh - 2 * off) * k / (n - 1)); })();
+      // число петель по правилу кухни — по высоте фасада; если в проекте другое число или другие высоты — берём высоты проекта
+      const n0 = (f.b.y1 - f.b.y0) <= 900 ? 2 : (f.b.y1 - f.b.y0) <= 1300 ? 3 : (f.b.y1 - f.b.y0) <= 1700 ? 4 : (f.b.y1 - f.b.y0) <= 2100 ? 5 : 6;
+      return { ys, custom: ys.length > 0 && (ys.length !== n0 || ys.some((y, k) => Math.abs(y - def[k]) > 0.5)), dh: r1(f.b.y1 - f.b.y0) };
+    };
+    const lo = rowHinges(fronts[0]);
+    if (lo.custom) { m.sections[0].hingeY = lo.ys; m.sections[0].hingeYFor = lo.dh; }
+    if (twoRows) {
+      const fu = fronts.filter((q) => q.b.y0 > fronts[0].b.y1 - 1).sort((a, c) => a.b.x0 - c.b.x0)[0], up = rowHinges(fu);
+      // верхний ряд: свои высоты, если не совпадают с тем, что студия дала бы сама (правило или масштаб нижних)
+      const scaled = lo.custom ? scaleHingeY(lo.ys, lo.dh, up.dh) : null;
+      if (up.custom || (scaled && (scaled.length !== up.ys.length || scaled.some((y, k) => Math.abs(y - up.ys[k]) > 0.5)))) { m.sections[0].hingeYUp = up.ys; m.sections[0].hingeYUpFor = up.dh; }
+    }
   }
   // полки (ЛДСП и стекло)
   const glassSh = P.filter(({ p }) => p.axis === "y" && p.kind === "glass");
@@ -201,6 +230,13 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const near = (h: { pos: number[] }) => Math.abs(h.pos[0] - sx) < 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1;
       if (ecc.some(near)) { (m.jointFastening ??= {})[`${id}:${side}`] = "eccentric"; }
     }
+  }
+  // фиксированные полки пенала (ниши под технику, разрез фасадов): эксцентрик + шкант, как у крыши — по фурнитуре Базиса у каждой стороны
+  for (const j of m.sections[0].fixed ?? []) {
+    const q = sh[j];
+    if (!q) continue;
+    for (const [side, sx] of [["left", left.b.x1], ["right", right.b.x0]] as const)
+      if (ecc.some((h) => Math.abs(h.pos[0] - sx) < 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1)) (m.jointFastening ??= {})[`${m.sections[0].id}:shelf:${j}:${side}`] = "eccentric";
   }
   if (m.jointFastening && dow.length && ecc.length) {
     const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
