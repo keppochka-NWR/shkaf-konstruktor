@@ -971,8 +971,19 @@ export function parts(m: Module): Part[] {
   }
   // Царги лёжа (кухни Базиса) и стяжки кухни на ребре: по одному конфирмату с каждой стороны через боковину в торец царги.
   for (const r of out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen))) {
-    for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
-      confirmat(`fast:${r.id}:${side}:0`, [edgeX - dir * t, r.position[1], r.position[2]], dir > 0 ? "+x" : "-x");
+    for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const) {
+      // Конфирмат царги по центру её торца; если там уже конфирмат дна/крыши в той же боковине (дно под боковинами,
+      // отступ 54 у k04 — z 503 против 507), сдвигаем по ширине царги до чистого места: 16 мм между осями (critic qdrawers B4).
+      const hx = edgeX - dir * t, xs = [Math.min(hx, hx + dir * 50), Math.max(hx, hx + dir * 50)], y = r.position[1];
+      const others = out.filter((p) => p.name.startsWith("Конфирмат") && p.position[0] + p.size[0] / 2 > xs[0] && p.position[0] - p.size[0] / 2 < xs[1] && Math.abs(p.position[1] - y) < p.size[1] / 2 + 3.5);
+      const hits = (z: number, gap: number) => others.some((p) => Math.abs(p.position[2] - z) < p.size[2] / 2 + 3.5 + gap);
+      let z = r.position[2];
+      if (hits(z, 0)) {
+        const half = r.size[2] / 2 - 10;
+        for (let d = 1; d <= half; d++) { const c = [r.position[2] + d, r.position[2] - d].find((v) => !hits(v, 9)); if (c !== undefined) { z = c; break; } }
+      }
+      confirmat(`fast:${r.id}:${side}:0`, [hx, y, z], dir > 0 ? "+x" : "-x");
+    }
   }
   for (const dv of out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;

@@ -163,29 +163,83 @@ export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<
   const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
   const innerBottom = axisFloor(m), y0 = feet + g, y1 = m.height - g, avail = y1 - y0 - (n - 1) * gap;
   const base = ratios?.length === n ? ratios : n === 1 ? [1] : n === 2 ? [0.5, 0.5] : n === 3 ? [0.44, 0.28, 0.28] : Array.from({ length: n }, (_, i) => (i === 0 ? 1.5 : 1));
-  const sum = base.reduce((s, v) => s + v, 0), maxLen = m.depth - 25;
+  const sum = base.reduce((s, v) => s + v, 0);
   const hs = base.map((r) => Math.round((avail * r) / sum * 2) / 2);
   hs[n - 1] = Math.round((avail - hs.slice(0, -1).reduce((s, v) => s + v, 0)) * 10) / 10; // остаток — верхнему, сумма точно по корпусу
   let y = y0;
-  return hs.map((fh, i) => {
+  return hs.map((fh) => {
     const runnerY = Math.round(Math.max(y + 59, innerBottom + 59) * 10) / 10, y1r = Math.round((y + fh) * 10) / 10;
-    // царга — самая высокая, что входит; длина — самая длинная из тех, на которые есть модели этой высоты
-    const pick = (hh: KDrawer["h"]): KDrawer | undefined => { const len = [...AXIS_LENGTHS].reverse().find((l) => l <= maxLen && axisAvailable({ h: hh, len: l, color })); return len ? { system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len, ...(color ? { color } : {}), ...(keep?.faceScrews ? { faceScrews: true } : {}) } : undefined; };
+    const at = (hh: KDrawer["h"], len: KDrawer["len"]): KDrawer => ({ system: "axis-pro", y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: hh, len, ...(color ? { color } : {}), ...(keep?.faceScrews ? { faceScrews: true } : {}) });
+    // царга — самая высокая, что входит; длина — самая длинная из тех, на которые есть модели этой высоты (в цвете ящиков)
+    const pick = (hh: KDrawer["h"]): KDrawer | undefined => { const len = axisBestLen(m, hh, color); return len ? at(hh, len) : undefined; };
     const cands = [...AXIS_HEIGHTS].reverse().map(pick).filter((c): c is KDrawer => !!c);
-    const k = cands.find((c) => axisFits(m, c)) ?? cands[cands.length - 1] ?? { system: "axis-pro" as const, y0: Math.round(y * 10) / 10, y1: y1r, runnerY, h: 120 as const, len: 300 as const };
+    // в цвете ящиков нет модели под эту глубину — цвет и саморезы НЕ меняются молча: ящик остаётся в своём цвете, проверка
+    // покажет «нет модели», а кнопки, которые к этому ведут, отключены (critic qdrawers B2)
+    const k = cands.find((c) => axisFits(m, c)) ?? cands[cands.length - 1] ?? at(120, [...AXIS_LENGTHS].reverse().find((l) => l <= axisMaxLen(m)) ?? 300);
     y += fh + gap;
     return k;
   });
 }
-/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика (по высоте ничего не двигается); высота, опоры,
- *  нижние царги — раскладка заново с теми же долями фасадов. Цвет и саморезы держателей сохраняются. */
+/** Запас по глубине: ящик не длиннее глубины корпуса минус 25 (база Базиса). Одно правило для раскладки и пересчёта. */
+export const AXIS_DEPTH_SPARE = 25;
+export function axisMaxLen(m: Module) { return m.depth - AXIS_DEPTH_SPARE; }
+/** Самая длинная длина Axis PRO с моделью Базиса на эту царгу и цвет, что входит в глубину корпуса. */
+export function axisBestLen(m: Module, h: KDrawer["h"], color?: KDrawer["color"]): KDrawer["len"] | undefined {
+  return [...AXIS_LENGTHS].reverse().find((l) => l <= axisMaxLen(m) && axisAvailable({ h, len: l, color }));
+}
+/** Ящик с другой царгой: длина подбирается заново под глубину корпуса (у H-200 нет 300, у H-86 и H-168 — короче 450). */
+export function withAxisH(m: Module, k: KDrawer, h: KDrawer["h"]): KDrawer {
+  const { backH: _b, ...rest } = k, len = axisBestLen(m, h, k.color);
+  return { ...rest, h, ...(len ? { len } : {}) };
+}
+/** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика при той же царге (по высоте ничего не двигается);
+ *  если на эту царгу нет длины под новую глубину — раскладка заново с теми же долями фасадов (царга подбирается).
+ *  Высота, опоры, нижние царги, отступы фасадов — раскладка заново с теми же долями. Цвет и саморезы сохраняются. */
 export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
-  if (what === "depth") return ks.map((k) => { const len = [...AXIS_LENGTHS].reverse().find((l) => l <= m.depth - 25 && axisAvailable({ ...k, len: l })); return len ? { ...k, len } : k; });
-  return axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks[0]);
+  const again = () => axisLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks[0]);
+  if (what === "depth") {
+    const lens = ks.map((k) => axisBestLen(m, k.h, k.color));
+    if (lens.some((l) => !l)) return again(); // critic qdrawers B1: H-200 на глубине 400 — длины 300 нет, ящик 500 оставался
+    return ks.map((k, i) => ({ ...k, len: lens[i]! }));
+  }
+  return again();
 }
 /** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков. */
 export function relayoutKDrawers(m: Module, n: number, ratios?: number[]) { return axisLayout(m, n, ratios, m.kdrawers?.[0]); }
+/** Наименьший фасад верхнего ящика, в который входит самая низкая царга с моделью под эту глубину и цвет:
+ *  направляющая 59 над низом фасада + верх короба + запас 21,5 до верха фасада (H-86 → 143,5). */
+export function kdrawerMinTop(m: Module) {
+  const color = m.kdrawers?.[0]?.color;
+  const t = AXIS_HEIGHTS.filter((h) => !!axisBestLen(m, h, color)).map((h) => 59 + axisTop({ system: "axis-pro", y0: 0, y1: 0, runnerY: 0, h, len: 500 }) + AXIS_FIT.facadeTop);
+  return t.length ? Math.ceil(Math.min(...t) * 2) / 2 : 100;
+}
+/** Наибольший фасад ящика i (не верхнего): верхнему остаётся kdrawerMinTop, иначе доли перенормируются, введённое
+ *  не выполняется и верхний ящик не входит (critic qdrawers minor: фасад 2 = 500 давал 417 и верхний 83,5). */
+export function kdrawerFacadeMax(m: Module, i: number) {
+  const ks = m.kdrawers ?? [], top = ks[ks.length - 1], k = ks[i];
+  return !k || !top ? 100 : Math.max(100, Math.floor(Math.min(700, k.y1 - k.y0 + top.y1 - top.y0 - kdrawerMinTop(m))));
+}
+/** Фасад ящика i = v (не больше kdrawerFacadeMax), остаток — верхнему; раскладка заново с цветом и саморезами. */
+export function setKDrawerFacade(m: Module, i: number, v: number): KDrawer[] | undefined {
+  const ks = m.kdrawers; if (!ks?.length || i >= ks.length - 1) return ks;
+  const r = ks.map((k) => k.y1 - k.y0), x = Math.max(100, Math.min(v, kdrawerFacadeMax(m, i)));
+  r[r.length - 1] += r[i] - x; r[i] = x;
+  return relayoutKDrawers(m, r.length, r);
+}
+/** Почему раскладка на n ящиков недоступна (для подсказки кнопки), или undefined. */
+export function relayoutProblem(m: Module, n: number): string | undefined {
+  const ks = relayoutKDrawers(m, n);
+  if (!ks.every((k) => axisFits(m, k))) {
+    // по высоте не входит из-за глубины: у низких царг (H-86, H-168) нет длин короче 450 — назвать глубину, с которой войдёт
+    const d = [325, 425, 475, 525, 575].find((dd) => dd > m.depth && relayoutKDrawers({ ...m, depth: dd }, n).every((k) => axisFits(m, k) && axisAvailable(k)));
+    return d ? `На глубину ${m.depth} столько ящиков Axis PRO не входит (низких царг такой длины нет) — нужна глубина от ${d}` : "Столько ящиков Axis PRO по высоте корпуса не входит";
+  }
+  const miss = ks.find((k) => !axisAvailable(k));
+  if (miss) return `Нет модели Axis PRO на H-${miss.h}, ${miss.len} мм${miss.color === "anthracite" ? ", антрацит" : ""} под эту глубину — смените цвет или глубину`;
+  if (ks.some((k) => k.len > axisMaxLen(m))) return "Ящик не входит в глубину корпуса";
+  return undefined;
+}
 
 /** Есть ли модели Базиса на это сочетание (царга нужной длины и высоты, держатели, направляющая; антрацит — свои сетки). */
 export function axisAvailable(k: Pick<KDrawer, "h" | "len" | "color">) {
@@ -287,7 +341,10 @@ export function kitchenDrawerErrors(m: Module): string[] {
     if (AXIS_HEIGHTS.includes(k.h) && AXIS_LENGTHS.includes(k.len) && !axisAvailable(k)) e.push(p + `Axis PRO H-${k.h}, ${k.len} мм${k.color === "anthracite" ? ", антрацит" : ""} — нет модели в проектах Базиса цеха (есть: ${axisCombos(k.color).join(", ")}).`);
     if (m.width - 32 < 180) e.push(p + "Axis PRO — внутренняя ширина корпуса от 180 мм (держатели задней стенки по 53 от боковин).");
     if (k.runnerY - AXIS_RUNNER_DOWN < floor - 0.01) e.push(p + `направляющая на ${k.runnerY} уходит в дно корпуса (низ направляющей ${k.runnerY - AXIS_RUNNER_DOWN}, дно до ${floor}).`);
-    if (axisTop(k) > axisCeiling(m) + 0.01) e.push(p + `короб H-${k.h} упирается в царги корпуса: верх ${Math.round(axisTop(k) * 10) / 10}, царги с ${axisCeiling(m)}. Возьмите царгу ниже.`);
+    if (axisTop(k) > axisCeiling(m) + 0.01) {
+      const lower = AXIS_HEIGHTS.some((hh) => hh < k.h && !!axisBestLen(m, hh, k.color));
+      e.push(p + `короб H-${k.h} упирается в царги корпуса: верх ${Math.round(axisTop(k) * 10) / 10}, царги с ${axisCeiling(m)}. ` + (lower ? "Возьмите царгу ниже." : `Царги ниже под глубину ${m.depth} в моделях Базиса нет — уменьшите число ящиков или увеличьте глубину.`));
+    }
     const above = ks.filter((o) => o !== k && o.runnerY > k.runnerY).sort((a, b) => a.runnerY - b.runnerY)[0];
     if (above && axisTop(k) > above.runnerY - AXIS_RUNNER_DOWN + 0.01) e.push(p + `короб заходит на направляющую ящика выше.`);
   });
