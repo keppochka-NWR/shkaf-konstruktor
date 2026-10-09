@@ -4,7 +4,7 @@ import {initialModule,parts,validate,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers} from '../src/kitchenDrawers';
+import {axisLayout,axisFits,axisTop,axisCeiling,relayoutKDrawers,refitKDrawers,withAxisH,relayoutProblem,axisMaxLen} from '../src/kitchenDrawers';
 import {edgeByDir} from '../src/edges';
 
 // НМ 600 с тремя ящиками Axis PRO как в Базисе k06/m03 (2×H-86 + H-168, 500 мм)
@@ -92,4 +92,55 @@ test('critic r3: adding a bottom front rail lifts the drawers (refit) instead of
   m.kdrawers=refitKDrawers(m);
   assert.deepEqual(validate(m).filter(x=>/Ящик/.test(x)),[]);
   assert.deepEqual(partCollisions(parts(m),m).filter(c=>/Axis|ящик/i.test(c.names.join(' '))),[]);
+});
+// --- критик qdrawers (B1–B4, minor) ---
+const k04=()=>{const m=kitchenBase(initialModule(),600,'drawers' as never);return m;};
+const clean=(m:ReturnType<typeof k04>,tag:string)=>{
+  assert.deepEqual(validate(m).filter(x=>/Ящик/.test(x)),[],tag+' errors');
+  assert.deepEqual(partCollisions(parts(m),m).filter(c=>/Axis|ящик|Задняя стенка/i.test(c.names.join(' '))),[],tag+' collisions');
+};
+test('critic qdrawers B1: depth 400 with H-200 (no 300 length) re-lays the drawers instead of leaving a 500 box; order of actions does not matter',()=>{
+  const m=k04();assert.equal(m.kdrawers![0].h,200);
+  const d400={...m,depth:400};d400.kdrawers=refitKDrawers(d400,'depth');
+  assert.ok(d400.kdrawers!.every(k=>k.len<=375),'all lengths fit 400');clean(d400,'400');
+  // 4 ящика → 470 и высота 760 → 470 (H-168/H-86 без длин ≤445) — так же чисто, как 470 → 4 ящика
+  // 4 ящика на 470 не входят ни в каком порядке (у H-86 нет длин ≤445) — результат тот же, что «470 → 4», и без ящика 500 в задней стенке
+  const four={...m,kdrawers:relayoutKDrawers(m,4)};const f470:ReturnType<typeof k04>={...four,depth:470};f470.kdrawers=refitKDrawers(f470,'depth');
+  assert.deepEqual(f470.kdrawers,relayoutKDrawers({...m,depth:470},4),'4→470 = 470→4');assert.ok(!validate(f470).some(x=>/не входит в глубину/.test(x)));
+  assert.deepEqual(partCollisions(parts(f470),f470).filter(c=>/Задняя стенка ·/.test(c.names.join(' '))),[],'no box in the cabinet back');
+  if(validate(f470).some(x=>/упирается/.test(x)))assert.ok(validate(f470).some(x=>/уменьшите число ящиков или увеличьте глубину/.test(x)),'honest hint, not "take a lower rail"');
+  const why=relayoutProblem({...m,depth:470},4);if(why)assert.match(why,/глубина от 475|по высоте/);
+  const three={...m,kdrawers:relayoutKDrawers(m,3,[1,1,1])};const t470:ReturnType<typeof k04>={...three,depth:470};t470.kdrawers=refitKDrawers(t470,'depth');clean(t470,'3 equal→470');
+  const h760={...m,height:760};h760.kdrawers=refitKDrawers(h760,'height');const hd={...h760,depth:470};hd.kdrawers=refitKDrawers(hd,'depth');clean(hd,'760→470');
+  // кнопка царги подбирает длину заново: H-200 на 400 — нет длины ≤375, H-120 даёт 300
+  const k=withAxisH(d400,{...d400.kdrawers![0],len:500},120);assert.equal(k.len,300);
+  assert.equal(withAxisH(m,m.kdrawers![1],200).len,500);
+});
+test('critic qdrawers B2: no model in the drawer colour — colour and facade screws are kept (error / disabled button), never silently white',()=>{
+  const m=k04();m.kdrawers=m.kdrawers!.map(k=>({...k,color:'anthracite' as const,faceScrews:true}));
+  const d={...m,depth:470};
+  const two=relayoutKDrawers(d,2);assert.ok(two.every(k=>k.color==='anthracite'&&k.faceScrews),'kept');
+  assert.ok(relayoutProblem(d,2),'button 2 disabled with a reason');assert.match(relayoutProblem(d,2)!,/антрацит/);
+  const refit=refitKDrawers(d,'height')!;assert.ok(refit.every(k=>k.color==='anthracite'&&k.faceScrews));
+  assert.ok(validate({...d,kdrawers:refit}).some(x=>/нет модели/.test(x)),'visible error');
+  assert.equal(relayoutProblem(m,2),undefined,'557: fine');
+});
+test('critic qdrawers B3: facade edge offset and gap between facades re-lay the drawers (same offset on all sides, gap as set)',()=>{
+  const m=k04();const feet=m.feet?.height??m.plinthHeight??0;
+  const a={...m,faceGap:3};a.kdrawers=refitKDrawers(a);
+  assert.equal(a.kdrawers![0].y0,feet+3);assert.equal(a.kdrawers!.at(-1)!.y1,m.height-3);
+  const b={...m,faceGapBetween:5};b.kdrawers=refitKDrawers(b);
+  for(let i=1;i<b.kdrawers!.length;i++)assert.ok(Math.abs(b.kdrawers![i].y0-b.kdrawers![i-1].y1-5)<0.051,'gap 5');
+  clean(a,'faceGap 3');clean(b,'gap 5');
+});
+test('critic qdrawers B4: bottom front rail confirmat steps aside from the bottom confirmat (inset 54 like k04)',()=>{
+  for(const inset of [54,64]){
+    const m=k04();m.confirmatInset=inset;m.rails=[...(m.rails??[]),{place:'front-bottom',height:100,lay:'flat'}];m.kdrawers=refitKDrawers(m);
+    const c=partCollisions(parts(m),m).filter(x=>x.names.every(n=>/Конфирмат/.test(n)));
+    assert.deepEqual(c,[],'inset '+inset);
+  }
+});
+test('critic qdrawers minor: one depth-spare rule for layout and refit',()=>{
+  const m={...k04(),depth:475};assert.equal(axisMaxLen(m),450);
+  assert.ok(axisLayout(m,3).every(k=>k.len<=axisMaxLen(m)));assert.ok(refitKDrawers({...k04(),depth:475},'depth')!.every(k=>k.len<=450));
 });
