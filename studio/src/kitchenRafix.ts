@@ -62,6 +62,13 @@ const grid = (x: unknown): RafixGrid | undefined => {
   const rear = Number(g.rear), front = Number(g.front), n = Math.round(Number(g.n));
   return Number.isFinite(rear) && Number.isFinite(front) && n >= 1 && n <= 6 ? { rear, front, n } : undefined;
 };
+/** Разбор сетки по ключам (крепёж стыков кухни kitchen.joints): неверные записи отбрасываются. */
+export function parseGridRecord(x: unknown): Record<string, RafixGrid> | undefined {
+  if (!x || typeof x !== "object") return undefined;
+  const e = Object.entries(x as Record<string, unknown>).flatMap(([k, v]) => { const q = grid(v); return q && /^(bottom|top|shelf:\d+)$/.test(k) ? [[k, q] as const] : []; });
+  return e.length ? Object.fromEntries(e) : undefined;
+}
+
 /** Разбор сохранённого проекта. */
 export function parseKitchenRafix(x: unknown): KitchenRafix | undefined {
   const g = grid(x);

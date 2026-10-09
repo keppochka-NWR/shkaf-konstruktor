@@ -2,8 +2,8 @@ import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
-import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, kitchenJointPoints, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
-import { rafixGrid, rafixSide, rafixCount, parseKitchenRafix, rafixErrors } from "./kitchenRafix";
+import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
@@ -960,6 +960,11 @@ export function parts(m: Module): Part[] {
   const horizontals = out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   // Точки крепежа стыка по глубине: задняя (k 0), передняя (k 1); у кухни дно/крыша — третья посередине (k 2) по kitchenJointPoints.
   const jointZs = (mm: Module, hid: string, a: number, b: number) => {
+    const g = kitchenJointGrid(mm, hid);
+    if (g) { // своя сетка стыка из Базиса: задняя, передняя, средние — равным шагом (порядок k как у правила)
+      const all = rafixZs(g, a, b);
+      return all.length <= 1 ? all : [all[0], all[all.length - 1], ...all.slice(1, -1)];
+    }
     const ins = mm.confirmatInset ?? RULES.confirmatInset, zs = [a + ins, b - ins];
     if ((hid === "bottom" || hid === "top") && kitchenJointPoints(mm) === 3) zs.push((a + b) / 2);
     return zs;
@@ -1642,7 +1647,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{}),...(()=>{const r=k.rafix===undefined?undefined:parseKitchenRafix(k.rafix);return r?{rafix:r}:{};})(),...(k.jointPoints===2||k.jointPoints===3?{jointPoints:k.jointPoints}:{}),...(Array.isArray(k.bareShelves)&&k.bareShelves.length?{bareShelves:k.bareShelves.map(Number).filter(Number.isInteger)}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{}),...(()=>{const r=k.rafix===undefined?undefined:parseKitchenRafix(k.rafix);return r?{rafix:r}:{};})(),...(k.jointPoints===2||k.jointPoints===3?{jointPoints:k.jointPoints}:{}),...(Array.isArray(k.bareShelves)&&k.bareShelves.length?{bareShelves:k.bareShelves.map(Number).filter(Number.isInteger)}:{}),...(()=>{const j=parseGridRecord(k.joints);return j?{joints:j}:{};})()};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

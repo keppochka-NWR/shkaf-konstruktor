@@ -87,6 +87,20 @@ test('пенал k16 m01: рафиксы 36 и крепёж стыков 3 то�
   assert.ok(c.pass,JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2),holes:c.holes?.missing.slice(0,3)}));
 });
 
+test('своя сетка крепежа стыка (kitchen.joints): крыша 104,5/64,5 при общей 64,5 — как в Базисе k23 m14; присадка совпала',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+  const m=tall({role:'tall',joints:{top:{rear:104.5,front:64.5,n:2}}});m.confirmatInset=64.5;
+  const ps=parts(m),z=(re:RegExp)=>ps.filter(p=>re.test(p.id)).map(p=>p.model!.origin![2]).sort((a,b)=>a-b);
+  const top=ps.find(p=>p.id==='top')!,t0=top.position[2]-top.size[2]/2,t1=top.position[2]+top.size[2]/2;
+  assert.deepEqual(z(/^fast:top:left:/),[t0+104.5,t1-64.5]);
+  const b=ps.find(p=>p.id==='bottom')!,b0=b.position[2]-b.size[2]/2;
+  assert.equal(z(/^fast:bottom:left:/)[0],b0+64.5,'дно — по общей сетке');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.joints,{top:{rear:104.5,front:64.5,n:2}});
+  const ref=load('k23','m14'),{module:k}=moduleFromEtalon(ref);
+  assert.deepEqual(k.kitchen?.joints?.top,{rear:104.5,front:64.5,n:2});
+  const c=compareModule(ref,k);
+  assert.deepEqual([c.holes?.matched,c.holes?.ref,c.holes?.extra.length],[40,40,0],'присадка Базиса 40 из 40');
+});
+
 test('распознавание: рафиксы k10 m01 — у полок разной глубины своя сетка, точки стыка k16 — 3',{skip:!existsSync(`${ETALON}/k10.json`)},()=>{
   const ref=load('k16','m01'),P=ref.panels;
   const b=(i:number)=>{const q=P[i].box;return {x0:q[0],y0:q[1],z0:q[2],x1:q[3],y1:q[4],z1:q[5]};};

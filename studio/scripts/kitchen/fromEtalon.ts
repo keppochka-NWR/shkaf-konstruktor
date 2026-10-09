@@ -61,6 +61,21 @@ export function doorRowsFromFronts(rows: B[][], single = 3): { gap: number; spli
   return { gap, split: r1(rs[0][0].y1 - rs[0][0].y0 + gap / 2), ...(niche !== undefined ? { niche } : {}), rows: rs.slice(1, -1).map((r) => r1(r[0].y1 - r[0].y0)) };
 }
 
+/** Сетка крепежа (конфирмат/эксцентрик) на стыке горизонтали со стойкой по Базису: точки у левой стойки (нет — у правой),
+ *  отступы от заднего/переднего торца горизонтали, штук; стыки, где точек меньше двух или шаг неравный, не возвращаются. */
+export function jointGridsFromEtalon(ref: RefModule, hosts: [string, B][], left: B, right: B): Record<string, RafixGrid> {
+  const fs = ref.hardware.filter((h) => h.category === "конфирмат" || h.category === "эксцентрик"), out: Record<string, RafixGrid> = {};
+  for (const [key, q] of hosts) {
+    const at = (s: B) => fs.filter((h) => (Math.abs(h.pos[1] - q.y0) < 1 || (h.pos[1] > q.y0 && h.pos[1] < q.y1)) && h.pos[0] >= s.x0 - 1 && h.pos[0] <= s.x1 + 1 && h.pos[2] >= q.z0 - 1 && h.pos[2] <= q.z1 + 1);
+    const pts = at(left).length ? at(left) : at(right);
+    const zs = [...new Set(pts.map((h) => r1(h.pos[2])))].sort((a, c) => a - c);
+    if (zs.length < 2) continue;
+    const g: RafixGrid = { rear: r1(zs[0] - q.z0), front: r1(q.z1 - zs[zs.length - 1]), n: zs.length };
+    if (rafixZs(g, q.z0, q.z1).every((z, k) => Math.abs(z - zs[k]) < 0.6)) out[key] = g;
+  }
+  return out;
+}
+
 /** Жёсткие полки без крепежа к стойкам в Базисе (ни конфирмата, ни эксцентрика, ни шканта, ни рафикса у торцов полки на её высоте). */
 export function bareShelvesFromEtalon(ref: RefModule, shelves: B[], fixed: number[]): number[] {
   const fs = ref.hardware.filter((h) => ["конфирмат", "эксцентрик", "шкант", "рафикс"].includes(h.category));
@@ -421,6 +436,16 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // точек крепежа на стык дна/крыши (2 или 3) — своё число, если не совпадает с правилом kitchenJointPoints
   const jp = jointPointsFromEtalon(ref, [bottom?.b, topPanel?.b], left.b);
   if (jp && jp !== (d > 600 ? 3 : 2)) m.kitchen.jointPoints = jp;
+  // своя сетка крепежа у стыков, где Базис поставил его иначе, чем у модуля (k23: крыша 104,5/64,5 при 64,5/64,5 у дна)
+  if (m.confirmatInset !== undefined) {
+    const nDef = jp ?? (d > 600 ? 3 : 2), ins = m.confirmatInset, hosts: [string, B][] = [];
+    if (bottom) hosts.push(["bottom", bottom.b]);
+    if (topPanel) hosts.push(["top", topPanel.b]);
+    for (const j of m.sections[0].fixed ?? []) if (sh[j] && !m.kitchen.bareShelves?.includes(j) && !(m.kitchen.rafix && !rfx.confirmat.includes(j))) hosts.push([`shelf:${j}`, sh[j].b]);
+    const grids = jointGridsFromEtalon(ref, hosts, left.b, right.b);
+    const own = Object.entries(grids).filter(([k, g]) => Math.abs(g.rear - ins) > 0.6 || Math.abs(g.front - ins) > 0.6 || g.n !== (k.startsWith("shelf:") ? 2 : nDef));
+    if (own.length) m.kitchen.joints = Object.fromEntries(own);
+  }
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
   if (et) m.edgeScheme = { t: et };
