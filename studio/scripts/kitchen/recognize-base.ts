@@ -19,7 +19,8 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
     notes.push("фасады без петель — как в Базисе");
   }
   if ((k.role === "base" || k.role === "tall") && !has("опора")) { k.noLegs = true; notes.push("без опор — как в Базисе"); }
-  if (!FASTENERS.some(has)) { k.fasteners = false; notes.push("без крепежа — как в Базисе"); }
+  // крепёж и под другим разделом: «Евровинт 6х50» Базис кладёт в «прочее» (k33, k34) — это тоже конфирмат, крепёж есть
+  if (!FASTENERS.some(has) && !ref.hardware.some((h) => /евровинт|конфирмат|эксцентрик|шкант|полкодерж/i.test(h.name))) { k.fasteners = false; notes.push("без крепежа — как в Базисе"); }
   const all = edgesAllAround(ref);
   if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }

@@ -45,6 +45,8 @@ test('без опор и без крепежа, кромка по кругу (k3
   for(const id of ['confirmat-7x50','confirmat-cap','shelf-holder','kit','kitchen-leg'])assert.ok(!ids.includes(id),'в смете нет '+id);
   const c=compareModule(ref,m);
   assert.ok(c.pass,why(c));
+  // «Евровинт 6х50» в разделе «прочее» (k33 m01) — это крепёж: флаг «без крепежа» не ставится
+  if(has('k33'))assert.equal(moduleFromEtalon(load('k33','m01')).module.kitchen?.fasteners,undefined);
 });
 
 test('без кромки (k23 m12): у Базиса на корпусе ни одной кромки — у студии тоже; фасад без петель — сверка PASS',{skip:!has('k23')},()=>{
