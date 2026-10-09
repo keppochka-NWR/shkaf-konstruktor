@@ -6,7 +6,9 @@ import type { Module, Part } from "./model";
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона). */
-export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][] };
+/** thick — толщина детали по Базису, если габарит её не показывает (деталь под углом: угловая дверь 261×917×261 при 18 мм);
+ *  room — геометрия помещения из проекта Базиса («Бетон»: стены, колонны k08, k19) — не мебель: вне раскроя и сметы. */
+export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; thick?: number; room?: true };
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
@@ -52,16 +54,35 @@ export const RAW_FALLBACK_MESH: Record<string, string> = {
   клипса: "0d12888fb9df",
 };
 
+/** Размеры детали сырого модуля для раскроя и сметы: длина, ширина, толщина по Базису. Деталь под углом в плане (повёрнута вокруг
+ *  вертикали: угловые двери и фасады k03, k07, k09) — ширина из габарита и толщины: a = w·cos + t·sin, b = w·sin + t·cos.
+ *  worktop — столешница (по имени или толщине ≥ 26 по Базису, не по габариту: габарит угловой двери 261 — не столешница 261 мм). */
+export function rawPanelDims(p: RawPanel): { length: number; width: number; thick: number; worktop: boolean; angled: boolean } {
+  const size = [p.box[3] - p.box[0], p.box[4] - p.box[1], p.box[5] - p.box[2]], dims = [...size].sort((a, b) => b - a);
+  const t = p.thick ?? dims[2], a = size[0], b = size[2];
+  const angled = p.thick !== undefined && a > t + 0.5 && b > t + 0.5;
+  let length = dims[0], width = dims[1];
+  if (angled) {
+    // ((a+b)/(w+t))² + ((a−b)/(w−t))² = 2 — бисекция по w в (t, a+b): левая часть убывает с ростом w
+    const f = (w: number) => ((a + b) / (w + t)) ** 2 + ((a - b) / (w - t)) ** 2 - 2;
+    let lo = t + 1e-6, hi = a + b;
+    for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
+    const w = Math.round(((lo + hi) / 2) * 10) / 10, H = size[1];
+    length = Math.max(w, H); width = Math.min(w, H);
+  }
+  return { length, width, thick: t, worktop: /столешн/i.test(p.name) || (!p.room && t >= 26), angled };
+}
+
 export function rawParts(m: Module): Part[] {
   const r = m.raw!, out: Part[] = [];
   r.panels.forEach((p, i) => {
     const [x0, y0, z0, x1, y1, z1] = p.box, size: [number, number, number] = [x1 - x0, y1 - y0, z1 - z0];
     const dims = [...size].sort((a, b) => b - a), thin = size.indexOf(Math.min(...size));
     const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
-    // Столешница (толщина ≥ 26) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
-    // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов.
-    const worktop = /столешн/i.test(p.name) || dims[2] >= 26, long = dims[0] > 2726;
-    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
+    // Столешница (толщина ≥ 26 по Базису) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
+    // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов. Помещение («Бетон») — не мебель, вне раскроя.
+    const pd = rawPanelDims(p), worktop = pd.worktop, long = pd.length > 2726;
+    out.push({ id: `raw:p${i}`, name: p.name + (p.room ? " · помещение (не мебель)" : long && !worktop && !p.fm ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm || p.room ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: pd.length, width: pd.width, thickness: rawThickness(pd.thick),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(dims[0]) === thin ? 1 : size.indexOf(dims[0])) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
@@ -88,6 +109,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
   if (!r || typeof r !== "object" || !Array.isArray(r.panels)) return undefined;
   return {
     panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}),
+      ...(Number.isFinite(Number(p.thick)) && Number(p.thick) > 0 ? { thick: Number(p.thick) } : {}), ...(p.room ? { room: true as const } : {}),
       ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"] })),
     ...(r.source ? { source: String(r.source) } : {}),

@@ -1,7 +1,7 @@
 // Детали «Ряда» и сырых модулей из эталона Базиса: фигурная панель (столешница с контуром в плоскости xz) → прямоугольники
 // по контуру вместо сплошного габарита (k25: Г/П-образная столешница 4470×1250 выступала на 650 мм перед нижними модулями
 // и заходила в пенал), фасадный материал и кромка Базиса.
-export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string };
+export type EtPanel = { name: string; kind?: string; mat?: string; thick?: number; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string };
 type Box = [number, number, number, number, number, number];
 
 /** Прямолинейный контур в плоскости xz → прямоугольники (полосы по x, соседние с одинаковыми интервалами по z склеены).
@@ -39,8 +39,25 @@ export function rowFront(p: EtPanel): boolean {
   return sz < Math.min(sx, sy) && sz <= 25 && sy >= 300;
 }
 
-/** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][] } {
+/** Столешница Базиса — по материалу проекта («Столешница», «Столешница 600», «Столешница ПФ 600») или по имени детали.
+ *  Не по группе эталона: в «worktops» ряда попадают и полки ЛДСП 16 (k07: 7 «Горизонтальных» на высоте 1190–2340), и «Хром» 6 мм (k09). */
+export function isWorktop(p: EtPanel): boolean { return /столешн/i.test(p.mat ?? "") || /столешн/i.test(p.name); }
+
+/** Имя детали ряда: столешница Базиса с безликим именем («Горизонтальная») — «Столешница»; остальное — имя Базиса как есть. */
+export function rowPanelName(p: EtPanel): string { return isWorktop(p) && !/столешн/i.test(p.name) ? "Столешница" : p.name; }
+
+/** Название объекта «Ряд» — только то, что в нём есть по Базису (кухня без столешницы в проекте — без «столешницы» в названии). */
+export function rowTitle(ps: (EtPanel & { group: string })[]): string {
+  const has = (g: string) => ps.some((p) => p.group === g);
+  const parts = [ps.some(isWorktop) ? "столешница" : "", has("plinths") ? "цоколь" : "", ps.some((p) => !isWorktop(p) && p.group !== "plinths") ? "панели" : ""].filter(Boolean);
+  return "Ряд: " + (parts.join(", ") || "детали вне модулей");
+}
+
+/** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля; толщина Базиса, если габарит
+ *  её не показывает (деталь под углом), и «помещение» — материал «Бетон» (стены и колонны в проекте: k08, k19 — не мебель). */
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; thick?: number; room?: true } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
-  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}) };
+  const b = p.box, bmin = Array.isArray(b) && b.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : NaN, t = Number(p.thick);
+  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}),
+    ...(Number.isFinite(t) && t > 0 && bmin > t + 0.5 ? { thick: Math.round(t * 10) / 10 } : {}), ...(/бетон/i.test(p.mat ?? "") ? { room: true as const } : {}) };
 }
