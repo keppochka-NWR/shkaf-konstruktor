@@ -354,3 +354,10 @@ test('кромка детали по проекту своей толщины (k
   assert.ok(compareModule(ref,m).pass);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).edgeScheme?.partsT,m.edgeScheme!.partsT);
 });
+test('паз Gola в переднем торце узкого дна (k06 m10, дно 118×275: торец на конце длины) — endL, как в Базисе; сохраняется в проекте',{skip:!existsSync(`${ETALON}/k06.json`)},()=>{
+  const ref=load('k06','m10'),{module:m}=moduleFromEtalon(ref);
+  const g=m.grooves?.find(x=>x.end);
+  assert.ok(g);assert.equal(g!.endL,true);assert.equal(g!.end,'+');
+  const c=compareModule(ref,m);assert.ok(c.pass,JSON.stringify(c.edges?.bad));
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).grooves?.find(x=>x.end)?.endL,true);
+});

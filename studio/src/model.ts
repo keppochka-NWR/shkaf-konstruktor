@@ -328,7 +328,9 @@ export type Module = {
  *  face — сторона толщины детали (+/−), along — отступы от концов по длине детали, across — от минимальной грани по ширине (от/до), depth — глубина. */
 export type Groove = { host: string; face: "+" | "-"; along: [number, number]; across: [number, number]; depth: number; name: string;
   /** Паз в торце детали (Базис «Паз торцевой», k10, k15, k06 — под LED-профиль в переднем торце дна): торец +W или −W; across — по толщине от нижней пласти, depth — вглубь от торца. */
-  end?: "+" | "-" };
+  end?: "+" | "-";
+  /** Торец паза на концах длины детали, а не ширины (узкое дно 118×275 навесного k06 m10: передний торец — по длине); along — тогда по ширине. */
+  endL?: true };
 export const RAIL_PLACES: Record<NonNullable<Module["rails"]>[number]["place"], string> = { "rear-bottom": "сзади снизу", "rear-top": "сзади сверху", "front-bottom": "спереди снизу", "front-top": "спереди сверху" };
 export type WallFiller = { kind: "edge"; width: number };
 /** Позиция фурнитуры Базиса для сметы: название как в Базисе, категория, количество (шт) и суммарная длина профилей (мм), если есть. */
@@ -1374,11 +1376,12 @@ function hardwareParts(m: Module, out: Part[]) {
 export function grooveBox(p: Part, g: Groove): [number, number, number, number, number, number] | null {
   const ax = partAxesOf(p), lo = p.position.map((v, i) => v - p.size[i] / 2), hi = p.position.map((v, i) => v + p.size[i] / 2);
   const b0 = [...lo], b1 = [...hi];
-  if (g.end) { // паз в торце: по толщине детали across, вглубь от торца depth
-    b0[ax.L] = lo[ax.L] + g.along[0]; b1[ax.L] = hi[ax.L] - g.along[1];
+  if (g.end) { // паз в торце: по толщине детали across, вглубь от торца depth; endL — торец на конце длины (узкая деталь)
+    const A = g.endL ? ax.W : ax.L, E = g.endL ? ax.L : ax.W;
+    b0[A] = lo[A] + g.along[0]; b1[A] = hi[A] - g.along[1];
     b0[ax.t] = lo[ax.t] + g.across[0]; b1[ax.t] = lo[ax.t] + g.across[1];
-    b0[ax.W] = g.end === "+" ? hi[ax.W] - g.depth : lo[ax.W]; b1[ax.W] = g.end === "+" ? hi[ax.W] : lo[ax.W] + g.depth;
-    if (b1[ax.L] <= b0[ax.L] || b1[ax.t] <= b0[ax.t] || b1[ax.t] > hi[ax.t] + 0.01 || g.depth <= 0 || g.depth >= hi[ax.W] - lo[ax.W]) return null;
+    b0[E] = g.end === "+" ? hi[E] - g.depth : lo[E]; b1[E] = g.end === "+" ? hi[E] : lo[E] + g.depth;
+    if (b1[A] <= b0[A] || b1[ax.t] <= b0[ax.t] || b1[ax.t] > hi[ax.t] + 0.01 || g.depth <= 0 || g.depth >= hi[E] - lo[E]) return null;
     return [b0[0], b0[1], b0[2], b1[0], b1[1], b1[2]];
   }
   b0[ax.t] = g.face === "+" ? hi[ax.t] - g.depth : lo[ax.t]; b1[ax.t] = g.face === "+" ? hi[ax.t] : lo[ax.t] + g.depth;
@@ -1866,7 +1869,7 @@ export function parseModule(input: unknown): Module {
     ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {endsX?:unknown}).endsX?{endsX:(x.edgeScheme as {endsX?:unknown}).endsX==='bottom'?'bottom' as const:(x.edgeScheme as {endsX?:unknown}).endsX==='top'?'top' as const:true as const}:{}),...((x.edgeScheme as {underEnds?:boolean}).underEnds===false?{underEnds:false as const}:{}),...((x.edgeScheme as {rear?:boolean}).rear?{rear:true as const}:{}),...((x.edgeScheme as {fixedEnds?:boolean}).fixedEnds===false?{fixedEnds:false as const}:{}),...((x.edgeScheme as {all?:boolean}).all===true?{all:true as const}:{}),...((x.edgeScheme as {sideTop?:boolean}).sideTop===false?{sideTop:false as const}:{}),...((x.edgeScheme as {front?:number}).front!==undefined?{front:Number((x.edgeScheme as {front?:number}).front)}:{}),...(Array.isArray((x.edgeScheme as {shelf?:unknown}).shelf)?{shelf:((x.edgeScheme as {shelf:unknown[]}).shelf).map(String)}:{}),...(()=>{const e=x.edgeScheme as {shelfT?:number;shelfSides?:string[]};return {...(e.shelfT===undefined?{}:{shelfT:Number(e.shelfT)}),...(Array.isArray(e.shelfSides)?{shelfSides:e.shelfSides.filter(s=>['+x','-x','+z','-z'].includes(s)) as ('+x'|'-x'|'+z'|'-z')[]}:{}),...(Array.isArray((e as {fixedSides?:string[]}).fixedSides)?{fixedSides:(e as {fixedSides:string[]}).fixedSides.filter(s=>['+x','-x','+z','-z'].includes(s)) as ('+x'|'-x'|'+z'|'-z')[]}:{}),...((x.edgeScheme as {ends?:Record<string,string[]>}).ends?{ends:Object.fromEntries(Object.entries((x.edgeScheme as {ends:Record<string,string[]>}).ends).filter(([k,v])=>(k==='bottom'||k==='top')&&Array.isArray(v)).map(([k,v])=>[k,v.filter(s=>['+x','-x','+z','-z'].includes(s))]))}:{}),...((x.edgeScheme as {parts?:Record<string,string[]>}).parts&&typeof (x.edgeScheme as {parts?:unknown}).parts==='object'?{parts:Object.fromEntries(Object.entries((x.edgeScheme as {parts:Record<string,string[]>}).parts).filter(([,v])=>Array.isArray(v)).map(([k,v])=>[k,v.filter(s=>['+x','-x','+y','-y','+z','-z'].includes(s)) as ('+x'|'-x'|'+y'|'-y'|'+z'|'-z')[]]))}:{}),...((x.edgeScheme as {partsT?:unknown}).partsT&&typeof (x.edgeScheme as {partsT?:unknown}).partsT==='object'?{partsT:Object.fromEntries(Object.entries((x.edgeScheme as {partsT:Record<string,unknown>}).partsT).filter(([,v])=>Number.isFinite(Number(v))&&Number(v)>0).map(([k,v])=>[k,Number(v)]))}:{})};})()}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
-    ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз'),...(g.end==='+'||g.end==='-'?{end:g.end}:{})})):[]}),
+    ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз'),...(g.end==='+'||g.end==='-'?{end:g.end,...(g.endL===true?{endL:true as const}:{})}:{})})):[]}),
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
