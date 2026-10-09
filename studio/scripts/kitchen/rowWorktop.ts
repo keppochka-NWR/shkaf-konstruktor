@@ -63,7 +63,7 @@ export function worktopGroupRole(p: EtPanel): "worktop" | "panel" | "mock" {
 
 const BOARD_KINDS = ["ldsp", "mdf", "hdf", "glass", "mirror"];
 
-export type RowPanel = EtPanel & { front: boolean; wall?: true };
+export type RowPanel = EtPanel & { front: boolean; wall?: true; group: string };
 /** Детали «Ряда» кухни (столешница, цоколь, стеновые панели, профили, прочее вне модулей) в мировых координатах Базиса.
  *  - фигурная столешница — прямоугольники по контуру Базиса (не сплошной габарит);
  *  - фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»);
@@ -82,8 +82,22 @@ export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[
     const name = g === "plinths" ? plinthName(p.name) : wt === "worktop" && !/столешн/i.test(p.name) ? "Столешница"
       : wall && !/[сc]тенов/i.test(p.name) ? `Стеновая панель · ${p.name}` : p.name;
     const rs = rowRects(p);
-    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
+    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", group: g, front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
   }));
+}
+
+/** Столешница Базиса — по материалу проекта («Столешница», «Столешница 600», «Столешница ПФ 600») или по имени детали.
+ *  Не по группе эталона: в «worktops» ряда попадают и полки ЛДСП 16 (k07: 7 «Горизонтальных» на высоте 1190–2340), и «Хром» 6 мм (k09). */
+export function isWorktop(p: EtPanel): boolean { return /столешн/i.test(p.mat ?? "") || /столешн/i.test(p.name); }
+
+/** Имя детали ряда: столешница Базиса с безликим именем («Горизонтальная») — «Столешница»; остальное — имя Базиса как есть. */
+export function rowPanelName(p: EtPanel): string { return isWorktop(p) && !/столешн/i.test(p.name) ? "Столешница" : p.name; }
+
+/** Название объекта «Ряд» — только то, что в нём есть по Базису (кухня без столешницы в проекте — без «столешницы» в названии). */
+export function rowTitle(ps: (EtPanel & { group: string })[]): string {
+  const has = (g: string) => ps.some((p) => p.group === g);
+  const parts = [ps.some(isWorktop) ? "столешница" : "", has("plinths") ? "цоколь" : "", ps.some((p) => !isWorktop(p) && p.group !== "plinths") ? "панели" : ""].filter(Boolean);
+  return "Ряд: " + (parts.join(", ") || "детали вне модулей");
 }
 
 /** Панель не по осям: габарит по толщине больше толщины Базиса больше чем на ROT_TOL — берём собственные толщину и длину×ширину
@@ -91,16 +105,19 @@ export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[
  *  лист «16.7» (лишний лист в смете). Дробные хвосты бокса (16.0999999, Δ 0,1) порог не задевают — их округляет rawThickness. */
 export const ROT_TOL = 0.3;
 
-/** Фасадный материал Базиса («Фасадный мат-л N»), кромка [толщина, длина] и материал плиты МДФ (mat) — для сметы сырого модуля;
- *  у панели не по осям — собственные толщина и длина×ширина Базиса (t, lw), а без lw — только толщина материала (thick). */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string; thick?: number; t?: number; lw?: [number, number] } {
+/** Фасадный материал Базиса («Фасадный мат-л N»), кромка [толщина, длина] и материал плиты МДФ / не плитный (mat) — для сметы сырого модуля;
+ *  у панели не по осям — собственные толщина и длина×ширина Базиса (t, lw), а без lw — только толщина материала (thick); «Бетон» — room. */
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string; thick?: number; t?: number; lw?: [number, number]; room?: true } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
   // панель не по осям (угловая дверь под 45°, чуть повёрнутый цоколь): габарит не равен толщине — собственные толщина и длина×ширина Базиса
   const b = p.box, minBox = Array.isArray(b) && b.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : NaN, th = Number(p.thick);
   const rot = th > 0 && Array.isArray(p.lw) && p.lw.length === 2 && Math.abs(minBox - th) > ROT_TOL;
   // без lw: толщина материала Базиса, если габарит детали толще (деталь чуть повёрнута: цоколь k09 — габарит 16,64 при ЛДСП 16)
-  const thick = !rot && th > 0 && minBox > 0 && Math.abs(minBox - Math.round(minBox)) > 0.2 && Math.abs(minBox - th) > 0.2;
+  // (или деталь под углом в плане без lw: угловая дверь 261×917×261 при 18 мм — n3-base, ширину считает rawDims)
+  const thick = !rot && th > 0 && minBox > 0 && ((Math.abs(minBox - Math.round(minBox)) > 0.2 && Math.abs(minBox - th) > 0.2) || minBox > th + 0.5);
   return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}), ...((p.kind === "mdf" || p.kind === "other") && p.mat && !/фасадн/i.test(p.mat) ? { mat: p.mat } : {}),
     ...(rot ? { t: Math.round(th * 10) / 10, lw: [Math.round(p.lw![0] * 10) / 10, Math.round(p.lw![1] * 10) / 10] as [number, number] } : {}),
-    ...(thick ? { thick: th } : {}) };
+    ...(thick ? { thick: Math.round(th * 10) / 10 } : {}),
+    // «помещение» — материал «Бетон» (стены и колонны в проекте: k08, k19 — не мебель; n3-base)
+    ...(/бетон/i.test(p.mat ?? "") ? { room: true as const } : {}) };
 }

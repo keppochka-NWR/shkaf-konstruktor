@@ -181,6 +181,8 @@ function CabinetPanel(props: KitchenPanelProps) {
         <Num label="Недоход ХДФ до дна паза" value={m.grooveClear ?? 0.5} min={0} max={3} step={0.5} change={(v) => modify((n) => { n.grooveClear = v; })} note="Базис П16-4×8: ХДФ (W−18)×(H−18)" />
       </>}
       {m.backType === "none" && <p className="field-note">Без задника — как под мойку и духовку в Базисе: доступ к коммуникациям и вентиляция.</p>}
+      {/* флаг модуля из Базиса: действует и на полки, добавленные потом в студии, — поэтому виден и снимается здесь */}
+      {k.fasteners === false && <p className="field-note">Как в проекте Базиса: крепежа нет — ни конфирматов, ни эксцентриков, ни полкодержателей в 3D, присадке и смете. Добавили полку или стык — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.fasteners; })}>Поставить крепёж</button></p>}
     </Group>
 
     {legged && <Group icon={<Footprints size={15} />} title="Опоры и цоколь" open={stage === "bodies"} note={`${legCount} оп. · ${clipCount} клипс`}>
@@ -212,7 +214,9 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!m.noHandles ? <button className="text-action" onClick={handles}>Ручка: {handleById(m.handleId).label}</button> : <p className="field-note">Без ручек: Gola, ручки заказчика или push — в смете ручек нет.</p>}
     </Group>}
 
-    {m.doors && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={hingeCount + " шт."}>
+    {m.doors && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
+      {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
+      {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
       <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
         {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{HINGE_BRANDS[b].label} · {HINGE_BRANDS[b].note} · {HINGE_BRANDS[b].soft.price} ₽/шт</option>)}</select></label>
       {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { n.sections[sIdx].hingeSide = e.target.value as "left" | "right"; })}><option value="left">Слева</option><option value="right">Справа</option></select></label>}

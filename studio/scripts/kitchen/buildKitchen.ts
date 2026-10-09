@@ -14,7 +14,7 @@ import { newProject, projectErrors, type PlacedModule, type Project } from "../.
 import { compareModule, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, bazisItems, bazisNames, type RawSpec } from "../../src/rawModule";
-import { panelExtras, plinthName, rowPanelsOf, type EtPanel } from "./rowWorktop";
+import { panelExtras, plinthName, rowPanelsOf, rowTitle, type EtPanel } from "./rowWorktop";
 import { catalog } from "../../src/catalog";
 
 export const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль"]);
@@ -108,7 +108,7 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
     const ps = rowPanels.length ? rowPanels : [];
     const o = ps.length ? [0, 1, 2].map((i) => Math.min(...ps.map((p) => p.box[i]))) : [0, 0, 0], M = ps.length ? [3, 4, 5].map((i) => Math.max(...ps.map((p) => p.box[i]))) : [10, 10, 10];
     const look = { decor: most(ps.filter((p) => p.kind === "ldsp").map((p) => bazisDecor((p as unknown as EtPanelRef).decor))) ?? LOOK.decor, facadeDecor: LOOK.facadeDecor };
-    const m: Module = { ...initialModule(), name: "Ряд: столешница, цоколь, панели", width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
+    const m: Module = { ...initialModule(), name: rowTitle(ps), width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
       raw: { panels: ps.map((p) => { const dec = bazisDecor((p as unknown as EtPanelRef).decor); return { name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p), ...(p.front ? { facade: true } : {}), ...(p.wall ? { wall: true } : {}) }; }),
         hardware: [], counts: rawCounts(rowHw), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}), row: true, source: "bazis-kitchen" } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });

@@ -33,7 +33,9 @@ for (const f of files) {
 writeFileSync(`${OUTDIR}/kitchens.json`, JSON.stringify(index.sort((a, b) => a.id.localeCompare(b.id)), null, 1));
 // сетки фурнитуры для сырых модулей
 let copied = 0, bytes = 0;
-for (const mid of meshes) {
+// проверочный импорт в свою папку (outDir) сетки в общую public не копирует (n3-base)
+const ownOut = opt("out") !== undefined || pos[1] !== undefined;
+for (const mid of ownOut ? [] : meshes) {
   const src = `${LIB}/${mid}.glb`, dst = `${PUB}/${mid}.glb`;
   if (existsSync(src) && !existsSync(dst)) { copyFileSync(src, dst); copied++; bytes += statSync(src).size; }
 }

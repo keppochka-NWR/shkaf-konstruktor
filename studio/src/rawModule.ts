@@ -13,11 +13,12 @@ import type { BazisItem, Module, Part } from "./model";
  *  contour — фигурный контур Базиса в плоскости детали (plane: xz — горизонтальная, xy/yz — вертикальные), в координатах модуля.
  *  obb — деталь повёрнута не на 90°: размеры по своим осям и углы (R = Ry·Rz, как в сцене), box — её габарит в модуле.
  *  skew — повёрнута так, что поворот не выражается (нарисована габаритом); figure — фигурная, но контур не перенесён (габарит)
- *  или перенесён без внутренних вырезов (есть contour). */
+ *  или перенесён без внутренних вырезов (есть contour).
+ *  room — геометрия помещения из проекта Базиса («Бетон»: стены, колонны k08, k19) — не мебель: вне раскроя и сметы (n3-base). */
 export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; wall?: boolean; edges?: [number, number][]; mat?: string;
   /** толщина материала Базиса, когда габарит детали толще (деталь чуть повёрнута) — раскрой по ней, без отдельного листа «16,7» */
   thick?: number; t?: number; lw?: [number, number];
-  contour?: [number, number][]; plane?: "xz" | "xy" | "yz"; obb?: { size: [number, number, number]; ry: number; rz: number }; skew?: boolean; figure?: boolean };
+  contour?: [number, number][]; plane?: "xz" | "xy" | "yz"; obb?: { size: [number, number, number]; ry: number; rz: number }; skew?: boolean; figure?: boolean; room?: true };
 
 /** Размеры детали Базиса по её собственным осям: у повёрнутой — obb.size (габарит в модуле у наклонной полки — не толщина), иначе бокс. */
 export function rawSize(p: Pick<RawPanel, "box" | "obb">): [number, number, number] {
@@ -27,7 +28,7 @@ export function rawSize(p: Pick<RawPanel, "box" | "obb">): [number, number, numb
  *  Толщина не признак: ЛДСП 25/32 мм, наклонная полка, объёмное тело — не столешница (правило Макса: не добавлять того, чего нет в Базисе). */
 export const rawIsWorktop = (p: Pick<RawPanel, "name" | "mat">) => /столешн/i.test(p.name) || /столешн/i.test(p.mat ?? "");
 /** Элемент помещения в модели Базиса (материал «Стена», «Пол», «Потолок», «Бетон»): не мебель — без раскроя и сметы, только вид. */
-export const rawIsRoom = (p: Pick<RawPanel, "mat">) => /^\s*(стена|пол|потолок|бетон)(?![а-яё])/i.test(p.mat ?? "");
+export const rawIsRoom = (p: Pick<RawPanel, "mat" | "room">) => !!p.room || /^\s*(стена|пол|потолок|бетон)(?![а-яё])/i.test(p.mat ?? "");
 /** Деталь Базиса больше рабочего поля листа (RULES: ЛДСП 2750×1830, ХДФ 2800×2070, поле 10 мм; длина ЛДСП — до 2726, как у гильотины):
  *  в раскрой не идёт (раскрой упал бы целиком — 010, 136, 149, 159, 166), в смете — строка «больше листа» без цены, решение технолога. */
 export function rawOversize(p: Pick<RawPanel, "box" | "obb" | "kind" | "t" | "lw">): boolean {
@@ -156,16 +157,33 @@ export const RAW_FALLBACK_MESH: Record<string, string> = {
 
 /** Размеры детали [длина, ширина, толщина] по убыванию. Повёрнутая не по осям панель Базиса (угловая дверь под 45°) — по её
  *  собственным длине/ширине/толщине (t, lw эталона): габарит такой двери 947×261×261 — не «столешница 261 мм»; наклонная полка шкафа —
- *  по obb (rawSize). */
-export function rawDims(p: Pick<RawPanel, "box" | "obb" | "t" | "lw">): [number, number, number] {
+ *  по obb (rawSize). Без lw, но с толщиной Базиса (thick), деталь под углом в плане (повёрнута вокруг вертикали: угловые двери
+ *  и фасады k03, k07, k09) — ширина из габарита и толщины: a = w·cos + t·sin, b = w·sin + t·cos (n3-base). */
+export function rawDims(p: Pick<RawPanel, "box" | "obb" | "t" | "lw" | "thick">): [number, number, number] {
   if (p.t && p.lw && p.lw.every((v) => v > 0)) return [Math.max(...p.lw), Math.min(...p.lw), p.t];
-  const s = rawSize(p).sort((a, b) => b - a);
-  return [s[0], s[1], s[2]];
+  const size = rawSize(p), s = [...size].sort((a, b) => b - a), t = p.thick;
+  if (!p.obb && t !== undefined && size[0] > t + 0.5 && size[2] > t + 0.5) {
+    // ((a+b)/(w+t))² + ((a−b)/(w−t))² = 2 — бисекция по w в (t, a+b): левая часть убывает с ростом w
+    const a = size[0], b = size[2], f = (w: number) => ((a + b) / (w + t)) ** 2 + ((a - b) / (w - t)) ** 2 - 2;
+    let lo = t + 1e-6, hi = a + b;
+    for (let k = 0; k < 60; k++) { const mid = (lo + hi) / 2; if (f(mid) > 0) lo = mid; else hi = mid; }
+    const w = Math.round(((lo + hi) / 2) * 10) / 10, H = size[1];
+    return [Math.max(w, H), Math.min(w, H), t];
+  }
+  return [s[0], s[1], t ?? s[2]];
+}
+/** Размеры детали сырого модуля для раскроя и сметы (n3-base): длина, ширина, толщина по Базису (rawDims); angled — деталь под углом
+ *  в плане; worktop — столешница по имени или толщине Базиса ≥ 26 (не по габариту: габарит угловой двери 261 — не столешница 261 мм),
+ *  без контекста модуля — для старых файлов без материала; в смете — rawWorktop. */
+export function rawPanelDims(p: RawPanel): { length: number; width: number; thick: number; worktop: boolean; angled: boolean } {
+  const [length, width, thick] = rawDims(p), size = rawSize(p);
+  const angled = !p.obb && !(p.t && p.lw) && p.thick !== undefined && size[0] > p.thick + 0.5 && size[2] > p.thick + 0.5;
+  return { length, width, thick, worktop: rawIsWorktop(p) || (!rawIsRoom(p) && !p.mat && thick >= 26), angled };
 }
 /** Столешница сырого модуля: названная так в Базисе (имя или материал, rawIsWorktop). У старых файлов кухни Базиса без материала
  *  (импорт до пометки source 'bazis-kitchen') — прежнее правило: толщина ≥ 26. Сырые шкафы и новые кухни — только по имени/материалу. */
 export function rawWorktop(p: RawPanel, r: RawSpec, dims = rawDims(p)): boolean {
-  return rawIsWorktop(p) || (rawKitchen(r) && r.source !== "bazis-kitchen" && !p.mat && dims[2] >= 26);
+  return rawIsWorktop(p) || (rawKitchen(r) && r.source !== "bazis-kitchen" && !p.mat && !rawIsRoom(p) && dims[2] >= 26);
 }
 
 export function rawParts(m: Module): Part[] {
@@ -185,7 +203,7 @@ export function rawParts(m: Module): Part[] {
     // а не «Белый/Слэйт» Lamarty. Сырые шкафы Базиса — по правилам шкафов.
     const worktop = rawWorktop(p, r, dims), long = material === "glass" ? dims[0] > 2726 : rawOversize(p), wall = !!(p.wall && r.row), flat = !!r.row && dims[2] < 0.5;
     const own = kitchenRaw && rawOwnMaterial(p), room = rawIsRoom(p) || rawIsNonBoard(p);
-    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm && !wall && !own && !room ? " · больше листа — сращивание" : ""), ...(worktop || long || p.fm || wall || flat || own || room ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: p.thick ?? rawThickness(dims[2]),
+    out.push({ id: `raw:p${i}`, name: p.name + (rawIsRoom(p) ? " · помещение (не мебель)" : long && !worktop && !p.fm && !wall && !own && !room ? " · больше листа — сращивание" : ""), ...(worktop || long || p.fm || wall || flat || own || room ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: p.thick ?? rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (kitchenRaw && p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
@@ -259,7 +277,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
       ...(Number(p.t) > 0 && Array.isArray(p.lw) && p.lw.length === 2 && p.lw.every((v) => Number(v) > 0) ? { t: Number(p.t), lw: [Number(p.lw[0]), Number(p.lw[1])] as [number, number] } : {}),
       ...(Array.isArray(p.contour) && p.plane && ["xz", "xy", "yz"].includes(p.plane) ? { contour: p.contour.slice(0, 400).map((c) => [Number(c[0]), Number(c[1])] as [number, number]).filter((c) => c.every(Number.isFinite)), plane: p.plane } : {}),
       ...(p.obb && Array.isArray(p.obb.size) && p.obb.size.length === 3 && [...p.obb.size, p.obb.ry, p.obb.rz].map(Number).every(Number.isFinite) ? { obb: { size: p.obb.size.map(Number) as [number, number, number], ry: Number(p.obb.ry), rz: Number(p.obb.rz) } } : {}),
-      ...(p.skew ? { skew: true } : {}), ...(p.figure ? { figure: true } : {}) })),
+      ...(p.skew ? { skew: true } : {}), ...(p.figure ? { figure: true } : {}), ...(p.room ? { room: true as const } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"],
       ...(Array.isArray(h.bbox) && h.bbox.length === 6 && h.bbox.map(Number).every(Number.isFinite) ? { bbox: h.bbox.map(Number) } : {}) })),
     ...(Array.isArray(r.profiles) && r.profiles.length ? { profiles: r.profiles.slice(0, 200).map((q) => ({ name: String(q.name ?? "профиль"), len: Number(q.len), d: Number(q.d), pos: (q.pos ?? [0, 0, 0]).map(Number) as RawProfile["pos"], dir: (q.dir ?? [1, 0, 0]).map(Number) as RawProfile["dir"] }))

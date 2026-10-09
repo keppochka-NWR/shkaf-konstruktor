@@ -7,9 +7,9 @@ import {kitchenWall} from '../src/kitchen';
 import {newProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
-import {rawCounts,rawParts,rawThickness,type RawSpec} from '../src/rawModule';
+import {rawCounts,rawParts,rawThickness,rawPanelDims,parseRaw,type RawSpec} from '../src/rawModule';
 import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
-import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole} from '../scripts/kitchen/rowWorktop';
+import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole,rowPanelName,rowTitle} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
 function project(...ms:Module[]):Project{const p=newProject({...initialModule(),sections:[section()]});p.modules=ms.map((m,i)=>({id:id(),x:i*1000,y:0,z:0,rotation:0,module:m}));return p;}
@@ -61,6 +61,13 @@ test('смета сырого модуля: фурнитура по Базису
   // с петлями Базиса — ровно их число
   const e2=estimate(project(rawModule({...raw,counts:{hinges:3}})));
   assert.equal(e2.lines.find(l=>l.id==='hinge')?.quantity,3);
+  // слияние n3: у сырого модуля кухни Базиса «мелочёвки корпуса» нет ни с крепежом, ни без (k32) — правило «ничего сверх Базиса»
+  // (n3-additions, n3-kitchens2, n3-runners, n3-wardrobes2); n3-base оставлял её при крепеже в проекте — решение за Максом
+  assert.equal(e.lines.find(l=>l.id==='kit'),undefined);
+  assert.equal(e2.lines.find(l=>l.id==='kit'),undefined);
+  // сырой шкаф (импорт корпуса, счётчиков Базиса нет) — мелочёвка как была
+  const {counts:_c,...noCounts}=raw;void _c;
+  assert.equal(estimate(project(rawModule(noCounts))).lines.find(l=>l.id==='kit')?.quantity,1);
 });
 
 test('«Ряд»: столешница 38 мм — строка worktop (пог.м), не корпус и не раскрой',()=>{
@@ -132,7 +139,7 @@ test('столешница сырого модуля — только назва
   assert.ok(!cut.some(s=>s.includes('Стена')||s.includes('"ПФ"')),'стена и столешница — не раскрой ЛДСП');
   const ps=rawParts(rawModule(shoe,3000,2700,700));
   assert.equal(ps.find(q=>q.name==='Полка обувная')!.thickness,16);
-  assert.ok(ps.find(q=>q.name==='Стена')!.external);
+  assert.ok(ps.find(q=>q.name.startsWith('Стена'))!.external); // имя «Стена · помещение (не мебель)» (n3-base)
   // стеновая панель 26 мм (в Базисе «Cтеновая панель 26мм», первая C латинская) и пластик — не столешница и не лист ЛДСП: строка по материалу Базиса
   const wall=project(rawModule({row:true,panels:[{name:'стеновая 26',kind:'other',mat:'Cтеновая панель 26мм',box:[0,900,0,2000,1500,26]},{name:'горизонтальная',kind:'other',mat:'Пластик ___________',box:[0,0,0,500,10,300]}],hardware:[]},2000,1500,300));
   const ew=estimate(wall);
@@ -287,4 +294,41 @@ test('группа «столешницы» эталона: столешница
   assert.ok(e.lines.some(l=>l.id==='sheet:Белый'));
   // стены «Бетон» и макеты «Пластик» (роль appliance) — тоже не изделие
   assert.equal(rowPanelsOf({other:[{name:'Фронтальная',mat:'Бетон',kind:'other',box:[0,0,0,4250,2410,80],role:'appliance'}]}).length,0);
+});
+
+test('столешница — только по Базису: угловая дверь под 45° (габарит 261×917×261, 18 мм), «Бетон» помещения и полки ЛДСП из группы worktops — не столешница',()=>{
+  // k07 m09: дверь МДФ 18 мм под углом — в смете не «столешница 261 мм»; ширина по габариту и толщине — 351
+  const door:RawSpec={panels:[{name:'Дверь',kind:'mdf',box:[0,0,0,261,917,261],facade:true,thick:18}],hardware:[]};
+  const d=rawPanelDims(door.panels[0]);
+  assert.equal(d.worktop,false);assert.equal(d.angled,true);assert.equal(d.thick,18);
+  assert.ok(Math.abs(d.width-(261*Math.SQRT2-18))<0.2,String(d.width));assert.equal(d.length,917);
+  const pd=rawParts(rawModule(door,261,917,261))[0];
+  assert.equal(pd.thickness,18);assert.ok(!pd.external,'обычная деталь 18 мм, не стороннее изделие');
+  assert.ok(!estimate(project(rawModule(door,261,917,261))).lines.some(l=>l.id.startsWith('worktop')),'нет фантомной столешницы');
+  // k08, k19: стены и колонны «Бетон» — помещение, не мебель: ни столешницы, ни раскроя
+  const wall:RawSpec={row:true,panels:[{name:'Фронтальная',kind:'other',box:[0,0,0,1200,2000,80],room:true}],hardware:[]};
+  assert.ok(!estimate(project(rawModule(wall,1200,2000,80))).lines.some(l=>l.id.startsWith('worktop')));
+  assert.ok(rawParts(rawModule(wall,1200,2000,80))[0].external);
+  // настоящая столешница: по имени или по толщине Базиса ≥ 26 — как раньше
+  assert.equal(rawPanelDims({name:'Столешница',kind:'other',box:[0,0,0,2000,20,600]}).worktop,true);
+  assert.equal(rawPanelDims({name:'Горизонтальная',kind:'other',box:[0,0,0,2000,38,600]}).worktop,true);
+  // стеновая панель 26 мм — своя строка, не «столешница»
+  // (слияние n3: стеновая «Ряда» помечена wall при импорте — rowPanelsOf, n3-plinth; строка м² изделия поставщика)
+  const wp=estimate(project(rawModule({row:true,panels:[{name:'стеновая',kind:'other',wall:true,box:[0,0,0,2364,600,26]}],hardware:[]},2364,600,26)));
+  assert.equal(wp.lines.find(l=>l.id==='wallpanel:raw:26')?.quantity,1.418);
+  assert.ok(!wp.lines.some(l=>l.id.startsWith('worktop')));
+  // импорт: толщина Базиса — если габарит её не показывает; «Бетон» — помещение
+  assert.deepEqual(panelExtras({name:'Дверь',mat:'Плита 18мм',thick:18,box:[0,0,0,261,917,261]}),{thick:18});
+  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП',thick:16,box:[0,0,0,16,720,560]}),{});
+  assert.deepEqual(panelExtras({name:'Фронтальная',mat:'Бетон',thick:80,box:[0,0,0,4250,2410,80]}),{room:true});
+  // «Столешница» в ряду — только из материала столешницы (k07: полки ЛДСП 16 и k09: «Хром» 6 мм в группе worktops эталона — имена Базиса)
+  assert.equal(rowPanelName({name:'Горизонтальная',mat:'Столешница 600',box:[0,0,0,1,1,1]}),'Столешница');
+  assert.equal(rowPanelName({name:'Горизонтальная',mat:'ЛДСП Kronospan Слоновая Кость (16мм)',box:[0,0,0,1,1,1]}),'Горизонтальная');
+  assert.equal(rowPanelName({name:'горизонтальная',mat:'Хром',box:[0,0,0,1,1,1]}),'горизонтальная');
+  // название ряда — по тому, что в нём есть: кухня без столешницы в Базисе (k06) — «Ряд: цоколь»
+  assert.equal(rowTitle([{name:'Цоколь',mat:'ЛДСП',box:[0,0,0,1,1,1],group:'plinths'}]),'Ряд: цоколь');
+  assert.equal(rowTitle([{name:'Горизонтальная',mat:'Столешница',box:[0,0,0,1,1,1],group:'worktops'},{name:'Цоколь',mat:'ЛДСП',box:[0,0,0,1,1,1],group:'plinths'}]),'Ряд: столешница, цоколь');
+  // проект сохраняется с толщиной и помещением
+  const back=parseRaw(JSON.parse(JSON.stringify({panels:[door.panels[0],wall.panels[0]],hardware:[]})))!;
+  assert.equal(back.panels[0].thick,18);assert.equal(back.panels[1].room,true);
 });

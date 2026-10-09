@@ -263,7 +263,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       }
       if(d.id.startsWith('gola:')&&!(bz&&rowGola))add(`gola-${d.id.split(':')[1]}`,`Профиль Gola ${d.id.split(':')[1]==='L'?'L (верхний)':'C (средний)'}, алюминий`,d.length/1000,'м',null,'Профиль-ручка Gola по Базису; цена не найдена — уточнить');
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
-      if(d.role==='door'&&d.id!=='slope-filler'){
+      if(d.role==='door'&&d.id!=='slope-filler'&&a.module.kitchen?.hinges!==false){ // кухня из Базиса без петель — петель нет и в смете
         // Число петель — фактические петли сцены (как в 3D и присадке); без них (подъёмный, скос) — по правилу.
         const placedHinges=allParts.filter(p=>p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')).length;
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);
