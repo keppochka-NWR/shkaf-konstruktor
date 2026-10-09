@@ -43,6 +43,7 @@ test('смета сырого модуля: фурнитура по Базису
   const e=estimate(project(rawModule(raw)));
   const q=(id:string)=>e.lines.find(l=>l.id===id)?.quantity??0;
   assert.equal(e.lines.filter(l=>l.id.startsWith('hinge')).length,0,'петель в Базисе нет — в смете тоже');
+  assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'«мелочёвки корпуса» в Базисе нет — сырому модулю её не добавляем');
   assert.equal(q('kitchen-leg'),4);assert.equal(q('kitchen-clip'),2);assert.equal(q('confirmat-7x50'),12);assert.equal(q('eccentric'),2);
   assert.equal(q('shelf-holder'),4);assert.equal(q('dowel'),6);assert.equal(q('axis-pro:raw'),1);assert.equal(q('lift-mechanism'),1);
   // фасадный материал — фасады поставщика (м²), не лист ЛДСП «Белый»; кромка по длинам Базиса
@@ -112,6 +113,43 @@ test('повёрнутая панель Базиса (угловая дверь 
   assert.ok(Math.abs((estimate(project(rawModule(fm))).lines.find(l=>l.id==='facade-external')?.quantity??0)-0.947*0.369)<0.001);
 });
 
+test('столешница сырого модуля — только названная так в Базисе; толщина и наклон не признак (критик 09.10.2026)',()=>{
+  // наклонная обувная полка ЛДСП 16 (повёрнута на 30°): габарит в модуле 158 мм, по своим осям 16 — в раскрой ЛДСП, не «столешница 158 мм»
+  const shoe:RawSpec={panels:[{name:'Полка обувная',kind:'ldsp',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,800,158,270],obb:{size:[800,16,300],ry:0,rz:0}},
+    // боковина ЛДСП 32 мм (так в Базисе) — в раскрой листом 32 мм, не столешница
+    {name:'Вертикальная',kind:'ldsp',mat:'ЛДСП Lamarty Орех Лугано (16мм)',box:[0,0,0,32,2500,560]},
+    // «ПФ» из материала «Столешница» — настоящая столешница Базиса
+    {name:'ПФ',kind:'other',mat:'Столешница',box:[0,900,0,1200,938,600]},
+    // стена помещения в модели Базиса — не мебель: ни раскроя, ни строки сметы
+    {name:'Стена',kind:'other',mat:'Стена',box:[0,0,600,3000,2700,700]}],hardware:[]};
+  const p=project(rawModule(shoe,3000,2700,700)),e=estimate(p),plan=nest(p);
+  const wt=e.lines.filter(l=>l.id.startsWith('worktop:'));
+  assert.deepEqual(wt.map(l=>[l.id,l.quantity]),[['worktop:raw:38',1.2]]);
+  const cut=plan.flatMap(s=>s.items.map(it=>JSON.stringify(it)));
+  assert.ok(cut.some(s=>s.includes('Полка обувная')),'наклонная полка — в раскрое ЛДСП');
+  assert.ok(cut.some(s=>s.includes('Вертикальная')),'ЛДСП 32 мм — в раскрое');
+  assert.ok(plan.some(s=>s.thickness===32),'лист 32 мм — как в Базисе');
+  assert.ok(!cut.some(s=>s.includes('Стена')||s.includes('"ПФ"')),'стена и столешница — не раскрой ЛДСП');
+  const ps=rawParts(rawModule(shoe,3000,2700,700));
+  assert.equal(ps.find(q=>q.name==='Полка обувная')!.thickness,16);
+  assert.ok(ps.find(q=>q.name==='Стена')!.external);
+  // стеновая панель 26 мм (в Базисе «Cтеновая панель 26мм», первая C латинская) и пластик — не столешница и не лист ЛДСП: строка по материалу Базиса
+  const wall=project(rawModule({row:true,panels:[{name:'стеновая 26',kind:'other',mat:'Cтеновая панель 26мм',box:[0,900,0,2000,1500,26]},{name:'горизонтальная',kind:'other',mat:'Пластик ___________',box:[0,0,0,500,10,300]}],hardware:[]},2000,1500,300));
+  const ew=estimate(wall);
+  assert.equal(ew.lines.find(l=>l.id.startsWith('worktop')),undefined);
+  assert.equal(ew.lines.find(l=>l.id==='mat:Cтеновая панель 26мм')?.quantity,1.2);
+  assert.equal(ew.lines.find(l=>l.id==='mat:Пластик ___________')?.quantity,0.15);
+  assert.equal(nest(wall).length,0,'не раскрой ЛДСП');
+  // деталь больше листа (136: ХДФ задника 2198×2588, 010: ЛДСП 1820×2565) — раскрой не падает, в смете строка «больше листа» без цены
+  const big=project(rawModule({panels:[{name:'Задняя стенка',kind:'hdf',box:[0,0,0,2198,2588,3]},{name:'Фронтальная',kind:'ldsp',box:[0,0,10,1820,2565,26]},{name:'Полка',kind:'ldsp',box:[0,500,30,800,516,530]}],hardware:[]},2200,2600,600));
+  const eb=estimate(big);
+  assert.equal(eb.lines.filter(l=>l.id.startsWith('unplaced-raw:')).length,2);
+  assert.ok(nest(big).some(s=>s.items.some(it=>JSON.stringify(it).includes('Полка'))),'остальное — в раскрое');
+  // старый проект без материала: деталь 38 мм без «столешн» в имени — не столешница
+  const old=estimate(project(rawModule({panels:[{name:'Горизонтальная',kind:'other',box:[0,0,0,1200,38,600]}],hardware:[]})));
+  assert.equal(old.lines.find(l=>l.id.startsWith('worktop:')),undefined);
+});
+
 test('дробная толщина Базиса (16.0999999) — целые мм, без отдельного листа 16.1',()=>{
   assert.equal(rawThickness(16.0999999),16);assert.equal(rawThickness(16.07),16);assert.equal(rawThickness(3),3);assert.equal(rawThickness(4.5),4.5);
   const raw:RawSpec={panels:[{name:'Планка карниза',kind:'ldsp',box:[0,2430,0,1990,2446.1,60]},{name:'Полка',kind:'ldsp',box:[0,0,0,564,16,500]}],hardware:[]};
@@ -142,6 +180,8 @@ test('«Ряд»: нет предупреждения «корпус не во �
 test('импорт: фасадный материал и кромка Базиса переносятся в сырой модуль',()=>{
   assert.deepEqual(panelExtras({name:'Цоколь',mat:'Фасадный мат-л 1',box:[0,0,0,1,1,1],edges:[{thick:1,len:597.5},{thick:0.4,len:0}]}),{fm:true,edges:[[1,597.5]]});
   assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,1,1,1]}),{});
+  // слияние n3: материал Базиса (mat) переносится у не плитных деталей и МДФ — по нему узнаются столешница, стена, пластик (n3-wardrobes2)
+  assert.deepEqual(panelExtras({name:'ПФ',kind:'other',mat:'Столешница',box:[0,0,0,1,1,1]}),{mat:'Столешница'});
 });
 
 test('цоколь Базиса под любым именем («Фронтальная», «Вертикальная») — «Цоколь · …», своё имя «Цоколь…» не трогаем',()=>{

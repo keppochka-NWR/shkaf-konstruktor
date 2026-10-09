@@ -312,6 +312,8 @@ export type Part = {
   edgeLen?: Record<string, number>;
   /** Horizontal polygon in local X/Z coordinates, relative to its bounding box. */
   planContour?: [number,number][];
+  /** Фигурная вертикальная деталь (из Базиса): контур в плоскости детали от угла габарита — (x, y) у детали тонкой по Z, (y, z) у тонкой по X. */
+  faceContour?: [number,number][];
   /** Edge thickness for each successive polygon segment. */
   contourEdges?: number[];
   /** Изделие стороннего участка (двери-купе): не идёт в раскрой ЛДСП, деталировку и бирки. */
@@ -673,7 +675,10 @@ export function parts(m: Module): Part[] {
     const dir = side === "left" ? -1 : 1, edge = side === "left" ? 0 : m.width, w = wf.width;
     add("wall-filler:" + side, "Фальшпанель к стене " + (side === "left" ? "левая" : "правая") + " " + w + "×16", [t, m.height, w], [edge + dir * t / 2, m.height / 2, d + 18 - w / 2], m.height, w, t);
   }
-  if(!m.feet&&bottom>0){
+  // Кухня по Базису: цоколь — только если он есть в модуле Базиса (фронтальная ЛДСП под дном — lowFront, или kitchen.plinth без off;
+  // в Базисе он бывает назван иначе). Приподнятое дно навесного/антресоли (фасад свисает ниже дна) или пенала без опор — не повод
+  // добавлять «Цоколь», которого в Базисе нет (k28 «Вм 5», k30 «ВМ 1»…: критик 09.10.2026).
+  if(!m.feet&&bottom>0&&(!m.kitchen||m.kitchen.lowFront||(!!m.kitchen.plinth&&!m.kitchen.plinth.off))){
     if(m.skew){ // цоколь по скошенному фронту: длина по косой, утоплен на 2 от передних граней боковин
       const pl=(m.width-2*t)/Math.cos(skewAngle(m)),fp=frontPoint(m,m.width/2,-RULES.plinthInset-t/2);
       add("plinth","Цоколь · скос",[pl,bottom,t],[fp.x,bottom/2,fp.z],pl,bottom,t);out.at(-1)!.rotY=fp.rotY;
@@ -1285,7 +1290,8 @@ export function validate(m: Module): string[] {
   }
   for(const s of m.sections)if(s.fixed!==undefined&&(!Array.isArray(s.fixed)||s.fixed.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push('Жёсткие полки: неверные номера.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
-  if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
+  // кухня по Базису: plinthHeight — подъём корпуса как в Базисе (у навесного — свес фасада ниже дна), не цоколь из списка шкафов
+  if(m.plinthHeight!==undefined && !(m.kitchen?m.plinthHeight>=0&&m.plinthHeight<=200:[0,60,80,100,120,150].includes(m.plinthHeight)))errors.push(m.kitchen?"Подъём корпуса кухни: от 0 до 200 мм.":"Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
@@ -1627,7 +1633,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(k.legs.screws?{screws:true as const}:{}),...(k.legs.same?{same:true as const}:{})}}:{}),...(k.screw==="euro-6x50"?{screw:"euro-6x50" as const}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.lowFront?{lowFront:true}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{}),...(k.legs.screws?{screws:true as const}:{}),...(k.legs.same?{same:true as const}:{})}}:{}),...(k.screw==="euro-6x50"?{screw:"euro-6x50" as const}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

@@ -7,7 +7,7 @@ import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, type M
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
-import { partCollisions } from "./collisions";
+import { partCollisions, rawCheck, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
 import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
@@ -328,7 +328,7 @@ const RAW_COUNT_LABEL = { legs: "опоры", clips: "клипсы цоколя"
 function RawInfo(props: KitchenPanelProps) {
   const { m } = props, r = m.raw!;
   const panels = r.panels.length, fronts = r.panels.filter((p) => p.facade).length;
-  // вся фурнитура Базиса, что идёт в смету (счётчики, петли по типам, позиции по названию), а не только показанная в 3D
+  // вся фурнитура Базиса, что идёт в смету (счётчики, петли по типам, позиции по названию), а не только показанная в 3D (n3-kitchens2)
   const rows = useMemo(() => {
     const out: [string, string][] = [], c = r.counts ?? {}, names = r.names ?? {};
     for (const [k, label] of Object.entries(RAW_COUNT_LABEL) as [keyof typeof RAW_COUNT_LABEL, string][]) {
@@ -337,15 +337,26 @@ function RawInfo(props: KitchenPanelProps) {
       if (c[k]) out.push([label, String(c[k])]);
     }
     for (const i of r.items ?? []) out.push([i.name, i.len ? `${Math.round(i.len) / 1000} м` : String(i.n)]);
+    // сырой шкаф Базиса (без счётчиков) — фурнитура модели по категориям
+    if (!out.length) { const map = new Map<string, number>(); for (const h of r.hardware) map.set(h.category || "прочее", (map.get(h.category || "прочее") ?? 0) + 1); for (const [cat, n] of [...map].sort((a, b) => b[1] - a[1])) out.push([cat, String(n)]); }
     return out;
   }, [r]);
-  const total = Object.values(r.counts ?? {}).reduce((s, v) => s + (v ?? 0), 0) + (r.items ?? []).reduce((s, i) => s + i.n, 0);
+  const total = r.counts || r.items ? Object.values(r.counts ?? {}).reduce((s, v) => s + (v ?? 0), 0) + (r.items ?? []).reduce((s, i) => s + i.n, 0) : r.hardware.length;
+  // проверка по политике сырого модуля (collisions.ts rawCheck): посадка фурнитуры и перекрытия панелей «как в Базисе» (n3-wardrobes2)
+  const check = useMemo(() => rawCheck(parts(m), m), [m]);
+  // figure + contour — внешний контур нарисован, внутренние вырезы нет; figure без контура или skew — габаритом
+  const figures = r.panels.filter((p) => p.contour).length, boxes = r.panels.filter((p) => (p.figure && !p.contour) || p.skew).length, holes = r.panels.filter((p) => p.figure && p.contour).length, turned = r.panels.filter((p) => p.obb).length, rods = r.profiles?.length ?? 0;
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
-    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура по Базису — {total} шт. (в 3D показано {r.hardware.length}). Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
+    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура по Базису — {total} шт. (в 3D показано {r.hardware.length}).{figures ? ` Фигурных по контуру Базиса — ${figures}.` : ""}{turned ? ` Повёрнутых не на 90° — ${turned}.` : ""}{rods ? ` Штанг Ø25 — ${rods}.` : ""}{boxes ? ` Нарисованы габаритом (контур или поворот не перенесён) — ${boxes}.` : ""}{holes ? ` Внутренние вырезы не нарисованы (контур — внешний) — ${holes}.` : ""} Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
     {rows.length > 0 && <Group icon={<Wrench size={15} />} title="Фурнитура из Базиса" open note={total + " шт."}>
       <ul className="kitchen-hardware">{rows.map(([c, n], i) => <li key={c + i}><span>{c}</span><b>{n}</b></li>)}</ul>
+      {check.deep.length > 0 && <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Внутри детали (тело фурнитуры в материале панели): {check.deep.slice(0, 3).map((x) => `${x.name} (${-x.gap} мм)`).join("; ")}{check.deep.length > 3 ? ` и ещё ${check.deep.length - 3}` : ""}. Проверьте в Базисе.</p>}
+      {check.far.length > 0 && <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Висит в воздухе (дальше {RAW_FAR} мм от деталей) — {check.far.length} шт.: {check.far.slice(0, 3).map((x) => `${x.name} (${x.gap} мм)`).join("; ")}{check.far.length > 3 ? " …" : ""}. Детали, на которой она крепится, в модели нет — проверьте в Базисе.</p>}
+      {check.deep.length + check.far.length === 0 && check.checked > 0 && <p className="kitchen-ok"><CircleCheck size={14} /> Фурнитура стоит на деталях: {check.checked - check.outside.length} из {check.checked} по точкам крепления Базиса.</p>}
+      {check.outside.length > 0 && <p className="field-note">Рядом с деталями, но не на них ({RAW_SEAT_GAP}–{RAW_FAR} мм) — {check.outside.length} шт.: {check.outside.slice(0, 2).map((x) => x.name).join("; ")}{check.outside.length > 2 ? " …" : ""}. Так бывает, когда крепление — на профиле без сечения или детали соседнего модуля; сверьте с Базисом.</p>}
     </Group>}
+    {check.overlaps.length > 0 && <div className="property-section kitchen-note raw"><Info size={14} /><p>Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет — правится в Базисе.</p></div>}
     <Position {...props} open />
   </div>;
 }

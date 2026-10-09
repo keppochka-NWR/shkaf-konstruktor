@@ -38,6 +38,18 @@ export function golaSideGeometry(part:Part):THREE.BufferGeometry{
  uv.needsUpdate=true;g.computeBoundingBox();return g;
 }
 
+/** Фигурная вертикальная деталь по контуру Базиса: тонкая по Z — контур (x, y), тонкая по X — контур (y, z); выдавлена на толщину.
+ *  Текстура на пластях — по габариту детали, как у прямоугольной панели. */
+export function faceContourGeometry(part:Part):THREE.BufferGeometry{
+ const [sx,sy,sz]=part.size,thinX=sx<=sz,shape=new THREE.Shape();
+ const pt=([a,b]:[number,number]):[number,number]=>thinX?[-(b-sz/2),a-sy/2]:[a-sx/2,b-sy/2];
+ part.faceContour!.forEach((p,i)=>{const [u,v]=pt(p);if(i===0)shape.moveTo(u,v);else shape.lineTo(u,v);});
+ shape.closePath();const t=thinX?sx:sz,g=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});
+ g.translate(0,0,-t/2);if(thinX)g.rotateY(Math.PI/2);
+ const pos=g.getAttribute('position'),normal=g.getAttribute('normal'),uv=g.getAttribute('uv'),ax=thinX?0:2,w=thinX?sz:sx,wa=thinX?2:0;
+ for(let i=0;i<pos.count;i++){if(Math.abs(normal.getComponent(i,ax))>.99)uv.setXY(i,pos.getComponent(i,wa)/w+.5,pos.getY(i)/sy+.5);else uv.setXY(i,0,0);}
+ uv.needsUpdate=true;return g;
+}
 /** Рамка алюминиевого фасада: контур фасада с прямоугольным вырезом под вставку, выдавленный на толщину рамки. */
 export function aluFrameGeometry(part:Part,face:number):THREE.BufferGeometry{
  const [w,h,t]=part.size,f=Math.min(face,w/2-1,h/2-1);

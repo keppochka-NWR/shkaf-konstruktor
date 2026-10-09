@@ -122,5 +122,56 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   return out;
 }
 
+/** Сырой модуль (детали и фурнитура Базиса как есть). Реестр контактов студии к нему неприменим: сетки фурнитуры Базиса сложной формы,
+ *  и их габарит (петля с плечом, направляющая под ящиком, ящик-система) всегда «заходит» в соседние детали — это ложные тревоги.
+ *  Политика проверки:
+ *  - фурнитура «в воздухе»: точка крепления Базиса (начало координат сетки) дальше RAW_SEAT_GAP мм от ближайшей панели/трубы —
+ *    сведения (держатель на профиле без сечения, хозяин в соседнем модуле); дальше RAW_FAR мм — тревога: так не крепят
+ *    (194: петли в 0,1–1,5 м от деталей — дверей, на которых они должны висеть, в модели нет).
+ *  - фурнитура «внутри детали» (класс ошибки «направляющая в стойке»): центр тела фурнитуры (габарит сетки Базиса по позиции
+ *    и повороту, без него — точка крепления) лежит внутри корпусной панели глубже RAW_SEAT_DEPTH мм от её граней — тело сидит
+ *    в материале, тревога. Порог меряется от ближайшей грани, поэтому достижим на панели 16 мм (до 8 мм): по 271 шкафу законные
+ *    максимумы — 4,8 мм (врезной кронштейн подвеса), 4,3 (Quadro под стенкой ящика). Крепёж, который по назначению сидит в
+ *    материале (конфирмат, шкант, эксцентрик, полкодержатель, винты, заглушки), и фасады (чашка петли, винты ручки) не проверяются.
+ *    Винты профиля купе и прочее, что крепится к профилям (их сечений нет), не проверяются.
+ *  - панели: перекрытие глубже RAW_JOINT мм (паз ХДФ, накладка фасада, стык — мельче) — «как в проекте Базиса», сведения, не тревога:
+ *    студия геометрию сырого модуля не меняет, правится она в Базисе. */
+export const RAW_SEAT_GAP = 30, RAW_FAR = 100, RAW_SEAT_DEPTH = 5, RAW_JOINT = 10, RAW_SHEET_MAX = 40;
+/** outside — точка крепления дальше RAW_SEAT_GAP, но не дальше RAW_FAR (сведения «сверьте с Базисом»); far — дальше RAW_FAR (тревога);
+ *  deep — тело фурнитуры внутри панели глубже RAW_SEAT_DEPTH (тревога, gap < 0 — глубина). */
+export type RawCheck = { checked: number; outside: { id: string; name: string; gap: number }[]; far: { id: string; name: string; gap: number }[]; deep: { id: string; name: string; gap: number }[]; overlaps: Collision[] };
+const RAW_NO_SEAT = /профил|винт для профиля/i;
+const RAW_IN_PANEL = /конфирмат|эксцентрик|стяжк|шкант|полкодерж|саморез|винт|заглушк/i;
+/** Расстояние точки до короба снаружи (0 — внутри) и глубина внутри (до ближайшей грани; 0 — снаружи). */
+function pointBox(pt: number[], B: Box): { out: number; depth: number } {
+  const d = [pt[0] - B.c[0], pt[1] - B.c[1], pt[2] - B.c[2]], l = B.ax.map((a) => dot(a, d));
+  const out = Math.hypot(...l.map((v, i) => Math.max(0, Math.abs(v) - B.h[i])));
+  return { out, depth: out > 0 ? 0 : Math.min(...l.map((v, i) => B.h[i] - Math.abs(v))) };
+}
+export function rawCheck(ps: Part[], m?: Module, withOverlaps = true): RawCheck {
+  const boards = ps.filter((p) => p.id.startsWith("raw:p") && p.material !== "metal"), hw = ps.filter((p) => p.id.startsWith("raw:h"));
+  // хозяева крепления: панели и нарисованные трубы (держатели и соединители штанг сидят на трубах)
+  const bx = [...boards, ...ps.filter((p) => p.id.startsWith("raw:r"))].map(box);
+  // где тело фурнитуры не должно сидеть: корпусные листовые панели (не фасады — в них чашка петли и винты ручки; не толще 40 мм —
+  // объёмный габарит повёрнутой двери углового модуля кухни (k07, k09: 262×917×261), бетонного короба и т. п. — не материал)
+  const body = boards.filter((p) => p.role !== "door" && Math.min(...p.size) <= RAW_SHEET_MAX).map(box);
+  const outside: RawCheck["outside"] = [], far: RawCheck["far"] = [], deep: RawCheck["deep"] = [];
+  let checked = 0;
+  for (const h of hw) {
+    const cat = m?.raw?.hardware[Number(h.id.slice(5))]?.category ?? "";
+    if (RAW_NO_SEAT.test(cat) || RAW_NO_SEAT.test(h.name) || !bx.length) continue;
+    checked++;
+    const pt = h.model?.origin ?? h.position;
+    const gap = Math.min(...bx.map((B) => pointBox(pt, B).out));
+    if (gap > RAW_FAR) { far.push({ id: h.id, name: h.name, gap: Math.round(gap) }); continue; }
+    if (gap > RAW_SEAT_GAP) { outside.push({ id: h.id, name: h.name, gap: Math.round(gap) }); continue; }
+    if (RAW_IN_PANEL.test(cat) || RAW_IN_PANEL.test(h.name)) continue;
+    const c = h.collide?.[0]?.position ?? pt, depth = Math.max(0, ...body.map((B) => pointBox(c, B).depth));
+    if (depth > RAW_SEAT_DEPTH) deep.push({ id: h.id, name: h.name, gap: -Math.round(depth * 10) / 10 });
+  }
+  const overlaps = withOverlaps ? partCollisions(boards, m, RAW_JOINT) : [];
+  return { checked, outside, far, deep, overlaps };
+}
+
 /** Пересечения с участием фурнитуры петель — то, что Макс требует свести к нулю везде. */
 export const hingeCollisions = (c: Collision[]) => c.filter((x) => /:(hingecup|hingeplate|hingearm|latch):/.test(x.a + " " + x.b));

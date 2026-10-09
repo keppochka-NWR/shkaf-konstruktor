@@ -13,6 +13,9 @@ export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob"
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean };
+  /** Корпус приподнят без опор, и в модуле Базиса под дном есть фронтальная панель ЛДСП (цоколь/планка под другим именем) —
+   *  студия ставит «Цоколь» по высоте подъёма. Без флага у кухни такого цоколя нет (у навесного фасад свисает ниже дна). */
+  lowFront?: boolean;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
@@ -70,8 +73,9 @@ export const APPLIANCES: Record<ApplianceKind, { label: string; niche: [number, 
 export const KITCHEN_MODELS: Partial<Record<"leg" | "clip" | "leg-left" | "clip-left" | "hanger-left" | "hanger-right" | "hanger-cap-left" | "hanger-cap-right", { file: string; mirror?: boolean }>> = {
   leg: { file: "hardware/bazis/ac675db9fc57.glb" },                // Опора кухонная регулируемая H100-120, чёрная (1 197 шт. в базе)
   clip: { file: "hardware/bazis/0d12888fb9df.glb" },               // Клипса для ПВХ цоколя, чёрная (611)
-  // левые опоры в Базисе — своя сетка и поворот на 180° вокруг вертикали (эталоны: 287 из 340 левых, правые — 343 из 349 ac675);
-  // клипса левой опоры — зеркальная сетка (X −29..10,9), поэтому в осях модуля она так же выступает к цоколю
+  // левые опоры в Базисе — своя сетка и поворот на 180° вокруг вертикали (эталоны: 287 из 340 левых, правые — 343 из 349 ac675;
+  // по n3-wardrobes2: 283 из 336 левых опор, 141 из 167 левых клипс по 34 кухням); клипса левой опоры — зеркальная сетка
+  // (X −29..10,9), поэтому в осях модуля она так же выступает к цоколю
   "leg-left": { file: "hardware/bazis/cb84c30b57a5.glb" },
   "clip-left": { file: "hardware/bazis/7ebcad9fda10.glb" },
   "hanger-left": { file: "hardware/bazis/95a815598b07.glb" },      // Навес мебельный регулируемый ABS левый
@@ -94,7 +98,7 @@ export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }
 // Повороты осей фурнитуры Базиса в оси модуля (проверено по корпусу: опора — Z вниз, клипса — X к цоколю; навес — X к стене, Y вверх,
 // Z внутрь корпуса). Кватернион [w, x, y, z].
 const Q_LEG: [number, number, number, number] = [0.5, 0.5, -0.5, 0.5];      // X→+Z, Y→−X, Z→−Y
-const Q_LEG_LEFT: [number, number, number, number] = [0.5, 0.5, 0.5, -0.5]; // левые опоры Базиса: X→−Z, Y→+X, Z→−Y
+const Q_LEG_LEFT: [number, number, number, number] = [0.5, 0.5, 0.5, -0.5]; // левые опора и клипса Базиса: X→−Z, Y→+X, Z→−Y (k04 m01: x = 70)
 const Q_HANGER: [number, number, number, number] = [Math.SQRT1_2, 0, Math.SQRT1_2, 0]; // X→−Z, Y→+Y, Z→+X (оба навеса)
 /** Площадка опоры: 4 точки крепления по квадрату 31×31 вокруг оси (те же, что отверстия D4×3 под опору). */
 export const LEG_SCREWS: [number, number][] = [[-15.5, -15.5], [15.5, -15.5], [-15.5, 15.5], [15.5, 15.5]];
