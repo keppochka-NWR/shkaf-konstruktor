@@ -8,7 +8,9 @@ import type { Module, Part } from "./model";
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона).
  *  kind 'mdf' — плита МДФ Базиса (IDM ETERNO, Evogloss, МДФ ламинированный), kind 'other' без fm — стеновая панель, пластик и т.п.:
  *  не раскрой ЛДСП Lamarty; mat — материал Базиса для сметы (rawOwnMaterial). */
-export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; mat?: string };
+export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][]; mat?: string;
+  /** толщина материала Базиса, когда габарит детали толще (деталь чуть повёрнута) — раскрой по ней, без отдельного листа «16,7» */
+  thick?: number };
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
 /** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
 export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
@@ -105,7 +107,7 @@ export function rawParts(m: Module): Part[] {
     // Плита МДФ и прочие материалы кухни Базиса (стеновая панель, пластик, хром…) — не лист ЛДСП Lamarty: вне раскроя ЛДСП
     // (в смете — м² по деталям Базиса, rawOwnMaterial). Сырые шкафы Базиса — как было (правила шкафов не меняются).
     const worktop = /столешн/i.test(p.name) || dims[2] >= 26, long = dims[0] > 2726, mdf = kitchenRaw && rawOwnMaterial(p);
-    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm && !mdf ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm || mdf ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
+    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm && !mdf ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm || mdf ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: p.thick ?? rawThickness(dims[2]),
       // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(dims[0]) === thin ? 1 : size.indexOf(dims[0])) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
@@ -133,7 +135,7 @@ export function parseRaw(x: unknown): RawSpec | undefined {
   return {
     panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}),
       ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}),
-      ...(p.mat ? { mat: String(p.mat).slice(0, 120) } : {}) })),
+      ...(p.mat ? { mat: String(p.mat).slice(0, 120) } : {}), ...(Number(p.thick) > 0 ? { thick: Number(p.thick) } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"] })),
     ...(r.source ? { source: String(r.source) } : {}),
     ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),

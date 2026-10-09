@@ -9,6 +9,7 @@ import {estimate,lineGroup} from '../src/pricing';
 import {nest} from '../src/exports';
 import {existsSync,readFileSync} from 'node:fs';
 import {rawKitchen,rawItems,type RawSpec} from '../src/rawModule';
+import {panelExtras} from '../scripts/kitchen/rowWorktop';
 
 const led=(m:Module):Module=>{m.grooves=['left','right'].map(h=>({host:h,face:(h==='left'?'+':'-') as '+'|'-',along:[16,16] as [number,number],across:[100,117] as [number,number],depth:8,name:'паз под подсветку'}));return m;};
 const k25wall=()=>{const m=led(kitchenWall(initialModule(),630));m.height=930;return m;};
@@ -180,4 +181,13 @@ test('k16: рафиксы 54 и ящики Indigo (14 направляющих) 
   assert.equal(it['шт:Полкодержатель стяжка РАФИКС'],54);
   assert.equal((it['шт:Направляющая Indigo, L=500, левая']??0)+(it['шт:Направляющая Indigo, L=500, правая']??0),14);
   assert.equal((it['шт:Заглушка для мебельного навеса ABS левая']??0)+(it['шт:Заглушка для мебельного навеса ABS правая']??0),10);
+});
+
+test('цоколь k09 (ЛДСП 16, габарит 16,64 — деталь чуть повёрнута): раскрой по толщине Базиса, без отдельного листа «16,7»',()=>{
+  const et={name:'Цоколь',kind:'ldsp',mat:'ЛДСП Lamarty Белый (16мм)',thick:16,box:[0,0,0,784,98.5,16.64]};
+  assert.deepEqual(panelExtras(et),{thick:16});
+  assert.deepEqual(panelExtras({...et,box:[0,0,0,784,98.5,16.0999]}),{},'дробный хвост габарита — без поля');
+  const row:RawSpec={row:true,hardware:[],panels:[{name:'Цоколь',kind:'ldsp',box:[0,0,0,784,98.5,16.64],...panelExtras(et)},{name:'Бок',kind:'ldsp',box:[0,0,100,16,720,660]}]};
+  const p=parseProject(JSON.parse(JSON.stringify(project({...rawBody(),name:'Ряд',raw:row}))));
+  assert.ok(nest(p).every(s=>s.material==='hdf'||(s.thickness??16)===16),JSON.stringify(nest(p).map(s=>s.thickness)));
 });

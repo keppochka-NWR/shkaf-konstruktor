@@ -1,7 +1,7 @@
 // Детали «Ряда» и сырых модулей из эталона Базиса: фигурная панель (столешница с контуром в плоскости xz) → прямоугольники
 // по контуру вместо сплошного габарита (k25: Г/П-образная столешница 4470×1250 выступала на 650 мм перед нижними модулями
 // и заходила в пенал), фасадный материал и кромка Базиса.
-export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string };
+export type EtPanel = { name: string; kind?: string; mat?: string; thick?: number; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string };
 type Box = [number, number, number, number, number, number];
 
 /** Прямолинейный контур в плоскости xz → прямоугольники (полосы по x, соседние с одинаковыми интервалами по z склеены).
@@ -40,7 +40,10 @@ export function rowFront(p: EtPanel): boolean {
 }
 
 /** Фасадный материал Базиса («Фасадный мат-л N»), кромка [толщина, длина] и материал плиты МДФ — для сметы сырого модуля. */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string } {
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string; thick?: number } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
-  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}), ...((p.kind === "mdf" || p.kind === "other") && p.mat && !/фасадн/i.test(p.mat) ? { mat: p.mat } : {}) };
+  // толщина материала Базиса, если габарит детали толще (деталь чуть повёрнута: цоколь k09 — габарит 16,64 при ЛДСП 16)
+  const b = p.box, t = b?.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : 0, th = Number(p.thick);
+  return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}), ...((p.kind === "mdf" || p.kind === "other") && p.mat && !/фасадн/i.test(p.mat) ? { mat: p.mat } : {}),
+    ...(th > 0 && t > 0 && Math.abs(t - Math.round(t)) > 0.2 && Math.abs(t - th) > 0.2 ? { thick: th } : {}) };
 }
