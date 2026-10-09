@@ -135,14 +135,23 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     m.doors = doors.length > 0;
     m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
-    if (fronts.length === 1) {
+    // подъёмный фасад: «Петля накладная» на нижней плоскости крыши (кватернион Базиса [0,−0,71,0,0,71]), выше середины фасада
+    const topHinge = (h: { pos: number[]; quat?: number[] }) => !!h.quat && Math.abs(h.quat[0]) < 0.1 && Math.abs(h.quat[2]) < 0.1 && Math.abs(Math.abs(h.quat[1]) - Math.SQRT1_2) < 0.05 && h.pos[1] > (f0.b.y0 + f0.b.y1) / 2;
+    if (fronts.length === 1 && hw("петля").length && hw("петля").every(topHinge)) {
+      m.sections[0].doorHinges = ["top"];
+      // газлифт PD-G-N02 Базиса (шток, газблок, фиксаторы) — комплект на боковину
+      if (hw("газлифт").some((h) => /PD-G-N02/.test(h.name))) m.kitchenLift = { system: "pd-g-n02" };
+      if (hw("газлифт").some((h) => !/PD-G-N02/.test(h.name))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !/PD-G-N02/.test(h.name))!.name}`);
+      const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = f0.b.x1 - f0.b.x0;
+      if (xs.length !== 2 || Math.abs(xs[0] - 100) > 0.5 || Math.abs(xs[1] - (dw - 100)) > 0.5) notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")}`);
+    } else if (fronts.length === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
     }
     if (fronts.length > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
   } else m.doors = false;
   // высоты петель (от низа фасада) — как в проекте, если отличаются от правила 100 мм от краёв
-  if (fronts.length && doors.length) {
+  if (fronts.length && doors.length && !m.sections[0].doorHinges?.includes("top")) {
     const f = fronts[0], ys = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30).map((h) => r1(h.pos[1] - f.b.y0)).sort((a, c) => a - c);
     const def = (() => { const n = ys.length, dh = f.b.y1 - f.b.y0, off = Math.min(100, Math.max(40, dh / 4)); return Array.from({ length: n }, (_, k) => n === 1 ? dh / 2 : off + (dh - 2 * off) * k / (n - 1)); })();
     // число петель по правилу кухни — по высоте фасада; если в проекте другое число или другие высоты — берём высоты проекта

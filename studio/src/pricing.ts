@@ -91,7 +91,7 @@ export const PULLOUT_PRICE=500;
 export type HardwareKind='hinges'|'slides'|'handles'|'legs'|'fasteners'|'rods'|'kupe'|'other';
 export const HARDWARE_KINDS:Record<HardwareKind,string>={hinges:'Петли и открывание',slides:'Направляющие и сетки',handles:'Ручки',legs:'Опоры',fasteners:'Крепёж',rods:'Штанги',kupe:'Двери-купе: доводчики и фурнитура',other:'Прочее'};
 export function hardwareKind(id:string):HardwareKind{
-  if(/^(hinge|push-latch|lift-mechanism)/.test(id))return 'hinges';
+  if(/^(hinge|push-latch|lift-mechanism|kitchen-lift)/.test(id))return 'hinges';
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
   if(id.startsWith('legs'))return 'legs';
@@ -137,6 +137,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     }
     const legs=a.module.kitchen?0:legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
     const allParts=parts(a.module);
+    // газлифт подъёмного фасада кухни (Базис: PD-G-N02 — шток, газблок, фиксаторы на фасад и боковину; комплект на боковину), без цены
+    const lifts=a.module.kitchenLift?allParts.filter(p=>p.id.startsWith('lift:')&&p.id.endsWith(':block')).length:0;
+    if(lifts)add('kitchen-lift:'+a.module.kitchenLift!.system,'Газлифт PD-G-N02 — комплект на боковину (шток, газблок, 2 фиксатора, саморезы)',lifts,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     for(const d of allParts){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха
@@ -150,7 +153,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const push=a.module.doorOpen==='push',inset=a.module.doorMount==='inset',n=placedHinges||hingeCount(d.length,d.width);
         // СТП: с ручками — петля с доводчиком; push-to-open — петля без пружины + толкатель. Бренд — выбор клиента (GTV по умолчанию).
         const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
-        if(d.hinge==='top')add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
+        if(d.hinge==='top'&&!a.module.kitchenLift)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
+        // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
+        if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
