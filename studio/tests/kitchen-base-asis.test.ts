@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront} from '../scripts/kitchen/recognize-base';
 import {edgeByDir} from '../src/edges';
 
 // Правило Макса: в кухню из Базиса студия не добавляет того, чего нет в Базисе (петли, опоры, крепёж, кромка, строки сметы).
@@ -68,6 +68,23 @@ test('верх боковин без кромки (k20 m08, k03): у нижне�
   assert.equal(moduleFromEtalon(load('k03','m02')).module.edgeScheme?.sideTop,false);
   // обычный нижний Базиса (k25 m07) — верх боковин кромится, как раньше
   if(has('k25'))assert.equal(moduleFromEtalon(load('k25','m07')).module.edgeScheme?.sideTop,undefined);
+});
+
+test('полкодержатели не симметричны по глубине (k18 m03: задние 50,5, передние 46,5) — как в Базисе; у шкафа поле не действует',{skip:!has('k18')},()=>{
+  const ref=load('k18','m03');
+  const {module:m}=moduleFromEtalon(ref);
+  assert.equal(m.shelfPinInset,50.5);
+  assert.equal(m.shelfPinInsetFront,46.5);
+  assert.equal(pinInsetFront(ref,50.5),46.5);
+  const row=compareModule(ref,m).hardware.find(h=>h.category==='полкодержатель')!;
+  assert.equal(row.ref,row.studio);
+  assert.ok((row.maxPosDelta??0)<=0.5,'Δ '+row.maxPosDelta);
+  // шкаф: передний отступ без кухни игнорируется — держатели симметричны, как раньше
+  const w={...initialModule(),shelfPinInset:50,shelfPinInsetFront:30};
+  const zs=parts(w).filter(p=>p.id.startsWith('shp:')&&p.id.includes(':shelf:0:')).map(p=>p.position[2]);
+  const sh=parts(w).find(p=>/:shelf:0$/.test(p.id))!;
+  assert.ok(zs.length===4);
+  assert.equal(Math.round((Math.min(...zs)-(sh.position[2]-sh.size[2]/2))*10)/10,Math.round(((sh.position[2]+sh.size[2]/2)-Math.max(...zs))*10)/10);
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{

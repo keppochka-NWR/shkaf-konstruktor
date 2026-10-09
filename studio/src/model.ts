@@ -211,6 +211,8 @@ export type Module = {
   /** Полка: отступ от задника (Базис — 1 мм) и полкодержатели от кромок полки (шкафы 40; Базис кухни — 60). */
   shelfRear?: number;
   shelfPinInset?: number;
+  /** Кухня Базиса: отступ передних полкодержателей от переднего торца полки, если не равен заднему (61 из 244 полок Базиса). */
+  shelfPinInsetFront?: number;
   /** Конфирматы дна/крыши/жёстких полок — от концов стыка, мм (по умолчанию RULES.confirmatInset 50; проекты Базиса — 50…64). */
   confirmatInset?: number;
   /** Ручки не заложены (Gola, ручки заказчика, без ручек) — как в кухнях Базиса без ручек в спецификации. */
@@ -1032,7 +1034,8 @@ function hardwareParts(m: Module, out: Part[]) {
   for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     const pi = m.shelfPinInset ?? 40, sg = sh.material === "glass" ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap; // держатель — на грани стойки
-    [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pi], [x + w / 2 - 4, z + dd / 2 - pi]].forEach(([px, pz], k) =>
+    const pf = m.kitchen ? m.shelfPinInsetFront ?? pi : pi; // передние — свой отступ только у кухни Базиса
+    [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pf], [x + w / 2 - 4, z + dd / 2 - pf]].forEach(([px, pz], k) =>
       out.push({ ...metal(`shp:${sh.id}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, y - sh.size[1] / 2 - 3, pz], "fastener", sh.sectionId),
         // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
         model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
@@ -1581,6 +1584,7 @@ export function parseModule(input: unknown): Module {
     ...(x.faceAir===undefined?{}:{faceAir:Number(x.faceAir)}),
     ...(x.shelfRear===undefined?{}:{shelfRear:Number(x.shelfRear)}),
     ...(x.shelfPinInset===undefined?{}:{shelfPinInset:Number(x.shelfPinInset)}),
+    ...(x.shelfPinInsetFront===undefined?{}:{shelfPinInsetFront:Number(x.shelfPinInsetFront)}),
     ...(x.confirmatInset===undefined?{}:{confirmatInset:Number(x.confirmatInset)}),
     ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),
     ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),

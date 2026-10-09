@@ -24,7 +24,24 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
   else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
+  const pf = pinInsetFront(ref, m.shelfPinInset);
+  if (pf !== undefined) { m.shelfPinInsetFront = pf; notes.push(`передние полкодержатели в ${pf} от переднего торца полки (задние в ${m.shelfPinInset}) — как в Базисе`); }
   return notes;
+}
+
+/** Полкодержатели не симметричны по глубине полки (61 из 244 полок Базиса): отступ передних от переднего торца нижней полки с держателями,
+ *  если он не равен заднему (back — shelfPinInset, распознанный по той же полке). */
+export function pinInsetFront(ref: RefModule, back: number | undefined): number | undefined {
+  if (back === undefined) return undefined;
+  const pins = ref.hardware.filter((h) => h.category === "полкодержатель");
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  for (const s of ref.panels.filter((p) => p.axis === "y").sort((a, b) => a.box[1] - b.box[1])) {
+    const ps = pins.filter((h) => Math.abs(h.pos[1] - s.box[1]) < 2);
+    if (ps.length < 2 || Math.abs(r1(Math.min(...ps.map((h) => h.pos[2] - s.box[2]))) - back) > 0.05) continue;
+    const front = r1(s.box[5] - Math.max(...ps.map((h) => h.pos[2])));
+    return Math.abs(front - back) > 0.5 ? front : undefined;
+  }
+  return undefined;
 }
 
 /** Нижний: боковины кромлены, но верхний торец — нет (k03, k20 — 16 из 290 боковин нижних модулей). */
