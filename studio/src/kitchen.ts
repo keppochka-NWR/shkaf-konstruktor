@@ -132,7 +132,9 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
  *  боковинами — перед и зад; царги — обе длинные; полки — все четыре; ХДФ и фасады — без кромки (фасады — фасадный материал). */
 export function kitchenEdges(m: Module, out: Part[]) {
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) return;
-  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
+  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
+  // фиксированная полка (пенал k12 m04, k30 m05) стоит между боковинами: торцы у боковин закрыты — кромка только перед и зад
+  const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   for (const p of out) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
     // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)
@@ -141,7 +143,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     const rearBase = m.backType === "none" ? ["-z"] : [];
     if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
-    else if (p.id === "top") setEdges(p, ["+z", ...rear], t);
+    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
+    else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)

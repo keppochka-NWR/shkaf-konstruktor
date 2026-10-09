@@ -187,6 +187,13 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       if (ecc.some(near)) { (m.jointFastening ??= {})[`${id}:${side}`] = "eccentric"; }
     }
   }
+  // фиксированные полки пенала (ниши под технику, разрез фасадов): эксцентрик + шкант, как у крыши — по фурнитуре Базиса у каждой стороны
+  for (const j of m.sections[0].fixed ?? []) {
+    const q = sh[j];
+    if (!q) continue;
+    for (const [side, sx] of [["left", left.b.x1], ["right", right.b.x0]] as const)
+      if (ecc.some((h) => Math.abs(h.pos[0] - sx) < 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1)) (m.jointFastening ??= {})[`${m.sections[0].id}:shelf:${j}:${side}`] = "eccentric";
+  }
   if (m.jointFastening && dow.length && ecc.length) {
     const e0 = ecc[0], d0 = dow.filter((d) => Math.abs(d.pos[1] - e0.pos[1]) < 10).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
     if (d0) m.dowels = { offset: r1(Math.abs(d0.pos[2] - e0.pos[2])) };
