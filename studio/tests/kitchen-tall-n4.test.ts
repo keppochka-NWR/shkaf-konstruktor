@@ -137,6 +137,17 @@ test('k16 m13: ящик внизу, ниша, одна распашная две
   assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2),missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name)}));
 });
 
+test('k30 m03 пенал под духовку без задника: крыша короче сзади на 70, как в Базисе (topBack), крыша и её конфирматы совпали',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{
+  const ref=load('k30','m03');
+  const {module:m}=moduleFromEtalon(ref);
+  assert.equal(m.backType,'none');
+  assert.equal(m.kitchen?.topBack,70);
+  const c=compareModule(ref,m);
+  assert.equal(c.missing.length+c.extra.length,0,JSON.stringify({missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name)}));
+  const conf=c.hardware.find(h=>h.category==='конфирмат')!;
+  assert.deepEqual([conf.ref,conf.studio,conf.maxPosDelta],[26,26,0]);
+});
+
 test('doorsAboveDrawers: распашные — только если все выше фасадов ящиков и в одном ряду',()=>{
   const q=(y0:number,y1:number)=>({b:{x0:0,y0,z0:0,x1:600,y1,z1:16}});
   const d=q(101,458),u=q(1509,2298),u2=q(800,1500);

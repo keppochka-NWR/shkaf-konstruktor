@@ -401,7 +401,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   if (railList.length) m.rails = railList;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
-  if (!back) m.backType = "none";
+  if (!back) {
+    m.backType = "none";
+    // пенал без задника (под духовку k30 m03): крыша короче сзади, как в Базисе (recognize-tall.ts)
+    const tbk = topBackTall(role, topPanel, bottom, sideZ0);
+    if (tbk !== undefined) { m.kitchen.topBack = tbk; notes.push(`крыша короче сзади на ${tbk}`); }
+  }
   else if (back.b.z1 <= sideZ0 + 0.5) {
     m.backType = "nailed"; m.backGap = r1(back.b.x0 - left.b.x0);
     // отступы снизу и сверху не как сбоку (k32 m06: 2 и 4 при 1,5) — по проекту; низ — от низа корпуса (у модуля на опорах — от дна)
