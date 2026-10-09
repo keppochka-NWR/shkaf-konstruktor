@@ -951,19 +951,25 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // кромка: торцы детали — как в проекте, если правило студии кромит иначе (k32 низ: боковины, дно и царги по кругу).
   // Деталь студии сопоставляется с панелью Базиса по габариту (±0,6); полки — своей схемой (shelfSides/shelfT), фасады — без кромки.
   if (m.edgeScheme) {
-    const own: NonNullable<NonNullable<Module["edgeScheme"]>["parts"]> = {};
+    const own: NonNullable<NonNullable<Module["edgeScheme"]>["parts"]> = {}, ownT: Record<string, number> = {};
     const dirs = ["+x", "-x", "+y", "-y", "+z", "-z"] as const;
     for (const sp of parts(m)) {
       if (sp.material !== "board" || sp.role === "door" || sp.role === "shelf" || sp.external || sp.id.endsWith(":facade") || sp.id.startsWith("kd:")) continue;
       const sb = [0, 1, 2].map((i) => sp.position[i] - sp.size[i] / 2).concat([0, 1, 2].map((i) => sp.position[i] + sp.size[i] / 2));
       const rp = P.find(({ p, b }) => board(p.kind) && [b.x0, b.y0, b.z0 - sideZ0, b.x1, b.y1, b.z1 - sideZ0].every((v, i) => Math.abs(v - sb[i]) <= 0.6))?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined;
       if (!rp?.edges) continue;
-      const ed = rp.edges.filter((e) => e.thick > 0);
-      if (ed.some((e) => Math.abs(e.thick - m.edgeScheme!.t) > 0.01)) continue; // другая толщина — не трогаем
+      const ed = rp.edges.filter((e) => e.thick > 0), th = [...new Set(ed.map((e) => e.thick))];
+      if (th.length > 1) continue; // разные толщины на одной детали — не трогаем
+      // одна толщина, но не как у корпуса (k31 m07/m09: стяжка у задника 0,5 при корпусе 1) — своя толщина детали (partsT)
+      const pt = th[0] ?? m.edgeScheme.t, thOwn = Math.abs(pt - m.edgeScheme.t) > 0.01;
       const want = dirs.filter((d) => ed.some((e) => e.side === d)), have = edgeByDir(sp);
-      if (want.join() !== dirs.filter((d) => (have[d] ?? 0) > 0).join()) own[sp.id] = [...want];
+      if (want.join() !== dirs.filter((d) => (have[d] ?? 0) > 0).join() || want.some((d) => Math.abs((have[d] ?? 0) - pt) > 0.01)) {
+        own[sp.id] = [...want];
+        if (thOwn) ownT[sp.id] = pt;
+      }
     }
-    if (Object.keys(own).length) { m.edgeScheme.parts = own; notes.push(`кромка по проекту: ${Object.entries(own).map(([k, v]) => `${k} ${v.join("")}`).join("; ")}`); }
+    if (Object.keys(own).length) { m.edgeScheme.parts = own; notes.push(`кромка по проекту: ${Object.entries(own).map(([k, v]) => `${k} ${v.join("")}${ownT[k] ? ` ${ownT[k]}` : ""}`).join("; ")}`); }
+    if (Object.keys(ownT).length) m.edgeScheme.partsT = ownT;
   }
   // угловой навесной с диагональным фасадом — параметрики нет (см. wallCorner.ts), причина первой
   if (ref.archetype.startsWith("wall")) { const why = wallCornerRaw(ref); if (why) unsupported.unshift(why); }

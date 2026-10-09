@@ -347,3 +347,10 @@ test('короб под вытяжку (k25 m16 накладной фронт, k
   assert.equal(hoodBoxes(load('k08','m10')).length,0);
   assert.ok(!moduleFromEtalon(load('k08','m10')).unsupported.some(u=>/короб/.test(u)));
 });
+test('кромка детали по проекту своей толщины (k31 m07: стяжка у задника 0,5 только по верхнему торцу при корпусе 1) — partsT, сохраняется в проекте',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
+  const ref=load('k31','m07'),{module:m}=moduleFromEtalon(ref);
+  const id=Object.keys(m.edgeScheme?.partsT??{})[0];
+  assert.ok(id);assert.equal(m.edgeScheme!.partsT![id],0.5);assert.deepEqual(m.edgeScheme!.parts![id],['+y']);
+  assert.ok(compareModule(ref,m).pass);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).edgeScheme?.partsT,m.edgeScheme!.partsT);
+});

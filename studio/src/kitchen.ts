@@ -343,7 +343,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
     // edgeScheme.rear — задние торцы кромятся и при набивном ХДФ, как в проекте Базиса (k31 m03/m04, n3-antresol)
     const rearBase = m.backType === "none" || m.edgeScheme?.rear ? ["-z"] : [];
     const ends = (p.id === "bottom" || p.id === "top") ? m.edgeScheme?.ends?.[p.id] : undefined, own = m.edgeScheme?.parts?.[p.id];
-    if (own) setEdges(p, own, t); // торцы детали — как в проекте Базиса (k32 низ: по кругу)
+    if (own) setEdges(p, own, m.edgeScheme?.partsT?.[p.id] ?? t); // торцы детали и их кромка — как в проекте Базиса (k32 низ: по кругу; k31 m07: стяжка 0,5)
     else if (ends) setEdges(p, ends, t); // торцы дна/крыши — как в проекте Базиса (k32 — по кругу)
     // опущенная боковина (sideDown, k22 m01): нижний торец открыт снизу — кромится
     else if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase, ...(m.kitchen.sideDown?.side === p.id ? ["-y"] : [])], t);
