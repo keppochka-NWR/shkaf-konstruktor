@@ -369,7 +369,9 @@ export function Scene(p: Props) {
           const isHandle = part.role === "handle";
           if (isMeshItem || (isHandle&&!part.simpleHandle)) { mat.transparent = true; mat.opacity = 0; mat.depthWrite = false; }
           const mesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]>(geometry, mat);
-          if (part.model?.native) {
+          if (part.model?.node) {
+            // узел Базиса без сетки («Петля под фальшпанель»): не рисуем — коробка выше прозрачная, остаётся только для выбора
+          } else if (part.model?.native) {
             // Фурнитура из Базиса (TriData → GLB в мм): начало координат модели — в origin, поворот quat, свои материалы, без растяжения.
             const g = generation, model = part.model; pendingTextures++;
             loadHandleModel(model.file).then((src) => {

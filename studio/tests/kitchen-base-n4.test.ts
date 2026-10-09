@@ -86,9 +86,35 @@ test('мойка 1480 с фальшем и планкой во всю высот
   assert.deepEqual(r.m.kitchen?.jointZ,{'bottom:right':[252,52]});
 });
 
+test('петля под фальшпанель — узел как в Базисе: точка и поворот [0,0,±1,0] у всех (k25 m02, k28 m17), без сетки ECHC; обычные петли — как были',{skip:!has('k25')||!has('k28')},()=>{
+  const same=(a:number[],b:number[])=>Math.abs(a.reduce((s,v,i)=>s+v*b[i],0))/(Math.hypot(...a)*Math.hypot(...b))>0.999;
+  for(const [k,key,nFf,nPlain] of [['k25','m02',3,0],['k28','m17',2,2]] as const){
+    const ref=load(k,key),r=moduleFromEtalon(ref),ps=parts(r.module),c=compareModule(ref,r.module);
+    const ffRef=ref.hardware.filter(h=>/под фальшпанель/.test(h.name)),nodes=ps.filter(p=>p.id.includes(':hingeplate:')&&p.falsePanelHinge);
+    assert.equal(ffRef.length,nFf);assert.equal(nodes.length,nFf);
+    // точки — сверка (Δ0 ниже); поворот каждого узла — как у петли Базиса (пары по высоте)
+    const ry=[...ffRef].sort((a,b)=>a.pos[1]-b.pos[1]),sy=[...nodes].sort((a,b)=>a.model!.origin![1]-b.model!.origin![1]);
+    ry.forEach((h,i)=>assert.ok(same(h.quat!,sy[i].model!.quat!),`${k} ${key}: поворот ${sy[i].model!.quat} ≠ Базис ${h.quat}`));
+    assert.ok(nodes.every(p=>p.model!.node&&p.model!.file===''&&p.name==='Петля под фальшпанель · узел'),'узел без сетки');
+    const cups=ps.filter(p=>p.id.includes(':hingecup:')&&p.falsePanelHinge);
+    assert.equal(cups.length,nFf);assert.ok(cups.every(p=>p.name==='Петля под фальшпанель · чашка Ø35'),'чашка названа как петля');
+    const plain=ps.filter(p=>p.id.includes(':hingeplate:')&&!p.falsePanelHinge);
+    assert.equal(plain.length,nPlain);assert.ok(plain.every(p=>p.model!.file==='hardware/bazis/d7e1d3957ebe.glb'),'обычные петли — сетка ECHC, как было');
+    const row=c.hardware.find(h=>h.category==='петля')!;
+    assert.equal(row.ref,row.studio);assert.equal(row.maxPosDelta,0);
+    assert.ok(!row.info&&!row.note&&!row.quatDiff,`${k} ${key}: поворот петель совпадает с Базисом (${row.info})`);
+    // присадка: чашка Ø35×13 в 22 от кромки двери (точка узла), наколок нет
+    const hs=holes(r.module).filter(h=>h.d===35);
+    for(const n of nodes){const cupX=ps.find(p=>p.id===n.id.replace(':hingeplate:',':hingecup:'))!.model!.origin![0];
+      assert.equal(Math.round(Math.abs(cupX-n.model!.origin![0])*10)/10,22);
+      assert.ok(hs.some(h=>Math.abs(h.at[0]-cupX)<0.01&&Math.abs(h.at[1]-n.model!.origin![1])<0.01&&h.depth===13),'чашка в точке чашки');}
+    assert.equal(partCollisions(ps,r.module).filter(x=>/hinge/.test(x.a+' '+x.b)).length,0,`${k} ${key}: петли ни с чем не пересекаются`);
+  }
+});
+
 test('фальш мойки только у кухни из Базиса с kitchen.faceFiller: шкаф студии и кухня палитры без флага — без фальша и петель под фальшпанель',()=>{
   const m=initialModule();
-  assert.ok(!parts(m).some(p=>p.id.startsWith('face-filler')||p.name.startsWith('Петля под фальшпанель')));
+  assert.ok(!parts(m).some(p=>p.id.startsWith('face-filler')||p.name.startsWith('Петля под фальшпанель')||p.falsePanelHinge||p.model?.node));
 });
 
 test('стяжка «без крепежа» — только если крепежа нет в её полосе вовсе: стенка короба ящика с конфирматами в его боковинах — с крепежом',()=>{

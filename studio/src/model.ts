@@ -355,7 +355,13 @@ export type Part = {
   model?: { file: string; length: "x" | "y"; mirror?: boolean;
     /** Модель фурнитуры из Базиса (TriData → GLB, мм, локальные оси фурнитуры): ставится как есть — начало координат модели
      *  в точку origin (координаты модуля), поворот quat [w,x,y,z]; без вписывания в габарит детали. */
-    native?: boolean; origin?: [number, number, number]; quat?: [number, number, number, number] };
+    native?: boolean; origin?: [number, number, number]; quat?: [number, number, number, number];
+    /** Узел Базиса без сетки: у Базиса у этой фурнитуры сетки нет и подходящей в библиотеке нет («Петля под фальшпанель»
+     *  угловой мойки) — точка и поворот как в Базисе для сверки и присадки, в 3D не рисуется (file пустой). */
+    node?: true };
+  /** «Петля под фальшпанель» (кухня Базиса, kitchen.faceFiller): точка — кромка двери × тыльная плоскость, чашка в 22 от кромки,
+   *  наколок под планку нет. Признак ставит model.ts на чашку и узел петли; присадка (drilling.ts) берёт его, а не название. */
+  falsePanelHinge?: true;
   /** Сдвиг по X при «открытых фасадах» — полотно купе отъезжает за соседнее. */
   openShift?: number;
   /** Explicitly schematic handle; use the declared box instead of a catalogue asset. */
@@ -1271,11 +1277,18 @@ function hardwareParts(m: Module, out: Part[]) {
         const qb: Quat = dir > 0 ? [0.5, 0.5, 0.5, -0.5] : [0.5, -0.5, 0.5, 0.5], o: [number, number, number] = [sideX, y, back];
         // Центр чашки — в 7,5 мм от внутренней плоскости стойки (присадка «Петля накладная» в проектах Базиса цеха).
         const co = qrot(qb, [0, ffHinge ? 22 : 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
-        const cup: Part = { ...metal(cupId, "Петля " + brand + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
+        const cup: Part = { ...metal(cupId, (ffHinge ? "Петля под фальшпанель" : "Петля " + brand) + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
           model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qb, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
-          collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }] };
+          collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }], ...(ffHinge ? { falsePanelHinge: true as const } : {}) };
+        // «Петля под фальшпанель» — узел как в Базисе (k06 m02, k19 m01, k25 m02, k28 m17: 26 модулей): точка — кромка двери × тыльная
+        // плоскость фасада, поворот 180° вокруг вертикали ([0,0,1,0] при левом фальше, [0,0,-1,0] при правом — один и тот же поворот),
+        // сетки у Базиса нет. Плечо ECHC (петля на стойке) сюда не годится — висело бы в корпусе за кромкой двери ни на чём;
+        // поэтому узел без сетки: точка и поворот для сверки и присадки, коробка 1 мм в точке узла (касается только своей двери).
+        if (ffHinge) return [cup, { ...metal(plateId, "Петля под фальшпанель · узел", [1, 1, 1], o, "hinge", door.sectionId),
+          model: { file: "", length: "y", native: true, origin: o, quat: ffk!.side === "left" ? [0, 0, 1, 0] : [0, 0, -1, 0], node: true },
+          collide: [{ size: [1, 1, 1], position: o }], falsePanelHinge: true }];
         // Плечо с планкой: по сетке ECHC 0..70 от фасада вглубь, 0..23,7 от стойки внутрь, ±26,5 по высоте.
-        const plate: Part = { ...metal(plateId, ffHinge ? "Петля под фальшпанель · плечо и планка" : "Петля " + brand + " · плечо и планка", [23.7, 53, 70], [sideX + dir * 11.85, y, back - 35], "hinge", door.sectionId),
+        const plate: Part = { ...metal(plateId, "Петля " + brand + " · плечо и планка", [23.7, 53, 70], [sideX + dir * 11.85, y, back - 35], "hinge", door.sectionId),
           model: { file: "hardware/bazis/d7e1d3957ebe.glb", length: "y", native: true, origin: o, quat: qb },
           collide: [{ size: [23.7, 53, 70], position: [sideX + dir * 11.85, y, back - 35] }] };
         return [cup, plate];
