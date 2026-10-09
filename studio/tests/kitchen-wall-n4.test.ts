@@ -31,7 +31,7 @@ test('вертикальный фасад кухни шире 700 — по-пр�
 
 test('ручка-рейлинг на месте Базиса: k09 m02 — горизонтально по центру в 30 от низа фасада, без отверстий',{skip:!has('k09')},()=>{
   const {m,c,ok}=pass('k09','m02');
-  assert.deepEqual(m.kitchen?.handle,{dy:30,from:'bottom',horizontal:true});
+  assert.deepEqual(m.kitchen?.handle,{dy:30,from:'bottom',horizontal:true,name:'Мебельная ручка рейлинг 128',mesh:'2905eccdc2f3',quat:[1,0,0,0],size:[148,10,30]});
   assert.equal(c.hardware.find(h=>h.category==='ручка')?.maxPosDelta,0);
   assert.equal(ok,true);
   assert.equal(holes(m).filter(h=>h.src.includes(':handle:')).length,0);
@@ -39,7 +39,7 @@ test('ручка-рейлинг на месте Базиса: k09 m02 — гор
 
 test('ручка k07 m07 на подъёмном фасаде: место и 2 × D5×18 насквозь с межосевым 160, как в Базисе',{skip:!has('k07')},()=>{
   const {m,c,ok}=pass('k07','m07');
-  assert.deepEqual(m.kitchen?.handle,{dy:40,from:'bottom',horizontal:true,holes:{d:5,depth:18,gap:160}});
+  assert.deepEqual(m.kitchen?.handle,{dy:40,from:'bottom',horizontal:true,name:'Мебельная ручка рейлинг 160',mesh:'9bc8182fe6be',quat:[0,0,0,1],size:[185,10,30],holes:{d:5,depth:18,gap:160}});
   const hh=holes(m).filter(h=>h.src.includes(':handle:'));
   assert.equal(hh.length,2);
   assert.ok(hh.every(h=>h.d===5&&h.depth===18&&h.dir[2]===-1));
@@ -60,7 +60,50 @@ test('handlePlace: ручки в разных местах — правила н
     {i:1,name:'ручка',category:'ручка',pos:[600,60,346],quat:[1,0,0,0],host:1},
   ]} as unknown as RefModule;
   assert.equal(handlePlace(ref,[[0,0,330,400,900,346],[400,0,330,800,900,346]]),undefined);
-  assert.deepEqual(handlePlace({...ref,hardware:ref.hardware.map(h=>({...h,pos:[h.pos[0],30,346]}))},[[0,0,330,400,900,346],[400,0,330,800,900,346]]),{dy:30,from:'bottom',horizontal:true});
+  assert.deepEqual(handlePlace({...ref,hardware:ref.hardware.map(h=>({...h,pos:[h.pos[0],30,346]}))},[[0,0,330,400,900,346],[400,0,330,800,900,346]]),{dy:30,from:'bottom',horizontal:true,name:'ручка'});
+});
+
+test('handlePlace: у двери без ручки в Базисе студия ручку не добавляет — правила нет (n4-fix)',()=>{
+  const ref={key:'x',name:'x',archetype:'wall',size:[800,900,350],panels:[],holes:[],hardware:[
+    {i:0,name:'ручка',category:'ручка',pos:[200,30,346],quat:[1,0,0,0],host:0},
+  ]} as unknown as RefModule;
+  // две двери, ручка одна: студия поставила бы ручку на обе — вторая была бы сверх Базиса
+  assert.equal(handlePlace(ref,[[0,0,330,400,900,346],[400,0,330,800,900,346]]),undefined);
+  assert.deepEqual(handlePlace(ref,[[0,0,330,400,900,346]]),{dy:30,from:'bottom',horizontal:true,name:'ручка'});
+});
+
+const HANDLE_KITCHENS=[['k07','m06'],['k07','m07'],['k09','m02'],['k09','m07']] as const;
+for(const [k,key] of HANDLE_KITCHENS)test(`ручка ${k} ${key} — ручка Базиса: сетка, поворот и габарит сетки, отверстия внутри ручки (n4-fix)`,{skip:!has(k)},()=>{
+  const {m,c,ok}=pass(k,key),ref=load(k,key);
+  assert.equal(ok,true);
+  const rh=ref.hardware.filter(h=>/ручк/i.test(h.name)),sh=parts(m).filter(p=>p.role==='handle');
+  assert.equal(sh.length,rh.length);
+  for(const p of sh){
+    assert.equal(p.name,'Ручка фасада · '+rh[0].name.trim());
+    assert.equal(p.model?.native,true);
+    assert.equal(p.model?.file,`hardware/bazis/${rh[0].mesh}.glb`);
+    const q=p.model!.quat!,r=rh[0].quat!;
+    assert.ok(Math.abs(q.reduce((s,v,i)=>s+v*r[i],0))/(Math.hypot(...q)*Math.hypot(...r))>0.999,'поворот как в Базисе');
+    // отверстия под ручку — в пределах длины ручки
+    const L=Math.max(p.size[0],p.size[1]),ax=p.size[0]>p.size[1]?0:1;
+    for(const h of holes(m).filter(h=>h.src.startsWith(p.id)))assert.ok(Math.abs(h.at[ax]-p.position[ax])<L/2,`отверстие ${h.at} вне ручки ${L}`);
+  }
+  const row=c.hardware.find(h=>h.category==='ручка')!;
+  assert.equal(row.studio,row.ref);
+  assert.equal(row.meshDiff,undefined);
+  assert.equal(row.quatDiff,undefined);
+  assert.equal(row.rot?.noQuat??0,0);
+});
+
+test('смета k07 m06: ручка Базиса одной строкой «bazis:ручка:…», без ручки студии сверху (n4-fix)',{skip:!has('k07')},async()=>{
+  const {markBazis}=await import('../scripts/kitchen/buildKitchen');
+  const {estimate}=await import('../src/pricing');
+  const {newProject}=await import('../src/project');
+  const ref=load('k07','m06'),{m}=pass('k07','m06'),mb=markBazis(m,ref);
+  assert.equal(mb.bazis,true);
+  const p=newProject(mb);
+  const lines=estimate(p).lines,hl=lines.filter(l=>/^handle:/.test(l.id)||/ручк/i.test(l.id));
+  assert.deepEqual(hl.map(l=>[l.id,l.quantity]),[['bazis:ручка:Мебельная ручка рейлинг 160',1]]);
 });
 
 test('шкаф студии: место ручки по-прежнему по правилу студии (kitchen.handle только у кухни)',()=>{
