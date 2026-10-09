@@ -1,7 +1,7 @@
 // Снимок регрессии деталей: все шкафы студии (примеры, заказы, локальные проекты, шаблоны палитры) → .qa/parts-baseline.json.
 // npx tsx scripts/parts-snapshot.ts --write   — записать эталон (перед правками)
 // npx tsx scripts/parts-snapshot.ts           — сравнить с эталоном: какие детали появились, пропали, сдвинулись (код выхода 1 при отличиях)
-// Кухонные проекты (kitchen-*) не входят: их меняем намеренно.
+// Кухонные проекты (kitchen-*) и шкафы из базы Базиса (wardrobe-*, wardrobes.json — сырой импорт) не входят: их меняем намеренно.
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { parts, initialModule, type Module } from "../src/model";
@@ -18,7 +18,7 @@ const addProject = (label: string, file: string) => {
 };
 for (const dir of ["examples", "examples/orders", "public/local-projects"]) {
   if (!existsSync(dir)) continue;
-  for (const f of readdirSync(dir)) if (f.endsWith(".json") && !f.startsWith("kitchen")) addProject(`${dir}/${f}`, join(dir, f));
+  for (const f of readdirSync(dir)) if (f.endsWith(".json") && !f.startsWith("kitchen") && !/^wardrobe/.test(f)) addProject(`${dir}/${f}`, join(dir, f));
 }
 const kinds: [ModuleKind, number, number, number][] = [["empty", 800, 2200, 600], ["shelves", 800, 2000, 400], ["wardrobe", 1000, 2200, 600], ["drawers", 600, 850, 550], ["corner", 1050, 2000, 450], ["desk", 1200, 750, 600], ["kupe", 1600, 2400, 100]];
 for (const [k, w, h, d] of kinds) { try { sets.set(`palette:${k}`, createModule(k, w, h, d, initialModule())); } catch (e) { console.error("палитра", k, (e as Error).message); } }

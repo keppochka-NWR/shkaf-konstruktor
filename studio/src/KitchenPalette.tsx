@@ -7,6 +7,7 @@ import type { Module } from "./model";
 import type { Project } from "./project";
 import { KITCHEN } from "./kitchen";
 import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule, placeKitchenRow, placeWorktop, type KitchenItem } from "./kitchenProject";
+import { WardrobeBase } from "./WardrobeBase";
 import "./kitchen.css";
 
 const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical };
@@ -72,6 +73,7 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, chil
       <p className="field-note">Проекты Базиса цеха, перенесённые в студию. Открываются здесь же, исходный файл не меняется.</p>
       <ul>{bases.map((b) => <li key={b.id}><a href={`?project=kitchen-${b.id}&fresh=1`}>{b.title}</a></li>)}</ul>
     </details>}
+    <WardrobeBase />
     {opened && <a className="text-action kp-back" href="?order=kitchen"><ArrowLeft size={14} />К своей кухне</a>}
   </details>;
 }
