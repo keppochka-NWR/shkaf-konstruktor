@@ -117,12 +117,19 @@ test('фальш мойки только у кухни из Базиса с kitc
   assert.ok(!parts(m).some(p=>p.id.startsWith('face-filler')||p.name.startsWith('Петля под фальшпанель')||p.falsePanelHinge||p.model?.node));
 });
 
-test('стяжка «без крепежа» — только если крепежа нет в её полосе вовсе: стенка короба ящика с конфирматами в его боковинах — с крепежом',()=>{
+test('стяжка с крепежом — только если в её полосе крепёж у наружных граней боковин: стенка короба ящика с конфирматами в боковинах короба — без крепежа к корпусу (студия не сверлит боковины корпуса там, где в Базисе отверстий нет)',()=>{
   const band={x0:16,y0:120,z0:20,x1:584,y1:220,z1:36};
   const conf=(x:number)=>({name:'Конфирмат 7х50 мм',category:'конфирмат',pos:[x,170,28]});
-  assert.equal(railFastened(band,[conf(29),conf(571)],0,600),true,'конфирматы в боковинах короба (x=29/571) — крепёж есть');
-  assert.equal(railFastened(band,[conf(0),conf(600)],0,600),true);
+  assert.equal(railFastened(band,[conf(29),conf(571)],0,600),false,'конфирматы в боковинах короба (x=29/571) — не в боковинах корпуса');
+  assert.equal(railFastened(band,[conf(0),conf(600)],0,600),true,'конфирматы через боковины корпуса — крепёж есть');
   assert.equal(railFastened(band,[{...conf(0),pos:[0,500,28]}],0,600),false,'крепёж вне полосы — без крепежа');
-  if(has('k01')){const m=moduleFromEtalon(load('k01','m04')).module;assert.ok(!(m.rails??[]).some(r=>r.fasten===false),'k01 m04: у стенок ящика крепёж есть');}
   if(has('k21')){const m=moduleFromEtalon(load('k21','m02')).module;assert.ok((m.rails??[]).some(r=>r.fasten===false),'k21 m02: передняя стяжка без крепежа — как в Базисе');}
+});
+
+test('стенки коробов ящиков (k01 m05, k02 m04, k07 m02, k11 m03, k04 m02): студия не сверлит отверстий, которых нет в Базисе, сверх прежнего',{skip:!has('k01')||!has('k02')||!has('k07')||!has('k11')||!has('k04')},()=>{
+  // до 9.10 (крепёж «при любом x») лишних отверстий было +24/+40/+72/+44/+22; по крепежу у наружных граней боковин — не больше прежних
+  for(const [k,key,maxExtra] of [['k01','m05',16],['k02','m04',24],['k07','m02',44],['k11','m03',24],['k04','m02',14]] as const){
+    const ref=load(k,key),m=moduleFromEtalon(ref).module,c=compareModule(ref,m);
+    assert.ok((c.holes?.extra.length??0)<=maxExtra,`${k} ${key}: лишних отверстий ${c.holes?.extra.length} > ${maxExtra}`);
+  }
 });
