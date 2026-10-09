@@ -618,7 +618,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const y0 = Math.min(...tallDoors.map((q) => q.b.y0));
     m.kitchen.faceBottom = r1(y0 - (m.feet ? (bottom ? m.feet.height : 0) : 0));
     notes.push(`распашные над ящиками: низ фасадов ${r1(y0)}`);
-  }
+  } else if (role === "tall" && m.kdrawers && hw("петля").length && fronts.some((q) => !drawerPanels.includes(q)))
+    // честно: иначе студия рисует створки на всю высоту поверх фасадов ящиков (k17 m09 — ящик, ниша, дверь и подъёмный фасад)
+    unsupported.push("пенал: ящики и распашные в несколько рядов — пока не поддержано");
   // фасады (одна строка распашных; ящики — выше)
   const doors = fronts.filter((f) => hw("петля").length);
   if (fronts.length) {

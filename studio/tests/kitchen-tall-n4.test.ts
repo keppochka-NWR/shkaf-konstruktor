@@ -148,6 +148,11 @@ test('k30 m03 пенал под духовку без задника: крыша
   assert.deepEqual([conf.ref,conf.studio,conf.maxPosDelta],[26,26,0]);
 });
 
+test('k17 m09: ящик, ниша, дверь и подъёмный фасад — честно «не поддержано», а не створки поверх ящика молча',{skip:!existsSync(`${ETALON}/k17.json`)},()=>{
+  const {unsupported}=moduleFromEtalon(load('k17','m09'));
+  assert.ok(unsupported.some(u=>u.includes('ящики и распашные')),unsupported.join('; '));
+});
+
 test('doorsAboveDrawers: распашные — только если все выше фасадов ящиков и в одном ряду',()=>{
   const q=(y0:number,y1:number)=>({b:{x0:0,y0,z0:0,x1:600,y1,z1:16}});
   const d=q(101,458),u=q(1509,2298),u2=q(800,1500);
