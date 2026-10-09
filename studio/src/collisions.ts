@@ -5,7 +5,8 @@
 // планка петли — на своей стойке, ХДФ — в пазу на глубину паза, ручка — на своём фасаде, направляющая — между ящиком и стойкой и т. п.
 import type { Module, Part } from "./model";
 
-export type Collision = { a: string; b: string; names: [string, string]; depth: number };
+/** bazis — пересечение есть в самом проекте Базиса (модуль из Базиса повторён как есть): показывается с пометкой, не прячется. */
+export type Collision = { a: string; b: string; names: [string, string]; depth: number; bazis?: true };
 
 type Box = { c: [number, number, number]; h: [number, number, number]; ax: [number, number, number][] };
 
@@ -115,6 +116,11 @@ export function partPenetration(a: Part, b: Part): number {
   return best;
 }
 
+/** Модуль из Базиса: отверстие крепежа вскрывает паз под подсветку (k31 m03/m04 — шкант под боковиной на 3 мм в паз 17×8 дна,
+ *  m12 — на 1 мм; отверстие D8×12 сверху и паз 8 снизу в доске 16). Так в самом проекте Базиса — студия повторяет как есть
+ *  и помечает пересечение «как в проекте Базиса» (не разрешённый контакт: дефект виден и правится в Базисе; n4-antresol). */
+const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.kitchen?.bazis && [[p, q], [q, p]].some(([a, b]) => isFastener(a) && b.role === "light" && b.id.startsWith("groove:"));
+
 /** Все неразрешённые пересечения деталей модуля. */
 export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   const out: Collision[] = [];
@@ -127,7 +133,7 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
     const depth = ps[i].collide || ps[j].collide ? partPenetration(ps[i], ps[j]) : penetration(A, B);
     if (depth <= tol) continue;
     if (allowedContact(ps[i], ps[j], depth, m)) continue;
-    out.push({ a: ps[i].id, b: ps[j].id, names: [ps[i].name, ps[j].name], depth: Math.round(depth * 10) / 10 });
+    out.push({ a: ps[i].id, b: ps[j].id, names: [ps[i].name, ps[j].name], depth: Math.round(depth * 10) / 10, ...(bazisHoleInGroove(ps[i], ps[j], m) ? { bazis: true as const } : {}) });
   }
   return out;
 }

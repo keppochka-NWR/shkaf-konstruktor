@@ -82,6 +82,6 @@ export function collisionWarnings(project:Project):RoomWarning[]{
   for(const a of project.modules){if(a.module.raw){const r=rawCheck(parts(a.module),a.module,false);
     if(r.deep.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса внутри детали — ${list(r.deep)}. Проверьте положение в проекте Базиса.`});
     if(r.far.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: фурнитура Базиса висит в воздухе дальше ${RAW_FAR} мм от деталей — ${list(r.far)}. Проверьте в проекте Базиса: нет детали, на которой она крепится.`});
-    continue;}const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм)`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. Сдвиньте полку или петлю, измените наполнение.`});}
+    continue;}const c=partCollisions(parts(a.module),a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм${x.bazis?", как в проекте Базиса":""})`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. ${c.every(x=>x.bazis)?"Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе.":"Сдвиньте полку или петлю, измените наполнение."}`});}
   return out;
 }

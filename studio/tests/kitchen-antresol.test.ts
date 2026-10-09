@@ -302,6 +302,17 @@ for(const [k,key,over] of [['k17','m07',true],['k21','m07',true],['k12','m05',fa
     assert.equal(unsupported.some(u=>/крыша на боковинах/.test(u)),over);
     if(over) assert.ok(!notes.some(n=>/навесы Базиса выше корпуса/.test(n)),'hangers under a roof on the sides are not «above the carcass»');
   });
+// Шкант под боковиной вскрывает паз подсветки дна (k31 m03/m04 — 3 мм, как в самом проекте Базиса: D8×12 сверху, паз 8 снизу):
+// студия повторяет как есть и помечает пересечение «как в проекте Базиса», не прячет его; у модуля не из Базиса пометки нет.
+for(const key of ['m03','m04'])
+  test(`etalon k31/${key}: dowel hole opening into the light groove is shown as a Bazis project defect`,{skip:!existsSync(ET+'k31.json')},()=>{
+    const {module:m}=moduleFromEtalon(refOf('k31',key));
+    const c=partCollisions(parts(m),m);
+    assert.ok(c.length>0&&c.every(x=>x.bazis&&/dowel:under:/.test(x.a+' '+x.b)&&/groove:/.test(x.a+' '+x.b)),'only the Bazis dowel × groove, flagged');
+    assert.ok(c.every(x=>x.depth<=3.05),'no deeper than in Bazis');
+    const own={...m,kitchen:{...m.kitchen!,bazis:undefined}} as Module;
+    assert.ok(partCollisions(parts(own),own).every(x=>!x.bazis),'not flagged for a module that is not from Bazis');
+  });
 // Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
 for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)
   test(`etalon ${k}/${key}: shelf confirmat does not hit the bottom confirmat`,{skip:!existsSync(ET+k+'.json')},()=>{

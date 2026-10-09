@@ -94,7 +94,7 @@ function Hardware({ list, m, showInside }: { list: Part[]; m: Module; showInside
     <ul className="kitchen-hardware">{rows.map(([name, n]) => <li key={name}><span>{name}</span><b>{n}</b></li>)}</ul>
     <button className="outline full" onClick={showInside}>Открыть фасады — увидеть петли, опоры, навесы</button>
     {collisions.length
-      ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересекаются детали: {collisions.slice(0, 3).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{collisions.length > 3 ? ` и ещё ${collisions.length - 3}` : ""}.</p>
+      ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересекаются детали: {collisions.slice(0, 3).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм${c.bazis ? ", как в проекте Базиса" : ""})`).join("; ")}{collisions.length > 3 ? ` и ещё ${collisions.length - 3}` : ""}.{collisions.every((c) => c.bazis) ? " Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе." : ""}</p>
       : <p className="kitchen-ok"><CircleCheck size={14} /> Детали и фурнитура не пересекаются.</p>}
   </Group>;
 }
