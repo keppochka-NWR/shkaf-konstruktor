@@ -226,7 +226,7 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
       for (const h of refQ) {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
         all.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
-        const q = best?.model?.quat; if (!q) { rot.noQuat++; continue; }
+        const q = best?.model?.quat ?? best?.quat; if (!q) { rot.noQuat++; continue; } // рафикс: сетки нет, поворот — Part.quat (n4-tall)
         rot.checked++;
         const r = quatRel(h.quat!, q);
         if (Math.abs(r[0]) >= 0.9995) continue;
@@ -373,7 +373,7 @@ export function refFromStudio(m: Module, key = "self"): RefModule {
     return { i, name: p.name, mat: p.material, thick: Math.min(...p.size), kind: p.material === "board" ? "ldsp" : p.material, axis: AX[ax], box: [0, 1, 2].map((k) => p.position[k] - p.size[k] / 2).concat([0, 1, 2].map((k) => p.position[k] + p.size[k] / 2)) };
   });
   // фасад студии — тоже «перед боковинами», как у Базиса
-  const hardware: RefHardware[] = ps.map((p) => ({ p, c: studioCategory(p) })).filter((x) => x.c).map((x, i) => ({ i, name: x.p.name, category: x.c!, pos: studioAnchor(x.p), ...(x.p.model?.quat ? { quat: [...x.p.model.quat] } : {}) }));
+  const hardware: RefHardware[] = ps.map((p) => ({ p, c: studioCategory(p) })).filter((x) => x.c).map((x, i) => ({ i, name: x.p.name, category: x.c!, pos: studioAnchor(x.p), ...(x.p.model?.quat ?? x.p.quat ? { quat: [...(x.p.model?.quat ?? x.p.quat)!] } : {}) }));
   return { key, name: m.name, archetype: "self", size: [m.width, m.height, m.depth], panels, hardware };
 }
 

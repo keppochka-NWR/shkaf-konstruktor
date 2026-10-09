@@ -39,6 +39,8 @@ export function rafixSide(add: Add, out: Part[], hp: Part, side: "left" | "right
     const id = `rafix:${hp.id}:${side}:${k}`;
     add(id, "Рафикс · полкодержатель-стяжка", [RAFIX.bodyD, RAFIX.bodyDepth, RAFIX.bodyD], [edgeX + dir * RAFIX.bodyInset, yb + RAFIX.bodyDepth / 2, z], RAFIX.bodyD, RAFIX.bodyD, RAFIX.bodyDepth, "fastener", hp.sectionId, "metal");
     out.at(-1)!.anchor = [edgeX, yb, z];
+    // поворот как в Базисе (по базе у полок: у левой стойки [0,1,0,0] — 103 из 105, у правой [0,0,0,1] — 101 из 103; n4-tall)
+    out.at(-1)!.quat = side === "left" ? [0, 1, 0, 0] : [0, 0, 0, 1];
     // шток: от корпуса в стойку на глубину отверстия
     const x0 = edgeX - dir * RAFIX.pinDepth, x1 = edgeX + dir * RAFIX.bodyInset, L = Math.abs(x1 - x0);
     add(`${id}:pin`, "Рафикс · шток", [L, RAFIX.pinD, RAFIX.pinD], [(x0 + x1) / 2, yb + RAFIX.pinUp, z], L, RAFIX.pinD, RAFIX.pinD, "fastener", hp.sectionId, "metal");

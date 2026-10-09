@@ -193,3 +193,9 @@ test('k24 m04: дно без крепежа к стойкам в Базисе (�
   const c=compareModule(ref,m).hardware.find(h=>h.category==='конфирмат')!;
   assert.equal(c.ref,8);assert.equal(c.studio,8);
 });
+test('рафикс повёрнут как в Базисе (у левой стойки [0,1,0,0], у правой [0,0,0,1]): k16 m01 — все 36 сверены, другого поворота нет',{skip:!existsSync(`${ETALON}/k16.json`)},()=>{
+  const ref=load('k16','m01'),{module:m}=moduleFromEtalon(ref);
+  const r=compareModule(ref,m).hardware.find(h=>h.category==='рафикс')!;
+  assert.deepEqual(r.rot,{checked:36,bad:0,spin:0,noQuat:0});
+  for(const p of parts(m).filter(p=>p.id.startsWith('rafix:')&&!p.id.endsWith(':pin')))assert.deepEqual(p.quat,p.id.includes(':left:')?[0,1,0,0]:[0,0,0,1],p.id);
+});

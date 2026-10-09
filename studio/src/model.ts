@@ -394,6 +394,8 @@ export type Part = {
   collide?: { size: [number, number, number]; position: [number, number, number] }[];
   /** Опорная точка фурнитуры как в Базисе (эксцентрик — грань стойки × внутренняя пласть горизонтали), для сверки и присадки. */
   anchor?: [number, number, number];
+  /** Поворот фурнитуры как в Базисе [w,x,y,z] у детали без своей модели (рафикс: сетки в Базисе нет) — для сверки, в 3D не участвует. */
+  quat?: [number, number, number, number];
 };
 export type SectionBox = {
   id: string;
