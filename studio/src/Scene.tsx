@@ -391,7 +391,7 @@ export function Scene(p: Props) {
             loadHandleModel(part.model.file).then((src) => { if (disposed || g !== generation) return; const fitted = fitProfile(src, part, pm); fitted.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; }); mesh.add(fitted); needsRender = true; })
               .catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
           }
-          if (isHandle&&!part.simpleHandle) {
+          if (isHandle&&!part.simpleHandle&&!part.model?.native) { // ручка Базиса (сетка библиотеки) — выше, своей моделью
             // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
             const handle = handleById(facadeHandleId(m,part.id)), vertical = part.size[1] > part.size[0];
             const holder = new THREE.Group();

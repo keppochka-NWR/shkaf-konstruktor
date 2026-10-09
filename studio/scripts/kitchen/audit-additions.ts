@@ -48,7 +48,9 @@ for (const f of files) {
       ["навесы", qty(/^kitchen-hanger$/), refN((h) => h.category === "навес")],
       ["заглушки навесов", qty(/^kitchen-hanger-cap$/), refN((h) => h.category === "заглушка" && /навес/i.test(h.name))],
       ["газлифты (комплект на боковину)", qty(/^kitchen-lift:/), Math.ceil(refN((h) => h.category === "газлифт") / 2)],
-      ["ручки", qty(/^handle:/), refN((h) => h.category === "ручка")],
+      // все строки ручек модуля — ручки студии и ручки Базиса (bazis:…ручка…): двойная ручка (студии сверху Базиса) видна здесь;
+      // «рейлинг» из «ящик-системы» эталона — ручка (refHardware, n4-wall)
+      ["ручки", qty(/^handle:/) + qty(/^bazis:[^:]*:.*ручк/i), refN((h) => refCategory(h) === "ручка")],
       ["толкатели", qty(/^push-latch$/), 0],
       ["подъёмный механизм (без газлифта Базиса)", qty(/^lift-mechanism$/), 0],
     ];

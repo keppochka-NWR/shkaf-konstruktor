@@ -7,15 +7,20 @@ import { hingePositions } from "../../src/hardware";
 import type { RefModule, RefPanel } from "./compare";
 import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, isEuro6, legScrews, railConfY, railFastened, screwKind, sideTopEdged } from "./recognize-common";
+import { edgeRail, isEuro6, legScrews, railConf, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { axisAsBazis, firmaxAsBazis } from "./recognize-drawers";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
+import { aluFacadeReason } from "./aluFacade";
+import { hoodBoxReason } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
+import { handlePlace } from "./recognize-handle";
+import { recognizeNails } from "./recognize-nails";
+import { railUnder } from "./recognize-wallrail";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 
@@ -313,6 +318,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
   const ffFlat = role === "base" && horiz.length ? faceFillerFlat(ref, P, left, right, sideZ1, Math.min(...horiz.map((h) => h.b.y0)), top) : undefined;
   const fronts = P.filter((x) => x.p.axis === "z" && x.p.kind !== "hdf" && x.b.z0 >= sideZ1 - 1 && !ffFlat?.panels.includes(x)).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
+  // фасад в алюминиевом профиле: рамки в проекте нет (профиль без сетки) — модуль честно сырой (aluFacade.ts); наполнение из рядов
+  // фасадов не убираем: по нему считается низ корпуса (подъём, фасады до низа), без него корпус съезжает (k21 m05: Δ3,5)
+  const aluWhy = aluFacadeReason(ref);
+  if (aluWhy) unsupported.push(aluWhy);
+  // короб под вытяжку у навесного (две стенки и фронт внутри корпуса, П-вырез в дне/крыше) — параметрики нет, честно сырой (hoodBox.ts)
+  const hoodWhy = ref.archetype.startsWith("wall") ? hoodBoxReason(ref) : null;
+  if (hoodWhy) unsupported.push(hoodWhy);
   const hdf = P.filter(({ p }) => p.kind === "hdf");
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
   const legs = hw("опора");
@@ -386,6 +398,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // спереди детали нет (задняя планка у стены k14 m06 — не цоколь), студия цоколь не ставит
   else if (!legs.length && (m.plinthHeight ?? 0) > 0 && !P.some(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.z1 >= sideZ1 - 40)) m.kitchen.plinth = { height: 95, off: true };
   if (fronts.length && !hw("ручка").length) m.noHandles = true;
+  else if (fronts.length) { const hp = handlePlace(ref, fronts.map(({ b }) => [b.x0, b.y0, b.z0, b.x1, b.y1, b.z1])); if (hp) m.kitchen.handle = hp; } // место ручки как в Базисе (n4-wall)
   if (!plinthPanel && (role === "base" || role === "tall")) notes.push("цоколя в модуле нет (в Базисе — у ряда или отсутствует)");
   // корпус приподнят без опор: фронтальная панель ЛДСП под дном в Базисе (цоколь/планка под другим именем) — студия ставит её «Цоколем»;
   // нет такой панели — цоколя нет (навесной со свесом фасада ниже дна: правило Макса — не добавлять того, чего нет в Базисе)
@@ -404,12 +417,19 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
     const front = r.b.z1 >= sideZ1 - 30;
     // навесной: планка на ребре, стоящая на дне (k04: верхняя и нижняя задние планки навески) — нижняя стяжка студии, не вторая «верхняя»
-    if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
+    if (wallRailOnBottom(role, r, bottom)) {
+      const place = front ? "front-bottom" : "rear-bottom";
+      railList.push({ place, height: r1(r.b.y1 - r.b.y0) });
+      const ru = bottom ? railUnder(ref.hardware, r.b, bottom.b) : undefined; if (ru) m.kitchen.railUnder = { ...m.kitchen.railUnder, [place]: ru }; // эксцентрики и шканты снизу (n4-wall)
+      continue;
+    }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
-    // и свои высоты конфирматов, если в проекте не один по центру (railConfY, n4-base)
+    // и крепёж по проекту: конфирматы через боковины (confY, если не один по центру) и через крышу/дно (topConf) — одно правило
+    // railConf для нижних, навесных и антресолей (слияние n4-base railConfY и n4-wall railConf)
     const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
-    const confY = role === "base" && fastened ? railConfY(r.b, ref.hardware, left.b.x0, right.b.x1) : undefined;
-    railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...(confY ? { confY } : {}) });
+    const hz = topPanel && Math.abs(topPanel.b.y0 - r.b.y1) < 0.6 ? topPanel.b : bottom && Math.abs(bottom.b.y1 - r.b.y0) < 0.6 ? bottom.b : undefined;
+    const rc = fastened && !m.kitchen.noFasteners && role !== "tall" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
+    railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...rc });
   }
   if (railList.length) m.rails = railList;
   // задник
@@ -417,6 +437,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   if (!back) m.backType = "none";
   else if (back.b.z1 <= sideZ0 + 0.5) {
     m.backType = "nailed"; m.backGap = r1(back.b.x0 - left.b.x0);
+    const nails = recognizeNails(ref, back.b); if (nails) m.kitchen.nails = nails; // гвозди ХДФ по раскладке Базиса (n4-wall)
     // отступы снизу и сверху не как сбоку (k32 m06: 2 и 4 при 1,5) — по проекту; низ — от низа корпуса (у модуля на опорах — от дна)
     const yb = legs.length && bottom ? bottom.b.y0 : Math.min(left.b.y0, right.b.y0, bottom?.b.y0 ?? Infinity), g0 = r1(back.b.y0 - yb), g1 = r1(top - back.b.y1);
     if (!m.raisedSides && (Math.abs(g0 - m.backGap) > 0.01 || Math.abs(g1 - m.backGap) > 0.01) && g0 >= 0 && g1 >= 0) m.kitchen.backGapY = [g0, g1];
@@ -916,6 +937,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (dSide !== undefined && dSide !== 12) e.dowelSide = dSide;
       // бочонок дна снизу; под площадкой опоры (k22 m01) — не повторяем: это пересечение (n3-base, eccFromBelow «legs»)
       if (bottom && eh.some((h) => h.d === 15 && h.panel === bottom.p.i && h.face === "-y") && eccFromBelow(ref) !== "legs") e.bottomOut = true;
+      // бочонок крыши сверху, с наружной пласти (k07: D15×12 «+y» крыши) — как в Базисе (n4-wall)
+      if (topPanel && topPanel !== bottom && eh.some((h) => h.d === 15 && h.panel === topPanel.p.i && h.face === "+y")) e.topOut = true;
       if (Object.keys(e).length) { m.kitchen.ecc = e; notes.push(`эксцентрик по проекту: ${JSON.stringify(e)}`); }
     }
     if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }
@@ -960,24 +983,34 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const other = ref.panels.length - P.filter((x) => [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, ...drawerPanels].includes(x)).length;
+  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, ...drawerPanels];
+  const other = ref.panels.length - P.filter((x) => known.includes(x)).length;
+  // полка из фасадного материала внутри корпуса (k23 m07: «Горизонтальная» 19 мм, «Фасадный мат-л», без полкодержателей) — причина прямо
+  const facShelf = P.find((x) => !known.includes(x) && x.p.axis === "y" && x.p.kind === "other" && x.b.x0 >= left.b.x1 - 0.6 && x.b.x1 <= right.b.x0 + 0.6 && x.b.z1 <= sideZ1 + 0.5);
+  if (facShelf) unsupported.push(`полка из фасадного материала ${r1(facShelf.b.y1 - facShelf.b.y0)} мм на ${r1(facShelf.b.y0)} — пока не поддержано`);
   if (other) unsupported.push(`${other} панелей не распознано (перегородки, ящики, вставки)`);
   // кромка: торцы детали — как в проекте, если правило студии кромит иначе (k32 низ: боковины, дно и царги по кругу).
   // Деталь студии сопоставляется с панелью Базиса по габариту (±0,6); полки — своей схемой (shelfSides/shelfT), фасады — без кромки.
   if (m.edgeScheme) {
-    const own: NonNullable<NonNullable<Module["edgeScheme"]>["parts"]> = {};
+    const own: NonNullable<NonNullable<Module["edgeScheme"]>["parts"]> = {}, ownT: Record<string, number> = {};
     const dirs = ["+x", "-x", "+y", "-y", "+z", "-z"] as const;
     for (const sp of parts(m)) {
       if (sp.material !== "board" || sp.role === "door" || sp.role === "shelf" || sp.external || sp.id.endsWith(":facade") || sp.id.startsWith("kd:")) continue;
       const sb = [0, 1, 2].map((i) => sp.position[i] - sp.size[i] / 2).concat([0, 1, 2].map((i) => sp.position[i] + sp.size[i] / 2));
       const rp = P.find(({ p, b }) => board(p.kind) && [b.x0, b.y0, b.z0 - sideZ0, b.x1, b.y1, b.z1 - sideZ0].every((v, i) => Math.abs(v - sb[i]) <= 0.6))?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined;
       if (!rp?.edges) continue;
-      const ed = rp.edges.filter((e) => e.thick > 0);
-      if (ed.some((e) => Math.abs(e.thick - m.edgeScheme!.t) > 0.01)) continue; // другая толщина — не трогаем
+      const ed = rp.edges.filter((e) => e.thick > 0), th = [...new Set(ed.map((e) => e.thick))];
+      if (th.length > 1) continue; // разные толщины на одной детали — не трогаем
+      // одна толщина, но не как у корпуса (k31 m07/m09: стяжка у задника 0,5 при корпусе 1) — своя толщина детали (partsT)
+      const pt = th[0] ?? m.edgeScheme.t, thOwn = Math.abs(pt - m.edgeScheme.t) > 0.01;
       const want = dirs.filter((d) => ed.some((e) => e.side === d)), have = edgeByDir(sp);
-      if (want.join() !== dirs.filter((d) => (have[d] ?? 0) > 0).join()) own[sp.id] = [...want];
+      if (want.join() !== dirs.filter((d) => (have[d] ?? 0) > 0).join() || want.some((d) => Math.abs((have[d] ?? 0) - pt) > 0.01)) {
+        own[sp.id] = [...want];
+        if (thOwn) ownT[sp.id] = pt;
+      }
     }
-    if (Object.keys(own).length) { m.edgeScheme.parts = own; notes.push(`кромка по проекту: ${Object.entries(own).map(([k, v]) => `${k} ${v.join("")}`).join("; ")}`); }
+    if (Object.keys(own).length) { m.edgeScheme.parts = own; notes.push(`кромка по проекту: ${Object.entries(own).map(([k, v]) => `${k} ${v.join("")}${ownT[k] ? ` ${ownT[k]}` : ""}`).join("; ")}`); }
+    if (Object.keys(ownT).length) m.edgeScheme.partsT = ownT;
   }
   // угловой навесной с диагональным фасадом — параметрики нет (см. wallCorner.ts), причина первой
   if (ref.archetype.startsWith("wall")) { const why = wallCornerRaw(ref); if (why) unsupported.unshift(why); }

@@ -37,15 +37,36 @@ export function railFastened(b: Box, hardware: Hw[], xL: number, xR: number): bo
   return hardware.some((h) => inBand(h) && (h.pos[0] <= xL + 1 || h.pos[0] >= xR - 1));
 }
 
+const isConf = (h: Hw) => h.category === "конфирмат" || /^Евровинт/.test(h.name);
 /** Высоты конфирматов стяжки на ребре от её низа (через боковины корпуса, x ≤ xL или x ≥ xR), если в проекте не один по центру.
  *  По всем 34 кухням у стяжек на ребре между боковинами высотой 100: один по центру — 37 сторон, два (34 и 66) — 21 сторона, по проекту;
- *  у стяжек 124–200 — всегда два. Берём, только если слева и справа одинаково; иначе — правило студии (один по центру). */
+ *  у стяжек 124–200 — всегда два. Берём, только если слева и справа одинаково; иначе — правило студии (один по центру).
+ *  В боковинах конфирматов нет ни слева, ни справа — [] (k15 m08, k19 m02: стяжка навесного без конфирматов; студия их не добавляет). */
 export function railConfY(b: Box, hardware: Hw[], xL: number, xR: number): number[] | undefined {
-  const inBand = (h: Hw) => (h.category === "конфирмат" || /^Евровинт/.test(h.name)) && h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
+  const inBand = (h: Hw) => isConf(h) && h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
   const ys = (f: (h: Hw) => boolean) => hardware.filter((h) => inBand(h) && f(h)).map((h) => r1(h.pos[1] - b.y0)).sort((a, c) => a - c);
   const L = ys((h) => h.pos[0] <= xL + 1), R = ys((h) => h.pos[0] >= xR - 1), mid = (b.y1 - b.y0) / 2;
-  if (!L.length || L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  if (L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  if (!L.length) return [];
   return L.length === 1 && Math.abs(L[0] - mid) < 0.6 ? undefined : L;
+}
+
+/** Конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от левого конца стяжки, по проекту Базиса:
+ *  точки на наружной пласти горизонтали hz в пределах ширины стяжки (k03: 2 через крышу в 51–60 от концов; k04: 56–65; k20: один
+ *  по центру; у каждого проекта своё — общего правила нет). Нет таких — undefined. */
+export function railTopConf(b: Box, hardware: Hw[], hz?: Box): number[] | undefined {
+  if (!hz) return undefined;
+  const yo = hz.y0 >= b.y1 - 0.5 ? hz.y1 : hz.y0; // наружная пласть крыши (над стяжкой) или дна (под ней)
+  const xs = hardware.filter((h) => isConf(h) && h.pos[2] >= b.z0 - 0.5 && h.pos[2] <= b.z1 + 0.5 && Math.abs(h.pos[1] - yo) < 0.6 && h.pos[0] > b.x0 + 0.5 && h.pos[0] < b.x1 - 0.5)
+    .map((h) => r1(h.pos[0] - b.x0)).sort((a, c) => a - c);
+  return xs.length ? xs : undefined;
+}
+
+/** Крепёж стяжки на ребре по проекту Базиса — одно правило для нижних, навесных и антресолей (слияние n4-base railConfY, n4-wall railConf):
+ *  confY — конфирматы через боковины (Module.rails[].confY), topConf — через крышу/дно (rails[].topConf). Без полей — правило студии. */
+export function railConf(b: Box, hardware: Hw[], xL: number, xR: number, hz?: Box): Pick<Rail, "confY" | "topConf"> {
+  const confY = railConfY(b, hardware, xL, xR), topConf = railTopConf(b, hardware, hz);
+  return { ...(confY ? { confY } : {}), ...(topConf ? { topConf } : {}) };
 }
 
 /** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */

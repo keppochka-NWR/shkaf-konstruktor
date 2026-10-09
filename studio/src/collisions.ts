@@ -45,6 +45,8 @@ const doorOf = (id: string) => id.replace(/:(hingecup|hingeplate|hingearm|handle
 /** Разрешён ли контакт пары (порядок не важен). depth — глубина проникновения, мм. */
 export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boolean {
   for (const [p, q] of [[a, b], [b, a]] as const) {
+    // Сушка кухни Базиса без сетки (k01, k02, k06, k08) — точка проекта без тела: пересекать нечего (n4-wall).
+    if (p.id.startsWith("kitchen-dryer:") && !p.model) return true;
     // Крепёж корпуса (конфирмат, эксцентрик, полкодержатель, шкант) сидит в отверстиях досок корпуса и полок.
     if (isFastener(p) && isBoard(q) && q.role !== "door" && !q.id.endsWith(":facade")) return true;
     // фальш угловой мойки Базиса (ЛДСП корпуса в плоскости фасадов) — свой крепёж в своих отверстиях D8×16 (kitchen.faceFiller.conf, k01 m03)

@@ -68,7 +68,9 @@ export function markBazis(m: Module, ref: RefModule): Module {
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
     || (/заглушк/i.test(h.name) && /навес/i.test(h.name))
     // рафиксы жёстких полок строит параметрика (kitchen.rafix, n3-tall) — строкой по деталям сцены, не второй раз по Базису
-    || (!!m.kitchen?.rafix && /рафикс/i.test(h.name))).concat(bazisHoles(ref.hardware));
+    || (!!m.kitchen?.rafix && /рафикс/i.test(h.name))
+    // ручки Базиса на фасадах ставит параметрика (kitchen.handle.name, n4-wall) — строкой по ручкам сцены, не второй раз по Базису
+    || (!!m.kitchen?.handle?.name && h.category === "ручка" && h.name.trim() === m.kitchen.handle.name)).concat(bazisHoles(ref.hardware));
   const names = bazisNames(ref.hardware);
   return { ...m, bazis: true, ...(items.length ? { bazisItems: items } : {}), ...(Object.keys(names).length ? { bazisNames: names } : {}) };
 }

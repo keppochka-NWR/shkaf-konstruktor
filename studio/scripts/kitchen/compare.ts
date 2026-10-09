@@ -12,7 +12,7 @@ import { normalizeRefHardware } from "./refHardware";
 import { legDupKey } from "../../src/rawModule";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 
-export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
+export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string; grp?: string };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
 export type RefHole = { panel: number; face: string; at: number[]; dir: number[]; d: number; depth: number; src?: number | null };
 export type RefModule = { key: string; name: string; archetype: string; size: number[]; panels: RefPanel[]; hardware: RefHardware[]; holes?: RefHole[] };
@@ -111,6 +111,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kd:") && id.includes(":sys:")) return "ящик-система";
   if (id.startsWith("kd:") && id.includes(":cap:")) return "заглушка";
   if (id.startsWith("kd:") && id.includes(":screw:")) return "прочее";
+  if (id.startsWith("nail:")) return "прочее"; // гвоздь набивного ХДФ — у Базиса «прочее» (n4-wall)
   if (p.role === "handle") return "ручка";
   return null;
 }
@@ -205,7 +206,8 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
     const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
-      const bad = ref.hardware.filter((h) => h.category === category && h.quat).filter((h) => {
+      // сушка Базиса без сетки (k01, k02, k06, k08) — тела нет, поворот не сверяется (n4-wall)
+      const bad = ref.hardware.filter((h) => h.category === category && h.quat && (category !== "сушка" || h.mesh)).filter((h) => {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
         sq.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
         const q = best?.model?.quat; if (!q) return true;

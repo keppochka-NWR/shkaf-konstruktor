@@ -4,7 +4,8 @@ import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '../src/model';
 import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
-import {compareModule,type RefModule} from '../scripts/kitchen/compare';
+import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
+import {hoodBoxes} from '../scripts/kitchen/hoodBox';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {refCategory,confirmatName} from '../scripts/kitchen/refHardware';
 import {estimate} from '../src/pricing';
@@ -296,7 +297,9 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   assert.match(compareModule(ref,turned).hardware.find(h=>h.category==='сушка')!.note??'',/поворот ≠ ×1/);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...kitchenWall(initialModule(),600),kitchen:{role:'wall',dryer:m.kitchen?.dryer}}))).kitchen?.dryer,m.kitchen?.dryer,'сушка переживает сохранение');
   const k6=moduleFromEtalon(load('k06','m07'));
-  assert.equal(k6.module.kitchen?.dryer,undefined);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
+  // n4-wall: сушка без сетки — точка проекта без тела (как в Базисе), геометрия не выдумывается
+  assert.deepEqual(k6.module.kitchen?.dryer?.map(d=>d.mesh),[undefined]);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
+  assert.ok(parts(k6.module).filter(p=>p.id.startsWith('kitchen-dryer:')).every(p=>!p.model));
 });
 test('навесной под вытяжку k08 m10: дно короче сзади (перед ХДФ) и без крепежа, как в Базисе — сверка PASS',{skip:!existsSync(`${ETALON}/k08.json`)},()=>{
   const ref=load('k08','m10'),{module:m}=moduleFromEtalon(ref);
@@ -320,4 +323,45 @@ test('угловой навесной с диагональным фасадом
   const {unsupported}=moduleFromEtalon(load('k03','m10'));
   assert.match(unsupported[0],/диагональным фасадом/);
   assert.ok(!moduleFromEtalon(load('k10','m09')).unsupported.some(u=>/диагональ/.test(u)));
+});
+test('навесной с поднятым дном и фасадами выше низа (k13 m05): низ фасадов из проекта главнее правила raise — петель как в Базисе, не больше',{skip:!existsSync(`${ETALON}/k13.json`)},()=>{
+  const ref=load('k13','m05'),{module:m}=moduleFromEtalon(ref);
+  assert.ok(m.kitchen?.raise);
+  assert.equal(m.kitchen?.faceBottom,361.5);
+  assert.equal(facadeBottom(m),361.5);
+  const h=compareModule(ref,m).hardware.find(x=>x.category==='петля')!;
+  assert.equal(h.studio,h.ref);
+});
+test('фасад в алюминиевом профиле Базиса (k20 m02, k21 m05): рамки в проекте нет — модуль честно сырой, без молчаливого PASS',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
+  const r=moduleFromEtalon(load('k20','m02'));
+  assert.match(r.unsupported[0],/алюминиевом профиле/);
+  const ref=load('k21','m05'),q=moduleFromEtalon(ref);
+  assert.match(q.unsupported.join(';'),/алюминиевом профиле/);
+  assert.ok(!honestPass(compareModule(ref,q.module),validate(q.module),q.unsupported));
+  assert.ok(!moduleFromEtalon(load('k23','m05')).unsupported.some(u=>/алюминиев/.test(u)));
+});
+test('короб под вытяжку (k25 m16 накладной фронт, k06 m09 вкладной) — по геометрии, честно «не поддержано»; навесной без короба (k08 m10) причины не получает',{skip:!existsSync(`${ETALON}/k25.json`)},()=>{
+  assert.deepEqual(hoodBoxes(load('k25','m16')),[{x0:179,x1:400,depth:250,y0:166,y1:714}]);
+  assert.equal(hoodBoxes(load('k06','m09')).length,1);
+  assert.match(moduleFromEtalon(load('k25','m16')).unsupported.join(';'),/короб под вытяжку/);
+  assert.equal(hoodBoxes(load('k08','m10')).length,0);
+  assert.ok(!moduleFromEtalon(load('k08','m10')).unsupported.some(u=>/короб/.test(u)));
+});
+test('кромка детали по проекту своей толщины (k31 m07: стяжка у задника 0,5 только по верхнему торцу при корпусе 1) — partsT, сохраняется в проекте',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
+  const ref=load('k31','m07'),{module:m}=moduleFromEtalon(ref);
+  const id=Object.keys(m.edgeScheme?.partsT??{})[0];
+  assert.ok(id);assert.equal(m.edgeScheme!.partsT![id],0.5);assert.deepEqual(m.edgeScheme!.parts![id],['+y']);
+  assert.ok(compareModule(ref,m).pass);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).edgeScheme?.partsT,m.edgeScheme!.partsT);
+});
+test('паз Gola в переднем торце узкого дна (k06 m10, дно 118×275: торец на конце длины) — endL, как в Базисе; сохраняется в проекте',{skip:!existsSync(`${ETALON}/k06.json`)},()=>{
+  const ref=load('k06','m10'),{module:m}=moduleFromEtalon(ref);
+  const g=m.grooves?.find(x=>x.end);
+  assert.ok(g);assert.equal(g!.endL,true);assert.equal(g!.end,'+');
+  const c=compareModule(ref,m);assert.ok(c.pass,JSON.stringify(c.edges?.bad));
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).grooves?.find(x=>x.end)?.endL,true);
+});
+test('k23 m07: полка из фасадного материала 19 мм без полкодержателей — причина названа прямо, модуль честно сырой; k23 m05/m09 — без неё',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+  assert.match(moduleFromEtalon(load('k23','m07')).unsupported[0],/полка из фасадного материала 19/);
+  for(const k of ['m05','m09'])assert.deepEqual(moduleFromEtalon(load('k23',k)).unsupported,[]);
 });

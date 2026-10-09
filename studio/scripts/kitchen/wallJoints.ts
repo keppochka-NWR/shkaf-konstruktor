@@ -55,10 +55,15 @@ export function wallEndEdges(bottom: PB | undefined, top: PB | undefined, def: {
  *  и внутри толщины → Groove с end. ax — оси детали студии (L, W, t), lo/hi — её границы. null — паз не торцевой. */
 export function endGroove(bb: number[], ax: { L: number; W: number; t: number }, lo: number[], hi: number[], name: string) {
   const inside = bb[ax.t] > lo[ax.t] + 0.5 && bb[ax.t + 3] < hi[ax.t] - 0.5;
-  const atHi = Math.abs(bb[ax.W + 3] - hi[ax.W]) < 0.6, atLo = Math.abs(bb[ax.W] - lo[ax.W]) < 0.6;
-  if (!inside || atHi === atLo) return null;
-  return { face: "+" as const, end: (atHi ? "+" : "-") as "+" | "-", along: [r1(bb[ax.L] - lo[ax.L]), r1(hi[ax.L] - bb[ax.L + 3])] as [number, number],
-    across: [r1(bb[ax.t] - lo[ax.t]), r1(bb[ax.t + 3] - lo[ax.t])] as [number, number], depth: r1(bb[ax.W + 3] - bb[ax.W]), name };
+  if (!inside) return null;
+  // торец — на конце ширины детали (W) или, у узкой детали, на конце длины (L: дно 118×275 у k06 m10 — передний торец по длине, endL)
+  for (const [E, A, endL] of [[ax.W, ax.L, false], [ax.L, ax.W, true]] as const) {
+    const atHi = Math.abs(bb[E + 3] - hi[E]) < 0.6, atLo = Math.abs(bb[E] - lo[E]) < 0.6;
+    if (atHi === atLo) continue;
+    return { face: "+" as const, end: (atHi ? "+" : "-") as "+" | "-", ...(endL ? { endL: true as const } : {}), along: [r1(bb[A] - lo[A]), r1(hi[A] - bb[A + 3])] as [number, number],
+      across: [r1(bb[ax.t] - lo[ax.t]), r1(bb[ax.t + 3] - lo[ax.t])] as [number, number], depth: r1(bb[E + 3] - bb[E]), name };
+  }
+  return null;
 }
 
 /** Стыки дна/крыши, у которых в проекте нет ни конфирмата, ни эксцентрика (k08 m10, k14 m06, k34 m04: дно под вытяжку перед ХДФ). */
