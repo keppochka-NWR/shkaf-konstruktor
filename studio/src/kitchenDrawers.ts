@@ -17,8 +17,12 @@ export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; 
   /** Шурупы 3,5×30 фальшпанели в фасад (часть проектов): [от внутренней грани левой боковины ящика, от низа фальшпанели]; true — по правилу
    *  большинства (два в 60 от боковин и 40 ниже верха, один посередине в 60 над низом). */
   faceScrews?: true | [number, number][];
-  /** Versalite: конфирматы дна в заднюю стенку и фальшпанель снизу — от внутренней грани боковины ящика (по умолчанию 59). */
-  confUnder?: number };
+  /** Конфирматы дна в заднюю стенку и фальшпанель снизу. Число — пара, от внутренней грани каждой боковины ящика (Versalite —
+   *  по умолчанию 59, MODERN SLIDE — 83,5); список — свои точки от внутренней грани левой боковины ящика (Firmax k31: 67, середина,
+   *  67 от правой). У Firmax по умолчанию их нет. */
+  confUnder?: number | number[];
+  /** Саморезы 3×3 направляющей Firmax в боковину корпуса — от передней кромки короба, если не по правилу (k31: 20 и 244). */
+  screwDz?: number[] };
 export type FirmaxDrawer = { system: "firmax-ldsp"; y0: number; y1: number; runnerY: number; box: FirmaxBox;
   /** Поля Axis PRO у Firmax не используются (остаются при смене системы, чтобы вернуть царгу/цвет). */
   h?: 86 | 120 | 168 | 200; len?: 300 | 400 | 450 | 500 | 550; color?: "white" | "anthracite"; backH?: number; faceScrews?: boolean };
@@ -459,7 +463,8 @@ export function modernLayout(m: Module, n: number, ratios?: number[], keep?: Mod
   return axisLayout(m, n, ratios).map((a, i) => {
     const [lo, hi] = golaBand(m, a.y0, a.y1), y = r1(Math.max(a.y0 + 35, floor + 10, lo)), top = r1(Math.min(a.y1 - 35, ceil, hi)), box: FirmaxBox = { y, h: r1(top - y), len };
     const o = (keep?.[i] ?? keep?.[0])?.box;
-    if (o) for (const key of ["gap", "front", "confBottom", "confUnder"] as const) if (o[key] !== undefined) box[key] = o[key];
+    if (o) for (const key of ["gap", "front", "confBottom"] as const) if (o[key] !== undefined) box[key] = o[key];
+    if (o?.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder;
     if (o?.faceScrews) box.faceScrews = true;
     return { system: "modern-slide" as const, y0: a.y0, y1: a.y1, runnerY: y, box };
   });
@@ -509,7 +514,8 @@ export function versaliteLayout(m: Module, n: number, ratios?: number[], keep?: 
     const own = keep?.[i], k = own ?? keep?.[0];
     if (k) {
       const o = k.box;
-      for (const key of ["gap", "front", "confBottom", "confUnder"] as const) if (o[key] !== undefined) box[key] = o[key];
+      for (const key of ["gap", "front", "confBottom"] as const) if (o[key] !== undefined) box[key] = o[key];
+      if (o.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder;
       if (own?.box.conf?.length && Math.abs(own.box.h - h) < 0.05) box.conf = [...own.box.conf];
     }
     return { system: "versalite-h45" as const, y0: a.y0, y1: a.y1, runnerY: r1(y + h / 2), len, box };
@@ -550,6 +556,8 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
       if (o.gap !== undefined) box.gap = o.gap;
       if (o.front !== undefined) box.front = o.front;
       if (o.confBottom !== undefined) box.confBottom = o.confBottom;
+      if (o.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder; // конфирматы снизу через дно (k31)
+      if (o.screwDz && o.len === len) box.screwDz = [...o.screwDz]; // саморезы направляющей не по правилу — пока длина короба та же
       const same = own && Math.abs(own.box.h - h) < 0.05;
       if (own?.box.bottomUp !== undefined && own.box.bottomUp < h - FIRMAX.t - 20) box.bottomUp = own.box.bottomUp;
       const backH = h - (box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t;
@@ -695,10 +703,9 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         for (const dy of b.conf ?? firmaxConf(g.backH)) for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:${id}:fx:${w}:${lr}:${dy}`, [head, g.backY + dy, z], ax, nm));
         const e = b.confBottom ?? VERSALITE.confBottom;
         for (const z of [g.zb + e, g.zf - e]) out.push(conf(`fast:${id}:fx:bottom:${lr}:${Math.round(z)}`, [head, g.yb + 8, z], ax, nm));
-        // дно → задняя стенка и фальшпанель снизу (Базис: 2 + 2 конфирмата в 8 от торцов дна)
-        const cu = b.confUnder ?? VERSALITE.confUnder, ux = s ? g.sr - g.t - cu : g.sl + g.t + cu;
-        for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:${id}:fx:under:${w}:${lr}`, [ux, g.yb, z], "+y", nm));
       }
+      // дно → задняя стенка и фальшпанель снизу (Базис: 2 + 2 конфирмата в 8 от торцов дна)
+      underConfs(out, id, g, b.confUnder ?? VERSALITE.confUnder, nm, "fast:" + id + ":fx:under");
       return;
     }
     if (isModern(k)) {
@@ -726,8 +733,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         for (const dy of b.conf ?? firmaxConf(g.backH)) for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:ms:${id}:${w}:${lr}:${dy}`, [head, g.backY + dy, z], ax, nm));
         const e = b.confBottom ?? MODERN.confBottom;
         for (const z of [g.zb + e, g.zf - e]) out.push(conf(`fast:ms:${id}:bottom:${lr}:${Math.round(z)}`, [head, g.yb + 8, z], ax, nm));
-        const cu = b.confUnder ?? MODERN.confUnder, ux = s ? g.sr - g.t - cu : g.sl + g.t + cu;
-        for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:ms:${id}:under:${w}:${lr}`, [ux, g.yb, z], "+y", nm));
+        if (s) underConfs(out, id, g, b.confUnder ?? MODERN.confUnder, nm, "fast:ms:" + id + ":under");
         if (b.screws !== false) for (const dz of [37, 261]) out.push(screwAt(`${id}:screw:fx3:${lr}:${dz}`, [sideIn(s), g.yb + 8, g.zf - dz], "Саморез 3,5×16 (направляющая MODERN SLIDE)"));
         if (b.rearHoles !== false) out.push(screwAt(`${id}:screw:fx5:${lr}`, [head + d * 23, g.yb + 11, g.zb], "Отверстие 5×12 (зацеп MODERN SLIDE)"));
       }
@@ -761,9 +767,11 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         const e = b.confBottom ?? FIRMAX.confBottom;
         for (const z of [g.zb + e, g.zf - e]) out.push(conf(`fast:${id}:fx:bottom:${lr}:${Math.round(z)}`, [head, g.yb + 8, z], ax));
         // «3x3» — саморезы направляющей в боковину корпуса; «5x12» — под зацеп направляющей в задний торец дна
-        if (b.screws) for (const dz of b.len >= 440 ? [37, 261] : [37, 165]) out.push(screwAt(`${id}:screw:fx3:${lr}:${dz}`, [sideIn(s), g.yb + 10, g.zf - dz], "Саморез 3×3 (направляющая Firmax)"));
+        if (b.screws) for (const dz of b.screwDz ?? (b.len >= 440 ? [37, 261] : [37, 165])) out.push(screwAt(`${id}:screw:fx3:${lr}:${dz}`, [sideIn(s), g.yb + 10, g.zf - dz], "Саморез 3×3 (направляющая Firmax)"));
         if (b.rearHoles !== false) out.push(screwAt(`${id}:screw:fx5:${lr}`, [head + d * 23, g.yb + 11, g.zb], "Отверстие 5×12 (зацеп Firmax)"));
       }
+      // дно → задняя стенка и фальшпанель снизу — только если так в проекте Базиса (k03 m05, k30 m12–m17, k31)
+      if (b.confUnder !== undefined) underConfs(out, id, g, b.confUnder, "Firmax", "fast:" + id + ":fx:under");
       return;
     }
     const col = k.color ?? "white", key = `${col}:${k.h}`, ry = k.runnerY;
@@ -793,6 +801,12 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
   });
 }
 function screwAt(id: string, at: [number, number, number], name: string): Part { return { ...screw(id, at), name }; }
+/** Конфирматы снизу через дно короба в заднюю стенку (zb + 8) и фальшпанель (zf − 8): число — пара от внутренних граней боковин
+ *  ящика (ids …:back:L/R), список — точки от внутренней грани левой боковины (ids …:back:0,1,…). */
+function underConfs(out: Part[], id: string, g: ReturnType<typeof firmaxGeom>, cu: number | number[], nm: string, pre: string) {
+  const xs: [string, number][] = Array.isArray(cu) ? cu.map((x, i) => [String(i), g.sl + g.t + x]) : [["L", g.sl + g.t + cu], ["R", g.sr - g.t - cu]];
+  for (const [lr, ux] of xs) for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`${pre}:${w}:${lr}`, [ux, g.yb, z], "+y", nm));
+}
 /** Конфирмат 7×50 короба ЛДСП: головка на наружной пласти боковины ящика, ось внутрь (модель «Евровинт 7х50» Базиса);
  *  «+y» — снизу через дно в заднюю стенку/фальшпанель (Versalite). */
 function conf(id: string, head: [number, number, number], axis: "+x" | "-x" | "+y", sys = "Firmax"): Part {
@@ -986,7 +1000,9 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     if (k0.system === "firmax-ldsp" || k0.system === "versalite-h45" || k0.system === "modern-slide") {
       const b = (k0.box ?? {}) as Partial<FirmaxBox>, num = (v: unknown) => (v === undefined ? undefined : Number(v));
       const box: FirmaxBox = { y: Number(b.y), h: Number(b.h), len: Number(b.len) };
-      for (const key of ["bottomUp", "gap", "front", "confBottom", "confUnder"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
+      for (const key of ["bottomUp", "gap", "front", "confBottom"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
+      if (Array.isArray(b.confUnder)) box.confUnder = b.confUnder.slice(0, 6).map(Number); else if (b.confUnder !== undefined) box.confUnder = Number(b.confUnder);
+      if (Array.isArray(b.screwDz)) box.screwDz = b.screwDz.slice(0, 4).map(Number);
       if (k0.system === "versalite-h45") {
         if (Array.isArray(b.conf)) box.conf = b.conf.slice(0, 6).map(Number);
         return { system: "versalite-h45", y0: Number(k0.y0), y1: Number(k0.y1), runnerY: Number(k0.runnerY), len: Number((k0 as Partial<VersaliteDrawer>).len) as VersaliteLen, box };

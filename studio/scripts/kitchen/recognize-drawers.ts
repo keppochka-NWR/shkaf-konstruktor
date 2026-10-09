@@ -6,11 +6,38 @@
 //  - Axis PRO, кромка дна: без кромки (правило) — 27 доньев / 13 модулей; по кругу — 14 (k18, k30); только задний торец — 11 (k05, k29);
 //    перед и зад — 1 (k25 m11).
 import type { Module } from "../../src/model";
-import { isAxis, REAR_SCREWS, type AxisEdgeSide } from "../../src/kitchenDrawers";
+import { isAxis, isFirmax, REAR_SCREWS, FIRMAX, type AxisEdgeSide } from "../../src/kitchenDrawers";
 import type { RefModule } from "./compare";
 
 type Edge = { side: string; thick: number };
 const r1 = (v: number) => Math.round(v * 10) / 10;
+
+/** Firmax: конфирматы снизу через дно (confUnder — точки Базиса от внутренней грани левой боковины ящика; есть в k03 m05,
+ *  k30 m12–m17, k31 — 7 модулей из 18 с Firmax) и саморезы 3×3 направляющей не по правилу (screwDz; k31 — 20 и 244 вместо 37 и 261,
+ *  6 ящиков из 40). Возвращает заметки. */
+export function firmaxAsBazis(ref: RefModule, m: Module): string[] {
+  const notes: string[] = [];
+  if (!m.kitchen || !m.kdrawers?.some(isFirmax)) return notes;
+  const W = ref.size[0], conf = ref.hardware.filter((h) => /онфирмат/.test(h.name));
+  m.kdrawers = m.kdrawers.map((k, j) => {
+    if (!isFirmax(k)) return k;
+    const side = ref.panels.find((p) => /^Боковина ящика лев/i.test(p.name) && p.box[0] < W / 2 && Math.abs(p.box[1] - k.box.y) < 0.6);
+    if (!side) return k;
+    const [x0, y0, z0, x1, , z1] = side.box, box = { ...k.box };
+    const bot = ref.panels.find((p) => /^Дно ящика/i.test(p.name) && p.box[0] >= x1 - 0.5 && p.box[0] < x1 + 30 && p.box[1] >= y0 - 0.5 && p.box[2] >= z0 - 0.5 && p.box[5] <= z1 + 0.5);
+    if (bot) {
+      const xs = [...new Set(conf.filter((h) => Math.abs(h.pos[1] - bot.box[1]) < 0.3 && h.pos[0] > x1 && h.pos[0] < bot.box[3] && h.pos[2] > z0 && h.pos[2] < z1).map((h) => r1(h.pos[0] - x1)))].sort((a, b) => a - b);
+      if (xs.length) { box.confUnder = xs; notes.push(`ящик ${j + 1}: конфирматы снизу через дно ${xs.join(", ")} — как в Базисе`); }
+    }
+    // саморезы направляющей — на внутренней грани боковины корпуса (боковина ящика − зазор), у низа короба
+    const xin = x0 - (k.box.gap ?? FIRMAX.gap);
+    const dz = [...new Set(ref.hardware.filter((h) => h.name === "3x3" && Math.abs(h.pos[0] - xin) < 0.6 && h.pos[1] > y0 - 0.5 && h.pos[1] < y0 + 40).map((h) => r1(z1 - h.pos[2])))].sort((a, b) => a - b);
+    const rule = box.len >= 440 ? [37, 261] : [37, 165];
+    if (box.screws && dz.length === 2 && dz.join() !== rule.join()) { box.screwDz = dz; notes.push(`ящик ${j + 1}: саморезы направляющей ${dz.join(", ")} от фронта короба — как в Базисе`); }
+    return { ...k, box };
+  });
+  return notes;
+}
 
 /** Ставит у ящиков Axis PRO rearScrews и edge.bottom, если в проекте Базиса не по правилу. Возвращает заметки. */
 export function axisAsBazis(ref: RefModule, m: Module): string[] {

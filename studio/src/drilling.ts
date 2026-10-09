@@ -26,10 +26,11 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
       push(p.id, h, a, 8, t1);
-      // короб ящика Firmax в Базисе — D5×37; кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall;
+      // короб ящика Firmax в Базисе — D5×37 (у k31 со своей глубиной проекта kitchen.confDepth — D5×42, как и корпус);
+      // кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall;
       // kitchen.confDepth, n3-antresol: k11 — 37, k31 — 42);
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
-      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
+      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? m.kitchen?.confDepth ?? 37 : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм
