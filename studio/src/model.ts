@@ -985,7 +985,7 @@ export function parts(m: Module): Part[] {
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
       // кухня Базиса: жёсткая полка без своего крепежа в jointFastening — на рафиксах по сетке Базиса (kitchenRafix.ts)
-      const rg = m.kitchen && fixedIds.has(hp.id) && !m.jointFastening?.[`${hp.id}:${side}`] ? rafixGrid(m, Number(hp.id.split(":shelf:")[1])) : undefined;
+      const rg = m.kitchen && fixedIds.has(hp.id) && !m.jointFastening?.[`${hp.id}:${side}`] ? rafixGrid(m, hp.sectionId === m.sections[0].id ? Number(hp.id.split(":shelf:")[1]) : -1) : undefined; // своя сетка (per) — только у полок секции 1
       if (rg) { rafixSide(add, out, hp, side, edgeX, dir, rg); continue; }
       const z1 = z0 + (hp.taperZ ? hp.taperZ[side === "left" ? 0 : 1] : hp.size[2]); // при скосе фронта передний крепёж по глубине своей стороны
       for (const [k, z] of jointZs(m, hp.id, z0, z1).entries()) {
