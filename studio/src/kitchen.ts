@@ -148,6 +148,23 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.id.startsWith("kd:")) continue;
     else if (p.role === "body") setEdges(p, ["+z"], t);
   }
+  golaSides(m, out);
+}
+
+/** Gola по Базису (k06/m03 и др.): вырезы в переднем торце боковин нижнего модуля. Кромка идёт отрезками контура:
+ *  перед = высота боковины − длины вырезов, верх = глубина − глубина верхнего (открытого) выреза; торцы самих вырезов не кромятся. */
+export function golaSides(m: Module, out: Part[]) {
+  const cuts = m.kitchen && m.kitchen.role === "base" ? m.gola?.cuts : undefined;
+  if (!cuts?.length) return;
+  for (const p of out) {
+    if (p.id !== "left" && p.id !== "right") continue;
+    const H = p.size[1], D = p.size[2];
+    const ok = cuts.filter((c) => c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
+    if (!ok.length) continue;
+    p.golaCuts = ok.map((c) => ({ ...c }));
+    const front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth));
+    p.edgeLen = { "+z": Math.round(front * 10) / 10, "+y": Math.round(top * 10) / 10 };
+  }
 }
 
 /** Столешница — отдельный объект над нижними корпусами: в раскрой ЛДСП не идёт (кроме ЛДСП 32), цена за погонный метр. */
