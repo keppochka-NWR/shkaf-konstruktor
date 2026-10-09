@@ -1589,6 +1589,9 @@ export function parseModule(input: unknown): Module {
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
     ...(x.kdrawers===undefined?{}:(()=>{const k=parseKDrawers(x.kdrawers);return k?{kdrawers:k}:{};})()),
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
+    // Gola по Базису (вырезы в боковинах, верх фасадов ниже корпуса): без него открытый в приложении модуль отличается от Базиса
+    ...(x.gola===undefined||!x.gola||typeof x.gola!=='object'||!Array.isArray((x.gola as {cuts?:unknown}).cuts)?{}:(()=>{const g=x.gola as NonNullable<Module['gola']>;
+      return {gola:{cuts:g.cuts.filter(c=>c&&typeof c==='object').map(c=>({top0:Number(c.top0),top1:Number(c.top1),depth:Number(c.depth),r:Number(c.r),...(c.edged?{edged:true}:{})})),...(g.faceTop===undefined?{}:{faceTop:Number(g.faceTop)})}};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
     ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{})}}),

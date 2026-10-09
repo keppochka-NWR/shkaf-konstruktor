@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule,parts,facadeTop,type Module} from '../src/model';
+import {existsSync,readFileSync} from 'node:fs';
+import {initialModule,parts,facadeTop,parseModule,type Module} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
-import {newProject} from '../src/project';
+import {newProject,parseProject} from '../src/project';
 import {estimate} from '../src/pricing';
 import {labelData} from '../src/exports';
 import {golaSideGeometry} from '../src/boardGeometry';
-import {golaFromContour} from '../scripts/kitchen/fromEtalon';
+import {golaFromContour,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {partCollisions} from '../src/collisions';
 
 // k06/m03 Базиса: боковина 704×557, вырезы 27 мм — средний y 417,5–490,5 (R5), верхний y 762,5–820 (R6,5) при верхе 820.
@@ -67,3 +69,23 @@ test('Gola profiles: L on top, C in the middle, aluminium outside the cut list, 
   const c=partCollisions(ps,m).filter(x=>[x.a,x.b].some(id=>id.startsWith('gola:'))&&[x.a,x.b].some(id=>id==='left'||id==='right'||/door|facade|hinge/.test(id)));
   assert.deepEqual(c,[],JSON.stringify(c));
 });
+test('Gola: открытие проекта в приложении (parseProject) сохраняет gola — детали, фасады и смета те же, что до сохранения',()=>{
+  const m=gola();m.gola!.faceTop=28.5;m.gola!.cuts[0].edged=true;
+  const p=newProject(m),q=parseProject(JSON.parse(JSON.stringify(p))),n=q.modules[0].module;
+  assert.deepEqual(n.gola,m.gola,'gola в модуле после открытия');
+  assert.equal(facadeTop(n),facadeTop(m),'верх фасадов под профилем L');
+  assert.deepEqual(parts(n),parts(m),'детали (фасады, петли, вырезы, профили) те же');
+  assert.deepEqual(estimate(q).lines,estimate(p).lines,'смета та же (профиль Gola, фасады, кромка)');
+  assert.equal(parseModule(JSON.parse(JSON.stringify({...m,gola:undefined}))).gola,undefined,'без Gola — без поля');
+});
+
+// k30/m11, k06/m03, k27/m15 — модули Базиса с Gola: сверка с Базисом и до, и после открытия проекта
+const ETD='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
+for(const [k,key] of [['k30','m11'],['k06','m03'],['k27','m15']] as const)
+  test(`Gola ${k}/${key}: после parseProject модуль сходится с Базисом (фасад, петли)`,{skip:!existsSync(ETD+k+'.json')},()=>{
+    const ref=(JSON.parse(readFileSync(ETD+k+'.json','utf8')).modules as RefModule[]).find(x=>x.key===key)!;
+    const m=moduleFromEtalon(ref).module;assert.ok(m.gola,'распознан Gola');
+    assert.ok(compareModule(ref,m).pass,'модуль распознавателя сходится');
+    const n=parseProject(JSON.parse(JSON.stringify(newProject(m)))).modules[0].module;
+    const c=compareModule(ref,n);assert.ok(c.pass,'после открытия в приложении: '+JSON.stringify(c).slice(0,300));
+  });
