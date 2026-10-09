@@ -1,0 +1,46 @@
+// Распознавание нижних модулей и пеналов Базиса: «как в Базисе, ничего сверх» — флаги кухни по составу фурнитуры проекта.
+// Отдельный файл, чтобы не конфликтовать с соседями по fromEtalon.ts. Правила выведены статистикой по 34 кухням (207 нижних и пеналов):
+//  - фасады без петель и без направляющих — 42 модуля: фасад есть, петель нет (фальш-фасад, «забыли», фасад ящика без ящика);
+//  - без опор — 34 модуля: дно на полу или на своём цоколе;
+//  - без крепежа — 10 модулей (k32): в проекте нет ни конфирматов, ни эксцентриков, ни шкантов, ни полкодержателей.
+import type { Module } from "../../src/model";
+import type { RefModule } from "./compare";
+
+const FASTENERS = ["конфирмат", "эксцентрик", "шкант", "полкодержатель"];
+
+/** Ставит kitchen.hinges / noLegs / fasteners по фурнитуре эталона. fronts — число фасадов перед корпусом (распознаны в fromEtalon). */
+export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): string[] {
+  const notes: string[] = [], k = m.kitchen;
+  if (!k) return notes;
+  const has = (c: string) => ref.hardware.some((h) => h.category === c);
+  // фасады есть, петель и ящиков нет — фасады без петель (не подъёмный: у него петли тоже есть)
+  if (fronts > 0 && !has("петля") && !has("направляющая") && !m.kdrawers?.length) {
+    m.doors = true; k.hinges = false;
+    notes.push("фасады без петель — как в Базисе");
+  }
+  if ((k.role === "base" || k.role === "tall") && !has("опора")) { k.noLegs = true; notes.push("без опор — как в Базисе"); }
+  if (!FASTENERS.some(has)) { k.fasteners = false; notes.push("без крепежа — как в Базисе"); }
+  const all = edgesAllAround(ref);
+  if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
+  else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
+  return notes;
+}
+
+/** Детали корпуса ЛДСП (без фасадов) с их кромкой. */
+function bodyPanels(ref: RefModule) {
+  const sides = ref.panels.filter((p) => p.kind === "ldsp" && p.axis === "x");
+  const front = Math.max(0, ...sides.map((p) => p.box[5]));
+  return ref.panels.filter((p) => p.kind === "ldsp" && !(p.axis === "z" && p.box[2] >= front - 1)) as (RefModule["panels"][number] & { edges?: { side: string; thick: number }[] })[];
+}
+/** Без кромки вовсе (k23 — 15 из 422 модулей): ни на одной детали корпуса нет кромки. */
+export function edgesNone(ref: RefModule): boolean {
+  const body = bodyPanels(ref);
+  return body.length > 0 && body.every((p) => !(p.edges ?? []).some((e) => e.thick > 0));
+}
+
+/** Кромка по кругу (k11, k32 — 36 из 422 модулей): у каждой детали корпуса ЛДСП кромлены все четыре торца. Возвращает толщину кромки или 0. */
+export function edgesAllAround(ref: RefModule): number {
+  const body = bodyPanels(ref);
+  if (!body.length || !body.every((p) => new Set((p.edges ?? []).filter((e) => e.thick > 0).map((e) => e.side)).size >= 4)) return 0;
+  return body[0].edges!.find((e) => e.thick > 0)!.thick;
+}
