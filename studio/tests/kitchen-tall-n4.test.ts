@@ -187,3 +187,9 @@ test('узкий стык (до 120 мм) в корпусе глубже — о�
   const ref=load('k27','m14'),ps=parts(moduleFromEtalon(ref).module);
   for(const p of ps.filter(p=>p.id.startsWith('fast:')))assert.equal(Math.round(p.model!.origin![2]),330,p.id);
 });
+test('k24 m04: дно без крепежа к стойкам в Базисе (у торца только опора с саморезами 3x3) — студия конфирматы не добавляет (bareJoints): 8, как в Базисе',{skip:!existsSync(`${ETALON}/k24.json`)},()=>{
+  const ref=load('k24','m04'),{module:m}=moduleFromEtalon(ref);
+  assert.ok(m.kitchen?.bareJoints?.includes('bottom'));
+  const c=compareModule(ref,m).hardware.find(h=>h.category==='конфирмат')!;
+  assert.equal(c.ref,8);assert.equal(c.studio,8);
+});

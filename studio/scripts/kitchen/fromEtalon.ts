@@ -101,7 +101,9 @@ export function bareShelvesFromEtalon(ref: RefModule, shelves: B[], fixed: numbe
  *  «крепёж» и др.) и ни одного отверстия у торцов горизонтали на её высоте. Осторожно: что-то есть — стык не «голый». */
 export function bareJointFromEtalon(ref: RefModule, b: B): boolean {
   const near = (p: number[]) => p[1] >= b.y0 - 1 && p[1] <= b.y1 + 1 && p[2] >= b.z0 - 1 && p[2] <= b.z1 + 1 && (p[0] <= b.x0 + 20 || p[0] >= b.x1 - 20);
-  return !ref.hardware.some((h) => near(h.pos)) && !(ref.holes ?? []).some((h) => near(h.at));
+  // опора с клипсой и саморезами площадки «3x3» и их отверстия в нижней пласти дна — не крепёж стыка (k24 m04: опора у торца дна, n4-tall)
+  const leg = new Set(ref.hardware.filter((h) => h.category === "опора" || h.category === "клипса" || h.name === "3x3").map((h) => h.i));
+  return !ref.hardware.some((h) => !leg.has(h.i) && near(h.pos)) && !(ref.holes ?? []).some((h) => !(h.src != null && leg.has(h.src)) && near(h.at));
 }
 
 /** Створки без петель (номер row*2+col, ряды снизу, створки слева): у фасада холодильника петель в Базисе нет — он на двери техники.
