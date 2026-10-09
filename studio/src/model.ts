@@ -1141,6 +1141,10 @@ export function fastenerCounts(m: Module) {
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0) };
 }
+/** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
+export function maxHeightOf(m: Module): number {
+  return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : RULES.maxH;
+}
 export function validate(m: Module): string[] {
   if(m.kupe)return kupeErrors(m);
   if(m.raw)return rawErrors(m);
@@ -1159,7 +1163,7 @@ export function validate(m: Module): string[] {
     ["depth", "Глубина стола", RULES.minD, RULES.maxD],
   ] : [
     ["width", "Ширина", m.kitchen ? KITCHEN.minWidth : RULES.minW, RULES.maxW], // кухня: бутылочница 150 (вкладка «Кухня»)
-    ["height", "Высота", RULES.minH, m.kitchen ? KITCHEN.maxHeight : RULES.maxH], // кухня: пеналы до 2900 (Базис)
+    ["height", "Высота", RULES.minH, maxHeightOf(m)], // кухонный пенал до 2900 (Базис), остальное до 2500
     ["depth", "Глубина", RULES.minD, RULES.maxD],
   ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
     const n = m[key];

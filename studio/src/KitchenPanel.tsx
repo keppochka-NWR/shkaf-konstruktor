@@ -3,7 +3,7 @@
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { scaleHingeY, parts, distribute, RULES, RAIL_PLACES, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -149,7 +149,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (ширина, цвета, петли и ручки сохраняются).</p>}
       <label className="hardware-field">Название<input aria-label="Название кухонного модуля" key={m.name} defaultValue={m.name} maxLength={80} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) modify((n) => { n.name = v; }); }} /></label>
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxWidth} change={(v) => modify((n) => { n.width = v; })} />
-      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={RULES.maxH} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
+      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
       <Check label="Дно под боковинами (боковины стоят на дне)" checked={!!m.bottomUnder} change={(v) => modify((n) => { if (v) n.bottomUnder = true; else delete n.bottomUnder; })} />
       <Check label={role === "base" ? "Крыша (у нижних обычно нет — царги под столешницу)" : "Крыша"} checked={m.topType !== "none"} change={(v) => modify((n) => { if (v) delete n.topType; else n.topType = "none"; })} />

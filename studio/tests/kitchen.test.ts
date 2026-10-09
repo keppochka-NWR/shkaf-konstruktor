@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule,validate,parts,parseModule} from '../src/model';
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {initialModule,validate,parts,parseModule,maxHeightOf,RULES} from '../src/model';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths,kitchenLegs} from '../src/kitchen';
 import {createKitchenRow} from '../src/ModulePalette';
 import {newProject,appendModuleGroup,projectErrors,parseProject} from '../src/project';
@@ -100,9 +102,24 @@ test('straight kitchen row fits a room: bases, worktop on top, wall cabinets at 
 });
 
 test('kitchen tall (пенал): height up to KITCHEN.maxHeight 2900 like Bazis (k30 m15 = 2869); wardrobe limit stays RULES.maxH 2500',()=>{
-  const k=kitchenBase(initialModule(),600);k.height=2869;
+  const b=kitchenBase(initialModule(),600),k={...b,kitchen:{...b.kitchen!,role:'tall' as const}};k.height=2869;
   assert.ok(!validate(k).some(e=>e.startsWith('Высота')),'kitchen 2869 is allowed');
   k.height=2901;assert.ok(validate(k).some(e=>e.startsWith('Высота: допустимо от')),'kitchen above 2900 is rejected');
   const w=initialModule();w.height=2600;assert.ok(validate(w).some(e=>e.startsWith('Высота: допустимо от')),'wardrobe 2600 still rejected');
   assert.equal(KITCHEN.maxHeight,2900);
+});
+
+test('limit of height is one for validate and both "Высота" fields: tall 2900, other kitchen roles and wardrobes 2500 (critic n2: UI cut tall at 2500)',()=>{
+  const b=kitchenBase(initialModule(),600);
+  assert.equal(maxHeightOf({...b,kitchen:{...b.kitchen!,role:'tall'}}),KITCHEN.maxHeight);
+  for(const role of ['base','wall','antresol'] as const){
+    const m={...b,kitchen:{...b.kitchen!,role},height:2600};
+    assert.equal(maxHeightOf(m),RULES.maxH,role);
+    assert.ok(validate(m).some(e=>e.startsWith('Высота: допустимо от 250 до 2500')),role+' above 2500 is rejected');
+  }
+  assert.equal(maxHeightOf(initialModule()),RULES.maxH);
+  // поля «Высота» во вкладке «Кухня» и в общей панели берут тот же предел, что validate
+  const src=(f:string)=>readFileSync(fileURLToPath(new URL('../src/'+f,import.meta.url)),'utf8');
+  assert.match(src('KitchenPanel.tsx'),/value=\{m\.height\} min=\{RULES\.minH\} max=\{maxHeightOf\(m\)\}/);
+  assert.match(src('App.tsx'),/label="Высота"\s+value=\{m\.height\}\s+min=\{RULES\.minH\}\s+max=\{maxHeightOf\(m\)\}/);
 });

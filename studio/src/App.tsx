@@ -66,6 +66,7 @@ import {
   type EdgeThickness,
   type Module,
   type Section,
+  maxHeightOf,
 } from "./model";
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
@@ -1296,7 +1297,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   label="Высота"
                   value={m.height}
                   min={RULES.minH}
-                  max={RULES.maxH}
+                  max={maxHeightOf(m)}
                   onChange={(v) => modify((n) => (n.height = v))}
                 />
                 <NumberField
