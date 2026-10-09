@@ -10,7 +10,7 @@ import {meshById} from './mesh';
 import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
-import {rawKitchen,rawOwnMaterial} from './rawModule';
+import {rawKitchen,rawOwnMaterial,rawDims} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -128,6 +128,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // Сырой модуль (импорт Базиса): фурнитура — по счётчикам Базиса (raw.counts), а не по правилам студии (без фантомных петель
     // на фасадах ящиков и планках); фасадный материал — фасады поставщика (м²); столешница — пог.м; кромка — по длинам Базиса.
     if(a.module.raw){
+      // kr — сырой модуль кухни Базиса (импорт: source «bazis-kitchen», ряд или счётчики Базиса; rawKitchen)
       const r=a.module.raw,c=r.counts??{},hb=HINGE_BRANDS[a.module.hingeBrand??'gtv'],src='Как в проекте Базиса',kr=rawKitchen(r);
       // Правило Макса 09.10.2026: в кухню из Базиса студия ничего не добавляет. Норматива «Мелочёвка корпуса» и заглушек
       // под конфирмат в спецификациях Базиса нет — этих строк у сырого модуля КУХНИ нет. Сырой шкаф Базиса (корпус) — как было.
@@ -149,10 +150,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // 09.10.2026 студия их не добавляет (раньше домысливала по именам модулей «Мойка»/«Варка»).
       for(const p of r.panels){
         // стекло Базиса (полки ВМКП) — как стеклянная полка студии, м²
-        if(p.kind==='glass'){const g=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);add('glass-shelf','Стеклянная полка · обработка и держатели',g[0]*g[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
+        if(p.kind==='glass'){const g=rawDims(p);add('glass-shelf','Стеклянная полка · обработка и держатели',g[0]*g[1]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');continue;}
         if(p.kind==='hdf'||p.kind==='mirror')continue;
-        const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
+        // размеры — собственные у повёрнутой панели (угловая дверь под 45°), иначе габарит: не «столешница 261 мм»
+        const s=rawDims(p);
+        // стеновая панель «Ряда» кухни (материал Базиса «Стеновая панель», фартук) — изделие поставщика, м² по деталям Базиса:
+        // не лист Lamarty 6 мм и не «столешница 26 мм». Только ряд кухни (r.row) — сырые шкафы не меняются.
+        if(r.row&&p.wall){add('wallpanel:raw:'+Math.round(s[2]),'Стеновая панель по проекту Базиса '+Math.round(s[2])+' мм',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена стеновой панели по прайсу поставщика — уточнить');continue;}
         if(/столешн/i.test(p.name)||s[2]>=26){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
+        // цоколь ряда кухни из фасадного материала (импорт Базиса: «Цоколь · …») — тот же материал поставщика, но своей строкой:
+        // это цоколь, не фасад. Только ряд кухни (r.row) — сырые шкафы не меняются.
+        if(r.row&&p.fm&&/^\s*цокол/i.test(p.name)){add('plinth-external','Цоколь — фасадный материал (по проекту Базиса), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадного материала по прайсу поставщика — уточнить');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
         // плита МДФ и прочие материалы кухни Базиса (не лист Lamarty): м² по деталям Базиса, материал — как в Базисе; кромка Базиса на них считается ниже
         if(kr&&rawOwnMaterial(p)){const t=Math.round(s[2]),mdf=p.kind==='mdf',name=p.mat??(mdf?'Плита МДФ ':'Материал Базиса ')+t+' мм';
@@ -169,6 +177,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(a.module.kitchen?.screw==='euro-6x50')add('confirmat-euro-6x50','Евровинт 6×50 (как в проекте Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у конфирмата 5×50 — уточнить по счёту');
     else if(kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
     else add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
+    // кухня — по практике Базиса цеха: заглушек под конфирмат в проектах Базиса нет; шкафы — как раньше
     if(!kitchen)add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
     if(fc.shelfHolders)add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
@@ -234,7 +243,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         add('glass-top-temper','Закалка стекла 4 мм',area,'м²',RULES.glassTopTemper,'АТБ, прайс 01.01.2026');
         add('glass-top-polish','Полировка кромки стекла 4 мм',perimeter,'пог.м',RULES.glassTopPolishPerM,'Прайс МВМ стеклообработка 13.01.2026');
       }
-      // паз Базиса (groove:*) — обработка детали, не подсветка: в 3D тёмной полосой, в смете его нет. Ленты подсветки в спецификациях Базиса нет.
+      // паз Базиса (groove:*) — обработка детали, не подсветка: в 3D тёмной полосой, в смете его нет (кухня: самой подсветки в проекте
+      // Базиса нет — строку не добавляем). Ленты подсветки в спецификациях Базиса нет.
       // Настоящая подсветка (опция «Подсветка в стойках», в т.ч. в кухне студии) — считается как раньше.
       if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }

@@ -89,7 +89,9 @@ test('кухня Базиса: стеновая панель 6 мм в «Ряд�
   const p=project({...rawBody(),name:'Ряд',raw:row}),plan=nest(p),e=estimate(p,plan);
   assert.ok(!plan.some(s=>(s.thickness??16)===6),'нет листа Lamarty 6 мм');
   assert.equal(e.lines.find(x=>x.id==='mat:Cтеновая панель 6мм')?.quantity,0.888);
-  assert.equal(e.lines.find(x=>x.id==='facade-external')?.quantity,0.12,'цоколь из фасадного материала — как было');
+  // цоколь «Ряда» из фасадного материала — м² фасадного материала поставщика своей строкой «Цоколь» (n3-plinth), не раскрой ЛДСП
+  assert.equal(e.lines.find(x=>x.id==='plinth-external')?.quantity,0.12,'цоколь из фасадного материала — м² поставщика');
+  assert.ok(!plan.some(s=>(s.thickness??16)===16),'цоколь фасадного материала — не лист ЛДСП');
 });
 
 test('кухня студии: опция «Подсветка в стойках» по-прежнему в смете (пазы Базиса — нет)',()=>{

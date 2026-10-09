@@ -11,7 +11,7 @@ const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LP = proce
 const arg = process.argv[2] ?? "all", out = process.argv[3] || undefined;
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 // строки сметы, которым соответствует фурнитура/панели Базиса (категория эталона или деталь раскроя)
-const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|eccentric$|shelf-holder$|dowel$|kitchen-leg$|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|firmax-ldsp|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
+const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|confirmat-euro-6x50$|wallpanel:raw:|plinth-external$|eccentric$|shelf-holder$|dowel$|kitchen-leg$|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|firmax-ldsp|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
 const LABOUR = /^(work$|small$|unplaced:)/;
 const agg = new Map<string, { label: string; kitchens: Set<string>; qty: number; sum: number }>();
 const partAgg = new Map<string, { kitchens: Set<string>; n: number }>();

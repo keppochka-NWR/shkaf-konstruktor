@@ -1,7 +1,7 @@
 // Детали «Ряда» и сырых модулей из эталона Базиса: фигурная панель (столешница с контуром в плоскости xz) → прямоугольники
 // по контуру вместо сплошного габарита (k25: Г/П-образная столешница 4470×1250 выступала на 650 мм перед нижними модулями
 // и заходила в пенал), фасадный материал и кромка Базиса.
-export type EtPanel = { name: string; kind?: string; mat?: string; thick?: number; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string };
+export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string; role?: string; thick?: number; lw?: number[] };
 type Box = [number, number, number, number, number, number];
 
 /** Прямолинейный контур в плоскости xz → прямоугольники (полосы по x, соседние с одинаковыми интервалами по z склеены).
@@ -39,11 +39,68 @@ export function rowFront(p: EtPanel): boolean {
   return sz < Math.min(sx, sy) && sz <= 25 && sy >= 300;
 }
 
-/** Фасадный материал Базиса («Фасадный мат-л N»), кромка [толщина, длина] и материал плиты МДФ — для сметы сырого модуля. */
-export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string; thick?: number } {
+/** Цоколь (деталь, закрывающая опоры) у Базиса называется как угодно — «Фронтальная», «Вертикальная», «Цоколь Видимый»; роль
+ *  определяет эталон (etalon.py: имя «цокол» или геометрия — вертикальная плита у пола, высотой с опору, 14–22 мм). Чтобы в раскрое
+ *  и смете деталь читалась как цоколь, имя — «Цоколь · <имя Базиса>»; уже названную «Цоколь…» не трогаем. Размеры — как в Базисе. */
+export function plinthName(name: string): string {
+  const n = (name ?? "").trim();
+  return /цокол/i.test(n) ? n : n ? `Цоколь · ${n}` : "Цоколь";
+}
+
+/** Деталь из группы «столешницы» эталона. etalon.py относит к столешнице и всё горизонтальное из контейнера «…столеш…» —
+ *  поэтому столешница здесь только та, что так и названа в Базисе (имя или материал «Столешница…»: все 31 столешница 34 кухонь),
+ *  либо толстая (≥ 20) деталь не из плиты. Остальное:
+ *  - ЛДСП/плита — обычная деталь под своим именем Базиса, в раскрой (k07: полки, крыша и дно «Пенала на столешку», ЛДСП 16 —
+ *    раньше «Столешница 16 мм», 3,2 пог.м, и вне раскроя);
+ *  - прочий материал (k09: «Хром» 6 мм 410×330 со скруглёнными углами на столешнице — макет мойки) — обстановка модели, не
+ *    изделие: не берём (как стены «Бетон» и макеты «Пластик»), иначе в смете «Столешница 6 мм». */
+export function worktopGroupRole(p: EtPanel): "worktop" | "panel" | "mock" {
+  if (/столешн/i.test(`${p.name ?? ""} ${p.mat ?? ""}`)) return "worktop";
+  if (["ldsp", "mdf", "hdf", "glass", "mirror"].includes(p.kind ?? "") || /фасадн|лдсп|мдф|хдф|плита/i.test(p.mat ?? "")) return "panel";
+  const b = p.box, t = Number(p.thick) > 0 ? Number(p.thick) : Array.isArray(b) && b.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : 0;
+  return t >= 20 ? "worktop" : "mock";
+}
+
+const BOARD_KINDS = ["ldsp", "mdf", "hdf", "glass", "mirror"];
+
+export type RowPanel = EtPanel & { front: boolean; wall?: true };
+/** Детали «Ряда» кухни (столешница, цоколь, стеновые панели, профили, прочее вне модулей) в мировых координатах Базиса.
+ *  - фигурная столешница — прямоугольники по контуру Базиса (не сплошной габарит);
+ *  - фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»);
+ *  - цоколь (row.plinths) — «Цоколь · <имя Базиса>»: в раскрое ЛДСП и в смете — цоколем;
+ *  - стеновая панель (row.wallPanels не из плиты: материал «Стеновая панель» 6/26 мм) — «Стеновая панель · <имя>», wall: изделие
+ *    поставщика, не лист Lamarty 6 мм и не «столешница 26 мм»; ХДФ/ЛДСП в группе стеновых — как есть, в раскрой;
+ *  - стены помещения («Бетон», замер) и макеты техники («Пластик», роль appliance) — обстановка модели Базиса, не изделие: не берём;
+ *  - группа «столешницы» — по worktopGroupRole: «Столешница» только настоящая столешница Базиса. */
+export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[] {
+  const grp = (g: string) => ((row?.[g] ?? []) as EtPanel[]).filter((p) => p && Array.isArray(p.box) && p.box.length === 6);
+  return (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => grp(g).flatMap((p): RowPanel[] => {
+    if (p.role === "appliance") return [];
+    const wt = g === "worktops" ? worktopGroupRole(p) : null;
+    if (wt === "mock") return [];
+    const wall = g === "wallPanels" && !BOARD_KINDS.includes(p.kind ?? "ldsp") && !/фасадн/i.test(p.mat ?? "");
+    const name = g === "plinths" ? plinthName(p.name) : wt === "worktop" && !/столешн/i.test(p.name) ? "Столешница"
+      : wall && !/[сc]тенов/i.test(p.name) ? `Стеновая панель · ${p.name}` : p.name;
+    const rs = rowRects(p);
+    return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${name} (часть ${i + 1}/${rs.length})` : name, box, kind: p.kind ?? "ldsp", front: g === "other" && rowFront(p), ...(wall ? { wall: true as const } : {}) }));
+  }));
+}
+
+/** Панель не по осям: габарит по толщине больше толщины Базиса больше чем на ROT_TOL — берём собственные толщину и длину×ширину
+ *  Базиса. Порог 0,3: k09 — боковой цоколь ЛДСП 16 стоит чуть повёрнутым (габарит 16,64), при пороге 1 мм он уходил на отдельный
+ *  лист «16.7» (лишний лист в смете). Дробные хвосты бокса (16.0999999, Δ 0,1) порог не задевают — их округляет rawThickness. */
+export const ROT_TOL = 0.3;
+
+/** Фасадный материал Базиса («Фасадный мат-л N»), кромка [толщина, длина] и материал плиты МДФ (mat) — для сметы сырого модуля;
+ *  у панели не по осям — собственные толщина и длина×ширина Базиса (t, lw), а без lw — только толщина материала (thick). */
+export function panelExtras(p: EtPanel): { fm?: true; edges?: [number, number][]; mat?: string; thick?: number; t?: number; lw?: [number, number] } {
   const edges = (p.edges ?? []).filter((e) => Number(e.len) > 0).map((e) => [Number(e.thick ?? 0), Math.round(Number(e.len) * 10) / 10] as [number, number]);
-  // толщина материала Базиса, если габарит детали толще (деталь чуть повёрнута: цоколь k09 — габарит 16,64 при ЛДСП 16)
-  const b = p.box, t = b?.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : 0, th = Number(p.thick);
+  // панель не по осям (угловая дверь под 45°, чуть повёрнутый цоколь): габарит не равен толщине — собственные толщина и длина×ширина Базиса
+  const b = p.box, minBox = Array.isArray(b) && b.length === 6 ? Math.min(b[3] - b[0], b[4] - b[1], b[5] - b[2]) : NaN, th = Number(p.thick);
+  const rot = th > 0 && Array.isArray(p.lw) && p.lw.length === 2 && Math.abs(minBox - th) > ROT_TOL;
+  // без lw: толщина материала Базиса, если габарит детали толще (деталь чуть повёрнута: цоколь k09 — габарит 16,64 при ЛДСП 16)
+  const thick = !rot && th > 0 && minBox > 0 && Math.abs(minBox - Math.round(minBox)) > 0.2 && Math.abs(minBox - th) > 0.2;
   return { ...(/фасадн/i.test(p.mat ?? "") ? { fm: true as const } : {}), ...(edges.length ? { edges } : {}), ...((p.kind === "mdf" || p.kind === "other") && p.mat && !/фасадн/i.test(p.mat) ? { mat: p.mat } : {}),
-    ...(th > 0 && t > 0 && Math.abs(t - Math.round(t)) > 0.2 && Math.abs(t - th) > 0.2 ? { thick: th } : {}) };
+    ...(rot ? { t: Math.round(th * 10) / 10, lw: [Math.round(p.lw![0] * 10) / 10, Math.round(p.lw![1] * 10) / 10] as [number, number] } : {}),
+    ...(thick ? { thick: th } : {}) };
 }

@@ -9,7 +9,7 @@ import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {rawCounts,rawParts,rawThickness,type RawSpec} from '../src/rawModule';
 import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
-import {rowRects,panelExtras,rowFront} from '../scripts/kitchen/rowWorktop';
+import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
 function project(...ms:Module[]):Project{const p=newProject({...initialModule(),sections:[section()]});p.modules=ms.map((m,i)=>({id:id(),x:i*1000,y:0,z:0,rotation:0,module:m}));return p;}
@@ -70,11 +70,44 @@ test('«Ряд»: столешница 38 мм — строка worktop (пог.
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined,'ряд — не корпус');
   assert.equal(nest(p).length,0);
   assert.equal(e.lines.find(l=>l.id==='worktop-cut:sink'),undefined,'нет мойки — нет выреза');
-  // k25: НММойка и НМВарка — в столешницах Базиса вырезов нет; правило Макса 09.10.2026: студия их не домысливает по именам модулей
+  // k25: НММойка и НМВарка — в столешнице Базиса вырезов нет; студия их не придумывает по именам модулей (как в Базисе)
   const sink={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НММойка'},hob={...rawModule({panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[]}),name:'НМВарка'};
   const e2=estimate(project(rawModule(raw,2600,900,910),sink,hob));
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink'),undefined,'кухня из Базиса: в смете нет выреза под мойку');
-  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob'),undefined,'кухня из Базиса: в смете нет выреза под варку');
+  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:sink'),undefined);
+  assert.equal(e2.lines.find(l=>l.id==='worktop-cut:hob'),undefined);
+});
+
+test('кухня из Базиса: в смете нет того, чего нет в Базисе — заглушек конфирмата, подсветки по пазу; шкафы как раньше',()=>{
+  const kr:RawSpec={source:'bazis-kitchen',panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[],counts:{confirmats:12}};
+  const ek=estimate(project(rawModule(kr)));
+  assert.equal(ek.lines.find(l=>l.id==='confirmat-7x50')?.quantity,12);
+  assert.equal(ek.lines.find(l=>l.id==='confirmat-cap'),undefined,'в Базисе заглушек конфирмата нет');
+  // сырой шкаф из корпуса Базиса — заглушки как раньше
+  const wr:RawSpec={source:'bazis-corpus',panels:[{name:'Бок',kind:'ldsp',box:[0,0,0,16,720,560]}],hardware:[],counts:{confirmats:12}};
+  assert.equal(estimate(project(rawModule(wr))).lines.find(l=>l.id==='confirmat-cap')?.quantity,12);
+  // параметрический кухонный корпус — без заглушек; обычный шкаф — с заглушками
+  const k=kitchenWall(initialModule(),800);
+  assert.equal(estimate(project(k)).lines.find(l=>l.id==='confirmat-cap'),undefined);
+  assert.ok((estimate(newProject()).lines.find(l=>l.id==='confirmat-cap')?.quantity??0)>0);
+  // паз под подсветку Базиса в кухонном корпусе — без строки «Подсветка врезная»
+  const kg={...k,grooves:[{host:'left',face:'+' as const,along:[16,16] as [number,number],across:[100,117] as [number,number],depth:8,name:'паз под подсветку'}]};
+  assert.ok(parts(kg).some(p=>p.role==='light'),'паз есть в деталях');
+  assert.equal(estimate(project(kg)).lines.find(l=>l.id==='light-stand'),undefined);
+});
+
+test('повёрнутая панель Базиса (угловая дверь под 45°): толщина и размеры свои, не «столешница 275 мм»',()=>{
+  // эталон: Дверь ЛДСП 16, lw 765×372, габарит 765×276×275
+  const ex=panelExtras({name:'Дверь',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,100,300,276,865,575],thick:16,lw:[765,372]});
+  assert.deepEqual(ex,{t:16,lw:[765,372]});
+  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП',box:[0,0,0,16,720,560],thick:16,lw:[720,560]}),{},'панель по осям — без t/lw');
+  const raw:RawSpec={source:'bazis-kitchen',panels:[{name:'Дверь',kind:'ldsp',box:[0,100,300,276,865,575],facade:true,...ex}],hardware:[]};
+  const d=rawParts(rawModule(raw))[0];
+  assert.equal(d.thickness,16);assert.equal(d.length,765);assert.equal(d.width,372);assert.ok(!d.external,'ЛДСП-дверь — в раскрой');
+  const e=estimate(project(rawModule(raw)));
+  assert.ok(!e.lines.some(l=>l.id.startsWith('worktop')),'не столешница');
+  // фасадный материал под 45° — площадь по своим размерам
+  const fm:RawSpec={source:'bazis-kitchen',panels:[{name:'Дверь',kind:'other',fm:true,facade:true,box:[0,100,300,261,1047,561],t:16,lw:[947,369]}],hardware:[]};
+  assert.ok(Math.abs((estimate(project(rawModule(fm))).lines.find(l=>l.id==='facade-external')?.quantity??0)-0.947*0.369)<0.001);
 });
 
 test('дробная толщина Базиса (16.0999999) — целые мм, без отдельного листа 16.1',()=>{
@@ -107,4 +140,109 @@ test('«Ряд»: нет предупреждения «корпус не во �
 test('импорт: фасадный материал и кромка Базиса переносятся в сырой модуль',()=>{
   assert.deepEqual(panelExtras({name:'Цоколь',mat:'Фасадный мат-л 1',box:[0,0,0,1,1,1],edges:[{thick:1,len:597.5},{thick:0.4,len:0}]}),{fm:true,edges:[[1,597.5]]});
   assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,1,1,1]}),{});
+});
+
+test('цоколь Базиса под любым именем («Фронтальная», «Вертикальная») — «Цоколь · …», своё имя «Цоколь…» не трогаем',()=>{
+  assert.equal(plinthName('Фронтальная'),'Цоколь · Фронтальная');
+  assert.equal(plinthName('Вертикальная'),'Цоколь · Вертикальная');
+  assert.equal(plinthName('Цоколь Видимый'),'Цоколь Видимый');
+  assert.equal(plinthName('цоколь ЛДСП Графит'),'цоколь ЛДСП Графит');
+  assert.equal(plinthName(''),'Цоколь');
+});
+
+test('цоколь ряда кухни: ЛДСП — в раскрое цоколем, фасадный материал — строкой цоколя; клипсы — по Базису у модулей',()=>{
+  // ряд (k06): цоколь ЛДСП 16 — лицевой 1877 и торцевой 446 (составной угловой), высота 95 у пола
+  const row:RawSpec={row:true,hardware:[],panels:[{name:plinthName('Фронтальная'),kind:'ldsp',box:[0,0,500,1877,95,516],edges:[[0.5,1877]]},{name:plinthName('Вертикальная'),kind:'ldsp',box:[1861,0,54,1877,95,500]}]};
+  const ps=rawParts(rawModule(row,1877,95,516));
+  assert.equal(ps.filter(p=>/^Цоколь/.test(p.name)&&p.material==='board'&&!p.external).length,2,'оба куска цоколя — плита в раскрой');
+  const plan=nest(project(rawModule(row,1877,95,516)));
+  const names=plan.flatMap(s=>s.items.map(it=>JSON.stringify(it)));
+  assert.ok(names.some(n=>/Цоколь · Фронтальная/.test(n))&&names.some(n=>/Цоколь · Вертикальная/.test(n)),'в картах раскроя деталь подписана «Цоколь»');
+  // клипс в ряду нет (в Базисе они у опор модулей) — ряд их не добавляет
+  const e=estimate(project(rawModule(row,1877,95,516)));
+  assert.equal(e.lines.find(l=>l.id==='kitchen-clip')?.quantity??0,0);
+  // клипсы модулей — ровно счётчик Базиса
+  const mod:RawSpec={panels:[{name:'Бок',kind:'ldsp',box:[0,100,0,16,820,560]}],hardware:[],counts:{legs:4,clips:2}};
+  assert.equal(estimate(project(rawModule(mod),rawModule(row,1877,95,516))).lines.find(l=>l.id==='kitchen-clip')?.quantity,2);
+  // цоколь из фасадного материала (k10, k25) — своей строкой «Цоколь», не «Фасады»; площадь как в Базисе
+  const fm:RawSpec={row:true,hardware:[],panels:[{name:plinthName('Фронтальная'),kind:'other',fm:true,box:[0,0,500,2469,95,519]}]};
+  const ef=estimate(project(rawModule(fm,2469,95,19)));
+  assert.ok(Math.abs((ef.lines.find(l=>l.id==='plinth-external')?.quantity??0)-2.469*0.095)<0.001);
+  assert.equal(ef.lines.find(l=>l.id==='facade-external'),undefined);
+  // вне ряда кухни (сырой шкаф) — как раньше: фасадный материал в «Фасады»
+  const wr:RawSpec={hardware:[],panels:[{name:'Цоколь',kind:'other',fm:true,box:[0,0,500,1000,95,519]}]};
+  assert.equal(estimate(project(rawModule(wr,1000,95,19))).lines.find(l=>l.id==='plinth-external'),undefined);
+});
+
+// «Ряд» кухни так, как его собирает import.ts: детали rowPanelsOf в осях объекта + panelExtras
+function rowModule(row:Record<string,unknown>):Module{
+  const ps=rowPanelsOf(row),o=[0,1,2].map(i=>Math.min(...ps.map(p=>p.box[i]))),M=[3,4,5].map(i=>Math.max(...ps.map(p=>p.box[i])));
+  return rawModule({row:true,source:'bazis-kitchen',hardware:[],panels:ps.map(p=>({name:p.name,kind:p.kind??'ldsp',box:p.box.map((v,i)=>v-o[i%3]) as RawSpec['panels'][number]['box'],...panelExtras(p),...(p.front?{facade:true}:{}),...(p.wall?{wall:true}:{})}))},M[0]-o[0],M[1]-o[1],M[2]-o[2]);
+}
+
+test('стеновая панель Базиса (фартук 6/26 мм) — изделие поставщика, м²: не лист Lamarty 6 мм и не «столешница 26 мм»',()=>{
+  // у Базиса материал «Cтеновая панель» (латинская C), детали «Фронтальная/Вертикальная»; ХДФ в группе стеновых — как есть
+  const row={wallPanels:[
+    {name:'Фронтальная',mat:'Cтеновая панель',kind:'other',thick:6,box:[0,900,594,1292,1462,600]},
+    {name:'стеновая 26',mat:'Cтеновая панель 26мм',kind:'other',thick:26,box:[1300,900,0,2264,1500,26]},
+    {name:'Задняя',mat:'ХДФ Белый (3мм)',kind:'hdf',thick:3,box:[2270,900,0,2470,1500,3]}]};
+  const rp=rowPanelsOf(row);
+  assert.deepEqual(rp.map(p=>[p.name,!!p.wall]),[['Стеновая панель · Фронтальная',true],['стеновая 26',true],['Задняя',false]]);
+  const m=rowModule(row),ps=rawParts(m);
+  assert.ok(ps.filter(p=>/стенов/i.test(p.name)).every(p=>p.external),'стеновые — вне раскроя ЛДСП');
+  const e=estimate(project(m)),ids=e.lines.map(l=>l.id);
+  assert.ok(!ids.some(id=>/^sheet:Белый:6$/.test(id)),'нет листа Lamarty 6 мм');
+  assert.ok(!ids.some(id=>id.startsWith('worktop')),'стеновая 26 мм — не столешница');
+  assert.ok(Math.abs((e.lines.find(l=>l.id==='wallpanel:raw:6')?.quantity??0)-1.292*0.562)<0.001);
+  assert.ok(Math.abs((e.lines.find(l=>l.id==='wallpanel:raw:26')?.quantity??0)-0.964*0.6)<0.001);
+  // вне ряда кухни (сырой шкаф) флаг не действует — как раньше
+  const wr=rawParts(rawModule({hardware:[],panels:[{name:'Панель',kind:'other',wall:true,box:[0,0,0,600,562,6]}]}));
+  assert.ok(!wr[0].external);
+});
+
+test('деталь ряда нулевой толщины без материала (k33: «З/С AQ LineBox») — не лист «0 мм», кромка Базиса остаётся',()=>{
+  const z={name:'З/С AQ LineBox',mat:'',kind:'other',thick:0,lw:[681,260],box:[0,400,18,681,660,18],edges:[{thick:0.5,len:681},{thick:0.5,len:260},{thick:0.5,len:681},{thick:0.5,len:260}]};
+  const shelf={name:'Полка',mat:'ЛДСП Lamarty Белый (16мм)',kind:'ldsp',thick:16,box:[0,0,0,600,16,300]};
+  const m=rowModule({other:[z,shelf]}),ps=rawParts(m);
+  assert.ok(ps[0].external&&!ps[1].external);
+  const e=estimate(project(m));
+  assert.deepEqual(e.lines.filter(l=>l.id.startsWith('sheet:')).map(l=>l.id),['sheet:Белый'],'нет листа «Белый 0»');
+  assert.ok(Math.abs((e.lines.find(l=>l.id==='edge05')?.quantity??0)-1.882)<1e-9,'кромка Базиса 1,882 м');
+  // вне ряда (сырой шкаф) — как раньше
+  assert.ok(!rawParts(rawModule({hardware:[],panels:[{name:'Плоская',kind:'other',box:[0,0,0,600,300,0]}]}))[0].external);
+});
+
+test('k09: чуть повёрнутый цоколь ЛДСП 16 (габарит 16,64) — толщина Базиса 16, без отдельного листа «16.7»',()=>{
+  const side={name:'Цоколь',mat:'ЛДСП Lamarty Дуб Вотан (16мм)',kind:'ldsp',thick:16,lw:[98.5,783.99],box:[499.4,0,-684,516.04,98.5,100]};
+  assert.deepEqual(panelExtras(side),{t:16,lw:[98.5,784]});
+  // дробный хвост бокса (16.1) — не поворот: толщину по-прежнему округляет rawThickness
+  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП',box:[0,0,0,16.1,720,560],thick:16,lw:[720,560]}),{});
+  const front={name:'Цоколь\\',mat:'ЛДСП Lamarty Дуб Вотан (16мм)',kind:'ldsp',thick:16,lw:[1800,98.5],box:[371,0,-700,2171,98.5,-684]};
+  const m=rowModule({plinths:[side,front]});
+  const ps=rawParts(m).filter(p=>p.material==='board');
+  assert.deepEqual(ps.map(p=>[p.length,p.width,p.thickness]),[[784,98.5,16],[1800,98.5,16]]);
+  const sheets=estimate(project(m)).lines.filter(l=>l.id.startsWith('sheet:')).map(l=>l.id);
+  assert.deepEqual(sheets,['sheet:Белый'],'оба куска цоколя — на листе 16, лишнего листа нет');
+});
+
+test('группа «столешницы» эталона: столешница — только настоящая; ЛДСП «Пенала на столешку» — в раскрой; макет «Хром» — не изделие',()=>{
+  const wt={name:'Горизонтальная',mat:'Столешница',kind:'other',thick:38,box:[0,820,0,2700,858,600]};
+  const shelf={name:'Горизонтальная',mat:'ЛДСП Kronospan Слоновая Кость (16мм)',kind:'ldsp',thick:16,lw:[466,330],box:[3000,1190,0,3330,1206,466],role:'worktop'};
+  const bottom={name:'Дно ящика',mat:'ЛДСП Kronospan Слоновая Кость (16мм)',kind:'ldsp',thick:16,lw:[408,300],box:[3015,1222,20,3315,1238,428],role:'worktop'};
+  const chrome={name:'горизонтальная',mat:'Хром',kind:'other',thick:6,lw:[330,410],box:[105,858,100,435,864,510],role:'worktop'};
+  assert.equal(worktopGroupRole(wt),'worktop');
+  assert.equal(worktopGroupRole({name:'Столешница большая',mat:'Столешница СКИФ 38мм',kind:'other',box:[0,0,0,1,1,1]}),'worktop');
+  assert.equal(worktopGroupRole(shelf),'panel');
+  assert.equal(worktopGroupRole(chrome),'mock');
+  // толстая деталь без имени «Столешница» и не плита — столешница по геометрии
+  assert.equal(worktopGroupRole({name:'Горизонтальная',mat:'',kind:'other',thick:28,box:[0,0,0,1000,28,600]}),'worktop');
+  const row={worktops:[wt,shelf,bottom,chrome]};
+  assert.deepEqual(rowPanelsOf(row).map(p=>p.name),['Столешница','Горизонтальная','Дно ящика']);
+  const m=rowModule(row),ps=rawParts(m);
+  assert.equal(ps.filter(p=>p.material==='board'&&!p.external).length,2,'полка и дно ЛДСП — в раскрое');
+  const e=estimate(project(m)),wl=e.lines.filter(l=>l.id.startsWith('worktop'));
+  assert.deepEqual(wl.map(l=>[l.id,l.quantity]),[['worktop:raw:38',2.7]],'в смете только столешница 38 мм Базиса');
+  assert.ok(e.lines.some(l=>l.id==='sheet:Белый'));
+  // стены «Бетон» и макеты «Пластик» (роль appliance) — тоже не изделие
+  assert.equal(rowPanelsOf({other:[{name:'Фронтальная',mat:'Бетон',kind:'other',box:[0,0,0,4250,2410,80],role:'appliance'}]}).length,0);
 });
