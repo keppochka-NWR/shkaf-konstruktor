@@ -11,6 +11,33 @@ export function planContourGeometry(part:Part):THREE.BufferGeometry{
  uv.needsUpdate=true;return g;
 }
 
+/** Боковина с вырезами Gola (kitchen.ts golaSides): контур в плоскости Z–Y со скруглениями внутренних углов, выдавлен на толщину по X;
+ *  UV пласти — как у прямоугольной панели (длина по grainAxis), чтобы декор лёг так же. */
+export function golaSideGeometry(part:Part):THREE.BufferGeometry{
+ const [t,H,D]=part.size,zf=D/2,yt=H/2,s=new THREE.Shape();
+ // в форме ось X = −Z детали (после поворота вокруг Y на +90° она станет +Z), ось Y = Y
+ const P=(z:number,y:number):[number,number]=>[-z,y];
+ const mv=(z:number,y:number)=>s.moveTo(...P(z,y)),ln=(z:number,y:number)=>s.lineTo(...P(z,y));
+ const qc=(cz:number,cy:number,z:number,y:number)=>{const [a,b]=P(cz,cy),[c,d]=P(z,y);s.quadraticCurveTo(a,b,c,d);};
+ const cuts=[...(part.golaCuts??[])].sort((a,b)=>b.top1-a.top1);
+ mv(-zf,-yt);ln(zf,-yt);
+ let openTop=false;
+ for(const c of cuts){
+  const ya=yt-c.top1,yb=yt-c.top0,zi=zf-c.depth,r=Math.max(0,Math.min(c.r,c.depth/2,(yb-ya)/2));
+  ln(zf,ya);ln(zi+r,ya);if(r>0)qc(zi,ya,zi,ya+r);
+  if(c.top0<=0.01){ln(zi,yt);openTop=true;break;}
+  ln(zi,yb-r);if(r>0)qc(zi,yb,zi+r,yb);ln(zf,yb);
+ }
+ if(!openTop)ln(zf,yt);
+ ln(-zf,yt);s.closePath();
+ const g=new THREE.ExtrudeGeometry(s,{depth:t,bevelEnabled:false,curveSegments:6});
+ g.translate(0,0,-t/2);g.rotateY(Math.PI/2);
+ const pos=g.getAttribute('position'),normal=g.getAttribute('normal'),uv=g.getAttribute('uv');
+ const L=part.grainAxis,W=L===1?2:1;
+ for(let i=0;i<pos.count;i++)if(Math.abs(normal.getX(i))>.99)uv.setXY(i,pos.getComponent(i,W)/part.size[W]+.5,pos.getComponent(i,L)/part.size[L]+.5);
+ uv.needsUpdate=true;g.computeBoundingBox();return g;
+}
+
 /** Рамка алюминиевого фасада: контур фасада с прямоугольным вырезом под вставку, выдавленный на толщину рамки. */
 export function aluFrameGeometry(part:Part,face:number):THREE.BufferGeometry{
  const [w,h,t]=part.size,f=Math.min(face,w/2-1,h/2-1);

@@ -23,6 +23,13 @@ export function edgeByDir(p: Pick<Part, "size" | "edge"> & Partial<Pick<Part, "l
   p.edge.forEach((e, i) => { if (e > 0) out[dirs[i]] = e; });
   return out;
 }
+/** Длина кромки торца k (м·1000 = мм): у прямоугольника — сторона (k<2 — ширина, иначе длина), у фигурного контура (вырезы Gola) —
+ *  длина отрезков контура по этому направлению (Part.edgeLen), как в Базисе. */
+export function edgeLength(p: Pick<Part, "size" | "width" | "length"> & Partial<Pick<Part, "edgeLen">>, k: number): number {
+  const side = k < 2 ? p.width : p.length;
+  if (!p.edgeLen) return side;
+  return p.edgeLen[edgeDirs(p)[k]] ?? side;
+}
 /** Задать кромку по направлениям: dirs — какие торцы кромить, thick — толщина, остальные без кромки. */
 export function setEdges(p: Part, dirs: string[], thick: number) {
   p.edge = edgeDirs(p).map((d) => (dirs.includes(d) ? thick : 0)) as Part["edge"];
