@@ -313,6 +313,16 @@ for(const key of ['m03','m04'])
     const own={...m,kitchen:{...m.kitchen!,bazis:undefined}} as Module;
     assert.ok(partCollisions(parts(own),own).every(x=>!x.bazis),'not flagged for a module that is not from Bazis');
   });
+// Лишний (третий) эксцентрик Базиса в углу у левой боковины (k28 m12, z=8) не отменяет эксцентрики боковины: обе боковины на стяжках
+// с той же парой, что справа, а не на конфирматах студии (их нет в Базисе, и они выходили в паз подсветки на 8 мм).
+test('etalon k28/m12: a stray corner eccentric keeps both sides on eccentrics, no studio confirmat in the light groove',{skip:!existsSync(ET+'k28.json')},()=>{
+  const {module:m}=moduleFromEtalon(refOf('k28','m12'));
+  assert.equal(m.jointFastening?.['bottom:left'],'eccentric');
+  assert.equal(m.jointFastening?.['bottom:right'],'eccentric');
+  assert.deepEqual([m.kitchen!.underEcc!.back,m.kitchen!.underEcc!.front],[70.5,50.5],'the regular pair, not the stray corner eccentric');
+  const c=partCollisions(parts(m),m);
+  assert.ok(c.every(x=>x.bazis),'only the Bazis dowel × groove remains');
+});
 // Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
 for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)
   test(`etalon ${k}/${key}: shelf confirmat does not hit the bottom confirmat`,{skip:!existsSync(ET+k+'.json')},()=>{
