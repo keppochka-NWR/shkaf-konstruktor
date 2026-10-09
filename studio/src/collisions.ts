@@ -120,5 +120,43 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   return out;
 }
 
+/** Сырой модуль (детали и фурнитура Базиса как есть). Реестр контактов студии к нему неприменим: сетки фурнитуры Базиса сложной формы,
+ *  и их габарит (петля с плечом, направляющая под ящиком, ящик-система) всегда «заходит» в соседние детали — это ложные тревоги.
+ *  Политика проверки:
+ *  - фурнитура: точка крепления Базиса (начало координат сетки) должна лежать на детали — снаружи не дальше RAW_SEAT_GAP мм от
+ *    ближайшей панели и не глубже RAW_SEAT_DEPTH мм внутри неё (глубже — прошла насквозь, выше — висит в воздухе). Это ошибки
+ *    импорта/положения, они идут в предупреждения. Винты профиля купе и прочее, что крепится к профилям (их сечений нет), не проверяются.
+ *  - панели: перекрытие глубже RAW_JOINT мм (паз ХДФ, накладка фасада, стык — мельче) — «как в проекте Базиса», сведения, не тревога:
+ *    студия геометрию сырого модуля не меняет, правится она в Базисе. */
+export const RAW_SEAT_GAP = 30, RAW_SEAT_DEPTH = 40, RAW_JOINT = 10;
+/** outside — точка крепления вне деталей модуля дальше RAW_SEAT_GAP (бывает законно: держатель на трубе или профиле, сечения которых нет,
+ *  деталь-хозяин в соседнем модуле) — сведения «проверьте в Базисе»; deep — глубже RAW_SEAT_DEPTH внутри панели — так не крепят, тревога. */
+export type RawCheck = { checked: number; outside: { id: string; name: string; gap: number }[]; deep: { id: string; name: string; gap: number }[]; overlaps: Collision[] };
+const RAW_NO_SEAT = /профил|винт для профиля/i;
+export function rawCheck(ps: Part[], m?: Module, withOverlaps = true): RawCheck {
+  const boards = ps.filter((p) => p.id.startsWith("raw:p") && p.material !== "metal"), hw = ps.filter((p) => p.id.startsWith("raw:h"));
+  // хозяева крепления: панели и нарисованные трубы (держатели и соединители штанг сидят на трубах)
+  const bx = [...boards, ...ps.filter((p) => p.id.startsWith("raw:r"))].map(box);
+  const misplaced: { id: string; name: string; gap: number }[] = [];
+  let checked = 0;
+  for (const h of hw) {
+    const cat = m?.raw?.hardware[Number(h.id.slice(5))]?.category ?? "";
+    if (RAW_NO_SEAT.test(cat) || RAW_NO_SEAT.test(h.name) || !bx.length) continue;
+    checked++;
+    const pt = h.model?.origin ?? h.position;
+    let gap = Infinity, depth = 0;
+    for (const B of bx) {
+      const d = [pt[0] - B.c[0], pt[1] - B.c[1], pt[2] - B.c[2]], l = B.ax.map((a) => dot(a, d));
+      const out = Math.hypot(...l.map((v, i) => Math.max(0, Math.abs(v) - B.h[i])));
+      if (out < gap) { gap = out; depth = out > 0 ? 0 : Math.min(...l.map((v, i) => B.h[i] - Math.abs(v))); }
+      else if (out === 0 && gap === 0) depth = Math.min(depth, Math.min(...l.map((v, i) => B.h[i] - Math.abs(v))));
+    }
+    if (gap > RAW_SEAT_GAP) misplaced.push({ id: h.id, name: h.name, gap: Math.round(gap) });
+    else if (gap === 0 && depth > RAW_SEAT_DEPTH) misplaced.push({ id: h.id, name: h.name, gap: -Math.round(depth) });
+  }
+  const overlaps = withOverlaps ? partCollisions(boards, m, RAW_JOINT) : [];
+  return { checked, outside: misplaced.filter((x) => x.gap > 0), deep: misplaced.filter((x) => x.gap < 0), overlaps };
+}
+
 /** Пересечения с участием фурнитуры петель — то, что Макс требует свести к нулю везде. */
 export const hingeCollisions = (c: Collision[]) => c.filter((x) => /:(hingecup|hingeplate|hingearm|latch):/.test(x.a + " " + x.b));

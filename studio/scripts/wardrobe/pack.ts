@@ -1,6 +1,12 @@
 // Сцены Базиса из нескольких изделий шире 20 м (025/029/074): модули (сборки верхнего уровня) раскладываются рядами
 // в пределах помещения 20 000 мм — геометрия каждого модуля не меняется, меняется только место модуля в сцене.
-export type PackItem = { w: number; h: number; d: number; y: number };
+/** Модель одним модулем шире лимита, собранная из многих мелких сборок верхнего уровня (051: 19 «Схем» по одной детали в ряд на 33 м), —
+ *  делится по сборкам верхнего уровня (дальше их раскладывает packRows). Иначе модули как были. */
+export function splitWide<T>(mods: T[], groups: T[], span: (x: T) => number, limit = 20000, margin = 300): T[] {
+  return mods.length === 1 && groups.length >= 2 && span(mods[0]) > limit - 2 * margin ? groups : mods;
+}
+
+export type PackItem ={ w: number; h: number; d: number; y: number };
 export type PackOut = { pos: { x: number; y: number; z: number }[]; room: { width: number; depth: number; height: number } } | null;
 
 /** ряды вдоль X с зазором gap, следующий ряд — глубже по Z; y сохраняется, если модуль помещается под 2600, иначе на пол.

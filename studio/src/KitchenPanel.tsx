@@ -7,7 +7,7 @@ import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, type M
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
-import { partCollisions } from "./collisions";
+import { partCollisions, rawCheck, RAW_JOINT, RAW_SEAT_GAP } from "./collisions";
 import { refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
@@ -325,11 +325,19 @@ function RawInfo(props: KitchenPanelProps) {
   const { m } = props, r = m.raw!;
   const panels = r.panels.length, fronts = r.panels.filter((p) => p.facade).length;
   const byCat = useMemo(() => { const map = new Map<string, number>(); for (const h of r.hardware) map.set(h.category || "прочее", (map.get(h.category || "прочее") ?? 0) + 1); return [...map].sort((a, b) => b[1] - a[1]); }, [r]);
+  // проверка по политике сырого модуля (collisions.ts rawCheck): посадка фурнитуры и перекрытия панелей «как в Базисе»
+  const check = useMemo(() => rawCheck(parts(m), m), [m]);
+  const figures = r.panels.filter((p) => p.contour).length, boxes = r.panels.filter((p) => p.figure || p.skew).length, turned = r.panels.filter((p) => p.obb).length, rods = r.profiles?.length ?? 0;
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
-    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура — {r.hardware.length} шт. Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
+    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура — {r.hardware.length} шт.{figures ? ` Фигурных по контуру Базиса — ${figures}.` : ""}{turned ? ` Повёрнутых не на 90° — ${turned}.` : ""}{rods ? ` Штанг Ø25 — ${rods}.` : ""}{boxes ? ` Нарисованы габаритом (контур или поворот не перенесён) — ${boxes}.` : ""} Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
     {byCat.length > 0 && <Group icon={<Wrench size={15} />} title="Фурнитура из Базиса" open note={r.hardware.length + " шт."}>
       <ul className="kitchen-hardware">{byCat.map(([c, n]) => <li key={c}><span>{c}</span><b>{n}</b></li>)}</ul>
+      {check.deep.length > 0
+        ? <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Глубоко в детали: {check.deep.slice(0, 3).map((x) => `${x.name} (${-x.gap} мм)`).join("; ")}{check.deep.length > 3 ? ` и ещё ${check.deep.length - 3}` : ""}. Проверьте в Базисе.</p>
+        : check.checked > 0 && <p className="kitchen-ok"><CircleCheck size={14} /> Фурнитура стоит на деталях: {check.checked - check.outside.length} из {check.checked} по точкам крепления Базиса.</p>}
+      {check.outside.length > 0 && <p className="field-note">Вне деталей модуля (дальше {RAW_SEAT_GAP} мм) — {check.outside.length} шт.: {check.outside.slice(0, 2).map((x) => x.name).join("; ")}{check.outside.length > 2 ? " …" : ""}. Так бывает, когда крепление — на трубе, профиле или детали соседнего модуля; сверьте с Базисом.</p>}
+      {check.overlaps.length > 0 && <p className="field-note">Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет.</p>}
     </Group>}
     <Position {...props} open />
   </div>;
