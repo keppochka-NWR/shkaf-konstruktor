@@ -419,7 +419,7 @@ export function Scene(p: Props) {
             }).catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
           }
           if (proc) {
-            proc.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active }; });
+            proc.traverse((o) => { o.userData = { ...o.userData, partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active }; });
             mesh.add(proc);
           }
           if (isMeshItem) {
@@ -468,6 +468,13 @@ export function Scene(p: Props) {
           if(active&&state.openDoors&&part.id.startsWith('kd:')&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')&&!part.id.includes(':screw:fx3')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd){const travel=(kd.box?kd.box.len:(kd.len??500))*.9;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}}
           if(active&&preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')&&!part.id.includes(':slide:')){
             const section=m.sections.find(s=>s.id===preview.sid);if(section){const travel=drawerConfig(m,section,preview.index).length*.8;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}
+          }
+          // направляющая с процедурной моделью: сама деталь стоит в корпусе, подвижные звенья выезжают вместе с ящиком (на тот же ход)
+          if(proc&&part.id.includes(':slide:')&&active){
+            let travel=0;
+            if(state.openDoors&&part.id.startsWith('kd:')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd)travel=(kd.box?kd.box.len:(kd.len??500))*.9;}
+            else if(preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')){const section=m.sections.find(s=>s.id===preview.sid);if(section)travel=drawerConfig(m,section,preview.index).length*.8;}
+            if(travel)proc.traverse(o=>{if(o.userData.slide==='run')o.position.z+=travel;else if(o.userData.slide==='mid')o.position.z+=travel/2;});
           }
           // у фурнитуры из Базиса тень даёт сама сетка; прозрачный габарит-заглушка тени не отбрасывает
           mesh.castShadow = !part.model?.native;

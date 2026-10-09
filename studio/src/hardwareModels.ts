@@ -32,9 +32,10 @@ export function procKind(p: P): ProcKind | undefined {
   return undefined;
 }
 
-const zinc = () => new THREE.MeshStandardMaterial({ color: 0xc3c8cd, metalness: 0.55, roughness: 0.38 });
-const alu = (color = 0xc4c8cc) => new THREE.MeshStandardMaterial({ color, metalness: 0.6, roughness: 0.35 });
-const chrome = () => new THREE.MeshStandardMaterial({ color: 0xdfe3e7, metalness: 0.7, roughness: 0.18 });
+// Металл без карты окружения при высоком metalness выглядит чёрным (см. Scene.tsx) — умеренный металл, светлый цвет.
+const zinc = () => new THREE.MeshStandardMaterial({ color: 0xcfd4d8, metalness: 0.35, roughness: 0.4 });
+const alu = (color = 0xc4c8cc) => new THREE.MeshStandardMaterial({ color, metalness: 0.4, roughness: 0.35 });
+const chrome = () => new THREE.MeshStandardMaterial({ color: 0xedf0f2, metalness: 0.3, roughness: 0.22 });
 const plastic = (color = 0x3c4045) => new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6 });
 const wood = () => new THREE.MeshStandardMaterial({ color: 0xd9b98a, metalness: 0, roughness: 0.8 });
 
@@ -85,8 +86,10 @@ export function slideModel(kind: "ball" | "hidden", size: [number, number, numbe
   if (kind === "ball") {
     // три звена телескопа: наружное (у корпуса), среднее, внутреннее (к ящику); переднее звено чуть короче — видны слои
     g.add(new THREE.Mesh(extrude(flip(channel(w, h, 1.2, 4)), L), steel));
-    g.add(new THREE.Mesh(extrude(flip(mirrorU(channel(w - 4, h - 8, 1.2, 3, 0.6))), L - 4, -L / 2 + 2), steel));
-    g.add(new THREE.Mesh(extrude(flip(channel(Math.max(2, w - 8.6), h - 18, 1.2, 2.5, 1.3)), L - 10, -L / 2 + 10), steel));
+    const mid = new THREE.Mesh(extrude(flip(mirrorU(channel(w - 4, h - 8, 1.2, 3, 0.6))), L - 4, -L / 2 + 2), steel);
+    const run = new THREE.Mesh(extrude(flip(channel(Math.max(2, w - 8.6), h - 18, 1.2, 2.5, 1.3)), L - 10, -L / 2 + 10), steel);
+    mid.userData.slide = "mid"; run.userData.slide = "run"; // выдвижение ящика: среднее звено — на половину хода, внутреннее — на весь
+    g.add(mid, run);
     // пластиковый буфер доводчика у заднего торца
     const buf = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, w - 3), h * 0.45, 30), plastic(0x2f3337));
     buf.position.set(wallAt * -1.2, 0, -L / 2 + 16); g.add(buf);
@@ -97,10 +100,12 @@ export function slideModel(kind: "ball" | "hidden", size: [number, number, numbe
     // подвижная шина под дном ящика: перевёрнутый швеллер
     const ma = a + t + gap, mlo = lo + t + gap;
     const moving = shape([[ma, hi], [b, hi], [b, mlo], [b - t, mlo], [b - t, hi - t], [ma + t, hi - t], [ma + t, mlo], [ma, mlo]]);
-    g.add(new THREE.Mesh(extrude(flip(fixed), L), steel), new THREE.Mesh(extrude(flip(moving), L - 6, -L / 2 + 6), steel));
-    // замок-регулятор спереди (пластик) — у переднего торца
+    const run = new THREE.Mesh(extrude(flip(moving), L - 6, -L / 2 + 6), steel);
+    g.add(new THREE.Mesh(extrude(flip(fixed), L), steel), run);
+    // замок-регулятор спереди (пластик) — у переднего торца подвижной шины, едет с ней
     const lock = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, w - 2 * t), Math.max(1, h - 2 * t), Math.min(40, L / 8)), plastic(0x4a4f55));
     lock.position.set(0, 0, L / 2 - Math.min(40, L / 8) / 2 - 2); g.add(lock);
+    run.userData.slide = "run"; lock.userData.slide = "run";
   }
   return g;
 }
@@ -159,6 +164,8 @@ export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean;
     : k === "ecc-cam" ? eccCamModel(p.size)
     : k === "ecc-pin" ? eccPinModel(p.size, ctx.headSign ?? 1)
     : dowelModel(p.size);
-  g.traverse((o) => { if (o instanceof THREE.Mesh) { o.castShadow = true; o.receiveShadow = true; } });
+  // тонкостенный профиль (Gola, направляющая) в собственной тени даёт полосы («shadow acne») — тень не отбрасывает, только принимает
+  const thin = k.startsWith("gola") || k.startsWith("slide");
+  g.traverse((o) => { if (o instanceof THREE.Mesh) { o.castShadow = !thin; o.receiveShadow = true; } });
   return g;
 }
