@@ -101,6 +101,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
   const clips = hw("клипса").length > 0;
   if (role === "base" || role === "tall") m.kitchen.plinth = { ...(plinthPanel ? { height: r1(plinthPanel.b.y1 - plinthPanel.b.y0) } : { height: 95, off: true }), ...(legs.length && !clips ? { clips: false } : {}) };
+  // навесной/антресоль: дно выше низа боковин (боковины свисают на 18,5–28) — у Базиса под дном спереди детали нет, студия цоколь не ставит
+  else if (!legs.length && (m.plinthHeight ?? 0) > 0 && !P.some(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1)) m.kitchen.plinth = { height: 95, off: true };
   if (fronts.length && !hw("ручка").length) m.noHandles = true;
   if (!plinthPanel && (role === "base" || role === "tall")) notes.push("цоколя в модуле нет (в Базисе — у ряда или отсутствует)");
   // царги

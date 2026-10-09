@@ -296,6 +296,25 @@ test('флаги «как в Базисе» переживают сохране�
   assert.equal(parseModule(JSON.parse(JSON.stringify({...m,edgeScheme:{t:0}}))).edgeScheme?.t,0);
 });
 
+test('навесной с дном выше низа боковин (k30 m06: свес 18,5): цоколя в Базисе нет — студия его не добавляет и не требует «высоту цоколя из списка»; шкафы — как было',{skip:!has('k30')},()=>{
+  for(const key of ['m06','m07','m08','m10']){
+    const ref=load('k30',key),{module:m}=moduleFromEtalon(ref);
+    assert.equal(m.kitchen?.plinth?.off,true,key);
+    assert.ok(!parts(m).some(p=>p.id==='plinth'),key+': детали «Цоколь» нет');
+    assert.ok(!validate(m).includes('Выберите высоту цоколя из списка.'),key);
+    assert.ok(!compareModule(ref,m).extra.some(x=>x.name==='Цоколь'),key+': лишнего цоколя в сверке нет');
+    // подъём дна остаётся: дно на высоте Базиса
+    const b=parts(m).find(p=>p.id==='bottom')!;
+    assert.equal(b.position[1]-b.size[1]/2,m.plinthHeight,key);
+  }
+  // шкаф на цоколе 18,5 — по-прежнему ошибка списка и деталь «Цоколь»; кухня без флага — тоже
+  const w={...initialModule(),plinthHeight:18.5};
+  assert.ok(validate(w).includes('Выберите высоту цоколя из списка.'));
+  assert.ok(parts(w).some(p=>p.id==='plinth'));
+  const kb=kitchenBase(initialModule(),600),nf={...kb,feet:undefined,plinthHeight:100,kitchen:{...kb.kitchen!,noLegs:true as const}};
+  assert.ok(parts(nf).some(p=>p.id==='plinth'),'кухня без опор с цоколем — цоколь есть');
+});
+
 test('флаги «без петель» / «без крепежа» видны во вкладке «Кухня» и снимаются: петли и полкодержатели возвращаются в 3D, присадку и смету',()=>{
   const m=kitchenBase(initialModule(),600);
   const off={...m,kitchen:{...m.kitchen!,hinges:false as const,fasteners:false as const}};

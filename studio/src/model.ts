@@ -388,6 +388,8 @@ export function setFacadeHandle(m:Module,pid:string,handleId:string){
  else{const k=Number(pid.split(':door:')[1]);s.doorHandles=Array.from({length:4},(_,i)=>s.doorHandles?.[i]??null);s.doorHandles[k]=handleId;}
 }
 export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
+/** Кухня без опор и без цоколя в модуле (kitchen.plinth.off): дно поднято над низом боковин, цокольной детали нет (как в проекте Базиса). */
+export function kitchenNoPlinth(m:Module){return !m.feet&&!!m.kitchen?.plinth?.off;}
 /** Отступ фасадов от кромок корпуса (шкафы — RULES.faceGap 2; кухни Базиса цеха — 1,5). */
 export function fe(m:Module){return m.faceGap??RULES.faceGap;}
 /** Зазор между фасадами (шкафы — 2; кухни Базиса — 3). */
@@ -666,7 +668,8 @@ export function parts(m: Module): Part[] {
     const dir = side === "left" ? -1 : 1, edge = side === "left" ? 0 : m.width, w = wf.width;
     add("wall-filler:" + side, "Фальшпанель к стене " + (side === "left" ? "левая" : "правая") + " " + w + "×16", [t, m.height, w], [edge + dir * t / 2, m.height / 2, d + 18 - w / 2], m.height, w, t);
   }
-  if(!m.feet&&bottom>0){
+  // кухня Базиса без цоколя в модуле (kitchen.plinth.off): дно поднято над низом боковин, а цокольной детали в проекте нет — не добавляем
+  if(!m.feet&&bottom>0&&!kitchenNoPlinth(m)){
     if(m.skew){ // цоколь по скошенному фронту: длина по косой, утоплен на 2 от передних граней боковин
       const pl=(m.width-2*t)/Math.cos(skewAngle(m)),fp=frontPoint(m,m.width/2,-RULES.plinthInset-t/2);
       add("plinth","Цоколь · скос",[pl,bottom,t],[fp.x,bottom/2,fp.z],pl,bottom,t);out.at(-1)!.rotY=fp.rotY;
@@ -1282,7 +1285,9 @@ export function validate(m: Module): string[] {
   }
   for(const s of m.sections)if(s.fixed!==undefined&&(!Array.isArray(s.fixed)||s.fixed.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push('Жёсткие полки: неверные номера.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
-  if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
+  // кухня без цоколя в модуле: plinthHeight — только подъём дна над низом боковин (Базис: 18,5, 28, 48…), список высот цоколя не про неё
+  if(m.plinthHeight!==undefined && kitchenNoPlinth(m)){if(!Number.isFinite(m.plinthHeight)||m.plinthHeight<0||m.plinthHeight>300)errors.push("Кухня: подъём дна над низом боковин — от 0 до 300 мм.");}
+  else if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
