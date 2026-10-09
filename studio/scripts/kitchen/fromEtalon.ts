@@ -321,6 +321,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // (k13 m03: ХДФ на 117–120 при глубине 300, крыша 180 — без этого крыша становилась жёсткой полкой вплотную к верху, n4-antresol)
   const beforeHdf = (b: B) => b.z1 >= sideZ1 - 1 && hdf.some((h) => Math.abs(h.b.z1 - b.z0) <= 0.5 && h.b.y1 > b.y0);
   const topPanel = horiz.filter(({ b }) => (b.z1 - b.z0 > d * 0.6 || beforeHdf(b)) && b.y1 >= top - 0.5).sort((a, c) => c.b.y1 - a.b.y1)[0];
+  // крыша на боковинах — над их торцами во всю ширину корпуса (k17 m07, k21 m07: боковины 31–999, крыша 999–1015): у студии крыша
+  // между боковинами, корпус выходил на 16 мм ниже, а навес Базиса под крышей (у торца боковины) — «выше корпуса» и в крыше студии
+  // на 16 мм. Пока не поддержано — модуль идёт в проект как в Базисе (n4-antresol).
+  const roofOver = horiz.find(({ b }) => b.y0 >= top - 0.5 && b.x0 <= left.b.x0 + 0.5 && b.x1 >= right.b.x1 - 0.5 && b.z1 - b.z0 > d * 0.6);
+  if (roofOver) unsupported.push(`крыша на боковинах (над их торцами, ${r1(roofOver.b.y1 - roofOver.b.y0)} мм) — пока не поддержано: у студии крыша между боковинами`);
   // единственная горизонталь во всю глубину — наверху (k34 m04: сушка без дна, «Крышка» и ХДФ до низа): это крыша, дна нет
   const bottom = bottom0 && bottom0 === topPanel && bottom0.b.y0 > top / 2 ? undefined : bottom0;
   const rails = horiz.filter((h) => h !== topPanel && h !== bottom && h.b.z1 - h.b.z0 <= 150 && h.b.y1 >= top - 0.5);
@@ -910,7 +915,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   if (role === "wall" || role === "antresol") {
     const hg = hangersFromEtalon(ref.hardware, left.b.x1, right.b.x0, top, sideZ0);
     if (!hg) m.kitchen.hangers = false;
-    else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note) notes.push(hg.note); }
+    else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note && !roofOver) notes.push(hg.note); } // под крышей на боковинах навес не «выше корпуса»
   }
   // сушка навесного: элементы с сеткой Базиса — в точке и с поворотом проекта; без сетки — только заметка
   if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }

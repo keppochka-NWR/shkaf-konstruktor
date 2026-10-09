@@ -294,6 +294,14 @@ for(const [k,key,w,h] of [['k13','m04',682,327],['k17','m07',1014,705.5],['k21',
     const hdf=ref.panels.filter(p=>p.kind==='hdf').map(p=>[p.box[1],p.box[4]]);
     assert.ok(hdf.some(([y0,y1])=>Math.abs(y0-(b.position[1]-h/2))<0.05&&Math.abs(y1-(b.position[1]+h/2))<0.05),'same height position');
   });
+// Крыша Базиса на боковинах (над торцами, во всю ширину; k17 m07, k21 m07): студия так не строит — «не поддержано» (модуль идёт как
+// в Базисе), без ложной заметки «навесы выше корпуса на 16 мм»; крыша между боковинами (k12 m05) — без этой причины (n4-antresol).
+for(const [k,key,over] of [['k17','m07',true],['k21','m07',true],['k12','m05',false]] as const)
+  test(`etalon ${k}/${key}: roof on top of the sides is ${over?'':'not '}reported as unsupported`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const {unsupported,notes}=moduleFromEtalon(refOf(k,key));
+    assert.equal(unsupported.some(u=>/крыша на боковинах/.test(u)),over);
+    if(over) assert.ok(!notes.some(n=>/навесы Базиса выше корпуса/.test(n)),'hangers under a roof on the sides are not «above the carcass»');
+  });
 // Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
 for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)
   test(`etalon ${k}/${key}: shelf confirmat does not hit the bottom confirmat`,{skip:!existsSync(ET+k+'.json')},()=>{
