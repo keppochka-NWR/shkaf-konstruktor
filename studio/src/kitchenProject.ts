@@ -176,7 +176,7 @@ export function setLegHeight(p: Project, ids: string[], height: number): Project
     a.module.height += height - old;
     // ящики Axis PRO поднимаются вместе с корпусом
     if (a.module.kdrawers) a.module.kdrawers = a.module.kdrawers.map((d) => { const dy = height - old, k = { ...d, y0: d.y0 + dy, y1: d.y1 + dy, runnerY: d.runnerY + dy };
-      return k.system === "firmax-ldsp" ? { ...k, box: { ...k.box, y: k.box.y + dy, ...(k.box.runs ? { runs: k.box.runs.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) } : {}) } } : k; });
+      return k.system === "firmax-ldsp" || k.system === "versalite-h45" ? { ...k, box: { ...k.box, y: k.box.y + dy, ...(k.box.runs ? { runs: k.box.runs.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) } : {}) } } : k; });
     // цоколь «по регламенту» (на 5 ниже дна) следует за опорами; свой — только не выше опор
     const ph = k.plinth?.height ?? KITCHEN.plinthHeight, auto = ph === old - (KITCHEN.legs - KITCHEN.plinthHeight);
     const nextPh = auto ? height - (KITCHEN.legs - KITCHEN.plinthHeight) : Math.min(ph, height);

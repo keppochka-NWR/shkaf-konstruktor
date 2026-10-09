@@ -8,7 +8,7 @@ import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, type WorktopSpec } from
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions } from "./collisions";
-import { refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
+import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
 import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, legModules, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
@@ -232,7 +232,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       </>}
     </Group>}
 
-    {!!m.kdrawers?.length && <Group icon={<Rows3 size={15} />} title={m.kdrawers[0].system === "firmax-ldsp" ? "Ящики Firmax ЛДСП" : "Ящики Axis PRO"} open={stage === "filling"} note={m.kdrawers.length + " шт."}>
+    {!!m.kdrawers?.length && <Group icon={<Rows3 size={15} />} title={m.kdrawers[0].system === "firmax-ldsp" ? "Ящики Firmax ЛДСП" : m.kdrawers[0].system === "versalite-h45" ? "Ящики Versalite H45" : "Ящики Axis PRO"} open={stage === "filling"} note={m.kdrawers.length + " шт."}>
       <div className="kitchen-field"><span>Количество ящиков</span>
         <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => { const same = m.kdrawers!.length === c, why = relayoutProblem(m, c); /* текущее число — пересобрать с теми же долями фасадов (царги и длины заново) */
           return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? relayoutKDrawers(n, c, n.kdrawers!.map((k) => k.y1 - k.y0)) : relayoutKDrawers(n, c); })}>{c}</button>; })}</div></div>
@@ -243,13 +243,13 @@ function CabinetPanel(props: KitchenPanelProps) {
           return <button key={h} type="button" aria-pressed={d.h === h} disabled={d.h !== h && !ok} title={!fit ? "Не входит: короб ближе 21,5 мм к верху фасада или 5 мм к царгам корпуса" : !ok ? `Нет модели Axis PRO H-${h} под глубину корпуса ${m.depth}` : undefined} onClick={() => modify((n) => { const o = n.kdrawers![i]; if (o.system !== "axis-pro") return; n.kdrawers![i] = withAxisH(n, o, h); })}>H-{h}</button>; })}</div>}
         {d.system === "firmax-ldsp" && <p className="field-note">Короб ЛДСП 16: боковины {d.box.h} × {d.box.len} мм с {d.box.y} от пола модуля, дно на {d.box.bottomUp ?? 10} выше низа боковин</p>}
       </div>)}
-      <label className="hardware-field">Система ящиков<select aria-label="Система ящиков" value={m.kdrawers[0].system} onChange={(e) => modify((n) => { n.kdrawers = relayoutKDrawers(n, n.kdrawers!.length, n.kdrawers!.map((k) => k.y1 - k.y0), e.target.value as "axis-pro" | "firmax-ldsp"); })}><option value="axis-pro">Axis PRO (металлические царги)</option><option value="firmax-ldsp">Firmax ЛДСП (короб ЛДСП, скрытый монтаж)</option></select></label>
+      <label className="hardware-field">Система ящиков<select aria-label="Система ящиков" value={m.kdrawers[0].system} onChange={(e) => modify((n) => { n.kdrawers = relayoutKDrawers(n, n.kdrawers!.length, n.kdrawers!.map((k) => k.y1 - k.y0), e.target.value as KDrawerSystem); })}><option value="axis-pro">Axis PRO (металлические царги)</option><option value="firmax-ldsp">Firmax ЛДСП (короб ЛДСП, скрытый монтаж)</option><option value="versalite-h45">Versalite Light H45 (короб ЛДСП, шариковые направляющие)</option></select></label>
       {m.kdrawers[0].system === "firmax-ldsp" && <>
         <Check label="Саморезы направляющих 3×3 в боковинах корпуса" checked={m.kdrawers.every((k) => k.system !== "firmax-ldsp" || !!k.box.screws)} change={(v) => modify((n) => { n.kdrawers = firmaxSetScrews(n.kdrawers!, "screws", v); })} />
         <Check label="Шурупы фальшпанели в фасад 3,5×30" checked={m.kdrawers.every((k) => k.system !== "firmax-ldsp" || !!k.box.faceScrews)} change={(v) => modify((n) => { n.kdrawers = firmaxSetScrews(n.kdrawers!, "faceScrews", v); })} />
       </>}
       {m.kdrawers[0].system === "axis-pro" && <label className="hardware-field">Цвет Axis PRO<select aria-label="Цвет Axis PRO" value={m.kdrawers[0].color ?? "white"} onChange={(e) => modify((n) => { n.kdrawers = n.kdrawers!.map((k) => { if (k.system !== "axis-pro") return k; const c = { ...k }; if (e.target.value === "anthracite") c.color = "anthracite"; else delete c.color; return c; }); })}><option value="white">Белый</option><option value="anthracite" disabled={!m.kdrawers.every((k) => axisAvailable({ ...k, color: "anthracite" }))}>Антрацит{m.kdrawers.every((k) => axisAvailable({ ...k, color: "anthracite" })) ? "" : " — нет моделей на эти размеры"}</option></select></label>}
-      <p className="field-note">{m.kdrawers[0].system === "firmax-ldsp" ? "Как в проектах Базиса цеха: короб ЛДСП 16 на конфирматах (боковины в 5 мм от корпуса, задняя стенка и фальшпанель на дне), направляющие Firmax скрытого монтажа под дном." : "Как в проектах Базиса цеха: дно и задняя стенка ЛДСП 16, царги металлические, направляющие на боковинах (саморезы 3×3, фиксаторы D5), держатели фасада AB/CD."} Высота корпуса или глубина меняются — ящики пересчитываются.</p>
+      <p className="field-note">{m.kdrawers[0].system === "versalite-h45" ? "Как в проектах Базиса цеха: короб ЛДСП 16 на конфирматах (боковины в 13 мм от корпуса, дно у их низа, задняя стенка и фальшпанель на дне), шариковые направляющие Versalite Light H45 на шурупах 3,5×16; посадка короба в Базисе ручная — по умолчанию медианы базы." : m.kdrawers[0].system === "firmax-ldsp" ? "Как в проектах Базиса цеха: короб ЛДСП 16 на конфирматах (боковины в 5 мм от корпуса, задняя стенка и фальшпанель на дне), направляющие Firmax скрытого монтажа под дном." : "Как в проектах Базиса цеха: дно и задняя стенка ЛДСП 16, царги металлические, направляющие на боковинах (саморезы 3×3, фиксаторы D5), держатели фасада AB/CD."} Высота корпуса или глубина меняются — ящики пересчитываются.</p>
     </Group>}
 
     {!m.kdrawers?.length && !m.sections.every((x) => x.drawers > 0) && <Group icon={<Rows3 size={15} />} title="Полки" open={stage === "filling"} note={m.sections.reduce((n, x) => n + x.shelves.length, 0) + " шт."}>

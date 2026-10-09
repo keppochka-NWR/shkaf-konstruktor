@@ -37,7 +37,9 @@ test('разрез фасадов (doorSplit) и «ниша под техник�
   for(const [k,key] of [['k13','m02'],['k27','m12'],['k10','m11']]){
     const {module:m,unsupported}=moduleFromEtalon(load(k,key));
     assert.equal(m.sections[0].doorSplit,undefined,k+key);
-    assert.ok(unsupported.some(u=>u.startsWith('фасады в 2 ряда')),k+key+': '+unsupported.join('; '));
+    // k10 m11 — два ящика Versalite Light H45 (n3): фасады распознаны как ящики, а не «2 ряда»
+    if(k==='k10')assert.ok(m.kdrawers?.length===2&&m.kdrawers.every(d=>d.system==='versalite-h45'),k+key+': ящики Versalite');
+    else assert.ok(unsupported.some(u=>u.startsWith('фасады в 2 ряда')),k+key+': '+unsupported.join('; '));
     assert.ok(!unsupported.some(u=>u.startsWith('ниша под технику')),k+key+': ниша — только у пенала');
   }
   const {module:p,unsupported:u30}=moduleFromEtalon(load('k30','m05'));
