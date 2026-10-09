@@ -24,6 +24,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Крыша короче сзади (Базис k33, k34: 20 — крыша перед ХДФ, ХДФ проходит за ней); backTopGap — ХДФ в паз до верха модуля минус столько мм (k33/k34: 1). */
   topBack?: number;
   backTopGap?: number;
+  /** Модуль без дна (сушка k34 m04): ХДФ от низа модуля плюс столько мм (k34: 1). */
+  backBottomGap?: number;
   /** Вырезы в обоих верхних углах ХДФ (Базис k33, k34: 25×45 — ХДФ проходит за крышей): ширина по X, высота от верха ХДФ. */
   backNotch?: { width: number; height: number };
   /** Стыки дна/крыши без крепежа в проекте Базиса («bottom:left» и т. п., k08 m10, k14 m06) — студия крепёж не ставит. */

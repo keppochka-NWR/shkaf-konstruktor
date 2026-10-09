@@ -148,6 +148,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if ((role === "wall" || role === "antresol") && topPanel && topPanel !== bottom && topPanel.b.z0 - sideZ0 > 0.5 && back.b.z1 <= topPanel.b.z0 + 0.5) {
       m.kitchen.topBack = r1(topPanel.b.z0 - sideZ0);
       if (back.b.y1 > topPanel.b.y0 + 0.5) m.kitchen.backTopGap = r1(top - back.b.y1);
+      if (!bottom && m.kitchen.backTopGap !== undefined) m.kitchen.backBottomGap = r1(back.b.y0 - Math.min(left.b.y0, right.b.y0)); // без дна (k34 m04): ХДФ от низа модуля
       notes.push(`крыша короче сзади на ${m.kitchen.topBack} (перед ХДФ)${m.kitchen.backTopGap !== undefined ? `, ХДФ до верха минус ${m.kitchen.backTopGap}` : ""}`);
     }
     // ХДФ с вырезами в обоих верхних углах (k33, k34: 25×45) — контур Базиса из 8 точек

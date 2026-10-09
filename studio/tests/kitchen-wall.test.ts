@@ -220,6 +220,11 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
   const r4=load('k34','m04'),m4=moduleFromEtalon(r4).module,c4=compareModule(r4,m4);
   assert.equal(m4.bottomType,'none');
   assert.deepEqual([c4.missing.map(x=>x.name),c4.extra.map(x=>x.name)],[[],[]]);
+  // без дна ХДФ — от низа модуля + 1 и до верха − 2, как в Базисе: сверка PASS
+  assert.deepEqual([m4.kitchen?.backBottomGap,m4.kitchen?.backTopGap],[1,2]);
+  const b4=parts(m4).find(p=>p.id==='back')!;assert.deepEqual([b4.position[1]-b4.size[1]/2,b4.position[1]+b4.size[1]/2],[1,718]);
+  assert.ok(c4.pass,String(c4.contours));assert.deepEqual(validate(m4),[]);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m4))).kitchen?.backBottomGap,1);
   // в k32 крепежа нет вовсе — правило «без крепежа» по-прежнему срабатывает
   assert.equal(moduleFromEtalon(load('k32','m14')).module.kitchen?.noFasteners,true);
 });
