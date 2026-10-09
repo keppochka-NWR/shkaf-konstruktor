@@ -60,6 +60,12 @@ test('смета сырого модуля: фурнитура по Базису
   // с петлями Базиса — ровно их число
   const e2=estimate(project(rawModule({...raw,counts:{hinges:3}})));
   assert.equal(e2.lines.find(l=>l.id==='hinge')?.quantity,3);
+  // мелочёвка корпуса — только если в Базисе есть крепёж (k32: ни конфирматов, ни эксцентриков, ни шкантов, ни полкодержателей — строки нет)
+  assert.equal(e.lines.find(l=>l.id==='kit')?.quantity,1);
+  assert.equal(e2.lines.find(l=>l.id==='kit'),undefined);
+  // сырой шкаф (импорт корпуса, счётчиков Базиса нет) — мелочёвка как была
+  const {counts:_c,...noCounts}=raw;void _c;
+  assert.equal(estimate(project(rawModule(noCounts))).lines.find(l=>l.id==='kit')?.quantity,1);
 });
 
 test('«Ряд»: столешница 38 мм — строка worktop (пог.м), не корпус и не раскрой',()=>{

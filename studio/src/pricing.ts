@@ -127,7 +127,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // на фасадах ящиков и планках); фасадный материал — фасады поставщика (м²); столешница — пог.м; кромка — по длинам Базиса.
     if(a.module.raw){
       const r=a.module.raw,c=r.counts??{},hb=HINGE_BRANDS[a.module.hingeBrand??'gtv'],src='Как в проекте Базиса';
-      if(!r.row)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
+      // мелочёвка — только у корпуса с крепежом в проекте Базиса: без конфирматов, эксцентриков, шкантов и полкодержателей (k32) — без неё,
+      // как у параметрической кухни с kitchen.fasteners:false. Сырые шкафы (импорт корпуса, без counts) — как были, с мелочёвкой
+      if(!r.row&&(!r.counts||(c.confirmats??0)+(c.eccentrics??0)+(c.dowels??0)+(c.shelfHolders??0)>0))add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
       add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
       add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',c.confirmats??0,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
       add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',c.eccentrics??0,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
