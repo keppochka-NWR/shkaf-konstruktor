@@ -90,6 +90,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Дно под одной боковиной, другая опущена (8 модулей 5 кухонь Базиса): до низа дна (y0 = низ дна, k22 m01) или до пола (y0 = 10, k06 m01 —
    *  торцевая боковина закрывает опоры). Действует только с дном под боковинами (bottomUnder). */
   sideDown?: { side: "left" | "right"; y0: number };
+  /** «8x45» Базиса в нижнем торце опущенной боковины: отступы от задней кромки (только если они есть в проекте; k05 m01). */
+  sideScrews?: number[];
   /** false — у петель нет наколок D3×3 под планку, только чашка Ø35 (26 модулей 11 кухонь Базиса). */
   plateHoles?: false;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2; n3-base).
@@ -259,6 +261,12 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
         // Клипса для ПВХ цоколя: на передней опоре, 45–52 мм ниже дна, от −10,9 до +29 к цоколю.
         out.push(metal(`kitchen-clip:${n}`, "Клипса для ПВХ цоколя, чёрная", [32.3, 7, 39.9], [l.x, H - 49, l.z + 9.07], cm ? { file: cm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: q } : undefined));
       }
+    }
+    // опущенная до пола боковина (sideDown): в её нижнем торце «8x45» Базиса — D8×45 по оси боковины (sideScrews — отступы от задней
+    // кромки, только если они есть в проекте Базиса: k05 m01, k06 m01, k15 m06 — 50 от задней и передней; n4-tall)
+    if (k.sideDown && k.sideScrews?.length) {
+      const x = k.sideDown.side === "left" ? t / 2 : m.width - t / 2, y = k.sideDown.y0;
+      k.sideScrews.forEach((z, j) => { const s = metal(`kitchen-side-screw:${k.sideDown!.side}:${j}`, "8x45", [8, 45, 8], [x, y + 22.5, z]); s.anchor = [x, y, z]; out.push(s); });
     }
     if (!k.plinth?.off) {
       const ph = k.plinth?.height ?? KITCHEN.plinthHeight, zb = m.depth - (k.legs?.front ?? KITCHEN.legInset) + KITCHEN.clipReach;

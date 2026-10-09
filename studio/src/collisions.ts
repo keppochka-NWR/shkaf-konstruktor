@@ -86,6 +86,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.id.startsWith("leg:") && isBoard(q) && depth <= 3) return true;
     // саморез площадки опоры — в своём отверстии D3×3 в нижней пласти дна
     if (p.id.startsWith("kitchen-leg-screw:") && isBoard(q) && q.role === "body" && depth <= 3.5) return true;
+    // «8x45» в нижнем торце опущенной боковины — в своём отверстии D8×45 (n4-tall)
+    if (p.id.startsWith("kitchen-side-screw:") && isBoard(q) && q.role === "body" && q.id === p.id.split(":")[1]) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
     if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body" && (q.material === "hdf" || (q.size[0] <= 40 && q.size[1] > 60))) return true;
     if (p.id.startsWith("kitchen-hanger-cap:") && q.id === p.id.replace("-cap", "")) return true;

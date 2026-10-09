@@ -222,3 +222,14 @@ test('пенал с опущенной боковиной (sideDown, как у �
   const cf=c24.hardware.find(h=>h.category==='конфирмат')!;assert.equal(cf.studio,cf.ref);
   assert.ok(c24.missing.length<=2,c24.missing.map(x=>x.name).join(', '));
 });
+test('k05 m01: «8x45» Базиса в нижнем торце опущенной боковины (kitchen.sideScrews 50/550) — отверстия D8×45, пересечений нет; модуль PASS',{skip:!existsSync(`${ETALON}/k05.json`)},()=>{
+  const ref=load('k05','m01'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.sideScrews,[50,550]);
+  const ps=parts(m),ss=ps.filter(p=>p.id.startsWith('kitchen-side-screw:'));
+  assert.equal(ss.length,2);
+  assert.equal(holes(m,ps).filter(h=>h.d===8&&h.depth===45).length,2);
+  assert.deepEqual(partCollisions(ps,m).filter(c=>c.names.some(n=>/8x45/.test(n))),[]);
+  assert.ok(honestPass(compareModule(ref,m),validate(m),unsupported));
+  // в Базисе их нет — студия не добавляет
+  const r24=load('k24','m04');assert.equal(moduleFromEtalon(r24).module.kitchen?.sideScrews,undefined);
+});

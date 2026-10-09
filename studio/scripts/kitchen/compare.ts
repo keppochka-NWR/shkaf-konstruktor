@@ -105,6 +105,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("leg:")) return "опора";
   if (id.startsWith("kitchen-clip:")) return "клипса";
   if (id.startsWith("kitchen-leg-screw:")) return "прочее";
+  if (id.startsWith("kitchen-side-screw:")) return "прочее"; // «8x45» Базиса в торце опущенной боковины
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.startsWith("kitchen-dryer:")) return "сушка";

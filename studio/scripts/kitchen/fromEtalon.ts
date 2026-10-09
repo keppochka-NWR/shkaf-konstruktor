@@ -981,6 +981,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const jn = wallJointNone(ref.hardware, [["bottom", bottom]], left, right).filter((k) => k === `bottom:${sdSide}`);
     if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык дна с опущенной боковиной без крепежа (как в Базисе)`); }
   }
+  // «8x45» Базиса в нижнем торце опущенной боковины (k05 m01, k06 m01, k15 m06) — повторяем по точкам проекта, иначе не добавляем
+  const sdP = m.kitchen.sideDown ? (sdSide === "left" ? left : right) : undefined;
+  if (sdP) {
+    const zs = ref.hardware.filter((h) => h.name === "8x45" && h.pos[0] >= sdP.b.x0 - 0.5 && h.pos[0] <= sdP.b.x1 + 0.5 && Math.abs(h.pos[1] - sdP.b.y0) < 1).map((h) => r1(h.pos[2] - sideZ0)).sort((a, c) => a - c);
+    if (zs.length) { m.kitchen.sideScrews = zs; notes.push(`«8x45» в торце опущенной боковины: ${zs.join(", ")} — как в Базисе`); }
+  }
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
