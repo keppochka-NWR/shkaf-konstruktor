@@ -9,7 +9,7 @@ import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {rawCounts,rawParts,rawThickness,type RawSpec} from '../src/rawModule';
 import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
-import {rowRects,panelExtras,rowFront,plinthName} from '../scripts/kitchen/rowWorktop';
+import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
 function project(...ms:Module[]):Project{const p=newProject({...initialModule(),sections:[section()]});p.modules=ms.map((m,i)=>({id:id(),x:i*1000,y:0,z:0,rotation:0,module:m}));return p;}
@@ -172,4 +172,45 @@ test('цоколь ряда кухни: ЛДСП — в раскрое цоко�
   // вне ряда кухни (сырой шкаф) — как раньше: фасадный материал в «Фасады»
   const wr:RawSpec={hardware:[],panels:[{name:'Цоколь',kind:'other',fm:true,box:[0,0,500,1000,95,519]}]};
   assert.equal(estimate(project(rawModule(wr,1000,95,19))).lines.find(l=>l.id==='plinth-external'),undefined);
+});
+
+// «Ряд» кухни так, как его собирает import.ts: детали rowPanelsOf в осях объекта + panelExtras
+function rowModule(row:Record<string,unknown>):Module{
+  const ps=rowPanelsOf(row),o=[0,1,2].map(i=>Math.min(...ps.map(p=>p.box[i]))),M=[3,4,5].map(i=>Math.max(...ps.map(p=>p.box[i])));
+  return rawModule({row:true,source:'bazis-kitchen',hardware:[],panels:ps.map(p=>({name:p.name,kind:p.kind??'ldsp',box:p.box.map((v,i)=>v-o[i%3]) as RawSpec['panels'][number]['box'],...panelExtras(p),...(p.front?{facade:true}:{})}))},M[0]-o[0],M[1]-o[1],M[2]-o[2]);
+}
+
+test('k09: чуть повёрнутый цоколь ЛДСП 16 (габарит 16,64) — толщина Базиса 16, без отдельного листа «16.7»',()=>{
+  const side={name:'Цоколь',mat:'ЛДСП Lamarty Дуб Вотан (16мм)',kind:'ldsp',thick:16,lw:[98.5,783.99],box:[499.4,0,-684,516.04,98.5,100]};
+  assert.deepEqual(panelExtras(side),{t:16,lw:[98.5,784]});
+  // дробный хвост бокса (16.1) — не поворот: толщину по-прежнему округляет rawThickness
+  assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП',box:[0,0,0,16.1,720,560],thick:16,lw:[720,560]}),{});
+  const front={name:'Цоколь\\',mat:'ЛДСП Lamarty Дуб Вотан (16мм)',kind:'ldsp',thick:16,lw:[1800,98.5],box:[371,0,-700,2171,98.5,-684]};
+  const m=rowModule({plinths:[side,front]});
+  const ps=rawParts(m).filter(p=>p.material==='board');
+  assert.deepEqual(ps.map(p=>[p.length,p.width,p.thickness]),[[784,98.5,16],[1800,98.5,16]]);
+  const sheets=estimate(project(m)).lines.filter(l=>l.id.startsWith('sheet:')).map(l=>l.id);
+  assert.deepEqual(sheets,['sheet:Белый'],'оба куска цоколя — на листе 16, лишнего листа нет');
+});
+
+test('группа «столешницы» эталона: столешница — только настоящая; ЛДСП «Пенала на столешку» — в раскрой; макет «Хром» — не изделие',()=>{
+  const wt={name:'Горизонтальная',mat:'Столешница',kind:'other',thick:38,box:[0,820,0,2700,858,600]};
+  const shelf={name:'Горизонтальная',mat:'ЛДСП Kronospan Слоновая Кость (16мм)',kind:'ldsp',thick:16,lw:[466,330],box:[3000,1190,0,3330,1206,466],role:'worktop'};
+  const bottom={name:'Дно ящика',mat:'ЛДСП Kronospan Слоновая Кость (16мм)',kind:'ldsp',thick:16,lw:[408,300],box:[3015,1222,20,3315,1238,428],role:'worktop'};
+  const chrome={name:'горизонтальная',mat:'Хром',kind:'other',thick:6,lw:[330,410],box:[105,858,100,435,864,510],role:'worktop'};
+  assert.equal(worktopGroupRole(wt),'worktop');
+  assert.equal(worktopGroupRole({name:'Столешница большая',mat:'Столешница СКИФ 38мм',kind:'other',box:[0,0,0,1,1,1]}),'worktop');
+  assert.equal(worktopGroupRole(shelf),'panel');
+  assert.equal(worktopGroupRole(chrome),'mock');
+  // толстая деталь без имени «Столешница» и не плита — столешница по геометрии
+  assert.equal(worktopGroupRole({name:'Горизонтальная',mat:'',kind:'other',thick:28,box:[0,0,0,1000,28,600]}),'worktop');
+  const row={worktops:[wt,shelf,bottom,chrome]};
+  assert.deepEqual(rowPanelsOf(row).map(p=>p.name),['Столешница','Горизонтальная','Дно ящика']);
+  const m=rowModule(row),ps=rawParts(m);
+  assert.equal(ps.filter(p=>p.material==='board'&&!p.external).length,2,'полка и дно ЛДСП — в раскрое');
+  const e=estimate(project(m)),wl=e.lines.filter(l=>l.id.startsWith('worktop'));
+  assert.deepEqual(wl.map(l=>[l.id,l.quantity]),[['worktop:raw:38',2.7]],'в смете только столешница 38 мм Базиса');
+  assert.ok(e.lines.some(l=>l.id==='sheet:Белый'));
+  // стены «Бетон» и макеты «Пластик» (роль appliance) — тоже не изделие
+  assert.equal(rowPanelsOf({other:[{name:'Фронтальная',mat:'Бетон',kind:'other',box:[0,0,0,4250,2410,80],role:'appliance'}]}).length,0);
 });
