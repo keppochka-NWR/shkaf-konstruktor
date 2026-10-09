@@ -28,9 +28,28 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
   else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
+  const pts = irregularLegs(ref);
+  if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
   if (pf !== undefined) { m.shelfPinInsetFront = pf; notes.push(`передние полкодержатели в ${pf} от переднего торца полки (задние в ${m.shelfPinInset}) — как в Базисе`); }
   return notes;
+}
+
+/** Опоры не сеткой «ряды по ширине × перед/зад» (18 из 174 модулей с опорами, k15 m02: правая задняя глубже левой на 23) —
+ *  точки [x, z от задней кромки боковин]. Сетка или опоры внахлёст (ближе площадки 58 по обеим осям) — undefined. */
+export function irregularLegs(ref: RefModule): [number, number][] | undefined {
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const sides = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200);
+  if (sides.length < 2) return undefined;
+  const z0 = Math.min(...sides.map((p) => p.box[2]));
+  const L = ref.hardware.filter((h) => h.category === "опора").map((h) => [r1(h.pos[0]), r1(h.pos[2] - z0)] as [number, number]);
+  if (L.length < 2) return undefined;
+  const xs = [...new Set(L.map((p) => p[0]))], zs = [...new Set(L.map((p) => p[1]))];
+  const key = (p: [number, number]) => p.join(","), have = new Set(L.map(key));
+  const grid = zs.length <= 2 && have.size === xs.length * zs.length && xs.every((x) => zs.every((z) => have.has(key([x, z]))));
+  if (grid) return undefined;
+  if (L.some((p, i) => L.some((q, j) => j > i && Math.abs(p[0] - q[0]) < 58 && Math.abs(p[1] - q[1]) < 58))) return undefined;
+  return L.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
 /** Полкодержатели не симметричны по глубине полки (61 из 244 полок Базиса): отступ передних от переднего торца нижней полки с держателями,

@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs} from '../scripts/kitchen/recognize-base';
 import {edgeByDir} from '../src/edges';
 
 // Правило Макса: в кухню из Базиса студия не добавляет того, чего нет в Базисе (петли, опоры, крепёж, кромка, строки сметы).
@@ -135,6 +135,19 @@ test('стяжка на ребре в 1 мм от задней кромки бо
   const w={...initialModule(),rails:[{place:'rear-top' as const,height:100,setback:5}]};
   const p=parts(w).find(x=>x.id==='rail:rear-top')!;
   assert.equal(p.position[2]-p.size[2]/2,0,'шкаф — как было');
+});
+
+test('опоры не сеткой (k15 m02: правая задняя на 23 глубже левой) — точки как в Базисе, клипсы на передних, PASS; сетка — как раньше',{skip:!has('k15')},()=>{
+  const ref=load('k15','m02'),{module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(irregularLegs(ref),[[70,71],[70,425],[640,94],[640,425]]);
+  assert.deepEqual(m.kitchen?.legs?.pts,[[70,71],[70,425],[640,94],[640,425]]);
+  assert.equal(parts(m).filter(p=>p.id.startsWith('leg:')).length,4);
+  assert.equal(parts(m).filter(p=>p.id.startsWith('kitchen-clip:')).length,2);
+  const c=compareModule(ref,m);
+  assert.ok(c.pass,why(c));
+  if(has('k25'))assert.equal(irregularLegs(load('k25','m07')),undefined,'сетка — без точек');
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back.kitchen?.legs?.pts,m.kitchen?.legs?.pts);
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{
