@@ -4,9 +4,44 @@
 // Раскрой и смета панелей работают как обычно; правила студии (петли, крепёж, полки) к сырому модулю не применяются.
 import type { Module, Part } from "./model";
 
-export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string };
+/** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
+ *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона). */
+export type RawPanel = { name: string; kind: string; box: [number, number, number, number, number, number]; facade?: boolean; decor?: string; fm?: boolean; edges?: [number, number][] };
 export type RawHardware = { name: string; category: string; mesh?: string | null; pos: [number, number, number]; quat: [number, number, number, number] };
-export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string };
+/** Счётчики фурнитуры Базиса для сметы (вся фурнитура модуля, в т.ч. не показанная в 3D): см. RAW_COUNT_KEYS. */
+export type RawCounts = Partial<Record<(typeof RAW_COUNT_KEYS)[number], number>>;
+export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccentrics", "shelfHolders", "dowels", "hinges", "lifts", "drawers"] as const;
+/** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса». */
+export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean };
+
+/** Счётчики фурнитуры по списку Базиса: петли — только «Петля …» (детали ФриФолд в Базисе тоже в категории «петля»),
+ *  подъёмник — пара механизмов ФриФолд/подъёмника на комплект, ящик Axis PRO — пара держателей фасада на ящик. */
+export function rawCounts(hw: { name: string; category: string }[]): RawCounts {
+  const c: Record<string, number> = {};
+  const inc = (k: string, n = 1) => { c[k] = (c[k] ?? 0) + n; };
+  let mech = 0, holders = 0;
+  for (const h of hw) {
+    const cat = h.category, n = h.name;
+    if (cat === "опора") inc("legs");
+    else if (cat === "клипса") inc("clips");
+    else if (cat === "навес") inc("hangers");
+    else if (cat === "конфирмат") inc("confirmats");
+    else if (cat === "эксцентрик") inc("eccentrics");
+    else if (cat === "полкодержатель") inc("shelfHolders");
+    else if (cat === "шкант") inc("dowels");
+    if ((cat === "петля" || cat === "подъёмник" || cat === "газлифт") && /^петля/i.test(n.trim())) inc("hinges");
+    if ((cat === "петля" || cat === "подъёмник" || cat === "газлифт") && /механизм/i.test(n) && /фрифолд|freefold|подъ|lift/i.test(n)) mech++;
+    if (/axis\s*pro/i.test(n) && /держ\.?\s*фасада/i.test(n)) holders++;
+  }
+  if (mech) c.lifts = Math.ceil(mech / 2);
+  if (holders) c.drawers = Math.ceil(holders / 2);
+  return c as RawCounts;
+}
+
+/** Толщина детали Базиса: дробные хвосты бокса (16.0999999) — целые мм, иначе раскрой заводит отдельный лист «16.1». */
+export function rawThickness(t: number): number {
+  return Math.abs(t - Math.round(t)) <= 0.2 ? Math.round(t) : Math.round(t * 10) / 10;
+}
 
 /** Сетки фурнитуры, которые есть в studio/public/models/hardware/bazis (заполняется при импорте: rawMeshes.json). */
 export const RAW_FALLBACK_MESH: Record<string, string> = {
@@ -24,9 +59,11 @@ export function rawParts(m: Module): Part[] {
     const dims = [...size].sort((a, b) => b - a), thin = size.indexOf(Math.min(...size));
     const material: Part["material"] = p.kind === "hdf" ? "hdf" : p.kind === "glass" || p.kind === "mirror" ? "glass" : "board";
     // Столешница (толщина ≥ 26) — стороннее изделие, не раскрой ЛДСП; деталь длиннее рабочей длины листа — на сращивание, вне карт.
+    // Фасадный материал (fm) — изделие поставщика фасадов, не раскрой ЛДСП; декор — фасадов.
     const worktop = /столешн/i.test(p.name) || dims[2] >= 26, long = dims[0] > 2726;
-    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop ? " · длиннее листа — сращивание" : ""), ...(worktop || long ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: dims[2],
-      role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.facade ? m.facadeDecor : m.decor), grain: "length",
+    out.push({ id: `raw:p${i}`, name: p.name + (long && !worktop && !p.fm ? " · длиннее листа — сращивание" : ""), ...(worktop || long || p.fm ? { external: true } : {}), size, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], length: dims[0], width: dims[1], thickness: rawThickness(dims[2]),
+      // декор фасадов — у фасадного материала; ЛДСП корпуса спереди (фальшпанель ящика, планка) остаётся в декоре корпуса
+      role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(dims[0]) === thin ? 1 : size.indexOf(dims[0])) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
   });
   r.hardware.forEach((h, i) => {
@@ -50,8 +87,11 @@ export function parseRaw(x: unknown): RawSpec | undefined {
   const r = x as RawSpec;
   if (!r || typeof r !== "object" || !Array.isArray(r.panels)) return undefined;
   return {
-    panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}) })),
+    panels: r.panels.map((p) => ({ name: String(p.name ?? "деталь"), kind: String(p.kind ?? "ldsp"), box: (p.box ?? []).map(Number) as RawPanel["box"], ...(p.facade ? { facade: true } : {}), ...(p.decor ? { decor: String(p.decor) } : {}), ...(p.fm ? { fm: true } : {}),
+      ...(Array.isArray(p.edges) && p.edges.length ? { edges: p.edges.filter((e) => Array.isArray(e) && e.length === 2).map((e) => [Number(e[0]), Number(e[1])] as [number, number]).filter((e) => e.every(Number.isFinite)) } : {}) })),
     hardware: (Array.isArray(r.hardware) ? r.hardware : []).map((h) => ({ name: String(h.name ?? ""), category: String(h.category ?? ""), mesh: h.mesh ? String(h.mesh) : null, pos: (h.pos ?? [0, 0, 0]).map(Number) as RawHardware["pos"], quat: (h.quat ?? [1, 0, 0, 0]).map(Number) as RawHardware["quat"] })),
     ...(r.source ? { source: String(r.source) } : {}),
+    ...(r.counts && typeof r.counts === "object" ? { counts: Object.fromEntries(RAW_COUNT_KEYS.filter((k) => Number.isFinite(Number(r.counts![k])) && Number(r.counts![k]) > 0).map((k) => [k, Math.round(Number(r.counts![k]))])) as RawCounts } : {}),
+    ...(r.row ? { row: true } : {}),
   };
 }
