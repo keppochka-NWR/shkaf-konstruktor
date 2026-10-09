@@ -90,7 +90,14 @@ test('поле «Ширина» во вкладке Кухня — тот же �
 test('мойка 1480 с фальшем и планкой во всю высоту (k28 m17): два ряда опор, свои отступы конфирматов дна справа — сверка PASS',{skip:!has('k28')},()=>{
   const r=pass('k28','m17');
   assert.ok(r.ok,r.info);
-  assert.deepEqual(r.m.kitchen?.legs?.xs,[70,1410]);
+  assert.equal(r.m.kitchen?.legs?.xs,undefined);assert.equal(r.m.kitchen?.legs?.side,70);assert.equal(r.m.kitchen?.legs?.rows2,true);
+  const legX=(m:typeof r.m)=>[...new Set(parts(m).filter(p=>p.id.startsWith('leg:')).map(p=>Math.round(p.model!.origin![0])))].sort((a,b)=>a-b);
+  assert.deepEqual(legX(r.m),[70,1410],'два ряда опор, как в Базисе');
+  // смена ширины: правые опоры идут за боковиной (70 от торца), третий ряд не появляется; проект сохраняет признак
+  const w={...r.m,width:1400};assert.deepEqual(legX(w),[70,1330]);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(r.m))).kitchen?.legs?.rows2,true);
+  // без признака у широкого кухонного модуля — третий ряд посередине, как было
+  const no={...r.m,kitchen:{...r.m.kitchen!,legs:{...r.m.kitchen!.legs!,rows2:undefined}}};assert.deepEqual(legX(no),[70,740,1410]);
   assert.deepEqual(r.m.kitchen?.jointZ,{'bottom:right':[252,52]});
 });
 

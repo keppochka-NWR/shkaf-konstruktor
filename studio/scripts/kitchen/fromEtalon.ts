@@ -365,9 +365,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // симметричная раскладка (отступ от торцов) — относительной: переживёт изменение ширины
     const sym = xs.length >= 2 && Math.abs(xs[0] - (r1(W) - xs[xs.length - 1])) < 0.6 && (xs.length === 2 || (xs.length === 3 && Math.abs(xs[1] - W / 2) < 0.6 && W > 1300));
     // шире 1300 при двух рядах (мойки k28 m17 1480, k31 m22 1347, остров k30 m01 1324 — все широкие модули Базиса с правильной
-    // раскладкой) — без третьего ряда студии посередине: ряды точками xs (n4-base)
+    // раскладкой) — без третьего ряда студии посередине (rows2); симметричные — по отступу от торцов, правые идут за боковиной
     const wide2 = xs.length === 2 && W > 1300;
-    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym && !wide2 ? { side: xs[0] } : { xs }) };
+    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0], ...(wide2 ? { rows2: true as const } : {}) } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
     if (legScrews(ref.hardware)) m.kitchen.legs.screws = true;
     // левые опоры у большинства проектов — своя сетка (cb84c30b57a5); в части проектов (k26, k27) — та же, что у правых

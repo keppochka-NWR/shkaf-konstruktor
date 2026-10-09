@@ -191,7 +191,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Check label="Только у этого модуля" checked={onlyThis} change={setOnlyThis} />
       <Num label="Опоры от зада" value={legs.back} min={20} max={Math.floor(m.depth / 2) - 20} change={(v) => setLegs({ back: v })} note="Задний ряд — от задней кромки дна; Базис — 70" />
       <Num label="Опоры от переда" value={legs.front} min={20} max={Math.floor(m.depth / 2) - 20} change={(v) => setLegs({ front: v })} note="Передний ряд (с клипсами) — от передней кромки дна; Базис — 70" />
-      {m.width >= 250 && !legs.xs && <Num label="Опоры от торцов" value={legs.side ?? KITCHEN.legInset} min={20} max={Math.floor(m.width / 2) - 20} change={(v) => setLegs({ side: v })} note={m.width > 1300 ? "Шире 1300 — третий ряд посередине" : "По Базису — 70 от краёв дна"} />}
+      {m.width >= 250 && !legs.xs && <Num label="Опоры от торцов" value={legs.side ?? KITCHEN.legInset} min={20} max={Math.floor(m.width / 2) - 20} change={(v) => setLegs({ side: v })} note={m.width > 1300 ? (legs.rows2 ? "Два ряда без среднего — как в проекте Базиса" : "Шире 1300 — третий ряд посередине") : "По Базису — 70 от краёв дна"} />}
       {m.width < 250 && <p className="field-note">Узкий модуль: одна пара опор по центру ширины.</p>}
       {legs.xs && <p className="field-note">Раскладка опор из проекта Базиса: {legs.xs.map((x) => Math.round(x)).join(", ")} мм от левого края. <button className="text-action" onClick={() => { const { xs: _xs, ...rest } = legs; void _xs; setK({ legs: rest }); }}>Вернуть по правилу</button></p>}
       <Check label="Цоколь у этого модуля" checked={!plinth.off} change={(v) => setPlinth({ off: v ? undefined : true })} />
