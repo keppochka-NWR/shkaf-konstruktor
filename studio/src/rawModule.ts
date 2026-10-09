@@ -14,6 +14,12 @@ export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccent
 /** row — объект «Ряд» (столешница, цоколь, панели): не корпус, без «мелочёвки корпуса». */
 export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean };
 
+/** Сырой модуль КУХНИ Базиса (scripts/kitchen/import.ts): у него есть счётчики фурнитуры Базиса (counts) или это объект «Ряд».
+ *  Шкафы из корпуса Базиса (scripts/wardrobe/import.ts, source 'bazis-corpus', без counts) — не кухня: смета и фальши по правилам шкафов. */
+export function rawKitchen(r: RawSpec | undefined): boolean {
+  return !!r && r.source !== "bazis-corpus" && (!!r.row || r.counts !== undefined);
+}
+
 /** Счётчики фурнитуры по списку Базиса: петли — только «Петля …» (детали ФриФолд в Базисе тоже в категории «петля»),
  *  подъёмник — пара механизмов ФриФолд/подъёмника на комплект, ящик Axis PRO — пара держателей фасада на ящик. */
 export function rawCounts(hw: { name: string; category: string }[]): RawCounts {

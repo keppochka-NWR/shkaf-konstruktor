@@ -1,6 +1,7 @@
 import type {Niche,CeilingType} from './measurement';
 import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
+import {rawKitchen} from './rawModule';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
@@ -49,15 +50,16 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
  * — боковина у стены при наличии фасадов/ящиков: планка торцом 100×16 (ширину менеджер может изменить), +5 мм к стене.
  * Корпус отодвигается от стены на вылет фальши. Если стык или стена больше не рядом — фальш убирается.
  */
-/** Кухня из Базиса: импорт помечен source 'bazis'; ранние импорты без пометки узнаются по сырым модулям (они бывают только из Базиса). */
-export function fromBazis(p:Project):boolean{return p.source==='bazis'||p.modules.some(a=>!!a.module.raw);}
+/** Кухня из Базиса: импорт помечен source 'bazis'; ранние импорты без пометки узнаются по сырым модулям кухни (rawKitchen).
+ *  Сырые шкафы из корпуса Базиса (wardrobe-NNN) — не кухня: фальши по правилам шкафов, как было. */
+export function fromBazis(p:Project):boolean{return p.source==='bazis'||p.modules.some(a=>rawKitchen(a.module.raw));}
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner)continue;
     // Кухня из Базиса (правило Макса 09.10.2026): фальши и сдвиги студии не добавляются — фальши, если нужны, уже деталями в Базисе.
-    if(bazis&&(a.module.kitchen||a.module.raw))continue;
+    if(bazis&&(a.module.kitchen||rawKitchen(a.module.raw)))continue;
     const rot=a.rotation??0;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
     const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;

@@ -7,7 +7,7 @@ import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {newProject,parseProject,applyAutoFillers,fromBazis,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
-import type {RawSpec} from '../src/rawModule';
+import {rawKitchen,type RawSpec} from '../src/rawModule';
 
 const led=(m:Module):Module=>{m.grooves=['left','right'].map(h=>({host:h,face:(h==='left'?'+':'-') as '+'|'-',along:[16,16] as [number,number],across:[100,117] as [number,number],depth:8,name:'паз под подсветку'}));return m;};
 const k25wall=()=>{const m=led(kitchenWall(initialModule(),630));m.height=930;return m;};
@@ -34,11 +34,41 @@ test('кухня из Базиса: в смете нет «Мелочёвки к
   assert.ok(we.includes('kit')&&we.includes('confirmat-cap')&&we.includes('confirmat'),'шкаф студии — как было');
 });
 
-test('сырой модуль Базиса: в смете нет «Мелочёвки корпуса» и заглушек под конфирмат',()=>{
+test('сырой модуль кухни Базиса: в смете нет «Мелочёвки корпуса» и заглушек под конфирмат',()=>{
+  assert.ok(rawKitchen(rawBody().raw));
   const e=estimate(project(rawBody()));
   assert.equal(e.lines.find(l=>l.id==='kit'),undefined);
   assert.equal(e.lines.find(l=>l.id==='confirmat-cap'),undefined);
   assert.equal(e.lines.find(l=>l.id==='confirmat-7x50')?.quantity,8,'конфирматы — по счётчику Базиса');
+});
+
+// Шкаф из корпуса Базиса (scripts/wardrobe/import.ts: source 'bazis-corpus', без счётчиков) — не кухня: правила шкафов как были.
+const hdfBack=():RawSpec['panels'][number]=>({name:'Задняя стенка',kind:'hdf',box:[0,0,0,600,720,3]});
+const rawWardrobe=():Module=>({...rawBody(),name:'Шкаф Базиса',raw:{panels:[...rawBody().raw!.panels,hdfBack()],hardware:[],source:'bazis-corpus'}});
+
+test('сырой шкаф Базиса (wardrobe-NNN): «Мелочёвка корпуса» и работа цеха за все листы, включая ХДФ, — как было',()=>{
+  const m=rawWardrobe();assert.ok(!rawKitchen(m.raw));
+  const p=project(m),plan=nest(p),e=estimate(p,plan);
+  assert.equal(e.lines.find(l=>l.id==='kit')?.quantity,1,'норматив шкафа на корпус остаётся');
+  assert.ok(plan.some(s=>s.material==='hdf'),'в раскрое есть лист ХДФ');
+  assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.length,'работа — за все листы, как у шкафов');
+  // тот же набор деталей в сыром модуле кухни: ХДФ работой не считается
+  const k={...rawBody(),raw:{...rawBody().raw!,panels:[...rawBody().raw!.panels,hdfBack()]}},kp=project(k),kplan=nest(kp);
+  assert.equal(estimate(kp,kplan).lines.find(l=>l.id==='work')!.quantity,kplan.filter(s=>s.material!=='hdf').length);
+});
+
+test('сырой шкаф Базиса — не «кухня из Базиса»: фальши по регламенту шкафов',()=>{
+  const p=project(rawWardrobe());
+  assert.equal(fromBazis(p),false);
+  // «Ряд» кухни — сырой модуль кухни, даже без счётчиков фурнитуры
+  assert.ok(rawKitchen({row:true,panels:[],hardware:[]}));
+  assert.ok(!rawKitchen(undefined));
+});
+
+test('кухня студии: опция «Подсветка в стойках» по-прежнему в смете (пазы Базиса — нет)',()=>{
+  const m=kitchenBase(initialModule(),600);m.standLight=true;
+  assert.ok(parts(m).some(d=>d.role==='light'&&!d.id.startsWith('groove:')),'у модуля есть подсветка');
+  assert.ok(ids(project(m)).includes('light-stand'));
 });
 
 test('кухня из Базиса (k25 НММойка/НМВарка): в смете нет вырезов в столешнице, которых нет в Базисе',()=>{
