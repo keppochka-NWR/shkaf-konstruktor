@@ -79,6 +79,14 @@ test('фальш мойки сохраняется в проекте (parseModul
   assert.ok(validate(w).some(e=>e.startsWith('Ширина')),'шкаф 1480 — ошибка, как раньше');
 });
 
+test('поле «Ширина» во вкладке Кухня — тот же предел, что в проверке кухни (KITCHEN.maxModuleWidth), а не 1200: мойку 1480 можно править',()=>{
+  const src=readFileSync(new URL('../src/KitchenPanel.tsx',import.meta.url),'utf8');
+  const field=src.split('\n').find(l=>l.includes('label="Ширина"'))!;
+  assert.ok(field.includes('max={KITCHEN.maxModuleWidth}'),field);
+  const k=initialModule();k.kitchen={role:'base'} as never;k.width=1480;
+  assert.ok(!validate(k).some(e=>e.startsWith('Ширина')),'кухонный модуль 1480 проходит проверку ширины');
+});
+
 test('мойка 1480 с фальшем и планкой во всю высоту (k28 m17): два ряда опор, свои отступы конфирматов дна справа — сверка PASS',{skip:!has('k28')},()=>{
   const r=pass('k28','m17');
   assert.ok(r.ok,r.info);
