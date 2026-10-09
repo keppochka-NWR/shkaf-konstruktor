@@ -184,6 +184,26 @@ test('k24 m04: пенал в 3 ряда — петли 7 из 7 по рядам 
   ys.forEach((y,k)=>assert.ok(Math.abs(y-ry[k])<=1.5,`петля ${k}: ${y} против ${ry[k]}`));
 });
 
+test('цоколь — деталь под дном: у кухни без опор и без панели под приподнятым дном в Базисе (ниша под техникой) студия его не рисует (bareBottom, критик n3)',{skip:!existsSync(`${ETALON}/k18.json`)},()=>{
+  for(const [k,key] of [['k18','m21'],['k23','m04'],['k30','m02']]){
+    const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.equal(m.kitchen?.bareBottom,true,k+key);
+    assert.equal(parts(m).find(p=>p.id==='plinth'),undefined,k+key+': цоколя ~2 м нет');
+    assert.ok(!compareModule(ref,m).extra.some(x=>x.name.startsWith('Цоколь')),k+key);
+  }
+  // панель под дном в Базисе есть («Фронтальная») — цоколь остаётся и сходится
+  const r14=load('k14','m03'),{module:m14}=moduleFromEtalon(r14);
+  assert.equal(m14.kitchen?.bareBottom,undefined);
+  assert.ok(compareModule(r14,m14).pairs.some(p=>p.studio.name.startsWith('Цоколь')&&p.delta<=2));
+  // поле сохраняется; у шкафа правило «низ без ножек — цоколь» прежнее
+  const w=initialModule();w.plinthHeight=100;
+  assert.ok(parts(w).some(p=>p.id==='plinth'));
+  const kk={...w,kitchen:{role:'wall' as const,bareBottom:true as const}};
+  assert.ok(parts({...kk,kitchen:{role:'wall' as const}}).some(p=>p.id==='plinth'),'без поля — как раньше');
+  assert.equal(parts(kk).find(p=>p.id==='plinth'),undefined);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(kk))).kitchen?.bareBottom,true);
+});
+
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
   const m=initialModule();m.sections[0].doorNiche=500;
   assert.ok(validate(m).some(e=>e.includes('ниша под технику')));

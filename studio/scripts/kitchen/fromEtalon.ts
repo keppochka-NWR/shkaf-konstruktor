@@ -201,7 +201,14 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const under = bottom.b.x0 <= left.b.x0 + 0.5 && bottom.b.x1 >= right.b.x1 - 0.5;
     if (under) m.bottomUnder = true;
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
-    else if (bottom.b.y0 > 0.5) { m.plinthHeight = r1(bottom.b.y0); notes.push(`низ корпуса на ${r1(bottom.b.y0)} без опор — как цоколь`); }
+    else if (bottom.b.y0 > 0.5) {
+      m.plinthHeight = r1(bottom.b.y0);
+      // цоколь — деталь, закрывающая низ под дном (у Базиса бывает «Фронтальная» ЛДСП): панель в плоскости фронта под дном.
+      // Нет её — под дном открытая ниша (техника, k18 m21, k23 m04, k30 m02) или зазор: цоколь студия не рисует.
+      const under = P.some(({ p, b }) => p.axis === "z" && board(p.kind) && b.y1 <= bottom.b.y0 + 1 && b.y1 - b.y0 >= Math.min(40, bottom.b.y0 / 2) && b.z1 >= sideZ1 - 100);
+      if (under) notes.push(`низ корпуса на ${r1(bottom.b.y0)} без опор — как цоколь`);
+      else { m.kitchen = { ...m.kitchen!, bareBottom: true }; notes.push(`низ корпуса на ${r1(bottom.b.y0)} без опор и без панели под дном — цоколя нет`); }
+    }
     else m.plinthHeight = 0;
   } else { m.bottomType = "none"; m.plinthHeight = 0; }
   if (!topPanel) m.topType = "none";
