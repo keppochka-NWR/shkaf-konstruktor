@@ -188,9 +188,9 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.id.startsWith("kd:")) continue;
     else if (p.role === "body") setEdges(p, ["+z"], t);
   }
-  // передние торцы корпуса толще остальных (k29: 2 при 0,5) — у кромленого «+z» деталей корпуса (без ящиков)
+  // передние торцы корпуса толще остальных (k29: 2 при 0,5) — у кромленого «+z» деталей корпуса, выходящих на перед (задняя царга — нет; без ящиков)
   const fr = m.edgeScheme?.front;
-  if (fr) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade") && !p.id.startsWith("kd:")) { const dirs = edgeDirs(p); p.edge = p.edge.map((e, i) => (e > 0 && dirs[i] === "+z" ? fr : e)) as Part["edge"]; }
+  if (fr) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade") && !p.id.startsWith("kd:") && p.position[2] + p.size[2] / 2 >= m.depth - 1) { const dirs = edgeDirs(p); p.edge = p.edge.map((e, i) => (e > 0 && dirs[i] === "+z" ? fr : e)) as Part["edge"]; }
   golaSides(m, out);
 }
 
