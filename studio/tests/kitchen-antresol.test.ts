@@ -7,7 +7,7 @@ import {holes} from '../src/drilling';
 import {partCollisions,bazisAirHardware} from '../src/collisions';
 import {collisionWarnings} from '../src/roomWarnings';
 import {hangersFromEtalon,fastenersAbsent,endsEdged,edgeFlags,underEccFromEtalon,noEdges,liftHingeX,confDepthFromEtalon,backClearY,faceGapOf,moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {compareModule,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
+import {compareModule,grooveTwins,type RefModule,type RefPanel} from '../scripts/kitchen/compare';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 
@@ -307,7 +307,8 @@ for(const [k,key,over] of [['k17','m07',true],['k21','m07',true],['k12','m05',fa
 // студия повторяет как есть и помечает пересечение «как в проекте Базиса», не прячет его; у модуля не из Базиса пометки нет.
 for(const key of ['m03','m04'])
   test(`etalon k31/${key}: dowel hole opening into the light groove is shown as a Bazis project defect`,{skip:!existsSync(ET+'k31.json')},()=>{
-    const {module:m}=moduleFromEtalon(refOf('k31',key));
+    const ref=refOf('k31',key),m=grooveTwins(ref,moduleFromEtalon(ref).module);
+    assert.equal(m.kitchen!.grooveHoles?.length,2,'both dowels have a twin hole in Bazis');
     const c=partCollisions(parts(m),m);
     assert.ok(c.length>0&&c.every(x=>x.bazis&&/dowel:under:/.test(x.a+' '+x.b)&&/groove:/.test(x.a+' '+x.b)),'only the Bazis dowel × groove, flagged');
     assert.ok(c.every(x=>x.depth<=3.05),'no deeper than in Bazis');
@@ -317,12 +318,31 @@ for(const key of ['m03','m04'])
 // Лишний (третий) эксцентрик Базиса в углу у левой боковины (k28 m12, z=8) не отменяет эксцентрики боковины: обе боковины на стяжках
 // с той же парой, что справа, а не на конфирматах студии (их нет в Базисе, и они выходили в паз подсветки на 8 мм).
 test('etalon k28/m12: a stray corner eccentric keeps both sides on eccentrics, no studio confirmat in the light groove',{skip:!existsSync(ET+'k28.json')},()=>{
-  const {module:m}=moduleFromEtalon(refOf('k28','m12'));
+  const ref=refOf('k28','m12'),m=grooveTwins(ref,moduleFromEtalon(ref).module);
   assert.equal(m.jointFastening?.['bottom:left'],'eccentric');
   assert.equal(m.jointFastening?.['bottom:right'],'eccentric');
   assert.deepEqual([m.kitchen!.underEcc!.back,m.kitchen!.underEcc!.front],[70.5,50.5],'the regular pair, not the stray corner eccentric');
   const c=partCollisions(parts(m),m);
   assert.ok(c.every(x=>x.bazis),'only the Bazis dowel × groove remains');
+});
+// Подпись «как в проекте Базиса» — только крепежу с двойником-отверстием в Базисе в том же пазу (kitchen.grooveHoles, compare.ts grooveTwins):
+// k16 m11 — эксцентрик полки студии, у Базиса отверстия нет; k06 m06 — у Базиса вместо паза вырез контура дна (критик n4-antresol).
+for(const [k,key] of [['k16','m11'],['k06','m06']] as const)
+  test(`etalon ${k}/${key}: a studio fastener in the light groove without a Bazis twin is not labelled «as in Bazis»`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=refOf(k,key),m=grooveTwins(ref,moduleFromEtalon(ref).module);
+    assert.equal(m.kitchen!.grooveHoles,undefined);
+    const c=partCollisions(parts(m),m).filter(x=>/groove:/.test(x.a+' '+x.b));
+    assert.ok(c.length>0,'the hit is shown');assert.ok(c.every(x=>!x.bazis),'without the Bazis label');
+  });
+test('the «as in Bazis» label follows the recorded fastener point: a fastener moved by an edit loses it',()=>{
+  const m=antresol();m.kitchen!.bazis=true;
+  const ps=parts(m),f=ps.find(p=>/^fast:/.test(p.id)&&p.model?.origin)!,o=f.model!.origin!;
+  const g={...f,id:'groove:0',name:'паз под подсветку',role:'light' as const,material:'metal' as const,size:[20,20,20] as [number,number,number],position:[o[0],o[1],o[2]] as [number,number,number],collide:undefined,model:undefined};
+  const hit=(mm:Module)=>partCollisions([f,g],mm).find(x=>x.a===f.id||x.b===f.id)!;
+  assert.equal(hit(m).bazis,undefined,'no recorded point — plain collision');
+  m.kitchen!.grooveHoles=[[o[0],o[1],o[2]]];assert.equal(hit(m).bazis,true);
+  m.kitchen!.grooveHoles=[[o[0],o[1]+10,o[2]]];assert.equal(hit(m).bazis,undefined,'the point moved 10 mm — not the Bazis hole');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.grooveHoles,m.kitchen!.grooveHoles);
 });
 // Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
 for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)

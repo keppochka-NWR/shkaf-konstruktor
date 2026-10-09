@@ -6,16 +6,17 @@ import { id, validate } from "../../src/model";
 import { newProject, projectErrors } from "../../src/project";
 import { partCollisions } from "../../src/collisions";
 import { parts } from "../../src/model";
-import { compareModule, comparisonMarkdown, type RefModule } from "./compare";
+import { compareModule, comparisonMarkdown, grooveTwins, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 
 const [k, key, outDir = "C:/Users/My PC/Desktop/Claude Project/Кухни/ГардерЁб/loop"] = process.argv.slice(2);
 const etalon = JSON.parse(readFileSync(`C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/${k}.json`, "utf8"));
 const ref = (etalon.modules as RefModule[]).find((m) => m.key === key);
 if (!ref) throw Error("нет модуля " + key);
-const { module: m, notes, unsupported } = moduleFromEtalon(ref);
+const r = moduleFromEtalon(ref), { notes, unsupported } = r;
+const c = compareModule(ref, r.module);
+const m = grooveTwins(ref, r.module, c); // крепёж в пазу подсветки с двойником в Базисе — с подписью, как в buildKitchen
 const errors = validate(m);
-const c = compareModule(ref, m);
 const coll = partCollisions(parts(m), m);
 mkdirSync(outDir, { recursive: true });
 const p = newProject(m);

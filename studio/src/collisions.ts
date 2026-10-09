@@ -118,8 +118,14 @@ export function partPenetration(a: Part, b: Part): number {
 
 /** Модуль из Базиса: отверстие крепежа вскрывает паз под подсветку (k31 m03/m04 — шкант под боковиной на 3 мм в паз 17×8 дна,
  *  m12 — на 1 мм; отверстие D8×12 сверху и паз 8 снизу в доске 16). Так в самом проекте Базиса — студия повторяет как есть
- *  и помечает пересечение «как в проекте Базиса» (не разрешённый контакт: дефект виден и правится в Базисе; n4-antresol). */
-const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.kitchen?.bazis && [[p, q], [q, p]].some(([a, b]) => isFastener(a) && b.role === "light" && b.id.startsWith("groove:"));
+ *  и помечает пересечение «как в проекте Базиса» (не разрешённый контакт: дефект виден и правится в Базисе; n4-antresol).
+ *  Только крепёж в точках kitchen.grooveHoles — там, где импорт нашёл у Базиса то же отверстие (compare.ts grooveTwins). Крепёж студии
+ *  без двойника в Базисе, в том числе поставленный после правки модуля, подписи не получает. */
+const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.kitchen?.bazis && [[p, q], [q, p]].some(([a, b]) => {
+  if (!isFastener(a) || b.role !== "light" || !b.id.startsWith("groove:")) return false;
+  const o = a.model?.origin ?? a.position;
+  return (m.kitchen!.grooveHoles ?? []).some((h) => Math.hypot(h[0] - o[0], h[1] - o[1], h[2] - o[2]) <= 0.5);
+});
 
 /** Все неразрешённые пересечения деталей модуля. */
 export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {

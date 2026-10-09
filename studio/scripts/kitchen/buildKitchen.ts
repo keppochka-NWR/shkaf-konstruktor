@@ -11,7 +11,7 @@
 //  — пометки: проект source 'bazis', сырые модули source 'bazis-kitchen' (смета без заглушек конфирмата и т. п.).
 import { initialModule, id, validate, section, type Module } from "../../src/model";
 import { newProject, projectErrors, type PlacedModule, type Project } from "../../src/project";
-import { compareModule, honestPass, type RefModule } from "./compare";
+import { compareModule, honestPass, grooveTwins, type RefModule } from "./compare";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, bazisItems, bazisNames, type RawSpec } from "../../src/rawModule";
@@ -92,7 +92,9 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
     try {
       const r = moduleFromEtalon(ref, look);
       // параметрический — только при честном PASS: сверка + нет ошибок + нет «не поддержано» (n3-wall)
-      if (honestPass(compareModule(ref, r.module), validate(r.module), r.unsupported)) { m = markBazis(r.module, ref); parametric++; }
+      // + крепёж в пазу подсветки, как в Базисе (двойник отверстия), — с подписью «как в проекте Базиса» (grooveTwins)
+      const c = compareModule(ref, r.module);
+      if (honestPass(c, validate(r.module), r.unsupported)) { m = markBazis(grooveTwins(ref, r.module, c), ref); parametric++; }
     } catch { /* нераспознанный — сырой */ }
     if (!m) {
       m = { ...initialModule(), name: ref.name, width: r1(ref.size[0]), height: r1(ref.size[1]), depth: r1(ref.size[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true, raw: rawFromRef(ref, meshes) };
