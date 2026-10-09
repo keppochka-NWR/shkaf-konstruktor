@@ -33,6 +33,18 @@ export function refGrooves(ref: RefModule, backZ0: number | null): { box: [numbe
 }
 export type Recognized = { module: Module; notes: string[]; unsupported: string[] };
 
+/** Ниша под технику между двумя рядами распашных фасадов пенала (одинаковое число створок, 1 или 2, ряды по одной линии x):
+ *  gap — зазор между створками ряда (у одной створки — 3, как у Базиса), split — от низа нижнего ряда до его верха + gap/2,
+ *  niche — от верха нижнего ряда до низа верхнего. undefined — ряды не совпадают по ширине/створкам. */
+export function nicheFromRows(low: B[], up: B[]): { gap: number; split: number; niche: number } | undefined {
+  if (!low.length || low.length !== up.length || low.length > 2) return undefined;
+  const lo = [...low].sort((a, c) => a.x0 - c.x0), hi = [...up].sort((a, c) => a.x0 - c.x0);
+  if (lo.some((q, k) => Math.abs(q.x0 - hi[k].x0) > 0.6 || Math.abs(q.x1 - hi[k].x1) > 0.6)) return undefined;
+  if (lo.some((q) => Math.abs(q.y0 - lo[0].y0) > 0.6 || Math.abs(q.y1 - lo[0].y1) > 0.6)) return undefined;
+  const gap = lo.length === 2 ? r1(lo[1].x0 - lo[0].x1) : 3, niche = r1(Math.min(...hi.map((q) => q.y0)) - lo[0].y1);
+  return { gap, split: r1(lo[0].y1 - lo[0].y0 + gap / 2), niche };
+}
+
 /** Точек крепежа (конфирмат/эксцентрик) по глубине на стыке дна и крыши с левой стойкой: наибольшее из двух; 2 или 3, иначе undefined. */
 export function jointPointsFromEtalon(ref: RefModule, hosts: (B | undefined)[], left: B): 2 | 3 | undefined {
   let n = 0;
@@ -53,7 +65,8 @@ export function rafixFromEtalon(ref: RefModule, shelves: B[], fixed: number[]): 
   const grids = new Map<number, RafixGrid>(), confirmat: number[] = [];
   for (const j of fixed) {
     const b = shelves[j]; if (!b) continue;
-    const mine = rf.filter((h) => Math.abs(h.pos[1] - b.y0) < 1 && h.pos[0] >= b.x0 - 1 && h.pos[0] <= b.x1 + 1);
+    // рафикс полки — у её торца (не у вставки/фронтальной панели на той же высоте, k18 m08)
+    const mine = rf.filter((h) => Math.abs(h.pos[1] - b.y0) < 1 && (Math.abs(h.pos[0] - b.x0) < 1 || Math.abs(h.pos[0] - b.x1) < 1) && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1);
     if (!mine.length) { confirmat.push(j); continue; }
     // сторона с большим числом точек (у Базиса обе стороны одинаковые; k27 m13 — разные, берём левую)
     const left = mine.filter((h) => h.pos[0] < (b.x0 + b.x1) / 2), right = mine.filter((h) => h.pos[0] >= (b.x0 + b.x1) / 2);
@@ -239,15 +252,23 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     // только пенал (role tall) и только если верхний ряд в пределах корпуса: пенал из двух корпусов (k30 m05: боковины 850, фасады до 2469) — не разрез
     const tallRows = role === "tall" && rowYs.length === 2 && !m.kdrawers;
     const upOver = tallRows && upRow.length ? r1(Math.max(...upRow.map((q) => q.b.y1)) - top) : 0;
-    const split = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5 && rowsGap <= 10;
-    if (tallRows && rowsGap > 10) unsupported.push(`ниша под технику между фасадами ${r1(rowsGap)} мм (пенал под духовку/СВЧ) — пока не поддержано`);
-    else if (tallRows && upOver > 20) unsupported.push(`фасады пенала выше боковин на ${upOver} мм (пенал из нескольких корпусов) — пока не поддержано`);
+    const rowsOk = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5;
+    const niche = rowsOk && rowsGap > 10 ? nicheFromRows(lowRow.map((q) => q.b), upRow.map((q) => q.b)) : undefined;
+    const split = rowsOk && rowsGap <= 10;
+    if (niche) {
+      // ниша под технику (духовка/СВЧ) между рядами распашных: нижний ряд — doorSplit, ниша — doorNiche, зазор створок — faceGapBetween
+      m.faceGapBetween = niche.gap;
+      m.sections[0].doorSplit = niche.split;
+      m.sections[0].doorNiche = niche.niche;
+      notes.push(`ниша под технику ${niche.niche} мм между рядами фасадов`);
+    } else if (tallRows && upOver > 20) unsupported.push(`фасады пенала выше боковин на ${upOver} мм (пенал из нескольких корпусов) — пока не поддержано`);
+    else if (tallRows && rowsGap > 10) unsupported.push(`ниша под технику между фасадами ${r1(rowsGap)} мм (пенал под духовку/СВЧ), ряды фасадов разные — пока не поддержано`);
     else if (split) {
       const gapY = r1(upRow[0].b.y0 - lowRow[0].b.y1);
       m.sections[0].doorSplit = r1(lowRow[0].b.y1 + gapY / 2 - lowRow[0].b.y0); // от низа нижнего фасада до середины зазора между рядами
       if (lowRow.length === 1) m.faceGapBetween = gapY;
     } else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
-    const perRow = split ? lowRow.length : fronts.length;
+    const perRow = split || niche ? lowRow.length : fronts.length;
     m.doors = doors.length > 0;
     m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
     // подъёмный фасад: «Петля накладная» на нижней плоскости крыши (кватернион Базиса [0,−0,71,0,0,71]), выше середины фасада

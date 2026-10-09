@@ -27,10 +27,43 @@ test('пенал k12 m04: два ряда распашных = doorSplit, фик
   assert.ok(c.pass,JSON.stringify({missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name),hw:c.hardware.filter(h=>h.ref!==h.studio),edges:c.edges?.bad.slice(0,3)}));
 });
 
-test('пенал под духовку k23 m15: ниша 385 мм между фасадами не выдаётся за разрез фасадов — честно «не поддержано»',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+test('пенал под духовку k23 m15: ниша 385,5 мм между рядами фасадов — doorNiche (не зазор разреза), нижний ряд 812,5 + 1,5',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
   const {module:m,unsupported}=moduleFromEtalon(load('k23','m15'));
-  assert.equal(m.sections[0].doorSplit,undefined);
-  assert.ok(unsupported.some(u=>u.startsWith('ниша под технику между фасадами 385.5')),unsupported.join('; '));
+  assert.equal(m.sections[0].doorSplit,814);
+  assert.equal(m.sections[0].doorNiche,385.5);
+  assert.equal(m.faceGapBetween,3);
+  assert.ok(!unsupported.some(u=>u.startsWith('ниша')),unsupported.join('; '));
+});
+
+test('пенал с нишей k31 m01: фасады двух рядов и петли — как в Базисе (ниша 1018,5), рафиксы полок разной глубины',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
+  const ref=load('k31','m01');
+  const {module:m}=moduleFromEtalon(ref);
+  assert.deepEqual(validate(m),[]);
+  assert.equal(m.sections[0].doorNiche,1018.5);
+  const c=compareModule(ref,m);
+  const doors=c.pairs.filter(p=>p.ref.cls.startsWith('фасад'));
+  assert.equal(doors.length,ref.panels.filter(p=>p.name==='Дверь').length);
+  for(const p of doors)assert.ok(p.delta<=0.5,p.ref.name+' Δ'+p.delta);
+  assert.ok(!c.missing.some(x=>x.cls.startsWith('фасад'))&&!c.extra.some(x=>x.cls.startsWith('фасад')));
+  const h=c.hardware.find(x=>x.category==='петля')!;
+  assert.deepEqual([h.ref,h.studio,h.maxPosDelta],[4,4,0]);
+  const r=c.hardware.find(x=>x.category==='рафикс')!;
+  assert.deepEqual([r.ref,r.studio],[12,12]);
+  // ниша в студии: верхний ряд выше верха нижнего ровно на высоту ниши
+  const ps=parts(m),dd=ps.filter(p=>p.role==='door').sort((a,b)=>a.position[1]-b.position[1]);
+  const top0=dd[0].position[1]+dd[0].size[1]/2,bot1=dd[dd.length-1].position[1]-dd[dd.length-1].size[1]/2;
+  assert.equal(Math.round((bot1-top0)*10)/10,1018.5);
+});
+
+test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
+  const m=initialModule();m.sections[0].doorNiche=500;
+  assert.ok(validate(m).some(e=>e.includes('ниша под технику')));
+  const t={...initialModule(),height:2100,kitchen:{role:'tall' as const}};t.sections=[{...t.sections[0],doorSplit:800,doorNiche:600}];
+  assert.deepEqual(validate(t),[]);
+  const k=parseModule(JSON.parse(JSON.stringify(t)));
+  assert.equal(k.sections[0].doorNiche,600,'сохраняется в проекте');
+  const dd=parts(k).filter(p=>p.role==='door').sort((a,b)=>a.position[1]-b.position[1]);
+  assert.equal(Math.round(dd[dd.length-1].position[1]-dd[dd.length-1].size[1]/2-(dd[0].position[1]+dd[0].size[1]/2)),600);
 });
 
 test('разрез фасадов (doorSplit) и «ниша под технику» распознаются только у пенала: антресоль/нижний — «не поддержано», пенал из двух корпусов — не разрез (критик n2)',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{

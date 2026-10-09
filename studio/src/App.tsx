@@ -1559,6 +1559,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 <p className="field-note">Дверь начинается над полкой ящиков. Ручка каждого фасада выбирается отдельно нажатием на фасад в модели.</p>
 <label className="hardware-field"><span><input type="checkbox" checked={s.doorSplit!==undefined} onChange={e=>modifySection(a=>{a.doorSplit=e.target.checked?Math.round((facadeTop(m)-(a.externalDrawers&&a.drawers?drawerCapTop(m,a)+(a.doorGap??RULES.faceGap):facadeBottom(m)))/2):undefined;delete a.removedDoors;})}/> Разделить фасады по высоте</span></label>
 {s.doorSplit!==undefined&&<NumberField label="Высота нижнего ряда фасадов" value={s.doorSplit} min={RULES.doorMinH} max={m.height-RULES.doorMinH} onChange={v=>modifySection(a=>a.doorSplit=v)}/>}
+{s.doorSplit!==undefined&&m.kitchen&&<NumberField label="Ниша под технику между рядами, мм (0 — без ниши)" value={s.doorNiche??0} min={0} max={Math.max(0,m.height-200-s.doorSplit)} onChange={v=>modifySection(a=>{if(v>0)a.doorNiche=v;else delete a.doorNiche;})}/>}
 <NumberField label="Зазор между створками" value={s.doorGap??RULES.faceGap} min={2} max={10} onChange={v=>modifySection(a=>a.doorGap=v)}/>
 {!!s.removedDoors?.length&&<button className="outline" onClick={()=>modifySection(a=>delete a.removedDoors)}>Вернуть снятые фасады секции</button>}
 </details>}

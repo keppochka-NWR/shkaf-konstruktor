@@ -131,6 +131,9 @@ export type Section = {
   doorGap?: number;
   /** Высота нижнего ряда фасадов от низа дверного проёма. */
   doorSplit?: number;
+  /** Кухня (пенал с doorSplit): открытая ниша под технику между рядами фасадов — от верха нижнего ряда до низа верхнего, мм.
+   *  Без поля между рядами — обычный зазор фасадов. */
+  doorNiche?: number;
   /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
   externalDrawers?: boolean;
   drawerGap?: number;
@@ -899,7 +902,9 @@ export function parts(m: Module): Part[] {
       const gap=s.doorGap??fb(m),count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
       const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
       const ft=m.facadeT??t,dz=inset?d-ft/2:d+ft/2+(m.faceAir??2);
-      const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2],[doorBottom+s.doorSplit+gap/2,y1flat]];
+      // ниша под технику (кухня, doorNiche): верхний ряд начинается выше верха нижнего на высоту ниши, а не на зазор
+      const upGap=m.kitchen&&s.doorNiche!==undefined?s.doorNiche:gap;
+      const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2],[doorBottom+s.doorSplit-gap/2+upGap,y1flat]];
       for(let row=0;row<bands.length;row++){
       const [y0,yTop]=bands[row];
       for(let col=0;col<count;col++){
@@ -1298,6 +1303,7 @@ export function validate(m: Module): string[] {
     if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
     if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<RULES.doorMinH||s.doorSplit>m.height-RULES.doorMinH))errors.push(prefix+'недопустимая высота разделения фасадов.');
+    if(s.doorNiche!==undefined&&(!m.kitchen||s.doorSplit===undefined||!Number.isFinite(s.doorNiche)||s.doorNiche<0||s.doorSplit+s.doorNiche>m.height-200))errors.push(prefix+'ниша под технику: только у кухни с разделёнными фасадами, верхний ряд не ниже 200 мм.');
     if(s.doorHinges!==undefined&&(!Array.isArray(s.doorHinges)||s.doorHinges.length>4||s.doorHinges.some(v=>v!==null&&!['left','right','top'].includes(v))))errors.push(prefix+'неверное открывание фасада.');
     if(s.drawerGap!==undefined&&(!Number.isFinite(s.drawerGap)||s.drawerGap<2||s.drawerGap>10))errors.push(prefix+'зазор фасадов ящиков от 2 до 10 мм.');
     if(s.doorLeaves!==undefined&&s.doorLeaves!==1&&s.doorLeaves!==2)errors.push(prefix+'число створок: 1 или 2.');
@@ -1635,6 +1641,7 @@ export function parseModule(input: unknown): Module {
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),
       ...(s.doorSplit===undefined?{}:{doorSplit:s.doorSplit}),
+      ...(s.doorNiche===undefined?{}:{doorNiche:s.doorNiche}),
       ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
       ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
