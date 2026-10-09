@@ -16,8 +16,9 @@ export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|1
 export type PlanDimension={id:string;from:[number,number];to:[number,number]};
 /** Движок раскроя: 'classic' (по умолчанию) — как было; 'guillotine' — гильотина как в Базисе (пропил 4,4, обрезка 12, ≤ 5 стадий). Решение Макса: новый движок только по флагу. */
 export type CuttingEngine='classic'|'guillotine';
-/** kind 'kitchen' — проект вкладки «Кухня» (кухонная палитра и панель модуля); без поля — обычный проект мебели. */
-export type Project={version:3;kind?:'kitchen';dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;cuttingEngine?:CuttingEngine};offer?:{customer:string;price:string;notes:string}};
+/** kind 'kitchen' — проект вкладки «Кухня» (кухонная палитра и панель модуля); без поля — обычный проект мебели.
+ *  source 'bazis' — кухня импортирована из Базиса (scripts/kitchen/import.ts): состав и расстановка как в Базисе. */
+export type Project={version:3;kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;cuttingEngine?:CuttingEngine};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
@@ -48,11 +49,15 @@ function shiftAlongWidth(a:PlacedModule,delta:number){const from=localToRoom(a,0
  * — боковина у стены при наличии фасадов/ящиков: планка торцом 100×16 (ширину менеджер может изменить), +5 мм к стене.
  * Корпус отодвигается от стены на вылет фальши. Если стык или стена больше не рядом — фальш убирается.
  */
+/** Кухня из Базиса: импорт помечен source 'bazis'; ранние импорты без пометки узнаются по сырым модулям (они бывают только из Базиса). */
+export function fromBazis(p:Project):boolean{return p.source==='bazis'||p.modules.some(a=>!!a.module.raw);}
 export function applyAutoFillers(p:Project):Project{
-  const n=structuredClone(p),t=RULES.panel,room=n.room;
+  const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner)continue;
+    // Кухня из Базиса (правило Макса 09.10.2026): фальши и сдвиги студии не добавляются — фальши, если нужны, уже деталями в Базисе.
+    if(bazis&&(a.module.kitchen||a.module.raw))continue;
     const rot=a.rotation??0;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
     const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
@@ -172,7 +177,7 @@ export function parseProject(data:unknown):Project{
   const x=data as any;
   if(x?.version===1){const p=newProject();p.modules=legacyModules(x,{id:id(),x:50,y:0,z:30});const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;}
   if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>40)throw Error('Нужен файл проекта редактора.');
-  const p:Project={version:3,...(x.kind===undefined?{}:{kind:x.kind}),room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
+  const p:Project={version:3,...(x.kind===undefined?{}:{kind:x.kind}),...(x.source==='bazis'?{source:'bazis' as const}:{}),room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill,
     ...(o?.casing===undefined?{}:{casing:o.casing}),...(o?.casingThick===undefined?{}:{casingThick:o.casingThick}),...(o?.hinge===undefined?{}:{hinge:o.hinge}),...(o?.reveal===undefined?{}:{reveal:o.reveal}),
     ...(o?.windowSill===undefined?{}:{windowSill:{width:o.windowSill?.width,thick:o.windowSill?.thick,overhang:o.windowSill?.overhang,offset:o.windowSill?.offset}})}));}
