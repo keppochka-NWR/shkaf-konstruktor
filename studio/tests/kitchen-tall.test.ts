@@ -167,6 +167,7 @@ test('пенал в 3 ряда: петли по рядам — средний п
   const wd=parts(w).find(p=>p.role==='door'&&p.id.endsWith(':door:0'))!;
   const ps=parts(w),y0=wd.position[1]-wd.size[1]/2,cy=ps.filter(p=>p.id.startsWith(wd.id.replace(':door:',':hingecup:')+':')).map(p=>p.position[1]-y0).sort((a,b)=>a-b);
   assert.ok(cy.length>=2&&cy.every((y,i)=>y>0&&y<wd.size[1]&&(i===0||y-cy[i-1]>=53)),String(cy));
+  assert.equal(cy.length,2,'столько петель, сколько разных высот в проекте (490,5 и 982,5), а не по правилу (3) — студия не добавляет петель');
   // при высоте фасада как в проекте — высоты Базиса как есть
   const same={...w,sections:[{...w.sections[0],hingeY:[100,300],hingeYFor:wd.size[1]}]};
   const ps2=parts(same);assert.deepEqual(ps2.filter(p=>p.id.startsWith(wd.id.replace(':door:',':hingecup:')+':')).map(p=>Math.round(p.position[1]-y0)).sort((a,b)=>a-b),[100,300]);
@@ -202,6 +203,11 @@ test('цоколь — деталь под дном: у кухни без опо
   assert.ok(parts({...kk,kitchen:{role:'wall' as const}}).some(p=>p.id==='plinth'),'без поля — как раньше');
   assert.equal(parts(kk).find(p=>p.id==='plinth'),undefined);
   assert.equal(parseModule(JSON.parse(JSON.stringify(kk))).kitchen?.bareBottom,true);
+  // низ кухни без опор — на высоте из Базиса (70, 2030 под нишей), список высот цоколя — только для шкафов
+  const low={...kk,plinthHeight:70};
+  assert.ok(!validate(low).some(e=>e.includes('высоту цоколя')),validate(low).join('; '));
+  assert.ok(validate({...w,plinthHeight:70}).some(e=>e.includes('высоту цоколя')),'у шкафа — из списка');
+  assert.ok(!validate(moduleFromEtalon(load('k18','m21')).module).some(e=>e.includes('высоту цоколя')));
 });
 
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{

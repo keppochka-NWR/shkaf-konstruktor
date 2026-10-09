@@ -1143,9 +1143,13 @@ function hardwareParts(m: Module, out: Part[]) {
     const src: [number[], number] | undefined = upRow ? [sec!.hingeYUp!, sec!.hingeYUpFor ?? dh] : midRow ? (midYs?.length ? [midYs, sec!.hingeYMidFor?.[row - 1] ?? dh] : undefined)
       : sec?.hingeY?.length ? [sec.hingeY, sec.hingeYFor ?? dh] : undefined;
     let hys = src ? scaleHingeY(src[0], src[1], dh) : hingePositions(dh, dw, !!m.kitchen || midRow);
-    // кухня: высоты проекта, пересчитанные под другую высоту фасада, сбились (не по порядку, ближе планки 53 мм, вне фасада) — по правилу.
-    // При высоте фасада как в проекте высоты Базиса не трогаем.
-    if (m.kitchen && src && Math.abs(src[1] - dh) >= 0.5 && !hys.every((y, k) => y > 0 && y < dh && (k === 0 || y - hys[k - 1] >= 53))) hys = hingePositions(dh, dw, true);
+    // кухня: высоты проекта, пересчитанные под другую высоту фасада, сбились (не по порядку, ближе планки 53 мм, вне фасада) —
+    // столько же петель, сколько разных высот в проекте (студия не добавляет петель), равномерно с отступом правила от краёв;
+    // не теснее планки 53 мм. При высоте фасада как в проекте высоты Базиса не трогаем.
+    if (m.kitchen && src && Math.abs(src[1] - dh) >= 0.5 && !hys.every((y, k) => y > 0 && y < dh && (k === 0 || y - hys[k - 1] >= 53))) {
+      const off = Math.min(100, Math.max(40, dh / 4)), n = Math.max(1, Math.min(new Set(src[0].map((y) => Math.round(y))).size, Math.floor((dh - 2 * off) / 53) + 1));
+      hys = n === 1 ? [dh / 2] : Array.from({ length: n }, (_, k) => off + (dh - 2 * off) * k / (n - 1));
+    }
     hys.forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
@@ -1326,7 +1330,8 @@ export function validate(m: Module): string[] {
   }
   for(const s of m.sections)if(s.fixed!==undefined&&(!Array.isArray(s.fixed)||s.fixed.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push('Жёсткие полки: неверные номера.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
-  if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
+  // кухня Базиса: низ корпуса без опор — на высоте из проекта (у Базиса 70, 135, 2030 под нишей техники), список высот цоколя — правило шкафов
+if(m.plinthHeight!==undefined && (m.kitchen&&!m.feet ? !Number.isFinite(m.plinthHeight)||m.plinthHeight<0||m.plinthHeight>m.height-100 : ![0,60,80,100,120,150].includes(m.plinthHeight)))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
