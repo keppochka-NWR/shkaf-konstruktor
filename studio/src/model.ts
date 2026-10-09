@@ -1124,7 +1124,7 @@ function hardwareParts(m: Module, out: Part[]) {
     };
     // Зазор 5 мм до любой детали, кроме разрешённых контактов (своя стойка, свой фасад, своя петля) — не впритык к полке.
     // Зазор — только до «чужих» деталей в зоне петли (полки, царги, крепёж, ящики, другие петли); каркас и свой фасад петля касает по устройству.
-    const clearOf = (o: Part) => o.role === "shelf" || o.role === "drawer" || o.role === "hinge" || o.id.startsWith("rail:") || o.id.startsWith("fast:") || o.id.startsWith("shp:") || o.id.startsWith("ecc:");
+    const clearOf = (o: Part) => o.role === "shelf" || o.role === "drawer" || o.role === "hinge" || o.id.startsWith("rail:") || o.id.startsWith("fast:") || o.id.startsWith("shp:") || o.id.startsWith("ecc:") || o.id.startsWith("rafix:");
     const blocked = (hs: Part[]) => hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); if (allowedContact(h, o, Math.max(depth, 0), m)) return false; return depth > 0.1 || (clearOf(o) && depth > -HINGE_CLEAR); }));
     // Петля не должна пересекать ничего (замечание Макса 09.10.2026): идеальная высота (100 мм от краёв фасада), а если там полка,
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
