@@ -36,7 +36,8 @@ export function bazisItems(hw: { name: string; category: string; length?: number
     if (!name || COUNTED.has(cat) || NOT_PRODUCT.test(name) || DIMS_ONLY.test(name) || skip(h)) continue;
     const key = cat + "|" + name, it = out.get(key) ?? { name, category: cat, n: 0 };
     it.n++;
-    if (Number.isFinite(h.length) && (h.length ?? 0) > 0) it.len = Math.round(((it.len ?? 0) + h.length!) * 10) / 10;
+    // длина — только у профилей и трубы-штанги (у направляющих «length» Базиса — не погонаж, считаем штуками)
+    if ((cat === "профиль" || /труба/i.test(name)) && Number.isFinite(h.length) && (h.length ?? 0) > 0) it.len = Math.round(((it.len ?? 0) + h.length!) * 10) / 10;
     out.set(key, it);
   }
   return [...out.values()];

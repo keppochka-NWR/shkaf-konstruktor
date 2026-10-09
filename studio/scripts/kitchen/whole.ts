@@ -104,9 +104,11 @@ for (const k of keys) {
 
   // 6. фурнитура и смета
   const names: Record<string, number> = {};
-  for (const m of mods) for (const h of m.hardware) names[`${h.category} | ${h.name}`] = (names[`${h.category} | ${h.name}`] ?? 0) + 1;
+  for (const m of mods) for (const h of m.hardware as { name: string; category: string; mat?: string | null }[]) { const n = `${h.category} | ${h.name}${h.mat && h.mat !== h.name && /^профиль\d*$/i.test(h.name) ? " (" + h.mat + ")" : ""}`; names[n] = (names[n] ?? 0) + 1; }
   for (const h of e.row?.hardware ?? []) names[`ряд ${h.category} | ${h.name}`] = (names[`ряд ${h.category} | ${h.name}`] ?? 0) + 1;
   for (const x of e.row?.profiles ?? []) { const n = `ряд профиль | ${x.name}${x.mat && x.mat !== x.name ? " (" + x.mat + ")" : ""}`; names[n] = (names[n] ?? 0) + 1; }
+  // фурнитура ряда в «прочем» без габарита (навесы, конфирматы, петли объектов ряда — «Пенал на столешку», «Карнизы»)
+  for (const x of (e.row?.other ?? []) as { name: string; category?: string; box?: number[] }[]) if (!Array.isArray(x.box) && x.category) { const n = `ряд ${x.category} | ${x.name}`; names[n] = (names[n] ?? 0) + 1; }
   log("\n## 6. Фурнитура Базиса");
   for (const [n, c] of Object.entries(names).sort()) log(`  ${c} × ${n}`);
   const edge: Record<string, number> = {}, edgeF: Record<string, number> = {}; let fa = 0;
@@ -123,13 +125,17 @@ for (const k of keys) {
   // штуки Базиса против строк сметы (пары направляющих — ×2, комплект ящика — 2 направляющие)
   const cnt = (re: RegExp, cat?: string) => Object.entries(names).filter(([n]) => (!cat || n.split(" | ")[0].endsWith(cat)) && re.test(n.split(" | ")[1] ?? "")).reduce((s, [, c]) => s + c, 0);
   const sum = (re: RegExp, mul = 1) => est.filter((l) => re.test(l.id)).reduce((s, l) => s + l.quantity * mul, 0);
+  // строки «как в Базисе» (n3): bazis:<категория>:<название>, firmax:<артикул> (пары), shelf-holder:<название>, kitchen-leg:<название>
+  const pipes = est.some((l) => /^bazis:прочее:Труба/i.test(l.id)) ? cnt(/труба/i) : 0;
+  const prodProfiles = cnt(/gola|kb \d|врезной|фасадный профиль|алюминиев/i, "профиль");
   const pairs: [string, number, number][] = [
-    ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg$/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
-    ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder$/)],
-    ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), 0], ["сушки", cnt(/./, "сушка"), 0],
-    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), sum(/^firmax-ldsp/, 2)],
-    ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), 0], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/)],
-    ["профили (Gola и др.)", cnt(/профиль/i, "профиль"), est.filter((l) => /^gola-/.test(l.id)).length],
+    ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
+    ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
+    ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
+    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), sum(/^firmax/, 2)],
+    ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), sum(/^bazis:направляющая:/)], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
+    // профили — изделия (GOLA, KB, врезной, узкий фасадный); в смете — строками с длиной: сверяем наличие
+    ["профили-изделия: строки сметы есть", prodProfiles ? 1 : 0, est.some((l) => /^(gola-|bazis:профиль:)/.test(l.id)) || !prodProfiles ? (prodProfiles ? 1 : 0) : 0],
   ];
   const est2: string[] = [];
   for (const [n, b, s] of pairs) if (Math.abs(b - s) > 0.01) est2.push(`${n}: Базис ${b}, смета ${r3(s)}`);

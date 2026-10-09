@@ -79,7 +79,10 @@ test('B4: фурнитура Базиса у сырых модулей и в р�
   assert.equal(qty(k06,/Крепление для профиля Тип 3/),5);
   assert.ok(qty(k06,/Профиль врезной для верхних баз/)>0,'k06: «Профиль1» навесных');
   assert.equal(line(k06,/^gola-/).length,0,'Gola считается один раз — по ряду Базиса');
-  // служебные объекты Базиса (отверстия, тела, безымянные размеры) — не фурнитура
+  // направляющие — штуками (length Базиса у них не погонаж); фурнитура объектов ряда без габарита (k07 «Пенал на столешку») — в смете
+  if(has('k02')){const k02=kitchen('k02');assert.equal(qty(k02,/^bazis:направляющая:/),24);assert.ok(line(k02,/^bazis:направляющая:/).every(l=>l.unit==='шт'));}
+  if(has('k07')){const row=kitchen('k07').modules.find(a=>a.module.raw?.row)!.module.raw!;assert.equal(row.counts?.hinges,3);assert.ok(row.items?.some(i=>/РАФИКС/.test(i.name)&&i.n===4));}
+  // служебные объекты Базиса (отверстия «35x13», «3x3» — диаметр×глубина, тела, зазоры) — не фурнитура
   assert.deepEqual(bazisItems([{name:'3x3',category:'прочее'},{name:'Отверстие 3х2',category:'прочее'},{name:'Тело по траектории',category:'сушка'},{name:'Профиль',category:'профиль',mat:'Хром'},{name:'Гвоздь',category:'прочее'}]).map(i=>i.name),['Гвоздь']);
 });
 
