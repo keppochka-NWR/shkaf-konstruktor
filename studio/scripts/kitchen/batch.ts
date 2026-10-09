@@ -30,6 +30,7 @@ for (const f of readdirSync(dir).filter((f) => /^k\d\d\.json$/.test(f)).sort()) 
       for (const h of c.hardware) if (h.ref !== h.studio || (h.maxPosDelta ?? 0) > 2 || h.note) why.push(`${h.category} ${h.ref}/${h.studio}${h.maxPosDelta ? " Δ" + h.maxPosDelta : ""}${h.note ? " " + h.note : ""}`);
       if (c.contours?.length) why.push(`контур: ${c.contours[0]}`);
       if (c.edges?.bad.length) why.push(`кромка/пазы: ${c.edges.bad[0]}`); // иначе FAIL только по кромке шёл с пустой причиной (k32 m09)
+      for (const h of c.hardware) if (h.info) why.push(`${h.category}: ${h.info} (сведения)`);
       if (c.holes && (c.holes.missing.length || c.holes.extra.length)) why.push(`отв. ${c.holes.matched}/${c.holes.ref} (+${c.holes.extra.length})`);
       else if (c.holes && c.holes.maxDelta > 0.5) why.push(`отв. Δ${c.holes.maxDelta}`);
       // справочно (в PASS не входит): другая сетка / поворот фурнитуры у ближайшей детали студии

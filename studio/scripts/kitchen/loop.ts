@@ -35,7 +35,7 @@ console.log(`${k}/${key} ${ref.name} [${ref.archetype}] ${c.pass ? "PASS" : "FAI
 if (c.edges) console.log(`кромка: пар ${c.edges.checked}` + (c.edges.bad.length ? " · " + c.edges.bad.slice(0, 4).join(" | ") : " — совпала"));
 if (c.contours?.length) console.log("контур: " + c.contours.join(" | "));
 if (c.holes) console.log(`отверстия: Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta}` + (c.holes.missing.length ? " · нет: " + c.holes.missing.slice(0, 6).join(" | ") : "") + (c.holes.extra.length ? " · лишние: " + c.holes.extra.slice(0, 6).join(" | ") : ""));
-console.log("фурнитура:", c.hardware.map((h) => `${h.category} ${h.ref}/${h.studio}${h.maxPosDelta !== null ? " Δ" + h.maxPosDelta : ""}${h.note ? " " + h.note : ""}`).join(", "));
+console.log("фурнитура:", c.hardware.map((h) => `${h.category} ${h.ref}/${h.studio}${h.maxPosDelta !== null ? " Δ" + h.maxPosDelta : ""}${h.note ? " " + h.note : ""}${h.info ? " [сведения: " + h.info + "]" : ""}`).join(", "));
 if (c.deviations?.length) console.log("отступления (реестр):", c.deviations.join(", "), "— профиль-экструзия Базиса без сетки, не воспроизводится");
 if (c.missing.length) console.log("нет в студии:", c.missing.map((x) => `${x.name}[${x.cls}] ${x.box.join(",")}`).join(" | "));
 if (c.extra.length) console.log("лишнее:", c.extra.map((x) => `${x.name}[${x.cls}] ${x.box.join(",")}`).join(" | "));

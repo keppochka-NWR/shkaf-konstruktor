@@ -26,9 +26,10 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
       push(p.id, h, a, 8, t1);
-      // короб ящика Firmax в Базисе — D5×37; кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall);
+      // короб ящика Firmax в Базисе — D5×37; кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall;
+      // kitchen.confDepth, n3-antresol: k11 — 37, k31 — 42);
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
-      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : m.kitchen?.drill?.confirmat ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
+      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм
@@ -44,6 +45,18 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const [x, yb, z] = p.anchor, yt = yb + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16]));
       push(p.id, [x, yt, z], [0, 1, 0], 8, 22);
       push(p.id + ":side", [x, yt, z], [0, -1, 0], 8, 12);
+    } else if (p.id.startsWith("ecc:under:") && !p.id.endsWith(":pin") && p.anchor) {
+      // боковина на дне (кухни Базиса k16/k28/k31): точка — наружная пласть боковины × верх дна; шток D8×34 вверх в торец боковины
+      // по её оси, бочонок D15×12 в наружную пласть в 34 мм над дном, D5×12 вниз в верхнюю пласть дна
+      const [ox, y, z] = p.anchor, inward = p.id.includes(":left:") ? 1 : -1, cx = ox + inward * 8;
+      push(p.id + ":pin", [cx, y, z], [0, 1, 0], 8, 34);
+      push(p.id, [ox, y + 34, z], [inward, 0, 0], 15, 12);
+      push(p.id + ":bottom", [cx, y, z], [0, -1, 0], 5, 12);
+    } else if (p.id.startsWith("dowel:under:") && p.anchor) {
+      // шкант 8×30 по оси боковины, стоящей на дне: D8×22 вверх в торец боковины, D8×12 вниз в верхнюю пласть дна
+      const y = p.position[1] - 3;
+      push(p.id, [p.position[0], y, p.position[2]], [0, 1, 0], 8, 22);
+      push(p.id + ":bottom", [p.position[0], y, p.position[2]], [0, -1, 0], 8, 12);
     } else if (p.id.startsWith("ecc:") && !p.id.endsWith(":pin") && p.anchor) {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;
@@ -76,10 +89,11 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       else if (p.id.includes(":screw:f")) push(p.id, o, [0, 0, 1], 3, 4, 2); // точка самореза Базиса — 1,5 мм за плоскостью фасада (в фиксаторе)
       else if (p.id.includes(":screw:s")) push(p.id, o, out_, 3, 3);
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin && p.size[0] > p.size[1]) {
-      // подъёмный фасад: планка на нижней плоскости крыши (две наколки D3×3 вверх), чашка Ø35×13 в 7,5 мм под крышей
-      const [x, y, back] = p.model.origin;
+      // подъёмный фасад: планка на нижней плоскости крыши (две наколки D3×3 вверх), чашка Ø35×13 — в точке чашки (22 от верхней кромки
+      // фасада, model.ts; n3-antresol); без детали чашки — 7,5 под крышей
+      const [x, y, back] = p.model.origin, cupId = p.id.replace(":hingeplate:", ":hingecup:"), cy = ps.find((q) => q.id === cupId)?.model?.origin?.[1] ?? y - 7.5;
       if (m.kitchen?.plateHoles !== false) for (const dx of [16, -16]) push(p.id, [x + dx, y, back - 37], [0, 1, 0], 3, 3);
-      push(p.id.replace(":hingeplate:", ":hingecup:"), [x, y - 7.5, back], [0, 0, 1], 35, 13);
+      push(cupId, [x, cy, back], [0, 0, 1], 35, 13);
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin) {
       const [sx, y, back] = p.model.origin, inward = p.position[0] > sx ? 1 : -1; // плечо — внутрь корпуса от стойки
       // кухня Базиса без наколок под планку (kitchen.plateHoles: false — 89 из 261 модулей с петлями) — только чашка

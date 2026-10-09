@@ -259,7 +259,8 @@ test('ниша под технику — только у кухни с разд�
 });
 
 test('разрез фасадов (doorSplit) и «ниша под технику» распознаются только у пенала: антресоль/нижний — «не поддержано», пенал из двух корпусов — не разрез (критик n2)',{skip:!existsSync(`${ETALON}/k30.json`)},()=>{
-  for(const [k,key] of [['k13','m02'],['k27','m12'],['k10','m11']]){
+  // k13 m02 — два ряда подъёмных фасадов, поддержано (n3, tests/kitchen-antresol.test.ts); два ряда распашных — нет
+  for(const [k,key] of [['k27','m12'],['k10','m11']]){
     const {module:m,unsupported}=moduleFromEtalon(load(k,key));
     assert.equal(m.sections[0].doorSplit,undefined,k+key);
     // k10 m11 — два ящика Versalite Light H45 (n3): фасады распознаны как ящики, а не «2 ряда»

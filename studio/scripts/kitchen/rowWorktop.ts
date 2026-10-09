@@ -87,17 +87,22 @@ export function rowPanelsOf(row: Record<string, unknown> | undefined): RowPanel[
 }
 
 /** Столешница Базиса — по материалу проекта («Столешница», «Столешница 600», «Столешница ПФ 600») или по имени детали.
- *  Не по группе эталона: в «worktops» ряда попадают и полки ЛДСП 16 (k07: 7 «Горизонтальных» на высоте 1190–2340), и «Хром» 6 мм (k09). */
+ *  Не по группе эталона: в «worktops» ряда попадают и полки ЛДСП 16 (k07: 7 «Горизонтальных» на высоте 1190–2340, «Дно ящика»), и «Хром» 6 мм (k09). */
 export function isWorktop(p: EtPanel): boolean { return /столешн/i.test(p.mat ?? "") || /столешн/i.test(p.name); }
 
 /** Имя детали ряда: столешница Базиса с безликим именем («Горизонтальная») — «Столешница»; остальное — имя Базиса как есть. */
 export function rowPanelName(p: EtPanel): string { return isWorktop(p) && !/столешн/i.test(p.name) ? "Столешница" : p.name; }
 
-/** Название объекта «Ряд» — только то, что в нём есть по Базису (кухня без столешницы в проекте — без «столешницы» в названии). */
-export function rowTitle(ps: (EtPanel & { group: string })[]): string {
-  const has = (g: string) => ps.some((p) => p.group === g);
-  const parts = [ps.some(isWorktop) ? "столешница" : "", has("plinths") ? "цоколь" : "", ps.some((p) => !isWorktop(p) && p.group !== "plinths") ? "панели" : ""].filter(Boolean);
-  return "Ряд: " + (parts.join(", ") || "детали вне модулей");
+type RowGroups = Partial<Record<"worktops" | "plinths" | "wallPanels" | "profiles" | "other", EtPanel[]>>;
+/** Название объекта «Ряд» — только то, что в нём есть по Базису (кухня без столешницы в проекте — без «столешницы» в названии; n3-base,
+ *  n3-antresol). Принимает детали ряда с группой (rowPanelsOf) или группы эталона (e.row). Полки ЛДСП и прочее из группы столешниц — «прочее». */
+export function rowTitle(src: (EtPanel & { group: string })[] | RowGroups): string {
+  const ps: (EtPanel & { group: string })[] = Array.isArray(src) ? src
+    : (Object.entries(src) as [string, EtPanel[] | undefined][]).flatMap(([g, xs]) => (xs ?? []).map((p) => ({ ...p, group: g })));
+  const has = (g: string) => ps.some((p) => p.group === g), w = ps.filter((p) => p.group === "worktops");
+  const parts = [ps.some(isWorktop) ? "столешница" : "", has("plinths") ? "цоколь" : "", has("wallPanels") ? "стеновые панели" : "",
+    has("profiles") ? "профили" : "", has("other") || w.some((p) => !isWorktop(p)) ? "прочее" : ""].filter(Boolean);
+  return "Ряд: " + (parts.length ? parts.join(", ") : "детали вне модулей");
 }
 
 /** Панель не по осям: габарит по толщине больше толщины Базиса больше чем на ROT_TOL — берём собственные толщину и длину×ширину

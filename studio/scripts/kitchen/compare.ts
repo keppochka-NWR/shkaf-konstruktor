@@ -25,8 +25,23 @@ export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[
  *  поворот не задан кватернионом (n3-additions).
  *  meshDiff / quatDiff — сколько деталей Базиса с сеткой стоят у ближайшей детали студии с другой сеткой / другим поворотом
  *  (одинаковая геометрия бывает под разными хэшами — зеркальные модули; n3-runners).
- *  dups — дубли Базиса (та же деталь в той же точке), в ref не входят (n3-tall). */
-export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number }; meshDiff?: number; quatDiff?: number; dups?: number };
+ *  dups — дубли Базиса (та же деталь в той же точке), в ref не входят (n3-tall).
+ *  info — поворот с учётом оси симметрии крепежа и сетка у ближайшей детали студии, строкой для отчёта (n3-antresol). */
+export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number }; meshDiff?: number; quatDiff?: number; dups?: number; info?: string };
+
+type Quat4 = [number, number, number, number];
+/** Ось симметрии крепежа в локальных осях Базиса: поворот вокруг неё не меняет деталь (k13 m02: конфирмат [0,−1,0,0] против [1,0,0,0]). */
+const SYM_AXIS: Record<string, 0 | 1 | 2> = { конфирмат: 0, опора: 2 }; // опора: ось — локальная Z (вниз); левый ряд опор Базиса повёрнут на 180° вокруг неё
+/** Один ли поворот (кватернионы [w,x,y,z]; q и −q — одно; при оси симметрии — с точностью до поворота вокруг неё). */
+export function sameTurn(a: Quat4, b: Quat4, axis?: 0 | 1 | 2): boolean {
+  const na = Math.hypot(...a), nb = Math.hypot(...b);
+  if (Math.abs(a.reduce((s, v, i) => s + v * b[i], 0)) / (na * nb) >= 0.999) return true;
+  if (axis === undefined) return false;
+  // r = conj(a)·b — поворот из a в b в локальных осях детали; вокруг оси симметрии — векторная часть r вдоль этой оси
+  const [aw, ax, ay, az] = a.map((v) => v / na), [bw, bx, by, bz] = b.map((v) => v / nb);
+  const r = [aw * bx - ax * bw - ay * bz + az * by, aw * by + ax * bz - ay * bw - az * bx, aw * bz - ax * by + ay * bx - az * bw];
+  return r.every((v, i) => i === axis || Math.abs(v) < 0.02);
+}
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
 export type Comparison = { edges?: EdgeCheck; /** Фигурные детали Базиса (контур с вырезами), которые в студии прямоугольник или с другим вырезом. */ contours?: string[]; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
@@ -228,6 +243,22 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
       if (md) row.meshDiff = md;
       if (qd) row.quatDiff = qd;
     }
+    // Остальная фурнитура: поворот и сетка — для сведения (на PASS не влияет). Поворот вокруг собственной оси осесимметричного крепежа
+    // (конфирмат — локальная X Базиса) — тот же поворот; разные id сетки при почти одинаковой модели тоже видны здесь.
+    if (category !== "газлифт") {
+      const own = ps.filter((p) => studioCategory(p) === category && p.model);
+      let rot = 0, mesh = 0;
+      for (const h of ref.hardware.filter((x) => x.category === category)) {
+        const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
+        own.forEach((p) => { const q = studioAnchor(p).map((v, i) => v - ob[i]), d = Math.hypot(pt[0] - q[0], pt[1] - q[1], pt[2] - q[2]); if (d < bd) { bd = d; best = p; } });
+        if (!best || bd > 5) continue;
+        const sm = /([0-9a-f]{12})\.glb$/.exec(best.model!.file ?? "")?.[1];
+        if (h.mesh && sm && sm !== h.mesh) mesh++;
+        if (h.quat && best.model!.quat && !sameTurn(h.quat as Quat4, best.model!.quat as Quat4, SYM_AXIS[category])) rot++;
+      }
+      const info = [rot ? `поворот ≠ ×${rot}` : "", mesh ? `сетка ≠ ×${mesh}` : ""].filter(Boolean).join(", ");
+      if (info) row.info = info;
+    }
     return row;
   });
   const tolOf = (p: PanelPair) => (p.ref.cls.startsWith("hdf") ? Math.max(1, tol) : tol);
@@ -261,7 +292,9 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id) as (RefPanel & { edges?: { side: string; thick: number }[] }) | undefined, sp = byId.get(pr.studio.id);
     if (!rp || !sp || !rp.edges) continue;
     edgeCheck.checked++;
-    const want: Record<string, number> = {}; for (const e of rp.edges) if (e.thick > 0) want[e.side] = e.thick;
+    // кромка на несуществующем элементе контура (k19 m05: elem 4 у прямоугольника из 4 элементов — без стороны и без длины) —
+    // в Базисе это пустая запись, длины у неё нет; не сверяем
+    const want: Record<string, number> = {}; for (const e of rp.edges as { side: string | null; thick: number; len?: number | null }[]) if (e.thick > 0 && (e.side || (e.len ?? 0) > 0)) want[String(e.side)] = e.thick;
     const have = edgeByDir(sp), keys = new Set([...Object.keys(want), ...Object.keys(have)]);
     const diff = [...keys].filter((k) => Math.abs((want[k] ?? 0) - (have[k] ?? 0)) > 0.01);
     // длина кромки по стороне: у Базиса кромка — отрезками контура; сумма меньше стороны — вырез (Gola и т. п.), которого нет у прямоугольника студии

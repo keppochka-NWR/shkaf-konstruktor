@@ -85,6 +85,9 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
     if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body" && (q.material === "hdf" || (q.size[0] <= 40 && q.size[1] > 60))) return true;
     if (p.id.startsWith("kitchen-hanger-cap:") && q.id === p.id.replace("-cap", "")) return true;
+    // навес верхней гранью упирается в нижнюю плоскость крыши: в проектах Базиса он стоит на 0,6–2 мм выше (k14 m04 — 1,2, k14 m06 — 0,6,
+    // k18 m09 — 2); глубже — ошибка (k17 m07: крыша Базиса над боковинами, у студии — между ними, 16 мм)
+    if (p.id.startsWith("kitchen-hanger") && q.id === "top" && depth <= 2.05) return true;
     // Ящик Axis PRO — сборочная единица (царги, держатели, дно, задняя стенка, фасад, направляющие); саморезы — в своих досках.
     if (p.id.startsWith("kd:") && p.id.includes(":screw:") && isBoard(q) && depth <= 3.5) return true;
     // Подсветка врезается в полку/крышу.

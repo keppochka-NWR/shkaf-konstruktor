@@ -9,7 +9,7 @@ import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {rawCounts,rawParts,rawThickness,rawPanelDims,parseRaw,type RawSpec} from '../src/rawModule';
 import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
-import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole,rowPanelName,rowTitle} from '../scripts/kitchen/rowWorktop';
+import {rowRects,panelExtras,rowFront,plinthName,rowPanelsOf,worktopGroupRole,rowPanelName,rowTitle,isWorktop} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
 function project(...ms:Module[]):Project{const p=newProject({...initialModule(),sections:[section()]});p.modules=ms.map((m,i)=>({id:id(),x:i*1000,y:0,z:0,rotation:0,module:m}));return p;}
@@ -331,4 +331,27 @@ test('столешница — только по Базису: угловая д
   // проект сохраняется с толщиной и помещением
   const back=parseRaw(JSON.parse(JSON.stringify({panels:[door.panels[0],wall.panels[0]],hardware:[]})))!;
   assert.equal(back.panels[0].thick,18);assert.equal(back.panels[1].room,true);
+});
+
+test('«Ряд»: столешницей называется только столешница Базиса; столешницу могли не закладывать — в имени ряда её нет',()=>{
+  // k07: полки ЛДСП и «Дно ящика» над столешницей и хром k09 лежат в группе столешниц эталона — имя Базиса остаётся
+  assert.equal(isWorktop({name:'Горизонтальная',mat:'Столешница 38 мм',box:[0,824,0,2070,862,600]}),true);
+  assert.equal(isWorktop({name:'столешница мал',mat:'СКИФ',box:[0,820,0,540,858,880]}),true);
+  assert.equal(isWorktop({name:'Горизонтальная',mat:'ЛДСП Kronospan',box:[0,1190,0,330,1206,466]}),false);
+  assert.equal(isWorktop({name:'горизонтальная',mat:'Хром',box:[0,896,0,330,902,410]}),false);
+  const wt={name:'Горизонтальная',mat:'Столешница',box:[0,820,0,2000,858,600]},pl={name:'Фронтальная',mat:'Фасадный мат-л 1',box:[0,0,0,1700,95,19]},sh={name:'Горизонтальная',mat:'ЛДСП',box:[0,1190,0,330,1206,466]};
+  assert.equal(rowTitle({worktops:[wt],plinths:[pl]}),'Ряд: столешница, цоколь');
+  assert.equal(rowTitle({plinths:[pl]}),'Ряд: цоколь','no worktop in Bazis (k10, k16, k23, k31) — none in the name');
+  assert.equal(rowTitle({worktops:[wt,sh]}),'Ряд: столешница, прочее');
+  assert.equal(rowTitle({}),'Ряд: детали вне модулей');
+});
+
+test('«Ряд»: полка ЛДСП из группы столешниц — в раскрой ЛДСП (не столешница); хром — стороннее изделие; у сырых шкафов без изменений',()=>{
+  const row:RawSpec={panels:[{name:'Горизонтальная',kind:'ldsp',box:[0,1190,0,330,1206,466]},{name:'горизонтальная',kind:'other',box:[400,896,0,730,902,410]}],hardware:[],counts:{},row:true};
+  const ps=rawParts(rawModule(row,800,1300,500));
+  assert.equal(ps[0].external,undefined,'LDSP shelf goes to the LDSP cutting');
+  assert.equal(ps[1].external,true,'chrome is not an LDSP board');
+  // сырой шкаф Базиса (source 'bazis-corpus'; без source и со счётчиками — старый файл кухни, rawKitchen n3-additions)
+  const cab:RawSpec={panels:[{name:'Профиль',kind:'other',box:[0,0,0,600,6,40]}],hardware:[],counts:{},source:'bazis-corpus'};
+  assert.equal(rawParts(rawModule(cab)).at(0)!.external,undefined,'raw wardrobe/module: unchanged');
 });
