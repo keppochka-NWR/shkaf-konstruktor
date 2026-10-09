@@ -30,7 +30,8 @@ export function firmaxAsBazis(ref: RefModule, m: Module): string[] {
     const bot = ref.panels.find((p) => /^Дно ящика/i.test(p.name) && p.box[0] >= x1 - 0.5 && p.box[0] < x1 + 30 && p.box[1] >= y0 - 0.5 && p.box[2] >= z0 - 0.5 && p.box[5] <= z1 + 0.5);
     if (bot) {
       const xs = [...new Set(conf.filter((h) => Math.abs(h.pos[1] - bot.box[1]) < 0.3 && h.pos[0] > x1 && h.pos[0] < bot.box[3] && h.pos[2] > z0 && h.pos[2] < z1).map((h) => r1(h.pos[0] - x1)))].sort((a, b) => a - b);
-      if (xs.length) { box.confUnder = xs; notes.push(`ящик ${j + 1}: конфирматы снизу через дно ${xs.join(", ")} — как в Базисе`); }
+      // ширина дна между боковинами ящика — при ней сняты точки (при смене ширины модуля точки держатся за свою боковину)
+      if (xs.length) { box.confUnder = xs; box.confUnderW = r1(bot.box[3] - x1); notes.push(`ящик ${j + 1}: конфирматы снизу через дно ${xs.join(", ")} — как в Базисе`); }
     }
     // глубина D5 конфирматов боковин в заднюю стенку короба (FurnList.Holes): 37 во всех проектах, кроме k31 (42)
     const bi = ref.panels.findIndex((p) => /^Задн/i.test(p.name) && /ящика/i.test(p.name) && p.box[0] >= x1 - 0.5 && p.box[0] < x1 + 30 && p.box[1] >= y0 - 0.5 && p.box[2] < z0 + 1);

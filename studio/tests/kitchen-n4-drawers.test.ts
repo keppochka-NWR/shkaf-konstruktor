@@ -6,7 +6,8 @@ import {holes} from '../src/drilling';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {kitHeaderIdx,normalizeRefHardware} from '../scripts/kitchen/refHardware';
-import {axisRearScrews,isAxis,isFirmax,parseKDrawers,type AxisDrawer,type FirmaxDrawer} from '../src/kitchenDrawers';
+import {axisRearScrews,isAxis,isFirmax,parseKDrawers,relayoutKDrawers,refitKDrawers,type AxisDrawer,type FirmaxDrawer} from '../src/kitchenDrawers';
+import {kitchenBase} from '../src/kitchen';
 import {partCollisions} from '../src/collisions';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
@@ -64,6 +65,44 @@ test('Firmax k31 m15/m17: конфирматы снизу через дно, с�
     assert.ok(holes(m).filter(h=>h.src.startsWith('fast:kd:')&&h.d===5).every(h=>h.depth===42));
     assert.deepEqual(partCollisions(parts(m),m),[]);
     const back=roundTrip(m).kdrawers![0] as FirmaxDrawer;assert.deepEqual(back.box.confUnder,k.box.confUnder);assert.deepEqual(back.box.screwDz,[20,244]);assert.equal(back.box.confDepth,42);
+  }
+});
+
+// конфирматы снизу через дно списком: x — от внутренней грани левой боковины ящика (центры по дну), берём из 3D
+const underXs=(ps:ReturnType<typeof parts>,j:number)=>{const bot=ps.find(p=>p.id===`kd:${j}:fx:bottom`)!,x0=bot.position[0]-bot.size[0]/2;
+  return {iw:bot.size[0],xs:ps.filter(p=>p.id.startsWith(`fast:kd:${j}:fx:under:back:`)).map(p=>Math.round((p.position[0]-x0)*10)/10).sort((a,b)=>a-b)};};
+const fxKitchen=(w:number)=>{const m=kitchenBase(initialModule(),w,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
+  m.kdrawers=relayoutKDrawers(m,2,undefined,'firmax-ldsp');return m;};
+
+test('Firmax: конфирматы снизу через дно списком держатся за свои боковины при смене ширины (отступ / середина / отступ от правой), за дном — ошибка проверки',()=>{
+  const m=fxKitchen(720),iw0=underXs(parts({...m,kdrawers:m.kdrawers!.map(k=>({...k,box:{...(k as FirmaxDrawer).box,confUnder:[1]}}))} as typeof m),0).iw;
+  m.kdrawers=m.kdrawers!.map(k=>({...k,box:{...(k as FirmaxDrawer).box,confUnder:[63.5,iw0/2,iw0-63.5],confUnderW:iw0}}));
+  for(const w of [720,600,450,900]){
+    const n={...m,width:w};
+    for(const j of [0,1]){const {iw,xs}=underXs(parts(n),j);assert.deepEqual(xs,[63.5,iw/2,iw-63.5],`ширина ${w}`);}
+    assert.ok(!validate(n).some(e=>/снизу через дно/.test(e)),`ширина ${w}: `+validate(n).join('; '));
+    // присадка идёт за конфирматами: D8×16 в дне — в тех же точках
+    const bot=parts(n).find(p=>p.id==='kd:0:fx:bottom')!,x0=bot.position[0]-bot.size[0]/2;
+    const d8=holes(n).filter(h=>h.part==='kd:0:fx:bottom'&&h.d===8).map(h=>Math.round((h.at[0]-x0)*10)/10);
+    assert.ok(d8.length>0&&d8.every(x=>x>3.5&&x<bot.size[0]-3.5),`ширина ${w}: D8 в дне ${d8}`);
+  }
+  // узкий корпус: точки от боковин сходятся — проверка пишет, а не молчит
+  assert.ok(validate({...m,width:200}).some(e=>/снизу через дно/.test(e)),validate({...m,width:200}).join('; '));
+  // старый проект без ширины точек: точка за дном — ошибка проверки
+  const old={...m,width:600,kdrawers:m.kdrawers!.map(k=>({...k,box:{...(k as FirmaxDrawer).box,confUnder:[63.5,iw0/2,iw0-63.5],confUnderW:undefined}}))};
+  assert.ok(validate(old).some(e=>/снизу через дно/.test(e)));
+  // сохранение и загрузка, смена высоты корпуса — ширина точек не теряется
+  assert.equal((roundTrip(m).kdrawers![0] as FirmaxDrawer).box.confUnderW,iw0);
+  const h={...m,height:m.height-60};h.kdrawers=refitKDrawers(h,'height');assert.equal((h.kdrawers![0] as FirmaxDrawer).box.confUnderW,iw0);
+});
+
+test('Firmax k31 m15: при смене ширины модуля (720 → 600, 450) конфирматы снизу через дно — 63,5 от боковин и посередине, в дне',{skip:!has('k31')},()=>{
+  const {m}=pass('k31','m15'),k=m.kdrawers![0] as FirmaxDrawer;
+  assert.equal(k.box.confUnderW,639);
+  for(const w of [600,450]){
+    const n={...m,width:w};
+    for(const j of [0,1]){const {iw,xs}=underXs(parts(n),j);assert.deepEqual(xs,[63.5,iw/2,iw-63.5],`ширина ${w}`);}
+    assert.ok(!validate(n).some(e=>/снизу через дно/.test(e)));
   }
 });
 

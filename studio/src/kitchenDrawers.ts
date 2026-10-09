@@ -21,10 +21,37 @@ export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; 
    *  по умолчанию 59, MODERN SLIDE — 83,5); список — свои точки от внутренней грани левой боковины ящика (Firmax k31: 67, середина,
    *  67 от правой). У Firmax по умолчанию их нет. */
   confUnder?: number | number[];
+  /** Внутренняя ширина короба (между боковинами ящика), при которой сняты точки confUnder списком. При другой ширине модуля
+   *  точки левой половины держат отступ от левой боковины, правой — от правой, середина остаётся серединой: так стоят все списки
+   *  базы (13 ящиков Firmax: k03 m05 74/522 при 596, k30 m14, k31 m15–m17 — симметрично, с серединой или без). */
+  confUnderW?: number;
   /** Саморезы 3×3 направляющей Firmax в боковину корпуса — от передней кромки короба, если не по правилу (k31: 20 и 244). */
   screwDz?: number[];
   /** Глубина D5 конфирматов короба, если не 37 (Базис k31 — 42). */
   confDepth?: number };
+/** Точки конфирматов снизу через дно (x от внутренней грани левой боковины ящика) при внутренней ширине короба iw.
+ *  Число — пара от граней обеих боковин; список — точки Базиса, привязанные к своей боковине или середине (confUnderW). */
+export function confUnderXs(b: Pick<FirmaxBox, "confUnder" | "confUnderW">, iw: number): number[] {
+  const cu = b.confUnder, w0 = b.confUnderW;
+  if (cu === undefined) return [];
+  if (!Array.isArray(cu)) return [cu, iw - cu];
+  if (!w0 || Math.abs(w0 - iw) < 0.05) return [...cu];
+  return cu.map((x) => (Math.abs(x - w0 / 2) < 0.6 ? iw / 2 : x < w0 / 2 ? x : iw - (w0 - x)));
+}
+/** Перенос конфирматов снизу через дно в новую раскладку (вместе с шириной, при которой сняты точки). */
+function keepConfUnder(o: FirmaxBox, box: FirmaxBox) {
+  if (o.confUnder === undefined) return;
+  box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder;
+  if (o.confUnderW !== undefined) box.confUnderW = o.confUnderW;
+}
+/** Ошибка проверки: конфирматы снизу через дно не в дне короба (Ø7 — не ближе 3,5 к боковинам ящика) или сошлись
+ *  (меньше 7 между осями) — например, после сужения модуля. */
+function confUnderError(b: FirmaxBox, iw: number): string | undefined {
+  const xs = confUnderXs(b, iw);
+  if (!xs.length) return undefined;
+  const s = [...xs].sort((a, c) => a - c), bad = s.some((x) => x < 3.5 || x > iw - 3.5) || s.some((x, i) => i > 0 && x - s[i - 1] < 7) || (Array.isArray(b.confUnder) && xs.some((x, i) => i > 0 && x < xs[i - 1]));
+  return bad ? `конфирматы снизу через дно (${xs.map((x) => Math.round(x * 10) / 10).join(", ")} от левой боковины ящика) не помещаются в дно короба шириной ${Math.round(iw * 10) / 10}.` : undefined;
+}
 /** Глубина D5 конфирмата короба ящика по id крепежа «fast:kd:<j>:…»: как в проекте (box.confDepth), иначе 37 (Базис). */
 export function kdConfDepth(m: Module, id: string): number {
   const k = m.kdrawers?.[Number(id.split(":")[2])];
@@ -483,7 +510,7 @@ export function modernLayout(m: Module, n: number, ratios?: number[], keep?: Mod
     const [lo, hi] = golaBand(m, a.y0, a.y1), y = r1(Math.max(a.y0 + 35, floor + 10, lo)), top = r1(Math.min(a.y1 - 35, ceil, hi)), box: FirmaxBox = { y, h: r1(top - y), len };
     const o = (keep?.[i] ?? keep?.[0])?.box;
     if (o) for (const key of ["gap", "front", "confBottom"] as const) if (o[key] !== undefined) box[key] = o[key];
-    if (o?.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder;
+    if (o) keepConfUnder(o, box);
     if (o?.faceScrews) box.faceScrews = true;
     return { system: "modern-slide" as const, y0: a.y0, y1: a.y1, runnerY: y, box };
   });
@@ -534,7 +561,7 @@ export function versaliteLayout(m: Module, n: number, ratios?: number[], keep?: 
     if (k) {
       const o = k.box;
       for (const key of ["gap", "front", "confBottom"] as const) if (o[key] !== undefined) box[key] = o[key];
-      if (o.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder;
+      keepConfUnder(o, box);
       if (own?.box.conf?.length && Math.abs(own.box.h - h) < 0.05) box.conf = [...own.box.conf];
     }
     return { system: "versalite-h45" as const, y0: a.y0, y1: a.y1, runnerY: r1(y + h / 2), len, box };
@@ -575,7 +602,7 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
       if (o.gap !== undefined) box.gap = o.gap;
       if (o.front !== undefined) box.front = o.front;
       if (o.confBottom !== undefined) box.confBottom = o.confBottom;
-      if (o.confUnder !== undefined) box.confUnder = Array.isArray(o.confUnder) ? [...o.confUnder] : o.confUnder; // конфирматы снизу через дно (k31)
+      keepConfUnder(o, box); // конфирматы снизу через дно (k31) — вместе с шириной, при которой сняты точки
       if (o.screwDz && o.len === len) box.screwDz = [...o.screwDz]; // саморезы направляющей не по правилу — пока длина короба та же
       if (o.confDepth !== undefined) box.confDepth = o.confDepth;
       const same = own && Math.abs(own.box.h - h) < 0.05;
@@ -725,7 +752,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         for (const z of [g.zb + e, g.zf - e]) out.push(conf(`fast:${id}:fx:bottom:${lr}:${Math.round(z)}`, [head, g.yb + 8, z], ax, nm));
       }
       // дно → задняя стенка и фальшпанель снизу (Базис: 2 + 2 конфирмата в 8 от торцов дна)
-      underConfs(out, id, g, b.confUnder ?? VERSALITE.confUnder, nm, "fast:" + id + ":fx:under");
+      underConfs(out, id, g, { confUnder: b.confUnder ?? VERSALITE.confUnder, confUnderW: b.confUnderW }, nm, "fast:" + id + ":fx:under");
       return;
     }
     if (isModern(k)) {
@@ -753,7 +780,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         for (const dy of b.conf ?? firmaxConf(g.backH)) for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`fast:ms:${id}:${w}:${lr}:${dy}`, [head, g.backY + dy, z], ax, nm));
         const e = b.confBottom ?? MODERN.confBottom;
         for (const z of [g.zb + e, g.zf - e]) out.push(conf(`fast:ms:${id}:bottom:${lr}:${Math.round(z)}`, [head, g.yb + 8, z], ax, nm));
-        if (s) underConfs(out, id, g, b.confUnder ?? MODERN.confUnder, nm, "fast:ms:" + id + ":under");
+        if (s) underConfs(out, id, g, { confUnder: b.confUnder ?? MODERN.confUnder, confUnderW: b.confUnderW }, nm, "fast:ms:" + id + ":under");
         if (b.screws !== false) for (const dz of [37, 261]) out.push(screwAt(`${id}:screw:fx3:${lr}:${dz}`, [sideIn(s), g.yb + 8, g.zf - dz], "Саморез 3,5×16 (направляющая MODERN SLIDE)"));
         if (b.rearHoles !== false) out.push(screwAt(`${id}:screw:fx5:${lr}`, [head + d * 23, g.yb + 11, g.zb], "Отверстие 5×12 (зацеп MODERN SLIDE)"));
       }
@@ -791,7 +818,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         if (b.rearHoles !== false) out.push(screwAt(`${id}:screw:fx5:${lr}`, [head + d * 23, g.yb + 11, g.zb], "Отверстие 5×12 (зацеп Firmax)"));
       }
       // дно → задняя стенка и фальшпанель снизу — только если так в проекте Базиса (k03 m05, k30 m12–m17, k31)
-      if (b.confUnder !== undefined) underConfs(out, id, g, b.confUnder, "Firmax", "fast:" + id + ":fx:under");
+      if (b.confUnder !== undefined) underConfs(out, id, g, b, "Firmax", "fast:" + id + ":fx:under");
       return;
     }
     const col = k.color ?? "white", key = `${col}:${k.h}`, ry = k.runnerY;
@@ -830,10 +857,11 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
 }
 function screwAt(id: string, at: [number, number, number], name: string): Part { return { ...screw(id, at), name }; }
 /** Конфирматы снизу через дно короба в заднюю стенку (zb + 8) и фальшпанель (zf − 8): число — пара от внутренних граней боковин
- *  ящика (ids …:back:L/R), список — точки от внутренней грани левой боковины (ids …:back:0,1,…). */
-function underConfs(out: Part[], id: string, g: ReturnType<typeof firmaxGeom>, cu: number | number[], nm: string, pre: string) {
-  const xs: [string, number][] = Array.isArray(cu) ? cu.map((x, i) => [String(i), g.sl + g.t + x]) : [["L", g.sl + g.t + cu], ["R", g.sr - g.t - cu]];
-  for (const [lr, ux] of xs) for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`${pre}:${w}:${lr}`, [ux, g.yb, z], "+y", nm));
+ *  ящика (ids …:back:L/R), список — точки от внутренней грани левой боковины (ids …:back:0,1,…), при другой ширине короба —
+ *  каждая у своей боковины или посередине (confUnderXs). */
+function underConfs(out: Part[], id: string, g: ReturnType<typeof firmaxGeom>, b: Pick<FirmaxBox, "confUnder" | "confUnderW">, nm: string, pre: string) {
+  const ux = confUnderXs(b, g.sr - g.sl - 2 * g.t), ids = Array.isArray(b.confUnder) ? ux.map((_, i) => String(i)) : ["L", "R"];
+  ux.forEach((x, i) => { for (const [w, z] of [["back", g.zb + 8], ["front", g.zf - 8]] as const) out.push(conf(`${pre}:${w}:${ids[i]}`, [g.sl + g.t + x, g.yb, z], "+y", nm)); });
 }
 /** Конфирмат 7×50 короба ЛДСП: головка на наружной пласти боковины ящика, ось внутрь (модель «Евровинт 7х50» Базиса);
  *  «+y» — снизу через дно в заднюю стенку/фальшпанель (Versalite). */
@@ -975,6 +1003,7 @@ export function kitchenDrawerErrors(m: Module): string[] {
       if (VERSALITE_LENGTHS.includes(k.len) && k.len + 0.5 > m.depth - (b.front ?? 0) + 0.01) e.push(p + `направляющая Versalite ${k.len} (${k.len + 0.5} по модели Базиса) не входит в глубину корпуса ${m.depth}.`);
       if (b.len > m.depth - (b.front ?? 0) + 0.01) e.push(p + `короб Versalite ${b.len} не входит в глубину корпуса ${m.depth}.`);
       if (m.width - 32 - 2 * (b.gap ?? VERSALITE.gap) - 32 < 100) e.push(p + "Versalite — узкий корпус: между боковинами ящика меньше 100 мм.");
+      const ue = confUnderError({ ...b, confUnder: b.confUnder ?? VERSALITE.confUnder }, m.width - 32 - 2 * (b.gap ?? VERSALITE.gap) - 32); if (ue) e.push(p + ue);
       if (b.y < axisFloor(m) - 0.01) e.push(p + `короб Versalite на ${b.y} уходит в дно корпуса (пол под ящиками ${axisFloor(m)}).`);
       if (b.y + b.h > axisCeiling(m) + 0.01) e.push(p + `короб Versalite упирается в царги корпуса: верх ${Math.round((b.y + b.h) * 10) / 10}, царги с ${axisCeiling(m)}.`);
       for (let i = 0; i < j; i++) { const o = ks[i]; if (k.y0 < o.y1 - 0.01 && o.y0 < k.y1 - 0.01) e.push(p + `фасад пересекается с ящиком ${i + 1}.`); if (isBox(o) && b.y < o.box.y + o.box.h - 0.01 && o.box.y < b.y + b.h - 0.01) e.push(p + `короб пересекается с коробом ящика ${i + 1}.`); }
@@ -991,6 +1020,8 @@ export function kitchenDrawerErrors(m: Module): string[] {
       }
       if (b.len > m.depth - (b.front ?? 0) + 0.01 || b.len < 250) e.push(p + `короб ${fx} ${b.len} не входит в глубину корпуса ${m.depth}.`);
       if (m.width - 32 - 2 * (b.gap ?? FIRMAX.gap) - 32 < 100) e.push(p + `${fx} — узкий корпус: между боковинами ящика меньше 100 мм.`);
+      // конфирматы снизу через дно: у MODERN SLIDE по умолчанию пара 83,5, у Firmax — только из проекта Базиса
+      const ue = confUnderError(isModern(k) ? { ...b, confUnder: b.confUnder ?? MODERN.confUnder } : b, m.width - 32 - 2 * (b.gap ?? (isModern(k) ? MODERN.gap : FIRMAX.gap)) - 32); if (ue) e.push(p + ue);
       if (b.y < axisFloor(m) - 0.01) e.push(p + `короб ${fx} на ${b.y} уходит в дно корпуса (пол под ящиками ${axisFloor(m)}).`);
       if (b.y + b.h > axisCeiling(m) + 0.01) e.push(p + `короб ${fx} упирается в царги корпуса: верх ${Math.round((b.y + b.h) * 10) / 10}, царги с ${axisCeiling(m)}.`);
       for (let i = 0; i < j; i++) { const o = ks[i]; if (k.y0 < o.y1 - 0.01 && o.y0 < k.y1 - 0.01) e.push(p + `фасад пересекается с ящиком ${i + 1}.`); if (isBox(o) && b.y < o.box.y + o.box.h - 0.01 && o.box.y < b.y + b.h - 0.01) e.push(p + `короб пересекается с коробом ящика ${i + 1}.`); }
@@ -1037,7 +1068,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
       const b = (k0.box ?? {}) as Partial<FirmaxBox>, num = (v: unknown) => (v === undefined ? undefined : Number(v));
       const box: FirmaxBox = { y: Number(b.y), h: Number(b.h), len: Number(b.len) };
       for (const key of ["bottomUp", "gap", "front", "confBottom", "confDepth"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
-      if (Array.isArray(b.confUnder)) box.confUnder = b.confUnder.slice(0, 6).map(Number); else if (b.confUnder !== undefined) box.confUnder = Number(b.confUnder);
+      if (Array.isArray(b.confUnder)) { box.confUnder = b.confUnder.slice(0, 6).map(Number); if (b.confUnderW !== undefined) box.confUnderW = Number(b.confUnderW); } else if (b.confUnder !== undefined) box.confUnder = Number(b.confUnder);
       if (Array.isArray(b.screwDz)) box.screwDz = b.screwDz.slice(0, 4).map(Number);
       if (k0.system === "versalite-h45") {
         if (Array.isArray(b.conf)) box.conf = b.conf.slice(0, 6).map(Number);
