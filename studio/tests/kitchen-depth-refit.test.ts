@@ -99,6 +99,14 @@ test('height refit of a drawer only at the bottom (fixed shelf above, k05 m03 / 
   }
 });
 
+test('k21 m03: lower СТАРТ and upper Axis PRO in one module are both recognized, each keeps its system on depth refit',{skip:!existsSync(ETD+'k21.json')},()=>{
+  const {module:m}=moduleFromEtalon(ref('k21','m03'));const ks=m.kdrawers!;
+  assert.equal(ks[0].system,'start-sc');assert.equal((ks[0] as StartDrawer).sb,'SB20');assert.equal((ks[0] as StartDrawer).len,400);
+  assert.ok(ks.slice(1).every(k=>k.system==='axis-pro'));
+  const d=deep(m,m.depth);assert.deepEqual(d.kdrawers!.map(k=>k.system),ks.map(k=>k.system));
+  assert.equal((d.kdrawers![0] as StartDrawer).len,400);
+});
+
 test('kitchen estimate has no rows the Bazis projects lack: no confirmat caps, no «мелочёвка корпуса»; wardrobes keep them',()=>{
   const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;m.kdrawers=relayoutKDrawers(m,3);
   const p=newProject();p.modules[0]={...p.modules[0],module:m};const e=estimate(p);

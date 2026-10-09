@@ -234,7 +234,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   // ящики Boyard СТАРТ: по каждой левой направляющей — боковина SBxx (тип), дно и задняя стенка ЛДСП, рейлинг; фасад — по высоте оси.
   // Внутренний ящик (за чужим фасадом, утоплен) — без своего фасада, как в Базисе.
   const stRuns = ref.hardware.filter((h) => h.category === "направляющая" && /СТАРТ Soft-Closing/.test(h.name) && h.pos[0] < W / 2).sort((a, c) => a.pos[1] - c.pos[1]);
-  if (stRuns.length && !axisRuns.length) {
+  // в одном модуле бывают СТАРТ и Axis PRO вместе (k21 m03: нижний СТАРТ, верхний Axis) — каждый ящик своей системой
+  if (stRuns.length) {
     const kd: KDrawer[] = [], owners = new Map<unknown, number>();
     for (const r of stRuns) {
       const [x, y, z] = r.pos, len = (Number(/(\d+)\s*мм/.exec(r.name)?.[1] ?? 500) === 400 ? 400 : 500) as 400 | 500;
@@ -259,7 +260,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       kd.push({ system: "start-sc", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(y), len, sb, ...(rail ? { rail: true } : {}), ...(rail && JSON.stringify(rys) !== "[206.5]" ? { railYs: rys } : {}), ...(rh && Math.abs(rh.pos[1] - y - 201.4) > 0.05 ? { railDy: r1(rh.pos[1] - y) } : {}),
         ...(backH !== def ? { backH } : {}), ...(front > 0.05 ? { front } : {}), ...(inner ? { inner: true } : {}), ...(edge.bottom || edge.back ? { edge } : {}) });
     }
-    if (kd.length) m.kdrawers = kd;
+    if (kd.length) m.kdrawers = axisRuns.length && m.kdrawers?.length ? [...m.kdrawers, ...kd].sort((a, c) => a.runnerY - c.runnerY) : kd;
   }
   // ящики Versalite Light H45: короб ЛДСП 16 по левой боковине ящика, левая направляющая — на внутренней грани левой боковины корпуса
   const vlRuns = ref.hardware.filter((h) => h.category === "направляющая" && /Versalite Light H45/.test(h.name));

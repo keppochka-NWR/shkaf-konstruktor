@@ -391,6 +391,18 @@ export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): K
       return refitKDrawers(stack, "height");
     }
   }
+  if (ks.some((k) => k.system !== ks[0].system)) {
+    // разные системы в одном модуле (Базис k21 m03: СТАРТ внизу, Axis PRO вверху) — каждая своим правилом, систему не меняем:
+    // глубина — длина по своей системе; высота — как есть, пока входят (иначе раскладка системой нижнего ящика)
+    if (what === "depth") return ks.map((k) => {
+      if (isStart(k)) { const len = startDepthLen(m, k); return len === k.len ? k : { ...k, len }; }
+      if (isVersalite(k)) { const len = versaliteDepthLen(m, k); return len === k.len ? k : { ...k, len, box: { ...k.box, len } }; }
+      if (isFirmax(k)) return { ...k, box: { ...k.box, len: firmaxLen(m) } };
+      if (isAxis(k)) { const len = axisBestLen(m, k.h, k.color); return len ? { ...k, len } : k; }
+      return k;
+    });
+    if (ks.every((k) => axisFits(m, k)) && !kitchenDrawerErrors(m).length) return ks;
+  }
   if (isStart(ks[0])) {
     if (what === "depth") return ks.map((k) => { if (!isStart(k)) return k; const len = startDepthLen(m, k); return len === k.len ? k : { ...k, len }; });
     return startLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isStart));
