@@ -4,6 +4,7 @@ import {initialModule,parts,validate,parseModule} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
+import {axisLayout,axisFits,axisTop,axisCeiling} from '../src/kitchenDrawers';
 
 // НМ 600 с тремя ящиками Axis PRO как в Базисе k06/m03 (2×H-86 + H-168, 500 мм)
 const axis=()=>{const m=kitchenBase(initialModule(),600,'drawers' as never);m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
@@ -43,4 +44,26 @@ test('kdrawers survive save/load and bad input is rejected',()=>{
   const bad={...m,kdrawers:[{...m.kdrawers![0],h:99 as never},{...m.kdrawers![1],y1:700}]};
   const e=validate(bad);
   assert.ok(e.some(x=>/высота царги/.test(x)));assert.ok(e.some(x=>/пересекается/.test(x)));
+});
+test('critic r1: right runner box sits on its mesh (z F-497..F-7), not 504 mm in front of the cabinet',()=>{
+  const m=axis(),ps=parts(m),L=ps.find(p=>p.id==='left')!,F=L.position[2]+L.size[2]/2;
+  for(const lr of ['L','R']){const r=ps.find(p=>p.id==='kd:2:slide:'+lr)!;
+    assert.ok(Math.abs(r.position[2]+r.size[2]/2-(F-7))<0.01&&Math.abs(r.position[2]-r.size[2]/2-(F-497))<0.01,lr+' runner z '+(r.position[2]-r.size[2]/2)+'..'+(r.position[2]+r.size[2]/2));}
+  const cd=ps.find(p=>p.id==='kd:2:sys:front:L')!;assert.ok(Math.abs(cd.position[1]+cd.size[1]/2-(174+3.5+132))<0.01,'CD front holder height from its mesh');
+});
+
+test('critic r1: default layout never pushes a drawer into the cabinet rails (600–1100, 1–3 drawers); 4 drawers that cannot fit are rejected, not drawn',()=>{
+  for(let n=1;n<=4;n++)for(let H=600;H<=1100;H+=5){
+    const m=kitchenBase(initialModule(),600,'drawers' as never);m.height=H;m.kdrawers=axisLayout(m,n);
+    const fits=m.kdrawers.every(k=>axisFits(m,k)),e=validate(m),c=partCollisions(parts(m),m);
+    if(fits){assert.deepEqual(e,[],`${n}×${H}`);assert.deepEqual(c,[],`${n}×${H}`);assert.ok(m.kdrawers.every(k=>axisTop(k)<=axisCeiling(m)-5),`${n}×${H}`);}
+    // не по запасам раскладки (низкий корпус): либо отказ проверкой, либо физически без пересечений
+    else{assert.ok(n===4||H<800,`${n}×${H} must fit`);if(c.length)assert.ok(e.some(x=>/царги корпуса|направляющую ящика выше/.test(x)),`${n}×${H} rejected`);}
+  }
+});
+
+test('critic r1: Axis PRO runner may only touch its cabinet side — a runner sunk into the bottom is reported',()=>{
+  const m=axis();m.kdrawers![2]={...m.kdrawers![2],runnerY:150};
+  assert.ok(validate(m).some(x=>/уходит в дно/.test(x)));
+  assert.ok(partCollisions(parts(m),m).some(c=>/Направляющая Axis PRO/.test(c.names.join(' '))&&/Дно/.test(c.names.join(' '))));
 });
