@@ -47,6 +47,33 @@ export function dupPartsFromEtalon(ref: Pick<RefModule, "panels" | "hardware">, 
   return out;
 }
 
+/** Пенал с набивным ХДФ: крыша короче сзади на 0,5–120 мм (вентзазор над техникой: k23 m15/m16 — 40 мм) — kitchen.topBack,
+ *  то же поле, что у навесных с крышей перед ХДФ (k33, k34). Только пенал: у остальных набивных крыша на всю глубину. */
+export function topBackTall(role: string, topPanel: { b: B } | undefined, bottom: { b: B } | undefined, sideZ0: number): number | undefined {
+  if (role !== "tall" || !topPanel || topPanel === bottom) return undefined;
+  const gap = r1(topPanel.b.z0 - sideZ0);
+  return gap > 0.5 && gap <= 120 ? gap : undefined;
+}
+
+/** Фигурный контур Базиса у горизонтальной детали корпуса (дно, крыша, полка) с настоящим вырезом (> 200 мм², как в compare.ts):
+ *  вырез под вентиляцию в дне пенала k23 m15/m16 (70 точек, 28 800 мм²). Деталь студии — с тем же габаритом (±0,6) — получает
+ *  контур в плане от своего угла (kitchen.planContours: id → точки [x, z]). Ключ — id детали студии. */
+export function planContoursFromEtalon(P: { p: { axis: string; kind: string; figure?: boolean; contour?: number[][]; contourPlane?: string }; b: B }[], ps: Part[], sideZ0: number): Record<string, [number, number][]> | undefined {
+  const out: Record<string, [number, number][]> = {};
+  for (const { p, b } of P) {
+    if (p.axis !== "y" || p.kind !== "ldsp" || !p.figure || p.contourPlane !== "xz" || !Array.isArray(p.contour) || p.contour.length < 4) continue;
+    const c = p.contour as number[][];
+    if (c.some((q) => !Array.isArray(q) || q.length < 2 || !Number.isFinite(q[0]) || !Number.isFinite(q[1]))) continue;
+    let a = 0; for (let i = 0; i < c.length; i++) { const [x0, z0] = c[i], [x1, z1] = c[(i + 1) % c.length]; a += x0 * z1 - x1 * z0; }
+    if ((b.x1 - b.x0) * (b.z1 - b.z0) - Math.abs(a) / 2 <= 200) continue; // скругления — не вырез
+    const sb = [b.x0, b.y0, b.z0 - sideZ0, b.x1, b.y1, b.z1 - sideZ0];
+    const sp = ps.find((q) => q.material === "board" && q.size[1] < q.size[0] && q.size[1] < q.size[2] && [0, 1, 2].every((i) => Math.abs(q.position[i] - q.size[i] / 2 - sb[i]) <= 0.6 && Math.abs(q.position[i] + q.size[i] / 2 - sb[i + 3]) <= 0.6));
+    if (!sp) continue;
+    out[sp.id] = c.map(([x, z]) => [r1(x - b.x0), r1(z - b.z0)] as [number, number]);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Полки, у которых в Базисе своя глубина или отступ от задника (не как у первой полки секции): номер → { rear, depth }.
  *  rear — от зоны задника студии (rear0 — z начала полок в координатах Базиса). k23 m14/m17: жёсткая полка 577 на всю глубину корпуса
  *  при съёмных 575 с отступом 1. */

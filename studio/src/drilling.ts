@@ -11,12 +11,21 @@ import { rafixHoles } from "./kitchenRafix";
 
 export type Hole = { part: string; at: [number, number, number]; dir: [number, number, number]; d: number; depth: number; src: string };
 
+/** Точка в многоугольнике (чётность пересечений). */
+function inPoly(c: [number, number][], x: number, z: number): boolean {
+  let s = false;
+  for (let i = 0, j = c.length - 1; i < c.length; j = i++) if ((c[i][1] > z) !== (c[j][1] > z) && x < ((c[j][0] - c[i][0]) * (z - c[i][1])) / (c[j][1] - c[i][1]) + c[i][0]) s = !s;
+  return s;
+}
 const inside = (p: Part, q: number[]) => [0, 1, 2].every((i) => Math.abs(q[i] - p.position[i]) <= p.size[i] / 2 + 1e-6);
+// кухня Базиса, деталь с контуром в плане (kitchen.planContours): точка в вырезе — не в детали (k23 m15: отверстия опор над вырезом дна в Базисе — в пустоте)
+const insideContour = (p: Part, q: number[]) => inside(p, q) && (!p.planContour || inPoly(p.planContour, q[0] - (p.position[0] - p.size[0] / 2), q[2] - (p.position[2] - p.size[2] / 2)));
 const isPanel = (p: Part) => p.material === "board" || p.material === "hdf";
 
 export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
   const out: Hole[] = [], panels = ps.filter(isPanel);
-  const host = (at: number[], dir: number[], probe = 0.5) => panels.find((p) => inside(p, [at[0] + dir[0] * probe, at[1] + dir[1] * probe, at[2] + dir[2] * probe]))?.id;
+  const inP = m.kitchen?.planContours ? insideContour : inside;
+  const host = (at: number[], dir: number[], probe = 0.5) => panels.find((p) => inP(p, [at[0] + dir[0] * probe, at[1] + dir[1] * probe, at[2] + dir[2] * probe]))?.id;
   const push = (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number, probe = 0.5) => {
     const part = host(at, dir, probe);
     if (part) out.push({ part, at: at.map((v) => Math.round(v * 100) / 100) as [number, number, number], dir, d, depth, src });

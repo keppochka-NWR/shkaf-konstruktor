@@ -9,7 +9,7 @@ import type { KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, isEuro6, legScrews, railFastened, screwKind, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink } from "./recognize-sink";
-import { dupPartsFromEtalon, shelfAtFromEtalon } from "./recognize-tall";
+import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
@@ -406,6 +406,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // отступы снизу и сверху не как сбоку (k32 m06: 2 и 4 при 1,5) — по проекту; низ — от низа корпуса (у модуля на опорах — от дна)
     const yb = legs.length && bottom ? bottom.b.y0 : Math.min(left.b.y0, right.b.y0, bottom?.b.y0 ?? Infinity), g0 = r1(back.b.y0 - yb), g1 = r1(top - back.b.y1);
     if (!m.raisedSides && (Math.abs(g0 - m.backGap) > 0.01 || Math.abs(g1 - m.backGap) > 0.01) && g0 >= 0 && g1 >= 0) m.kitchen.backGapY = [g0, g1];
+    // пенал с набивным ХДФ: крыша короче сзади (вентзазор над техникой, k23 m15/m16) — то же поле topBack, что у навесных (recognize-tall.ts)
+    const tbk = topBackTall(role, topPanel, bottom, sideZ0);
+    if (tbk !== undefined) { m.kitchen.topBack = tbk; notes.push(`крыша короче сзади на ${tbk} (вентзазор)`); }
   }
   else {
     m.backType = "groove";
@@ -789,6 +792,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const conf = [...hw("конфирмат"), ...ref.hardware.filter(isEuro6), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   const host0 = bottom ?? topPanel;
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
+  // пенал: жёсткая полка, у которой в Базисе крепёж только с одной стороны (k23 m15/m16: конфирматы лишь у правой стойки) —
+  // другая сторона без крепежа, как в Базисе (то же поле jointNone и та же проверка, что у навесных)
+  if (role === "tall" && m.confirmatInset !== undefined) {
+    const fixedJ = (m.sections[0].fixed ?? []).filter((j) => !m.kitchen?.bareShelves?.includes(j)).map((j) => [`${m.sections[0].id}:shelf:${j}`, sh[j]] as [string, (typeof sh)[number] | undefined]);
+    const jn = wallJointNone(ref.hardware, fixedJ, left, right).filter((k, _, all) => all.filter((x) => x.replace(/:(left|right)$/, "") === k.replace(/:(left|right)$/, "")).length === 1);
+    if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык полки без крепежа (как в Базисе): ${jn.join(", ")}`); }
+  }
   // навесные: у каждого стыка дна/крыши свои отступы крепежа, если они не совпадают с общим
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     // жёсткие полки (k05 m10/m11: полка над сушкой на конфирматах 53/52 при общем 63) — тоже свои отступы
@@ -946,6 +956,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // угловой навесной с диагональным фасадом — параметрики нет (см. wallCorner.ts), причина первой
   if (ref.archetype.startsWith("wall")) { const why = wallCornerRaw(ref); if (why) unsupported.unshift(why); }
   // дубли Базиса (опора/конфирмат дважды в одной точке) — повторяем, как в Базисе (recognize-tall.ts)
+  // фигурный контур Базиса у дна/крыши/полки с вырезом (вентиляция пенала) — контур детали в плане (recognize-tall.ts)
+  const pc = planContoursFromEtalon(P as unknown as Parameters<typeof planContoursFromEtalon>[0], parts(m), sideZ0);
+  if (pc) { m.kitchen.planContours = pc; notes.push(`контур Базиса в плане: ${Object.keys(pc).join(", ")}`); }
   const dupP = dupPartsFromEtalon(ref, m);
   if (dupP.length) { m.kitchen.dupParts = dupP; notes.push(`дубли Базиса: ${dupP.join(", ")}`); }
   return { module: m, notes, unsupported };

@@ -7,7 +7,7 @@ import {partCollisions} from '../src/collisions';
 import {edgeByDir} from '../src/edges';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {shelfAtFromEtalon} from '../scripts/kitchen/recognize-tall';
+import {shelfAtFromEtalon,topBackTall} from '../scripts/kitchen/recognize-tall';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тест пропускается.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -66,6 +66,38 @@ test('shelfAt: своя глубина полки — только у кухни
   const back=parseModule(JSON.parse(JSON.stringify(k)));
   assert.deepEqual(back.sections[0].shelfAt,{0:{rear:0,depth:300}});
   assert.deepEqual(back.kitchen?.dupParts,['leg:x']);
+});
+
+test('k23 m15/m16: крыша короче сзади на 40 (topBack у пенала), вырез под вентиляцию в дне (planContours), полка на конфирматах только справа (jointNone) — PASS',{skip:!existsSync(`${ETALON}/k23.json`)},()=>{
+  for(const key of ['m15','m16']){
+    const ref=load('k23',key);
+    const {module:m,unsupported}=moduleFromEtalon(ref);
+    assert.deepEqual(unsupported,[]);
+    assert.deepEqual(validate(m),[]);
+    assert.equal(m.kitchen?.topBack,40);
+    assert.deepEqual(Object.keys(m.kitchen?.planContours??{}),['bottom']);
+    const sid=m.sections[0].id;
+    // m15 — крепёж только у правой стойки, m16 (зеркальный) — только у левой
+    assert.deepEqual(m.kitchen?.jointNone,[`${sid}:shelf:1:${key==='m15'?'left':'right'}`]);
+    const ps=parts(m),bottom=ps.find(p=>p.id==='bottom')!;
+    assert.ok(bottom.planContour&&bottom.planContour.length===70,'дно с контуром Базиса');
+    assert.equal(ps.filter(p=>p.id.startsWith(`fast:${sid}:shelf:1:`)).length,2,'полка: 2 конфирмата, только справа');
+    // отверстия опор над вырезом дна — в пустоте, как в Базисе: в дно не сверлятся
+    assert.equal(holes(m,ps).filter(h=>h.part==='bottom'&&h.d===4).length,14,'D4×3 в дне 14, как в Базисе (2 — над вырезом, в пустоте)');
+    const c=compareModule(ref,m);
+    assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({hw:c.hardware.filter(h=>h.ref!==h.studio),contours:c.contours,holes:c.holes?.extra.slice(0,4)}));
+  }
+});
+
+test('контур в плане: не совпал с деталью после смены размера — прямоугольник; topBackTall — только пенал',()=>{
+  const k=initialModule();
+  k.kitchen={role:'tall',planContours:{bottom:[[0,0],[10,0],[10,10],[0,10]]}} as typeof k.kitchen;
+  const b=parts(k).find(p=>p.id==='bottom');
+  if(b)assert.equal(b.planContour,undefined,'габарит контура 10×10 ≠ дну — контур не ставим');
+  const box=(z0:number)=>({b:{x0:16,y0:0,z0,x1:584,y1:16,z1:580}});
+  assert.equal(topBackTall('tall',box(43),undefined,3),40);
+  assert.equal(topBackTall('base',box(43),undefined,3),undefined);
+  assert.equal(topBackTall('tall',box(3),undefined,3),undefined);
 });
 
 test('shelfAtFromEtalon: полки одной глубины — нет записи; другая глубина или отступ — запись по номеру полки',()=>{
