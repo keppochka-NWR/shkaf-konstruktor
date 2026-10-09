@@ -150,30 +150,38 @@ export function jointPointsFromEtalon(ref: RefModule, hosts: (B | undefined)[], 
 /** Рафиксы Базиса у жёстких полок: точка — торец полки у стойки × нижняя пласть; сетка по глубине от торцов полки.
  *  Общая сетка — самая частая среди полок, у остальных — своя (per). confirmat — жёсткие полки без рафиксов (их крепёж не меняем).
  *  shelves — коробы полок снизу вверх (номера как в section.shelves), fixed — номера жёстких полок. */
-export function rafixFromEtalon(ref: RefModule, shelves: B[], fixed: number[]): { rafix?: KitchenRafix; confirmat: number[]; notes: string[] } {
+export function rafixFromEtalon(ref: RefModule, shelves: B[], fixed: number[], topB?: B): { rafix?: KitchenRafix; confirmat: number[]; notes: string[] } {
   const rf = ref.hardware.filter((h) => h.category === "рафикс"), notes: string[] = [];
   if (!rf.length) return { confirmat: [], notes };
   const grids = new Map<number, RafixGrid>(), confirmat: number[] = [];
-  for (const j of fixed) {
-    const b = shelves[j]; if (!b) continue;
+  // сетка рафиксов горизонтали b (полка или крыша); undefined — у её торцов рафиксов нет
+  const gridOf = (b: B, what: string): RafixGrid | undefined => {
     // рафикс полки — у её торца (не у вставки/фронтальной панели на той же высоте, k18 m08)
     const mine = rf.filter((h) => Math.abs(h.pos[1] - b.y0) < 1 && (Math.abs(h.pos[0] - b.x0) < 1 || Math.abs(h.pos[0] - b.x1) < 1) && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1);
-    if (!mine.length) { confirmat.push(j); continue; }
+    if (!mine.length) return undefined;
     // сторона с большим числом точек (у Базиса обе стороны одинаковые; k27 m13 — разные, берём левую)
     const left = mine.filter((h) => h.pos[0] < (b.x0 + b.x1) / 2), right = mine.filter((h) => h.pos[0] >= (b.x0 + b.x1) / 2);
     const zs = (left.length >= right.length ? left : right).map((h) => h.pos[2]).sort((a, c) => a - c);
     const g: RafixGrid = { rear: r1(zs[0] - b.z0), front: r1(b.z1 - zs[zs.length - 1]), n: zs.length };
     const even = rafixZs(g, b.z0, b.z1).every((z, k) => Math.abs(z - zs[k]) < 0.6);
-    if (!even) notes.push(`рафиксы полки ${j + 1}: шаг неравный (${zs.map((z) => r1(z - b.z0)).join(", ")})`);
-    if (left.length !== right.length || left.some((h, k) => Math.abs(h.pos[2] - (right[k]?.pos[2] ?? h.pos[2])) > 0.6)) notes.push(`рафиксы полки ${j + 1}: стороны разные (${left.length}/${right.length})`);
+    if (!even) notes.push(`рафиксы ${what}: шаг неравный (${zs.map((z) => r1(z - b.z0)).join(", ")})`);
+    if (left.length !== right.length || left.some((h, k) => Math.abs(h.pos[2] - (right[k]?.pos[2] ?? h.pos[2])) > 0.6)) notes.push(`рафиксы ${what}: стороны разные (${left.length}/${right.length})`);
+    return g;
+  };
+  for (const j of fixed) {
+    const b = shelves[j]; if (!b) continue;
+    const g = gridOf(b, `полки ${j + 1}`);
+    if (!g) { confirmat.push(j); continue; }
     grids.set(j, g);
   }
+  // крыша на рафиксах (k20 m09 — единственный пенал базы): своя сетка, конфирматов у крыши нет (n4-tall)
+  const topG = topB ? gridOf(topB, "крыши") : undefined;
   if (!grids.size) return { confirmat: [], notes };
   const key = (g: RafixGrid) => `${g.rear}|${g.front}|${g.n}`, freq = new Map<string, number>();
   for (const g of grids.values()) freq.set(key(g), (freq.get(key(g)) ?? 0) + 1);
   const top = [...freq].sort((a, c) => c[1] - a[1])[0][0], base = [...grids.values()].find((g) => key(g) === top)!;
   const per = Object.fromEntries([...grids].filter(([, g]) => key(g) !== top).map(([j, g]) => [String(j), g]));
-  return { rafix: { ...base, ...(Object.keys(per).length ? { per } : {}) }, confirmat, notes };
+  return { rafix: { ...base, ...(Object.keys(per).length ? { per } : {}), ...(topG ? { top: topG } : {}) }, confirmat, notes };
 }
 
 type Hw = { name: string; category: string; pos: number[] };
@@ -795,7 +803,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (ecc.some((h) => Math.abs(h.pos[0] - sx) < 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1)) (m.jointFastening ??= {})[`${m.sections[0].id}:shelf:${j}:${side}`] = "eccentric";
   }
   // рафиксы жёстких полок (Базис): сетка по полкам; жёсткие полки на конфирматах при этом — явно в jointFastening
-  const rfx = rafixFromEtalon(ref, sh.map((q) => q.b), m.sections[0].fixed ?? []);
+  const rfx = rafixFromEtalon(ref, sh.map((q) => q.b), m.sections[0].fixed ?? [], role === "tall" ? topPanel?.b : undefined);
   if (rfx.rafix) {
     m.kitchen.rafix = rfx.rafix;
     for (const j of rfx.confirmat) for (const side of ["left", "right"] as const) {

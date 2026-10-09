@@ -1127,7 +1127,8 @@ export function parts(m: Module): Part[] {
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
       if (downSide && side !== downSide) continue;
       // кухня Базиса: жёсткая полка без своего крепежа в jointFastening — на рафиксах по сетке Базиса (kitchenRafix.ts)
-      const rg = m.kitchen && fixedIds.has(hp.id) && !m.jointFastening?.[`${hp.id}:${side}`] ? rafixGrid(m, hp.sectionId === m.sections[0].id ? Number(hp.id.split(":shelf:")[1]) : -1) : undefined; // своя сетка (per) — только у полок секции 1
+      // крыша на рафиксах (kitchen.rafix.top, k20 m09) — тоже по сетке Базиса (n4-tall)
+      const rg = m.kitchen && !m.jointFastening?.[`${hp.id}:${side}`] ? (fixedIds.has(hp.id) ? rafixGrid(m, hp.sectionId === m.sections[0].id ? Number(hp.id.split(":shelf:")[1]) : -1) : hp.id === "top" ? m.kitchen.rafix?.top : undefined) : undefined; // своя сетка (per) — только у полок секции 1
       if (rg) { rafixSide(add, out, hp, side, edgeX, dir, rg); continue; }
       const z1 = z0 + (hp.taperZ ? hp.taperZ[side === "left" ? 0 : 1] : hp.size[2]); // при скосе фронта передний крепёж по глубине своей стороны
       // кухня Базиса: дно короче спереди (bottomFront) - передний крепёж стоит как у полного дна, от лица боковин (k10 m10, k15 m09)

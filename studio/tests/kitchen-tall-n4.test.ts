@@ -8,6 +8,7 @@ import {edgeByDir} from '../src/edges';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {shelfAtFromEtalon,topBackTall,doorsAboveDrawers} from '../scripts/kitchen/recognize-tall';
+import {parseKitchenRafix} from '../src/kitchenRafix';
 
 // Эталоны Базиса лежат вне репозитория (Кухни\etalon) — на чужой машине тест пропускается.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -198,4 +199,14 @@ test('рафикс повёрнут как в Базисе (у левой сто
   const r=compareModule(ref,m).hardware.find(h=>h.category==='рафикс')!;
   assert.deepEqual(r.rot,{checked:36,bad:0,spin:0,noQuat:0});
   for(const p of parts(m).filter(p=>p.id.startsWith('rafix:')&&!p.id.endsWith(':pin')))assert.deepEqual(p.quat,p.id.includes(':left:')?[0,1,0,0]:[0,0,0,1],p.id);
+});
+test('k20 m09: крыша на рафиксах, как в Базисе (kitchen.rafix.top) — рафиксов 16, у крыши конфирматов нет; сетка крыши переживает сохранение',{skip:!existsSync(`${ETALON}/k20.json`)},()=>{
+  const ref=load('k20','m09'),{module:m}=moduleFromEtalon(ref);
+  assert.ok(m.kitchen?.rafix?.top);
+  const r=compareModule(ref,m).hardware.find(h=>h.category==='рафикс')!;
+  assert.equal(r.studio,r.ref);assert.ok((r.maxPosDelta??0)<=2);
+  const ps=parts(m);
+  assert.equal(ps.filter(p=>p.id.startsWith('fast:top:')).length,0);
+  assert.equal(ps.filter(p=>p.id.startsWith('rafix:top:')&&!p.id.endsWith(':pin')).length,4);
+  assert.deepEqual(parseKitchenRafix(JSON.parse(JSON.stringify(m.kitchen!.rafix)))?.top,m.kitchen!.rafix!.top);
 });
