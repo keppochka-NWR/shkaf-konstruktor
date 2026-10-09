@@ -1,6 +1,7 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, type RawSpec } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
+import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
 import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, KITCHEN, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
@@ -222,6 +223,8 @@ export type Module = {
    *  до верхнего/нижнего края выреза (мм), depth — глубина от переднего торца, r — радиус скругления внутренних углов.
    *  Вырез с top0 = 0 открыт сверху (верхний профиль L), остальные — средние (профиль C). Только для кухонь (m.kitchen). */
   gola?: { cuts: GolaCut[]; /** Верх фасадов ниже верха корпуса на столько мм (Базис: 28–33 под верхний профиль L). */ faceTop?: number };
+  /** Газлифт подъёмного фасада кухни по Базису (PD-G-N02, комплект на каждую боковину) — kitchenLift.ts. */
+  kitchenLift?: KitchenLift;
   /** Материал фасадов: ЛДСП (по умолчанию, в раскрое) или фасадный материал стороннего участка (МДФ/плёнка/эмаль — без раскроя и кромки). */
   facadeMaterial?: "ldsp" | "external";
   /** Кромка фасадов из фасадного материала, мм (Базис: «Кромка фасадная 1х22»); нет — без кромки. */
@@ -907,7 +910,7 @@ export function parts(m: Module): Part[] {
           out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
         } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,ft],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,ft,'door',s.id);
         if(fp)out.at(-1)!.rotY=fp.rotY;
-        out.at(-1)!.hinge=hinge;if(hinge==='top')out.at(-1)!.name='Фасад подъёмный · механизм требует подбора';
+        out.at(-1)!.hinge=hinge;if(hinge==='top')out.at(-1)!.name=m.kitchen&&m.kitchenLift?'Фасад подъёмный · газлифт PD-G-N02':'Фасад подъёмный · механизм требует подбора';
         if(m.doorOpen==='push'||m.noHandles)continue; // push-to-open или ручки не заложены: без ручки
         const hl=handleById(s.doorHandles?.[k]??m.handleId).len;
         const hp=m.skew?frontPoint(m,cx,t+2+13,hinge==='top'?0:(hinge==='left'?1:-1)*(dw/2-40)):undefined;
@@ -1086,6 +1089,30 @@ function hardwareParts(m: Module, out: Part[]) {
       out.push(metal(door.id.replace(":door:", ":latch:"), "Толкатель push-to-open", [14, 14, 40], [freeX, cy + dh / 2 - 120, (inset ? back : d) - 20], "hinge", door.sectionId));
     }
   }
+  // Подъёмный фасад кухни (петли по верху, как в Базисе: «Петля накладная» на нижней плоскости крыши, 100 мм от боковых кромок фасада,
+  // кватернион узла Базиса [0,−0,71,0,0,71]; центр чашки — в 7,5 мм от плоскости крыши). Только для кухонь и накладных фасадов.
+  if (m.kitchen && !inset) for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:") && !p.rotY && p.hinge === "top")) {
+    const [cx, cy, dz] = door.position, [dw, dh] = door.size, back = dz - door.size[2] / 2, topY = cy + dh / 2;
+    // Крыша/горизонталь над фасадом: нижняя плоскость в пределах кромки фасада
+    const roof = out.filter((p) => p.material === "board" && p.role === "body" && p.size[1] <= 40 && p.size[0] > 60 && p.size[2] > 60 && !p.rotY && !p.rotZ
+      && p.position[0] - p.size[0] / 2 <= cx && p.position[0] + p.size[0] / 2 >= cx && p.position[2] + p.size[2] / 2 >= back - 30)
+      .map((p) => p.position[1] - p.size[1] / 2).filter((y) => y <= topY + 1 && y >= topY - 40).sort((a, b) => b - a)[0];
+    if (roof === undefined) continue;
+    // Кватернион узла Базиса [w,x,y,z] = [0,−0,71,0,0,71]: X петли → −Z (вглубь от фасада), Y → −Y (вниз от крыши), Z → −X (вдоль кромки).
+    const qv: Quat = [0, -Math.SQRT1_2, 0, Math.SQRT1_2];
+    hingePositions(dw, dh, true).forEach((hx, n) => {
+      const x = cx - dw / 2 + hx, o: [number, number, number] = [x, roof, back];
+      const cupId = door.id.replace(":door:", ":hingecup:") + ":" + n, plateId = door.id.replace(":door:", ":hingeplate:") + ":" + n;
+      const cupO: [number, number, number] = [x, roof - 7.5, back];
+      out.push({ ...metal(cupId, "Петля " + brand + " · чашка Ø35", [35, 35, 12.5], [x, cupO[1], back + 6.25], "hinge", door.sectionId),
+        model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qv, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
+        collide: [{ size: [35, 35, 12.5], position: [x, cupO[1], back + 6.25] }] });
+      out.push({ ...metal(plateId, "Петля " + brand + " · плечо и планка (подъёмный фасад)", [53, 23.7, 70], [x, roof - 11.85, back - 35], "hinge", door.sectionId),
+        model: { file: "hardware/bazis/d7e1d3957ebe.glb", length: "y", native: true, origin: o, quat: qv },
+        collide: [{ size: [53, 23.7, 70], position: [x, roof - 11.85, back - 35] }] });
+    });
+  }
+  kitchenLiftParts(m, out);
   void slideMotion; void slideBrand; void SLIDE_BRANDS;
 }
 /** Коробка паза в осях модуля по детали-носителю (пересчитывается при каждом построении — паз идёт за деталью). */
@@ -1221,7 +1248,7 @@ export function validate(m: Module): string[] {
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
   if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m),...kitchenDrawerErrors(m));
+  errors.push(...kitchenErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
@@ -1540,6 +1567,7 @@ export function parseModule(input: unknown): Module {
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
     ...(x.kdrawers===undefined?{}:(()=>{const k=parseKDrawers(x.kdrawers);return k?{kdrawers:k}:{};})()),
+    ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
     ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{})}}),

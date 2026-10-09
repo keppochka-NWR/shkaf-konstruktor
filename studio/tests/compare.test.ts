@@ -28,3 +28,17 @@ test('comparator catches mutations: 1 mm shift, missing panel, extra hinge, move
   const asym=kitchenBase(initialModule(),600);asym.sections[0].hingeSide='left';
   assert.equal(compareModule(refFromStudio(asym),{...asym,sections:[{...asym.sections[0],hingeSide:'right'}]}).pass,false,'hinges on the other side fail');
 });
+
+test('comparator checks gas lift rotation (quaternion), not only the point',()=>{
+  const m=kitchenWall(initialModule(),600);m.height=300;m.depth=600;m.kitchen={...m.kitchen!,role:'antresol'};
+  m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top']}];m.kitchenLift={system:'pd-g-n02'};
+  const ref=refFromStudio(m);
+  assert.ok(ref.hardware.some(h=>h.category==='газлифт'&&h.quat),'lift quats in the self reference');
+  assert.ok(compareModule(ref,m).pass,'self-check passes');
+  const flipped={...ref,hardware:ref.hardware.map(h=>h.category==='газлифт'&&h.name.includes('Шток')?{...h,quat:[h.quat![0],h.quat![1],-h.quat![2],-h.quat![3]]}:h)};
+  const c=compareModule(flipped,m);
+  assert.equal(c.pass,false);
+  assert.match(c.hardware.find(h=>h.category==='газлифт')!.note??'',/поворот ≠ ×2/);
+  const neg={...ref,hardware:ref.hardware.map(h=>h.quat?{...h,quat:h.quat.map(v=>-v)}:h)};
+  assert.ok(compareModule(neg,m).pass,'q and -q are the same rotation');
+});

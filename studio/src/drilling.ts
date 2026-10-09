@@ -15,9 +15,9 @@ const isPanel = (p: Part) => p.material === "board" || p.material === "hdf";
 
 export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
   const out: Hole[] = [], panels = ps.filter(isPanel);
-  const host = (at: number[], dir: number[]) => panels.find((p) => inside(p, [at[0] + dir[0] * 0.5, at[1] + dir[1] * 0.5, at[2] + dir[2] * 0.5]))?.id;
-  const push = (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number) => {
-    const part = host(at, dir);
+  const host = (at: number[], dir: number[], probe = 0.5) => panels.find((p) => inside(p, [at[0] + dir[0] * probe, at[1] + dir[1] * probe, at[2] + dir[2] * probe]))?.id;
+  const push = (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number, probe = 0.5) => {
+    const part = host(at, dir, probe);
     if (part) out.push({ part, at: at.map((v) => Math.round(v * 100) / 100) as [number, number, number], dir, d, depth, src });
   };
   for (const p of ps) {
@@ -49,6 +49,18 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // навес ABS: две наколки D3×3 в боковину — на 15 мм ниже начала навеса (30 от верха), в 38 и 70 мм от задней кромки
       const o = p.model.origin, into: [number, number, number] = [o[0] < m.width / 2 ? -1 : 1, 0, 0];
       for (const dz of [18, 50]) push(p.id, [o[0], o[1] - 15, o[2] + dz], into, 3, 3);
+    } else if (p.id.startsWith("lift:") && (p.model?.origin || p.anchor)) {
+      // газлифт PD-G-N02 (Базис): фиксатор на фасад — 2×D4×1,8 (±12 по высоте), его саморезы — D3×4; фиксатор на боковину — 3×D4×2, саморезы — D3×3
+      const o = (p.model?.origin ?? p.anchor)!, out_: [number, number, number] = [p.id.startsWith("lift:left:") ? -1 : 1, 0, 0];
+      if (p.id.endsWith(":face")) for (const dy of [12, -12]) push(p.id, [o[0], o[1] + dy, o[2]], [0, 0, 1], 4, 1.8);
+      else if (p.id.endsWith(":side")) for (const [dy, dz] of [[-5, 8.66], [10, 0], [-5, -8.66]]) push(p.id, [o[0], o[1] + dy, o[2] + dz], out_, 4, 2);
+      else if (p.id.includes(":screw:f")) push(p.id, o, [0, 0, 1], 3, 4, 2); // точка самореза Базиса — 1,5 мм за плоскостью фасада (в фиксаторе)
+      else if (p.id.includes(":screw:s")) push(p.id, o, out_, 3, 3);
+    } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin && p.size[0] > p.size[1]) {
+      // подъёмный фасад: планка на нижней плоскости крыши (две наколки D3×3 вверх), чашка Ø35×13 в 7,5 мм под крышей
+      const [x, y, back] = p.model.origin;
+      for (const dx of [16, -16]) push(p.id, [x + dx, y, back - 37], [0, 1, 0], 3, 3);
+      push(p.id.replace(":hingeplate:", ":hingecup:"), [x, y - 7.5, back], [0, 0, 1], 35, 13);
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin) {
       const [sx, y, back] = p.model.origin, inward = p.position[0] > sx ? 1 : -1; // плечо — внутрь корпуса от стойки
       for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
