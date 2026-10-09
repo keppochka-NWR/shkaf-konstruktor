@@ -88,6 +88,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     // Подсветка врезается в полку/крышу.
     // подсветка в пазу — только в корпусной доске и не глубже паза (8,5)
     if (p.role === "light" && isBoard(q) && q.role !== "door" && depth <= 8.5) return true;
+  // два паза одной доски пересекаются (торцевой паз Gola и паз под подсветку у переднего торца дна, k06 m06) — это вырезы, не детали
+  if (p.role === "light" && q.role === "light" && p.id.startsWith("groove:") && q.id.startsWith("groove:")) return true;
   // паз в торце доски (Базис «Паз торцевой», паз Gola в переднем торце дна): целиком внутри своей доски, по её толщине — не больше 8,5
   if (p.role === "light" && p.id.startsWith("groove:") && isBoard(q) && q.role !== "door" && !p.rotY && !p.rotZ && !q.rotY && !q.rotZ) {
     const ti = q.size.indexOf(Math.min(...q.size));
