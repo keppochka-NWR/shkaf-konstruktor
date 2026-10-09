@@ -15,6 +15,12 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   plinth?: { height: number; off?: boolean; clips?: boolean };
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
+  /** Положение навесов, как в проекте Базиса (если не по правилу 15 ниже верха / 20 от задней кромки / на внутренней грани боковины):
+   *  [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины], мм — по каждой стороне. Отрицательное «ниже верха» —
+   *  навес выше корпуса (так стоит в части проектов Базиса; отверстий в боковине тогда нет, как и у Базиса). */
+  hangerAt?: { left: [number, number, number]; right: [number, number, number]; caps?: { left: [number, number, number]; right: [number, number, number] } };
+  /** Крепёж корпуса в проекте Базиса не заложен (ни конфирматов, ни эксцентриков, ни шкантов) — студия его тоже не добавляет. */
+  noFasteners?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
   legs?: { back: number; front: number; side?: number; xs?: number[] } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
@@ -115,14 +121,16 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
     for (const side of ["left", "right"] as const) {
       // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
       // сетка Базиса: −64..+20 к стене, −42..−1 по высоте, 0..23 внутрь корпуса.
-      const fx = side === "left" ? t : m.width - t, dir = side === "left" ? 1 : -1, oy = m.height - KITCHEN.hangerDown, oz = KITCHEN.hangerBack;
+      const dir = side === "left" ? 1 : -1, at = k.hangerAt?.[side], ca = k.hangerAt?.caps?.[side] ?? at;
+      const pt = (a: [number, number, number] | undefined): [number, number, number] => [(side === "left" ? t : m.width - t) + dir * (a?.[2] ?? 0), m.height - (a?.[0] ?? KITCHEN.hangerDown), a?.[1] ?? KITCHEN.hangerBack];
+      const [fx, oy, oz] = pt(at), [cx, cy, cz] = pt(ca);
       // Оси навеса в модуле: X→−Z (−64..+20 → z 84..0, задний крюк заподлицо с задней кромкой), Y→+Y, Z→+X (правый навес Базиса — Z −23..0, внутрь).
       const hm = KITCHEN_MODELS[side === "left" ? "hanger-left" : "hanger-right"], cm = KITCHEN_MODELS[side === "left" ? "hanger-cap-left" : "hanger-cap-right"];
       out.push(metal(`kitchen-hanger:${side}`, `Навес мебельный регулируемый ABS ${side === "left" ? "левый" : "правый"}`, [23, 41, 84], [fx + dir * 11.5, oy - 21.5, oz + 22],
         hm ? { file: hm.file, length: "y", native: true, origin: [fx, oy, oz], quat: Q_HANGER } : undefined));
       // Заглушка навеса (комплект с навесом): −65..0 по X, −44..−1 по высоте, 0..26 внутрь.
-      out.push(metal(`kitchen-hanger-cap:${side}`, `Заглушка навеса ABS ${side === "left" ? "левая" : "правая"}`, [26, 43, 65], [fx + dir * 13, oy - 22.5, oz + 32.5],
-        cm ? { file: cm.file, length: "y", native: true, origin: [fx, oy, oz], quat: Q_HANGER } : undefined));
+      out.push(metal(`kitchen-hanger-cap:${side}`, `Заглушка навеса ABS ${side === "left" ? "левая" : "правая"}`, [26, 43, 65], [cx + dir * 13, cy - 22.5, cz + 32.5],
+        cm ? { file: cm.file, length: "y", native: true, origin: [cx, cy, cz], quat: Q_HANGER } : undefined));
     }
   }
 }
@@ -133,6 +141,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
 export function kitchenEdges(m: Module, out: Part[]) {
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
+  const ends = m.edgeScheme?.ends ? ["+x", "-x"] : []; // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32)
   // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
   // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
   const ecc = (id: string) => m.jointFastening?.[`${id}:left`] === "eccentric" || m.jointFastening?.[`${id}:right`] === "eccentric";
@@ -144,8 +153,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся
     const rearBase = m.backType === "none" ? ["-z"] : [];
     if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : ["+y", "+z", ...rearBase], t);
-    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
-    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear, ...ends], t);
+    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z", ...ends] : ["+z", ...rear, ...ends], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);

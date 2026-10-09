@@ -235,7 +235,7 @@ export type Module = {
   facadeEdge?: number;
   /** Схема кромки кухни по Базису: открытые торцы — кромка t мм (1 или 0,5), скрытые — без кромки (kitchen.ts kitchenEdges). */
   /** Кромка кухни: толщина; railBack:false — задняя царга заподлицо с задником без кромки по заднему торцу (18 из 80 нижних в базе). */
-  edgeScheme?: { t: number; railBack?: false };
+  edgeScheme?: { t: number; railBack?: false; /** дно и крыша между боковинами кромятся и по торцам у боковин (k32: все торцы) */ ends?: true };
   /** Пазы в панелях, кроме паза под задник (кухни Базиса: паз под LED-подсветку 17×8 в боковинах/дне/крыше): коробка паза в осях модуля.
    *  В 3D — тёмная полоса, в смете — подсветка врезная за погонный метр, на бирке — паз. */
   grooves?: Groove[];
@@ -442,6 +442,9 @@ export function facadeBottom(m:Module){
     // Кухни Базиса: отступ фасада от низа дна такой же, как от остальных кромок (m.faceGap, 1,5); шкафы — вровень с низом дна.
     return (hasBottom(m)?m.feet.height:m.feet.height+rail)+(m.faceGap??0);
   }
+  // Кухни Базиса, навесной/антресоль с поднятым корпусом (дно выше низа модуля на 13–20 мм): фасад опущен до низа модуля —
+  // у всех 18 таких модулей базы (k17, k21, k23, k28, k30) низ фасада = 0; цоколя у навесных нет.
+  if(m.kitchen&&(m.kitchen.role==='wall'||m.kitchen.role==='antresol')&&plinth(m)>0)return 0;
   return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):fe(m);
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
@@ -658,7 +661,9 @@ export function parts(m: Module): Part[] {
     const dir = side === "left" ? -1 : 1, edge = side === "left" ? 0 : m.width, w = wf.width;
     add("wall-filler:" + side, "Фальшпанель к стене " + (side === "left" ? "левая" : "правая") + " " + w + "×16", [t, m.height, w], [edge + dir * t / 2, m.height / 2, d + 18 - w / 2], m.height, w, t);
   }
-  if(!m.feet&&bottom>0){
+  // кухня: навесной/антресоль без цоколя (низ корпуса выше пола — свес боковин), у нижнего — только если цоколь есть в проекте Базиса
+  const kitchenNoPlinth = !!m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol" || !!m.kitchen.plinth?.off);
+  if(!m.feet&&bottom>0&&!kitchenNoPlinth){
     if(m.skew){ // цоколь по скошенному фронту: длина по косой, утоплен на 2 от передних граней боковин
       const pl=(m.width-2*t)/Math.cos(skewAngle(m)),fp=frontPoint(m,m.width/2,-RULES.plinthInset-t/2);
       add("plinth","Цоколь · скос",[pl,bottom,t],[fp.x,bottom/2,fp.z],pl,bottom,t);out.at(-1)!.rotY=fp.rotY;
@@ -937,7 +942,7 @@ export function parts(m: Module): Part[] {
     add(key, "Конфирмат 7×50", vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal");
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
-  const horizontals = out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
+  const horizontals = m.kitchen?.noFasteners ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   const ecc = m.fastening === "eccentric";
   for (const hp of horizontals) {
     const z0 = hp.position[2] - hp.size[2] / 2;
@@ -970,7 +975,7 @@ export function parts(m: Module): Part[] {
     }
   }
   // Царги лёжа (кухни Базиса) и стяжки кухни на ребре: по одному конфирмату с каждой стороны через боковину в торец царги.
-  for (const r of out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen))) {
+  for (const r of m.kitchen?.noFasteners ? [] : out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen))) {
     for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const) {
       // Конфирмат царги по центру её торца; если там уже конфирмат дна/крыши в той же боковине (дно под боковинами,
       // отступ 54 у k04 — z 503 против 507), сдвигаем по ширине царги до чистого места: 16 мм между осями (critic qdrawers B4).
@@ -985,7 +990,7 @@ export function parts(m: Module): Part[] {
       confirmat(`fast:${r.id}:${side}:0`, [hx, y, z], dir > 0 ? "+x" : "-x");
     }
   }
-  for (const dv of out.filter((p) => p.id.endsWith(":divider"))) {
+  for (const dv of m.kitchen?.noFasteners ? [] : out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;
     for (const [edge, y] of [["top", innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
@@ -1266,7 +1271,7 @@ export function validate(m: Module): string[] {
   }
   for(const s of m.sections)if(s.fixed!==undefined&&(!Array.isArray(s.fixed)||s.fixed.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push('Жёсткие полки: неверные номера.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
-  if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
+  if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight) && !m.kitchen)errors.push("Выберите высоту цоколя из списка."); // кухня: низ корпуса — как в проекте Базиса
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
@@ -1590,7 +1595,7 @@ export function parseModule(input: unknown): Module {
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),
     ...(x.facadeEdge===undefined?{}:{facadeEdge:Number(x.facadeEdge)}),
-    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{})}}),
+    ...(x.edgeScheme===undefined?{}:{edgeScheme:{t:Number((x.edgeScheme as {t:number}).t),...((x.edgeScheme as {railBack?:boolean}).railBack===false?{railBack:false as const}:{}),...((x.edgeScheme as {ends?:boolean}).ends?{ends:true as const}:{})}}),
     ...(x.jointFastening===undefined||typeof x.jointFastening!=='object'?{}:{jointFastening:Object.fromEntries(Object.entries(x.jointFastening as Record<string,string>).map(([k,v])=>[k,v==='eccentric'?'eccentric':'confirmat']))}),
     ...(x.dowels===undefined?{}:{dowels:{offset:Number((x.dowels as {offset:number}).offset)}}),
     ...(x.grooves===undefined?{}:{grooves:Array.isArray(x.grooves)?(x.grooves as Groove[]).filter(g=>g&&typeof g.host==='string'&&Array.isArray(g.along)&&Array.isArray(g.across)).map(g=>({host:g.host,face:g.face==='-'?'-':'+',along:[Number(g.along[0]),Number(g.along[1])],across:[Number(g.across[0]),Number(g.across[1])],depth:Number(g.depth),name:String(g.name??'Паз')})):[]}),
@@ -1602,7 +1607,7 @@ export function parseModule(input: unknown): Module {
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
+    ...(x.kitchen===undefined?{}:{kitchen:(()=>{const k=x.kitchen as KitchenSpec;return {role:String(k.role) as KitchenSpec["role"],...(k.appliance?{appliance:String(k.appliance) as NonNullable<KitchenSpec["appliance"]>}:{}),...(k.plinth?{plinth:{height:Number(k.plinth.height),...(k.plinth.off?{off:true}:{}),...(k.plinth.clips===false?{clips:false}:{})}}:{}),...(k.hangers===false?{hangers:false}:{}),...(k.hangerAt&&Array.isArray(k.hangerAt.left)&&Array.isArray(k.hangerAt.right)?{hangerAt:{left:k.hangerAt.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.right.slice(0,3).map(Number) as [number,number,number],...(k.hangerAt.caps&&Array.isArray(k.hangerAt.caps.left)&&Array.isArray(k.hangerAt.caps.right)?{caps:{left:k.hangerAt.caps.left.slice(0,3).map(Number) as [number,number,number],right:k.hangerAt.caps.right.slice(0,3).map(Number) as [number,number,number]}}:{})}}:{}),...(k.noFasteners?{noFasteners:true}:{}),...(k.legs?{legs:{back:Number(k.legs.back),front:Number(k.legs.front),...(k.legs.side===undefined?{}:{side:Number(k.legs.side)}),...(Array.isArray(k.legs.xs)?{xs:k.legs.xs.map(Number)}:{})}}:{})};})()}),
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth)})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{})};})()}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),

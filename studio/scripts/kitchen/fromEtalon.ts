@@ -32,6 +32,42 @@ export function refGrooves(ref: RefModule, backZ0: number | null): { box: [numbe
 }
 export type Recognized = { module: Module; notes: string[]; unsupported: string[] };
 
+type Hw = { name: string; category: string; pos: number[] };
+/** Навесы Базиса → kitchen.hangerAt: [ниже верха боковины, от задней кромки, внутрь от внутренней грани боковины] по каждой стороне.
+ *  null — навесов нет; {} — стоят по правилу студии (15 / 20 / 0, большинство навесов базы); иначе — как в проекте: у части проектов
+ *  навесы выше корпуса (на 130–1000 мм, k12, k15, k26–k28, k31) или в 100 мм от боковины (k18) — повторяем как есть, отверстий в боковине
+ *  тогда нет, как и у Базиса. */
+export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner: number, top: number, sideZ0: number): { hangerAt?: NonNullable<NonNullable<Module["kitchen"]>["hangerAt"]>; note?: string } | null {
+  const hs = hardware.filter((h) => h.category === "навес");
+  if (!hs.length) return null;
+  const mid = (leftInner + rightInner) / 2;
+  const L = hs.filter((h) => /лев/i.test(h.name) || (!/прав/i.test(h.name) && h.pos[0] < mid)), R = hs.filter((h) => !L.includes(h));
+  if (L.length !== 1 || R.length !== 1) return { note: `навесов в Базисе ${hs.length} (по одному на сторону не разложить) — по правилу студии` };
+  const at = (h: Hw, inner: number, dir: 1 | -1): [number, number, number] => [r1(top - h.pos[1]) + 0, r1(h.pos[2] - sideZ0) + 0, r1(dir * (h.pos[0] - inner)) + 0]; // + 0: без «−0» в проекте
+  const left = at(L[0], leftInner, 1), right = at(R[0], rightInner, -1);
+  // заглушки навесов: обычно в той же точке, что и навес; у k18 навес на планке в 100 мм от боковины, а заглушка — на боковине по правилу
+  const cs = hardware.filter((h) => h.category === "заглушка" && /навес/i.test(h.name));
+  const CL = cs.filter((h) => /лев/i.test(h.name)), CR = cs.filter((h) => /прав/i.test(h.name));
+  const capL = CL.length === 1 ? at(CL[0], leftInner, 1) : left, capR = CR.length === 1 ? at(CR[0], rightInner, -1) : right;
+  const same = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) < 0.05);
+  const std = (a: [number, number, number]) => same(a, [15, 20, 0]);
+  const caps = same(capL, left) && same(capR, right) ? {} : { caps: { left: capL, right: capR } };
+  if (std(left) && std(right) && !caps.caps) return {};
+  const out = Math.max(-left[0], -right[0]);
+  return { hangerAt: { left, right, ...caps }, ...(out > 0 ? { note: `навесы Базиса выше корпуса на ${r1(out + 15)} мм — повторено как в проекте` } : {}) };
+}
+
+/** Дно/крыша между боковинами с кромкой на торцах у боковин (±x) — так в части проектов (k32: кромка по кругу у всех панелей). */
+export function endsEdged(hs: RefPanel[]): boolean {
+  const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
+  return hs.length > 0 && hs.every((p) => ed(p).includes("+x") && ed(p).includes("-x"));
+}
+
+/** Крепёж корпуса в проекте Базиса не заложен вовсе (ни конфирматов, ни эксцентриков, ни шкантов, ни отверстий) — студия его не добавляет. */
+export function fastenersAbsent(ref: RefModule): boolean {
+  return !ref.hardware.some((h) => ["конфирмат", "эксцентрик", "шкант"].includes(h.category)) && !(ref.holes ?? []).length;
+}
+
 /** Вырезы Gola по контуру боковины Базиса: участки контура, ушедшие вглубь от переднего торца (z < zFront) не дальше 100 мм.
  *  top0/top1 — от верха боковины, depth — глубина, r — скругление (переход от вертикали выреза к его дну). */
 export function golaFromContour(p: { contour?: [number, number][]; contourPlane?: string }, yTop: number, zFront: number): GolaCut[] {
@@ -286,7 +322,7 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
-  if (et) m.edgeScheme = { t: et };
+  if (et) m.edgeScheme = { t: et, ...(endsEdged([bottom, topPanel].filter((q) => q && !(q === bottom && m.bottomUnder)).map((q) => q!.p)) ? { ends: true as const } : {}) };
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
     const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);
@@ -300,7 +336,12 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
   if (et && rre?.some((e) => e.thick > 0) && !rre.some((e) => e.side === "-z" && e.thick > 0)) m.edgeScheme = { t: et, railBack: false };
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
-  if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;
+  if (role === "wall" || role === "antresol") {
+    const hg = hangersFromEtalon(ref.hardware, left.b.x1, right.b.x0, top, sideZ0);
+    if (!hg) m.kitchen.hangers = false;
+    else { if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; if (hg.note) notes.push(hg.note); }
+  }
+  if (fastenersAbsent(ref)) { m.kitchen.noFasteners = true; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
   // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
   const g = refGrooves(ref, back ? r1(back.b.z0) : null);
