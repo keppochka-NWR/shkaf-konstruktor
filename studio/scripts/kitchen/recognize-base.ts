@@ -41,6 +41,11 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   }
   const bgs = m.backType === "nailed" ? backGapsTB(ref, m.backGap ?? 0) : undefined;
   if (bgs) { k.backGaps = bgs; notes.push(`ХДФ: зазор снизу ${bgs.bottom}, сверху ${bgs.top} (сбоку ${m.backGap}) — как в Базисе`); }
+  const eb = eccFromBelow(ref);
+  if (eb === true) { k.eccBelow = true; notes.push("эксцентрики дна сверлятся снизу — как в Базисе"); }
+  else if (eb === "legs") notes.push("эксцентрик дна снизу у Базиса попадает под площадку опоры — не повторяем (пересечение), сверлим сверху");
+  const se = shelfEdges(ref);
+  if (se && m.edgeScheme?.t && !m.edgeScheme.all) { m.edgeScheme = { ...m.edgeScheme, shelf: se }; notes.push(`съёмные полки кромятся: ${se.join(", ")} — как в Базисе`); }
   const fe = frontEdge(ref);
   if (fe && m.edgeScheme?.t) { m.edgeScheme = { ...m.edgeScheme, t: fe.other, front: fe.front }; notes.push(`передние торцы корпуса — кромка ${fe.front}, остальные ${fe.other} — как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
@@ -104,6 +109,28 @@ export function backGapsTB(ref: RefModule, side: number): { bottom: number; top:
   const ylo = Math.min(...ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && (p.axis === "y" || sides.includes(p))).map((p) => p.box[1]));
   const bottom = r1(hd.box[1] - ylo), tp = r1(top - hd.box[4]);
   return Math.abs(bottom - side) > 0.05 || Math.abs(tp - side) > 0.05 ? { bottom, top: tp } : undefined;
+}
+
+/** Все эксцентрики дна — на нижней пласти (сверлятся снизу): 56 из 380 эксцентриков дна Базиса (у нижних модулей 18 из 31).
+ *  "legs" — бочонок (Ø15 в 34 от стойки) под площадкой опоры (±29): так у Базиса бывает (k22 m01), но это пересечение — не повторяем. */
+export function eccFromBelow(ref: RefModule): boolean | "legs" {
+  const bot = ref.panels.filter((p) => p.axis === "y" && (p.kind === "ldsp" || p.kind === "mdf")).sort((a, b) => a.box[1] - b.box[1])[0];
+  if (!bot) return false;
+  const e = ref.hardware.filter((h) => h.category === "эксцентрик" && h.pos[1] > bot.box[1] - 0.6 && h.pos[1] < bot.box[4] + 0.6);
+  if (!e.length || !e.every((h) => Math.abs(h.pos[1] - bot.box[1]) < 0.6)) return false;
+  const W = ref.size[0], legs = ref.hardware.filter((h) => h.category === "опора");
+  const hit = e.some((h) => { const cx = h.pos[0] + (h.pos[0] < W / 2 ? 34 : -34); return legs.some((l) => Math.abs(l.pos[0] - cx) < 29 + 7.5 && Math.abs(l.pos[2] - h.pos[2]) < 29 + 7.5); });
+  return hit ? "legs" : true;
+}
+
+/** Съёмные полки (на полкодержателях) кромлены не по кругу (18 из 219 полок Базиса — только перед): торцы, одинаковые у всех полок модуля. */
+export function shelfEdges(ref: RefModule): string[] | undefined {
+  type P = RefModule["panels"][number] & { edges?: { side: string; thick: number }[] };
+  const pins = ref.hardware.filter((h) => h.category === "полкодержатель");
+  const sh = (ref.panels as P[]).filter((s) => s.axis === "y" && s.kind === "ldsp" && pins.some((h) => Math.abs(h.pos[1] - s.box[1]) < 2));
+  const sets = sh.map((s) => [...new Set((s.edges ?? []).filter((e) => e.thick > 0).map((e) => e.side))].sort().join(","));
+  if (!sets.length || new Set(sets).size !== 1 || !sets[0] || sets[0] === "+x,+z,-x,-z") return undefined;
+  return sets[0].split(",");
 }
 
 /** Передний торец боковин кромлен толще остальных (k29 — 7, k27 — 1 из 383 модулей): { front, other } или undefined. */

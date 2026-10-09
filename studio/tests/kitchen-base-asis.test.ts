@@ -7,7 +7,8 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB,backGapsTB} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge,faceGapsTB,backGapsTB,eccFromBelow,shelfEdges} from '../scripts/kitchen/recognize-base';
+import {partCollisions} from '../src/collisions';
 import {holes} from '../src/drilling';
 import {edgeByDir} from '../src/edges';
 
@@ -219,6 +220,21 @@ test('накладной ХДФ с зазорами снизу/сверху не
   assert.equal(pal.kitchen?.backGaps,undefined);
   const pb=parts(pal).find(p=>p.id==='back')!;
   assert.equal(pb.position[1]+pb.size[1]/2,pal.height-pal.backGap!,'палитра — по backGap');
+});
+
+test('эксцентрик дна снизу (kitchen.eccBelow) — как в Базисе; под площадкой опоры (k22 m01) не повторяем — без пересечений; съёмные полки k22 — кромка только спереди',{skip:!has('k22')},()=>{
+  const ref=load('k22','m01');
+  assert.equal(eccFromBelow(ref),'legs');
+  const {module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.eccBelow,undefined);
+  assert.deepEqual(m.edgeScheme?.shelf,['+z']);
+  assert.deepEqual(shelfEdges(ref),['+z']);
+  assert.ok(!partCollisions(parts(m),m).some(x=>x.names.some(n=>n.startsWith('Эксцентрик'))),'эксцентрик ни с чем не пересекается');
+  // флаг сам по себе: бочонок у нижней пласти дна
+  const pal=kitchenBase(initialModule(),600);
+  const e={...pal,jointFastening:{'bottom:left':'eccentric' as const,'bottom:right':'eccentric' as const},bottomUnder:false,kitchen:{...pal.kitchen!,eccBelow:true as const}};
+  const bot=parts(e).find(p=>p.id==='bottom')!,ecc=parts(e).find(p=>p.id.startsWith('ecc:bottom:')&&!p.id.endsWith(':pin'))!;
+  assert.equal(ecc.anchor![1],bot.position[1]-bot.size[1]/2);
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{

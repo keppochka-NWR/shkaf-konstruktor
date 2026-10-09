@@ -33,7 +33,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2). */
   faceTop?: number; faceBottom?: number;
   /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 из 110 набивных задников Базиса; k32 m06: 2 и 4 при 1,5). */
-  backGaps?: { bottom: number; top: number } };
+  backGaps?: { bottom: number; top: number };
+  /** Эксцентрик дна сверлится снизу (бочонок в нижней пласти): 56 из 380 эксцентриков дна Базиса, у нижних — 18 из 31. */
+  eccBelow?: true };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
@@ -185,7 +187,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
-    else if (p.role === "shelf") setEdges(p, ["+x", "-x", "+z", "-z"], t);
+    else if (p.role === "shelf") setEdges(p, m.edgeScheme?.shelf ?? ["+x", "-x", "+z", "-z"], t); // съёмная полка: по кругу или по Базису (edgeScheme.shelf)
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
     else if (p.id.startsWith("kd:") && p.id.includes(":fx:")) setEdges(p, p.id.includes(":fx:side:") ? ["+y", "-y", "-z"] : p.id.endsWith(":bottom") ? ["-z"] : ["+y"], t); // короб Firmax (Базис): боковины ±y и задний торец, задняя/фальшпанель — верх, дно — задний торец
     else if (p.id.startsWith("kd:") && p.id.endsWith(":back")) setEdges(p, ["+x", "-x", "+y", "-y"], t); // задняя стенка ящика Axis PRO — по кругу; дно — без кромки
