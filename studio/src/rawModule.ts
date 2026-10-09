@@ -49,7 +49,9 @@ export const RAW_COUNT_KEYS = ["legs", "clips", "hangers", "confirmats", "eccent
  *  names — названия петель и полкодержателей Базиса с количеством (тип петли и артикул полкодержателя в смете — как в Базисе).
  *  profiles — профили Базиса с однозначным сечением (штанга Ø25 шкафов). */
 export type RawSpec = { panels: RawPanel[]; hardware: RawHardware[]; source?: string; counts?: RawCounts; row?: boolean; items?: BazisItem[];
-  names?: BazisNames; profiles?: RawProfile[] };
+  names?: BazisNames; profiles?: RawProfile[];
+  /** Имя крепежа корпуса Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50») — строка сметы под этим именем (n3-wall). */
+  confirmatName?: string };
 /** Названия Базиса с количеством: петли, полкодержатели, направляющие Firmax (артикул «L - 500» — длина направляющей, не короба). */
 export type BazisNames = { hinges?: Record<string, number>; shelfHolders?: Record<string, number>; slides?: Record<string, number>; legs?: Record<string, number> };
 
@@ -288,5 +290,6 @@ export function parseRaw(x: unknown): RawSpec | undefined {
     ...(Array.isArray(r.items) ? { items: parseItems(r.items) } : {}),
     ...(r.names && typeof r.names === "object" ? { names: Object.fromEntries((["hinges", "shelfHolders", "slides", "legs"] as const).filter((k) => r.names![k] && typeof r.names![k] === "object")
       .map((k) => [k, Object.fromEntries(Object.entries(r.names![k]!).filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0).slice(0, 50).map(([n, v]) => [String(n).slice(0, 200), Math.round(Number(v))]))])) } : {}),
+    ...(typeof r.confirmatName === "string" && r.confirmatName.trim() ? { confirmatName: r.confirmatName.trim().slice(0, 80) } : {}),
   };
 }

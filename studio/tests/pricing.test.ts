@@ -8,6 +8,7 @@ import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerC
 import {insertItem} from '../src/operations';
 import {specificationHTML,details,grainFree,labelData,labelsHTML} from '../src/exports';
 import {packRectangles} from '../src/packing';
+import {kitchenWall} from '../src/kitchen';
 
 test('every catalog decor has a purchase price from explicit list or Lamarty tier',()=>{
   assert.equal(catalog.length,133);
@@ -52,6 +53,17 @@ test('stand lighting adds LED strips per stand face and a retail line on top of 
   assert.equal(e.knownCost,base.knownCost);
   assert.equal(e.retail,base.retail!+Math.round(line.quantity*3000));
   assert.deepEqual(parseProject(p).modules[0].module.standLight,true);
+});
+
+test('паз кухни из Базиса (торцевой, Gola, под подсветку) — не строка сметы «Подсветка»: в Базисе только паз, ленты нет',()=>{
+  const m={...kitchenWall(initialModule(),600),grooves:[
+    {host:'bottom',face:'+' as const,end:'+' as const,along:[0,0] as [number,number],across:[7.8,10.3] as [number,number],depth:10,name:'Паз торцевой'},
+    {host:'left',face:'+' as const,along:[0,0] as [number,number],across:[40,50] as [number,number],depth:8,name:'паз под подсветку'}]};
+  assert.equal(parts(m).filter(x=>x.id.startsWith('groove:')).length,2,'пазы в модели есть');
+  const e=estimate(newProject(m));
+  assert.ok(!e.lines.some(l=>l.id==='light-stand'),'подсветки в смете нет');
+  const w=initialModule();w.standLight=true;
+  assert.ok(estimate(newProject(w)).lines.some(l=>l.id==='light-stand'),'подсветка в стойках шкафа — по-прежнему в смете');
 });
 
 test('plinth is 2 mm behind the front and facades drop onto it to 30 mm above the floor',()=>{

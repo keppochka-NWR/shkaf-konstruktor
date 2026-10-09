@@ -25,24 +25,37 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
       push(p.id, h, a, 8, t1);
-      // короб ящика Firmax в Базисе — D5×37; евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36
-      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
+      // короб ящика Firmax в Базисе — D5×37; кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall);
+      // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
+      push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, p.id.startsWith("fast:kd:") ? 37 : m.kitchen?.drill?.confirmat ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40));
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм
-      push(p.id, [o[0], o[1] - (p.name.includes("стекл") ? 5 : 2.5), o[2]], [into, 0, 0], 5, 12);
+      push(p.id, [o[0], o[1] - (p.name.includes("стекл") ? 5 : 2.5), o[2]], [into, 0, 0], 5, m.kitchen?.drill?.pin ?? 12); // кухня Базиса — глубина по проекту (k33, k34: 9)
+    } else if (p.id.startsWith("ecc:bottom-under:") && !p.id.endsWith(":pin") && p.anchor) {
+      // эксцентрик над дном под боковинами (Базис k30): D15×12 в пласть боковины в 34 над дном, шток D8×34 в торец боковины, D5×12 в дно
+      const [ex, ey, ez] = p.anchor, inward = p.id.includes(":left:") ? 1 : -1, sx = ex - inward * 8;
+      push(p.id, [ex, ey + 34, ez], [-inward, 0, 0], 15, 12);
+      push(p.id + ":pin", [sx, ey, ez], [0, 1, 0], 8, 34);
+      push(p.id + ":side", [sx, ey, ez], [0, -1, 0], 5, 12);
+    } else if (p.id.startsWith("dowel:bottom-under:") && p.anchor) {
+      // шкант стыка «дно под боковинами»: D8×22 в торец боковины, D8×12 в дно — из плоскости стыка
+      const [x, yb, z] = p.anchor, yt = yb + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16]));
+      push(p.id, [x, yt, z], [0, 1, 0], 8, 22);
+      push(p.id + ":side", [x, yt, z], [0, -1, 0], 8, 12);
     } else if (p.id.startsWith("ecc:") && !p.id.endsWith(":pin") && p.anchor) {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;
       const hpY = ey + down * 8; // середина горизонтали 16
-      push(p.id, [ex + inward * 34, ey, ez], [0, down, 0], 15, 12);
-      push(p.id + ":pin", [ex, hpY, ez], [inward, 0, 0], 8, 34);
-      push(p.id + ":side", [ex, hpY, ez], [-inward, 0, 0], 5, 12);
+      const e = m.kitchen?.ecc; // кухня Базиса со своей стяжкой (k33/k34 «Макмарт Ø15»): глубины и шток по проекту
+      push(p.id, [ex + inward * 34, ey, ez], [0, down, 0], 15, e?.barrel ?? 12);
+      push(p.id + ":pin", [ex, hpY, ez], [inward, 0, 0], e?.stem?.[0] ?? 8, e?.stem?.[1] ?? 34);
+      push(p.id + ":side", [ex, hpY, ez], [-inward, 0, 0], 5, e?.side ?? 12);
     } else if (p.id.startsWith("dowel:")) {
       // шкант 8×30: D8×22 в торец горизонтали, D8×12 в стойку
       const inward = p.id.includes(":left:") ? 1 : -1, ex = p.position[0] - inward * 3;
       push(p.id, [ex, p.position[1], p.position[2]], [inward, 0, 0], 8, 22);
-      push(p.id + ":side", [ex, p.position[1], p.position[2]], [-inward, 0, 0], 8, 12);
+      push(p.id + ":side", [ex, p.position[1], p.position[2]], [-inward, 0, 0], 8, m.kitchen?.ecc?.dowelSide ?? 12);
     } else if (p.id.startsWith("leg:") && p.model?.origin) {
       const o = p.model.origin;
       for (const [dx, dz] of [[-15.5, -15.5], [15.5, -15.5], [-15.5, 15.5], [15.5, 15.5]]) push(p.id, [o[0] + dx, o[1], o[2] + dz], [0, 1, 0], 4, 3);

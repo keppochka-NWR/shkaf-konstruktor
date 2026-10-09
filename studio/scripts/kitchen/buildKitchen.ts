@@ -11,7 +11,8 @@
 //  — пометки: проект source 'bazis', сырые модули source 'bazis-kitchen' (смета без заглушек конфирмата и т. п.).
 import { initialModule, id, validate, section, type Module } from "../../src/model";
 import { newProject, projectErrors, type PlacedModule, type Project } from "../../src/project";
-import { compareModule, type RefModule } from "./compare";
+import { compareModule, honestPass, type RefModule } from "./compare";
+import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, bazisItems, bazisNames, type RawSpec } from "../../src/rawModule";
 import { panelExtras, plinthName, rowPanelsOf, rowTitle, type EtPanel } from "./rowWorktop";
@@ -43,15 +44,17 @@ export function moduleLook(ref: RefModule): { decor: string; facadeDecor: string
 }
 
 export function rawFromRef(ref: RefModule, meshes?: Set<string>): RawSpec {
-  const D = ref.size[2], counts = rawCounts(ref.hardware), names = bazisNames(ref.hardware);
+  // «Евровинт 6х50» из «прочего» эталона — конфирмат (счётчик), в смете — под своим именем (confirmatName; n3-wall)
+  const D = ref.size[2], counts = rawCounts(normalizeRefHardware(ref.hardware)), names = bazisNames(ref.hardware), cn = confirmatName(ref.hardware);
   return {
     // цоколь внутри модуля (роль эталона plinth: пенал, тумба) — под своим именем «Цоколь · …», размеры Базиса
     panels: ref.panels.map((p) => { const dec = bazisDecor((p as EtPanelRef).decor); return { name: (p as EtPanelRef).role === "plinth" ? plinthName(p.name) : p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p as unknown as EtPanel) }; }),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes?.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
     counts,
     // Axis PRO — комплектом на ящик (counts.drawers); всё остальное — по названию Базиса
-    items: bazisItems(ref.hardware, (h) => !!counts.drawers && /axis\s*pro/i.test(h.name)),
+    items: bazisItems(normalizeRefHardware(ref.hardware), (h) => !!counts.drawers && /axis\s*pro/i.test(h.name)),
     ...(Object.keys(names).length ? { names } : {}),
+    ...(cn ? { confirmatName: cn } : {}),
     source: "bazis-kitchen", // смета: только то, что есть в Базисе (без заглушек конфирмата и т.п.)
   };
 }
@@ -60,7 +63,7 @@ export function markBazis(m: Module, ref: RefModule): Module {
   const sys = new Set((m.kdrawers ?? []).map((k) => k.system ?? "axis-pro")), axis = sys.has("axis-pro"), firmax = sys.has("firmax-ldsp");
   // ящики, которые строит параметрика (n3-runners: Indigo, MODERN SLIDE, СТАРТ, Versalite), считаются комплектом/парой своей строкой сметы
   const runner = (n: string) => (sys.has("indigo") && /indigo/i.test(n)) || (sys.has("modern-slide") && /modern slide/i.test(n)) || (sys.has("start-sc") && /старт|start/i.test(n)) || (sys.has("versalite-h45") && /versalite/i.test(n));
-  const items = bazisItems(ref.hardware, (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || runner(h.name) || (!!m.kitchenLift && /PD-G-N02/i.test(h.name)) || (!!m.gola && /gola/i.test(h.name))
+  const items = bazisItems(normalizeRefHardware(ref.hardware), (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || runner(h.name) || (!!m.kitchenLift && /PD-G-N02/i.test(h.name)) || (!!m.gola && /gola/i.test(h.name))
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
     || (/заглушк/i.test(h.name) && /навес/i.test(h.name)));
   const names = bazisNames(ref.hardware);
@@ -86,7 +89,8 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
     const look = moduleLook(ref);
     try {
       const r = moduleFromEtalon(ref, look);
-      if (!validate(r.module).length && compareModule(ref, r.module).pass) { m = markBazis(r.module, ref); parametric++; }
+      // параметрический — только при честном PASS: сверка + нет ошибок + нет «не поддержано» (n3-wall)
+      if (honestPass(compareModule(ref, r.module), validate(r.module), r.unsupported)) { m = markBazis(r.module, ref); parametric++; }
     } catch { /* нераспознанный — сырой */ }
     if (!m) {
       m = { ...initialModule(), name: ref.name, width: r1(ref.size[0]), height: r1(ref.size[1]), depth: r1(ref.size[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true, raw: rawFromRef(ref, meshes) };
@@ -110,7 +114,7 @@ export function buildKitchen(e: Etalon, meshes?: Set<string>): { project: Projec
     const look = { decor: most(ps.filter((p) => p.kind === "ldsp").map((p) => bazisDecor((p as unknown as EtPanelRef).decor))) ?? LOOK.decor, facadeDecor: LOOK.facadeDecor };
     const m: Module = { ...initialModule(), name: rowTitle(ps), width: r1(M[0] - o[0]), height: r1(M[1] - o[1]), depth: r1(M[2] - o[2]), ...look, sections: [section()], doors: false, backType: "none", plinthHeight: 0, bazis: true,
       raw: { panels: ps.map((p) => { const dec = bazisDecor((p as unknown as EtPanelRef).decor); return { name: p.name, kind: p.kind ?? "ldsp", box: p.box.map((v, i) => r1(v - o[i % 3])) as RawSpec["panels"][number]["box"], ...(dec && p.kind !== "hdf" && p.kind !== "glass" ? { decor: dec } : {}), ...panelExtras(p), ...(p.front ? { facade: true } : {}), ...(p.wall ? { wall: true } : {}) }; }),
-        hardware: [], counts: rawCounts(rowHw), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}), row: true, source: "bazis-kitchen" } };
+        hardware: [], counts: rawCounts(normalizeRefHardware(rowHw)), items: rowItems, ...(Object.keys(bazisNames(rowHw)).length ? { names: bazisNames(rowHw) } : {}), row: true, source: "bazis-kitchen" } };
     placed.push({ id: id(), x: r1(o[0]), y: r1(o[1]), z: r1(o[2]), rotation: 0, module: m });
   }
   // помещение по габариту кухни

@@ -18,6 +18,41 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Корпус приподнят без опор, и в модуле Базиса под дном есть фронтальная панель ЛДСП (цоколь/планка под другим именем) —
    *  студия ставит «Цоколь» по высоте подъёма. Без флага у кухни такого цоколя нет (у навесного фасад свисает ниже дна). */
   lowFront?: boolean;
+  /** Низ навесного без опор (Базис): дно поднято на plinthHeight, стандартного цоколя нет. front — фронтальная панель ЛДСП под дном
+   *  (в Базисе «Фронтальная», «ФП» — закрывает низ, как цоколь) с утопанием от лица боковин; без front панели нет.
+   *  doorsToFloor — фасады опущены до низа модуля (корпус поднят, фасад закрывает подсветку: k23, k28, k30). */
+  raise?: { front?: number; doorsToFloor?: boolean };
+  /** Дно короче спереди на столько мм (Базис k06, k10, k15: 24,5 — ниша под подсветку у лица навесного); по умолчанию 0. */
+  bottomFront?: number;
+  /** Дно короче сзади (Базис: навесной под вытяжку, дно перед ХДФ — k08 m10, k04, k13, k14: 20). */
+  bottomBack?: number;
+  /** Крыша короче сзади (Базис k33, k34: 20 — крыша перед ХДФ, ХДФ проходит за ней); backTopGap — ХДФ в паз до верха модуля минус столько мм (k33/k34: 1). */
+  topBack?: number;
+  backTopGap?: number;
+  /** Набивной ХДФ с разными отступами [снизу, сверху] от низа и верха корпуса (Базис k32 m06: 2 и 4 при боковых 1,5). */
+  backGapY?: [number, number];
+  /** Модуль без дна (сушка k34 m04): ХДФ от низа модуля плюс столько мм (k34: 1). */
+  backBottomGap?: number;
+  /** Вырезы в обоих верхних углах ХДФ (Базис k33, k34: 25×45 — ХДФ проходит за крышей): ширина по X, высота от верха ХДФ. */
+  backNotch?: { width: number; height: number };
+  /** Стыки дна/крыши без крепежа в проекте Базиса («bottom:left» и т. п., k08 m10, k14 m06) — студия крепёж не ставит. */
+  jointNone?: string[];
+  /** Крепёж стыков дна/крыши с боковинами по Базису: ключ «bottom:left» и т. п. → [от задней кромки, от передней кромки детали], мм. */
+  jointZ?: Record<string, [number, number]>;
+  /** В проекте Базиса у модуля нет крепежа корпуса (конфирматов, эксцентриков, шкантов) — студия его не добавляет. */
+  noFasteners?: boolean;
+  /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
+  dryer?: { name: string; mesh: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  /** Имя крепежа корпуса по проекту Базиса, если это не «Конфирмат 7х50» (k33, k34: «Евровинт 6х50») — в деталях и смете. */
+  confirmatName?: string;
+  /** Глубина присадки по проекту Базиса, если она не типовая: confirmat — D5 в торец (обычно 35; k33/k34 «Евровинт 6х50» — 36), pin — D5 под полкодержатель (обычно 12; k33/k34 — 9). */
+  drill?: { confirmat?: number; pin?: number };
+  /** Присадка эксцентрика по проекту Базиса, если не типовая (k33/k34 «Стяжка Макмарт Ø15»): глубина бочонка D15 (13 вместо 12),
+   *  шток [D, глубина] ([7, 28] вместо [8, 34]), в стойку D5 (9 вместо 12), шкант в стойку D8 (11 вместо 12);
+   *  bottomOut — бочонок дна с наружной (нижней) пласти. */
+  ecc?: { barrel?: number; stem?: [number, number]; side?: number; dowelSide?: number; bottomOut?: boolean };
+  /** Вырез в заднем верхнем углу боковины навесного/антресоли (Базис k32: 100×20 — контур боковины из 6 точек): height — от верха, depth — от задней кромки. */
+  sideNotch?: Partial<Record<"left" | "right", { height: number; depth: number }>>;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
@@ -134,9 +169,16 @@ export const LEG_SCREWS: [number, number][] = [[-15.5, -15.5], [15.5, -15.5], [-
 /** Кухня из Базиса — ничего сверх проекта: без петель (hinges: false) снимаем петли и толкатели фасадов, без крепежа (fasteners: false) —
  *  конфирматы, эксцентрики, шканты и полкодержатели. Присадка и смета идут по деталям, поэтому лишнего нет и там. */
 export function kitchenStrip(m: Module, out: Part[]) {
-  const k = m.kitchen; if (!k || (k.hinges !== false && k.fasteners !== false)) return;
-  const drop = (p: Part) => (k.hinges === false && /:(hingecup|hingeplate|hingearm|latch):/.test(p.id)) || (k.fasteners === false && /^(fast|ecc|dowel|shp):/.test(p.id));
+  const k = m.kitchen; if (!k || (k.hinges !== false && k.fasteners !== false && !k.noFasteners)) return;
+  const drop = (p: Part) => (k.hinges === false && /:(hingecup|hingeplate|hingearm|latch):/.test(p.id)) || (k.fasteners === false && /^(fast|ecc|dowel|shp):/.test(p.id))
+    // Базис без крепежа корпуса (n3-wall: k32 целиком, отдельные модули k33, k34) — конфирматы, эксцентрики, шканты
+    || (!!k.noFasteners && /^(fast|ecc|dowel):/.test(p.id));
   for (let i = out.length - 1; i >= 0; i--) if (drop(out[i])) out.splice(i, 1);
+}
+/** Единичный кватернион: в эталоне Базиса компоненты округлены до 0,01 (0,71 вместо √½, |q|² = 1,0082) — без нормировки сетка растянута на ~0,8 %. */
+export function unitQuat(q: [number, number, number, number]): [number, number, number, number] {
+  const n = Math.hypot(...q);
+  return n > 1e-9 ? (q.map((v) => v / n) as [number, number, number, number]) : [1, 0, 0, 0];
 }
 
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
@@ -169,6 +211,12 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
   }
+  // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
+  for (const [n, d] of (k.dryer ?? []).entries()) {
+    const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
+    out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
+       { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) }));
+  }
   if ((k.role === "wall" || k.role === "antresol") && k.hangers !== false) {
     for (const side of ["left", "right"] as const) {
       // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
@@ -191,12 +239,13 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
 export function kitchenEdges(m: Module, out: Part[]) {
   // кухня Базиса без кромки вовсе (k23 — 15 модулей: ни одной кромки на деталях корпуса) — снимаем кромку студии по умолчанию
   if (m.kitchen && m.edgeScheme?.t === 0) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade")) p.edge = [0, 0, 0, 0];
-  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); return; } // вырезы Gola — и без схемы кромки
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
   // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
   // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
   const ecc = (id: string) => m.jointFastening?.[`${id}:left`] === "eccentric" || m.jointFastening?.[`${id}:right`] === "eccentric";
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)).filter(ecc));
+  const fixedAll = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   for (const p of out) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
     // кухня Базиса с кромкой по кругу (k11, k32): все четыре торца каждой детали корпуса
@@ -205,13 +254,17 @@ export function kitchenEdges(m: Module, out: Part[]) {
     const rear = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
     // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся
     const rearBase = m.backType === "none" ? ["-z"] : [];
+    const ends = (p.id === "bottom" || p.id === "top") ? m.edgeScheme?.ends?.[p.id] : undefined, own = m.edgeScheme?.parts?.[p.id];
+    if (own) setEdges(p, own, t); // торцы детали — как в проекте Базиса (k32 низ: по кругу)
+    else if (ends) setEdges(p, ends, t); // торцы дна/крыши — как в проекте Базиса (k32 — по кругу)
     // опущенная боковина (sideDown, k22 m01): нижний торец открыт снизу — кромится
-    if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase, ...(m.kitchen.sideDown?.side === p.id ? ["-y"] : [])], t);
+    else if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase, ...(m.kitchen.sideDown?.side === p.id ? ["-y"] : [])], t);
     else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", "+x", "-x", ...(wall ? rear : rearBase)] : ["+z", ...rear], t);
     else if (p.id === "top") setEdges(p, tall ? ["+z", "-z"] : ["+z", ...rear], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, ["+z", "-z"], t);
+    else if (p.role === "shelf" && m.edgeScheme?.fixedSides && fixedAll.has(p.id)) setEdges(p, m.edgeScheme.fixedSides, t); // жёсткая полка навесного — торцы как в Базисе (k05: перед и зад)
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
-    else if (p.role === "shelf") setEdges(p, m.edgeScheme?.shelf ?? ["+x", "-x", "+z", "-z"], t); // съёмная полка: по кругу или по Базису (edgeScheme.shelf)
+    else if (p.role === "shelf") setEdges(p, m.edgeScheme?.shelfSides ?? m.edgeScheme?.shelf ?? ["+x", "-x", "+z", "-z"], m.edgeScheme?.shelfT ?? t); // съёмная полка: по кругу или по Базису (shelfSides / shelf), толщина корпуса — если Базис не задал иначе
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
     else if (p.id.startsWith("kd:") && p.id.includes(":fx:")) setEdges(p, p.id.includes(":fx:side:") ? ["+y", "-y", "-z"] : p.id.endsWith(":bottom") ? ["-z"] : ["+y"], t); // короб Firmax (Базис): боковины ±y и задний торец, задняя/фальшпанель — верх, дно — задний торец
     else if (p.id.startsWith("kd:") && /:(bottom|back)$/.test(p.id) && m.kdrawers?.[Number(p.id.split(":")[1])]?.system === "indigo") setEdges(p, p.id.endsWith(":back") ? ["+y", "-y"] : ["+z", "-z"], t); // Indigo (Базис k16): задняя стенка ±y, дно перед и зад
@@ -229,6 +282,31 @@ export function kitchenEdges(m: Module, out: Part[]) {
   const fr = m.edgeScheme?.front;
   if (fr) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade") && !p.id.startsWith("kd:") && p.position[2] + p.size[2] / 2 >= m.depth - 1) { const dirs = edgeDirs(p); p.edge = p.edge.map((e, i) => (e > 0 && dirs[i] === "+z" ? fr : e)) as Part["edge"]; }
   golaSides(m, out);
+  rearNotches(m, out);
+}
+
+/** Вырез в заднем верхнем углу боковин навесного/антресоли (Базис k32: 100×20). Раскрой — по габариту; кромка по контуру
+ *  (отрезки выреза кромятся, сумма по сторонам равна стороне — как у Базиса 310 + 20 = 330); пересечения — по телу без выреза. */
+export function rearNotches(m: Module, out: Part[]) {
+  const wallish = !!m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol");
+  // ХДФ с вырезами в верхних углах (k33, k34): раскрой — по габариту, пересечения — по телу без углов
+  const bn = wallish ? m.kitchen!.backNotch : undefined, bp = bn ? out.find((p) => p.id === "back" && p.material === "hdf") : undefined;
+  if (bn && bp && bn.width > 0 && bn.height > 0 && 2 * bn.width < bp.size[0] && bn.height < bp.size[1]) {
+    bp.topNotches = { width: bn.width, height: bn.height };
+    const [w, h] = bp.size, [x, y, z] = bp.position;
+    bp.collide = [{ size: [w, h - bn.height, bp.size[2]], position: [x, y - bn.height / 2, z] }, { size: [w - 2 * bn.width, bn.height, bp.size[2]], position: [x, y + h / 2 - bn.height / 2, z] }];
+  }
+  const sn = wallish ? m.kitchen!.sideNotch : undefined;
+  if (!sn) return;
+  for (const p of out) {
+    if (p.id !== "left" && p.id !== "right") continue;
+    const n = sn[p.id], H = p.size[1], D = p.size[2];
+    if (!n || !(n.height > 0 && n.height < H && n.depth > 0 && n.depth < D)) continue;
+    p.rearNotch = { height: n.height, depth: n.depth };
+    const x = p.position[0], y0 = p.position[1] - H / 2, z0 = p.position[2] - D / 2;
+    p.collide = [{ size: [p.size[0], H - n.height, D], position: [x, y0 + (H - n.height) / 2, z0 + D / 2] },
+      { size: [p.size[0], n.height, D - n.depth], position: [x, y0 + H - n.height / 2, z0 + n.depth + (D - n.depth) / 2] }];
+  }
 }
 
 /** Gola по Базису (k06/m03 и др.): вырезы в переднем торце боковин нижнего модуля. Кромка идёт отрезками контура:
@@ -296,6 +374,12 @@ export function kitchenErrors(m: Module): string[] {
     // без опор — у кухни из Базиса (noLegs) или при явном низе (plinthHeight): в Базисе мойки и корпуса без опор бывают
     // (k21 m02, k33/k34 — корпус на полу или подиуме; 33 модуля 13 кухонь — дно на полу или на своём цоколе)
     if ((k.role === "base") && !m.feet && !k.noLegs && m.plinthHeight === undefined) e.push("Нижний кухонный корпус ставится на опоры.");
+    if (k.jointZ && Object.values(k.jointZ).some((v) => !Array.isArray(v) || v.length !== 2 || v.some((x) => !Number.isFinite(x) || x < 5 || x > m.depth / 2 + 50))) e.push("Крепёж стыка: отступы от кромок 5 мм — до середины глубины.");
+    if (k.bottomFront !== undefined && (!Number.isFinite(k.bottomFront) || k.bottomFront < 0 || k.bottomFront > 100)) e.push("Дно короче спереди: 0–100 мм.");
+    if (k.bottomBack !== undefined && (!Number.isFinite(k.bottomBack) || k.bottomBack < 0 || k.bottomBack > 120)) e.push("Дно короче сзади: 0–120 мм.");
+    if (k.topBack !== undefined && (!Number.isFinite(k.topBack) || k.topBack < 0 || k.topBack > 120)) e.push("Крыша короче сзади: 0–120 мм.");
+    if (k.backTopGap !== undefined && (!Number.isFinite(k.backTopGap) || k.backTopGap < 0 || k.backTopGap > 20)) e.push("Зазор ХДФ до верха: 0–20 мм.");
+    if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
   }
   return e;

@@ -2,13 +2,35 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {kitchenBase,kitchenWall} from '../src/kitchen';
-import {compareModule,refFromStudio} from '../scripts/kitchen/compare';
+import {compareModule,refFromStudio,honestPass} from '../scripts/kitchen/compare';
 
 test('comparator self-check: a module against itself passes',()=>{
   for(const m of [kitchenBase(initialModule(),600),kitchenWall(initialModule(),800),kitchenBase(initialModule(),800,'sink')]){
     const c=compareModule(refFromStudio(m),m);
     assert.ok(c.pass,m.name+': '+JSON.stringify({missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name),worst:c.pairs.filter(p=>p.delta>0.5).map(p=>p.ref.name+' '+p.delta)}));
   }
+});
+
+test('сверщик видит фигурную деталь Базиса: вырез в контуре при прямоугольнике студии — FAIL; прямоугольный контур и скругления — нет',()=>{
+  const m=kitchenWall(initialModule(),600),ref=refFromStudio(m);
+  assert.ok(compareModule(ref,m).pass);
+  const side=ref.panels.find(p=>p.axis==='x')!,[,y0,z0,,y1,z1]=side.box,H=y1-y0,D=z1-z0;
+  const cut=structuredClone(ref),cs=cut.panels.find(p=>p.i===side.i)!;
+  // вырез 100×20 в заднем верхнем углу, как у боковин k32 (точки [y, z] в плоскости yz)
+  Object.assign(cs,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H,D],[H,20],[H-100,20],[H-100,0]]});
+  const c=compareModule(cut,m);
+  assert.equal(c.pass,false);assert.equal(c.contours?.length,1);assert.match(c.contours![0],/вырез 2000 мм²/);
+  const rect=structuredClone(ref);Object.assign(rect.panels.find(p=>p.i===side.i)!,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H,D],[H,0]]});
+  assert.ok(compareModule(rect,m).pass,'прямоугольный контур — не вырез');
+  const round=structuredClone(ref);Object.assign(round.panels.find(p=>p.i===side.i)!,{figure:true,contourPlane:'yz',contour:[[0,0],[0,D],[H-10,D],[H,D-10],[H,0]]});
+  assert.ok(compareModule(round,m).pass,'срез угла 10×10 (50 мм²) — не вырез');
+});
+
+test('честный PASS: совпавшая сверка не делает модуль параметрическим, если у студии ошибки или распознаватель что-то не поддержал',()=>{
+  assert.equal(honestPass({pass:true},[],[]),true);
+  assert.equal(honestPass({pass:true},[],['1 панелей не распознано']),false);
+  assert.equal(honestPass({pass:true},['Параметр faceGap: 0–5 мм.'],[]),false);
+  assert.equal(honestPass({pass:false},[],[]),false);
 });
 
 test('comparator catches mutations: 1 mm shift, missing panel, extra hinge, moved leg, mirrored layout',()=>{

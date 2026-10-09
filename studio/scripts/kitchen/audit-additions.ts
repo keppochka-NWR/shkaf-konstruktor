@@ -6,12 +6,13 @@ import { parts, type Module } from "../../src/model";
 import { parseProject, applyAutoFillers, type Project } from "../../src/project";
 import { estimate } from "../../src/pricing";
 import { compareModule, type RefModule } from "./compare";
+import { refCategory } from "./refHardware";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LP = process.argv[4] ?? "public/local-projects";
 const arg = process.argv[2] ?? "all", out = process.argv[3] || undefined;
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 // строки сметы, которым соответствует фурнитура/панели Базиса (категория эталона или деталь раскроя)
-const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|confirmat-euro-6x50$|wallpanel:raw:|plinth-external$|eccentric$|shelf-holder(:|$)|dowel$|kitchen-leg(:|$)|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|firmax-ldsp|firmax:|indigo:|start-sc:|modern-slide:|versalite-h45:|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
+const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|confirmat-euro-6x50$|confirmat:|wallpanel:raw:|plinth-external$|eccentric$|shelf-holder(:|$)|dowel$|kitchen-leg(:|$)|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|firmax-ldsp|firmax:|indigo:|start-sc:|modern-slide:|versalite-h45:|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
 const LABOUR = /^(work$|small$|unplaced:|unplaced-raw:)/;
 const agg = new Map<string, { label: string; kitchens: Set<string>; qty: number; sum: number }>();
 const partAgg = new Map<string, { kitchens: Set<string>; n: number }>();
@@ -40,7 +41,7 @@ for (const f of files) {
       ["петли", qty(/^hinge/), refN((h) => h.category === "петля" && /^Петля/i.test(h.name))],
       ["полкодержатели", qty(/^shelf-holder$/), refN((h) => h.category === "полкодержатель")],
       ["эксцентрики", qty(/^eccentric$/), refN((h) => h.category === "эксцентрик")],
-      ["конфирматы", qty(/^confirmat/) - qty(/^confirmat-cap$/), refN((h) => h.category === "конфирмат")],
+      ["конфирматы", qty(/^confirmat/) - qty(/^confirmat-cap$/), refN((h) => refCategory(h) === "конфирмат")], // «Евровинт 6х50» из «прочего» — конфирмат (refHardware)
       ["шканты", qty(/^dowel$/), refN((h) => h.category === "шкант")],
       ["опоры", qty(/^kitchen-leg$/), refN((h) => h.category === "опора")],
       ["клипсы", qty(/^kitchen-clip$/), refN((h) => h.category === "клипса")],

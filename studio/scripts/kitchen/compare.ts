@@ -8,8 +8,10 @@ import { parseProject } from "../../src/project";
 import { holes as studioHoles } from "../../src/drilling";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
+import { normalizeRefHardware } from "./refHardware";
+import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 
-export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean };
+export type RefPanel = { i: number; name: string; mat: string; decor?: string; thick: number; kind: string; box: number[]; axis: string; texdir?: number; figure?: boolean; contour?: number[][]; contourPlane?: string };
 export type RefHardware = { i: number; name: string; article?: string; category: string; mesh?: string | null; pos: number[]; quat?: number[]; host?: number | null };
 export type RefHole = { panel: number; face: string; at: number[]; dir: number[]; d: number; depth: number; src?: number | null };
 export type RefModule = { key: string; name: string; archetype: string; size: number[]; panels: RefPanel[]; hardware: RefHardware[]; holes?: RefHole[] };
@@ -26,7 +28,7 @@ export type PanelPair = { ref: Item; studio: Item; delta: number; faces: number[
 export type HardwareRow = { category: string; ref: number; studio: number; maxPosDelta: number | null; note?: string; rot?: { checked: number; bad: number; spin: number; noQuat: number }; meshDiff?: number; quatDiff?: number };
 export type HoleCheck = { ref: number; studio: number; matched: number; maxDelta: number; missing: string[]; extra: string[] };
 export type EdgeCheck = { checked: number; bad: string[] };
-export type Comparison = { edges?: EdgeCheck; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
+export type Comparison = { edges?: EdgeCheck; /** Фигурные детали Базиса (контур с вырезами), которые в студии прямоугольник или с другим вырезом. */ contours?: string[]; pass: boolean; tol: number; pairs: PanelPair[]; missing: Item[]; extra: Item[]; hardware: HardwareRow[]; holes?: HoleCheck; deviations?: string[]; size: { ref: number[]; studio: number[] } };
 
 const AX = ["x", "y", "z"];
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -79,9 +81,10 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kitchen-leg-screw:")) return "прочее";
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
+  if (id.startsWith("kitchen-dryer:")) return "сушка";
   if (id.includes(":hingeplate:")) return "петля";
   if (id.startsWith("lift:")) return id.includes(":screw:") ? "прочее" : "газлифт";
-  if (id.startsWith("fast:")) return p.name.startsWith("Евровинт") ? "прочее" : "конфирмат"; // евровинт у Базиса — «прочее»
+  if (id.startsWith("fast:")) return "конфирмат"; // евровинт 6×50 тоже: у эталона его «прочее» переносит в конфирматы normalizeRefHardware (n3-wall)
   if (id.startsWith("ecc:") && !id.endsWith(":pin")) return "эксцентрик";
   if (id.startsWith("dowel:")) return "шкант";
   if (id.startsWith("shp:")) return "полкодержатель";
@@ -119,11 +122,34 @@ function quatRel(a: number[], b: number[]): number[] {
   const na = Math.hypot(...a) || 1, nb = Math.hypot(...b) || 1, [aw, ax, ay, az] = [a[0] / na, -a[1] / na, -a[2] / na, -a[3] / na], [bw, bx, by, bz] = b.map((v) => v / nb);
   return [aw * bw - ax * bx - ay * by - az * bz, aw * bx + ax * bw + ay * bz - az * by, aw * by - ax * bz + ay * bw + az * bx, aw * bz + ax * by - ay * bx + az * bw];
 }
+/** Площадь многоугольника (мм²) и его габарит. */
+function polyArea(c: number[][]): { area: number; box: number } {
+  let s = 0;
+  for (let i = 0; i < c.length; i++) { const a = c[i], b = c[(i + 1) % c.length]; s += a[0] * b[1] - b[0] * a[1]; }
+  const xs = c.map((q) => q[0]), ys = c.map((q) => q[1]);
+  return { area: Math.abs(s) / 2, box: (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)) };
+}
+/** Вырезы фигурной детали Базиса: габарит контура минус его площадь, мм² (0 — прямоугольник или контура нет).
+ *  Скругления углов до R30 (≤ 200 мм²) вырезом не считаются. */
+export function refCutArea(p: { figure?: boolean; contour?: number[][] }): number {
+  const c = p.contour;
+  if (!p.figure || !Array.isArray(c) || c.length < 4 || c.some((q) => !Array.isArray(q) || q.length < 2 || !q.every(Number.isFinite))) return 0;
+  const { area, box } = polyArea(c), cut = box - area;
+  return cut > 200 ? Math.round(cut) : 0;
+}
+/** Вырезы детали студии, мм²: контур в плане (planContour) — по площади; Gola в боковине — есть (геометрию сверяет кромка выреза). */
+function studioCut(p: Part): number | "gola" {
+  if (p.golaCuts?.length) return "gola";
+  if (p.rearNotch) return Math.round(p.rearNotch.height * p.rearNotch.depth);
+  if (p.planContour && p.planContour.length >= 4) { const { area, box } = polyArea(p.planContour); return Math.round(box - area); }
+  return 0;
+}
 
 /** Отступления (реестр): профили-экструзии Базиса («Профиль», «Профиль1») — без сетки, контур в эталон не извлекается; не воспроизводятся, в отчёте — отдельной строкой. */
 export const isDeviation = (h: RefHardware) => (/^Профиль/.test(h.name) || /^(Розетка|Выталкивание)/.test(h.name)) && !h.mesh; // + розетка помещения и её «выталкивание» (k28, k29 — 4 модуля): электрика, не мебель
 
-export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison {
+export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Comparison {
+  const ref0: RefModule = { ...ref00, hardware: normalizeRefHardware(ref00.hardware) }; // «Евровинт 6х50» из «прочего» — конфирмат
   const deviations = ref0.hardware.filter(isDeviation).map((h) => h.name), ref: RefModule = { ...ref0, hardware: ref0.hardware.filter((h) => !isDeviation(h)) };
   const ps = parts(m), A0 = refItems(ref), B0 = studioItems(ps), pairs: PanelPair[] = [], missing: Item[] = [], extra: Item[] = [];
   // Общая точка отсчёта: минимальный угол габарита панелей (у Базиса ХДФ на z 0..3 и боковины с 3, у студии боковины с 0 и ХДФ на −3..0).
@@ -151,8 +177,8 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
   const hardware: HardwareRow[] = [...cats].map((category) => {
     const rp = ref.hardware.filter((h) => h.category === category).map((h) => h.pos.map((v, i) => v - oa[i])), sp = ps.filter((p) => studioCategory(p) === category).map(studioAnchor).map((q) => q.map((v, i) => v - ob[i]));
     const row: HardwareRow = { category, ref: rp.length, studio: sp.length, maxPosDelta: matchPoints(rp, sp) };
-    // Газлифт: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
-    const sq = category === "газлифт" ? ps.filter((p) => studioCategory(p) === category) : [];
+    // Газлифт и сушка: кроме точки — поворот узла (кватернион Базиса [w,x,y,z], q и −q — один поворот) у ближайшей детали студии.
+    const sq = category === "газлифт" || category === "сушка" ? ps.filter((p) => studioCategory(p) === category) : [];
     if (sq.length) {
       const bad = ref.hardware.filter((h) => h.category === category && h.quat).filter((h) => {
         const pt = h.pos.map((v, i) => v - oa[i]); let best: Part | undefined, bd = Infinity;
@@ -243,6 +269,33 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
     }
     if (diff.length) edgeCheck.bad.push(`${pr.ref.name}: ${diff.map((k) => `${k} Базис ${want[k] ?? 0} / студия ${have[k] ?? 0}`).join(", ")}`);
   }
+  // фигурные детали: вырез в контуре Базиса (k32: боковины с вырезом 100×20 в заднем верхнем углу) — у студии должен быть тот же вырез.
+  // Кромка его не ловит: сумма длин отрезков контура по стороне равна стороне (310 + 20 = 330).
+  const contours: string[] = [];
+  for (const pr of pairs) {
+    const rp = ref.panels.find((p) => "b" + p.i === pr.ref.id), sp = byId.get(pr.studio.id);
+    if (!rp || !sp) continue;
+    const cut = refCutArea(rp);
+    if (!cut) {
+      if (sp.rearNotch) contours.push(`${pr.ref.name}: у Базиса без выреза, у студии вырез ${sp.rearNotch.height}×${sp.rearNotch.depth}`);
+      if (sp.topNotches) contours.push(`${pr.ref.name}: у Базиса без вырезов, у студии верхние углы ${sp.topNotches.width}×${sp.topNotches.height}`);
+      continue;
+    }
+    const sc = studioCut(sp);
+    if (sc === "gola") continue;
+    if (sp.topNotches) { // вырезы в верхних углах ХДФ — сверяем сами углы
+      const tn = topCornerNotchFromContour(rp);
+      if (!tn || Math.abs(tn.width - sp.topNotches.width) > 0.5 || Math.abs(tn.height - sp.topNotches.height) > 0.5) contours.push(`${pr.ref.name}: вырезы у Базиса ${tn ? `${tn.width}×${tn.height} в верхних углах` : `другой формы (${rp.contour!.length} точек, ${cut} мм²)`}, у студии ${sp.topNotches.width}×${sp.topNotches.height}`);
+      continue;
+    }
+    if (sp.rearNotch) { // вырез в заднем верхнем углу боковины — сверяем сам угол, а не только площадь
+      const rn = rearNotchFromContour(rp);
+      if (!rn || Math.abs(rn.height - sp.rearNotch.height) > 0.5 || Math.abs(rn.depth - sp.rearNotch.depth) > 0.5) contours.push(`${pr.ref.name}: вырез у Базиса ${rn ? `${rn.height}×${rn.depth} в заднем верхнем углу` : `другой формы (${rp.contour!.length} точек, ${cut} мм²)`}, у студии ${sp.rearNotch.height}×${sp.rearNotch.depth}`);
+      continue;
+    }
+    if (!sc) contours.push(`${pr.ref.name}: фигурный контур Базиса (${rp.contour!.length} точек, вырез ${cut} мм²) — в студии прямоугольник`);
+    else if (Math.abs(sc - cut) > Math.max(200, cut * 0.02)) contours.push(`${pr.ref.name}: вырез у Базиса ${cut} мм², у студии ${sc} мм²`);
+  }
   // пазы (кроме паза под задник): у Базиса — по панелям эталона (проходы слиты), у студии — детали groove:*
   const backPanel = ref.panels.filter((p) => p.kind === "hdf").sort((a, b) => (b.box[3] - b.box[0]) * (b.box[4] - b.box[1]) - (a.box[3] - a.box[0]) * (a.box[4] - a.box[1]))[0];
   const rg = refGroovesOf(ref, backPanel ? r1(backPanel.box[2]) : null).map((g) => g.box.map((v, i) => v - oa[i % 3]));
@@ -256,9 +309,13 @@ export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison
   sg.forEach((s, k) => { if (!usedG.has(k)) grooveBad.push(`лишний паз ${s.map(r1).join(",")}`); });
   edgeCheck.bad.push(...grooveBad.map((x) => "пазы: " + x));
   const holesOk = !holeCheck || (!holeCheck.missing.length && !holeCheck.extra.length && holeCheck.maxDelta <= 0.5);
-  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length;
-  return { edges: edgeCheck, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, deviations, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
+  const pass = !missing.length && !extra.length && pairs.every((p) => p.delta <= tolOf(p)) && hwOk && holesOk && !edgeCheck.bad.length && !contours.length;
+  return { edges: edgeCheck, contours, pass, tol, pairs, missing, extra, hardware, holes: holeCheck, deviations, size: { ref: ref.size, studio: [m.width, m.height, m.depth] } };
 }
+
+/** Модуль можно брать параметрическим (пакет — PASS, импорт — не сырой): сверка совпала, у студии нет ошибок
+ *  и распознаватель ничего не пометил «не поддержано» (иначе неподдержанное теряется молча, даже если сверка его не видит). */
+export const honestPass = (c: Pick<Comparison, "pass">, errors: string[], unsupported: string[]) => c.pass && !errors.length && !unsupported.length;
 
 /** Эталон из модуля студии (для самопроверки сверщика мутациями). */
 export function refFromStudio(m: Module, key = "self"): RefModule {
@@ -281,6 +338,7 @@ export function comparisonMarkdown(ref: RefModule, c: Comparison): string {
   md += "\n| фурнитура | Базис | студия | max Δ точки, мм | поворот (справочно) | сетка / поворот ≠ (справочно) |\n|---|---|---|---|---|---|\n";
   const rot = (r: HardwareRow["rot"]) => !r ? "—" : `сверено ${r.checked}${r.bad ? `, **другой ${r.bad}**` : ""}${r.spin ? `, вокруг своей оси ${r.spin}` : ""}${r.noQuat ? `, без кватерниона ${r.noQuat}` : ""}`;
   for (const h of c.hardware) md += `| ${h.category} | ${h.ref} | ${h.studio}${h.ref !== h.studio ? " ≠" : ""} | ${h.maxPosDelta ?? "—"} | ${rot(h.rot)} | ${h.meshDiff || h.quatDiff ? `${h.meshDiff ?? 0} / ${h.quatDiff ?? 0}` : "—"} |\n`;
+  if (c.contours?.length) md += `\n**Контур:** ${c.contours.join("; ")}\n`;
   if (c.edges) md += `\n**Кромка:** проверено пар ${c.edges.checked}${c.edges.bad.length ? "; расхождения: " + c.edges.bad.join("; ") : " — совпала"}\n`;
   if (c.holes) md += `\n**Отверстия:** Базис ${c.holes.ref}, студия ${c.holes.studio}, совпало ${c.holes.matched}, max Δ ${c.holes.maxDelta} мм${c.holes.missing.length ? "; нет в студии: " + c.holes.missing.join("; ") : ""}${c.holes.extra.length ? "; лишние: " + c.holes.extra.join("; ") : ""}\n`;
   return md;

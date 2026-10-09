@@ -171,7 +171,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // прочая фурнитура Базиса — строками «как в Базисе». Сырой шкаф Базиса (корпус, правила шкафов) — как было.
       const r=a.module.raw,c=r.counts??{},bk=a.module.hingeBrand??'gtv',src='Как в проекте Базиса',kr=rawKitchen(r);
       if(!kr)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
-      add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
+      // крепёж корпуса под именем Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50», n3-wall)
+      if(r.confirmatName)add('confirmat:'+r.confirmatName,r.confirmatName+' (по проекту Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
+      else add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
       if(!kr)add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',c.confirmats??0,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
       add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',c.eccentrics??0,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
       if(r.names?.shelfHolders)addShelfHolders(r.names.shelfHolders);else add('shelf-holder','Полкодержатель Boyard p521',c.shelfHolders??0,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);
@@ -223,7 +225,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // кухня по Базису — конфирмат 7×50 (под него присадка D8+D5×35); шкафы — 5×50 по прайсу цеха
     // кухня (правила Базиса): только то, что есть в спецификации Базиса — без заглушек под конфирмат и норматива «Мелочёвка корпуса»
     const kitchen=!!a.module.kitchen;
-    if(a.module.kitchen?.screw==='euro-6x50')add('confirmat-euro-6x50','Евровинт 6×50 (как в проекте Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у конфирмата 5×50 — уточнить по счёту');
+    // крепёж с другим именем в проекте Базиса (k33/k34: «Евровинт 6х50», n3-wall) — своей строкой, цена как у 5×50 до счёта;
+    // евровинт шаблонов без имени из проекта (n3-sink) — «Евровинт 6×50»
+    if(a.module.kitchen?.confirmatName)add('confirmat:'+a.module.kitchen.confirmatName,a.module.kitchen.confirmatName+' (по проекту Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
+    else if(a.module.kitchen?.screw==='euro-6x50')add('confirmat-euro-6x50','Евровинт 6×50 (как в проекте Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у конфирмата 5×50 — уточнить по счёту');
     else if(kitchen)add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',fc.confirmats,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
     else add('confirmat','Конфирмат 5×50 чёрный цинк',fc.confirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
     // кухня (правила Базиса — для кухонь m.kitchen) и модуль из Базиса: заглушек под конфирмат и «Мелочёвки корпуса» в проектах
