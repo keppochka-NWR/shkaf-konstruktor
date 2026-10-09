@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '../src/model';
-import {kitchenWall} from '../src/kitchen';
+import {kitchenWall,kitchenBase} from '../src/kitchen';
+import {holes} from '../src/drilling';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {refCategory} from '../scripts/kitchen/refHardware';
@@ -166,6 +167,21 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
     assert.ok(!c.hardware.some(h=>h.category==='прочее'&&h.ref>0),'в «прочем» евровинтов не осталось');
     assert.ok((c.holes?.matched??0)>0,`${k} ${key}: присадка крепежа совпадает хотя бы частично`);
   }
+  // присадка евровинта по проекту (D5×36, у Базиса не 35) и полкодержателя (D5×9, не 12)
+  const r3=load('k33','m03'),m3=moduleFromEtalon(r3).module;
+  assert.deepEqual(m3.kitchen?.drill,{confirmat:36,pin:9});
+  const hs=holes(m3);
+  assert.ok(hs.some(h=>h.d===5&&h.depth===36)&&!hs.some(h=>h.d===5&&h.depth===35),'D5 евровинта — 36');
+  assert.ok(hs.some(h=>h.d===5&&h.depth===9)&&!hs.some(h=>h.d===5&&h.depth===12),'D5 полкодержателя — 9');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(kitchenWall(initialModule(),600)))).kitchen?.drill,undefined,'у обычного навесного — типовая');
+  // мойка k33 m01: опор в Базисе нет — студия их не требует и не добавляет; сверка деталь в деталь
+  const r1=load('k33','m01'),k1=moduleFromEtalon(r1);
+  assert.equal(k1.module.kitchen?.noLegs,true);assert.deepEqual(validate(k1.module),[]);assert.deepEqual(k1.unsupported,[]);
+  assert.ok(!parts(k1.module).some(p=>p.id.startsWith('leg:')||/опор/i.test(p.name)));
+  const c1=compareModule(r1,k1.module);assert.ok(c1.pass);assert.deepEqual([c1.holes?.matched,c1.holes?.ref],[16,16]);
+  const sv=parseModule(JSON.parse(JSON.stringify(k1.module)));assert.equal(sv.kitchen?.noLegs,true);assert.deepEqual(sv.kitchen?.drill,{confirmat:36});
+  // обычный нижний без опор — по-прежнему ошибка (правило студии)
+  const b=kitchenBase(initialModule(),600);delete b.feet;assert.ok(validate(b).some(e=>/на опоры/.test(e)));
   // сушка k34 m04 без дна: единственная горизонталь — «Крышка» наверху; дна студия не выдумывает, ХДФ не теряется
   const r4=load('k34','m04'),m4=moduleFromEtalon(r4).module,c4=compareModule(r4,m4);
   assert.equal(m4.bottomType,'none');

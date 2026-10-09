@@ -29,6 +29,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   noFasteners?: boolean;
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
   dryer?: { name: string; mesh: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  /** В проекте Базиса у нижнего модуля нет опор (k33, k34: стоит на дне) — студия опоры не требует и не добавляет. */
+  noLegs?: boolean;
+  /** Глубина присадки по проекту Базиса, если она не типовая: confirmat — D5 в торец (обычно 35; k33/k34 «Евровинт 6х50» — 36), pin — D5 под полкодержатель (обычно 12; k33/k34 — 9). */
+  drill?: { confirmat?: number; pin?: number };
   /** Вырез в заднем верхнем углу боковины навесного/антресоли (Базис k32: 100×20 — контур боковины из 6 точек): height — от верха, depth — от задней кромки. */
   sideNotch?: Partial<Record<"left" | "right", { height: number; depth: number }>>;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
@@ -272,7 +276,7 @@ export function kitchenErrors(m: Module): string[] {
     const k = m.kitchen;
     if (!["base", "wall", "tall", "antresol"].includes(k.role)) e.push("Кухня: тип корпуса — нижний, навесной, пенал или антресоль.");
     if (k.appliance && !(k.appliance in APPLIANCES)) e.push("Кухня: неизвестная техника.");
-    if ((k.role === "base") && !m.feet) e.push("Нижний кухонный корпус ставится на опоры.");
+    if ((k.role === "base") && !m.feet && !k.noLegs) e.push("Нижний кухонный корпус ставится на опоры."); // noLegs — в проекте Базиса опор нет (k33, k34): не требуем и не добавляем
     if (k.jointZ && Object.values(k.jointZ).some((v) => !Array.isArray(v) || v.length !== 2 || v.some((x) => !Number.isFinite(x) || x < 5 || x > m.depth / 2 + 50))) e.push("Крепёж стыка: отступы от кромок 5 мм — до середины глубины.");
     if (k.bottomFront !== undefined && (!Number.isFinite(k.bottomFront) || k.bottomFront < 0 || k.bottomFront > 100)) e.push("Дно короче спереди: 0–100 мм.");
     if (k.bottomBack !== undefined && (!Number.isFinite(k.bottomBack) || k.bottomBack < 0 || k.bottomBack > 120)) e.push("Дно короче сзади: 0–120 мм.");

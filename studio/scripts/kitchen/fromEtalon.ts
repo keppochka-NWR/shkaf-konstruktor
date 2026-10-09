@@ -104,6 +104,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     else m.plinthHeight = 0;
   } else { m.bottomType = "none"; m.plinthHeight = 0; }
   if (!topPanel) m.topType = "none";
+  if (role === "base" && !legs.length) { m.kitchen.noLegs = true; notes.push("опор в проекте нет — студия их не добавляет"); } // k33, k34: нижний стоит на дне
   if (legs.length) {
     const xs = [...new Set(legs.map((l) => r1(l.pos[0])))].sort((a, c) => a - c);
     const zs = [...new Set(legs.map((l) => r1(l.pos[2] - sideZ0)))].sort((a, c) => a - c);
@@ -350,6 +351,19 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (Object.keys(ends).length) m.edgeScheme.ends = ends;
     const fx = m.sections[0].fixed?.length ? wallFixedShelfEdges(sh[m.sections[0].fixed[0]]) : undefined;
     if (fx) m.edgeScheme.fixedSides = fx;
+  }
+  // глубина присадки по проекту, если не типовая: D5 конфирмата в торец дна/крыши (типовая 35; k33/k34 «Евровинт 6х50» — 36), D5 полкодержателя (12; k33/k34 — 9)
+  {
+    const body = new Set([bottom, topPanel, left, right].filter(Boolean).map((x) => x!.p.i));
+    const mode = (xs: number[]) => { const c = new Map<number, number>(); for (const x of xs) c.set(x, (c.get(x) ?? 0) + 1); return [...c].sort((a, b) => b[1] - a[1])[0]?.[0]; };
+    const srcCat = (h: { src?: number | null }) => (h.src === null || h.src === undefined ? undefined : ref.hardware[h.src]?.category);
+    const hs = ref.holes ?? [];
+    const conf = mode(hs.filter((h) => h.d === 5 && srcCat(h) === "конфирмат" && body.has(h.panel)).map((h) => r1(h.depth)));
+    const pin = mode(hs.filter((h) => h.d === 5 && srcCat(h) === "полкодержатель").map((h) => r1(h.depth)));
+    const drill: NonNullable<NonNullable<Module["kitchen"]>["drill"]> = {};
+    if (conf !== undefined && Math.abs(t - 16) < 0.1 && conf !== 35) drill.confirmat = conf;
+    if (pin !== undefined && pin !== 12) drill.pin = pin;
+    if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }
   }
   // навесные/антресоли: вырез в заднем верхнем углу боковины (k32: 100×20, контур из 6 точек) — у каждой боковины свой (k32 m14: только у правой)
   if (role === "wall" || role === "antresol") {
