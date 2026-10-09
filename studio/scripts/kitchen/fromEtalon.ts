@@ -135,18 +135,28 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const above = fronts.filter((q) => q.b.y0 > f0.b.y1 - 1).sort((a, c) => a.b.y0 - c.b.y0)[0];
     m.faceGapBetween = m.kdrawers ? 3 : sameRow ? r1(sameRow.b.x0 - f0.b.x1) : above ? r1(above.b.y0 - f0.b.y1) : 3; // одиночный фасад: зазор по Базису 3 (при разделении на створки)
     const rows = new Set(fronts.map((f) => Math.round(f.b.y0)));
-    if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
+    // пенал: два ряда распашных (низ + верх, по одной или по две створки) = section.doorSplit студии (разрез фасадов по высоте)
+    const rowYs = [...rows].sort((a, c) => a - c), inRow = (y: number) => fronts.filter((q) => Math.abs(Math.round(q.b.y0) - y) < 1);
+    const lowRow = inRow(rowYs[0]), upRow = rowYs.length > 1 ? inRow(rowYs[1]) : [];
+    const split = rowYs.length === 2 && !m.kdrawers && lowRow.length === upRow.length && lowRow.length <= 2 && upRow[0].b.y0 > lowRow[0].b.y1 - 0.5;
+    if (split) {
+      const gapY = r1(upRow[0].b.y0 - lowRow[0].b.y1);
+      m.sections[0].doorSplit = r1(lowRow[0].b.y1 + gapY / 2 - lowRow[0].b.y0); // от низа нижнего фасада до середины зазора между рядами
+      if (lowRow.length === 1) m.faceGapBetween = gapY;
+    } else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
+    const perRow = split ? lowRow.length : fronts.length;
     m.doors = doors.length > 0;
-    m.sections[0].doorLeaves = (fronts.length >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
-    if (fronts.length === 1) {
+    m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
+    if (perRow === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
     }
-    if (fronts.length > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
+    if (perRow > 2 && !m.kdrawers) unsupported.push(`${fronts.length} фасадов в ряду`);
   } else m.doors = false;
   // высоты петель (от низа фасада) — как в проекте, если отличаются от правила 100 мм от краёв
   if (fronts.length && doors.length) {
-    const f = fronts[0], ys = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30).map((h) => r1(h.pos[1] - f.b.y0)).sort((a, c) => a - c);
+    const f = fronts[0], twoRows = m.sections[0].doorSplit !== undefined; // два ряда: высоты петель — нижнего фасада (верхний масштабируется студией)
+    const ys = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30 && (!twoRows || (h.pos[1] >= f.b.y0 && h.pos[1] <= f.b.y1))).map((h) => r1(h.pos[1] - f.b.y0)).sort((a, c) => a - c);
     const def = (() => { const n = ys.length, dh = f.b.y1 - f.b.y0, off = Math.min(100, Math.max(40, dh / 4)); return Array.from({ length: n }, (_, k) => n === 1 ? dh / 2 : off + (dh - 2 * off) * k / (n - 1)); })();
     // число петель по правилу кухни — по высоте фасада; если в проекте другое число или другие высоты — берём высоты проекта
     const n0 = (f.b.y1 - f.b.y0) <= 900 ? 2 : (f.b.y1 - f.b.y0) <= 1300 ? 3 : (f.b.y1 - f.b.y0) <= 1700 ? 4 : (f.b.y1 - f.b.y0) <= 2100 ? 5 : 6;
