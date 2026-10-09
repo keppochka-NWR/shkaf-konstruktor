@@ -33,6 +33,8 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
+  const fe = frontEdge(ref);
+  if (fe && m.edgeScheme?.t) { m.edgeScheme = { ...m.edgeScheme, t: fe.other, front: fe.front }; notes.push(`передние торцы корпуса — кромка ${fe.front}, остальные ${fe.other} — как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
   if (pf !== undefined) { m.shelfPinInsetFront = pf; notes.push(`передние полкодержатели в ${pf} от переднего торца полки (задние в ${m.shelfPinInset}) — как в Базисе`); }
   return notes;
@@ -65,6 +67,14 @@ export function hingePlateHoles(ref: RefModule): boolean | undefined {
       || ref.holes!.filter((o) => o.d === 3 && Math.abs(o.at[1] - y) < 1 && Math.abs(Math.abs(o.at[0] - x) - 16) < 1.5 && Math.abs(o.at[2] - (z - 37)) < 1.5).length >= 2;
   }).length;
   return n === hs.length ? true : n === 0 ? false : undefined;
+}
+
+/** Передний торец боковин кромлен толще остальных (k29 — 7, k27 — 1 из 383 модулей): { front, other } или undefined. */
+export function frontEdge(ref: RefModule): { front: number; other: number } | undefined {
+  type P = RefModule["panels"][number] & { edges?: { side: string; thick: number }[] };
+  const L = (ref.panels as P[]).filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "x" && p.box[4] - p.box[1] > 200).sort((a, b) => a.box[0] - b.box[0])[0];
+  const ed = (L?.edges ?? []).filter((e) => e.thick > 0), f = ed.find((e) => e.side === "+z"), o = [...new Set(ed.filter((e) => e.side !== "+z").map((e) => e.thick))];
+  return f && o.length === 1 && Math.abs(o[0] - f.thick) > 0.01 ? { front: f.thick, other: o[0] } : undefined;
 }
 
 /** Опоры не сеткой «ряды по ширине × перед/зад» (18 из 174 модулей с опорами, k15 m02: правая задняя глубже левой на 23) —

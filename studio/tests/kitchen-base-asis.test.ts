@@ -7,7 +7,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
-import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles} from '../scripts/kitchen/recognize-base';
+import {edgesAllAround,edgesNone,sideTopBare,pinInsetFront,irregularLegs,sideDown,hingePlateHoles,frontEdge} from '../scripts/kitchen/recognize-base';
 import {holes} from '../src/drilling';
 import {edgeByDir} from '../src/edges';
 
@@ -178,6 +178,13 @@ test('петли без наколок под планку (k29 m04): у Баз�
   const c=compareModule(ref,m);
   assert.deepEqual([c.holes?.missing.length,c.holes?.extra.length],[0,0],JSON.stringify(c.holes?.extra.slice(0,4)));
   if(has('k25'))assert.equal(hingePlateHoles(load('k25','m07')),true);
+  // передние торцы корпуса кромлены 2 при остальных 0,5 (k29) — как в Базисе; розетка помещения — в реестре отступлений, сверка PASS
+  assert.deepEqual(frontEdge(ref),{front:2,other:0.5});
+  assert.deepEqual([m.edgeScheme?.t,m.edgeScheme?.front],[0.5,2]);
+  const L=parts(m).find(p=>p.id==='left')!;
+  assert.deepEqual([edgeByDir(L)['+z'],edgeByDir(L)['+y']],[2,0.5]);
+  assert.ok(c.deviations?.includes('Розетка'));
+  assert.ok(c.pass,why(c));
   const pal=kitchenBase(initialModule(),600);
   const d3=(x:typeof pal)=>holes(x,parts(x)).filter(h=>h.d===3).length;
   const plates=parts(pal).filter(p=>p.id.includes(':hingeplate:')).length;

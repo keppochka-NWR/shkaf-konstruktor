@@ -106,7 +106,7 @@ function matchPoints(a: number[][], b: number[][]): number | null {
 }
 
 /** Отступления (реестр): профили-экструзии Базиса («Профиль», «Профиль1») — без сетки, контур в эталон не извлекается; не воспроизводятся, в отчёте — отдельной строкой. */
-export const isDeviation = (h: RefHardware) => /^Профиль/.test(h.name) && !h.mesh;
+export const isDeviation = (h: RefHardware) => (/^Профиль/.test(h.name) || /^(Розетка|Выталкивание)/.test(h.name)) && !h.mesh; // + розетка помещения и её «выталкивание» (k28, k29 — 4 модуля): электрика, не мебель
 
 export function compareModule(ref0: RefModule, m: Module, tol = 0.5): Comparison {
   const deviations = ref0.hardware.filter(isDeviation).map((h) => h.name), ref: RefModule = { ...ref0, hardware: ref0.hardware.filter((h) => !isDeviation(h)) };
