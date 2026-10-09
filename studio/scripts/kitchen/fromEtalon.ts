@@ -37,12 +37,28 @@ export type Recognized = { module: Module; notes: string[]; unsupported: string[
  *  gap — зазор между створками ряда (у одной створки — 3, как у Базиса), split — от низа нижнего ряда до его верха + gap/2,
  *  niche — от верха нижнего ряда до низа верхнего. undefined — ряды не совпадают по ширине/створкам. */
 export function nicheFromRows(low: B[], up: B[]): { gap: number; split: number; niche: number } | undefined {
-  if (!low.length || low.length !== up.length || low.length > 2) return undefined;
-  const lo = [...low].sort((a, c) => a.x0 - c.x0), hi = [...up].sort((a, c) => a.x0 - c.x0);
-  if (lo.some((q, k) => Math.abs(q.x0 - hi[k].x0) > 0.6 || Math.abs(q.x1 - hi[k].x1) > 0.6)) return undefined;
-  if (lo.some((q) => Math.abs(q.y0 - lo[0].y0) > 0.6 || Math.abs(q.y1 - lo[0].y1) > 0.6)) return undefined;
-  const gap = lo.length === 2 ? r1(lo[1].x0 - lo[0].x1) : 3, niche = r1(Math.min(...hi.map((q) => q.y0)) - lo[0].y1);
-  return { gap, split: r1(lo[0].y1 - lo[0].y0 + gap / 2), niche };
+  const r = doorRowsFromFronts([low, up], 3);
+  return r && r.niche !== undefined ? { gap: r.gap, split: r.split, niche: r.niche } : undefined;
+}
+
+/** Ряды распашных фасадов пенала снизу вверх (в каждом ряду 1 или 2 створки, ряды по одной линии x, створки ряда одной высоты):
+ *  gap — зазор между створками (у одной створки — зазор между рядами 2-й и выше, иначе single), split — нижний ряд + gap/2,
+ *  niche — открытая ниша над нижним рядом (если зазор там не равен зазору рядов), rows — высоты средних рядов.
+ *  undefined — ряды не сводятся к этой схеме (разное число створок, разные зазоры между верхними рядами). */
+export function doorRowsFromFronts(rows: B[][], single = 3): { gap: number; split: number; niche?: number; rows: number[] } | undefined {
+  if (rows.length < 2 || rows.some((r) => !r.length || r.length > 2 || r.length !== rows[0].length)) return undefined;
+  const rs = rows.map((r) => [...r].sort((a, c) => a.x0 - c.x0));
+  for (const r of rs) {
+    if (r.some((q, k) => Math.abs(q.x0 - rs[0][k].x0) > 0.6 || Math.abs(q.x1 - rs[0][k].x1) > 0.6)) return undefined;
+    if (r.some((q) => Math.abs(q.y0 - r[0].y0) > 0.6 || Math.abs(q.y1 - r[0].y1) > 0.6)) return undefined;
+  }
+  const gaps = rs.slice(1).map((r, i) => r1(r[0].y0 - rs[i][0].y1));
+  const rowGap = gaps.length > 1 ? gaps[1] : undefined;
+  if (gaps.slice(1).some((g) => Math.abs(g - gaps[1]) > 0.6) || gaps.some((g) => g < -0.5)) return undefined;
+  const gap = rs[0].length === 2 ? r1(rs[0][1].x0 - rs[0][0].x1) : rowGap ?? (gaps[0] <= 10 ? gaps[0] : single);
+  if (rowGap !== undefined && Math.abs(rowGap - gap) > 0.6) return undefined; // у двух створок зазор рядов = зазор створок
+  const niche = Math.abs(gaps[0] - gap) > 0.6 ? gaps[0] : undefined;
+  return { gap, split: r1(rs[0][0].y1 - rs[0][0].y0 + gap / 2), ...(niche !== undefined ? { niche } : {}), rows: rs.slice(1, -1).map((r) => r1(r[0].y1 - r[0].y0)) };
 }
 
 /** Точек крепежа (конфирмат/эксцентрик) по глубине на стыке дна и крыши с левой стойкой: наибольшее из двух; 2 или 3, иначе undefined. */
@@ -255,6 +271,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const rowsOk = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5;
     const niche = rowsOk && rowsGap > 10 ? nicheFromRows(lowRow.map((q) => q.b), upRow.map((q) => q.b)) : undefined;
     const split = rowsOk && rowsGap <= 10;
+    // 3+ ряда распашных у пенала: все фасады — двери (на петлях), верхний ряд в пределах корпуса
+    const allRows = rowYs.map(inRow), topOver = fronts.length ? r1(Math.max(...fronts.map((q) => q.b.y1)) - top) : 0;
+    const multi = role === "tall" && rowYs.length >= 3 && rowYs.length <= 5 && !m.kdrawers && topOver <= 20 && hw("петля").length > 0 && !hw("направляющая").length && !fronts.some((q) => /^Фронтал/i.test(q.p.name)) ? doorRowsFromFronts(allRows.map((r) => r.map((q) => q.b))) : undefined;
     if (niche) {
       // ниша под технику (духовка/СВЧ) между рядами распашных: нижний ряд — doorSplit, ниша — doorNiche, зазор створок — faceGapBetween
       m.faceGapBetween = niche.gap;
@@ -267,8 +286,15 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
       const gapY = r1(upRow[0].b.y0 - lowRow[0].b.y1);
       m.sections[0].doorSplit = r1(lowRow[0].b.y1 + gapY / 2 - lowRow[0].b.y0); // от низа нижнего фасада до середины зазора между рядами
       if (lowRow.length === 1) m.faceGapBetween = gapY;
+    } else if (multi) {
+      // пенал в 3+ ряда распашных: нижний — doorSplit, средние — doorRows, верхний — до верха; ниша над нижним — doorNiche
+      m.faceGapBetween = multi.gap;
+      m.sections[0].doorSplit = multi.split;
+      if (multi.niche !== undefined) m.sections[0].doorNiche = multi.niche;
+      m.sections[0].doorRows = multi.rows;
+      notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
     } else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
-    const perRow = split || niche ? lowRow.length : fronts.length;
+    const perRow = split || niche || multi ? lowRow.length : fronts.length;
     m.doors = doors.length > 0;
     m.sections[0].doorLeaves = (perRow >= 2 ? 2 : 1) as 1 | 2; // число створок — как в Базисе («авто» студии делит 630 на две)
     // подъёмный фасад: «Петля накладная» на нижней плоскости крыши (кватернион Базиса [0,−0,71,0,0,71]), выше середины фасада

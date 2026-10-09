@@ -55,6 +55,31 @@ test('пенал с нишей k31 m01: фасады двух рядов и пе
   assert.equal(Math.round((bot1-top0)*10)/10,1018.5);
 });
 
+test('пенал в 3 ряда распашных (doorRows): нижний 824,5, средний 1135, верхний до верха, зазор 3; петли по правилу по высоте ряда',()=>{
+  const t={...initialModule(),height:2470.5,width:680,depth:600,kitchen:{role:'tall' as const}};t.sections=[{...t.sections[0],doorLeaves:1 as const,doorSplit:826,doorRows:[1135]}];t.faceGapBetween=3;
+  assert.deepEqual(validate(t),[]);
+  const dd=parts(t).filter(p=>p.role==='door').sort((a,b)=>a.position[1]-b.position[1]);
+  assert.equal(dd.length,3);
+  assert.deepEqual(dd.slice(0,2).map(p=>Math.round(p.size[1]*10)/10),[824.5,1135]);
+  assert.equal(Math.round((dd[1].position[1]-dd[1].size[1]/2-(dd[0].position[1]+dd[0].size[1]/2))*10)/10,3);
+  assert.equal(Math.round((dd[2].position[1]-dd[2].size[1]/2-(dd[1].position[1]+dd[1].size[1]/2))*10)/10,3);
+  const hinges=parts(t).filter(p=>p.id.includes(':hingeplate:'));
+  assert.equal(hinges.length,2+3+2,'824,5 → 2, 1135 → 3, верхний ≤ 900 → 2 (как 7 петель k05 m01)');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(t))).sections[0].doorRows,[1135]);
+  const w={...t};delete (w as Partial<typeof t>).kitchen;
+  assert.ok(validate(w as typeof t).some(e=>e.includes('ряды фасадов')),'у шкафа doorRows нет');
+});
+
+test('распознавание рядов: k05 m01 — 3 ряда по одной створке (826 + средний 1135), k24 m04 — 3 ряда; ряды с ящиками не трогаем',{skip:!existsSync(`${ETALON}/k05.json`)},()=>{
+  const a=moduleFromEtalon(load('k05','m01'));
+  assert.deepEqual([a.module.sections[0].doorSplit,a.module.sections[0].doorRows,a.module.sections[0].doorNiche],[826,[1135],undefined]);
+  assert.ok(!a.unsupported.some(u=>u.startsWith('фасады в')),a.unsupported.join('; '));
+  const b=moduleFromEtalon(load('k24','m04'));
+  assert.equal(b.module.sections[0].doorRows?.length,1);
+  const c=moduleFromEtalon(load('k28','m03'));
+  assert.equal(c.module.sections[0].doorRows,undefined,'ящики Axis + двери — не ряды распашных');
+});
+
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
   const m=initialModule();m.sections[0].doorNiche=500;
   assert.ok(validate(m).some(e=>e.includes('ниша под технику')));
