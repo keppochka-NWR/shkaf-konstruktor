@@ -194,10 +194,18 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0] } : { xs }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
   }
-  // цоколь в модуле? (панель у пола перед опорами)
-  const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40);
+  // цоколь в модуле? (щит ЛДСП у пола перед опорами / под поднятым дном навесного — по положению, имя в Базисе любое;
+  // у навесного боковины бывают подняты над низом модуля — k30 m09: боковины и щит от 18,5)
+  const lowWall = role === "wall" || role === "antresol";
+  const plinthPanel = P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40
+    // навесной: щит спереди, за фасадом (не фасад и не задняя планка у стены, k04 m09 / k14 m06 — z 0..16), от низа модуля
+    // (до 25: k30 m09 — боковины и щит от 18,5); щит до 160, уже распознанный стяжкой на ребре (k22 m10, k25 m16), остаётся стяжкой
+    && (lowWall ? b.y0 < 25 && b.z1 <= sideZ1 + 0.5 && b.z1 >= sideZ1 - 30 && !fronts.some((f) => f.b === b) && !railsEdge.some((r) => r.b === b) : b.y0 < 5));
   const clips = hw("клипса").length > 0;
   if (role === "base" || role === "tall") m.kitchen.plinth = { ...(plinthPanel ? { height: r1(plinthPanel.b.y1 - plinthPanel.b.y0) } : { height: 95, off: true }), ...(legs.length && !clips ? { clips: false } : {}) };
+  // навесной/антресоль с поднятым дном: щит под дном (цоколь из ЛДСП под любым именем — «Фронтальная», «13-ФП», k14 m03, k32 m13)
+  // остаётся цоколем модуля; без такого щита в Базисе — цоколя нет (свес боковин, k28 m10)
+  else if (!plinthPanel && !legs.length && (m.plinthHeight ?? 0) > 0) m.kitchen.plinth = { height: 95, off: true };
   if (fronts.length && !hw("ручка").length) m.noHandles = true;
   if (!plinthPanel && (role === "base" || role === "tall")) notes.push("цоколя в модуле нет (в Базисе — у ряда или отсутствует)");
   // царги

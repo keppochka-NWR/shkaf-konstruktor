@@ -668,8 +668,9 @@ export function parts(m: Module): Part[] {
     const dir = side === "left" ? -1 : 1, edge = side === "left" ? 0 : m.width, w = wf.width;
     add("wall-filler:" + side, "Фальшпанель к стене " + (side === "left" ? "левая" : "правая") + " " + w + "×16", [t, m.height, w], [edge + dir * t / 2, m.height / 2, d + 18 - w / 2], m.height, w, t);
   }
-  // кухня: навесной/антресоль без цоколя (низ корпуса выше пола — свес боковин), у нижнего — только если цоколь есть в проекте Базиса
-  const kitchenNoPlinth = !!m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol" || !!m.kitchen.plinth?.off);
+  // кухня: цоколя нет, только если его нет в проекте Базиса (plinth.off ставит распознаватель — у нижних, пеналов, навесных и антресолей);
+  // щит под поднятым дном навесного под другим именем («Фронтальная», k14 m03) — это цоколь, он остаётся
+  const kitchenNoPlinth = !!m.kitchen?.plinth?.off;
   if(!m.feet&&bottom>0&&!kitchenNoPlinth){
     if(m.skew){ // цоколь по скошенному фронту: длина по косой, утоплен на 2 от передних граней боковин
       const pl=(m.width-2*t)/Math.cos(skewAngle(m)),fp=frontPoint(m,m.width/2,-RULES.plinthInset-t/2);
@@ -954,6 +955,9 @@ export function parts(m: Module): Part[] {
   };
   const horizontals = m.kitchen?.noFasteners ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   const ecc = m.fastening === "eccentric";
+  // лицевая плоскость ХДФ в пазу (кухня): по ней узнаём жёсткую полку, стоящую задней кромкой на задней стенке
+  const grooveBack = m.kitchen && m.backType === "groove" ? out.find((p) => p.id === "back") : undefined;
+  const grooveBackFront = grooveBack ? grooveBack.position[2] + grooveBack.size[2] / 2 : undefined;
   for (const hp of horizontals) {
     const z0 = hp.position[2] - hp.size[2] / 2;
     if (hp.id === "bottom" && m.bottomUnder) {
@@ -999,9 +1003,12 @@ export function parts(m: Module): Part[] {
             add(`dowel:${hp.id}:${side}:${k}`, "Шкант 8×30", [30, 8, 8], [edgeX + dir * 3, hp.position[1], z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
           }
         } else {
-          // кухня по Базису: задний конфирмат жёсткой полки, отодвинутой от задней кромки (за ХДФ), — от задней кромки боковины,
-          // как у дна и крыши (k13 m02: полка с 20, конфирматы на 54 у всех горизонталей)
-          const ins = m.confirmatInset ?? RULES.confirmatInset, zc = k === 0 && !!m.kitchen && fixedIds.has(hp.id) && ins - z0 >= 20 ? ins : z;
+          // кухня по Базису: задний конфирмат жёсткой полки, стоящей задней кромкой на ХДФ в пазу (полка перед задником), — от задней
+          // кромки боковины, как у дна и крыши (k13 m02: ХДФ 17–20, полка с 20, конфирматы на 54 у всех горизонталей). Только такая полка:
+          // у полок нижних шкафов без ХДФ в пазу (k10 m11, набивной задник) конфирмат остаётся от кромки полки — иначе он попадает
+          // в точку вертикального конфирмата дна.
+          const ins = m.confirmatInset ?? RULES.confirmatInset;
+          const zc = k === 0 && !!m.kitchen && fixedIds.has(hp.id) && grooveBackFront !== undefined && Math.abs(z0 - grooveBackFront) < 0.6 && ins - z0 >= 20 ? ins : z;
           confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], zc], dir > 0 ? "+x" : "-x", hp.sectionId);
         }
       }

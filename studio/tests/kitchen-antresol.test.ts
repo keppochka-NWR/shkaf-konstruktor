@@ -60,7 +60,7 @@ test('no fasteners in Bazis (k32): studio adds no confirmats, eccentrics or dowe
 });
 
 test('raised hanging body (bottom 14 above the module bottom): no plinth panel, facade down to the module bottom, no plinth-list error',()=>{
-  const m=antresol();m.plinthHeight=14;
+  const m=antresol();m.plinthHeight=14;m.kitchen!.plinth={height:95,off:true}; // как ставит распознаватель: щита под дном в Базисе нет
   const ps=parts(m);
   assert.ok(!ps.some(p=>p.id==='plinth'),'hanging cabinets have no plinth');
   assert.equal(facadeBottom(m),0);
@@ -219,8 +219,57 @@ test('single front gap: the gap shared by two of three edges (k23 m08: left 2.5,
   assert.equal(faceGapOf(B(1,1,330,597,396,349),0,600,400),1,'all different -> left');
 });
 
+test('wall/antresol plinth: off only when Bazis has none (kitchen.plinth.off), otherwise kept like base/tall',()=>{
+  const m=antresol();m.plinthHeight=100;
+  assert.ok(parts(m).some(p=>p.id==='plinth'),'no spec: plinth stays (as before the antresol work)');
+  m.kitchen!.plinth={height:95,off:true};
+  assert.ok(!parts(m).some(p=>p.id==='plinth'),'Bazis has no panel under the raised bottom: no plinth');
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.plinth!.off,true);
+});
+
+test('fixed shelf back confirmat from the side edge only for a shelf standing on the HDF in the groove; nailed back keeps the shelf-edge inset',()=>{
+  const shelfOf=(m:Module)=>{const ps=parts(m),sh=ps.find(p=>p.id===`${m.sections[0].id}:shelf:0`)!;return {ps,sh,z0:sh.position[2]-sh.size[2]/2,cz:ps.find(p=>p.id===`fast:${sh.id}:left:0`)!.model!.origin![2]};};
+  const m=kitchenWall(initialModule(),600);m.height=700;m.depth=330;m.backType='groove';m.confirmatInset=54;m.sections=[{...m.sections[0],shelves:[0.5],fixed:[0]}];
+  const bk=parts(m).find(p=>p.id==='back')!,front=bk.position[2]+bk.size[2]/2;
+  m.shelfRear=(m.shelfRear??0)+front-shelfOf(m).z0; // полка задней кромкой на лицевой плоскости ХДФ (как k13 m02: ХДФ 17–20, полка с 20)
+  const g=shelfOf(m);
+  assert.equal(g.z0,front);assert.equal(g.cz,54,'on the HDF: from the side edge, like bottom and top');
+  const n={...m,backType:'nailed' as const},s=shelfOf(n);
+  assert.equal(s.cz,s.z0+54,'nailed back: from the shelf edge');
+  const nb={...m,kitchen:undefined},w=shelfOf(nb);
+  assert.equal(w.cz,w.z0+54,'not a kitchen: unchanged');
+});
+
 // Сверка с эталонами Базиса (вне репозитория — на другой машине пропуск).
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon/';
+const refOf=(k:string,key:string)=>(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+
+// Цоколь из ЛДСП под другим именем: щит под поднятым дном навесного («Фронтальная» k14 m03, «13-ФП» k32 m13) — цоколь модуля,
+// он не пропадает; у антресоли без такого щита (k28 m10) цоколя нет.
+for(const [k,key,name,h] of [['k14','m03','Фронтальная',255],['k32','m13','13-ФП',312]] as const)
+  test(`etalon ${k}/${key}: plinth panel under the raised bottom of a wall module ("${name}") is kept`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const ref=refOf(k,key),{module:m}=moduleFromEtalon(ref);
+    assert.notEqual(m.kitchen!.plinth?.off,true);
+    const pl=parts(m).find(p=>p.id==='plinth')!;
+    assert.ok(pl,'plinth part');assert.equal(pl.size[1],h);
+    const c=compareModule(ref,m);
+    assert.ok(!c.missing.some(x=>x.name===name&&/ldsp/.test(x.cls)),'Bazis panel is not missing');
+    assert.ok(c.pairs.some(p=>p.ref.name===name&&p.studio.id==='plinth'&&p.delta<=2));
+  });
+test('etalon k28/m10: antresol without a panel under the bottom has no plinth (plinth.off)',{skip:!existsSync(ET+'k28.json')},()=>{
+  const {module:m}=moduleFromEtalon(refOf('k28','m10'));
+  assert.equal(m.kitchen!.plinth?.off,true);
+  assert.ok(!parts(m).some(p=>p.id==='plinth'));
+});
+// Задний конфирмат жёсткой полки нижнего шкафа (набивной ХДФ) — от кромки полки, не в точке вертикального конфирмата дна (k10 m11/m12/m14, k15 m03).
+for(const [k,key] of [['k10','m11'],['k10','m12'],['k10','m14'],['k15','m03']] as const)
+  test(`etalon ${k}/${key}: shelf confirmat does not hit the bottom confirmat`,{skip:!existsSync(ET+k+'.json')},()=>{
+    const {module:m}=moduleFromEtalon(refOf(k,key)),ps=parts(m);
+    // задние (…:0); передние пересечения (…:1) — старые, до работы по антресолям: полка распознана ниже, чем в Базисе
+    const bad=partCollisions(ps,m).filter(c=>[c.a,c.b].some(x=>/^fast:bottom:\w+:0$/.test(x))&&[c.a,c.b].some(x=>/^fast:.*shelf:\d+:\w+:0$/.test(x)));
+    assert.deepEqual(bad,[]);
+  });
+
 for(const [k,key] of [['k12','m05'],['k18','m14'],['k32','m16'],['k16','m08'],['k31','m03'],['k23','m06'],['k31','m13'],['k20','m05'],['k28','m10'],['k23','m08'],['k19','m05']] as const)
   test(`etalon ${k}/${key}: antresol recognized and matches Bazis`,{skip:!existsSync(ET+k+'.json')},()=>{
     const ref=(JSON.parse(readFileSync(ET+k+'.json','utf8')).modules as RefModule[]).find(m=>m.key===key)!;
