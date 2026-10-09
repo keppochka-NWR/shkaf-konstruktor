@@ -149,3 +149,10 @@ test('навесной под вытяжку k08 m10: дно короче сза
   assert.deepEqual(partCollisions(ps,m).map(x=>x.names.join(' × ')),[]);
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.jointNone,['bottom:left','bottom:right']);
 });
+test('навесной с сушкой k05 m10: жёсткая полка над сушкой — свои отступы конфирматов и кромка перед/зад, как в Базисе',{skip:!existsSync(`${ETALON}/k05.json`)},()=>{
+  const ref=load('k05','m10'),{module:m}=moduleFromEtalon(ref);
+  const id=`${m.sections[0].id}:shelf:${m.sections[0].fixed![0]}`;
+  assert.deepEqual(m.kitchen?.jointZ?.[`${id}:left`],[53,52]);
+  assert.deepEqual(m.edgeScheme?.fixedSides,['+z','-z']);
+  assert.ok(compareModule(ref,m).pass);
+});

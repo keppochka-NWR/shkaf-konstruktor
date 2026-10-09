@@ -7,7 +7,7 @@ import type { RefModule, RefPanel } from "./compare";
 import type { KitchenRole } from "../../src/kitchen";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { wallDryer } from "./wallDryer";
-import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
 import { AXIS_BACK, FIRMAX, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer } from "../../src/kitchenDrawers";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -307,7 +307,9 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
   if (conf.length && host0) m.confirmatInset = r1(Math.min(...conf.map((h) => h.pos[2] - host0.b.z0)));
   // навесные: у каждого стыка дна/крыши свои отступы крепежа, если они не совпадают с общим
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
-    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right, m.confirmatInset);
+    // жёсткие полки (k05 m10/m11: полка над сушкой на конфирматах 53/52 при общем 63) — тоже свои отступы
+    const fixedJ = (m.sections[0].fixed ?? []).map((j) => [`${m.sections[0].id}:shelf:${j}`, sh[j]] as [string, (typeof sh)[number] | undefined]);
+    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right, m.confirmatInset);
     if (Object.keys(jz).length) m.kitchen.jointZ = jz;
     const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right);
     if (jn.length) m.kitchen.jointNone = jn;
@@ -339,6 +341,8 @@ export function moduleFromEtalon(ref: RefModule, look: { decor: string; facadeDe
     const rear: ("-z")[] = m.backType === "groove" || m.backType === "none" ? ["-z"] : [];
     const ends = wallEndEdges(bottom, topPanel, { bottom: m.bottomUnder ? ["+z", "+x", "-x", ...rear] : ["+z", ...rear], top: ["+z", ...rear] });
     if (Object.keys(ends).length) m.edgeScheme.ends = ends;
+    const fx = m.sections[0].fixed?.length ? wallFixedShelfEdges(sh[m.sections[0].fixed[0]]) : undefined;
+    if (fx) m.edgeScheme.fixedSides = fx;
   }
   // навесы: в ранних кухнях (k01, k03) навешивание иначе — без навесов
   if ((role === "wall" || role === "antresol") && !hw("навес").length) m.kitchen.hangers = false;

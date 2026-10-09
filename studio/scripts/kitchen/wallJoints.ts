@@ -30,6 +30,14 @@ export function bottomUnderDowelOffset(hardware: RefHardware[], bottom: PB): num
   return d0 ? r1(Math.abs(d0.pos[2] - e0.pos[2])) : null;
 }
 
+/** Торцы жёсткой полки навесного (без полкодержателей), кромлёные в Базисе (k05 m10/m11: перед и зад): только если не «по кругу». */
+export function wallFixedShelfEdges(fixed: PB | undefined): Side[] | undefined {
+  if (!fixed) return undefined;
+  const ed = ((fixed.p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0);
+  const sides = (["+x", "-x", "+z", "-z"] as Side[]).filter((d) => ed.some((e) => e.side === d));
+  return sides.length === 4 ? undefined : sides;
+}
+
 /** Торцы дна и крыши навесного, кромлёные в Базисе (k32 — по кругу, включая торцы у боковин): только если отличаются от правила студии. */
 export function wallEndEdges(bottom: PB | undefined, top: PB | undefined, def: { bottom: Side[]; top: Side[] }): Partial<Record<"bottom" | "top", Side[]>> {
   const out: Partial<Record<"bottom" | "top", Side[]>> = {};
