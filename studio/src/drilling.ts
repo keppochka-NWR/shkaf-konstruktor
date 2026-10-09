@@ -45,6 +45,8 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     } else if (p.id.startsWith("leg:") && p.model?.origin) {
       const o = p.model.origin;
       for (const [dx, dz] of [[-15.5, -15.5], [15.5, -15.5], [-15.5, 15.5], [15.5, 15.5]]) push(p.id, [o[0] + dx, o[1], o[2] + dz], [0, 1, 0], 4, 3);
+    } else if (p.id.startsWith("kitchen-leg-screw:") && p.anchor) {
+      push(p.id, p.anchor, [0, 1, 0], 3, 3); // саморез площадки опоры (Базис «3x3»): D3×3 в нижнюю пласть дна
     } else if (p.id.startsWith("kitchen-hanger:") && p.model?.origin) {
       // навес ABS: две наколки D3×3 в боковину — на 15 мм ниже начала навеса (30 от верха), в 38 и 70 мм от задней кромки
       const o = p.model.origin, into: [number, number, number] = [o[0] < m.width / 2 ? -1 : 1, 0, 0];

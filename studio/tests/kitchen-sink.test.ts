@@ -53,3 +53,27 @@ test('recognize-common edgeRail: rear rail 1 mm from the back edge, front rail a
   assert.deepEqual(edgeRail({x0:16,y0:760,z0:541,x1:584,y1:820,z1:557},820,0,557),{place:'front-top',height:60});
   assert.deepEqual(edgeRail({x0:16,y0:550,z0:0,x1:584,y1:620,z1:16},820,0,557),{place:'rear-top',height:70,at:550});
 });
+
+test('Bazis k24: leg plate screws 3x3 only when the project has them; D3x3 holes in the bottom, no collisions',async()=>{
+  const {holes}=await import('../src/drilling');
+  const {partCollisions}=await import('../src/collisions');
+  const {legScrews}=await import('../scripts/kitchen/recognize-common');
+  const m=sink();
+  assert.ok(!parts(m).some(p=>p.id.startsWith('kitchen-leg-screw:')),'not added by default');
+  m.kitchen!.legs={back:70,front:70,screws:true};
+  const ps=parts(m);
+  assert.equal(ps.filter(p=>p.id.startsWith('kitchen-leg-screw:')).length,16);
+  assert.equal(holes(m,ps).filter(h=>h.src.startsWith('kitchen-leg-screw:')&&h.d===3&&h.depth===3&&h.part==='bottom').length,16);
+  assert.deepEqual(partCollisions(ps,m).filter(c=>/leg-screw/.test(c.a+c.b)),[]);
+  const leg={name:'Опора',category:'опора',pos:[49,100,49]},sc=(dx:number,dz:number)=>({name:'3x3',category:'прочее',pos:[49+dx,100,49+dz]});
+  assert.equal(legScrews([leg,sc(-15.5,-15.5),sc(15.5,-15.5),sc(-15.5,15.5),sc(15.5,15.5)]),true);
+  assert.equal(legScrews([leg,sc(-15.5,-15.5)]),false);
+});
+
+test('Bazis sinks without legs (k21 m02): base on the floor with explicit plinthHeight 0 is valid, without it - error',async()=>{
+  const {kitchenErrors}=await import('../src/kitchen');
+  const m=sink();m.feet=undefined;
+  assert.ok(kitchenErrors(m).some(e=>/на опоры/.test(e)));
+  m.plinthHeight=0;
+  assert.ok(!kitchenErrors(m).some(e=>/на опоры/.test(e)));
+});

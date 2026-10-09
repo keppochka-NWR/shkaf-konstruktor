@@ -80,6 +80,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if ((p.role === "rod" && q.role === "flange") || (p.role === "flange" && isBoard(q) && depth <= 2)) return true;
     // Кухонная фурнитура: опора — под дном, клипса — на опоре и цоколе, навес — в углу боковины, проходит через полосу ХДФ.
     if (p.id.startsWith("leg:") && isBoard(q) && depth <= 3) return true;
+    // саморез площадки опоры — в своём отверстии D3×3 в нижней пласти дна
+    if (p.id.startsWith("kitchen-leg-screw:") && isBoard(q) && q.role === "body" && depth <= 3.5) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
     if (p.id.startsWith("kitchen-hanger") && isBoard(q) && q.role === "body" && (q.material === "hdf" || (q.size[0] <= 40 && q.size[1] > 60))) return true;
     if (p.id.startsWith("kitchen-hanger-cap:") && q.id === p.id.replace("-cap", "")) return true;

@@ -70,6 +70,7 @@ function studioCategory(p: Part): string | null {
   const id = p.id;
   if (id.startsWith("leg:")) return "опора";
   if (id.startsWith("kitchen-clip:")) return "клипса";
+  if (id.startsWith("kitchen-leg-screw:")) return "прочее";
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.includes(":hingeplate:")) return "петля";

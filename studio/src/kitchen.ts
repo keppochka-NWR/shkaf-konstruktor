@@ -16,7 +16,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Навесы ABS L/R: по умолчанию есть у навесных и антресолей; false — навешивание иначе (планка, шина, ранние проекты без навесов). */
   hangers?: boolean;
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
-  legs?: { back: number; front: number; side?: number; xs?: number[] } };
+  legs?: { back: number; front: number; side?: number; xs?: number[];
+    /** Площадка опоры на 4 самореза 3×3 по квадрату 31×31 (Базис «3x3» у опор: k21, k24 — 6 модулей из 174 с опорами). */
+    screws?: true } };
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
@@ -85,6 +87,8 @@ export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }
 // Z внутрь корпуса). Кватернион [w, x, y, z].
 const Q_LEG: [number, number, number, number] = [0.5, 0.5, -0.5, 0.5];      // X→+Z, Y→−X, Z→−Y
 const Q_HANGER: [number, number, number, number] = [Math.SQRT1_2, 0, Math.SQRT1_2, 0]; // X→−Z, Y→+Y, Z→+X (оба навеса)
+/** Площадка опоры: 4 точки крепления по квадрату 31×31 вокруг оси (те же, что отверстия D4×3 под опору). */
+export const LEG_SCREWS: [number, number][] = [[-15.5, -15.5], [15.5, -15.5], [-15.5, 15.5], [15.5, 15.5]];
 
 /** Детали, которые кухонный корпус добавляет к обычному: опоры с клипсами и цоколь (нижний, пенал), навесы (навесной, антресоль). */
 export function kitchenExtraParts(m: Module, out: Part[]) {
@@ -98,6 +102,8 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       // Опора: ось вниз от нижней грани дна, площадка 4×D4 по квадрату 31×31; модель Базиса ±29 × 0..100 по оси.
       const lm = KITCHEN_MODELS.leg;
       out.push(metal(`leg:${n}`, "Опора кухонная регулируемая H100-120, чёрная", [58, H, 58], [l.x, H / 2, l.z], lm ? { file: lm.file, length: "y", native: true, origin: [l.x, H, l.z], quat: Q_LEG } : undefined));
+      // саморезы площадки опоры — только если они есть в проекте Базиса (legs.screws): точка — на нижней пласти дна, тело — в отверстии 3×3 дна
+      if (k.legs?.screws) LEG_SCREWS.forEach(([dx, dz], j) => { const s = metal(`kitchen-leg-screw:${n}:${j}`, "Саморез 3×3 (площадка опоры)", [3, 3, 3], [l.x + dx, H + 1.5, l.z + dz]); s.anchor = [l.x + dx, H, l.z + dz]; out.push(s); });
       // клипсы на передних опорах — и когда цоколь у ряда, а не у модуля; нет только при clips: false
       if (l.front && k.plinth?.clips !== false) {
         const cm = KITCHEN_MODELS.clip;
@@ -220,7 +226,8 @@ export function kitchenErrors(m: Module): string[] {
     const k = m.kitchen;
     if (!["base", "wall", "tall", "antresol"].includes(k.role)) e.push("Кухня: тип корпуса — нижний, навесной, пенал или антресоль.");
     if (k.appliance && !(k.appliance in APPLIANCES)) e.push("Кухня: неизвестная техника.");
-    if ((k.role === "base") && !m.feet) e.push("Нижний кухонный корпус ставится на опоры.");
+    // без опор — только если низ задан явно (plinthHeight): в Базисе мойки без опор бывают (k21 m02, k33/k34 — корпус на полу или подиуме)
+    if ((k.role === "base") && !m.feet && m.plinthHeight === undefined) e.push("Нижний кухонный корпус ставится на опоры.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
   }
   return e;
