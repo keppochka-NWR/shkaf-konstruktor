@@ -1334,7 +1334,8 @@ export function validate(m: Module): string[] {
   }
   for(const s of m.sections)if(s.fixed!==undefined&&(!Array.isArray(s.fixed)||s.fixed.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push('Жёсткие полки: неверные номера.');
   if(m.wallFiller!==undefined){for(const side of ['left','right'] as const){const w=m.wallFiller[side];if(w===undefined)continue;if(w.kind!=='edge'||!Number.isFinite(w.width)||w.width<RULES.wallFillerMin||w.width>RULES.wallFillerMax)errors.push(`Фальшпанель к стене: планка торцом от ${RULES.wallFillerMin} до ${RULES.wallFillerMax} мм.`);}}
-  if(m.kitchen?.faceBottom!==undefined&&(m.feet||!Number.isFinite(m.kitchen.faceBottom)||m.kitchen.faceBottom<0||m.kitchen.faceBottom>m.height-100))errors.push('Низ фасадов: только у кухни без опор, от 0 до высоты корпуса без 100 мм.');
+  // низ фасадов из Базиса (у корпуса на опорах не действует — фасады от опор)
+if(m.kitchen?.faceBottom!==undefined&&!m.feet&&(!Number.isFinite(m.kitchen.faceBottom)||m.kitchen.faceBottom<0||m.kitchen.faceBottom>m.height-100))errors.push('Низ фасадов: от 0 до высоты корпуса без 100 мм.');
 // кухня Базиса: низ корпуса без опор — на высоте из проекта (у Базиса 70, 135, 2030 под нишей техники), список высот цоколя — правило шкафов
 if(m.plinthHeight!==undefined && (m.kitchen&&!m.feet ? !Number.isFinite(m.plinthHeight)||m.plinthHeight<0||m.plinthHeight>m.height-100 : ![0,60,80,100,120,150].includes(m.plinthHeight)))errors.push("Выберите высоту цоколя из списка.");
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>30||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
