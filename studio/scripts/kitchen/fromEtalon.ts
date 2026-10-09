@@ -17,6 +17,7 @@ import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wal
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
+import { railConf } from "./recognize-wallrail";
 import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 
@@ -398,6 +399,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (wallRailOnBottom(role, r, bottom)) { railList.push({ place: front ? "front-bottom" : "rear-bottom", height: r1(r.b.y1 - r.b.y0) }); continue; }
     // стяжка на ребре: место, высота, «на высоте», отступ от кромки (edgeRail) и без крепежа, если его нет в Базисе (n3-sink)
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(role === "base" && !railFastened(r.b, ref.hardware, left.b.x0, right.b.x1) ? { fasten: false as const } : {}) });
+    if ((role === "wall" || role === "antresol") && !m.kitchen.noFasteners) { // крепёж стяжки по проекту Базиса (n4-wall)
+      const hz = topPanel && Math.abs(topPanel.b.y0 - r.b.y1) < 0.6 ? topPanel.b : bottom && Math.abs(bottom.b.y1 - r.b.y0) < 0.6 ? bottom.b : undefined;
+      const rc = railConf(ref.hardware, r.b, left.b.x0, right.b.x1, hz), place = railList[railList.length - 1].place;
+      if (rc) m.kitchen.railConf = { ...m.kitchen.railConf, [place]: rc };
+    }
   }
   if (railList.length) m.rails = railList;
   // задник

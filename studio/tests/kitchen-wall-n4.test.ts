@@ -7,6 +7,7 @@ import {partCollisions} from '../src/collisions';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {handlePlace} from '../scripts/kitchen/recognize-handle';
+import {nailRows} from '../src/kitchen';
 
 // Навесные кухни (n4-wall). Эталоны Базиса лежат вне репозитория — на чужой машине тесты по эталонам пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -82,4 +83,38 @@ test('сушка Базиса без сетки (k02 m03 «Сушка тарел
   assert.equal(ok,true);
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.equal(back.kitchen?.dryer?.length,2,'сушка без сетки сохраняется в проекте');
+});
+
+test('гвозди набивного ХДФ по Базису (k03 m09): ряды в 7,5 от края, round(L/125) — 24 гвоздя, сверка «прочее» 24/24',{skip:!has('k03')},()=>{
+  const {m,c,ok}=pass('k03','m09');
+  assert.ok(m.kitchen?.nails,'раскладка распознана');
+  const ns=parts(m).filter(p=>p.id.startsWith('nail:'));
+  assert.equal(ns.length,24);
+  const row=c.hardware.find(h=>h.category==='прочее')!;
+  assert.deepEqual([row.ref,row.studio,row.maxPosDelta],[24,24,0]);
+  assert.deepEqual(partCollisions(parts(m),m),[]);
+  assert.equal(ok,true);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.nails,m.kitchen?.nails,'гвозди переживают сохранение');
+});
+
+test('nailRows: число гвоздей в ряду round(L/125), ряды от 23 и от 8 мм',()=>{
+  const r=nailRows(548,948);
+  assert.deepEqual([r.bottom.length,r.left.length],[4,8]);
+  assert.deepEqual([r.bottom[0],r.bottom.at(-1),r.left[0],r.left.at(-1)],[23,525,8,940]);
+});
+
+test('гвоздей нет в Базисе — студия их не ставит (k09 m02: паз)',{skip:!has('k09')},()=>{
+  const {m}=pass('k09','m02');
+  assert.equal(m.kitchen?.nails,undefined);
+  assert.equal(parts(m).filter(p=>p.id.startsWith('nail:')).length,0);
+});
+
+test('стяжка навесного k03 m08 на крепеже Базиса: 2 конфирмата через боковину и 2 через крышу (kitchen.railConf)',{skip:!has('k03')},()=>{
+  const {m,c,ok}=pass('k03','m08');
+  assert.deepEqual(m.kitchen?.railConf?.['rear-top'],{side:[34,66],top:[60,508]});
+  const row=c.hardware.find(h=>h.category==='конфирмат')!;
+  assert.deepEqual([row.ref,row.studio],[14,14]);
+  assert.equal(c.holes?.matched,c.holes?.ref);
+  assert.equal(ok,true);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.railConf,m.kitchen?.railConf,'крепёж стяжки переживает сохранение');
 });
