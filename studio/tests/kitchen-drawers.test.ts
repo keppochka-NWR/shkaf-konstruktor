@@ -134,3 +134,23 @@ test('Firmax: system switch keeps the facades, layout fits, save/load round trip
   const deep={...m,depth:450};assert.equal(refitKDrawers(deep,'depth')!.every(k=>k.system==='firmax-ldsp'&&k.box.len<=410),true);
   const bad={...m,kdrawers:[{system:'firmax-ldsp' as const,y0:101.5,y1:471.5,runnerY:116,box:{y:152,h:40,len:490}}]};assert.ok(validate(bad).some(x=>/боковины от 60/.test(x)));
 });
+
+// Критик Firmax р.1: ящик из панели или после смены высоты не должен уходить в цех без 3×3 направляющих и шурупов фасада
+const cnt=(m:ReturnType<typeof firmax>)=>{const h=holes(m);return {d3:h.filter(x=>x.d===3&&x.depth===3).length,d516:h.filter(x=>x.d===5&&x.depth===16).length};};
+test('Firmax height refit keeps runner screws D3x3, face screws D5x16, 5x12 choice, gap and front offset',()=>{
+  const m=firmax();m.kdrawers=m.kdrawers!.map((k,i)=>k.system==='firmax-ldsp'?{...k,box:{...k.box,faceScrews:i===1?[[60,50],[300,20]] as [number,number][]:true,gap:5,front:0,confBottom:53}}:k);
+  const c0=cnt(m);assert.ok(c0.d3>=12&&c0.d516>=8,'source has screws');
+  for(const dh of [-100,100]){
+    const n={...m,height:m.height+dh};n.kdrawers=refitKDrawers(n,'height');
+    const c=cnt(n);assert.ok(c.d3>=c0.d3,`height ${dh}: D3x3 ${c.d3} < ${c0.d3}`);assert.ok(c.d516>=c0.d516,`height ${dh}: D5x16 ${c.d516} < ${c0.d516}`);
+    assert.ok(n.kdrawers!.every(k=>k.system==='firmax-ldsp'&&k.box.screws&&k.box.faceScrews&&k.box.gap===5&&k.box.front===0&&k.box.confBottom===53));
+    assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
+  }
+  const no5={...m,kdrawers:m.kdrawers!.map(k=>k.system==='firmax-ldsp'?{...k,box:{...k.box,rearHoles:false,screws:false}}:k)};
+  const r=refitKDrawers({...no5,height:m.height-100},'height')!;assert.ok(r.every(k=>k.system==='firmax-ldsp'&&k.box.rearHoles===false&&!k.box.screws),'Bazis project without 3x3 / 5x12 stays so');
+});
+test('Firmax from the panel (system switch, count) has runner screws D3x3 by default, like 17 of 19 Bazis modules',()=>{
+  const ax=axis(),f=relayoutKDrawers(ax,3,ax.kdrawers!.map(k=>k.y1-k.y0),'firmax-ldsp');assert.ok(f.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
+  const n={...ax,kdrawers:f};assert.equal(cnt(n as never).d3,12,'2 per side per drawer');assert.deepEqual(validate(n),[]);assert.deepEqual(partCollisions(parts(n),n),[]);
+  const two=relayoutKDrawers(n,2);assert.ok(two.every(k=>k.system==='firmax-ldsp'&&k.box.screws));
+});

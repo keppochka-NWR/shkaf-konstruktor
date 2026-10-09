@@ -197,12 +197,13 @@ export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<
   });
 }
 /** Пересчитать ящики после изменения корпуса. Глубина — только длина ящика (по высоте ничего не двигается); высота, опоры,
- *  нижние царги — раскладка заново с теми же долями фасадов. Цвет и саморезы держателей сохраняются. */
+ *  нижние царги — раскладка заново с теми же долями фасадов. Цвет и саморезы держателей сохраняются; у Firmax — саморезы 3×3,
+ *  шурупы фасада, 5×12, зазор, отступ от фронта, конфирматы дна (см. firmaxLayout). */
 export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
   if (isFirmax(ks[0])) {
     if (what === "depth") return ks.map((k) => (isFirmax(k) ? { ...k, box: { ...k.box, len: firmaxLen(m) } } : k));
-    return firmaxLayout(m, ks.length, ks.map((k) => k.y1 - k.y0));
+    return firmaxLayout(m, ks.length, ks.map((k) => k.y1 - k.y0), ks.filter(isFirmax));
   }
   if (what === "depth") return ks.map((k) => { if (!isAxis(k)) return k; const len = [...AXIS_LENGTHS].reverse().find((l) => l <= m.depth - 25 && axisAvailable({ ...k, len: l })); return len ? { ...k, len } : k; });
   const k0 = ks[0];
@@ -211,7 +212,7 @@ export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): K
 /** Новое число ящиков или доли фасадов — с цветом и саморезами текущих ящиков; система — как у текущих. */
 export function relayoutKDrawers(m: Module, n: number, ratios?: number[], system?: KDrawerSystem): KDrawer[] {
   const k0 = m.kdrawers?.[0], sys = system ?? k0?.system ?? "axis-pro";
-  return sys === "firmax-ldsp" ? firmaxLayout(m, n, ratios) : axisLayout(m, n, ratios, k0 && isAxis(k0) ? k0 : undefined);
+  return sys === "firmax-ldsp" ? firmaxLayout(m, n, ratios, m.kdrawers?.filter(isFirmax)) : axisLayout(m, n, ratios, k0 && isAxis(k0) ? k0 : undefined);
 }
 
 /** Firmax: длины коробов в проектах Базиса цеха (390, 440, 490, 540); берём самую длинную, что входит с запасом 40 от задней кромки. */
@@ -225,12 +226,34 @@ export function firmaxConf(backH: number): number[] {
   return [Math.round(e * 10) / 10, Math.round((backH - e) * 10) / 10];
 }
 /** Раскладка Firmax: фасады — как у Axis PRO; короб — от фасада вниз на 30 (не ниже пола + 10), верх на 30 ниже верха фасада
- *  и не ближе 5 к царгам корпуса. Точка направляющей — низ фасада (не ниже пола), как у большинства проектов Базиса. */
-export function firmaxLayout(m: Module, n: number, ratios?: number[]): FirmaxDrawer[] {
+ *  и не ближе 5 к царгам корпуса. Точка направляющей — низ фасада (не ниже пола), как у большинства проектов Базиса.
+ *  Саморезы направляющих 3×3 в боковинах корпуса — по умолчанию есть (17 из 19 модулей Firmax в базе, как и 5×12).
+ *  keep — текущие ящики Firmax (смена высоты корпуса, числа ящиков, долей фасадов): присадка и посадка короба переносятся —
+ *  саморезы 3×3, шурупы фасада (свои точки — пока входят в новую фальшпанель, иначе по правилу большинства), 5×12, зазор
+ *  до корпуса, отступ от фронта, конфирматы дна; дно над низом боковин и высоты конфирматов — у того же ящика, пока высота
+ *  его короба не изменилась (иначе по правилу большинства). Точки направляющих Базиса (runs) не переносятся: они привязаны
+ *  к старым фасадам, новая точка — низ фасада. */
+export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: FirmaxDrawer[]): FirmaxDrawer[] {
   const floor = axisFloor(m), ceil = axisCeiling(m) - AXIS_FIT.ceiling, len = firmaxLen(m);
-  return axisLayout(m, n, ratios).map((a) => {
+  return axisLayout(m, n, ratios).map((a, i) => {
     const y = Math.round(Math.max(a.y0 + FIRMAX.sideDown, floor + 10) * 10) / 10, top = Math.round(Math.min(a.y1 - FIRMAX.topUnder, ceil) * 10) / 10;
-    return { system: "firmax-ldsp" as const, y0: a.y0, y1: a.y1, runnerY: Math.round(Math.max(a.y0, floor) * 10) / 10, box: { y, h: Math.round((top - y) * 10) / 10, len } };
+    const h = Math.round((top - y) * 10) / 10, box: FirmaxBox = { y, h, len, screws: true };
+    const own = keep?.[i], k = own ?? keep?.[0];
+    if (k) {
+      const o = k.box;
+      if (!o.screws) delete box.screws; // в проекте Базиса без 3×3 (2 из 19) — так и оставляем
+      if (o.rearHoles === false) box.rearHoles = false;
+      if (o.gap !== undefined) box.gap = o.gap;
+      if (o.front !== undefined) box.front = o.front;
+      if (o.confBottom !== undefined) box.confBottom = o.confBottom;
+      const same = own && Math.abs(own.box.h - h) < 0.05;
+      if (same && own.box.bottomUp !== undefined) box.bottomUp = own.box.bottomUp;
+      if (same && own.box.conf) box.conf = [...own.box.conf];
+      const backH = h - (box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t;
+      if (o.faceScrews === true) box.faceScrews = true;
+      else if (Array.isArray(o.faceScrews)) box.faceScrews = same && o.faceScrews.every(([, sy]) => sy > 0 && sy < backH) ? o.faceScrews.map((p) => [p[0], p[1]] as [number, number]) : true;
+    }
+    return { system: "firmax-ldsp" as const, y0: a.y0, y1: a.y1, runnerY: Math.round(Math.max(a.y0, floor) * 10) / 10, box };
   });
 }
 export function firmaxFits(m: Module, k: FirmaxDrawer) {
@@ -298,7 +321,8 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
           length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
       });
       if (b.faceScrews) {
-        const iw = g.sr - g.sl - 2 * g.t, pts = b.faceScrews === true ? [[60, g.backH - 40], [iw - 60, g.backH - 40], [iw / 2, 60]] : b.faceScrews;
+        // фальшпанель ниже 100 (низкий верхний ящик после смены высоты): 60 и «40 ниже верха» выходят за неё — все три посередине по высоте
+        const iw = g.sr - g.sl - 2 * g.t, lo = g.backH < 100, pts = b.faceScrews === true ? [[60, lo ? g.backH / 2 : g.backH - 40], [iw - 60, lo ? g.backH / 2 : g.backH - 40], [iw / 2, lo ? g.backH / 2 : 60]] : b.faceScrews;
         pts.forEach(([dx, dy], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Шуруп 3,5×30 (фальшпанель в фасад)")));
       }
       for (const s of [0, 1] as const) {
