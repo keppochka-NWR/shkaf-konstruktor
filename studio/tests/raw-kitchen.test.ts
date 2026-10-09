@@ -9,7 +9,7 @@ import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {rawCounts,rawParts,rawThickness,type RawSpec} from '../src/rawModule';
 import {collisionWarnings,roomWarnings} from '../src/roomWarnings';
-import {rowRects,panelExtras,rowFront} from '../scripts/kitchen/rowWorktop';
+import {rowRects,panelExtras,rowFront,plinthName} from '../scripts/kitchen/rowWorktop';
 
 function rawModule(raw:RawSpec,w=600,h=720,d=560):Module{return {...initialModule(),name:'Сырой',width:w,height:h,depth:d,decor:'Белый',facadeDecor:'Слэйт',sections:[section()],doors:false,backType:'none',plinthHeight:0,raw};}
 function project(...ms:Module[]):Project{const p=newProject({...initialModule(),sections:[section()]});p.modules=ms.map((m,i)=>({id:id(),x:i*1000,y:0,z:0,rotation:0,module:m}));return p;}
@@ -107,4 +107,36 @@ test('«Ряд»: нет предупреждения «корпус не во �
 test('импорт: фасадный материал и кромка Базиса переносятся в сырой модуль',()=>{
   assert.deepEqual(panelExtras({name:'Цоколь',mat:'Фасадный мат-л 1',box:[0,0,0,1,1,1],edges:[{thick:1,len:597.5},{thick:0.4,len:0}]}),{fm:true,edges:[[1,597.5]]});
   assert.deepEqual(panelExtras({name:'Бок',mat:'ЛДСП Lamarty Белый (16мм)',box:[0,0,0,1,1,1]}),{});
+});
+
+test('цоколь Базиса под любым именем («Фронтальная», «Вертикальная») — «Цоколь · …», своё имя «Цоколь…» не трогаем',()=>{
+  assert.equal(plinthName('Фронтальная'),'Цоколь · Фронтальная');
+  assert.equal(plinthName('Вертикальная'),'Цоколь · Вертикальная');
+  assert.equal(plinthName('Цоколь Видимый'),'Цоколь Видимый');
+  assert.equal(plinthName('цоколь ЛДСП Графит'),'цоколь ЛДСП Графит');
+  assert.equal(plinthName(''),'Цоколь');
+});
+
+test('цоколь ряда кухни: ЛДСП — в раскрое цоколем, фасадный материал — строкой цоколя; клипсы — по Базису у модулей',()=>{
+  // ряд (k06): цоколь ЛДСП 16 — лицевой 1877 и торцевой 446 (составной угловой), высота 95 у пола
+  const row:RawSpec={row:true,hardware:[],panels:[{name:plinthName('Фронтальная'),kind:'ldsp',box:[0,0,500,1877,95,516],edges:[[0.5,1877]]},{name:plinthName('Вертикальная'),kind:'ldsp',box:[1861,0,54,1877,95,500]}]};
+  const ps=rawParts(rawModule(row,1877,95,516));
+  assert.equal(ps.filter(p=>/^Цоколь/.test(p.name)&&p.material==='board'&&!p.external).length,2,'оба куска цоколя — плита в раскрой');
+  const plan=nest(project(rawModule(row,1877,95,516)));
+  const names=plan.flatMap(s=>s.items.map(it=>JSON.stringify(it)));
+  assert.ok(names.some(n=>/Цоколь · Фронтальная/.test(n))&&names.some(n=>/Цоколь · Вертикальная/.test(n)),'в картах раскроя деталь подписана «Цоколь»');
+  // клипс в ряду нет (в Базисе они у опор модулей) — ряд их не добавляет
+  const e=estimate(project(rawModule(row,1877,95,516)));
+  assert.equal(e.lines.find(l=>l.id==='kitchen-clip')?.quantity??0,0);
+  // клипсы модулей — ровно счётчик Базиса
+  const mod:RawSpec={panels:[{name:'Бок',kind:'ldsp',box:[0,100,0,16,820,560]}],hardware:[],counts:{legs:4,clips:2}};
+  assert.equal(estimate(project(rawModule(mod),rawModule(row,1877,95,516))).lines.find(l=>l.id==='kitchen-clip')?.quantity,2);
+  // цоколь из фасадного материала (k10, k25) — своей строкой «Цоколь», не «Фасады»; площадь как в Базисе
+  const fm:RawSpec={row:true,hardware:[],panels:[{name:plinthName('Фронтальная'),kind:'other',fm:true,box:[0,0,500,2469,95,519]}]};
+  const ef=estimate(project(rawModule(fm,2469,95,19)));
+  assert.ok(Math.abs((ef.lines.find(l=>l.id==='plinth-external')?.quantity??0)-2.469*0.095)<0.001);
+  assert.equal(ef.lines.find(l=>l.id==='facade-external'),undefined);
+  // вне ряда кухни (сырой шкаф) — как раньше: фасадный материал в «Фасады»
+  const wr:RawSpec={hardware:[],panels:[{name:'Цоколь',kind:'other',fm:true,box:[0,0,500,1000,95,519]}]};
+  assert.equal(estimate(project(rawModule(wr,1000,95,19))).lines.find(l=>l.id==='plinth-external'),undefined);
 });

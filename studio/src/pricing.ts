@@ -150,6 +150,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(p.kind==='hdf'||p.kind==='mirror')continue;
         const s=[p.box[3]-p.box[0],p.box[4]-p.box[1],p.box[5]-p.box[2]].sort((x,y)=>y-x);
         if(/столешн/i.test(p.name)||s[2]>=26){add('worktop:raw:'+Math.round(s[2]),'Столешница по проекту Базиса '+Math.round(s[2])+' мм',s[0]/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');continue;}
+        // цоколь ряда кухни из фасадного материала (импорт Базиса: «Цоколь · …») — тот же материал поставщика, но своей строкой:
+        // это цоколь, не фасад. Только ряд кухни (r.row) — сырые шкафы не меняются.
+        if(r.row&&p.fm&&/^\s*цокол/i.test(p.name)){add('plinth-external','Цоколь — фасадный материал (по проекту Базиса), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадного материала по прайсу поставщика — уточнить');continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
         for(const [t,len] of p.edges??[]){const L=len/1000;if(t===2)edge2+=L;else if(t===1)edge1+=L;else if(t===0.8)edge08+=L;else if(t===0.5)edge05+=L;else edge04+=L;}
         if(s[1]<70)small++;

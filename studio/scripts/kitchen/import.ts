@@ -1,18 +1,22 @@
 // Импорт кухонь из эталонов Базиса в проекты студии: модуль, прошедший сверку (PASS), — параметрический; остальные — «сырые»
 // (детали Базиса как есть). Расстановка и повороты — из эталона (p_world = origin + Ry(yaw)·p_mod). Объекты ряда (столешница,
 // цоколь, стеновые панели, профили) — отдельный сырой объект «Ряд».
-// npx tsx scripts/kitchen/import.ts [k14,k25|all]  → public/local-projects/kitchen-kNN.json + kitchens.json (только локально, не публикуется)
-import { readFileSync, readdirSync, writeFileSync, existsSync, copyFileSync, statSync } from "node:fs";
+// npx tsx scripts/kitchen/import.ts [k14,k25|all] [--et=<папка эталонов>] [--out=<папка проектов>]
+//   → public/local-projects/kitchen-kNN.json + kitchens.json (только локально, не публикуется).
+//   --et (или KITCHEN_ETALON) — другая сборка эталонов (напр. Кухни\etalon-n3); --out — своя папка вместо общей local-projects.
+import { readFileSync, readdirSync, writeFileSync, existsSync, copyFileSync, statSync, mkdirSync } from "node:fs";
 import { initialModule, id, validate, section, type Module } from "../../src/model";
 import { newProject, parseProject, projectErrors, type PlacedModule } from "../../src/project";
 import { compareModule, type RefModule } from "./compare";
 import { moduleFromEtalon } from "./fromEtalon";
 import { rawCounts, type RawSpec } from "../../src/rawModule";
-import { rowRects, panelExtras, rowFront, type EtPanel } from "./rowWorktop";
+import { rowRects, panelExtras, rowFront, plinthName, type EtPanel } from "./rowWorktop";
 
-const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
-const OUTDIR = "public/local-projects";
-const arg = process.argv[2] ?? "all";
+const argv = process.argv.slice(2), opt = (n: string) => argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3);
+const ET = opt("et") ?? process.env.KITCHEN_ETALON ?? "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LIB = "C:/Users/My PC/Desktop/Claude Project/Кухни/hardware-lib/glb", PUB = "public/models/hardware/bazis";
+const OUTDIR = opt("out") ?? "public/local-projects";
+if (!existsSync(OUTDIR)) mkdirSync(OUTDIR, { recursive: true });
+const arg = argv.find((a) => !a.startsWith("--")) ?? "all";
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 const SHOW = new Set(["опора", "клипса", "навес", "заглушка", "петля", "подъёмник", "газлифт", "направляющая", "ящик-система", "ручка", "сушка", "карго", "профиль"]);
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -23,7 +27,8 @@ const meshes = new Set<string>();
 function rawFromRef(ref: RefModule): RawSpec {
   const D = ref.size[2];
   return {
-    panels: ref.panels.map((p) => ({ name: p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
+    // цоколь внутри модуля (роль эталона plinth: пенал, тумба) — под своим именем «Цоколь · …», размеры Базиса
+    panels: ref.panels.map((p) => ({ name: (p as { role?: string }).role === "plinth" ? plinthName(p.name) : p.name, kind: p.kind, box: p.box.map(r1) as RawSpec["panels"][number]["box"], ...(p.axis === "z" && p.kind !== "hdf" && p.box[2] >= D - 40 ? { facade: true } : {}), ...panelExtras(p as unknown as EtPanel) })),
     hardware: ref.hardware.filter((h) => SHOW.has(h.category)).map((h) => { if (h.mesh) meshes.add(h.mesh); return { name: h.name, category: h.category, mesh: h.mesh ?? null, pos: h.pos.map(r1) as [number, number, number], quat: (h.quat ?? [1, 0, 0, 0]) as [number, number, number, number] }; }),
     counts: rawCounts(ref.hardware),
   };
@@ -57,7 +62,8 @@ for (const f of files) {
   // ряд: столешница, цоколь, стеновые панели, профили и прочее вне модулей — один сырой объект в мировых координатах
   // фигурная столешница — прямоугольники по контуру Базиса (не сплошной габарит)
   // фасад посудомойки (ПМ) и прочие фронтальные детали фасадного материала в «прочем» — фасад (кнопка «Скрыть фасады»)
-  const rowPanels = (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => ((e.row?.[g] ?? []) as EtPanel[]).map((p) => ({ ...p, front: g === "other" && rowFront(p) })))
+  // цоколь ряда (row.plinths) — «Цоколь · <имя Базиса>»: в раскрое ЛДСП и в смете — цоколем, клипсы — у опор модулей (как в Базисе)
+  const rowPanels = (["worktops", "plinths", "wallPanels", "profiles", "other"] as const).flatMap((g) => ((e.row?.[g] ?? []) as EtPanel[]).map((p) => ({ ...p, ...(g === "plinths" ? { name: plinthName(p.name) } : {}), front: g === "other" && rowFront(p) })))
     .filter((p) => Array.isArray(p.box))
     .flatMap((p) => { const rs = rowRects(p), nm = (e.row?.worktops ?? []).some((w: EtPanel) => w.box === p.box) && !/столешн/i.test(p.name) ? "Столешница" : p.name; return rs.map((box, i) => ({ ...p, name: rs.length > 1 ? `${nm} (часть ${i + 1}/${rs.length})` : nm, box, kind: p.kind ?? "ldsp" })); });
   if (rowPanels.length) {

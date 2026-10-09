@@ -1,7 +1,7 @@
 // Детали «Ряда» и сырых модулей из эталона Базиса: фигурная панель (столешница с контуром в плоскости xz) → прямоугольники
 // по контуру вместо сплошного габарита (k25: Г/П-образная столешница 4470×1250 выступала на 650 мм перед нижними модулями
 // и заходила в пенал), фасадный материал и кромка Базиса.
-export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string };
+export type EtPanel = { name: string; kind?: string; mat?: string; box: number[]; edges?: { thick?: number; len?: number }[]; figure?: boolean; contour?: number[][]; contourPlane?: string; role?: string };
 type Box = [number, number, number, number, number, number];
 
 /** Прямолинейный контур в плоскости xz → прямоугольники (полосы по x, соседние с одинаковыми интервалами по z склеены).
@@ -37,6 +37,14 @@ export function rowFront(p: EtPanel): boolean {
   if (!Array.isArray(b) || b.length !== 6 || !/фасадн/i.test(p.mat ?? "")) return false;
   const sx = b[3] - b[0], sy = b[4] - b[1], sz = b[5] - b[2];
   return sz < Math.min(sx, sy) && sz <= 25 && sy >= 300;
+}
+
+/** Цоколь (деталь, закрывающая опоры) у Базиса называется как угодно — «Фронтальная», «Вертикальная», «Цоколь Видимый»; роль
+ *  определяет эталон (etalon.py: имя «цокол» или геометрия — вертикальная плита у пола, высотой с опору, 14–22 мм). Чтобы в раскрое
+ *  и смете деталь читалась как цоколь, имя — «Цоколь · <имя Базиса>»; уже названную «Цоколь…» не трогаем. Размеры — как в Базисе. */
+export function plinthName(name: string): string {
+  const n = (name ?? "").trim();
+  return /цокол/i.test(n) ? n : n ? `Цоколь · ${n}` : "Цоколь";
 }
 
 /** Фасадный материал Базиса («Фасадный мат-л N») и кромка [толщина, длина] — для сметы сырого модуля. */
