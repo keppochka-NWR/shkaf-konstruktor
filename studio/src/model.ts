@@ -513,6 +513,8 @@ export function boxes(m: Module): SectionBox[] {
     return b;
   });
 }
+/** Кухни Базиса: дно под боковинами глубже этого — третий конфирмат на стык посередине глубины. */
+export const KITCHEN_CONF_MID_DEPTH = 600;
 export function parts(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
   if(m.raw)return rawParts(m);
@@ -623,7 +625,9 @@ export function parts(m: Module): Part[] {
     }
     // at — низ стяжки на ребре от пола модуля (мойка Базиса: задняя стяжка посередине высоты, под трубы)
     const y0 = r.at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
-    add("rail:" + r.place, r.at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(r.at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], m.width - 2 * t, r.height, t);
+    // кухни Базиса: стяжка на ребре бывает отступлена от кромки боковин на 1–2 мм (setback — от задней кромки у задней, от лица у передней)
+    const esb = m.kitchen ? r.setback ?? 0 : 0;
+    add("rail:" + r.place, r.at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(r.at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - esb - t / 2 : esb + t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
   if (m.topStrip) {
@@ -944,9 +948,12 @@ export function parts(m: Module): Part[] {
     if (hp.id === "bottom" && m.bottomUnder) {
       // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
       const yb = hp.position[1] - t / 2;
-      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const)
+      for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) {
         for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z0 + hp.size[2] - (m.confirmatInset ?? RULES.confirmatInset)].entries())
           confirmat(`fast:${hp.id}:${side}:${k}`, [x, yb, z], "+y", hp.sectionId);
+        // Кухни Базиса: дно глубже 600 — третий конфирмат посередине глубины (34 кухни: все днища >600 — по 3, все ≤600 — по 2)
+        if (m.kitchen && hp.size[2] > KITCHEN_CONF_MID_DEPTH) confirmat(`fast:${hp.id}:${side}:mid`, [x, yb, z0 + hp.size[2] / 2], "+y", hp.sectionId);
+      }
       continue;
     }
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
