@@ -30,7 +30,9 @@ export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; 
   /** Глубина D5 конфирматов короба, если не 37 (Базис k31 — 42). */
   confDepth?: number;
   /** Глубина D5 конфирматов снизу через дно (confUnder), если в проекте не как у конфирматов короба (Базис k30 m12/m13: 35 при 37). */
-  confUnderDepth?: number };
+  confUnderDepth?: number;
+  /** Глубина D5 конфирматов боковин в торец дна короба, если не как у стенок (Базис k30 m14, k03 m05, k04 m02 и др.: 37 при 35). */
+  confBottomDepth?: number };
 /** Точки конфирматов снизу через дно (x от внутренней грани левой боковины ящика) при внутренней ширине короба iw.
  *  Число — пара от граней обеих боковин; список — точки Базиса, привязанные к своей боковине или середине (confUnderW). */
 export function confUnderXs(b: Pick<FirmaxBox, "confUnder" | "confUnderW">, iw: number): number[] {
@@ -60,7 +62,8 @@ export function kdConfDepth(m: Module, id: string): number {
   const k = m.kdrawers?.[Number(id.split(":")[2])];
   const b = k && "box" in k ? k.box : undefined;
   // снизу через дно (…:under:…) — своя глубина, если в проекте другая (confUnderDepth), иначе как у короба
-  return (id.includes(":under:") ? b?.confUnderDepth : undefined) ?? b?.confDepth ?? 37;
+  // в торец дна короба (…:fx:bottom:…) — своя глубина, если в проекте другая (confBottomDepth)
+  return (id.includes(":under:") ? b?.confUnderDepth : id.includes(":fx:bottom:") ? b?.confBottomDepth : undefined) ?? b?.confDepth ?? 37;
 }
 export type FirmaxDrawer = { system: "firmax-ldsp"; y0: number; y1: number; runnerY: number; box: FirmaxBox;
   /** Поля Axis PRO у Firmax не используются (остаются при смене системы, чтобы вернуть царгу/цвет). */
@@ -633,6 +636,7 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
       keepConfUnder(o, box); // конфирматы снизу через дно (k31) — вместе с шириной, при которой сняты точки
       if (o.screwDz && o.len === len) box.screwDz = [...o.screwDz]; // саморезы направляющей не по правилу — пока длина короба та же
       if (o.confDepth !== undefined) box.confDepth = o.confDepth;
+      if (o.confBottomDepth !== undefined) box.confBottomDepth = o.confBottomDepth;
       const same = own && Math.abs(own.box.h - h) < 0.05;
       if (own?.box.bottomUp !== undefined && own.box.bottomUp < h - FIRMAX.t - 20) box.bottomUp = own.box.bottomUp;
       const backH = h - (box.bottomUp ?? FIRMAX.bottomUp) - FIRMAX.t;
@@ -1125,7 +1129,7 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     if (k0.system === "firmax-ldsp" || k0.system === "versalite-h45" || k0.system === "modern-slide") {
       const b = (k0.box ?? {}) as Partial<FirmaxBox>, num = (v: unknown) => (v === undefined ? undefined : Number(v));
       const box: FirmaxBox = { y: Number(b.y), h: Number(b.h), len: Number(b.len) };
-      for (const key of ["bottomUp", "gap", "front", "confBottom", "confDepth", "confUnderDepth"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
+      for (const key of ["bottomUp", "gap", "front", "confBottom", "confDepth", "confUnderDepth", "confBottomDepth"] as const) { const v = num(b[key]); if (v !== undefined) box[key] = v; }
       if (Array.isArray(b.confUnder)) { box.confUnder = b.confUnder.slice(0, 6).map(Number); if (b.confUnderW !== undefined) box.confUnderW = Number(b.confUnderW); } else if (b.confUnder !== undefined) box.confUnder = Number(b.confUnder);
       if (Array.isArray(b.screwDz)) box.screwDz = b.screwDz.slice(0, 4).map(Number);
       if (k0.system === "versalite-h45") {

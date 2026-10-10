@@ -176,3 +176,12 @@ test('Rail confirmat D5 depth from project when not like the carcass (rails[].co
   // k31 m15/m17 — у царг 42 как у корпуса, поля нет
   for(const key of ['m15','m17'])assert.ok(!(moduleFromEtalon(refOf('k31',key)).module.rails??[]).some(q=>q.confDepth!==undefined),key);
 });
+test('Firmax box: D5 depth of side confirmats into the bottom end from project when not like the walls (box.confBottomDepth): k30 m14',{skip:!existsSync(ED)},()=>{
+  const ref=refOf('k30','m14'),{module:m,unsupported}=moduleFromEtalon(ref);
+  const k=m.kdrawers!.find(x=>'box' in x&&!!x.box&&(x.box as {confBottomDepth?:number}).confBottomDepth!==undefined)!;assert.ok(k,'ящик с дном на 37 при стенках 35');
+  const j=m.kdrawers!.indexOf(k),b=k.box as {confDepth?:number;confBottomDepth?:number};assert.equal(b.confDepth,35);assert.equal(b.confBottomDepth,37);
+  const hs=holes(m).filter(h=>h.src.startsWith(`fast:kd:${j}:fx:`)&&h.d===5);
+  assert.ok(hs.filter(h=>h.src.includes(':fx:bottom:')).every(h=>h.depth===37)&&hs.filter(h=>!h.src.includes(':fx:bottom:')&&!h.src.includes(':under:')).every(h=>h.depth===35));
+  const c=compareModule(ref,m);assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify(c.holes&&[c.holes.missing,c.holes.extra]));
+  const p=parseModule(JSON.parse(JSON.stringify(m)));assert.equal((p.kdrawers![j] as {box:{confBottomDepth?:number}}).box.confBottomDepth,37);
+});
