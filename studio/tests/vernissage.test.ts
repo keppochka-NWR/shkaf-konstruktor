@@ -5,6 +5,11 @@ import { parts, parseVernissage, initialModule, validate, type Module } from '..
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
 import { estimate, estimateCSV, lineGroup } from '../src/pricing';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { V_FILM_COLORS, V_TEXTURES } from '../src/vernissageTextures';
+import { vernissageTexture, vernissageColor, VERNISSAGE_FILMS } from '../src/facadesVernissage';
 import { vernissageLayout, vernissageFacadePrice, vernissageMilling, vernissageSizeCheck, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
@@ -320,6 +325,30 @@ test('Вернисаж: цена клиенту = закупка × 1,6 (реш�
   // свой коэффициент проекта (calculation.vernissageMarkup): 8710,40 × 1,8 = 15 678,72 → 15 700
   assert.equal(estimate({ ...q, calculation: { markup: 2.2, overrides: {}, vernissageMarkup: 1.8 } }).vernissageOnTop, 15700);
   assert.ok(estimateCSV(q).includes('коэффициент Вернисажа'));
+});
+
+test('Вернисаж: текстуры плёнок с сайта — файл есть, масштаб в мм, UV по образцу; однотонные и ПЭТ — цвет образца', () => {
+  const names = Object.keys(V_TEXTURES);
+  assert.ok(names.length >= 30, `текстур ${names.length}`);
+  for (const n of names) {
+    const t = V_TEXTURES[n], p = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'textures', 'vernissage', t.file);
+    assert.ok(existsSync(p), `${n}: нет файла ${t.file}`);
+    assert.ok(VERNISSAGE_FILMS.some((f) => f.name === n), `${n}: плёнка из прайса`);
+    assert.ok(t.tileMm >= 150 && t.tileMm <= 400 && /^https:\/\/vernisag-fasad\.ru\//.test(t.src), `${n}: ${t.tileMm} мм, ${t.src}`);
+  }
+  // Дуб Турин — карточка №15, квадрат 700 px × 0,49 мм/px ≈ 343 мм
+  const tex = vernissageTexture({ milling: '1', cover: 'film', film: 'Дуб Турин', thickness: 19 })!;
+  assert.equal(tex.url, 'textures/vernissage/dub-turin.jpg'); assert.equal(tex.tileMm, 343);
+  // UV в образцах: фасад 450×716 → по ширине 450/343 образца, текстура повторяется, не растягивается под габарит
+  const g = facadeGeometry(vernissageLayout({ milling: '1', cover: 'film', film: 'Дуб Турин', thickness: 19 }, 450, 716), 1, tex.tileMm), uv = g.getAttribute('uv');
+  let umax = -Infinity, vmax = -Infinity; for (let i = 0; i < uv.count; i++) { umax = Math.max(umax, uv.getX(i)); vmax = Math.max(vmax, uv.getY(i)); }
+  assert.ok(Math.abs(umax - 450 / 343) < 1e-6 && Math.abs(vmax - 716 / 343) < 1e-6, `${umax} ${vmax}`);
+  // эмаль, Адилет, софт/глянец — без текстуры
+  assert.equal(vernissageTexture({ milling: '1', cover: 'enamel-matte', thickness: 19 }), null);
+  assert.equal(vernissageTexture({ milling: '1', cover: 'film', film: 'Белый глянец', thickness: 19 }), null);
+  // однотонные: цвет образца с сайта (карточка «Белый глянец», плакат ПЭТ «Монблан»)
+  assert.equal(vernissageColor({ milling: '1', cover: 'film', film: 'Белый глянец', thickness: 19 }), parseInt(V_FILM_COLORS['Белый глянец'].color.slice(1), 16));
+  assert.equal(vernissageColor({ milling: 'ПЭТ', cover: 'pet', film: 'Римо', thickness: 18 }), parseInt(V_FILM_COLORS['Римо'].color.slice(1), 16));
 });
 
 test('Вернисаж на кухне: двери и фасады ящиков нижнего модуля получают фрезеровку, раскладка строится под их размер', () => {

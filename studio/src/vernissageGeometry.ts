@@ -246,8 +246,8 @@ function emitSection(mb: MeshBuilder, L: FacadeLayout) {
 }
 
 /** Сетка фасада по раскладке. grainAxis детали: 1 — плёнка/текстура вдоль высоты (как boardGeometry), 0 — вдоль ширины.
- *  UV пластей и профиля — проекция на плоскость фасада по габариту, поэтому плёнка не плывёт при смене размера. */
-export function facadeGeometry(L: FacadeLayout, grainAxis: 0 | 1 | 2 = 1): THREE.BufferGeometry {
+ *  UV пластей и профиля — проекция на плоскость фасада: по габариту (0..1) или, если задан tileMm, в образцах текстуры плёнки. */
+export function facadeGeometry(L: FacadeLayout, grainAxis: 0 | 1 | 2 = 1, tileMm?: number): THREE.BufferGeometry {
   const mb = new MeshBuilder(), { w, h, t } = L;
   mb.material(0);
   if (L.rails) emitRails(mb, L);
@@ -264,8 +264,10 @@ export function facadeGeometry(L: FacadeLayout, grainAxis: 0 | 1 | 2 = 1): THREE
   }
   mb.flush();
   const geo = new THREE.BufferGeometry(), pos = new Float32Array(mb.pos), uv = new Float32Array((mb.pos.length / 3) * 2);
+  // tileMm — текстура плёнки (образец tileMm×tileMm мм, RepeatWrapping): UV в долях образца от угла фасада, масштаб не зависит от габарита
+  const sx = tileMm ? tileMm : w, sy = tileMm ? tileMm : h, ox = tileMm ? w / 2 / tileMm : 0.5, oy = tileMm ? h / 2 / tileMm : 0.5;
   for (let i = 0; i < mb.pos.length / 3; i++) {
-    const x = mb.pos[i * 3] / w + 0.5, y = mb.pos[i * 3 + 1] / h + 0.5;
+    const x = mb.pos[i * 3] / sx + ox, y = mb.pos[i * 3 + 1] / sy + oy;
     if (grainAxis === 0) { uv[i * 2] = y; uv[i * 2 + 1] = x; } else { uv[i * 2] = x; uv[i * 2 + 1] = y; }
   }
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));

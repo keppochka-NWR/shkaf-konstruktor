@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { previewSvg } from "./vernissageGeometry";
 import { ADILET_FILMS, PET_DECORS, VERNISSAGE_FILMS, VERNISSAGE_MILLINGS, VERNISSAGE_NOTES, VERNISSAGE_SERIES, PROVISIONAL, SERIES_LABEL, coversOf, filmCatsOf, fmtRu, normalizeVernissage, openings, priceDateRu, seriesOf, thicknessesOf, vernissageFacadePrice, vernissageLayout, vernissageMilling, vernissageSizeCheck, vernissageTexture, type VernissageFacade, type VernissageCover } from "./facadesVernissage";
 import type { VLimit, VSeriesId } from "./vernissageData";
+import { V_FILM_COLORS } from "./vernissageTextures";
 
 const ROW_LABEL = { solid: "глухой", glass: "витрина", grille: "решётка", drawer: "ящик" } as const;
 const lim = (r: VLimit | null) => r ? `${r[0]}–${r[1] ?? "…"} × ${r[2]}–${r[3] ?? "…"}` : "не делается";
@@ -61,6 +62,6 @@ export function VernissagePicker({ value, onChange, sample, sizes }: { value: Ve
       {m.pp.notes.length ? <><br />Примечания паспорта: {m.pp.notes.join("; ")}.</> : null}
       {m.pp.series && m.pp.series !== SERIES_LABEL[m.series] ? <><br />В паспорте серия «{m.pp.series}», в прайсе — «{SERIES_LABEL[m.series]}»: цена по прайсу.</> : null}</div>
       : !handle && !pet && <p className="field-note">Паспорта PDF у №{m.id} нет{m.pdfNote ? ` (${m.pdfNote})` : ""} — рисунок «{m.shapeNote}» по фото каталога, размеры условные: рамка {PROVISIONAL.frame} мм, паз {PROVISIONAL.groove.w}×{PROVISIONAL.groove.d} мм; ограничений размеров нет.</p>}
-    <p className="field-note">{handle ? `Интегрированная ручка ${m.id}: только МДФ 19 мм, фасады прямые.` : pet ? "ПЭТ: гладкая плита 18 мм." : ""} {tex ? `В 3D — текстура плёнки «${tex.name}» с сайта Вернисажа (образец, масштаб приблизительный).` : value.cover.startsWith("enamel") || value.cover === "none" ? "В 3D — цвет эмали/МДФ." : "Текстуры этой плёнки нет — в 3D цвет приблизительный."}</p>
+    <p className="field-note">{handle ? `Интегрированная ручка ${m.id}: только МДФ 19 мм, фасады прямые.` : pet ? "ПЭТ: гладкая плита 18 мм." : ""} {tex ? `В 3D — текстура плёнки «${tex.name}» с сайта Вернисажа (образец ${tex.tileMm} мм, масштаб приблизительный).` : value.cover.startsWith("enamel") || value.cover === "none" ? "В 3D — цвет эмали/МДФ." : value.film && V_FILM_COLORS[value.film] ? "Однотонная — в 3D цвет образца с сайта Вернисажа." : "Образца этой плёнки на сайте нет — в 3D цвет приблизительный, по названию."}</p>
   </div>;
 }

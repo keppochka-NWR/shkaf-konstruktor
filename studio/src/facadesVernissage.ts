@@ -1,5 +1,6 @@
 import { V_ADILET_FILMS, V_ADILET_MDF19, V_ADILET_PRICES, V_FILMS, V_MILLINGS, V_NOTES, V_PET_DECORS, V_SERIES, type VLimit, type VMillingRow, type VSeriesId } from './vernissageData';
 import { layoutFacade, type FacadeLayout, type MillShape, type Opening } from './vernissageGeometry';
+import { V_FILM_COLORS, V_TEXTURES } from './vernissageTextures';
 
 /** Фасады МДФ «Вернисаж» (г. Бор): каталог фрезеровок, плёнки, эмаль, цены по прайсу от 10.08.2026.
  *  Сторонний участок: фасады не идут в раскрой ЛДСП, цена — м² по серии, категории покрытия и толщине (примечания прайса — ниже).
@@ -305,18 +306,28 @@ export function vernissageLabel(v: VernissageFacade): string {
   return `Вернисаж ${s.name} ${s.id === 'handle' ? '' : '№'}${m?.id ?? v.milling}${open}, ${cover}, МДФ ${v.thickness}`;
 }
 
-/** Текстура плёнки в 3D: образец декора с сайта Вернисажа (studio/public/textures/vernissage/, разрешение Макса 10.10.2026).
- *  Однотонные плёнки и эмаль — цветом (null). Заполняется на шаге текстур. */
+/** Текстура плёнки в 3D: образец декора с сайта Вернисажа (studio/public/textures/vernissage/, разрешение Макса 10.10.2026;
+ *  scripts/vernissage_textures.py). url — путь от BASE_URL; tileMm — сторона квадрата текстуры на фасаде, мм (карточки: фото фасада
+ *  396×716 мм, 0,49 мм/px; образцы из новостей — условно 350 мм). Рисунок идёт вдоль оси волокна детали (как у ЛДСП).
+ *  Однотонные плёнки (софт, глянец, моно), Адилет, ПЭТ и эмаль — цветом (null). */
 export type VernissageTexture = { name: string; url: string; tileMm: number };
-export function vernissageTexture(_v: VernissageFacade): VernissageTexture | null { return null; }
+export function vernissageTexture(v: VernissageFacade): VernissageTexture | null {
+  if (v.cover !== 'film' || !v.film) return null;
+  const t = V_TEXTURES[v.film];
+  return t ? { name: v.film, url: `textures/vernissage/${t.file}`, tileMm: t.tileMm } : null;
+}
 
-/** Цвет в 3D по названию плёнки/эмали — приблизительный (текстур плёнок производителя нет). */
+/** Цвет в 3D: эмаль — RAL/hex; однотонная плёнка или ПЭТ с образцом на сайте — цвет образца; иначе — по названию (приблизительно).
+ *  Для плёнок с текстурой (vernissageTexture) цвет — запасной, пока текстура грузится. */
 export function vernissageColor(v: VernissageFacade): number {
   if (v.cover.startsWith('enamel') && v.enamelColor && /^#?[0-9a-f]{6}$/i.test(v.enamelColor)) return parseInt(v.enamelColor.replace('#', ''), 16);
   // частые RAL эмали — цвета по стандарту RAL (приблизительно для экрана)
   const ral = v.cover.startsWith('enamel') ? /RAL\s*(\d{4})/i.exec(v.enamelColor ?? '')?.[1] : undefined;
   const RAL: Record<string, number> = { '9001': 0xe9e0d2, '9002': 0xd7d5cb, '9003': 0xf4f4f4, '9005': 0x0a0a0d, '9010': 0xf1ece1, '9016': 0xf1f0ea, '9018': 0xcfd3cd, '1013': 0xe3d9c6, '1015': 0xe6d2b5, '7035': 0xcbd0cc, '7047': 0xd0d0d0, '7016': 0x383e42, '7024': 0x474a50, '7037': 0x7a7b7a, '6021': 0x89ac76, '5014': 0x606e8c };
   if (ral && RAL[ral] !== undefined) return RAL[ral];
+  // однотонные плёнки ПВХ и ПЭТ с образцом на сайте Вернисажа — средний цвет образца (scripts/vernissage_textures.py)
+  const sample = (v.cover === 'film' || v.cover === 'pet') && v.film ? V_FILM_COLORS[v.film]?.color : undefined;
+  if (sample) return parseInt(sample.slice(1), 16);
   const n = (v.cover === 'film' || v.cover === 'adilet' ? v.film ?? '' : v.enamelColor ?? '').toLowerCase();
   const table: [RegExp, number][] = [[/графит|антрацит|чёрн|черн|венге|обсидиан/, 0x3d3f42], [/сер|грей|grey|бетон|маренго/, 0x9a9c99], [/мят|олив|фисташ|зел|грин|green|шалфей|эвкалипт|мирт|базилик|мелисс/, 0xa9b8a0],
     [/голуб|скай|синий|деним|азур|индиго|аквамарин|океан/, 0x93a7b8], [/лаванд|пудр|pink|розм|фламинго/, 0xc9b3b8], [/орех|тик|каштан|шоколад|кофе|мокко|трюфель|брауни|темн|тёмн/, 0x7a5a42],

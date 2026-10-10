@@ -3,7 +3,7 @@ import {frameDistance,frameHeight} from './framing';
 import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
 import {facadeGeometry} from './vernissageGeometry';
-import {vernissageLayout,vernissageColor,vernissageGlossy} from './facadesVernissage';
+import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
 import {procModel,faceAt} from './hardwareModels';
@@ -330,9 +330,19 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
+          const vTex = part.vernissage && m.vernissage && !part.rotZ ? vernissageTexture(m.vernissage) : null;
           if (part.vernissage && m.vernissage) {
-            // цвет плёнки/эмали приблизительный (текстур плёнок производителя в студии нет); глянец — низкая шероховатость
+            // плёнка с рисунком — текстура образца с сайта Вернисажа (UV фасада в образцах tileMm, повтор); однотонные и эмаль — цветом;
+            // глянец — низкая шероховатость
             mat.color.set(vernissageColor(m.vernissage)); mat.roughness = vernissageGlossy(m.vernissage) ? 0.14 : 0.62;
+            if (vTex) {
+              pendingTextures++;
+              cachedTexture(import.meta.env.BASE_URL + vTex.url).then(map=>{
+                if(disposed||gen!==generation)return;
+                if(map.wrapS!==THREE.RepeatWrapping){map.wrapS=map.wrapT=THREE.RepeatWrapping;map.needsUpdate=true;}
+                mat.map=map;mat.color.set(0xffffff);mat.needsUpdate=true;needsRender=true;
+              }).catch(()=>{}).finally(()=>{if(gen===generation)pendingTextures--;});
+            }
           } else if (texture && (!isBack || m.casework) && !isMetal && part.material !== "alu" && part.material !== "glass") {
             pendingTextures++;
             cachedTexture(texture).then(map=>{
@@ -358,7 +368,7 @@ export function Scene(p: Props) {
               ? (() => { const f = fastenerAxis(part.size); return new THREE.CylinderGeometry(f.r, f.r, f.h, 20); })()
               : (part.role === "rod" || part.role === "flange")
               ? (() => { const c = rodCylinder(part.size); return new THREE.CylinderGeometry(c.r, c.r, c.h, 24); })()
-              : vern ? facadeGeometry(vernissageLayout(vern, part.size[0], part.size[1], part.size[2]), part.grainAxis)
+              : vern ? facadeGeometry(vernissageLayout(vern, part.size[0], part.size[1], part.size[2]), part.grainAxis, vTex?.tileMm)
               : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.topNotches ? topNotchGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
