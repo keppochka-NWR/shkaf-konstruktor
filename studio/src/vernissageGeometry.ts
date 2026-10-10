@@ -26,19 +26,22 @@ export type FacadeLayout = {
 
 /* ---------- контуры ---------- */
 /** Параметрические контуры: точное смещение с тем же числом точек (дуги скругления не выворачиваются, когда смещение внутрь
- *  больше радиуса — радиус уходит в ноль, точки угла совпадают). Смещение остальных контуров — на ус (offsetContour). */
+ *  больше радиуса — радиус после смещения max(0, r − d), точки угла совпадают). Смещение остальных контуров — на ус (offsetContour). */
 const OFFSET = new WeakMap<P[], (o: number) => P[]>();
 function parametric(gen: (o: number) => P[]): P[] { const c = gen(0); OFFSET.set(c, gen); return c; }
 export function rectContour(x0: number, y0: number, x1: number, y1: number, r = 0, seg = 6): P[] {
   r = Math.max(0, Math.min(r, (x1 - x0) / 2 - 0.01, (y1 - y0) / 2 - 0.01));
-  if (r < 0.05) return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  // прямые углы: 4 точки; смещение внутрь больше половины стороны — честное упрощение: контур сходится в отрезок/точку, не выворачивается
+  if (r < 0.05) return parametric((o) => { const [X0, X1] = span(x0 - o, x1 + o), [Y0, Y1] = span(y0 - o, y1 + o); return [[X0, Y0], [X1, Y0], [X1, Y1], [X0, Y1]]; });
   return parametric((o) => {
-    const X0 = x0 - o, Y0 = y0 - o, X1 = x1 + o, Y1 = y1 + o, R = Math.max(0, Math.min(r + o, (X1 - X0) / 2 - 0.01, (Y1 - Y0) / 2 - 0.01)), out: P[] = [];
+    const [X0, X1] = span(x0 - o, x1 + o), [Y0, Y1] = span(y0 - o, y1 + o), R = Math.max(0, Math.min(r + o, (X1 - X0) / 2 - 0.01, (Y1 - Y0) / 2 - 0.01)), out: P[] = [];
     const corner = (cx: number, cy: number, a0: number) => { for (let k = 0; k <= seg; k++) { const a = a0 + (k / seg) * Math.PI / 2; out.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]); } };
     corner(X1 - R, Y0 + R, -Math.PI / 2); corner(X1 - R, Y1 - R, 0); corner(X0 + R, Y1 - R, Math.PI / 2); corner(X0 + R, Y0 + R, Math.PI);
     return out;
   });
 }
+/** Отрезок [a, b] после смещения: если концы разошлись наоборот (смещение внутрь больше половины) — сходится в середину. */
+function span(a: number, b: number): [number, number] { if (b >= a) return [a, b]; const m = (a + b) / 2; return [m, m]; }
 /** Проём с вогнутыми углами («фигурные углы» №59): из филёнки по углам вырезана четверть круга радиуса r с центром в углу проёма. CCW.
  *  Смещение внутрь — дуга того же центра радиуса r + d до пересечения со смещёнными сторонами; наружу — радиус r − d и стык «на ус».
  *  На угол — 2 + seg + 1 точек при любом смещении (на нулевом и внутренних смещениях крайние точки совпадают с концами дуги). */
@@ -83,6 +86,18 @@ export function offsetContour(c: P[], o: number): P[] {
   const gen = OFFSET.get(c);
   if (gen) { const res = Math.abs(o) < 1e-9 ? c.map(p => [p[0], p[1]] as P) : gen(o); OFFSET.set(res, (o2) => gen(o + o2)); return res; }
   if (Math.abs(o) < 1e-9) return c.map(p => [p[0], p[1]] as P);
+  const full = miterOffset(c, o);
+  if (soundOffset(c, full)) return full;
+  // Честное упрощение: на полном смещении контур вырождается (стороны сходятся, сегменты пересекаются) — берём наибольшее смещение
+  // того же знака, при котором контур ещё правильный; рисунок у вырожденного места мельче заказанного, но сетка не выворачивается.
+  let lo = 0, hi = 1;
+  for (let k = 0; k < 24; k++) { const mid = (lo + hi) / 2; if (soundOffset(c, miterOffset(c, o * mid))) lo = mid; else hi = mid; }
+  return lo > 0 ? miterOffset(c, o * lo) : c.map(p => [p[0], p[1]] as P);
+}
+/** Смещение «на ус» с тем же числом точек. Сторона, которая после смещения сменила направление (сжалась «через ноль» — короткая
+ *  сторона у вогнутого стыка, мелкий сегмент арки), стягивается в точку — середину своих концов; совпавшие точки дают вырожденные
+ *  треугольники, они пропускаются. Повтор, пока ни одна сторона не вывернута. */
+function miterOffset(c: P[], o: number): P[] {
   const n = c.length, out: P[] = [];
   const nrm = (a: P, b: P): P => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [dy / l, -dx / l]; };
   for (let i = 0; i < n; i++) {
@@ -90,7 +105,30 @@ export function offsetContour(c: P[], o: number): P[] {
     if (k < 1e-6) { out.push([p[0] + o * n1[0], p[1] + o * n1[1]]); continue; }
     out.push([p[0] + o * (n1[0] + n2[0]) / k, p[1] + o * (n1[1] + n2[1]) / k]);
   }
+  for (let pass = 0; pass < n; pass++) {
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, ox = c[j][0] - c[i][0], oy = c[j][1] - c[i][1], nx = out[j][0] - out[i][0], ny = out[j][1] - out[i][1];
+      if (ox * nx + oy * ny < -1e-9 * (Math.hypot(ox, oy) + 1)) { const m: P = [(out[i][0] + out[j][0]) / 2, (out[i][1] + out[j][1]) / 2]; out[i] = m; out[j] = [m[0], m[1]]; changed = true; }
+    }
+    if (!changed) break;
+  }
   return out;
+}
+/** Смещённый контур правильный: стороны не сменили направление, площадь того же знака, несмежные стороны не пересекаются. */
+function soundOffset(c: P[], d: P[]): boolean {
+  const n = c.length;
+  for (let i = 0; i < n; i++) { const j = (i + 1) % n; if ((c[j][0] - c[i][0]) * (d[j][0] - d[i][0]) + (c[j][1] - c[i][1]) * (d[j][1] - d[i][1]) < -1e-9) return false; }
+  if (signedArea(d) < -1e-9) return false;
+  const cross = (a: P, b: P, p: P) => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+  const live: number[] = []; for (let i = 0; i < n; i++) { const j = (i + 1) % n; if (Math.hypot(d[j][0] - d[i][0], d[j][1] - d[i][1]) > 1e-7) live.push(i); }
+  for (let x = 0; x < live.length; x++) for (let y = x + 1; y < live.length; y++) {
+    const i = live[x], k = live[y]; if (y === x + 1 || (x === 0 && y === live.length - 1)) continue;
+    const a = d[i], b = d[(i + 1) % n], p = d[k], q = d[(k + 1) % n];
+    const d1 = cross(a, b, p), d2 = cross(a, b, q), d3 = cross(p, q, a), d4 = cross(p, q, b), e = 1e-9;
+    if (((d1 > e && d2 < -e) || (d1 < -e && d2 > e)) && ((d3 > e && d4 < -e) || (d3 < -e && d4 > e))) return false;
+  }
+  return true;
 }
 function bbox(c: P[]) { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of c) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } return { x0, y0, x1, y1 }; }
 

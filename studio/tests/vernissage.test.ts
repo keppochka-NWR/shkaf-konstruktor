@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { facadeGeometry } from '../src/vernissageGeometry';
+import { facadeGeometry, offsetContour, signedArea, rectContour, archContour, concaveRectContour, type Feature, type P } from '../src/vernissageGeometry';
 import { parts, parseVernissage, initialModule, type Module } from '../src/model';
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
@@ -10,23 +10,35 @@ import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, V
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
 const KINDS: [string, VernissageFacade['open']][] = [['15', 'solid'], ['1', 'solid'], ['3', 'solid'], ['54', 'solid'], ['52', 'solid'], ['W1', 'solid'], ['46', 'solid'], ['100', 'solid'], ['79', 'solid'], ['78/1', 'solid'], ['109', 'solid'], ['25', 'glass'], ['54', 'grille'], ['93', 'solid']];
 
-/** Сетка замкнута и ориентирована: каждое направленное ребро встречается один раз и ровно один раз в обратную сторону. */
+/** Сетка замкнута и ориентирована: каждое направленное ребро встречается один раз и ровно один раз в обратную сторону.
+ *  up/down — площадь проекции на плоскость фасада лицевых (n.z > 0) и тыльных (n.z < 0) треугольников: у тела без вывернутых
+ *  и наложенных треугольников обе равны площади тела в плане (рельеф фасада — «высотное поле», без поднутрений). */
 function checkMesh(g: ReturnType<typeof facadeGeometry>, label: string) {
   const p = g.getAttribute('position'), n = g.getAttribute('normal'), key = (i: number) => `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
   const edges = new Map<string, number>();
-  let vol = 0;
+  let vol = 0, up = 0, down = 0;
   for (let i = 0; i < p.count; i += 3) {
     const a = [p.getX(i), p.getY(i), p.getZ(i)], b = [p.getX(i + 1), p.getY(i + 1), p.getZ(i + 1)], c = [p.getX(i + 2), p.getY(i + 2), p.getZ(i + 2)];
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     assert.ok(nx * n.getX(i) + ny * n.getY(i) + nz * n.getZ(i) > 0, `${label}: треугольник вывернут относительно нормали`);
     vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+    if (nz > 0) up += nz / 2; else down -= nz / 2;
     const ks = [key(i), key(i + 1), key(i + 2)];
     for (let k = 0; k < 3; k++) { const e = ks[k] + '>' + ks[(k + 1) % 3]; edges.set(e, (edges.get(e) ?? 0) + 1); }
   }
   let open = 0, dup = 0;
   for (const [e, c] of edges) { if (c > 1) dup++; const [a, b] = e.split('>'); if (!edges.has(b + '>' + a)) open++; }
-  return { vol, open, dup };
+  return { vol, open, dup, up, down };
+}
+/** Площадь тела в плане по раскладке: полотно минус сквозные проёмы, плюс стекло и планки решётки (отдельные тела). */
+function footprint(L: ReturnType<typeof vernissageLayout>) {
+  let s = L.w * L.h;
+  const walk = (f: Feature) => { for (const k of f.kids ?? []) { if (k.through) s -= Math.abs(signedArea(offsetContour(k.c, k.path[k.path.length - 1][0]))); walk(k); } };
+  walk(L.root);
+  if (L.glass) s += Math.abs(signedArea(L.glass.c));
+  for (const b of L.bars) s += (b.x1 - b.x0) * (b.y1 - b.y0);
+  return s;
 }
 
 test('Вернисаж: геометрия строится под габарит — точный габарит, замкнутая сетка без вывернутых треугольников', () => {
@@ -42,26 +54,46 @@ test('Вернисаж: геометрия строится под габари�
   assert.deepEqual(bad, []);
 });
 
-/** Лицевая площадь: проекция треугольников с нормалью к лицу (+Z). У рельефа без наложений равна w×h. */
-function faceArea(g: ReturnType<typeof facadeGeometry>) {
-  const p = g.getAttribute('position'); let s = 0;
-  for (let i = 0; i < p.count; i += 3) { const z = ((p.getX(i + 1) - p.getX(i)) * (p.getY(i + 2) - p.getY(i)) - (p.getY(i + 1) - p.getY(i)) * (p.getX(i + 2) - p.getX(i))) / 2; if (z > 0) s += z; }
-  return s;
-}
-
-test('Вернисаж: все фрезеровки каталога × 5 габаритов × исполнения — сетка замкнута, лицо без наложений (№59 «фигурные углы»)', () => {
+test('Вернисаж: все фрезеровки каталога × 150×300, 300×300, 450×716, 597×2000, 1170×2750 × исполнения × МДФ 16/19/25 — сетка замкнута, рёбра парные, нет вывернутых треугольников, объём положительный', () => {
   const bad: string[] = [];
-  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[300, 300], [450, 716], [597, 2000], [150, 716], [597, 140]] as const) {
-    const L = vernissageLayout({ milling: m.id, cover: 'film', film: 'Моно белый', thickness: 19, open }, w, h), g = facadeGeometry(L, 1), r = checkMesh(g, `№${m.id} ${open} ${w}×${h}`);
-    if (r.open || r.dup) bad.push(`№${m.id} ${open} ${w}×${h}: незамкнутых рёбер ${r.open}, повторных ${r.dup}`);
-    if (open === 'solid') { const a = faceArea(g); if (Math.abs(a - w * h) > w * h * 1e-6) bad.push(`№${m.id} ${w}×${h}: лицевая площадь ${a.toFixed(0)} при ${w * h}`); }
+  let n = 0;
+  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[150, 300], [300, 300], [450, 716], [597, 2000], [1170, 2750]] as const) for (const t of [16, 19, 25] as const) {
+    const label = `№${m.id} ${open} ${w}×${h}×${t}`, L = vernissageLayout({ milling: m.id, cover: 'film', film: 'Моно белый', thickness: t, open }, w, h), r = checkMesh(facadeGeometry(L, 1), label), f = footprint(L), tol = 0.5 + 1e-7 * w * h;
+    n++;
+    if (r.open || r.dup) bad.push(`${label}: непарных рёбер ${r.open}, повторных ${r.dup}`);
+    if (!(r.vol > 0) || r.vol > w * h * t * 1.0001) bad.push(`${label}: объём ${r.vol.toFixed(0)}`);
+    if (Math.abs(r.up - f) > tol || Math.abs(r.down - f) > tol) bad.push(`${label}: вывернутые/наложенные треугольники — проекция лица ${r.up.toFixed(1)}, тыла ${r.down.toFixed(1)} при площади в плане ${f.toFixed(1)}`);
   }
   assert.deepEqual(bad, []);
+  assert.ok(VERNISSAGE_MILLINGS.filter((m) => !['handle', 'pet'].includes(m.series)).length === 97 && n >= 97 * 5 * 3, `проверено вариантов ${n}`);
   // №59: вогнутые углы филёнки — контур проёма в углу уходит внутрь (точка проёма на диагонали угла дальше от угла, чем у прямоугольника)
   const L = vernissageLayout({ milling: '59', cover: 'film', film: 'Моно белый', thickness: 19 }, 597, 2000), c = L.root.kids![0].c, F = L.frame!;
   assert.ok(vernissageMilling('59')!.shape.cornerKind === 'concave');
   const cx = -597 / 2 + F, cy = -2000 / 2 + F;
   assert.ok(!c.some(([x, y]) => Math.hypot(x - cx, y - cy) < 13.9), 'у угла проёма вырезана четверть круга');
+});
+
+test('Вернисаж: смещение контура не выворачивается — радиус max(0, r − d), вырожденный контур честно сходится', () => {
+  /** Ни одна сторона не сменила направление, площадь не отрицательная, точек столько же. */
+  const sound = (c: P[], o: number, label: string) => {
+    const d = offsetContour(c, o);
+    assert.equal(d.length, c.length, label);
+    assert.ok(signedArea(d) >= -1e-9, `${label}: площадь ${signedArea(d)}`);
+    for (let i = 0; i < c.length; i++) { const j = (i + 1) % c.length; assert.ok((c[j][0] - c[i][0]) * (d[j][0] - d[i][0]) + (c[j][1] - c[i][1]) * (d[j][1] - d[i][1]) >= -1e-9, `${label}: сторона ${i} вывернута`); }
+    return d;
+  };
+  // скругление r = 14 внутрь на 25 (случай №59 до исправления): углы прямые (радиус 0), прямоугольник меньше на 25 с каждой стороны
+  const r14 = sound(rectContour(-100, -200, 100, 200, 14), -25, 'r14 −25'), bb = (c: P[]) => [Math.min(...c.map((p) => p[0])), Math.max(...c.map((p) => p[0])), Math.min(...c.map((p) => p[1])), Math.max(...c.map((p) => p[1]))];
+  assert.deepEqual(bb(r14).map((x) => Math.round(x * 1e6) / 1e6), [-75, 75, -175, 175]);
+  assert.ok(Math.abs(signedArea(r14) - 150 * 350) < 1e-6, 'радиус после смещения 0 — площадь прямоугольника');
+  // r − d > 0: радиус уменьшается на d
+  const r30 = sound(rectContour(-100, -200, 100, 200, 30), -10, 'r30 −10');
+  assert.ok(Math.abs(signedArea(r30) - (180 * 380 - (4 - Math.PI) * 20 * 20)) < 30, 'радиус 20 после смещения на 10');
+  // смещение больше половины стороны: контур сходится в отрезок (площадь 0), а не выворачивается
+  for (const r of [0, 6]) assert.ok(Math.abs(signedArea(sound(rectContour(-20, -50, 20, 50, r), -30, `узкий r${r} −30`))) < 1e-6);
+  // вогнутые углы и арки (смещение на ус): стороны не выворачиваются при глубоком смещении внутрь и наружу
+  for (const o of [-25, -12, 9]) sound(concaveRectContour(-150, -300, 150, 300, 14), o, `вогнутые ${o}`);
+  for (const o of [-40, -25, 4, 9]) { sound(archContour(-120, -300, 120, 300, 40, 18, 28), o, `арка с плечиками ${o}`); sound(archContour(-40, -100, 40, 100, 12, 0, 8), o, `узкая арка ${o}`); }
 });
 
 test('Вернисаж: рамка не меняет ширину при любом габарите, филёнка растягивается', () => {
