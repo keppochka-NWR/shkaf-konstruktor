@@ -4,7 +4,7 @@
 //   полкодержатель: D5×12 в стойку, центр на 2,5 ниже пласти полки;
 //   опора кухонная: 4 × D4×3 по квадрату 31×31 в нижнюю пласть дна;
 //   петля накладная: чашка D35×13 в фасад (центр в 7,5 мм от внутренней плоскости стойки), планка — 2 × D3×3 в стойку (±16 от оси, 37 от фасада).
-import { parts, type Module, type Part } from "./model";
+import { parts, railsOf, type Module, type Part } from "./model";
 import { qrot } from "./quat";
 import { kitchenDrawerHoles, kdConfDepth } from "./kitchenDrawers";
 import { rafixHoles } from "./kitchenRafix";
@@ -63,7 +63,9 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat, n3-wall;
       // kitchen.confDepth, n3-antresol: k11 — 37, k31 — 42);
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
-      const d5 = p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
+      // царга со своей глубиной по проекту (rails[].confDepth, k31 m16: 35 при 42 у корпуса) — главнее глубины модуля
+      const rd = m.kitchen && p.id.startsWith("fast:rail:") ? railsOf(m).find((q) => q.place === p.id.split(":")[2])?.confDepth : undefined;
+      const d5 = p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : rd ?? m.kitchen?.drill?.confirmat ?? m.kitchen?.confDepth ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
       // стяжка с соседним корпусом (kitchen.outConf): D5 — в соседа; у Базиса оно записано на наружной грани своей боковины навстречу
       if (p.id.startsWith("fast:out:")) push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], [-a[0], -a[1], -a[2]], 5, d5);
       else push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, d5);

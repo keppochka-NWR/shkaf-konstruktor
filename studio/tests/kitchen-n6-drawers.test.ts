@@ -166,3 +166,13 @@ test('Flat rail confirmats off-centre from project (rails[].confZ): k27 m02 — 
   // царга 60 с конфирматом посередине (k31 m16) и 100 → 50 (k10 m12) — правило студии, поля нет
   for(const [k,key] of [['k31','m16'],['k10','m12']])assert.ok(!(moduleFromEtalon(refOf(k,key)).module.rails??[]).some(q=>q.confZ),`${k} ${key}`);
 });
+test('Rail confirmat D5 depth from project when not like the carcass (rails[].confDepth): k31 m16 front rail 35 at 42 elsewhere',{skip:!existsSync(ED)},()=>{
+  const ref=refOf('k31','m16'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen!.drill?.confirmat,42);assert.equal(m.rails!.find(q=>q.place==='front-top')!.confDepth,35);
+  const hs=holes(m).filter(h=>h.src.startsWith('fast:rail:front-top')&&h.d===5);assert.ok(hs.length>0&&hs.every(h=>h.depth===35));
+  assert.ok(holes(m).filter(h=>h.src.startsWith('fast:bottom')&&h.d===5).every(h=>h.depth===42),'корпус — 42 по проекту');
+  const c=compareModule(ref,m);assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify(c.holes&&[c.holes.missing,c.holes.extra]));
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).rails!.find(q=>q.place==='front-top')!.confDepth,35);
+  // k31 m15/m17 — у царг 42 как у корпуса, поля нет
+  for(const key of ['m15','m17'])assert.ok(!(moduleFromEtalon(refOf('k31',key)).module.rails??[]).some(q=>q.confDepth!==undefined),key);
+});

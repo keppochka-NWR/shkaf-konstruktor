@@ -1098,6 +1098,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (Object.keys(e).length) { m.kitchen.ecc = e; notes.push(`эксцентрик по проекту: ${JSON.stringify(e)}`); }
     }
     if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }
+    // царга с другой глубиной D5 конфирматов в торец, чем у корпуса (k31 m16: передняя 35 при 42 у остальных деталей) — по проекту
+    const rp = [...rails, ...railsEdge], own = m.kitchen.drill?.confirmat ?? m.kitchen.confDepth ?? 35;
+    (m.rails ?? []).forEach((r, i) => {
+      const q = rp[i]; if (!q) return;
+      const ds = [...new Set(hs.filter((h) => h.d === 5 && srcCat(h) === "конфирмат" && h.panel === q.p.i).map((h) => r1(h.depth)))];
+      if (ds.length === 1 && Math.abs(ds[0] - own) > 0.05) { r.confDepth = ds[0]; notes.push(`царга ${r.place}: конфирматы D5×${ds[0]} — как в Базисе`); }
+    });
   }
   // навесные/антресоли: вырез в заднем верхнем углу боковины (k32: 100×20, контур из 6 точек) — у каждой боковины свой (k32 m14: только у правой)
   if (role === "wall" || role === "antresol") {

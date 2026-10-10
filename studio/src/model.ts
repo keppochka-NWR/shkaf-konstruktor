@@ -218,6 +218,7 @@ export type Module = {
      *  у стяжки 100); [] — в боковинах конфирматов нет */ confY?: number[];
     /** кухни Базиса: царга лёжа — конфирматы через боковины в её торец, мм от задней кромки царги, если в проекте не один посередине
      *  (k27 m02: 21,5 у царги 60; k01 m01/m02/m04 — 34 и 66 у царги 100; по базе посередине — 97 из 102) */ confZ?: number[];
+    /** кухни Базиса: глубина D5 конфирматов в торец царги, если не как у корпуса (k31 m16: передняя 35 при 42) */ confDepth?: number;
     /** кухни Базиса: конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от её левого конца (k03: 60 и 508) */ topConf?: number[] }[];
   /** Дно под боковинами на всю ширину (кухонные низы и пеналы Базиса: боковины стоят на дне). По умолчанию дно между боковинами. */
   bottomUnder?: boolean;
@@ -1951,7 +1952,7 @@ export function parseModule(input: unknown): Module {
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
-    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)}),...((r as {fasten?:boolean})?.fasten===false?{fasten:false as const}:{}),...(Array.isArray((r as {confY?:unknown})?.confY)?{confY:((r as {confY?:unknown[]}).confY??[]).map(Number).filter(Number.isFinite)}:{}),...(Array.isArray((r as {confZ?:unknown})?.confZ)?{confZ:((r as {confZ?:unknown[]}).confZ??[]).map(Number).filter(Number.isFinite)}:{}),...(Array.isArray((r as {topConf?:unknown})?.topConf)?{topConf:((r as {topConf?:unknown[]}).topConf??[]).map(Number).filter(Number.isFinite)}:{})})):[]}),
+    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)}),...((r as {fasten?:boolean})?.fasten===false?{fasten:false as const}:{}),...(Array.isArray((r as {confY?:unknown})?.confY)?{confY:((r as {confY?:unknown[]}).confY??[]).map(Number).filter(Number.isFinite)}:{}),...(Number((r as {confDepth?:unknown})?.confDepth)>0?{confDepth:Number((r as {confDepth?:unknown}).confDepth)}:{}),...(Array.isArray((r as {confZ?:unknown})?.confZ)?{confZ:((r as {confZ?:unknown[]}).confZ??[]).map(Number).filter(Number.isFinite)}:{}),...(Array.isArray((r as {topConf?:unknown})?.topConf)?{topConf:((r as {topConf?:unknown[]}).topConf??[]).map(Number).filter(Number.isFinite)}:{})})):[]}),
     ...(x.bottomUnder===undefined?{}:{bottomUnder:x.bottomUnder===true}),
     ...(x.faceGap===undefined?{}:{faceGap:Number(x.faceGap)}),
     ...(x.faceGapBetween===undefined?{}:{faceGapBetween:Number(x.faceGapBetween)}),
