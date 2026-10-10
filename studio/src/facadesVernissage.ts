@@ -1,5 +1,6 @@
-import { V_ADILET_FILMS, V_ADILET_MDF19, V_ADILET_PRICES, V_FILMS, V_MILLINGS, V_NOTES, V_PET_DECORS, V_SERIES, type VMillingRow, type VSeriesId } from './vernissageData';
+import { V_ADILET_FILMS, V_ADILET_MDF19, V_ADILET_PRICES, V_FILMS, V_MILLINGS, V_NOTES, V_PET_DECORS, V_SERIES, type VLimit, type VMillingRow, type VSeriesId } from './vernissageData';
 import { layoutFacade, type FacadeLayout, type MillShape, type Opening } from './vernissageGeometry';
+import { V_FILM_COLORS, V_TEXTURES } from './vernissageTextures';
 
 /** Фасады МДФ «Вернисаж» (г. Бор): каталог фрезеровок, плёнки, эмаль, цены по прайсу от 10.08.2026.
  *  Сторонний участок: фасады не идут в раскрой ЛДСП, цена — м² по серии, категории покрытия и толщине (примечания прайса — ниже).
@@ -28,11 +29,11 @@ export const VERNISSAGE_NOTES = V_NOTES;
 export const PET_DECORS = V_PET_DECORS;
 export const SERIES_LABEL: Record<VSeriesId, string> = { standart: 'Стандарт', optima: 'Оптима', prestige: 'Престиж', premium: 'Премиум', handle: 'Интегрированная ручка V5/V6/V7', pet: 'ПЭТ на PUR-клее 18 мм' };
 
-/** УСЛОВНЫЕ размеры профилей. На сайте Вернисажа размеров нет ни у одной фрезеровки — они только в PDF «Техническая информация»
- *  каждой карточки (не скачаны без разрешения Макса). Тип рисунка — оценка по фото каталога. Числа ниже — наши рабочие значения,
- *  чтобы рисунок строился и растягивался по правилам; заменить по тех. PDF. */
+/** УСЛОВНЫЕ размеры профилей — только для фрезеровок БЕЗ паспорта. С 10.10.2026 у 55 фрезеровок размеры из PDF «Техническая информация»
+ *  (поле pp в vernissageData.ts, источник — pp.source: файл и страница; см. passportShape ниже). У остальных (своего PDF на сайте нет или
+ *  на карточке чужой PDF, №86) — числа ниже: наши рабочие значения, чтобы рисунок строился и растягивался по правилам. */
 export const PROVISIONAL = {
-  source: 'условно: размеров на сайте нет, геометрия — в тех. PDF Вернисажа (не скачаны); тип рисунка — по фото каталога',
+  source: 'условно: паспорта PDF у этой фрезеровки нет; тип рисунка — по фото каталога',
   edgeR: 2, grooveInset: 50, groove: { w: 8, d: 3 }, frame: 60, frameNarrow: 45, frameWide: 80,
   profile: { w: 9, d: 6 }, shaker: { w: 1, d: 4, step: true }, raised: { w: 25, h: 3.5 }, second: 22,
   slots: { pitch: 28, w: 8, d: 2.5 }, rails: { pitch: 30, w: 12, d: 3 }, railsFine: { pitch: 18, w: 7, d: 2.5 }, railsVeryFine: { pitch: 12, w: 5, d: 2 },
@@ -44,8 +45,34 @@ export const PROVISIONAL = {
 
 export type VernissageMilling = VMillingRow & { shape: MillShape; shapeNote: string };
 
-/** Наша параметрическая трактовка рисунка по типу из каталога (фото каталога, оценка). */
+/** Рисунок по паспорту PDF (pp.geom): отступы, ширины, радиусы, шаги — числа паспорта (мм); глубина — из примечаний PDF (depthStated)
+ *  или условная; где размер снят с чертежа по масштабу — widthsEstimated. */
+export function passportShape(m: VMillingRow): { shape: MillShape; note: string } | null {
+  const g = m.pp?.geom;
+  if (!g) return null;
+  const P = PROVISIONAL, D = g.depthMm ?? 3, base = { edgeR: g.edgeR ?? P.edgeR, top: g.top ?? 'rect', bottom: g.bottom ?? 'rect', archRise: P.archRise, shoulder: P.shoulder } as const;
+  const tag = [g.depthStated ? `глубина ${fmtRu(D)} мм` : `глубина ${fmtRu(D)} мм условно`, g.widthsEstimated ? 'часть ширин по чертежу' : ''].filter(Boolean).join(', ');
+  const note = `${g.note} (паспорт PDF; ${tag})`;
+  if (g.kind === 'relief') return { shape: { kind: 'relief', ...base, relief: { dir: g.dir ?? 'v', pitch: g.pitch ?? g.module ?? 30, w: g.w ?? 10, d: D, ...(g.shape ? { shape: g.shape } : {}), ...(g.module ? { module: g.module, grooves: g.grooves } : {}), ...(g.band ? { band: g.band } : {}) } }, note };
+  if (g.kind === 'lattice') return { shape: { kind: 'lattice', ...base, lattice: { cellW: g.cellW ?? 34, cellH: g.cellH ?? 63, d: D, vAngle: g.vAngle ?? 90 } }, note };
+  const gf = m.pp!.glass?.frame ?? g.glassProvisional;
+  const shape: MillShape = {
+    kind: 'profile', ...base,
+    ...(g.profile ? { face: { pts: g.profile.map(([x, f]) => [x, f * D] as [number, number]), edge: !!g.edge } } : {}),
+    ...(gf ? { glass: { frame: gf, r: m.pp!.glass?.r ?? 0 } } : {}),
+    ...(g.bottomBand ? { bottomBand: g.bottomBand } : {}),
+    ...(g.corner === 'concave' ? { cornerKind: 'concave' as const, cornerR: g.cornerR ?? 14 } : {}),
+    ...(g.lines ? { lines: { ...g.lines, d: D } } : {}),
+    ...(g.archBand ? { archBand: { outer: g.archBand.outer, width: g.archBand.width, d: g.archBand.d } } : {}),
+    ...(g.slots ? { slots: { dir: g.slots.dir, pitch: g.slots.pitch, w: g.slots.w, d: g.slots.d, zone: g.slots.zone ?? 'all', shape: g.slots.shape, ...(g.slots.inArch ? { inArch: true } : {}) } } : {}),
+  };
+  return { shape, note };
+}
+
+/** Наша параметрическая трактовка рисунка: по паспорту PDF, если он есть; иначе — по типу из каталога (фото каталога, оценка). */
 export function millingShape(m: VMillingRow): { shape: MillShape; note: string } {
+  const fromPdf = passportShape(m);
+  if (fromPdf) return fromPdf;
   const P = PROVISIONAL, inner = (m.inner ?? '').toLowerCase(), note = (m.note ?? '').toLowerCase();
   const top: MillShape['top'] = inner.includes('плечик') ? 'shoulders' : inner.includes('арк') ? 'arch' : 'rect';
   const base = { edgeR: P.edgeR, top, archRise: P.archRise, shoulder: P.shoulder };
@@ -90,17 +117,60 @@ export const VERNISSAGE_MILLINGS: VernissageMilling[] = V_MILLINGS.map((m) => { 
 export function vernissageMilling(id: string | undefined): VernissageMilling | undefined { return VERNISSAGE_MILLINGS.find((m) => m.id === id); }
 export function seriesOf(id: string) { const m = vernissageMilling(id); return V_SERIES.find((s) => s.id === (m?.series ?? 'standart'))!; }
 
-/** Варианты исполнения фрезеровки (по подписям фото каталога): глухой всегда; под стекло и решётка — только у рамочных с проёмом. */
+/** Варианты исполнения: с паспортом — строки «витрина»/«решётка» таблицы размеров PDF (есть строка — делается); без паспорта —
+ *  по подписям фото каталога: глухой всегда, под стекло и решётка — только у рамочных с проёмом. */
 export function openings(m: VernissageMilling): Opening[] {
   const out: Opening[] = ['solid'];
+  if (m.pp) {
+    if (m.shape.kind === 'profile' && m.shape.glass && m.pp.limits.glass) out.push('glass');
+    if (m.shape.kind === 'profile' && m.shape.glass && m.pp.limits.grille) out.push('grille');
+    return out;
+  }
   if (m.shape.kind === 'frame' && m.variants?.glass) out.push('glass');
   if (m.shape.kind === 'frame' && m.variants?.grille) out.push('grille');
   return out;
 }
 
+/** Проверка габарита фасада по таблице размеров паспорта PDF. Строка: витрина/решётка — по исполнению; глухой ниже минимальной высоты
+ *  глухого — строка «ящик». Меньше минимума ящика при примечании «Ящик < Min размера изготавливается без фрезеровки» — не ошибка,
+ *  фасад без фрезеровки (smooth); остальное вне таблицы — ошибка проверки (validate). Без паспорта ограничений нет (их нигде нет). */
+export type VSizeCheck = { row: 'solid' | 'glass' | 'grille' | 'drawer' | null; errors: string[]; warnings: string[]; smooth?: string };
+export function vernissageSizeCheck(milling: string, open: Opening | undefined, w: number, h: number): VSizeCheck {
+  const m = vernissageMilling(milling), pp = m?.pp, W = Math.round(w), H = Math.round(h);
+  if (!m || !pp) return { row: null, errors: [], warnings: [] };
+  const src = `паспорт ${pp.pdf}, стр. 1`, lim = pp.limits, errors: string[] = [], warnings: string[] = [];
+  const range = (r: VLimit) => `высота ${r[0]}–${r[1] ?? '…'}, ширина ${r[2]}–${r[3] ?? '…'} мм`;
+  const fits = (r: VLimit) => H >= r[0] && (r[1] === null || H <= r[1]) && W >= r[2] && (r[3] === null || W <= r[3]);
+  const alt = () => !pp.maxAlt || pp.maxAlt.some(([a, b]) => H <= a && W <= b);
+  if (H > 2450 && pp.notes.some((n) => n.startsWith('h=2750'))) warnings.push(`№${m.id}: при высоте ${H} мм рисунок будет разделён на несколько частей (${src})`);
+  if (open === 'glass' || open === 'grille') {
+    const r = lim[open], name = open === 'glass' ? 'витрина' : 'решётка';
+    if (!r) return { row: open, errors: [`№${m.id}: ${name} по паспорту не делается (${src})`], warnings };
+    if (!fits(r) || !alt()) errors.push(`№${m.id} ${name} ${W}×${H}: по паспорту ${range(r)}${pp.maxAlt ? ' (max ' + pp.maxAlt.map(([a, b]) => `${a}×${b}`).join(' или ') + ')' : ''} (${src})`);
+    return { row: open, errors, warnings };
+  }
+  const s = lim.solid, d = lim.drawer;
+  if (s && H >= s[0]) {
+    if (!fits(s) || !alt()) errors.push(`№${m.id} ${W}×${H}: по паспорту глухой фасад ${range(s)}${pp.maxAlt ? ' (max ' + pp.maxAlt.map(([a, b]) => `${a}×${b}`).join(' или ') + ')' : ''} (${src})`);
+    return { row: 'solid', errors, warnings };
+  }
+  // ниже минимальной высоты глухого — строка «ящик»
+  if (d && fits(d)) return { row: 'drawer', errors, warnings };
+  const tooBig = d && ((d[3] !== null && W > d[3]));
+  if (pp.drawerSmooth && !tooBig) {
+    const why = d ? `меньше минимального размера ящика (${range(d)})` : 'ящик по паспорту не делается';
+    return { row: 'drawer', errors, warnings: [...warnings, `№${m.id} ${W}×${H}: ${why} — изготавливается без фрезеровки (${src})`], smooth: `Фасад ${W}×${H} меньше минимального по паспорту — без фрезеровки` };
+  }
+  errors.push(`№${m.id} ${W}×${H}: по паспорту ${d ? 'ящик ' + range(d) : ''}${d && s ? '; ' : ''}${s ? 'глухой ' + range(s) : ''} (${src})`);
+  return { row: 'drawer', errors, warnings };
+}
+
 export function vernissageLayout(v: VernissageFacade, w: number, h: number, t: number = v.thickness): FacadeLayout {
-  const m = vernissageMilling(v.milling) ?? VERNISSAGE_MILLINGS[0];
-  return layoutFacade(w, h, t, m.shape, v.open && openings(m).includes(v.open) ? v.open : 'solid');
+  const m = vernissageMilling(v.milling) ?? VERNISSAGE_MILLINGS[0], open = v.open && openings(m).includes(v.open) ? v.open : 'solid';
+  // меньше минимума по паспорту («Ящик < Min размера изготавливается без фрезеровки») — гладкий фасад с той же кромкой
+  const chk = vernissageSizeCheck(m.id, open, w, h);
+  if (chk.smooth) { const L = layoutFacade(w, h, t, { kind: 'smooth', edgeR: m.shape.edgeR }, 'solid'); L.notes.push(chk.smooth); return L; }
+  return layoutFacade(w, h, t, m.shape, open);
 }
 
 /** Колонка прайса для покрытия: категория плёнки → колонка серии (Стандарт делит 2 и 3, остальные — «2,3»). */
@@ -179,6 +249,15 @@ export function vernissageFacadePrice(v: VernissageFacade, wMm: number, hMm: num
   if (v.cover === 'adilet') { notes.push('плёнка Адилет: срок +5 раб. дней'); if (V_ADILET_FILMS.find((f) => f.name === v.film)?.out) warnings.push(`Плёнка «${v.film}» выводится из ассортимента («[Выводим]» в прайсе)`); }
   if (v.cover.startsWith('enamel') && m && m.enamel === 'none') warnings.push(`№${v.milling} в эмали не исполняется по прайсу`);
   if (v.cover === 'enamel-gloss' && m?.enamel === 'matte') warnings.push(`№${v.milling} — эмаль только матовая`);
+  // паспорт PDF: толщины МДФ и покрытия из шапки паспорта («МДФ (19 мм) • ПВХ, Эмаль мат.»)
+  const pp = m?.pp;
+  if (pp?.mdf && !pp.mdf.includes(v.thickness) && !(v.thickness === 16 && m?.mdf19Only)) {
+    if (pp.mdf.includes(22)) warnings.push(`№${v.milling}: по паспорту МДФ 22 мм${pp.notes.some((n) => /без присадки МДФ 16\/19/.test(n)) ? ' (на 16/19 мм — без присадки под петли)' : ''} (${pp.pdf})`);
+    else if (v.thickness === 16 && pp.notes.some((n) => /без петель МДФ 16/.test(n))) warnings.push(`№${v.milling}: МДФ 16 мм — только без петель, с петлями 19 мм (паспорт ${pp.pdf})`);
+    else warnings.push(`№${v.milling}: по паспорту МДФ ${pp.mdf.join(', ')} мм (${pp.pdf})`);
+  }
+  if (pp?.covers && v.cover.startsWith('enamel') && !/эмаль/i.test(pp.covers) && m?.enamel !== 'none') warnings.push(`№${v.milling}: по паспорту покрытие только ${pp.covers} (${pp.pdf})`);
+  if (pp?.covers && v.cover === 'enamel-gloss' && /эмаль мат/i.test(pp.covers) && m?.enamel !== 'matte') warnings.push(`№${v.milling}: по паспорту эмаль только матовая (${pp.pdf})`);
   // R28: «без решёток: №58, 40, 40-1», «без декора: №44»
   if (v.cover.startsWith('enamel') && m?.enamelNoGrille && v.open === 'grille') warnings.push(`№${v.milling} в эмали — без решёток (R28)`);
   if (v.cover.startsWith('enamel') && m?.enamelNoDecor) warnings.push(`№${v.milling} в эмали исполняется без декора (R28)`);
@@ -227,13 +306,28 @@ export function vernissageLabel(v: VernissageFacade): string {
   return `Вернисаж ${s.name} ${s.id === 'handle' ? '' : '№'}${m?.id ?? v.milling}${open}, ${cover}, МДФ ${v.thickness}`;
 }
 
-/** Цвет в 3D по названию плёнки/эмали — приблизительный (текстур плёнок производителя нет). */
+/** Текстура плёнки в 3D: образец декора с сайта Вернисажа (studio/public/textures/vernissage/, разрешение Макса 10.10.2026;
+ *  scripts/vernissage_textures.py). url — путь от BASE_URL; tileMm — сторона квадрата текстуры на фасаде, мм (карточки: фото фасада
+ *  396×716 мм, 0,49 мм/px; образцы из новостей — условно 350 мм). Рисунок идёт вдоль оси волокна детали (как у ЛДСП).
+ *  Однотонные плёнки (софт, глянец, моно), Адилет, ПЭТ и эмаль — цветом (null). */
+export type VernissageTexture = { name: string; url: string; tileMm: number };
+export function vernissageTexture(v: VernissageFacade): VernissageTexture | null {
+  if (v.cover !== 'film' || !v.film) return null;
+  const t = V_TEXTURES[v.film];
+  return t ? { name: v.film, url: `textures/vernissage/${t.file}`, tileMm: t.tileMm } : null;
+}
+
+/** Цвет в 3D: эмаль — RAL/hex; однотонная плёнка или ПЭТ с образцом на сайте — цвет образца; иначе — по названию (приблизительно).
+ *  Для плёнок с текстурой (vernissageTexture) цвет — запасной, пока текстура грузится. */
 export function vernissageColor(v: VernissageFacade): number {
   if (v.cover.startsWith('enamel') && v.enamelColor && /^#?[0-9a-f]{6}$/i.test(v.enamelColor)) return parseInt(v.enamelColor.replace('#', ''), 16);
   // частые RAL эмали — цвета по стандарту RAL (приблизительно для экрана)
   const ral = v.cover.startsWith('enamel') ? /RAL\s*(\d{4})/i.exec(v.enamelColor ?? '')?.[1] : undefined;
   const RAL: Record<string, number> = { '9001': 0xe9e0d2, '9002': 0xd7d5cb, '9003': 0xf4f4f4, '9005': 0x0a0a0d, '9010': 0xf1ece1, '9016': 0xf1f0ea, '9018': 0xcfd3cd, '1013': 0xe3d9c6, '1015': 0xe6d2b5, '7035': 0xcbd0cc, '7047': 0xd0d0d0, '7016': 0x383e42, '7024': 0x474a50, '7037': 0x7a7b7a, '6021': 0x89ac76, '5014': 0x606e8c };
   if (ral && RAL[ral] !== undefined) return RAL[ral];
+  // однотонные плёнки ПВХ и ПЭТ с образцом на сайте Вернисажа — средний цвет образца (scripts/vernissage_textures.py)
+  const sample = (v.cover === 'film' || v.cover === 'pet') && v.film ? V_FILM_COLORS[v.film]?.color : undefined;
+  if (sample) return parseInt(sample.slice(1), 16);
   const n = (v.cover === 'film' || v.cover === 'adilet' ? v.film ?? '' : v.enamelColor ?? '').toLowerCase();
   const table: [RegExp, number][] = [[/графит|антрацит|чёрн|черн|венге|обсидиан/, 0x3d3f42], [/сер|грей|grey|бетон|маренго/, 0x9a9c99], [/мят|олив|фисташ|зел|грин|green|шалфей|эвкалипт|мирт|базилик|мелисс/, 0xa9b8a0],
     [/голуб|скай|синий|деним|азур|индиго|аквамарин|океан/, 0x93a7b8], [/лаванд|пудр|pink|розм|фламинго/, 0xc9b3b8], [/орех|тик|каштан|шоколад|кофе|мокко|трюфель|брауни|темн|тёмн/, 0x7a5a42],

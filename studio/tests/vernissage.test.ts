@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { facadeGeometry, offsetContour, signedArea, rectContour, archContour, concaveRectContour, type Feature, type P } from '../src/vernissageGeometry';
-import { parts, parseVernissage, initialModule, type Module } from '../src/model';
+import { parts, parseVernissage, initialModule, validate, type Module } from '../src/model';
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
 import { estimate, estimateCSV, lineGroup } from '../src/pricing';
-import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { V_FILM_COLORS, V_TEXTURES } from '../src/vernissageTextures';
+import { vernissageTexture, vernissageColor, VERNISSAGE_FILMS } from '../src/facadesVernissage';
+import { vernissageLayout, vernissageFacadePrice, vernissageMilling, vernissageSizeCheck, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
 const KINDS: [string, VernissageFacade['open']][] = [['15', 'solid'], ['1', 'solid'], ['3', 'solid'], ['54', 'solid'], ['52', 'solid'], ['W1', 'solid'], ['46', 'solid'], ['100', 'solid'], ['79', 'solid'], ['78/1', 'solid'], ['109', 'solid'], ['25', 'glass'], ['54', 'grille'], ['93', 'solid']];
@@ -57,7 +62,8 @@ test('Вернисаж: геометрия строится под габари�
 test('Вернисаж: все фрезеровки каталога × 150×300, 300×300, 450×716, 597×2000, 1170×2750 × исполнения × МДФ 16/19/25 — сетка замкнута, рёбра парные, нет вывернутых треугольников, объём положительный', () => {
   const bad: string[] = [];
   let n = 0;
-  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[150, 300], [300, 300], [450, 716], [597, 2000], [1170, 2750]] as const) for (const t of [16, 19, 25] as const) {
+  // + фасад ящика 596×176 и узкая дверь 316×756 (арки и глубокие профили паспортов на малых габаритах)
+  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[150, 300], [300, 300], [450, 716], [597, 2000], [1170, 2750], [596, 176], [316, 756]] as const) for (const t of [16, 19, 25] as const) {
     const label = `№${m.id} ${open} ${w}×${h}×${t}`, L = vernissageLayout({ milling: m.id, cover: 'film', film: 'Моно белый', thickness: t, open }, w, h), r = checkMesh(facadeGeometry(L, 1), label), f = footprint(L), tol = 0.5 + 1e-7 * w * h;
     n++;
     if (r.open || r.dup) bad.push(`${label}: непарных рёбер ${r.open}, повторных ${r.dup}`);
@@ -96,8 +102,55 @@ test('Вернисаж: смещение контура не выворачив�
   for (const o of [-40, -25, 4, 9]) { sound(archContour(-120, -300, 120, 300, 40, 18, 28), o, `арка с плечиками ${o}`); sound(archContour(-40, -100, 40, 100, 12, 0, 8), o, `узкая арка ${o}`); }
 });
 
-test('Вернисаж: рамка не меняет ширину при любом габарите, филёнка растягивается', () => {
-  for (const id of ['54', '52', 'W1', '25', '75']) {
+test('Вернисаж: по паспорту PDF — рамка и профиль по числам паспорта, не меняются с габаритом; мелкий фасад — отступы пропорционально', () => {
+  // W1: рамка 50, профиль 30 (W1.pdf); №25: 49 + 32 + 9 (25.pdf); №75: кант 15, уступ 3 мм (75.pdf, «глубина фрезы 3 мм»); №3: 49 + 32
+  for (const [id, F, E] of [['W1', 50, 80], ['25', 49, 93], ['75', 15, 18], ['3', 49, 81]] as const) for (const [w, h] of [[450, 716], [597, 2000], [300, 300]]) {
+    const L = vernissageLayout({ milling: id, cover: 'film', film: 'Моно белый', thickness: 19 }, w, h), label = `№${id} ${w}×${h}`;
+    assert.equal(L.frame, F, label);
+    assert.ok(Math.abs(L.opening!.x0 - (-w / 2 + E)) < 1e-6, `${label}: филёнка в ${E} мм от кромки`);
+    assert.ok(!L.notes.some((n) => n.includes('уменьшен')), label);
+  }
+  const m75 = vernissageMilling('75')!;
+  assert.deepEqual(m75.shape.face!.pts, [[15, 0], [18, 3]], 'глубина 3 мм — из примечания паспорта');
+  assert.ok(m75.pp!.source.includes('75.pdf') && m75.pp!.source.includes('стр. 1'));
+  // узкий фасад: отступы рисунка уменьшаются пропорционально, филёнка не меньше 30 мм
+  const n = vernissageLayout({ milling: 'W1', cover: 'film', film: 'Моно белый', thickness: 19 }, 150, 716);
+  assert.ok(n.frame! < 50 && n.notes.some((x) => x.includes('уменьшен')) && n.opening!.x1 - n.opening!.x0 >= 30 - 1e-6);
+});
+
+test('Вернисаж: ограничения размеров из паспортов PDF — проверка проекта и предупреждения', () => {
+  assert.equal(VERNISSAGE_MILLINGS.filter((m) => m.pp).length, 55, 'фрезеровок с паспортом PDF');
+  for (const m of VERNISSAGE_MILLINGS.filter((x) => x.pp)) assert.ok(/\.pdf, стр\. 1/.test(m.pp!.source), `№${m.id}: источник — файл и страница`);
+  // №86: на карточке сайта PDF №76 — своих размеров нет, рисунок условный
+  assert.ok(!vernissageMilling('86')!.pp && vernissageMilling('86')!.pdfNote!.includes('76'));
+  // №3 (3.pdf): глухой 246–2750 × 246–1000, витрина/решётка от 296, ящик 116–246; «Ящик < Min размера изготавливается без фрезеровки»
+  assert.deepEqual(vernissageSizeCheck('3', 'solid', 450, 716).errors, []);
+  assert.ok(vernissageSizeCheck('3', 'solid', 450, 2800).errors[0].includes('2750'));
+  assert.ok(vernissageSizeCheck('3', 'solid', 1100, 716).errors[0].includes('1000'));
+  assert.ok(vernissageSizeCheck('3', 'glass', 260, 716).errors[0].includes('витрина'));
+  assert.equal(vernissageSizeCheck('3', 'solid', 596, 177).row, 'drawer');
+  const small = vernissageSizeCheck('3', 'solid', 596, 100);
+  assert.ok(small.smooth && small.errors.length === 0 && small.warnings[0].includes('без фрезеровки'));
+  // меньше минимума ящика — фасад без фрезеровки (в 3D гладкий)
+  const L = vernissageLayout({ milling: '3', cover: 'film', film: 'Моно белый', thickness: 19 }, 596, 100);
+  assert.ok(L.root.kids!.length === 0 && L.notes.some((x) => x.includes('без фрезеровки')));
+  // №6 (6.pdf): решётка «-» — в исполнениях её нет; №78: только глухой
+  assert.deepEqual(openings(vernissageMilling('6')!), ['solid', 'glass']);
+  assert.deepEqual(openings(vernissageMilling('78')!), ['solid']);
+  assert.ok(vernissageSizeCheck('6', 'grille', 450, 716).errors[0].includes('не делается'));
+  // №45 (45-BIG.pdf): max 2450×1100 или 2750×1000
+  assert.deepEqual(vernissageSizeCheck('45', 'solid', 1050, 2400).errors, []);
+  assert.ok(vernissageSizeCheck('45', 'solid', 1050, 2600).errors.length === 1);
+  // проверка проекта: кухонная бутылочница 150 с №3 — фасад уже 246 мм по паспорту — ошибка; №1 (паспорта нет) — без ограничений
+  const narrow = { ...kitchenBase(initialModule(), 150, 'doors'), vernissage: { milling: '3', cover: 'film', film: 'Моно белый', thickness: 19 } as VernissageFacade, facadeT: 19 };
+  assert.ok(validate(narrow).some((e) => e.includes('Вернисаж') && e.includes('246')), validate(narrow).join('; '));
+  assert.ok(!validate({ ...narrow, vernissage: { ...narrow.vernissage, milling: '1' } }).some((e) => e.includes('Вернисаж')));
+  // шапка паспорта: №113 — МДФ 22 мм; №78 — эмаль только матовая
+  assert.ok(vernissageFacadePrice({ milling: '113', cover: 'film', film: 'Моно белый', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('22')));
+});
+
+test('Вернисаж: рамка не меняет ширину при любом габарите, филёнка растягивается (условные, без паспорта)', () => {
+  for (const id of ['54', '52']) {
     const m = vernissageMilling(id)!, F = m.shape.inset!;
     for (const [w, h] of SIZES) {
       const L = vernissageLayout({ milling: id, cover: 'film', film: 'Моно белый', thickness: 19 }, w, h);
@@ -228,21 +281,75 @@ test('Вернисаж: шкаф по умолчанию, №86, эмаль ма
   const plain = estimate(base), withV = estimate({ ...base, modules: [{ ...p.modules[0], module: m }] });
   const cost = withV.lines.filter((l) => l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0);
   assert.ok(cost > 20000, `закупка фасадов ${cost}`);
-  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * withV.markup / 100) * 100);
-  assert.equal(withV.vernissageOnTop, Math.round(cost * withV.markup / 100) * 100);
+  // фасады Вернисажа сверху листов — закупка × свой коэффициент 1,6 (решение Макса 10.10.2026), не общий 2,2
+  assert.equal(withV.vernissageMarkup, 1.6);
+  assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * 1.6 / 100) * 100);
+  assert.equal(withV.vernissageOnTop, Math.round(cost * 1.6 / 100) * 100);
   assert.ok(withV.bySheet > plain.bySheet, `цена по листам ${plain.bySheet} → ${withV.bySheet}: фасады не должны удешевлять шкаф`);
   // цена клиента (retail) в модели «по листам» — с фасадами: листы те же (фасады вне раскроя ЛДСП), разница — фасады × коэффициент
   assert.equal(withV.retail, withV.bySheet);
   assert.equal(withV.retail! - plain.retail!, (withV.ldspSheets - plain.ldspSheets) * withV.sheetPrice + withV.vernissageOnTop);
   // закупка фасадов остаётся в себестоимости сметы (не розничная строка)
   assert.ok(withV.lines.filter((l) => l.id.startsWith('vernissage')).every((l) => !l.retail) && withV.knownCost >= Math.round(cost));
-  // модель наценки: фасады в «Материалах» по тому же коэффициенту — цена клиента тоже с фасадами
+  // модель наценки: фасады в «Материалах» по своему коэффициенту 1,6 — цена клиента тоже с фасадами
   const mkBase = estimate(p), mk = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] });
   assert.equal(mk.model, 'markup'); assert.equal(mk.retail, mk.byMarkup);
   assert.ok(mk.retail !== null && mk.retail > mkBase.retail!, `цена по коэффициенту ${mkBase.retail} → ${mk.retail}`);
   assert.ok(mk.split.materialCost >= Math.round(cost) - 1, 'закупка фасадов — в материалах');
   // CSV сметы показывает, что фасады идут сверху листов
   assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('сверху фасады Вернисаж'));
+});
+
+test('Вернисаж: цена клиенту = закупка × 1,6 (решение Макса 10.10.2026) в обеих моделях — ручной пример', () => {
+  // Шкаф по умолчанию, Стандарт №1, плёнка «Моно белый» (кат. 2 → «Категория ПВХ 2, Моно»), МДФ 19 мм: 4800 ₽/м².
+  // Фасады: дверь 596×1968 = 1,1729 м²; два ящика 546×177 = 0,0966 м² → ПВХ меньше 0,3 м² — по 0,3 м². Итого 1,773 м² × 4800 = 8510,40 ₽.
+  // Присадка под петли: 5 петель × 40 ₽ = 200 ₽. Закупка Вернисажа: 8710,40 ₽ → клиенту × 1,6 = 13 936,64 → 13 900 ₽ (округление до 100, как у групп сметы).
+  const p = newProject(), m: Module = { ...p.modules[0].module, vernissage: { milling: '1', cover: 'film', film: 'Моно белый', thickness: 19 }, facadeT: 19 };
+  const q = { ...p, modules: [{ ...p.modules[0], module: m }] }, e = estimate(q);
+  const f = e.lines.find((l) => l.id.startsWith('vernissage:1:'))!, b = e.lines.find((l) => l.id === 'vernissage-hinge-boring')!;
+  assert.equal(f.unitPrice, 4800); assert.equal(f.quantity, 1.773);
+  assert.equal(b.unitPrice, 40); assert.equal(b.quantity, 5);
+  assert.equal(e.vernissageCost, 8710.4);
+  assert.equal(e.vernissageMarkup, 1.6);
+  assert.equal(e.vernissageOnTop, 13900);
+  assert.ok(f.source.includes('× 1,6'), 'в строке сметы — закупка, пометка «клиенту × 1,6»');
+  // модель «себестоимость × коэффициент»: материалы без Вернисажа × 2,2 + Вернисаж × 1,6; закупка Вернисажа остаётся в себестоимости материалов
+  const own = Math.round(e.lines.filter((l) => !l.retail && lineGroup(l.id) === 'material' && !l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0));
+  assert.equal(e.split.material, Math.round(own * 2.2 / 100) * 100 + 13900);
+  assert.ok(e.split.materialCost >= own + 8710);
+  assert.equal(e.byMarkup, e.split.material + e.split.hardware);
+  // модель «цена за лист»: листы × 23 000 + фасады Вернисаж 13 900 сверху
+  const s = estimate({ ...q, calculation: { markup: 2.2, overrides: {}, model: 'sheet' } });
+  assert.equal(s.vernissageOnTop, 13900);
+  assert.equal(s.bySheet, s.ldspSheets * 23000 + s.retailExtras + 13900);
+  assert.equal(s.retail, s.bySheet);
+  // свой коэффициент проекта (calculation.vernissageMarkup): 8710,40 × 1,8 = 15 678,72 → 15 700
+  assert.equal(estimate({ ...q, calculation: { markup: 2.2, overrides: {}, vernissageMarkup: 1.8 } }).vernissageOnTop, 15700);
+  assert.ok(estimateCSV(q).includes('коэффициент Вернисажа'));
+});
+
+test('Вернисаж: текстуры плёнок с сайта — файл есть, масштаб в мм, UV по образцу; однотонные и ПЭТ — цвет образца', () => {
+  const names = Object.keys(V_TEXTURES);
+  assert.ok(names.length >= 30, `текстур ${names.length}`);
+  for (const n of names) {
+    const t = V_TEXTURES[n], p = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'textures', 'vernissage', t.file);
+    assert.ok(existsSync(p), `${n}: нет файла ${t.file}`);
+    assert.ok(VERNISSAGE_FILMS.some((f) => f.name === n), `${n}: плёнка из прайса`);
+    assert.ok(t.tileMm >= 150 && t.tileMm <= 400 && /^https:\/\/vernisag-fasad\.ru\//.test(t.src), `${n}: ${t.tileMm} мм, ${t.src}`);
+  }
+  // Дуб Турин — карточка №15, квадрат 700 px × 0,49 мм/px ≈ 343 мм
+  const tex = vernissageTexture({ milling: '1', cover: 'film', film: 'Дуб Турин', thickness: 19 })!;
+  assert.equal(tex.url, 'textures/vernissage/dub-turin.jpg'); assert.equal(tex.tileMm, 343);
+  // UV в образцах: фасад 450×716 → по ширине 450/343 образца, текстура повторяется, не растягивается под габарит
+  const g = facadeGeometry(vernissageLayout({ milling: '1', cover: 'film', film: 'Дуб Турин', thickness: 19 }, 450, 716), 1, tex.tileMm), uv = g.getAttribute('uv');
+  let umax = -Infinity, vmax = -Infinity; for (let i = 0; i < uv.count; i++) { umax = Math.max(umax, uv.getX(i)); vmax = Math.max(vmax, uv.getY(i)); }
+  assert.ok(Math.abs(umax - 450 / 343) < 1e-6 && Math.abs(vmax - 716 / 343) < 1e-6, `${umax} ${vmax}`);
+  // эмаль, Адилет, софт/глянец — без текстуры
+  assert.equal(vernissageTexture({ milling: '1', cover: 'enamel-matte', thickness: 19 }), null);
+  assert.equal(vernissageTexture({ milling: '1', cover: 'film', film: 'Белый глянец', thickness: 19 }), null);
+  // однотонные: цвет образца с сайта (карточка «Белый глянец», плакат ПЭТ «Монблан»)
+  assert.equal(vernissageColor({ milling: '1', cover: 'film', film: 'Белый глянец', thickness: 19 }), parseInt(V_FILM_COLORS['Белый глянец'].color.slice(1), 16));
+  assert.equal(vernissageColor({ milling: 'ПЭТ', cover: 'pet', film: 'Римо', thickness: 18 }), parseInt(V_FILM_COLORS['Римо'].color.slice(1), 16));
 });
 
 test('Вернисаж на кухне: двери и фасады ящиков нижнего модуля получают фрезеровку, раскладка строится под их размер', () => {

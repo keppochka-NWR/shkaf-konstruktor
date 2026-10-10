@@ -16,7 +16,7 @@ import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
 import { handleById, handleKind, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
-import type { VernissageFacade } from "./facadesVernissage";
+import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
 import { V_MILLINGS } from "./vernissageData";
 export const RULES = {
   panel: 16,
@@ -1825,7 +1825,15 @@ export function validate(m: Module): string[] {
     const room=p.id.includes(':drawer:')||facade.hinge==='top'?facade.size[0]:facade.size[1];
     if(hl+2*HANDLE_MARGIN>room)errors.push(`Ручка ${hl} мм длиннее фасада «${facade.name}». Выберите короче или измените фасад.`);
   }
+  // фасады «Вернисаж»: габарит по таблице размеров паспорта PDF (глухой / витрина / решётка / ящик). Меньше минимума ящика при
+  // примечании паспорта «Ящик < Min размера изготавливается без фрезеровки» — не ошибка: фасад без фрезеровки (предупреждение в выборе).
+  if(m.vernissage)for(const p of geometry)if(p.vernissage)errors.push(...vernissageSizeCheck(m.vernissage.milling,m.vernissage.open,p.size[0],p.size[1]).errors.map(e=>'Фасад Вернисаж '+e+'. Выберите другую фрезеровку или измените размер.'));
   return [...new Set(errors)];
+}
+/** Габариты фасадов «Вернисаж» модуля (ширина, высота) — для проверки по паспорту в выборе фрезеровки. */
+export function vernissageSizes(m: Module): [number, number][] {
+  if(!m.vernissage)return [];
+  try{return parts(m).filter(p=>p.vernissage).map(p=>[Math.round(p.size[0]),Math.round(p.size[1])] as [number,number]);}catch{return [];}
 }
 function dTooSmall(m: Module) {
   return m.depth < 300;
