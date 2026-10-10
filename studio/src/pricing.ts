@@ -14,8 +14,14 @@ import {kupeLines} from './kupe';
 import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES} from './facadesVernissage';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
-export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number};
+export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number};
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
+/** Решение Макса 10.10.2026: фасады «Вернисаж» — покупное изделие, цена клиенту = закупка по прайсу Вернисажа × 1,6. Свой коэффициент
+ *  вместо общего (2,2) в обеих моделях цены: «себестоимость × коэффициент» и «цена за лист» (сверху листов). Строки Вернисажа — фасады
+ *  и присадка под петли по прайсу Вернисажа (id «vernissage…»); в смете у них закупка, в цене клиента — × коэффициент Вернисажа.
+ *  В проекте можно поменять (calculation.vernissageMarkup). */
+export const VERNISSAGE_MARKUP_DEFAULT=1.6;
+export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
@@ -367,26 +373,33 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const materialCost=costOf('material'),hardwareCost=costOf('hardware');
+  // Фасады «Вернисаж» — свой коэффициент (VERNISSAGE_MARKUP_DEFAULT, решение Макса 10.10.2026): закупка остаётся в себестоимости
+  // «Материалов», а в цену клиента идёт закупка × коэффициент Вернисажа, не общий коэффициент сметы.
+  const vernissageMarkup=settings.vernissageMarkup??VERNISSAGE_MARKUP_DEFAULT;
+  const vernissageCost=lines.filter(l=>!l.retail&&isVernissageLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
+  const vernissageClient=vernissageCost?Math.round(vernissageCost*vernissageMarkup/100)*100:0;
+  const materialOwn=Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)==='material'&&!isVernissageLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  for(const l of lines)if(!l.retail&&isVernissageLine(l.id))l.source+=`; клиенту: закупка × ${String(vernissageMarkup).replace('.',',')} (коэффициент Вернисажа)`;
   // Розничные позиции (двери-купе по прайсу калькулятора купе, подсветка) идут в свою группу без коэффициента.
   const retailOf=(g:LineGroup)=>Math.round(lines.filter(l=>l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const split={materialCost,hardwareCost,material:Math.round(materialCost*settings.markup/100)*100+retailOf('material'),hardware:Math.round(hardwareCost*settings.markup/100)*100+retailOf('hardware')};
+  const split={materialCost,hardwareCost,material:Math.round(materialOwn*settings.markup/100)*100+vernissageClient+retailOf('material'),hardware:Math.round(hardwareCost*settings.markup/100)*100+retailOf('hardware')};
   const byMarkup=missing.length?null:split.material+split.hardware;
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
   const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   // Фасады «Вернисаж» (и присадка под петли на них) — покупное изделие стороннего производителя: в раскрой ЛДСП не идут, значит в цену листа
-  // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × тот же коэффициент, что и в модели наценки
-  // (как в «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы). Раньше выпадали из цены.
-  const vernissageCost=lines.filter(l=>!l.retail&&l.id.startsWith('vernissage')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
-  const vernissageOnTop=vernissageCost?Math.round(vernissageCost*settings.markup/100)*100:0;
+  // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × коэффициент Вернисажа (1,6), как и в
+  // «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы.
+  const vernissageOnTop=vernissageClient;
   const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop;
-  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,vernissageOnTop,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:unplaced.length?null:model==='sheet'?bySheet:byMarkup};
+  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:unplaced.length?null:model==='sheet'?bySheet:byMarkup};
 }
 
 
 export function estimateCSV(p:Project,result=estimate(p)){
  const rows:(string|number)[][]=[['Проект',p.offer?.customer||'Проект мебели','','','','',''],['Позиция','Количество','Единица','Цена, ₽','Сумма, ₽','Источник','Статус']];
  for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.unitPrice===null?'Уточнить цену':'Учтено']);
- rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой'+(result.vernissageOnTop?'; сверху фасады Вернисаж (закупка × коэффициент) '+result.vernissageOnTop+' ₽':''),result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'','',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ const vk=String(result.vernissageMarkup).replace('.',',');
+ rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой'+(result.vernissageOnTop?'; сверху фасады Вернисаж (закупка × '+vk+') '+result.vernissageOnTop+' ₽':''),result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'','',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  const cell=(v:string|number)=>{let text=typeof v==='number'?String(v).replace('.',','):v;if(typeof v==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
  return '﻿'+rows.map(row=>row.map(cell).join(';')).join('\r\n');
 }

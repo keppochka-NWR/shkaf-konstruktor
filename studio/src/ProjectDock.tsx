@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
-import { estimate, hardwareKind, HARDWARE_KINDS, lineGroup, slidePrice, type HardwareKind } from "./pricing";
+import { estimate, hardwareKind, HARDWARE_KINDS, isVernissageLine, lineGroup, slidePrice, type HardwareKind } from "./pricing";
 import { HANDLES, handleById } from "./handles";
 import { HINGE_BRANDS, SLIDE_SYSTEMS, type HingeBrand } from "./hardware";
 import { EDGE_CHOICES, type EdgeThickness } from "./model";
@@ -83,7 +83,8 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
   const materialRows = useMemo(() => {
     if (!e) return [];
     const rows: [string, RegExp][] = [["Плита ЛДСП и задники", /^sheet:/], ["Кромка", /^edge/], ["Работа цеха", /^(work|small)$/], ["Рамочные фасады и стекло", /^(alu-|glass-)/], ["Фасады Вернисаж", /^vernissage/]];
-    return rows.map(([label, re]) => ({ label, sum: e.lines.filter((l) => re.test(l.id)).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0) * markup, 0) })).filter((r) => r.sum > 0);
+    // фасады Вернисаж — свой коэффициент (закупка × 1,6), остальные материалы — общий
+    return rows.map(([label, re]) => ({ label, sum: e.lines.filter((l) => re.test(l.id)).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0) * (isVernissageLine(l.id) ? e.vernissageMarkup : markup), 0) })).filter((r) => r.sum > 0);
   }, [e, markup]);
   const choice = useMemo(() => hardwareChoice(project), [project]);
 
@@ -99,7 +100,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
             <div className="dock-actions"><button className="outline" onClick={() => openOutput("estimate")}>Подробная смета</button><button className="outline" onClick={() => openOutput("quote")}>КП</button></div>
           </div>
         </div>
-        {e.model === "sheet" && <p className="dock-note">Выбрана модель «цена за лист»: фурнитура входит в цену листа и отдельно не показывается{e.vernissageOnTop ? `; фасады Вернисаж — сверху листов, закупка × коэффициент: ${rub(e.vernissageOnTop)}` : ""}. Чтобы видеть её отдельно, в подробной смете выберите «Себестоимость × коэффициент».</p>}
+        {e.model === "sheet" && <p className="dock-note">Выбрана модель «цена за лист»: фурнитура входит в цену листа и отдельно не показывается{e.vernissageOnTop ? `; фасады Вернисаж — сверху листов, закупка × ${String(e.vernissageMarkup).replace(".", ",")}: ${rub(e.vernissageOnTop)}` : ""}. Чтобы видеть её отдельно, в подробной смете выберите «Себестоимость × коэффициент».</p>}
       </>}
     </div>
   ) : tab === "hardware" ? (
