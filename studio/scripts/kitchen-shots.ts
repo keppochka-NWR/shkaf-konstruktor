@@ -6,6 +6,7 @@
 //            не зависит от выбранного модуля (view:Спереди студии смотрит на фасад выбранного: у k01/k06 это вид сбоку, у k30 «Остров» — сзади)
 //          present — режим «Показать клиенту» (без рамки выбранного модуля и панелей; open в нём тоже работает)
 //          clean — дальше снимки без элементов интерфейса поверх сцены (панель снизу не закрывает цоколь и опоры)
+//          btn:<подпись кнопки> — нажать кнопку панели вида (btn:Прозрачный корпус, btn:Прозрачные фасады)
 // Каждый снимок — только после загрузки текстур и моделей фурнитуры (window.__pending() === 0), проект — из файла, без правок в браузере.
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
@@ -60,6 +61,7 @@ for (const cmd of (script ?? "view:3D;shot:3d").split(";").map((s) => s.trim()).
     await page.evaluate((v) => (window as unknown as { __camera?: (p: number[], l: number[]) => void }).__camera?.(v.slice(0, 3), v.slice(3, 6)), v);
     await settle();
   } else if (op === "present") { const b = page.getByRole("button", { name: /Показать клиенту|Вернуться к редактору/ }); if (await b.count()) await b.first().click(); await settle(); }
+  else if (op === "btn") { const b = page.getByRole("button", { name: arg, exact: true }); if (await b.count()) await b.first().click(); await settle(); } // btn:Прозрачный корпус и т. п.
   else if (op === "clean") clean = !clean;
   else if (op === "wait") await page.waitForTimeout(Number(arg));
   else if (op === "shot") {
