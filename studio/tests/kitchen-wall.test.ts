@@ -5,7 +5,7 @@ import {validate,parts,initialModule,facadeBottom,parseModule,grooveBox} from '.
 import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
-import {hoodBoxes} from '../scripts/kitchen/hoodBox';
+import {hoodBoxes,hoodBoxSpecs} from '../scripts/kitchen/hoodBox';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {refCategory,confirmatName} from '../scripts/kitchen/refHardware';
 import {estimate} from '../src/pricing';
@@ -346,6 +346,17 @@ test('короб под вытяжку (k25 m16 накладной фронт, k
   assert.match(moduleFromEtalon(load('k25','m16')).unsupported.join(';'),/короб под вытяжку/);
   assert.equal(hoodBoxes(load('k08','m10')).length,0);
   assert.ok(!moduleFromEtalon(load('k08','m10')).unsupported.some(u=>/короб/.test(u)));
+});
+test('короб под вытяжку — разбор Базиса для параметрики (n6-hood): фронт накладной/вкладной со свесом, П-вырез в горизонталях впритык, полки трапецией у стенок, ХДФ двумя кусками',{skip:!existsSync(`${ETALON}/k31.json`)||!existsSync(`${ETALON}/k05.json`)},()=>{
+  const [a]=hoodBoxSpecs(load('k31','m08'));
+  assert.deepEqual([a.wallZ,a.front,a.cut,a.hdfSplit],[[20,200],{mount:'overlay',z0:200,over:[2,2]},{below:true,above:false,round:false},false]);
+  assert.deepEqual(a.shelves.map(s=>[s.side,s.trapezoid,s.apexGap]),[['left',true,1.5],['right',true,1.5]]);
+  const [b]=hoodBoxSpecs(load('k05','m08'));
+  assert.deepEqual([b.wallZ,b.front.mount,b.cut.below,b.cut.above,b.hdfSplit,b.shelves.length],[[59,220],'overlay',true,true,true,4]);
+  assert.equal(hoodBoxSpecs(load('k06','m09'))[0].front.mount,'inset');
+  // полка в соседней секции за перегородкой (k16 m11) — не полка короба
+  assert.equal(hoodBoxSpecs(load('k16','m11'))[0].shelves.length,2);
+  assert.match(moduleFromEtalon(load('k31','m08')).unsupported.join(';'),/фронт накладной в 216 от задней кромки, вырез П под коробом, полок трапецией 2\)/);
 });
 test('кромка детали по проекту своей толщины (k31 m07: стяжка у задника 0,5 только по верхнему торцу при корпусе 1) — partsT, сохраняется в проекте',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
   const ref=load('k31','m07'),{module:m}=moduleFromEtalon(ref);
