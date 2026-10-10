@@ -114,6 +114,10 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       for (const [dx, dz] of [[-15.5, -15.5], [15.5, -15.5], [-15.5, 15.5], [15.5, 15.5]]) push(p.id, [o[0] + dx, o[1], o[2] + dz], [0, 1, 0], 4, 3);
     } else if (p.id.startsWith("kitchen-side-screw:") && p.anchor) {
       push(p.id, p.anchor, [0, 1, 0], 8, 45); // «8x45» Базиса: D8×45 в нижний торец опущенной боковины (n4-tall)
+    } else if (p.id.startsWith("kitchen-tie:") && p.anchor) {
+      // стяжка соседних модулей в Gola (kitchen.golaTies, Базис «5»): D5 насквозь через боковину в углу среднего выреза
+      const s = p.id.split(":")[1] as "left" | "right", t = ps.find((q) => q.id === s)?.size[0] ?? 16;
+      push(p.id, p.anchor, [m.kitchen?.golaTies?.[s] ?? 1, 0, 0], 5, t);
     } else if (p.id.startsWith("kitchen-leg-screw:") && p.anchor) {
       push(p.id, p.anchor, [0, 1, 0], 3, 3); // саморез площадки опоры (Базис «3x3»): D3×3 в нижнюю пласть дна
     } else if (p.id.startsWith("kitchen-hanger:") && p.model?.origin) {

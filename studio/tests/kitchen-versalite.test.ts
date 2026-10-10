@@ -87,7 +87,7 @@ test('Versalite recognizer + compare on Bazis k10/m12: 3 drawers, all panels wit
   const row=(cat:string)=>c.hardware.find(r=>r.category===cat)!;
   assert.equal(row('направляющая').studio,6);assert.equal(row('направляющая').maxPosDelta,0);
   assert.equal(row('конфирмат').studio,row('конфирмат').ref);
-  // «прочее» в Базисе — 30 шурупов ящиков + 2 метки «5» на боковинах (не ящики)
-  assert.equal(row('прочее').studio,30);
-  assert.ok(c.holes!.missing.every(x=>/D5×16/.test(x)),'only the two non-drawer D5x16 marks are missing');
+  // «прочее» в Базисе — 30 шурупов ящиков + 2 «5» на боковинах: стяжки соседних модулей в углу среднего выреза Gola (n6, kitchen.golaTies)
+  assert.equal(row('прочее').studio,32);assert.equal(row('прочее').ref,32);
+  assert.deepEqual(c.holes!.missing,[],'D5x16 стяжек Gola — как в Базисе');
 });

@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
 import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, isEuro6, legScrews, outConfirmats, railConf, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
+import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
@@ -318,13 +318,39 @@ export function golaFromContour(p: { contour?: [number, number][]; contourPlane?
     if (grp.length >= 2) {
       const ys = grp.map((q) => q[0]), zMin = Math.min(...grp.map((q) => q[1])), y0 = Math.min(...ys), y1 = Math.max(...ys);
       const zEdge = Math.max(grp[0][1], grp[grp.length - 1][1]);
-      if (y1 - y0 > 10 && y1 - y0 < 300) out.push({ top0: r1(yTop - y1), top1: r1(yTop - y0), depth: r1(zFront - zMin), r: r1(Math.max(0, zEdge - zMin)) });
+      // средний вырез с острым верхним углом (k10, k15, k17, k30: в этом углу стяжка «5»), скруглён только нижний
+      const at = (y: number) => grp.find((q) => Math.abs(q[0] - y) < 0.01)![1] - zMin, sharp = yTop - y1 > 0.01 && at(y1) < 0.05 && at(y0) > 0.05;
+      if (y1 - y0 > 10 && y1 - y0 < 300) out.push({ top0: r1(yTop - y1), top1: r1(yTop - y0), depth: r1(zFront - zMin), r: r1(Math.max(0, zEdge - zMin)), ...(sharp ? { sharpTop: true } : {}) });
     }
     grp = [];
   };
   for (const q of c) { if (inCut(q)) grp.push(q); else flush(); }
   flush();
   return out.sort((a, b) => a.top0 - b.top0);
+}
+
+/** Какие вырезы Gola кромятся — по длинам кромки боковины Базиса. Сумма кромки переднего торца больше прямых участков — кромлены
+ *  стенки и дуги вырезов: берём тот набор вырезов, чьи стенки с дугами дают эту разницу (±0,6; k10: только верхний — 52 + 7,85,
+ *  k15/k17: оба), не нашёлся — все (как раньше). Кромка −y сверх кромленых средних — верхняя стенка среднего выреза без остального
+ *  (k10 m11/m12: только она, 26) — edgedTop. Длины — как в kitchen.ts golaSides. */
+export function golaCutEdges(gc: GolaCut[], edges: { side: string; thick: number; len?: number }[], H: number, ze: number) {
+  const straight = H - gc.reduce((s, c) => s + c.top1 - c.top0, 0);
+  if (ze > straight + 1) {
+    const wall = (c: GolaCut) => (c.top0 <= 0.01 || c.sharpTop ? c.top1 - c.top0 - c.r + (Math.PI * c.r) / 2 : c.top1 - c.top0 - 2 * c.r + Math.PI * c.r);
+    let best = -1, bd = 0.6;
+    for (let mask = 1; mask < 1 << gc.length; mask++) {
+      const d = Math.abs(gc.reduce((s, c, i) => s + (mask & (1 << i) ? wall(c) : 0), 0) - (ze - straight));
+      if (d <= bd) { bd = d; best = mask; }
+    }
+    gc.forEach((c, i) => { if (best < 0 || best & (1 << i)) c.edged = true; });
+  }
+  const top = (c: GolaCut) => (c.sharpTop ? c.depth : c.depth - c.r), dMax = Math.max(...gc.map((c) => c.depth)) + 1;
+  // −y: отрезки не длиннее выреза — верхние стенки средних вырезов; длиннее — нижний торец боковины (k17 m02: 560 + 26)
+  const ys = edges.filter((e) => e.side === "-y" && e.thick > 0 && e.len !== undefined), ym = ys.filter((e) => e.len! <= dMax).reduce((s, e) => s + e.len!, 0);
+  let rest = ym - gc.filter((c) => c.top0 > 0.01 && c.edged).reduce((s, c) => s + top(c), 0);
+  for (const c of gc) if (c.top0 > 0.01 && !c.edged && rest > 0.6 && Math.abs(rest - top(c)) <= 0.6) { c.edgedTop = true; rest -= top(c); }
+  // −y только у стенок вырезов, нижний торец без кромки (k10 m11/m12) — иначе студия кромила бы его во всю глубину
+  return { bareBottom: ym > 0 && !ys.some((e) => e.len! > dMax) };
 }
 
 export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
@@ -990,8 +1016,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const fTop = fronts.length ? Math.max(...fronts.map((f) => f.b.y1)) : null;
     // кромка по самому вырезу: сумма кромки переднего торца у Базиса больше прямых участков
     const ze = ((left.p as unknown as { edges?: { side: string; thick: number; len?: number }[] }).edges ?? []).filter((e) => e.side === "+z" && e.thick > 0 && e.len !== undefined).reduce((s, e) => s + e.len!, 0);
-    if (gc.length && ze > left.b.y1 - left.b.y0 - gc.reduce((s, c) => s + c.top1 - c.top0, 0) + 1) gc.forEach((c) => (c.edged = true));
-    if (gc.length) { m.gola = { cuts: gc }; if (fTop !== null && gc.some((c) => c.top0 === 0)) m.gola.faceTop = r1(top - fTop); notes.push(`Gola: ${gc.length} выреза в боковинах (${gc.map((c) => `${c.top0}–${c.top1} от верха, глуб. ${c.depth}, R${c.r}`).join("; ")})`); }
+    const ge = gc.length ? golaCutEdges(gc, (left.p as unknown as { edges?: { side: string; thick: number; len?: number }[] }).edges ?? [], left.b.y1 - left.b.y0, ze) : undefined;
+    if (gc.length) { m.gola = { cuts: gc, ...(ge?.bareBottom ? { bareBottom: true } : {}) }; if (fTop !== null && gc.some((c) => c.top0 === 0)) m.gola.faceTop = r1(top - fTop); notes.push(`Gola: ${gc.length} выреза в боковинах (${gc.map((c) => `${c.top0}–${c.top1} от верха, глуб. ${c.depth}, R${c.r}`).join("; ")})`); }
+    // стяжки соседних модулей в углу среднего выреза («5» Базиса) — стороны по проекту, точка по правилу (recognize-common golaTies)
+    const ties = gc.length ? golaTies(ref.hardware as Parameters<typeof golaTies>[0], (ref.holes ?? []) as Parameters<typeof golaTies>[1], [{ side: "left", i: left.p.i, b: left.b }, { side: "right", i: right.p.i, b: right.b }], gc) : undefined;
+    if (ties) { m.kitchen.golaTies = ties; notes.push(`стяжки соседних модулей в Gola: ${[ties.left ? "левая" : "", ties.right ? "правая" : ""].filter(Boolean).join(", ")} — как в Базисе`); }
   }
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;

@@ -26,7 +26,8 @@ export function golaSideGeometry(part:Part):THREE.BufferGeometry{
   const ya=yt-c.top1,yb=yt-c.top0,zi=zf-c.depth,r=Math.max(0,Math.min(c.r,c.depth/2,(yb-ya)/2));
   ln(zf,ya);ln(zi+r,ya);if(r>0)qc(zi,ya,zi,ya+r);
   if(c.top0<=0.01){ln(zi,yt);openTop=true;break;}
-  ln(zi,yb-r);if(r>0)qc(zi,yb,zi+r,yb);ln(zf,yb);
+  const rt=c.sharpTop?0:r; // верхний угол среднего выреза без скругления (k10/k15/k17/k30 — в нём стяжка «5»)
+  ln(zi,yb-rt);if(rt>0)qc(zi,yb,zi+rt,yb);ln(zf,yb);
  }
  if(!openTop)ln(zf,yt);
  ln(-zf,yt);s.closePath();
