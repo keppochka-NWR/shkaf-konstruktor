@@ -143,3 +143,16 @@ test('Bazis k30: per-side Gola cuts recognized (m12 — middle only right, m14 �
   const b=moduleFromEtalon(refOf('k30','m14')).module;assert.ok(b.gola!.cuts.every(c=>c.side==='left'));
   assert.equal(compareModule(refOf('k30','m14'),b).edges!.bad.length,0,'кромка боковин — как в Базисе');
 });
+test('Blind front next to drawers (kitchen.blindFronts): a facade like the drawer ones, no box and no hardware; saved and read back',{skip:!existsSync(ED)},()=>{
+  // k29 m03: два ящика Axis (фасад 597–936), под ними глухой фасад 102–593 без петель и направляющих
+  const ref=refOf('k29','m03'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen!.blindFronts,[{y0:102,y1:593}]);
+  const ps=parts(m),bf=ps.find(p=>p.id==='kd-blind:0:facade')!,kf=ps.find(p=>p.id.startsWith('kd:')&&p.id.endsWith(':facade'))!;
+  assert.deepEqual([bf.size[0],bf.size[2],bf.position[0],bf.position[2],bf.decor],[kf.size[0],kf.size[2],kf.position[0],kf.position[2],kf.decor],'как фасад ящика');
+  assert.equal(bf.size[1],491);assert.ok(!ps.some(p=>p.id.startsWith('kd-blind')&&!p.id.endsWith(':facade')),'ни короба, ни крепежа');
+  assert.ok(!holes(m).some(h=>h.part.startsWith('kd-blind')),'отверстий в глухом фасаде нет (в Базисе нет)');
+  const c=compareModule(ref,m);assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({miss:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name)}));
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.blindFronts,[{y0:102,y1:593}]);
+  // фасад с фурнитурой на нём (дверь на петлях) — не глухой: в модулях с петлями поле не ставится
+  for(const [k,key] of [['k10','m12'],['k15','m04']])assert.equal(moduleFromEtalon(refOf(k,key)).module.kitchen!.blindFronts,undefined);
+});

@@ -735,6 +735,19 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     });
     if (kd.length) m.kdrawers = kd;
   }
+  // нижний с ящиками: фасад во всю ширину ряда фасадов, не ставший фасадом ящика, а в модуле нет ни петель, ни газлифта (k29 m03:
+  // под двумя ящиками Axis глухой фасад 102–593) — глухой, как в Базисе (kitchen.blindFronts); фасад с фурнитурой на нём
+  // (отверстия или крепёж в его плоскости) — не глухой, не берём
+  if (role === "base" && m.kdrawers?.length && !hw("петля").length && !hw("газлифт").length) {
+    const kdF = fronts.filter((q) => drawerPanels.includes(q)), fw = (q: (typeof fronts)[number]) => q.b.x1 - q.b.x0;
+    const onIt = (q: (typeof fronts)[number]) => ref.hardware.some((h) => h.pos[0] >= q.b.x0 - 0.5 && h.pos[0] <= q.b.x1 + 0.5 && h.pos[1] >= q.b.y0 - 0.5 && h.pos[1] <= q.b.y1 + 0.5 && h.pos[2] >= q.b.z0 - 0.5 && h.pos[2] <= q.b.z1 + 0.5);
+    const blind = fronts.filter((q) => !drawerPanels.includes(q) && kdF.length && kdF.every((f) => Math.abs(fw(f) - fw(q)) < 0.6 && Math.abs(f.b.x0 - q.b.x0) < 0.6) && !onIt(q));
+    if (blind.length) {
+      m.kitchen.blindFronts = blind.map((q) => ({ y0: r1(q.b.y0), y1: r1(q.b.y1) })).sort((a, c) => a.y0 - c.y0);
+      drawerPanels.push(...blind);
+      notes.push(`глухой фасад без фурнитуры: ${m.kitchen.blindFronts.map((b) => `${b.y0}–${b.y1}`).join(", ")} — как в Базисе`);
+    }
+  }
   // пенал: ящики внизу, выше (через нишу) — один ряд распашных на петлях (k16 m13): фасады ящиков ведут ящики (kdrawers),
   // распашные — свой ряд от низа kitchen.faceBottom, как в Базисе (recognize-tall.ts)
   const tallDoors = role === "tall" && m.kdrawers && hw("петля").length ? doorsAboveDrawers(fronts, drawerPanels) : undefined;

@@ -705,6 +705,13 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     return { id, name, size, position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], length: size[grainAxis], width: Math.max(...rest), thickness: Math.min(...rest),
       role: "drawer", material: "board", decor: m.decor, grain: "length", grainAxis, edge: [0, 0, 0, 0] };
   };
+  // глухие фасады без фурнитуры рядом с ящиками (kitchen.blindFronts, k29 m03: под ящиками фасад без петель и направляющих) —
+  // как фасад ящика: та же ширина, толщина, вынос и декор; ни короба, ни крепежа (в Базисе их нет)
+  for (const [i, b] of (m.kitchen?.blindFronts ?? []).entries()) {
+    const fw = m.width - 2 * faceGap, fh = b.y1 - b.y0;
+    out.push({ id: `kd-blind:${i}:facade`, name: `Фасад глухой ${i + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (b.y0 + b.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
+      role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+  }
   m.kdrawers.forEach((k, j) => {
     const id = `kd:${j}`;
     const sideIn = (s: 0 | 1) => (s ? xr : x0), dir = (s: 0 | 1) => (s ? -1 : 1);
