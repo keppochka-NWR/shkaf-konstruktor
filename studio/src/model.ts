@@ -357,7 +357,8 @@ export type WallFiller = { kind: "edge"; width: number };
 export type BazisItem = { name: string; category: string; n: number; len?: number };
 export type GolaCut = { top0: number; top1: number; depth: number; r: number; /** Кромка и по контуру самого выреза (стенка, дуга, дно, у среднего — и верх) — как в части кухонь Базиса. */ edged?: boolean;
   /** Средний вырез: кромка только по его верхней стенке (k10: кромка у Базиса — только верх среднего выреза). */ edgedTop?: boolean;
-  /** Средний вырез: верхний угол без скругления (k10, k15, k17, k30 — в нём стяжка соседних модулей «5»), скруглён только нижний. */ sharpTop?: boolean };
+  /** Средний вырез: верхний угол без скругления (k10, k15, k17, k30 — в нём стяжка соседних модулей «5»), скруглён только нижний. */ sharpTop?: boolean;
+  /** Вырез только в этой боковине (k30 m12: средний — только в правой; k30 m14: в правой вырезов нет). Без поля — в обеих. */ side?: 'left' | 'right' };
 export type Part = {
   /** Вырезы Gola в боковине (координаты детали: от её верха вниз по Y, глубина — от переднего торца +Z); раскрой — по габариту. */
   golaCuts?: GolaCut[];
@@ -1965,7 +1966,7 @@ export function parseModule(input: unknown): Module {
     ...(x.bazisNames&&typeof x.bazisNames==='object'?(()=>{const r=parseRaw({panels:[],names:x.bazisNames});return r?.names?{bazisNames:r.names}:{};})():{}),
     // Gola по Базису: вырезы в боковинах и опущенный верх фасадов (без разбора — фасады и петли уезжают на 28,5 мм вверх и открытый
     // в приложении модуль отличается от Базиса; разбор добавлен и в n3-additions, и в n3-kitchens2 — оставлен один)
-    ...(x.gola===undefined||!x.gola||typeof x.gola!=='object'?{}:{gola:(()=>{const g=x.gola as NonNullable<Module['gola']>;return {cuts:Array.isArray(g.cuts)?g.cuts.filter(c=>c&&typeof c==='object').map(c=>({top0:Number(c.top0),top1:Number(c.top1),depth:Number(c.depth),r:Number(c.r),...(c.edged?{edged:true}:{}),...(c.edgedTop?{edgedTop:true}:{}),...(c.sharpTop?{sharpTop:true}:{})})):[],...(g.faceTop===undefined?{}:{faceTop:Number(g.faceTop)}),...(g.bareBottom?{bareBottom:true as const}:{})};})()}),
+    ...(x.gola===undefined||!x.gola||typeof x.gola!=='object'?{}:{gola:(()=>{const g=x.gola as NonNullable<Module['gola']>;return {cuts:Array.isArray(g.cuts)?g.cuts.filter(c=>c&&typeof c==='object').map(c=>({top0:Number(c.top0),top1:Number(c.top1),depth:Number(c.depth),r:Number(c.r),...(c.edged?{edged:true}:{}),...(c.edgedTop?{edgedTop:true}:{}),...(c.sharpTop?{sharpTop:true}:{}),...(c.side==='left'||c.side==='right'?{side:c.side}:{})})):[],...(g.faceTop===undefined?{}:{faceTop:Number(g.faceTop)}),...(g.bareBottom?{bareBottom:true as const}:{})};})()}),
     ...(x.kdrawers===undefined?{}:(()=>{const k=parseKDrawers(x.kdrawers);return k?{kdrawers:k}:{};})()),
     ...(x.kitchenLift===undefined?{}:(()=>{const k=parseKitchenLift(x.kitchenLift);return k?{kitchenLift:k}:{};})()),
     ...(x.facadeMaterial===undefined?{}:{facadeMaterial:x.facadeMaterial==='external'?'external':'ldsp'}),

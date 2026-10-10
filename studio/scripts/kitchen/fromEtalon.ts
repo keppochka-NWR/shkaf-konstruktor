@@ -1019,14 +1019,24 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
-    const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);
+    type CP = { contour?: [number, number][]; contourPlane?: string; edges?: { side: string; thick: number; len?: number }[] };
+    const gL = golaFromContour(left.p as unknown as CP, left.b.y1, left.b.z1), gR = golaFromContour(right.p as unknown as CP, right.b.y1, right.b.z1);
+    // вырезы по боковинам: есть в обеих — общий; только в одной — GolaCut.side (k30 m12: средний только в правой, k30 m14: в правой нет)
+    const sameCut = (a: GolaCut, b: GolaCut) => Math.abs(a.top0 - b.top0) <= 1 && Math.abs(a.top1 - b.top1) <= 1;
+    const gc: GolaCut[] = [...gL.map((c) => (gR.some((r) => sameCut(c, r)) ? c : { ...c, side: "left" as const })), ...gR.filter((r) => !gL.some((c) => sameCut(c, r))).map((r) => ({ ...r, side: "right" as const }))].sort((a, b) => a.top0 - b.top0);
     const fTop = fronts.length ? Math.max(...fronts.map((f) => f.b.y1)) : null;
-    // кромка по самому вырезу: сумма кромки переднего торца у Базиса больше прямых участков
-    const ze = ((left.p as unknown as { edges?: { side: string; thick: number; len?: number }[] }).edges ?? []).filter((e) => e.side === "+z" && e.thick > 0 && e.len !== undefined).reduce((s, e) => s + e.len!, 0);
-    const ge = gc.length ? golaCutEdges(gc, (left.p as unknown as { edges?: { side: string; thick: number; len?: number }[] }).edges ?? [], left.b.y1 - left.b.y0, ze) : undefined;
+    // кромка по самому вырезу: сумма кромки переднего торца у Базиса больше прямых участков (по каждой боковине — её вырезы и её кромка)
+    const edgesOf = (s: typeof left) => (s.p as unknown as CP).edges ?? [], zeOf = (s: typeof left) => edgesOf(s).filter((e) => e.side === "+z" && e.thick > 0 && e.len !== undefined).reduce((a, e) => a + e.len!, 0);
+    const lc = gc.filter((c) => c.side !== "right"), rOnly = gc.filter((c) => c.side === "right");
+    let ge = lc.length ? golaCutEdges(lc, edgesOf(left), left.b.y1 - left.b.y0, zeOf(left)) : undefined;
+    if (rOnly.length) {
+      const g2 = golaCutEdges([...gc.filter((c) => !c.side).map((c) => ({ ...c, edged: undefined, edgedTop: undefined })), ...rOnly].sort((a, b) => a.top0 - b.top0), edgesOf(right), right.b.y1 - right.b.y0, zeOf(right));
+      ge ??= g2;
+    }
     if (gc.length) { m.gola = { cuts: gc, ...(ge?.bareBottom ? { bareBottom: true } : {}) }; if (fTop !== null && gc.some((c) => c.top0 === 0)) m.gola.faceTop = r1(top - fTop); notes.push(`Gola: ${gc.length} выреза в боковинах (${gc.map((c) => `${c.top0}–${c.top1} от верха, глуб. ${c.depth}, R${c.r}`).join("; ")})`); }
     // стяжки соседних модулей в углу среднего выреза («5» Базиса) — стороны по проекту, точка по правилу (recognize-common golaTies)
-    const ties = gc.length ? golaTies(ref.hardware as Parameters<typeof golaTies>[0], (ref.holes ?? []) as Parameters<typeof golaTies>[1], [{ side: "left", i: left.p.i, b: left.b }, { side: "right", i: right.p.i, b: right.b }], gc) : undefined;
+    const tie = (side: "left" | "right", s: typeof left) => golaTies(ref.hardware as Parameters<typeof golaTies>[0], (ref.holes ?? []) as Parameters<typeof golaTies>[1], [{ side, i: s.p.i, b: s.b }], gc.filter((c) => !c.side || c.side === side));
+    const tl = tie("left", left), tr = tie("right", right), ties = tl || tr ? { ...tl, ...tr } : undefined;
     if (ties) { m.kitchen.golaTies = ties; notes.push(`стяжки соседних модулей в Gola: ${[ties.left ? "левая" : "", ties.right ? "правая" : ""].filter(Boolean).join(", ")} — как в Базисе`); }
   }
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится

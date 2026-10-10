@@ -4,7 +4,7 @@
 // столешница как отдельный объект и шаблоны для палитры.
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
-import type { Module, Part } from "./model";
+import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
 import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
@@ -482,7 +482,8 @@ export function golaSides(m: Module, out: Part[]) {
   for (const p of out) {
     if (p.id !== "left" && p.id !== "right") continue;
     const H = p.size[1], D = p.size[2];
-    const ok = cuts.filter((c) => c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
+    // вырез только в одной боковине (GolaCut.side, k30 m12: средний — только в правой, k30 m14: в правой вырезов нет вовсе)
+    const ok = cuts.filter((c) => (!c.side || c.side === p.id) && c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
     if (!ok.length) continue;
     p.golaCuts = ok.map((c) => ({ ...c }));
     let front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth)), under = 0;
@@ -505,14 +506,17 @@ export function golaSides(m: Module, out: Part[]) {
     p.collide = col;
   }
   out.push(...golaTieParts(m, out));
-  // профили Gola (алюминий, вне раскроя): верхний вырез — профиль L, средний — C; по всей ширине модуля в вырезах боковин
-  const sideL = out.find((p) => p.id === "left" && p.golaCuts);
-  if (!sideL) return;
-  const H = sideL.size[1], y0 = sideL.position[1] - H / 2, zf = sideL.position[2] + sideL.size[2] / 2;
-  for (const [k, c] of sideL.golaCuts!.entries()) {
+  // профили Gola (алюминий, вне раскроя): верхний вырез — профиль L, средний — C; по ширине модуля в вырезах боковин; вырез только
+  // в одной боковине — профиль упирается в пласть другой (не пересекает её)
+  const sL = out.find((p) => p.id === "left"), sR = out.find((p) => p.id === "right"), side0 = [sL, sR].find((p) => p?.golaCuts);
+  if (!side0) return;
+  const H = side0.size[1], y0 = side0.position[1] - H / 2, zf = side0.position[2] + side0.size[2] / 2;
+  const has = (p: Part | undefined, c: GolaCut) => !!p?.golaCuts?.some((g) => g.top0 === c.top0 && g.top1 === c.top1);
+  for (const [k, c] of cuts.filter((c) => has(sL, c) || has(sR, c)).entries()) {
     const L = c.top0 <= 0.01, h = c.top1 - c.top0, yc = y0 + H - (c.top0 + c.top1) / 2;
-    out.push({ id: `gola:${L ? "L" : "C"}:${k}`, name: `Профиль Gola ${L ? "L (верхний)" : "C (средний)"}, алюминий`, size: [m.width, h, c.depth], position: [m.width / 2, yc, zf - c.depth / 2],
-      length: m.width, width: h, thickness: c.depth, material: "alu", decor: "", role: "fastener", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true,
+    const xa = has(sL, c) || !sL ? 0 : sL.position[0] + sL.size[0] / 2, xb = has(sR, c) || !sR ? m.width : sR.position[0] - sR.size[0] / 2, w = xb - xa;
+    out.push({ id: `gola:${L ? "L" : "C"}:${k}`, name: `Профиль Gola ${L ? "L (верхний)" : "C (средний)"}, алюминий`, size: [w, h, c.depth], position: [(xa + xb) / 2, yc, zf - c.depth / 2],
+      length: w, width: h, thickness: c.depth, material: "alu", decor: "", role: "fastener", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true,
       look: { color: 0xc4c8cc, metalness: 0.85, roughness: 0.35 } });
   }
 }

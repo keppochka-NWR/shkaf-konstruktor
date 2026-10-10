@@ -121,3 +121,25 @@ test('Base module: bottom joint fastened in Bazis only at one side (k10 m11: con
   // обе стороны с крепежом (k10 m12) — правило модуля, jointNone нет
   assert.equal(moduleFromEtalon(refOf('k10','m12')).module.kitchen!.jointNone,undefined);
 });
+test('Gola cut in one side only (GolaCut.side): the other side stays rectangular, the profile stops at its face, tie only where the cut is',()=>{
+  // k30 m12: средний вырез только в правой боковине (в нём стяжка «5»), верхний — в обеих
+  const m=gola({right:1},[{top0:0,top1:57,depth:26,r:5},{top0:368.5,top1:440.5,depth:26,r:5,sharpTop:true,side:'right'}]);
+  const l=side(m),r=side(m,'right');
+  assert.equal(l.golaCuts!.length,1);assert.equal(r.golaCuts!.length,2);
+  assert.equal(l.edgeLen!['+z'],l.size[1]-57);assert.equal(r.edgeLen!['+z'],r.size[1]-57-72);
+  const c=parts(m).find(p=>p.id.startsWith('gola:C'))!,lx=l.position[0]+l.size[0]/2;
+  assert.ok(Math.abs(c.position[0]-c.size[0]/2-lx)<1e-6,'профиль C упирается в пласть левой боковины');assert.ok(Math.abs(c.position[0]+c.size[0]/2-m.width)<1e-6);
+  assert.deepEqual(partCollisions(parts(m),m).filter(x=>(x.a.startsWith('gola:C')||x.b.startsWith('gola:C'))&&[x.a,x.b].some(id=>id==='left'||id==='right')),[],'профиль C не пересекает боковину без выреза');
+  assert.ok(holes(m).some(h=>h.src==='kitchen-tie:right'));
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).gola!.cuts[1].side,'right');
+  // в правой вырезов нет вовсе (k30 m14): правая — прямоугольник
+  const n=gola(undefined,K10_CUTS.map(c=>({...c,side:'left' as const})));assert.equal(side(n,'right').golaCuts,undefined);
+});
+
+test('Bazis k30: per-side Gola cuts recognized (m12 — middle only right, m14 — right side without cuts), m12 PASS',{skip:!existsSync(ED)},()=>{
+  const r12=refOf('k30','m12'),a=moduleFromEtalon(r12);
+  assert.deepEqual(a.module.gola!.cuts.map(c=>c.side??'both'),['both','right']);assert.deepEqual(a.module.kitchen!.golaTies,{right:1});
+  const c=compareModule(r12,a.module);assert.ok(honestPass(c,validate(a.module),a.unsupported),JSON.stringify({e:c.edges?.bad,h:c.holes&&[c.holes.missing,c.holes.extra]}));
+  const b=moduleFromEtalon(refOf('k30','m14')).module;assert.ok(b.gola!.cuts.every(c=>c.side==='left'));
+  assert.equal(compareModule(refOf('k30','m14'),b).edges!.bad.length,0,'кромка боковин — как в Базисе');
+});
