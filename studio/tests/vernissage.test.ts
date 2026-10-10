@@ -62,7 +62,8 @@ test('Вернисаж: геометрия строится под габари�
 test('Вернисаж: все фрезеровки каталога × 150×300, 300×300, 450×716, 597×2000, 1170×2750 × исполнения × МДФ 16/19/25 — сетка замкнута, рёбра парные, нет вывернутых треугольников, объём положительный', () => {
   const bad: string[] = [];
   let n = 0;
-  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[150, 300], [300, 300], [450, 716], [597, 2000], [1170, 2750]] as const) for (const t of [16, 19, 25] as const) {
+  // + фасад ящика 596×176 и узкая дверь 316×756 (арки и глубокие профили паспортов на малых габаритах)
+  for (const m of VERNISSAGE_MILLINGS) for (const open of openings(m)) for (const [w, h] of [[150, 300], [300, 300], [450, 716], [597, 2000], [1170, 2750], [596, 176], [316, 756]] as const) for (const t of [16, 19, 25] as const) {
     const label = `№${m.id} ${open} ${w}×${h}×${t}`, L = vernissageLayout({ milling: m.id, cover: 'film', film: 'Моно белый', thickness: t, open }, w, h), r = checkMesh(facadeGeometry(L, 1), label), f = footprint(L), tol = 0.5 + 1e-7 * w * h;
     n++;
     if (r.open || r.dup) bad.push(`${label}: непарных рёбер ${r.open}, повторных ${r.dup}`);

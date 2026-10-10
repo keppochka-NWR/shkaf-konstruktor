@@ -101,6 +101,27 @@ export function archContour(x0: number, y0: number, x1: number, y1: number, rise
   out.push([x0, yb]);
   return out;
 }
+/** Проём с дугой сверху и/или снизу без плечиков — параметрический: смещение o даёт дугу того же центра радиуса R + o и стороны,
+ *  сдвинутые на o, точка пяты — пересечение стороны с дугой (на ус по дуге не выворачивается при глубоком профиле 60–70 мм:
+ *  паспорта №43, 45, 62, 66). Точек одинаково при любом смещении. CCW: низ слева направо, правая сторона, верх справа налево. */
+export function archParamContour(x0: number, y0: number, x1: number, y1: number, riseT: number, riseB: number, seg = 24): P[] {
+  const xm = (x0 + x1) / 2, c = (x1 - x0) / 2;
+  const RT = riseT >= 1 ? (c * c + riseT * riseT) / (2 * riseT) : 0, cyT = y1 - RT, RB = riseB >= 1 ? (c * c + riseB * riseB) / (2 * riseB) : 0, cyB = y0 + RB;
+  return parametric((o) => {
+    const cc = Math.max(0.5, c + o), out: P[] = [];
+    // дуга радиуса R + o: пята — на стороне; если дуга уже проёма (R + o ≤ cc), пята на высоте центра (полукруг)
+    const arc = (R0: number, cy: number, up: boolean) => { const R = Math.max(R0 + o, cc + 1e-3), h = Math.sqrt(Math.max(0, R * R - cc * cc)); return { R, ys: up ? cy + h : cy - h, a: Math.atan2(h, cc) }; };
+    const b = RB ? arc(RB, cyB, false) : null, t = RT ? arc(RT, cyT, true) : null;
+    let yb = b ? b.ys : y0 - o, yt = t ? t.ys : y1 + o;
+    if (yt < yb) { const m = (yt + yb) / 2; yt = m; yb = m; }
+    out.push([xm - cc, yb]);
+    if (b) for (let k = 1; k < seg; k++) { const a = Math.PI + b.a + ((Math.PI - 2 * b.a) * k) / seg; out.push([xm + b.R * Math.cos(a), Math.min(yt, cyB + b.R * Math.sin(a))]); }
+    out.push([xm + cc, yb], [xm + cc, yt]);
+    if (t) for (let k = 1; k < seg; k++) { const a = t.a + ((Math.PI - 2 * t.a) * k) / seg; out.push([xm + t.R * Math.cos(a), Math.max(yb, cyT + t.R * Math.sin(a))]); }
+    out.push([xm - cc, yt]);
+    return out;
+  });
+}
 export function signedArea(c: P[]): number { let a = 0; for (let i = 0; i < c.length; i++) { const [x0, y0] = c[i], [x1, y1] = c[(i + 1) % c.length]; a += x0 * y1 - x1 * y0; } return a / 2; }
 /** Смещение замкнутого контура (CCW): o > 0 — наружу, o < 0 — внутрь; углы — на ус (как у профиля рамки). */
 export function offsetContour(c: P[], o: number): P[] {
@@ -364,6 +385,8 @@ function openingContour(x0: number, y0: number, x1: number, y1: number, s: MillS
     const lim = topA && botA ? 0.25 : 0.35, rise = (k: boolean) => k ? Math.min((s.archRise ?? 0.18) * W, H * lim) : 0;
     const sh = s.top === 'shoulders' ? (s.shoulder ?? 18) : 0, shB = s.bottom === 'shoulders' ? (s.shoulder ?? 18) : 0;
     const seg = Math.max(8, Math.min(28, Math.round((W - 2 * Math.max(sh, shB)) / 8)));
+    // профиль по паспорту (глубокий, 30–70 мм) — параметрическая дуга без плечиков; плечики и условные рамки — на ус, как раньше
+    if (s.kind === 'profile' && !sh && !shB) return archParamContour(x0, y0, x1, y1, rise(topA), rise(botA), seg);
     return archContour(x0, y0, x1, y1, rise(topA), sh, seg, rise(botA), shB);
   }
   return rectContour(x0, y0, x1, y1, s.cornerR ?? 0);
@@ -665,8 +688,11 @@ function layoutProfile(L: FacadeLayout, s: MillShape, open: Opening, r: number):
     const arched = (s.top && s.top !== 'rect') || (s.bottom && s.bottom !== 'rect');
     if (arched) {
       const deep = Math.max(depth, open !== 'solid' ? glassAt * k - x0 : 0), [rT, rB] = archRises(X1 - X0, Y1 - Y0, s);
-      const test = bbox(offsetContour(openingContour(X0, Y0, X1, Y1, s, 0), -deep)), wantW = X1 - X0 - 2 * deep, wantH = Y1 - Y0 - 2 * deep;
-      if (Math.abs(test.x1 - test.x0 - wantW) > 0.5 || Math.abs(test.y1 - test.y0 - wantH) > 0.5 || wantH - rT - rB < 20 || wantW < 2 * (s.shoulder ?? 18) + 40) { shape = { ...shape, top: 'rect', bottom: 'rect' }; notes.push('Арка не помещается под профиль — контур прямоугольный'); }
+      // «плечики» (полочка у начала арки) короче ширины профиля выворачиваются при смещении внутрь — длина плечика не меньше
+      // ширины профиля + 8 мм (в паспорте длина плечика не проставлена — условно)
+      if (s.top === 'shoulders' || s.bottom === 'shoulders') shape = { ...shape, shoulder: Math.max(s.shoulder ?? 18, deep + 8) };
+      const test = bbox(offsetContour(openingContour(X0, Y0, X1, Y1, shape, 0), -deep)), wantW = X1 - X0 - 2 * deep, wantH = Y1 - Y0 - 2 * deep;
+      if (Math.abs(test.x1 - test.x0 - wantW) > 0.5 || Math.abs(test.y1 - test.y0 - wantH) > 0.5 || wantH - rT - rB < 20 || ((s.top === 'shoulders' || s.bottom === 'shoulders') && wantW < 2 * (shape.shoulder ?? 18) + 40)) { shape = { ...shape, top: 'rect', bottom: 'rect' }; notes.push('Арка не помещается под профиль — контур прямоугольный'); }
     }
     if (open !== 'solid' && shape.cornerKind === 'concave' && shape.cornerR) { const dg = glassAt * k - x0, q = Math.sqrt(shape.cornerR ** 2 + 2 * shape.cornerR * Math.max(0, dg)); if (dg > 2.4 * shape.cornerR || Math.min(X1 - X0, Y1 - Y0) - 2 * dg < 2 * q + 10) shape = { ...shape, cornerKind: undefined, cornerR: 0 }; }
     c0 = open !== 'solid' && glassAt * k > x0 + 0.5 ? openingContour(X0, Y0, X1, Y1, { ...shape, cornerR: shape.cornerKind === 'concave' ? shape.cornerR : (s.glass?.r ?? 0) + glassAt * k - x0 }, 0) : openingContour(X0, Y0, X1, Y1, shape, 0);
