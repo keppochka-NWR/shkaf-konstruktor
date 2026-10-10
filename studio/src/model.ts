@@ -216,6 +216,8 @@ export type Module = {
    *  lay 'flat' — лёжа, как царги кухонных низов Базиса (ширина height в глубину, заподлицо с верхом); setback — утопание от фронта (под Gola). */
   rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number; at?: number; /** кухни Базиса: false — без конфирматов (k21 m02: передняя стяжка мойки без крепежа в проекте) */ fasten?: false; /** кухни Базиса: высоты конфирматов стяжки на ребре через боковины от её низа, если в проекте не один по центру (k01 m03, k03 m08: 34 и 66
      *  у стяжки 100); [] — в боковинах конфирматов нет */ confY?: number[];
+    /** кухни Базиса: царга лёжа — конфирматы через боковины в её торец, мм от задней кромки царги, если в проекте не один посередине
+     *  (k27 m02: 21,5 у царги 60; k01 m01/m02/m04 — 34 и 66 у царги 100; по базе посередине — 97 из 102) */ confZ?: number[];
     /** кухни Базиса: конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от её левого конца (k03: 60 и 508) */ topConf?: number[] }[];
   /** Дно под боковинами на всю ширину (кухонные низы и пеналы Базиса: боковины стоят на дне). По умолчанию дно между боковинами. */
   bottomUnder?: boolean;
@@ -1219,11 +1221,16 @@ export function parts(m: Module): Part[] {
     // [] — в боковинах их нет, как в Базисе), иначе один по центру. Одно правило для нижних, навесных и антресолей (n4-base, n4-wall)
     const spec = m.kitchen && r.size[1] !== t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay !== "flat") : undefined;
     const ys = spec?.confY ? spec.confY.map((v) => r.position[1] - r.size[1] / 2 + v) : [r.position[1]];
+    // царга лёжа со своими точками конфирматов по глубине из проекта (rails[].confZ, k27 m02) — в них, без поиска места
+    const flat = m.kitchen && r.size[1] === t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay === "flat") : undefined;
+    const zs = flat?.confZ?.length ? flat.confZ.map((v) => r.position[2] - r.size[2] / 2 + v) : undefined;
     for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
-      for (const [k, y] of ys.entries()) {
+      for (const [k, y] of (zs ? zs.map(() => r.position[1]) : ys).entries()) {
+        const hx = edgeX - dir * t;
+        if (zs) { confirmat(`fast:${r.id}:${side}:${k}`, [hx, y, zs[k]], dir > 0 ? "+x" : "-x"); continue; }
         // Конфирмат царги по центру её торца; если там уже конфирмат дна/крыши в той же боковине (дно под боковинами,
         // отступ 54 у k04 — z 503 против 507), сдвигаем по ширине царги до чистого места: 16 мм между осями (critic qdrawers B4).
-        const hx = edgeX - dir * t, xs = [Math.min(hx, hx + dir * 50), Math.max(hx, hx + dir * 50)];
+        const xs = [Math.min(hx, hx + dir * 50), Math.max(hx, hx + dir * 50)];
         const others = out.filter((p) => /^(Конфирмат|Евровинт)/.test(p.name) && p.position[0] + p.size[0] / 2 > xs[0] && p.position[0] - p.size[0] / 2 < xs[1] && Math.abs(p.position[1] - y) < p.size[1] / 2 + 3.5);
         const hits = (z: number, gap: number) => others.some((p) => Math.abs(p.position[2] - z) < p.size[2] / 2 + 3.5 + gap);
         let z = r.position[2];
@@ -1944,7 +1951,7 @@ export function parseModule(input: unknown): Module {
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
-    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)}),...((r as {fasten?:boolean})?.fasten===false?{fasten:false as const}:{}),...(Array.isArray((r as {confY?:unknown})?.confY)?{confY:((r as {confY?:unknown[]}).confY??[]).map(Number).filter(Number.isFinite)}:{}),...(Array.isArray((r as {topConf?:unknown})?.topConf)?{topConf:((r as {topConf?:unknown[]}).topConf??[]).map(Number).filter(Number.isFinite)}:{})})):[]}),
+    ...(x.rails===undefined?{}:{rails:Array.isArray(x.rails)?(x.rails as {place:string;height:number;lay?:string;setback?:number}[]).map(r=>({place:r?.place as NonNullable<Module['rails']>[number]['place'],height:Number(r?.height),...(r?.lay===undefined?{}:{lay:r.lay as 'edge'|'flat'}),...(r?.setback===undefined?{}:{setback:Number(r.setback)}),...((r as {at?:number})?.at===undefined?{}:{at:Number((r as {at?:number}).at)}),...((r as {fasten?:boolean})?.fasten===false?{fasten:false as const}:{}),...(Array.isArray((r as {confY?:unknown})?.confY)?{confY:((r as {confY?:unknown[]}).confY??[]).map(Number).filter(Number.isFinite)}:{}),...(Array.isArray((r as {confZ?:unknown})?.confZ)?{confZ:((r as {confZ?:unknown[]}).confZ??[]).map(Number).filter(Number.isFinite)}:{}),...(Array.isArray((r as {topConf?:unknown})?.topConf)?{topConf:((r as {topConf?:unknown[]}).topConf??[]).map(Number).filter(Number.isFinite)}:{})})):[]}),
     ...(x.bottomUnder===undefined?{}:{bottomUnder:x.bottomUnder===true}),
     ...(x.faceGap===undefined?{}:{faceGap:Number(x.faceGap)}),
     ...(x.faceGapBetween===undefined?{}:{faceGapBetween:Number(x.faceGapBetween)}),

@@ -51,6 +51,17 @@ export function railConfY(b: Box, hardware: Hw[], xL: number, xR: number): numbe
   return L.length === 1 && Math.abs(L[0] - mid) < 0.6 ? undefined : L;
 }
 
+/** Конфирматы через боковины в торец царги лёжа — мм от её задней кромки, если в проекте не один посередине. По всем нижним базы
+ *  (102 царги лёжа с конфирматами): посередине — 97 (100 → 50, 80 → 40, 70 → 35, 60 → 30); 34 и 66 у царги 100 — k01 m01/m02/m04;
+ *  34, 50, 66 — k10 m14; 22 и 35 — k10 m13; 21,5 у царги 60 — k27 m02. Берём, только если слева и справа одинаково; иначе — правило студии. */
+export function railConfZ(b: Box, hardware: Hw[], xL: number, xR: number): number[] | undefined {
+  const inBand = (h: Hw) => isConf(h) && h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
+  const zs = (f: (h: Hw) => boolean) => hardware.filter((h) => inBand(h) && f(h)).map((h) => r1(h.pos[2] - b.z0)).sort((a, c) => a - c);
+  const L = zs((h) => h.pos[0] <= xL + 1), R = zs((h) => h.pos[0] >= xR - 1), mid = (b.z1 - b.z0) / 2;
+  if (!L.length || L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  return L.length === 1 && Math.abs(L[0] - mid) < 0.6 ? undefined : L;
+}
+
 /** Конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от левого конца стяжки, по проекту Базиса:
  *  точки на наружной пласти горизонтали hz в пределах ширины стяжки (k03: 2 через крышу в 51–60 от концов; k04: 56–65; k20: один
  *  по центру; у каждого проекта своё — общего правила нет). Нет таких — undefined. */

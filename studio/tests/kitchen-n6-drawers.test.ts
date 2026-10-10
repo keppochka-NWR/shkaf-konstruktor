@@ -156,3 +156,13 @@ test('Blind front next to drawers (kitchen.blindFronts): a facade like the drawe
   // фасад с фурнитурой на нём (дверь на петлях) — не глухой: в модулях с петлями поле не ставится
   for(const [k,key] of [['k10','m12'],['k15','m04']])assert.equal(moduleFromEtalon(refOf(k,key)).module.kitchen!.blindFronts,undefined);
 });
+test('Flat rail confirmats off-centre from project (rails[].confZ): k27 m02 — 21.5 from the rail rear on both sides; centred rails keep the rule',{skip:!existsSync(ED)},()=>{
+  const ref=refOf('k27','m02'),{module:m,unsupported}=moduleFromEtalon(ref);
+  const r=m.rails!.find(q=>q.place==='front-top')!;assert.equal(r.lay,'flat');assert.deepEqual(r.confZ,[21.5]);
+  const ps=parts(m),rail=ps.find(p=>p.id==='rail:front-top')!,cs=ps.filter(p=>p.id.startsWith('fast:rail:front-top:'));
+  assert.equal(cs.length,2);for(const c of cs)assert.equal(c.position[2],rail.position[2]-rail.size[2]/2+21.5);
+  const c=compareModule(ref,m);assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({hw:c.hardware.filter(h=>(h.maxPosDelta??0)>1),h:c.holes&&[c.holes.missing,c.holes.extra]}));
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).rails!.find(q=>q.place==='front-top')!.confZ,[21.5]);
+  // царга 60 с конфирматом посередине (k31 m16) и 100 → 50 (k10 m12) — правило студии, поля нет
+  for(const [k,key] of [['k31','m16'],['k10','m12']])assert.ok(!(moduleFromEtalon(refOf(k,key)).module.rails??[]).some(q=>q.confZ),`${k} ${key}`);
+});
