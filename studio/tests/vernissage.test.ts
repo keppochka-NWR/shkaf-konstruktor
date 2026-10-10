@@ -5,7 +5,7 @@ import { parts, parseVernissage, initialModule, type Module } from '../src/model
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
 import { estimate, lineGroup } from '../src/pricing';
-import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
+import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
 const KINDS: [string, VernissageFacade['open']][] = [['15', 'solid'], ['1', 'solid'], ['3', 'solid'], ['54', 'solid'], ['52', 'solid'], ['W1', 'solid'], ['46', 'solid'], ['100', 'solid'], ['79', 'solid'], ['78/1', 'solid'], ['109', 'solid'], ['25', 'glass'], ['54', 'grille'], ['93', 'solid']];
@@ -138,6 +138,73 @@ test('Вернисаж: цена по прайсу 10.08.2026 — три руч�
   assert.ok(vernissageFacadePrice({ milling: '78', cover: 'enamel-gloss', thickness: 19 }, 400, 700).warnings.some((w) => w.includes('матовая')));
 });
 
+test('Вернисаж: интегрированная ручка V5/V6/V7 и ПЭТ на PUR-клее — в каталоге и в выборе, цены по прайсу (R46–R57)', () => {
+  for (const id of ['V5', 'V6', 'V7', 'ПЭТ']) assert.ok(vernissageMilling(id), id);
+  assert.equal(VERNISSAGE_SERIES.length, 6);
+  // ручка, плёнка ПВХ: «2, 3 категория» 8930, «5, 6 категория» 9840 ₽/м² (R49), только 19 мм
+  const a = vernissageFacadePrice({ milling: 'V5', cover: 'film', film: 'Моно айс', thickness: 19 }, 450, 716);
+  assert.equal(a.perM2, 8930); assert.deepEqual(a.warnings, []);
+  assert.equal(vernissageFacadePrice({ milling: 'V6', cover: 'film', film: 'Сиена айс', thickness: 19 }, 450, 716).perM2, 9840);
+  assert.equal(vernissageFacadePrice({ milling: 'V5', cover: 'film', film: 'Карамель глянец', thickness: 19 }, 450, 716).perM2, null, 'категории 4 у ручки нет');
+  assert.deepEqual(filmCatsOf('V5'), ['2', '3', '5', '6']);
+  // колонка «V5» листа категорий: «Кантри Мята» — нет
+  assert.ok(vernissageFacadePrice({ milling: 'V5', cover: 'film', film: 'Кантри Мята', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('V5')));
+  // эмалевый участок (R54): без покрытия 6520, мат 11190, глянец 12230; минимум 0,3 м² — только ПВХ
+  const e = vernissageFacadePrice({ milling: 'V7', cover: 'none', thickness: 19 }, 300, 300);
+  assert.equal(e.perM2, 6520); assert.equal(e.billArea, 0.09);
+  assert.equal(vernissageFacadePrice({ milling: 'V7', cover: 'enamel-matte', thickness: 19 }, 450, 716).perM2, 11190);
+  assert.equal(vernissageFacadePrice({ milling: 'V7', cover: 'enamel-gloss', thickness: 19 }, 450, 716).perM2, 12230);
+  assert.deepEqual(thicknessesOf('V5'), [19]);
+  // ПЭТ на PUR-клее 18 мм: 7200 ₽/м² (R57), 13 декоров, без минимума площади
+  const p = vernissageFacadePrice({ milling: 'ПЭТ', cover: 'pet', film: 'Луара', thickness: 18 }, 300, 300);
+  assert.equal(p.perM2, 7200); assert.equal(p.billArea, 0.09); assert.equal(PET_DECORS.length, 13);
+  assert.deepEqual(thicknessesOf('ПЭТ'), [18]); assert.deepEqual(coversOf('ПЭТ'), ['pet']);
+  // смена серии на ПЭТ приводит выбор к допустимому: покрытие ПЭТ, декор из списка, 18 мм
+  assert.deepEqual(normalizeVernissage({ milling: 'ПЭТ', cover: 'enamel-matte', thickness: 19, twoSided: true }), { milling: 'ПЭТ', cover: 'pet', film: 'Луара', thickness: 18 });
+  for (const id of ['V5', 'ПЭТ']) { const g = facadeGeometry(vernissageLayout(normalizeVernissage({ ...DEFAULT_VERNISSAGE, milling: id }), 450, 716)), r = checkMesh(g, id); assert.equal(r.open + r.dup, 0, id); }
+  // ручка: профиля на сайте нет — паз-выборка по верхнему краю на всю ширину с условными размерами из PROVISIONAL, пометка «размеры условные»
+  for (const id of ['V5', 'V6', 'V7']) {
+    const m = vernissageMilling(id)!, L = vernissageLayout({ milling: id, cover: 'film', film: 'Моно айс', thickness: 19 }, 450, 716), H = PROVISIONAL.handle;
+    assert.equal(m.shape.kind, 'handle', id); assert.ok(m.shapeNote.includes('размеры условные'), id);
+    assert.deepEqual(L.handle, { y0: 716 / 2 - H.h, y1: 716 / 2, depth: H.d }, id);
+    const g = facadeGeometry(L, 1), p = g.getAttribute('position'), bb = g.boundingBox!;
+    assert.ok(Math.abs(bb.max.x - bb.min.x - 450) < 1e-3 && Math.abs(bb.max.y - bb.min.y - 716) < 1e-3 && Math.abs(bb.max.z - bb.min.z - 19) < 1e-3, `${id}: габарит`);
+    // дно выборки — на глубине d от лица у верхней кромки по всей ширине; ниже выборки лицо фасада целое
+    let floorL = false, floorR = false, faceUnder = false;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      if (Math.abs(y - 716 / 2) < 1e-3 && Math.abs(z - (19 / 2 - H.d)) < 1e-3) { if (Math.abs(x + 225) < 1e-3) floorL = true; if (Math.abs(x - 225) < 1e-3) floorR = true; }
+      if (Math.abs(y + 716 / 2) < 1e-3 && Math.abs(z - 19 / 2) < 1e-3) faceUnder = true;
+    }
+    assert.ok(floorL && floorR && faceUnder, `${id}: выборка по верхнему краю на всю ширину`);
+  }
+  // низкий фасад ящика: выборка не больше трети высоты; совсем узкий — честно гладкий с пометкой
+  assert.equal(vernissageLayout({ milling: 'V6', cover: 'none', thickness: 19 }, 600, 60).handle!.y1 - vernissageLayout({ milling: 'V6', cover: 'none', thickness: 19 }, 600, 60).handle!.y0, 20);
+  const tiny = vernissageLayout({ milling: 'V7', cover: 'none', thickness: 19 }, 600, 20); assert.ok(!tiny.handle && tiny.notes.some((x) => x.includes('не помещается')));
+  assert.deepEqual(parseVernissage({ milling: 'ПЭТ', cover: 'pet', film: 'Луара', thickness: 18 }), { milling: 'ПЭТ', cover: 'pet', film: 'Луара', thickness: 18 });
+});
+
+test('Вернисаж: правила прайса — эмаль №44/№58 (R28), Лайн/Сиена у Премиума (R38), №109 в Адилет (R27), 16 мм без петель (R26), сброс покрытия', () => {
+  // R28: «без декора: №44», «без решёток: №58» — в эмали исполняются, с ограничением
+  assert.ok(coversOf('44').includes('enamel-matte') && coversOf('44').includes('enamel-gloss'));
+  assert.ok(vernissageFacadePrice({ milling: '44', cover: 'enamel-matte', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('без декора')));
+  assert.ok(vernissageFacadePrice({ milling: '58', cover: 'enamel-matte', thickness: 19, open: 'grille' }, 450, 716).warnings.some((w) => w.includes('без решёток')));
+  assert.ok(!vernissageFacadePrice({ milling: '58', cover: 'enamel-matte', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('без решёток')));
+  // R38: вся серия Премиум не рекомендуется в Лайн и Сиена
+  assert.ok(vernissageFacadePrice({ milling: '75', cover: 'film', film: 'Лайн белый', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('Лайн')));
+  assert.ok(vernissageFacadePrice({ milling: '90', cover: 'film', film: 'Сиена айс', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('Лайн')));
+  // Премиум: колонки категории 4 нет — в выборе её нет
+  assert.ok(!filmCatsOf('75').includes('4'));
+  // Адилет R27: №109 — МДФ 19 с петлями
+  assert.ok(vernissageFacadePrice({ milling: '109', cover: 'adilet', film: 'Плёнка мат. Carbon CBR-1 Эгрет', thickness: 16 }, 450, 716).warnings.some((w) => w.includes('19')));
+  // R26: «только МДФ 19» — если есть петли; 16 мм доступна (без петель), с предупреждением
+  assert.ok(thicknessesOf('72').includes(16));
+  // смена фрезеровки: эмали глянец у №75 нет — покрытие сбрасывается на допустимое (список и расчёт совпадают)
+  for (const [id, cover] of [['75', 'enamel-gloss'], ['54', 'enamel-matte']] as const) { const n = normalizeVernissage({ milling: id, cover, thickness: 19 }); assert.ok(coversOf(id).includes(n.cover), id); assert.ok(vernissageFacadePrice(n, 450, 716).perM2 !== null, id); }
+  // неизвестный номер из файла — не хранится (подпись и геометрия от одной фрезеровки)
+  assert.equal(parseVernissage({ milling: '999', cover: 'film', thickness: 19 }).milling, '1');
+});
+
 test('Вернисаж в модуле: фасады — сторонний участок со своей ценой; без выбора детали шкафа не меняются', () => {
   const p = newProject(), base = parts(p.modules[0].module);
   const m: Module = { ...p.modules[0].module, vernissage: { milling: '54', cover: 'film', film: 'Моно белый', thickness: 19 }, facadeT: 19 };
@@ -178,6 +245,8 @@ test('Вернисаж на кухне: двери и фасады ящиков 
 });
 
 test('Вернисаж: каталог — все фрезеровки прайса со своей раскладкой', () => {
-  assert.equal(VERNISSAGE_MILLINGS.length, 97);
+  // 97 фрезеровок серий прайса + интегрированная ручка V5/V6/V7 + ПЭТ на PUR-клее
+  assert.equal(VERNISSAGE_MILLINGS.filter((m) => m.series !== 'handle' && m.series !== 'pet').length, 97);
+  assert.equal(VERNISSAGE_MILLINGS.length, 101);
   for (const m of VERNISSAGE_MILLINGS) { const L = vernissageLayout({ milling: m.id, cover: 'film', film: 'Моно белый', thickness: 19 }, 450, 716); assert.ok(facadeGeometry(L).getAttribute('position').count > 0, m.id); }
 });

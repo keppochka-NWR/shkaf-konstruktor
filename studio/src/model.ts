@@ -17,6 +17,7 @@ import { handleById, handleKind, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
 import type { VernissageFacade } from "./facadesVernissage";
+import { V_MILLINGS } from "./vernissageData";
 export const RULES = {
   panel: 16,
   back: 3,
@@ -337,8 +338,10 @@ export type Module = {
  *  face — сторона толщины детали (+/−), along — отступы от концов по длине детали, across — от минимальной грани по ширине (от/до), depth — глубина. */
 /** Разбор фасада «Вернисаж» из сохранённого проекта: только известные поля. */
 export function parseVernissage(x: unknown): VernissageFacade {
-  const v = x as Record<string, unknown>, cover = ['film', 'adilet', 'enamel-matte', 'enamel-gloss', 'none'].includes(String(v.cover)) ? String(v.cover) as VernissageFacade['cover'] : 'film';
-  return { milling: String(v.milling ?? '1'), cover, thickness: Number(v.thickness) === 16 ? 16 : Number(v.thickness) === 25 ? 25 : 19,
+  const v = x as Record<string, unknown>, cover = ['film', 'adilet', 'enamel-matte', 'enamel-gloss', 'none', 'pet'].includes(String(v.cover)) ? String(v.cover) as VernissageFacade['cover'] : 'film';
+  // неизвестный номер фрезеровки (нет в каталоге) — не храним: подпись и геометрия/цена должны быть от одной фрезеровки
+  const milling = V_MILLINGS.some((m) => m.id === String(v.milling)) ? String(v.milling) : '1', t = Number(v.thickness);
+  return { milling, cover, thickness: t === 16 ? 16 : t === 18 ? 18 : t === 25 ? 25 : 19,
     ...(typeof v.film === 'string' ? { film: v.film } : {}), ...(typeof v.enamelColor === 'string' ? { enamelColor: v.enamelColor } : {}),
     ...(v.open === 'glass' || v.open === 'grille' ? { open: v.open } : {}), ...(v.patina === true ? { patina: true } : {}),
     ...(v.twoSided === true ? { twoSided: true } : {}), ...(v.lacquer === true ? { lacquer: true } : {}) };

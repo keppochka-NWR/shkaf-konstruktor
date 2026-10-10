@@ -36,6 +36,9 @@ def enamel_of(mid, series_id):
         return 'matte'
     if mid in gloss:
         return 'matte-gloss'
+    # R28: «без декора: №44», «без решёток: №58, 40, 40-1» — в эмали исполняются (с ограничением, флаги enamelNoDecor/enamelNoGrille)
+    if mid in no_decor_enamel or mid in no_grille_enamel:
+        return 'matte-gloss'
     if series_id == 'premium' and mid in premium_enamel:
         return 'matte'  # Премиум R39: «только мат»
     if series_id == 'optima' and mid in optima_enamel:
@@ -65,6 +68,28 @@ for it in mill['items']:
         'enamelNoGrille': it['id'] in no_grille_enamel,
         'enamelNoDecor': it['id'] in no_decor_enamel,
     })
+
+# Фасады с интегрированной ручкой (лист «Прайс ПВХ, Эмаль, ПЭТ», R46–R54): только 19 мм, «фасады прямые»; модели V5, V6, V7 (сайт).
+# Плёнка ПВХ — колонки «2, 3 категория» и «5, 6 категория»; эмаль — «без покрытия», мат, глянец. Профиль ручки на сайте не описан.
+ih = price['integratedHandle']
+ih_pvc, ih_en = ih['pvc']['prices']['19'], ih['enamel']['prices']['19']
+series.append({
+    'id': 'handle', 'name': 'Интегрированная ручка',
+    'columns': {'pvc_cat2_3': ih['pvc']['columns']['pvc_cat2_3'], 'pvc_cat5_6': ih['pvc']['columns']['pvc_cat5_6'],
+                'no_film': 'Фасад без покрытия (интегр. ручка, эмалевый участок)', 'enamel_matte': 'Фасады эмаль матовые (интегр. ручка)', 'enamel_gloss': 'Фасады эмаль глянец (интегр. ручка)'},
+    'prices': {'19': {'pvc_cat2_3': ih_pvc['pvc_cat2_3'], 'pvc_cat5_6': ih_pvc['pvc_cat5_6'], 'no_film': ih_en['no_coating'], 'enamel_matte': ih_en['enamel_matte'], 'enamel_gloss': ih_en['enamel_gloss']}},
+    'srcRows': {'19': ih_pvc.get('_srcRow'), '19e': ih_en.get('_srcRow')},
+})
+for mid in ih['pvc']['models_on_site']:
+    millings.append({'id': mid, 'series': 'handle', 'grafika': False, 'type': 'интегрированная ручка', 'panel': None, 'inner': None,
+                     'note': 'профиль ручки на сайте не описан (тех. информация производителя)', 'variants': {'solid': True, 'glass': False, 'grille': False, 'drawer': True},
+                     'mdf19Only': False, 'lineSienaNo': False, 'enamel': 'matte-gloss', 'enamelNoGrille': False, 'enamelNoDecor': False})
+# Фасады ПЭТ на PUR-клее 18 мм (R56–R57): одна цена за м², 13 декоров
+pet = price['petFacadesPUR']
+series.append({'id': 'pet', 'name': 'ПЭТ на PUR-клее', 'columns': {'pet': pet['title']}, 'prices': {'18': {'pet': pet['pricePerM2']}}, 'srcRows': {'18': pet['priceSrcRow']}})
+millings.append({'id': 'ПЭТ', 'series': 'pet', 'grafika': False, 'type': 'гладкий', 'panel': None, 'inner': None, 'note': 'гладкая плита МДФ 18 мм с плёнкой ПЭТ',
+                 'variants': {'solid': True, 'glass': False, 'grille': False, 'drawer': True}, 'mdf19Only': False, 'lineSienaNo': False, 'enamel': 'none', 'enamelNoGrille': False, 'enamelNoDecor': False})
+pet_decors = pet['decors']
 
 films = []
 for cat, c in price['filmCategories']['categories'].items():
@@ -98,8 +123,9 @@ def js(x):
 with open(out, 'w', encoding='utf-8', newline='\n') as f:
     f.write('// Сгенерировано scripts/vernissage_data.py из разбора прайса «Вернисаж фасады 10.08.2026 с эмалью глянец» и каталога vernisag-fasad.ru.\n')
     f.write('// Не править руками. Тип рисунка фрезеровки — оценка по фото каталога (без размеров); размеры профилей — в facadesVernissage.ts (условные).\n')
-    f.write('export type VSeriesId="standart"|"optima"|"prestige"|"premium";\n')
-    f.write('export type VSeriesRow={id:VSeriesId;name:string;columns:Record<string,string>;prices:Record<"16"|"19",Record<string,number>>;srcRows:Record<string,number>};\n')
+    f.write('/** handle — фасады с интегрированной ручкой V5/V6/V7 (только 19 мм), pet — фасады ПЭТ на PUR-клее (18 мм). */\n')
+    f.write('export type VSeriesId="standart"|"optima"|"prestige"|"premium"|"handle"|"pet";\n')
+    f.write('export type VSeriesRow={id:VSeriesId;name:string;columns:Record<string,string>;prices:Partial<Record<"16"|"18"|"19",Record<string,number>>>;srcRows:Record<string,number>};\n')
     f.write('export type VMillingRow={id:string;series:VSeriesId;grafika:boolean;type:string|null;panel:string|null;inner:string|null;note:string|null;variants:{solid:boolean;glass:boolean;grille:boolean;drawer:boolean}|null;mdf19Only:boolean;lineSienaNo:boolean;enamel:"none"|"matte"|"matte-gloss";enamelNoGrille:boolean;enamelNoDecor:boolean};\n')
     f.write('export type VFilmRow={name:string;cat:string;patina:boolean|null;v5:boolean|null};\n')
     f.write('export const V_SERIES:VSeriesRow[]=' + js(series) + ';\n')
@@ -110,5 +136,12 @@ with open(out, 'w', encoding='utf-8', newline='\n') as f:
     f.write('export type VAdiletFilm={name:string;cat:string;collection:string|null;finish:string|null;out:boolean};\n')
     f.write('export const V_ADILET_FILMS:VAdiletFilm[]=' + js(adilet_films) + ';\n')
     f.write('/** Прайс Адилет: серия → толщина → cat3..cat6, ₽/м². Срок +5 раб. дней к стандартному. */\n')
-    f.write('export const V_ADILET_PRICES:Record<VSeriesId,Record<"16"|"19",Record<string,number>>>=' + js(adilet_prices) + ';\n')
+    f.write('export const V_ADILET_PRICES:Partial<Record<VSeriesId,Record<"16"|"19",Record<string,number>>>>=' + js(adilet_prices) + ';\n')
+    # лист «Прайс Адилет» R27: «Исполнение на МДФ 19мм: №61 … 92, 109. Только мат.-110, 111, 114» — в Адилет к списку добавлен №109
+    import re
+    ad19 = re.findall(r'(?:№)?\s*(\d+(?:/\d+)?)', price['adilet']['prestigeMdf19Raw'].split('Только')[0])
+    f.write('/** Адилет: фрезеровки «только МДФ 19 мм» (лист «Прайс Адилет» R27, к основному списку добавлен №109). */\n')
+    f.write('export const V_ADILET_MDF19:string[]=' + js([x for x in ad19 if x != '19']) + ';\n')
+    f.write('/** Декоры фасадов ПЭТ на PUR-клее 18 мм (R56): одна цена за м² на все декоры. */\n')
+    f.write('export const V_PET_DECORS:string[]=' + js(pet_decors) + ';\n')
 print(len(series), len(millings), len(films))

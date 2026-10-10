@@ -13,6 +13,10 @@ export type FacadeLayout = {
   w: number; h: number; t: number;
   root: Feature;
   rails?: Rails;
+  /** Сечение (y, z), CCW, протянутое по ширине фасада с плоскими торцами — фасад с интегрированной ручкой (выборка по верхнему краю). */
+  section?: P[];
+  /** Выборка ручки по верхнему краю: от y0 до y1 (= верхняя кромка), глубина от лица. */
+  handle?: { y0: number; y1: number; depth: number };
   bars: { x0: number; y0: number; x1: number; y1: number; z0: number; z1: number }[];
   glass?: { c: P[]; z0: number; z1: number };
   /** Ширина рамки (от кромки до проёма филёнки), мм — постоянная при любом габарите; null — у фасада нет рамки. */
@@ -203,12 +207,24 @@ function emitRails(mb: MeshBuilder, L: FacadeLayout) {
   for (const s of [s0, s1]) for (const [i, j, k] of tri) mb.tri(map(sec[i][0], s, sec[i][1]), map(sec[j][0], s, sec[j][1]), map(sec[k][0], s, sec[k][1]), wantMap(0, 0, s > 0 ? 1 : -1));
 }
 
+/** Сечение по высоте фасада (y, z), CCW, протянуто по ширине (x) с плоскими торцами — интегрированная ручка. */
+function emitSection(mb: MeshBuilder, L: FacadeLayout) {
+  const sec = L.section!, x0 = -L.w / 2, x1 = L.w / 2;
+  for (let i = 0; i < sec.length; i++) {
+    const a = sec[i], b = sec[(i + 1) % sec.length], du = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(du, dz); if (l < 1e-9) continue;
+    mb.quad([x0, a[0], a[1]], [x0, b[0], b[1]], [x1, b[0], b[1]], [x1, a[0], a[1]], [0, dz / l, -du / l]);
+  }
+  const tri = THREE.ShapeUtils.triangulateShape(sec.map(([u, z]) => new THREE.Vector2(u, z)), []);
+  for (const x of [x0, x1]) for (const [i, j, k] of tri) mb.tri([x, sec[i][0], sec[i][1]], [x, sec[j][0], sec[j][1]], [x, sec[k][0], sec[k][1]], [x > 0 ? 1 : -1, 0, 0]);
+}
+
 /** Сетка фасада по раскладке. grainAxis детали: 1 — плёнка/текстура вдоль высоты (как boardGeometry), 0 — вдоль ширины.
  *  UV пластей и профиля — проекция на плоскость фасада по габариту, поэтому плёнка не плывёт при смене размера. */
 export function facadeGeometry(L: FacadeLayout, grainAxis: 0 | 1 | 2 = 1): THREE.BufferGeometry {
   const mb = new MeshBuilder(), { w, h, t } = L;
   mb.material(0);
   if (L.rails) emitRails(mb, L);
+  else if (L.section) emitSection(mb, L);
   else {
     emitFeature(mb, L.root);
     const holes: P[][] = []; throughHoles(L.root, holes);
@@ -235,7 +251,9 @@ export function facadeGeometry(L: FacadeLayout, grainAxis: 0 | 1 | 2 = 1): THREE
 
 /* ---------- раскладка рисунка ---------- */
 export type MillShape = {
-  kind: 'smooth' | 'groove' | 'frame' | 'relief';
+  kind: 'smooth' | 'groove' | 'frame' | 'relief' | 'handle';
+  /** Интегрированная ручка: выборка по верхнему краю — высота h от кромки вниз, глубина d от лица, фаска ch по кромке выборки. */
+  handle?: { h: number; d: number; ch: number };
   /** Радиус скругления наружной кромки. */
   edgeR: number;
   /** groove: отступ оси паза от кромки; frame: ширина рамки (от кромки до филёнки). */
@@ -329,6 +347,16 @@ export function layoutFacade(w: number, h: number, t: number, s: MillShape, open
     return L;
   }
   if (s.kind === 'smooth') return L;
+  if (s.kind === 'handle') {
+    // выборка по верхнему краю на всю ширину: высота не больше трети фасада, под выборкой остаётся не меньше 5 мм МДФ
+    const hd = s.handle ?? { h: 25, d: 10, ch: 2 }, hh = Math.min(hd.h, h / 3), dd = Math.min(hd.d, t - 5), ch = Math.max(0.5, Math.min(hd.ch, hh / 3, dd / 3));
+    if (hh < 8 || dd < 2) { notes.push('Выборка ручки не помещается в габарит — фасад гладкий'); return L; }
+    const H2 = h / 2, T2 = t / 2;
+    L.section = [[-H2, -T2], [H2, -T2], [H2, T2 - dd], [H2 - hh, T2 - dd], [H2 - hh, T2 - ch], [H2 - hh - ch, T2], [-H2, T2]];
+    L.handle = { y0: H2 - hh, y1: H2, depth: dd };
+    if (hh < hd.h - 1e-9) notes.push(`Выборка ручки уменьшена до ${Math.round(hh)} мм под высоту фасада`);
+    return L;
+  }
   const inset = s.inset ?? 50;
   if (s.kind === 'groove') {
     const g = s.groove ?? { w: 8, d: 3 }, x0 = -w / 2 + inset, y0 = -h / 2 + inset, x1 = w / 2 - inset, y1 = h / 2 - inset;
@@ -385,6 +413,7 @@ export function previewSvg(L: FacadeLayout, px = 120): string {
   s += `<style>.o{fill:#eeeae2;stroke:#6b665c;stroke-width:1}.g{fill:none;stroke:#8a8478;stroke-width:.8}.p{fill:#e2ddd2;stroke:#8a8478;stroke-width:.7}.gl{fill:#cfe0e6;stroke:#6b8a94;stroke-width:.7}.b{fill:#e2ddd2;stroke:#8a8478;stroke-width:.5}.r{fill:#d8d2c6;stroke:none}</style>`;
   s += poly(L.root.c, 'o');
   if (L.rails) for (const [a, b] of L.rails.grooves) { const r: [P, P, P, P] = L.rails.dir === 'v' ? [[a, -L.h / 2], [b, -L.h / 2], [b, L.h / 2], [a, L.h / 2]] : [[-L.w / 2, a], [L.w / 2, a], [L.w / 2, b], [-L.w / 2, b]]; s += poly(r, 'r'); }
+  if (L.handle) s += poly([[-L.w / 2, L.handle.y0], [L.w / 2, L.handle.y0], [L.w / 2, L.handle.y1], [-L.w / 2, L.handle.y1]], 'r');
   const walk = (f: Feature) => {
     for (const kd of f.kids ?? []) {
       const outer = offsetContour(kd.c, kd.path[0][0]), inner = offsetContour(kd.c, kd.path[kd.path.length - 1][0]);
