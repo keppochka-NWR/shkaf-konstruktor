@@ -4,7 +4,7 @@
 // столешница как отдельный объект и шаблоны для палитры.
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
-import type { Module, Part } from "./model";
+import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
 import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
@@ -71,6 +71,15 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Служебные сквозные отверстия, как в проекте Базиса (k28 m14: D10 под провод в боковине и дне): точка входа, направление внутрь
    *  детали, диаметр, глубина. В смету не идут (у Базиса это служебная запись). */
   svcHoles?: { at: [number, number, number]; dir: [number, number, number]; d: number; depth: number }[];
+  /** Стяжка соседних модулей в Gola (Базис «5»: служебная запись + сквозное D5 на толщину боковины; по всей базе 23 боковины
+   *  в k10, k15, k17, k30, k21, k31 — все в остром верхнем углу среднего выреза Gola: на его верхней кромке, в глубине выреза от переднего торца;
+   *  у соседа — встречное, винт стягивает боковины за профилем C). Стороны — по проекту Базиса (в k06, k21 m03, k23, k27, k31 НМ
+   *  стяжек нет), значение — направление сверления по X (+1 — с левой пласти). depth — от переднего торца боковины, если не равна
+   *  глубине выреза (k17: 27 при вырезе 26). Без поля — нет. */
+  golaTies?: { left?: 1 | -1; right?: 1 | -1; depth?: number };
+  /** Глухие фасады рядом с ящиками — без петель, направляющих и короба, как в проекте Базиса (k29 m03: фасад 102–593 под двумя
+   *  ящиками Axis). Низ и верх от пола модуля, ширина и вынос — как у фасадов ящиков. Без поля — нет. */
+  blindFronts?: { y0: number; y1: number }[];
   /** Конфирматы стяжки с соседним корпусом, как в проекте Базиса (k15 m12): изнутри через боковину наружу — сторона, высота,
    *  от задней кромки боковин. Без поля их нет. */
   outConf?: { side: "left" | "right"; y: number; z: number }[];
@@ -289,7 +298,7 @@ export function unitQuat(q: [number, number, number, number]): [number, number, 
  *  привязки сквозного отверстия, не изделие: в смету не идёт, в список фурнитуры тоже). */
 export function hardwareRows(list: Part[]): [string, number][] {
   const map = new Map<string, number>();
-  for (const p of list) if (p.material === "metal" && (p.role === "fastener" || p.role === "hinge" || p.role === "handle") && !p.id.startsWith("worktop-cut") && !p.id.startsWith("kitchen-svc:")) map.set(p.name, (map.get(p.name) ?? 0) + 1);
+  for (const p of list) if (p.material === "metal" && (p.role === "fastener" || p.role === "hinge" || p.role === "handle") && !p.id.startsWith("worktop-cut") && !p.id.startsWith("kitchen-svc:") && !p.id.startsWith("kitchen-tie:")) map.set(p.name, (map.get(p.name) ?? 0) + 1);
   return [...map].sort((a, b) => b[1] - a[1]);
 }
 
@@ -476,17 +485,21 @@ export function golaSides(m: Module, out: Part[]) {
   for (const p of out) {
     if (p.id !== "left" && p.id !== "right") continue;
     const H = p.size[1], D = p.size[2];
-    const ok = cuts.filter((c) => c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
+    // вырез только в одной боковине (GolaCut.side, k30 m12: средний — только в правой, k30 m14: в правой вырезов нет вовсе)
+    const ok = cuts.filter((c) => (!c.side || c.side === p.id) && c.top1 > c.top0 && c.top1 <= H && c.depth > 0 && c.depth < D);
     if (!ok.length) continue;
     p.golaCuts = ok.map((c) => ({ ...c }));
-    let front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth));
-    // кромка по самому вырезу (k15, k17 и др.): стенка выреза и дуга скругления — к переднему торцу, дно выреза — к верхнему
-    for (const c of ok) if (c.edged) {
-      const open = c.top0 <= 0.01, L = c.top1 - c.top0;
-      front += (open ? L - c.r + Math.PI * c.r / 2 : L - 2 * c.r + Math.PI * c.r);
-      top += c.depth - c.r;
+    let front = H - ok.reduce((s, c) => s + (c.top1 - c.top0), 0), top = D - Math.max(0, ...ok.filter((c) => c.top0 <= 0.01).map((c) => c.depth)), under = 0;
+    // кромка по самому вырезу (k15, k17 и др.): стенка выреза и дуга скругления — к переднему торцу, дно выреза — к верхнему,
+    // верхняя стенка среднего выреза — к нижнему (−y); у среднего с острым верхним углом (sharpTop) — одна дуга, верх во всю глубину
+    for (const c of ok) {
+      const open = c.top0 <= 0.01, L = c.top1 - c.top0, one = open || c.sharpTop;
+      if (c.edged) { front += one ? L - c.r + Math.PI * c.r / 2 : L - 2 * c.r + Math.PI * c.r; top += c.depth - c.r; }
+      if (!open && (c.edged || c.edgedTop)) under += c.sharpTop ? c.depth : c.depth - c.r;
     }
-    p.edgeLen = { "+z": Math.round(front * 10) / 10, "+y": Math.round(top * 10) / 10 };
+    // −y: нижний торец во всю глубину (если он кромится) + верхние стенки средних вырезов; gola.bareBottom — только стенки (k10)
+    if (under > 0 && !m.gola?.bareBottom) under += D;
+    p.edgeLen = { "+z": Math.round(front * 10) / 10, "+y": Math.round(top * 10) / 10, ...(under > 0 ? { "-y": Math.round(under * 10) / 10 } : {}) };
     // проверка пересечений — по телу боковины без вырезов: задняя часть во всю высоту + передняя полоса между вырезами
     const y0 = p.position[1] - H / 2, z0 = p.position[2] - D / 2, zf = z0 + D, dz = Math.max(...ok.map((c) => c.depth)), x = p.position[0];
     const col: NonNullable<Part["collide"]> = [{ size: [p.size[0], H, D - dz], position: [x, y0 + H / 2, z0 + (D - dz) / 2] }];
@@ -495,16 +508,42 @@ export function golaSides(m: Module, out: Part[]) {
     for (const [s0, s1] of [...spans, [y0 + H, y0 + H]]) { if (s0 - ya > 0.01) col.push({ size: [p.size[0], s0 - ya, dz], position: [x, (ya + s0) / 2, zf - dz / 2] }); ya = Math.max(ya, s1); }
     p.collide = col;
   }
-  // профили Gola (алюминий, вне раскроя): верхний вырез — профиль L, средний — C; по всей ширине модуля в вырезах боковин
-  const sideL = out.find((p) => p.id === "left" && p.golaCuts);
-  if (!sideL) return;
-  const H = sideL.size[1], y0 = sideL.position[1] - H / 2, zf = sideL.position[2] + sideL.size[2] / 2;
-  for (const [k, c] of sideL.golaCuts!.entries()) {
+  out.push(...golaTieParts(m, out));
+  // профили Gola (алюминий, вне раскроя): верхний вырез — профиль L, средний — C; по ширине модуля в вырезах боковин; вырез только
+  // в одной боковине — профиль упирается в пласть другой (не пересекает её)
+  const sL = out.find((p) => p.id === "left"), sR = out.find((p) => p.id === "right"), side0 = [sL, sR].find((p) => p?.golaCuts);
+  if (!side0) return;
+  const H = side0.size[1], y0 = side0.position[1] - H / 2, zf = side0.position[2] + side0.size[2] / 2;
+  const has = (p: Part | undefined, c: GolaCut) => !!p?.golaCuts?.some((g) => g.top0 === c.top0 && g.top1 === c.top1);
+  for (const [k, c] of cuts.filter((c) => has(sL, c) || has(sR, c)).entries()) {
     const L = c.top0 <= 0.01, h = c.top1 - c.top0, yc = y0 + H - (c.top0 + c.top1) / 2;
-    out.push({ id: `gola:${L ? "L" : "C"}:${k}`, name: `Профиль Gola ${L ? "L (верхний)" : "C (средний)"}, алюминий`, size: [m.width, h, c.depth], position: [m.width / 2, yc, zf - c.depth / 2],
-      length: m.width, width: h, thickness: c.depth, material: "alu", decor: "", role: "fastener", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true,
+    const xa = has(sL, c) || !sL ? 0 : sL.position[0] + sL.size[0] / 2, xb = has(sR, c) || !sR ? m.width : sR.position[0] - sR.size[0] / 2, w = xb - xa;
+    out.push({ id: `gola:${L ? "L" : "C"}:${k}`, name: `Профиль Gola ${L ? "L (верхний)" : "C (средний)"}, алюминий`, size: [w, h, c.depth], position: [(xa + xb) / 2, yc, zf - c.depth / 2],
+      length: w, width: h, thickness: c.depth, material: "alu", decor: "", role: "fastener", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true,
       look: { color: 0xc4c8cc, metalness: 0.85, roughness: 0.35 } });
   }
+}
+
+/** Точка стяжки соседних модулей в Gola (kitchen.golaTies): угол верхнего среднего выреза боковины — его верхняя кромка по высоте,
+ *  глубина выреза (или golaTies.depth) от переднего торца; по X — пласть, с которой сверлит Базис. Нет среднего выреза — нет точки. */
+export function golaTiePoint(m: Module, side: Part): [number, number, number] | null {
+  const dir = m.kitchen?.golaTies?.[side.id as "left" | "right"], c = [...(side.golaCuts ?? [])].filter((g) => g.top0 > 0.01).sort((a, b) => a.top0 - b.top0)[0];
+  if (!dir || !c) return null;
+  const x = side.position[0] - (dir * side.size[0]) / 2, y = side.position[1] + side.size[1] / 2 - c.top0, z = side.position[2] + side.size[2] / 2 - (m.kitchen!.golaTies!.depth ?? c.depth);
+  return [Math.round(x * 100) / 100, Math.round(y * 100) / 100, Math.round(z * 100) / 100];
+}
+
+/** Стяжки соседних модулей в Gola — точка привязки «5» Базиса для сверки (служебная, в смету и список фурнитуры не идёт, как kitchen-svc);
+ *  отверстие D5 на толщину боковины даёт drilling.ts. Только кухня из Базиса с golaTies (правило 2: студия не добавляет). */
+function golaTieParts(m: Module, out: Part[]): Part[] {
+  if (!m.kitchen?.golaTies) return [];
+  const res: Part[] = [];
+  for (const s of out) {
+    if (s.id !== "left" && s.id !== "right") continue;
+    const o = golaTiePoint(m, s);
+    if (o) res.push({ id: `kitchen-tie:${s.id}`, name: "Стяжка соседнего модуля D5 в Gola (как в проекте Базиса)", size: [0.01, 0.01, 0.01], position: [...o], anchor: [...o], length: 0.01, width: 0.01, thickness: 0.01, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+  }
+  return res;
 }
 
 /** Столешница — отдельный объект над нижними корпусами: в раскрой ЛДСП не идёт (кроме ЛДСП 32), цена за погонный метр. */

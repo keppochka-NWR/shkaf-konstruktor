@@ -51,6 +51,17 @@ export function railConfY(b: Box, hardware: Hw[], xL: number, xR: number): numbe
   return L.length === 1 && Math.abs(L[0] - mid) < 0.6 ? undefined : L;
 }
 
+/** Конфирматы через боковины в торец царги лёжа — мм от её задней кромки, если в проекте не один посередине. По всем нижним базы
+ *  (102 царги лёжа с конфирматами): посередине — 97 (100 → 50, 80 → 40, 70 → 35, 60 → 30); 34 и 66 у царги 100 — k01 m01/m02/m04;
+ *  34, 50, 66 — k10 m14; 22 и 35 — k10 m13; 21,5 у царги 60 — k27 m02. Берём, только если слева и справа одинаково; иначе — правило студии. */
+export function railConfZ(b: Box, hardware: Hw[], xL: number, xR: number): number[] | undefined {
+  const inBand = (h: Hw) => isConf(h) && h.pos[1] >= b.y0 - 1 && h.pos[1] <= b.y1 + 1 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
+  const zs = (f: (h: Hw) => boolean) => hardware.filter((h) => inBand(h) && f(h)).map((h) => r1(h.pos[2] - b.z0)).sort((a, c) => a - c);
+  const L = zs((h) => h.pos[0] <= xL + 1), R = zs((h) => h.pos[0] >= xR - 1), mid = (b.z1 - b.z0) / 2;
+  if (!L.length || L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  return L.length === 1 && Math.abs(L[0] - mid) < 0.6 ? undefined : L;
+}
+
 /** Конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от левого конца стяжки, по проекту Базиса:
  *  точки на наружной пласти горизонтали hz в пределах ширины стяжки (k03: 2 через крышу в 51–60 от концов; k04: 56–65; k20: один
  *  по центру; у каждого проекта своё — общего правила нет). Нет таких — undefined. */
@@ -83,6 +94,32 @@ export function serviceHoles(hardware: (Hw & { i?: number; service?: boolean; me
     out.push({ at: [r1(q.at[0] - x0), r1(q.at[1]), r1(q.at[2] - z0)], dir: q.dir.map((v) => Math.round(v)) as [number, number, number], d: q.d, depth: q.depth });
   }
   return out;
+}
+
+/** Стяжки соседних модулей в Gola — Базис «5» (служебная запись без сетки, «прочее», одно сквозное D5 на толщину боковины).
+ *  Статистика по всей базе (147 «5» в 31 модуле): на боковинах с вырезом Gola — 23 «5» (k10, k15, k17, k30; пеналы k10, k17, k21, k31),
+ *  все 23 — в углу верхнего среднего выреза, и этот угол у Базиса острый (sharpTop: острых 26 — со стяжкой 23, скруглённых 30 — ни одной): высота — верхняя кромка выреза, от переднего торца — глубина выреза (k17 — на 1 мм глубже:
+ *  27 при вырезе 26); у соседнего модуля встречная «5» в той же точке мира — винт стягивает боковины за профилем C. Боковины со средним
+ *  вырезом без «5» (k06 m03, k21 m03, k23, k27, k31 НМ — 33 из 55) — так в проекте: сторона берётся по проекту, точка — по правилу.
+ *  Остальные «5» базы (k11: 32 от кромки на высотах полок, ригели; k09 — дверь; k18 — щит) — другое назначение, сюда не входят.
+ *  sides — боковины корпуса (индекс панели Базиса и коробка), cuts — вырезы Gola студии (по левой боковине). */
+export function golaTies(hardware: (Hw & { i?: number; host?: number | null; service?: boolean; mesh?: string | null })[], holes: { src?: number | null; dir: number[]; d: number; through?: boolean }[],
+  sides: { side: "left" | "right"; i: number; b: Box }[], cuts: { top0: number; depth: number }[]): { left?: 1 | -1; right?: 1 | -1; depth?: number } | undefined {
+  const mid = cuts.filter((c) => c.top0 > 0.01).sort((a, c) => a.top0 - c.top0)[0];
+  if (!mid) return undefined;
+  const out: { left?: 1 | -1; right?: 1 | -1; depth?: number } = {};
+  for (const s of sides) {
+    for (const h of hardware) {
+      if (h.name.trim() !== "5" || !h.service || h.mesh || h.category !== "прочее" || h.host !== s.i || h.i === undefined) continue;
+      const q = holes.filter((o) => o.src === h.i);
+      if (q.length !== 1 || q[0].d !== 5 || !q[0].through || Math.abs(Math.abs(q[0].dir[0]) - 1) > 0.01) continue;
+      const dir = q[0].dir[0] > 0 ? 1 : -1, fromTop = r1(s.b.y1 - h.pos[1]), fromFront = r1(s.b.z1 - h.pos[2]);
+      if (Math.abs(h.pos[0] - (dir > 0 ? s.b.x0 : s.b.x1)) > 0.6 || Math.abs(fromTop - mid.top0) > 0.6 || Math.abs(fromFront - mid.depth) > 1.5) continue;
+      out[s.side] = dir;
+      if (Math.abs(fromFront - mid.depth) > 0.05) out.depth = fromFront;
+    }
+  }
+  return out.left || out.right ? out : undefined;
 }
 
 /** Конфирматы стяжки с соседним корпусом — как в Базисе (k15 m12: два изнутри через левую боковину наружу; в базе такие ещё

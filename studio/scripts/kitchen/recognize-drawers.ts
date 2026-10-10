@@ -40,6 +40,10 @@ export function firmaxAsBazis(ref: RefModule, m: Module): string[] {
     // глубина D5 конфирматов снизу через дно (в заднюю стенку короба, грань −y): в k30 m12/m13 — 35 при 37 у боковин
     const du = box.confUnder !== undefined ? ((ref as unknown as { holes?: { panel?: number; d: number; depth: number; face: string }[] }).holes ?? []).filter((h) => h.panel === bi && h.d === 5 && h.face === "-y").map((h) => h.depth) : [];
     if (bi >= 0 && du.length && du.every((v) => v === du[0]) && du[0] !== (box.confDepth ?? 37)) { box.confUnderDepth = du[0]; notes.push(`ящик ${j + 1}: конфирматы снизу через дно D5×${du[0]} — как в Базисе`); }
+    // глубина D5 конфирматов боковин в торец дна короба: по базе в 7 модулях (k03 m05, k04 m02, k15 m03, k26 m05, k30 m12–m14) у части
+    // ящиков стенки на 35, а дно на 37 — своя глубина, если не как у стенок
+    const di = bot ? ref.panels.indexOf(bot) : -1, db = ((ref as unknown as { holes?: { panel?: number; d: number; depth: number; face: string }[] }).holes ?? []).filter((h) => di >= 0 && h.panel === ref.panels[di].i && h.d === 5 && /x/.test(h.face)).map((h) => h.depth);
+    if (db.length && db.every((v) => v === db[0]) && db[0] !== (box.confDepth ?? 37)) { box.confBottomDepth = db[0]; notes.push(`ящик ${j + 1}: конфирматы в дно короба D5×${db[0]} — как в Базисе`); }
     // саморезы направляющей — на внутренней грани боковины корпуса (боковина ящика − зазор), у низа короба
     const xin = x0 - (k.box.gap ?? FIRMAX.gap);
     const dz = [...new Set(ref.hardware.filter((h) => h.name === "3x3" && Math.abs(h.pos[0] - xin) < 0.6 && h.pos[1] > y0 - 0.5 && h.pos[1] < y0 + 40).map((h) => r1(z1 - h.pos[2])))].sort((a, b) => a - b);

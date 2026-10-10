@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
 import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, isEuro6, legScrews, outConfirmats, railConf, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
+import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
@@ -318,13 +318,39 @@ export function golaFromContour(p: { contour?: [number, number][]; contourPlane?
     if (grp.length >= 2) {
       const ys = grp.map((q) => q[0]), zMin = Math.min(...grp.map((q) => q[1])), y0 = Math.min(...ys), y1 = Math.max(...ys);
       const zEdge = Math.max(grp[0][1], grp[grp.length - 1][1]);
-      if (y1 - y0 > 10 && y1 - y0 < 300) out.push({ top0: r1(yTop - y1), top1: r1(yTop - y0), depth: r1(zFront - zMin), r: r1(Math.max(0, zEdge - zMin)) });
+      // средний вырез с острым верхним углом (k10, k15, k17, k30: в этом углу стяжка «5»), скруглён только нижний
+      const at = (y: number) => grp.find((q) => Math.abs(q[0] - y) < 0.01)![1] - zMin, sharp = yTop - y1 > 0.01 && at(y1) < 0.05 && at(y0) > 0.05;
+      if (y1 - y0 > 10 && y1 - y0 < 300) out.push({ top0: r1(yTop - y1), top1: r1(yTop - y0), depth: r1(zFront - zMin), r: r1(Math.max(0, zEdge - zMin)), ...(sharp ? { sharpTop: true } : {}) });
     }
     grp = [];
   };
   for (const q of c) { if (inCut(q)) grp.push(q); else flush(); }
   flush();
   return out.sort((a, b) => a.top0 - b.top0);
+}
+
+/** Какие вырезы Gola кромятся — по длинам кромки боковины Базиса. Сумма кромки переднего торца больше прямых участков — кромлены
+ *  стенки и дуги вырезов: берём тот набор вырезов, чьи стенки с дугами дают эту разницу (±0,6; k10: только верхний — 52 + 7,85,
+ *  k15/k17: оба), не нашёлся — все (как раньше). Кромка −y сверх кромленых средних — верхняя стенка среднего выреза без остального
+ *  (k10 m11/m12: только она, 26) — edgedTop. Длины — как в kitchen.ts golaSides. */
+export function golaCutEdges(gc: GolaCut[], edges: { side: string; thick: number; len?: number }[], H: number, ze: number) {
+  const straight = H - gc.reduce((s, c) => s + c.top1 - c.top0, 0);
+  if (ze > straight + 1) {
+    const wall = (c: GolaCut) => (c.top0 <= 0.01 || c.sharpTop ? c.top1 - c.top0 - c.r + (Math.PI * c.r) / 2 : c.top1 - c.top0 - 2 * c.r + Math.PI * c.r);
+    let best = -1, bd = 0.6;
+    for (let mask = 1; mask < 1 << gc.length; mask++) {
+      const d = Math.abs(gc.reduce((s, c, i) => s + (mask & (1 << i) ? wall(c) : 0), 0) - (ze - straight));
+      if (d <= bd) { bd = d; best = mask; }
+    }
+    gc.forEach((c, i) => { if (best < 0 || best & (1 << i)) c.edged = true; });
+  }
+  const top = (c: GolaCut) => (c.sharpTop ? c.depth : c.depth - c.r), dMax = Math.max(...gc.map((c) => c.depth)) + 1;
+  // −y: отрезки не длиннее выреза — верхние стенки средних вырезов; длиннее — нижний торец боковины (k17 m02: 560 + 26)
+  const ys = edges.filter((e) => e.side === "-y" && e.thick > 0 && e.len !== undefined), ym = ys.filter((e) => e.len! <= dMax).reduce((s, e) => s + e.len!, 0);
+  let rest = ym - gc.filter((c) => c.top0 > 0.01 && c.edged).reduce((s, c) => s + top(c), 0);
+  for (const c of gc) if (c.top0 > 0.01 && !c.edged && rest > 0.6 && Math.abs(rest - top(c)) <= 0.6) { c.edgedTop = true; rest -= top(c); }
+  // −y только у стенок вырезов, нижний торец без кромки (k10 m11/m12) — иначе студия кромила бы его во всю глубину
+  return { bareBottom: ym > 0 && !ys.some((e) => e.len! > dMax) };
 }
 
 export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
@@ -450,7 +476,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const sb = front ? r1(sideZ1 - r.b.z1) : r1(r.b.z0 - sideZ0); // утопание передней — от фронта, задней — от задней кромки боковин
     // царга лёжа без крепежа в Базисе (k19 m10: передняя 69 — ни конфирмата, ни эксцентрика, ни шканта в её полосе) — студия не добавляет
     const bare = role === "base" && !railFastened(r.b, ref.hardware, Infinity, -Infinity);
-    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}), ...(bare ? { fasten: false as const } : {}) });
+    // конфирматы в торец не посередине (k27 m02: 21,5 от задней кромки царги 60; k01: 34 и 66) — как в Базисе (railConfZ)
+    const cz = bare || m.kitchen.noFasteners ? undefined : railConfZ(r.b, ref.hardware, left.b.x0, right.b.x1);
+    railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}), ...(bare ? { fasten: false as const } : {}), ...(cz ? { confZ: cz } : {}) });
   }
   for (const r of railsEdge) {
     if (r === wr?.panel) continue; // фронтальная под дном навесного — уже панель raise.front, не стяжка (n3-wall)
@@ -709,6 +737,19 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     });
     if (kd.length) m.kdrawers = kd;
   }
+  // нижний с ящиками: фасад во всю ширину ряда фасадов, не ставший фасадом ящика, а в модуле нет ни петель, ни газлифта (k29 m03:
+  // под двумя ящиками Axis глухой фасад 102–593) — глухой, как в Базисе (kitchen.blindFronts); фасад с фурнитурой на нём
+  // (отверстия или крепёж в его плоскости) — не глухой, не берём
+  if (role === "base" && m.kdrawers?.length && !hw("петля").length && !hw("газлифт").length) {
+    const kdF = fronts.filter((q) => drawerPanels.includes(q)), fw = (q: (typeof fronts)[number]) => q.b.x1 - q.b.x0;
+    const onIt = (q: (typeof fronts)[number]) => ref.hardware.some((h) => h.pos[0] >= q.b.x0 - 0.5 && h.pos[0] <= q.b.x1 + 0.5 && h.pos[1] >= q.b.y0 - 0.5 && h.pos[1] <= q.b.y1 + 0.5 && h.pos[2] >= q.b.z0 - 0.5 && h.pos[2] <= q.b.z1 + 0.5);
+    const blind = fronts.filter((q) => !drawerPanels.includes(q) && kdF.length && kdF.every((f) => Math.abs(fw(f) - fw(q)) < 0.6 && Math.abs(f.b.x0 - q.b.x0) < 0.6) && !onIt(q));
+    if (blind.length) {
+      m.kitchen.blindFronts = blind.map((q) => ({ y0: r1(q.b.y0), y1: r1(q.b.y1) })).sort((a, c) => a.y0 - c.y0);
+      drawerPanels.push(...blind);
+      notes.push(`глухой фасад без фурнитуры: ${m.kitchen.blindFronts.map((b) => `${b.y0}–${b.y1}`).join(", ")} — как в Базисе`);
+    }
+  }
   // пенал: ящики внизу, выше (через нишу) — один ряд распашных на петлях (k16 m13): фасады ящиков ведут ящики (kdrawers),
   // распашные — свой ряд от низа kitchen.faceBottom, как в Базисе (recognize-tall.ts)
   const tallDoors = role === "tall" && m.kdrawers && hw("петля").length ? doorsAboveDrawers(fronts, drawerPanels) : undefined;
@@ -929,6 +970,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const jn = wallJointNone(ref.hardware, fixedJ, left, right).filter((k, _, all) => all.filter((x) => x.replace(/:(left|right)$/, "") === k.replace(/:(left|right)$/, "")).length === 1);
     if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык полки без крепежа (как в Базисе): ${jn.join(", ")}`); }
   }
+  // нижний: дно/крыша с крепежом в Базисе только у одной стойки (k10 m11: конфирматы снизу через дно лишь под правой боковиной,
+  // у левой — ни конфирмата, ни эксцентрика, ни отверстия) — другая сторона без крепежа, как в Базисе (то же поле jointNone и та же
+  // проверка, что у пенала и навесных; без крепежа с обеих сторон — bareJoints, евровинты k33/k34 проверка не видит — не трогаем)
+  if (role === "base" && m.confirmatInset !== undefined && !ref.hardware.some(isEuro6)) {
+    const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right).filter((k, _, all) => all.filter((x) => x.replace(/:(left|right)$/, "") === k.replace(/:(left|right)$/, "")).length === 1);
+    if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык без крепежа с одной стороны (как в Базисе): ${jn.join(", ")}`); }
+  }
   // навесные: у каждого стыка дна/крыши свои отступы крепежа, если они не совпадают с общим
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     // жёсткие полки (k05 m10/m11: полка над сушкой на конфирматах 53/52 при общем 63) — тоже свои отступы
@@ -986,12 +1034,25 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
   if (role === "base") {
-    const gc = golaFromContour(left.p as unknown as { contour?: [number, number][]; contourPlane?: string }, left.b.y1, left.b.z1);
+    type CP = { contour?: [number, number][]; contourPlane?: string; edges?: { side: string; thick: number; len?: number }[] };
+    const gL = golaFromContour(left.p as unknown as CP, left.b.y1, left.b.z1), gR = golaFromContour(right.p as unknown as CP, right.b.y1, right.b.z1);
+    // вырезы по боковинам: есть в обеих — общий; только в одной — GolaCut.side (k30 m12: средний только в правой, k30 m14: в правой нет)
+    const sameCut = (a: GolaCut, b: GolaCut) => Math.abs(a.top0 - b.top0) <= 1 && Math.abs(a.top1 - b.top1) <= 1;
+    const gc: GolaCut[] = [...gL.map((c) => (gR.some((r) => sameCut(c, r)) ? c : { ...c, side: "left" as const })), ...gR.filter((r) => !gL.some((c) => sameCut(c, r))).map((r) => ({ ...r, side: "right" as const }))].sort((a, b) => a.top0 - b.top0);
     const fTop = fronts.length ? Math.max(...fronts.map((f) => f.b.y1)) : null;
-    // кромка по самому вырезу: сумма кромки переднего торца у Базиса больше прямых участков
-    const ze = ((left.p as unknown as { edges?: { side: string; thick: number; len?: number }[] }).edges ?? []).filter((e) => e.side === "+z" && e.thick > 0 && e.len !== undefined).reduce((s, e) => s + e.len!, 0);
-    if (gc.length && ze > left.b.y1 - left.b.y0 - gc.reduce((s, c) => s + c.top1 - c.top0, 0) + 1) gc.forEach((c) => (c.edged = true));
-    if (gc.length) { m.gola = { cuts: gc }; if (fTop !== null && gc.some((c) => c.top0 === 0)) m.gola.faceTop = r1(top - fTop); notes.push(`Gola: ${gc.length} выреза в боковинах (${gc.map((c) => `${c.top0}–${c.top1} от верха, глуб. ${c.depth}, R${c.r}`).join("; ")})`); }
+    // кромка по самому вырезу: сумма кромки переднего торца у Базиса больше прямых участков (по каждой боковине — её вырезы и её кромка)
+    const edgesOf = (s: typeof left) => (s.p as unknown as CP).edges ?? [], zeOf = (s: typeof left) => edgesOf(s).filter((e) => e.side === "+z" && e.thick > 0 && e.len !== undefined).reduce((a, e) => a + e.len!, 0);
+    const lc = gc.filter((c) => c.side !== "right"), rOnly = gc.filter((c) => c.side === "right");
+    let ge = lc.length ? golaCutEdges(lc, edgesOf(left), left.b.y1 - left.b.y0, zeOf(left)) : undefined;
+    if (rOnly.length) {
+      const g2 = golaCutEdges([...gc.filter((c) => !c.side).map((c) => ({ ...c, edged: undefined, edgedTop: undefined })), ...rOnly].sort((a, b) => a.top0 - b.top0), edgesOf(right), right.b.y1 - right.b.y0, zeOf(right));
+      ge ??= g2;
+    }
+    if (gc.length) { m.gola = { cuts: gc, ...(ge?.bareBottom ? { bareBottom: true } : {}) }; if (fTop !== null && gc.some((c) => c.top0 === 0)) m.gola.faceTop = r1(top - fTop); notes.push(`Gola: ${gc.length} выреза в боковинах (${gc.map((c) => `${c.top0}–${c.top1} от верха, глуб. ${c.depth}, R${c.r}`).join("; ")})`); }
+    // стяжки соседних модулей в углу среднего выреза («5» Базиса) — стороны по проекту, точка по правилу (recognize-common golaTies)
+    const tie = (side: "left" | "right", s: typeof left) => golaTies(ref.hardware as Parameters<typeof golaTies>[0], (ref.holes ?? []) as Parameters<typeof golaTies>[1], [{ side, i: s.p.i, b: s.b }], gc.filter((c) => !c.side || c.side === side));
+    const tl = tie("left", left), tr = tie("right", right), ties = tl || tr ? { ...tl, ...tr } : undefined;
+    if (ties) { m.kitchen.golaTies = ties; notes.push(`стяжки соседних модулей в Gola: ${[ties.left ? "левая" : "", ties.right ? "правая" : ""].filter(Boolean).join(", ")} — как в Базисе`); }
   }
   // задняя царга заподлицо с задней кромкой боковин: у части кухонь её задний торец не кромится
   const rearRail = rails.find((r) => Math.abs(r.b.z0 - sideZ0) < 0.6), rre = (rearRail?.p as unknown as { edges?: { side: string; thick: number }[] } | undefined)?.edges;
@@ -1037,6 +1098,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (Object.keys(e).length) { m.kitchen.ecc = e; notes.push(`эксцентрик по проекту: ${JSON.stringify(e)}`); }
     }
     if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }
+    // царга с другой глубиной D5 конфирматов в торец, чем у корпуса (k31 m16: передняя 35 при 42 у остальных деталей) — по проекту
+    const rp = [...rails, ...railsEdge], own = m.kitchen.drill?.confirmat ?? m.kitchen.confDepth ?? 35;
+    (m.rails ?? []).forEach((r, i) => {
+      const q = rp[i]; if (!q) return;
+      const ds = [...new Set(hs.filter((h) => h.d === 5 && srcCat(h) === "конфирмат" && h.panel === q.p.i).map((h) => r1(h.depth)))];
+      if (ds.length === 1 && Math.abs(ds[0] - own) > 0.05) { r.confDepth = ds[0]; notes.push(`царга ${r.place}: конфирматы D5×${ds[0]} — как в Базисе`); }
+    });
   }
   // навесные/антресоли: вырез в заднем верхнем углу боковины (k32: 100×20, контур из 6 точек) — у каждой боковины свой (k32 m14: только у правой)
   if (role === "wall" || role === "antresol") {
