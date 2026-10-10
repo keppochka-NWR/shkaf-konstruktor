@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { facadeGeometry, offsetContour, signedArea, rectContour, archContour, concaveRectContour, type Feature, type P } from '../src/vernissageGeometry';
-import { parts, parseVernissage, initialModule, type Module } from '../src/model';
+import { parts, parseVernissage, initialModule, validate, type Module } from '../src/model';
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
 import { estimate, estimateCSV, lineGroup } from '../src/pricing';
-import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
+import { vernissageLayout, vernissageFacadePrice, vernissageMilling, vernissageSizeCheck, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
 const KINDS: [string, VernissageFacade['open']][] = [['15', 'solid'], ['1', 'solid'], ['3', 'solid'], ['54', 'solid'], ['52', 'solid'], ['W1', 'solid'], ['46', 'solid'], ['100', 'solid'], ['79', 'solid'], ['78/1', 'solid'], ['109', 'solid'], ['25', 'glass'], ['54', 'grille'], ['93', 'solid']];
@@ -96,8 +96,55 @@ test('Вернисаж: смещение контура не выворачив�
   for (const o of [-40, -25, 4, 9]) { sound(archContour(-120, -300, 120, 300, 40, 18, 28), o, `арка с плечиками ${o}`); sound(archContour(-40, -100, 40, 100, 12, 0, 8), o, `узкая арка ${o}`); }
 });
 
-test('Вернисаж: рамка не меняет ширину при любом габарите, филёнка растягивается', () => {
-  for (const id of ['54', '52', 'W1', '25', '75']) {
+test('Вернисаж: по паспорту PDF — рамка и профиль по числам паспорта, не меняются с габаритом; мелкий фасад — отступы пропорционально', () => {
+  // W1: рамка 50, профиль 30 (W1.pdf); №25: 49 + 32 + 9 (25.pdf); №75: кант 15, уступ 3 мм (75.pdf, «глубина фрезы 3 мм»); №3: 49 + 32
+  for (const [id, F, E] of [['W1', 50, 80], ['25', 49, 93], ['75', 15, 18], ['3', 49, 81]] as const) for (const [w, h] of [[450, 716], [597, 2000], [300, 300]]) {
+    const L = vernissageLayout({ milling: id, cover: 'film', film: 'Моно белый', thickness: 19 }, w, h), label = `№${id} ${w}×${h}`;
+    assert.equal(L.frame, F, label);
+    assert.ok(Math.abs(L.opening!.x0 - (-w / 2 + E)) < 1e-6, `${label}: филёнка в ${E} мм от кромки`);
+    assert.ok(!L.notes.some((n) => n.includes('уменьшен')), label);
+  }
+  const m75 = vernissageMilling('75')!;
+  assert.deepEqual(m75.shape.face!.pts, [[15, 0], [18, 3]], 'глубина 3 мм — из примечания паспорта');
+  assert.ok(m75.pp!.source.includes('75.pdf') && m75.pp!.source.includes('стр. 1'));
+  // узкий фасад: отступы рисунка уменьшаются пропорционально, филёнка не меньше 30 мм
+  const n = vernissageLayout({ milling: 'W1', cover: 'film', film: 'Моно белый', thickness: 19 }, 150, 716);
+  assert.ok(n.frame! < 50 && n.notes.some((x) => x.includes('уменьшен')) && n.opening!.x1 - n.opening!.x0 >= 30 - 1e-6);
+});
+
+test('Вернисаж: ограничения размеров из паспортов PDF — проверка проекта и предупреждения', () => {
+  assert.equal(VERNISSAGE_MILLINGS.filter((m) => m.pp).length, 55, 'фрезеровок с паспортом PDF');
+  for (const m of VERNISSAGE_MILLINGS.filter((x) => x.pp)) assert.ok(/\.pdf, стр\. 1/.test(m.pp!.source), `№${m.id}: источник — файл и страница`);
+  // №86: на карточке сайта PDF №76 — своих размеров нет, рисунок условный
+  assert.ok(!vernissageMilling('86')!.pp && vernissageMilling('86')!.pdfNote!.includes('76'));
+  // №3 (3.pdf): глухой 246–2750 × 246–1000, витрина/решётка от 296, ящик 116–246; «Ящик < Min размера изготавливается без фрезеровки»
+  assert.deepEqual(vernissageSizeCheck('3', 'solid', 450, 716).errors, []);
+  assert.ok(vernissageSizeCheck('3', 'solid', 450, 2800).errors[0].includes('2750'));
+  assert.ok(vernissageSizeCheck('3', 'solid', 1100, 716).errors[0].includes('1000'));
+  assert.ok(vernissageSizeCheck('3', 'glass', 260, 716).errors[0].includes('витрина'));
+  assert.equal(vernissageSizeCheck('3', 'solid', 596, 177).row, 'drawer');
+  const small = vernissageSizeCheck('3', 'solid', 596, 100);
+  assert.ok(small.smooth && small.errors.length === 0 && small.warnings[0].includes('без фрезеровки'));
+  // меньше минимума ящика — фасад без фрезеровки (в 3D гладкий)
+  const L = vernissageLayout({ milling: '3', cover: 'film', film: 'Моно белый', thickness: 19 }, 596, 100);
+  assert.ok(L.root.kids!.length === 0 && L.notes.some((x) => x.includes('без фрезеровки')));
+  // №6 (6.pdf): решётка «-» — в исполнениях её нет; №78: только глухой
+  assert.deepEqual(openings(vernissageMilling('6')!), ['solid', 'glass']);
+  assert.deepEqual(openings(vernissageMilling('78')!), ['solid']);
+  assert.ok(vernissageSizeCheck('6', 'grille', 450, 716).errors[0].includes('не делается'));
+  // №45 (45-BIG.pdf): max 2450×1100 или 2750×1000
+  assert.deepEqual(vernissageSizeCheck('45', 'solid', 1050, 2400).errors, []);
+  assert.ok(vernissageSizeCheck('45', 'solid', 1050, 2600).errors.length === 1);
+  // проверка проекта: кухонная бутылочница 150 с №3 — фасад уже 246 мм по паспорту — ошибка; №1 (паспорта нет) — без ограничений
+  const narrow = { ...kitchenBase(initialModule(), 150, 'doors'), vernissage: { milling: '3', cover: 'film', film: 'Моно белый', thickness: 19 } as VernissageFacade, facadeT: 19 };
+  assert.ok(validate(narrow).some((e) => e.includes('Вернисаж') && e.includes('246')), validate(narrow).join('; '));
+  assert.ok(!validate({ ...narrow, vernissage: { ...narrow.vernissage, milling: '1' } }).some((e) => e.includes('Вернисаж')));
+  // шапка паспорта: №113 — МДФ 22 мм; №78 — эмаль только матовая
+  assert.ok(vernissageFacadePrice({ milling: '113', cover: 'film', film: 'Моно белый', thickness: 19 }, 450, 716).warnings.some((w) => w.includes('22')));
+});
+
+test('Вернисаж: рамка не меняет ширину при любом габарите, филёнка растягивается (условные, без паспорта)', () => {
+  for (const id of ['54', '52']) {
     const m = vernissageMilling(id)!, F = m.shape.inset!;
     for (const [w, h] of SIZES) {
       const L = vernissageLayout({ milling: id, cover: 'film', film: 'Моно белый', thickness: 19 }, w, h);

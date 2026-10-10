@@ -3,7 +3,7 @@
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -210,7 +210,7 @@ function CabinetPanel(props: KitchenPanelProps) {
         <div className="kitchen-chips" role="group" aria-label="Число створок">{([undefined, 1, 2] as const).map((v) => <button key={String(v)} type="button" aria-pressed={s.doorLeaves === v} onClick={() => modify((n) => { if (v) n.sections[sIdx].doorLeaves = v; else delete n.sections[sIdx].doorLeaves; })}>{v ?? "Авто"}</button>)}</div></div>}
       <label className="hardware-field">Материал фасадов<select aria-label="Материал кухонных фасадов" value={m.vernissage ? "vernissage" : m.facadeMaterial ?? "ldsp"} onChange={(e) => modify((n) => { const v = e.target.value; if (v === "vernissage") { delete n.facadeMaterial; n.vernissage = { ...DEFAULT_VERNISSAGE }; n.facadeT = DEFAULT_VERNISSAGE.thickness; return; } delete n.vernissage; if (v === "external") n.facadeMaterial = "external"; else delete n.facadeMaterial; })}>
         <option value="ldsp">ЛДСП — в раскрое цеха</option><option value="external">Фасадный материал (МДФ, эмаль, плёнка) — сторонний участок</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль (прайс)</option></select></label>
-      {m.vernissage && <VernissagePicker value={m.vernissage} sample={door ? [Math.round(door.size[0]), Math.round(door.size[1])] : undefined} onChange={(v) => modify((n) => { n.vernissage = v; n.facadeT = v.thickness; })} />}
+      {m.vernissage && <VernissagePicker value={m.vernissage} sample={door ? [Math.round(door.size[0]), Math.round(door.size[1])] : undefined} sizes={vernissageSizes(m)} onChange={(v) => modify((n) => { n.vernissage = v; n.facadeT = v.thickness; })} />}
       {/* у фасадов Вернисажа толщина задаётся выбором МДФ (цена и 3D от одного значения) — отдельного поля нет */}
       {m.vernissage ? <p className="field-note">Толщина фасада — по выбору МДФ Вернисаж: {m.vernissage.thickness} мм.</p>
         : <Num label="Толщина фасада" value={m.facadeT ?? RULES.panel} min={3} max={40} change={(v) => modify((n) => { if (v === RULES.panel) delete n.facadeT; else n.facadeT = v; })} note="ЛДСП 16, МДФ 18–19, рамка со стеклом — по профилю" />}

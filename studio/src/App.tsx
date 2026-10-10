@@ -1,6 +1,6 @@
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -1391,7 +1391,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {m.doors && (
                   <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль</option></select></label>
                 )}
-                {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
+                {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
                 {m.doors&&<button className="outline full" onClick={()=>{setTab('section');propertiesRef.current?.scrollTo({top:0,behavior:'smooth'});}}>Настроить каждую дверь · ручки, петли, разделение</button>}
                 {m.doors && m.alu && (<>
                   <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>

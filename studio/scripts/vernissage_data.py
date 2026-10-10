@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Генератор src/vernissageData.ts из разбора прайса и каталога Вернисажа.
 Источник: Desktop/Claude Project/Вернисаж/vernissage-price.json и vernissage-millings.json (разбор прайса 10.08.2026 и сайта).
-В студию идут только наши параметры: номера фрезеровок, серии, тип рисунка (оценка по фото каталога, без размеров), цены, названия плёнок.
+В студию идут только наши параметры: номера фрезеровок, серии, тип рисунка (оценка по фото каталога), цены, названия плёнок,
+размеры и ограничения из паспортов PDF (items[].passport, scripts/vernissage_passports.py, 10.10.2026).
 Запуск: py scripts/vernissage_data.py <папка Вернисаж> <выходной .ts>"""
 import json, sys, os
 
@@ -48,6 +49,15 @@ def enamel_of(mid, series_id):
     return 'none'
 
 
+def passport(it):
+    """Паспорт фрезеровки (PDF «Техническая информация», scripts/vernissage_passports.py): размеры, ограничения, примечания, источник."""
+    pp = it.get('passport')
+    if not pp:
+        return None
+    out = {k: pp.get(k) for k in ('pdf', 'source', 'series', 'mdf', 'covers', 'edge', 'limits', 'maxAlt', 'notes', 'drawerSmooth', 'glass', 'geom', 'sectionDims', 'samePdfAs', 'catPage')}
+    return {k: v for k, v in out.items() if v is not None}
+
+
 millings = []
 for it in mill['items']:
     g = it.get('geometry') or {}
@@ -67,6 +77,8 @@ for it in mill['items']:
         'enamel': enamel_of(it['id'], sid),
         'enamelNoGrille': it['id'] in no_grille_enamel,
         'enamelNoDecor': it['id'] in no_decor_enamel,
+        **({'pp': passport(it)} if it.get('passport') else {}),
+        **({'pdfNote': it['techPdfNote']} if it.get('techPdfNote') else {}),
     })
 
 # Фасады с интегрированной ручкой (лист «Прайс ПВХ, Эмаль, ПЭТ», R46–R54): только 19 мм, «фасады прямые»; модели V5, V6, V7 (сайт).
@@ -122,11 +134,26 @@ def js(x):
 
 with open(out, 'w', encoding='utf-8', newline='\n') as f:
     f.write('// Сгенерировано scripts/vernissage_data.py из разбора прайса «Вернисаж фасады 10.08.2026 с эмалью глянец» и каталога vernisag-fasad.ru.\n')
-    f.write('// Не править руками. Тип рисунка фрезеровки — оценка по фото каталога (без размеров); размеры профилей — в facadesVernissage.ts (условные).\n')
+    f.write('// Не править руками. Тип рисунка — оценка по фото каталога; размеры, профиль и ограничения — из паспортов PDF «Техническая информация»\n')
+    f.write('// (поле pp, файл и страница — pp.source; scripts/vernissage_passports.py); у фрезеровок без паспорта — условные (facadesVernissage.ts, PROVISIONAL).\n')
     f.write('/** handle — фасады с интегрированной ручкой V5/V6/V7 (только 19 мм), pet — фасады ПЭТ на PUR-клее (18 мм). */\n')
     f.write('export type VSeriesId="standart"|"optima"|"prestige"|"premium"|"handle"|"pet";\n')
     f.write('export type VSeriesRow={id:VSeriesId;name:string;columns:Record<string,string>;prices:Partial<Record<"16"|"18"|"19",Record<string,number>>>;srcRows:Record<string,number>};\n')
-    f.write('export type VMillingRow={id:string;series:VSeriesId;grafika:boolean;type:string|null;panel:string|null;inner:string|null;note:string|null;variants:{solid:boolean;glass:boolean;grille:boolean;drawer:boolean}|null;mdf19Only:boolean;lineSienaNo:boolean;enamel:"none"|"matte"|"matte-gloss";enamelNoGrille:boolean;enamelNoDecor:boolean};\n')
+    f.write('/** Строка таблицы размеров паспорта: [высота min, высота max, ширина min, ширина max], null — max в паспорте не указан. */\n')
+    f.write('export type VLimit=[number,number|null,number,number|null];\n')
+    f.write('/** Рисунок по паспорту: profile — сечение лица от кромки [мм от кромки, доля глубины 0..1]; depthMm (depthStated — из примечаний PDF,\n')
+    f.write(' *  иначе условная); relief — пазы по всему полотну; lattice — сетка ромбов; lines — прямые пазы; archBand — полоса-арка, открытая книзу. */\n')
+    f.write('export type VPassportGeom={kind:"smooth"|"profile"|"relief"|"lattice";note:string;depthMm?:number;depthStated?:boolean;widthsEstimated?:boolean;edgeR?:number;edge?:boolean;\n')
+    f.write('  profile?:[number,number][];top?:"arch"|"shoulders";bottom?:"arch"|"shoulders";corner?:"concave";cornerR?:number;glassProvisional?:number;bottomBand?:number;\n')
+    f.write('  slots?:{dir:"v"|"h";pitch:number;w:number;d:number;shape:"round"|"v";zone?:"band";inArch?:boolean;provisional?:boolean};\n')
+    f.write('  lines?:{w:number;v?:{from:"left"|"right";at:number[]}[];h?:{from:"bottom"|"top";at:number[];between?:boolean}[];diag?:{pitch:number;angle:number}};\n')
+    f.write('  archBand?:{outer:number;width:number;d:number;provisional?:boolean};\n')
+    f.write('  dir?:"v"|"h";pitch?:number;w?:number;shape?:"trap"|"round"|"v"|"convex";module?:number;grooves?:[number,number,number,"trap"|"round"|"v"][];band?:{from:"left";count:number};\n')
+    f.write('  cellW?:number;cellH?:number;vAngle?:number};\n')
+    f.write('/** Паспорт фрезеровки — PDF «Техническая информация» Вернисажа (source: файл и страница). */\n')
+    f.write('export type VPassport={pdf:string;source:string;series?:string;mdf?:number[];covers?:string;edge?:string;limits:{solid:VLimit|null;glass:VLimit|null;grille:VLimit|null;drawer:VLimit|null};\n')
+    f.write('  maxAlt?:[number,number][];notes:string[];drawerSmooth:boolean;glass?:{frame:number|null;r:number;from?:string};geom:VPassportGeom;sectionDims?:number[];samePdfAs?:string;catPage?:number};\n')
+    f.write('export type VMillingRow={id:string;series:VSeriesId;grafika:boolean;type:string|null;panel:string|null;inner:string|null;note:string|null;variants:{solid:boolean;glass:boolean;grille:boolean;drawer:boolean}|null;mdf19Only:boolean;lineSienaNo:boolean;enamel:"none"|"matte"|"matte-gloss";enamelNoGrille:boolean;enamelNoDecor:boolean;pp?:VPassport;pdfNote?:string};\n')
     f.write('export type VFilmRow={name:string;cat:string;patina:boolean|null;v5:boolean|null};\n')
     f.write('export const V_SERIES:VSeriesRow[]=' + js(series) + ';\n')
     f.write('export const V_MILLINGS:VMillingRow[]=' + js(millings) + ';\n')
