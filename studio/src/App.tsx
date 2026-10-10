@@ -86,6 +86,8 @@ import { decorPrice } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
 import { ALU_PROFILES, ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
+import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
@@ -1387,8 +1389,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 </div>
                 {project.modules.length>1&&<details className="measurement-fields"><summary>Фасады всей композиции</summary><p className="field-note">Сохраняются материалы каждого корпуса. Детали, фальши и смета пересчитаются; отмена возвращает всё одним шагом.</p>{[true,false].map(enabled=><button key={String(enabled)} className="text-action" disabled={project.modules.every(a=>a.module.doors===enabled)} onClick={()=>{if(commitProject({...project,modules:project.modules.map(a=>({...a,module:{...a.module,doors:enabled}}))})){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(false);}}}>{enabled?'Добавить фасады всем корпусам':'Убрать фасады у всех корпусов'}</button>)}</details>}
                 {m.doors && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{if(e.target.value==='alu')n.alu={...DEFAULT_ALU};else delete n.alu;})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option></select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль</option></select></label>
                 )}
+                {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
                 {m.doors&&<button className="outline full" onClick={()=>{setTab('section');propertiesRef.current?.scrollTo({top:0,behavior:'smooth'});}}>Настроить каждую дверь · ручки, петли, разделение</button>}
                 {m.doors && m.alu && (<>
                   <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>

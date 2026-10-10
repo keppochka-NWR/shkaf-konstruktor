@@ -82,7 +82,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
   }, [e, markup]);
   const materialRows = useMemo(() => {
     if (!e) return [];
-    const rows: [string, RegExp][] = [["Плита ЛДСП и задники", /^sheet:/], ["Кромка", /^edge/], ["Работа цеха", /^(work|small)$/], ["Рамочные фасады и стекло", /^(alu-|glass-)/]];
+    const rows: [string, RegExp][] = [["Плита ЛДСП и задники", /^sheet:/], ["Кромка", /^edge/], ["Работа цеха", /^(work|small)$/], ["Рамочные фасады и стекло", /^(alu-|glass-)/], ["Фасады Вернисаж", /^vernissage/]];
     return rows.map(([label, re]) => ({ label, sum: e.lines.filter((l) => re.test(l.id)).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0) * markup, 0) })).filter((r) => r.sum > 0);
   }, [e, markup]);
   const choice = useMemo(() => hardwareChoice(project), [project]);
@@ -99,7 +99,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
             <div className="dock-actions"><button className="outline" onClick={() => openOutput("estimate")}>Подробная смета</button><button className="outline" onClick={() => openOutput("quote")}>КП</button></div>
           </div>
         </div>
-        {e.model === "sheet" && <p className="dock-note">Выбрана модель «цена за лист»: фурнитура входит в цену листа и отдельно не показывается. Чтобы видеть её отдельно, в подробной смете выберите «Себестоимость × коэффициент».</p>}
+        {e.model === "sheet" && <p className="dock-note">Выбрана модель «цена за лист»: фурнитура входит в цену листа и отдельно не показывается{e.vernissageOnTop ? `; фасады Вернисаж — сверху листов, закупка × коэффициент: ${rub(e.vernissageOnTop)}` : ""}. Чтобы видеть её отдельно, в подробной смете выберите «Себестоимость × коэффициент».</p>}
       </>}
     </div>
   ) : tab === "hardware" ? (
