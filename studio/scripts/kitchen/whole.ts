@@ -13,6 +13,7 @@ import { estimate } from "../../src/pricing";
 import { interModule, studioBox, pen, isBoard } from "./interModule";
 import { worktopGroupRole } from "./rowWorktop";
 import { etalonHoleItems, holeSig, supplierEdgeKind } from "./wholeChecks";
+import { guideKits, GUIDE_KIT_LINE } from "../../src/guideKits";
 import { kitHeaderIdx } from "./refHardware";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon";
@@ -133,10 +134,10 @@ for (const k of keys) {
   log("\n## 7. Смета студии");
   const est = estimate(p).lines;
   for (const l of est) log(`  ${l.id} · ${l.label} · ${l.quantity} ${l.unit}`);
-  // штуки Базиса против строк сметы (пары направляющих — ×2, комплект ящика — 2 направляющие)
+  // штуки Базиса против строк сметы (направляющие — комплектами по ящикам, см. ниже)
   const cnt = (re: RegExp, cat?: string) => Object.entries(names).filter(([n]) => (!cat || n.split(" | ")[0].endsWith(cat)) && re.test(n.split(" | ")[1] ?? "")).reduce((s, [, c]) => s + c, 0);
   const sum = (re: RegExp, mul = 1) => est.filter((l) => re.test(l.id)).reduce((s, l) => s + l.quantity * mul, 0);
-  // строки «как в Базисе» (n3): bazis:<категория>:<название>, firmax:<артикул> (пары), shelf-holder:<название>, kitchen-leg:<название>
+  // строки «как в Базисе» (n3): bazis:<категория>:<название>, firmax:<артикул> (комплекты), shelf-holder:<название>, kitchen-leg:<название>
   const pipes = est.some((l) => /^bazis:прочее:Труба/i.test(l.id)) ? cnt(/труба/i) : 0;
   const prodProfiles = cnt(/gola|kb \d|врезной|фасадный профиль|алюминиев/i, "профиль");
   // отверстия-крепёж Базиса — независимо от правила имени в bazisHoles и от категории (wholeChecks.etalonHoleItems: service без модели
@@ -145,18 +146,33 @@ for (const k of keys) {
   const holesBazis = holeHw.length, holeNames: Record<string, number> = {};
   for (const h of holeHw) holeNames[(h.name ?? "").trim()] = (holeNames[(h.name ?? "").trim()] ?? 0) + 1;
   if (holesBazis) log(`отверстия-крепёж Базиса (service без модели): ${holesBazis} — ${Object.entries(holeNames).map(([n, c]) => `${c} × ${n}`).join(", ")}`);
+  // направляющие — комплектами: ящики Базиса по коробам (guideKits по эталону модуля) против строк комплектов сметы — по каждому модулю
+  // (модуль i эталона = объект i проекта, buildKitchen) и в целом; направляющие штуками/парами в смете — замечание
+  const kitMods = mods.map((m) => ({ m, g: guideKits(m.panels as { name: string }[], m.hardware) })).filter(({ g }) => g.length);
+  const kitsBazis = kitMods.reduce((s, { g }) => s + g.reduce((t, x) => t + x.n, 0), 0);
+  const kitBad: string[] = [];
+  mods.forEach((m, i) => {
+    const b = guideKits(m.panels as { name: string }[], m.hardware).reduce((t, x) => t + x.n, 0), a = p.modules[i];
+    const s = a && !a.module.raw?.row ? estimate({ ...p, modules: [a] }).lines.filter((l) => GUIDE_KIT_LINE.test(l.id)).reduce((t, l) => t + l.quantity, 0) : 0;
+    if (b !== s) kitBad.push(`${m.name}: ящиков Базиса ${b}, комплектов ${s}`);
+  });
+  const noBox = kitMods.flatMap(({ m, g }) => g.filter((x) => x.noBox).map((x) => `${m.name}: ${x.n} компл. ${x.id}`));
+  log(`комплекты направляющих (по 2 шт.: левая + правая) = ящики Базиса: ${kitsBazis}${noBox.length ? `; без короба и фасада ящика в модели (по записям, проверить): ${noBox.join("; ")}` : ""}`);
+  if (kitBad.length) { log(`  по модулям не сходится: ${kitBad.join("; ")}`); issues.push(`комплекты направляющих ≠ ящики (${kitBad.length})`); }
+  const notKit = est.filter((l) => /направляющ/i.test(l.label) && l.unit !== "компл");
+  if (notKit.length) { log(`  направляющие не комплектами: ${notKit.map((l) => `${l.id} ${l.quantity} ${l.unit}`).join("; ")}`); issues.push(`направляющие не комплектами (${notKit.length})`); }
   const pairs: [string, number, number][] = [
     ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
     ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
     ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
-    // Firmax кухни из Базиса — штуками (n4-kitchens3), студийный firmax-ldsp — парами. Axis PRO — комплект на ящик (2 направляющие);
-    // строка внутреннего ящика axis-pro:inner (передняя панель, держатели, стабилизатор — n4-drawers) направляющих не добавляет
-    ["направляющие Axis PRO", cnt(/axis pro направляющая/i), sum(/^axis-pro(?!:inner:)/, 2)], ["направляющие Firmax", cnt(/firmax/i, "направляющая"), est.filter((l) => /^firmax/.test(l.id)).reduce((s, l) => s + l.quantity * (l.unit === "пара" ? 2 : 1), 0)],
+    // направляющие — комплектами по 2 шт. (левая + правая), N — ящики (правило Макса 10.10.2026): комплекты сметы (Firmax, Versalite,
+    // MODERN SLIDE, прочие Базиса, ящики Axis PRO / Indigo / СТАРТ — комплект ящика с парой направляющих) = ящики Базиса по коробам
+    // (guideKits по эталону модуля), а не записи Базиса. Строка внутреннего ящика axis-pro:inner направляющих не добавляет
+    ["комплекты направляющих = ящики", kitsBazis, sum(GUIDE_KIT_LINE)],
     // отверстия-крепёж Базиса («3x3», «5x12», «Отверстие 3х2», «Отверстие глухое_d2x10 мм.»…) — строки «Отверстие …» (n4-kitchens3).
     // Счёт Базиса — не по правилу имени bazisHoles, а по признакам эталона: см. holesBazis выше
     ["отверстия-крепёж", holesBazis, sum(/^bazis:отверстие:/)],
-    // ящики параметрики n3-runners (MODERN SLIDE, Versalite — пара; Indigo, СТАРТ — комплект на ящик: 2 направляющие)
-    ["направляющие прочие", cnt(/^(?!.*(axis pro|firmax)).*/i, "направляющая"), sum(/^bazis:направляющая:/) + sum(/^(modern-slide|versalite-h45|indigo):/, 2) + sum(/^start-sc:(?!rail)/, 2)], ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
+    ["штанги/фланцы", cnt(/труба|фланец/i), sum(/^(rod|flange)/) + sum(/^bazis:прочее:Фланец/i) + pipes],
     // профили — изделия (GOLA, KB, врезной, узкий фасадный); в смете — строками с длиной: сверяем наличие
     ["профили-изделия: строки сметы есть", prodProfiles ? 1 : 0, est.some((l) => /^(gola-|bazis:профиль:)/.test(l.id)) || !prodProfiles ? (prodProfiles ? 1 : 0) : 0],
   ];

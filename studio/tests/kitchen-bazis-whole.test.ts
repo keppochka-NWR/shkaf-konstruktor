@@ -71,12 +71,12 @@ test('B3: смета кухни из Базиса без мелочёвки, з�
 
 test('B4: фурнитура Базиса у сырых модулей и в ряду — в смете (Firmax, Indigo, РАФИКС, сушка, штанга, профили)',{skip},()=>{
   const k22=kitchen('k22'),k30=kitchen('k30'),k16=kitchen('k16'),k06=kitchen('k06');
-  assert.equal(qty(k22,/^firmax/),14,'k22: Firmax 14 шт, как в Базисе (штуками, n4-kitchens3)');
-  // n4-drawers: в k30 направляющие Firmax — вложенные комплекты: 18 из 39 записей Базиса — члены комплекта в точке-якоре
-  // (та же направляющая второй записью, refHardware.kitHeaderIdx); направляющих 21 — штуками (n4-kitchens3), а не 39
-  assert.equal(qty(k30,/^firmax/),21,'k30: Firmax 21 шт (39 записей Базиса минус 18 членов вложенных комплектов)');
+  // правило Макса 10.10.2026: направляющие — комплектами по 2 шт. (левая + правая), N — ящики (guideKits), а не записи Базиса
+  // (было: k22 14 шт, k30 21 шт штуками, n4-kitchens3). k22: 3 + 2 ящика Firmax + 2 комплекта в «НМ 4 мойка» (ящика в модели нет — по записям)
+  assert.equal(qty(k22,/^firmax/),7,'k22: Firmax 7 компл.');assert.ok(line(k22,/^firmax/).every(l=>l.unit==='компл'));
+  assert.equal(qty(k30,/^firmax/),13,'k30: Firmax 13 компл. — 13 ящиков (было 21 шт из 39 записей Базиса)');
   // слияние n3: ящики Indigo, которые строит параметрика (n3-runners: k16 m04/m05), — комплект на ящик (2 направляющие, 2 царги)
-  assert.equal(qty(k16,/^bazis:направляющая:Направляющая Indigo/)+2*qty(k16,/^indigo:/),14,'k16: Indigo 14 направляющих');
+  assert.equal(qty(k16,/^guides:Направляющие Indigo/)+qty(k16,/^indigo:/),7,'k16: Indigo — 7 ящиков, 7 комплектов направляющих');
   assert.equal(qty(k16,/^bazis:ящик-система:Царга Indigo/)+2*qty(k16,/^indigo:/),14,'k16: 14 царг Indigo');
   assert.equal(qty(k16,/РАФИКС/),54);assert.equal(qty(k30,/РАФИКС/),40);
   assert.equal(qty(k06,/Сушка двухуровневая/),1);
@@ -87,9 +87,9 @@ test('B4: фурнитура Базиса у сырых модулей и в р�
   assert.equal(qty(k06,/Крепление для профиля Тип 3/),5);
   assert.ok(qty(k06,/Профиль врезной для верхних баз/)>0,'k06: «Профиль1» навесных');
   assert.equal(line(k06,/^gola-/).length,0,'Gola считается один раз — по ряду Базиса');
-  // направляющие — штуками (length Базиса у них не погонаж); фурнитура объектов ряда без габарита (k07 «Пенал на столешку») — в смете
-  // n4-drawers: в k02 направляющие Versalite — вложенные комплекты (24 записи Базиса, из них 12 — члены комплекта в точке-якоре): 12 шт
-  if(has('k02')){const k02=kitchen('k02');assert.equal(qty(k02,/^bazis:направляющая:/),12);assert.ok(line(k02,/^bazis:направляющая:/).every(l=>l.unit==='шт'));}
+  // направляющие — комплектами по ящикам (24 записи Базиса k02, из них 12 — члены вложенных комплектов, на 6 ящиков): 3 + 3 компл.;
+  // фурнитура объектов ряда без габарита (k07 «Пенал на столешку») — в смете
+  if(has('k02')){const k02=kitchen('k02');assert.equal(line(k02,/^bazis:направляющая:/).length,0);assert.deepEqual(line(k02,/^guides:/).map(l=>[l.quantity,l.unit]),[[3,'компл'],[3,'компл']]);}
   if(has('k07')){const row=kitchen('k07').modules.find(a=>a.module.raw?.row)!.module.raw!;assert.equal(row.counts?.hinges,3);assert.ok(row.items?.some(i=>/РАФИКС/.test(i.name)&&i.n===4));}
   // служебные объекты Базиса (отверстия «35x13», «3x3» — диаметр×глубина, тела, зазоры) — не фурнитура
   assert.deepEqual(bazisItems([{name:'3x3',category:'прочее'},{name:'Отверстие 3х2',category:'прочее'},{name:'Тело по траектории',category:'сушка'},{name:'Профиль',category:'профиль',mat:'Хром'},{name:'Гвоздь',category:'прочее'}]).map(i=>i.name),['Гвоздь']);
@@ -99,7 +99,7 @@ test('B5: артикулы — по Базису: тип петель, полк�
   const k14=kitchen('k14'),k22=kitchen('k22'),k30=kitchen('k30');
   assert.equal(qty(k14,/^hinge-inset/),4,'k14 НМ: вкладные ×4');
   assert.equal(qty(k22,/^hinge-bazis:под фальшпанель/),4);assert.equal(qty(k22,/^hinge-bazis:полунакладная/),2);
-  assert.equal(qty(k14,/^firmax:.*L - 500/),10,'k14: 10 шт L - 500 (5 пар), как в Базисе (не 6 пар «490»)');
+  assert.equal(qty(k14,/^firmax:.*L - 500/),6,'k14: L - 500 по Базису (не «490»), 6 компл. — 6 ящиков (было 10 шт по записям)');
   assert.ok(!estimate(k22).lines.some(l=>/Firmax (390|490) мм/.test(l.label)),'длина короба вместо артикула');
   assert.equal(qty(k30,/^shelf-holder:Полкодержатель для стеклянных полок MV05/),24);
   assert.ok(!estimate(k30).lines.some(l=>l.label==='Полкодержатель Boyard p521'));

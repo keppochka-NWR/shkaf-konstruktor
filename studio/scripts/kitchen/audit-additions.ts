@@ -7,12 +7,13 @@ import { parseProject, applyAutoFillers, type Project } from "../../src/project"
 import { estimate } from "../../src/pricing";
 import { compareModule, type RefModule } from "./compare";
 import { refCategory } from "./refHardware";
+import { guideKits, GUIDE_KIT_LINE } from "../../src/guideKits";
 
 const ET = "C:/Users/My PC/Desktop/Claude Project/Кухни/etalon", LP = process.argv[4] ?? "public/local-projects";
 const arg = process.argv[2] ?? "all", out = process.argv[3] || undefined;
 const files = readdirSync(ET).filter((f) => /^k\d\d\.json$/.test(f)).sort().filter((f) => arg === "all" || arg.split(",").includes(f.slice(0, 3)));
 // строки сметы, которым соответствует фурнитура/панели Базиса (категория эталона или деталь раскроя)
-const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|confirmat-euro-6x50$|confirmat:|wallpanel:raw:|plinth-external$|eccentric$|shelf-holder(:|$)|dowel$|kitchen-leg(:|$)|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|axis-rail:|firmax-ldsp|firmax:|indigo:|start-sc:|modern-slide:|versalite-h45:|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
+const BAZIS_LINE = /^(sheet:|edge|confirmat-7x50$|confirmat-euro-6x50$|confirmat:|wallpanel:raw:|plinth-external$|eccentric$|shelf-holder(:|$)|dowel$|kitchen-leg(:|$)|kitchen-clip$|kitchen-hanger$|hinge|lift-mechanism$|kitchen-lift:|axis-pro|axis-rail:|firmax-ldsp|firmax:|guides:|indigo:|start-sc:|modern-slide:|versalite-h45:|gola-|facade-external$|mat:|bazis:|kitchen-hanger-cap$|glass-shelf$|worktop(?!-cut)|handle:)/;
 const LABOUR = /^(work$|small$|unplaced:|unplaced-raw:)/;
 const agg = new Map<string, { label: string; kitchens: Set<string>; qty: number; sum: number }>();
 const partAgg = new Map<string, { kitchens: Set<string>; n: number }>();
@@ -48,6 +49,8 @@ for (const f of files) {
       ["навесы", qty(/^kitchen-hanger$/), refN((h) => h.category === "навес")],
       ["заглушки навесов", qty(/^kitchen-hanger-cap$/), refN((h) => h.category === "заглушка" && /навес/i.test(h.name))],
       ["газлифты (комплект на боковину)", qty(/^kitchen-lift:/), Math.ceil(refN((h) => h.category === "газлифт") / 2)],
+      // направляющие — комплектами по 2 шт. (левая + правая), N — ящики Базиса по коробам (guideKits; правило Макса 10.10.2026)
+      ["комплекты направляющих (= ящики Базиса)", qty(GUIDE_KIT_LINE), guideKits(ref.panels, ref.hardware).reduce((s, g) => s + g.n, 0)],
       // все строки ручек модуля — ручки студии и ручки Базиса (bazis:…ручка…): двойная ручка (студии сверху Базиса) видна здесь;
       // «рейлинг» из «ящик-системы» эталона — ручка (refHardware, n4-wall)
       ["ручки", qty(/^handle:/) + qty(/^bazis:[^:]*:.*ручк/i), refN((h) => refCategory(h) === "ручка")],
