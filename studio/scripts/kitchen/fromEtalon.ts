@@ -955,6 +955,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const jn = wallJointNone(ref.hardware, fixedJ, left, right).filter((k, _, all) => all.filter((x) => x.replace(/:(left|right)$/, "") === k.replace(/:(left|right)$/, "")).length === 1);
     if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык полки без крепежа (как в Базисе): ${jn.join(", ")}`); }
   }
+  // нижний: дно/крыша с крепежом в Базисе только у одной стойки (k10 m11: конфирматы снизу через дно лишь под правой боковиной,
+  // у левой — ни конфирмата, ни эксцентрика, ни отверстия) — другая сторона без крепежа, как в Базисе (то же поле jointNone и та же
+  // проверка, что у пенала и навесных; без крепежа с обеих сторон — bareJoints, евровинты k33/k34 проверка не видит — не трогаем)
+  if (role === "base" && m.confirmatInset !== undefined && !ref.hardware.some(isEuro6)) {
+    const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel]], left, right).filter((k, _, all) => all.filter((x) => x.replace(/:(left|right)$/, "") === k.replace(/:(left|right)$/, "")).length === 1);
+    if (jn.length) { m.kitchen.jointNone = [...(m.kitchen.jointNone ?? []), ...jn]; notes.push(`стык без крепежа с одной стороны (как в Базисе): ${jn.join(", ")}`); }
+  }
   // навесные: у каждого стыка дна/крыши свои отступы крепежа, если они не совпадают с общим
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     // жёсткие полки (k05 m10/m11: полка над сушкой на конфирматах 53/52 при общем 63) — тоже свои отступы

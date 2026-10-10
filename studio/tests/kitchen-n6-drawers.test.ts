@@ -112,3 +112,12 @@ test('Bazis modules with middle Gola cuts and no «5» get no ties (k06 m03, k27
     assert.equal(m.kitchen!.golaTies,undefined);assert.ok(!parts(m).some(p=>p.id.startsWith('kitchen-tie')));
   }
 });
+
+test('Base module: bottom joint fastened in Bazis only at one side (k10 m11: confirmats only under the right side) — the other side bare, as in Bazis',{skip:!existsSync(ED)},()=>{
+  const ref=refOf('k10','m11'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen!.jointNone,['bottom:left']);
+  const ps=parts(m);assert.ok(!ps.some(p=>/^fast:.*bottom.*left|^fast:bottom:left/.test(p.id)&&p.position[0]<m.width/2),'слева у дна конфирматов нет');
+  const c=compareModule(ref,m);assert.ok(honestPass(c,validate(m),unsupported),JSON.stringify({h:c.holes&&[c.holes.missing,c.holes.extra],hw:c.hardware.filter(h=>h.ref!==h.studio)}));
+  // обе стороны с крепежом (k10 m12) — правило модуля, jointNone нет
+  assert.equal(moduleFromEtalon(refOf('k10','m12')).module.kitchen!.jointNone,undefined);
+});
