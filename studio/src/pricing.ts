@@ -373,19 +373,20 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const byMarkup=missing.length?null:split.material+split.hardware;
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
   const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  // Фасады «Вернисаж» (и присадка под петли на них) — закупка стороннего участка, в раскрой ЛДСП не идут, значит в цену листа не входят:
-  // сверху по тому же коэффициенту, что и в модели наценки (иначе при «цене за лист» фасады пропадали из цены клиента)
+  // Фасады «Вернисаж» (и присадка под петли на них) — покупное изделие стороннего производителя: в раскрой ЛДСП не идут, значит в цену листа
+  // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × тот же коэффициент, что и в модели наценки
+  // (как в «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы). Раньше выпадали из цены.
   const vernissageCost=lines.filter(l=>!l.retail&&l.id.startsWith('vernissage')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
-  const vernissageSheet=vernissageCost?Math.round(vernissageCost*settings.markup/100)*100:0;
-  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageSheet;
-  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:unplaced.length?null:model==='sheet'?bySheet:byMarkup};
+  const vernissageOnTop=vernissageCost?Math.round(vernissageCost*settings.markup/100)*100:0;
+  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop;
+  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,bySheet,vernissageOnTop,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,retail:unplaced.length?null:model==='sheet'?bySheet:byMarkup};
 }
 
 
 export function estimateCSV(p:Project,result=estimate(p)){
  const rows:(string|number)[][]=[['Проект',p.offer?.customer||'Проект мебели','','','','',''],['Позиция','Количество','Единица','Цена, ₽','Сумма, ₽','Источник','Статус']];
  for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.unitPrice===null?'Уточнить цену':'Учтено']);
- rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой',result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'','',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой'+(result.vernissageOnTop?'; сверху фасады Вернисаж (закупка × коэффициент) '+result.vernissageOnTop+' ₽':''),result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'','',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  const cell=(v:string|number)=>{let text=typeof v==='number'?String(v).replace('.',','):v;if(typeof v==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
  return '﻿'+rows.map(row=>row.map(cell).join(';')).join('\r\n');
 }

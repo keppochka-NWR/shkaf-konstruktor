@@ -4,7 +4,7 @@ import { facadeGeometry, offsetContour, signedArea, rectContour, archContour, co
 import { parts, parseVernissage, initialModule, type Module } from '../src/model';
 import { kitchenBase } from '../src/kitchen';
 import { newProject } from '../src/project';
-import { estimate, lineGroup } from '../src/pricing';
+import { estimate, estimateCSV, lineGroup } from '../src/pricing';
 import { vernissageLayout, vernissageFacadePrice, vernissageMilling, openings, coversOf, filmCatsOf, thicknessesOf, normalizeVernissage, DEFAULT_VERNISSAGE, PET_DECORS, VERNISSAGE_SERIES, VERNISSAGE_MILLINGS, PROVISIONAL, type VernissageFacade } from '../src/facadesVernissage';
 
 const SIZES: [number, number][] = [[300, 300], [450, 716], [597, 2000], [150, 716]];
@@ -222,17 +222,27 @@ test('Вернисаж в модуле: фасады — сторонний уч
   assert.deepEqual(parseVernissage(JSON.parse(JSON.stringify(m.vernissage))), m.vernissage);
 });
 
-test('Вернисаж: при «цене за лист» фасады входят в цену клиента (закупка × коэффициент сверху листов)', () => {
+test('Вернисаж: шкаф по умолчанию, №86, эмаль мат с двух сторон — фасады в цене клиента в обеих моделях (по листам — закупка × коэффициент сверху листов)', () => {
   const p = newProject(), m: Module = { ...p.modules[0].module, vernissage: { milling: '86', cover: 'enamel-matte', thickness: 19, twoSided: true }, facadeT: 19 };
   const base = { ...p, calculation: { ...(p.calculation ?? { markup: 2.2, overrides: {} }), model: 'sheet' as const } };
   const plain = estimate(base), withV = estimate({ ...base, modules: [{ ...p.modules[0], module: m }] });
   const cost = withV.lines.filter((l) => l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0);
   assert.ok(cost > 20000, `закупка фасадов ${cost}`);
   assert.equal(withV.bySheet, withV.ldspSheets * withV.sheetPrice + withV.retailExtras + Math.round(cost * withV.markup / 100) * 100);
+  assert.equal(withV.vernissageOnTop, Math.round(cost * withV.markup / 100) * 100);
   assert.ok(withV.bySheet > plain.bySheet, `цена по листам ${plain.bySheet} → ${withV.bySheet}: фасады не должны удешевлять шкаф`);
-  // модель наценки не меняется: фасады в «Материалах» по коэффициенту
-  const mk = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] });
-  assert.ok(mk.byMarkup !== null && mk.byMarkup > estimate(p).byMarkup!);
+  // цена клиента (retail) в модели «по листам» — с фасадами: листы те же (фасады вне раскроя ЛДСП), разница — фасады × коэффициент
+  assert.equal(withV.retail, withV.bySheet);
+  assert.equal(withV.retail! - plain.retail!, (withV.ldspSheets - plain.ldspSheets) * withV.sheetPrice + withV.vernissageOnTop);
+  // закупка фасадов остаётся в себестоимости сметы (не розничная строка)
+  assert.ok(withV.lines.filter((l) => l.id.startsWith('vernissage')).every((l) => !l.retail) && withV.knownCost >= Math.round(cost));
+  // модель наценки: фасады в «Материалах» по тому же коэффициенту — цена клиента тоже с фасадами
+  const mkBase = estimate(p), mk = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] });
+  assert.equal(mk.model, 'markup'); assert.equal(mk.retail, mk.byMarkup);
+  assert.ok(mk.retail !== null && mk.retail > mkBase.retail!, `цена по коэффициенту ${mkBase.retail} → ${mk.retail}`);
+  assert.ok(mk.split.materialCost >= Math.round(cost) - 1, 'закупка фасадов — в материалах');
+  // CSV сметы показывает, что фасады идут сверху листов
+  assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('сверху фасады Вернисаж'));
 });
 
 test('Вернисаж на кухне: двери и фасады ящиков нижнего модуля получают фрезеровку, раскладка строится под их размер', () => {
