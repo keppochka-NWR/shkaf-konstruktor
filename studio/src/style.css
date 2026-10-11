@@ -37,6 +37,23 @@
   border-color: #24899b;
   background: #edf7f8;
 }
+/* Сырой модуль из Базиса (m.raw) в списке корпусов: детали как в проекте, наполнение правится в Базисе */
+.module-item .module-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fdf6ef;
+  border: 1px solid #e8c9ad;
+  color: #b4561f;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.stage-note.raw-note { --stage: #b4561f; }
 .model-dimension {
   position: absolute;
   z-index: 3;
