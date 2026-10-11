@@ -6,7 +6,7 @@ import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Proje
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts} from './model';
 import {partCollisions,rawCheck,bazisAirHardware,RAW_FAR,BAZIS_AIR} from './collisions';
-import {rawHangerSeats,RAW_HANGER_DROP} from './rawModule';
+import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
 /** Что советуем по каждому типу объекта на стене, если его перекрывает мебель. */
@@ -50,8 +50,10 @@ export function roomWarnings(project:Project){
   }
   const clearance=ceilingClearance(project.room.ceiling);
   for(const a of project.modules){const gap=project.room.height-(a.y??0)-a.module.height;if(gap<clearance-.001)warnings.push({moduleId:a.id,kind:"ceiling",message:`«${a.module.name}»: до потолка ${Math.round(gap*10)/10} мм. По регламенту оставьте ${clearance} мм до ${project.room.ceiling==='stretch'?'натяжного':'стационарного'} потолка; проверьте светильники и выступы.`});}
-  // «Ряд» импорта Базиса (столешница, цоколь, панели) — не корпус в сборе
-  for(const a of project.modules)if(a.module.width>900&&!a.module.worktop&&!a.module.kupe&&!a.module.raw?.row)warnings.push({moduleId:a.id,kind:'logistics',message:`«${a.module.name}»: корпус шириной ${a.module.width} мм в сборе не во все лифты входит. Уточните лифт и подъём на этаж или разбейте на два корпуса.`});
+  // «Ряд» импорта Базиса (столешница, цоколь, панели; m.worktop / raw.row) — не корпус в сборе. Кухни (параметрика m.kitchen и сырые
+  // кухонные модули Базиса) — без «лифта»: ширины модулей заданы проектом Базиса, предупреждение было 100 % шумом (k30 4 из 4, k25 2 из 2;
+  // аудит 11.10.2026). Шкафы студии и сырые шкафы Базиса (bazis-corpus) — как прежде; порог 900 — вопрос Макса (ярус B).
+  for(const a of project.modules)if(a.module.width>900&&!a.module.worktop&&!a.module.kupe&&!a.module.raw?.row&&!a.module.kitchen&&!rawKitchen(a.module.raw))warnings.push({moduleId:a.id,kind:'logistics',message:`«${a.module.name}»: корпус шириной ${a.module.width} мм в сборе не во все лифты входит. Уточните лифт и подъём на этаж или разбейте на два корпуса.`});
   for(const {a,b} of closed){
     const exits=[['левой',-b.x],['задней',-b.z],['правой',b.x+b.w-project.room.width],['передней',b.z+b.d-project.room.depth]] as const;
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});
