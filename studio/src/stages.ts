@@ -10,7 +10,7 @@ export const STAGES: { id: Stage; n: number; title: string; short: string; color
   { id: "docs", n: 6, title: "Документы", short: "Смета и карты", color: "#55606a", hint: "Смета, карты листов, бирки, ведомость и КП — в окне документов." },
 ];
 /** Подсказка этапа «Наполнение», когда выбран сырой модуль из Базиса (m.raw): полки, ящики и штанги у него не настраиваются (A5, 11.10.2026). */
-export const RAW_FILLING_HINT = "Выбран модуль из Базиса: наполнение правится в Базисе (переимпорт). Здесь — положение в комнате, смета и раскрой; другой корпус выберите в списке слева.";
+export const RAW_FILLING_HINT = "Выбран модуль из Базиса: наполнение правится в Базисе (переимпорт). Здесь — положение в комнате, смета и раскрой.";
 export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
 export const nextStage = (s: Stage) => STAGES[Math.min(STAGES.length - 1, stageIndex(s) + 1)].id;
 export const prevStage = (s: Stage) => STAGES[Math.max(0, stageIndex(s) - 1)].id;

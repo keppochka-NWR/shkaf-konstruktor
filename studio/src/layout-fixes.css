@@ -47,3 +47,28 @@
 
 /* Focusing low toolbar buttons must not scroll the clipped 3D viewport. */
 .viewport { overflow: clip; }
+
+/* 6. Невысокие экраны (ноутбук 1280×720, высота ≤ 768; аудит 11.10.2026, A5): сцене не меньше 320 px.
+   Замеры до правки на 1280×720: шапка 68 + полоса этапов 80 (подсказка второй строкой) + док 47 → рабочая область 525,
+   сцена 249 px (отступы .scene 156 сверху и 120 снизу внутри области), с открытой вкладкой дока (230) — 19 px.
+   Панель дока выезжает ПОВЕРХ сцены (абсолютно над своей полосой вкладок), не сжимая рабочую область. */
+@media (max-height: 768px) {
+  .project-dock { position: relative; z-index: 11; } /* выше панелей 3D (5–10), ниже модальных окон (20) */
+  .dock-panel { position: absolute; left: 0; right: 0; bottom: 100%; max-height: min(55dvh, 380px); box-shadow: 0 -10px 28px rgba(20, 30, 40, 0.16); border-top: 1px solid var(--line); }
+  /* ряд клиента: без второй строки вкладок проектов (размер/цена остаются в подсказке и итоге) — 55 → ~40 px */
+  .client-bar { min-height: 36px; padding: 3px 16px; }
+  .client-bar .project-tab button[role="tab"] small { display: none; }
+  .client-bar .project-tab button[role="tab"] { padding: 5px 10px; }
+}
+/* Полоса этапов — в одну строку: подписи шагов, кроме текущего, скрыты, подсказка этапа между шагами и кнопками;
+   3D-область начинается сразу под панелью инструментов (одна строка при ширине ≥ 1000) и заканчивается над подсказкой орбиты
+   (13 px в 17 px от низа), пикер секций (bottom 45) ложится на нижний край сцены полупрозрачной плашкой. */
+@media (max-height: 768px) and (min-width: 1000px) {
+  .app .stage-bar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 14px; padding: 5px 25px; }
+  .app .stage-steps { grid-column: 1; grid-row: 1; }
+  .app .stage-hint { grid-column: 2; grid-row: 1; align-self: center; font-size: 12px; }
+  .app .stage-actions { grid-column: 3; grid-row: 1; }
+  /* studio-refresh.css держит подписи шагов всегда видимыми (!important) — на невысоком экране оставляем только текущую, как style.css при ширине ≤ 1100 */
+  .app .stage-step:not(.current) .stage-title { display: none !important; }
+  /* сцена: после правки Codex (inset: 0, панели инструментов поверх сцены) отдельных отступов .scene на невысоком экране не нужно */
+}
