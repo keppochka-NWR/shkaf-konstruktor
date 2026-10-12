@@ -1,0 +1,27 @@
+C:\Users\My PC\Desktop\Claude Project\Конструктор-claude\server\.studio-deps\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_admin_creates_accounts_and_password_hash_is_private (test_studio.StudioTests.test_admin_creates_accounts_and_password_hash_is_private) ... ok
+test_change_password_keeps_current_device_and_logs_out_other_devices (test_studio.StudioTests.test_change_password_keeps_current_device_and_logs_out_other_devices) ... ok
+test_combined_web_server_exposes_only_editor_assets (test_studio.StudioTests.test_combined_web_server_exposes_only_editor_assets) ... ok
+test_concurrent_saves_preserve_one_winner_and_exact_history (test_studio.StudioTests.test_concurrent_saves_preserve_one_winner_and_exact_history) ... ok
+test_csrf_and_logout (test_studio.StudioTests.test_csrf_and_logout) ... ok
+test_failed_login_and_limits_survive_app_restart (test_studio.StudioTests.test_failed_login_and_limits_survive_app_restart) ... ok
+test_history_access_and_non_destructive_restore (test_studio.StudioTests.test_history_access_and_non_destructive_restore) ... ok
+test_ip_limit_cannot_be_bypassed_by_different_logins (test_studio.StudioTests.test_ip_limit_cannot_be_bypassed_by_different_logins) ... ok
+test_legacy_database_migration_keeps_owner_versions_and_library (test_studio.StudioTests.test_legacy_database_migration_keeps_owner_versions_and_library) ... ok
+test_live_database_backup_preserves_projects_and_versions (test_studio.StudioTests.test_live_database_backup_preserves_projects_and_versions) ... ok
+test_local_admin_bootstrap_and_password_recovery (test_studio.StudioTests.test_local_admin_bootstrap_and_password_recovery) ... ok
+test_login_validation_does_not_echo_password (test_studio.StudioTests.test_login_validation_does_not_echo_password) ... ok
+test_no_email_backdoor_signup_or_default_accounts (test_studio.StudioTests.test_no_email_backdoor_signup_or_default_accounts) ... ok
+test_ownership_and_admin (test_studio.StudioTests.test_ownership_and_admin) ... ok
+test_personal_library_is_stored_per_user_and_validated (test_studio.StudioTests.test_personal_library_is_stored_per_user_and_validated) ... ok
+test_production_cookie_and_csrf_without_smtp (test_studio.StudioTests.test_production_cookie_and_csrf_without_smtp) ... ok
+test_reset_and_disable_revoke_existing_sessions_and_preserve_projects (test_studio.StudioTests.test_reset_and_disable_revoke_existing_sessions_and_preserve_projects) ... ok
+test_revision_archive_restore (test_studio.StudioTests.test_revision_archive_restore) ... ok
+test_room_document_roundtrip_conflict_and_owner_isolation (test_studio.StudioTests.test_room_document_roundtrip_conflict_and_owner_isolation) ... ok
+test_room_obstacles_survive_save_and_revision_history (test_studio.StudioTests.test_room_obstacles_survive_save_and_revision_history) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 115.186s
+
+OK

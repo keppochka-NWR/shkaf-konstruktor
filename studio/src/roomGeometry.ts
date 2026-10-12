@@ -14,3 +14,28 @@ export function wallPanels(room:Room):WallPanel[]{
   }
   return result;
 }
+/** All coordinates in mm. Numerical tolerance is not an installation allowance. */
+export const GEOMETRY_EPS = 1e-7;
+export type Point2 = {x:number;z:number};
+export function trig(degrees:number){
+  const a=degrees*Math.PI/180;
+  const clean=(n:number)=>Math.abs(n)<1e-14?0:Math.abs(Math.abs(n)-1)<1e-14?Math.sign(n):n;
+  return {c:clean(Math.cos(a)),s:clean(Math.sin(a))};
+}
+/** Origin uses the lower corner of the rotated nominal bounding box, as in v3. */
+export function transform(x:number,z:number,w:number,d:number,degrees:number,u:number,v:number):Point2{
+  const {c,s}=trig(degrees),minX=Math.min(0,w*c)+Math.min(0,d*s),minZ=Math.min(0,-w*s)+Math.min(0,d*c);
+  return {x:x-minX+u*c+v*s,z:z-minZ-u*s+v*c};
+}
+export function inverseTransform(x:number,z:number,w:number,d:number,degrees:number,px:number,pz:number):Point2{
+  const origin=transform(x,z,w,d,degrees,0,0),{c,s}=trig(degrees),dx=px-origin.x,dz=pz-origin.z;
+  return {x:dx*c-dz*s,z:dx*s+dz*c};
+}
+export function polygonBounds(points:Point2[]){const xs=points.map(p=>p.x),zs=points.map(p=>p.z);return{x:Math.min(...xs),z:Math.min(...zs),w:Math.max(...xs)-Math.min(...xs),d:Math.max(...zs)-Math.min(...zs)};}
+export function convexOverlap(a:Point2[],b:Point2[],tolerance=.1){
+  for(const poly of [a,b])for(let i=0;i<poly.length;i++){
+    const p=poly[i],q=poly[(i+1)%poly.length],dx=q.x-p.x,dz=q.z-p.z,l=Math.hypot(dx,dz);if(l<GEOMETRY_EPS)continue;
+    const projection=(r:Point2)=>(-dz*r.x+dx*r.z)/l,aa=a.map(projection),bb=b.map(projection);
+    if(Math.max(...aa)<=Math.min(...bb)+tolerance||Math.max(...bb)<=Math.min(...aa)+tolerance)return false;
+  }return true;
+}

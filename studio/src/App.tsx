@@ -1,3 +1,5 @@
+import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProperties';
+import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
 import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes} from './model';
@@ -212,7 +214,8 @@ function Counter({
     </div>
   );
 }
-export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean}={}) {
+export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject,externalVersion,viewKey}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean;externalVersion?:number;viewKey?:string}={}) {
+  const [environmentSelection,setEnvironmentSelection]=useState<EnvironmentSelection|null>(null);
   const KEY=CURRENT_PROJECT+(projectKey?':'+projectKey:'');
   const [startup] = useState(() => {
     if(saveManagedProject&&initialProject)return {model:initialProject,error:'',damaged:undefined as string|undefined,storageUnavailable:false,currentRaw:null};
@@ -244,7 +247,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const project = history[cursor];
   const lastLocalWrite=useRef(startup.currentRaw);
   const currentProject=useRef(project),importSequence=useRef(0);currentProject.current=project;
-  const [active, setActive] = useState(project.modules[0].id);
+  const [active, setActive] = useState(()=>{try{const id=viewKey?sessionStorage.getItem('garderyob-selection:'+viewKey):null;return project.modules.some(a=>a.id===id)?id!:project.modules[0].id;}catch{return project.modules[0].id;}});
+  useEffect(()=>{if(viewKey)try{sessionStorage.setItem('garderyob-selection:'+viewKey,active);}catch{}},[viewKey,active]);
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
@@ -386,7 +390,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     }
   }
   const [selected, setSelected] = useState(m.sections[0].id),
-    [view, setView] = useState<View>("iso"),
+    [view, setView] = useState<View>(()=>{try{const v=viewKey?JSON.parse(sessionStorage.getItem('garderyob-camera:'+viewKey)||'null')?.view:null;return ['iso','front','side','top'].includes(v)?v:'iso';}catch{return 'iso';}}),
     [fit, setFit] = useState(0),
     [openDoors, setOpenDoors] = useState(true),
     [exploded, setExploded] = useState(false),
@@ -421,6 +425,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);
     setSelectedOpening(undefined);setSelectedObstacle(undefined);
   }
+  const externalSeen=useRef(externalVersion);
+  useEffect(()=>{if(externalVersion===externalSeen.current)return;externalSeen.current=externalVersion;if(saveManagedProject&&initialProject){setHistory([initialProject]);setCursor(0);setActive(a=>initialProject.modules.some(m=>m.id===a)?a:initialProject.modules[0].id);clearHistorySelection();}},[externalVersion]);
   const undo = () => {
     if(saveManagedProject&&!saveManagedProject(history[Math.max(0,cursor-1)]))return;
     clearHistorySelection();
@@ -749,6 +755,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>
       </header>
       {!presentation&&clientBar}
+      {!presentation&&(selectedOpening||selectedFixture||selectedObstacle)&&<button className="environment-properties-trigger" onClick={()=>setEnvironmentSelection(selectedOpening?{kind:'opening',id:selectedOpening}:selectedFixture?{kind:'fixture',id:selectedFixture}:{kind:'obstacle',id:selectedObstacle!})}>Свойства выбранного объекта</button>}
+      {environmentSelection&&!presentation&&<RoomObjectProperties room={project.room} selection={environmentSelection} onChange={room=>commitProject({...project,room})} onClose={()=>setEnvironmentSelection(null)}/>}
       {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone}/>}
       {!presentation&&(stage==='filling'||stage==='facades')&&canRemove&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
         <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
@@ -1040,7 +1048,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='filling'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
-          {roomPlan?<RoomPlan showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene
+          {roomPlan?<RoomPlan onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation?'orbit':mode}
@@ -1060,6 +1068,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             arrangement={project.modules}
             activeId={placed.id}
             room={showRoom ? project.room : undefined}
+            onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})}
             selectedObstacle={selectedObstacle}
             onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);setSelectedPart(null);setTab('room');}}
             selectedFixture={selectedFixture}
@@ -1248,7 +1257,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {tab === "room" ? (
             <div className="property-section">
               <h2>{stage==='fixtures'&&!advanced?'Окна, двери и коммуникации':'Замер помещения'}</h2>
-              <div data-stages="room bodies filling facades docs">
+              <div data-stages="room bodies filling facades docs"><details className="measurement-fields"><summary>Точки замера и кривые стены</summary><RoomSurveyEditor room={project.room} onChange={room=>commitProject({...project,room})}/></details>
               <p className="field-note">
                 Прямоугольное помещение. Модули не должны пересекаться или
                 выходить за стены.
@@ -1426,7 +1435,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div className="property-section" data-stages="bodies">
                 <h2>Положение в помещении</h2>
                 <button className="outline" onClick={()=>{try{if(commitProject(mirrorModule(project,active))){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>Зеркально отразить наполнение</button><p className="field-note">Меняет левую и правую секции местами и сторону петель. Размеры и положение корпуса сохраняются.</p>
-                <label className="hardware-field">Поворот корпуса<select aria-label="Поворот корпуса" value={placed.rotation??0} onChange={e=>{try{commitProject(rotateModule(project,placed.id,Number(e.target.value) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label><p className="field-note">Поворот — вокруг центра; у стены корпус сдвигается внутрь комнаты. Перетащите его в сцене для расстановки, на виде спереди — по высоте.</p><NumberField label="От пола" value={placed.y??0} min={movingTogether?placedBounds.y-groupBounds.y:0} max={movingTogether?project.room.height-groupBounds.h+placedBounds.y-groupBounds.y:project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
+                <NumberField label="Поворот корпуса" value={placed.rotation??0} min={-360} max={360} unit="°" onChange={v=>{try{commitProject(rotateModule(project,placed.id,v));}catch(e){setError((e as Error).message);}}}/><p className="field-note">Поворот — вокруг центра; у стены корпус сдвигается внутрь комнаты. Перетащите его в сцене для расстановки, на виде спереди — по высоте.</p><NumberField label="От пола" value={placed.y??0} min={movingTogether?placedBounds.y-groupBounds.y:0} max={movingTogether?project.room.height-groupBounds.h+placedBounds.y-groupBounds.y:project.room.height-m.height} onChange={v=>movePlaced('y',v)}/>
                 <NumberField
                   label="От левой стены"
                   value={placedBounds.x}

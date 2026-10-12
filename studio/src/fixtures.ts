@@ -7,6 +7,7 @@ export type FixtureType =
   | "verticalBox" | "horizontalBox" | "ceilingPlinth" | "floorPlinth"
   | "radiator" | "pipe" | "niche" | "apron" | "hatch" | "waterHeater" | "gasMeter";
 export type Fixture = {
+  color?:string;wallGap?:number;diameter?:number;insulation?:number;serviceClearance?:number;
   id: string;
   type: FixtureType;
   wall: Wall;
@@ -67,7 +68,7 @@ export const FIXTURE_GROUPS = ["Электрика", "Отопление и во
 export const WALL_NAMES: Record<Wall, string> = { back: "Задняя стена", left: "Левая стена", right: "Правая стена", front: "Передняя стена" };
 export function wallLength(room: { width: number; depth: number }, wall: Wall) { return wall === "back" || wall === "front" ? room.width : room.depth; }
 /** Габарит объекта в координатах комнаты (что занимает в комнате). Ниша — нулевой выступ. */
-export function fixtureBox(room: { width: number; depth: number; height: number }, f: Fixture) {
+function baseFixtureBox(room: { width: number; depth: number; height: number }, f: Fixture) {
   const spec = FIXTURES[f.type], d = spec.recess ? 0 : Math.max(0, f.depth);
   const y = f.fromFloor, h = f.height;
   switch (f.wall) {
@@ -94,6 +95,10 @@ export function validateFixture(room: { width: number; depth: number; height: nu
   if (f.width < 5 || f.height < 3 || f.depth < 0 || f.depth > 600) return `«${label}»: ширина от 5, высота от 3, выступ 0–600 мм.`;
   if (f.offset < 0 || f.offset + f.width > len + 0.1) return `«${label}»: выходит за длину стены (${len} мм).`;
   if (f.fromFloor < 0 || f.fromFloor + f.height > room.height + 0.1) return `«${label}»: выходит за высоту помещения (${room.height} мм).`;
+  if((f.color!==undefined&&!/^#[0-9a-f]{6}$/i.test(f.color))||[f.wallGap,f.insulation,f.serviceClearance].some(v=>v!==undefined&&(!Number.isFinite(v)||v<0||v>2000))||(f.diameter!==undefined&&(!Number.isFinite(f.diameter)||f.diameter<5||f.diameter>600)))return 'Проверьте диаметр, изоляцию, зазор и цвет.';
+  if(f.type==='pipe'&&f.diameter!==undefined){const outer=f.diameter+2*(f.insulation??0);if(Math.abs(f.depth-outer)>.1||Math.abs((f.horizontal?f.height:f.width)-outer)>.1)return 'Габарит трубы должен равняться наружному диаметру плюс две толщины изоляции.';}
   if (f.name !== undefined && (typeof f.name !== "string" || f.name.length > 80)) return "Название объекта на стене — до 80 символов.";
   return null;
 }
+
+export function fixtureBox(room: {width:number;depth:number;height:number},f:Fixture){const box=baseFixtureBox(room,f),gap=f.wallGap??0;return {...box,x:box.x+(f.wall==='left'?gap:f.wall==='right'?-gap:0),z:box.z+(f.wall==='back'?gap:f.wall==='front'?-gap:0)};}

@@ -75,6 +75,7 @@ function ClientBar({ index, setIndex }: { index: ClientIndex; setIndex: (i: Clie
             <button type="button" role="menuitem" onClick={() => run(() => { const r = addProject(localStorage, index, (client.projects.find((p) => p.key === client.active)?.title ?? "Проект") + " · вариант", client.active); setIndex(r.index); setAdding(false); })}><Copy size={15} /> Копия этого проекта<small>для второго варианта</small></button>
           </div>}
       </div>
+      <button type="button" className="outline" onClick={()=>{window.location.search='?rooms=1&workspace='+encodeURIComponent(client.active);}}>Комнаты этого проекта</button>
       <div className="client-total">{client.projects.length > 1 && <>Итого по клиенту <b>{total === null ? "считаем…" : rub(total)}</b></>}</div>
       {error && <p role="alert" className="client-error">{error}</p>}
     </div>

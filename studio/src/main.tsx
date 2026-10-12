@@ -14,7 +14,7 @@ import "./layout-fixes.css";
 async function start(){
   const query=new URLSearchParams(location.search),slug=query.get('project');
   if(query.get('rooms')==='1'){
-    createRoot(document.getElementById('root')!).render(<React.StrictMode><RoomWorkspace/></React.StrictMode>);
+    createRoot(document.getElementById('root')!).render(<React.StrictMode><RoomWorkspace workspaceKey={query.get('workspace')??''}/></React.StrictMode>);
     return;
   }
   let initialProject;

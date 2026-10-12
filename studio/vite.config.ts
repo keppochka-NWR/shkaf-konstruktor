@@ -4,5 +4,5 @@ export default defineConfig({
   plugins: [react()],
   base: "./",
   build: { outDir: "../web/studio", emptyOutDir: true },
-  server: { port: 5173 },
+  server: { port: 5173, proxy: {'/api': {target:'http://127.0.0.1:8115'}} },
 });

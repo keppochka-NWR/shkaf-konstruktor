@@ -1,3 +1,4 @@
+import {environmentChecks} from './environmentChecks';
 import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
@@ -38,7 +39,7 @@ export function openingZone(room:Room,o:Opening){
 }
 export function roomWarnings(project:Project){
   const closed=project.modules.map(a=>({a,b:closedModuleBounds(a)}));
-  const warnings:RoomWarning[]=[];
+  const warnings:RoomWarning[]=environmentChecks(project);
   for(const [index,o] of (project.room.openings||[]).entries())for(const a of project.modules){
     if(!overlap(bounds(a),openingZone(project.room,o)))continue;
     warnings.push({moduleId:a.id,openingId:o.id,message:o.type==='door'

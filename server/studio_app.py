@@ -233,8 +233,11 @@ def create_app(db_path=None, config=None, static_root=None):
         u=user(request)
         try:data=json.dumps(body.data,ensure_ascii=False,allow_nan=False)
         except ValueError:raise HTTPException(422,'Некорректные числа в проекте.')
-        if len(data.encode())>500000:raise HTTPException(413,'Проект слишком большой.')
-        if body.data.get('version')!=3 or not isinstance(body.data.get('modules'),list) or not 1<=len(body.data['modules'])<=40:raise HTTPException(422,'Нужен проект новой студии.')
+        is_rooms=body.data.get('format')=='garderyob-rooms'
+        if len(data.encode())>(20000000 if is_rooms else 500000):raise HTTPException(413,'Проект слишком большой.')
+        if is_rooms:
+            validate_room_document(body.data)
+        elif body.data.get('version')!=3 or not isinstance(body.data.get('modules'),list) or not 1<=len(body.data['modules'])<=40:raise HTTPException(422,'Нужен проект новой студии.')
         with connect() as c:
             c.execute('BEGIN IMMEDIATE')
             row=c.execute('SELECT * FROM projects WHERE id=?',(body.id,)).fetchone()
@@ -277,3 +280,47 @@ def create_app(db_path=None, config=None, static_root=None):
         def home():
             return RedirectResponse('/studio/')
     return app
+
+
+def validate_room_document(data):
+    import math
+    def reject():
+        raise HTTPException(422,'Некорректный документ комнат.')
+    def finite(n,low,high):
+        return not isinstance(n,bool) and isinstance(n,(int,float)) and math.isfinite(n) and low<=n<=high
+    def project_ok(project):
+        if not isinstance(project,dict) or project.get('version')!=3 or not isinstance(project.get('modules'),list) or len(project['modules'])>200:reject()
+        geometry=project.get('room')
+        if not isinstance(geometry,dict) or any(not finite(geometry.get(k),500,20000) for k in ('width','height','depth')):reject()
+    rooms=data.get('rooms')
+    if data.get('version')!=1 or not isinstance(rooms,list) or not 1<=len(rooms)<=30 or not finite(data.get('revision'),0,2**53-1) or int(data['revision'])!=data['revision']:reject()
+    ids=set()
+    def unique(value):
+        if not isinstance(value,str) or not 1<=len(value)<=100 or value in ids:reject()
+        ids.add(value)
+    room_ids=set()
+    for room in rooms:
+        if not isinstance(room,dict):reject()
+        unique(room.get('id'));room_ids.add(room['id'])
+        if not isinstance(room.get('title'),str) or not 1<=len(room['title'].strip())<=60:reject()
+        project_ok(room.get('project'))
+        walls=room.get('walls')
+        if not isinstance(walls,dict):reject()
+        for k in ('back','front','left','right'):unique(walls.get(k))
+        origin=room.get('origin')
+        if origin is not None and (not isinstance(origin,dict) or any(not finite(origin.get(k),-1000000,1000000) for k in ('x','z'))):reject()
+        variants=room.get('variants',[])
+        if not isinstance(variants,list) or len(variants)>20:reject()
+        for variant in variants:
+            if not isinstance(variant,dict) or not isinstance(variant.get('title'),str) or not variant['title'].strip():reject()
+            unique(variant.get('id'));project_ok(variant.get('project'))
+    if data.get('activeRoomId') not in room_ids:reject()
+    links=data.get('links',[])
+    if not isinstance(links,list) or len(links)>60:reject()
+    for link in links:
+        if not isinstance(link,dict) or link.get('a') not in room_ids or link.get('b') not in room_ids or link['a']==link['b'] or link.get('side') not in ('back','front','left','right'):reject()
+        unique(link.get('id'))
+        for side in ('a','b'):
+            r=next(r for r in rooms if r['id']==link[side])
+            openings=r['project']['room'].get('openings',[])
+            if not isinstance(openings,list) or not any(isinstance(o,dict) and o.get('id')==link.get(side+'Opening') for o in openings):reject()

@@ -1,3 +1,5 @@
+import {parseSurvey,type Survey} from './roomSurvey';
+import {transform,inverseTransform,polygonBounds,convexOverlap} from './roomGeometry';
 import type {Niche,CeilingType} from './measurement';
 import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
@@ -5,15 +7,15 @@ import {rawKitchen} from './rawModule';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
-  casing?:number;casingThick?:number;hinge?:'left'|'right';reveal?:number;windowSill?:{width:number;thick:number;overhang:number;offset:number}};
+  color?:string;frameDepth?:number;direction?:'in'|'out';swingAngle?:number;handleProjection?:number;casing?:number;casingThick?:number;hinge?:'left'|'right';reveal?:number;windowSill?:{width:number;thick:number;overhang:number;offset:number}};
 export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator'|'fridge'|'washer'|'stove';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
-export type Room={width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType;
+export type Room={survey?:Survey;width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType;
   /** Объекты на стенах из замера (розетки, батареи, короба, плинтусы, трубы…). */
   fixtures?:Fixture[];
   /** Стены: толщина и углы между фронтальной (задней) и боковыми, как в скрипте Базиса. */
   walls?:{thickness:number;angleLeft?:number;angleRight?:number}};
-export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:0|90|180|270;module:Module};
+export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:number;module:Module};
 export type PlanDimension={id:string;from:[number,number];to:[number,number]};
 /** Движок раскроя: 'classic' (по умолчанию) — как было; 'guillotine' — гильотина как в Базисе (пропил 4,4, обрезка 12, ≤ 5 стадий). Решение Макса: новый движок только по флагу. */
 export type CuttingEngine='classic'|'guillotine';
@@ -21,19 +23,22 @@ export type CuttingEngine='classic'|'guillotine';
  *  source 'bazis' — кухня импортирована из Базиса (scripts/kitchen/import.ts): состав и расстановка как в Базисе. */
 export type Project={version:3;kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;cuttingEngine?:CuttingEngine};offer?:{customer:string;price:string;notes:string}};
 export function newProject(module=initialModule()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
-export function localToRoom(a:PlacedModule,u:number,v:number){const w=a.module.width,d=a.module.depth;switch(a.rotation??0){case 90:return{x:a.x+v,z:a.z+w-u};case 180:return{x:a.x+w-u,z:a.z+d-v};case 270:return{x:a.x+d-v,z:a.z+u};default:return{x:a.x+u,z:a.z+v};}}
-export function roomToLocal(a:PlacedModule,x:number,z:number){const u=x-a.x,v=z-a.z;switch(a.rotation??0){case 90:return{x:a.module.width-v,z:u};case 180:return{x:a.module.width-u,z:a.module.depth-v};case 270:return{x:v,z:a.module.depth-u};default:return{x:u,z:v};}}
+export function localToRoom(a:PlacedModule,u:number,v:number){return transform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,u,v);}
+export function roomToLocal(a:PlacedModule,x:number,z:number){const p=inverseTransform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,x,z);return p;}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
 export function sideExtension(m:Module,side:'left'|'right'){if(m.sidePanels?.[side])return RULES.panel;if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
 export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
  const c=a.module.corner;
  if(c){const w=a.module.width,d=c.sideDepth,rear=a.module.backType==='none'?0:3,front=a.module.doors?26:0;return [[-rear,-rear],[w,-rear],[w,d+front],[d+front,w],[-rear,w]].map(([u,v])=>localToRoom(a,u,v));}
- const b=bounds(a);return [{x:b.x,z:b.z},{x:b.x+b.w,z:b.z},{x:b.x+b.w,z:b.z+b.d},{x:b.x,z:b.z+b.d}];
+ const m=a.module,rear=m.kupe?0:!m.backType||m.backType==='nailed'?3:0;
+ const faces=!m.kupe&&((m.doors&&m.doorMount!=='inset')||m.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(m.doors&&!s.externalDrawers))||!!m.desk);
+ const front=m.openJunction?m.depth:Math.max(m.depth+(faces?18:0),m.cornerFiller&&!cornerStrip(m)?m.depth+RULES.cornerFillerExtra:0);
+ return [[-sideExtension(m,'left'),-rear],[m.width+sideExtension(m,'right'),-rear],[m.width+sideExtension(m,'right'),front],[-sideExtension(m,'left'),front]].map(([u,v])=>localToRoom(a,u,v));
 }
 export function bounds(a:PlacedModule){
  if(a.module.corner){const points=moduleFootprint(a),xs=points.map(p=>p.x),zs=points.map(p=>p.z);return {x:Math.min(...xs),z:Math.min(...zs),y:a.y??0,w:Math.max(...xs)-Math.min(...xs),d:Math.max(...zs)-Math.min(...zs),h:a.module.height};}
- const rear=a.module.kupe?0:!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;/* вкладные фасады (двери и ящики) внутри корпуса — спереди не выступают */const faces=!a.module.kupe&&((a.module.doors&&a.module.doorMount!=='inset')||a.module.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(a.module.doors&&!s.externalDrawers))||!!a.module.desk);const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+(faces?18:0),cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[localToRoom(a,-sideExtension(a.module,'left'),-rear),localToRoom(a,a.module.width+sideExtension(a.module,'right'),front)];return{x:Math.min(...points.map(p=>p.x)),z:Math.min(...points.map(p=>p.z)),y:a.y??0,w:Math.abs(points[1].x-points[0].x),d:Math.abs(points[1].z-points[0].z),h:a.module.height};}
+ const rear=a.module.kupe?0:!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;/* вкладные фасады (двери и ящики) внутри корпуса — спереди не выступают */const faces=!a.module.kupe&&((a.module.doors&&a.module.doorMount!=='inset')||a.module.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(a.module.doors&&!s.externalDrawers))||!!a.module.desk);const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+(faces?18:0),cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[[-sideExtension(a.module,'left'),-rear],[a.module.width+sideExtension(a.module,'right'),-rear],[a.module.width+sideExtension(a.module,'right'),front],[-sideExtension(a.module,'left'),front]].map(([u,v])=>localToRoom(a,u,v));return {...polygonBounds(points),y:a.y??0,h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
 /**
@@ -70,6 +75,8 @@ export function applyAutoFillers(p:Project):Project{
     // (ранний импорт) — все кухонные модули. Модуль палитры, добавленный в кухню из Базиса с признаками, — свой.
     if(isBazisModule(n,a)||(bazis&&!n.modules.some(b=>b.module.bazis)&&(a.module.kitchen||rawKitchen(a.module.raw))))continue;
     const rot=a.rotation??0;
+    // Orthogonal workshop auto-fillers have no validated rule for oblique walls.
+    if(rot%90!==0)continue;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
     const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
     for(const side of ['left','right'] as const){
@@ -113,29 +120,33 @@ export function applyAutoFillers(p:Project):Project{
 export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x<b.x+b.w-0.1&&a.x+a.w>b.x+0.1&&a.y<b.y+b.h-0.1&&a.y+a.h>b.y+0.1&&a.z<b.z+b.d-0.1&&a.z+a.d>b.z+0.1;}
 /** Занятые объёмы корпуса для проверки пересечений: обычный корпус — один габарит; стол — столешница, опоры и царга,
  *  чтобы под столешницу можно было поставить тумбу. */
-export function volumes(a:PlacedModule):ReturnType<typeof bounds>[]{
-  if(a.module.openJunction)return parts(a.module).filter(q=>q.role!=='fastener').map(q=>{const p=localToRoom(a,q.position[0]-q.size[0]/2,q.position[2]-q.size[2]/2),r=localToRoom(a,q.position[0]+q.size[0]/2,q.position[2]+q.size[2]/2);return {x:Math.min(p.x,r.x),z:Math.min(p.z,r.z),y:(a.y??0)+q.position[1]-q.size[1]/2,w:Math.abs(r.x-p.x),d:Math.abs(r.z-p.z),h:q.size[1]};});
-  const m=a.module;if(!m.desk)return [bounds(a)];
-  const g=deskGeometry(m),T=RULES.deskTop,y=a.y??0,t=RULES.panel;
-  const box=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number)=>{const p=localToRoom(a,u0,v0),q=localToRoom(a,u1,v1);return {x:Math.min(p.x,q.x),z:Math.min(p.z,q.z),y:y+y0,w:Math.abs(q.x-p.x),d:Math.abs(q.z-p.z),h:y1-y0};};
-  const out=[box(0,m.width,0,m.depth,m.height-T,m.height)];
-  if(g.hasL)out.push(box(g.x0,g.x0+t,0,g.baseDepth,0,m.height-T));
-  if(g.hasR)out.push(box(g.x1-t,g.x1,0,g.baseDepth,0,m.height-T));
-  out.push(box(g.hasL?g.x0+t:g.x0,g.hasR?g.x1-t:g.x1,g.apronOffset,g.apronOffset+t,m.height-T-m.desk.apron,m.height-T));
-  return out;
+type Solid={polygon:{x:number;z:number}[];y:number;h:number};
+function moduleSolids(a:PlacedModule):Solid[]{
+ const m=a.module,y=a.y??0;
+ const box=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number):Solid=>({polygon:[[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([u,v])=>localToRoom(a,u,v)),y:y+y0,h:y1-y0});
+ if(m.openJunction||m.raw?.source==='garderyob-free-panel')return parts(m).filter(q=>q.role!=='fastener').map(q=>box(q.position[0]-q.size[0]/2,q.position[0]+q.size[0]/2,q.position[2]-q.size[2]/2,q.position[2]+q.size[2]/2,q.position[1]-q.size[1]/2,q.position[1]+q.size[1]/2));
+ if(!m.desk)return [{polygon:moduleFootprint(a),y,h:m.height}];
+ const g=deskGeometry(m),T=RULES.deskTop,t=RULES.panel,out=[box(0,m.width,0,m.depth,m.height-T,m.height)];
+ if(g.hasL)out.push(box(g.x0,g.x0+t,0,g.baseDepth,0,m.height-T));
+ if(g.hasR)out.push(box(g.x1-t,g.x1,0,g.baseDepth,0,m.height-T));
+ out.push(box(g.hasL?g.x0+t:g.x0,g.hasR?g.x1-t:g.x1,g.apronOffset,g.apronOffset+t,m.height-T-m.desk.apron,m.height-T));
+ return out;
 }
+export function volumes(a:PlacedModule):ReturnType<typeof bounds>[]{return moduleSolids(a).map(s=>({...polygonBounds(s.polygon),y:s.y,h:s.h}));}
 function polygonsOverlap(a:{x:number;z:number}[],b:{x:number;z:number}[]){
  for(const poly of [a,b])for(let i=0;i<poly.length;i++){const p=poly[i],q=poly[(i+1)%poly.length],dx=q.x-p.x,dz=q.z-p.z,len=Math.hypot(dx,dz);if(!len)continue;const project=(r:{x:number;z:number})=>(-dz*r.x+dx*r.z)/len,aa=a.map(project),bb=b.map(project);if(Math.max(...aa)<=Math.min(...bb)+.1||Math.max(...bb)<=Math.min(...aa)+.1)return false;}return true;
 }
 export function modulesOverlap(a:PlacedModule,b:PlacedModule){
- // Сырые модули (импорт из Базиса как есть): стыки угловых и наложения повторяют проект Базиса — не ошибка студии.
- if(a.module.raw||b.module.raw)return false;
- if(a.module.corner||b.module.corner){if(!overlap(bounds(a),bounds(b)))return false;return polygonsOverlap(moduleFootprint(a),moduleFootprint(b));}
- const va=volumes(a),vb=volumes(b);return va.some(x=>vb.some(y=>overlap(x,y)));}
+ // Imported assemblies keep their existing intentional joints. Locally authored panels are checked.
+ if([a,b].some(x=>x.module.raw&&x.module.raw.source!=='garderyob-free-panel'))return false;
+ const va=moduleSolids(a),vb=moduleSolids(b);
+ return va.some(x=>vb.some(y=>x.y<y.y+y.h-.1&&x.y+x.h>y.y+.1&&polygonsOverlap(x.polygon,y.polygon)));
+}
 /** Предел объектов в проекте: 40 у проектов студии; у кухни из Базиса — 200 (каждая деталь ряда — свой объект: цоколь, куски столешницы, стеновые панели). */
 export function maxModules(p:{source?:unknown}){return p.source==='bazis'?200:40;}
-export function projectErrors(p:Project):string[]{
+export function projectErrors(p:Project,allowEmpty=false):string[]{
   const errors:string[]=[];
+  if(p.room.survey){try{parseSurvey(p.room.survey);}catch(e){return [(e as Error).message];}}
   if(p.kind!==undefined&&p.kind!=='kitchen')return ['Неизвестный тип проекта.'];
   if(p.dimensions!==undefined&&(!Array.isArray(p.dimensions)||p.dimensions.length>50||p.dimensions.some(d=>!d||typeof d.id!=='string'||!Array.isArray(d.from)||!Array.isArray(d.to)||d.from.length!==2||d.to.length!==2||[...d.from,...d.to].some(v=>!Number.isFinite(v)||v<0||v>20000)||Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1])<1)||new Set(p.dimensions.map(d=>d.id)).size!==p.dimensions.length))return ['Проверьте размеры на плане: до 50 линий, разные точки в пределах 0–20000 мм.'];
   if(p.measurement){const m=p.measurement;if(typeof m.number!=='string'||m.number.length>60||typeof m.notes!=='string'||m.notes.length>2000||typeof m.date!=='string'||(m.date!==''&&(!/^\d{4}-\d{2}-\d{2}$/.test(m.date)||!Number.isFinite(Date.parse(m.date))||new Date(m.date).toISOString().slice(0,10)!==m.date)))return ['Проверьте номер, дату и примечания замера.'];}
@@ -148,7 +159,7 @@ export function projectErrors(p:Project):string[]{
   if(p.calculation?.vernissageMarkup!==undefined&&(!Number.isFinite(p.calculation.vernissageMarkup)||p.calculation.vernissageMarkup<1||p.calculation.vernissageMarkup>10))return ['Коэффициент фасадов Вернисаж: от 1 до 10.'];
   if(p.calculation&&(!Number.isFinite(p.calculation.markup)||p.calculation.markup<1||p.calculation.markup>10||!p.calculation.overrides||typeof p.calculation.overrides!=='object'||Array.isArray(p.calculation.overrides)||Object.keys(p.calculation.overrides).length>300||Object.values(p.calculation.overrides).some(v=>!Number.isFinite(v)||v<0||v>1e9)))return ['Проверьте цены и коэффициент сметы (от 1 до 10).'];
   if(p.offer&&(typeof p.offer.customer!=='string'||p.offer.customer.length>120||typeof p.offer.notes!=='string'||p.offer.notes.length>2000||typeof p.offer.price!=='string'||(p.offer.price!==''&&(!Number.isFinite(Number(p.offer.price))||Number(p.offer.price)<0||Number(p.offer.price)>1e12))))return ['Проверьте поля коммерческого предложения.'];
-  if(!p.modules.length||p.modules.length>maxModules(p))return [`В проекте должно быть от 1 до ${maxModules(p)} модулей.`];
+  if((!allowEmpty&&!p.modules.length)||p.modules.length>maxModules(p))return [`В проекте должно быть от 1 до ${maxModules(p)} модулей.`];
   if(new Set(p.modules.map(m=>m.id)).size!==p.modules.length)return ['Идентификаторы модулей повторяются.'];
   for(const v of [p.room.width,p.room.depth,p.room.height])if(!Number.isFinite(v)||v<500||v>20000)return ['Размеры помещения: от 500 до 20 000 мм.'];
   const obstacles=p.room.obstacles;
@@ -166,6 +177,7 @@ export function projectErrors(p:Project):string[]{
   if(p.room.openings&&(!Array.isArray(p.room.openings)||p.room.openings.length>30))return ['Допустимо до 30 окон и дверей.'];
   for(const [index,o] of (p.room.openings||[]).entries()){
     if(!o||!['window','door'].includes(o.type)||!['back','left','right','front'].includes(o.wall)||typeof o.id!=='string'||!o.id.trim()||![o.offset,o.width,o.height,o.sill].every(Number.isFinite)||o.offset<0||o.width<200||o.height<200||o.sill<0||o.sill+o.height>p.room.height||o.offset+o.width>(o.wall==='back'||o.wall==='front'?p.room.width:p.room.depth))return ['Проём '+(index+1)+': проверьте параметры. Окно или дверь выходят за границы стены либо имеют некорректные данные.'];
+    if((o.color!==undefined&&!/^#[0-9a-f]{6}$/i.test(o.color))||(o.direction!==undefined&&!['in','out'].includes(o.direction))||[o.frameDepth,o.handleProjection].some(v=>v!==undefined&&(!Number.isFinite(v)||v<0||v>1000))||(o.swingAngle!==undefined&&(!Number.isFinite(o.swingAngle)||o.swingAngle<0||o.swingAngle>180)))return ['Проверьте цвет, глубину и открывание проёма.'];
     if((o.casing!==undefined&&(!Number.isFinite(o.casing)||o.casing<0||o.casing>200))||(o.casingThick!==undefined&&(!Number.isFinite(o.casingThick)||o.casingThick<0||o.casingThick>60))||(o.hinge!==undefined&&!['left','right'].includes(o.hinge))||(o.reveal!==undefined&&(!Number.isFinite(o.reveal)||o.reveal<0||o.reveal>500)))return ['Проём '+(index+1)+': наличник до 200×60, откос до 500 мм, открывание слева/справа.'];
     if(o.windowSill!==undefined){const s=o.windowSill;if(![s.width,s.thick,s.overhang,s.offset].every(Number.isFinite)||s.width<100||s.thick<5||s.thick>100||s.overhang<0||s.overhang>400||s.offset<0)return ['Проём '+(index+1)+': подоконник — ширина от 100, толщина 5–100, вылет до 400 мм.'];}
   }
@@ -173,7 +185,7 @@ export function projectErrors(p:Project):string[]{
   if(new Set(os.map(o=>o.id)).size!==os.length)errors.push('Идентификаторы проёмов повторяются.');
   os.forEach((o,i)=>{for(const b of os.slice(0,i))if(o.wall===b.wall&&o.offset<b.offset+b.width&&o.offset+o.width>b.offset&&o.sill<b.sill+b.height&&o.sill+o.height>b.sill)errors.push('Окна и двери не должны пересекаться.');});
   p.modules.forEach((a,i)=>{
-    if(a.rotation!==undefined&&![0,90,180,270].includes(a.rotation))errors.push('Поворот корпуса: 0, 90, 180 или 270 градусов.');
+    if(a.rotation!==undefined&&(!Number.isFinite(a.rotation)||Math.abs(a.rotation)>36000))errors.push('Поворот корпуса должен быть конечным числом в пределах ±36000°.');
     errors.push(...validate(a.module).map(e=>`${a.module.name}: ${e}`));const b=bounds(a);
     if(![a.x,a.z,a.y??0].every(Number.isFinite)||b.x<0||b.y<0||b.z<0||b.x+b.w>p.room.width+0.1||b.z+b.d>p.room.depth+0.1||b.y+b.h>p.room.height+0.1)errors.push(`${a.module.name}: корпус выходит за границы помещения. Измените замер или положение.`);
     for(const other of p.modules.slice(0,i))if(modulesOverlap(a,other))errors.push(`«${a.module.name}» пересекается с «${other.module.name}». Сдвиньте корпус или поставьте его сверху.`);
@@ -187,15 +199,16 @@ function legacyModules(raw:any,placement:{id:string;x:number;z:number;y?:number}
   const count=Math.max(2,raw.sections.length),w=raw.width/count;
   return Array.from({length:count},(_,i)=>{const s=raw.sections[i]||section();const m=parseModule({...raw,width:w,name:(raw.name||'Модуль').slice(0,66)+' · '+(i+1),sections:[{...s,id:id(),weight:1}]});return {...placement,id:i===0?placement.id:id(),x:placement.x+i*w,module:m};});
 }
-export function parseProject(data:unknown):Project{
+export function parseProject(data:unknown,allowEmpty=false):Project{
   const x=data as any;
   if(x?.version===1){const p=newProject();p.modules=legacyModules(x,{id:id(),x:50,y:0,z:30});const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;}
   if(!x||![2,3].includes(x.version)||!x.room||!Array.isArray(x.modules)||x.modules.length>maxModules(x))throw Error('Нужен файл проекта редактора.');
   const p:Project={version:3,...(x.kind===undefined?{}:{kind:x.kind}),...(x.source==='bazis'?{source:'bazis' as const}:{}),room:{width:x.room.width,height:x.room.height,depth:x.room.depth,openings:[]},modules:[]};
+  if(x.room.survey!==undefined)p.room.survey=parseSurvey(x.room.survey);
   if(x.room.openings!==undefined){if(!Array.isArray(x.room.openings)||x.room.openings.length>30)throw Error('Неверные проёмы помещения.');p.room.openings=x.room.openings.map((o:any)=>({id:o?.id,type:o?.type,wall:o?.wall,offset:o?.offset,width:o?.width,height:o?.height,sill:o?.sill,
-    ...(o?.casing===undefined?{}:{casing:o.casing}),...(o?.casingThick===undefined?{}:{casingThick:o.casingThick}),...(o?.hinge===undefined?{}:{hinge:o.hinge}),...(o?.reveal===undefined?{}:{reveal:o.reveal}),
+    ...(o?.color===undefined?{}:{color:o.color}),...(o?.frameDepth===undefined?{}:{frameDepth:o.frameDepth}),...(o?.direction===undefined?{}:{direction:o.direction}),...(o?.swingAngle===undefined?{}:{swingAngle:o.swingAngle}),...(o?.handleProjection===undefined?{}:{handleProjection:o.handleProjection}),...(o?.casing===undefined?{}:{casing:o.casing}),...(o?.casingThick===undefined?{}:{casingThick:o.casingThick}),...(o?.hinge===undefined?{}:{hinge:o.hinge}),...(o?.reveal===undefined?{}:{reveal:o.reveal}),
     ...(o?.windowSill===undefined?{}:{windowSill:{width:o.windowSill?.width,thick:o.windowSill?.thick,overhang:o.windowSill?.overhang,offset:o.windowSill?.offset}})}));}
-  if(x.room.fixtures!==undefined){if(!Array.isArray(x.room.fixtures)||x.room.fixtures.length>60)throw Error('Неверные объекты на стенах.');p.room.fixtures=x.room.fixtures.map((f:any)=>({id:f?.id,type:f?.type,wall:f?.wall,offset:f?.offset,fromFloor:f?.fromFloor,width:f?.width,height:f?.height,depth:f?.depth,...(f?.name===undefined?{}:{name:f.name}),...(f?.round===undefined?{}:{round:!!f.round}),...(f?.horizontal===undefined?{}:{horizontal:!!f.horizontal}),...(f?.grille===undefined?{}:{grille:!!f.grille})}));}
+  if(x.room.fixtures!==undefined){if(!Array.isArray(x.room.fixtures)||x.room.fixtures.length>60)throw Error('Неверные объекты на стенах.');p.room.fixtures=x.room.fixtures.map((f:any)=>({id:f?.id,type:f?.type,wall:f?.wall,offset:f?.offset,fromFloor:f?.fromFloor,width:f?.width,height:f?.height,depth:f?.depth,...Object.fromEntries(['color','wallGap','diameter','insulation','serviceClearance'].filter(k=>f?.[k]!==undefined).map(k=>[k,f[k]])),...(f?.name===undefined?{}:{name:f.name}),...(f?.round===undefined?{}:{round:!!f.round}),...(f?.horizontal===undefined?{}:{horizontal:!!f.horizontal}),...(f?.grille===undefined?{}:{grille:!!f.grille})}));}
   if(x.room.ceiling!==undefined)p.room.ceiling=x.room.ceiling;
   if(x.room.walls!==undefined){const w=x.room.walls;p.room.walls={thickness:Number(w?.thickness),...(w?.angleLeft===undefined?{}:{angleLeft:Number(w.angleLeft)}),...(w?.angleRight===undefined?{}:{angleRight:Number(w.angleRight)})};}
   if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height}));}
@@ -204,7 +217,7 @@ export function parseProject(data:unknown):Project{
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation,...(x.measurement.niche.readings===undefined?{}:{readings:structuredClone(x.measurement.niche.readings)})}})};
   if(x.cloud)p.cloud={id:x.cloud.id,revision:x.cloud.revision,owner:x.cloud.owner,...(x.cloud.name===undefined?{}:{name:x.cloud.name})};
   if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.model===undefined?{}:{model:x.calculation.model}),...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice}),...(x.calculation.vernissageMarkup===undefined?{}:{vernissageMarkup:x.calculation.vernissageMarkup}),...(x.calculation.cuttingEngine===undefined?{}:{cuttingEngine:x.calculation.cuttingEngine})};
-  if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes};const e=projectErrors(p);if(e.length)throw Error(e[0]);return p;
+  if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes};const e=projectErrors(p,allowEmpty);if(e.length)throw Error(e[0]);return p;
 }
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
   const n=structuredClone(p),module=structuredClone(source);rekeySections(module,id);module.name=`Модуль ${p.modules.length+1}`;

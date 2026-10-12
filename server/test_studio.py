@@ -32,6 +32,22 @@ class StudioTests(unittest.TestCase):
         self.assertIn('httponly',result.headers['set-cookie'].lower())
         return c
     def payload(self,revision=0):return {'id':'test-project','name':'Шкаф','revision':revision,'data':{'version':3,'modules':[{}]}}
+    def test_room_document_roundtrip_conflict_and_owner_isolation(self):
+        data={'format':'garderyob-rooms','version':1,'revision':0,'activeRoomId':'r1','rooms':[{'id':'r1','title':'Комната','walls':dict(zip(('back','front','left','right'),('w1','w2','w3','w4'))),'project':{'version':3,'modules':[],'room':{'width':4000,'height':2700,'depth':3000}}}]}
+        body={'id':'rooms','name':'Заказ с комнатами','revision':0,'data':data}
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/projects/rooms').json()['data'],data)
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).status_code,409)
+        self.assertEqual(self.b.get('/api/studio/projects/rooms').status_code,404)
+        self.assertNotEqual(self.b.post('/api/studio/projects',json=body).status_code,200)
+        body['revision']=1;data['revision']=1
+        data['rooms'][0]['project']['room']['width']=4100
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).status_code,200)
+        self.assertEqual(self.a.get('/api/studio/projects/rooms').json()['data']['rooms'][0]['project']['room']['width'],4100)
+        body['revision']=2;data['rooms'][0]['walls']['left']='w1'
+        self.assertEqual(self.a.post('/api/studio/projects',json=body).status_code,422)
+        self.assertEqual(self.a.get('/api/studio/projects/rooms').json()['revision'],2)
+
     def test_personal_library_is_stored_per_user_and_validated(self):
         self.assertEqual(self.a.get('/api/studio/library').json(),{'items':[],'updated':None})
         items=[{'name':'Платяной 600','module':{'version':1,'width':600}},{'name':'Прихожая','group':[{'x':0,'z':0,'module':{}}]}]

@@ -17,8 +17,8 @@ export function distributeCornerShelves(m:Module,s:Section,count:number){
 export function CornerModulePanel({module:m,stage,selected,update,select,material,addUpper,position,room,rotation,rotate,move,preview}:{
  module:Module;stage:string;selected:string;update:(m:Module)=>boolean;select:(sid:string)=>void;
  material:(target:'decor'|'facadeDecor'|'drawerFacadeDecor')=>void;addUpper:()=>void;
- position:{x:number;y:number;z:number;w:number;d:number;h:number};room:Room;rotation:0|90|180|270;
- rotate:(r:0|90|180|270)=>boolean;move:(axis:'x'|'y'|'z',v:number)=>void;
+ position:{x:number;y:number;z:number;w:number;d:number;h:number};room:Room;rotation:number;
+ rotate:(r:number)=>boolean;move:(axis:'x'|'y'|'z',v:number)=>void;
  preview:(sid:string,j:number|null,pid:string)=>void;
 }){
  const c=m.corner!,upper=c.level==='upper',index=Math.max(0,m.sections.findIndex(s=>s.id===selected)),s=m.sections[index],b=cornerBoxes(m)[index],span=b.top-b.bottom;

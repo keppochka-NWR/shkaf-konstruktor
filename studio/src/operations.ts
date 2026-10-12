@@ -120,9 +120,9 @@ export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:n
  return n;
 }
 
-export function rotateModule(p:Project,mid:string,rotation:0|90|180|270):Project {
+export function rotateModule(p:Project,mid:string,rotation:number):Project {
  const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);
- if(!a||![0,90,180,270].includes(rotation))throw Error('Выберите поворот корпуса.');
+ if(!a||!Number.isFinite(rotation)||Math.abs(rotation)>36000)throw Error('Выберите поворот корпуса.');
  const before=bounds(a);a.rotation=rotation;const after=bounds(a);
  if(after.w>p.room.width||after.d>p.room.depth)throw Error('В этом направлении корпус не помещается в комнате.');
  const x=Math.max(0,Math.min(p.room.width-after.w,before.x+(before.w-after.w)/2));

@@ -1,0 +1,16 @@
+
+Running 9 tests using 1 worker
+
+(node:70432) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 tests\room-workspace.spec.ts:3:1 › P1: room isolation, cabinet edits, persistence, document undo and legacy isolation (10.9s)
+  ok 2 tests\room-workspace.spec.ts:28:1 › P1: stale writer is rejected without applying room edit (2.6s)
+  ok 3 tests\room-workspace.spec.ts:37:1 › P1: invalid imported file does not replace saved document; full export contains all rooms (1.8s)
+  ok 4 tests\room-workspace.spec.ts:48:1 › P1: corrupt storage is not replaced by a sample (1.3s)
+  ok 5 tests\room-workspace.spec.ts:54:1 › P1: recovery restores backup and keeps the damaged source (2.8s)
+  ok 6 tests\room-workspace.spec.ts:65:1 › P2/P3: empty room 3D, right-click properties and measured surface survive reload (2.6s)
+  ok 7 tests\room-workspace.spec.ts:81:1 › P1b/P5/P6: adjacent room, editable panel, approved snapshot and full export (2.6s)
+  ok 8 tests\room-workspace.spec.ts:96:1 › P1: writer lock is transferred after owning tab closes (2.4s)
+  ok 9 tests\room-workspace.spec.ts:102:1 › P1 cloud response cannot overwrite edits made while saving (1.7s)
+
+  9 passed (30.2s)

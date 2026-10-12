@@ -1,3 +1,4 @@
+import {surfacePoint} from './roomSurvey';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
 import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
@@ -56,6 +57,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
+  viewKey?:string;
   isoDirection?: [number, number];
   captureReady: (fn: (() => string) | undefined) => void;
   module: Module;
@@ -89,6 +91,7 @@ type Props = {
   /** Клик по ручке фасада или ящика: открыть выбор ручки корпуса. */
   onHandleClick?: (mid: string, pid: string) => void;
   /** Правая кнопка по корпусу: контекстное меню редактирования (как в B Planner). Координаты — экранные. */
+  onEnvironmentContext?:(kind:'opening'|'fixture'|'obstacle',id:string)=>void;
   onContextMenu?: (mid: string, sid: string, x: number, y: number, info?: { pid?: string; role?: string; localY?: number }) => void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
@@ -147,6 +150,11 @@ export function Scene(p: Props) {
     const scene = new THREE.Scene(),perspective=new THREE.PerspectiveCamera(34,1,5,250000),orthographic=new THREE.OrthographicCamera(-1000,1000,1000,-1000,5,250000);
     let camera:THREE.PerspectiveCamera|THREE.OrthographicCamera=perspective;
     const controls = new OrbitControls<THREE.PerspectiveCamera|THREE.OrthographicCamera>(camera, renderer.domElement);
+    const cameraKey=p.viewKey?'garderyob-camera:'+p.viewKey:undefined;
+    let fitting=false;
+    function saveCamera(){if(!cameraKey||fitting)return;try{sessionStorage.setItem(cameraKey,JSON.stringify({origin:sceneOrigin,view:current.current.view,position:camera.position.toArray(),target:controls.target.toArray(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null}));}catch{/* view state must not block document saving */}}
+    function restoreCamera(){if(!cameraKey)return;try{const s=JSON.parse(sessionStorage.getItem(cameraKey)||'null');if(!s||s.view!==current.current.view||![...s.position,...s.target,s.zoom].every(Number.isFinite))return;camera.position.fromArray(s.position);controls.target.fromArray(s.target);if(s.origin&&sceneOrigin){const delta=new THREE.Vector3(s.origin.x-sceneOrigin.x,0,s.origin.z-sceneOrigin.z);camera.position.add(delta);controls.target.add(delta);}camera.zoom=s.zoom;if(camera===orthographic&&s.frustum){[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=s.frustum;}camera.updateProjectionMatrix();controls.update();}catch{}}
+    controls.addEventListener('end',saveCamera);
     let needsRender=true;const requestRender=()=>{needsRender=true;};controls.addEventListener('change',requestRender);
     controls.enableDamping = true;
     controls.dampingFactor = 0.12;
@@ -574,21 +582,49 @@ export function Scene(p: Props) {
         geo.dispose();
         outline.position.set(x0 + r.width / 2, r.height / 2, z0 + r.depth / 2);
         modelGroup.add(outline);
+        let environmentOpeningId:string|undefined;
         function wallBox(wall:string,u:number,y:number,w:number,h:number,depth:number,color:number,opacity:number){
           const horizontal=wall==='back'||wall==='front';
           const mesh=new THREE.Mesh(new THREE.BoxGeometry(horizontal?w:depth,h,horizontal?depth:w),new THREE.MeshStandardMaterial({color,transparent:opacity<1,opacity,depthWrite:opacity===1}));
-          mesh.position.set(horizontal?x0+u:x0+(wall==='left'?-depth/2:r.width+depth/2),y,horizontal?z0+(wall==='back'?-depth/2:r.depth+depth/2):z0+u);mesh.receiveShadow=true;modelGroup.add(mesh);
+          mesh.position.set(horizontal?x0+u:x0+(wall==='left'?-depth/2:r.width+depth/2),y,horizontal?z0+(wall==='back'?-depth/2:r.depth+depth/2):z0+u);mesh.receiveShadow=true;if(environmentOpeningId)mesh.userData.openingId=environmentOpeningId;modelGroup.add(mesh);return mesh;
         }
-        for(const panel of wallPanels(r))wallBox(panel.wall,panel.u,panel.y,panel.width,panel.height,80,0xd5d5cc,panel.wall==='front'||panel.wall==='right'?0.06:0.25);
+        for(const panel of wallPanels(r)){
+          if(!r.survey?.surfaces[panel.wall]){wallBox(panel.wall,panel.u,panel.y,panel.width,panel.height,80,0xd5d5cc,panel.wall==='front'||panel.wall==='right'?0.06:0.25);continue;}
+          const vertices:number[]=[];const grid=r.survey.surfaces[panel.wall]!;
+          const cuts=(lo:number,hi:number,measured:number[])=>[...new Set([lo,hi,...measured.filter(v=>v>lo&&v<hi),...Array.from({length:5},(_,i)=>lo+(hi-lo)*(i+1)/6)])].sort((a,b)=>a-b);
+          const us=cuts(panel.u-panel.width/2,panel.u+panel.width/2,grid.u),vs=cuts(panel.y-panel.height/2,panel.y+panel.height/2,grid.v);
+          for(let j=0;j<vs.length-1;j++)for(let i=0;i<us.length-1;i++){
+            const points=[[us[i],vs[j]],[us[i+1],vs[j]],[us[i+1],vs[j+1]],[us[i],vs[j+1]]].map(([u,v])=>surfacePoint(r,panel.wall,u,v));
+            for(const n of [0,1,2,0,2,3]){const p=points[n];vertices.push(x0+p.x,p.y,z0+p.z);}
+          }
+          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.computeVertexNormals();
+          const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb5c9c1,transparent:true,opacity:panel.wall==='front'||panel.wall==='right'?.08:.35,side:THREE.DoubleSide,depthWrite:false}));modelGroup.add(mesh);
+        }
+        for(const side of ['floor','ceiling'] as const)if(r.survey?.surfaces[side]){
+          const grid=r.survey.surfaces[side]!,vertices:number[]=[];
+          for(let j=0;j<grid.v.length-1;j++)for(let i=0;i<grid.u.length-1;i++){
+            const points=[[grid.u[i],grid.v[j]],[grid.u[i+1],grid.v[j]],[grid.u[i+1],grid.v[j+1]],[grid.u[i],grid.v[j+1]]].map(([u,v])=>surfacePoint(r,side,u,v));
+            for(const n of [0,1,2,0,2,3]){const p=points[n];vertices.push(x0+p.x,p.y,z0+p.z);}
+          }
+          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.computeVertexNormals();modelGroup.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xc4c3ad,transparent:true,opacity:side==='floor'?.35:.08,side:THREE.DoubleSide})));
+        }
         for(const o of r.openings||[]){
+          environmentOpeningId=o.id;
           const u=o.offset+o.width/2,y=o.sill+o.height/2;
-          for(const dx of [-o.width/2+20,o.width/2-20])wallBox(o.wall,u+dx,y,40,o.height,85,0xfafaf6,0.95);
-          wallBox(o.wall,u,o.sill+o.height-20,o.width,40,85,0xfafaf6,0.95);
+          for(const dx of [-o.width/2+20,o.width/2-20])wallBox(o.wall,u+dx,y,40,o.height,o.frameDepth??85,0xfafaf6,0.95);
+          wallBox(o.wall,u,o.sill+o.height-20,o.width,40,o.frameDepth??85,0xfafaf6,0.95);
           if(o.type==='window'){
-            wallBox(o.wall,u,o.sill+20,o.width,40,85,0xfafaf6,0.95);wallBox(o.wall,u,y,40,o.height,85,0xfafaf6,0.95);
+            wallBox(o.wall,u,o.sill+20,o.width,40,o.frameDepth??85,0xfafaf6,0.95);wallBox(o.wall,u,y,40,o.height,o.frameDepth??85,0xfafaf6,0.95);
             wallBox(o.wall,u,y,o.width-80,o.height-80,4,0x8cbac6,0.2);
-          }else wallBox(o.wall,u,y,o.width-80,o.height-40,35,0xaa8e6d,0.3);
+          }else wallBox(o.wall,u,y,o.width-80,o.height-40,35,o.color?Number.parseInt(o.color.slice(1),16):0xaa8e6d,0.6);
         }
+        environmentOpeningId=undefined;
+        for(const o of r.openings||[]){environmentOpeningId=o.id;
+          const casing=o.casing??0,thick=o.casingThick??12,color=o.color?Number.parseInt(o.color.slice(1),16):0xf3eee4;
+          if(casing){wallBox(o.wall,o.offset-casing/2,o.sill+o.height/2,casing,o.height,thick,color,.9);wallBox(o.wall,o.offset+o.width+casing/2,o.sill+o.height/2,casing,o.height,thick,color,.9);wallBox(o.wall,o.offset+o.width/2,o.sill+o.height+casing/2,o.width+2*casing,casing,thick,color,.9);}
+          if(o.windowSill){const w=o.windowSill;const mesh=wallBox(o.wall,w.offset+w.width/2,o.sill-w.thick/2,w.width,w.thick,w.overhang+(o.reveal??0),color,.95);const amount=w.overhang;if(o.wall==='back')mesh.position.z+=amount;if(o.wall==='front')mesh.position.z-=amount;if(o.wall==='left')mesh.position.x+=amount;if(o.wall==='right')mesh.position.x-=amount;}
+        }
+        environmentOpeningId=undefined;
         for(const o of r.obstacles||[]){const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=o.id;mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===o.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===o.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===o.id;mesh.add(edge);}
         // Объекты замера на стенах (розетки, батареи, короба, трубы…): боксы или цилиндры на своей стене.
         for(const [fi,f] of (r.fixtures||[]).entries()){
@@ -596,10 +632,10 @@ export function Scene(p: Props) {
           const recess=spec.recess,d=recess?f.depth:Math.max(2,box.w&&box.d?(f.wall==='back'||f.wall==='front'?box.d:box.w):2);
           const horizontal=f.wall==='back'||f.wall==='front';
           const geo=f.round?new THREE.CylinderGeometry(Math.min(f.width,f.height)/2,Math.min(f.width,f.height)/2,f.horizontal?f.width:f.height,20):new THREE.BoxGeometry(horizontal?f.width:d,f.height,horizontal?d:f.width);
-          const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:spec.color,roughness:.8,metalness:f.round?.4:0,transparent:recess,opacity:recess?.35:1}));
+          const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:f.color?Number.parseInt(f.color.slice(1),16):spec.color,roughness:.8,metalness:f.round?.4:0,transparent:recess,opacity:recess?.35:1}));
           const cx=horizontal?x0+f.offset+f.width/2:x0+(f.wall==='left'?(recess?-f.depth/2:d/2):r.width-(recess?-f.depth/2:d/2));
           const cz=horizontal?z0+(f.wall==='back'?(recess?-f.depth/2:d/2):r.depth-(recess?-f.depth/2:d/2)):z0+f.offset+f.width/2;
-          mesh.position.set(cx,f.fromFloor+f.height/2,cz);
+          mesh.position.set(cx+(f.wall==='left'?(f.wallGap??0):f.wall==='right'?-(f.wallGap??0):0),f.fromFloor+f.height/2,cz+(f.wall==='back'?(f.wallGap??0):f.wall==='front'?-(f.wallGap??0):0));
           if(f.round&&f.horizontal)mesh.rotation.z=horizontal?Math.PI/2:0,mesh.rotation.x=horizontal?0:Math.PI/2;
           if(f.round&&!f.horizontal&&!horizontal)mesh.rotation.y=0;
           mesh.userData.fixtureId=f.id;mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);
@@ -710,7 +746,7 @@ export function Scene(p: Props) {
       }
     }
     function fit() {
-      needsRender=true;
+      fitting=true;needsRender=true;
       const m = current.current.module;
       const aspect = target.clientWidth / Math.max(1, target.clientHeight);
       const state = current.current,
@@ -748,6 +784,8 @@ export function Scene(p: Props) {
       camera.up.set(0, 1, 0);
       camera.position.copy(center).addScaledVector(dir, dist);
       controls.update();
+      if(current.current.fit===p.fit&&current.current.view===p.view)restoreCamera();
+      fitting=false;
     }
     let initial = true;
     const observer = new ResizeObserver(() => {
@@ -857,6 +895,9 @@ export function Scene(p: Props) {
       e.preventDefault();if(current.current.presentation)return;
       if(rightDown&&Math.hypot(e.clientX-rightDown.x,e.clientY-rightDown.y)>6){rightDown=null;return;}
       rightDown=null;
+      cast(e.clientX,e.clientY);
+      const env=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.openingId||h.object.userData.fixtureId||h.object.userData.obstacleId||h.object.userData.moduleId));
+      if(env){const d=env.object.userData;if(d.openingId){current.current.onEnvironmentContext?.('opening',d.openingId);return;}if(d.fixtureId){current.current.onEnvironmentContext?.('fixture',d.fixtureId);return;}if(d.obstacleId){current.current.onEnvironmentContext?.('obstacle',d.obstacleId);return;}}
       const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;
       const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId);if(!a)return;
       current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY,{pid:hit.object.userData.partId as string|undefined,role:hit.object.userData.role as string|undefined,localY:hit.point.y-(a.y??0)});
@@ -922,6 +963,7 @@ export function Scene(p: Props) {
     }
     animate();
     return () => {
+      saveCamera();controls.removeEventListener('end',saveCamera);
       disposed = true;
       current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
