@@ -1,0 +1,4 @@
+*.zip
+extracted/
+python-deps/
+components/

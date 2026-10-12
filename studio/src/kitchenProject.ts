@@ -27,7 +27,7 @@ export const KITCHEN_ITEMS: Record<KitchenItem, { label: string; widths: number[
   "base-drawers": { label: "Нижний с ящиками", widths: [400, 450, 600, 800], group: "base" },
   sink: { label: "Под мойку", widths: [600, 800], group: "base" },
   oven: { label: "Под духовку", widths: [600], group: "base" },
-  bottle: { label: "Бутылочница", widths: [150], group: "base" },
+  bottle: { label: "Бутылочница", widths: [150, 200], group: "base" },
   wall: { label: "Навесной", widths: [300, 400, 450, 600, 800], group: "wall" },
   "wall-open": { label: "Навесной с полками", widths: [300, 400, 600, 800], group: "wall" },
   antresol: { label: "Антресоль", widths: [400, 600, 800], group: "wall" },
@@ -56,7 +56,7 @@ export function kitchenTemplate(kind: KitchenItem, width: number, source: Pick<M
   else if (kind === "base-drawers") m = kitchenBase(base, width, "drawers");
   else if (kind === "sink") m = kitchenBase(base, width, "sink");
   else if (kind === "oven") m = kitchenBase(base, width, "oven");
-  else if (kind === "bottle") { m = kitchenBase(base, width, "doors"); m.name = "Бутылочница"; m.sections = [{ ...m.sections[0], shelves: [] }]; }
+  else if (kind === "bottle") { m = kitchenBase(base, width, "doors"); m.name = "Бутылочница"; m.sections = [{ ...m.sections[0], shelves: [] }]; if (width === 150 || width === 200) m.kitchen!.premialPullout = { article: width === 150 ? '060500' : '060502' }; }
   else if (kind === "wall") m = kitchenWall(base, width);
   else if (kind === "wall-open") { m = kitchenWall(base, width); m.name = "Навесной открытый"; m.doors = false; m.sections = [{ ...m.sections[0], shelves: [] }]; m.sections[0].shelves = distribute(m, m.sections[0], 2); }
   else if (kind === "antresol") { m = kitchenWall(base, width); m.name = "Антресоль"; m.height = KITCHEN_ANTRESOL_HEIGHT; m.kitchen = { role: "antresol" }; m.sections = [{ ...m.sections[0], shelves: [] }]; }

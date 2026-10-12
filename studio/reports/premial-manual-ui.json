@@ -1,0 +1,96 @@
+{
+  "format": "garderyob-rooms",
+  "version": 1,
+  "revision": 3,
+  "activeRoomId": "b781a405-4a16-4cd6-b86f-8540a1fddc76",
+  "rooms": [
+    {
+      "id": "b781a405-4a16-4cd6-b86f-8540a1fddc76",
+      "title": "Комната 1",
+      "walls": {
+        "back": "b0920c88-d1ce-49f5-aa6f-af429b708342",
+        "left": "2929f5ab-660e-4d05-991b-224b8cf1ef7d",
+        "right": "fcbf9d46-5aba-4046-9cf1-7a52119bf83a",
+        "front": "d48cfc1d-6223-4121-8e36-f3fcd833e3a4"
+      },
+      "project": {
+        "version": 3,
+        "room": {
+          "width": 4000,
+          "height": 2700,
+          "depth": 3000,
+          "openings": []
+        },
+        "modules": [
+          {
+            "id": "c6e9222b-8967-475e-84dc-3b06cea42e11",
+            "x": 21,
+            "z": 3,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Модуль 1",
+              "width": 150,
+              "height": 820,
+              "depth": 557,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "nailed",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 100,
+                  "lay": "flat"
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100,
+                  "lay": "flat"
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base",
+                "premialPullout": {
+                  "article": "060500"
+                }
+              },
+              "wallFiller": {
+                "left": {
+                  "kind": "edge",
+                  "width": 100
+                }
+              },
+              "sections": [
+                {
+                  "id": "74ebe3cf-894b-49fa-9a98-0e052f9e81de",
+                  "weight": 1,
+                  "shelves": [],
+                  "shelfDepth": 554.5,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

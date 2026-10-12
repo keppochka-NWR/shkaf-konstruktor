@@ -8,10 +8,12 @@ import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
 import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
+import { allegroErrors, type PremialPullout } from './premialPullout';
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
+  premialPullout?: PremialPullout;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean;
     /** Корпус без опор (цоколь — деталь самого модуля): отступ цоколя от переда корпуса, если не RULES.plinthInset 2 (Базис k20 m09: 16). */
@@ -557,7 +559,7 @@ export function worktopParts(m: Module): Part[] {
 export function worktopLabel(w: WorktopSpec) { return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень" }[w.material]; }
 
 export function kitchenErrors(m: Module): string[] {
-  const e: string[] = [];
+  const e: string[] = allegroErrors(m);
   if (m.worktop) {
     const w = m.worktop;
     if (!["postforming", "ldsp", "stone"].includes(w.material)) e.push("Столешница: материал из списка.");

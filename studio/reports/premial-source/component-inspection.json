@@ -1,0 +1,635 @@
+{
+  "sampledFiles": 10,
+  "totalSourceFiles": 314,
+  "components": [
+    {
+      "name": "Подъемник Premial ALLA GRAZIA на двойные (ломающиеся) фасады (белый) левый",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "891c11e7245a4477e07414939c61daa5b139cf074f8cfb5bf19648ea6b8eca4a",
+      "file": "891c11e7245a4477.glb",
+      "box": [
+        4.0679779052734375,
+        -70.94766235351562,
+        -8.881784197001252e-14,
+        249.92921447753906,
+        25.998252868652344,
+        26.0
+      ],
+      "recordBox": [
+        4.0679779052734375,
+        -70.94766235351562,
+        -12.000000000000089,
+        249.92921447753906,
+        25.998252868652344,
+        26.0
+      ],
+      "maxBoxDelta": 12.0,
+      "finite": true,
+      "triangles": 508,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепление рычага ALLA GRAZIA (белый)",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "849f8a587d36865341e8b817f4d01d08dfc3be8077f56b736f2f04dba7ee2e87",
+      "file": "849f8a587d368653.glb",
+      "box": [
+        -26.65373420715332,
+        -9.535041809082031,
+        3.0262200832366943,
+        17.003273010253906,
+        114.40591430664062,
+        20.999418258666992
+      ],
+      "recordBox": [
+        -26.65373420715332,
+        -9.535041809082031,
+        3.0262200832366943,
+        17.003273010253906,
+        114.40591430664062,
+        20.999418258666992
+      ],
+      "maxBoxDelta": 0.0,
+      "finite": true,
+      "triangles": 988,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепление к фасаду ALLA GRAZIA (белый)",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "c58bac9cabfb48054d6bd43d3d90e8bd91e59183656b65ea1e783126ba08fbf7",
+      "file": "c58bac9cabfb4805.glb",
+      "box": [
+        -41.85100173950195,
+        -34.453983306884766,
+        2.5695295333862305,
+        10.137728691101074,
+        41.828548431396484,
+        21.430471420288086
+      ],
+      "recordBox": [
+        -43.851002713176634,
+        -34.453983306884766,
+        2.5695295333862305,
+        10.137728691101074,
+        41.828548431396484,
+        21.430471420288086
+      ],
+      "maxBoxDelta": 2.0000009736746804,
+      "finite": true,
+      "triangles": 3628,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Плечо рычага ALLA GRAZIA (белый)",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "fc18a8123bff7bdf74c99f2689be404fa6320c98b7bf1325fe9965c6471a0b8c",
+      "file": "fc18a8123bff7bdf.glb",
+      "box": [
+        -23.782470703125,
+        -59.86138153076172,
+        3.0,
+        13.687629699707031,
+        17.420856475830078,
+        21.0
+      ],
+      "recordBox": [
+        -23.782470703125,
+        -59.86138153076172,
+        3.0,
+        13.687629699707031,
+        17.420856475830078,
+        21.00000000000002
+      ],
+      "maxBoxDelta": 2.1316282072803006e-14,
+      "finite": true,
+      "triangles": 328,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Плечо рычага ALLA GRAZIA (белый)",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "25dee381250768195a3d8d2effd24b13d138a4fd047296945cad5022b4dd3bd0",
+      "file": "25dee38125076819.glb",
+      "box": [
+        -13.687629699707031,
+        -59.86138153076172,
+        3.0,
+        23.782470703125,
+        17.420856475830078,
+        21.0
+      ],
+      "recordBox": [
+        -13.687629699707031,
+        -59.86138153076172,
+        3.0,
+        23.782470703125,
+        17.420856475830078,
+        21.00000000000002
+      ],
+      "maxBoxDelta": 2.1316282072803006e-14,
+      "finite": true,
+      "triangles": 328,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепление рычага ALLA GRAZIA (белый)",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "2be9974cbc62de7909a765c2a6fad7984502a9cb56c37c4a554970a59f782d64",
+      "file": "2be9974cbc62de79.glb",
+      "box": [
+        -17.003273010253906,
+        -9.535041809082031,
+        3.0262200832366943,
+        26.65373420715332,
+        114.40591430664062,
+        20.999418258666992
+      ],
+      "recordBox": [
+        -17.003273010253906,
+        -9.535041809082031,
+        3.0262200832366943,
+        26.65373420715332,
+        114.40591430664062,
+        20.999418258666992
+      ],
+      "maxBoxDelta": 0.0,
+      "finite": true,
+      "triangles": 988,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепление к фасаду ALLA GRAZIA (белый)",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "a091560edc2061623544d9ab59f9f1153f0b092d199de98ace957562d3a7930e",
+      "file": "a091560edc206162.glb",
+      "box": [
+        -10.137728691101074,
+        -34.453983306884766,
+        2.5695295333862305,
+        41.85100173950195,
+        41.828548431396484,
+        21.430471420288086
+      ],
+      "recordBox": [
+        -10.137728691101074,
+        -34.453983306884766,
+        2.5695295333862305,
+        43.851002713176634,
+        41.828548431396484,
+        21.430471420288086
+      ],
+      "maxBoxDelta": 2.0000009736746804,
+      "finite": true,
+      "triangles": 3628,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Подъемник Premial ALLA GRAZIA на двойные (ломающиеся) фасады (белый) правый",
+      "source": "extracted/cad-1/0002.fr3d",
+      "sourceName": "Подъёмник для двойных фасадов - Premial АЛЛА ГРАЦИЯ/Белые/H/Подъемник Premial АЛЛА ГРАЦИЯ на двойные (ломающиеся) фасады H 8.07-17.0 кг, белый(020709)(L1050-1400_H820-849).fr3d",
+      "triSha256": "02c3f6a4a036386668389cde98e54c1bf33759a4b4b9f8f9b693e068c9405472",
+      "file": "02c3f6a4a0363866.glb",
+      "box": [
+        -249.92921447753906,
+        -70.94766235351562,
+        -9.237055564881302e-14,
+        -4.0679779052734375,
+        25.998252868652344,
+        26.0
+      ],
+      "recordBox": [
+        -249.92921447753906,
+        -70.94766235351562,
+        -12.000000000000089,
+        -4.0679779052734375,
+        25.998252868652344,
+        26.0
+      ],
+      "maxBoxDelta": 11.999999999999996,
+      "finite": true,
+      "triangles": 508,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепёж для алюминиевой рамки под подъёмный механизм Premial СЕМПРЕ, цвет хром\r020717",
+      "source": "extracted/cad-10/0000.fr3d",
+      "sourceName": "Подъёмник для одинарных фасадов - Premial СЕМПРЕ/Крепёж для алюминиевой рамки под подъёмный механизм Premial СЕМПРЕ, цвет хром(020717).fr3d",
+      "triSha256": "0ae57859eb6914194f6f138891c527aafbf0b4aa6620aa1544bd23e8aff08826",
+      "file": "0ae57859eb691419.glb",
+      "box": [
+        -22.75,
+        0.0,
+        -39.0,
+        22.750001907348633,
+        12.5,
+        8.881784197001252e-16
+      ],
+      "recordBox": [
+        -22.74999990342704,
+        0.0,
+        -39.000000882459325,
+        22.750001050247278,
+        12.500000190717415,
+        8.881784197001252e-16
+      ],
+      "maxBoxDelta": 8.824593251688384e-07,
+      "finite": true,
+      "triangles": 244,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепёж для алюминиевой рамки под подъёмный механизм Premial СЕМПРЕ, цвет хром\r020717",
+      "source": "extracted/cad-10/0000.fr3d",
+      "sourceName": "Подъёмник для одинарных фасадов - Premial СЕМПРЕ/Крепёж для алюминиевой рамки под подъёмный механизм Premial СЕМПРЕ, цвет хром(020717).fr3d",
+      "triSha256": "73ddb9f203744fdfd36f9f97dbb0cf405fb1d50c5411a54abb967288e2a379ac",
+      "file": "73ddb9f203744fdf.glb",
+      "box": [
+        -22.75,
+        0.0,
+        -39.0,
+        22.750001907348633,
+        12.5,
+        8.881784197001252e-16
+      ],
+      "recordBox": [
+        -22.74999990342704,
+        0.0,
+        -39.000000882459325,
+        22.750001050247278,
+        12.500000190717415,
+        8.881784197001252e-16
+      ],
+      "maxBoxDelta": 8.824593251688384e-07,
+      "finite": true,
+      "triangles": 244,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Фасадный крепёж для внутреннего низкого ящика Premial МАЭСТРО, белый\r033622",
+      "source": "extracted/cad-2/0000.fr3d",
+      "sourceName": "Выдвижные ящики - Premial МАЭСТРО/Алюминиевый передний фасад для внутреннего ящика Premial МАЭСТРО L-1100 мм, белый(033621).fr3d",
+      "triSha256": "3d0f964ef2e3125e45daf1ff1770acb813e1a85899b862dc3c41789e929f1b53",
+      "file": "3d0f964ef2e3125e.glb",
+      "box": [
+        -52.75,
+        37.16445541381836,
+        -3.691251039505005,
+        -31.25,
+        51.86445617675781,
+        16.308753967285156
+      ],
+      "recordBox": [
+        -52.75,
+        37.16445708096059,
+        -3.6912511495063924,
+        -31.25,
+        51.86445785191841,
+        16.308754572539506
+      ],
+      "maxBoxDelta": 1.6751605969034244e-06,
+      "finite": true,
+      "triangles": 136,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Фасадный крепёж для внутреннего низкого ящика Premial МАЭСТРО, белый\r033622",
+      "source": "extracted/cad-2/0000.fr3d",
+      "sourceName": "Выдвижные ящики - Premial МАЭСТРО/Алюминиевый передний фасад для внутреннего ящика Premial МАЭСТРО L-1100 мм, белый(033621).fr3d",
+      "triSha256": "4034e8bc6d5bf7e017ef579b595df8758afa1c59c2e1e025db709c557e9cca9b",
+      "file": "4034e8bc6d5bf7e0.glb",
+      "box": [
+        -51.83935546875,
+        65.3382339477539,
+        -37.0,
+        -3.8393545150756836,
+        173.83822631835938,
+        -1.4210854715202004e-14
+      ],
+      "recordBox": [
+        -51.83935546875,
+        65.3382339477539,
+        -37.0,
+        -3.8393545150756836,
+        173.83822631835938,
+        -1.4210854715202004e-14
+      ],
+      "maxBoxDelta": 0.0,
+      "finite": true,
+      "triangles": 84,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 1,
+        "degenerate": 2
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Фасадный крепёж для внутреннего низкого ящика Premial МАЭСТРО, белый\r033622",
+      "source": "extracted/cad-2/0000.fr3d",
+      "sourceName": "Выдвижные ящики - Premial МАЭСТРО/Алюминиевый передний фасад для внутреннего ящика Premial МАЭСТРО L-1100 мм, белый(033621).fr3d",
+      "triSha256": "311df2b6928de9828593445faacd08871a1377b2cf44d90cf52353ce1ab1743d",
+      "file": "311df2b6928de982.glb",
+      "box": [
+        3.8393545150756836,
+        65.3382339477539,
+        -37.0,
+        51.83935546875,
+        173.83822631835938,
+        -1.4210854715202004e-14
+      ],
+      "recordBox": [
+        3.8393545895132775,
+        65.3382314484947,
+        -37.000000509297905,
+        51.83935458951328,
+        173.83823097165754,
+        -1.4210854715202004e-14
+      ],
+      "maxBoxDelta": 4.653298162793362e-06,
+      "finite": true,
+      "triangles": 84,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 1,
+        "degenerate": 2
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепёж для алюминиевой рамки под лифт газовый, Premial АДАЖИО\r020716",
+      "source": "extracted/cad-3/0000.fr3d",
+      "sourceName": "Газлифты - Premial АДАЖИО/Крепёж для алюминиевой рамки под лифт газовый, Premial АДАЖИО(020716).fr3d",
+      "triSha256": "7e4e4873f093afecf497b5acd31ee6ec91924cb662153cd73f41c18f111dc8d8",
+      "file": "7e4e4873f093afec.glb",
+      "box": [
+        -22.657394409179688,
+        -0.9999998807907104,
+        -8.266965778602753e-09,
+        22.65739631652832,
+        18.0,
+        30.149999618530273
+      ],
+      "recordBox": [
+        -22.657394677085115,
+        -0.9999998807757748,
+        -8.266965778602753e-09,
+        22.657396048622893,
+        18.000000119209293,
+        30.149999999992712
+      ],
+      "maxBoxDelta": 3.814624385256593e-07,
+      "finite": true,
+      "triangles": 236,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 8,
+        "degenerate": 16
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Крепёж для алюминиевой рамки под подъёмный механизм Premial АНИМАТО/ хром\r020719",
+      "source": "extracted/cad-6/0000.fr3d",
+      "sourceName": "Подъёмник для одинарных фасадов - Premial АНИМАТО/Крепёж для алюминиевой рамки под подъёмный механизм Premial АНИМАТО_ хром(020719).fr3d",
+      "triSha256": "ae3d4c88c3f63ebf2c9f0dc3a72517d4ba4a769543b68c32404963c832763f37",
+      "file": "ae3d4c88c3f63ebf.glb",
+      "box": [
+        -43.5,
+        -1.1990408877709927e-15,
+        -31.471267700195312,
+        43.5,
+        12.5,
+        5.400000095367432
+      ],
+      "recordBox": [
+        -43.500000857101355,
+        -1.1990409142407723e-15,
+        -31.471268582654638,
+        43.50000105024728,
+        12.500000190717415,
+        5.400000214576722
+      ],
+      "maxBoxDelta": 1.0502472775897331e-06,
+      "finite": true,
+      "triangles": 284,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Направляющая шариковая Premial Andante PtO СД H=45 L-400 (Я)",
+      "source": "extracted/cad-7/0002.fr3d",
+      "sourceName": "Шариковые направляющие - Premial АНДАНТЕ/К-ты направлящих/Push с доводчиком/К-т направляющих шариковых PtO СД АНДАНТЕ 400мм.fr3d",
+      "triSha256": "2d6c37c7cdd9dd3ce77ab9258d98b151c1bbdc6c3fb70730bcd2458421c4ed53",
+      "file": "2d6c37c7cdd9dd3c.glb",
+      "box": [
+        -398.9999694824219,
+        -12.653904914855957,
+        4.59999942779541,
+        -1.9999964237213135,
+        12.65390682220459,
+        13.0
+      ],
+      "recordBox": [
+        -398.9999694824219,
+        -12.653904914855957,
+        4.59999942779541,
+        -1.9999964237213135,
+        12.65390682220459,
+        13.0
+      ],
+      "maxBoxDelta": 0.0,
+      "finite": true,
+      "triangles": 648,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Направляющая шариковая Premial Andante PtO СД H=45 L-400 (К)",
+      "source": "extracted/cad-7/0002.fr3d",
+      "sourceName": "Шариковые направляющие - Premial АНДАНТЕ/К-ты направлящих/Push с доводчиком/К-т направляющих шариковых PtO СД АНДАНТЕ 400мм.fr3d",
+      "triSha256": "7a07d6693ce1ef5c928224c5f71e34ec75366fd313811c71def525115289f27f",
+      "file": "7a07d6693ce1ef5c.glb",
+      "box": [
+        -400.0,
+        -22.180620193481445,
+        -5.555617299535243e-09,
+        -5.684341886080802e-14,
+        22.180622100830078,
+        11.570745468139648
+      ],
+      "recordBox": [
+        -400.00000000000006,
+        -22.18061995506286,
+        -5.555617355046394e-09,
+        -5.684341886080802e-14,
+        22.180621385574433,
+        11.570745693869572
+      ],
+      "maxBoxDelta": 7.152556449341319e-07,
+      "finite": true,
+      "triangles": 2016,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 2,
+        "degenerate": 3
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Направляющая шариковая Premial Andante PtO СД H=45 L-400 (Я)",
+      "source": "extracted/cad-7/0002.fr3d",
+      "sourceName": "Шариковые направляющие - Premial АНДАНТЕ/К-ты направлящих/Push с доводчиком/К-т направляющих шариковых PtO СД АНДАНТЕ 400мм.fr3d",
+      "triSha256": "ef96787180d47f6f1518d09b03f5d0c4296239f4d4969a5236eb0cea6f9bf21f",
+      "file": "ef96787180d47f6f.glb",
+      "box": [
+        1.9999964237213135,
+        -12.653904914855957,
+        4.59999942779541,
+        398.9999694824219,
+        12.65390682220459,
+        13.0
+      ],
+      "recordBox": [
+        1.9999963706285617,
+        -12.65390538139869,
+        4.599999649193258,
+        398.9999842604917,
+        12.653906594080441,
+        13.000000222840034
+      ],
+      "maxBoxDelta": 1.4778069839849195e-05,
+      "finite": true,
+      "triangles": 648,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 0,
+        "degenerate": 0
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    },
+    {
+      "name": "Направляющая шариковая Premial Andante PtO СД H=45 L-400 (К)",
+      "source": "extracted/cad-7/0002.fr3d",
+      "sourceName": "Шариковые направляющие - Premial АНДАНТЕ/К-ты направлящих/Push с доводчиком/К-т направляющих шариковых PtO СД АНДАНТЕ 400мм.fr3d",
+      "triSha256": "aa50d735607b8a5128b6323c79db7241cdf8c13fbd49049cf4aae9f9558d37bd",
+      "file": "aa50d735607b8a51.glb",
+      "box": [
+        5.684341886080802e-14,
+        -22.180620193481445,
+        -5.555617299535243e-09,
+        400.0,
+        22.180622100830078,
+        11.570745468139648
+      ],
+      "recordBox": [
+        5.684341886080802e-14,
+        -22.180620193481445,
+        -5.555617299535243e-09,
+        400.0,
+        22.180622100830078,
+        11.570745468139648
+      ],
+      "maxBoxDelta": 0.0,
+      "finite": true,
+      "triangles": 2016,
+      "formatProblems": [],
+      "normalRepair": {
+        "flipped": 0,
+        "vn_face": 2,
+        "degenerate": 3
+      },
+      "status": "component-only; whole assembly and visual QC pending"
+    }
+  ],
+  "errors": [],
+  "limitation": "Component meshes only. No complete assembly claim; profiles, boolean solids, placement, and animation not converted."
+}

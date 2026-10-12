@@ -1,4 +1,5 @@
 import { alignKitchenRow } from "./kitchenAlignment";
+import { ALLEGRO, ALLEGRO_SOURCE, allegroErrors } from './premialPullout';
 import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setKitchenGola} from './kitchenEditing';
 // Панель кухонного модуля справа (вкладка «Кухня», трек И, 09.10.2026): корпус, опоры и цоколь, фасады, петли, полки, навесы,
 // столешница; для сырого модуля из Базиса — только сведения. Каждое изменение идёт через modify/commit студии (validate + projectErrors),
@@ -209,6 +210,12 @@ function CabinetPanel(props: KitchenPanelProps) {
     </Group>}
 
     {role === "base" && <Group icon={<Rows3 size={15}/>} title="Наполнение кухни" open={stage === 'filling' || stage === 'facades'}>
+      {!k.appliance && <label className="hardware-field">Бутылочница Premial<select aria-label="Бутылочница Premial" value={k.premialPullout?.article ?? ''} onChange={e => modify(n => { if (e.target.value) n.kitchen!.premialPullout = { article: e.target.value }; else delete n.kitchen!.premialPullout; })}>
+        <option value="">Без бутылочницы</option>
+        {ALLEGRO.map(item => { const issues = allegroErrors({ ...m, kitchen: { ...k, premialPullout: { article: item.article } } }); return <option key={item.article} value={item.article} disabled={!!issues.length}>{`АЛЛЕГРО ${item.base} · ${item.side === 'left' ? 'левая' : 'правая'} · ${item.article}${issues.length ? ' — не подходит' : ''}`}</option>; })}
+      </select></label>}
+      {!k.appliance && !k.premialPullout && <p className="field-note">АЛЛЕГРО: тумба 150 или 200 мм, одна секция без полок и ящиков. Свободная глубина от 457 мм, высота от 548 мм с запасом.</p>}
+      {k.premialPullout && <p className="field-note">Два яруса, крепление к фасаду без петель. Геометрия прутка упрощена; показана закрытая установка, ход выдвижения ещё не моделируется. <a href={ALLEGRO_SOURCE} target="_blank" rel="noreferrer">Чертёж и артикулы Premial</a></p>}
       {!k.appliance&&<label className="hardware-field">Ящики нижнего модуля<select aria-label="Ящики нижнего модуля" value={m.kdrawers?.length??0} onChange={e=>modify(n=>setKitchenDrawerCount(n,Number(e.target.value)))}>
         <option value="0">Без ящиков · распашные фасады</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n} {n===1?'ящик':'ящика'}</option>)}
       </select></label>}
@@ -234,7 +241,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!m.noHandles ? <button className="text-action" onClick={handles}>Ручка: {handleById(m.handleId).label}</button> : <p className="field-note">Без ручек: Gola, ручки заказчика или push — в смете ручек нет.</p>}
     </Group>}
 
-    {m.doors && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
+    {m.doors && !k.premialPullout && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
       {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
       {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
       <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
