@@ -1,7 +1,7 @@
 import {surfacePoint} from './roomSurvey';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
-import {boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
+import {worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
 import {aluProfile,aluInsert} from './alu';
 import {facadeGeometry} from './vernissageGeometry';
 import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
@@ -377,7 +377,7 @@ export function Scene(p: Props) {
               : (part.role === "rod" || part.role === "flange")
               ? (() => { const c = rodCylinder(part.size); return new THREE.CylinderGeometry(c.r, c.r, c.h, 24); })()
               : vern ? facadeGeometry(vernissageLayout(vern, part.size[0], part.size[1], part.size[2]), part.grainAxis, vTex?.tileMm)
-              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.topNotches ? topNotchGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
+              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planHoles?.length ? worktopGeometry(part) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.topNotches ? topNotchGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;
@@ -778,8 +778,15 @@ export function Scene(p: Props) {
               : new THREE.Vector3(state.isoDirection?.[0]??(facing.x<-.1?-1:1), state.isoDirection?.75:.55, state.isoDirection?.[1]??(facing.z<-.1?-1.7:1.7)).normalize();
       if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),((focus.rotation??0)+(m.corner?45:0))*Math.PI/180);
       const padding=state.presentation?50:state.dimensions?500:180;
-      const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,perspective.fov,1.08);
-      if(camera===orthographic){const h=frameHeight({x:width+padding,y:height+padding,z:depth+padding},dir,aspect,1.08);orthographic.left=-h*aspect/2;orthographic.right=h*aspect/2;orthographic.top=h/2;orthographic.bottom=-h/2;orthographic.zoom=1;}else perspective.aspect=aspect;
+      // Fit into the uncovered area, while keeping the canvas full size for orbit/zoom.
+      const screenH=Math.max(1,target.clientHeight), top=Math.min(state.presentation?60:112,screenH*.3), bottom=Math.min(state.presentation?75:55,screenH*.18);
+      const usableH=Math.max(1,screenH-top-bottom), safeAspect=target.clientWidth/usableH;
+      const safeFov=THREE.MathUtils.radToDeg(2*Math.atan(Math.tan(THREE.MathUtils.degToRad(perspective.fov)/2)*usableH/screenH));
+      const dist=frameDistance({x:width+padding,y:height+padding,z:depth+padding},dir,safeAspect,safeFov,1.08);
+      let frameH=2*dist*Math.tan(THREE.MathUtils.degToRad(perspective.fov)/2);
+      if(camera===orthographic){const h=frameHeight({x:width+padding,y:height+padding,z:depth+padding},dir,safeAspect,1.08)*screenH/usableH;frameH=h;orthographic.left=-h*aspect/2;orthographic.right=h*aspect/2;orthographic.top=h/2;orthographic.bottom=-h/2;orthographic.zoom=1;}else perspective.aspect=aspect;
+      const screenUp=new THREE.Vector3(0,1,0).addScaledVector(dir,-dir.y).normalize();
+      center.addScaledVector(screenUp,(top-bottom)*frameH/(2*screenH));controls.target.copy(center);
       camera.updateProjectionMatrix();
       camera.up.set(0, 1, 0);
       camera.position.copy(center).addScaledVector(dir, dist);

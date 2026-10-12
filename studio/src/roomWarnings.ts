@@ -1,3 +1,4 @@
+import {sinkChecks} from './sinkChecks';
 import {environmentChecks} from './environmentChecks';
 import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
@@ -71,7 +72,7 @@ export function roomWarnings(project:Project){
       if(actual>limit+.1)warnings.push({moduleId:edge.a.id,kind:'niche-'+size,message:`Ниша: ${label.toLocaleLowerCase('ru')} мебели ${Math.round(actual*10)/10} мм превышает допустимые ${limit} мм после вычетов СТП. Проверьте состав композиции и замер. Учтены закрытые фасады, ручки и промежутки между корпусами.`});
     }
   }
-  return warnings;
+  return [...warnings,...sinkChecks(project)];
 }
 /** Пересечения деталей внутри корпусов (петли, полки, царги, крепёж, фурнитура) — правило Макса 09.10.2026: ничего не должно пересекаться.
  *  Отдельно от roomWarnings (размещение в помещении); панель предупреждений студии показывает оба списка. */

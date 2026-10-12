@@ -1,3 +1,4 @@
+import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
 import { alignKitchenRow } from "./kitchenAlignment";
 import { ALLEGRO, ALLEGRO_SOURCE, allegroErrors } from './premialPullout';
 import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setKitchenGola} from './kitchenEditing';
@@ -78,11 +79,12 @@ export function KitchenPanel(props: KitchenPanelProps) {
 }
 
 /** Положение модуля в комнате — как в общей панели (отступы по монтажному габариту, поворот, удаление). */
-function Position({ placed, project, position, room, move, rotate, commit, open, allowEmpty }: KitchenPanelProps & { open?: boolean }) {
+function Position({ placed, project, position, room, move, rotate, commit, modify, open, allowEmpty }: KitchenPanelProps & { open?: boolean }) {
   return <Group icon={<Move size={15} />} title="Положение" open={open}>
     {(["y", "x", "z"] as const).map((axis) => <Num key={axis} label={{ x: "От левой стены", z: "От задней стены", y: "От пола" }[axis]} value={position[axis]} min={0}
       max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => { move(axis, v); }} />)}
     <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={placed.rotation ?? 0} onChange={(e) => rotate(Number(e.target.value) as 0 | 90 | 180 | 270)}>{[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}</select></label>
+    {placed.module.kitchen&&<Check label="Автофальши у стен и в углах" checked={!placed.module.autoFillersOff} change={v=>modify(n=>{if(v)delete n.autoFillersOff;else{n.autoFillersOff=true;delete n.wallFiller;delete n.cornerFiller;delete n.cornerKind;}})}/>}
     {placed.module.kitchen && (placed.rotation ?? 0) === 0 && <button className="outline full" onClick={() => commit(alignKitchenRow(project, placed.id))}>Выровнять ряд по фасадам</button>}
     <p className="field-note">Отступы — по монтажному габариту с фальшами и выступом ХДФ. Тяните модуль в сцене — края притягиваются к соседям.</p>
     <button className="text-action danger" disabled={project.modules.length === 1&&!allowEmpty} onClick={() => commit({ ...project, modules: project.modules.filter((a) => a.id !== placed.id) })}>Удалить модуль · Ctrl+Z вернёт</button>
@@ -232,6 +234,7 @@ function CabinetPanel(props: KitchenPanelProps) {
         <option value="ldsp">ЛДСП — в раскрое цеха</option><option value="external">Фасадный материал (МДФ, эмаль, плёнка) — сторонний участок</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль (прайс)</option></select></label>
       {m.vernissage && <VernissagePicker value={m.vernissage} sample={door ? [Math.round(door.size[0]), Math.round(door.size[1])] : undefined} sizes={vernissageSizes(m)} onChange={(v) => modify((n) => { n.vernissage = v; n.facadeT = v.thickness; })} />}
       {/* у фасадов Вернисажа толщина задаётся выбором МДФ (цена и 3D от одного значения) — отдельного поля нет */}
+      {m.doors&&role==='tall'&&<><Check label="Разделить фасад по высоте" checked={s.doorSplit!==undefined} change={v=>modify(n=>{if(v)n.sections[sIdx].doorSplit=Math.round((m.height-(m.feet?.height??0))/2);else delete n.sections[sIdx].doorSplit;})}/>{s.doorSplit!==undefined&&<Num label="Высота нижней части фасада" value={s.doorSplit} min={200} max={m.height-(m.feet?.height??0)-200} step={.5} change={v=>modify(n=>{n.sections[sIdx].doorSplit=v;})}/>}</>}
       {m.vernissage ? <p className="field-note">Толщина фасада — по выбору МДФ Вернисаж: {m.vernissage.thickness} мм.</p>
         : <Num label="Толщина фасада" value={m.facadeT ?? RULES.panel} min={3} max={40} change={(v) => modify((n) => { if (v === RULES.panel) delete n.facadeT; else n.facadeT = v; })} note="ЛДСП 16, МДФ 18–19, рамка со стеклом — по профилю" />}
       <Num label="Отступ от кромок корпуса" value={m.faceGap ?? RULES.faceGap} min={0} max={5} step={0.5} change={(v) => modify((n) => { n.faceGap = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} note={`Базис цеха: ${KITCHEN.faceGap} → фасад W−3 × H−3`} />
@@ -246,7 +249,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
       <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
         {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{HINGE_BRANDS[b].label} · {HINGE_BRANDS[b].note} · {HINGE_BRANDS[b].soft.price} ₽/шт</option>)}</select></label>
-      {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { n.sections[sIdx].hingeSide = e.target.value as "left" | "right"; })}><option value="left">Слева</option><option value="right">Справа</option></select></label>}
+      {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.doorHinges?.[0] ?? s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { const side=e.target.value as "left"|"right"|"top"; n.sections[sIdx].doorHinges=[side]; if(side!=="top"){n.sections[sIdx].hingeSide=side;delete n.kitchenLift;} })}><option value="left">Слева</option><option value="right">Справа</option><option value="top">Сверху (подъёмный)</option></select></label>}
       {/* фактические высоты (ручные пересчитаны под текущую высоту фасада) — их показываем и от них считаем правки */}
       <div className="kitchen-chips" role="group" aria-label="Высоты петель">
         <button type="button" aria-pressed={!s.hingeY?.length} onClick={() => modify((n) => { delete n.sections[sIdx].hingeY; delete n.sections[sIdx].hingeYFor; })}>Авто</button>
@@ -340,8 +343,11 @@ function WorktopPanel(props: KitchenPanelProps) {
       <div className="kitchen-cuts">
         <span className="rails-title">Вырезы</span>
         {w.cutouts.map((c, i) => <div key={i} className="kitchen-cut">
-          <div className="kitchen-chips" role="group" aria-label={"Вырез " + (i + 1)}>{(["sink", "hob"] as const).map((kind) => <button key={kind} type="button" aria-pressed={c.kind === kind} onClick={() => setCut(i, { kind })}>{kind === "sink" ? "Мойка" : "Варочная"}</button>)}
+          <div className="kitchen-chips" role="group" aria-label={"Вырез " + (i + 1)}>{(["sink", "hob"] as const).map((kind) => <button key={kind} type="button" aria-pressed={c.kind === kind} onClick={() => setCut(i, { kind, fixture:undefined, drainDrop:undefined })}>{kind === "sink" ? "Мойка" : "Варочная"}</button>)}
             <button type="button" className="danger" onClick={() => modify((n) => { n.worktop = { ...n.worktop!, cutouts: n.worktop!.cutouts.filter((_, j) => j !== i) }; })}>Убрать</button></div>
+          {c.kind==='sink'&&<><label className="hardware-field">Модель мойки<select aria-label="Модель мойки" value={c.fixture??''} onChange={e=>setCut(i,e.target.value?{fixture:SINK_ARTICLE,x:c.x+(c.width-560)/2,...(c.z===undefined?{}:{z:c.z+(c.depth-360)/2}),width:560,depth:360}:{fixture:undefined,drainDrop:undefined})}><option value="">Только вырез</option><option value={SINK_ARTICLE}>Premial PRODIGY 6045 · 210245 · 600×450</option></select></label>
+          {c.fixture&&<><p className="field-note">Чаша 550×350×220. Радиусы, слив и вырез — компоновочные: перед изготовлением сверить шаблон. <a href={SINK_SOURCE} target="_blank" rel="noreferrer">Карточка производителя</a></p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
+          <Num label="От задней кромки" value={c.z??(m.depth-c.depth)/2} min={40} max={m.depth-40-c.depth} change={v=>setCut(i,{z:v})}/>
           <Num label="От левого торца" value={c.x} min={50} max={Math.max(50, m.width - 50 - c.width)} change={(v) => setCut(i, { x: v })} />
           <Num label="Ширина выреза" value={c.width} min={200} max={Math.max(200, m.width - 100)} change={(v) => setCut(i, { width: v })} />
           <Num label="Глубина выреза" value={c.depth} min={200} max={Math.max(200, m.depth - 80)} change={(v) => setCut(i, { depth: v })} />

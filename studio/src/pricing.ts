@@ -184,6 +184,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // Двери-купе: строки по формуле калькулятора купе, розничные; корпусных деталей и крепежа у объекта нет.
     if(a.module.kupe){for(const l of kupeLines(a.module))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
     // Столешница (kitchen.ts): за погонный метр по материалу и толщине, вырезы под мойку и варку — отдельно. Цен поставщика пока нет.
+    for(const c of a.module.worktop?.cutouts??[])if(c.fixture==='210245')add('premial-sink:210245','Мойка Premial PRODIGY 6045, графит, 210245 (слив в комплекте)',1,'компл',null,'Артикул подтверждён allpremial.ru; закупочную цену уточнить');
     if(a.module.worktop){const w=a.module.worktop;add('worktop:'+w.material+':'+w.thickness,'Столешница '+worktopLabel(w)+' '+w.thickness+' мм',a.module.width/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');for(const c of w.cutouts)add('worktop-cut:'+c.kind,c.kind==='sink'?'Вырез под мойку':'Вырез под варочную панель',1,'шт',null,'Цена работы не найдена');continue;}
     // Сырой модуль (импорт Базиса): фурнитура — по счётчикам Базиса (raw.counts), а не по правилам студии (без фантомных петель
     // на фасадах ящиков и планках); фасадный материал — фасады поставщика (м²); столешница — пог.м; кромка — по длинам Базиса.
@@ -294,6 +295,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     }
     let bzHinges=0;
     const legs=a.module.kitchen?0:legCount(a.module,a.y??0);if(legs){const low=a.module.feet&&a.module.feet.height<=30;add(low?'legs-m6':'legs',low?'Ножка мебельная M6×18 с гайкой':'Опора регулируемая INTEGRATO TECH G с шипами',legs,'шт',low?LEG_M6.price:LEG.price,low?LEG_M6.source:LEG.source);}
+
     const allParts=parts(a.module);
     // газлифт подъёмного фасада кухни (Базис: PD-G-N02 — шток, газблок, фиксаторы на фасад и боковину; комплект на боковину), без цены
     const lifts=a.module.kitchenLift?allParts.filter(p=>p.id.startsWith('lift:')&&p.id.endsWith(':block')).length:0;

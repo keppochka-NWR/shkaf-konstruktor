@@ -70,7 +70,7 @@ export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
     // Bespoke open assemblies describe their corner themselves; no door filler.
-    if(a.module.openJunction||a.module.corner)continue;
+    if(a.module.openJunction||a.module.corner||a.module.autoFillersOff)continue;
     // Кухня из Базиса (правило Макса 09.10.2026): фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней
     // не относится). Модуль с признаком bazis или сырой модуль кухни; в проекте с пометкой source 'bazis' без признаков модулей
     // (ранний импорт) — все кухонные модули. Модуль палитры, добавленный в кухню из Базиса с признаками, — свой.

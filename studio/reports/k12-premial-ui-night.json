@@ -1,0 +1,496 @@
+{
+  "format": "garderyob-rooms",
+  "version": 1,
+  "revision": 59,
+  "activeRoomId": "f92f08bd-52bc-41c6-949d-dde6fc9e066a",
+  "rooms": [
+    {
+      "id": "f92f08bd-52bc-41c6-949d-dde6fc9e066a",
+      "title": "K12 · ручная сборка",
+      "walls": {
+        "back": "1d64d3bc-b5e6-4f78-8d9a-700f57ba9e31",
+        "left": "3991918a-eece-47e4-b681-2aba29a8d695",
+        "right": "a7dcc89d-3271-4d92-aa45-8bf7efb1046c",
+        "front": "94ace0f0-f66a-4f85-92a2-49cae0f8c425"
+      },
+      "project": {
+        "version": 3,
+        "room": {
+          "width": 3001,
+          "height": 2700,
+          "depth": 1000,
+          "openings": []
+        },
+        "modules": [
+          {
+            "id": "42042faa-544e-4ae8-896d-5376f4ddf372",
+            "x": 6,
+            "z": 0,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Мойка",
+              "width": 800,
+              "height": 820,
+              "depth": 560,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "none",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 60
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base",
+                "appliance": "sink",
+                "plinth": {
+                  "height": 95,
+                  "off": true
+                }
+              },
+              "autoFillersOff": true,
+              "sections": [
+                {
+                  "id": "6063c812-3885-46f4-9098-e5c3a39e60e9",
+                  "weight": 1,
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "b5363bf8-b345-4256-bdde-8e26e8668840",
+            "x": 806,
+            "z": 10,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "НМ 2",
+              "width": 600,
+              "height": 820,
+              "depth": 550,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "nailed",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 100,
+                  "lay": "flat"
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100,
+                  "lay": "flat"
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "kdrawers": [
+                {
+                  "system": "axis-pro",
+                  "y0": 101.5,
+                  "y1": 601,
+                  "runnerY": 175,
+                  "h": 200,
+                  "len": 500
+                },
+                {
+                  "system": "axis-pro",
+                  "y0": 604,
+                  "y1": 818.5,
+                  "runnerY": 663,
+                  "h": 120,
+                  "len": 500
+                }
+              ],
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base",
+                "plinth": {
+                  "height": 95,
+                  "off": true
+                }
+              },
+              "sections": [
+                {
+                  "id": "89b7c303-7729-4f8f-80ac-807809f1775a",
+                  "weight": 1,
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "be6931db-3fb2-4719-93f1-b25d46962365",
+            "x": 1406,
+            "z": 13,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "НМ 3",
+              "width": 800,
+              "height": 820,
+              "depth": 547,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "nailed",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 100,
+                  "lay": "flat"
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100,
+                  "lay": "flat"
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "kdrawers": [
+                {
+                  "system": "axis-pro",
+                  "y0": 101.5,
+                  "y1": 452.5,
+                  "runnerY": 175,
+                  "h": 200,
+                  "len": 500,
+                  "color": "anthracite"
+                },
+                {
+                  "system": "axis-pro",
+                  "y0": 455.5,
+                  "y1": 818.5,
+                  "runnerY": 514.5,
+                  "h": 200,
+                  "len": 500,
+                  "color": "anthracite"
+                }
+              ],
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base",
+                "plinth": {
+                  "height": 95,
+                  "off": true
+                }
+              },
+              "sections": [
+                {
+                  "id": "4d271b03-0d57-4f59-9ac0-4c574f51df0a",
+                  "weight": 1,
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "397671bc-b170-4c17-8327-ab0338321781",
+            "x": 2206,
+            "z": 3,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Пенал",
+              "width": 400,
+              "height": 2100,
+              "depth": 557,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "nailed",
+              "feet": {
+                "height": 100
+              },
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "tall",
+                "plinth": {
+                  "height": 95,
+                  "off": true
+                }
+              },
+              "sections": [
+                {
+                  "id": "b60b1545-d16f-4b1f-836d-be6680470716",
+                  "weight": 1,
+                  "doorSplit": 1198.5,
+                  "shelves": [
+                    0.33220502901353965,
+                    0.6677949709864603
+                  ],
+                  "shelfDepth": 554.5,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "87e84090-751f-4da4-99b4-8d139a7774e4",
+            "x": 406,
+            "z": 0,
+            "y": 1700,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "А 3",
+              "width": 600,
+              "height": 400,
+              "depth": 350,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "antresol"
+              },
+              "autoFillersOff": true,
+              "sections": [
+                {
+                  "id": "00a78022-2b2a-4d37-a297-86a5f39f600d",
+                  "weight": 1,
+                  "doorHinges": [
+                    "top"
+                  ],
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "17267fff-e0da-4428-bd56-00ea4ce5440e",
+            "x": 1006,
+            "z": 0,
+            "y": 1700,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "А 2",
+              "width": 600,
+              "height": 400,
+              "depth": 350,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "antresol"
+              },
+              "autoFillersOff": true,
+              "sections": [
+                {
+                  "id": "fa3f57f7-dd43-43fa-adc6-e598fbcec902",
+                  "weight": 1,
+                  "doorHinges": [
+                    "top"
+                  ],
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "d7a00f24-49aa-47c2-ad5f-6e26b6bdb821",
+            "x": 1606,
+            "z": 0,
+            "y": 1700,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "А 1",
+              "width": 600,
+              "height": 400,
+              "depth": 350,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "antresol"
+              },
+              "autoFillersOff": true,
+              "sections": [
+                {
+                  "id": "90a85965-ec56-4f40-9a5e-906d9689d153",
+                  "weight": 1,
+                  "doorHinges": [
+                    "top"
+                  ],
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "fc8c46b2-259b-46c3-9bc5-f0766d353771",
+            "x": 5,
+            "z": 0,
+            "y": 820,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Столешница 2250",
+              "width": 2201,
+              "height": 38,
+              "depth": 600,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "none",
+              "plinthHeight": 0,
+              "worktop": {
+                "material": "postforming",
+                "thickness": 38,
+                "overhang": 24,
+                "cutouts": [
+                  {
+                    "kind": "sink",
+                    "x": 121,
+                    "width": 560,
+                    "depth": 360,
+                    "fixture": "210245",
+                    "drainDrop": 420
+                  }
+                ]
+              },
+              "sections": [
+                {
+                  "id": "3adb584c-a21b-4cac-8dab-8fe72695e569",
+                  "weight": 1,
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

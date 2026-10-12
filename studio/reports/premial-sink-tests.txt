@@ -1,0 +1,15 @@
+✔ sink selection, displaced cutout and drain survive save/load; bad sizes and overlap rejected (3.8533ms)
+✔ off-centre cutout really pierces the slab while remaining material is solid (5.494ms)
+✔ sink matches official 600x450 envelope and bowl depth, finite outward geometry (5.651ms)
+✔ sink check finds shelves and side panels, accepts an empty sink cabinet (12.7968ms)
+✔ manual filler setting survives load and preserves an exact 6 mm wall clearance (3.3634ms)
+✔ sink meshes have closed welded edges, including rim holes and bowl outlet (3.3077ms)
+✔ rotated sink checks use room coordinates (2.6707ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 487.3874

@@ -1,6 +1,14 @@
 import * as THREE from 'three';
 import type {Part} from './model';
 
+/** Real through holes in the slab; no metal placeholder covers the opening. */
+export function worktopGeometry(part:Part):THREE.BufferGeometry {
+ const [w,t,d]=part.size,s=new THREE.Shape();
+ s.moveTo(-w/2,-d/2);s.lineTo(w/2,-d/2);s.lineTo(w/2,d/2);s.lineTo(-w/2,d/2);s.closePath();
+ for(const h of part.planHoles??[]){const p=new THREE.Path(),x=h.x-w/2,z=h.z-d/2;p.moveTo(x,z);p.lineTo(x,z+h.depth);p.lineTo(x+h.width,z+h.depth);p.lineTo(x+h.width,z);p.closePath();s.holes.push(p);}
+ const g=new THREE.ExtrudeGeometry(s,{depth:t,bevelEnabled:false});g.translate(0,0,-t/2);g.rotateX(Math.PI/2);
+ const uv=g.getAttribute('uv'),p=g.getAttribute('position');for(let i=0;i<p.count;i++)uv.setXY(i,p.getX(i)/w+.5,p.getZ(i)/d+.5);return g;
+}
 export function planContourGeometry(part:Part):THREE.BufferGeometry{
  const [w,t,d]=part.size,shape=new THREE.Shape();
  part.planContour!.forEach(([x,z],i)=>{if(i===0)shape.moveTo(x-w/2,z-d/2);else shape.lineTo(x-w/2,z-d/2);});

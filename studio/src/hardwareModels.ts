@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Part } from "./model";
+import {premialSinkModel,layoutDrainModel} from './premialSinkGeometry';
 import { allegroModel } from './premialGeometry';
 
 // Процедурные 3D-модели фурнитуры, у которой нет сетки ни в Базисе, ни в библиотеке (n5-hardware3d, 09.10.2026).
@@ -217,6 +218,8 @@ export function flangeModel(size: [number, number, number], baseAt: -1 | 1): THR
 
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
 export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
+  if (p.id.startsWith('premial-sink:')) return premialSinkModel();
+  if (p.id.startsWith('layout-drain:')) return layoutDrainModel(p.size[1]);
   if (p.id.startsWith('premial-allegro:')) return allegroModel(p.size[0], /06050[13]$/.test(p.id));
   const k = procKind(p);
   if (!k) return undefined;

@@ -44,3 +44,6 @@
 .app .viewport .scene, .app.presentation .viewport .scene { inset: 0; overflow: hidden; isolation: isolate; z-index: 0; }
 .viewport .view-header, .viewport .scene-tools, .viewport .section-picker,
 .viewport .orbit-help, .viewport .presentation-tools, .viewport .scene-caption { z-index: 4; }
+
+/* Focusing low toolbar buttons must not scroll the clipped 3D viewport. */
+.viewport { overflow: clip; }

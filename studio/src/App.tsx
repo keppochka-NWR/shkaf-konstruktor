@@ -1215,7 +1215,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             )}
           </div>
-          <div className="section-picker" style={{display:roomPlan||(!advanced&&stage!=='filling')?"none":undefined}}>
+          <div className="section-picker" style={{display:!!m.worktop||roomPlan||(!advanced&&stage!=='filling')?"none":undefined}}>
             {boxes(m).map((box, i) => (
               <button
                 key={box.id}

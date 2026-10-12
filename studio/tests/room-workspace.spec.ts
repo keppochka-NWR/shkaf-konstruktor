@@ -205,3 +205,37 @@ test('Premial bottle pullout: one-click template, handedness, invalid resize, pe
  await select.selectOption('');
  await expect(props.getByText('Петли',{exact:true})).toHaveCount(1);
 });
+
+
+test('Premial sink: real cutout, persistence, invalid edit and small viewport camera',async({page})=>{
+ test.setTimeout(90000);await page.setViewportSize({width:1280,height:720});
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/?rooms=1&workspace=premial-sink-regression-'+Date.now());
+ await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
+ await page.getByRole('spinbutton',{name:'Ширина новой мебели',exact:true}).fill('800');
+ await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Все настройки',exact:true}).check();
+ await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('combobox',{name:'Назначение кухонного модуля',exact:true}).selectOption({label:'Под мойку'});
+ await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
+ await page.getByRole('button',{name:'+ под мойку',exact:true}).click();
+ await page.getByRole('combobox',{name:'Модель мойки',exact:true}).selectOption('210245');
+ await page.getByRole('checkbox',{name:'Показать сифон для компоновки',exact:true}).check();
+ const cw=page.getByRole('spinbutton',{name:'Ширина выреза',exact:true});await cw.fill('500');await cw.press('Tab');
+ await expect(cw).toHaveValue('560');await expect(page.getByRole('alert')).toContainText('PRODIGY');
+ await page.reload();await expect(page.getByRole('combobox',{name:'Модель мойки',exact:true})).toHaveValue('210245');
+ await expect(page.getByRole('checkbox',{name:'Показать сифон для компоновки',exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'Скрыть фасады',exact:true}).click();
+ await page.getByRole('button',{name:'Прозрачный корпус',exact:true}).click();
+ await page.getByRole('button',{name:'Показать помещение',exact:true}).click();
+ await page.getByRole('button',{name:'Показать размеры',exact:true}).click();
+ await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
+ const viewport=page.locator('.viewport');
+ expect(await viewport.evaluate(e=>e.scrollTop)).toBe(0);
+ const r=await viewport.boundingBox(),c=await page.locator('.scene canvas').boundingBox();expect(Math.abs(r!.y-c!.y)).toBeLessThan(1);
+ await page.setViewportSize({width:1600,height:1000});
+ const tip=page.getByRole('button',{name:'Понятно',exact:true});if(await tip.isVisible())await tip.click();
+ await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
+ await page.waitForTimeout(1200);await page.screenshot({path:'reports/premial-sink-ui.png'});
+ expect(errors).toEqual([]);
+});

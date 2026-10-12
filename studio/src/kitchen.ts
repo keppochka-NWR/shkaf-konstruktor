@@ -4,6 +4,7 @@
 // столешница как отдельный объект и шаблоны для палитры.
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
+import { sinkParts, worktopCutErrors } from './premialSink';
 import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
@@ -196,7 +197,7 @@ export function kitchenJointPoints(m: Module, depth = m.depth, joint?: number, b
 }
 /** Правило кухни без своего счёта из Базиса: глубже KITCHEN.deepBottom (600) — 3 точки, иначе 2. */
 export const jointPointsRule = (depth: number): 2 | 3 => (depth > KITCHEN.deepBottom ? 3 : 2);
-export type WorktopCutout = { kind: "sink" | "hob"; x: number; width: number; depth: number };
+export type WorktopCutout = { kind: "sink" | "hob"; x: number; z?: number; width: number; depth: number; fixture?: string; drainDrop?: number };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
 /** Регламенты кухни по проектам Базиса цеха, мм. */
@@ -552,8 +553,8 @@ function golaTieParts(m: Module, out: Part[]): Part[] {
 export function worktopParts(m: Module): Part[] {
   const w = m.worktop!, T = w.thickness, out: Part[] = [];
   out.push({ id: "worktop", name: `Столешница ${worktopLabel(w)} ${T} мм`, size: [m.width, T, m.depth], position: [m.width / 2, T / 2, m.depth / 2], length: m.width, width: m.depth, thickness: T, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 2, 0], external: w.material !== "ldsp" });
-  for (const [i, c] of w.cutouts.entries())
-    out.push({ id: `worktop-cut:${i}`, name: c.kind === "sink" ? "Вырез под мойку" : "Вырез под варочную панель", size: [c.width, T + 2, c.depth], position: [c.x + c.width / 2, T / 2, m.depth / 2], length: c.width, width: c.depth, thickness: T, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], external: true });
+  if(w.cutouts.length) out[0].planHoles=w.cutouts.map(c=>({x:c.x,z:c.z??(m.depth-c.depth)/2,width:c.width,depth:c.depth}));
+  for (const [i,c] of w.cutouts.entries()) out.push(...sinkParts(m,c,i));
   return out;
 }
 export function worktopLabel(w: WorktopSpec) { return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень" }[w.material]; }
@@ -565,7 +566,7 @@ export function kitchenErrors(m: Module): string[] {
     if (!["postforming", "ldsp", "stone"].includes(w.material)) e.push("Столешница: материал из списка.");
     if (!Number.isFinite(w.thickness) || w.thickness < 12 || w.thickness > 60) e.push("Столешница: толщина 12–60 мм.");
     if (m.width < 200 || m.width > 4100) e.push("Столешница: длина 200–4100 мм (длиннее — со стыком).");
-    for (const c of w.cutouts) if (c.x < 50 || c.x + c.width > m.width - 50 || c.depth > m.depth - 80) e.push("Столешница: вырез не ближе 50 мм к торцам и 40 мм к кромкам.");
+    e.push(...worktopCutErrors(m));
   }
   if (m.kitchen) {
     const k = m.kitchen;
