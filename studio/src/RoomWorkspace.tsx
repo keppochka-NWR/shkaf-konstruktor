@@ -52,6 +52,12 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
     const candidate = from.current.at(-1), old = current.current;
     if (candidate && old && commit(candidate, false, true)) { from.current.pop(); to.current.push(old); }
   }
+  useEffect(()=>{
+    if(!document||activeRoom(document).project.modules.length)return;
+    const key=(e:KeyboardEvent)=>{if(!(e.ctrlKey||e.metaKey)||e.altKey||(e.target instanceof HTMLElement&&e.target.closest('input,textarea,select,[contenteditable="true"]')))return;
+      if(e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey);}else if(e.key.toLowerCase()==='y'){e.preventDefault();history(false);}};
+    window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
+  },[document]);
   function restoreBackup() {
     try {
       if(!writer.current)throw Error('Документ редактируется в другой вкладке.');
@@ -103,11 +109,8 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
       } catch(e){setError(e instanceof Error?e.message:String(e));}
     }}/>
   </section>;
-  if (!room.project.modules.length) return <div className="rooms-shell">{bar}<main className="rooms-empty"><h1>{room.title}</h1><p>Комната пока без мебели. Размеры — в миллиметрах.</p>
-    {(['width','depth','height'] as const).map(axis => <label key={room.id+axis+room.project.room[axis]}>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}<input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} defaultValue={room.project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}} onBlur={e=>{const n=Number(e.target.value);if(n!==room.project.room[axis])run(d=>updateRoom(d,room.id,{...room.project,room:{...room.project.room,[axis]:n}}));}}/></label>)}
-    <button onClick={() => run(d => updateRoom(d,room.id,{...room.project,modules:newProject().modules}))}>Добавить первый шкаф</button>
-    <p>Другие комнаты сохранены и скрыты. Замер, достройка и варианты доступны в меню выше.</p></main><EmptyRoomView key={room.id} viewKey={workspaceKey+':'+room.id} project={room.project} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/></div>;
-  return <App key={room.id} viewKey={workspaceKey+':'+room.id} externalVersion={epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
+  if (!room.project.modules.length) return <EmptyRoomView title={room.title} bar={bar} viewKey={workspaceKey+':'+room.id} project={room.project} onAdd={()=>run(d=>updateRoom(d,room.id,{...room.project,modules:newProject().modules}))} onDownload={()=>saveFile('ГардерЁб комнаты.json',JSON.stringify(current.current,null,2),'application/json')} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/>;
+  return <App onEmptyProject={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}} key={room.id} viewKey={workspaceKey+':'+room.id} externalVersion={epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
     try { return commit(updateRoom(current.current!,room.id,p)); } catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }}/>;
 }

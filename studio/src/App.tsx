@@ -1,3 +1,5 @@
+import {layoutKitchenDrawers} from './kitchenEditing';
+import {EditorBrand} from './EditorBrand';
 import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProperties';
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
@@ -214,7 +216,7 @@ function Counter({
     </div>
   );
 }
-export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject,externalVersion,viewKey}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean;externalVersion?:number;viewKey?:string}={}) {
+export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject,externalVersion,viewKey,onEmptyProject}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean;externalVersion?:number;viewKey?:string;onEmptyProject?:(p:Project)=>boolean}={}) {
   const [environmentSelection,setEnvironmentSelection]=useState<EnvironmentSelection|null>(null);
   const KEY=CURRENT_PROJECT+(projectKey?':'+projectKey:'');
   const [startup] = useState(() => {
@@ -252,6 +254,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const placed =
     project.modules.find((a) => a.id === active) || project.modules[0];
   const m = placed.module;
+  const kitchenModule=!!m.kitchen;
   const kitchenMode=isKitchenProject(project); // вкладка «Кухня»: кухонная палитра слева, KitchenPanel справа
   const placedBounds=bounds(placed);
   const mountingComposition=useMemo(()=>mountingCompositionBounds(project),[project]);
@@ -444,7 +447,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function commitProject(raw: Project) {
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
-    const e = projectErrors(next);
+    const e = projectErrors(next,!!onEmptyProject);
     if (e.length) {
       setError(e[0]);
       return false;
@@ -453,6 +456,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       setError("");
       return true;
     }
+    if (!next.modules.length && onEmptyProject) return onEmptyProject(next);
     if(saveManagedProject&&!saveManagedProject(next))return false;
     touched.current = true;
     setHistory((h) => [...h.slice(0, cursor + 1), next].slice(-61));
@@ -472,7 +476,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
-    try{update(next);if(next.height!==m.height&&!next.corner)fitDrawersAfterResize(next);}catch(e){setError((e as Error).message);return false;}
+    try{update(next);if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}}catch(e){setError((e as Error).message);return false;}
     return commit(next);
   }
   function modifySection(update: (draft: Section, next: Module) => void) {
@@ -516,7 +520,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})}]};
     const bodyRing:RadialItem[]=[
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
-      {id:'fill',label:'Добавить',icon:Plus,hint:'Полка, ящик или штанга в этот проём',children:[fill('shelf','Полку',Rows3,'Встанет на высоте клика'),fill('drawer','Ящик',Archive,'Ящик в эту секцию'),fill('rod','Штангу',Shirt,'Штанга для одежды')]},
+      {id:'fill',label:'Добавить',icon:Plus,...(mod.kitchen?{hint:'Кухонные ящики, полки и Gola — в панели справа',run:()=>{setActive(a.id);goStage('filling');}}:{hint:'Наполнение секции',children:[fill('shelf','Полку',Rows3,'Встанет на высоте клика'),fill('drawer','Ящик',Archive,'Ящик в эту секцию'),fill('rod','Штангу',Shirt,'Штанга для одежды')]})},
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
@@ -526,7 +530,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
       {id:'rotate',label:'Повернуть',icon:RotateCw,hint:'На 90° по часовой',run:()=>{if(commitProject(rotateModule(project,a.id,(((a.rotation??0)+90)%360) as 0|90|180|270)))setFit(f=>f+1);}},
       {id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:()=>{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}},
-      {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
+      {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
     const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Действия со всем корпусом',children:bodyRing};
     if(mod.kupe){
@@ -542,7 +546,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'kupe-panel',label:'Профиль',icon:SlidersHorizontal,hint:'Система, цвет профиля, секции — справа',run:panel},
         {id:'size',label:'Размеры',icon:Ruler,hint:`Проём ${mod.width} × ${mod.height} мм`,children:[size('width','Ширина'),size('height','Высота')]},
         {id:'copy',label:'Копия',icon:Copy,hint:'Ещё такой же комплект',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
-        {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1,hint:'Убрать двери купе. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
+        {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать двери купе. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
       ]};
     }
     const part=(label:string)=>({remove:{id:'remove',label:'Удалить',icon:Trash,danger:true,hint:label+': убрать. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}} as RadialItem,
@@ -706,14 +710,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   return (
     <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')+(kitchenMode?' kitchen-mode':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
       <header className="header">
-        <a className="brand" href="./" aria-label="ГардерЁб — главная">
-          <span className="brand-mark">
-            <Box size={23} />
-          </span>
-          <strong>
-            ГардерЁб<span>{kitchenMode?'проектировщик кухни':'проектировщик мебели'}</span>
-          </strong>
-        </a>
+        <EditorBrand kitchen={kitchenMode}/>
         <div className="document-name">
           <input
             aria-label="Название модуля"
@@ -876,7 +873,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         <aside className="library">
           <div className="panel-heading">
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
-            <h1>{kitchenMode?'Соберите кухню':'Соберите шкаф'}</h1>
+            <h1>{(kitchenMode||kitchenModule||!!m.worktop)?'Соберите кухню':'Соберите шкаф'}</h1>
             <p>
               <span title="Габарит закрытой мебели Ш × В × Г: включает промежутки, задники, фасады и ручки.">Вся композиция:<br/><span style={{whiteSpace:'nowrap'}}>{Math.round(composition.w)} × {Math.round(composition.h)} × {Math.round(composition.d)} мм</span></span>
             </p>
@@ -885,7 +882,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies">{(general=>kitchenMode?<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}>{general}</KitchenPalette>:<>{general}<WardrobeBase/></>)(<ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}}/>)}</div>
+          <div data-stages="bodies">{(general=>(kitchenMode||!!m.kitchen||!!m.worktop)?<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}>{general}</KitchenPalette>:<>{general}<WardrobeBase/></>)(<ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}}/>)}</div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -918,7 +915,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <button className="text-action" onClick={() => addModule(true)}>
               <Copy size={14} /> Копировать с наполнением
             </button>
-            <button className="text-action danger" disabled={project.modules.length===1} title="Удалить выбранный корпус. Ctrl+Z — отменить" onClick={()=>{if(commitProject({...project,modules:project.modules.filter(a=>a.id!==placed.id)}))setSelectedPart(null);}}><Trash2 size={14}/>Удалить выбранный модуль</button>
+            <button className="text-action danger" disabled={project.modules.length===1&&!onEmptyProject} title="Удалить выбранный корпус. Ctrl+Z — отменить" onClick={()=>{if(commitProject({...project,modules:project.modules.filter(a=>a.id!==placed.id)}))setSelectedPart(null);}}><Trash2 size={14}/>Удалить выбранный модуль</button>
             <button
               className="text-action"
               onClick={() => {
@@ -933,7 +930,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <button className="text-action upper-add" data-stages="bodies" title={`Высота до 600 мм; под потолком остаётся ${MEASUREMENT_RULES.ceilingClearance} мм по СТП`} onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
           <button className="text-action upper-add" data-stages="bodies filling" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
-          <details hidden={!!m.corner} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
+          <details hidden={!!m.corner||kitchenModule||!!m.worktop||!!m.raw} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
           <div className="presets" data-stages="filling">
             {(
               [
@@ -960,7 +957,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           <div className="library-label section-title" data-stages="filling">
             Наполнение <span>в секцию {idx + 1}</span>
           </div>
-          <div className="fill-buttons" data-stages="filling">
+          <div className="fill-buttons" data-stages="filling" hidden={!!m.kitchen||!!m.worktop||!!m.raw}>
             <button hidden={!!m.corner} draggable onDragStart={e=>startFill(e,'pantograph')} onClick={()=>dropFilling('pantograph',placed.id,selectedId,b.top-100)}><Shirt size={19}/><span>Пантограф</span><Plus size={15}/></button>
             <button draggable onDragStart={e=>startFill(e,'shelf')}
               onClick={()=>m.corner?dropFilling('shelf',placed.id,selectedId,(b.top+b.bottom)/2):setComposer('shelf')}
@@ -1240,7 +1237,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}>
-          <div className="property-tabs" data-stages="bodies filling facades" hidden={!!m.kupe||!!m.raw||!!m.worktop}>
+          <div className="property-tabs" data-stages="bodies filling facades" hidden={!!m.kupe||!!m.raw||!!m.worktop||!!m.kitchen}>
             <button
               aria-selected={tab === "module"}
               onClick={() => setTab("module")}
@@ -1292,7 +1289,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 К выбранному модулю
               </button>
             </div>
-          ) : m.raw||m.worktop||(m.kitchen&&tab==='module') ? <KitchenPanel m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);setOpenDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
+          ) : m.raw||m.worktop||kitchenModule ? <KitchenPanel allowEmpty={!!onEmptyProject} m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);setOpenDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : tab === "module" ? (
             <>
               <div className="property-section" data-stages="bodies">
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>
@@ -1454,7 +1451,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <p className="field-note">Отступы учитывают поворот, выступ задней стенки и место под фасады.</p>{movingTogether&&<p className="field-note"><b>Общий сдвиг:</b> отступ выбранного корпуса перемещает {moveAll?'всю композицию':'отмеченную группу'}.</p>}
                 <button
                   className="text-action danger"
-                  disabled={project.modules.length === 1}
+                  disabled={project.modules.length === 1&&!onEmptyProject}
                   onClick={() =>
                     commitProject({
                       ...project,

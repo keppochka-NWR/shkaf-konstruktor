@@ -1,0 +1,395 @@
+{
+  "format": "garderyob-rooms",
+  "version": 1,
+  "revision": 15,
+  "activeRoomId": "9d3266ac-46f0-4ec8-813a-24d52e97d190",
+  "rooms": [
+    {
+      "id": "9d3266ac-46f0-4ec8-813a-24d52e97d190",
+      "title": "Комната 1",
+      "walls": {
+        "back": "42967a62-8211-4384-b7a8-e697d4bebf27",
+        "left": "583d2269-8153-4850-b10a-c68e6e9ed82a",
+        "right": "13ca277c-5463-42de-b29b-ee5b24cafa48",
+        "front": "39de08c4-77b2-4b0b-83dc-8cc460fd689b"
+      },
+      "project": {
+        "version": 3,
+        "room": {
+          "width": 4000,
+          "height": 2700,
+          "depth": 3000,
+          "openings": []
+        },
+        "modules": [
+          {
+            "id": "9b7c8564-1343-44fe-bffb-cdbfb450cfcf",
+            "x": 0,
+            "z": 33,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Модуль 1",
+              "width": 600,
+              "height": 820,
+              "depth": 557,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "nailed",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 100,
+                  "lay": "flat",
+                  "setback": 28
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100,
+                  "lay": "flat"
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "noHandles": true,
+              "gola": {
+                "cuts": [
+                  {
+                    "top0": 0,
+                    "top1": 57.5,
+                    "depth": 27,
+                    "r": 6.5
+                  },
+                  {
+                    "top0": 367.5,
+                    "top1": 440.5,
+                    "depth": 27,
+                    "r": 5
+                  },
+                  {
+                    "top0": 165.5,
+                    "top1": 238.5,
+                    "depth": 27,
+                    "r": 5
+                  }
+                ],
+                "faceTop": 30
+              },
+              "kdrawers": [
+                {
+                  "system": "axis-pro",
+                  "y0": 101.5,
+                  "y1": 401,
+                  "runnerY": 175,
+                  "h": 200,
+                  "len": 500
+                },
+                {
+                  "system": "axis-pro",
+                  "y0": 431,
+                  "y1": 603,
+                  "runnerY": 497.5,
+                  "h": 86,
+                  "len": 500
+                },
+                {
+                  "system": "axis-pro",
+                  "y0": 633,
+                  "y1": 790,
+                  "runnerY": 699.5,
+                  "h": 86,
+                  "len": 500
+                }
+              ],
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base"
+              },
+              "sections": [
+                {
+                  "id": "17a4b029-7b8d-4054-ba77-4563080328eb",
+                  "weight": 1,
+                  "shelves": [],
+                  "shelfDepth": 554.5,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "30aaa83d-ba5d-4bea-994a-d9ecdb400cad",
+            "x": 600,
+            "z": 0,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Под мойку 600",
+              "width": 600,
+              "height": 820,
+              "depth": 557,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "none",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 60
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base",
+                "appliance": "sink"
+              },
+              "sections": [
+                {
+                  "id": "b0c0e658-688b-438b-bf41-6a7525beaae1",
+                  "weight": 1,
+                  "shelves": [],
+                  "shelfDepth": 554.5,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "2dc8e534-0e16-41b9-bb61-efdd631ca5a3",
+            "x": 1200,
+            "z": 3,
+            "y": 0,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Нижний кухонный 600",
+              "width": 600,
+              "height": 820,
+              "depth": 557,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "nailed",
+              "handleId": "lm87376595",
+              "drawerHandleId": "uz819-128",
+              "feet": {
+                "height": 100
+              },
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 100,
+                  "lay": "flat"
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100,
+                  "lay": "flat"
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base"
+              },
+              "sections": [
+                {
+                  "id": "8f673ed3-0186-4478-829b-7ebb3a3373cc",
+                  "weight": 1,
+                  "shelves": [
+                    0.5
+                  ],
+                  "shelfDepth": 554.5,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "21f06919-226f-4c0d-9435-447fe07721e5",
+            "x": 21,
+            "z": 0,
+            "y": 1458,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Навесной кухонный 600",
+              "width": 600,
+              "height": 920,
+              "depth": 330,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "wall"
+              },
+              "wallFiller": {
+                "left": {
+                  "kind": "edge",
+                  "width": 100
+                }
+              },
+              "sections": [
+                {
+                  "id": "b107ed94-0d90-4f26-af3c-f64749d799d9",
+                  "weight": 1,
+                  "shelves": [
+                    0.5
+                  ],
+                  "shelfDepth": 308,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "9ea8bc79-04f8-42a9-8c36-f7d91669c8d1",
+            "x": 621,
+            "z": 0,
+            "y": 1458,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Навесной кухонный 600",
+              "width": 600,
+              "height": 920,
+              "depth": 330,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": true,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "wall"
+              },
+              "sections": [
+                {
+                  "id": "b6cfebff-418d-49f2-8f41-10dd99fdf98b",
+                  "weight": 1,
+                  "shelves": [
+                    0.5
+                  ],
+                  "shelfDepth": 308,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "f1a2ca1f-fb2c-4794-b1cd-8f31a9845634",
+            "x": 0,
+            "z": 0,
+            "y": 820,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Столешница 1800",
+              "width": 1800,
+              "height": 38,
+              "depth": 600,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "none",
+              "plinthHeight": 0,
+              "worktop": {
+                "material": "postforming",
+                "thickness": 38,
+                "overhang": 24,
+                "cutouts": []
+              },
+              "sections": [
+                {
+                  "id": "68a78eff-b4db-4ae0-8130-cc41026bd7e4",
+                  "weight": 1,
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

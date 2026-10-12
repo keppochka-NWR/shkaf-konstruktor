@@ -64,8 +64,8 @@ test('P1: recovery restores backup and keeps the damaged source',async({page})=>
 
 test('P2/P3: empty room 3D, right-click properties and measured surface survive reload',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/?rooms=1');
- await expect(page.locator('.empty-room-canvas canvas')).toBeVisible();
- await page.getByText('Двери и окна',{exact:true}).click();await page.getByRole('button',{name:'Окно',exact:true}).click();
+ await expect(page.locator('.empty-room-app .viewport canvas')).toBeVisible();
+ await page.getByRole('button',{name:'Дальше: Коммуникации'}).click();await page.getByRole('button',{name:'Окно',exact:true}).click();
  let dialog=page.getByRole('dialog',{name:'Параметры объекта помещения'});await expect(dialog).toBeVisible();
  await dialog.getByLabel('Глубина откосов',{exact:true}).fill('150');await dialog.getByLabel('Глубина откосов',{exact:true}).press('Enter');
  await dialog.getByRole('button',{name:'Закрыть параметры'}).click();await page.getByRole('button',{name:'Показать план комнаты'}).click();
@@ -105,4 +105,50 @@ test('P1 cloud response cannot overwrite edits made while saving',async({page})=
  await page.goto('/?rooms=1');await page.locator('.room-tools>summary').click();await page.getByText('Сохранение на сервере',{exact:true}).click();await page.getByRole('button',{name:'Проверить подключение'}).click();await page.getByRole('button',{name:'Сохранить комнаты на сервер'}).click();await started;
  await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();release();await expect(page.getByText(/В заказе уже есть новые правки/)).toBeVisible();
  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).rooms.length,KEY)).toBe(2);
+});
+
+
+test('empty project: delete last module, undo, reload and export without losing room',async({page})=>{
+ await page.goto('/?rooms=1');const width=page.getByLabel('Ширина пустой комнаты');await width.fill('4100');await width.press('Enter');
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('button',{name:'Удалить выбранный модуль',exact:true}).click();
+ await expect(page.locator('.empty-room-app')).toBeVisible();await expect(width).toHaveValue('4100');
+ await page.keyboard.press('Control+z');await expect(page.getByLabel('Название модуля')).toBeVisible();
+ await page.getByRole('button',{name:'Удалить выбранный модуль',exact:true}).click();await page.reload();
+ await expect(width).toHaveValue('4100');
+ const doc=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),KEY);expect(doc.rooms[0].project.modules).toEqual([]);
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Скачать все комнаты',exact:true}).click();
+ const stream=await (await download).createReadStream(),chunks:Buffer[]=[];for await(const c of stream!)chunks.push(c);
+ expect(JSON.parse(Buffer.concat(chunks).toString()).rooms[0].project.modules).toEqual([]);
+ await page.screenshot({path:'reports/empty-room-unified.png',fullPage:true});
+ await page.setViewportSize({width:1280,height:720});expect((await page.locator('.empty-room-app canvas').boundingBox())!.height).toBeGreaterThan(200);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.setViewportSize({width:1600,height:1000});
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await expect(page.getByLabel('Название модуля')).toBeVisible();
+});
+
+test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persistence and zoom bounds',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/?rooms=1');await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await page.getByRole('button',{name:/^(4 )?Наполнение$/}).filter({hasText:'Наполнение'}).first().click();
+ await page.getByLabel('Ящики нижнего модуля',{exact:true}).selectOption('3');await page.getByLabel('Профиль Gola',{exact:true}).check();
+ await expect(page.getByRole('button',{name:'Добавить пантограф',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('button',{name:'Под мойку 600',exact:true}).click();await page.getByRole('button',{name:'Нижний распашной 600',exact:true}).click();
+ await page.getByRole('button',{name:'Навесной 600',exact:true}).click();await page.getByRole('button',{name:'Навесной 600',exact:true}).click();
+ await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
+ const read=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).rooms[0].project,KEY);
+ const before=await read(),top=before.modules.find((m:any)=>m.module.worktop);expect(top.y).toBe(820);expect(before.modules).toHaveLength(6);
+ await page.getByRole('button',{name:'План',exact:true}).click();
+ const worktop=page.getByRole('button',{name:/На плане:.*Столешница/});const box=await worktop.boundingBox();expect(box).toBeTruthy();
+ await page.mouse.move(box!.x+box!.width/2,box!.y+box!.height-3);await page.mouse.down();await page.mouse.move(box!.x+box!.width/2+25,box!.y+box!.height+70,{steps:10});await page.mouse.up();
+ const moved=await read(),after=moved.modules.find((m:any)=>m.id===top.id);expect(after.y).toBe(top.y);expect(after.z).not.toBe(top.z);
+ await page.getByRole('button',{name:'Отменить',exact:true}).click();await page.reload();await page.getByRole('button',{name:'3D',exact:true}).click();await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
+ await page.getByRole('button',{name:'Показать помещение',exact:true}).click();await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
+ const scene=page.getByTestId('scene'),canvas=scene.locator('canvas'),region=page.getByRole('region',{name:'Рабочая область'});
+ const cb=await canvas.boundingBox(),vb=await region.boundingBox();expect(Math.abs(cb!.height-vb!.height)).toBeLessThan(2);
+ await page.mouse.move(cb!.x+cb!.width/2,cb!.y+cb!.height/2);for(let i=0;i<6;i++){await page.mouse.wheel(0,-180);await page.waitForTimeout(80);}
+ await page.waitForTimeout(500);
+ const overlaps=await page.evaluate(()=>{const scene=document.querySelector('.scene')!,r=scene.getBoundingClientRect();const controls=[...document.querySelectorAll('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help')].filter(e=>e.getClientRects().length).map(e=>e.getBoundingClientRect());return [...scene.querySelectorAll<HTMLElement>('.model-dimension')].filter(e=>getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden').filter(e=>{const b=e.getBoundingClientRect();return b.left<r.left||b.right>r.right||b.top<r.top||b.bottom>r.bottom||controls.some(c=>b.left<c.right&&b.right>c.left&&b.top<c.bottom&&b.bottom>c.top);}).map(e=>e.textContent);});
+ expect(overlaps).toEqual([]);await page.screenshot({path:'reports/kitchen-zoom-ui.png',fullPage:true});
+ await page.getByRole('button',{name:'Вписать модель',exact:true}).click();const tip=page.getByRole('button',{name:'Понятно',exact:true});if(await tip.isVisible())await tip.click();await page.screenshot({path:'reports/kitchen-built-ui.png',fullPage:true});expect(errors).toEqual([]);
 });

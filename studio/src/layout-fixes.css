@@ -39,3 +39,8 @@
 /* 5. Телефон: кнопки истории без подписей; 3D-область не налезает на левую панель. */
 @media (max-width: 600px) { .history-label { display: none; } }
 @media (max-width: 520px) { .workspace { grid-template-rows: minmax(520px, auto) auto auto; } }
+
+/* Canvas and dimensions share one viewport; controls float above it. */
+.app .viewport .scene, .app.presentation .viewport .scene { inset: 0; overflow: hidden; isolation: isolate; z-index: 0; }
+.viewport .view-header, .viewport .scene-tools, .viewport .section-picker,
+.viewport .orbit-help, .viewport .presentation-tools, .viewport .scene-caption { z-index: 4; }

@@ -854,6 +854,8 @@ export function Scene(p: Props) {
       if(drag.kind==='module'){
         const raw={x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
         const next=e.altKey?{x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}:current.current.snap(drag.mid,raw);
+        // Horizontal dragging must not snap height to a neighbour or the floor.
+        if(current.current.view!=='front')next.y=drag.origin.y;
         drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||current.current.groupIds?.includes(drag.mid)&&current.current.groupIds.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':current.current.groupIds?.includes(drag.mid)?'Группа · ':'')+(e.altKey?'Без привязки · ':'')+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else if(drag.kind==='divider'){
         const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;
@@ -942,18 +944,21 @@ export function Scene(p: Props) {
       needsRender=false;renderer.render(scene, camera);
       // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
       // вверх/вниз на её высоту, а если места нет — прячем до следующего поворота камеры (аудит вёрстки 06.10.2026).
-      const placed: {x:number;y:number;w:number;h:number}[] = [];
+      const rect=target.getBoundingClientRect();
+      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip')??[])
+        .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2,w:r.width+12,h:r.height+12};});
+      const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
       const ordered = [...labels].sort((a,b)=>Number(a.element.classList.contains('gap-dimension'))-Number(b.element.classList.contains('gap-dimension')));
       for (const l of ordered) {
         const v = l.position.clone().project(camera);
         const x = ((v.x + 1) / 2) * target.clientWidth, y0 = ((-v.y + 1) / 2) * target.clientHeight;
         l.element.style.left = x + "px";
         l.element.style.visibility = "";
-        if (!(v.z < 1 && v.z > -1)) { l.element.style.display = "none"; continue; }
+        if (!(v.z < 1 && v.z > -1 && Math.abs(v.x)<1 && Math.abs(v.y)<1)) { l.element.style.display = "none"; continue; }
         l.element.style.display = "";
         const w = l.element.offsetWidth + 4, h = l.element.offsetHeight + 4;
         const hits = (y:number) => placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < (p.h + h) / 2);
-        const y = [y0, y0 - h, y0 + h, y0 - 2 * h, y0 + 2 * h].find(c => !hits(c));
+        const y = [y0, y0 - h, y0 + h, y0 - 2 * h, y0 + 2 * h].find(c => x-w/2>=4 && x+w/2<=target.clientWidth-4 && c-h/2>=4 && c+h/2<=target.clientHeight-4 && !hits(c));
         if (y === undefined) { l.element.style.top = y0 + "px"; l.element.style.visibility = "hidden"; continue; }
         l.element.style.top = y + "px";
         placed.push({ x, y, w, h });

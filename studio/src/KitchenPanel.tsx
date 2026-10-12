@@ -1,3 +1,4 @@
+import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setKitchenGola} from './kitchenEditing';
 // Панель кухонного модуля справа (вкладка «Кухня», трек И, 09.10.2026): корпус, опоры и цоколь, фасады, петли, полки, навесы,
 // столешница; для сырого модуля из Базиса — только сведения. Каждое изменение идёт через modify/commit студии (validate + projectErrors),
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
@@ -50,13 +51,13 @@ function Colors({ m, material }: { m: Module; material: KitchenPanelProps["mater
   const fill = (n: string) => n === "Белый" ? "#efeeeb" : n === "Графит" ? "#565956" : "#c4ad85";
   const rows: ["decor" | "facadeDecor" | "drawerFacadeDecor", string, string][] = [["decor", m.worktop ? "Декор столешницы" : "Корпус", m.decor]];
   if (m.doors) rows.push(["facadeDecor", "Фасады", m.facadeDecor]);
-  if (m.sections.some((s) => s.drawers > 0)) rows.push(["drawerFacadeDecor", "Фасады ящиков", m.drawerFacadeDecor ?? m.facadeDecor]);
+  if (m.kdrawers?.length || m.sections.some((s) => s.drawers > 0)) rows.push(["drawerFacadeDecor", "Фасады ящиков", m.drawerFacadeDecor ?? m.facadeDecor]);
   return <div className="kitchen-colors">{rows.map(([target, label, name]) => <button key={target} type="button" aria-label={`${label}: ${name} — выбрать декор`} onClick={() => material(target)}>
     <span className="swatch" style={tex(name) ? { backgroundImage: `url("${tex(name)}")` } : { backgroundColor: fill(name) }} /><span><small>{label}</small>{name}</span></button>)}</div>;
 }
 
 export type KitchenPanelProps = {
-  m: Module; placed: PlacedModule; project: Project; stage: string;
+  m: Module; placed: PlacedModule; project: Project; stage: string; allowEmpty?: boolean;
   modify: (update: (draft: Module) => void) => boolean;
   commit: (p: Project) => boolean;
   move: (axis: "x" | "y" | "z", v: number) => void;
@@ -75,13 +76,13 @@ export function KitchenPanel(props: KitchenPanelProps) {
 }
 
 /** Положение модуля в комнате — как в общей панели (отступы по монтажному габариту, поворот, удаление). */
-function Position({ placed, project, position, room, move, rotate, commit, open }: KitchenPanelProps & { open?: boolean }) {
+function Position({ placed, project, position, room, move, rotate, commit, open, allowEmpty }: KitchenPanelProps & { open?: boolean }) {
   return <Group icon={<Move size={15} />} title="Положение" open={open}>
     {(["y", "x", "z"] as const).map((axis) => <Num key={axis} label={{ x: "От левой стены", z: "От задней стены", y: "От пола" }[axis]} value={position[axis]} min={0}
       max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => { move(axis, v); }} />)}
     <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={placed.rotation ?? 0} onChange={(e) => rotate(Number(e.target.value) as 0 | 90 | 180 | 270)}>{[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}</select></label>
     <p className="field-note">Отступы — по монтажному габариту с фальшами и выступом ХДФ. Тяните модуль в сцене — края притягиваются к соседям.</p>
-    <button className="text-action danger" disabled={project.modules.length === 1} onClick={() => commit({ ...project, modules: project.modules.filter((a) => a.id !== placed.id) })}>Удалить модуль · Ctrl+Z вернёт</button>
+    <button className="text-action danger" disabled={project.modules.length === 1&&!allowEmpty} onClick={() => commit({ ...project, modules: project.modules.filter((a) => a.id !== placed.id) })}>Удалить модуль · Ctrl+Z вернёт</button>
   </Group>;
 }
 
@@ -204,6 +205,15 @@ function CabinetPanel(props: KitchenPanelProps) {
       <button className="outline full" onClick={legsToAll}>Эти отступы опор и цоколь — всем нижним</button>
     </Group>}
 
+    {role === "base" && <Group icon={<Rows3 size={15}/>} title="Наполнение кухни" open={stage === 'filling' || stage === 'facades'}>
+      {!k.appliance&&<label className="hardware-field">Ящики нижнего модуля<select aria-label="Ящики нижнего модуля" value={m.kdrawers?.length??0} onChange={e=>modify(n=>setKitchenDrawerCount(n,Number(e.target.value)))}>
+        <option value="0">Без ящиков · распашные фасады</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n} {n===1?'ящик':'ящика'}</option>)}
+      </select></label>}
+      <Check label="Профиль Gola" checked={!!m.gola} change={v=>modify(n=>setKitchenGola(n,v))}/>
+      {m.gola&&<p className="field-note">Верхний L-профиль; между ящиками — C-профили. Вырезы боковин и зазоры фасадов показаны в модели. Обычные ручки отключены.</p>}
+      {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
+    </Group>}
+
     {hasFronts && <Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}>
       <Check label="Распашные фасады" checked={m.doors} change={(v) => modify((n) => { n.doors = v; })} />
       {m.doors && <div className="kitchen-field"><span>Створки{m.sections.length > 1 ? ` · секция ${sIdx + 1}` : ""}</span>
@@ -246,10 +256,10 @@ function CabinetPanel(props: KitchenPanelProps) {
     {!!m.kdrawers?.length && <Group icon={<Rows3 size={15} />} title={m.kdrawers[0].system === "firmax-ldsp" ? "Ящики Firmax ЛДСП" : m.kdrawers[0].system === "versalite-h45" ? "Ящики Versalite H45" : m.kdrawers[0].system === "start-sc" ? "Ящики Boyard СТАРТ" : m.kdrawers[0].system === "indigo" ? "Ящики Indigo" : m.kdrawers[0].system === "modern-slide" ? "Ящики MODERN SLIDE" : "Ящики Axis PRO"} open={stage === "filling"} note={m.kdrawers.length + " шт."}>
       <div className="kitchen-field"><span>Количество ящиков</span>
         <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => { const same = m.kdrawers!.length === c, why = relayoutProblem(m, c); /* текущее число — пересобрать с теми же долями фасадов (царги и длины заново) */
-          return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? relayoutKDrawers(n, c, n.kdrawers!.map((k) => k.y1 - k.y0)) : relayoutKDrawers(n, c); })}>{c}</button>; })}</div></div>
+          return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? layoutKitchenDrawers(n, c) : layoutKitchenDrawers(n, c); })}>{c}</button>; })}</div></div>
       {[...m.kdrawers].map((d, i) => ({ d, i })).reverse().map(({ d, i }) => <div key={i} className="kitchen-rail">
         <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(d)} · направляющая на {d.runnerY} от пола модуля</p>
-        {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={kdrawerFacadeMax(m, i)} step={0.5} change={(v) => modify((n) => { n.kdrawers = setKDrawerFacade(n, i, v); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
+        {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={kdrawerFacadeMax(m, i)} step={0.5} change={(v) => modify((n) => { n.kdrawers = n.gola ? resizeKitchenDrawerFront(n,i,v) : setKDrawerFacade(n, i, v); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
         {d.system === "axis-pro" && <div className="kitchen-chips" role="group" aria-label={`Царга ящика ${i + 1}`}>{AXIS_HEIGHTS.map((h) => { const k2 = withAxisH(m, d, h), fit = axisFits(m, k2), ok = fit && axisAvailable(k2) && k2.len <= axisMaxLen(m); /* длина подбирается под глубину и царгу */
           return <button key={h} type="button" aria-pressed={d.h === h} disabled={d.h !== h && !ok} title={!fit ? "Не входит: короб ближе 21,5 мм к верху фасада или 5 мм к царгам корпуса" : !ok ? `Нет модели Axis PRO H-${h} под глубину корпуса ${m.depth}` : undefined} onClick={() => modify((n) => { const o = n.kdrawers![i]; if (o.system !== "axis-pro") return; n.kdrawers![i] = withAxisH(n, o, h); })}>H-{h}</button>; })}</div>}
         {d.system === "firmax-ldsp" && <p className="field-note">Короб ЛДСП 16: боковины {d.box.h} × {d.box.len} мм с {d.box.y} от пола модуля, дно на {d.box.bottomUp ?? 10} выше низа боковин</p>}
@@ -257,7 +267,7 @@ function CabinetPanel(props: KitchenPanelProps) {
         {d.system === "modern-slide" && <p className="field-note">Короб ЛДСП 16: боковины {d.box.h} × {d.box.len} мм с {d.box.y} от пола модуля, дно на {d.box.bottomUp ?? 13} выше низа боковин</p>}
         {d.system === "start-sc" && <p className="field-note">Боковины СТАРТ {d.sb}{d.rail ? " с рейлингом" : ""}{d.inner ? " · внутренний ящик за фасадом" : ""}</p>}
       </div>)}
-      <label className="hardware-field">Система ящиков<select aria-label="Система ящиков" value={m.kdrawers[0].system} onChange={(e) => modify((n) => { n.kdrawers = relayoutKDrawers(n, n.kdrawers!.length, n.kdrawers!.map((k) => k.y1 - k.y0), e.target.value as KDrawerSystem); })}><option value="axis-pro">Axis PRO (металлические царги)</option><option value="firmax-ldsp">Firmax ЛДСП (короб ЛДСП, скрытый монтаж)</option><option value="versalite-h45">Versalite Light H45 (короб ЛДСП, шариковые направляющие)</option><option value="start-sc">Boyard СТАРТ Soft-Closing (металлические боковины SB08/SB19/SB20)</option><option value="indigo">Indigo (металлические царги H=90 / H=175, 500 мм)</option><option value="modern-slide">MODERN SLIDE (короб ЛДСП, направляющая без модели Базиса)</option></select></label>
+      <label className="hardware-field">Система ящиков<select aria-label="Система ящиков" value={m.kdrawers[0].system} onChange={(e) => modify((n) => { n.kdrawers = layoutKitchenDrawers(n, n.kdrawers!.length, undefined, e.target.value as KDrawerSystem); })}><option value="axis-pro">Axis PRO (металлические царги)</option><option value="firmax-ldsp">Firmax ЛДСП (короб ЛДСП, скрытый монтаж)</option><option value="versalite-h45">Versalite Light H45 (короб ЛДСП, шариковые направляющие)</option><option value="start-sc">Boyard СТАРТ Soft-Closing (металлические боковины SB08/SB19/SB20)</option><option value="indigo">Indigo (металлические царги H=90 / H=175, 500 мм)</option><option value="modern-slide">MODERN SLIDE (короб ЛДСП, направляющая без модели Базиса)</option></select></label>
       {m.kdrawers[0].system === "firmax-ldsp" && <>
         <Check label="Саморезы направляющих 3×3 в боковинах корпуса" checked={m.kdrawers.every((k) => k.system !== "firmax-ldsp" || !!k.box.screws)} change={(v) => modify((n) => { n.kdrawers = firmaxSetScrews(n.kdrawers!, "screws", v); })} />
         <Check label="Шурупы фальшпанели в фасад 3,5×30" checked={m.kdrawers.every((k) => k.system !== "firmax-ldsp" || !!k.box.faceScrews)} change={(v) => modify((n) => { n.kdrawers = firmaxSetScrews(n.kdrawers!, "faceScrews", v); })} />

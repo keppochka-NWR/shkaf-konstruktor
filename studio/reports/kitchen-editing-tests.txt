@@ -1,0 +1,11 @@
+✔ kitchen editing preserves carcass and produces valid drawer systems with Gola (29.8826ms)
+✔ worktop from ordinary palette is placed at cabinet height (3.2948ms)
+✔ Gola drawer changes preserve gaps and front sizes across relayout, system change and height change (4.4947ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 525.2029
