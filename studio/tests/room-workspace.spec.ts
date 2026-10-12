@@ -1,0 +1,62 @@
+import { test, expect } from '@playwright/test';
+const KEY='garderyob-rooms-v1';
+test('P1: room isolation, cabinet edits, persistence, document undo and legacy isolation', async ({page}) => {
+  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/?rooms=1');
+  await expect(page.getByRole('heading',{name:'Комната 1',exact:true})).toBeVisible();
+  const w=page.getByLabel('Ширина пустой комнаты');await w.fill('4100');await w.press('Enter');
+  await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+  const name=page.getByLabel('Название модуля');await name.fill('Шкаф первой комнаты');await name.press('Enter');
+  await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Комната 2',exact:true})).toBeVisible();
+  await expect(page.getByLabel('Название модуля')).toHaveCount(0);
+  await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+  await name.fill('Шкаф второй комнаты');await name.press('Enter');
+  await page.getByLabel('Активная комната').selectOption({label:'Комната 1'});
+  await expect(name).toHaveValue('Шкаф первой комнаты');
+  await page.reload();await expect(name).toHaveValue('Шкаф первой комнаты');
+  expect(await page.evaluate(()=>localStorage.getItem('module-studio-v3'))).toBeNull();
+  await page.getByRole('button',{name:'Удалить комнату',exact:true}).click();
+  await page.getByRole('button',{name:'Подтвердить удаление комнаты'}).click();
+  await expect(name).toHaveValue('Шкаф второй комнаты');
+  await page.getByRole('button',{name:'Отменить изменение заказа'}).click();
+  await expect(name).toHaveValue('Шкаф первой комнаты');
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).rooms.length,KEY)).toBe(2);
+  await page.screenshot({path:'reports/p1-rooms.png',fullPage:true});
+  expect(errors).toEqual([]);
+});
+test('P1: stale writer is rejected without applying room edit',async({page,context})=>{
+  await page.goto('/?rooms=1');await page.getByRole('button',{name:'Сохранить комнаты',exact:true}).click();
+  const other=await context.newPage();await other.goto('/?rooms=1');
+  await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+  await other.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+  await expect(other.getByRole('alert')).toContainText('другой вкладке');
+  await expect(other.getByRole('heading',{name:'Комната 1',exact:true})).toBeVisible();
+  expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).rooms.length,KEY)).toBe(2);
+});
+test('P1: invalid imported file does not replace saved document; full export contains all rooms',async({page})=>{
+  await page.goto('/?rooms=1');await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+  const before=await page.evaluate(key=>localStorage.getItem(key),KEY);
+  await page.locator('.rooms-bar input[type=file]').setInputFiles({name:'future.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'garderyob-rooms',version:99}))});
+  await expect(page.getByRole('alert')).toContainText('Неподдерживаемый');
+  expect(await page.evaluate(key=>localStorage.getItem(key),KEY)).toBe(before);
+  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Скачать все комнаты'}).click();
+  const file=await download;expect(file.suggestedFilename()).toContain('комнаты');
+  const stream=await file.createReadStream();const chunks:Buffer[]=[];for await(const c of stream!)chunks.push(c);
+  const doc=JSON.parse(Buffer.concat(chunks).toString());expect(doc.rooms).toHaveLength(2);
+});
+test('P1: corrupt storage is not replaced by a sample',async({page})=>{
+  await page.goto('/?rooms=1');
+  await page.evaluate(key=>localStorage.setItem(key,'{broken'),KEY);await page.reload();
+  await expect(page.getByRole('heading',{name:'Документ комнат не удалось открыть'})).toBeVisible();
+  expect(await page.evaluate(key=>localStorage.getItem(key),KEY)).toBe('{broken');
+});
+test('P1: recovery restores backup and keeps the damaged source',async({page})=>{
+  await page.goto('/?rooms=1');await page.getByRole('button',{name:'Сохранить комнаты',exact:true}).click();
+  await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+  await page.evaluate(key=>localStorage.setItem(key,'{broken'),KEY);await page.reload();
+  await page.getByRole('button',{name:'Восстановить предыдущую копию'}).click();
+  await expect(page.getByRole('heading',{name:'Комната 1',exact:true})).toBeVisible();
+  expect(await page.evaluate(key=>Object.keys(localStorage).some(k=>k.startsWith(key+':damaged:')&&localStorage.getItem(k)==='{broken'),KEY)).toBe(true);
+  await page.reload();await expect(page.getByRole('heading',{name:'Комната 1',exact:true})).toBeVisible();
+});

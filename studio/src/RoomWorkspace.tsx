@@ -1,0 +1,99 @@
+import { useRef, useState } from 'react';
+import App from './App';
+import { CURRENT_PROJECT } from './projectStorage';
+import { newProject, type Project } from './project';
+import { saveFile } from './exports';
+import { activeRoom, addRoom, migrateRoomDocument, parseRoomDocument, persistRoomDocument, removeRoom, renameRoom, selectRoom, updateRoom, ROOM_DOCUMENT_KEY, ROOM_DOCUMENT_BACKUP, type RoomDocument } from './roomDocument';
+import './room-workspace.css';
+
+/** Opt-in P1 workspace. Only the selected room is mounted in the legacy editor. */
+export function RoomWorkspace() {
+  const [startup] = useState(() => {
+    try {
+      const raw = localStorage.getItem(ROOM_DOCUMENT_KEY);
+      const legacy = localStorage.getItem(CURRENT_PROJECT);
+      return { document: raw ? parseRoomDocument(JSON.parse(raw)) : migrateRoomDocument(legacy ? JSON.parse(legacy) : undefined), raw, error: '' };
+    } catch (e) { return { document: null, raw: null, error: String(e instanceof Error ? e.message : e) }; }
+  });
+  const [document, setDocument] = useState<RoomDocument | null>(startup.document);
+  const current = useRef(document), expected = useRef(startup.raw);
+  const [error, setError] = useState(startup.error), [saved, setSaved] = useState(startup.raw ? 'Сохранено в этом браузере' : 'Новая копия · ещё не сохранена');
+  const [epoch, setEpoch] = useState(0), [confirmDelete, setConfirmDelete] = useState(false);
+  const undo = useRef<RoomDocument[]>([]), redo = useRef<RoomDocument[]>([]);
+  const upload = useRef<HTMLInputElement>(null), importSequence = useRef(0);
+  function commit(candidate: RoomDocument, track = true, remount = false): boolean {
+    try {
+      const result = persistRoomDocument(localStorage, candidate, expected.current);
+      if (track && current.current) { undo.current = [...undo.current, current.current].slice(-60); redo.current = []; }
+      expected.current = result.serialized;
+      current.current = result.document; setDocument(result.document);
+      setSaved('Сохранено в этом браузере'); setError(''); setConfirmDelete(false);
+      if (remount) setEpoch(v => v + 1);
+      return true;
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); setSaved('Изменение не сохранено и не применено'); return false; }
+  }
+  function run(action: (d: RoomDocument) => RoomDocument, remount = false) {
+    if (!current.current) return;
+    try { commit(action(current.current), true, remount); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+  function history(back: boolean) {
+    const from = back ? undo : redo, to = back ? redo : undo;
+    const candidate = from.current.at(-1), old = current.current;
+    if (candidate && old && commit(candidate, false, true)) { from.current.pop(); to.current.push(old); }
+  }
+  function restoreBackup() {
+    try {
+      const raw = localStorage.getItem(ROOM_DOCUMENT_BACKUP);
+      if (!raw) throw Error('Предыдущая копия отсутствует.');
+      const candidate = parseRoomDocument(JSON.parse(raw));
+      // Preserve unreadable original before recovery. Never silently overwrite it.
+      const original = localStorage.getItem(ROOM_DOCUMENT_KEY);
+      let nowValid = false;
+      if(original!==null){try{parseRoomDocument(JSON.parse(original));nowValid=true;}catch{/* recovery only for an unreadable primary */}}
+      if(nowValid)throw Error('В другой вкладке уже восстановлен документ. Перезагрузите страницу.');
+      if (original !== null) localStorage.setItem(ROOM_DOCUMENT_KEY + ':damaged:' + crypto.randomUUID(), original);
+      // A corrupt document cannot provide a revision. Restore a validated copy atomically.
+      localStorage.setItem(ROOM_DOCUMENT_KEY, JSON.stringify(candidate));
+      expected.current = JSON.stringify(candidate); current.current = candidate; setDocument(candidate); setError('');
+      setSaved('Восстановлена предыдущая копия'); setEpoch(v => v + 1);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+  if (!document) return <main className="rooms-empty"><h1>Документ комнат не удалось открыть</h1><p role="alert">{error}</p><p>Исходная запись сохранена. Автозамена примером отключена.</p><button onClick={restoreBackup}>Восстановить предыдущую копию</button></main>;
+  const room = activeRoom(document);
+  const bar = <section className="rooms-bar" aria-label="Комнаты заказа">
+    <div className="rooms-top"><strong>Комнаты заказа</strong><span role="status">{saved}</span><span>Мебель, расчёт и документы редактора — только выбранная комната</span></div>
+    <div className="rooms-controls">
+      <label>Комната<select aria-label="Активная комната" value={room.id} onChange={e => run(d => selectRoom(d, e.target.value))}>{document.rooms.map(r => <option value={r.id} key={r.id}>{r.title}</option>)}</select></label>
+      <input aria-label="Название комнаты" key={room.id + room.title} defaultValue={room.title} maxLength={60} onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); if(e.key === 'Escape'){ e.currentTarget.value=room.title; e.currentTarget.blur(); } }} onBlur={e => { if(e.target.value!==room.title)run(d => renameRoom(d,room.id,e.target.value)); }} />
+      <button onClick={() => run(d => addRoom(d, `Комната ${d.rooms.length + 1}`))}>Добавить комнату</button>
+      <button onClick={() => run(d => addRoom(d, `${room.title.slice(0,50)} · копия`, room.id))}>Копировать комнату</button>
+      <button disabled={document.rooms.length === 1} onClick={() => setConfirmDelete(true)}>Удалить комнату</button>
+      <button disabled={!undo.current.length} onClick={() => history(true)}>Отменить изменение заказа</button>
+      <button disabled={!redo.current.length} onClick={() => history(false)}>Повторить изменение заказа</button>
+      <button onClick={() => commit(current.current!,false)}>Сохранить комнаты</button>
+      <button onClick={() => saveFile('ГардерЁб комнаты.json',JSON.stringify(current.current,null,2),'application/json')}>Скачать все комнаты</button>
+      <button onClick={() => upload.current?.click()}>Открыть документ комнат</button>
+    </div>
+    {confirmDelete && <div role="alert">Удалить «{room.title}» вместе с её мебелью? <button onClick={() => run(d => removeRoom(d,room.id))}>Подтвердить удаление комнаты</button><button onClick={() => setConfirmDelete(false)}>Оставить комнату</button></div>}
+    {error && <p role="alert">{error}</p>}
+    <input hidden ref={upload} type="file" accept=".json" onChange={async e => {
+      const file=e.target.files?.[0];e.target.value='';if(!file)return;
+      const sequence=++importSequence.current,before=current.current;
+      try {
+        if(file.size>20_000_000)throw Error('Документ больше 20 МБ.');
+        const raw=JSON.parse(await file.text());
+        if(sequence!==importSequence.current)return;
+        if(current.current!==before)throw Error('Заказ изменился во время чтения. Повторите открытие файла.');
+        const candidate=raw?.format==='garderyob-rooms'?parseRoomDocument(raw):migrateRoomDocument(raw);
+        commit(candidate,true,true);
+      } catch(e){setError(e instanceof Error?e.message:String(e));}
+    }}/>
+  </section>;
+  if (!room.project.modules.length) return <div className="rooms-shell">{bar}<main className="rooms-empty"><h1>{room.title}</h1><p>Комната пока без мебели. Размеры — в миллиметрах.</p>
+    {(['width','depth','height'] as const).map(axis => <label key={room.id+axis+room.project.room[axis]}>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}<input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} defaultValue={room.project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}} onBlur={e=>{const n=Number(e.target.value);if(n!==room.project.room[axis])run(d=>updateRoom(d,room.id,{...room.project,room:{...room.project.room,[axis]:n}}));}}/></label>)}
+    <button onClick={() => run(d => updateRoom(d,room.id,{...room.project,modules:newProject().modules}))}>Добавить первый шкаф</button>
+    <p>Другие комнаты сохранены и скрыты. Общие стены и кривые поверхности — следующие пакеты.</p></main></div>;
+  return <App key={room.id+':'+epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
+    try { return commit(updateRoom(current.current!,room.id,p)); } catch(e){setError(e instanceof Error?e.message:String(e));return false;}
+  }}/>;
+}

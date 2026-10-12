@@ -212,9 +212,10 @@ function Counter({
     </div>
   );
 }
-export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void}={}) {
+export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean}={}) {
   const KEY=CURRENT_PROJECT+(projectKey?':'+projectKey:'');
   const [startup] = useState(() => {
+    if(saveManagedProject&&initialProject)return {model:initialProject,error:'',damaged:undefined as string|undefined,storageUnavailable:false,currentRaw:null};
     let original:string|null=null,currentRaw:string|null=null;
     try {
       currentRaw=localStorage.getItem(KEY);
@@ -421,12 +422,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setSelectedOpening(undefined);setSelectedObstacle(undefined);
   }
   const undo = () => {
+    if(saveManagedProject&&!saveManagedProject(history[Math.max(0,cursor-1)]))return;
     clearHistorySelection();
     setCursor((c) => Math.max(0, c - 1));
     setError("");
     touched.current = true;
   };
   const redo = () => {
+    if(saveManagedProject&&!saveManagedProject(history[Math.min(history.length-1,cursor+1)]))return;
     clearHistorySelection();
     setCursor((c) => Math.min(history.length - 1, c + 1));
     setError("");
@@ -444,6 +447,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       setError("");
       return true;
     }
+    if(saveManagedProject&&!saveManagedProject(next))return false;
     touched.current = true;
     setHistory((h) => [...h.slice(0, cursor + 1), next].slice(-61));
     setCursor(Math.min(cursor + 1, 60));
@@ -568,11 +572,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   // Папка клиента: новый проект сразу пишется в браузер под своим ключом, а вкладка получает цену без ожидания первой правки.
   useEffect(()=>{
+    if(saveManagedProject)return;
     if((projectKey||onProjectChange)&&!startup.currentRaw&&!startup.storageUnavailable){try{lastLocalWrite.current=persistProject(localStorage,project,undefined,null,KEY);}catch{/* хранилище недоступно — сохранится при первой правке */}}
     onProjectChange?.(project);
   },[]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!touched.current) return;
+    if(saveManagedProject){setSaved('Комната сохранена в браузере');return;}
     if(startup.storageUnavailable){setSaved("Не сохранено");setError("При запуске не удалось прочитать хранилище. Автосохранение отключено, чтобы не заменить недоступный проект. Скачайте текущую работу и перезагрузите редактор.");return;}
     try {
       lastLocalWrite.current=persistProject(localStorage,project,startup.damaged,lastLocalWrite.current,KEY);
@@ -724,7 +730,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>}
         <div className="header-actions">
           <button className="outline presentation-trigger" onClick={()=>changePresentation(!presentation)}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
-          <button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>
+          {!saveManagedProject&&<button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>}
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("sheets");setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
@@ -734,11 +740,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onClick={() => upload.current?.click()}
           >
             <Upload size={16} />
-            <span>Открыть</span>
+            <span>{saveManagedProject?'Заменить мебель комнаты':'Открыть'}</span>
           </button>
           <button className="primary" aria-label="Сохранить проект файлом" title="Скачать проект для открытия на другом компьютере. Автосохранение работает в этом браузере." onClick={download}>
             <Download size={16} />
-            <span>Сохранить файл</span>
+            <span>{saveManagedProject?'Скачать комнату':'Сохранить файл'}</span>
           </button>
         </div>
       </header>

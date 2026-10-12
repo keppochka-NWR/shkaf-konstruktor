@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ClientWorkspace } from "./ClientWorkspace";
+import { RoomWorkspace } from './RoomWorkspace';
 import VotanStudio from './VotanStudio';
 import {cornerProject,CORNER_DEFAULT,CORNER_STORAGE} from './cornerWardrobe';
 import {parseProject} from './project';
@@ -12,6 +13,10 @@ import "./studio-refresh.css";
 import "./layout-fixes.css";
 async function start(){
   const query=new URLSearchParams(location.search),slug=query.get('project');
+  if(query.get('rooms')==='1'){
+    createRoot(document.getElementById('root')!).render(<React.StrictMode><RoomWorkspace/></React.StrictMode>);
+    return;
+  }
   let initialProject;
   if(slug){
     if(!/^[a-z0-9-]{1,64}$/.test(slug))throw Error('Некорректная ссылка на локальный проект.');
