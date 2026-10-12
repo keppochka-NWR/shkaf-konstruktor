@@ -1,3 +1,4 @@
+import { kitchenRowZ } from "./kitchenAlignment";
 import {parseSurvey,type Survey} from './roomSurvey';
 import {transform,inverseTransform,polygonBounds,convexOverlap} from './roomGeometry';
 import type {Niche,CeilingType} from './measurement';
@@ -225,7 +226,7 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?1500:0);
   if(source.worktop&&!supports.length)throw Error('Сначала добавьте нижние кухонные корпуса: столешница устанавливается над ними.');
   const a:PlacedModule={id:id(),x:0,y:initialY,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
-  const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=source.worktop&&supports.length?Math.min(...supports.map(a=>a.x)):anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),0),preferredZ=anchor?bounds(anchor).z:30;
+  const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=source.worktop&&supports.length?Math.min(...supports.map(a=>a.x)):anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),source.kitchen?21:0),preferredZ=anchor?bounds(anchor).z:source.kitchen?kitchenRowZ(p,module,initialY)+base.z:source.worktop&&supports.length?Math.min(...supports.map(a=>a.z-kitchenRowZ({ ...p, modules: [] },a.module,a.y??0))):30;
   const xs=[preferredX,0,...occupied.flatMap(b=>[b.x+b.w,b.x-base.w,b.x]),p.room.width-base.w],zs=[preferredZ,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-base.d,b.z]),p.room.depth-base.d];
   for(const z of [...new Set(zs)])for(const x of [...new Set(xs)]){
     const box={...base,x,z};if(x<0||z<0||x+base.w>p.room.width||z+base.d>p.room.depth||base.y+base.h>p.room.height||occupied.some(b=>overlap(box,b)))continue;

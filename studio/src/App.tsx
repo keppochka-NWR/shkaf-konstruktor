@@ -476,7 +476,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
-    try{update(next);if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}}catch(e){setError((e as Error).message);return false;}
+    try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}}catch(e){setError((e as Error).message);return false;}
     return commit(next);
   }
   function modifySection(update: (draft: Section, next: Module) => void) {

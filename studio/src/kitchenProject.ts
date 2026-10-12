@@ -1,3 +1,4 @@
+import { kitchenRowZ, kitchenFaceOffset, kitchenRearClearance } from "./kitchenAlignment";
 // Вкладка «Кухня» (трек И, 09.10.2026): кухонный проект, шаблоны кухонной палитры и расстановка модулей по рядам кухни.
 // Только логика, без React: KitchenPalette.tsx и KitchenPanel.tsx вызывают эти функции, App коммитит результат обычным commitProject
 // (автофальши + projectErrors), так что проверки и ошибки — те же, что во всей студии.
@@ -118,7 +119,7 @@ export function placeKitchenModule(p: Project, m: Module): { project: Project; i
     if (y + m.height > p.room.height) throw Error(`Антресоль ${m.height} мм не помещается: верх навесных на ${y} мм, потолок ${p.room.height}. Уменьшите высоту навесных (например, до 720) или поставьте антресоль вместо навесного.`);
   }
   const a: PlacedModule = { id: id(), x: 0, y, z: 0, rotation: 0, module: m };
-  a.z = -bounds(a).z; // задняя грань (с выступом накладного ХДФ) — к стене
+  a.z = kitchenRowZ(p, m, y); // единая линия фасадов соседей, независимо от задника
   const all = p.modules.map(bounds);
   const xs = [right(row), r === "wall" || r === "antresol" ? left(r === "wall" ? bases : walls) : undefined, KITCHEN_WALL_OFFSET, (left(row) ?? NaN) - m.width,
     ...all.flatMap((b) => [b.x + b.w, b.x - m.width]), p.room.width - m.width - KITCHEN_WALL_OFFSET, 0].filter((x): x is number => x !== undefined);
@@ -131,21 +132,23 @@ export function placeWorktop(p: Project, source: Pick<Module, "decor">): { proje
   const bases = p.modules.filter((a) => role(a) === "base" && (a.rotation ?? 0) === 0).sort((a, b) => a.x - b.x);
   if (!bases.length) throw Error("Столешница ставится на нижние модули. Сначала добавьте нижние.");
   const worktops = p.modules.filter((a) => a.module.worktop);
-  const covered = (a: PlacedModule) => worktops.some((w) => w.x < a.x + a.module.width - 1 && w.x + w.module.width > a.x + 1);
+  const covered = (a: PlacedModule) => worktops.some((w) => (w.rotation ?? 0) === 0 && Math.abs((w.y ?? 0) - (a.y ?? 0) - a.module.height) < 1 && w.z <= a.z + 1 && w.z + w.module.depth >= a.z + kitchenFaceOffset(a.module) - 1 && w.x < a.x + a.module.width - 1 && w.x + w.module.width > a.x + 1);
   // первый непрерывный участок нижних без столешницы (стык соседей — до 2 мм)
   let run: PlacedModule[] = [];
   for (const a of bases) {
     if (covered(a)) { if (run.length) break; continue; }
     const last = run[run.length - 1];
-    if (last && Math.abs(last.x + last.module.width - a.x) > 2) break;
+    if (last && (Math.abs(last.x + last.module.width - a.x) > 2 || Math.abs(last.z + kitchenFaceOffset(last.module) - a.z - kitchenFaceOffset(a.module)) > 2 || Math.abs((last.y ?? 0) + last.module.height - (a.y ?? 0) - a.module.height) > 1)) break;
     run.push(a);
   }
   if (!run.length) throw Error("Все нижние уже под столешницей. Длина столешницы меняется в панели справа.");
   const x0 = run[0].x, x1 = run[run.length - 1].x + run[run.length - 1].module.width, length = Math.round(x1 - x0);
   const y = Math.max(...run.map((a) => (a.y ?? 0) + a.module.height));
+  const rowZ = Math.max(0, Math.min(...run.map(a => a.z - kitchenRearClearance(a.module))));
+  const rowDepth = Math.max(KITCHEN.worktopDepth, ...run.map(a => a.z + kitchenFaceOffset(a.module) + 24 - rowZ));
   const pieces = length > 4100 ? [Math.round(length / 2), length - Math.round(length / 2)] : [length];
   let x = x0;
-  const group = pieces.map((w) => { const m = cleanWorktop({ ...kitchenWorktop(initialModule(), w), decor: source.decor, name: `Столешница ${w}` }); const e = validate(m)[0]; if (e) throw Error(e); const a: PlacedModule = { id: id(), x, y, z: 0, rotation: 0, module: m }; x += w; return a; });
+  const group = pieces.map((w) => { const m = cleanWorktop({ ...kitchenWorktop(initialModule(), w), depth: rowDepth, decor: source.decor, name: `Столешница ${w}` }); const e = validate(m)[0]; if (e) throw Error(e); const a: PlacedModule = { id: id(), x, y, z: rowZ, rotation: 0, module: m }; x += w; return a; });
   return { project: { ...p, modules: [...p.modules, ...group] }, ids: group.map((a) => a.id) };
 }
 

@@ -1,0 +1,239 @@
+{
+  "format": "garderyob-rooms",
+  "version": 1,
+  "revision": 40,
+  "activeRoomId": "b45207f3-5a58-469c-b5d3-fd7561afd1fc",
+  "rooms": [
+    {
+      "id": "b45207f3-5a58-469c-b5d3-fd7561afd1fc",
+      "title": "01 · K34 · компактная",
+      "walls": {
+        "back": "5adc81e1-a0a2-4b83-856e-9a0f4b2082c5",
+        "left": "baced0e0-d821-44fc-9aaf-a41fd0fd53ec",
+        "right": "9eb06e53-d4c5-4871-bd2c-4a9ae9daf23b",
+        "front": "1300b18e-1e87-472a-b639-f32e1f3ed6a1"
+      },
+      "project": {
+        "version": 3,
+        "room": {
+          "width": 2500,
+          "height": 2700,
+          "depth": 3000,
+          "openings": []
+        },
+        "modules": [
+          {
+            "id": "f78abf11-278a-466a-9ee9-10e49d7f9868",
+            "x": 500,
+            "z": 105,
+            "y": 0,
+            "rotation": 180,
+            "module": {
+              "version": 1,
+              "name": "K34 · мойка",
+              "width": 800,
+              "height": 720,
+              "depth": 460,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "none",
+              "plinthHeight": 0,
+              "topType": "none",
+              "rails": [
+                {
+                  "place": "front-top",
+                  "height": 60
+                },
+                {
+                  "place": "rear-top",
+                  "height": 100
+                }
+              ],
+              "bottomUnder": true,
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "base",
+                "appliance": "sink",
+                "plinth": {
+                  "height": 95,
+                  "off": true
+                },
+                "noLegs": true
+              },
+              "sections": [
+                {
+                  "id": "b6f96fd8-810e-4c82-b79e-2fc57c0dd9de",
+                  "weight": 1,
+                  "shelves": [],
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "c59f2056-786e-49bd-9a35-7316c0a03174",
+            "x": 0,
+            "z": 5,
+            "y": 1360,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Навесной кухонный 600",
+              "width": 500,
+              "height": 720,
+              "depth": 315,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "wall",
+                "hangers": false
+              },
+              "sections": [
+                {
+                  "id": "9ce6c70a-10e5-4ecf-a99b-ff438224e956",
+                  "weight": 1,
+                  "shelves": [
+                    0.32994186046511625,
+                    0.6700581395348837
+                  ],
+                  "shelfDepth": 293,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "ada1a05b-a45f-408d-9e1f-e09c3c6b07cc",
+            "x": 500,
+            "z": 5,
+            "y": 1360,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "K34 · сушка 800",
+              "width": 800,
+              "height": 720,
+              "depth": 315,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "bottomType": "none",
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "wall",
+                "hangers": false
+              },
+              "sections": [
+                {
+                  "id": "05783216-85a6-4450-880f-d37fd70183db",
+                  "weight": 1,
+                  "shelves": [],
+                  "shelfDepth": 293,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          },
+          {
+            "id": "137f75db-14b2-4312-88c9-9ab693447452",
+            "x": 1300,
+            "z": 5,
+            "y": 1360,
+            "rotation": 0,
+            "module": {
+              "version": 1,
+              "name": "Навесной кухонный 800",
+              "width": 800,
+              "height": 720,
+              "depth": 315,
+              "decor": "Дуб Вотан",
+              "facadeDecor": "Белый",
+              "doors": false,
+              "backType": "groove",
+              "grooveInset": 16,
+              "grooveDepth": 8,
+              "plinthHeight": 0,
+              "topType": "panel",
+              "faceGap": 1.5,
+              "faceGapBetween": 3,
+              "backGap": 1.5,
+              "grooveWidth": 4,
+              "grooveClear": 1,
+              "faceAir": 0,
+              "shelfRear": 1,
+              "shelfPinInset": 60,
+              "confirmatInset": 64,
+              "edgeScheme": {
+                "t": 1
+              },
+              "kitchen": {
+                "role": "wall",
+                "hangers": false
+              },
+              "sections": [
+                {
+                  "id": "d3ab043d-24cd-4acc-95cb-35393059d177",
+                  "weight": 1,
+                  "shelves": [
+                    0.32994186046511625,
+                    0.6700581395348837
+                  ],
+                  "shelfDepth": 293,
+                  "drawers": 0,
+                  "rod": false
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

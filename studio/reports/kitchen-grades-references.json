@@ -1,0 +1,2613 @@
+[
+  {
+    "grade": 1,
+    "reference": "k12",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k12.json",
+    "sha256": "9cbf66cb9a0bb1ef80c0290c0515f1be5b8ebd69a303106e91007de34aa3c435",
+    "room": {
+      "width": 3001,
+      "depth": 1000,
+      "height": 2700,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "Мойка",
+        "width": 800,
+        "height": 820,
+        "depth": 560,
+        "x": 6,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 70,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 2",
+        "width": 600,
+        "height": 820,
+        "depth": 569,
+        "x": 806,
+        "y": 0,
+        "z": 10,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 3",
+        "width": 800,
+        "height": 820,
+        "depth": 547,
+        "x": 1406,
+        "y": 0,
+        "z": 13,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 57,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 2
+      },
+      {
+        "name": "Пенал",
+        "width": 400,
+        "height": 2100,
+        "depth": 557,
+        "x": 2206,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "tall",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 67,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "А 1",
+        "width": 600,
+        "height": 400,
+        "depth": 350,
+        "x": 1606,
+        "y": 1700,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true,
+          "hangerAt": {
+            "left": [
+              -285,
+              20,
+              0
+            ],
+            "right": [
+              -285,
+              20,
+              0
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "А 2",
+        "width": 600,
+        "height": 400,
+        "depth": 350,
+        "x": 1006,
+        "y": 1700,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true,
+          "hangerAt": {
+            "left": [
+              -285,
+              20,
+              0
+            ],
+            "right": [
+              -285,
+              20,
+              0
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "А 3",
+        "width": 600,
+        "height": 400,
+        "depth": 350,
+        "x": 406,
+        "y": 1700,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true,
+          "hangerAt": {
+            "left": [
+              -285,
+              20,
+              0
+            ],
+            "right": [
+              -285,
+              20,
+              0
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Столешница",
+        "width": 2201,
+        "height": 38,
+        "depth": 600,
+        "x": 5,
+        "y": 820,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  },
+  {
+    "grade": 2,
+    "reference": "k04",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k04.json",
+    "sha256": "950bfab8112230e36bb2b97118a7263981ad89afd6e8fcb2be70126b6086f0ee",
+    "room": {
+      "width": 2956,
+      "depth": 976,
+      "height": 2700,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "НМ1",
+        "width": 400,
+        "height": 860,
+        "depth": 557,
+        "x": 6,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 67,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 3
+      },
+      {
+        "name": "НМ2",
+        "width": 600,
+        "height": 860,
+        "depth": 573,
+        "x": 406,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ3",
+        "width": 500,
+        "height": 860,
+        "depth": 557,
+        "x": 1006,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 67,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 2
+      },
+      {
+        "name": "НМ Мойка",
+        "width": 600,
+        "height": 860,
+        "depth": 557,
+        "x": 1956,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 67,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ1",
+        "width": 400,
+        "height": 1000,
+        "depth": 346,
+        "x": 6,
+        "y": 1400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ2",
+        "width": 600,
+        "height": 850,
+        "depth": 346,
+        "x": 406,
+        "y": 1550,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ3",
+        "width": 500,
+        "height": 1000,
+        "depth": 346,
+        "x": 1006,
+        "y": 1400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ4",
+        "width": 450,
+        "height": 1000,
+        "depth": 330,
+        "x": 1506,
+        "y": 1400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "railUnder": {
+            "rear-bottom": {
+              "ecc": [
+                65,
+                353
+              ],
+              "dowel": [
+                97,
+                321
+              ],
+              "face": "front"
+            }
+          },
+          "hangers": false
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ5",
+        "width": 600,
+        "height": 1000,
+        "depth": 346,
+        "x": 1956,
+        "y": 1400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ПМ",
+        "width": 447,
+        "height": 757,
+        "depth": 16,
+        "x": 1507.5,
+        "y": 101.5,
+        "z": 560,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  },
+  {
+    "grade": 3,
+    "reference": "k13",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k13.json",
+    "sha256": "ed88ed5754f5946daff0e213106ae6fa02bc62b85a9c7e97f0f3927f77481c3b",
+    "room": {
+      "width": 2900,
+      "depth": 1000,
+      "height": 2700,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "ВМ 1",
+        "width": 300,
+        "height": 690,
+        "depth": 300,
+        "x": 0,
+        "y": 1780,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 2",
+        "width": 500,
+        "height": 690,
+        "depth": 300,
+        "x": 300,
+        "y": 1780,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true,
+          "jointZ": {
+            "642abd04-88bd-4686-ab5a-fc5f09abb76b:shelf:0:left": [
+              34,
+              54
+            ],
+            "642abd04-88bd-4686-ab5a-fc5f09abb76b:shelf:0:right": [
+              34,
+              54
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 3",
+        "width": 300,
+        "height": 690,
+        "depth": 300,
+        "x": 800,
+        "y": 1780,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true,
+          "topBack": 120,
+          "backTopGap": 1.5,
+          "jointZ": {
+            "top:left": [
+              58,
+              58
+            ],
+            "top:right": [
+              58,
+              58
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 4 + полка",
+        "width": 700,
+        "height": 1050,
+        "depth": 319,
+        "x": 1100,
+        "y": 1420,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 5",
+        "width": 700,
+        "height": 1050,
+        "depth": 319,
+        "x": 1800,
+        "y": 1420,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 1",
+        "width": 300,
+        "height": 820,
+        "depth": 457,
+        "x": 0,
+        "y": 0,
+        "z": 103,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 60,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "hinges": false
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 2",
+        "width": 300,
+        "height": 820,
+        "depth": 457,
+        "x": 800,
+        "y": 0,
+        "z": 103,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 60,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 3
+      },
+      {
+        "name": "НМ 3",
+        "width": 700,
+        "height": 820,
+        "depth": 457,
+        "x": 1100,
+        "y": 0,
+        "z": 103,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 60,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 2
+      },
+      {
+        "name": "Мойка (НМ 4)",
+        "width": 700,
+        "height": 820,
+        "depth": 560,
+        "x": 1800,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 70,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Столешница",
+        "width": 300,
+        "height": 38,
+        "depth": 600,
+        "x": 0,
+        "y": 820,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Столешница",
+        "width": 1700,
+        "height": 38,
+        "depth": 600,
+        "x": 800,
+        "y": 820,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  },
+  {
+    "grade": 4,
+    "reference": "k08",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k08.json",
+    "sha256": "4ac27ac4a7b59aab1e1e9fa385b976c2caeac040789fec026262440076ba62a6",
+    "room": {
+      "width": 4510,
+      "depth": 979,
+      "height": 2700,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "пенал 1",
+        "width": 450,
+        "height": 2410,
+        "depth": 578.5,
+        "x": 20,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 1",
+        "width": 570,
+        "height": 872,
+        "depth": 297,
+        "x": 470,
+        "y": 0,
+        "z": 263,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 79,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 2",
+        "width": 600,
+        "height": 872,
+        "depth": 555,
+        "x": 1040,
+        "y": 0,
+        "z": 5,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 65,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "духовка",
+        "width": 600,
+        "height": 872,
+        "depth": 457,
+        "x": 2275,
+        "y": 0,
+        "z": 103,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 89,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "bareShelves": [
+            0
+          ]
+        },
+        "raw": false,
+        "drawers": 1
+      },
+      {
+        "name": "НМ 4",
+        "width": 635,
+        "height": 872,
+        "depth": 457,
+        "x": 2875,
+        "y": 0,
+        "z": 103,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 89,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 3
+      },
+      {
+        "name": "Пенал Холод.",
+        "width": 600,
+        "height": 2410,
+        "depth": 576,
+        "x": 3510,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 1",
+        "width": 570,
+        "height": 930,
+        "depth": 116,
+        "x": 470,
+        "y": 1480,
+        "z": 250,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 2 Сушка",
+        "width": 600,
+        "height": 930,
+        "depth": 366,
+        "x": 1040,
+        "y": 1480,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 3",
+        "width": 635,
+        "height": 930,
+        "depth": 350,
+        "x": 1640,
+        "y": 1480,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ  4 Вытяжка",
+        "width": 600,
+        "height": 770,
+        "depth": 350,
+        "x": 2275,
+        "y": 1640,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "bottomBack": 20,
+          "jointZ": {
+            "top:left": [
+              63,
+              63
+            ],
+            "top:right": [
+              63,
+              63
+            ]
+          },
+          "jointNone": [
+            "bottom:left",
+            "bottom:right"
+          ],
+          "bareJoints": [
+            "bottom"
+          ]
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 5",
+        "width": 635,
+        "height": 930,
+        "depth": 350,
+        "x": 2875,
+        "y": 1480,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Стиралка",
+        "width": 635,
+        "height": 772,
+        "depth": 116,
+        "x": 1640,
+        "y": 100,
+        "z": 460,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  },
+  {
+    "grade": 5,
+    "reference": "k05",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k05.json",
+    "sha256": "3221830cf6f91b2d8eafd764dff3ff1b1ff80fcf6d893d7c4fe97fc5d971d95b",
+    "room": {
+      "width": 3900,
+      "depth": 2650,
+      "height": 2700,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "Пнеал 1",
+        "width": 680,
+        "height": 2470.5,
+        "depth": 600,
+        "x": 220,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "tall",
+          "bazis": true,
+          "bottomBack": 40,
+          "legs": {
+            "back": 70,
+            "front": 92,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "topBack": 40,
+          "rafix": {
+            "rear": 20,
+            "front": 60,
+            "n": 2
+          },
+          "joints": {
+            "bottom": {
+              "rear": 20,
+              "front": 60,
+              "n": 2
+            },
+            "top": {
+              "rear": 20,
+              "front": 60,
+              "n": 2
+            }
+          },
+          "sideDown": {
+            "side": "left",
+            "y0": 10.5
+          },
+          "jointNone": [
+            "bottom:left"
+          ],
+          "sideScrews": [
+            50,
+            550
+          ]
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 1 (бутылочница)",
+        "width": 200,
+        "height": 820.5,
+        "depth": 557,
+        "x": 900,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 49,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "hinges": false
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 2 (Духовка)",
+        "width": 600,
+        "height": 820.5,
+        "depth": 576,
+        "x": 1100,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 3 с ВЯ",
+        "width": 580,
+        "height": 820.5,
+        "depth": 557,
+        "x": 2300,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 49,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 3
+      },
+      {
+        "name": "НМ 4 (Мойка)",
+        "width": 1000,
+        "height": 820,
+        "depth": 617,
+        "x": 2880,
+        "y": 0.5,
+        "z": 50,
+        "rotation": 270,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 5",
+        "width": 600,
+        "height": 820,
+        "depth": 557,
+        "x": 2940,
+        "y": 0.5,
+        "z": 1050,
+        "rotation": 270,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 67,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          }
+        },
+        "raw": false,
+        "drawers": 2
+      },
+      {
+        "name": "НМ  6",
+        "width": 600,
+        "height": 820,
+        "depth": 580,
+        "x": 2920,
+        "y": 0.5,
+        "z": 1650,
+        "rotation": 270,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 1 (вытяжка)",
+        "width": 780,
+        "height": 862,
+        "depth": 369,
+        "x": 900,
+        "y": 1608.5,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 2 + СВЧ",
+        "width": 600,
+        "height": 1012,
+        "depth": 350,
+        "x": 1680,
+        "y": 1458.5,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "faceBottom": 400.5,
+          "bareShelves": [
+            0
+          ],
+          "jointNone": [
+            "b89573b4-d571-40fc-b1da-6bf1de167ad1:shelf:0:left",
+            "b89573b4-d571-40fc-b1da-6bf1de167ad1:shelf:0:right"
+          ]
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 3 (сушка)",
+        "width": 600,
+        "height": 1012,
+        "depth": 350,
+        "x": 2280,
+        "y": 1458.5,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "jointZ": {
+            "f653a5fd-8a22-4f18-a39c-7f8bb5cff4f9:shelf:0:left": [
+              53,
+              52
+            ],
+            "f653a5fd-8a22-4f18-a39c-7f8bb5cff4f9:shelf:0:right": [
+              53,
+              52
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 4 (сушка)",
+        "width": 600,
+        "height": 1012,
+        "depth": 350,
+        "x": 2880,
+        "y": 1458.5,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "jointZ": {
+            "cd4e5607-ac65-4178-80d3-68694f5c4f33:shelf:0:left": [
+              53,
+              52
+            ],
+            "cd4e5607-ac65-4178-80d3-68694f5c4f33:shelf:0:right": [
+              53,
+              52
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Столешница",
+        "width": 2000,
+        "height": 38,
+        "depth": 600,
+        "x": 900,
+        "y": 820.5,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Столешница",
+        "width": 600,
+        "height": 38,
+        "depth": 2250,
+        "x": 2900,
+        "y": 820.5,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  },
+  {
+    "grade": 6,
+    "reference": "k10",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k10.json",
+    "sha256": "05437be06b493b3e8de27ec435b2c5b839a052b216cd904e1b5146e873defa24",
+    "room": {
+      "width": 4020,
+      "depth": 1900,
+      "height": 2700,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "Пенал 1",
+        "width": 600,
+        "height": 2400,
+        "depth": 600,
+        "x": 900,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "А 1",
+        "width": 900,
+        "height": 550,
+        "depth": 600,
+        "x": 0,
+        "y": 1850,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "А 2",
+        "width": 600,
+        "height": 300,
+        "depth": 581,
+        "x": 1500,
+        "y": 2100,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "А 3",
+        "width": 520,
+        "height": 300,
+        "depth": 581,
+        "x": 2100,
+        "y": 2100,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "А 4",
+        "width": 500,
+        "height": 300,
+        "depth": 581,
+        "x": 2620,
+        "y": 2100,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "А 5",
+        "width": 500,
+        "height": 300,
+        "depth": 581,
+        "x": 3120,
+        "y": 2100,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 1",
+        "width": 600,
+        "height": 492,
+        "depth": 349,
+        "x": 1500,
+        "y": 1608,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 2",
+        "width": 520,
+        "height": 642,
+        "depth": 330,
+        "x": 2100,
+        "y": 1458,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "bottomFront": 24.5,
+          "jointZ": {
+            "bottom:left": [
+              56.8,
+              56.8
+            ],
+            "bottom:right": [
+              56.8,
+              56.8
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 3",
+        "width": 608,
+        "height": 642,
+        "depth": 330,
+        "x": 2620,
+        "y": 1458,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "bottomFront": 24.5,
+          "jointZ": {
+            "bottom:left": [
+              56.8,
+              56.8
+            ],
+            "bottom:right": [
+              56.8,
+              56.8
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ 4",
+        "width": 392,
+        "height": 642,
+        "depth": 330,
+        "x": 3228,
+        "y": 1458,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "bottomFront": 24.5,
+          "jointZ": {
+            "bottom:left": [
+              53,
+              28.5
+            ],
+            "bottom:right": [
+              53,
+              28.5
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 1",
+        "width": 600,
+        "height": 820,
+        "depth": 568,
+        "x": 1500,
+        "y": 0,
+        "z": 13,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 39,
+            "front": 109,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "jointNone": [
+            "bottom:left"
+          ],
+          "golaTies": {
+            "left": 1,
+            "right": 1
+          }
+        },
+        "raw": false,
+        "drawers": 2
+      },
+      {
+        "name": "НМ 2",
+        "width": 520,
+        "height": 820,
+        "depth": 568,
+        "x": 2100,
+        "y": 0,
+        "z": 13,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 39,
+            "front": 109,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "golaTies": {
+            "left": 1,
+            "right": 1
+          }
+        },
+        "raw": false,
+        "drawers": 3
+      },
+      {
+        "name": "НМ 3 мойка",
+        "width": 950,
+        "height": 820,
+        "depth": 642,
+        "x": 2620,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "НМ 4",
+        "width": 855,
+        "height": 820,
+        "depth": 395,
+        "x": 3217,
+        "y": 0,
+        "z": 645,
+        "rotation": 270,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Фронтальная",
+        "width": 2469,
+        "height": 95,
+        "depth": 19,
+        "x": 916,
+        "y": 0,
+        "z": 522,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Вертикальная",
+        "width": 19,
+        "height": 95,
+        "depth": 940,
+        "x": 3296,
+        "y": 0,
+        "z": 541,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  },
+  {
+    "grade": 7,
+    "reference": "k23",
+    "source": "C:\\Users\\My PC\\Desktop\\Claude Project\\Конструктор-claude\\studio\\public\\local-projects\\kitchen-k23.json",
+    "sha256": "2b485ae49bf79b396da9f68d75308e947775bbaccef42ce582f43546d1c6bb23",
+    "room": {
+      "width": 7300,
+      "depth": 3108,
+      "height": 2860,
+      "openings": []
+    },
+    "modules": [
+      {
+        "name": "Каркас",
+        "width": 581,
+        "height": 900,
+        "depth": 600,
+        "x": 99,
+        "y": 0,
+        "z": 49,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Каркас",
+        "width": 600,
+        "height": 900,
+        "depth": 600,
+        "x": 680,
+        "y": 0,
+        "z": 49,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Каркас",
+        "width": 581,
+        "height": 900,
+        "depth": 600,
+        "x": 1280,
+        "y": 0,
+        "z": 49,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 830,
+        "height": 2800,
+        "depth": 594,
+        "x": 2870,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 800,
+        "height": 913,
+        "depth": 330,
+        "x": 3700,
+        "y": 1487,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "raise": {
+            "doorsToFloor": true
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "hinges": false
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 800,
+        "height": 400,
+        "depth": 330,
+        "x": 3700,
+        "y": 2400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 900,
+        "height": 913,
+        "depth": 349,
+        "x": 4500,
+        "y": 1487,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 900,
+        "height": 400,
+        "depth": 330,
+        "x": 4500,
+        "y": 2400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 900,
+        "height": 913,
+        "depth": 330,
+        "x": 5400,
+        "y": 1487,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "wall",
+          "bazis": true,
+          "raise": {
+            "doorsToFloor": true
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "hinges": false
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "ВМ (Стенка в паз)",
+        "width": 900,
+        "height": 400,
+        "depth": 330,
+        "x": 5400,
+        "y": 2400,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {
+          "role": "antresol",
+          "bazis": true
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 800,
+        "height": 900,
+        "depth": 594,
+        "x": 3700,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 600,
+        "height": 900,
+        "depth": 572,
+        "x": 5100,
+        "y": 0,
+        "z": 3,
+        "rotation": 0,
+        "kitchen": {
+          "role": "base",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 82,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "hinges": false
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 600,
+        "height": 900,
+        "depth": 594,
+        "x": 5700,
+        "y": 0,
+        "z": 0,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 450,
+        "height": 2800,
+        "depth": 577,
+        "x": 6320,
+        "y": 0,
+        "z": 620,
+        "rotation": 270,
+        "kitchen": {
+          "role": "tall",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 87,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "bareShelves": [
+            0,
+            2,
+            3,
+            4,
+            5
+          ],
+          "joints": {
+            "top": {
+              "rear": 104.5,
+              "front": 64.5,
+              "n": 2
+            },
+            "shelf:1": {
+              "rear": 104.5,
+              "front": 64.5,
+              "n": 2
+            }
+          },
+          "hinges": false,
+          "dupParts": [
+            "fast:91b22c8b-b7a4-4b19-9248-d52492c471cf:shelf:1:right:1",
+            "fast:91b22c8b-b7a4-4b19-9248-d52492c471cf:shelf:1:right:0"
+          ]
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 600,
+        "height": 2800,
+        "depth": 577,
+        "x": 6320,
+        "y": 0,
+        "z": 1070,
+        "rotation": 270,
+        "kitchen": {
+          "role": "tall",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 87,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "topBack": 40,
+          "bareShelves": [
+            0,
+            2,
+            3,
+            4
+          ],
+          "jointNone": [
+            "32384cb1-a05f-40ae-8c10-914cb71ac10e:shelf:1:left"
+          ],
+          "hinges": false,
+          "planContours": {
+            "bottom": [
+              [
+                0,
+                577
+              ],
+              [
+                600,
+                577
+              ],
+              [
+                600,
+                0
+              ],
+              [
+                577.5,
+                0
+              ],
+              [
+                574.2,
+                0.1
+              ],
+              [
+                570.9,
+                0.5
+              ],
+              [
+                567.7,
+                1.2
+              ],
+              [
+                564.5,
+                2.2
+              ],
+              [
+                561.5,
+                3.4
+              ],
+              [
+                558.5,
+                4.8
+              ],
+              [
+                555.7,
+                6.5
+              ],
+              [
+                553,
+                8.4
+              ],
+              [
+                550.5,
+                10.5
+              ],
+              [
+                548.1,
+                12.8
+              ],
+              [
+                546,
+                15.3
+              ],
+              [
+                544.1,
+                18
+              ],
+              [
+                542.4,
+                20.8
+              ],
+              [
+                540.9,
+                23.8
+              ],
+              [
+                539.7,
+                26.9
+              ],
+              [
+                538.7,
+                30
+              ],
+              [
+                537.8,
+                33.2
+              ],
+              [
+                536.6,
+                36.2
+              ],
+              [
+                535.1,
+                39.2
+              ],
+              [
+                533.4,
+                42
+              ],
+              [
+                531.5,
+                44.7
+              ],
+              [
+                529.4,
+                47.2
+              ],
+              [
+                527,
+                49.5
+              ],
+              [
+                524.5,
+                51.6
+              ],
+              [
+                521.8,
+                53.5
+              ],
+              [
+                519,
+                55.2
+              ],
+              [
+                516,
+                56.7
+              ],
+              [
+                512.9,
+                57.9
+              ],
+              [
+                509.8,
+                58.8
+              ],
+              [
+                506.6,
+                59.5
+              ],
+              [
+                503.3,
+                59.9
+              ],
+              [
+                500,
+                60
+              ],
+              [
+                97.5,
+                60
+              ],
+              [
+                94.2,
+                59.9
+              ],
+              [
+                90.9,
+                59.5
+              ],
+              [
+                87.7,
+                58.8
+              ],
+              [
+                84.5,
+                57.9
+              ],
+              [
+                81.5,
+                56.7
+              ],
+              [
+                78.5,
+                55.2
+              ],
+              [
+                75.7,
+                53.5
+              ],
+              [
+                73,
+                51.6
+              ],
+              [
+                70.5,
+                49.5
+              ],
+              [
+                68.1,
+                47.2
+              ],
+              [
+                66,
+                44.7
+              ],
+              [
+                64.1,
+                42
+              ],
+              [
+                62.4,
+                39.2
+              ],
+              [
+                60.9,
+                36.2
+              ],
+              [
+                59.7,
+                33.2
+              ],
+              [
+                58.7,
+                30
+              ],
+              [
+                57.8,
+                26.9
+              ],
+              [
+                56.6,
+                23.8
+              ],
+              [
+                55.1,
+                20.8
+              ],
+              [
+                53.4,
+                18
+              ],
+              [
+                51.5,
+                15.3
+              ],
+              [
+                49.4,
+                12.8
+              ],
+              [
+                47,
+                10.5
+              ],
+              [
+                44.5,
+                8.4
+              ],
+              [
+                41.8,
+                6.5
+              ],
+              [
+                39,
+                4.8
+              ],
+              [
+                36,
+                3.4
+              ],
+              [
+                32.9,
+                2.2
+              ],
+              [
+                29.8,
+                1.2
+              ],
+              [
+                26.6,
+                0.5
+              ],
+              [
+                23.3,
+                0.1
+              ],
+              [
+                20,
+                0
+              ],
+              [
+                0,
+                0
+              ]
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 600,
+        "height": 2800,
+        "depth": 577,
+        "x": 6320,
+        "y": 0,
+        "z": 1670,
+        "rotation": 270,
+        "kitchen": {
+          "role": "tall",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 87,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "topBack": 40,
+          "bareShelves": [
+            0,
+            2,
+            3,
+            4
+          ],
+          "jointNone": [
+            "39cad6c0-116d-45c0-aaab-7b77911a9043:shelf:1:right"
+          ],
+          "hinges": false,
+          "planContours": {
+            "bottom": [
+              [
+                600,
+                577
+              ],
+              [
+                600,
+                0
+              ],
+              [
+                577.5,
+                0
+              ],
+              [
+                574.2,
+                0.1
+              ],
+              [
+                570.9,
+                0.5
+              ],
+              [
+                567.7,
+                1.2
+              ],
+              [
+                564.5,
+                2.2
+              ],
+              [
+                561.5,
+                3.4
+              ],
+              [
+                558.5,
+                4.8
+              ],
+              [
+                555.7,
+                6.5
+              ],
+              [
+                553,
+                8.4
+              ],
+              [
+                550.5,
+                10.5
+              ],
+              [
+                548.1,
+                12.8
+              ],
+              [
+                546,
+                15.3
+              ],
+              [
+                544.1,
+                18
+              ],
+              [
+                542.4,
+                20.8
+              ],
+              [
+                540.9,
+                23.8
+              ],
+              [
+                539.7,
+                26.9
+              ],
+              [
+                538.7,
+                30
+              ],
+              [
+                537.8,
+                33.2
+              ],
+              [
+                536.6,
+                36.2
+              ],
+              [
+                535.1,
+                39.2
+              ],
+              [
+                533.4,
+                42
+              ],
+              [
+                531.5,
+                44.7
+              ],
+              [
+                529.4,
+                47.2
+              ],
+              [
+                527,
+                49.5
+              ],
+              [
+                524.5,
+                51.6
+              ],
+              [
+                521.8,
+                53.5
+              ],
+              [
+                519,
+                55.2
+              ],
+              [
+                516,
+                56.7
+              ],
+              [
+                512.9,
+                57.9
+              ],
+              [
+                509.8,
+                58.8
+              ],
+              [
+                506.6,
+                59.5
+              ],
+              [
+                503.3,
+                59.9
+              ],
+              [
+                500,
+                60
+              ],
+              [
+                97.5,
+                60
+              ],
+              [
+                94.2,
+                59.9
+              ],
+              [
+                90.9,
+                59.5
+              ],
+              [
+                87.7,
+                58.8
+              ],
+              [
+                84.5,
+                57.9
+              ],
+              [
+                81.5,
+                56.7
+              ],
+              [
+                78.5,
+                55.2
+              ],
+              [
+                75.7,
+                53.5
+              ],
+              [
+                73,
+                51.6
+              ],
+              [
+                70.5,
+                49.5
+              ],
+              [
+                68.1,
+                47.2
+              ],
+              [
+                66,
+                44.7
+              ],
+              [
+                64.1,
+                42
+              ],
+              [
+                62.4,
+                39.2
+              ],
+              [
+                60.9,
+                36.2
+              ],
+              [
+                59.7,
+                33.2
+              ],
+              [
+                58.7,
+                30
+              ],
+              [
+                57.8,
+                26.9
+              ],
+              [
+                56.6,
+                23.8
+              ],
+              [
+                55.1,
+                20.8
+              ],
+              [
+                53.4,
+                18
+              ],
+              [
+                51.5,
+                15.3
+              ],
+              [
+                49.4,
+                12.8
+              ],
+              [
+                47,
+                10.5
+              ],
+              [
+                44.5,
+                8.4
+              ],
+              [
+                41.8,
+                6.5
+              ],
+              [
+                39,
+                4.8
+              ],
+              [
+                36,
+                3.4
+              ],
+              [
+                32.9,
+                2.2
+              ],
+              [
+                29.8,
+                1.2
+              ],
+              [
+                26.6,
+                0.5
+              ],
+              [
+                23.3,
+                0.1
+              ],
+              [
+                20,
+                0
+              ],
+              [
+                0,
+                0
+              ],
+              [
+                0,
+                577
+              ]
+            ]
+          }
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Нижний модуль (Пустой)",
+        "width": 438,
+        "height": 2800,
+        "depth": 577,
+        "x": 6320,
+        "y": 0,
+        "z": 2270,
+        "rotation": 270,
+        "kitchen": {
+          "role": "tall",
+          "bazis": true,
+          "legs": {
+            "back": 70,
+            "front": 87,
+            "side": 70
+          },
+          "plinth": {
+            "height": 95,
+            "off": true
+          },
+          "bareShelves": [
+            0,
+            2,
+            3,
+            4
+          ],
+          "joints": {
+            "top": {
+              "rear": 104.5,
+              "front": 64.5,
+              "n": 2
+            },
+            "shelf:1": {
+              "rear": 104.5,
+              "front": 64.5,
+              "n": 2
+            }
+          },
+          "hinges": false,
+          "dupParts": [
+            "fast:1ecafd3b-4f08-44ef-8be1-4e42ac1518d6:shelf:1:left:1",
+            "fast:1ecafd3b-4f08-44ef-8be1-4e42ac1518d6:shelf:1:left:0"
+          ]
+        },
+        "raw": false,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Фронтальная",
+        "width": 1718,
+        "height": 100,
+        "depth": 19,
+        "x": 121,
+        "y": 0,
+        "z": 65,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Вертикальная",
+        "width": 19,
+        "height": 100,
+        "depth": 522,
+        "x": 121,
+        "y": 0,
+        "z": 65,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Вертикальная",
+        "width": 19,
+        "height": 100,
+        "depth": 522,
+        "x": 1820,
+        "y": 0,
+        "z": 65,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Фронтальная",
+        "width": 1718,
+        "height": 100,
+        "depth": 19,
+        "x": 121,
+        "y": 0,
+        "z": 568,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Фронтальная",
+        "width": 2659,
+        "height": 100,
+        "depth": 19,
+        "x": 3700,
+        "y": 0,
+        "z": 520,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Вертикальная",
+        "width": 19,
+        "height": 100,
+        "depth": 2147,
+        "x": 6359,
+        "y": 0,
+        "z": 539,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Цоколь · Фронтальная",
+        "width": 522,
+        "height": 100,
+        "depth": 19,
+        "x": 6378,
+        "y": 0,
+        "z": 2667,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Вертикальная",
+        "width": 19,
+        "height": 800,
+        "depth": 620,
+        "x": 80,
+        "y": 100,
+        "z": 30,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Вертикальная",
+        "width": 19,
+        "height": 800,
+        "depth": 620,
+        "x": 1861,
+        "y": 100,
+        "z": 30,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Фронтальная",
+        "width": 1762,
+        "height": 800,
+        "depth": 19,
+        "x": 99,
+        "y": 100,
+        "z": 30,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Вертикальная",
+        "width": 16,
+        "height": 1897,
+        "depth": 617,
+        "x": 6304,
+        "y": 901.5,
+        "z": 1.5,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      },
+      {
+        "name": "Фронтальная",
+        "width": 597,
+        "height": 768,
+        "depth": 19,
+        "x": 4501.5,
+        "y": 102,
+        "z": 575,
+        "rotation": 0,
+        "kitchen": {},
+        "raw": true,
+        "drawers": 0
+      }
+    ]
+  }
+]

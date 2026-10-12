@@ -1,3 +1,4 @@
+import { alignKitchenRow } from "./kitchenAlignment";
 import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setKitchenGola} from './kitchenEditing';
 // Панель кухонного модуля справа (вкладка «Кухня», трек И, 09.10.2026): корпус, опоры и цоколь, фасады, петли, полки, навесы,
 // столешница; для сырого модуля из Базиса — только сведения. Каждое изменение идёт через modify/commit студии (validate + projectErrors),
@@ -81,6 +82,7 @@ function Position({ placed, project, position, room, move, rotate, commit, open,
     {(["y", "x", "z"] as const).map((axis) => <Num key={axis} label={{ x: "От левой стены", z: "От задней стены", y: "От пола" }[axis]} value={position[axis]} min={0}
       max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => { move(axis, v); }} />)}
     <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={placed.rotation ?? 0} onChange={(e) => rotate(Number(e.target.value) as 0 | 90 | 180 | 270)}>{[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}</select></label>
+    {placed.module.kitchen && (placed.rotation ?? 0) === 0 && <button className="outline full" onClick={() => commit(alignKitchenRow(project, placed.id))}>Выровнять ряд по фасадам</button>}
     <p className="field-note">Отступы — по монтажному габариту с фальшами и выступом ХДФ. Тяните модуль в сцене — края притягиваются к соседям.</p>
     <button className="text-action danger" disabled={project.modules.length === 1&&!allowEmpty} onClick={() => commit({ ...project, modules: project.modules.filter((a) => a.id !== placed.id) })}>Удалить модуль · Ctrl+Z вернёт</button>
   </Group>;
@@ -126,7 +128,6 @@ function CabinetPanel(props: KitchenPanelProps) {
   const hingeCount = list.filter((p) => p.id.includes(":hingecup:")).length;
   const auto = door ? hingePositions(door.size[1], door.size[0], true) : [];
   const legCount = list.filter((p) => p.id.startsWith("leg:")).length, clipCount = list.filter((p) => p.id.startsWith("kitchen-clip:")).length, plinthPart = list.find((p) => p.id === "kitchen-plinth");
-  const hasFronts = m.doors || m.sections.some((x) => x.drawers > 0) || !!m.kdrawers?.length;
   const legsAll = (v: number) => commit(setLegHeight(project, onlyThis ? [placed.id] : legModules(project), v));
   const legsToAll = () => commit({ ...project, modules: project.modules.map((a) => {
     const ak = a.module.kitchen;
@@ -156,6 +157,8 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} change={(v) => modify((n) => { n.width = v; })} />
       <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
+      {(role === "base" || role === "tall") && <Check label="Опоры под корпусом" checked={!!m.feet && !k.noLegs} change={v => modify(n => { if (v) { n.feet = { height: 100 }; delete n.kitchen!.noLegs; } else { delete n.feet; n.plinthHeight = 0; n.kitchen!.noLegs = true; n.kitchen!.plinth = { height: n.kitchen!.plinth?.height ?? 95, ...n.kitchen!.plinth, off: true }; } })} />}
+      <Check label="Дно корпуса" checked={m.bottomType !== "none"} change={v => modify(n => { if (v) delete n.bottomType; else n.bottomType = "none"; })} />
       <Check label="Дно под боковинами (боковины стоят на дне)" checked={!!m.bottomUnder} change={(v) => modify((n) => { if (v) n.bottomUnder = true; else delete n.bottomUnder; })} />
       <Check label={role === "base" ? "Крыша (у нижних обычно нет — царги под столешницу)" : "Крыша"} checked={m.topType !== "none"} change={(v) => modify((n) => { if (v) delete n.topType; else n.topType = "none"; })} />
       <div className="kitchen-field"><span>Кромка открытых торцов</span>
@@ -214,7 +217,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
     </Group>}
 
-    {hasFronts && <Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}>
+    {<Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}>
       <Check label="Распашные фасады" checked={m.doors} change={(v) => modify((n) => { n.doors = v; })} />
       {m.doors && <div className="kitchen-field"><span>Створки{m.sections.length > 1 ? ` · секция ${sIdx + 1}` : ""}</span>
         <div className="kitchen-chips" role="group" aria-label="Число створок">{([undefined, 1, 2] as const).map((v) => <button key={String(v)} type="button" aria-pressed={s.doorLeaves === v} onClick={() => modify((n) => { if (v) n.sections[sIdx].doorLeaves = v; else delete n.sections[sIdx].doorLeaves; })}>{v ?? "Авто"}</button>)}</div></div>}

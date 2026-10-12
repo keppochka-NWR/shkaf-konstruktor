@@ -138,6 +138,7 @@ test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persisten
  await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
  const read=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).rooms[0].project,KEY);
  const before=await read(),top=before.modules.find((m:any)=>m.module.worktop);expect(top.y).toBe(820);expect(before.modules).toHaveLength(6);
+ const facadePlanes=before.modules.filter((a:any)=>a.module.kitchen?.role==='base').map((a:any)=>a.z+a.module.depth+(a.module.faceAir??2)+(a.module.facadeT??16));expect(new Set(facadePlanes).size).toBe(1);
  await page.getByRole('button',{name:'План',exact:true}).click();
  const worktop=page.getByRole('button',{name:/На плане:.*Столешница/});const box=await worktop.boundingBox();expect(box).toBeTruthy();
  await page.mouse.move(box!.x+box!.width/2,box!.y+box!.height-3);await page.mouse.down();await page.mouse.move(box!.x+box!.width/2+25,box!.y+box!.height+70,{steps:10});await page.mouse.up();
@@ -151,4 +152,27 @@ test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persisten
  const overlaps=await page.evaluate(()=>{const scene=document.querySelector('.scene')!,r=scene.getBoundingClientRect();const controls=[...document.querySelectorAll('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help')].filter(e=>e.getClientRects().length).map(e=>e.getBoundingClientRect());return [...scene.querySelectorAll<HTMLElement>('.model-dimension')].filter(e=>getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden').filter(e=>{const b=e.getBoundingClientRect();return b.left<r.left||b.right>r.right||b.top<r.top||b.bottom>r.bottom||controls.some(c=>b.left<c.right&&b.right>c.left&&b.top<c.bottom&&b.bottom>c.top);}).map(e=>e.textContent);});
  expect(overlaps).toEqual([]);await page.screenshot({path:'reports/kitchen-zoom-ui.png',fullPage:true});
  await page.getByRole('button',{name:'Вписать модель',exact:true}).click();const tip=page.getByRole('button',{name:'Понятно',exact:true});if(await tip.isVisible())await tip.click();await page.screenshot({path:'reports/kitchen-built-ui.png',fullPage:true});expect(errors).toEqual([]);
+});
+
+
+test('kitchen correction: depth without shelves, reversible facades and supports',async({page})=>{
+ await page.goto('/?rooms=1');
+ await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
+ await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByLabel('Назначение кухонного модуля',{exact:true}).selectOption('sink');
+ await page.getByLabel('Глубина',{exact:true}).fill('460');await page.getByLabel('Глубина',{exact:true}).press('Tab');
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await expect(page.getByLabel('Глубина',{exact:true})).toHaveValue('460');
+ await page.getByLabel('Опоры под корпусом',{exact:true}).uncheck();
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await page.getByRole('button',{name:/^(5 )?Фасады$/}).click();
+ await page.getByLabel('Распашные фасады',{exact:true}).uncheck();
+ await expect(page.getByLabel('Распашные фасады',{exact:true})).toBeVisible();
+ await page.getByLabel('Распашные фасады',{exact:true}).check();
+ await page.reload();await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await expect(page.getByLabel('Глубина',{exact:true})).toHaveValue('460');
+ await expect(page.getByLabel('Опоры под корпусом',{exact:true})).not.toBeChecked();
+ await page.getByLabel('Опоры под корпусом',{exact:true}).check();
+ await expect(page.getByRole('alert')).toHaveCount(0);
 });
