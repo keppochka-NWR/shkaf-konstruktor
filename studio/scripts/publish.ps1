@@ -12,7 +12,7 @@
 #   4. privacy scan of web/ (py -I scripts/privacy-scan.py ../web --exclude local-projects --strict) -> exit 0 required;
 #      --strict = all three token sources must exist (corpus index.json, public/local-projects, corpus privacy-tokens.txt)
 #   5. web/studio/version.json = { commit, srcCommit, builtAt }
-#   6. robocopy web -> $Pages /MIR /XD local-projects .git   (exit code >= 8 = error; with -DryRun robocopy runs with /L = list only)
+#   6. robocopy web -> $Pages /MIR /XD local-projects .git /XF .git (protect .git as directory AND worktree file)
 #   7. git add -A; git commit "Publish studio from <commit>"; git push origin HEAD:gh-pages   (skipped with -DryRun)
 #
 # -DryRun never commits, never pushes and never changes the Pages folder (robocopy /L).
@@ -133,14 +133,20 @@ if (-not $?) { Fail "cannot write version.json" }
 Write-Host ("  " + $json)
 
 # ---------------------------------------------------------------- 6. robocopy web -> pages
-Step 6 "robocopy web -> pages /MIR (local-projects and .git excluded)"
+Step 6 "robocopy web -> pages /MIR (local-projects and .git file/directory excluded)"
 if (-not (Test-Path $pagesDir)) { Fail ("pages folder not found: " + $pagesDir) }
 if (-not (Test-Path (Join-Path $pagesDir '.git'))) { Fail ("pages folder is not a git worktree: " + $pagesDir) }
-$rcArgs = @($web, $pagesDir, '/MIR', '/XD', 'local-projects', '.git', '/NFL', '/NDL', '/NJH', '/R:2', '/W:2')
+$pagesRoot = (git -C $pagesDir rev-parse --show-toplevel 2>$null | Out-String).Trim()
+if (-not $? -or $pagesRoot -eq '' -or [System.IO.Path]::GetFullPath($pagesRoot) -ne $pagesDir) { Fail "Pages destination is not the root of a valid Git checkout" }
+# GitHub Pages must serve the Vite assets directly, including underscore-prefixed files.
+if (-not (Test-Path (Join-Path $web '.nojekyll'))) { [System.IO.File]::WriteAllText((Join-Path $web '.nojekyll'), '') }
+$rcArgs = @($web, $pagesDir, '/MIR', '/XD', 'local-projects', '.git', '/XF', '.git', '/NFL', '/NDL', '/NJH', '/R:2', '/W:2')
 if ($DryRun) { $rcArgs += '/L' }
 & robocopy @rcArgs
 $rc = $LASTEXITCODE
 if ($rc -ge 8) { Fail ("robocopy exit code " + $rc) }
+git -C $pagesDir rev-parse --git-dir > $null
+if (-not $?) { Fail "Pages Git metadata check failed after synchronization" }
 Write-Host ("  robocopy exit code " + $rc + " (0 = nothing to do, 1-7 = copied/extra/mismatch, >= 8 = error)")
 
 # ---------------------------------------------------------------- 7. commit + push
