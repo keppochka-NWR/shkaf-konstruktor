@@ -704,9 +704,9 @@ input {
 .room-setup { display: grid; gap: 10px; }
 .room-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .room-setup-actions .primary { display: inline-flex; align-items: center; gap: 4px; }
-.app:not(.advanced)[data-stage="room"] [data-stages]:not([data-stages~="room"]),
+.app:not(.advanced)[data-stage="room"] [data-stages]:not([data-stages~="room"]):not([data-stages~="fixtures"]),
 .app:not(.advanced)[data-stage="fixtures"] [data-stages]:not([data-stages~="fixtures"]),
-.app:not(.advanced)[data-stage="bodies"] [data-stages]:not([data-stages~="bodies"]),
+.app:not(.advanced)[data-stage="bodies"] [data-stages]:not([data-stages~="bodies"]):not([data-stages~="filling"]):not([data-stages~="facades"]),
 .app:not(.advanced)[data-stage="filling"] [data-stages]:not([data-stages~="filling"]),
 .app:not(.advanced)[data-stage="facades"] [data-stages]:not([data-stages~="facades"]),
 .app:not(.advanced)[data-stage="docs"] [data-stages]:not([data-stages~="docs"]):not([data-stages~="facades"]) { display: none !important; }

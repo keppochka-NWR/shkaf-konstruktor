@@ -82,7 +82,7 @@ function entry(project: Project, title: string): RoomEntry {
 }
 export function migrateRoomDocument(raw?: unknown): RoomDocument {
   const p =
-    raw === undefined ? { ...newProject(), modules: [] } : parseProject(raw);
+    raw === undefined ? { ...newProject(), modules: [] } : parseRoomProject(raw);
   const room = entry(p, "Комната 1");
   return {
     format: "garderyob-rooms",

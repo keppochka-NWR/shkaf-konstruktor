@@ -1,3 +1,4 @@
+import {refitKDrawers} from './kitchenDrawers';
 import {useState} from 'react';
 import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal} from 'lucide-react';
 import {initialModule,section,deskModule,distribute,validate,id,type Module} from './model';
@@ -28,14 +29,15 @@ export function createKupeWardrobe(width:number,height:number,depth:number,sourc
   return out;
 }
 /** Прямая кухня по длине стены: нижние корпуса на ножках, столешница на всю длину (длиннее 4100 — двумя частями), навесные над ней на регламентный зазор. */
-export function createKitchenRow(length:number,source:Module):PlacedModule[]{
-  if(length<600||length>6000)throw Error('Прямая кухня: длина стены 600–6000 мм.');
+export function createKitchenRow(length:number,source:Module,height:number=KITCHEN.baseHeight,depth:number=KITCHEN.baseDepth):PlacedModule[]{
+  if(!Number.isFinite(length)||length<600||length>6000)throw Error('Прямая кухня: длина стены 600–6000 мм.');
+  if(!Number.isFinite(height)||!Number.isFinite(depth))throw Error('Введите высоту и глубину кухни в миллиметрах.');
   const look=(m:Module)=>({...m,decor:source.decor,facadeDecor:source.facadeDecor}),out:PlacedModule[]=[],z=3;let x=0;
   const widths=kitchenRowWidths(length);
-  for(const w of widths){const b=look(kitchenBase(initialModule(),w.width,w.kind)),e=validate(b)[0];if(e)throw Error(b.name+': '+e);out.push({id:id(),x,y:0,z,rotation:0,module:b});
-    const top=look(kitchenWall(initialModule(),w.width));out.push({id:id(),x,y:KITCHEN.baseHeight+KITCHEN.worktopThickness+KITCHEN.wallGap,z:0,rotation:0,module:top});x+=w.width;}
+  for(const w of widths){const b=look(kitchenBase(initialModule(),w.width,w.kind));b.height=height;b.depth=depth;b.sections.forEach(s=>s.shelfDepth=depth-2.5);if(b.kdrawers)b.kdrawers=refitKDrawers(b);const e=validate(b)[0];if(e)throw Error(b.name+': '+e);out.push({id:id(),x,y:0,z,rotation:0,module:b});
+    const top=look(kitchenWall(initialModule(),w.width));out.push({id:id(),x,y:height+KITCHEN.worktopThickness+KITCHEN.wallGap,z:0,rotation:0,module:top});x+=w.width;}
   const pieces=length>4100?[Math.round(length/2),length-Math.round(length/2)]:[length];let wx=0;
-  for(const p of pieces){out.push({id:id(),x:wx,y:KITCHEN.baseHeight,z:0,rotation:0,module:look(kitchenWorktop(initialModule(),p))});wx+=p;}
+  for(const p of pieces){out.push({id:id(),x:wx,y:height,z:0,rotation:0,module:look({...kitchenWorktop(initialModule(),p),depth:depth+KITCHEN.worktopDepth-KITCHEN.baseDepth,sections:[{...section(),shelves:[],drawers:0,rod:false}]})});wx+=p;}
   return out;
 }
 export function createModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module):Module {
@@ -60,7 +62,7 @@ export function ModulePalette({source,onAdd,onAddGroup}:{source:Module;onAdd:(mo
   const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'
     :kind==='kupe-wardrobe'?'Корпуса без распашных дверей и двери купе на всю ширину. Глубина — общая, 100 мм из неё занимают направляющие.'
-    :kind==='kitchen-row'?'Ширина — длина стены. Нижние корпуса на ножках (ящики, мойка, распашные), столешница во всю длину, навесные над ней на регламентный зазор.'
+    :kind==='kitchen-row'?'Ширина — длина ряда корпусов; у боковых стен нужен запас по 21 мм под фальши. Высота — нижние корпуса с опорами, глубина — нижние корпуса без фасадов. Нижние корпуса на ножках (ящики, мойка, распашные), столешница во всю длину, навесные над ней на регламентный зазор.'
     :kind==='kitchen-base'?'Нижний кухонный: на ножках с цокольной планкой, вместо крыши царги под столешницу.'
     :kind==='kitchen-wall'?'Навесной кухонный: на навесах. Поставьте его на нужную высоту в сцене.'
     :kind==='worktop'?'Столешница — отдельным объектом. Ставьте сверху на нижние корпуса.'
@@ -70,6 +72,6 @@ export function ModulePalette({source,onAdd,onAddGroup}:{source:Module;onAdd:(mo
     <div className="module-sizes">{[{label:kind==='corner'?'Сторона угла':kind==='kupe'?'Ширина проёма':'Ширина',value:width,set:setWidth},{label:kind==='kupe'?'Высота проёма':'Высота',value:height,set:setHeight},...(kind==='kupe'?[]:[{label:kind==='corner'?'Глубина боковины':'Глубина',value:depth,set:setDepth}])].map(f=><label key={f.label}>{f.label}<input aria-label={`${f.label} новой мебели`} type="number" value={f.value} onChange={e=>f.set(Number(e.target.value))}/></label>)}</div>
     <small>{note}</small>
     {error&&<p role="alert">{error}</p>}
-    <button className="primary full" onClick={()=>{try{const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source)):kind==='kitchen-row'?onAddGroup(createKitchenRow(width,source)):onAdd(createModule(kind,width,height,depth,source));if(ok)setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
+    <button className="primary full" onClick={()=>{try{const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source)):kind==='kitchen-row'?onAddGroup(createKitchenRow(width,source,height,depth)):onAdd(createModule(kind,width,height,depth,source));if(ok)setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
   </details>;
 }

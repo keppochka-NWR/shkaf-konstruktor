@@ -1,6 +1,8 @@
 import {EmptyRoomView} from './EmptyRoomView';
 import {RoomTools} from './RoomTools';
-import { useRef, useState, useMemo, useEffect } from 'react';
+import { useRef, useState, useMemo, useEffect, type ReactNode } from 'react';
+import {isClientBundle, type ClientBundle} from './clientIndex';
+import {historyShortcut,editsText} from './historyShortcuts';
 import App from './App';
 import { CURRENT_PROJECT } from './projectStorage';
 import { newProject, type Project } from './project';
@@ -8,8 +10,8 @@ import { saveFile } from './exports';
 import { activeRoom, addRoom, migrateRoomDocument, parseRoomDocument, persistRoomDocument, removeRoom, renameRoom, selectRoom, updateRoom, ROOM_DOCUMENT_KEY, ROOM_DOCUMENT_BACKUP, type RoomDocument } from './roomDocument';
 import './room-workspace.css';
 
-/** Opt-in P1 workspace. Only the selected room is mounted in the legacy editor. */
-export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
+/** Only the selected room is mounted in the furniture editor. */
+export function RoomWorkspace({workspaceKey='',clientBar,onDocumentChange,onImportBundle}:{workspaceKey?:string;clientBar?:ReactNode;onDocumentChange?:(d:RoomDocument)=>void;onImportBundle?:(b:ClientBundle)=>void}={}) {
   const store=useMemo(()=>({getItem:(key:string)=>localStorage.getItem(key.startsWith(ROOM_DOCUMENT_KEY)?key+(workspaceKey?':'+workspaceKey:''):key),setItem:(key:string,value:string)=>localStorage.setItem(key.startsWith(ROOM_DOCUMENT_KEY)?key+(workspaceKey?':'+workspaceKey:''):key,value)}),[workspaceKey]);
   const writer=useRef(false),[writerMessage,setWriterMessage]=useState('Проверка доступа к записи…');
   useEffect(()=>{let release:()=>void=()=>{},cancelled=false;const controller=new AbortController();
@@ -27,6 +29,7 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
   });
   const [document, setDocument] = useState<RoomDocument | null>(startup.document);
   const current = useRef(document), expected = useRef(startup.raw);
+  useEffect(()=>{if(document)onDocumentChange?.(document);},[document,onDocumentChange]);
   const [error, setError] = useState(startup.error), [saved, setSaved] = useState(startup.raw ? 'Сохранено в этом браузере' : 'Новая копия · ещё не сохранена');
   const [epoch, setEpoch] = useState(0), [confirmDelete, setConfirmDelete] = useState(false);
   const undo = useRef<RoomDocument[]>([]), redo = useRef<RoomDocument[]>([]);
@@ -54,8 +57,8 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
   }
   useEffect(()=>{
     if(!document||activeRoom(document).project.modules.length)return;
-    const key=(e:KeyboardEvent)=>{if(!(e.ctrlKey||e.metaKey)||e.altKey||(e.target instanceof HTMLElement&&e.target.closest('input,textarea,select,[contenteditable="true"]')))return;
-      if(e.key.toLowerCase()==='z'){e.preventDefault();history(!e.shiftKey);}else if(e.key.toLowerCase()==='y'){e.preventDefault();history(false);}};
+    const key=(e:KeyboardEvent)=>{const command=historyShortcut(e);if(!command||e.defaultPrevented||editsText(e.target))return;
+      e.preventDefault();history(command==='undo');};
     window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
   },[document]);
   function restoreBackup() {
@@ -78,7 +81,7 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
   }
   if (!document) return <main className="rooms-empty"><h1>Документ комнат не удалось открыть</h1><p role="alert">{error}</p><p>Исходная запись сохранена. Автозамена примером отключена.</p><button onClick={restoreBackup}>Восстановить предыдущую копию</button></main>;
   const room = activeRoom(document);
-  const bar = <section className="rooms-bar" aria-label="Комнаты заказа">
+  const bar = <>{clientBar}<section className="rooms-bar" aria-label="Комнаты заказа">
     <div className="rooms-top"><strong>Комнаты заказа</strong><span role="status">{saved}</span><span>Мебель, расчёт и документы редактора — только выбранная комната</span></div>
     {writerMessage&&<p role="status">{writerMessage}</p>}
     <div className="rooms-controls">
@@ -104,13 +107,14 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
         const raw=JSON.parse(await file.text());
         if(sequence!==importSequence.current)return;
         if(current.current!==before)throw Error('Заказ изменился во время чтения. Повторите открытие файла.');
+        if(isClientBundle(raw)&&onImportBundle){onImportBundle(raw);return;}
         const candidate=raw?.format==='garderyob-rooms'?parseRoomDocument(raw):migrateRoomDocument(raw);
         commit(candidate,true,true);
       } catch(e){setError(e instanceof Error?e.message:String(e));}
     }}/>
-  </section>;
+  </section></>;
   if (!room.project.modules.length) return <EmptyRoomView title={room.title} bar={bar} viewKey={workspaceKey+':'+room.id} project={room.project} onAdd={()=>run(d=>updateRoom(d,room.id,{...room.project,modules:newProject().modules}))} onDownload={()=>saveFile('Ё Конструктор комнаты.json',JSON.stringify(current.current,null,2),'application/json')} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/>;
-  return <App onEmptyProject={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}} key={room.id} viewKey={workspaceKey+':'+room.id} externalVersion={epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
+  return <App managedHistory={{undo:()=>history(true),redo:()=>history(false),undoCount:undo.current.length,redoCount:redo.current.length}} onImportBundle={onImportBundle} onEmptyProject={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}} key={room.id} viewKey={workspaceKey+':'+room.id} externalVersion={epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
     try { return commit(updateRoom(current.current!,room.id,p)); } catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }}/>;
 }

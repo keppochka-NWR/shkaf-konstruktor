@@ -1,7 +1,7 @@
 import type { Module, Part } from './model';
 
-export const ALLEGRO_SOURCE = 'https://premial-furniture.ru/product/butylochnica-brioso-v-bazu-150-mm/';
-/** Official installation drawing: base width is NOT the mechanism width.
+export const ALLEGRO_SOURCE = 'https://premial-furniture.ru/wp-content/uploads/2026/07/Инструкция-Бутылочница-Brioso-в-базу-150-200-300-мм.pdf';
+/** Official BRIOSO (current catalogue ALLEGRO) PDF p.104: base width is NOT the mechanism width.
  * Basket wire diameters and slide cross sections are visual approximations;
  * this module does not generate manufacturing drillings. */
 export const ALLEGRO = [
@@ -53,7 +53,7 @@ export function applyAllegroParts(m: Module, out: Part[]) {
   // Pull-out fronts have no door hinges. Removing the item restores ordinary hinges.
   for (let i = out.length - 1; i >= 0; i--) if (out[i].role === 'hinge') out.splice(i, 1);
   // Do not incorrectly swing this front when the scene opens hinged doors.
-  // Stroke simulation is separate from the verified closed installation.
+  // Stroke simulation is separate from the simplified closed layout; travel is not verified.
   for (const p of out) if (p.role === 'door' || p.role === 'handle') { p.openShift = 0; if (p.role === 'door') p.hingeless = true; }
   const width = item.width, height = 540, depth = 457;
   const x = item.side === 'left' ? 16 + width / 2 : m.width - 16 - width / 2;

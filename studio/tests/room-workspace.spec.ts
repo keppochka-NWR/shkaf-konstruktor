@@ -1,5 +1,158 @@
 import { test, expect } from '@playwright/test';
+import {newProject} from '../src/project';
 const KEY='garderyob-rooms-v1';
+test('right-click rehangs the selected facade and supports undo redo reload',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.getByRole('button',{name:'Спереди',exact:true}).click();
+ await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
+ await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;
+ await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});
+ await expect(page.getByRole('menuitem',{name:/^Открывание\./})).toBeVisible();
+ await page.getByRole('menuitem',{name:/^Открывание\./}).click();
+ await page.getByRole('menuitem',{name:/^Петли справа\./}).click();
+ const hinges=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.sections[0].doorHinges);
+ expect((await hinges())[0]).toBe('right');await page.keyboard.press('Control+z');expect(await hinges()).toBeUndefined();
+ await page.keyboard.press('Control+y');expect((await hinges())[0]).toBe('right');await page.reload();expect((await hinges())[0]).toBe('right');
+});
+async function openSettings(page:any,title:string){
+ const summary=page.locator('.properties summary').filter({hasText:new RegExp('^'+title)}).first();
+ if(!await summary.evaluate((e:HTMLElement)=>(e.parentElement as HTMLDetailsElement).open))await summary.click();
+}
+
+test('unified workflow keeps communications through furniture, undo and reload',async({page})=>{
+ await page.goto('/');await expect(page.locator('.app')).toHaveAttribute('data-stage','room');
+ await expect(page.locator('.stage-step')).toHaveCount(3);
+ await page.getByText('Трубы, радиаторы и объекты на стенах',{exact:true}).click();
+ await page.getByLabel('Тип объекта',{exact:true}).selectOption('socket');
+ await page.locator('.fixture-add').getByRole('button',{name:'Добавить',exact:true}).click();
+ const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project);
+ const fixtures=(await state()).room.fixtures;expect(fixtures).toHaveLength(1);
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ for(const title of ['Полки','Ящики','Штанги','Опоры','Подсветка','Фасад','Ручки','Тип открывания']){
+  const summary=page.locator('.properties summary').getByText(title,{exact:true});await expect(summary).toBeVisible();
+  expect(await summary.evaluate(e=>(e.closest('details') as HTMLDetailsElement).open)).toBe(false);
+ }
+ expect((await state()).room.fixtures).toEqual(fixtures);
+ await page.getByRole('button',{name:'Помещение',exact:true}).click();
+ await expect(page.getByLabel('Тип объекта',{exact:true})).toBeVisible();
+ await page.getByLabel('Тип объекта',{exact:true}).selectOption('vent');
+ await page.locator('.fixture-add').getByRole('button',{name:'Добавить',exact:true}).click();
+ expect((await state()).room.fixtures).toHaveLength(2);
+ await page.keyboard.press('Control+z');expect((await state()).room.fixtures).toEqual(fixtures);
+ await page.reload();await expect(page.locator('.app')).toHaveAttribute('data-stage','room');expect((await state()).room.fixtures).toEqual(fixtures);
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.screenshot({path:'.qa/unified-furniture.png'});
+ for(const width of [1600,1100,920,500]){await page.setViewportSize({width,height:1000});
+  const brand=page.locator('.header .brand strong');await expect(brand).toBeVisible();
+  const rows=await brand.evaluate(e=>{const r=document.createRange();r.selectNode(e.firstChild!);return [...r.getClientRects()].map(x=>x.top);});expect(new Set(rows).size).toBe(1);
+ }
+});
+
+test('straight kitchen creates the entered dimensions without self-overlap',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.getByRole('button',{name:'Кухня прямая',exact:true}).click();
+ for(const [name,value] of [['Ширина','2000'],['Высота','900'],['Глубина','600']])await page.getByLabel(name+' новой мебели',{exact:true}).fill(value);
+ await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ const state=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project);
+ const saved=await state(),base=saved.modules.filter((a:any)=>a.module.kitchen?.role==='base');
+ expect(base.length).toBeGreaterThan(1);expect(base.reduce((s:number,a:any)=>s+a.module.width,0)).toBe(2000);
+ expect(base.every((a:any)=>a.module.height===900&&a.module.depth===600)).toBe(true);
+ const top=saved.modules.find((a:any)=>a.module.worktop);expect(top.y).toBe(900);expect(top.module.depth).toBe(643);
+ await page.screenshot({path:'.qa/unified-kitchen.png'});
+ await page.keyboard.press('Control+z');expect((await state()).modules).toHaveLength(0);
+ await page.keyboard.press('Control+y');expect((await state()).modules).toEqual(saved.modules);
+ await page.reload();expect((await state()).modules).toEqual(saved.modules);
+});
+
+test('apply facade style to all is one reversible saved command',async({page})=>{
+ await page.goto('/');const p=newProject();p.modules[0].module.facadeDecor='Графит';p.modules[0].module.doors=true;
+ const target=structuredClone(p.modules[0]);target.id='second';target.x=1600;target.module.facadeDecor='Белый';target.module.doors=false;p.modules.push(target);
+ await page.evaluate(p=>localStorage.setItem('module-studio-v3',JSON.stringify(p)),p);await page.reload();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Фасад');
+ const modules=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules);
+ const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('module-studio-v3')!).modules);await page.getByRole('button',{name:'Применить ко всем модулям',exact:true}).click();
+ await expect(page.getByRole('alert')).toHaveCount(0);expect((await modules())[1].module.facadeDecor).toBe('Графит');expect((await modules())[1].module.doors).toBe(true);
+ await page.keyboard.press('Control+z');expect(await modules()).toEqual(before);
+ await page.keyboard.press('Control+y');await page.reload();expect((await modules())[1].module.facadeDecor).toBe('Графит');
+});
+
+test('unified Ctrl+Z undoes furniture, room commands and last-module removal; Russian layout and redo work',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByLabel('Название модуля').fill('История');await page.getByLabel('Название модуля').press('Enter');
+ await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+ await page.keyboard.press('Control+z');await expect(page.getByLabel('Название модуля')).toHaveValue('История');
+ await page.getByRole('button',{name:'Отменить',exact:true}).click();await expect(page.getByLabel('Название модуля')).not.toHaveValue('История');
+ await page.keyboard.press('Control+z');await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.keyboard.press('Control+Shift+z');await expect(page.getByLabel('Название модуля')).toBeVisible();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.getByRole('button',{name:'Удалить выбранный модуль',exact:true}).click();
+ await page.evaluate(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'я',code:'KeyZ',ctrlKey:true,bubbles:true,cancelable:true})));
+ await expect(page.getByLabel('Название модуля')).toBeVisible();
+ await page.getByLabel('Название модуля').focus();const before=await page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'));
+ await page.keyboard.press('Control+z');expect(await page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1')),'typing undo does not undo the room').toBe(before);
+});
+
+test('shelf module exposes a direct facade action in section controls, supports undo and reload',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Стеллаж',exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.locator('.properties summary').getByText('Фасад',{exact:true}).click();
+ await page.getByRole('button',{name:'Добавить распашные фасады',exact:true}).click();
+ const hasDoors=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.doors);
+ expect(await hasDoors()).toBe(true);await page.keyboard.press('Control+z');expect(await hasDoors()).toBe(false);
+ await page.keyboard.press('Control+y');expect(await hasDoors()).toBe(true);await page.reload();expect(await hasDoors()).toBe(true);
+});
+
+test('drawer front increase shifts fixed upper drawers as one undoable command',async({page})=>{
+ await page.goto('/');const p=newProject();p.modules[0].module.height=2000;p.modules[0].module.doors=false;
+ const s=p.modules[0].module.sections[0];s.shelves=[];s.drawers=3;s.drawerConfigs=[0,200,400].map(y=>({slide:'ball',height:160,length:450,y}));
+ await page.evaluate(p=>localStorage.setItem('module-studio-v3',JSON.stringify(p)),p);await page.reload();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.locator('.properties summary').filter({hasText:/^Ящики( и бутылочницы)?$/}).click();
+ const input=page.getByLabel('Высота фасада ящика',{exact:true});await input.fill('350');await input.press('Enter');
+ const values=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.sections[0].drawerConfigs);
+ expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
+ await page.keyboard.press('Control+z');expect((await values()).map((c:any)=>c.y)).toEqual([0,200,400]);
+ await page.keyboard.press('Control+y');expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
+ await page.reload();expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
+});
+
+test('ordinary URL: empty start, last module deletion, undo, reload and re-add',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/');
+ await expect(page.getByRole('heading',{name:'Комната 1',exact:true})).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'Проекты клиента'})).toBeVisible();
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ const del=page.getByRole('button',{name:'Удалить выбранный модуль',exact:true});await expect(del).toBeEnabled();await del.click();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Отменить изменение заказа'}).click();await expect(page.getByLabel('Название модуля')).toBeVisible();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await del.click();await page.reload();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await expect(page.getByLabel('Название модуля')).toBeVisible();
+ expect(errors).toEqual([]);
+});
+
+test('ordinary URL: old project retained, new project empty, copy keeps all rooms',async({page})=>{
+ await page.goto('/');const old=newProject();old.modules[0].module.name='Прежний шкаф';
+ await page.evaluate(p=>localStorage.setItem('module-studio-v3',JSON.stringify(p)),old);await page.reload();
+ await expect(page.getByLabel('Название модуля')).toHaveValue('Прежний шкаф');
+ await page.getByRole('button',{name:'Ещё проект',exact:true}).click();await page.getByRole('menuitem',{name:/^Новый проект/}).click();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+ await page.getByRole('button',{name:'Ещё проект',exact:true}).click();await page.getByRole('menuitem',{name:/^Копия этого проекта/}).click();
+ await expect(page.getByLabel('Активная комната').locator('option')).toHaveCount(2);await page.reload();
+ await expect(page.getByLabel('Активная комната').locator('option')).toHaveCount(2);
+ await page.getByRole('tab',{name:/^Проект 1 /}).click();await expect(page.getByLabel('Название модуля')).toHaveValue('Прежний шкаф');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('module-studio-v3')!).modules[0].module.name)).toBe('Прежний шкаф');
+});
+
+test('ordinary URL: explicit new project without furniture has no hidden default module',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:'Новый проект / восстановить',exact:true}).click();
+ await page.getByRole('button',{name:'Создать проект без мебели',exact:true}).click();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();await page.reload();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules.length)).toBe(0);
+});
 test('P1: room isolation, cabinet edits, persistence, document undo and legacy isolation', async ({page}) => {
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/?rooms=1');
@@ -65,7 +218,7 @@ test('P1: recovery restores backup and keeps the damaged source',async({page})=>
 test('P2/P3: empty room 3D, right-click properties and measured surface survive reload',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/?rooms=1');
  await expect(page.locator('.empty-room-app .viewport canvas')).toBeVisible();
- await page.getByRole('button',{name:'Дальше: Коммуникации'}).click();await page.getByRole('button',{name:'Окно',exact:true}).click();
+ await page.getByRole('button',{name:'Окно',exact:true}).click();
  let dialog=page.getByRole('dialog',{name:'Параметры объекта помещения'});await expect(dialog).toBeVisible();
  await dialog.getByLabel('Глубина откосов',{exact:true}).fill('150');await dialog.getByLabel('Глубина откосов',{exact:true}).press('Enter');
  await dialog.getByRole('button',{name:'Закрыть параметры'}).click();await page.getByRole('button',{name:'Показать план комнаты'}).click();
@@ -111,11 +264,11 @@ test('P1 cloud response cannot overwrite edits made while saving',async({page})=
 test('empty project: delete last module, undo, reload and export without losing room',async({page})=>{
  await page.goto('/?rooms=1');const width=page.getByLabel('Ширина пустой комнаты');await width.fill('4100');await width.press('Enter');
  await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
- await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Удалить выбранный модуль',exact:true}).click();
  await expect(page.locator('.empty-room-app')).toBeVisible();await expect(width).toHaveValue('4100');
  await page.keyboard.press('Control+z');await expect(page.getByLabel('Название модуля')).toBeVisible();
- await page.getByRole('button',{name:'Удалить выбранный модуль',exact:true}).click();await page.reload();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.getByRole('button',{name:'Удалить выбранный модуль',exact:true}).click();await page.reload();
  await expect(width).toHaveValue('4100');
  const doc=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),KEY);expect(doc.rooms[0].project.modules).toEqual([]);
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Скачать все комнаты',exact:true}).click();
@@ -129,10 +282,10 @@ test('empty project: delete last module, undo, reload and export without losing 
 test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persistence and zoom bounds',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/?rooms=1');await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
- await page.getByRole('button',{name:/^(4 )?Наполнение$/}).filter({hasText:'Наполнение'}).first().click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.locator('.properties summary').filter({hasText:/^Ящики( и бутылочницы)?$/}).click();
  await page.getByLabel('Ящики нижнего модуля',{exact:true}).selectOption('3');await page.getByLabel('Профиль Gola',{exact:true}).check();
  await expect(page.getByRole('button',{name:'Добавить пантограф',exact:true})).toHaveCount(0);
- await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Под мойку 600',exact:true}).click();await page.getByRole('button',{name:'Нижний распашной 600',exact:true}).click();
  await page.getByRole('button',{name:'Навесной 600',exact:true}).click();await page.getByRole('button',{name:'Навесной 600',exact:true}).click();
  await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
@@ -159,18 +312,20 @@ test('kitchen correction: depth without shelves, reversible facades and supports
  await page.goto('/?rooms=1');
  await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
- await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await openSettings(page,'Корпус');
  await page.getByLabel('Назначение кухонного модуля',{exact:true}).selectOption('sink');
  await page.getByLabel('Глубина',{exact:true}).fill('460');await page.getByLabel('Глубина',{exact:true}).press('Tab');
  await expect(page.getByRole('alert')).toHaveCount(0);
  await expect(page.getByLabel('Глубина',{exact:true})).toHaveValue('460');
  await page.getByLabel('Опоры под корпусом',{exact:true}).uncheck();
  await expect(page.getByRole('alert')).toHaveCount(0);
- await page.getByRole('button',{name:/^(5 )?Фасады$/}).click();
- await page.getByLabel('Распашные фасады',{exact:true}).uncheck();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await openSettings(page,'Фасады');await page.getByLabel('Распашные фасады',{exact:true}).uncheck();
  await expect(page.getByLabel('Распашные фасады',{exact:true})).toBeVisible();
  await page.getByLabel('Распашные фасады',{exact:true}).check();
- await page.reload();await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.reload();await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await openSettings(page,'Корпус');
  await expect(page.getByLabel('Глубина',{exact:true})).toHaveValue('460');
  await expect(page.getByLabel('Опоры под корпусом',{exact:true})).not.toBeChecked();
  await page.getByLabel('Опоры под корпусом',{exact:true}).check();
@@ -181,20 +336,21 @@ test('Premial bottle pullout: one-click template, handedness, invalid resize, pe
  await page.goto('/?rooms=1&workspace=premial-regression-'+Date.now());
  await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
- await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('checkbox',{name:'Все настройки',exact:true}).check();
  await page.getByRole('button',{name:'Бутылочница 200',exact:true}).click();
  const props=page.getByRole('complementary').last();
- await props.getByText('Наполнение кухни',{exact:true}).click();
+ await props.getByText('Ящики и бутылочницы',{exact:true}).click();
  const select=page.getByRole('combobox',{name:'Бутылочница Premial',exact:true});
  await expect(select).toHaveValue('060502');
  await select.selectOption('060503');
- const depth=page.getByRole('spinbutton',{name:'Глубина',exact:true});
+ await openSettings(page,'Корпус');const depth=page.getByRole('spinbutton',{name:'Глубина',exact:true});
  await depth.fill('450');await depth.press('Tab');
  await expect(depth).toHaveValue('557');
  await expect(page.getByRole('alert')).toContainText('457');
  await page.reload();
- if(!await select.isVisible()) await props.getByText('Наполнение кухни',{exact:true}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ if(!await select.isVisible()) await props.getByText('Ящики и бутылочницы',{exact:true}).click();
  await expect(select).toHaveValue('060503');
  await expect(props.getByText('Петли',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Прозрачный корпус',exact:true}).click();
@@ -215,15 +371,15 @@ test('Premial sink: real cutout, persistence, invalid edit and small viewport ca
  await page.getByRole('spinbutton',{name:'Ширина новой мебели',exact:true}).fill('800');
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
  await page.getByRole('checkbox',{name:'Все настройки',exact:true}).check();
- await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
- await page.getByRole('combobox',{name:'Назначение кухонного модуля',exact:true}).selectOption({label:'Под мойку'});
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.locator('.properties summary').filter({hasText:/^Корпус$/}).click();await page.getByRole('combobox',{name:'Назначение кухонного модуля',exact:true}).selectOption({label:'Под мойку'});
  await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
- await page.getByRole('button',{name:'+ под мойку',exact:true}).click();
+ await page.locator('.properties summary').filter({hasText:/^Столешница$/}).click();await page.getByRole('button',{name:'+ под мойку',exact:true}).click();
  await page.getByRole('combobox',{name:'Модель мойки',exact:true}).selectOption('210245');
  await page.getByRole('checkbox',{name:'Показать сифон для компоновки',exact:true}).check();
  const cw=page.getByRole('spinbutton',{name:'Ширина выреза',exact:true});await cw.fill('500');await cw.press('Tab');
  await expect(cw).toHaveValue('560');await expect(page.getByRole('alert')).toContainText('PRODIGY');
- await page.reload();await expect(page.getByRole('combobox',{name:'Модель мойки',exact:true})).toHaveValue('210245');
+ await page.reload();await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Столешница');await expect(page.getByRole('combobox',{name:'Модель мойки',exact:true})).toHaveValue('210245');
  await expect(page.getByRole('checkbox',{name:'Показать сифон для компоновки',exact:true})).toBeChecked();
  await page.getByRole('button',{name:'Скрыть фасады',exact:true}).click();
  await page.getByRole('button',{name:'Прозрачный корпус',exact:true}).click();
@@ -238,4 +394,20 @@ test('Premial sink: real cutout, persistence, invalid edit and small viewport ca
  await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
  await page.waitForTimeout(1200);await page.screenshot({path:'reports/premial-sink-ui.png'});
  expect(errors).toEqual([]);
+});
+
+
+test('sidebars resize by dragging, persist across empty and furnished rooms, and fit smaller windows',async({page})=>{
+ await page.goto('/');
+ const left=page.getByRole('separator',{name:'Ширина левой панели'}),right=page.getByRole('separator',{name:'Ширина правой панели'});
+ const drag=async(locator:any,dx:number)=>{const b=(await locator.boundingBox())!;await page.mouse.move(b.x+b.width/2,b.y+80);await page.mouse.down();await page.mouse.move(b.x+b.width/2+dx,b.y+80,{steps:6});await page.mouse.up();};
+ await drag(left,90);await drag(right,-80);
+ await expect(left).toHaveAttribute('aria-valuenow','340');await expect(right).toHaveAttribute('aria-valuenow','380');
+ expect(Math.round((await page.locator('.library').boundingBox())!.width)).toBe(340);
+ await page.reload();await expect(left).toHaveAttribute('aria-valuenow','340');
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await expect(right).toHaveAttribute('aria-valuenow','380');
+ await right.focus();await right.press('ArrowLeft');await expect(right).toHaveAttribute('aria-valuenow','390');
+ await left.dblclick();await expect(left).toHaveAttribute('aria-valuenow','250');
+ await page.setViewportSize({width:920,height:800});await expect.poll(async()=> (await page.locator('.viewport').boundingBox())!.width).toBeGreaterThanOrEqual(319);
+ await page.setViewportSize({width:500,height:800});await expect(left).toBeHidden();
 });
