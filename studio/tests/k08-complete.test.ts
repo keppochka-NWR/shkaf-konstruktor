@@ -8,7 +8,7 @@ import {roomWarnings,collisionWarnings} from '../src/roomWarnings';
 import {parts,validate} from '../src/model';
 import {installSink} from '../src/installSink';
 import {kitchenTemplate} from '../src/kitchenProject';
-import {configureOven,ovenSupportTop} from '../src/kitchenOven';
+import {configureOven,ovenSupportTop,ovenLayoutWarnings} from '../src/kitchenOven';
 import {refitKDrawers} from '../src/kitchenDrawers';
 import {ovenModel} from '../src/ovenGeometry';
 import {applianceModel} from '../src/applianceGeometry';
@@ -16,7 +16,9 @@ import {sinkChecks} from '../src/sinkChecks';
 const saved=()=>parseProject(JSON.parse(readFileSync(new URL('../reports/k08-manual-ui.project.json',import.meta.url),'utf8')));
 test('actual UI kitchen survives parse/save with furniture, appliances, fixtures and two holes',()=>{
  const p=saved();assert.equal(p.modules.length,10);assert.equal(p.room.obstacles?.length,4);assert.equal(p.room.fixtures?.length,10);
- assert.deepEqual(projectErrors(p),[]);assert.deepEqual(roomWarnings(p),[]);assert.deepEqual(collisionWarnings(p),[]);
+ assert.deepEqual(projectErrors(p),[]);assert.deepEqual(roomWarnings(p),[]);const oven=p.modules.find(a=>a.module.kitchen?.oven)!;
+ assert.equal(ovenLayoutWarnings(oven.module).length,1);assert.ok(collisionWarnings(p).some(w=>w.moduleId===oven.id&&w.message.includes('Фасад ящика')));
+ configureOven(oven.module);assert.deepEqual(collisionWarnings(p),[]);
  const top=p.modules.find(a=>a.module.worktop)!;assert.equal(top.module.worktop!.cutouts.length,2);
  assert.deepEqual(parseProject(JSON.parse(JSON.stringify(p))),p);
 });
@@ -47,7 +49,7 @@ test('appliances have finite outward meshes inside their closed declared bounds;
  mesh.traverse(a=>{if(a instanceof THREE.Mesh){assert.equal((a.material as THREE.Material).side,THREE.FrontSide);for(const v of a.geometry.getAttribute('position').array)assert.ok(Number.isFinite(v));}});
  if(['fridge','dishwasher'].includes(o.type)){const opened=new THREE.Box3().setFromObject(applianceModel(o,true)!);assert.ok(opened.max.z>o.depth/2+200);assert.ok(opened.min.y>=-o.height/2-20);}
  }
- assert.deepEqual(new THREE.Box3().setFromObject(ovenModel()).getSize(new THREE.Vector3()).toArray(),[594,595,585]);
+ assert.deepEqual(new THREE.Box3().setFromObject(ovenModel()).getSize(new THREE.Vector3()).toArray(),[594,595,618]);
  assert.ok(new THREE.Box3().setFromObject(ovenModel(true)).max.z>600);
 });
 
