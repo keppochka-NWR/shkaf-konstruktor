@@ -282,7 +282,7 @@ test('estimate falls back to the tier price for decors outside the explicit list
   assert.equal(line.unitPrice,decorPrice('Титан').price);assert.match(line.source,/Прайс Lamarty/);
 });
 
-test('plan skew (Шаин): sides of different depth, tapered horizontals, rotated doors and plinth, front fasteners follow depth',()=>{
+test('plan skew (6724055): sides of different depth, tapered horizontals, rotated doors and plinth, front fasteners follow depth',()=>{
   const m=initialModule();m.width=708;m.height=960;m.depth=493;m.plinthHeight=80;m.skew={side:'right',depth:300};m.sections=[{...section(),weight:426,shelves:[0.5]},{...section(),weight:266,shelves:[0.5]}];
   assert.equal(validate(m).length,0,validate(m).join('; '));
   const ps=parts(m),L=ps.find(p=>p.id==='left')!,R=ps.find(p=>p.id==='right')!;

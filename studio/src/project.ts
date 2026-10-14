@@ -113,7 +113,7 @@ export function applyAutoFillers(p:Project):Project{
       if(needed>0){a.module.wallFiller={...a.module.wallFiller,[side]:wf[side]};shiftAlongWidth(a,side==='left'?needed:-needed);}
     }
     if(Object.keys(wf).length)a.module.wallFiller=wf;else delete a.module.wallFiller;
-    // Ниша впритык (Цецегов: 1244 в 1252): планкам негде встать, сдвиг вытолкнул бы корпус за стену — оставляем корпус без планок.
+    // Ниша впритык (заказ 7212718: 1244 в 1252): планкам негде встать, сдвиг вытолкнул бы корпус за стену — оставляем корпус без планок.
     if(a.module.wallFiller){const b=bounds(a);if(b.x<-0.5||b.z<-0.5||b.x+b.w>room.width+0.5||b.z+b.d>room.depth+0.5){a.x=before.x;a.z=before.z;delete a.module.wallFiller;}}
   }
   return n;
