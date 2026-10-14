@@ -5,6 +5,7 @@
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
 import { sinkParts, worktopCutErrors } from './premialSink';
+import {ovenErrors,ovenParts,type OvenSpec} from './kitchenOven';
 import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
@@ -14,6 +15,7 @@ import { allegroErrors, type PremialPullout } from './premialPullout';
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
+  oven?: OvenSpec;
   premialPullout?: PremialPullout;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
   plinth?: { height: number; off?: boolean; clips?: boolean;
@@ -197,7 +199,7 @@ export function kitchenJointPoints(m: Module, depth = m.depth, joint?: number, b
 }
 /** Правило кухни без своего счёта из Базиса: глубже KITCHEN.deepBottom (600) — 3 точки, иначе 2. */
 export const jointPointsRule = (depth: number): 2 | 3 => (depth > KITCHEN.deepBottom ? 3 : 2);
-export type WorktopCutout = { kind: "sink" | "hob"; x: number; z?: number; width: number; depth: number; fixture?: string; drainDrop?: number };
+export type WorktopCutout = { kind: "sink" | "hob"; x: number; z?: number; width: number; depth: number; fixture?: string; drainDrop?: number; tap?:boolean; plumbing?:boolean };
 export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
 
 /** Регламенты кухни по проектам Базиса цеха, мм. */
@@ -315,6 +317,7 @@ export function nailRows(W: number, H: number): { bottom: number[]; top: number[
 
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
+  out.push(...ovenParts(m));
   kitchenStrip(m, out);
   const t = 16;
   const metal = (id: string, name: string, size: Part["size"], position: Part["position"], model?: Part["model"]): Part =>
@@ -554,13 +557,14 @@ export function worktopParts(m: Module): Part[] {
   const w = m.worktop!, T = w.thickness, out: Part[] = [];
   out.push({ id: "worktop", name: `Столешница ${worktopLabel(w)} ${T} мм`, size: [m.width, T, m.depth], position: [m.width / 2, T / 2, m.depth / 2], length: m.width, width: m.depth, thickness: T, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 2, 0], external: w.material !== "ldsp" });
   if(w.cutouts.length) out[0].planHoles=w.cutouts.map(c=>({x:c.x,z:c.z??(m.depth-c.depth)/2,width:c.width,depth:c.depth}));
+  for(const c of w.cutouts)if(c.tap){const cx=c.x+c.width/2,cz=(c.z??(m.depth-c.depth)/2)+c.depth/2;(out[0].planHoles??=[]).push({x:cx-17.5,z:cz-230,width:35,depth:35});}
   for (const [i,c] of w.cutouts.entries()) out.push(...sinkParts(m,c,i));
   return out;
 }
 export function worktopLabel(w: WorktopSpec) { return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень" }[w.material]; }
 
 export function kitchenErrors(m: Module): string[] {
-  const e: string[] = allegroErrors(m);
+  const e: string[] = [...allegroErrors(m),...ovenErrors(m)];
   if (m.worktop) {
     const w = m.worktop;
     if (!["postforming", "ldsp", "stone"].includes(w.material)) e.push("Столешница: материал из списка.");

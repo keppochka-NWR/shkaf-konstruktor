@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import {ovenModel} from './ovenGeometry';
+import {tapModel,servicePipeModel} from './serviceGeometry';
 import type { Part } from "./model";
 import {premialSinkModel,layoutDrainModel} from './premialSinkGeometry';
 import { allegroModel } from './premialGeometry';
@@ -217,7 +219,11 @@ export function flangeModel(size: [number, number, number], baseAt: -1 | 1): THR
 }
 
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
-export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
+export function procModel(p: P & { look?: Part["look"] }, ctx: { open?:boolean; left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
+  if(p.id==='layout-oven')return ovenModel(ctx.open);
+  if(p.id.startsWith('layout-tap:'))return tapModel();
+  if(p.id.startsWith('layout-waste:'))return servicePipeModel(p.size,false);
+  if(p.id.startsWith('layout-water:'))return servicePipeModel(p.size,true,p.id.endsWith(':1'));
   if (p.id.startsWith('premial-sink:')) return premialSinkModel();
   if (p.id.startsWith('layout-drain:')) return layoutDrainModel(p.size[1]);
   if (p.id.startsWith('premial-allegro:')) return allegroModel(p.size[0], /06050[13]$/.test(p.id));

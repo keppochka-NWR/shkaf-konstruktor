@@ -471,6 +471,7 @@ export function relayoutProblem(m: Module, n: number): string | undefined {
  *  глубина её не меняет; у СТАРТ и Versalite длина Базиса остаётся, пока входит (см. startDepthLen, versaliteDepthLen). */
 export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): KDrawer[] | undefined {
   const ks = m.kdrawers; if (!ks?.length) return ks;
+  if(m.kitchen?.oven) return versaliteLayout({...m,height:m.height-m.kitchen.oven.nicheHeight,topType:'panel',rails:[],gola:undefined,kitchen:{...m.kitchen,oven:undefined}},1,undefined,ks.filter(isVersalite));
   if (what === "height") {
     // ящики только внизу, над ними жёсткая полка или двери (Базис k05 m03, k08 m04): стопка не растягивается на всю высоту
     // (короб упирался в «Полку жёсткую»). Пока ящики входят — остаются как в Базисе; нет — раскладка в пределах прежней стопки.

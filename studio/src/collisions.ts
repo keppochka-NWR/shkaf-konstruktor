@@ -45,6 +45,8 @@ const doorOf = (id: string) => id.replace(/:(hingecup|hingeplate|hingearm|handle
 
 /** Разрешён ли контакт пары (порядок не важен). depth — глубина проникновения, мм. */
 export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boolean {
+  const fixtureId=(p:Part)=>/^(?:premial-sink|layout-(?:drain|tap|waste|water)):(\d+)/.exec(p.id)?.[1];
+  if(fixtureId(a)!==undefined&&fixtureId(a)===fixtureId(b))return true; // connected fittings of this assembly
   for (const [p, q] of [[a, b], [b, a]] as const) {
     // Дубль Базиса (kitchen.dupParts): второй экземпляр детали в той же точке — как в проекте Базиса, с собой не сталкивается;
     // с остальным — те же правила, что у оригинала.
@@ -121,6 +123,10 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
 
 /** Коробки детали для проверки: точные коробки фурнитуры (collide) или габарит детали. */
 function boxesOf(p: Part): Box[] {
+  if(p.planHoles?.length){
+    const holes=p.planHoles,xs=[...new Set([0,p.size[0],...holes.flatMap(h=>[h.x,h.x+h.width])])].sort((a,b)=>a-b),zs=[...new Set([0,p.size[2],...holes.flatMap(h=>[h.z,h.z+h.depth])])].sort((a,b)=>a-b),out:Box[]=[];
+    for(let x=1;x<xs.length;x++)for(let z=1;z<zs.length;z++){const cx=(xs[x]+xs[x-1])/2,cz=(zs[z]+zs[z-1])/2;if(holes.some(h=>cx>h.x&&cx<h.x+h.width&&cz>h.z&&cz<h.z+h.depth))continue;out.push(box({...p,position:[p.position[0]-p.size[0]/2+cx,p.position[1],p.position[2]-p.size[2]/2+cz],size:[xs[x]-xs[x-1],p.size[1],zs[z]-zs[z-1]]}));}return out;
+  }
   return p.collide?.length ? p.collide.map((c) => ({ c: c.position, h: [c.size[0] / 2, c.size[1] / 2, c.size[2] / 2], ax: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] })) : [box(p)];
 }
 /** Глубина пересечения двух деталей (с учётом точных коробок); ≤ 0 — не пересекаются. */
@@ -150,7 +156,7 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
     const A = boxes[i], B = boxes[j];
     if (Math.hypot(B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]) > rad[i] + rad[j]) continue;
-    const depth = ps[i].collide || ps[j].collide ? partPenetration(ps[i], ps[j]) : penetration(A, B);
+    const depth = ps[i].collide || ps[j].collide || ps[i].planHoles || ps[j].planHoles ? partPenetration(ps[i], ps[j]) : penetration(A, B);
     if (depth <= tol) continue;
     if (allowedContact(ps[i], ps[j], depth, m)) continue;
     out.push({ a: ps[i].id, b: ps[j].id, names: [ps[i].name, ps[j].name], depth: Math.round(depth * 10) / 10, ...(bazisHoleInGroove(ps[i], ps[j], m) ? { bazis: true as const } : {}) });

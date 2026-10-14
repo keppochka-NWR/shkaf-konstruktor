@@ -1,4 +1,6 @@
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
+import {configureOven,ovenSupportTop,OVEN_SOURCE} from './kitchenOven';
+import {installSink} from './installSink';
 import { alignKitchenRow } from "./kitchenAlignment";
 import { ALLEGRO, ALLEGRO_SOURCE, allegroErrors } from './premialPullout';
 import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setKitchenGola} from './kitchenEditing';
@@ -114,6 +116,7 @@ function CabinetPanel(props: KitchenPanelProps) {
   const list = useMemo(() => parts(m), [m]);
   const [si, setSi] = useState(0), sIdx = Math.min(si, m.sections.length - 1), s = m.sections[sIdx];
   const [onlyThis, setOnlyThis] = useState(false);
+  const [installationError,setInstallationError]=useState('');
   const item = kitchenItemOf(m), group = item ? KITCHEN_ITEMS[item].group : "base";
   const kinds = (Object.keys(KITCHEN_ITEMS) as KitchenItem[]).filter((x) => KITCHEN_ITEMS[x].group === group);
   const setK = (patch: Partial<NonNullable<Module["kitchen"]>>) => modify((n) => { n.kitchen = { ...n.kitchen!, ...patch }; });
@@ -151,12 +154,26 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Colors m={m} material={material} />
     </div>
 
+    {k.appliance==='sink'&&<Group icon={<Wrench size={15}/>} title="Мойка и слив" open>
+      <p>Premial PRODIGY 6045 · 600×450 мм</p>
+      <button className="outline full" onClick={()=>{try{if(commit(installSink(project,placed.id)))setInstallationError('Мойка и сифон установлены. Положение выреза — в параметрах столешницы.');}catch(e){setInstallationError((e as Error).message);}}}>Установить мойку и сифон</button>
+      <p className="field-note">Вырез создаётся на столешнице над тумбой. Если столешницы нет — добавится вместе с мойкой. Повторное нажатие не создаёт копию.</p>
+      {installationError&&<p role="status">{installationError}</p>}
+    </Group>}
+    {k.appliance==='oven'&&<Group icon={<Wrench size={15}/>} title="Духовка и нижний ящик" open>
+      <Check label="Показать духовку в 3D" checked={!!k.oven?.visible} change={v=>modify(n=>configureOven(n,{visible:v}))}/>
+      <Check label="Ящик под духовкой" checked={!!k.oven?.drawer} change={v=>modify(n=>configureOven(n,{drawer:v}))}/>
+      {k.oven&&<><Num label="Высота ниши духовки" value={k.oven.nicheHeight} min={595} max={610} change={v=>modify(n=>configureOven(n,{nicheHeight:v}))}/><p className="field-note">Опорная полка на {ovenSupportTop(m)} мм от низа модуля. Ящик занимает только пространство под ней.</p></>}
+      <p className="field-note">Типовая модель 60 см: дверца, стекло, ручка и панель управления. Посадка и вентиляция уточняются по выбранному прибору. <a href={OVEN_SOURCE} target="_blank" rel="noreferrer">Размерный ориентир</a></p>
+    </Group>}
     <Group icon={<Box size={15} />} title="Корпус" open={stage === "bodies"}>
       {item && kinds.length > 1 && <label className="hardware-field">Назначение<select aria-label="Назначение кухонного модуля" value={item} onChange={(e) => modify((n) => { const r = rebuildKitchen(n, e.target.value as KitchenItem); for (const key of Object.keys(n)) delete (n as Record<string, unknown>)[key]; Object.assign(n, r); })}>
         {kinds.map((x) => <option key={x} value={x}>{KITCHEN_ITEMS[x].label}</option>)}</select></label>}
       {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (ширина, цвета, петли и ручки сохраняются).</p>}
       <label className="hardware-field">Название<input aria-label="Название кухонного модуля" key={m.name} defaultValue={m.name} maxLength={80} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) modify((n) => { n.name = v; }); }} /></label>
       {/* предел — как в проверке кухни (KITCHEN.maxModuleWidth 1650: мойка 1480 k28 m17), не 1200 нарезки ряда */}
+      <Check label="Менять ширину только этого корпуса" checked={!!m.ownWidthOnly} change={v=>modify(n=>{if(v)n.ownWidthOnly=true;else delete n.ownWidthOnly;})}/>
+      <p className="field-note">{m.ownWidthOnly?'Соседи сохраняют размеры. Проверьте зазор после изменения.':'Ширина перераспределяется с соседним корпусом в ряду.'}</p>
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} change={(v) => modify((n) => { n.width = v; })} />
       <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
@@ -221,7 +238,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!k.appliance&&<label className="hardware-field">Ящики нижнего модуля<select aria-label="Ящики нижнего модуля" value={m.kdrawers?.length??0} onChange={e=>modify(n=>setKitchenDrawerCount(n,Number(e.target.value)))}>
         <option value="0">Без ящиков · распашные фасады</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n} {n===1?'ящик':'ящика'}</option>)}
       </select></label>}
-      <Check label="Профиль Gola" checked={!!m.gola} change={v=>modify(n=>setKitchenGola(n,v))}/>
+      {k.appliance!=='oven'&&<Check label="Профиль Gola" checked={!!m.gola} change={v=>modify(n=>setKitchenGola(n,v))}/>}
       {m.gola&&<p className="field-note">Верхний L-профиль; между ящиками — C-профили. Вырезы боковин и зазоры фасадов показаны в модели. Обычные ручки отключены.</p>}
       {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
     </Group>}
@@ -266,7 +283,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       </>}
     </Group>}
 
-    {!!m.kdrawers?.length && <Group icon={<Rows3 size={15} />} title={m.kdrawers[0].system === "firmax-ldsp" ? "Ящики Firmax ЛДСП" : m.kdrawers[0].system === "versalite-h45" ? "Ящики Versalite H45" : m.kdrawers[0].system === "start-sc" ? "Ящики Boyard СТАРТ" : m.kdrawers[0].system === "indigo" ? "Ящики Indigo" : m.kdrawers[0].system === "modern-slide" ? "Ящики MODERN SLIDE" : "Ящики Axis PRO"} open={stage === "filling"} note={m.kdrawers.length + " шт."}>
+    {!!m.kdrawers?.length && !k.oven && <Group icon={<Rows3 size={15} />} title={m.kdrawers[0].system === "firmax-ldsp" ? "Ящики Firmax ЛДСП" : m.kdrawers[0].system === "versalite-h45" ? "Ящики Versalite H45" : m.kdrawers[0].system === "start-sc" ? "Ящики Boyard СТАРТ" : m.kdrawers[0].system === "indigo" ? "Ящики Indigo" : m.kdrawers[0].system === "modern-slide" ? "Ящики MODERN SLIDE" : "Ящики Axis PRO"} open={stage === "filling"} note={m.kdrawers.length + " шт."}>
       <div className="kitchen-field"><span>Количество ящиков</span>
         <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => { const same = m.kdrawers!.length === c, why = relayoutProblem(m, c); /* текущее число — пересобрать с теми же долями фасадов (царги и длины заново) */
           return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? layoutKitchenDrawers(n, c) : layoutKitchenDrawers(n, c); })}>{c}</button>; })}</div></div>
@@ -343,12 +360,12 @@ function WorktopPanel(props: KitchenPanelProps) {
       <div className="kitchen-cuts">
         <span className="rails-title">Вырезы</span>
         {w.cutouts.map((c, i) => <div key={i} className="kitchen-cut">
-          <div className="kitchen-chips" role="group" aria-label={"Вырез " + (i + 1)}>{(["sink", "hob"] as const).map((kind) => <button key={kind} type="button" aria-pressed={c.kind === kind} onClick={() => setCut(i, { kind, fixture:undefined, drainDrop:undefined })}>{kind === "sink" ? "Мойка" : "Варочная"}</button>)}
+          <div className="kitchen-chips" role="group" aria-label={"Вырез " + (i + 1)}>{(["sink", "hob"] as const).map((kind) => <button key={kind} type="button" aria-pressed={c.kind === kind} onClick={() => setCut(i, { kind, fixture:undefined, drainDrop:undefined, tap:undefined, plumbing:undefined })}>{kind === "sink" ? "Мойка" : "Варочная"}</button>)}
             <button type="button" className="danger" onClick={() => modify((n) => { n.worktop = { ...n.worktop!, cutouts: n.worktop!.cutouts.filter((_, j) => j !== i) }; })}>Убрать</button></div>
-          {c.kind==='sink'&&<><label className="hardware-field">Модель мойки<select aria-label="Модель мойки" value={c.fixture??''} onChange={e=>setCut(i,e.target.value?{fixture:SINK_ARTICLE,x:c.x+(c.width-560)/2,...(c.z===undefined?{}:{z:c.z+(c.depth-360)/2}),width:560,depth:360}:{fixture:undefined,drainDrop:undefined})}><option value="">Только вырез</option><option value={SINK_ARTICLE}>Premial PRODIGY 6045 · 210245 · 600×450</option></select></label>
-          {c.fixture&&<><p className="field-note">Чаша 550×350×220. Радиусы, слив и вырез — компоновочные: перед изготовлением сверить шаблон. <a href={SINK_SOURCE} target="_blank" rel="noreferrer">Карточка производителя</a></p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
+          {c.kind==='sink'&&<><label className="hardware-field">Модель мойки<select aria-label="Модель мойки" value={c.fixture??''} onChange={e=>setCut(i,e.target.value?{fixture:SINK_ARTICLE,x:c.x+(c.width-560)/2,...(c.z===undefined?{}:{z:c.z+(c.depth-360)/2}),width:560,depth:360}:{fixture:undefined,drainDrop:undefined,tap:undefined,plumbing:undefined})}><option value="">Только вырез</option><option value={SINK_ARTICLE}>Premial PRODIGY 6045 · 210245 · 600×450</option></select></label>
+          {c.fixture&&<><Check label="Смеситель в 3D" checked={!!c.tap} change={v=>setCut(i,{tap:v})}/><Check label="Подводки воды и слив до задней кромки" checked={!!c.plumbing} change={v=>setCut(i,{plumbing:v,drainDrop:v?(c.drainDrop??420):c.drainDrop})}/><p className="field-note">Чаша 550×350×220. Радиусы, слив и вырез — компоновочные: перед изготовлением сверить шаблон. <a href={SINK_SOURCE} target="_blank" rel="noreferrer">Карточка производителя</a></p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined,plumbing:e.target.checked?c.plumbing:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
           <Num label="От задней кромки" value={c.z??(m.depth-c.depth)/2} min={40} max={m.depth-40-c.depth} change={v=>setCut(i,{z:v})}/>
-          <Num label="От левого торца" value={c.x} min={50} max={Math.max(50, m.width - 50 - c.width)} change={(v) => setCut(i, { x: v })} />
+          <Num label="От левого торца" value={c.x} min={c.fixture?20:50} max={Math.max(c.fixture?20:50, m.width - (c.fixture?20:50) - c.width)} change={(v) => setCut(i, { x: v })} />
           <Num label="Ширина выреза" value={c.width} min={200} max={Math.max(200, m.width - 100)} change={(v) => setCut(i, { width: v })} />
           <Num label="Глубина выреза" value={c.depth} min={200} max={Math.max(200, m.depth - 80)} change={(v) => setCut(i, { depth: v })} />
         </div>)}

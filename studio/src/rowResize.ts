@@ -19,7 +19,7 @@ type Box = ReturnType<typeof bounds>;
 /** Не участвует в ряду: столешница и объекты «Ряда» Базиса. */
 const rowObject = (m: Module) => !!m.worktop || !!m.raw?.row;
 /** Ширину самого модуля меняем по-старому (без соседей): угловой (ширина = глубина), купе, сырой из Базиса, объект ряда. */
-const ownWidthOnly = (m: Module) => !!m.corner || !!m.kupe || !!m.raw || rowObject(m);
+const ownWidthOnly = (m: Module) => !!m.ownWidthOnly || !!m.corner || !!m.kupe || !!m.raw || rowObject(m);
 /** Почему соседа нельзя менять (или undefined, если можно). */
 function locked(m: Module): string | undefined {
   if (m.raw) return "модуль из Базиса, его ширину студия не меняет";

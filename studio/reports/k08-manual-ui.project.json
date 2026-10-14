@@ -1,0 +1,748 @@
+{
+  "version": 3,
+  "room": {
+    "width": 4510,
+    "height": 2700,
+    "depth": 3000,
+    "openings": [],
+    "fixtures": [
+      {
+        "id": "ee057413-644a-4cde-8217-89ae67e26688",
+        "type": "pipe",
+        "wall": "back",
+        "offset": 1270,
+        "fromFloor": 600,
+        "width": 20,
+        "height": 20,
+        "depth": 20,
+        "name": "Холодная вода",
+        "round": true
+      },
+      {
+        "id": "2ec2a246-f327-40aa-94b3-40d81a971c0a",
+        "type": "pipe",
+        "wall": "back",
+        "offset": 1390,
+        "fromFloor": 600,
+        "width": 20,
+        "height": 20,
+        "depth": 20,
+        "name": "Горячая вода",
+        "round": true
+      },
+      {
+        "id": "e48997a8-dee4-42a7-aeab-ad271ca5f593",
+        "type": "pipe",
+        "wall": "back",
+        "offset": 1315,
+        "fromFloor": 515,
+        "width": 50,
+        "height": 50,
+        "depth": 50,
+        "name": "Канализация Ø50",
+        "round": true
+      },
+      {
+        "id": "db639a45-b8b4-4562-8580-a69dbaae0803",
+        "type": "socket",
+        "wall": "back",
+        "offset": 4150,
+        "fromFloor": 300,
+        "width": 80,
+        "height": 80,
+        "depth": 12,
+        "name": "Холодильник · розетка сбоку"
+      },
+      {
+        "id": "e4d91298-d2cc-4d83-a61e-79bd04df4a3d",
+        "type": "socket",
+        "wall": "back",
+        "offset": 2750,
+        "fromFloor": 2350,
+        "width": 80,
+        "height": 80,
+        "depth": 12,
+        "name": "Вытяжка · питание"
+      },
+      {
+        "id": "94a70915-38af-4d12-a805-3669b88cf803",
+        "type": "vent",
+        "wall": "back",
+        "offset": 2500,
+        "fromFloor": 2450,
+        "width": 150,
+        "height": 150,
+        "depth": 5,
+        "name": "Вентканал вытяжки · проектный"
+      },
+      {
+        "id": "a5b92114-3645-47cc-8d4c-4e715f7cbf98",
+        "type": "verticalBox",
+        "wall": "back",
+        "offset": 2500,
+        "fromFloor": 2160,
+        "width": 150,
+        "height": 440,
+        "depth": 150,
+        "name": "Воздуховод 150×150 · компоновка"
+      },
+      {
+        "id": "06514570-9e9f-47c4-ab23-dfede45a0e7f",
+        "type": "socket",
+        "wall": "back",
+        "offset": 1520,
+        "fromFloor": 150,
+        "width": 80,
+        "height": 80,
+        "depth": 12,
+        "name": "ПММ · питание, доступ из мойки"
+      },
+      {
+        "id": "d5ef3ed5-c01b-4382-89fc-ab49d3f87170",
+        "type": "socket",
+        "wall": "back",
+        "offset": 3000,
+        "fromFloor": 250,
+        "width": 80,
+        "height": 80,
+        "depth": 12,
+        "name": "Духовка · питание за съёмными ящиками"
+      },
+      {
+        "id": "69d1a24e-0f28-45b8-82aa-8ba92c3cf2d1",
+        "type": "stoveSocket",
+        "wall": "back",
+        "offset": 3100,
+        "fromFloor": 250,
+        "width": 70,
+        "height": 70,
+        "depth": 40,
+        "name": "Варочная · силовой вывод, проектный"
+      }
+    ],
+    "obstacles": [
+      {
+        "id": "47544f05-abfd-48b2-8749-ea7bbe6451bd",
+        "name": "Посудомойка",
+        "type": "dishwasher",
+        "x": 1658,
+        "y": 0,
+        "z": 106,
+        "width": 598,
+        "depth": 570,
+        "height": 865,
+        "sinkModuleId": "4e2346b6-328c-4d95-a8ac-394fe28256b9"
+      },
+      {
+        "id": "7cfd07a7-f8c3-4f7b-ba7b-728c5a0b1830",
+        "name": "Холодильник",
+        "type": "fridge",
+        "x": 3560,
+        "y": 0,
+        "z": 26,
+        "width": 600,
+        "depth": 650,
+        "height": 2000
+      },
+      {
+        "id": "98f328ed-13b7-49fb-a955-4abfb3c6c6a1",
+        "name": "Вытяжка",
+        "type": "hood",
+        "x": 2275,
+        "y": 1560,
+        "z": 0,
+        "width": 600,
+        "depth": 450,
+        "height": 600
+      },
+      {
+        "id": "235e78b7-58a8-4d0c-a9a0-a39d4a3ed0dc",
+        "name": "Варочная панель",
+        "type": "hob",
+        "x": 2280,
+        "y": 910,
+        "z": 128,
+        "width": 590,
+        "depth": 520,
+        "height": 10
+      }
+    ]
+  },
+  "modules": [
+    {
+      "id": "1ca50888-4652-4573-804e-89f01398bc2e",
+      "x": 470,
+      "z": 103,
+      "y": 0,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 НМ1 · хранение 570",
+        "width": 570,
+        "height": 872,
+        "depth": 557,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "nailed",
+        "feet": {
+          "height": 100
+        },
+        "topType": "none",
+        "rails": [
+          {
+            "place": "front-top",
+            "height": 100,
+            "lay": "flat"
+          },
+          {
+            "place": "rear-top",
+            "height": 100,
+            "lay": "flat"
+          }
+        ],
+        "bottomUnder": true,
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "base"
+        },
+        "autoFillersOff": true,
+        "sections": [
+          {
+            "id": "38f8ec11-8225-476a-b607-983490649834",
+            "weight": 1,
+            "shelves": [
+              0.5
+            ],
+            "shelfDepth": 554.5,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "03ca03e3-3cc2-4460-87cb-555af236282d",
+      "x": 1040,
+      "z": 103,
+      "y": 0,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 НМ2 · мойка 600",
+        "width": 600,
+        "height": 872,
+        "depth": 557,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "none",
+        "feet": {
+          "height": 100
+        },
+        "topType": "none",
+        "rails": [
+          {
+            "place": "front-top",
+            "height": 60
+          },
+          {
+            "place": "rear-top",
+            "height": 100
+          }
+        ],
+        "bottomUnder": true,
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "base",
+          "appliance": "sink"
+        },
+        "sections": [
+          {
+            "id": "6dfe9d70-8854-4451-bfc0-f88778a3a84e",
+            "weight": 1,
+            "shelves": [],
+            "shelfDepth": 554.5,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "4326591d-a9aa-4277-938d-5e87d351903a",
+      "x": 2275,
+      "z": 103,
+      "y": 0,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 духовка · нижний ящик",
+        "width": 600,
+        "height": 872,
+        "depth": 557,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": false,
+        "backType": "none",
+        "feet": {
+          "height": 100
+        },
+        "topType": "none",
+        "rails": [],
+        "bottomUnder": true,
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "kdrawers": [
+          {
+            "system": "versalite-h45",
+            "y0": 101.5,
+            "y1": 270.5,
+            "runnerY": 187.8,
+            "len": 500,
+            "box": {
+              "y": 126,
+              "h": 123.5,
+              "len": 500
+            }
+          }
+        ],
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "base",
+          "oven": {
+            "visible": true,
+            "drawer": true,
+            "nicheHeight": 600
+          },
+          "appliance": "oven"
+        },
+        "sections": [
+          {
+            "id": "3b33d8e2-5a92-4e09-96c6-3ecba18c2ab6",
+            "weight": 1,
+            "shelves": [],
+            "shelfDepth": 554.5,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "1ce9616f-a8fe-42da-b2a5-ebd16f988ed6",
+      "x": 2875,
+      "z": 103,
+      "y": 0,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 НМ4 · ящики 635",
+        "width": 635,
+        "height": 872,
+        "depth": 557,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": false,
+        "backType": "nailed",
+        "feet": {
+          "height": 100
+        },
+        "topType": "none",
+        "rails": [
+          {
+            "place": "front-top",
+            "height": 100,
+            "lay": "flat"
+          },
+          {
+            "place": "rear-top",
+            "height": 100,
+            "lay": "flat"
+          }
+        ],
+        "bottomUnder": true,
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "kdrawers": [
+          {
+            "system": "axis-pro",
+            "y0": 101.5,
+            "y1": 437.5,
+            "runnerY": 175,
+            "h": 200,
+            "len": 500
+          },
+          {
+            "system": "axis-pro",
+            "y0": 440.5,
+            "y1": 654,
+            "runnerY": 499.5,
+            "h": 120,
+            "len": 500
+          },
+          {
+            "system": "axis-pro",
+            "y0": 657,
+            "y1": 870.5,
+            "runnerY": 716,
+            "h": 120,
+            "len": 500
+          }
+        ],
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "base"
+        },
+        "ownWidthOnly": true,
+        "sections": [
+          {
+            "id": "946759dc-f0e3-4b27-98b1-c7f21a7e854f",
+            "weight": 1,
+            "shelves": [],
+            "shelfDepth": 554.5,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "7bc50152-c005-4916-81da-2438fc1354bc",
+      "x": 20,
+      "z": 103,
+      "y": 0,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 пенал · хранение 450",
+        "width": 450,
+        "height": 2410,
+        "depth": 557,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "nailed",
+        "feet": {
+          "height": 100
+        },
+        "bottomUnder": true,
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "tall"
+        },
+        "autoFillersOff": true,
+        "sections": [
+          {
+            "id": "a1003687-c542-48f2-b253-7fdf2ddeb244",
+            "weight": 1,
+            "doorSplit": 718.5,
+            "shelves": [
+              0.1977834612105712,
+              0.39940323955669227,
+              0.6005967604433078,
+              0.8022165387894288
+            ],
+            "shelfDepth": 554.5,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "dd390492-8052-4375-bbc8-fca18161487a",
+      "x": 470,
+      "z": 0,
+      "y": 1480,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 ВМ1 · хранение 570",
+        "width": 570,
+        "height": 930,
+        "depth": 350,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "groove",
+        "grooveInset": 16,
+        "grooveDepth": 8,
+        "plinthHeight": 0,
+        "topType": "panel",
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "grooveWidth": 4,
+        "grooveClear": 1,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "wall"
+        },
+        "ownWidthOnly": true,
+        "sections": [
+          {
+            "id": "ad7ad10a-891e-41e8-a879-8bfbb461bc19",
+            "weight": 1,
+            "shelves": [
+              0.5
+            ],
+            "shelfDepth": 328,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "8ba68e2a-a890-4b4c-8d4f-e0463d475c9f",
+      "x": 1040,
+      "z": 0,
+      "y": 1480,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 ВМ2 · над мойкой",
+        "width": 600,
+        "height": 930,
+        "depth": 350,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "groove",
+        "grooveInset": 16,
+        "grooveDepth": 8,
+        "plinthHeight": 0,
+        "topType": "panel",
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "grooveWidth": 4,
+        "grooveClear": 1,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "wall"
+        },
+        "ownWidthOnly": true,
+        "sections": [
+          {
+            "id": "d19892ee-dd34-4242-a74b-924b883a7e3c",
+            "weight": 1,
+            "shelves": [
+              0.5
+            ],
+            "shelfDepth": 328,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "4e8e5ad6-7f7b-42f7-aa0f-b658ecd1cee6",
+      "x": 1640,
+      "z": 0,
+      "y": 1480,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 ВМ3 · над ПММ",
+        "width": 635,
+        "height": 930,
+        "depth": 350,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "groove",
+        "grooveInset": 16,
+        "grooveDepth": 8,
+        "plinthHeight": 0,
+        "topType": "panel",
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "grooveWidth": 4,
+        "grooveClear": 1,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "wall"
+        },
+        "ownWidthOnly": true,
+        "sections": [
+          {
+            "id": "5f5c25c3-225e-46e7-ae1d-cf9a2970c044",
+            "weight": 1,
+            "shelves": [
+              0.5
+            ],
+            "shelfDepth": 328,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "41ed7b4a-5bdd-490f-a732-a376155bdadc",
+      "x": 2875,
+      "z": 0,
+      "y": 1480,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 ВМ5 · хранение",
+        "width": 635,
+        "height": 930,
+        "depth": 350,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": true,
+        "backType": "groove",
+        "grooveInset": 16,
+        "grooveDepth": 8,
+        "plinthHeight": 0,
+        "topType": "panel",
+        "faceGap": 1.5,
+        "faceGapBetween": 3,
+        "backGap": 1.5,
+        "grooveWidth": 4,
+        "grooveClear": 1,
+        "faceAir": 0,
+        "shelfRear": 1,
+        "shelfPinInset": 60,
+        "confirmatInset": 64,
+        "edgeScheme": {
+          "t": 1
+        },
+        "kitchen": {
+          "role": "wall"
+        },
+        "ownWidthOnly": true,
+        "sections": [
+          {
+            "id": "ed6cf357-dba9-4421-8c22-db20098eeeb0",
+            "weight": 1,
+            "shelves": [
+              0.5
+            ],
+            "shelfDepth": 328,
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "4e2346b6-328c-4d95-a8ac-394fe28256b9",
+      "x": 470,
+      "z": 0,
+      "y": 872,
+      "rotation": 0,
+      "module": {
+        "version": 1,
+        "name": "K08 Столешница 3040 · мойка и варочная",
+        "width": 3040,
+        "height": 38,
+        "depth": 700,
+        "decor": "Дуб Вотан",
+        "facadeDecor": "Белый",
+        "doors": false,
+        "backType": "none",
+        "plinthHeight": 0,
+        "worktop": {
+          "material": "postforming",
+          "thickness": 38,
+          "overhang": 24,
+          "cutouts": [
+            {
+              "kind": "sink",
+              "x": 590,
+              "width": 560,
+              "depth": 360,
+              "z": 226.5,
+              "fixture": "210245",
+              "drainDrop": 420,
+              "tap": true,
+              "plumbing": true
+            },
+            {
+              "kind": "hob",
+              "x": 1825,
+              "width": 560,
+              "depth": 490,
+              "z": 143
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "6b7c9894-07fd-48d7-aac9-99c4b24f9e64",
+            "weight": 1,
+            "shelves": [],
+            "drawers": 0,
+            "rod": false
+          }
+        ]
+      }
+    }
+  ]
+}

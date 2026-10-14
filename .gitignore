@@ -1,4 +1,4 @@
-﻿.venv/
+.venv/
 server/data.db*
 server/.env
 data/lamarty-source.js
@@ -22,3 +22,7 @@ studio/public/local-projects/
 web/studio/local-projects/
 
 studio/.qa/
+
+studio/reports/local-backups/
+studio/reports/server-temp/
+studio/reports/recheck-*/

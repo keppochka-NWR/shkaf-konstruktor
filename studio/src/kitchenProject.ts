@@ -1,4 +1,5 @@
 import { kitchenRowZ, kitchenFaceOffset, kitchenRearClearance } from "./kitchenAlignment";
+import {configureOven} from './kitchenOven';
 // Вкладка «Кухня» (трек И, 09.10.2026): кухонный проект, шаблоны кухонной палитры и расстановка модулей по рядам кухни.
 // Только логика, без React: KitchenPalette.tsx и KitchenPanel.tsx вызывают эти функции, App коммитит результат обычным commitProject
 // (автофальши + projectErrors), так что проверки и ошибки — те же, что во всей студии.
@@ -55,7 +56,7 @@ export function kitchenTemplate(kind: KitchenItem, width: number, source: Pick<M
   if (kind === "base-doors") m = kitchenBase(base, width, "doors");
   else if (kind === "base-drawers") m = kitchenBase(base, width, "drawers");
   else if (kind === "sink") m = kitchenBase(base, width, "sink");
-  else if (kind === "oven") m = kitchenBase(base, width, "oven");
+  else if (kind === "oven") {m = kitchenBase(base, width, "oven");configureOven(m);}
   else if (kind === "bottle") { m = kitchenBase(base, width, "doors"); m.name = "Бутылочница"; m.sections = [{ ...m.sections[0], shelves: [] }]; if (width === 150 || width === 200) m.kitchen!.premialPullout = { article: width === 150 ? '060500' : '060502' }; }
   else if (kind === "wall") m = kitchenWall(base, width);
   else if (kind === "wall-open") { m = kitchenWall(base, width); m.name = "Навесной открытый"; m.doors = false; m.sections = [{ ...m.sections[0], shelves: [] }]; m.sections[0].shelves = distribute(m, m.sections[0], 2); }

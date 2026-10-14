@@ -9,7 +9,7 @@ import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,corner
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
   color?:string;frameDepth?:number;direction?:'in'|'out';swingAngle?:number;handleProjection?:number;casing?:number;casingThick?:number;hinge?:'left'|'right';reveal?:number;windowSill?:{width:number;thick:number;overhang:number;offset:number}};
-export type RoomObstacle={id:string;name:string;type:'column'|'beam'|'radiator'|'fridge'|'washer'|'stove';x:number;y:number;z:number;width:number;depth:number;height:number};
+export type RoomObstacle={sinkModuleId?:string;id:string;name:string;type:'column'|'beam'|'radiator'|'fridge'|'washer'|'stove'|'dishwasher'|'hood'|'hob';x:number;y:number;z:number;width:number;depth:number;height:number};
 export const obstacleBounds=(o:RoomObstacle)=>({x:o.x,y:o.y,z:o.z,w:o.width,d:o.depth,h:o.height});
 export type Room={survey?:Survey;width:number;depth:number;height:number;openings?:Opening[];obstacles?:RoomObstacle[];ceiling?:CeilingType;
   /** Объекты на стенах из замера (розетки, батареи, короба, плинтусы, трубы…). */
@@ -166,7 +166,8 @@ export function projectErrors(p:Project,allowEmpty=false):string[]{
   const obstacles=p.room.obstacles;
   if(obstacles!==undefined){
     if(!Array.isArray(obstacles)||obstacles.length>30)return ['Допустимо до 30 объектов замера.'];
-    for(const o of obstacles)if(!o||typeof o.id!=='string'||!o.id||typeof o.name!=='string'||!o.name.trim()||o.name.length>80||!['column','beam','radiator','fridge','washer','stove'].includes(o.type)||![o.x,o.y,o.z,o.width,o.depth,o.height].every(Number.isFinite)||o.x<0||o.y<0||o.z<0||Math.min(o.width,o.depth,o.height)<10||o.x+o.width>p.room.width||o.z+o.depth>p.room.depth||o.y+o.height>p.room.height)return ['Объект замера «'+(typeof o?.name==='string'?o.name:'без названия')+'»: проверьте название, размеры и положение — он должен помещаться в комнате.'];
+    for(const o of obstacles)if(!o||typeof o.id!=='string'||!o.id||typeof o.name!=='string'||!o.name.trim()||o.name.length>80||!['column','beam','radiator','fridge','washer','stove','dishwasher','hood','hob'].includes(o.type)||![o.x,o.y,o.z,o.width,o.depth,o.height].every(Number.isFinite)||o.x<0||o.y<0||o.z<0||Math.min(o.width,o.depth,o.height)<10||o.x+o.width>p.room.width||o.z+o.depth>p.room.depth||o.y+o.height>p.room.height)return ['Объект замера «'+(typeof o?.name==='string'?o.name:'без названия')+'»: проверьте название, размеры и положение — он должен помещаться в комнате.'];
+    if(obstacles.some(o=>o.sinkModuleId!==undefined&&(o.type!=='dishwasher'||typeof o.sinkModuleId!=='string'||o.sinkModuleId.length>100)))return ['Подключение мойки: неверная ссылка.'];
     if(new Set(obstacles.map(o=>o.id)).size!==obstacles.length)return ['Идентификаторы объектов замера повторяются.'];
   }
   if(p.room.fixtures!==undefined){
@@ -212,7 +213,7 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
   if(x.room.fixtures!==undefined){if(!Array.isArray(x.room.fixtures)||x.room.fixtures.length>60)throw Error('Неверные объекты на стенах.');p.room.fixtures=x.room.fixtures.map((f:any)=>({id:f?.id,type:f?.type,wall:f?.wall,offset:f?.offset,fromFloor:f?.fromFloor,width:f?.width,height:f?.height,depth:f?.depth,...Object.fromEntries(['color','wallGap','diameter','insulation','serviceClearance'].filter(k=>f?.[k]!==undefined).map(k=>[k,f[k]])),...(f?.name===undefined?{}:{name:f.name}),...(f?.round===undefined?{}:{round:!!f.round}),...(f?.horizontal===undefined?{}:{horizontal:!!f.horizontal}),...(f?.grille===undefined?{}:{grille:!!f.grille})}));}
   if(x.room.ceiling!==undefined)p.room.ceiling=x.room.ceiling;
   if(x.room.walls!==undefined){const w=x.room.walls;p.room.walls={thickness:Number(w?.thickness),...(w?.angleLeft===undefined?{}:{angleLeft:Number(w.angleLeft)}),...(w?.angleRight===undefined?{}:{angleRight:Number(w.angleRight)})};}
-  if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height}));}
+  if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height,...(o?.sinkModuleId!==undefined?{sinkModuleId:o.sinkModuleId}:{})}));}
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}
   if(x.dimensions!==undefined)p.dimensions=structuredClone(x.dimensions);
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation,...(x.measurement.niche.readings===undefined?{}:{readings:structuredClone(x.measurement.niche.readings)})}})};

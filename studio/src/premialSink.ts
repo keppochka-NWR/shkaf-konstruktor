@@ -9,7 +9,8 @@ export function worktopCutErrors(m:Module):string[]{
  for(const [i,c] of cuts.entries()){
   const z=c.z??(m.depth-c.depth)/2;
   if(![c.x,z,c.width,c.depth].every(Number.isFinite)||c.width<=0||c.depth<=0) {errors.push('Столешница: размеры и положение выреза должны быть конечными положительными числами.');continue;}
-  if(c.x<50||c.x+c.width>m.width-50||z<40||z+c.depth>m.depth-40)errors.push('Столешница: вырез не ближе 50 мм к торцам и 40 мм к кромкам.');
+  const end=c.fixture===SINK_ARTICLE?20:50;
+  if(c.x<end||c.x+c.width>m.width-end||z<40||z+c.depth>m.depth-40)errors.push(`Столешница: вырез не ближе ${end} мм к торцам и 40 мм к кромкам. Для изготовления сверить шаблон изделия.`);
   for(const b of cuts.slice(0,i)){const bz=b.z??(m.depth-b.depth)/2;if(c.x<b.x+b.width+50&&c.x+c.width+50>b.x&&z<bz+b.depth+50&&z+c.depth+50>bz)errors.push('Столешница: между вырезами оставьте перемычку не менее 50 мм.');}
   if(c.fixture){
    if(c.fixture!==SINK_ARTICLE||c.kind!=='sink')errors.push('Мойка: неизвестный артикул или выбран вырез для варочной панели.');
@@ -18,6 +19,8 @@ export function worktopCutErrors(m:Module):string[]{
    if(cx-300<0||cx+300>m.width||cz-225<0||cz+225>m.depth)errors.push('PRODIGY 6045: борт мойки выходит за столешницу.');
   }
   if(c.drainDrop!==undefined&&(!c.fixture||!Number.isFinite(c.drainDrop)||c.drainDrop<350||c.drainDrop>650))errors.push('Слив: низ сифона задаётся от верха столешницы, 350–650 мм, только для установленной мойки.');
+  if((c.tap||c.plumbing)&&!c.fixture)errors.push('Смеситель и подводки требуют установленную мойку.');
+  if(c.plumbing&&c.drainDrop===undefined)errors.push('Для подключения слива включите сифон.');
  }
  return [...new Set(errors)];
 }
@@ -29,5 +32,12 @@ export function sinkParts(m:Module,c:WorktopCutout,i:number):Part[]{
  if(c.drainDrop!==undefined){const drop=c.drainDrop;
   out.push(part(`layout-drain:${i}`, 'Выпуск и сифон · условная компоновка Ø40, не заводская модель',[90,drop-220,90],[cx,T-(220+drop)/2,cz]));
  }
+ if(c.tap)out.push(part(`layout-tap:${i}`,'Смеситель · типовой, компоновочный',[50,320,210],[cx,T+160,cz-117.5]));
+ if(c.plumbing&&c.drainDrop!==undefined){
+  out.push(part(`layout-waste:${i}`,'Канализация Ø40 · компоновочная трасса до задней кромки',[40,40,cz],[cx,T-c.drainDrop+50,cz/2]));
+  for(const [j,x] of [-60,60].entries())out.push(part(`layout-water:${i}:${j}`,'Подводка воды · компоновочная трасса',[72,300,Math.max(20,cz-212.5)],[cx+x/2,T-150,Math.max(20,cz-212.5)/2]));
+ }
+ out[0].collide=[{size:[556,220,356],position:[cx,T-110,cz]},{size:[600,3,450],position:[cx,T+1.5,cz-25]}];
+ for(const p of out.filter(p=>p.id.startsWith('layout-water:'))){const x=p.id.endsWith(':1')?60:-60,z=Math.max(20,cz-212.5);p.collide=[...Array.from({length:20},(_,j)=>({size:[15,15,12] as [number,number,number],position:[cx+x*(j+.5)/20,T-15*(j+.5),z] as [number,number,number]})),{size:[12,12,z],position:[cx+x,T-300,z/2]}];}
  return out;
 }

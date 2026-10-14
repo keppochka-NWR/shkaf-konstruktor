@@ -1,3 +1,5 @@
+import {dishwasherServiceModel} from './dishwasherServices';
+import {applianceModel} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
@@ -78,6 +80,7 @@ type Props = {
   arrangement: PlacedModule[];
   activeId: string;
   room?: Room;
+  appliances?: Room["obstacles"];
   selectedObstacle?:string;
   onObstacleSelect:(id:string)=>void;
   selectedFixture?:string;
@@ -152,8 +155,8 @@ export function Scene(p: Props) {
     const controls = new OrbitControls<THREE.PerspectiveCamera|THREE.OrthographicCamera>(camera, renderer.domElement);
     const cameraKey=p.viewKey?'garderyob-camera:'+p.viewKey:undefined;
     let fitting=false;
-    function saveCamera(){if(!cameraKey||fitting)return;try{sessionStorage.setItem(cameraKey,JSON.stringify({origin:sceneOrigin,view:current.current.view,position:camera.position.toArray(),target:controls.target.toArray(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null}));}catch{/* view state must not block document saving */}}
-    function restoreCamera(){if(!cameraKey)return;try{const s=JSON.parse(sessionStorage.getItem(cameraKey)||'null');if(!s||s.view!==current.current.view||![...s.position,...s.target,s.zoom].every(Number.isFinite))return;camera.position.fromArray(s.position);controls.target.fromArray(s.target);if(s.origin&&sceneOrigin){const delta=new THREE.Vector3(s.origin.x-sceneOrigin.x,0,s.origin.z-sceneOrigin.z);camera.position.add(delta);controls.target.add(delta);}camera.zoom=s.zoom;if(camera===orthographic&&s.frustum){[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=s.frustum;}camera.updateProjectionMatrix();controls.update();}catch{}}
+    function saveCamera(){if(!cameraKey||fitting||current.current.presentation)return;try{sessionStorage.setItem(cameraKey,JSON.stringify({origin:sceneOrigin,view:current.current.view,position:camera.position.toArray(),target:controls.target.toArray(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null}));}catch{/* view state must not block document saving */}}
+    function restoreCamera(){if(!cameraKey||current.current.presentation)return;try{const s=JSON.parse(sessionStorage.getItem(cameraKey)||'null');if(!s||s.view!==current.current.view||![...s.position,...s.target,s.zoom].every(Number.isFinite))return;camera.position.fromArray(s.position);controls.target.fromArray(s.target);if(s.origin&&sceneOrigin){const delta=new THREE.Vector3(s.origin.x-sceneOrigin.x,0,s.origin.z-sceneOrigin.z);camera.position.add(delta);controls.target.add(delta);}camera.zoom=s.zoom;if(camera===orthographic&&s.frustum){[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=s.frustum;}camera.updateProjectionMatrix();controls.update();}catch{}}
     controls.addEventListener('end',saveCamera);
     let needsRender=true;const requestRender=()=>{needsRender=true;};controls.addEventListener('change',requestRender);
     controls.enableDamping = true;
@@ -364,7 +367,7 @@ export function Scene(p: Props) {
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант, толкатель —
           // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)
-          const proc = procModel(part, { left: part.position[0] < m.width / 2, headSign: (() => {
+          const proc = procModel(part, { open:state.openDoors, left: part.position[0] < m.width / 2, headSign: (() => {
             if (!part.id.startsWith("ecc:") || !part.id.endsWith(":pin")) return undefined;
             const cam = byId.get(part.id.slice(0, -4)), ax = part.size.indexOf(Math.max(...part.size));
             return cam && cam.position[ax] < part.position[ax] ? -1 : 1;
@@ -566,6 +569,7 @@ export function Scene(p: Props) {
           box.dispose();guide.position.set(m.width/2,m.height/2,m.depth/2);guide.userData.captureGuide=true;guide.renderOrder=10;moduleGroup.add(guide);
         }
       }
+      for(const o of state.appliances??[]){const appliance=applianceModel(o,state.openDoors);if(!appliance)continue;appliance.position.set(o.x+o.width/2-moduleCenter(focus).x,o.y+o.height/2,o.z+o.depth/2-moduleCenter(focus).z);modelGroup.add(appliance);if(o.sinkModuleId){const hoses=dishwasherServiceModel(o,state.arrangement);hoses.position.set(-moduleCenter(focus).x,0,-moduleCenter(focus).z);modelGroup.add(hoses);}}
       if (state.room) {
         const r = state.room,
           x0 = -moduleCenter(focus).x,
@@ -625,14 +629,14 @@ export function Scene(p: Props) {
           if(o.windowSill){const w=o.windowSill;const mesh=wallBox(o.wall,w.offset+w.width/2,o.sill-w.thick/2,w.width,w.thick,w.overhang+(o.reveal??0),color,.95);const amount=w.overhang;if(o.wall==='back')mesh.position.z+=amount;if(o.wall==='front')mesh.position.z-=amount;if(o.wall==='left')mesh.position.x+=amount;if(o.wall==='right')mesh.position.x-=amount;}
         }
         environmentOpeningId=undefined;
-        for(const o of r.obstacles||[]){const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=o.id;mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===o.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===o.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===o.id;mesh.add(edge);}
+        for(const o of r.obstacles||[]){if(['fridge','dishwasher','hood','hob'].includes(o.type))continue;const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=o.id;mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===o.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===o.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===o.id;mesh.add(edge);}
         // Объекты замера на стенах (розетки, батареи, короба, трубы…): боксы или цилиндры на своей стене.
         for(const [fi,f] of (r.fixtures||[]).entries()){
           const spec=FIXTURES[f.type],box=fixtureBox(r,f);
           const recess=spec.recess,d=recess?f.depth:Math.max(2,box.w&&box.d?(f.wall==='back'||f.wall==='front'?box.d:box.w):2);
           const horizontal=f.wall==='back'||f.wall==='front';
           const geo=f.round?new THREE.CylinderGeometry(Math.min(f.width,f.height)/2,Math.min(f.width,f.height)/2,f.horizontal?f.width:f.height,20):new THREE.BoxGeometry(horizontal?f.width:d,f.height,horizontal?d:f.width);
-          const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:f.color?Number.parseInt(f.color.slice(1),16):spec.color,roughness:.8,metalness:f.round?.4:0,transparent:recess,opacity:recess?.35:1}));
+          const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:f.color?Number.parseInt(f.color.slice(1),16):spec.color,roughness:.8,metalness:f.round?.4:0,transparent:!!recess,opacity:recess?.35:1}));
           const cx=horizontal?x0+f.offset+f.width/2:x0+(f.wall==='left'?(recess?-f.depth/2:d/2):r.width-(recess?-f.depth/2:d/2));
           const cz=horizontal?z0+(f.wall==='back'?(recess?-f.depth/2:d/2):r.depth-(recess?-f.depth/2:d/2)):z0+f.offset+f.width/2;
           mesh.position.set(cx+(f.wall==='left'?(f.wallGap??0):f.wall==='right'?-(f.wallGap??0):0),f.fromFloor+f.height/2,cz+(f.wall==='back'?(f.wallGap??0):f.wall==='front'?-(f.wallGap??0):0));
@@ -754,10 +758,11 @@ export function Scene(p: Props) {
           state.arrangement.find((a) => a.id === state.activeId) ||
           state.arrangement[0];
       const items=state.focusActive?[focus]:state.arrangement,room=state.focusActive?undefined:state.room;
-      const minX=Math.min(...items.map(a=>bounds(a).x)),maxX=Math.max(...items.map(a=>bounds(a).x+bounds(a).w));
-      const minZ=Math.min(...items.map(a=>bounds(a).z)),maxZ=Math.max(...items.map(a=>bounds(a).z+bounds(a).d));
+      const objects=state.focusActive?[]:(state.appliances??[]), fitted=[...items.map(bounds),...objects.map(o=>({x:o.x,z:o.z,w:o.width,d:o.depth}))];
+      const minX=Math.min(...fitted.map(b=>b.x)),maxX=Math.max(...fitted.map(b=>b.x+b.w));
+      const minZ=Math.min(...fitted.map(b=>b.z)),maxZ=Math.max(...fitted.map(b=>b.z+b.d));
       const minY=state.focusActive?(focus.y??0):0;
-      let height=room?room.height:Math.max(...items.map(a=>a.module.height+(a.y??0)))-minY;
+      let height=room?room.height:Math.max(...items.map(a=>a.module.height+(a.y??0)),...objects.map(o=>o.y+o.height))-minY;
       let width=room?room.width:maxX-minX,depth=room?room.depth:maxZ-minZ;
       const center=new THREE.Vector3((room?room.width/2:(minX+maxX)/2)-moduleCenter(focus).x,minY+height/2,(room?room.depth/2:(minZ+maxZ)/2)-moduleCenter(focus).z);
       if(m.corner&&!room&&!state.focusActive){
@@ -1002,6 +1007,7 @@ export function Scene(p: Props) {
       p.arrangement,
       p.activeId,
       p.room,
+      p.appliances,
       p.selectedObstacle,
       p.selectedFixture,
       p.selectedOpening,

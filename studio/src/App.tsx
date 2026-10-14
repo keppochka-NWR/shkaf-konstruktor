@@ -693,6 +693,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       beforePresentation.current=null;setPresentation(false);setFit(f=>f+1);
     }
   }
+  async function localBackup(){try{const response=await fetch('/__local-project-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Backup-Token':document.querySelector<HTMLMetaElement>('meta[name=local-backup-token]')?.content??''},body:JSON.stringify({project,image:capture.current?.()})});const result=await response.json();if(!response.ok)throw Error(result.error);setSaved('Резервная копия: '+result.path);}catch(e){setError('Не удалось сохранить резервную копию: '+String(e));}}
   function download() {
     const blob = new Blob([JSON.stringify(project, null, 2)], {
         type: "application/json",
@@ -745,6 +746,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <Upload size={16} />
             <span>{saveManagedProject?'Заменить мебель комнаты':'Открыть'}</span>
           </button>
+          {import.meta.env.DEV&&<button className="outline" onClick={localBackup}>Резервная копия</button>}
           <button className="primary" aria-label="Сохранить проект файлом" title="Скачать проект для открытия на другом компьютере. Автосохранение работает в этом браузере." onClick={download}>
             <Download size={16} />
             <span>{saveManagedProject?'Скачать комнату':'Сохранить файл'}</span>
@@ -1065,6 +1067,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             arrangement={project.modules}
             activeId={placed.id}
             room={showRoom ? project.room : undefined}
+            appliances={project.room.obstacles}
             onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})}
             selectedObstacle={selectedObstacle}
             onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);setSelectedPart(null);setTab('room');}}
@@ -1121,7 +1124,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             roomDimensions={!presentation&&dimensions&&(advanced||stage==='room'||stage==='fixtures')}
             gapDimensions={gapDimensions}
           />}
-          {presentation&&<div className="presentation-tools"><button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button><button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
+          {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button><button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
             <span>КОРПУС / ЛДСП 16</span>
             <b>
@@ -1284,7 +1287,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div data-stages="room"><RoomEditor part="walls" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <div data-stages="fixtures"><RoomEditor part="openings" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <RoomFixtures selected={selectedFixture} onSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} room={project.room} roomName={project.measurement?.number?'Замер '+project.measurement.number:project.offer?.customer} onChange={room=>commitProject({...project,room})} onImport={r=>{const room={...project.room,...r.room};if(commitProject({...project,room,measurement:{number:project.measurement?.number||'',date:project.measurement?.date||'',notes:[project.measurement?.notes||'',r.name?'Замер из Базиса: '+r.name:'',...r.notes].filter(Boolean).join('\n')}})){setShowRoom(true);setFit(f=>f+1);}}}/>
-              <RoomObstacles selected={selectedObstacle} onSelect={setSelectedObstacle} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
+              <RoomObstacles modules={project.modules} selected={selectedObstacle} onSelect={setSelectedObstacle} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <button className="text-action" data-stages="bodies filling facades" onClick={() => setTab("module")}>
                 К выбранному модулю
               </button>
