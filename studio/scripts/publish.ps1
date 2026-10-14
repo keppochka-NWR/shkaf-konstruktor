@@ -40,7 +40,8 @@ $web = Join-Path $root 'web'
 $webStudio = Join-Path $web 'studio'
 Set-Location $studio
 if (-not $?) { Fail "cannot cd to studio" }
-if ([System.IO.Path]::IsPathRooted($Pages)) { $pagesDir = $Pages } else { $pagesDir = Join-Path $studio $Pages }
+# relative -Pages is resolved from this script's folder (studio/scripts): ..\..\..\pages-n2 = sibling of the repo folder
+if ([System.IO.Path]::IsPathRooted($Pages)) { $pagesDir = $Pages } else { $pagesDir = Join-Path $PSScriptRoot $Pages }
 $pagesDir = [System.IO.Path]::GetFullPath($pagesDir)
 
 Write-Host ("studio:  " + $studio)
@@ -61,7 +62,8 @@ if ($dirty.Count -gt 0) {
 }
 $commit = (git rev-parse HEAD | Out-String).Trim()
 $short = (git rev-parse --short HEAD | Out-String).Trim()
-$srcCommit = (git log -1 --format=%H -- studio/src | Out-String).Trim()
+$srcCommit = (git -C $root log -1 --format=%H -- studio/src | Out-String).Trim()
+if ($srcCommit.Length -lt 7) { Fail "cannot find last commit touching studio/src" }
 Write-Host ("  branch " + $cur + " @ " + $short + ", last src commit " + $srcCommit.Substring(0, 7))
 
 # ---------------------------------------------------------------- 2. tests + parts snapshot
