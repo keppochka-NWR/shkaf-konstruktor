@@ -250,7 +250,7 @@ export function RoomTools({
           <h3>Передача технологу</h3>
           <button
             onClick={() =>
-              saveFile("ГардерЁб передача.html", handoffHTML(document))
+              saveFile("Ё Конструктор передача.html", handoffHTML(document))
             }
           >
             Скачать план и деталировку
@@ -260,7 +260,7 @@ export function RoomTools({
               try {
                 const data = bazisExport(document);
                 saveFile(
-                  "ГардерЁб Базис manifest.json",
+                  "Ё Конструктор Базис manifest.json",
                   JSON.stringify(data.manifest, null, 2),
                   "application/json",
                 );
@@ -285,7 +285,7 @@ export function RoomTools({
                     "Скрипт не создаётся: есть сложные детали, которые он пока не переносит. Скачайте ведомость.",
                   );
                 saveFile(
-                  "ГардерЁб построить в Базисе.js",
+                  "Ё Конструктор построить в Базисе.js",
                   data.script,
                   "text/javascript;charset=utf-8",
                 );

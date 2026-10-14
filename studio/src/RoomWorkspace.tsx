@@ -90,7 +90,7 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
       <button disabled={!undo.current.length} onClick={() => history(true)}>Отменить изменение заказа</button>
       <button disabled={!redo.current.length} onClick={() => history(false)}>Повторить изменение заказа</button>
       <button onClick={() => commit(current.current!,false)}>Сохранить комнаты</button>
-      <button onClick={() => saveFile('ГардерЁб комнаты.json',JSON.stringify(current.current,null,2),'application/json')}>Скачать все комнаты</button>
+      <button onClick={() => saveFile('Ё Конструктор комнаты.json',JSON.stringify(current.current,null,2),'application/json')}>Скачать все комнаты</button>
       <button onClick={() => upload.current?.click()}>Открыть документ комнат</button>
     </div>
     {confirmDelete && <div role="alert">Удалить «{room.title}» вместе с её мебелью? <button onClick={() => run(d => removeRoom(d,room.id))}>Подтвердить удаление комнаты</button><button onClick={() => setConfirmDelete(false)}>Оставить комнату</button></div>}
@@ -109,7 +109,7 @@ export function RoomWorkspace({workspaceKey=''}:{workspaceKey?:string}={}) {
       } catch(e){setError(e instanceof Error?e.message:String(e));}
     }}/>
   </section>;
-  if (!room.project.modules.length) return <EmptyRoomView title={room.title} bar={bar} viewKey={workspaceKey+':'+room.id} project={room.project} onAdd={()=>run(d=>updateRoom(d,room.id,{...room.project,modules:newProject().modules}))} onDownload={()=>saveFile('ГардерЁб комнаты.json',JSON.stringify(current.current,null,2),'application/json')} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/>;
+  if (!room.project.modules.length) return <EmptyRoomView title={room.title} bar={bar} viewKey={workspaceKey+':'+room.id} project={room.project} onAdd={()=>run(d=>updateRoom(d,room.id,{...room.project,modules:newProject().modules}))} onDownload={()=>saveFile('Ё Конструктор комнаты.json',JSON.stringify(current.current,null,2),'application/json')} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/>;
   return <App onEmptyProject={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}} key={room.id} viewKey={workspaceKey+':'+room.id} externalVersion={epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
     try { return commit(updateRoom(current.current!,room.id,p)); } catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }}/>;

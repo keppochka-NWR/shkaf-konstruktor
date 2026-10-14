@@ -77,7 +77,7 @@ test('mixed project output includes every part once, edge deductions and actual 
  assert.ok(placed.some(i=>i.detail.planContour?.length===5&&i.cutContour?.length===5));
  const door=placed.find(i=>i.detail.role==='door')!;assert.ok(Math.abs(door.w*door.h-(door.detail.length-4)*(door.detail.width-4))<.1);
  assert.match(sheetSVG(sheets.find(s=>s.items.some(i=>i.detail.planContour))!),/<polygon/);
- assert.match(detailCSV(p),/Контур заготовки/);assert.match(nestingHTML(p),/ГардерЁб · раскрой проекта/);
+ assert.match(detailCSV(p),/Контур заготовки/);assert.match(nestingHTML(p),/Ё Конструктор · раскрой проекта/);
 });
 test('corner drawings retain shaped shelves, filling elevations and the five-sided footprint',()=>{
  const m=createCornerModule(),p=newProject(m),svg=moduleDrawingSVG(m),plan=placementSVG(p);
