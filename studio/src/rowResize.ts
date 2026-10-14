@@ -28,7 +28,9 @@ function locked(m: Module): string | undefined {
   return undefined;
 }
 const minWidth = (m: Module) => (m.kitchen && !m.desk ? KITCHEN.minWidth : RULES.minW);
-const maxWidth = (m: Module) => (m.kitchen && !m.desk ? KITCHEN.maxWidth : RULES.maxW);
+// предел ширины кухонного соседа — как у проверки и поля «Ширина» (KITCHEN.maxModuleWidth 1650: самый широкий модуль базы 1649),
+// а не предел автораскладки фасадов KITCHEN.maxWidth 1200: сосед при сужении модуля растёт, пока вручную допустимо
+const maxWidth = (m: Module) => (m.kitchen && !m.desk ? KITCHEN.maxModuleWidth : RULES.maxW);
 const r1 = (v: number) => Math.round(v * 10) / 10;
 const quote = (m: Module) => "«" + m.name + "»";
 
