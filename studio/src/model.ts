@@ -570,6 +570,8 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
  *  Одно место для размаха фасадов (facadeSpan) и точки «Петля под фальшпанель» (hardwareParts). */
 export function faceFillerEdge(m:Module):number|undefined{const ff=m.kitchen?.faceFiller;if(!ff)return undefined;const w=ff.width+(ff.strip??0)+fe(m);return ff.side==='left'?w:m.width-w;}
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
+/** Верхний предел «Паз от задней кромки»: шкафы — 30 мм, кухня из Базиса — до depth−32 (k20 m05: 119). Одна точка для validate и поля KitchenPanel (A5). */
+export const grooveInsetMax=(m:Pick<Module,'kitchen'|'depth'>)=>m.kitchen?m.depth-32:30;
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
 export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+(c.tray?10:RULES.drawerStep);return c.facadeH?Math.max(box,c.facadeH+gap):box;}
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
@@ -1640,7 +1642,7 @@ export function validate(m: Module): string[] {
   else if(m.plinthHeight!==undefined && ![0,60,80,100,120,150].includes(m.plinthHeight))errors.push("Выберите высоту цоколя из списка.");
   if(m.kitchen && !m.feet && plinth(m)>0 && m.height-plinth(m)-2*RULES.panel<=0)errors.push("Кухня: низ корпуса поднят выше крыши — внутри корпуса не остаётся места.");
   // кухня: паз под ХДФ бывает утоплен вглубь корпуса (Базис k20 m05 — 119 мм от задней кромки) — предел по глубине корпуса (n3-antresol)
-  if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>(m.kitchen?m.depth-32:30)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
+  if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;

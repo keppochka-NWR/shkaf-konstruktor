@@ -1,14 +1,16 @@
 import {ChevronLeft,ChevronRight,Check,SlidersHorizontal} from 'lucide-react';
-import {STAGES,stageIndex,nextStage,prevStage,type Stage} from './stages';
-type Props={stage:Stage;advanced:boolean;onStage:(s:Stage)=>void;onAdvanced:(v:boolean)=>void;done:Partial<Record<Stage,boolean>>};
+import {STAGES,stageHint,stageIndex,nextStage,prevStage,type Stage} from './stages';
+/** rawSelected — выбран сырой модуль из Базиса (m.raw): на этапе «Наполнение» подсказка говорит, что наполнение правится в Базисе. */
+type Props={stage:Stage;advanced:boolean;onStage:(s:Stage)=>void;onAdvanced:(v:boolean)=>void;done:Partial<Record<Stage,boolean>>;rawSelected?:boolean};
 /** Полоса этапов над рабочей областью: цветные шаги, подсказка, «Назад» / «Дальше», переключатель «Все настройки». */
-export function StageBar({stage,advanced,onStage,onAdvanced,done}:Props){
+export function StageBar({stage,advanced,onStage,onAdvanced,done,rawSelected}:Props){
   const i=stageIndex(stage),current=STAGES[i];
+  const hint=stageHint(stage,rawSelected);
   return <nav className="stage-bar" aria-label="Этапы работы" style={{'--stage':current.color} as React.CSSProperties}>
     <ol className="stage-steps">
       {STAGES.map((s,k)=><li key={s.id}><button className={'stage-step'+(s.id===stage?' current':'')+(k<i?' passed':'')} style={{'--step':s.color} as React.CSSProperties} aria-current={s.id===stage?'step':undefined} onClick={()=>onStage(s.id)}><span className="stage-num">{done[s.id]&&s.id!==stage?<Check size={13}/>:s.n}</span><span className="stage-title">{s.title}</span></button></li>)}
     </ol>
-    <p className="stage-hint" aria-live="polite"><b>{current.n}. {current.title}.</b> {current.hint}</p>
+    <p className="stage-hint" aria-live="polite"><b>{current.n}. {current.title}.</b> {hint}</p>
     <div className="stage-actions">
       <button className="outline" disabled={i===0} onClick={()=>onStage(prevStage(stage))}><ChevronLeft size={15}/> Назад</button>
       {i<STAGES.length-1?<button className="primary" onClick={()=>onStage(nextStage(stage))}>Дальше: {STAGES[i+1].title} <ChevronRight size={15}/></button>:<button className="primary" onClick={()=>onStage('docs')}>Открыть документы</button>}

@@ -385,9 +385,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);
     if(pid){setSelectedPart({mid,sid,pid});if(kind==='drawer'||kind==='mesh')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
   }
+  /** Сырой модуль из Базиса (m.raw): наполнение не настраивается — пресеты, композер и перетаскивание выходят без записи в историю (A5). */
+  const RAW_FILLING_MESSAGE='Модуль перенесён из Базиса как есть — наполнение здесь не настраивается. Правится в Базисе (переимпорт).';
   function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string){
     if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;
-    if(project.modules.find(a=>a.id===mid)?.module.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
+    const target=project.modules.find(a=>a.id===mid)?.module;
+    if(target?.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
+    if(target?.raw){setError(RAW_FILLING_MESSAGE);return false;}
     setMeshFit(null);
     try{const next=insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
     catch(e){
@@ -423,8 +427,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       "decor",
     ),
     [search, setSearch] = useState("");
-  const [composer,setComposer]=useState<'shelf'|'drawer'|null>(null);
-  useEffect(()=>setComposer(null),[active,stage]);
+  const [composer,setComposerState]=useState<'shelf'|'drawer'|null>(null);
+  // композер полок/ящиков для сырого модуля Базиса не открывается (наполнение правится в Базисе)
+  const setComposer=(kind:'shelf'|'drawer'|null)=>{if(kind&&m.raw)return;setComposerState(kind);};
+  useEffect(()=>setComposerState(null),[active,stage]);
   // Restore the workspace as well as the stage label after a reload.
   useEffect(()=>{goStage(stage);},[]);
   useEffect(()=>{if((stage==='room'||stage==='fixtures')&&tab!=='room'&&!advanced)setTab('room');},[stage,tab,advanced]);
@@ -673,6 +679,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     };
   }, [modal]);
   function preset(type: "shelves" | "wardrobe" | "drawers" | "empty" | "desk") {
+    // сырой модуль Базиса: шаблон раньше копировал модуль вместе с raw и молча писал шаг в историю (1/1 → 2/2), ничего не меняя
+    if (m.raw) { setError(RAW_FILLING_MESSAGE); return; }
     if (type === "desk") { const n = deskModule(m); if (commit(n)) { setSelected(n.sections[0].id); setTab("module"); } return; }
     const n = {...structuredClone(m),sections:[section()]};
     delete n.desk; if (m.desk) { n.height = 2000; n.doors = true; delete n.plinthHeight; delete n.bottomType; delete n.backType; }
@@ -773,7 +781,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {!presentation&&clientBar}
       {!presentation&&(selectedOpening||selectedFixture||selectedObstacle)&&<button className="environment-properties-trigger" onClick={()=>setEnvironmentSelection(selectedOpening?{kind:'opening',id:selectedOpening}:selectedFixture?{kind:'fixture',id:selectedFixture}:{kind:'obstacle',id:selectedObstacle!})}>Свойства выбранного объекта</button>}
       {environmentSelection&&!presentation&&<RoomObjectProperties room={project.room} selection={environmentSelection} onChange={room=>commitProject({...project,room})} onClose={()=>setEnvironmentSelection(null)}/>}
-      {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone}/>}
+      {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone} rawSelected={!!m.raw}/>}
       {!presentation&&stage==='bodies'&&canRemove&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
         <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
         <button className="outline" onClick={()=>{setTab('section');requestAnimationFrame(()=>{const target=propertiesRef.current?.querySelector<HTMLElement>('.selected-filling');revealSettings(target);target?.scrollIntoView({block:'nearest'});target?.querySelector<HTMLInputElement>('input')?.focus();});}}>Параметры</button>
@@ -921,6 +929,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   <b>{a.module.name}</b>
                   <small>
                     {a.module.width} × {a.module.height} × {a.module.depth}
+                    {a.module.raw&&<em className="module-badge" title="Детали и фурнитура — как в проекте Базиса; наполнение правится в Базисе">Базис · как есть</em>}
                   </small>
                 </span>
                 <small>{i + 1}</small>
@@ -949,6 +958,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <button className="text-action upper-add" data-stages="bodies" title={`Высота до 600 мм; под потолком остаётся ${MEASUREMENT_RULES.ceilingClearance} мм по СТП`} onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
           <button className="text-action upper-add" data-stages="bodies filling" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
+          {/* сырой модуль Базиса: вместо пресетов и кнопок наполнения — заметка; «Пересобрать модулем студии» появится вместе с распознавателем (ярус C) */}
+          {!!m.raw&&<div className="stage-note raw-note" data-stages="bodies filling"><b>Модуль перенесён из Базиса как есть</b><p>Наполнение здесь не настраивается. Правится в Базисе (переимпорт). Положение в комнате, смета и раскрой работают как обычно. Кнопка «Пересобрать модулем студии» будет позже — когда появится распознаватель корпусов Базиса.</p></div>}
           <details hidden={!!m.corner||kitchenModule||!!m.worktop||!!m.raw} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
           <div className="presets" data-stages="filling">
             {(
@@ -972,7 +983,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             Изменение можно отменить.
           </p>
           </details>
-          <div className="library-label section-title" data-stages="filling">
+          <div className="library-label section-title" data-stages="filling" hidden={!!m.raw}>
             Наполнение <span>в секцию {idx + 1}</span>
           </div>
           <div className="fill-buttons" data-stages="filling" hidden={!!m.kitchen||!!m.worktop||!!m.raw}>

@@ -12,7 +12,7 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -49,8 +49,10 @@ function Num({ label, value, min, max, step = 1, unit = "мм", change, note }: 
 }
 const Check = ({ label, checked, change }: { label: string; checked: boolean; change: (v: boolean) => void }) =>
   <label className="hardware-field"><span><input type="checkbox" aria-label={label} checked={checked} onChange={(e) => change(e.target.checked)} /> {label}</span></label>;
-function Group({ icon, title, children, note }: { icon: ReactNode; title: string; open?: boolean; children: ReactNode; note?: string }) {
-  return <details className="property-section kitchen-group"><summary>{icon}<span>{title}</span>{note && <small>{note}</small>}</summary>{children}</details>;
+/** stages — этапы пошагового режима, на которых группа видна (data-stages, фильтр style.css); без него группа видна на всех этапах.
+ *  open не применяется: категории закрыты по умолчанию (ручная приёмка Codex 15.10). */
+function Group({ icon, title, children, note, stages }: { icon: ReactNode; title: string; open?: boolean; children: ReactNode; note?: string; stages?: string }) {
+  return <details className="property-section kitchen-group" data-stages={stages}><summary>{icon}<span>{title}</span>{note && <small>{note}</small>}</summary>{children}</details>;
 }
 
 /** Цвета модуля образцами (как выбор материала в общей панели): корпус, фасады, фасады ящиков — открывают каталог декоров. */
@@ -84,8 +86,8 @@ export function KitchenPanel(props: KitchenPanelProps) {
 }
 
 /** Положение модуля в комнате — как в общей панели (отступы по монтажному габариту, поворот, удаление). */
-function Position({ placed, project, position, room, move, rotate, commit, modify, open, allowEmpty }: KitchenPanelProps & { open?: boolean; settingsTitle?:string }) {
-  return <Group icon={<Move size={15} />} title="Положение" open={open}>
+function Position({ placed, project, position, room, move, rotate, commit, modify, open, allowEmpty, stages }: KitchenPanelProps & { open?: boolean; settingsTitle?:string; stages?: string }) {
+  return <Group icon={<Move size={15} />} title="Положение" open={open} stages={stages}>
     {(["y", "x", "z"] as const).map((axis) => <Num key={axis} label={{ x: "От левой стены", z: "От задней стены", y: "От пола" }[axis]} value={position[axis]} min={0}
       max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => move(axis, v)} />)}
     <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={placed.rotation ?? 0} onChange={(e) => rotate(Number(e.target.value) as 0 | 90 | 180 | 270)}>{[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}</select></label>
@@ -208,7 +210,8 @@ function CabinetPanel(props: KitchenPanelProps) {
       })}><option value="nailed">ХДФ 3 мм накладной</option><option value="groove">ХДФ 3 мм в паз</option><option value="none">Без задней стенки</option></select></label>
       {(m.backType ?? "nailed") === "nailed" && <Num label="Отступ ХДФ от кромок" value={m.backGap ?? 2} min={0} max={10} step={0.5} change={(v) => modify((n) => { n.backGap = v; })} note={`Базис: ${KITCHEN.backGap} → ХДФ (W−3)×(H−3)`} />}
       {m.backType === "groove" && <>
-        <Num label="Паз от задней кромки" value={m.grooveInset ?? 16} min={8} max={30} change={(v) => modify((n) => { n.grooveInset = v; })} />
+        {/* предел — как в проверке модуля (model.ts validate): у кухни паз может стоять глубоко (k20 m05: 119), у шкафов — 30 */}
+        <Num label="Паз от задней кромки" value={m.grooveInset ?? 16} min={8} max={grooveInsetMax(m)} change={(v) => modify((n) => { n.grooveInset = v; })} />
         <Num label="Ширина паза" value={m.grooveWidth ?? 4} min={3} max={10} step={0.5} change={(v) => modify((n) => { n.grooveWidth = v; })} />
         <Num label="Глубина паза" value={m.grooveDepth ?? 8} min={4} max={10} change={(v) => modify((n) => { n.grooveDepth = v; })} />
         <Num label="Недоход ХДФ до дна паза" value={m.grooveClear ?? 0.5} min={0} max={3} step={0.5} change={(v) => modify((n) => { n.grooveClear = v; })} note="Базис П16-4×8: ХДФ (W−18)×(H−18)" />
@@ -219,7 +222,8 @@ function CabinetPanel(props: KitchenPanelProps) {
     </Group>
 
     {legged && <Group icon={<Footprints size={15} />} title="Опоры и цоколь" open={stage === "bodies"} note={`${legCount} оп. · ${clipCount} клипс`}>
-      <Num label="Высота опор" value={m.feet!.height} min={55} max={RULES.feetMax} change={(v) => legsAll(v)} note="Опора H100-120: корпус не меняется, модуль и столешница поднимаются" />
+      {/* нижний предел — как в проверке модуля (RULES.feetMin 15), а не 55: иначе поле отвергало то, что validate принимает */}
+      <Num label="Высота опор" value={m.feet!.height} min={RULES.feetMin} max={RULES.feetMax} change={(v) => legsAll(v)} note="Опора H100-120: корпус не меняется, модуль и столешница поднимаются" />
       <Check label="Только у этого модуля" checked={onlyThis} change={setOnlyThis} />
       <Num label="Опоры от зада" value={legs.back} min={20} max={Math.floor(m.depth / 2) - 20} change={(v) => setLegs({ back: v })} note="Задний ряд — от задней кромки дна; Базис — 70" />
       <Num label="Опоры от переда" value={legs.front} min={20} max={Math.floor(m.depth / 2) - 20} change={(v) => setLegs({ front: v })} note="Передний ряд (с клипсами) — от передней кромки дна; Базис — 70" />
@@ -414,20 +418,21 @@ function RawInfo(props: KitchenPanelProps) {
   const seated = useMemo(() => [...rawHangerSeats(r)].filter(([i]) => r.hardware[i].category === "навес").length, [r]);
   // figure + contour — внешний контур нарисован, внутренние вырезы нет; figure без контура или skew — габаритом
   const figures = r.panels.filter((p) => p.contour).length, boxes = r.panels.filter((p) => (p.figure && !p.contour) || p.skew).length, holes = r.panels.filter((p) => p.figure && p.contour).length, turned = r.panels.filter((p) => p.obb).length, rods = r.profiles?.length ?? 0;
+  // пересечения проверяются только у позиций с 3D-моделью Базиса (check.checked), а не у всей фурнитуры сметы (total) — сказать это прямо
   return <div className="kitchen-panel">
-    <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
-    <div className="property-section kitchen-note raw"><Info size={14} /><p>Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура по Базису — {total} шт. (в 3D показано {r.hardware.length}).{figures ? ` Фигурных по контуру Базиса — ${figures}.` : ""}{turned ? ` Повёрнутых не на 90° — ${turned}.` : ""}{rods ? ` Штанг Ø25 — ${rods}.` : ""}{boxes ? ` Нарисованы габаритом (контур или поворот не перенесён) — ${boxes}.` : ""}{holes ? ` Внутренние вырезы не нарисованы (контур — внешний) — ${holes}.` : ""} Размеры, наполнение и фурнитура правятся в Базисе; здесь — положение в комнате, смета и раскрой.</p></div>
-    {rows.length > 0 && <Group icon={<Wrench size={15} />} title="Фурнитура из Базиса" open note={total + " шт."}>
+    <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса · как есть</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
+    <div className="property-section kitchen-note raw"><Info size={14} /><p><b>Настройка наполнения недоступна</b> — размеры, полки, ящики и фурнитура правятся в Базисе (переимпорт); здесь — положение в комнате, смета и раскрой.<br />Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура по Базису — {total} шт. (в 3D показано {r.hardware.length}).{figures ? ` Фигурных по контуру Базиса — ${figures}.` : ""}{turned ? ` Повёрнутых не на 90° — ${turned}.` : ""}{rods ? ` Штанг Ø25 — ${rods}.` : ""}{boxes ? ` Нарисованы габаритом (контур или поворот не перенесён) — ${boxes}.` : ""}{holes ? ` Внутренние вырезы не нарисованы (контур — внешний) — ${holes}.` : ""}</p></div>
+    {rows.length > 0 && <Group icon={<Wrench size={15} />} title="Фурнитура из Базиса" open note={total + " шт."} stages="bodies docs">
       <ul className="kitchen-hardware">{rows.map(([c, n], i) => <li key={c + i}><span>{c}</span><b>{n}</b></li>)}</ul>
       {check.deep.length > 0 && <p role="alert" className="kitchen-warn"><TriangleAlert size={14} /> Пересечение: тело фурнитуры в материале панели — {check.deep.slice(0, 3).map((x) => `${x.name} (${-x.gap} мм)`).join("; ")}{check.deep.length > 3 ? ` и ещё ${check.deep.length - 3}` : ""}. Так стоит в проекте Базиса — исправить в Базисе.</p>}
-      {check.deep.length === 0 && check.checked > 0 && <p className="kitchen-ok"><CircleCheck size={14} /> Пересечений фурнитуры с деталями нет; стоит на деталях {check.checked - check.outside.length - check.far.length} из {check.checked} по точкам крепления Базиса.</p>}
+      {check.deep.length === 0 && check.checked > 0 && <p className="kitchen-ok"><CircleCheck size={14} /> Проверено {check.checked} позиций с 3D-моделью из {total}: пересечений нет; стоит на деталях {check.checked - check.outside.length - check.far.length} из {check.checked} по точкам крепления Базиса.</p>}
       {/* «в воздухе» — не пересечение: детали-хозяина нет в самой модели Базиса (модель неполная, деталь удалена, высота модуля
           изменена без навесов, а навеса над боковиной нет). Сведения, не тревога (n4-wardrobes). */}
       {check.far.length > 0 && <p className="field-note"><Info size={12} /> Без детали в модели Базиса (дальше {RAW_FAR} мм от деталей) — {check.far.length} шт.: {check.far.slice(0, 3).map((x) => `${x.name} (${x.gap} мм)`).join("; ")}{check.far.length > 3 ? " …" : ""}. Это не пересечение: в проекте Базиса нет детали, на которой она крепится (модель неполная или деталь удалена) — так в самом проекте.</p>}
       {seated > 0 && <p className="field-note"><Info size={12} /> Навесы ({seated}) в файле Базиса висели над своей боковиной (комплект навесов со старыми координатами) — поставлены на боковину, {RAW_HANGER_DROP} мм ниже её верха, как остальные навесы кухонь.</p>}
       {check.outside.length > 0 && <p className="field-note">Рядом с деталями, но не на них ({RAW_SEAT_GAP}–{RAW_FAR} мм) — {check.outside.length} шт.: {check.outside.slice(0, 2).map((x) => x.name).join("; ")}{check.outside.length > 2 ? " …" : ""}. Так бывает, когда крепление — на профиле без сечения или детали соседнего модуля; сверьте с Базисом.</p>}
     </Group>}
-    {check.overlaps.length > 0 && <div className="property-section kitchen-note raw"><Info size={14} /><p>Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет — правится в Базисе.</p></div>}
-    <Position {...props} open />
+    {check.overlaps.length > 0 && <div className="property-section kitchen-note raw" data-stages="bodies docs"><Info size={14} /><p>Перекрытия деталей глубже {RAW_JOINT} мм — как в проекте Базиса ({check.overlaps.length}): {check.overlaps.slice(0, 2).map((c) => `${c.names[0]} × ${c.names[1]} (${c.depth} мм)`).join("; ")}{check.overlaps.length > 2 ? " …" : ""}. Студия геометрию сырого модуля не меняет — правится в Базисе.</p></div>}
+    <Position {...props} open stages="bodies" />
   </div>;
 }
