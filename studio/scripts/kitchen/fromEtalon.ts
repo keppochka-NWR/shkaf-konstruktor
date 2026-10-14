@@ -5,7 +5,7 @@ import { initialModule, section, parts, scaleHingeY, doorRowCount, facadeBottom,
 import { partAxes, edgeByDir } from "../../src/edges";
 import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
-import { jointPointsRule, type KitchenRole } from "../../src/kitchen";
+import { jointPointsRule, fastenersMode, kitchenEndsRule, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
@@ -280,13 +280,15 @@ export function endsEdged(hs: RefPanel[]): boolean {
 
 /** Отличия кромки проекта Базиса от схемы студии (kitchenEdges): торцы дна/крыши между боковинами (k32), торцы дна под боковинами
  *  без кромки (k28), задние торцы при набивном ХДФ (k31). Только то, что видно в кромке эталона. */
-export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: RefPanel | undefined, bottomUnder: boolean, backType: Module["backType"]): { endsX?: true | "bottom" | "top"; underEnds?: false; rear?: true } {
+export function edgeFlags(side: RefPanel, bottom: RefPanel | undefined, top: RefPanel | undefined, bottomUnder: boolean, backType: Module["backType"], role: KitchenRole): Pick<NonNullable<Module["edgeScheme"]>, "ends" | "underEnds" | "rear"> {
   const ed = (p: RefPanel) => ((p as unknown as { edges?: { side: string; thick: number }[] }).edges ?? []).filter((e) => e.thick > 0).map((e) => e.side);
-  const out: { endsX?: true | "bottom" | "top"; underEnds?: false; rear?: true } = {};
-  const eb = !bottomUnder && !!bottom && endsEdged([bottom]), etp = !!top && endsEdged([top]);
-  if (eb || etp) out.endsX = eb && etp ? true : eb ? "bottom" : "top";
+  const out: ReturnType<typeof edgeFlags> = {};
   if (bottomUnder && bottom && !ed(bottom).includes("+x") && !ed(bottom).includes("-x")) out.underEnds = false;
   if (backType === "nailed" && ed(side).includes("-z")) out.rear = true;
+  // торцы дна (между боковинами) и крыши у боковин — списком ends: правило kitchenEndsRule + «+x», «-x» (бывший endsX, n7-spec-dedupe)
+  const eb = !bottomUnder && !!bottom && endsEdged([bottom]), etp = !!top && endsEdged([top]);
+  const scheme = { backType, edgeScheme: { t: 1, ...(out.rear ? { rear: true as const } : {}) }, kitchen: { role } };
+  if (eb || etp) out.ends = { ...(eb ? { bottom: [...kitchenEndsRule(scheme, "bottom"), "+x", "-x"] } : {}), ...(etp ? { top: [...kitchenEndsRule(scheme, "top"), "+x", "-x"] } : {}) };
   return out;
 }
 
@@ -411,8 +413,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
-  m.kitchen = { role, bazis: true }; // из проекта Базиса: смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
-  const sk = screwKind(ref0.hardware); if (sk) m.kitchen.screw = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
+  m.kitchen = { role }; m.bazis = true; // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
+  const sk = screwKind(ref0.hardware); if (sk) m.kitchen.confirmatName = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно
   let wr: WallRaise | null = null;
   if (bottom) {
@@ -477,7 +479,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // царга лёжа без крепежа в Базисе (k19 m10: передняя 69 — ни конфирмата, ни эксцентрика, ни шканта в её полосе) — студия не добавляет
     const bare = role === "base" && !railFastened(r.b, ref.hardware, Infinity, -Infinity);
     // конфирматы в торец не посередине (k27 m02: 21,5 от задней кромки царги 60; k01: 34 и 66) — как в Базисе (railConfZ)
-    const cz = bare || m.kitchen.noFasteners ? undefined : railConfZ(r.b, ref.hardware, left.b.x0, right.b.x1);
+    const cz = bare || fastenersMode(m.kitchen) === "pins" ? undefined : railConfZ(r.b, ref.hardware, left.b.x0, right.b.x1);
     railList.push({ place: front ? "front-top" : "rear-top", height: w, lay: "flat", ...(sb > 0.5 ? { setback: sb } : {}), ...(bare ? { fasten: false as const } : {}), ...(cz ? { confZ: cz } : {}) });
   }
   for (const r of railsEdge) {
@@ -501,7 +503,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // railConf для нижних, навесных и антресолей (слияние n4-base railConfY и n4-wall railConf)
     const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
     const hz = topPanel && Math.abs(topPanel.b.y0 - r.b.y1) < 0.6 ? topPanel.b : bottom && Math.abs(bottom.b.y1 - r.b.y0) < 0.6 ? bottom.b : undefined;
-    const rc = fastened && !m.kitchen.noFasteners ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
+    const rc = fastened && fastenersMode(m.kitchen) !== "pins" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...rc });
   }
   if (railList.length) m.rails = railList;
@@ -920,7 +922,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // крепёж по стыкам: эксцентрик (+шкант) или конфирмат — по фурнитуре у каждой стороны дна/крыши
   const ecc = hw("эксцентрик"), dow = hw("шкант");
   // в проекте нет крепежа корпуса вовсе (k32: ни фурнитуры, ни присадки) — студия его не добавляет
-  if (!ecc.length && !dow.length && !hw("конфирмат").length) m.kitchen.noFasteners = true;
+  if (!ecc.length && !dow.length && !hw("конфирмат").length && m.kitchen.fasteners !== false) m.kitchen.fasteners = "pins"; // false (recognize-base: и полкодержателей нет) строже
   for (const [id, q] of [["bottom", bottom], ["top", topPanel]] as const) {
     if (!q) continue;
     for (const [side, sx] of [["left", left.b.x1], ["right", right.b.x0]] as const) {
@@ -1019,7 +1021,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // кромка: толщина — по кромке боковины (Базис: 1 или 0,5 мм на открытых торцах, скрытые — без кромки)
   const et = (left.p as unknown as { edges?: { thick: number }[] }).edges?.find((e) => e.thick > 0)?.thick;
-  if (et) m.edgeScheme = { t: et, ...edgeFlags(left.p, bottom?.p, topPanel?.p, !!m.bottomUnder, m.backType) };
+  if (et) m.edgeScheme = { t: et, ...edgeFlags(left.p, bottom?.p, topPanel?.p, !!m.bottomUnder, m.backType, role) };
   else if (noEdges(ref.panels)) { m.edgeScheme = { t: 0 }; notes.push("кромка в Базисе не заложена — студия не добавляет"); }
   // жёсткие полки не на эксцентриках без кромки по торцам у боковин (k13 m02 — на конфирматах, только перед и зад); на эксцентриках
   // «перед и зад» студия ставит и так (k12 m04)
@@ -1099,7 +1101,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     }
     if (Object.keys(drill).length) { m.kitchen.drill = drill; notes.push(`присадка по проекту: ${Object.entries(drill).map(([k, v]) => `${k === "pin" ? "полкодержатель" : "конфирмат"} D5×${v}`).join(", ")}`); }
     // царга с другой глубиной D5 конфирматов в торец, чем у корпуса (k31 m16: передняя 35 при 42 у остальных деталей) — по проекту
-    const rp = [...rails, ...railsEdge], own = m.kitchen.drill?.confirmat ?? m.kitchen.confDepth ?? 35;
+    const rp = [...rails, ...railsEdge], own = m.kitchen.drill?.confirmat ?? 35;
     (m.rails ?? []).forEach((r, i) => {
       const q = rp[i]; if (!q) return;
       const ds = [...new Set(hs.filter((h) => h.d === 5 && srcCat(h) === "конфирмат" && h.panel === q.p.i).map((h) => r1(h.depth)))];
@@ -1126,9 +1128,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   }
   // сушка навесного: элементы с сеткой Базиса — в точке и с поворотом проекта; без сетки — только заметка
   if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
-  if (fastenersAbsent(ref)) { m.kitchen.noFasteners = true; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }
+  if (fastenersAbsent(ref)) { if (m.kitchen.fasteners !== false) m.kitchen.fasteners = "pins"; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }
+  // глубина D5 конфирмата по проекту — одно поле drill.confirmat (присадка по k33/k34 выше главнее, если уже записана)
   const cd = confDepthFromEtalon(ref);
-  if (cd !== undefined) m.kitchen.confDepth = cd;
+  if (cd !== undefined && m.kitchen.drill?.confirmat === undefined) (m.kitchen.drill ??= {}).confirmat = cd;
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
   // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
   const g = refGrooves(ref, back ? r1(back.b.z0) : null);

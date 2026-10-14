@@ -141,7 +141,7 @@ export function partPenetration(a: Part, b: Part): number {
  *  и помечает пересечение «как в проекте Базиса» (не разрешённый контакт: дефект виден и правится в Базисе; n4-antresol).
  *  Только крепёж в точках kitchen.grooveHoles — там, где импорт нашёл у Базиса то же отверстие (compare.ts grooveTwins). Крепёж студии
  *  без двойника в Базисе, в том числе поставленный после правки модуля, подписи не получает. */
-const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.kitchen?.bazis && [[p, q], [q, p]].some(([a, b]) => {
+const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.bazis && !!m.kitchen && [[p, q], [q, p]].some(([a, b]) => {
   if (!isFastener(a) || b.role !== "light" || !b.id.startsWith("groove:")) return false;
   const o = a.model?.origin ?? a.position;
   return (m.kitchen!.grooveHoles ?? []).some((h) => Math.hypot(h[0] - o[0], h[1] - o[1], h[2] - o[2]) <= 0.5);
@@ -193,7 +193,7 @@ function pointBox(pt: number[], B: Box): { out: number; depth: number } {
 }
 /** Зазор от точки крепления фурнитуры (начало сетки Базиса, без сетки — центр) до ближайшего короба-хозяина, мм; 0 — на нём или внутри. */
 const seatGap = (h: Part, bx: Box[]) => Math.min(...bx.map((B) => pointBox(h.model?.origin ?? h.position, B).out));
-/** Модуль из Базиса, повторённый параметрически (m.kitchen.bazis): фурнитура с сеткой дальше BAZIS_AIR мм от всех досок модуля —
+/** Модуль из Базиса, повторённый параметрически (m.bazis у кухонного модуля; признак — только Module.bazis, см. isBazisModule): фурнитура с сеткой дальше BAZIS_AIR мм от всех досок модуля —
  *  висит в воздухе, как в самом проекте Базиса (навесы на «верх боковины + 985» у k26–k28, k31: сдвиг записан в файле Базиса, сверловок нет).
  *  Студия положение не меняет (всё как в Базисе), а показывает сведения «как в проекте Базиса», как у сырого модуля (rawCheck far →
  *  roomWarnings.bazisHostNotes; слияние n4-wardrobes и n4-antresol: «в воздухе» — не пересечение). Порог — RAW_SEAT_GAP, а не
@@ -203,7 +203,7 @@ const seatGap = (h: Part, bx: Box[]) => Math.min(...bx.map((B) => pointBox(h.mod
  *  без пометки Базиса не проверяются. */
 export const BAZIS_AIR = RAW_SEAT_GAP;
 export function bazisAirHardware(ps: Part[], m?: Module, limit = BAZIS_AIR): RawCheck["far"] {
-  if (!m?.kitchen?.bazis || m.raw) return [];
+  if (!m?.bazis || !m.kitchen || m.raw) return [];
   const bx = ps.filter(isBoard).map(box), far: RawCheck["far"] = [];
   if (!bx.length) return far;
   for (const h of ps) {

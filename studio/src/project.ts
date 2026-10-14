@@ -63,7 +63,7 @@ export function fromBazis(p:Project):boolean{return p.source==='bazis'||p.module
  *  Признак — m.bazis (импорт с признаком) или сырой модуль кухни; кухонный модуль в проекте с сырыми модулями Базиса — тоже из Базиса
  *  (файлы, импортированные до признака: в каждой кухне из Базиса есть сырой «Ряд» или сырые модули).
  *  Сырой шкаф из корпуса Базиса (source 'bazis-corpus') — не кухня: правила шкафов, как было. */
-export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;if(m.bazis)return true;if(m.raw)return m.raw.source!=='bazis-corpus';
+export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;if(m.bazis)return true;if(m.raw)return ['bazis','bazis-kitchen'].includes(String(m.raw.source)); // явный список источников кухни (bazis-corpus — сырой шкаф)
   // старый файл (ни одного признака): кухонный модуль рядом с сырыми модулями Базиса — из Базиса; в новом файле модуль без признака — свой (палитра)
   return !!(m.kitchen&&!p.modules.some(b=>b.module.bazis)&&p.modules.some(b=>rawKitchen(b.module.raw)));}
 export function applyAutoFillers(p:Project):Project{

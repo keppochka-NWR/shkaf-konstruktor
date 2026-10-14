@@ -48,7 +48,7 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   const bgs = m.backType === "nailed" ? backGapsTB(ref, m.backGap ?? 0) : undefined;
   if (bgs) { k.backGaps = bgs; notes.push(`ХДФ: зазор снизу ${bgs.bottom}, сверху ${bgs.top} (сбоку ${m.backGap}) — как в Базисе`); }
   const eb = eccFromBelow(ref);
-  if (eb === true) { k.eccBelow = true; notes.push("эксцентрики дна сверлятся снизу — как в Базисе"); }
+  if (eb === true) { k.ecc = { ...(k.ecc ?? {}), bottomOut: true }; notes.push("эксцентрики дна сверлятся снизу — как в Базисе"); } // одно поле: kitchen.ecc.bottomOut (бывший eccBelow)
   else if (eb === "legs") notes.push("эксцентрик дна снизу у Базиса попадает под площадку опоры — не повторяем (пересечение), сверлим сверху");
   const se = shelfEdges(ref);
   if (se && m.edgeScheme?.t && !m.edgeScheme.all) { m.edgeScheme = { ...m.edgeScheme, shelf: se }; notes.push(`съёмные полки кромятся: ${se.join(", ")} — как в Базисе`); }

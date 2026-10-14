@@ -137,8 +137,9 @@ export function outConfirmats(hardware: (Hw & { i?: number })[], holes: { src: n
   return out;
 }
 
-/** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50. */
+/** Крепёж корпуса проекта: «Евровинт 6х50» (шаблоны «Т_» k33, k34 — у Базиса в категории «прочее») вместо конфирмата 7×50 —
+ *  имя для kitchen.confirmatName (одно поле; бывшее screw:'euro-6x50' — parse-алиас в kitchen.ts). */
 export const isEuro6 = (h: { name: string }) => /^Евровинт 6/.test(h.name);
-export function screwKind(hardware: Hw[]): "euro-6x50" | undefined {
-  return hardware.some(isEuro6) && !hardware.some((h) => h.category === "конфирмат") ? "euro-6x50" : undefined;
+export function screwKind(hardware: Hw[]): "Евровинт 6х50" | undefined {
+  return hardware.some(isEuro6) && !hardware.some((h) => h.category === "конфирмат") ? "Евровинт 6х50" : undefined;
 }
