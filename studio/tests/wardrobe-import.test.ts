@@ -177,7 +177,7 @@ test('сцена Базиса шире 20 м раскладывается ряд
 
 test('parts-snapshot исключает только импорт wardrobe-NNN.json и wardrobes.json',()=>{
   for(const f of ['wardrobe-001.json','wardrobe-271.json','wardrobes.json']) assert.ok(isWardrobeImportFile(f),f);
-  for(const f of ['wardrobe.json','wardrobe-ivanov.json','wardrobe-12-copy.json','wardrobe-001.json.bak','my-wardrobe-001.json']) assert.ok(!isWardrobeImportFile(f),f);
+  for(const f of ['wardrobe.json','wardrobe-client.json','wardrobe-12-copy.json','wardrobe-001.json.bak','my-wardrobe-001.json']) assert.ok(!isWardrobeImportFile(f),f);
 });
 
 test('импорт: телефоны в названиях сборок Базиса маскируются, размеры — нет',()=>{
@@ -191,7 +191,7 @@ test('импорт: имена и фамилии в названиях маск�
   // вымышленные имена — не клиенты цеха
   assert.equal(maskNames('1234 Клиентова рекламация · Переделка рекламация'),'1234 … рекламация · Переделка рекламация');
   assert.equal(maskPersonal('ТЗ · Тестимир, 8 900 000-00-00 шкаф купе после замера'),'ТЗ · …, тел. скрыт шкаф купе после замера');
-  assert.equal(maskNames('0556 Ё Сервис 3887362 · Шкаф 2'),'0556 Ё Сервис 3887362 · Шкаф 2');
+  assert.equal(maskNames('0556 Ё Сервис 0000001 · Шкаф 2'),'0556 Ё Сервис 0000001 · Шкаф 2'); // номер синтетический
   assert.equal(maskNames('Тумба в ванную, прихожая, стол письменный'),'Тумба в ванную, прихожая, стол письменный');
   // основы, с которых начинаются фамилии: слово мебели остаётся, фамилия с той же основой — нет
   assert.equal(maskNames('стол Столяров'),'стол …');
