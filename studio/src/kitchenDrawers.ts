@@ -422,13 +422,16 @@ const isInner = (k: KDrawer) => (isAxis(k) || isStart(k)) && !!k.inner;
  *  (в базе нет) не вычитается — об этом скажет проверка. */
 function facadeColumn(m: Module): [number, number] {
   const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
-  let y0 = feet + g, y1 = m.height - g;
+  // с Gola верх колонки — под верхним профилем L (gola.faceTop: k15 852 = 882 − 30, k27, k31), не у верха корпуса:
+  // иначе при смене высоты верхний фасад и внутренний ящик за ним уходили в профиль (k15 «НМ 4» height+100)
+  let y0 = feet + g, y1 = m.height - (m.kitchen && m.gola?.faceTop !== undefined ? m.gola.faceTop : g);
   const cur = (m.kdrawers ?? []).filter((k) => !isInner(k) && Number.isFinite(k.y0) && Number.isFinite(k.y1));
   for (const b of m.kitchen?.blindFronts ?? []) {
     if (!Number.isFinite(b.y0) || !Number.isFinite(b.y1) || b.y1 <= b.y0) continue;
-    const below = cur.length ? cur.every((k) => k.y0 >= b.y1 - 0.01) : (b.y0 + b.y1) / 2 < (y0 + y1) / 2;
-    const above = cur.length ? cur.every((k) => k.y1 <= b.y0 + 0.01) : !below;
-    if (below) y0 = Math.max(y0, b.y1 + gap); else if (above) y1 = Math.min(y1, b.y0 - gap);
+    let below = cur.length > 0 && cur.every((k) => k.y0 >= b.y1 - 0.01), above = cur.length > 0 && cur.every((k) => k.y1 <= b.y0 + 0.01);
+    // ящиков нет или глухой сейчас перекрыт ящиком (раскладка заново поверх ошибки проверки) — сторона по середине колонки
+    if (!below && !above) { below = (b.y0 + b.y1) / 2 < (y0 + y1) / 2; above = !below; }
+    if (below) y0 = Math.max(y0, b.y1 + gap); else y1 = Math.min(y1, b.y0 - gap);
   }
   return [y0, y1];
 }

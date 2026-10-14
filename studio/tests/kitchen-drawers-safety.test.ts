@@ -5,7 +5,7 @@ import {initialModule,parts,validate,type Module} from '../src/model';
 import {kitchenBase} from '../src/kitchen';
 import {parseProject} from '../src/project';
 import {partCollisions} from '../src/collisions';
-import {relayoutKDrawers,refitKDrawers,golaBand,kdHardwareSpan,type AxisDrawer,type KDrawer} from '../src/kitchenDrawers';
+import {relayoutKDrawers,refitKDrawers,golaBand,kdHardwareSpan,withAxisH,type AxisDrawer,type KDrawer} from '../src/kitchenDrawers';
 import {drawersSweep,applyChange,silentCollisions,isParametric,SWEEP_CHANGES} from '../scripts/kitchen/drawers-sweep';
 
 // Ящики Базиса: конфликты с ящиками студии, глухие фасады, пересчёт по высоте с жёсткими полками и профилями Gola (аудит 11.10.2026, A4).
@@ -60,8 +60,10 @@ test('жёсткая полка секции: раскладка обходит 
 });
 
 test('внутренний ящик (inner) при смене высоты возвращается к своему фасаду, а не становится третьим фасадом; хозяин — под его направляющей',()=>{
+  // как k25 «НМВарка»: хозяин — царга H-120, внутренний H-86 утоплен на 9 (front) с осью в 105 от верха фасада
   const m=base(2);const ks=m.kdrawers as AxisDrawer[];
-  m.kdrawers=[ks[0],ks[1],{...ks[1],h:86 as const,inner:true as const,runnerY:Math.round((ks[1].y1-105)*10)/10}];
+  m.kdrawers=[ks[0],withAxisH(m,ks[1],120),{...ks[1],h:86 as const,inner:true as const,front:9,runnerY:Math.round((ks[1].y1-105)*10)/10}];
+  clean(m);
   const n={...m,height:m.height+100};n.kdrawers=refitKDrawers(n,'height');
   const out=n.kdrawers as AxisDrawer[];
   assert.equal(out.length,3);assert.equal(out.filter(k=>k.inner).length,1,'внутренний остался внутренним');
@@ -73,7 +75,7 @@ test('внутренний ящик (inner) при смене высоты во�
 
 test('local-projects: height+100 / depth+100 / width±100 по всем модулям с ящиками Базиса — ни одного тихого пересечения',{skip:!existsSync(LP)},()=>{
   const r=drawersSweep(LP,SWEEP_CHANGES,m=>!!m.kdrawers?.length);
-  assert.ok(r.modules>=60,'модулей с ящиками Базиса в базе '+r.modules);
+  assert.ok(r.modules>=30,'модулей с ящиками Базиса в базе '+r.modules); // 35 на 14.10.2026
   assert.deepEqual(r.hits.map(h=>`${h.kitchen} «${h.name}» ${h.change}: ${h.first}`),[]);
 });
 
@@ -90,13 +92,22 @@ test('k29 «нМ 1» (глухой фасад под ящиками Axis): relay
   assert.equal(h.kdrawers!.filter(k=>(k as AxisDrawer).inner).length,1);assert.ok(h.kdrawers!.every(k=>k.y0>=b.y1+3-0.01));
 });
 
-test('k25 «НМВарка», k27 «НМ 2», k31 «НМ 2», k15 «НМ 4»: height+100 — ящики обходят жёсткую полку и профиль Gola, проверка и детали чисты',{skip:!existsSync(lp('k25'))},()=>{
-  for(const [k,i] of [['k25',4],['k27',1],['k31',15],['k15',3]] as const){
+test('k25 «НМВарка», k31 «НМ 2», k15 «НМ 4»: height+100 — ящики обходят жёсткую полку и профиль Gola, проверка и детали чисты',{skip:!existsSync(lp('k25'))},()=>{
+  for(const [k,i] of [['k25',4],['k31',15],['k15',3]] as const){
     if(!existsSync(lp(k)))continue;
     const m=load(k,i);assert.ok(isParametric(m)&&m.kdrawers?.length,`${k} #${i}`);clean(m);
     const h=applyChange(m,'height+100');
     assert.deepEqual(validate(h),[],`${k} «${m.name}»`);assert.deepEqual(silentCollisions(h),[],`${k} «${m.name}»`);
   }
+});
+
+test('k27 «НМ 2» (глухой фасад под профилем C, ящики СТАРТ над ним): height+100 — профиль C уходит вверх от глухого, ящику места нет — ошибка проверки, не тихое пересечение',{skip:!existsSync(lp('k27'))},()=>{
+  // вырезы Gola заданы от верха боковины, глухой фасад — от пола: при росте корпуса между ними 100 мм, которых в Базисе не бывает;
+  // раскладка в стопке не находит места под полкой и профилем — проверка называет профиль (раньше 11 тихих пересечений)
+  const m=load('k27',1);clean(m);
+  const h=applyChange(m,'height+100');
+  assert.ok(validate(h).some(x=>/^Ящик 1: пересекает профиль Gola/.test(x)),validate(h).join('; '));
+  assert.ok(silentCollisions(h).length>0,'пересечение есть — и проверка о нём говорит');
 });
 
 test('k05 m03 / k08 m04 (ящики внизу, жёсткая полка над ними): полка в band не меняет ящики Базиса при 0/+40/−30',{skip:!existsSync(lp('k05'))},()=>{

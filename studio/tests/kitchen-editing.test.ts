@@ -24,8 +24,12 @@ test('Gola drawer changes preserve gaps and front sizes across relayout, system 
  const m=kitchenBase(initialModule(),600);setKitchenDrawerCount(m,3);setKitchenGola(m,true);
  const sizes=()=>m.kdrawers!.map(d=>d.y1-d.y0);const before=sizes();
  m.kdrawers=layoutKitchenDrawers(m,3);assert.deepEqual(sizes(),before);
- m.kdrawers=resizeKitchenDrawerFront(m,0,320);assert.equal(sizes()[0],320);assert.deepEqual(validate(m),[]);
- m.kdrawers=layoutKitchenDrawers(m,3,undefined,'firmax-ldsp');assert.equal(sizes()[0],320);assert.deepEqual(validate(m),[]);
+ // верхний ящик H-86 уже минимальный под профилем L (820: царга 762,5 = низ профиля): рост нижнего фасада — честная ошибка,
+ // а не царга в профиле (раньше проверка ящиков профилей не знала, пересечение было тихим); уменьшение — можно
+ assert.throws(()=>resizeKitchenDrawerFront(m,0,320),/Не хватает высоты.*профиль Gola/);
+ m.kdrawers=resizeKitchenDrawerFront(m,0,280);assert.equal(sizes()[0],280);assert.deepEqual(validate(m),[]);
+ assert.deepEqual(partCollisions(parts(m),m).filter(c=>[c.a,c.b].some(id=>id.startsWith('gola:'))),[]);
+ m.kdrawers=layoutKitchenDrawers(m,3,undefined,'firmax-ldsp');assert.equal(sizes()[0],280);assert.deepEqual(validate(m),[]);
  m.height=900;m.kdrawers=layoutKitchenDrawers(m,3);assert.deepEqual(validate(m),[]);
  assert.equal(m.kdrawers!.at(-1)!.y1,m.height-30);
  const collisions=partCollisions(parts(m),m).filter(c=>[c.a,c.b].some(id=>id.startsWith('gola:')));assert.deepEqual(collisions,[]);
