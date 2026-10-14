@@ -39,6 +39,18 @@ if (process.argv.includes("--write")) {
   console.log("эталон записан:", Object.keys(snap).length, "изделий,", Object.values(snap).reduce((s, v) => s + Object.keys(v).length, 0), "деталей");
 } else {
   const base = JSON.parse(readFileSync(out, "utf8")) as typeof snap;
+  // Переименованный файл проекта (например, examples/orders/<имя> → <номер заказа>) с теми же деталями —
+  // не отличие: эталон подхватывает новый ключ, старый ключ (может содержать имя) не печатается.
+  const onlyBase = Object.keys(base).filter((k) => !(k in snap)), onlySnap = new Set(Object.keys(snap).filter((k) => !(k in base)));
+  let renamed = 0;
+  for (const old of onlyBase) {
+    const sig = JSON.stringify(base[old]), suffix = old.slice(old.indexOf("#"));
+    const twin = [...onlySnap].find((k) => k.endsWith(suffix) && JSON.stringify(snap[k]) === sig);
+    if (!twin) continue;
+    base[twin] = base[old]; delete base[old]; onlySnap.delete(twin); renamed++;
+    console.log(`переименован (детали те же): → ${twin}`);
+  }
+  if (renamed) { writeFileSync(out, JSON.stringify(base)); console.log(`эталон обновлён: ${renamed} ключ(ей) переименовано`); }
   let diffs = 0;
   for (const k of new Set([...Object.keys(base), ...Object.keys(snap)])) {
     const a = base[k] ?? {}, b = snap[k] ?? {};
