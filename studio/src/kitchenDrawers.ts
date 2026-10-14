@@ -361,7 +361,8 @@ export const AXIS_FIT = { facadeTop: 21.5, ceiling: 5 };
 export function axisTop(k: KDrawer) { if (isBox(k)) return k.box.y + k.box.h; if (isStart(k)) return startTop(k); if (isIndigo(k)) return indigoTop(k); return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
 /** Низ под царгами/крышей корпуса (нижний кухонный: царги 16 лёжа у верха; на ребре — их высота). */
 export function axisCeiling(m: Module) {
-  const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : r.height));
+  // верхняя стяжка с atTop (пакет 0) стоит ниже кромки: её низ от верха = atTop + height (та же формула, что railAt в model.ts), а не высота стяжки
+  const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : (r.atTop ?? 0) + r.height));
   return m.height - Math.max(m.topType === "none" ? 0 : 16, ...top, 0);
 }
 /** Профили Gola нижнего/пенала по высоте от пола модуля [низ, верх] — по вырезам боковин (top0/top1 от верха боковины). */

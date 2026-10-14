@@ -3,10 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
-import {initialModule,parseModule,parts,validate,type Module} from '../src/model';
+import {initialModule,parseModule,parts,validate,railAt,type Module} from '../src/model';
 import {kitchenBase,kitchenWall,kitchenLegs,grooveHoleAt,grooveHoleOf,parseGrooveHole} from '../src/kitchen';
 import {partCollisions} from '../src/collisions';
-import {relayoutKDrawers,isFirmax,parseKDrawers} from '../src/kitchenDrawers';
+import {relayoutKDrawers,isFirmax,parseKDrawers,axisCeiling} from '../src/kitchenDrawers';
 import {ETALON_DIR,resizeSweep,RESIZE_CHANGES} from '../scripts/kitchen/resize-sweep';
 import {kitchenProject,setLegHeight,legsByRule,legsFromBazis,legsBazisNote} from '../src/kitchenProject';
 import type {PlacedModule} from '../src/project';
@@ -42,6 +42,19 @@ test('стяжка: topConfR — конфирматы через крышу от
   const a=kitchenWall(initialModule(),600);a.height=720;a.rails=[{place:'rear-top',height:70,at:450}];
   assert.deepEqual(y({...a,height:620}),[450,100],'at — по-прежнему от пола (старые файлы)');
   assert.deepEqual(rt(m).rails,m.rails);assert.deepEqual(rt(r).rails,r.rails);
+});
+
+test('стяжка с atTop: validate считает низ той же формулой, что parts (railAt) — выход за боковины ловится честной ошибкой; axisCeiling — низ стяжки, а не её высота',()=>{
+  const r=kitchenWall(initialModule(),600);r.height=720;r.rails=[{place:'rear-top',height:70,atTop:200}];
+  assert.equal(railAt(r,r.rails[0]),450);assert.deepEqual(validate(r).filter(e=>/Стяжка/.test(e)),[]);
+  const low={...r,rails:[{place:'rear-top' as const,height:70,atTop:700}]};
+  assert.equal(railAt(low,low.rails[0]),-50);
+  assert.ok(validate(low).some(e=>/Стяжка на заданной высоте выходит за боковины/.test(e)),'atTop ниже дна — ошибка, как и at');
+  assert.ok(validate({...r,rails:[{place:'rear-top',height:70,at:-50}]}).some(e=>/выходит за боковины/.test(e)));
+  const b=kitchenBase(initialModule(),600,'drawers');b.rails=[{place:'rear-top',height:70,atTop:100}];
+  assert.equal(axisCeiling(b),b.height-170,'потолок ящиков — под низом стяжки (100 от верха + 70)');
+  b.rails=[{place:'rear-top',height:70}];assert.equal(axisCeiling(b),b.height-70,'стяжка у кромки — как было');
+  b.rails=[{place:'rear-top',height:70,at:300}];assert.equal(axisCeiling(b),b.height-(b.topType==='none'?0:16),'at от пола — не верхняя, как было');
 });
 
 test('стяжка на дне: eccR/dowelR — эксцентрики и шканты правой половины от правого конца стяжки',()=>{

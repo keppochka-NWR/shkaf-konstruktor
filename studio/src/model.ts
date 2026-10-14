@@ -510,6 +510,9 @@ export function frontPoint(m:Module,x:number,normalOff:number,alongOff=0){
   return {x:x+ux*alongOff+nx*normalOff,z:depthAt(m,x)+uz*alongOff+nz*normalOff,rotY:-(a*180)/Math.PI};
 }
 export function railsOf(m:Module){return (m.rails??[]).filter(r=>r&&Number.isFinite(r.height));}
+/** Низ стяжки на ребре от пола модуля, если она не у кромки: atTop — от верха модуля (пакет 0, переживает смену высоты), at — от пола; иначе undefined.
+ *  Одна формула для parts, validate и axisCeiling. */
+export function railAt(m:Pick<Module,'height'>,r:{height:number;at?:number;atTop?:number}):number|undefined{return r.atTop!==undefined?m.height-r.atTop-r.height:r.at;}
 export function railHeight(m:Module,place:NonNullable<Module['rails']>[number]['place']){return railsOf(m).find(r=>r.place===place)?.height??0;}
 /** Угловая фальш этого корпуса — планка из фасада (strip). Старые файлы без cornerKind: по наличию фасадов. */
 export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.cornerKind?m.cornerKind==='strip'&&m.doors:m.doors;}
@@ -749,7 +752,7 @@ export function parts(m: Module): Part[] {
       continue;
     }
     // at — низ стяжки на ребре от пола модуля (мойка Базиса: задняя стяжка посередине высоты, под трубы)
-    const at = r.atTop !== undefined ? m.height - r.atTop - r.height : r.at; // atTop — от верха модуля (пакет 0), at — от пола
+    const at = railAt(m, r); // atTop — от верха модуля (пакет 0), at — от пола
     const y0 = at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
     // кухни Базиса: стяжка на ребре бывает отступлена от кромки боковин на 1–2 мм (setback — от задней кромки у задней, от лица у передней)
     const esb = m.kitchen ? r.setback ?? 0 : 0;
@@ -1610,7 +1613,7 @@ export function validate(m: Module): string[] {
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
   for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['faceAir',0,10],['shelfRear',0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
   if(m.rails?.some(r=>r&&((r.lay!==undefined&&!['edge','flat'].includes(r.lay))||(r.setback!==undefined&&(!Number.isFinite(r.setback)||r.setback<0||r.setback>80)))))errors.push('Царга: укладка на ребро или лёжа, утопание 0–80 мм.');
-  if(m.rails?.some(r=>r&&r.at!==undefined&&(!Number.isFinite(r.at)||r.at<innerBottom(m)||r.at+r.height>innerTop(m)+0.01)))errors.push('Стяжка на заданной высоте выходит за боковины: низ не ниже верха дна, верх не выше крыши/верха боковин.');
+  if(m.rails?.some(r=>{if(!r)return false;const at=railAt(m,r);return at!==undefined&&(!Number.isFinite(at)||at<innerBottom(m)||at+r.height>innerTop(m)+0.01);}))errors.push('Стяжка на заданной высоте выходит за боковины: низ не ниже верха дна, верх не выше крыши/верха боковин.');
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');
