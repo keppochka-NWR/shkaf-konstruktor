@@ -517,3 +517,16 @@ App.tsx, таблица расхождений норм (900/1200, зазор ф
 - Доки: `PASSWORD-ACCOUNTS.md` → `ACCOUNTS-SETUP.md`; новые `ARCHITECTURE.md` (три вида модулей, где живут правила Базиса,
   карта тестов) и `INDEX.md`; `ROADMAP-CRM-SECURITY.md` помечен устаревшим с 04.10.
 - Проверка: `npm test` через glob — 769 на базе 6f16cc7, `studio/src` не менялся (parts-snapshot «шкафы без изменений»).
+
+## 14.10.2026 (вечер) — A1 epo-privacy: исправления по ревью критика, перебазирование на 27ba45d
+- Критик (НЕ СХОДИТСЯ): один клиент пропущен целиком (пятый заказ примеров: ключ, заголовок, тест, три строки здесь), журнал Vault не чист, privacy-scan.py знал только кухонных клиентов. Исправлено:
+  пятый заказ → 5-6724055 (файл, ключ в scripts/orders.ts, тест в pricing.test.ts, пять логов в eports/), журнал Vault и три лога тестов в Vault.
+- scripts/privacy-scan.py: три источника токенов — Кухни/corpus/index.json (кухни), --names-dir studio/public/local-projects (шкафы, вне git), --tokens Кухни/corpus/privacy-tokens.txt
+  (старые имена файлов примеров и клиенты из комментариев; файл вне git). --strict требует все три (для publish.ps1 шаг 4, параметр -LocalProjects для копий без local-projects).
+  Строка «источники: index N, names-dir N, tokens N» в выводе. Стоп-слова: wardrobes, kitchens, cademic, demo.
+- src (по заявке на доске): ClientWorkspace.tsx:45 placeholder «Например: 7212718» без фамилии (строка уходила в бандл Pages), комментарии model.ts:31,33,34,97,323,326 и project.ts:116 → номера заказов.
+  Поведение не менялось: parts-snapshot «шкафы без изменений». web/studio пересобран (
+pm run build), privacy-scan по web — 0; src/catalog.ts после сборки меняет только переносы строк — откатывать.
+- scripts/parts-snapshot.ts: переименованный файл проекта с теми же деталями — «переименован», эталон .qa/parts-baseline.json обновляется сам, старый ключ не печатается (при слиянии в основную папку ничего переписывать не нужно).
+- Тесты: 	ests/privacy.test.ts (имена файлов и ключи заказов — только номера; placeholder; privacy-scan на синтетических токенах: маскировка, источники, код 2 без файла токенов), 	ests/parts-snapshot.test.ts (переименование). Итого 774.
+- Не исправлено (принято): старые имена в «−»-строках истории git (историю не переписываем); worktree 13 (5 × n7 активны, остальные Codex/Pages); полный publish.ps1 без -SkipTests на стволе — при слиянии.

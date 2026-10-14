@@ -21,8 +21,11 @@ param(
   [string]$Pages = '..\..\..\pages-n2',
   [switch]$SkipTests,
   [switch]$DryRun,
-  [string]$Branch = 'claude/studio'
+  [string]$Branch = 'claude/studio',
+  [string]$LocalProjects = ''
 )
+# -LocalProjects: folder with client project files for privacy-scan --names-dir (default: studio/public/local-projects
+# next to this script; pass it explicitly when running from a worktree copy that has no local-projects)
 
 $ErrorActionPreference = 'Continue'
 
@@ -115,7 +118,9 @@ if (Test-Path $pubModels) {
 
 # ---------------------------------------------------------------- 4. privacy scan of web/
 Step 4 "privacy scan of web/ (without local-projects), all token sources required"
-py -I (Join-Path $PSScriptRoot 'privacy-scan.py') $web --exclude local-projects --exclude .git --strict
+$scanArgs = @($web, '--exclude', 'local-projects', '--exclude', '.git', '--strict')
+if ($LocalProjects -ne '') { $scanArgs += @('--names-dir', $LocalProjects) }
+py -I (Join-Path $PSScriptRoot 'privacy-scan.py') @scanArgs
 if (-not $?) { Fail "privacy-scan found client names in web/ (or a token source is missing)" }
 
 # ---------------------------------------------------------------- 5. version.json
