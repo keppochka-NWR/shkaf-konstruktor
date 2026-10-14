@@ -19,6 +19,8 @@ import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
 import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
 import { V_MILLINGS } from "./vernissageData";
+/** Поворот модели конфирмата Базиса по оси ввинчивания (X модели — ось винта, головка при x = 0); общий для parts() и kitchen.ts (короб вытяжки). */
+export const CONFIRMAT_QUATS: Record<"+x" | "-x" | "+y" | "-y" | "-z", [number, number, number, number]> = { "+x": [1, 0, 0, 0], "-x": [0, 0, 1, 0], "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2], "-y": [Math.SQRT1_2, 0, 0, -Math.SQRT1_2], "-z": [Math.SQRT1_2, 0, Math.SQRT1_2, 0] };
 export const RULES = {
   panel: 16,
   back: 3,
@@ -1104,7 +1106,7 @@ export function parts(m: Module): Part[] {
   // Конфирмат: головка на наружной грани сквозной панели, ось — в сторону ввинчивания; модель «Евровинт 7х50» из проектов Базиса
   // (X — ось винта, головка при x = 0). Габарит детали — стержень 7×50 от головки.
   // «-z» — с лица внутрь корпуса: только фальш угловой мойки Базиса (kitchen.faceFiller.conf, k01 m03)
-  const CONF_Q: Record<"+x" | "-x" | "+y" | "-y" | "-z", Quat> = { "+x": [1, 0, 0, 0], "-x": [0, 0, 1, 0], "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2], "-y": [Math.SQRT1_2, 0, 0, -Math.SQRT1_2], "-z": [Math.SQRT1_2, 0, Math.SQRT1_2, 0] };
+  const CONF_Q = CONFIRMAT_QUATS;
   const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y" | "-z", sid?: string) => {
     const L = RULES.confirmatL, D = RULES.confirmatD, s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y"), deep = axis.endsWith("z");
     const c: [number, number, number] = deep ? [head[0], head[1], head[2] + s * L / 2] : vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]];

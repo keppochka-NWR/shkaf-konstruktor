@@ -6,6 +6,7 @@
 // Разброс большой (стенки 150–540 от левой боковины, глубина 200–234, вырез есть не во всех горизонталях), параметрики короба в студии
 // пока нет — модуль честно сырой, причина в сверке называется прямо, а не «панели не распознаны».
 import type { RefModule } from "./compare";
+import type { KitchenSpec } from "../../src/kitchen";
 
 type Box = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
 const bx = (b: number[]): Box => ({ x0: b[0], y0: b[1], z0: b[2], x1: b[3], y1: b[4], z1: b[5] });
@@ -83,6 +84,36 @@ export function hoodBoxSpecs(ref: RefModule): HoodBoxSpec[] {
   });
 }
 
+/** Короб, который студия уже строит сама (kitchen.hoodBox, pkg1): один короб без полок по сторонам, без ХДФ двумя кусками и без круглого
+ *  выреза (П-вырез горизонталей — planContours). Иначе null — модуль честно «не поддержано» (hoodBoxReason). */
+export function hoodBoxSimple(ref: RefModule): HoodBoxSpec | null {
+  const hs = hoodBoxSpecs(ref);
+  return hs.length === 1 && !hs[0].shelves.length && !hs[0].hdfSplit && !hs[0].cut.round && frontOnConfirmats(ref, hs[0]) ? hs[0] : null;
+}
+/** Фронт короба крепится к стенкам конфирматами с лица (k24 m09); на эксцентриках и шкантах (k25 m16) параметрика пока не строит. */
+export function frontOnConfirmats(ref: RefModule, h: HoodBoxSpec): boolean {
+  return ref.hardware.some((q) => q.category === "конфирмат" && Math.abs(q.pos[2] - h.depth) < 0.6 && q.pos[0] > h.x0 - 1 && q.pos[0] < h.x1 + 1 && q.pos[1] > h.y0 && q.pos[1] < h.y1);
+}
+
+/** Поле kitchen.hoodBox из разбора Базиса: координаты в осях модуля (z — от задней кромки боковин sideZ0), конфирматы короба по проекту:
+ *  с лица фронта в торцы стенок (от низа стенки), снизу из горизонтали и сверху в торцы стенок (от задней кромки стенки). */
+export function hoodBoxField(h: HoodBoxSpec, ref: RefModule, sideZ0: number): NonNullable<KitchenSpec["hoodBox"]> {
+  const conf = ref.hardware.filter((q) => q.category === "конфирмат" && q.pos[0] > h.x0 - 1 && q.pos[0] < h.x1 + 1);
+  const uniq = (v: number[]) => [...new Set(v.map(r1))].sort((a, b) => a - b);
+  const front = uniq(conf.filter((q) => Math.abs(q.pos[2] - h.depth) < 0.6 && q.pos[1] > h.y0 && q.pos[1] < h.y1).map((q) => q.pos[1] - h.y0));
+  const below = uniq(conf.filter((q) => Math.abs(q.pos[1] - (h.y0 - 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
+  const above = uniq(conf.filter((q) => Math.abs(q.pos[1] - (h.y1 + 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
+  const over = h.front.over.some((v) => Math.abs(v) > 0.05) ? { over: h.front.over } : {};
+  const c = { ...(front.length ? { front } : {}), ...(below.length ? { below } : {}), ...(above.length ? { above } : {}) };
+  return { x0: h.x0, x1: h.x1, y0: h.y0, y1: h.y1, z0: r1(h.wallZ[0] - sideZ0), z1: r1(h.wallZ[1] - sideZ0), front: { mount: h.front.mount, ...over }, ...(Object.keys(c).length ? { conf: c } : {}) };
+}
+
+/** Панели короба в эталоне (стенки и фронт) — чтобы распознаватель не считал их «не распознанными». */
+export function hoodBoxPanels(ref: RefModule, h: HoodBoxSpec): RefModule["panels"] {
+  return ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && ((p.axis === "x" && (Math.abs(p.box[0] - h.x0) < 0.6 || Math.abs(p.box[3] - h.x1) < 0.6) && Math.abs(p.box[1] - h.y0) < 1)
+    || (p.axis === "z" && Math.abs(p.box[5] - h.depth) < 0.6 && p.box[0] <= h.x0 + 20 && p.box[3] >= h.x1 - 20 && p.box[4] - p.box[1] > 200)));
+}
+
 /** Причина «не поддержано» для навесного с коробом под вытяжку или null: что именно в коробе Базиса (фронт, вырез, полки, ХДФ). */
 export function hoodBoxReason(ref: RefModule): string | null {
   const hs = hoodBoxSpecs(ref);
@@ -90,5 +121,5 @@ export function hoodBoxReason(ref: RefModule): string | null {
   const b = hs[0], cut = [b.cut.below ? "под коробом" : "", b.cut.above ? "над коробом" : ""].filter(Boolean);
   const tr = hs.flatMap((h) => h.shelves).filter((s) => s.trapezoid).length;
   return `короб под вытяжку${hs.length > 1 ? ` ×${hs.length}` : ""} (стенки ${b.x0}–${b.x1} мм, фронт ${b.front.mount === "overlay" ? "накладной" : "вкладной"} в ${b.depth} от задней кромки`
-    + `${cut.length ? `, вырез ${b.cut.round ? "круглый" : "П"} ${cut.join(" и ")}` : ", без выреза"}${tr ? `, полок трапецией ${tr}` : ""}${b.hdfSplit ? ", ХДФ двумя кусками" : ""}) — пока не поддержано`;
+    + `${cut.length ? `, вырез ${b.cut.round ? "круглый" : "П"} ${cut.join(" и ")}` : ", без выреза"}${tr ? `, полок трапецией ${tr}` : ""}${b.hdfSplit ? ", ХДФ двумя кусками" : ""}${frontOnConfirmats(ref, b) ? "" : ", фронт на эксцентриках"}) — пока не поддержано`;
 }

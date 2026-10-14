@@ -357,7 +357,7 @@ test('короб под вытяжку — разбор Базиса для па
   assert.equal(hoodBoxSpecs(load('k06','m09'))[0].front.mount,'inset');
   // полка в соседней секции за перегородкой (k16 m11) — не полка короба
   assert.equal(hoodBoxSpecs(load('k16','m11'))[0].shelves.length,2);
-  assert.match(moduleFromEtalon(load('k31','m08')).unsupported.join(';'),/фронт накладной в 216 от задней кромки, вырез П под коробом, полок трапецией 2\)/);
+  assert.match(moduleFromEtalon(load('k31','m08')).unsupported.join(';'),/фронт накладной в 216 от задней кромки, вырез П под коробом, полок трапецией 2(, фронт на эксцентриках)?\)/); // pkg1: фронт k31 на эксцентриках — причина дописана
 });
 test('кромка детали по проекту своей толщины (k31 m07: стяжка у задника 0,5 только по верхнему торцу при корпусе 1) — partsT, сохраняется в проекте',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
   const ref=load('k31','m07'),{module:m}=moduleFromEtalon(ref);

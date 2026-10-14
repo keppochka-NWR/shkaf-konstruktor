@@ -14,7 +14,7 @@ import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { axisAsBazis, firmaxAsBazis } from "./recognize-drawers";
 import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
 import { aluFacadeReason } from "./aluFacade";
-import { hoodBoxReason } from "./hoodBox";
+import { hoodBoxReason, hoodBoxSimple, hoodBoxField, hoodBoxPanels } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
@@ -381,7 +381,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const aluWhy = aluFacadeReason(ref);
   if (aluWhy) unsupported.push(aluWhy);
   // короб под вытяжку у навесного (две стенки и фронт внутри корпуса, П-вырез в дне/крыше) — параметрики нет, честно сырой (hoodBox.ts)
-  const hoodWhy = ref.archetype.startsWith("wall") ? hoodBoxReason(ref) : null;
+  // простой короб (один, без полок по сторонам и ХДФ двумя кусками) — параметрика kitchen.hoodBox (pkg1), остальные — честно сырые
+  const hoodSimple = ref.archetype.startsWith("wall") ? hoodBoxSimple(ref) : null;
+  const hoodWhy = ref.archetype.startsWith("wall") && !hoodSimple ? hoodBoxReason(ref) : null;
   if (hoodWhy) unsupported.push(hoodWhy);
   const hdf = P.filter(({ p }) => p.kind === "hdf");
   const hw = (cat: string) => ref.hardware.filter((h) => h.category === cat);
@@ -414,6 +416,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   m.kitchen = { role }; m.bazis = true; // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
+  if (hoodSimple) { m.kitchen.hoodBox = hoodBoxField(hoodSimple, ref, sideZ0); notes.push(`короб под вытяжку: стенки ${hoodSimple.x0}–${hoodSimple.x1}, фронт ${hoodSimple.front.mount === "overlay" ? "накладной" : "вкладной"}, конфирматы ${JSON.stringify(m.kitchen.hoodBox.conf ?? "по правилу")}`); }
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.confirmatName = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно
   let wr: WallRaise | null = null;
@@ -1168,7 +1171,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, wr?.plank, ...drawerPanels];
+  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, wr?.plank, ...drawerPanels, ...(hoodSimple ? P.filter((x) => hoodBoxPanels(ref, hoodSimple).includes(x.p)) : [])];
   const other = ref.panels.length - P.filter((x) => known.includes(x)).length;
   // полка из фасадного материала внутри корпуса (k23 m07: «Горизонтальная» 19 мм, «Фасадный мат-л», без полкодержателей) — причина прямо
   const facShelf = P.find((x) => !known.includes(x) && x.p.axis === "y" && x.p.kind === "other" && x.b.x0 >= left.b.x1 - 0.6 && x.b.x1 <= right.b.x0 + 0.6 && x.b.z1 <= sideZ1 + 0.5);
