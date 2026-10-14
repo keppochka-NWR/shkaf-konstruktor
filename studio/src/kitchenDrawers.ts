@@ -361,18 +361,76 @@ export function axisCeiling(m: Module) {
   const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : r.height));
   return m.height - Math.max(m.topType === "none" ? 0 : 16, ...top, 0);
 }
-/** Полоса по высоте для фурнитуры ящика с фасадом [y0, y1] в модуле с Gola: профиль в вырезах боковин стоит по всей ширине
- *  у фронта, поэтому короб, направляющие и царги ящика его не пересекают (правило 3): профиль ниже середины фасада — под ящиком
- *  (низ ящика выше верха профиля), выше — над ним (верх ящика ниже низа профиля); 1 мм — чтобы не касаться. Без Gola — без границ. */
-export function golaBand(m: Module, y0: number, y1: number): [number, number] {
+/** Профили Gola нижнего/пенала по высоте от пола модуля [низ, верх] — по вырезам боковин (top0/top1 от верха боковины). */
+export function golaBands(m: Module): [number, number][] {
   const cuts = m.kitchen && (m.kitchen.role === "base" || m.kitchen.role === "tall") ? m.gola?.cuts ?? [] : [];
-  let lo = -Infinity, hi = Infinity;
-  for (const c of cuts) {
-    if (!(c.top1 > c.top0)) continue;
-    const pb = m.height - c.top1, pt = m.height - c.top0;
-    if ((pb + pt) / 2 < (y0 + y1) / 2) lo = Math.max(lo, pt + 1); else hi = Math.min(hi, pb - 1);
+  return cuts.filter((c) => c.top1 > c.top0).map((c) => [m.height - c.top1, m.height - c.top0]);
+}
+/** Низ и верх проёма секций кухни — как boxes() в model.ts: над дном / под крышей 16, без них — низ/верх боковин;
+ *  низ корпуса — опоры или подъём дна (без них RULES.plinth 80). Только для положения полок секций. */
+function sectionSpan(m: Module) {
+  const base = m.feet?.height ?? m.plinthHeight ?? 80;
+  return { bottom: base + (m.bottomType === "none" ? 0 : 16), top: m.height - (m.topType === "none" ? 0 : 16) };
+}
+/** Жёсткие полки секций кухни (s.fixed) в осях модуля: [низ, верх, от задней кромки, до переда] — полка 16 на доле высоты проёма,
+ *  глубина своя из Базиса (shelfAt), секции или до переда корпуса; +20 по глубине — запас на отступ от задника (rearClear).
+ *  Съёмные полки не считаются (их переставят), шкафы студии — тоже (правила Базиса только для m.kitchen). */
+export function fixedShelfBoxes(m: Module): [number, number, number, number][] {
+  if (!m.kitchen || m.sectionLayout || m.corner || !Array.isArray(m.sections)) return [];
+  const { bottom, top } = sectionSpan(m), h = top - bottom, out: [number, number, number, number][] = [];
+  for (const s of m.sections) for (const j of s.fixed ?? []) {
+    const f = s.shelves?.[j];
+    if (!Number.isFinite(f)) continue;
+    const y = bottom + f * h, own = s.shelfAt?.[j], z0 = own?.rear ?? m.shelfRear ?? 0, depth = own?.depth ?? s.shelfDepth ?? m.depth;
+    out.push([y - 8, y + 8, z0, z0 + depth + 20]);
   }
+  return out;
+}
+/** Полоса по высоте для фурнитуры ящика с фасадом [y0, y1]: препятствия — профили Gola в вырезах боковин (стоят по всей ширине
+ *  у фронта, правило 3) и жёсткие полки секций (k25 «НМВарка», k27, k31: полка 100 у задника между ящиками). Препятствие ниже
+ *  середины фасада — под ящиком (низ фурнитуры выше его верха), выше — над ним (верх фурнитуры ниже его низа); у профиля 1 мм —
+ *  чтобы не касаться; полки ящик касается (Базис k08 m04: короб Versalite вплотную под полкой). Без Gola и жёстких полок — без границ. */
+export function golaBand(m: Module, y0: number, y1: number): [number, number] {
+  let lo = -Infinity, hi = Infinity;
+  const put = (pb: number, pt: number, air: number) => { if ((pb + pt) / 2 < (y0 + y1) / 2) lo = Math.max(lo, pt + air); else hi = Math.min(hi, pb - air); };
+  for (const [pb, pt] of golaBands(m)) put(pb, pt, 1);
+  for (const [sy0, sy1] of fixedShelfBoxes(m)) put(sy0, sy1, 0);
   return [lo, hi];
+}
+/** Фурнитура ящика по высоте от пола модуля [низ, верх]: направляющая под осью (Axis/Indigo −44, СТАРТ −33), короб ЛДСП — боковины;
+ *  верх — короб/царга/задняя стенка/рейлинг (axisTop). undefined — ящик с неверными полями (об этом скажут проверки системы). */
+export function kdHardwareSpan(k: KDrawer): [number, number] | undefined {
+  if (isBox(k)) return Number.isFinite(k.box?.y) && Number.isFinite(k.box?.h) ? [k.box.y, k.box.y + k.box.h] : undefined;
+  if (!Number.isFinite(k.runnerY)) return undefined;
+  if (isStart(k)) return START[k.sb] ? [k.runnerY - START_RUN_DOWN, startTop(k)] : undefined;
+  if (isIndigo(k)) return INDIGO[k.hc] ? [k.runnerY - 44, indigoTop(k)] : undefined;
+  if (!AXIS_HEIGHTS.includes(k.h)) return undefined;
+  // внутренний ящик: держатель передней панели (сетка pp) на 46 ниже оси — ниже направляющей (44)
+  const pp = k.inner && (M.pp[`${k.color ?? "white"}:${k.h}`] ?? M.pp[`white:${k.h}`]);
+  return [k.runnerY - (pp ? 46 : AXIS_RUNNER_DOWN), axisTop(k)];
+}
+/** Ящик по глубине [от задней кромки боковин, до переда]: длина от передней кромки корпуса с утопанием (front). */
+function kdDepthSpan(m: Module, k: KDrawer): [number, number] {
+  const front = (isBox(k) ? k.box?.front : isIndigo(k) ? 0 : k.front) ?? 0, len = kdLen(k);
+  return [m.depth - front - (Number.isFinite(len) ? len : 0), m.depth - front];
+}
+/** Внутренний ящик за фасадом другого (Axis PRO, СТАРТ): своего фасада нет. */
+const isInner = (k: KDrawer) => (isAxis(k) || isStart(k)) && !!k.inner;
+/** Колонка фасадов ящиков [низ, верх] от пола модуля: от опор до верха с отступом faceGap, без глухих фасадов (kitchen.blindFronts,
+ *  k29 m03, k27 m02: глухой под ящиками — колонка от его верха плюс зазор; над ящиками — до его низа). Сторона — по текущим
+ *  ящикам модуля (все выше глухого / все ниже), без них — по положению глухого относительно середины; глухой между ящиками
+ *  (в базе нет) не вычитается — об этом скажет проверка. */
+function facadeColumn(m: Module): [number, number] {
+  const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
+  let y0 = feet + g, y1 = m.height - g;
+  const cur = (m.kdrawers ?? []).filter((k) => !isInner(k) && Number.isFinite(k.y0) && Number.isFinite(k.y1));
+  for (const b of m.kitchen?.blindFronts ?? []) {
+    if (!Number.isFinite(b.y0) || !Number.isFinite(b.y1) || b.y1 <= b.y0) continue;
+    const below = cur.length ? cur.every((k) => k.y0 >= b.y1 - 0.01) : (b.y0 + b.y1) / 2 < (y0 + y1) / 2;
+    const above = cur.length ? cur.every((k) => k.y1 <= b.y0 + 0.01) : !below;
+    if (below) y0 = Math.max(y0, b.y1 + gap); else if (above) y1 = Math.min(y1, b.y0 - gap);
+  }
+  return [y0, y1];
 }
 /** Ящик входит: верх короба не ближе запасов к верху своего фасада и к царгам корпуса, не заходит в профили Gola. */
 export function axisFits(m: Module, k: KDrawer) {
@@ -395,8 +453,9 @@ function aabb(origin: number[], q: Quat, b: number[]): { size: [number, number, 
  *  длина — самая длинная, что входит в корпус с запасом 25. ratios — доли высот фасадов снизу вверх (по умолчанию нижний крупнее). */
 export function axisLayout(m: Module, n: number, ratios?: number[], keep?: Pick<AxisDrawer, "color" | "faceScrews">): AxisDrawer[] {
   const color = keep?.color;
-  const g = m.faceGap ?? 1.5, gap = m.faceGapBetween ?? 3, feet = m.feet?.height ?? m.plinthHeight ?? 0;
-  const innerBottom = axisFloor(m), y0 = feet + g, y1 = m.height - g, avail = y1 - y0 - (n - 1) * gap;
+  const gap = m.faceGapBetween ?? 3;
+  // колонка фасадов — без глухих фасадов Базиса (kitchen.blindFronts): под ящиками — от его верха, над ними — до его низа
+  const innerBottom = axisFloor(m), [y0, y1] = facadeColumn(m), avail = y1 - y0 - (n - 1) * gap;
   const base = ratios?.length === n ? ratios : n === 1 ? [1] : n === 2 ? [0.5, 0.5] : n === 3 ? [0.44, 0.28, 0.28] : Array.from({ length: n }, (_, i) => (i === 0 ? 1.5 : 1));
   const sum = base.reduce((s, v) => s + v, 0);
   const hs = base.map((r) => Math.round((avail * r) / sum * 2) / 2);
@@ -473,12 +532,47 @@ export function refitKDrawers(m: Module, what: "height" | "depth" = "height"): K
   const ks = m.kdrawers; if (!ks?.length) return ks;
   if(m.kitchen?.oven) return versaliteLayout({...m,height:m.height-m.kitchen.oven.nicheHeight,topType:'panel',rails:[],gola:undefined,kitchen:{...m.kitchen,oven:undefined}},1,undefined,ks.filter(isVersalite));
   if (what === "height") {
+    // внутренний ящик за фасадом другого (Axis PRO/СТАРТ inner: k15, k25, k29 — у него тот же фасад, что у хозяина) — не фасад:
+    // раскладываются только фасадные ящики, внутренний возвращается к хозяину с прежним отступом оси от верха фасада
+    // (иначе раскладка делала из него третий фасад и клала его на глухой фасад — k29 «нМ 1» при height+100)
+    const inners = ks.map((k, i) => (isInner(k) ? i : -1)).filter((i) => i >= 0);
+    if (inners.length && inners.length < ks.length) {
+      const hosts = ks.filter((k) => !isInner(k)), laid = refitKDrawers({ ...m, kdrawers: hosts }, "height") ?? hosts, r1 = (v: number) => Math.round(v * 10) / 10;
+      const out: KDrawer[] = [], placed = new Set<number>();
+      hosts.forEach((h, i) => {
+        let nh = laid[i] ?? h;
+        const mine: KDrawer[] = [];
+        for (const ii of inners) {
+          const k = ks[ii], mid = (k.y0 + k.y1) / 2;
+          if (placed.has(ii) || !(mid >= h.y0 - 0.01 && mid <= h.y1 + 0.01)) continue;
+          const inner = { ...k, y0: nh.y0, y1: nh.y1, runnerY: r1(nh.y1 - (h.y1 - k.runnerY)) } as KDrawer;
+          mine.push(inner); placed.add(ii);
+          // хозяин остаётся под направляющей внутреннего (Базис k30 m12/m13: короб Firmax ниже направляющей Axis PRO H-86 внутри):
+          // короб ЛДСП — ниже на 1, царга Axis PRO — самая высокая, что входит под неё
+          const lim = (kdHardwareSpan(inner)?.[0] ?? Infinity) - 1;
+          if (isBox(nh) && nh.box.y + nh.box.h > lim && lim - nh.box.y >= 60) nh = { ...nh, box: { ...nh.box, h: r1(lim - nh.box.y) } } as KDrawer;
+          else if (isAxis(nh) && axisTop(nh) > lim) { const fit = [...AXIS_HEIGHTS].reverse().map((hh) => withAxisH(m, nh as AxisDrawer, hh)).find((c) => axisTop(c) <= lim && axisAvailable(c)); if (fit) nh = fit; }
+        }
+        out.push(nh, ...mine);
+      });
+      for (const ii of inners) if (!placed.has(ii)) out.push(ks[ii]); // хозяина не нашли — как было, проверка скажет
+      return out;
+    }
     // ящики только внизу, над ними жёсткая полка или двери (Базис k05 m03, k08 m04): стопка не растягивается на всю высоту
     // (короб упирался в «Полку жёсткую»). Пока ящики входят — остаются как в Базисе; нет — раскладка в пределах прежней стопки.
     const g = m.faceGap ?? 1.5, top = Math.max(...ks.map((k) => k.y1));
     if (top < m.height - g - 60 && (m.doors !== false || m.sections.some((s) => (s.shelves?.length ?? 0) > 0))) {
       if (ks.every((k) => axisFits(m, k)) && !kitchenDrawerErrors(m).length) return ks;
-      const stack: Module = { ...m, height: top + g, topType: "none", rails: (m.rails ?? []).filter((r) => r.place.endsWith("bottom")), gola: undefined, doors: false, sections: m.sections.map((s) => ({ ...s, shelves: [] })) };
+      // в стопке жёсткие полки и вырезы Gola остаются на своей высоте от пола (полка — доля проёма, вырез — от верха боковины):
+      // раскладка в стопке обходит их так же, как в целом корпусе (k25 «НМВарка», k27, k31: полка 100 у задника между ящиками)
+      const top1 = top + g, sp = sectionSpan(m), cut = m.height - top1;
+      const sections = m.sections.map((s) => {
+        const keep = (s.fixed ?? []).map((j) => ({ j, y: sp.bottom + (s.shelves?.[j] ?? NaN) * (sp.top - sp.bottom) })).filter(({ y }) => Number.isFinite(y) && y + 8 < top1);
+        const shelfAt = s.shelfAt ? Object.fromEntries(keep.map(({ j }, i) => [i, s.shelfAt![j]]).filter(([, v]) => v)) : undefined;
+        return { ...s, shelves: keep.map(({ y }) => (y - sp.bottom) / (top1 - sp.bottom)), fixed: keep.map((_, i) => i), ...(shelfAt && Object.keys(shelfAt).length ? { shelfAt } : { shelfAt: undefined }) };
+      });
+      const gola = m.gola ? { ...m.gola, cuts: m.gola.cuts.filter((c) => c.top1 > cut).map((c) => ({ ...c, top0: Math.max(0, c.top0 - cut), top1: c.top1 - cut })) } : undefined;
+      const stack: Module = { ...m, height: top1, topType: "none", rails: (m.rails ?? []).filter((r) => r.place.endsWith("bottom")), gola, doors: false, sections };
       return refitKDrawers(stack, "height");
     }
   }
@@ -1028,6 +1122,27 @@ export function kitchenDrawerErrors(m: Module): string[] {
   const e: string[] = [];
   const ks = m.kdrawers; if (!ks) return e;
   if (!Array.isArray(ks) || ks.length > 6) return ["Ящиков кухни — не больше шести."];
+  // ящики секции (студии) и ящики Базиса в одном модуле — короба в одном проёме (69 пересечений при молчащей проверке)
+  if (ks.length && Array.isArray(m.sections) && m.sections.some((s) => s.drawers > 0)) e.push("В модуле с ящиками Базиса (Axis/Firmax/Versalite) ящики студии не ставятся: уберите ящики секции или ящики Базиса.");
+  // глухие фасады Базиса (kitchen.blindFronts) и фасады ящиков — в одной плоскости, не перекрываются; фурнитура ящика —
+  // не в профиле Gola и не в жёсткой полке (по высоте и по глубине ящика): раньше это были тихие пересечения после смены высоты
+  const r = (v: number) => Math.round(v * 10) / 10, blind = (m.kitchen?.blindFronts ?? []).filter((b) => Number.isFinite(b.y0) && Number.isFinite(b.y1) && b.y1 > b.y0), cuts = golaBands(m), shelves = fixedShelfBoxes(m);
+  ks.forEach((k, j) => {
+    if (!k || typeof k !== "object" || ![k.y0, k.y1].every(Number.isFinite)) return;
+    const p = `Ящик ${j + 1}: `;
+    if (!isInner(k)) for (const [i, b] of blind.entries()) if (k.y0 < b.y1 - 0.01 && b.y0 < k.y1 - 0.01) e.push(p + `фасад ${r(k.y0)}–${r(k.y1)} перекрывает глухой фасад ${i + 1} (${r(b.y0)}–${r(b.y1)}).`);
+    const hs = kdHardwareSpan(k); if (!hs) return;
+    const [h0, h1] = hs, [z0, z1] = kdDepthSpan(m, k);
+    for (const [c0, c1] of cuts) if (h0 < c1 - 0.01 && c0 < h1 - 0.01) e.push(p + `пересекает профиль Gola (${r(c0)}–${r(c1)}): фурнитура ящика ${r(h0)}–${r(h1)}.`);
+    for (const [s0, s1, sz0, sz1] of shelves) if (h0 < s1 - 0.01 && s0 < h1 - 0.01 && z0 < sz1 - 0.01 && sz0 < z1 - 0.01) e.push(p + `пересекает жёсткую полку (${r(s0)}–${r(s1)}): фурнитура ящика ${r(h0)}–${r(h1)}.`);
+    // внутренний ящик за этим фасадом (k15, k25, k29, k30): его направляющая выше короба/царги хозяина — иначе короб Firmax заходил
+    // на направляющую Axis PRO молча (проверка Axis «короб заходит на направляющую ящика выше» знает только хозяина Axis)
+    if (!isInner(k)) ks.forEach((o, i) => {
+      if (i === j || !isInner(o) || !((o.y0 + o.y1) / 2 >= k.y0 - 0.01 && (o.y0 + o.y1) / 2 <= k.y1 + 0.01)) return;
+      const os = kdHardwareSpan(o);
+      if (os && h1 > os[0] + 0.01 && h0 < os[1] - 0.01) e.push(p + `короб заходит на направляющую внутреннего ящика ${i + 1} (${r(os[0])}): верх ${r(h1)}.`);
+    });
+  });
   ks.forEach((k, j) => {
     const p = `Ящик ${j + 1}: `;
     if (isIndigo(k)) {

@@ -157,11 +157,14 @@ test("столешница над внешним краем: модуль не �
   assert.equal(get(p, "b").module.width, 500);
 });
 
-test("кухня: сосед не уходит за максимум 1200 и под технику — только ширины ниш", () => {
+test("кухня: сосед растёт до 1650 (как проверка и поле «Ширина»), не дальше; под технику — только ширины ниш", () => {
   const k = (kind: KitchenItem, w: number) => kitchenTemplate(kind, w, initialModule());
-  // B 600 → 450 рядом с C 1100: C стал бы 1250 > 1200
+  // B 600 → 450 рядом с C 1100: C станет 1250 — вручную допустимо до KITCHEN.maxModuleWidth 1650 (раньше упиралось в предел автораскладки 1200)
   const wide = proj([at("a", 500, k("base-doors", 600)), at("b", 1100, k("base-doors", 600)), at("c", 1700, { ...k("base-doors", 600), width: 1100 })]);
-  assert.throws(() => resizeInRow(wide, "b", 450), /расширится до 1250 мм, а больше 1200/);
+  assert.equal(resizeInRow(wide, "b", 450).modules.find((x) => x.id === "c")!.module.width, 1250);
+  // C 1550 → 1700 > 1650 — ошибка
+  const wider = proj([at("a", 500, k("base-doors", 600)), at("b", 1100, k("base-doors", 600)), at("c", 1700, { ...k("base-doors", 600), width: 1550 })]);
+  assert.throws(() => resizeInRow(wider, "b", 450), /расширится до 1700 мм, а больше 1650/);
   // под духовку 600 → 500 и под мойку 600 → 300 — ошибка; под мойку 800 → 600 — можно (ширина ниши)
   assert.throws(() => resizeInRow(proj([at("a", 500, k("base-doors", 600)), at("o", 1100, k("oven", 600))]), "a", 700), /под технику.*600 мм, а стала бы 500/);
   assert.throws(() => resizeInRow(proj([at("a", 500, k("base-doors", 600)), at("s", 1100, k("sink", 600))]), "a", 900), /стала бы 300/);
