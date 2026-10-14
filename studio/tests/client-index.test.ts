@@ -30,13 +30,13 @@ test('add, copy, rename, switch and remove projects of one client; totals sum pr
 
 test('several clients and a client folder file round trip',()=>{
   const s=memory();s.setItem(projectStorageKey(''),JSON.stringify(newProject()));
-  let i=renameClient(loadIndex(s),'7212718 Цецегов');
+  let i=renameClient(loadIndex(s),'7212718');
   const second=addProject(s,i,'Шкаф-купе','');i=second.index;
   const c=addClient(i,'Новый');i=c.index;assert.equal(i.clients.length,2);assert.equal(activeClient(i).label,'Новый');
-  i=switchClient(i,i.clients[0].id);assert.equal(activeClient(i).label,'7212718 Цецегов');
+  i=switchClient(i,i.clients[0].id);assert.equal(activeClient(i).label,'7212718');
   const bundle=clientBundle(s,activeClient(i));assert.ok(isClientBundle(bundle));assert.equal(bundle.projects.length,2);
   const t=memory();const imported=importBundle(t,loadIndex(t),JSON.parse(JSON.stringify(bundle)));
-  const ic=activeClient(imported.index);assert.equal(ic.label,'7212718 Цецегов');assert.deepEqual(ic.projects.map(p=>p.title),['Проект 1','Шкаф-купе']);
+  const ic=activeClient(imported.index);assert.equal(ic.label,'7212718');assert.deepEqual(ic.projects.map(p=>p.title),['Проект 1','Шкаф-купе']);
   assert.ok(ic.projects.every(p=>t.getItem(projectStorageKey(p.key))));
   assert.throws(()=>importBundle(t,imported.index,{...bundle,projects:[]}));
   assert.throws(()=>removeProject(s,{...i,clients:[{...i.clients[1]}],active:i.clients[1].id},activeClient({...i,active:i.clients[1].id}).projects[0].key),/хотя бы один/);

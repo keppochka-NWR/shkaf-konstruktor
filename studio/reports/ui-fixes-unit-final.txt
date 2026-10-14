@@ -516,7 +516,7 @@
 ✔ floor height of the shelf above drawers distributes drawers equally; glass top replaces the LDSP top (126.7015ms)
 ✔ workshop frames: feet without plinth, no bottom, rails, inset push doors, top strip, side panel, oval rod (20.6917ms)
 ✔ estimate falls back to the tier price for decors outside the explicit list (39.031ms)
-✔ plan skew (Шаин): sides of different depth, tapered horizontals, rotated doors and plinth, front fasteners follow depth (1.0594ms)
+✔ plan skew (6724055): sides of different depth, tapered horizontals, rotated doors and plinth, front fasteners follow depth (1.0594ms)
 ✔ eccentric fastening replaces confirmats with barrels and pins and is priced (78.2176ms)
 ✔ fixed shelves are full-width, fastened like body horizontals and not counted for shelf holders (1.8853ms)
 ✔ drawer without facade has box and slides only, no handle, and parses (11.8567ms)
