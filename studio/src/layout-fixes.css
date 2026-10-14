@@ -70,3 +70,19 @@
  .resizable-workspace > .library,.resizable-workspace > .properties { min-width:0; }
 }
 .presentation .panel-resizer { display:none; }
+
+/* Unified construction: disclosures keep the controls quiet until needed. */
+.settings-section {padding:0; border-bottom:1px solid #dce1e5;}
+.settings-section>summary {cursor:pointer; padding:16px 20px; font-size:14px; font-weight:650; color:#253648;}
+.settings-section[open]>summary {background:#edf1ff; color:#2449d6;}
+.settings-section>summary:focus-visible {outline:2px solid #325bee; outline-offset:-3px;}
+.settings-content {padding:16px 20px;}
+.selected-module-heading {padding:16px 20px; border-bottom:1px solid #dce1e5;}
+.selected-module-heading strong {display:block; margin-bottom:12px;}
+.selected-module-heading label {display:flex; gap:8px; align-items:center; font-size:12px;}
+.selected-module-heading select {min-width:0;flex:1;padding:7px;border:1px solid #dce1e5;border-radius:5px;}
+.app .header .brand strong {display:block;white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+.app .stage-step .stage-title {display:inline;}
+.app .stage-steps {flex-wrap:wrap;}
+/* Filling is configured at the right; keep the left side for adding and placing modules. */
+.app[data-stage="bodies"] .library [data-stages="filling"] {display:none!important;}

@@ -1,3 +1,4 @@
+import {applyFacadeStyle} from './applyFacadeStyle';
 import {OVEN} from './ovenDimensions';
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
 import {configureOven,ovenSupportTop,ovenLayoutWarnings,OVEN_SOURCE} from './kitchenOven';
@@ -47,8 +48,8 @@ function Num({ label, value, min, max, step = 1, unit = "мм", change, note }: 
 }
 const Check = ({ label, checked, change }: { label: string; checked: boolean; change: (v: boolean) => void }) =>
   <label className="hardware-field"><span><input type="checkbox" aria-label={label} checked={checked} onChange={(e) => change(e.target.checked)} /> {label}</span></label>;
-function Group({ icon, title, open, children, note }: { icon: ReactNode; title: string; open?: boolean; children: ReactNode; note?: string }) {
-  return <details className="property-section kitchen-group" open={open}><summary>{icon}<span>{title}</span>{note && <small>{note}</small>}</summary>{children}</details>;
+function Group({ icon, title, children, note }: { icon: ReactNode; title: string; open?: boolean; children: ReactNode; note?: string }) {
+  return <details className="property-section kitchen-group"><summary>{icon}<span>{title}</span>{note && <small>{note}</small>}</summary>{children}</details>;
 }
 
 /** Цвета модуля образцами (как выбор материала в общей панели): корпус, фасады, фасады ящиков — открывают каталог декоров. */
@@ -231,7 +232,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       <button className="outline full" onClick={legsToAll}>Эти отступы опор и цоколь — всем нижним</button>
     </Group>}
 
-    {role === "base" && <Group icon={<Rows3 size={15}/>} title="Наполнение кухни" open={stage === 'filling' || stage === 'facades'}>
+    {role === "base" && <Group icon={<Rows3 size={15}/>} title="Ящики и бутылочницы" open={stage === 'filling' || stage === 'facades'}>
       {!k.appliance && <label className="hardware-field">Бутылочница Premial<select aria-label="Бутылочница Premial" value={k.premialPullout?.article ?? ''} onChange={e => modify(n => { if (e.target.value) n.kitchen!.premialPullout = { article: e.target.value }; else delete n.kitchen!.premialPullout; })}>
         <option value="">Без бутылочницы</option>
         {ALLEGRO.map(item => { const issues = allegroErrors({ ...m, kitchen: { ...k, premialPullout: { article: item.article } } }); return <option key={item.article} value={item.article} disabled={!!issues.length}>{`АЛЛЕГРО ${item.base} · ${item.side === 'left' ? 'левая' : 'правая'} · ${item.article}${issues.length ? ' — не подходит' : ''}`}</option>; })}
@@ -246,7 +247,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
     </Group>}
 
-    {<Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}>
+    {<Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}><button className="outline full" onClick={()=>{try{commit(applyFacadeStyle(project,placed.id));}catch(e){setInstallationError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов редактируемых корпусов. Импорт Базиса, столешницы и техника без фасада не меняются.</p>
       <Check label="Распашные фасады" checked={m.doors} change={(v) => modify((n) => { n.doors = v; })} />
       {m.doors && <div className="kitchen-field"><span>Створки{m.sections.length > 1 ? ` · секция ${sIdx + 1}` : ""}</span>
         <div className="kitchen-chips" role="group" aria-label="Число створок">{([undefined, 1, 2] as const).map((v) => <button key={String(v)} type="button" aria-pressed={s.doorLeaves === v} onClick={() => modify((n) => { if (v) n.sections[sIdx].doorLeaves = v; else delete n.sections[sIdx].doorLeaves; })}>{v ?? "Авто"}</button>)}</div></div>}
@@ -260,9 +261,12 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Num label="Отступ от кромок корпуса" value={m.faceGap ?? RULES.faceGap} min={0} max={5} step={0.5} change={(v) => modify((n) => { n.faceGap = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} note={`Базис цеха: ${KITCHEN.faceGap} → фасад W−3 × H−3`} />
       <Num label="Зазор между фасадами" value={m.faceGapBetween ?? KITCHEN.faceGapBetween} min={0} max={10} step={0.5} change={(v) => modify((n) => { n.faceGapBetween = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} />
       <Num label="Воздух до корпуса" value={m.faceAir ?? 2} min={0} max={10} step={0.5} change={(v) => modify((n) => { n.faceAir = v; })} note="Кухни Базиса — 0 (фасад вплотную)" />
+    </Group>}
+
+    <Group icon={<Wrench size={15}/>} title="Ручки">
       <Check label="Ручки на фасадах" checked={!m.noHandles} change={(v) => modify((n) => { if (v) delete n.noHandles; else n.noHandles = true; })} />
       {!m.noHandles ? <button className="text-action" onClick={handles}>Ручка: {handleById(m.handleId).label}</button> : <p className="field-note">Без ручек: Gola, ручки заказчика или push — в смете ручек нет.</p>}
-    </Group>}
+    </Group>
 
     {m.doors && !k.premialPullout && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
       {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
