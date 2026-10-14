@@ -1,3 +1,4 @@
+import {WorkspacePanels} from './WorkspacePanels';
 import {useEffect,useMemo,useState,type ReactNode} from 'react';
 import {Download,Plus,RotateCcw,Box,FileText} from 'lucide-react';
 import {EditorBrand} from './EditorBrand';
@@ -22,7 +23,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  <header className="header"><EditorBrand/><div className="document-name"><strong>{title}</strong><span>Помещение · без мебели</span></div><div className="header-actions"><button className="outline" onClick={onAdd}><Plus size={16}/>Добавить первый шкаф</button><button className="primary" onClick={onDownload}><Download size={16}/><span>Скачать документ</span></button></div></header>
  {bar}
  <StageBar stage={stage} advanced={advanced} onStage={go} onAdvanced={setAdvanced} done={{}}/>
- <main className="workspace">
+ <WorkspacePanels>
  <aside className="library"><div className="panel-heading"><span className="eyebrow">ПОМЕЩЕНИЕ</span><h1>{title}</h1><p>{project.room.width} × {project.room.depth} × {project.room.height} мм</p></div>
  <div className="stage-note"><b>{stage==='room'?'Начните с размеров комнаты':stage==='fixtures'?'Что мешает установке мебели?':'Комната готова к расстановке'}</b><p>{stage==='room'?'Введите размеры справа. Затем добавьте окна, двери и коммуникации.':stage==='fixtures'?'Добавьте объекты справа. Нажмите правой кнопкой по объекту, чтобы изменить его параметры.':'Добавьте первый шкаф, чтобы перейти к корпусам, наполнению и фасадам.'}</p></div>
  <div className="project-modules"><ModulePalette source={dummy.module} onAdd={m=>update(appendModule(project,m))} onAddGroup={group=>update(appendModuleGroup(project,group).project)}/></div>
@@ -73,7 +74,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  {(advanced||stage==='fixtures')&&<><details open><summary>Двери и окна</summary><RoomEditor room={project.room} part="openings" onSelect={id=>pick('opening',id)} onChange={change}/></details><details><summary>Трубы, радиаторы и объекты на стенах</summary><RoomFixtures room={project.room} onSelect={id=>pick('fixture',id)} onChange={change} onImport={r=>change(r.room)}/></details><details><summary>Колонны и отдельные препятствия</summary><RoomObstacles room={project.room} onSelect={id=>pick('obstacle',id)} onChange={change}/></details></>}
  {['bodies','filling','facades'].includes(stage)&&<><p className="field-note">В этой комнате пока нет мебели. Добавьте шкаф, чтобы настроить корпуса, наполнение и фасады.</p><button className="primary full" onClick={onAdd}>Добавить шкаф в комнату</button></>}
  {stage==='docs'&&<><p className="field-note">Сохраните помещение с замером и проёмами. Деталировка появится после добавления мебели.</p><button className="outline full" onClick={onDownload}>Скачать документ комнат</button></>}
- </section></aside></main>
+ </section></aside></WorkspacePanels>
  <div className="project-dock"><nav className="dock-bar" aria-label="Навигация по проекту"><button aria-pressed={stage!=='docs'} onClick={()=>go('room')}><Box size={17}/>Проект</button><button aria-pressed={stage==='docs'} onClick={()=>go('docs')}><FileText size={17}/>Документы</button><span className="empty-room-total">В комнате пока нет мебели</span></nav></div>
  {selected&&<RoomObjectProperties room={project.room} selection={selected} onChange={change} onClose={()=>setSelected(null)}/>}
  </div>;

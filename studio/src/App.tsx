@@ -1,3 +1,4 @@
+import {WorkspacePanels} from './WorkspacePanels';
 import {layoutKitchenDrawers} from './kitchenEditing';
 import {EditorBrand} from './EditorBrand';
 import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProperties';
@@ -27,6 +28,8 @@ import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useRef, useMemo, useId } from "react";
+import {historyShortcut,editsText} from './historyShortcuts';
+import {editDrawerConfig} from './drawerEditing';
 import {
   Box,
   Undo2,
@@ -216,7 +219,7 @@ function Counter({
     </div>
   );
 }
-export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject,externalVersion,viewKey,onEmptyProject}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean;externalVersion?:number;viewKey?:string;onEmptyProject?:(p:Project)=>boolean}={}) {
+export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject,externalVersion,viewKey,onEmptyProject,managedHistory}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean;externalVersion?:number;viewKey?:string;onEmptyProject?:(p:Project)=>boolean;managedHistory?:{undo:()=>void;redo:()=>void;undoCount:number;redoCount:number}}={}) {
   const [environmentSelection,setEnvironmentSelection]=useState<EnvironmentSelection|null>(null);
   const KEY=CURRENT_PROJECT+(projectKey?':'+projectKey:'');
   const [startup] = useState(() => {
@@ -431,6 +434,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const externalSeen=useRef(externalVersion);
   useEffect(()=>{if(externalVersion===externalSeen.current)return;externalSeen.current=externalVersion;if(saveManagedProject&&initialProject){setHistory([initialProject]);setCursor(0);setActive(a=>initialProject.modules.some(m=>m.id===a)?a:initialProject.modules[0].id);clearHistorySelection();}},[externalVersion]);
   const undo = () => {
+    if(managedHistory){managedHistory.undo();return;}
     if(saveManagedProject&&!saveManagedProject(history[Math.max(0,cursor-1)]))return;
     clearHistorySelection();
     setCursor((c) => Math.max(0, c - 1));
@@ -438,6 +442,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     touched.current = true;
   };
   const redo = () => {
+    if(managedHistory){managedHistory.redo();return;}
     if(saveManagedProject&&!saveManagedProject(history[Math.min(history.length-1,cursor+1)]))return;
     clearHistorySelection();
     setCursor((c) => Math.min(history.length - 1, c + 1));
@@ -523,6 +528,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'fill',label:'Добавить',icon:Plus,...(mod.kitchen?{hint:'Кухонные ящики, полки и Gola — в панели справа',run:()=>{setActive(a.id);goStage('filling');}}:{hint:'Наполнение секции',children:[fill('shelf','Полку',Rows3,'Встанет на высоте клика'),fill('drawer','Ящик',Archive,'Ящик в эту секцию'),fill('rod','Штангу',Shirt,'Штанга для одежды')]})},
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
+        {id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
         {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
         {id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,disabled:!mod.doors,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на все фасады корпуса',disabled:!hasHandles(mod),run:()=>{setActive(a.id);setHandleFace('');setModal('handles');}},
@@ -601,22 +607,16 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }, [project]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const editing = e.target instanceof Element && !!e.target.closest('input,textarea,select,[contenteditable="true"],[contenteditable=""]');
-      if (e.defaultPrevented || editing || direct || modal) return;
+      if (e.defaultPrevented || editsText(e.target)) return;
+      const command=historyShortcut(e);
       if(presentation){
         if(e.key==='Escape'){e.preventDefault();changePresentation(false);}
-        if(e.key==='Delete'||((e.ctrlKey||e.metaKey)&&['z','y'].includes(e.key.toLowerCase())))e.preventDefault();
+        if(e.key==='Delete'||command)e.preventDefault();
         return;
       }
+      if(command){e.preventDefault();command==='undo'?undo():redo();return;}
+      if(direct||modal)return;
       if(e.key==='Delete'&&!modal&&canRemove){e.preventDefault();removeSelected();}
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        e.shiftKey ? redo() : undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        redo();
-      }
       if (e.key === "Escape") setModal(null);
     };
     window.addEventListener("keydown", handler);
@@ -727,10 +727,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             {saved}
           </span>
         </div>
-        {!presentation && <div className="history" title={`История изменений: шаг ${cursor + 1} из ${history.length}. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z`}>
-          <button title="Шаг назад · Ctrl+Z" aria-label="Отменить" disabled={cursor === 0} onClick={undo}><Undo2 size={16} /><span className="history-label">Назад</span></button>
-          <span className="history-step" aria-live="polite">{cursor + 1}/{history.length}</span>
-          <button title="Шаг вперёд · Ctrl+Shift+Z" aria-label="Повторить" disabled={cursor === history.length - 1} onClick={redo}><span className="history-label">Вперёд</span><Redo2 size={16} /></button>
+        {!presentation && <div className="history" title="История изменений проекта. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z">
+          <button title="Шаг назад · Ctrl+Z" aria-label="Отменить" disabled={managedHistory?managedHistory.undoCount===0:cursor===0} onClick={undo}><Undo2 size={16} /><span className="history-label">Назад</span></button>
+          <span className="history-step" aria-live="polite">{managedHistory?`${managedHistory.undoCount+1}/${managedHistory.undoCount+managedHistory.redoCount+1}`:`${cursor+1}/${history.length}`}</span>
+          <button title="Шаг вперёд · Ctrl+Shift+Z" aria-label="Повторить" disabled={managedHistory?managedHistory.redoCount===0:cursor===history.length-1} onClick={redo}><span className="history-label">Вперёд</span><Redo2 size={16} /></button>
         </div>}
         <div className="header-actions">
           <button className="outline presentation-trigger" onClick={()=>changePresentation(!presentation)}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
@@ -871,7 +871,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </form>
         </div>
       )}
-      <main className="workspace">
+      <WorkspacePanels>
         <aside className="library">
           <div className="panel-heading">
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
@@ -1397,11 +1397,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     aria-label="Распашные фасады"
                     aria-checked={m.doors}
                     className="switch"
-                    onClick={() => modify((n) => (n.doors = !n.doors))}
+                    onClick={() => modify((n) => {n.doors=!n.doors;if(n.doors)n.sections.forEach(s=>delete s.removedDoors);})}
                   >
                     <span />
                   </button>
                 </div>
+                {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {project.modules.length>1&&<details className="measurement-fields"><summary>Фасады всей композиции</summary><p className="field-note">Сохраняются материалы каждого корпуса. Детали, фальши и смета пересчитаются; отмена возвращает всё одним шагом.</p>{[true,false].map(enabled=><button key={String(enabled)} className="text-action" disabled={project.modules.every(a=>a.module.doors===enabled)} onClick={()=>{if(commitProject({...project,modules:project.modules.map(a=>({...a,module:{...a.module,doors:enabled}}))})){setSelectedPart(null);setDrawerPreview(false);setOpenDoors(false);}}}>{enabled?'Добавить фасады всем корпусам':'Убрать фасады у всех корпусов'}</button>)}</details>}
                 {m.doors && (
                   <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль</option></select></label>
@@ -1561,7 +1562,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <div className="section-copy"><button className="text-action" onClick={()=>{try{setFillingCopy(captureSectionFilling(project,placed.id,s.id));}catch(e){setError((e as Error).message);}}}>Копировать наполнение секции</button>{fillingCopy&&<><p className="field-note">Скопировано: {fillingCopy.name}</p><button className="outline full" onClick={()=>{try{if(commitProject(pasteSectionFilling(project,placed.id,s.id,fillingCopy))){setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}}catch(e){setError((e as Error).message);}}}>{s.drawers||s.shelves.length||s.rod||s.pantograph?'Заменить наполнение копией':'Вставить наполнение секции'}</button><p className="field-note">Высоты от дна и фурнитура сохранятся. Корпус и материалы остаются его собственными. Ctrl+Z отменит вставку.</p></>}</div>
                 {selectedDetail?.id.includes(':drawer:')&&<button className="text-action danger" onClick={()=>{if(selectedPart&&commitProject(removePart(project,placed.id,s.id,selectedPart.pid.replace(':facade',':bottom'))))setSelectedPart(null);}}>Удалить ящик целиком</button>}
                 {canRemove&&<div className="selected-filling"><span>{selectedFillingName}</span><div style={{display:selectedDetail?.role==='door'?'none':undefined}} className="filling-nudge" role="group" aria-label="Точное перемещение наполнения" onKeyDown={e=>{if(e.ctrlKey||e.metaKey||e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();nudgeSelected((e.key==='ArrowUp'?1:-1)*(e.shiftKey?10:1));}}><button className="outline" aria-label="Опустить выбранный элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ Ниже на 10</button><button className="outline" aria-label="Поднять выбранный элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ Выше на 10</button></div>{selectedDetail?.role!=='door'&&<small>На этих кнопках: ↑ / ↓ — 1 мм, Shift — 10 мм.</small>}{selectedDetail?.id.includes(':shelf:')&&<><NumberField label="Высота выбранной полки" value={Math.round(selectedDetail.position[1]-b.bottom)} min={80} max={b.top-b.bottom-80} onChange={v=>{if(selectedPart)moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,v-(selectedDetail.position[1]-b.bottom));}}/><small>От дна проёма до центра полки.</small></>}{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="text-action" onClick={copySelected}>Копировать {selectedDetail.id.includes(':drawer:')?'ящик с настройками':'полку'}</button>}<button className="text-action danger" onClick={removeSelected}><Trash2 size={14}/>{removalLabel}</button><small>{selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)?"Копия займёт ближайшее свободное место. ":""}Delete — удалить · Ctrl+Z — отменить</small></div>}
-                {m.doors&&<details className="section-facades" open={stage==='facades'||selectedDetail?.role==='door'||undefined}><summary>Фасады секции {idx+1}</summary>
+                {!m.doors&&!m.desk&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}{m.doors&&<details className="section-facades" open={stage==='facades'||selectedDetail?.role==='door'||undefined}><summary>Фасады секции {idx+1}</summary>
 <div className="facade-pick-list" role="group" aria-label="Выбрать отдельный фасад">{parts(m).filter(p=>p.sectionId===s.id&&(p.role==='door'||p.id.endsWith(':facade'))).map((p,i)=><button key={p.id} className="outline" aria-pressed={selectedPart?.pid===p.id} onClick={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:p.id});setDrawerIndex(p.id.includes(':drawer:')?Number(p.id.split(':drawer:')[1].split(':')[0]):null);setMode('select');}}>{p.role==='door'?'Дверь '+(i+1):p.name} · {Math.round(p.width)}×{Math.round(p.length)}</button>)}</div>
 {selectedDetail?.role==='door'&&<button className="outline full" onClick={()=>{setHandleFace(selectedDetail.id);setHandleTarget('doors');setModal('handles');}}>Ручка выбранной двери</button>}
 {selectedDetail?.role==='door'&&<label className="hardware-field">Открывание выбранной двери<select aria-label="Открывание выбранной двери" value={selectedDetail.hinge??'left'} onChange={e=>modifySection((a,next)=>{const k=Number(selectedDetail.id.split(':door:')[1]);a.doorHinges=Array.from({length:4},(_,i)=>a.doorHinges?.[i]??null);a.doorHinges[k]=e.target.value as 'left'|'right'|'top';syncKitchenLift(next);})}><option value="left">Петли слева</option><option value="right">Петли справа</option><option value="top">Подъёмный, ось сверху</option></select></label>}
@@ -1637,15 +1638,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         c = drawerConfig(m, s, j);
                       const update = (patch: Partial<DrawerConfig>) =>
                         modifySection((a, n) => {
-                          const offsets=drawerOffsets(a);
-                          a.drawerConfigs = Array.from(
-                            { length: a.drawers },
-                            (_, k) => ({...drawerConfig(n, a, k),...(patch.y===undefined?{}:{y:offsets[k]})}),
-                          );
-                          a.drawerConfigs[j] = {
-                            ...a.drawerConfigs[j],
-                            ...patch,
-                          };
+                          a.drawerConfigs=editDrawerConfig(n,a,j,patch);
                         });
                       const meshItem=c.mesh?meshById(c.mesh):undefined;
                       return (
@@ -1837,7 +1830,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             </div>
           </div>
         </aside>
-      </main>
+      </WorkspacePanels>
       {!presentation&&<ProjectDock project={project} commit={commitProject} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/>}
       {modal && (
         <div
