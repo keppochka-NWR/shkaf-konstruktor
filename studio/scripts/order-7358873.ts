@@ -1,6 +1,6 @@
-// Заказ 7358873-З Кофанов — шкаф-перегородка на 2 стороны между комнатой и прихожей, собран в студии по замеру 06.10.2026,
+// Заказ 7358873-З — шкаф-перегородка на 2 стороны между комнатой и прихожей, собран в студии по замеру 06.10.2026,
 // ТЗ замерщика и проекту Леманы 02.10 (Яндекс-диск заказа, папка «Продажа»). Запуск: npx tsx scripts/order-7358873.ts
-// → public/local-projects/7358873-kofanov.json (личный проект, в публикацию не идёт) + смета в консоль.
+// → public/local-projects/7358873.json (личный проект, в публикацию не идёт) + смета в консоль.
 // Помещение: проём комната↔прихожая 2043 от стены до колонны, колонна 173×164, балка над проёмом низом 2222–2230 (659 от потолка),
 // потолок 2900 у стены и 2889 у колонны, плинтус 50.
 // ТЗ: каркас, кромка, задняя стенка, фасады — ЛДСП «Слэйт»; цоколь; петли с доводчиком; антресоль push; ящики — скрытые с доводчиком,
@@ -44,7 +44,7 @@ const hallPullout = { shelves: [at(401), at(691)], fixed: [0, 1], pullouts: 1 };
 const ANT_SHELF = Math.round((2545 - 2216) / (2884 - 2216) * 10000) / 10000; // полка антресоли на той же доле высоты, что в b3d
 const project: Project = {
   version: 3,
-  measurement: { number: "7358873", date: "2026-10-06", notes: "Замер Кондырев А.С. Проём 2043 × 2222–2230, колонна 173×164, балка 262, потолок 2900/2889, плинтус 50." },
+  measurement: { number: "7358873", date: "2026-10-06", notes: "Замер (замерщик цеха) Проём 2043 × 2222–2230, колонна 173×164, балка 262, потолок 2900/2889, плинтус 50." },
   room: {
     width: 3000, depth: 2400, height: 2889 /* минимум по замеру: 2900 у стены, 2889 у колонны */, openings: [],
     obstacles: [
@@ -76,7 +76,7 @@ const project: Project = {
 const parsed = applyAutoFillers(parseProject(JSON.parse(JSON.stringify(project))));
 const errors = projectErrors(parsed);
 mkdirSync("public/local-projects", { recursive: true });
-writeFileSync("public/local-projects/7358873-kofanov.json", JSON.stringify(parsed, null, 1));
+writeFileSync("public/local-projects/7358873.json", JSON.stringify(parsed, null, 1));
 console.log("Ошибки проекта:", errors.length ? errors.join(" | ") : "нет");
 const e = estimate(parsed);
 console.log(`Листов ЛДСП: ${e.ldspSheets}; по листу ${e.sheetPrice}: ${e.bySheet.toLocaleString("ru-RU")} ₽; по коэффициенту ${e.markup}: ${e.byMarkup?.toLocaleString("ru-RU") ?? "не завершена"} ₽`);

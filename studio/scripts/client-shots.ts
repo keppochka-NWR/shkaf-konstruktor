@@ -13,7 +13,7 @@ await page.waitForTimeout(1500);
 const tabs = async () => (await page.locator(".project-tab").allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim()).join(" | ");
 const total = async () => (await page.locator(".client-total").innerText()).replace(/\s+/g, " ").trim();
 await page.locator(".client-name").click();
-await page.getByLabel("Имя клиента или номер заказа").fill("7212718 Цецегов");
+await page.getByLabel("Имя клиента или номер заказа").fill("7212718");
 await page.getByLabel("Имя клиента или номер заказа").press("Enter");
 await page.locator(".client-name").click(); await page.waitForTimeout(300);
 console.log("клиент:", (await page.locator(".client-name").innerText()).trim(), "| вкладки:", await tabs());
