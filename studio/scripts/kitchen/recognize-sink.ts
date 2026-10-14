@@ -18,7 +18,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
  *  «Петля под фальшпанель» у своей кромки. Г-образный фальш (планки поперёк в плоскости фасадов: k05 m05, k19 m01) — не этот случай.
  *  Возвращает ширины и панели фальша (их не считаем фасадами). */
 export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sideZ1: number, bottomY0: number, top: number):
-  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; conf?: { bottom?: number[]; side?: number[] }; panels: Pb[] } | undefined {
+  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; conf?: { bottom?: number[]; side?: number[] }; facadeMat?: true; inset?: number; panels: Pb[] } | undefined {
   const ffh = falsePanelHinges(ref);
   if (!ffh.length) return undefined;
   const front = P.filter(({ p, b }) => p.kind !== "hdf" && b.z0 >= sideZ1 - 1);
@@ -28,7 +28,7 @@ export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sid
   const full = ({ b }: Pb) => Math.abs(b.y0 - bottomY0) < 1 && Math.abs(b.y1 - top) < 1;
   const L = front.filter((f) => isBody(f) && full(f) && Math.abs(f.b.x0 - left.b.x0) < 0.6);
   const R = front.filter((f) => isBody(f) && full(f) && Math.abs(f.b.x1 - right.b.x1) < 0.6);
-  if (L.length + R.length !== 1) return undefined;
+  if (L.length + R.length !== 1) return faceFillerFacade(ref, front, left, right, isBody);
   const side = L.length ? "left" : "right", fp = (L[0] ?? R[0]);
   // планка из фасада вплотную к фальшу (k25 m02: 59 мм, фасадный материал 19)
   const strip = front.find((f) => f !== fp && !isBody(f) && f.b.x1 - f.b.x0 < 200 && (side === "left" ? Math.abs(f.b.x0 - fp.b.x1) < 0.6 : Math.abs(f.b.x1 - fp.b.x0) < 0.6));
@@ -43,6 +43,27 @@ export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sid
   const stripFull = !!strip && Math.abs(strip.b.y0 - fp.b.y0) < 0.6 && Math.abs(strip.b.y1 - fp.b.y1) < 0.6;
   const conf = fillerConf(ref, fp, side === "left" ? left : right, side, bottomY0);
   return { side, width, ...(strip ? { strip: r1(strip.b.x1 - strip.b.x0) } : {}), ...(stripFull ? { stripFull: true as const } : {}), ...(conf ? { conf } : {}), panels: strip ? [fp, strip] : [fp] };
+}
+
+/** Плоская фальшпанель углового стыка из фасадного материала (F_FILLER_FLAT, пакет 2): у навесных, антресолей, пеналов и нижних
+ *  (k06 m11, k22 m08, k19 m02, k31 m11, k15 m10) панель фасадного материала (или ЛДСП корпуса по высоте ряда дверей) у края модуля
+ *  в плоскости фасадов, той же высоты, что двери ряда; дверь у фальша — на «Петля под фальшпанель» у своей кромки (зазор до фальша
+ *  1,5–3 мм, как между фасадами). Отступ фальша от края модуля — inset (k06 m11: 0, k22 m08: 2 = faceGap). */
+function faceFillerFacade(ref: RefModule, front: Pb[], left: Pb, right: Pb, isBody: (f: Pb) => boolean) {
+  const ffh = falsePanelHinges(ref), hx = ffh[0].pos[0];
+  if (!ffh.every((h) => Math.abs(h.pos[0] - hx) < 0.6)) return undefined;
+  for (const side of ["left", "right"] as const) {
+    const fp = front.find((f) => (side === "left" ? Math.abs(f.b.x0 - left.b.x0) <= 5 && Math.abs(hx - f.b.x1) <= 5 && hx > f.b.x1 - 0.5 : Math.abs(f.b.x1 - right.b.x1) <= 5 && Math.abs(hx - f.b.x0) <= 5 && hx < f.b.x0 + 0.5));
+    if (!fp) continue;
+    const doors = front.filter((f) => f !== fp);
+    const near = doors.find((f) => Math.abs((side === "left" ? f.b.x0 : f.b.x1) - hx) < 0.6);
+    // двери того же ряда (та же высота), не ЛДСП корпуса; фальш — по высоте дверей
+    if (!near || doors.some(isBody) || doors.some((f) => Math.abs(f.b.y0 - near.b.y0) > 0.6 || Math.abs(f.b.y1 - near.b.y1) > 0.6)) return undefined;
+    if (Math.abs(fp.b.y0 - near.b.y0) > 0.6 || Math.abs(fp.b.y1 - near.b.y1) > 0.6) return undefined;
+    const inset = r1(side === "left" ? fp.b.x0 - left.b.x0 : right.b.x1 - fp.b.x1);
+    return { side, width: r1(fp.b.x1 - fp.b.x0), facadeMat: true as const, ...(inset ? { inset } : {}), panels: [fp] };
+  }
+  return undefined;
 }
 
 /** Конфирматы через фальш (головка на лицевой пласти фальша): в передний торец дна (по середине толщины дна) и в передний торец

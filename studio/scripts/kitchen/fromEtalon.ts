@@ -9,6 +9,7 @@ import { jointPointsRule, fastenersMode, kitchenEndsRule, type KitchenRole } fro
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
+import { sideStripOf, shiftRefX } from "./recognize-fillers";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { axisAsBazis, firmaxAsBazis } from "./recognize-drawers";
@@ -356,13 +357,21 @@ export function golaCutEdges(gc: GolaCut[], edges: { side: string; thick: number
 }
 
 export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
-  const ref: RefModule = { ...ref0, hardware: normalizeRefHardware(ref0.hardware) }; // «Евровинт 6х50» из «прочего» — конфирмат
+  // доборная планка сбоку (recognize-fillers.ts, F_FILLER_STRIP): корпус студии — между боковинами, планки снаружи; планка слева —
+  // отсчёт x проекта переносим на наружную пласть левой боковины (остальные правила читают x от неё)
+  const ss = sideStripOf(ref0);
+  const ssPanels = new Set(ss?.panels ?? []);
+  const refS = ss?.strip.side === "left" ? shiftRefX(ref0, -ref0.panels.filter((p) => p.axis === "x" && (p.kind === "ldsp" || p.kind === "mdf") && p.box[4] - p.box[1] > 200).sort((a, c) => a.box[0] - c.box[0])[0].box[0]) : ref0;
+  const ref: RefModule = { ...refS, hardware: normalizeRefHardware(refS.hardware) }; // «Евровинт 6х50» из «прочего» — конфирмат
   const notes: string[] = [], unsupported: string[] = [];
-  const W = ref.size[0], P = ref.panels.map((p) => ({ p, b: bx(p) }));
+  const P = ref.panels.map((p) => ({ p, b: bx(p) }));
+  const isStrip = (x: { p: RefPanel }) => ssPanels.has(x.p.i);
   const board = (k: string) => k === "ldsp" || k === "mdf";
   const sides = P.filter(({ p, b }) => p.axis === "x" && board(p.kind) && b.y1 - b.y0 > 200).sort((a, c) => a.b.x0 - c.b.x0);
   const left = sides[0], right = sides[sides.length - 1];
   if (!left || left === right) throw Error("нет двух боковин");
+  const W = ss ? r1(right.b.x1 - left.b.x0) : ref.size[0];
+  if (ss) ref.size = [W, ref.size[1], ref.size[2]]; // ширина корпуса для правил, читающих ref.size (опоры, эксцентрики)
   const t = left.b.x1 - left.b.x0;
   // боковина до плоскости фасадов (k23 m04, k29 m02, k27 m13): перед корпуса — по мелкой боковине, иначе двери оказывались «внутри»
   // корпуса и терялись (n4-tall). Сам выступ студия не строит — честно «не поддержано»
@@ -374,8 +383,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const horiz = P.filter(({ p }) => p.axis === "y" && board(p.kind));
   // угловая мойка с плоским фальшем (recognize-sink.ts, n4-base): фальш и планка — не фасады, а kitchen.faceFiller
   const role: KitchenRole = ref.archetype.startsWith("wall") ? "wall" : ref.archetype === "antresol" ? "antresol" : ref.archetype.startsWith("tall") ? "tall" : "base";
-  const ffFlat = role === "base" && horiz.length ? faceFillerFlat(ref, P, left, right, sideZ1, Math.min(...horiz.map((h) => h.b.y0)), top) : undefined;
-  const fronts = P.filter((x) => x.p.axis === "z" && x.p.kind !== "hdf" && x.b.z0 >= sideZ1 - 1 && !ffFlat?.panels.includes(x)).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
+  // пакет 2: фальш из фасадного материала по высоте ряда дверей — у любой роли (навесные k06 m11, k22 m08; faceFillerFacade)
+  const ffFlat = horiz.length ? faceFillerFlat(ref, P, left, right, sideZ1, Math.min(...horiz.map((h) => h.b.y0)), top) : undefined;
+  const fronts = P.filter((x) => x.p.axis === "z" && x.p.kind !== "hdf" && x.b.z0 >= sideZ1 - 1 && !ffFlat?.panels.includes(x) && !isStrip(x)).sort((a, c) => a.b.x0 - c.b.x0 || a.b.y0 - c.b.y0);
   // фасад в алюминиевом профиле: рамки в проекте нет (профиль без сетки) — модуль честно сырой (aluFacade.ts); наполнение из рядов
   // фасадов не убираем: по нему считается низ корпуса (подъём, фасады до низа), без него корпус съезжает (k21 m05: Δ3,5)
   const aluWhy = aluFacadeReason(ref);
@@ -413,7 +423,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
-  m.kitchen = { role }; m.bazis = true; // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
+  m.kitchen = { role }; m.bazis = true;
+  if (ss) { m.kitchen.sideStrip = ss.strip; notes.push(`доборная планка ${ss.strip.side === "left" ? "слева" : "справа"} ${ss.strip.ext} мм: планок ЛДСП ${ss.strip.planks.length}${ss.strip.facade ? `, планка ${ss.strip.facade.ldsp ? "ЛДСП" : "из фасада"} ${ss.strip.facade.w}` : ""}${ss.strip.conf ? `, конфирматов ${ss.strip.conf.length}` : ", без крепежа"} — как в Базисе`); } // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.confirmatName = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно
   let wr: WallRaise | null = null;
@@ -511,7 +522,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const svc = serviceHoles(ref.hardware as Parameters<typeof serviceHoles>[0], (ref.holes ?? []) as Parameters<typeof serviceHoles>[1], left.b.x0, sideZ0);
   if (svc.length) m.kitchen.svcHoles = svc;
   // стяжка с соседним корпусом: конфирмат изнутри через боковину наружу (k15 m12) — как в Базисе (n4-antresol)
-  const oc = outConfirmats(ref.hardware as Parameters<typeof outConfirmats>[0], (ref.holes ?? []) as Parameters<typeof outConfirmats>[1], left.b.x0, right.b.x1, t, sideZ0);
+  // конфирматы наружу из боковины в торец доборной планки (kitchen.sideStrip.conf) — не стяжка с соседом (recognize-fillers.ts)
+  const oc = outConfirmats(ref.hardware as Parameters<typeof outConfirmats>[0], (ref.holes ?? []) as Parameters<typeof outConfirmats>[1], left.b.x0, right.b.x1, t, sideZ0)
+    .filter((c) => !(ss?.strip.conf && c.side === ss.strip.side && ss.strip.planks[0] && Math.abs(c.z - (ss.strip.planks[0].z + 8)) < 0.6));
   if (oc.length) m.kitchen.outConf = oc;
   // задник
   const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
@@ -817,11 +830,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       if (multi.niche !== undefined) m.sections[0].doorNiche = multi.niche;
       m.sections[0].doorRows = multi.rows;
       notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
-    } else if (role === "base" && ffFlat && rows.size === 1) {
-      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}), ...(ffFlat.conf ? { conf: ffFlat.conf } : {}) };
+    } else if ((role === "base" || ffFlat?.facadeMat) && ffFlat && rows.size === 1) {
+      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}), ...(ffFlat.conf ? { conf: ffFlat.conf } : {}), ...(ffFlat.facadeMat ? { facadeMat: true as const } : {}), ...(ffFlat.inset ? { inset: ffFlat.inset } : {}) };
       // зазор фасадов — от дальнего края модуля (у фальша свой отступ)
       m.faceGap = ffFlat.side === "left" ? r1(right.b.x1 - Math.max(...fronts.map((q) => q.b.x1))) : r1(Math.min(...fronts.map((q) => q.b.x0)) - left.b.x0);
-      notes.push(`угловая мойка: фальш ${ffFlat.width}${ffFlat.strip ? ` + планка из фасада ${ffFlat.strip}` : ""} ${ffFlat.side === "left" ? "слева" : "справа"}, петли под фальшпанель — как в Базисе`);
+      notes.push(ffFlat.facadeMat ? `фальшпанель углового стыка из фасада ${ffFlat.width} ${ffFlat.side === "left" ? "слева" : "справа"}${ffFlat.inset ? ` (от края ${ffFlat.inset})` : ""}, дверь у фальша на петлях под фальшпанель — как в Базисе`
+        : `угловая мойка: фальш ${ffFlat.width}${ffFlat.strip ? ` + планка из фасада ${ffFlat.strip}` : ""} ${ffFlat.side === "left" ? "слева" : "справа"}, петли под фальшпанель — как в Базисе`);
     } else if (role === "base" && cornerFillerSink(ref)) unsupported.push("угловая мойка с фальшпанелью (петли под фальшпанель, фальш в плоскости фасадов) — пока не поддержано");
     else if (rows.size > 1 && !m.kdrawers) unsupported.push(`фасады в ${rows.size} ряда (ящики/антресоль) — распознаватель пока только для одного ряда распашных`);
     const perRow = split || niche || multi ? lowRow.length : fronts.length;
@@ -1166,7 +1180,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, ...drawerPanels];
+  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, ...drawerPanels, ...P.filter(isStrip)];
   const other = ref.panels.length - P.filter((x) => known.includes(x)).length;
   // полка из фасадного материала внутри корпуса (k23 m07: «Горизонтальная» 19 мм, «Фасадный мат-л», без полкодержателей) — причина прямо
   const facShelf = P.find((x) => !known.includes(x) && x.p.axis === "y" && x.p.kind === "other" && x.b.x0 >= left.b.x1 - 0.6 && x.b.x1 <= right.b.x0 + 0.6 && x.b.z1 <= sideZ1 + 0.5);
