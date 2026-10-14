@@ -1,17 +1,18 @@
 // Папка клиента над редактором: клиент, вкладки его проектов с ценой, «+ ещё проект», итог по клиенту.
 // Переключение вкладки перезапускает редактор с ключом выбранного проекта (у каждого проекта своя история и автосохранение).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import { Plus, X, Users, Download, Pencil, Copy, FilePlus2, CookingPot } from "lucide-react";
 import { kitchenProject } from "./kitchenProject";
-import App from "./App";
-import { parseProject, type Project } from "./project";
+import { RoomWorkspace } from "./RoomWorkspace";
+import { type RoomDocument } from "./roomDocument";
 import { estimate } from "./pricing";
 import { saveFile } from "./exports";
-import { activeClient, addClient, addProject, clientBundle, clientTotal, importBundle, loadIndex, projectStorageKey, removeProject, renameClient, renameProject, saveIndex, setPrice, switchClient, switchProject, type ClientBundle, type ClientIndex } from "./clientIndex";
+import { activeClient, addClient, addProject, clientBundle, clientTotal, importBundle, loadIndex, projectStorageKey, readClientRooms, removeProject, renameClient, renameProject, saveIndex, setPrice, switchClient, switchProject, type ClientBundle, type ClientIndex } from "./clientIndex";
 import "./client-bar.css";
 
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
-function priceOf(raw: string | null): number | null { try { return raw ? estimate(parseProject(JSON.parse(raw))).retail : null; } catch { return null; } }
+function documentPrice(d:RoomDocument):number|null {let total=0;for(const r of d.rooms){const price=r.project.modules.length?estimate(r.project).retail:0;if(price===null)return null;total+=price;}return total;}
+function priceOf(key: string): number | null { try { return documentPrice(readClientRooms(localStorage,key)); } catch { return null; } }
 
 export function ClientWorkspace() {
   const [index, setIndexState] = useState<ClientIndex>(() => { try { return loadIndex(localStorage); } catch { return loadIndex({ getItem: () => null, setItem: () => {}, removeItem: () => {} }); } });
@@ -20,16 +21,15 @@ export function ClientWorkspace() {
   // Цены вкладок: при открытии считаем по сохранённым проектам, активный обновляется из редактора.
   useEffect(() => {
     let next = index, changed = false;
-    for (const p of client.projects) if (p.price === undefined) { try { next = setPrice(next, p.key, priceOf(localStorage.getItem(projectStorageKey(p.key)))); changed = true; } catch { /* нет хранилища */ } }
+    for (const p of client.projects) { try { const price=priceOf(p.key); if(price!==p.price){next = setPrice(next, p.key, price); changed = true;} } catch { /* нет хранилища */ } }
     if (changed) setIndex(next);
   }, [index.active, client.projects.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  const timer = useRef<number | undefined>(undefined);
-  const onProjectChange = (p: Project) => {
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => { const price = estimate(p).retail; setIndexState((cur) => { if (activeClient(cur).projects.find((x) => x.key === active)?.price === price) return cur; const next = setPrice(cur, active, price); try { saveIndex(localStorage, next); } catch { /* */ } return next; }); }, 600);
-  };
+  const onDocumentChange = useCallback((d: RoomDocument) => {
+    const price=documentPrice(d);
+    setIndexState(cur=>{if(activeClient(cur).projects.find(p=>p.key===active)?.price===price)return cur;const next=setPrice(cur,active,price);try{saveIndex(localStorage,next);}catch{/* */}return next;});
+  },[active]);
   const bar = <ClientBar index={index} setIndex={setIndex} />;
-  return <App key={index.active + "/" + active} projectKey={active || undefined} clientBar={bar} onProjectChange={onProjectChange} onImportBundle={(b: ClientBundle) => { const r = importBundle(localStorage, index, b); setIndex(r.index); }} />;
+  return <RoomWorkspace key={index.active + "/" + active} workspaceKey={active} clientBar={bar} onDocumentChange={onDocumentChange} onImportBundle={(b: ClientBundle) => { const r = importBundle(localStorage, index, b); setIndex(r.index); }} />;
 }
 
 function ClientBar({ index, setIndex }: { index: ClientIndex; setIndex: (i: ClientIndex) => void }) {
@@ -75,7 +75,6 @@ function ClientBar({ index, setIndex }: { index: ClientIndex; setIndex: (i: Clie
             <button type="button" role="menuitem" onClick={() => run(() => { const r = addProject(localStorage, index, (client.projects.find((p) => p.key === client.active)?.title ?? "Проект") + " · вариант", client.active); setIndex(r.index); setAdding(false); })}><Copy size={15} /> Копия этого проекта<small>для второго варианта</small></button>
           </div>}
       </div>
-      <button type="button" className="outline" onClick={()=>{window.location.search='?rooms=1&workspace='+encodeURIComponent(client.active);}}>Комнаты этого проекта</button>
       <div className="client-total">{client.projects.length > 1 && <>Итого по клиенту <b>{total === null ? "считаем…" : rub(total)}</b></>}</div>
       {error && <p role="alert" className="client-error">{error}</p>}
     </div>
