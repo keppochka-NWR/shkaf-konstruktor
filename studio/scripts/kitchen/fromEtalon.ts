@@ -22,7 +22,7 @@ import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
 import { railUnder } from "./recognize-wallrail";
-import { rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
+import { contourEdgesFromEtalon, rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -426,7 +426,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const bb = role === "wall" || role === "tall" ? bottomBackRecess(bottom, sideZ0) : null;
     if (bb !== null) { m.kitchen.bottomBack = bb; notes.push(`дно короче сзади на ${bb}`); }
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
-    else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1))) {
+    else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1, sideZ0))) {
       m.plinthHeight = wr.plinthHeight; if (wr.raisedSides) m.raisedSides = true; m.kitchen.raise = wr.raise; notes.push(wr.note); if (wr.unsupported) unsupported.push(wr.unsupported);
     } else if (bottom.b.y0 > 0.5) {
       m.plinthHeight = r1(bottom.b.y0);
@@ -894,7 +894,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // полки (ЛДСП и стекло)
   const glassSh = P.filter(({ p }) => p.axis === "y" && p.kind === "glass");
   const innerBottom = bottom ? bottom.b.y1 : 0, innerTop = topPanel ? topPanel.b.y0 : top;
-  const sh = [...shelves, ...glassSh].sort((a, c) => a.b.y0 - c.b.y0), looseBare: number[] = [];
+  const sh = [...shelves.filter((s) => s !== wr?.plank), ...glassSh].sort((a, c) => a.b.y0 - c.b.y0), looseBare: number[] = []; // планка под поднятым дном — raise.plank, не полка (pkg1)
   m.sections[0].shelves = sh.map((s) => (s.b.y0 + s.b.y1) / 2).map((cy) => (cy - innerBottom) / (innerTop - innerBottom));
   const gl = sh.map((s, j) => (glassSh.includes(s) ? j : -1)).filter((j) => j >= 0);
   if (gl.length) { m.sections[0].glassShelves = gl; m.glassT = r1(glassSh[0].b.y1 - glassSh[0].b.y0); m.glassGap = r1(glassSh[0].b.x0 - left.b.x1); }
@@ -1034,8 +1034,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const fx = wallFixedShelfEdges(fixedSh[0]);
     if (fx && fixedSh.every((q) => (wallFixedShelfEdges(q) ?? []).join() === fx.join())) m.edgeScheme.fixedSides = fx;
   }
-  // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z])
-  if (role === "base") {
+  // Gola: вырезы в переднем торце боковин — по контуру боковины Базиса (contourPlane yz, точки [y, z]); у пенала — средний вырез под
+  // профиль C на уровне Gola нижнего ряда (pkg1, по базе 6 пеналов: k10 m01, k17 m09, k20 m09, k21 m04, k27 m08, k31 m01 — 57–103 высотой,
+  // 1570–2383 от верха, глубина 25–27; в одной боковине у 4 из 6)
+  if (role === "base" || role === "tall") {
     type CP = { contour?: [number, number][]; contourPlane?: string; edges?: { side: string; thick: number; len?: number }[] };
     const gL = golaFromContour(left.p as unknown as CP, left.b.y1, left.b.z1), gR = golaFromContour(right.p as unknown as CP, right.b.y1, right.b.z1);
     // вырезы по боковинам: есть в обеих — общий; только в одной — GolaCut.side (k30 m12: средний только в правой, k30 m14: в правой нет)
@@ -1166,7 +1168,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, ...drawerPanels];
+  const known = [left, right, bottom, topPanel, back, ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, wr?.plank, ...drawerPanels];
   const other = ref.panels.length - P.filter((x) => known.includes(x)).length;
   // полка из фасадного материала внутри корпуса (k23 m07: «Горизонтальная» 19 мм, «Фасадный мат-л», без полкодержателей) — причина прямо
   const facShelf = P.find((x) => !known.includes(x) && x.p.axis === "y" && x.p.kind === "other" && x.b.x0 >= left.b.x1 - 0.6 && x.b.x1 <= right.b.x0 + 0.6 && x.b.z1 <= sideZ1 + 0.5);
@@ -1200,7 +1202,17 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // дубли Базиса (опора/конфирмат дважды в одной точке) — повторяем, как в Базисе (recognize-tall.ts)
   // фигурный контур Базиса у дна/крыши/полки с вырезом (вентиляция пенала) — контур детали в плане (recognize-tall.ts)
   const pc = planContoursFromEtalon(P as unknown as Parameters<typeof planContoursFromEtalon>[0], parts(m), sideZ0);
-  if (pc) { m.kitchen.planContours = pc; notes.push(`контур Базиса в плане: ${Object.keys(pc).join(", ")}`); }
+  if (pc) {
+    m.kitchen.planContours = pc; notes.push(`контур Базиса в плане: ${Object.keys(pc).join(", ")}`);
+    // кромка по отрезкам контура (вырез под воздуховод: стенки/дно выреза кромлены или нет — как в проекте, sideNotch.ts)
+    const ce: Record<string, number[]> = {};
+    for (const [id, c] of Object.entries(pc)) {
+      const src = P.find(({ p, b }) => p.axis === "y" && Array.isArray(p.contour) && p.contour.length === c.length && p.contour.every((q, i) => Math.abs(q[0] - b.x0 - c[i][0]) <= 0.1 && Math.abs(q[1] - b.z0 - c[i][1]) <= 0.1));
+      const e = src ? contourEdgesFromEtalon((src.p as unknown as { edges?: { side?: string | null; thick: number; len?: number | null }[] }).edges, c) : undefined;
+      if (e) ce[id] = e;
+    }
+    if (Object.keys(ce).length) { m.kitchen.contourEdges = ce; notes.push(`кромка по контуру: ${Object.entries(ce).map(([id, e]) => `${id} [${e.join(" ")}]`).join("; ")}`); }
+  }
   const dupP = dupPartsFromEtalon(ref, m);
   if (dupP.length) { m.kitchen.dupParts = dupP; notes.push(`дубли Базиса: ${dupP.join(", ")}`); }
   return { module: m, notes, unsupported };

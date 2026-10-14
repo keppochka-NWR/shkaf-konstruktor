@@ -28,7 +28,11 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Низ навесного без опор (Базис): дно поднято на plinthHeight, стандартного цоколя нет. front — фронтальная панель ЛДСП под дном
    *  (в Базисе «Фронтальная», «ФП» — закрывает низ, как цоколь) с утопанием от лица боковин; без front панели нет.
    *  doorsToFloor — фасады опущены до низа модуля (корпус поднят, фасад закрывает подсветку: k23, k28, k30). */
-  raise?: { front?: number; doorsToFloor?: boolean };
+  raise?: { front?: number; doorsToFloor?: boolean;
+    /** Планка ЛДСП лёжа у задней кромки под поднятым дном (между боковинами, y 0…16, от задней кромки на depth; конфирматы через боковины
+     *  по правилу стыка — одна точка посередине у планки до 120). По базе — 7 навесных с поднятым дном: k04 m06 (50), k04 m09 (100),
+     *  k08 m08, k10 m07, k14 m03 (50), k18 m12 (60), k32 m13 (50); кромка перед и зад (5 из 7), k10 — без, k32 — по кругу (edgeScheme.parts). */
+    plank?: { depth: number } };
   /** Дно короче спереди на столько мм (Базис k06, k10, k15: 24,5 — ниша под подсветку у лица навесного); по умолчанию 0. */
   bottomFront?: number;
   /** Дно короче сзади (Базис: навесной под вытяжку, дно перед ХДФ — k08 m10, k04, k13, k14: 20). */
@@ -173,6 +177,11 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Фигурный контур Базиса в плане у горизонтальной детали (id детали → точки [x, z] от её заднего левого угла): вырез под вентиляцию
    *  в дне пенала (k23 m15/m16). Ставится, только если габарит контура совпадает с деталью; после смены размера — прямоугольник. */
   planContours?: Record<string, [number, number][]>;
+  /** Кромка фигурной детали по отрезкам её контура (id → толщина на каждом отрезке planContours[id], 0 — без кромки), как в проекте
+   *  Базиса. По базе (17 горизонталей с П-вырезом под воздуховод в 13 навесных): стенки и дно выреза кромлены в 8 (k04, k05, k10, k18,
+   *  k28, k30, k31 — своей толщиной: k10 0,5 при корпусе 0,4), не кромлены в 9 (k06, k15, k22, k25, k27, k24); наружные торцы у боковин —
+   *  по правилу схемы (k18 m12, k30 m09 дно — кромлены). Кромка детали по направлениям (edge, edgeLen) и бирки считаются отсюда (contourEdgeLens). */
+  contourEdges?: Record<string, number[]>;
   /** ХДФ в пазу только от жёсткой полки (номер в секции 1) до верха: пенал под холодильник (k25 m10), ниже полки — ниша без задника.
    *  Низ ХДФ — низ полки плюс зазор паза (grooveClear), как в Базисе. Работает вместе с topBack/backTopGap и bottomBack. */
   backFromShelf?: number };
@@ -415,7 +424,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
   // фальш угловой мойки (kitchen.faceFiller) — ЛДСП корпуса, кромка корпуса по кругу (k25 m02: 1, k01 m03 и k28 m17: 0,5)
   const ffp = out.find((p) => p.id === "face-filler:panel:facade");
   if (ffp && m.edgeScheme?.t !== undefined) setEdges(ffp, edgeDirs(ffp), m.edgeScheme.t);
-  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { contourEdgeLens(m, out); golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
   // торцы дна/крыши у боковин — по спискам проекта Базиса (edgeScheme.ends: k32 — по кругу, k31 m13 — только дно; бывший endsX —
   // parse-алиас в parseEdgeScheme), иначе правило kitchenEndsRule
@@ -448,6 +457,7 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (p.id.startsWith("rail:")) setEdges(p, p.size[1] <= 16.01 ? (m.edgeScheme?.railBack === false && p.position[2] - p.size[2] / 2 < 0.5 ? ["+z"] : ["+z", "-z"]) : ["+y", "-y"], t);
     else if (p.role === "shelf") setEdges(p, m.edgeScheme?.shelfSides ?? m.edgeScheme?.shelf ?? ["+x", "-x", "+z", "-z"], m.edgeScheme?.shelfT ?? t); // съёмная полка: по кругу или по Базису (shelfSides / shelf), толщина корпуса — если Базис не задал иначе
     else if (p.id === "kitchen-plinth") setEdges(p, ["+y", "-y"], t); // цоколь: кромка по верхнему и нижнему торцу (у пола в Базисе ±y)
+    else if (p.id === "raise-plank") setEdges(p, ["+z", "-z"], t); // планка под поднятым дном: перед и зад (k04, k08, k14, k18 — 5 из 7; иначе edgeScheme.parts)
     else if (p.id.startsWith("kd:") && p.id.includes(":fx:")) setEdges(p, p.id.includes(":fx:side:") ? ["+y", "-y", "-z"] : p.id.endsWith(":bottom") ? ["-z"] : ["+y"], t); // короб Firmax (Базис): боковины ±y и задний торец, задняя/фальшпанель — верх, дно — задний торец
     else if (p.id.startsWith("kd:") && /:(bottom|back)$/.test(p.id) && m.kdrawers?.[Number(p.id.split(":")[1])]?.system === "indigo") setEdges(p, p.id.endsWith(":back") ? ["+y", "-y"] : ["+z", "-z"], t); // Indigo (Базис k16): задняя стенка ±y, дно перед и зад
     else if (p.id.startsWith("kd:") && /:(bottom|back)$/.test(p.id) && m.kdrawers?.[Number(p.id.split(":")[1])]?.system === "start-sc") {
@@ -468,8 +478,49 @@ export function kitchenEdges(m: Module, out: Part[]) {
   // передние торцы корпуса толще остальных (k29: 2 при 0,5) — у кромленого «+z» деталей корпуса, выходящих на перед (задняя царга — нет; без ящиков)
   const fr = m.edgeScheme?.front;
   if (fr) for (const p of out) if (p.material === "board" && p.role !== "door" && !p.id.endsWith(":facade") && !p.id.startsWith("kd:") && p.position[2] + p.size[2] / 2 >= m.depth - 1) { const dirs = edgeDirs(p); p.edge = p.edge.map((e, i) => (e > 0 && dirs[i] === "+z" ? fr : e)) as Part["edge"]; }
+  contourEdgeLens(m, out);
   golaSides(m, out);
   rearNotches(m, out);
+}
+
+/** Наружная нормаль и длина отрезка k замкнутого контура в плане ([x, z]): нормаль — та из двух, в сторону которой точка у середины
+ *  отрезка выходит из многоугольника. */
+export function contourSegments(c: [number, number][]): { dir: string; len: number }[] {
+  const inside = (x: number, z: number) => { let r = false; for (let i = 0, j = c.length - 1; i < c.length; j = i++) { const [xi, zi] = c[i], [xj, zj] = c[j]; if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) r = !r; } return r; };
+  return c.map((a, k) => {
+    const b = c[(k + 1) % c.length], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
+    if (len < 0.01) return { dir: "", len: 0 };
+    const nx = dz / len, nz = -dx / len, mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+    const out = inside(mx + nx * 0.5, mz + nz * 0.5) ? [-nx, -nz] : [nx, nz];
+    const dir = Math.abs(out[0]) >= Math.abs(out[1]) ? (out[0] > 0 ? "+x" : "-x") : (out[1] > 0 ? "+z" : "-z");
+    return { dir, len: Math.round(len * 10) / 10 };
+  });
+}
+
+/** Кромка фигурной горизонтали кухни Базиса по отрезкам контура (kitchen.contourEdges, вырез под воздуховод в дне/крыше/полке): на каждое
+ *  направление торца — толщина с наибольшей суммарной длиной кромленых отрезков и их длина (edgeLen), как считает Базис (k10 m07: стенки
+ *  выреза +x/−x 0,5 по 180, зад 184 + 184 по 0,4 и дно выреза 200 по 0,5 — всего 568; наружные торцы у боковин не кромятся). Главнее схемы
+ *  кромки (edgeScheme) для этой детали. Контур берётся, только если его габарит совпадает с деталью (как planContour в parts). */
+export function contourEdgeLens(m: Module, out: Part[]) {
+  const pcs = m.kitchen?.planContours, ces = m.kitchen?.contourEdges;
+  if (!pcs || !ces) return;
+  for (const [id, c] of Object.entries(pcs)) {
+    const te = ces[id], p = out.find((q) => q.id === id);
+    if (!te || !p || p.material !== "board" || c.length < 4 || te.length !== c.length || p.size[1] >= Math.min(p.size[0], p.size[2])) continue;
+    const xs = c.map((q) => q[0]), zs = c.map((q) => q[1]);
+    if (Math.abs(Math.min(...xs)) > 0.6 || Math.abs(Math.min(...zs)) > 0.6 || Math.abs(Math.max(...xs) - p.size[0]) > 0.6 || Math.abs(Math.max(...zs) - p.size[2]) > 0.6) continue;
+    const segs = contourSegments(c), byDir: Record<string, Record<number, number>> = {};
+    segs.forEach((s, k) => { const th = te[k]; if (!s.dir || !(th > 0) || s.len <= 0) return; (byDir[s.dir] ??= {})[th] = (byDir[s.dir][th] ?? 0) + s.len; });
+    const dirs = edgeDirs(p), edgeLen: Record<string, number> = {};
+    p.edge = dirs.map((d) => {
+      const m2 = byDir[d]; if (!m2) return 0;
+      const best = Object.entries(m2).sort((a, b) => b[1] - a[1])[0];
+      edgeLen[d] = Math.round(Object.values(m2).reduce((s, v) => s + v, 0) * 10) / 10;
+      return Number(best[0]);
+    }) as Part["edge"];
+    p.edgeLen = edgeLen;
+    p.contourEdges = te.map((v) => (v > 0 ? v : 0));
+  }
 }
 
 /** Вырез в заднем верхнем углу боковин навесного/антресоли (Базис k32: 100×20). Раскрой — по габариту; кромка по контуру
@@ -679,7 +730,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Object.keys(drill).length ? { drill } : {}),
     ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number] })) } : {}),
     ...(k.jointZ && typeof k.jointZ === "object" ? { jointZ: Object.fromEntries(Object.entries(k.jointZ).filter(([, v]) => Array.isArray(v) && v.length === 2).map(([key, v]) => [key, [num(v[0]), num(v[1])] as [number, number]])) } : {}),
-    ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}) } } : {}),
+    ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}), ...(k.raise.plank && num(k.raise.plank.depth) > 0 ? { plank: { depth: num(k.raise.plank.depth) } } : {}) } } : {}),
     ...(k.legs ? { legs: { back: num(k.legs.back), front: num(k.legs.front), ...(k.legs.side === undefined ? {} : { side: num(k.legs.side) }), ...(Array.isArray(k.legs.xs) ? { xs: k.legs.xs.map(Number) } : {}), ...(Array.isArray(k.legs.pts) ? { pts: k.legs.pts.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(k.legs.screws ? { screws: true as const } : {}), ...(k.legs.same ? { same: true as const } : {}), ...(k.legs.rows2 ? { rows2: true as const } : {}) } } : {}),
     ...(() => { const r = k.rafix === undefined ? undefined : deps.parseKitchenRafix(k.rafix); return r ? { rafix: r } : {}; })(),
     ...(k.jointPoints === 2 || k.jointPoints === 3 ? { jointPoints: k.jointPoints } : {}),
@@ -687,6 +738,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.dupParts) && k.dupParts.length ? { dupParts: k.dupParts.map(String) } : {}),
     ...(Number.isInteger(k.backFromShelf) && k.backFromShelf! >= 0 ? { backFromShelf: k.backFromShelf } : {}),
     ...(k.planContours && typeof k.planContours === "object" ? { planContours: Object.fromEntries(Object.entries(k.planContours as Record<string, unknown>).filter(([, c]) => Array.isArray(c)).map(([id, c]) => [id, (c as unknown[][]).map((q) => [num(q[0]), num(q[1])] as [number, number])])) } : {}),
+    ...(k.contourEdges && typeof k.contourEdges === "object" ? { contourEdges: Object.fromEntries(Object.entries(k.contourEdges as Record<string, unknown>).filter(([, c]) => Array.isArray(c)).map(([id, c]) => [id, (c as unknown[]).map((v) => Math.max(0, num(v)))])) } : {}),
     ...(k.bareBottom === true ? { bareBottom: true as const } : {}),
     ...(Array.isArray(k.bareJoints) && k.bareJoints.some((j: unknown) => j === "bottom" || j === "top") ? { bareJoints: k.bareJoints.filter((j: unknown): j is "bottom" | "top" => j === "bottom" || j === "top") } : {}),
     ...(() => { const j = deps.parseGridRecord(k.joints); return j ? { joints: j } : {}; })() };

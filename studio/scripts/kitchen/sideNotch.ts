@@ -1,5 +1,6 @@
 // Вырез в заднем верхнем углу боковины по контуру Базиса (k32: навесные и антресоли, вырез 100×20).
 // Контур боковины — в плоскости yz, точки [y, z] от угла детали; z растёт к фасаду, поэтому задняя кромка — минимальный z.
+import { contourSegments } from "../../src/kitchen";
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** ХДФ с вырезами в обоих верхних углах (k33, k34: 25×45 — ХДФ проходит за крышей, углы обходят пазы/крепёж у боковин):
@@ -19,6 +20,23 @@ export function topCornerNotchFromContour(p: { figure?: boolean; contour?: numbe
   if (!(w > 0 && h > 0 && 2 * w < x1 - x0 && h < y1 - y0)) return null;
   if (![[x0, y0], [x1, y0], [x1, yn], [x1 - w, yn], [x1 - w, y1], [x0 + w, y1], [x0 + w, yn], [x0, yn]].every(([x, y]) => has(x, y))) return null;
   return { width: r1(w), height: r1(h) };
+}
+
+/** Кромка фигурной горизонтали Базиса по отрезкам её контура в плане: записи кромки проекта (сторона = наружная нормаль отрезка,
+ *  длина отрезка) раскладываются по отрезкам контура (порядок отрезков в файле Базиса не совпадает с порядком точек контура —
+ *  k10 m07: elem 4 «+x 180» — стенка выреза у x=200; поэтому только по стороне и длине ±0,6). Нет ни одной кромки — undefined.
+ *  Толщина на отрезке — из записи; отрезки без записи — 0. */
+export function contourEdgesFromEtalon(edges: { side?: string | null; thick: number; len?: number | null }[] | undefined, contour: [number, number][]): number[] | undefined {
+  if (!edges?.length || contour.length < 4) return undefined;
+  const segs = contourSegments(contour), out = segs.map(() => 0), used = new Set<number>();
+  let any = false;
+  for (const e of [...edges].sort((a, b) => (b.len ?? 0) - (a.len ?? 0))) {
+    if (!(e.thick > 0) || !e.side || !((e.len ?? 0) > 0)) continue;
+    const k = segs.findIndex((s, i) => !used.has(i) && s.dir === e.side && Math.abs(s.len - e.len!) <= 0.6);
+    if (k < 0) continue;
+    used.add(k); out[k] = e.thick; any = true;
+  }
+  return any ? out : undefined;
 }
 
 /** Высота (от верха) и глубина (от задней кромки) выреза, если контур — ровно прямоугольник без заднего верхнего угла; иначе null. */

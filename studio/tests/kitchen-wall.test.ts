@@ -34,7 +34,7 @@ test('навесной с поднятым корпусом (k30 m06): фаса�
 test('навесной с поднятым дном и фронтальной ЛДСП под дном (k14 m03): панель под дном вместо цоколя, фасад с зазором 1,5',{skip:!existsSync(`${ETALON}/k14.json`)},()=>{
   const ref=load('k14','m03'),{module:m}=moduleFromEtalon(ref);
   assert.equal(m.plinthHeight,255);
-  assert.deepEqual(m.kitchen?.raise,{front:0});
+  assert.deepEqual(m.kitchen?.raise,{front:0,plank:{depth:50}}); // планка 568×50 лёжа у задней кромки под дном — raise.plank (pkg1), не полка
   const pl=plinthLike(m);
   assert.equal(pl.length,1);
   assert.equal(pl[0].name,'Фронтальная под дном');

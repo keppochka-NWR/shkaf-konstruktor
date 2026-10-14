@@ -792,6 +792,8 @@ export function parts(m: Module): Part[] {
   // Кухня Базиса с поднятым дном (raise, n3-wall): цоколя нет; есть только фронтальная панель под дном, если она есть в Базисе.
   const kr=m.kitchen?.raise;
   if(kr&&kr.front!==undefined&&!m.feet&&bottom>0)add("plinth","Фронтальная под дном",[m.width-2*t,bottom,t],[m.width/2,bottom/2,d-kr.front-t/2],m.width-2*t,bottom,t);
+  // планка лёжа у задней кромки под поднятым дном навесного (kitchen.raise.plank, pkg1: k04 m06/m09, k08 m08, k10 m07, k14 m03, k18 m12, k32 m13) — между боковинами, на конфирматах через боковины
+  if(kr?.plank&&!m.feet&&bottom>t)add("raise-plank","Планка под дном сзади",[m.width-2*t,t,kr.plank.depth],[m.width/2,t/2,kr.plank.depth/2],m.width-2*t,kr.plank.depth,t);
   // кухня Базиса без панели под приподнятым дном (kitchen.bareBottom, n3-tall) — цоколя нет
   else if(!m.feet&&bottom>0&&!kr&&!m.kitchen?.bareBottom&&!kitchenNoPlinth(m)&&(!m.kitchen||m.kitchen.lowFront||(m.kitchen.plinth?!m.kitchen.plinth.off:m.kitchen.role==='base'||m.kitchen.role==='tall'))){
     if(m.skew){ // цоколь по скошенному фронту: длина по косой, утоплен на 2 от передних граней боковин
@@ -1109,7 +1111,7 @@ export function parts(m: Module): Part[] {
     add(key, m.kitchen?.confirmatName ?? "Конфирмат 7×50", deep ? [D, D, L] : vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal"); // кухня Базиса — имя крепежа по проекту (k33/k34: «Евровинт 6х50»)
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
-  const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
+  const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id === "raise-plank" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   // Точки крепежа стыка по глубине: задняя (k 0), передняя (k 1), средние (k 2…):
   //  — свои отступы стыка из Базиса (kitchen.jointZ «bottom:left», n3-wall);
   //  — своя сетка стыка из Базиса (kitchen.joints, n3-tall): задняя, передняя, средние равным шагом;
@@ -1603,7 +1605,7 @@ export function validate(m: Module): string[] {
   if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);}
   if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
-  for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['faceAir',0,10],['shelfRear',0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
+  for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['faceAir',0,10],['shelfRear',m.kitchen?-100:0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
   if(m.rails?.some(r=>r&&((r.lay!==undefined&&!['edge','flat'].includes(r.lay))||(r.setback!==undefined&&(!Number.isFinite(r.setback)||r.setback<0||r.setback>80)))))errors.push('Царга: укладка на ребро или лёжа, утопание 0–80 мм.');
   if(m.rails?.some(r=>r&&r.at!==undefined&&(!Number.isFinite(r.at)||r.at<innerBottom(m)||r.at+r.height>innerTop(m)+0.01)))errors.push('Стяжка на заданной высоте выходит за боковины: низ не ниже верха дна, верх не выше крыши/верха боковин.');
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
