@@ -189,7 +189,8 @@ export function setLegHeight(p: Project, ids: string[], height: number): Project
     a.module.height += height - old;
     // ящики Axis PRO поднимаются вместе с корпусом
     if (a.module.kdrawers) a.module.kdrawers = a.module.kdrawers.map((d) => { const dy = height - old, k = { ...d, y0: d.y0 + dy, y1: d.y1 + dy, runnerY: d.runnerY + dy };
-      return k.box ? { ...k, box: { ...k.box, y: k.box.y + dy, ...(k.box.runs ? { runs: k.box.runs.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) } : {}) } } : k; });
+      // точки направляющих: сдвиг только по y, маркер −1 «от правой боковины» (r[3]) сохраняется — иначе правые направляющие уезжают на левую боковину
+      return k.box ? { ...k, box: { ...k.box, y: k.box.y + dy, ...(k.box.runs ? { runs: k.box.runs.map((r) => (r.length > 3 ? [r[0], r[1] + dy, r[2], r[3]] : [r[0], r[1] + dy, r[2]]) as [number, number, number] | [number, number, number, -1]) } : {}) } } : k; });
     // цоколь «по регламенту» (на 5 ниже дна) следует за опорами; свой — только не выше опор
     const ph = k.plinth?.height ?? KITCHEN.plinthHeight, auto = ph === old - (KITCHEN.legs - KITCHEN.plinthHeight);
     const nextPh = auto ? height - (KITCHEN.legs - KITCHEN.plinthHeight) : Math.min(ph, height);
@@ -206,6 +207,22 @@ export function setLegHeight(p: Project, ids: string[], height: number): Project
 
 /** Кухонные модули проекта, к которым относятся общие настройки опор (нижние и пеналы на опорах). */
 export function legModules(p: Project) { return p.modules.filter((a) => (a.module.kitchen?.role === "base" || a.module.kitchen?.role === "tall") && !!a.module.feet).map((a) => a.id); }
+
+type KitchenLegs = NonNullable<NonNullable<Module["kitchen"]>["legs"]>;
+/** Раскладка опор взята из проекта Базиса (а не по правилу): позиции xs/xr или точки pts/ptsR. Пока есть хоть одно поле — «Опоры от торцов» не действует. */
+export const legsFromBazis = (legs: KitchenLegs) => !!(legs.xs?.length || legs.xr?.length || legs.pts?.length || legs.ptsR?.length);
+/** «Вернуть по правилу»: снимаем xs, xr, pts и ptsR ВМЕСТЕ — kitchenLegs строит из оставшихся полей, и если снять только xs, остаются одни правые опоры. */
+export function legsByRule(legs: KitchenLegs): KitchenLegs { const { xs: _xs, xr: _xr, pts: _pts, ptsR: _ptsR, ...rest } = legs; void _xs; void _xr; void _pts; void _ptsR; return rest; }
+/** Подпись раскладки Базиса для панели: ряды от левого и от правого торца, точки — числом. */
+export function legsBazisNote(legs: KitchenLegs): string {
+  const r = (v: number[]) => v.map((x) => Math.round(x)).join(", ");
+  const s: string[] = [];
+  if (legs.xs?.length) s.push(`${r(legs.xs)} мм от левого края`);
+  if (legs.xr?.length) s.push(`${r(legs.xr)} мм от правого края`);
+  const n = (legs.pts?.length ?? 0) + (legs.ptsR?.length ?? 0);
+  if (n) s.push(`${n} точек как в Базисе`);
+  return s.join("; ");
+}
 
 /** Пересобрать нижний по регламенту под другое назначение: ширина, декоры, петли и ручки сохраняются, остальное — как у шаблона Базиса. */
 export function rebuildKitchen(m: Module, kind: KitchenItem): Module {

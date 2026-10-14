@@ -8,6 +8,8 @@ import {kitchenBase,kitchenWall,kitchenLegs,grooveHoleAt,grooveHoleOf,parseGroov
 import {partCollisions} from '../src/collisions';
 import {relayoutKDrawers,isFirmax,parseKDrawers} from '../src/kitchenDrawers';
 import {ETALON_DIR,resizeSweep,RESIZE_CHANGES} from '../scripts/kitchen/resize-sweep';
+import {kitchenProject,setLegHeight,legsByRule,legsFromBazis,legsBazisNote} from '../src/kitchenProject';
+import type {PlacedModule} from '../src/project';
 
 const at=(ps:ReturnType<typeof parts>,id:string)=>{const p=ps.find(q=>q.id===id);assert.ok(p,id);return (p.anchor??p.model?.origin??p.position) as [number,number,number];};
 const rt=(m:Module)=>parseModule(JSON.parse(JSON.stringify(m)));
@@ -78,6 +80,37 @@ test('Firmax: точки направляющих и шурупы фальшпа
   assert.equal(a,a2,'левый шуруп — от левой боковины ящика');assert.equal(b-b2,100,'правый — от правой');
   const back=parseKDrawers(JSON.parse(JSON.stringify(m.kdrawers)))![0];assert.ok(isFirmax(back));
   assert.deepEqual(back.box.runs,k.box.runs);assert.deepEqual(back.box.faceScrews,k.box.faceScrews);
+});
+
+test('высота опор (панель «Высота опор»): точки направляющих Firmax поднимаются по y, маркер −1 «от правой боковины» остаётся — правые направляющие не уезжают на левую боковину',()=>{
+  const m=kitchenBase(initialModule(),600,'drawers');m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
+  m.kdrawers=relayoutKDrawers(m,2,undefined,'firmax-ldsp');
+  const k=m.kdrawers![0];assert.ok(isFirmax(k));
+  k.box.runs=[[8.5,k.runnerY,-500],[-8.5,k.runnerY,-500,-1],[16.5,k.runnerY,-500],[-16.5,k.runnerY,-500,-1]];
+  const placed:PlacedModule={id:'a',x:0,y:0,z:0,rotation:0,module:m};
+  const p={...kitchenProject(),modules:[placed]};
+  const n=setLegHeight(p,['a'],m.feet!.height+20);
+  const nk=n.modules[0].module.kdrawers![0];assert.ok(isFirmax(nk));
+  assert.deepEqual(nk.box.runs,k.box.runs.map(r=>r.length>3?[r[0],r[1]+20,r[2],r[3]]:[r[0],r[1]+20,r[2]]),'y +20, маркер на месте');
+  const sx=(mm:Module)=>{const ps=parts(mm);return ps.filter(q=>q.id.startsWith('kd:0:slide:')).map(q=>(q.anchor??q.model?.origin??q.position)[0]).sort((a,b)=>a-b);};
+  assert.deepEqual(sx(n.modules[0].module),sx(m),'x направляющих — как до смены высоты опор');
+  assert.deepEqual(validate(n.modules[0].module),[]);
+});
+
+test('«Вернуть по правилу»: снимает xs, xr, pts и ptsR вместе — раскладка по правилу, а не одни правые опоры; подпись перечисляет и правые',()=>{
+  const m=kitchenBase(initialModule(),1200);
+  const rule=kitchenLegs(m).map(l=>[l.x,l.z]);
+  m.kitchen!.legs={back:70,front:70,xs:[70,390],xr:[70,390]};
+  assert.equal(kitchenLegs(m).length,8);assert.ok(legsFromBazis(m.kitchen!.legs));
+  assert.match(legsBazisNote(m.kitchen!.legs),/70, 390 мм от левого края; 70, 390 мм от правого края/);
+  const back=legsByRule(m.kitchen!.legs);assert.deepEqual(back,{back:70,front:70});
+  assert.deepEqual(kitchenLegs({...m,kitchen:{...m.kitchen!,legs:back}}).map(l=>[l.x,l.z]),rule,'после кнопки — ровно раскладка по правилу');
+  const onlyR={back:70,front:70,xr:[70,390]};assert.ok(legsFromBazis(onlyR),'только xr — тоже раскладка Базиса, поле «Опоры от торцов» не показываем');
+  assert.equal(kitchenLegs({...m,kitchen:{...m.kitchen!,legs:legsByRule(onlyR)}}).length,4);
+  const pts={back:70,front:70,pts:[[70,70]] as [number,number][],ptsR:[[60,90]] as [number,number][]};
+  assert.ok(legsFromBazis(pts));assert.match(legsBazisNote(pts),/2 точек как в Базисе/);
+  assert.deepEqual(kitchenLegs({...m,kitchen:{...m.kitchen!,legs:legsByRule(pts)}}).map(l=>[l.x,l.z]),rule);
+  assert.ok(!legsFromBazis({back:70,front:70,side:100}));
 });
 
 // Честный список исключений общего прогона: прогоны без ошибки validate, где после ±100 остаётся пересечение/потеря пометки.
