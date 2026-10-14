@@ -10,7 +10,7 @@ import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout } from "./kitchenDrawers";
 import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
-import { allegroErrors, type PremialPullout } from './premialPullout';
+import { allegroErrors, parsePremialPullout, type PremialPullout } from './premialPullout';
 
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
@@ -50,8 +50,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Стяжка на дне навесного на эксцентриках и шкантах снизу по Базису (n4-wall; k04 m08, k31): ключ — место стяжки; ecc и dowel —
    *  мм от левого конца стяжки; face — пласть стяжки с бочонком D15×12 (front — к фасаду, back — к стене). */
   railUnder?: Record<string, { ecc: number[]; dowel: number[]; face: "front" | "back" }>;
-  /** В проекте Базиса у модуля нет крепежа корпуса (конфирматов, эксцентриков, шкантов) — студия его не добавляет (n3-wall, n3-antresol). */
-  noFasteners?: boolean;
+  /** Крепёж корпуса по проекту Базиса (одно поле на один факт, n7-spec-dedupe): false — крепежа нет вовсе (ни конфирматов, ни эксцентриков,
+   *  ни шкантов, ни полкодержателей; только k32 — 22 модуля); 'pins' — нет крепежа стыков (конфирматы, эксцентрики, шканты), полкодержатели
+   *  остаются (бывшее noFasteners: n3-wall, n3-antresol). Без поля / true — как у шкафов. Читать через fastenersMode(k). */
+  fasteners?: boolean | "pins";
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
   dryer?: { name: string; /** сетка библиотеки Базиса; нет — у Базиса элемент без геометрии (k01, k02, k06, k08): точка и строка спецификации */ mesh?: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
   /** Имя крепежа корпуса по проекту Базиса, если это не «Конфирмат 7х50» (k33, k34: «Евровинт 6х50») — в деталях и смете. */
@@ -91,16 +93,15 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Точки крепления крепежа, чьё отверстие и в проекте Базиса вскрывает паз подсветки (k31, k28 m12): только это пересечение
    *  подписывается «как в проекте Базиса» (collisions.ts). Ставит импорт по двойнику в Базисе (compare.ts grooveTwins). */
   grooveHoles?: [number, number, number][];
-  /** Модуль распознан из проекта Базиса: смета — только то, что есть в Базисе (без норматива «мелочёвка корпуса» и заглушек
-   *  под конфирматы — в проектах Базиса цеха их нет ни в одном модуле). */
+  /** @deprecated Признак «из Базиса» живёт в Module.bazis (isBazisModule в project.ts — единственная точка); parse переносит
+   *  kitchen.bazis → m.bazis. Поле оставлено в типе до перехода pricing.ts / App.tsx / KitchenPanel.tsx (A3/A5), потом удалить. */
   bazis?: boolean;
   /** Дно под боковинами на эксцентриках (Базис k16, k28, k31; jointFastening bottom:left/right = eccentric): отступы стяжек
    *  от задней и передней кромки дна, мм (у Базиса несимметрично: сзади на 20 больше — за пазом ХДФ). */
   underEcc?: { back: number; front: number };
   /** ХДФ в пазу: зазор до дна паза снизу и сверху, мм, как в проекте Базиса (k28 m10: 2,5 и 1); без поля — grooveClear с обеих сторон. */
   backClearY?: [number, number];
-  /** Глубина отверстия D5 конфирмата в торце второй детали, как в проекте Базиса (по умолчанию 35; k11 — 37, k31 — 42). */
-  confDepth?: number;
+  // Глубина D5 конфирмата по проекту — только drill.confirmat (бывшее confDepth: k11 — 37, k31 — 42; parse-алиас в parseKitchenSpec).
   /** Опоры: отступы рядов от задней и передней кромки боковин и позиции по ширине (по умолчанию 70/70 от краёв дна, как в Базисе). */
   legs?: { back: number; front: number; side?: number; xs?: number[];
     /** Площадка опоры на 4 самореза 3×3 по квадрату 31×31 (Базис «3x3» у опор: k21, k24 — 6 модулей из 174 с опорами). */
@@ -112,7 +113,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
     rows2?: true;
     /** Нерегулярная раскладка Базиса (17 модулей 10 кухонь: не сетка «ряды × перед/зад»): точки [x, z от задней кромки боковин]. */
     pts?: [number, number][] };
-  /** Крепёж корпуса: по умолчанию «Конфирмат 7×50»; euro-6x50 — «Евровинт 6х50» (шаблоны «Т_» k33, k34: D8×16 + D5×36). */
+  /** @deprecated Крепёж «Евровинт 6х50» (шаблоны «Т_» k33, k34: D8×16 + D5×36) — только confirmatName; parse переводит screw → confirmatName,
+   *  поле в типе оставлено до перехода pricing.ts (A3: единый ключ сметы confirmat:<name>), потом удалить. */
   screw?: "euro-6x50";
   /** Как в Базисе — ничего сверх проекта (правило Макса): false — фасады без петель (15 модулей 12 кухонь Базиса: фасад есть, петель нет,
    *  студия строит ровно те же фасады). Флаг модуля: дверь, добавленная потом в студии, тоже будет без петель — см. KitchenPanel. */
@@ -129,8 +131,6 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  и поворот Базиса [w,x,y,z] в точке ручки; size — габарит сетки в её осях [вдоль, поперёк, вылет] (n4-wall). */
   handle?: { dy: number; from: "bottom" | "top"; horizontal: boolean; holes?: { d: number; depth: number; gap: number };
     name?: string; mesh?: string; quat?: [number, number, number, number]; size?: [number, number, number] };
-  /** false — без крепежа (конфирматы, эксцентрики, шканты, полкодержатели): в проекте Базиса его нет (только k32 — 22 модуля). */
-  fasteners?: false;
   /** Дно под одной боковиной, другая опущена (8 модулей 5 кухонь Базиса): до низа дна (y0 = низ дна, k22 m01) или до пола (y0 = 10, k06 m01 —
    *  торцевая боковина закрывает опоры). Действует только с дном под боковинами (bottomUnder). */
   sideDown?: { side: "left" | "right"; y0: number };
@@ -150,8 +150,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
     conf?: { bottom?: number[]; side?: number[] } };
   /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 модуля 13 кухонь Базиса; k32 m06: 2 и 4 при 1,5). */
   backGaps?: { bottom: number; top: number };
-  /** Эксцентрик дна сверлится снизу (бочонок в нижней пласти): 56 из 380 эксцентриков дна Базиса, флаг — на 12 модулях 10 кухонь. */
-  eccBelow?: true;
+  // Эксцентрик дна снизу (56 из 380 эксцентриков дна Базиса, 12 модулей 10 кухонь) — только ecc.bottomOut (бывшее eccBelow; parse-алиас).
   /** Рафиксы жёстких полок по сетке Базиса (kitchenRafix.ts); без поля — жёсткие полки на конфирматах/эксцентриках, как у шкафов. */
   rafix?: KitchenRafix;
   /** Точек крепежа на стык дна/крыши со стойкой (2 или 3); без поля — по правилу kitchenJointPoints. */
@@ -287,11 +286,25 @@ export const LEG_SCREWS: [number, number][] = [[-15.5, -15.5], [15.5, -15.5], [-
 /** Кухня из Базиса — ничего сверх проекта: без петель (hinges: false) снимаем петли и толкатели фасадов, без крепежа (fasteners: false) —
  *  конфирматы, эксцентрики, шканты и полкодержатели. Присадка и смета идут по деталям, поэтому лишнего нет и там. */
 export function kitchenStrip(m: Module, out: Part[]) {
-  const k = m.kitchen; if (!k || (k.hinges !== false && k.fasteners !== false && !k.noFasteners)) return;
-  const drop = (p: Part) => (k.hinges === false && /:(hingecup|hingeplate|hingearm|latch):/.test(p.id)) || (k.fasteners === false && /^(fast|ecc|dowel|shp):/.test(p.id))
+  const k = m.kitchen; if (!k) return;
+  const fm = fastenersMode(k); if (k.hinges !== false && fm === true) return;
+  const drop = (p: Part) => (k.hinges === false && /:(hingecup|hingeplate|hingearm|latch):/.test(p.id)) || (fm === false && /^(fast|ecc|dowel|shp):/.test(p.id))
     // Базис без крепежа корпуса (n3-wall: k32 целиком, отдельные модули k33, k34) — конфирматы, эксцентрики, шканты
-    || (!!k.noFasteners && /^(fast|ecc|dowel):/.test(p.id));
+    || (fm === "pins" && /^(fast|ecc|dowel):/.test(p.id));
   for (let i = out.length - 1; i >= 0; i--) if (drop(out[i])) out.splice(i, 1);
+}
+/** Режим крепежа корпуса кухни: true — как у шкафов; false — крепежа нет вовсе (и полкодержателей); 'pins' — нет крепежа стыков,
+ *  полкодержатели есть. Единственная точка чтения kitchen.fasteners (n7-spec-dedupe). */
+export function fastenersMode(k: KitchenSpec | undefined): true | false | "pins" {
+  return k?.fasteners === false ? false : k?.fasteners === "pins" ? "pins" : true;
+}
+type EdgeDir = "+x" | "-x" | "+z" | "-z";
+/** Правило торцов дна (между боковинами) и крыши кухни по умолчанию: перед всегда; зад — при пазе, без задника или edgeScheme.rear;
+ *  у пенала крыша видна сверху — перед и зад (Базис k12 m04, k30 m05). Торцы у боковин («+x», «-x») — только по проекту (edgeScheme.ends). */
+export function kitchenEndsRule(m: Pick<Module, "backType" | "edgeScheme" | "kitchen">, id: "bottom" | "top"): EdgeDir[] {
+  const rear: EdgeDir[] = m.backType === "groove" || m.backType === "none" || m.edgeScheme?.rear ? ["-z"] : [];
+  if (id === "top" && m.kitchen?.role === "tall") return ["+z", "-z"];
+  return ["+z", ...rear];
 }
 /** Единичный кватернион: в эталоне Базиса компоненты округлены до 0,01 (0,71 вместо √½, |q|² = 1,0082) — без нормировки сетка растянута на ~0,8 %. */
 export function unitQuat(q: [number, number, number, number]): [number, number, number, number] {
@@ -402,10 +415,9 @@ export function kitchenEdges(m: Module, out: Part[]) {
   const ffp = out.find((p) => p.id === "face-filler:panel:facade");
   if (ffp && m.edgeScheme?.t !== undefined) setEdges(ffp, edgeDirs(ffp), m.edgeScheme.t);
   const t = m.edgeScheme?.t; if (!t || !m.kitchen) { golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
-  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol", tall = m.kitchen.role === "tall";
-  // торцы дна/крыши у боковин — кромятся, если так в проекте Базиса (k32 — оба, k31 m13 — только дно; edgeScheme.endsX, n3-antresol);
-  // свои списки торцов дна/крыши навесного (edgeScheme.ends, n3-wall) — главнее
-  const en = m.edgeScheme?.endsX, endsB = en === true || en === "bottom" ? ["+x", "-x"] : [], endsT = en === true || en === "top" ? ["+x", "-x"] : [];
+  const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
+  // торцы дна/крыши у боковин — по спискам проекта Базиса (edgeScheme.ends: k32 — по кругу, k31 m13 — только дно; бывший endsX —
+  // parse-алиас в parseEdgeScheme), иначе правило kitchenEndsRule
   // фиксированная полка на эксцентриках (пенал k12 m04, k30 m05): торцы у боковин закрыты — кромка только перед и зад;
   // фикс. полка на другом крепеже (k16 m01, P8–P14) — по кругу, как съёмная
   const ecc = (id: string) => m.jointFastening?.[`${id}:left`] === "eccentric" || m.jointFastening?.[`${id}:right`] === "eccentric";
@@ -426,9 +438,9 @@ export function kitchenEdges(m: Module, out: Part[]) {
     else if (ends) setEdges(p, ends, t); // торцы дна/крыши — как в проекте Базиса (k32 — по кругу)
     // опущенная боковина (sideDown, k22 m01): нижний торец открыт снизу — кромится
     else if (p.id === "left" || p.id === "right") setEdges(p, wall ? ["+y", "-y", "+z", ...rear] : [...(m.edgeScheme?.sideTop === false ? [] : ["+y"]), "+z", ...rearBase, ...(m.kitchen.sideDown?.side === p.id ? ["-y"] : [])], t);
-    // дно под боковинами без кромки по торцам (underEnds, k28); торцы дна/крыши между боковинами у боковин (endsX, k31 m13) — n3-antresol
-    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", ...(m.edgeScheme?.underEnds === false ? [] : ["+x", "-x"]), ...(wall ? rear : rearBase)] : ["+z", ...rear, ...endsB], t);
-    else if (p.id === "top") setEdges(p, tall ? ["+z", "-z", ...endsT] : ["+z", ...rear, ...endsT], t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
+    // дно под боковинами без кромки по торцам (underEnds, k28); дно между боковинами и крыша — правило kitchenEndsRule (n3-antresol)
+    else if (p.id === "bottom") setEdges(p, m.bottomUnder ? ["+z", ...(m.edgeScheme?.underEnds === false ? [] : ["+x", "-x"]), ...(wall ? rear : rearBase)] : kitchenEndsRule(m, "bottom"), t);
+    else if (p.id === "top") setEdges(p, kitchenEndsRule(m, "top"), t); // пенал: крыша видна сверху — кромка перед и зад (Базис k12 m04, k30 m05)
     // торцы жёсткой полки по проекту Базиса (fixedSides) главнее правила «перед и зад» (k25 m10: только перед, n4-tall)
     else if (p.role === "shelf" && fixedIds.has(p.id)) setEdges(p, m.edgeScheme?.fixedSides ?? ["+z", "-z"], t);
     else if (p.role === "shelf" && m.edgeScheme?.fixedSides && fixedAll.has(p.id)) setEdges(p, m.edgeScheme.fixedSides, t); // жёсткая полка навесного — торцы как в Базисе (k05: перед и зад)
@@ -586,8 +598,125 @@ export function kitchenErrors(m: Module): string[] {
     if (k.backTopGap !== undefined && (!Number.isFinite(k.backTopGap) || k.backTopGap < 0 || k.backTopGap > 20)) e.push("Зазор ХДФ до верха: 0–20 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
+    // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
+    if (k.legs) {
+      const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
+      if (!inDepth(l.back) || !inDepth(l.front) || (l.side !== undefined && !(Number.isFinite(l.side) && l.side >= 0 && l.side <= m.width))) e.push("Опоры: отступы рядов от кромок в пределах дна.");
+      if (l.xs?.some((x) => !Number.isFinite(x) || x < 0 || x > m.width)) e.push("Опоры: позиции по ширине в пределах дна.");
+      if (l.pts?.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z) || x < 0 || x > m.width || z < 0 || z > m.depth)) e.push("Опоры: точки в пределах дна.");
+    }
   }
+  // глубина столешницы — в диапазоне поля UI (KitchenPanel 400–1200); у модулей без столешницы глубина проверяется правилами корпуса
+  if (m.worktop && (!Number.isFinite(m.depth) || m.depth < 400 || m.depth > 1200)) e.push("Столешница: глубина 400–1200 мм.");
   return e;
+}
+
+// ---------- разбор сохранённого JSON (parseModule в model.ts): кухонные поля, схема кромки, стяжки — рядом с типами ----------
+// Алиасы старых полей (слияние веток n2–n6, аудит 11.10): noFasteners → fasteners:'pins'; confDepth → drill.confirmat; eccBelow → ecc.bottomOut;
+// screw:'euro-6x50' → confirmatName:'Евровинт 6х50'; edgeScheme.endsX → ends (parseEdgeScheme); kitchen.bazis → Module.bazis (parseModule).
+const num = (v: unknown) => Number(v);
+const fin = (v: unknown) => Number.isFinite(Number(v));
+const v3 = (a: unknown[]) => a.slice(0, 3).map(Number) as [number, number, number];
+const v4 = (a: unknown[]) => a.slice(0, 4).map(Number) as [number, number, number, number];
+const MESH = /^[0-9a-f]{12}$/;
+/** Кухонные поля модуля из JSON (без проверки — её делает validate/kitchenErrors). parseKitchenRafix/parseGridRecord — kitchenRafix.ts. */
+export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: unknown) => KitchenRafix | undefined; parseGridRecord: (x: unknown) => Record<string, RafixGrid> | undefined }): KitchenSpec {
+  const k = (input && typeof input === "object" ? input : {}) as KitchenSpec & { noFasteners?: unknown; confDepth?: unknown; eccBelow?: unknown; screw?: unknown };
+  const dirs = (a: unknown) => (Array.isArray(a) ? a.map(Number).filter(Number.isFinite) : []);
+  // крепёж корпуса: одно поле; false строже 'pins' (старые файлы: noFasteners и fasteners:false вместе)
+  const fasteners = k.fasteners === false ? false : k.fasteners === "pins" || k.noFasteners === true ? ("pins" as const) : undefined;
+  // присадка конфирмата: drill.confirmat, старое confDepth — только если drill.confirmat не задан
+  const confirmat = k.drill && typeof k.drill === "object" && k.drill.confirmat !== undefined ? num(k.drill.confirmat) : k.confDepth !== undefined && fin(k.confDepth) ? num(k.confDepth) : undefined;
+  const pin = k.drill && typeof k.drill === "object" && k.drill.pin !== undefined ? num(k.drill.pin) : undefined;
+  const drill = { ...(confirmat === undefined ? {} : { confirmat }), ...(pin === undefined ? {} : { pin }) };
+  const ecc0 = k.ecc && typeof k.ecc === "object" ? k.ecc : undefined;
+  const ecc = { ...(ecc0?.barrel === undefined ? {} : { barrel: num(ecc0.barrel) }), ...(Array.isArray(ecc0?.stem) && ecc0.stem.length === 2 ? { stem: [num(ecc0.stem[0]), num(ecc0.stem[1])] as [number, number] } : {}),
+    ...(ecc0?.side === undefined ? {} : { side: num(ecc0.side) }), ...(ecc0?.dowelSide === undefined ? {} : { dowelSide: num(ecc0.dowelSide) }), ...(ecc0?.bottomOut || k.eccBelow ? { bottomOut: true } : {}), ...(ecc0?.topOut ? { topOut: true } : {}) };
+  const confirmatName = typeof k.confirmatName === "string" && k.confirmatName.trim() ? k.confirmatName.trim().slice(0, 80) : k.screw === "euro-6x50" ? "Евровинт 6х50" : undefined;
+  const h = k.handle;
+  return { role: String(k.role) as KitchenSpec["role"],
+    // духовка и выдвижная система Premial (Codex, room-document-p1) — разбор как в их ветке
+    ...(k.oven ? { oven: { visible: k.oven.visible !== false, drawer: k.oven.drawer === true, nicheHeight: num(k.oven.nicheHeight) } } : {}),
+    ...(k.premialPullout !== undefined ? { premialPullout: parsePremialPullout(k.premialPullout) } : {}),
+    ...(k.appliance ? { appliance: String(k.appliance) as NonNullable<KitchenSpec["appliance"]> } : {}),
+    ...(k.plinth ? { plinth: { height: num(k.plinth.height), ...(k.plinth.off ? { off: true } : {}), ...(k.plinth.clips === false ? { clips: false } : {}), ...(k.plinth.inset !== undefined && fin(k.plinth.inset) ? { inset: num(k.plinth.inset) } : {}) } } : {}),
+    ...(k.hangers === false ? { hangers: false } : k.hangers === true ? { hangers: true } : {}),
+    ...(k.hangerAt && Array.isArray(k.hangerAt.left) && Array.isArray(k.hangerAt.right) ? { hangerAt: { left: v3(k.hangerAt.left), right: v3(k.hangerAt.right), ...(k.hangerAt.caps && Array.isArray(k.hangerAt.caps.left) && Array.isArray(k.hangerAt.caps.right) ? { caps: { left: v3(k.hangerAt.caps.left), right: v3(k.hangerAt.caps.right) } } : {}) } } : {}),
+    ...(num(k.backAir) > 0 ? { backAir: num(k.backAir) } : {}),
+    ...(Array.isArray(k.grooveHoles) ? { grooveHoles: k.grooveHoles.filter((g) => Array.isArray(g) && g.length >= 3).map((g) => v3(g)) } : {}),
+    ...(Array.isArray(k.outConf) ? { outConf: k.outConf.filter((c) => c && (c.side === "left" || c.side === "right")).map((c) => ({ side: c.side, y: num(c.y), z: num(c.z) })) } : {}),
+    ...(Array.isArray(k.svcHoles) ? { svcHoles: k.svcHoles.filter((s) => s && Array.isArray(s.at) && Array.isArray(s.dir)).map((s) => ({ at: v3(s.at), dir: v3(s.dir), d: num(s.d), depth: num(s.depth) })) } : {}),
+    ...(Array.isArray(k.blindFronts) ? { blindFronts: k.blindFronts.filter((b) => b && num(b.y1) > num(b.y0)).map((b) => ({ y0: num(b.y0), y1: num(b.y1) })) } : {}),
+    ...(k.golaTies && typeof k.golaTies === "object" ? { golaTies: { ...(k.golaTies.left === 1 || k.golaTies.left === -1 ? { left: k.golaTies.left } : {}), ...(k.golaTies.right === 1 || k.golaTies.right === -1 ? { right: k.golaTies.right } : {}), ...(num(k.golaTies.depth) > 0 ? { depth: num(k.golaTies.depth) } : {}) } } : {}),
+    ...(Array.isArray(k.backClearY) && k.backClearY.length === 2 && k.backClearY.every(fin) ? { backClearY: [num(k.backClearY[0]), num(k.backClearY[1])] as [number, number] } : {}),
+    ...(k.underEcc ? { underEcc: { back: num(k.underEcc.back), front: num(k.underEcc.front) } } : {}),
+    ...(k.lowFront ? { lowFront: true } : {}),
+    ...(k.hinges === false ? { hinges: false } : {}),
+    ...(k.noLegs ? { noLegs: true } : {}),
+    ...(k.railUnder && typeof k.railUnder === "object" ? { railUnder: Object.fromEntries(Object.entries(k.railUnder).filter(([, v]) => v && Array.isArray(v.ecc) && Array.isArray(v.dowel)).map(([key, v]) => [key, { ecc: v.ecc.map(Number), dowel: v.dowel.map(Number), face: v.face === "back" ? ("back" as const) : ("front" as const) }])) } : {}),
+    ...(k.nails && k.nails.q ? { nails: { ...(typeof k.nails.mesh === "string" && MESH.test(k.nails.mesh) ? { mesh: k.nails.mesh } : {}), q: Object.fromEntries((["bottom", "top", "left", "right"] as const).map((s) => { const v = k.nails!.q[s] as unknown; return [s, (Array.isArray(v) && v.length === 4 ? v.map(Number) : [1, 0, 0, 0]) as [number, number, number, number]]; })) as Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> } } : {}),
+    ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
+    ...(fasteners === undefined ? {} : { fasteners }),
+    ...(k.plateHoles === false ? { plateHoles: false } : {}),
+    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}) } } : {}) } } : {}),
+    ...(k.faceTop !== undefined ? { faceTop: num(k.faceTop) } : {}),
+    ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
+    ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),
+    ...(k.sideDown && (k.sideDown.side === "left" || k.sideDown.side === "right") ? { sideDown: { side: k.sideDown.side, y0: num(k.sideDown.y0) } } : {}),
+    ...(Array.isArray(k.sideScrews) && k.sideScrews.length && k.sideScrews.every(fin) ? { sideScrews: k.sideScrews.map(Number) } : {}),
+    ...(k.bottomFront === undefined ? {} : { bottomFront: num(k.bottomFront) }),
+    ...(k.bottomBack === undefined ? {} : { bottomBack: num(k.bottomBack) }),
+    ...(k.topBack === undefined ? {} : { topBack: num(k.topBack) }),
+    ...(k.backBottomGap === undefined ? {} : { backBottomGap: num(k.backBottomGap) }),
+    ...(Array.isArray(k.backGapY) && k.backGapY.length === 2 ? { backGapY: [num(k.backGapY[0]), num(k.backGapY[1])] as [number, number] } : {}),
+    ...(Object.keys(ecc).length ? { ecc } : {}),
+    ...(k.backNotch && typeof k.backNotch === "object" ? { backNotch: { width: num(k.backNotch.width), height: num(k.backNotch.height) } } : {}),
+    ...(k.backTopGap === undefined ? {} : { backTopGap: num(k.backTopGap) }),
+    ...(Array.isArray(k.jointNone) ? { jointNone: k.jointNone.filter((s) => /^(bottom|top|.+:shelf:\d+):(left|right)$/.test(String(s))).map(String) } : {}),
+    ...(confirmatName ? { confirmatName } : {}),
+    ...(k.sideNotch && typeof k.sideNotch === "object" ? { sideNotch: Object.fromEntries((["left", "right"] as const).filter((s) => k.sideNotch?.[s]).map((s) => [s, { height: num(k.sideNotch![s]!.height), depth: num(k.sideNotch![s]!.depth) }])) } : {}),
+    ...(Object.keys(drill).length ? { drill } : {}),
+    ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number] })) } : {}),
+    ...(k.jointZ && typeof k.jointZ === "object" ? { jointZ: Object.fromEntries(Object.entries(k.jointZ).filter(([, v]) => Array.isArray(v) && v.length === 2).map(([key, v]) => [key, [num(v[0]), num(v[1])] as [number, number]])) } : {}),
+    ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}) } } : {}),
+    ...(k.legs ? { legs: { back: num(k.legs.back), front: num(k.legs.front), ...(k.legs.side === undefined ? {} : { side: num(k.legs.side) }), ...(Array.isArray(k.legs.xs) ? { xs: k.legs.xs.map(Number) } : {}), ...(Array.isArray(k.legs.pts) ? { pts: k.legs.pts.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(k.legs.screws ? { screws: true as const } : {}), ...(k.legs.same ? { same: true as const } : {}), ...(k.legs.rows2 ? { rows2: true as const } : {}) } } : {}),
+    ...(() => { const r = k.rafix === undefined ? undefined : deps.parseKitchenRafix(k.rafix); return r ? { rafix: r } : {}; })(),
+    ...(k.jointPoints === 2 || k.jointPoints === 3 ? { jointPoints: k.jointPoints } : {}),
+    ...(Array.isArray(k.bareShelves) && k.bareShelves.length ? { bareShelves: k.bareShelves.map(Number).filter(Number.isInteger) } : {}),
+    ...(Array.isArray(k.dupParts) && k.dupParts.length ? { dupParts: k.dupParts.map(String) } : {}),
+    ...(Number.isInteger(k.backFromShelf) && k.backFromShelf! >= 0 ? { backFromShelf: k.backFromShelf } : {}),
+    ...(k.planContours && typeof k.planContours === "object" ? { planContours: Object.fromEntries(Object.entries(k.planContours as Record<string, unknown>).filter(([, c]) => Array.isArray(c)).map(([id, c]) => [id, (c as unknown[][]).map((q) => [num(q[0]), num(q[1])] as [number, number])])) } : {}),
+    ...(k.bareBottom === true ? { bareBottom: true as const } : {}),
+    ...(Array.isArray(k.bareJoints) && k.bareJoints.some((j: unknown) => j === "bottom" || j === "top") ? { bareJoints: k.bareJoints.filter((j: unknown): j is "bottom" | "top" => j === "bottom" || j === "top") } : {}),
+    ...(() => { const j = deps.parseGridRecord(k.joints); return j ? { joints: j } : {}; })() };
+}
+type EdgeScheme = NonNullable<Module["edgeScheme"]>;
+const DIR4 = ["+x", "-x", "+z", "-z"], DIR6 = ["+x", "-x", "+y", "-y", "+z", "-z"];
+/** Схема кромки кухни из JSON. ctx — поля модуля, от которых зависит правило торцов (бывший endsX: true ≡ ends.bottom и ends.top =
+ *  правило + «+x», «-x»; 'bottom'/'top' — половина; у дна под боковинами (bottomUnder) торцы дна правит underEnds, половина «bottom» не переносится). */
+export function parseEdgeScheme(input: unknown, ctx: Pick<Module, "backType" | "bottomUnder" | "kitchen">): EdgeScheme {
+  const e = (input && typeof input === "object" ? input : {}) as EdgeScheme & { endsX?: unknown };
+  const f4 = (a: unknown[]) => a.filter((s) => DIR4.includes(String(s))) as ("+x" | "-x" | "+z" | "-z")[];
+  const out: EdgeScheme = { t: num(e.t), ...(e.railBack === false ? { railBack: false as const } : {}), ...(e.underEnds === false ? { underEnds: false as const } : {}), ...(e.rear ? { rear: true as const } : {}),
+    ...(e.fixedEnds === false ? { fixedEnds: false as const } : {}), ...(e.all === true ? { all: true as const } : {}), ...(e.sideTop === false ? { sideTop: false as const } : {}), ...(e.front !== undefined ? { front: num(e.front) } : {}),
+    ...(Array.isArray(e.shelf) ? { shelf: e.shelf.map(String) } : {}), ...(e.shelfT === undefined ? {} : { shelfT: num(e.shelfT) }), ...(Array.isArray(e.shelfSides) ? { shelfSides: f4(e.shelfSides) } : {}), ...(Array.isArray(e.fixedSides) ? { fixedSides: f4(e.fixedSides) } : {}),
+    ...(e.parts && typeof e.parts === "object" ? { parts: Object.fromEntries(Object.entries(e.parts as Record<string, unknown>).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, (v as unknown[]).filter((s) => DIR6.includes(String(s))) as ("+x" | "-x" | "+y" | "-y" | "+z" | "-z")[]])) } : {}),
+    ...(e.partsT && typeof e.partsT === "object" ? { partsT: Object.fromEntries(Object.entries(e.partsT as Record<string, unknown>).filter(([, v]) => fin(v) && num(v) > 0).map(([k, v]) => [k, num(v)])) } : {}) };
+  const ends: NonNullable<EdgeScheme["ends"]> = e.ends && typeof e.ends === "object" ? Object.fromEntries(Object.entries(e.ends as Record<string, unknown>).filter(([k, v]) => (k === "bottom" || k === "top") && Array.isArray(v)).map(([k, v]) => [k, f4(v as unknown[])])) : {};
+  // старый endsX — в ends по правилу торцов (список проекта главнее)
+  const ex = e.endsX === true || e.endsX === "bottom" || e.endsX === "top" ? e.endsX : undefined;
+  const scheme = { ...ctx, edgeScheme: out };
+  if ((ex === true || ex === "bottom") && !ends.bottom && !ctx.bottomUnder) ends.bottom = [...kitchenEndsRule(scheme, "bottom"), "+x", "-x"];
+  if ((ex === true || ex === "top") && !ends.top) ends.top = [...kitchenEndsRule(scheme, "top"), "+x", "-x"];
+  return { ...out, ...(Object.keys(ends).length ? { ends } : {}) };
+}
+type Rail = NonNullable<Module["rails"]>[number];
+/** Стяжки/царги из JSON: место и высота, lay/setback/at, fasten:false, конфирматы по Базису (confY/confZ/topConf), своя глубина D5 (confDepth — законное поле царги). */
+export function parseRails(input: unknown): Rail[] {
+  if (!Array.isArray(input)) return [];
+  return (input as Record<string, unknown>[]).map((r) => ({ place: r?.place as Rail["place"], height: num(r?.height), ...(r?.lay === undefined ? {} : { lay: r.lay as "edge" | "flat" }), ...(r?.setback === undefined ? {} : { setback: num(r.setback) }), ...(r?.at === undefined ? {} : { at: num(r.at) }),
+    ...(r?.fasten === false ? { fasten: false as const } : {}), ...(Array.isArray(r?.confY) ? { confY: (r.confY as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(num(r?.confDepth) > 0 ? { confDepth: num(r.confDepth) } : {}),
+    ...(Array.isArray(r?.confZ) ? { confZ: (r.confZ as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(Array.isArray(r?.topConf) ? { topConf: (r.topConf as unknown[]).map(Number).filter(Number.isFinite) } : {}) }));
 }
 
 /** Общий кухонный вид корпуса по Базису: фасады 1,5 / 3, ХДФ накладной (W−3)×(H−3) или в паз П16-4×8. */

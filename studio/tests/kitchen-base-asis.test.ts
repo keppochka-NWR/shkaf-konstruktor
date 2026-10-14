@@ -262,15 +262,19 @@ test('эксцентрик дна снизу (kitchen.eccBelow) — как в Б
   const ref=load('k22','m01');
   assert.equal(eccFromBelow(ref),'legs');
   const {module:m}=moduleFromEtalon(ref);
-  assert.equal(m.kitchen?.eccBelow,undefined);
+  assert.equal(m.kitchen?.ecc?.bottomOut,undefined);
   assert.deepEqual(m.edgeScheme?.shelf,['+z']);
   assert.deepEqual(shelfEdges(ref),['+z']);
   assert.ok(!partCollisions(parts(m),m).some(x=>x.names.some(n=>n.startsWith('Эксцентрик'))),'эксцентрик ни с чем не пересекается');
-  // флаг сам по себе: бочонок у нижней пласти дна
+  // флаг сам по себе (одно поле kitchen.ecc.bottomOut): бочонок у нижней пласти дна
   const pal=kitchenBase(initialModule(),600);
-  const e={...pal,jointFastening:{'bottom:left':'eccentric' as const,'bottom:right':'eccentric' as const},bottomUnder:false,kitchen:{...pal.kitchen!,eccBelow:true as const}};
+  const e={...pal,jointFastening:{'bottom:left':'eccentric' as const,'bottom:right':'eccentric' as const},bottomUnder:false,kitchen:{...pal.kitchen!,ecc:{bottomOut:true}}};
   const bot=parts(e).find(p=>p.id==='bottom')!,ecc=parts(e).find(p=>p.id.startsWith('ecc:bottom:')&&!p.id.endsWith(':pin'))!;
   assert.equal(ecc.anchor![1],bot.position[1]-bot.size[1]/2);
+  // старый JSON (kitchen.eccBelow) — в ecc.bottomOut, бочонок там же
+  const old=parseModule(JSON.parse(JSON.stringify({...e,kitchen:{...pal.kitchen!,eccBelow:true}})));
+  assert.deepEqual(old.kitchen?.ecc,{bottomOut:true});assert.equal((old.kitchen as {eccBelow?:unknown}).eccBelow,undefined);
+  assert.equal(parts(old).find(p=>p.id.startsWith('ecc:bottom:')&&!p.id.endsWith(':pin'))!.anchor![1],bot.position[1]-bot.size[1]/2);
 });
 
 test('флаги «как в Базисе» не трогают обычную кухню палитры и шкафы: петли, опоры и крепёж на месте',()=>{

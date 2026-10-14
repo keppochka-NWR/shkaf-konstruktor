@@ -62,16 +62,19 @@ test('hanger pressed up to 2 mm into the roof underside (Bazis k14 m04 1.2, k18 
 test('no fasteners in Bazis (k32): studio adds no confirmats, eccentrics or dowels',()=>{
   assert.equal(fastenersAbsent({key:'x',name:'x',archetype:'antresol',size:[600,690,560],panels:[],hardware:[],holes:[]}),true);
   assert.equal(fastenersAbsent({key:'x',name:'x',archetype:'antresol',size:[600,690,560],panels:[],hardware:[{i:0,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,8,63]}]}),false);
-  const m=antresol();m.kitchen!.noFasteners=true;
+  const m=antresol();m.kitchen!.fasteners='pins';
   const ps=parts(m);
   assert.equal(ps.filter(p=>/^(fast|ecc|dowel):/.test(p.id)).length,0);
-  assert.equal(antresol().kitchen!.noFasteners,undefined);
+  assert.ok(ps.some(p=>p.id.startsWith('shp:')),'pins: полкодержатели остаются');
+  assert.equal(antresol().kitchen!.fasteners,undefined);
   assert.ok(parts(antresol()).some(p=>p.id.startsWith('fast:')),'default antresol keeps its confirmats');
-  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.noFasteners,true);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen!.fasteners,'pins');
+  // старый JSON (noFasteners) — в новое поле
+  assert.equal(parseModule(JSON.parse(JSON.stringify({...m,kitchen:{...m.kitchen,fasteners:undefined,noFasteners:true}}))).kitchen!.fasteners,'pins');
 });
 
 test('raised hanging body (bottom 14 above the module bottom): no plinth panel, facade down to the module bottom, no plinth-list error',()=>{
-  const m=antresol();m.plinthHeight=14;m.kitchen!.plinth={height:95,off:true};m.kitchen!.bazis=true; // как ставит распознаватель: модуль из Базиса, щита под дном нет
+  const m=antresol();m.plinthHeight=14;m.kitchen!.plinth={height:95,off:true};m.bazis=true; // как ставит распознаватель: модуль из Базиса, щита под дном нет
   const ps=parts(m);
   assert.ok(!ps.some(p=>p.id==='plinth'),'hanging cabinets have no plinth');
   assert.equal(facadeBottom(m),0);
@@ -88,9 +91,13 @@ test('edge ends: top/bottom between sides edged at the ends only when Bazis edge
   const p=(edges:[string,number][]):RefPanel=>({i:0,name:'Дно',mat:'',thick:16,kind:'ldsp',box:[16,0,0,584,16,560],axis:'y',edges:edges.map(([side,thick])=>({side,thick}))} as unknown as RefPanel);
   assert.equal(endsEdged([p([['+z',1],['+x',1],['-z',1],['-x',1]])]),true);
   assert.equal(endsEdged([p([['+z',1],['-z',1]])]),false);
-  const m=antresol();m.edgeScheme={t:1,endsX:true};
+  const m=antresol();m.edgeScheme={t:1,ends:{bottom:['+z','-z','+x','-x'],top:['+z','-z','+x','-x']}};
   const top=parts(m).find(q=>q.id==='top')!;
   assert.deepEqual(top.edge.filter(x=>x>0).length,4,'all four ends edged');
+  // старый endsX:true — в ends по правилу торцов (паз: перед и зад) плюс торцы у боковин
+  const old=parseModule(JSON.parse(JSON.stringify({...antresol(),edgeScheme:{t:1,endsX:true}})));
+  assert.deepEqual(old.edgeScheme?.ends,{bottom:['+z','-z','+x','-x'],top:['+z','-z','+x','-x']});
+  assert.equal((old.edgeScheme as {endsX?:unknown}).endsX,undefined);
 });
 
 test('sides standing on the bottom with eccentrics (k16): recognizer reads insets/dowel offset, studio drills like Bazis',()=>{
@@ -114,9 +121,9 @@ test('sides standing on the bottom with eccentrics (k16): recognizer reads inset
 
 test('edge flags follow the Bazis edging: under-bottom ends not edged (k28), rear ends with a nailed back (k31)',()=>{
   const P=(edges:[string,number][]):RefPanel=>({i:0,name:'',mat:'',thick:16,kind:'ldsp',box:[0,0,0,1,1,1],axis:'y',edges:edges.map(([side,thick])=>({side,thick}))} as unknown as RefPanel);
-  assert.deepEqual(edgeFlags(P([['+z',1],['-z',1]]),P([['+z',0.4],['-z',0.4]]),P([['+z',0.4],['-z',0.4]]),true,'groove'),{underEnds:false});
-  assert.deepEqual(edgeFlags(P([['+z',1],['-z',1]]),P([['+z',1],['-z',1],['+x',1],['-x',1]]),P([['+z',1],['-z',1]]),true,'nailed'),{rear:true});
-  assert.deepEqual(edgeFlags(P([['+z',1]]),P([['+z',1],['+x',1],['-x',1]]),P([['+z',1]]),true,'nailed'),{});
+  assert.deepEqual(edgeFlags(P([['+z',1],['-z',1]]),P([['+z',0.4],['-z',0.4]]),P([['+z',0.4],['-z',0.4]]),true,'groove','antresol'),{underEnds:false});
+  assert.deepEqual(edgeFlags(P([['+z',1],['-z',1]]),P([['+z',1],['-z',1],['+x',1],['-x',1]]),P([['+z',1],['-z',1]]),true,'nailed','antresol'),{rear:true});
+  assert.deepEqual(edgeFlags(P([['+z',1]]),P([['+z',1],['+x',1],['-x',1]]),P([['+z',1]]),true,'nailed','antresol'),{});
   const m=antresol();m.bottomUnder=true;m.backType='nailed';m.edgeScheme={t:1,underEnds:false,rear:true};
   const ps=parts(m),bottom=ps.find(p=>p.id==='bottom')!,left=ps.find(p=>p.id==='left')!;
   assert.equal(bottom.edge.filter(x=>x>0).length,2,'bottom under the sides: front and rear only');
@@ -148,18 +155,27 @@ test('confirmat D5 depth as in the Bazis project (k31: 42), single value only',(
   assert.equal(confDepthFromEtalon(ref([42,42])),42);
   assert.equal(confDepthFromEtalon(ref([35,35])),undefined);
   assert.equal(confDepthFromEtalon(ref([35,42])),undefined,'mixed depths are not one rule');
-  const m=antresol();m.kitchen!.confDepth=42;
+  const m=antresol();m.kitchen!.drill={confirmat:42};
   assert.ok(holes(m).filter(h=>h.src.startsWith('fast:')&&h.d===5).every(h=>h.depth===42));
   assert.ok(holes(antresol()).filter(h=>h.src.startsWith('fast:')&&h.d===5).every(h=>h.depth===35));
+  // старый JSON (kitchen.confDepth) — в drill.confirmat; явный drill.confirmat главнее
+  const old=parseModule(JSON.parse(JSON.stringify({...antresol(),kitchen:{...antresol().kitchen,confDepth:42}})));
+  assert.deepEqual(old.kitchen?.drill,{confirmat:42});assert.equal((old.kitchen as {confDepth?:unknown}).confDepth,undefined);
+  assert.ok(holes(old).filter(h=>h.src.startsWith('fast:')&&h.d===5).every(h=>h.depth===42));
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...antresol(),kitchen:{...antresol().kitchen,confDepth:42,drill:{confirmat:37,pin:9}}}))).kitchen?.drill,{confirmat:37,pin:9});
 });
 
 test('edge ends per panel: only the bottom edged at the ends (k31 m13)',()=>{
   const P=(edges:[string,number][]):RefPanel=>({i:0,name:'',mat:'',thick:16,kind:'ldsp',box:[0,0,0,1,1,1],axis:'y',edges:edges.map(([side,thick])=>({side,thick}))} as unknown as RefPanel);
-  assert.deepEqual(edgeFlags(P([['+z',1]]),P([['+z',1],['-z',1],['+x',1],['-x',1]]),P([['+z',1],['-z',1]]),false,'groove'),{endsX:'bottom'});
-  const m=antresol();m.edgeScheme={t:1,endsX:'bottom'};
+  assert.deepEqual(edgeFlags(P([['+z',1]]),P([['+z',1],['-z',1],['+x',1],['-x',1]]),P([['+z',1],['-z',1]]),false,'groove','antresol'),{ends:{bottom:['+z','-z','+x','-x']}});
+  const m=antresol();m.edgeScheme={t:1,ends:{bottom:['+z','-z','+x','-x']}};
   const ps=parts(m);
   assert.equal(ps.find(p=>p.id==='bottom')!.edge.filter(x=>x>0).length,4);
   assert.equal(ps.find(p=>p.id==='top')!.edge.filter(x=>x>0).length,2);
+  // старый endsX:'bottom' — половина: только дно; у дна под боковинами половина «bottom» не переносится (торцы правит underEnds)
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...antresol(),edgeScheme:{t:1,endsX:'bottom'}}))).edgeScheme?.ends,{bottom:['+z','-z','+x','-x']});
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...antresol(),edgeScheme:{t:1,endsX:'top'}}))).edgeScheme?.ends,{top:['+z','-z','+x','-x']});
+  assert.equal(parseModule(JSON.parse(JSON.stringify({...antresol(),bottomUnder:true,edgeScheme:{t:1,endsX:'bottom'}}))).edgeScheme?.ends,undefined);
 });
 
 test('kitchen back groove may sit deep in the body (k20 m05: 119 mm), wardrobe limit 8–30 unchanged',()=>{
@@ -206,17 +222,21 @@ test('estimate of a module from Bazis: no "мелочёвка корпуса" no
   const lines=(m:Module)=>estimate(newProject(m)).lines.map(l=>l.id);
   // слияние n3: правила Базиса — у любой кухни (m.kitchen, n3-kitchens2/n3-additions): ни «мелочёвки», ни заглушек, ни подъёмника
   // без газлифта Базиса; шкаф студии — как раньше
-  const own=antresol(),bz=antresol();bz.kitchen!.bazis=true;
+  const own=antresol(),bz=antresol();bz.bazis=true;
   const wardrobe={...initialModule()};
   assert.ok(lines(wardrobe).includes('kit')&&lines(wardrobe).includes('confirmat-cap'),'wardrobe keeps the norm and caps');
   assert.ok(!lines(own).includes('kit')&&!lines(own).includes('confirmat-cap'));
   assert.ok(!lines(bz).includes('kit')&&!lines(bz).includes('confirmat-cap'));
   assert.ok(lines(bz).includes('confirmat-7x50'),'confirmats themselves stay — they are in Bazis');
   // подъёмный фасад без подъёмника в проекте: строки механизма нет ни у модуля из Базиса, ни у кухни студии
-  const lift=(b:boolean)=>{const m=antresol();m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top']}];if(b)m.kitchen!.bazis=true;return m;};
+  const lift=(b:boolean)=>{const m=antresol();m.sections=[{...m.sections[0],shelves:[],doorLeaves:1,doorHinges:['top']}];if(b)m.bazis=true;return m;};
   assert.ok(!lines(lift(false)).includes('lift-mechanism'));
   assert.ok(!lines(lift(true)).includes('lift-mechanism'));
-  assert.equal(parseModule(JSON.parse(JSON.stringify(bz))).kitchen!.bazis,true);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(bz))).bazis,true);
+  // старый JSON с kitchen.bazis — признак переезжает в Module.bazis (единственный признак «из Базиса»: isBazisModule)
+  const legacy=parseModule(JSON.parse(JSON.stringify({...own,kitchen:{...own.kitchen,bazis:true}})));
+  assert.equal(legacy.bazis,true);assert.equal(legacy.kitchen?.bazis,undefined);
+  assert.ok(!lines(legacy).includes('confirmat-cap'));
   // название фасада — как смета: у модуля из Базиса без подъёмника нет «механизм требует подбора»
   const door=(b:boolean)=>parts(lift(b)).find(p=>p.role==='door'&&p.hinge==='top')!.name;
   assert.match(door(false),/механизм требует подбора/);
@@ -312,7 +332,7 @@ for(const key of ['m03','m04'])
     const c=partCollisions(parts(m),m);
     assert.ok(c.length>0&&c.every(x=>x.bazis&&/dowel:under:/.test(x.a+' '+x.b)&&/groove:/.test(x.a+' '+x.b)),'only the Bazis dowel × groove, flagged');
     assert.ok(c.every(x=>x.depth<=3.05),'no deeper than in Bazis');
-    const own={...m,kitchen:{...m.kitchen!,bazis:undefined}} as Module;
+    const own={...m,bazis:undefined} as Module; // признак «из Базиса» — только Module.bazis
     assert.ok(partCollisions(parts(own),own).every(x=>!x.bazis),'not flagged for a module that is not from Bazis');
   });
 // Лишний (третий) эксцентрик Базиса в углу у левой боковины (k28 m12, z=8) не отменяет эксцентрики боковины: обе боковины на стяжках
@@ -337,7 +357,7 @@ for(const [k,key] of [['k16','m11'],['k06','m06']] as const)
     assert.ok(c.every(x=>!x.bazis),'without the Bazis label');
   });
 test('the «as in Bazis» label follows the recorded fastener point: a fastener moved by an edit loses it',()=>{
-  const m=antresol();m.kitchen!.bazis=true;
+  const m=antresol();m.bazis=true;
   const ps=parts(m),f=ps.find(p=>/^fast:/.test(p.id)&&p.model?.origin)!,o=f.model!.origin!;
   const g={...f,id:'groove:0',name:'паз под подсветку',role:'light' as const,material:'metal' as const,size:[20,20,20] as [number,number,number],position:[o[0],o[1],o[2]] as [number,number,number],collide:undefined,model:undefined};
   const hit=(mm:Module)=>partCollisions([f,g],mm).find(x=>x.a===f.id||x.b===f.id)!;
@@ -463,7 +483,7 @@ test('confirmats tying the body to its neighbour (k15 m12: from inside through t
 // Слияние n4: «в воздухе» — не пересечение, а сведения «как в проекте Базиса» (roomWarnings.bazisHostNotes, политика n4-wardrobes).
 const inProject=(mm:Module)=>{const p=newProject({...initialModule()});p.modules=[{id:'a',x:0,y:0,z:0,rotation:0,module:mm}];return p;};
 test('hangers of a Bazis module hanging in the air above the body (+985) are reported, position kept as in Bazis',()=>{
-  const m=antresol();m.kitchen!.bazis=true;m.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};
+  const m=antresol();m.bazis=true;m.kitchen!.hangerAt={left:[-985,20,0],right:[-985,20,0]};
   const ps=parts(m);
   assert.deepEqual(ps.find(p=>p.id==='kitchen-hanger:left')!.model!.origin,[16,1385,20],'position as in Bazis');
   const far=bazisAirHardware(ps,m);
@@ -472,10 +492,10 @@ test('hangers of a Bazis module hanging in the air above the body (+985) are rep
   assert.equal(w.length,1);assert.match(w[0].message,/висит в воздухе дальше 30 мм.*Навес мебельный регулируемый ABS левый \(985 мм\).*Проверьте в проекте Базиса/);
   assert.deepEqual(collisionWarnings(inProject(m)),[],'не пересечение');
   // по правилу (15 ниже верха) и навес на 25 мм выше — не в воздухе (порог RAW_SEAT_GAP: дальше 30 мм в базе только эти навесы)
-  const std=antresol();std.kitchen!.bazis=true;assert.deepEqual(bazisAirHardware(parts(std),std),[]);assert.deepEqual(collisionWarnings(inProject(std)),[]);assert.deepEqual(bazisHostNotes(inProject(std)),[]);
-  const near=antresol();near.kitchen!.bazis=true;near.kitchen!.hangerAt={left:[-25,20,0],right:[-25,20,0]};assert.deepEqual(bazisAirHardware(parts(near),near),[]);
+  const std=antresol();std.bazis=true;assert.deepEqual(bazisAirHardware(parts(std),std),[]);assert.deepEqual(collisionWarnings(inProject(std)),[]);assert.deepEqual(bazisHostNotes(inProject(std)),[]);
+  const near=antresol();near.bazis=true;near.kitchen!.hangerAt={left:[-25,20,0],right:[-25,20,0]};assert.deepEqual(bazisAirHardware(parts(near),near),[]);
   // гвозди ХДФ — по правилу раскладки Базиса от размеров ХДФ (n4-wall): после сужения модуля на 100 мм остаются на ХДФ
-  const nl=antresol();nl.kitchen!.bazis=true;nl.backType='nailed';nl.backGap=1;nl.kitchen!.nails={mesh:'281de529218b',q:{bottom:[1,0,0,0],top:[1,0,0,0],left:[1,0,0,0],right:[1,0,0,0]}};
+  const nl=antresol();nl.bazis=true;nl.backType='nailed';nl.backGap=1;nl.kitchen!.nails={mesh:'281de529218b',q:{bottom:[1,0,0,0],top:[1,0,0,0],left:[1,0,0,0],right:[1,0,0,0]}};
   assert.deepEqual(bazisAirHardware(parts(nl),nl),[],'nails on the HDF');
   nl.width=500;assert.deepEqual(bazisAirHardware(parts(nl),nl),[],'narrower module: nails follow the HDF');
   // модуль студии (не из Базиса) и шкаф — не проверяются

@@ -126,7 +126,8 @@ test('навесной: составной корпус (k26 m01, боковин
 });
 test('навесной k32 m14: в Базисе нет крепежа и кромка дна/крыши по кругу — студия крепёж не добавляет, кромит как Базис',{skip:!existsSync(`${ETALON}/k32.json`)},()=>{
   const ref=load('k32','m14'),{module:m}=moduleFromEtalon(ref);
-  assert.equal(m.kitchen?.noFasteners,true);
+  // k32: ни крепежа стыков, ни полкодержателей (было noFasteners + fasteners:false) — одно поле, false строже 'pins'
+  assert.equal(m.kitchen?.fasteners,false);
   assert.deepEqual(m.edgeScheme?.ends?.bottom?.slice().sort(),['+x','+z','-x','-z']);
   const ps=parts(m);
   assert.deepEqual(ps.filter(p=>/^(fast|ecc|dowel):/.test(p.id)).map(p=>p.id),[],'ни конфирматов, ни эксцентриков');
@@ -143,7 +144,7 @@ test('навесной k32 m14: в Базисе нет крепежа и кро�
   assert.equal(compareModule(ref,{...m,kitchen:{...m.kitchen!,sideNotch:{left:{height:100,depth:20}}}}).pass,false);
   assert.equal(compareModule(ref,{...m,kitchen:{...m.kitchen!,sideNotch:{right:{height:100,depth:30}}}}).pass,false);
   const back=parseModule(JSON.parse(JSON.stringify(m)));
-  assert.equal(back.kitchen?.noFasteners,true);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
+  assert.equal(back.kitchen?.fasteners,false);assert.deepEqual(back.edgeScheme?.ends,m.edgeScheme?.ends);
   assert.deepEqual(back.kitchen?.sideNotch,m.kitchen?.sideNotch,'вырез переживает сохранение');
   // пересечения — по телу боковины без выреза
   assert.deepEqual(partCollisions(parts(m),m).map(x=>x.names.join(' × ')),[]);
@@ -222,7 +223,7 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
   }
   for(const [k,key,n] of [['k33','m03',8],['k34','m03',8],['k34','m04',4],['k33','m01',8]] as const){
     const ref=load(k,key),{module:m}=moduleFromEtalon(ref);
-    assert.notEqual(m.kitchen?.noFasteners,true,`${k} ${key}: крепёж в Базисе есть`);
+    assert.notEqual(m.kitchen?.fasteners,'pins',`${k} ${key}: крепёж в Базисе есть`);
     assert.ok(parts(m).filter(p=>p.id.startsWith('fast:')).length>=n,`${k} ${key}: конфирматы студии`);
     const c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='конфирмат')!;
     assert.equal(row.ref,n,`${k} ${key}: евровинты Базиса посчитаны конфирматами`);
@@ -265,7 +266,7 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
   assert.ok(c4.pass,String(c4.contours));assert.deepEqual(validate(m4),[]);
   assert.equal(parseModule(JSON.parse(JSON.stringify(m4))).kitchen?.backBottomGap,1);
   // в k32 крепежа нет вовсе — правило «без крепежа» по-прежнему срабатывает
-  assert.equal(moduleFromEtalon(load('k32','m14')).module.kitchen?.noFasteners,true);
+  assert.equal(moduleFromEtalon(load('k32','m14')).module.kitchen?.fasteners,false);
 });
 test('сушка навесного k21 m05: набор SU01/03 с сеткой Базиса — в точках и с поворотами проекта; без сетки (k06 m07) — только заметка',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
   const ref=load('k21','m05'),{module:m}=moduleFromEtalon(ref);

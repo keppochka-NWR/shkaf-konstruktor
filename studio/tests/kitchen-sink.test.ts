@@ -105,15 +105,22 @@ test('Bazis k21 m02: rail without fasteners in the project gets no confirmats (f
 test('Bazis k33/k34 templates: euro screw 6x50 instead of confirmat 7x50 - name, D5x36, estimate line; recognized only without confirmats',async()=>{
   const {holes}=await import('../src/drilling');
   const {screwKind}=await import('../scripts/kitchen/recognize-common');
-  const m=sink();m.kitchen!.screw='euro-6x50';
+  const m=sink();m.kitchen!.confirmatName='Евровинт 6х50'; // одно поле: имя крепежа по проекту (бывшее screw:'euro-6x50')
   const ps=parts(m),f=ps.filter(p=>p.id.startsWith('fast:'));
-  assert.ok(f.length>0&&f.every(p=>p.name==='Евровинт 6×50'));
+  assert.ok(f.length>0&&f.every(p=>p.name==='Евровинт 6х50'));
   const hs=holes(m,ps).filter(h=>h.src.startsWith('fast:')&&h.d===5);
   assert.ok(hs.length>0&&hs.every(h=>h.depth===36));
   const e=estimate(newProject(m));
-  assert.ok(e.lines.some(l=>l.id==='confirmat-euro-6x50'));
+  assert.ok(e.lines.some(l=>l.id==='confirmat:Евровинт 6х50'));
   assert.ok(!e.lines.some(l=>l.id==='confirmat-7x50'));
-  assert.equal(screwKind([{name:'Евровинт 6х50',category:'прочее',pos:[0,0,0]}]),'euro-6x50');
+  // старый JSON (kitchen.screw) — в confirmatName; те же детали, присадка и строка сметы
+  const {parseModule}=await import('../src/model');
+  const old=parseModule(JSON.parse(JSON.stringify({...sink(),kitchen:{...sink().kitchen,screw:'euro-6x50'}})));
+  assert.equal(old.kitchen?.confirmatName,'Евровинт 6х50');assert.equal(old.kitchen?.screw,undefined);
+  assert.ok(parts(old).filter(p=>p.id.startsWith('fast:')).every(p=>p.name==='Евровинт 6х50'));
+  assert.ok(holes(old).filter(h=>h.src.startsWith('fast:')&&h.d===5).every(h=>h.depth===36));
+  assert.ok(estimate(newProject(old)).lines.some(l=>l.id==='confirmat:Евровинт 6х50'));
+  assert.equal(screwKind([{name:'Евровинт 6х50',category:'прочее',pos:[0,0,0]}]),'Евровинт 6х50');
   assert.equal(screwKind([{name:'Евровинт 6х50',category:'прочее',pos:[0,0,0]},{name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[0,0,0]}]),undefined);
 });
 
