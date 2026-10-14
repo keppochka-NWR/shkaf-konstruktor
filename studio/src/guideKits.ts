@@ -43,6 +43,24 @@ export const versaliteKit = (len: number) => ({ id: "versalite-h45:" + len, labe
 export const modernKit = (len: number) => ({ id: "modern-slide:" + len, label: `Направляющие MODERN SLIDE ${len} мм с доводчиком — ${GUIDE_KIT}` });
 /** Firmax ящика студии без артикула Базиса — по длине короба, как раньше. */
 export const firmaxKit = (len: number) => ({ id: "firmax-ldsp:" + len, label: `Направляющие скрытого монтажа Firmax ${len} мм — ${GUIDE_KIT}` });
+/** Ящики Axis PRO сырого модуля по записям Базиса: высота — из царг («Axis PRO Царга H-120 Белый, 300»), длина — хвост царги или
+ *  направляющая («Axis PRO Направляющая, 500»), цвет — «антрацит» / белый; n — записей царг (2 на ящик) или направляющих. Группы по
+ *  (высота, длина, цвет) — строка сметы та же, что у параметрического ящика (axis-pro:<h>:<len>:<color>); без записей — []. */
+export function axisSpecs(hardware: Rec[]): { h: number | null; len: number; color: "white" | "anthracite"; n: number }[] {
+  const lens = new Map<number, number>(), groups = new Map<string, { h: number | null; len: number; color: "white" | "anthracite"; n: number }>();
+  const tail = (s: string) => { const m = /,\s*(\d{3})\s*$/.exec(s); return m ? Number(m[1]) : null; };
+  for (const h of hardware) { const s = (h.name ?? "").trim(); if (h.category === "направляющая" && isAxisGuide(s)) { const L = tail(s); if (L) lens.set(L, (lens.get(L) ?? 0) + 1); } }
+  const mainLen = [...lens].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  for (const h of hardware) {
+    const s = (h.name ?? "").trim(), c = /axis\s*pro.*царга\s*H-?(\d+)/i.exec(s);
+    if (!c) continue;
+    const len = tail(s) ?? mainLen; if (!len) continue;
+    const color = /антрацит/i.test(s) ? "anthracite" : "white", key = `${c[1]}:${len}:${color}`;
+    const g = groups.get(key) ?? { h: Number(c[1]), len, color, n: 0 }; g.n++; groups.set(key, g);
+  }
+  if (!groups.size && mainLen) for (const [len, n] of lens) groups.set(`:${len}`, { h: null, len, color: "white", n });
+  return [...groups.values()];
+}
 /** Доли комплектов по весам (записи Базиса разных длин одной системы): сумма = total, остаток — по наибольшей дробной части. */
 export function shareKits(total: number, weights: number[]): number[] {
   const sum = weights.reduce((s, v) => s + v, 0);

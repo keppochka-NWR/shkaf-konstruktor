@@ -4,6 +4,40 @@
 // Раскрой и смета панелей работают как обычно; правила студии (петли, крепёж, полки) к сырому модулю не применяются.
 import type { BazisItem, Module, Part } from "./model";
 import { RAW_SEAT_GAP } from "./collisions";
+import { edgeDirs } from "./edges";
+
+/** Кромка Базиса сырой детали ([толщина, длина] без стороны) → Part.edge по четырём торцам (edges.ts: 0/1 — торцы по ширине,
+ *  2/3 — по длине), чтобы деталировка и бирки показывали её (аудит 11.10.2026: k04 — бирки 35,1 м против 87,8 м в смете, сырые детали
+ *  шли без кромки). Отрезок длиной в сторону детали (±1 мм) — на свободный торец этой стороны; остальные (контур фигурной детали,
+ *  k04 ВМ2: 185/183/160/200/160) — на свободные торцы с длиной отрезка в edgeLen, без свободных — суммой к занятому. Сумма по бирке
+ *  равна кромке Базиса детали; смета по-прежнему считает её по raw.edges. */
+export function rawEdgeSlots(q: Pick<Part, "size" | "length" | "width" | "edge" | "edgeLen">, edges: [number, number][]): void {
+  const dirs = edgeDirs(q), side = (k: number) => (k < 2 ? q.width : q.length), order = [2, 3, 0, 1];
+  const used: (number | null)[] = [null, null, null, null], lens = [0, 0, 0, 0], rest: [number, number][] = [];
+  for (const [t, len] of edges) {
+    if (!(t > 0) || !(len > 0)) continue;
+    const k = order.find((i) => used[i] === null && Math.abs(side(i) - len) <= 1);
+    if (k === undefined) rest.push([t, len]); else { used[k] = t; lens[k] = len; }
+  }
+  for (const [t, len] of rest) {
+    const k = order.find((i) => used[i] === null) ?? [1, 0, 3, 2].find((i) => used[i] !== null) ?? 2;
+    used[k] = used[k] ?? t; lens[k] += len;
+  }
+  q.edge = used.map((t) => t ?? 0) as Part["edge"];
+  const over: Record<string, number> = {};
+  used.forEach((t, k) => { if (t !== null && Math.abs(lens[k] - side(k)) > 0.05) over[dirs[k]] = Math.round(lens[k] * 10) / 10; });
+  if (Object.keys(over).length) q.edgeLen = over;
+}
+/** Кромка этой сырой детали идёт в смету (pricing.ts, сырой модуль): ХДФ — только у кухни Базиса; стекло, зеркало, помещение, стеновая
+ *  панель ряда, столешница и фасадный материал — нет (кромка у поставщика). Тем же деталям — кромка на бирке. */
+export function rawEdgeCounted(p: RawPanel, r: Pick<RawSpec, "row" | "source" | "counts">, worktop: boolean): boolean {
+  if (p.kind === "glass") return false;
+  if (p.kind === "hdf") return rawKitchen(r as RawSpec);
+  if (p.kind === "mirror" || rawIsRoom(p)) return false;
+  if (r.row && p.wall) return false;
+  if (worktop || p.fm) return false;
+  return true;
+}
 
 /** fm — деталь из фасадного материала Базиса («Фасадный мат-л N»): не раскрой ЛДСП корпуса, декор фасадов, в смете — фасады поставщика.
  *  edges — кромка Базиса [толщина, длина мм] (edges.len эталона).
@@ -265,6 +299,8 @@ export function rawParts(m: Module): Part[] {
       // Lamarty «Белый» декора корпуса/фасадов студии (n4-wardrobes)
       role: p.facade ? "door" : "body", material, decor: p.decor ?? (p.kind === "mdf" && p.mat ? p.mat : p.fm || (p.facade && p.kind !== "ldsp") ? m.facadeDecor : m.decor), grain: "length",
       grainAxis: (size.indexOf(Math.max(...size)) === thin ? 1 : size.indexOf(Math.max(...size))) as 0 | 1 | 2, edge: [0, 0, 0, 0] });
+    // кромка Базиса (raw.panels[].edges) — на торцы детали для деталировки и бирок; у тех же деталей, что и в смете
+    if (p.edges?.length && rawEdgeCounted(p, r, worktop)) rawEdgeSlots(out[out.length - 1], p.edges);
     // повёрнутая не на 90° деталь Базиса — ориентированный короб вокруг центра габарита
     if (p.obb) { const q = out[out.length - 1]; if (p.obb.ry) q.rotY = p.obb.ry; if (p.obb.rz) q.rotZ = p.obb.rz; }
     // фигурная деталь (П- и Г-образная столешница, стеновая панель с вырезом): контур Базиса от угла габарита

@@ -111,7 +111,7 @@ test('Bazis k33/k34 templates: euro screw 6x50 instead of confirmat 7x50 - name,
   const hs=holes(m,ps).filter(h=>h.src.startsWith('fast:')&&h.d===5);
   assert.ok(hs.length>0&&hs.every(h=>h.depth===36));
   const e=estimate(newProject(m));
-  assert.ok(e.lines.some(l=>l.id==='confirmat:Евровинт 6х50'));
+  assert.ok(e.lines.some(l=>l.id==='confirmat:Евровинт 6х50')); // один ключ сметы confirmat:<имя> для screw и confirmatName (A3, 11.10.2026)
   assert.ok(!e.lines.some(l=>l.id==='confirmat-7x50'));
   // старый JSON (kitchen.screw) — в confirmatName; те же детали, присадка и строка сметы
   const {parseModule}=await import('../src/model');
