@@ -19,6 +19,13 @@
 }
 
 /* 4. Название проекта в шапке сжимается вместе со своим блоком. */
+.header .brand { width: max-content; flex: 0 0 auto; }
+.header .brand strong { white-space: nowrap; }
+.header .brand-mark { flex-shrink: 0; }
+@media (max-width: 600px) {
+  .app .header { height: auto; min-height: 62px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; gap: 10px 14px; }
+  .app .header-actions { flex-wrap: wrap; }
+}
 .document-name { min-width: 0; }
 .document-name input { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
 

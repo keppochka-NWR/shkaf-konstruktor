@@ -1,5 +1,44 @@
 import { test, expect } from '@playwright/test';
+import {newProject} from '../src/project';
 const KEY='garderyob-rooms-v1';
+
+test('ordinary URL: empty start, last module deletion, undo, reload and re-add',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/');
+ await expect(page.getByRole('heading',{name:'Комната 1',exact:true})).toBeVisible();
+ await expect(page.getByRole('navigation',{name:'Проекты клиента'})).toBeVisible();
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();
+ const del=page.getByRole('button',{name:'Удалить выбранный модуль',exact:true});await expect(del).toBeEnabled();await del.click();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Отменить изменение заказа'}).click();await expect(page.getByLabel('Название модуля')).toBeVisible();
+ await page.getByRole('button',{name:/^(3 )?Корпуса$/}).click();await del.click();await page.reload();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await expect(page.getByLabel('Название модуля')).toBeVisible();
+ expect(errors).toEqual([]);
+});
+
+test('ordinary URL: old project retained, new project empty, copy keeps all rooms',async({page})=>{
+ await page.goto('/');const old=newProject();old.modules[0].module.name='Прежний шкаф';
+ await page.evaluate(p=>localStorage.setItem('module-studio-v3',JSON.stringify(p)),old);await page.reload();
+ await expect(page.getByLabel('Название модуля')).toHaveValue('Прежний шкаф');
+ await page.getByRole('button',{name:'Ещё проект',exact:true}).click();await page.getByRole('menuitem',{name:/^Новый проект/}).click();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Добавить комнату',exact:true}).click();
+ await page.getByRole('button',{name:'Ещё проект',exact:true}).click();await page.getByRole('menuitem',{name:/^Копия этого проекта/}).click();
+ await expect(page.getByLabel('Активная комната').locator('option')).toHaveCount(2);await page.reload();
+ await expect(page.getByLabel('Активная комната').locator('option')).toHaveCount(2);
+ await page.getByRole('tab',{name:/^Проект 1 /}).click();await expect(page.getByLabel('Название модуля')).toHaveValue('Прежний шкаф');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('module-studio-v3')!).modules[0].module.name)).toBe('Прежний шкаф');
+});
+
+test('ordinary URL: explicit new project without furniture has no hidden default module',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:'Новый проект / восстановить',exact:true}).click();
+ await page.getByRole('button',{name:'Создать проект без мебели',exact:true}).click();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();await page.reload();
+ await expect(page.getByText('Помещение · без мебели',{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules.length)).toBe(0);
+});
 test('P1: room isolation, cabinet edits, persistence, document undo and legacy isolation', async ({page}) => {
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/?rooms=1');
