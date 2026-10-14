@@ -54,3 +54,19 @@
 
 /* Focusing low toolbar buttons must not scroll the clipped 3D viewport. */
 .viewport { overflow: clip; }
+
+/* Sidebars retain a usable center viewport. Widths are application preferences. */
+.panel-resizer { display:none; }
+@media (min-width:901px) {
+ .workspace.resizable-workspace { position:relative; grid-template-columns:var(--left-panel-width,250px) minmax(0,1fr) var(--right-panel-width,300px); }
+ .panel-resizer { display:block; position:absolute; top:0; bottom:0; width:10px; z-index:45; cursor:col-resize; touch-action:none; }
+ .panel-resizer-left { left:calc(var(--left-panel-width) - 5px); }
+ .panel-resizer-right { right:calc(var(--right-panel-width) - 5px); }
+ .panel-resizer::after { content:""; position:absolute; top:0; bottom:0; left:4px; width:2px; background:transparent; transition:background .15s; }
+ .panel-resizer:hover::after,.panel-resizer:focus-visible::after,.resizing-panels .panel-resizer::after { background:#007f86; }
+ .panel-resizer:focus-visible { outline:2px solid #007f86; outline-offset:-2px; }
+ .resizing-panels { cursor:col-resize; user-select:none; }
+ .resizing-panels .viewport { pointer-events:none; }
+ .resizable-workspace > .library,.resizable-workspace > .properties { min-width:0; }
+}
+.presentation .panel-resizer { display:none; }

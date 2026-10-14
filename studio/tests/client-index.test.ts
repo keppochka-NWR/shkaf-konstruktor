@@ -4,8 +4,25 @@ import {loadIndex,saveIndex,addProject,removeProject,renameProject,switchProject
 import {newProject,parseProject} from '../src/project';
 import {readClientRooms,clientRoomsKey} from '../src/clientIndex';
 import {migrateRoomDocument,addRoom,activeRoom} from '../src/roomDocument';
+import {editDrawerConfig} from '../src/drawerEditing';
+import {initialModule,section,drawerOffsets,validate} from '../src/model';
 
 function memory(){const m=new Map<string,string>();return {getItem:(k:string)=>m.get(k)??null,setItem:(k:string,v:string)=>{m.set(k,v);},removeItem:(k:string)=>{m.delete(k);},m};}
+
+test('growing a drawer front pushes physical upper drawers, preserving lower drawers and hardware',()=>{
+ const m=initialModule();m.height=2000;m.doors=false;const s={...section(),drawers:3,drawerConfigs:[{slide:'ball' as const,height:160,length:450,y:400},{slide:'ball' as const,height:160,length:450,y:0},{slide:'ball' as const,height:160,length:450,y:200}]};m.sections=[s];
+ const before=JSON.stringify(m);const configs=editDrawerConfig(m,s,1,{facadeH:350});
+ assert.equal(JSON.stringify(m),before,'source is immutable');
+ assert.deepEqual(drawerOffsets({...s,drawerConfigs:configs}),[553,0,353]);
+ assert.equal(configs[0].length,450);Object.assign(s,{drawerConfigs:configs});assert.deepEqual(validate(m),[]);
+ const middle=editDrawerConfig(m,s,2,{facadeH:400});assert.equal(middle[1].y,0);assert.equal(middle[2].y,353);assert.equal(middle[0].y,756);
+});
+
+test('drawer front growth uses free gaps before pushing; blocked roof rejects without changing source',()=>{
+ const m=initialModule();m.doors=false;const s={...section(),drawers:2,drawerConfigs:[{slide:'ball' as const,height:160,length:450,y:0},{slide:'ball' as const,height:160,length:450,y:500}]};m.sections=[s];
+ assert.equal(editDrawerConfig(m,s,0,{facadeH:300})[1].y,500);
+ m.height=800;const before=JSON.stringify(m);assert.throws(()=>editDrawerConfig(m,s,0,{facadeH:650}),/не хватает .* мм/);assert.equal(JSON.stringify(m),before);
+});
 
 test('default client workspace migrates legacy furniture without changing its original and starts fresh projects empty',()=>{
  const s=memory(),original=JSON.stringify(newProject());s.setItem(projectStorageKey(''),original);
