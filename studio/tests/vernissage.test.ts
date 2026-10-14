@@ -315,9 +315,10 @@ test('Вернисаж: цена клиенту = закупка × 1,6 (реш�
   assert.ok(f.source.includes('× 1,6'), 'в строке сметы — закупка, пометка «клиенту × 1,6»');
   // модель «себестоимость × коэффициент»: материалы без Вернисажа × 2,2 + Вернисаж × 1,6; закупка Вернисажа остаётся в себестоимости материалов
   const own = Math.round(e.lines.filter((l) => !l.retail && lineGroup(l.id) === 'material' && !l.id.startsWith('vernissage')).reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0));
-  assert.equal(e.split.material, Math.round(own * 2.2 / 100) * 100 + 13900);
+  // части клиенту — до рубля, округление до 100 ₽ один раз по итогу (A3, 11.10.2026); Вернисаж — своя сотня (13 900)
+  assert.equal(e.split.material, Math.round(own * 2.2) + 13900);
   assert.ok(e.split.materialCost >= own + 8710);
-  assert.equal(e.byMarkup, e.split.material + e.split.hardware);
+  assert.equal(e.byMarkup, Math.round((own + e.split.hardwareCost) * 2.2 / 100) * 100 + 13900);
   // модель «цена за лист»: листы × 23 000 + фасады Вернисаж 13 900 сверху
   const s = estimate({ ...q, calculation: { markup: 2.2, overrides: {}, model: 'sheet' } });
   assert.equal(s.vernissageOnTop, 13900);

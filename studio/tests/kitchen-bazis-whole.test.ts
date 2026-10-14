@@ -80,7 +80,9 @@ test('B4: фурнитура Базиса у сырых модулей и в р�
   assert.equal(qty(k16,/^bazis:ящик-система:Царга Indigo/)+2*qty(k16,/^indigo:/),14,'k16: 14 царг Indigo');
   assert.equal(qty(k16,/РАФИКС/),54);assert.equal(qty(k30,/РАФИКС/),40);
   assert.equal(qty(k06,/Сушка двухуровневая/),1);
+  // фланец D25 и труба D25 Базиса — строки Базиса, но с ценой цеха (40 ₽, 300 ₽/м; A3, 11.10.2026)
   assert.equal(qty(k30,/^bazis:прочее:Фланец/),4);assert.ok(qty(k30,/^bazis:прочее:Труба Д25/)>1.5);
+  assert.equal(line(k30,/^bazis:прочее:Фланец/)[0].unitPrice,40);assert.equal(line(k30,/^bazis:прочее:Труба Д25/)[0].unitPrice,300);
   assert.equal(qty(k30,/фасадный профиль узкий/),1);
   assert.ok(qty(k30,/KB 91 MODUS/)>0&&qty(k30,/KB 92 MODUS/)>0,'k30: профили ряда KB 91/92');
   assert.equal(qty(k06,/GOLA L-образный/),1.662,'k06: GOLA L ряда — длины Базиса');

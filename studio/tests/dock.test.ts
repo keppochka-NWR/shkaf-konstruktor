@@ -15,7 +15,9 @@ function withDrawers(){
 test('estimate splits retail into materials and hardware that sum to the markup price',()=>{
   const e=estimate(newProject());
   assert.ok(e.split.material>0&&e.split.hardware>0);
-  assert.equal(e.byMarkup,e.split.material+e.split.hardware);
+  // округление до 100 ₽ — один раз по итогу (аудит 11.10.2026); части клиенту — до рубля
+  assert.equal(e.byMarkup,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100);
+  assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware))<100);
   assert.ok(Math.abs(e.split.materialCost+e.split.hardwareCost-e.knownCost)<=1,'parts are rounded separately');
   assert.equal(lineGroup('sheet:Белый'),'material');assert.equal(lineGroup('edge2'),'material');assert.equal(lineGroup('work'),'material');
   assert.equal(lineGroup('hinge'),'hardware');assert.equal(lineGroup('slide:ball:450'),'hardware');assert.equal(hardwareKind('slide:ball:450'),'slides');assert.equal(hardwareKind('handle:uz819-128'),'handles');

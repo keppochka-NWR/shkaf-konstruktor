@@ -57,7 +57,8 @@ test('один ящик в сыром модуле Базиса — 1 компл
   assert.equal(duh.hardware.filter(h=>h.category==='направляющая').length,4,'в Базисе 4 записи на один ящик');
   assert.deepEqual(kits(rawProject(duh)).map(l=>[l.quantity,l.unit]),[[1,'компл']]);
   const nm2=etalon('k12').modules.find(m=>m.key==='m02')!;
-  assert.deepEqual(kits(rawProject(nm2)).map(l=>[l.id,l.quantity,l.unit]),[['axis-pro:raw',1,'компл']]);
+  // высота и длина ящика — из записей Базиса (царга H-120, направляющая 500, антрацит): строка параметрического ящика (A3, 11.10.2026)
+  assert.deepEqual(kits(rawProject(nm2)).map(l=>[l.id,l.quantity,l.unit]),[['axis-pro:120:500:anthracite',1,'компл']]);
 });
 
 test('сырой модуль k30 «НМ 2»: Firmax — 2 компл. (2 ящика, 8 записей Базиса), внутренний ящик Axis PRO — 1 компл.',{skip:!has('k30')},()=>{
@@ -65,7 +66,7 @@ test('сырой модуль k30 «НМ 2»: Firmax — 2 компл. (2 ящи
   assert.equal(ref.hardware.filter(h=>/firmax/i.test(h.name)).length,8);
   const ls=kits(rawProject(ref));
   assert.deepEqual(ls.filter(l=>/^firmax:/.test(l.id)).map(l=>[l.quantity,l.unit]),[[2,'компл']]);
-  assert.deepEqual(ls.filter(l=>l.id==='axis-pro:raw').map(l=>l.quantity),[1]);
+  assert.deepEqual(ls.filter(l=>/^axis-pro:(?!inner:)/.test(l.id)).map(l=>l.quantity),[1]);
   assert.ok(!estimate(rawProject(ref)).lines.some(l=>/^bazis:направляющая:/.test(l.id)),'записи Базиса направляющих — не строками');
 });
 

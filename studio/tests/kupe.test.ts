@@ -82,7 +82,7 @@ test('sliding wardrobe group: bodies without swing doors plus kupe in front, val
   const e=estimate(r.project);
   const kupe=e.lines.filter(l=>l.id.startsWith('kupe-'));assert.ok(kupe.length>=6);assert.ok(kupe.every(l=>l.retail));
   assert.ok(kupe.filter(l=>l.id.startsWith('kupe-fill')).every(l=>lineGroup(l.id)==='material'));
-  assert.equal(e.byMarkup,e.split.material+e.split.hardware);
+  assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware))<100,'округление до 100 ₽ — один раз по итогу (A3, 11.10.2026)');
   const kupeRetail=Math.round(kupe.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   assert.ok(e.retail!>=kupeRetail);
   assert.equal(parseProject(JSON.parse(JSON.stringify(r.project))).modules.find(a=>a.module.kupe)!.module.kupe!.system,'Стандарт (Аристо)');
