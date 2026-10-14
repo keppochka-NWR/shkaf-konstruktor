@@ -320,6 +320,12 @@ export function labelDetails(p:Project){
  *  Поля: № заказа, материал, наименование (модуль), поз. (код), № детали (обозначение), пазование, паз, торец (отверстия),
  *  длина × ширина крупно; по четырём сторонам — кромка: обозначение и линия (тонкая < 0,8, толстая ≥ 0,8). */
 export type LabelData={order:string;material:string;module:string;code:string;name:string;groove:string;notches:string;endHoles:string;length:number;width:number;edges:{L1:number;L2:number;W1:number;W2:number};/** Длины кромки по контуру (мм) у фигурной детали (вырезы Gola): на бирке рядом с толщиной. */edgeLens?:{L1:number;L2:number;W1:number;W2:number}};
+/** Декор из каталога Lamarty (явные цены сметы — все в каталоге): бирка «ЛДСП … (Lamarty)», иначе «Плита …» — как строка листа в смете. */
+export const lamartyDecor=(decor:string)=>catalog.some(c=>c.n===decor);
+export function labelMaterial(d:Pick<Part,'material'|'decor'|'thickness'>):string{
+  if(d.material==='hdf')return 'ЛХДФ '+d.thickness+' мм';
+  return lamartyDecor(d.decor)?'ЛДСП '+d.decor+' '+d.thickness+' мм (Lamarty)':'Плита '+d.decor+' '+d.thickness+' мм';
+}
 export function labelData(p:Project):LabelData[]{
   const order=labelOrder(p);
   return p.modules.flatMap((a,i)=>{
@@ -329,7 +335,8 @@ export function labelData(p:Project):LabelData[]{
       const thin=d.size.indexOf(Math.min(...d.size)),endHoles=drill.filter(h=>h.part===d.id&&Math.abs(h.dir[thin])<0.5).length;
       const grooved=m.backType==='groove'&&['left','right','top','bottom'].includes(d.id);
       // Кромка: 1–2 — торцы по ширине (короткие, слева/справа на бирке), 3–4 — по длине (сверху/снизу).
-      return {order,material:(d.material==='hdf'?'ЛХДФ ':'ЛДСП ')+d.decor+' '+d.thickness+' мм'+(d.material==='hdf'?'':' (Lamarty)'),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
+      // материал — как в смете: ЛХДФ без декора корпуса; декор вне каталога Lamarty (МДФ IDM, «Ясень Бронхольм» из Базиса) — «Плита», не «Lamarty»
+      return {order,material:labelMaterial(d),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
         groove:grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:grooveText(m,d.id)||'—', // «Пазование» — паз под ЛХДФ, «Паз» — пазы под подсветку (каждая строка влезает в бирку)
         endHoles:endHoles?`${endHoles} отв.`:'—',
         length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]},...(d.edgeLen?{edgeLens:{W1:edgeLength(d,0),W2:edgeLength(d,1),L1:edgeLength(d,2),L2:edgeLength(d,3)}}:{})};
