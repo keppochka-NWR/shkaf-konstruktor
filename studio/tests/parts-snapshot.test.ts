@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,copyFileSync,renameSync,readFileSync,rmSync} from 'node:fs';
@@ -8,7 +9,7 @@ import {spawnSync} from 'node:child_process';
 // scripts/parts-snapshot.ts: переименованный файл проекта с теми же деталями — не отличие,
 // эталон .qa/parts-baseline.json подхватывает новый ключ сам (старый ключ не печатается).
 const script=resolve('scripts/parts-snapshot.ts');
-const run=(cwd:string,...args:string[])=>{const r=spawnSync('npx',['tsx','"'+script+'"',...args],{cwd,encoding:'utf8',shell:true});return {code:r.status,out:(r.stdout||'')+(r.stderr||'')};};
+const run=(cwd:string,...args:string[])=>{const r=spawnSync(process.execPath,[fileURLToPath(import.meta.resolve('tsx/cli')),script,...args],{cwd,encoding:'utf8'});return {code:r.status,out:(r.stdout||'')+(r.stderr||'')};};
 
 test('parts-snapshot treats a renamed project file with identical parts as a rename, not a diff',{timeout:120000},()=>{
   const t=mkdtempSync(join(tmpdir(),'snap-'));

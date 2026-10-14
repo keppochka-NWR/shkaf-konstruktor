@@ -1,5 +1,6 @@
+import {OVEN} from './ovenDimensions';
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
-import {configureOven,ovenSupportTop,OVEN_SOURCE} from './kitchenOven';
+import {configureOven,ovenSupportTop,ovenLayoutWarnings,OVEN_SOURCE} from './kitchenOven';
 import {installSink} from './installSink';
 import { alignKitchenRow } from "./kitchenAlignment";
 import { ALLEGRO, ALLEGRO_SOURCE, allegroErrors } from './premialPullout';
@@ -155,16 +156,18 @@ function CabinetPanel(props: KitchenPanelProps) {
     </div>
 
     {k.appliance==='sink'&&<Group icon={<Wrench size={15}/>} title="Мойка и слив" open>
-      <p>Premial PRODIGY 6045 · 600×450 мм</p>
+      <p>Premial PRODIGY 6045 · 600×450 мм</p><p className="field-note">Чаша 550×350×220 мм по каталогу. Вырез, сифон, радиусы и монтажные зазоры — оценка для компоновки, не шаблон изготовления.</p>
       <button className="outline full" onClick={()=>{try{if(commit(installSink(project,placed.id)))setInstallationError('Мойка и сифон установлены. Положение выреза — в параметрах столешницы.');}catch(e){setInstallationError((e as Error).message);}}}>Установить мойку и сифон</button>
       <p className="field-note">Вырез создаётся на столешнице над тумбой. Если столешницы нет — добавится вместе с мойкой. Повторное нажатие не создаёт копию.</p>
       {installationError&&<p role="status">{installationError}</p>}
     </Group>}
     {k.appliance==='oven'&&<Group icon={<Wrench size={15}/>} title="Духовка и нижний ящик" open>
       <Check label="Показать духовку в 3D" checked={!!k.oven?.visible} change={v=>modify(n=>configureOven(n,{visible:v}))}/>
+      {ovenLayoutWarnings(m).map(w=><p className="field-note" role="alert" key={w}>{w}</p>)}
+      {!!ovenLayoutWarnings(m).length&&<button className="outline full" onClick={()=>modify(n=>configureOven(n))}>Пересобрать нижний ящик</button>}
       <Check label="Ящик под духовкой" checked={!!k.oven?.drawer} change={v=>modify(n=>configureOven(n,{drawer:v}))}/>
-      {k.oven&&<><Num label="Высота ниши духовки" value={k.oven.nicheHeight} min={595} max={610} change={v=>modify(n=>configureOven(n,{nicheHeight:v}))}/><p className="field-note">Опорная полка на {ovenSupportTop(m)} мм от низа модуля. Ящик занимает только пространство под ней.</p></>}
-      <p className="field-note">Типовая модель 60 см: дверца, стекло, ручка и панель управления. Посадка и вентиляция уточняются по выбранному прибору. <a href={OVEN_SOURCE} target="_blank" rel="noreferrer">Размерный ориентир</a></p>
+      {k.oven&&<><Num label="Высота ниши духовки" value={k.oven.nicheHeight} min={OVEN.baseNiche.heightMin} max={OVEN.baseNiche.heightMax} change={v=>modify(n=>configureOven(n,{nicheHeight:v}))}/><p className="field-note">Опорная полка на {ovenSupportTop(m)} мм от низа модуля. Ящик занимает только пространство под ней.</p></>}
+      <p className="field-note">Bosch HBF113BR0B: под столешницей ниша 600–604 мм, ширина в свету 560–568 мм, глубина от 550 мм. Глубина встраивания 548 мм; фасад 20 мм и ручка до 50 мм выступают вперёд. Форма ручки и корпуса — оценка, вентиляцию сверить по схеме. <a href={OVEN_SOURCE} target="_blank" rel="noreferrer">Паспорт, стр. 3</a></p>
     </Group>}
     <Group icon={<Box size={15} />} title="Корпус" open={stage === "bodies"}>
       {item && kinds.length > 1 && <label className="hardware-field">Назначение<select aria-label="Назначение кухонного модуля" value={item} onChange={(e) => modify((n) => { const r = rebuildKitchen(n, e.target.value as KitchenItem); for (const key of Object.keys(n)) delete (n as Record<string, unknown>)[key]; Object.assign(n, r); })}>
@@ -234,7 +237,7 @@ function CabinetPanel(props: KitchenPanelProps) {
         {ALLEGRO.map(item => { const issues = allegroErrors({ ...m, kitchen: { ...k, premialPullout: { article: item.article } } }); return <option key={item.article} value={item.article} disabled={!!issues.length}>{`АЛЛЕГРО ${item.base} · ${item.side === 'left' ? 'левая' : 'правая'} · ${item.article}${issues.length ? ' — не подходит' : ''}`}</option>; })}
       </select></label>}
       {!k.appliance && !k.premialPullout && <p className="field-note">АЛЛЕГРО: тумба 150 или 200 мм, одна секция без полок и ящиков. Свободная глубина от 457 мм, высота от 548 мм с запасом.</p>}
-      {k.premialPullout && <p className="field-note">Два яруса, крепление к фасаду без петель. Геометрия прутка упрощена; показана закрытая установка, ход выдвижения ещё не моделируется. <a href={ALLEGRO_SOURCE} target="_blank" rel="noreferrer">Чертёж и артикулы Premial</a></p>}
+      {k.premialPullout && <p className="field-note">Два яруса, крепление к фасаду без петель. Габариты 95/145×540×457 мм и артикулы — по официальной схеме. Геометрия прутка, креплений и запас по высоте 8 мм — оценка; показана закрытая установка, ход выдвижения ещё не моделируется. <a href={ALLEGRO_SOURCE} target="_blank" rel="noreferrer">Чертёж и артикулы Premial</a></p>}
       {!k.appliance&&<label className="hardware-field">Ящики нижнего модуля<select aria-label="Ящики нижнего модуля" value={m.kdrawers?.length??0} onChange={e=>modify(n=>setKitchenDrawerCount(n,Number(e.target.value)))}>
         <option value="0">Без ящиков · распашные фасады</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n} {n===1?'ящик':'ящика'}</option>)}
       </select></label>}
@@ -363,7 +366,7 @@ function WorktopPanel(props: KitchenPanelProps) {
           <div className="kitchen-chips" role="group" aria-label={"Вырез " + (i + 1)}>{(["sink", "hob"] as const).map((kind) => <button key={kind} type="button" aria-pressed={c.kind === kind} onClick={() => setCut(i, { kind, fixture:undefined, drainDrop:undefined, tap:undefined, plumbing:undefined })}>{kind === "sink" ? "Мойка" : "Варочная"}</button>)}
             <button type="button" className="danger" onClick={() => modify((n) => { n.worktop = { ...n.worktop!, cutouts: n.worktop!.cutouts.filter((_, j) => j !== i) }; })}>Убрать</button></div>
           {c.kind==='sink'&&<><label className="hardware-field">Модель мойки<select aria-label="Модель мойки" value={c.fixture??''} onChange={e=>setCut(i,e.target.value?{fixture:SINK_ARTICLE,x:c.x+(c.width-560)/2,...(c.z===undefined?{}:{z:c.z+(c.depth-360)/2}),width:560,depth:360}:{fixture:undefined,drainDrop:undefined,tap:undefined,plumbing:undefined})}><option value="">Только вырез</option><option value={SINK_ARTICLE}>Premial PRODIGY 6045 · 210245 · 600×450</option></select></label>
-          {c.fixture&&<><Check label="Смеситель в 3D" checked={!!c.tap} change={v=>setCut(i,{tap:v})}/><Check label="Подводки воды и слив до задней кромки" checked={!!c.plumbing} change={v=>setCut(i,{plumbing:v,drainDrop:v?(c.drainDrop??420):c.drainDrop})}/><p className="field-note">Чаша 550×350×220. Радиусы, слив и вырез — компоновочные: перед изготовлением сверить шаблон. <a href={SINK_SOURCE} target="_blank" rel="noreferrer">Карточка производителя</a></p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined,plumbing:e.target.checked?c.plumbing:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
+          {c.fixture&&<><Check label="Смеситель в 3D" checked={!!c.tap} change={v=>setCut(i,{tap:v})}/><Check label="Подводки воды и слив до задней кромки" checked={!!c.plumbing} change={v=>setCut(i,{plumbing:v,drainDrop:v?(c.drainDrop??420):c.drainDrop})}/><p className="field-note">Чаша 550×350×220 мм по каталогу. Вырез 560×360 мм, его допустимый диапазон в редакторе, толщина стенок, радиусы и сифон — оценка. Проверка пересечений компоновочная; перед изготовлением нужен заводской шаблон. <a href={SINK_SOURCE} target="_blank" rel="noreferrer">Карточка производителя</a></p><label><input type="checkbox" aria-label="Показать сифон для компоновки" checked={c.drainDrop!==undefined} onChange={e=>setCut(i,{drainDrop:e.target.checked?420:undefined,plumbing:e.target.checked?c.plumbing:undefined})}/> Выпуск и сифон (условная модель)</label>{c.drainDrop!==undefined&&<Num label="Низ сифона от верха столешницы" value={c.drainDrop} min={350} max={650} change={v=>setCut(i,{drainDrop:v})}/>}</> }</>}
           <Num label="От задней кромки" value={c.z??(m.depth-c.depth)/2} min={40} max={m.depth-40-c.depth} change={v=>setCut(i,{z:v})}/>
           <Num label="От левого торца" value={c.x} min={c.fixture?20:50} max={Math.max(c.fixture?20:50, m.width - (c.fixture?20:50) - c.width)} change={(v) => setCut(i, { x: v })} />
           <Num label="Ширина выреза" value={c.width} min={200} max={Math.max(200, m.width - 100)} change={(v) => setCut(i, { width: v })} />
