@@ -4,6 +4,7 @@
 // Разрешённые контакты — только по реестру allowedContact: крепёж сидит в своих досках, чашка петли — в отверстии своего фасада,
 // планка петли — на своей стойке, ХДФ — в пазу на глубину паза, ручка — на своём фасаде, направляющая — между ящиком и стойкой и т. п.
 import type { Module, Part } from "./model";
+import {kupeParts} from './kupe';
 
 /** bazis — пересечение есть в самом проекте Базиса (модуль из Базиса повторён как есть): показывается с пометкой, не прячется. */
 export type Collision = { a: string; b: string; names: [string, string]; depth: number; bazis?: true };
@@ -150,11 +151,17 @@ const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.bazis && !!m.ki
 /** Все неразрешённые пересечения деталей модуля. */
 export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   const out: Collision[] = [];
+  // Profile AABBs include empty channels. Only the unmodified factory assembly
+  // has permitted track/leaf and frame/insert seating; moved parts still use SAT.
+  const canonical=m?.kupe?new Map(kupeParts(m).map(p=>[p.id,p])):undefined;
+  const canonicalPart=(p:Part)=>{const q=canonical?.get(p.id);return !!q&&p.size.every((v,i)=>Math.abs(v-q.size[i])<0.001)&&p.position.every((v,i)=>Math.abs(v-q.position[i])<0.001)&&(p.rotY??0)===(q.rotY??0)&&(p.rotZ??0)===(q.rotZ??0);};
+  const kupeSeat=(a:Part,b:Part)=>[[a,b],[b,a]].some(([p,q])=>p.id.startsWith('kupe:track:')&&/^kupe:\d+:/.test(q.id)||/^kupe:\d+:(frame|side|div-[hv]):/.test(p.id)&&/^kupe:\d+:fill:/.test(q.id)&&p.id.split(':')[1]===q.id.split(':')[1]);
   const boxes = ps.map(box);
   // грубый отбор по сферам габаритов, затем SAT по точным коробкам
   const rad = boxes.map((b) => Math.hypot(...b.h));
   for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
     const A = boxes[i], B = boxes[j];
+    if(canonical&&kupeSeat(ps[i],ps[j])&&canonicalPart(ps[i])&&canonicalPart(ps[j]))continue;
     if (Math.hypot(B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]) > rad[i] + rad[j]) continue;
     const depth = ps[i].collide || ps[j].collide || ps[i].planHoles || ps[j].planHoles ? partPenetration(ps[i], ps[j]) : penetration(A, B);
     if (depth <= tol) continue;

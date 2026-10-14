@@ -56,9 +56,9 @@ test('palette placement: base continues the floor row, wall cabinet joins the wa
   const w=placeKitchenModule(p,kitchenTemplate('wall',450,look)),wa=w.project.modules.find(x=>x.id===w.id)!;
   assert.deepEqual(commitErrors(w.project),[]);
   assert.equal(wa.y,KITCHEN.baseHeight+KITCHEN.worktopThickness+KITCHEN.wallGap);
-  // справа от ряда 558 мм до стены: пенал 450 встаёт, 600 — понятная ошибка вместо пересечения
+  // справа от ряда 558 мм: пенал 450 продолжает ряд, 600 занимает свободное место перед ним.
   assert.deepEqual(commitErrors(placeKitchenModule(p,kitchenTemplate('tall',450,look)).project),[]);
-  assert.throws(()=>placeKitchenModule(p,kitchenTemplate('tall',600,look)),/Нет места/);
+  const free=placeKitchenModule(p,kitchenTemplate('tall',600,look));assert.deepEqual(commitErrors(free.project),[]);assert.ok(bounds(free.project.modules.find(a=>a.id===free.id)!).z>=KITCHEN.baseDepth);
   // антресоль над навесными 920 в комнату 2700 не помещается — понятная ошибка; над навесными 720 — встаёт сверху
   assert.throws(()=>placeKitchenModule(p,kitchenTemplate('antresol',600,look)),/не помещается/);
   const low={...p,modules:p.modules.map(x=>x.module.kitchen?.role==='wall'?{...x,module:{...x.module,height:720}}:x)};

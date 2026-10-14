@@ -21,7 +21,7 @@ test('worktop from ordinary palette is placed at cabinet height',()=>{
 });
 
 test('Gola drawer changes preserve gaps and front sizes across relayout, system change and height change',()=>{
- const m=kitchenBase(initialModule(),600);setKitchenDrawerCount(m,3);setKitchenGola(m,true);
+ const m=kitchenBase(initialModule(),600);m.height=850;setKitchenDrawerCount(m,3);setKitchenGola(m,true);
  const sizes=()=>m.kdrawers!.map(d=>d.y1-d.y0);const before=sizes();
  m.kdrawers=layoutKitchenDrawers(m,3);assert.deepEqual(sizes(),before);
  m.kdrawers=resizeKitchenDrawerFront(m,0,320);assert.equal(sizes()[0],320);assert.deepEqual(validate(m),[]);

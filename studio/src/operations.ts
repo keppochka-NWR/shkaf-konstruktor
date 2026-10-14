@@ -3,7 +3,7 @@ import {createCornerUpper} from './cornerWardrobe';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
-import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors} from './project';
+import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
@@ -54,6 +54,8 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     else if(kind==='drawer'){
       if(s.drawers>=RULES.maxDrawers)break;
       s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawer??drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
+      const fillers=fillerSides(m,s);
+      if((fillers.left||fillers.right)&&s.shelves.some(f=>f*(b.top-b.bottom)<drawerStackHeight(s)+RULES.panel))continue;
     }else if(kind==='rod'){s.rod=true;s.pantograph=false;s.rodAt=y/(b.top-b.bottom);}
     else {s.pantograph=true;s.rod=false;s.rodAt=y/(b.top-b.bottom);}
     const errs=projectErrors(n);if(!errs.length)return n;
@@ -111,11 +113,21 @@ export function mirrorModule(p:Project,mid:string):Project {
 }
 
 export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number,whole=false,ids?:readonly string[]):Project {
- const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);
+ let n=structuredClone(p);const a=n.modules.find(a=>a.id===mid);
  if(!a||!Number.isFinite(distance)||distance<0)throw Error('Укажите неотрицательное расстояние от стены или пола.');
  const edge=bounds(a)[axis];
  const delta=distance-edge;
  for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a])item[axis]=(item[axis]??0)+delta;
+ // Auto fillers change the mounting envelope near walls and perpendicular runs.
+ // Keep the manager's distance tied to the final envelope, not the old filler.
+ if(a.module.kitchen){for(let i=0;i<8;i++){
+   n=applyAutoFillers(n);const current=n.modules.find(item=>item.id===mid)!;
+   const correction=distance-bounds(current)[axis];if(Math.abs(correction)<0.01)break;
+   for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[current])item[axis]=(item[axis]??0)+correction;
+ }
+   n=applyAutoFillers(n);
+   if(Math.abs(bounds(n.modules.find(item=>item.id===mid)!)[axis]-distance)>0.01)throw Error('Этот отступ меняет состав угловых фальшей. Задайте другой отступ или отключите автофальши у выбранного корпуса и настройте стык отдельно.');
+ }
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }

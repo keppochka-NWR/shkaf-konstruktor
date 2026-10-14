@@ -42,3 +42,5 @@ async function start(){
   createRoot(document.getElementById('root')!).render(<React.StrictMode>{order==='votan'?<VotanStudio/>:initialProject||slug?<App initialProject={initialProject} projectKey={key}/>:<ClientWorkspace/>}</React.StrictMode>);
 }
 start().catch(error=>{document.getElementById('root')!.textContent='Не удалось открыть проект: '+String(error.message);});
+
+import './manager-workflow.css';

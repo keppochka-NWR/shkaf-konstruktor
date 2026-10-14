@@ -6,7 +6,8 @@ import {configureOven} from './kitchenOven';
 import { initialModule, section, distribute, validate, id, RULES, type Module } from "./model";
 import { KITCHEN, kitchenBase, kitchenWall, kitchenWorktop } from "./kitchen";
 import { createKitchenRow } from "./ModulePalette";
-import { maxModules, applyAutoFillers, projectErrors, bounds, overlap, type Project, type PlacedModule } from "./project";
+import { maxModules, applyAutoFillers, projectErrors, bounds, overlap, appendModule, type Project, type PlacedModule } from "./project";
+import {refitKDrawers} from './kitchenDrawers';
 
 /** Ключ хранилища вкладки ?order=kitchen (module-studio-v3:kitchen-workspace). */
 export const KITCHEN_WORKSPACE = "kitchen-workspace";
@@ -124,8 +125,16 @@ export function placeKitchenModule(p: Project, m: Module): { project: Project; i
   const all = p.modules.map(bounds);
   const xs = [right(row), r === "wall" || r === "antresol" ? left(r === "wall" ? bases : walls) : undefined, KITCHEN_WALL_OFFSET, (left(row) ?? NaN) - m.width,
     ...all.flatMap((b) => [b.x + b.w, b.x - m.width]), p.room.width - m.width - KITCHEN_WALL_OFFSET, 0].filter((x): x is number => x !== undefined);
-  const out = placeAt(p, [a], xs, `«${m.name}» (${m.width} мм)`);
-  return { project: out.project, id: out.ids[0] };
+  try {
+    const out = placeAt(p, [a], xs, `«${m.name}» (${m.width} мм)`);
+    return { project: out.project, id: out.ids[0] };
+  } catch (error) {
+    // A filled rear wall is not a filled room: returns and islands need a free floor position.
+    const fallback=applyAutoFillers(appendModule(p,m,a));
+    if(fallback.modules.length>maxModules(p)||projectErrors(fallback).length)throw error;
+    const added=fallback.modules.at(-1)!;added.module.name=m.name;
+    return {project:fallback,id:added.id};
+  }
 }
 
 /** Столешница над нижними, ещё не закрытыми столешницей: от левого до правого края ряда нижних (длиннее 4100 — двумя частями). */
@@ -201,6 +210,12 @@ export function legModules(p: Project) { return p.modules.filter((a) => (a.modul
 /** Пересобрать нижний по регламенту под другое назначение: ширина, декоры, петли и ручки сохраняются, остальное — как у шаблона Базиса. */
 export function rebuildKitchen(m: Module, kind: KitchenItem): Module {
   const n = kitchenTemplate(kind, m.width, m);
+  n.height=m.height;n.depth=m.depth;
+  if(m.feet&&n.feet)n.feet={...m.feet};
+  if(m.kitchen?.plinth&&n.kitchen)n.kitchen.plinth={...m.kitchen.plinth};
+  n.sections.forEach(s=>{if(s.shelfDepth!==undefined)s.shelfDepth=n.depth-(n.kitchen?.role==='wall'?22:2.5);});
+  if(n.kdrawers)n.kdrawers=refitKDrawers(n);
+  if(n.kitchen?.appliance==='oven')configureOven(n);
   return { ...n, ...(m.drawerFacadeDecor ? { drawerFacadeDecor: m.drawerFacadeDecor } : {}), ...(m.hingeBrand ? { hingeBrand: m.hingeBrand } : {}), ...(m.handleId ? { handleId: m.handleId } : {}), ...(m.noHandles ? { noHandles: true } : {}) };
 }
 /** Ручные высоты петель: ещё петля — посередине самого большого промежутка; убрать — среднюю (крайние остаются у краёв фасада). */
