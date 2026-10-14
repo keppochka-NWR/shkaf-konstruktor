@@ -2,15 +2,23 @@
 """
 privacy-scan.py — поиск имён клиентских папок базы заказов в текстовых файлах.
 
-Токены берутся из `Кухни\\corpus\\index.json` (компоненты путей после общего корня),
-минус стоп-слова мебели/служебные слова и декоры Lamarty (из web/assets/catalog-lamarty.js),
+Три источника токенов (ни один не лежит в git):
+  1. `Кухни\\corpus\\index.json` — кухонные клиенты (компоненты путей после общего корня);
+  2. `--names-dir` — имена файлов/папок с проектами шкафных клиентов
+     (по умолчанию `studio/public/local-projects`, если папка есть);
+  3. `--tokens` — текстовый файл, слово в строке (старые имена примеров, клиенты из переписки);
+     по умолчанию `Кухни\\corpus\\privacy-tokens.txt`, если файл есть. Явно указанный, но
+     отсутствующий файл — ошибка (код 2), чтобы страж не молчал.
+Минус стоп-слова мебели/служебные слова и декоры Lamarty (из web/assets/catalog-lamarty.js),
 плюс латинские транслитерации. Сами токены в скрипте не хранятся и в вывод не попадают.
 
 Запуск (только с -I, чтобы не подхватить чужой модуль из рабочей папки):
   py -I scripts/privacy-scan.py <путь>... [--exclude <подстрока>]... [--index <index.json>]
+                                 [--names-dir <папка>]... [--tokens <файл>]
                                  [--decors <catalog-lamarty.js>] [--min-len 4] [--quiet]
-Вывод: только `файл:строка  маска` (первая буква + звёздочки). Код возврата: 0 — чисто,
-1 — есть совпадения, 2 — ошибка (нет index.json и т. п.).
+Вывод: только `файл:строка  маска` (первая буква + звёздочки) и строка
+«источники: index N, names-dir N, tokens N». Код возврата: 0 — чисто,
+1 — есть совпадения, 2 — ошибка (нет index.json, нет указанного файла токенов и т. п.).
 """
 import argparse
 import itertools
@@ -22,6 +30,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_INDEX = os.path.normpath(os.path.join(HERE, "..", "..", "..", "Кухни", "corpus", "index.json"))
 DEFAULT_DECORS = os.path.normpath(os.path.join(HERE, "..", "..", "web", "assets", "catalog-lamarty.js"))
+DEFAULT_NAMES_DIR = os.path.normpath(os.path.join(HERE, "..", "public", "local-projects"))
+DEFAULT_TOKENS = os.path.join(os.path.dirname(DEFAULT_INDEX), "privacy-tokens.txt")
 
 TEXT_EXT = {".ts", ".tsx", ".js", ".cjs", ".mjs", ".md", ".json", ".html", ".css", ".py", ".ps1",
             ".txt", ".csv", ".yml", ".yaml", ".bat", ".svg", ".cmd", ".sh", ".toml", ".ini", ".env"}
@@ -31,7 +41,7 @@ MAX_FILE = 50 * 1024 * 1024
 # Стоп-слова: мебель, помещения, служебные слова файлов/папок, владелец цеха, поставщики.
 # Это НЕ имена клиентов — список можно держать в репозитории.
 STOP = set("""
-autosave bazis kupe name prikhozhaya sanuzely shkaf kitchen wardrobe project model
+autosave bazis kupe name prikhozhaya sanuzely shkaf kitchen kitchens wardrobe wardrobes academic demo project model
 актуальные антресоль антресолью антресоли балкон белый блок бойлер боку большая большой
 ванная ванную ваная вариант варианты верх версия вид вопрос вторая выбеленное выпуск
 гардероб гардеробная глянец гостиная готов готовый групп группа
@@ -103,7 +113,19 @@ def load_decor_words(path):
     return words
 
 
-def load_tokens(index_path, decors_path, min_len):
+def add_words(text, stop, min_len, cyr, lat):
+    """Слова из имени файла/папки → токены (кириллица и латиница отдельно)."""
+    for w in WORD_RX.findall(text):
+        w = w.lower()
+        if w in stop or len(w) < min_len:
+            continue
+        if re.fullmatch(r"[а-яё]+", w):
+            cyr.add(w)
+        elif re.fullmatch(r"[a-z]+", w):
+            lat.add(w)
+
+
+def index_components(index_path):
     with open(index_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     if isinstance(data, dict):
@@ -120,23 +142,53 @@ def load_tokens(index_path, decors_path, min_len):
     prefix = 0
     while all(len(s) > prefix + 1 and s[prefix] == split[0][prefix] for s in split):
         prefix += 1
+    return [os.path.splitext(comp)[0] for s in split for comp in s[prefix:]]
+
+
+def names_dir_components(path):
+    """Имена файлов и папок первого уровня (без расширений); кухонные kitchen-* пропускаем."""
+    out = []
+    for name in os.listdir(path):
+        base = os.path.splitext(name)[0]
+        if base.startswith("kitchen"):
+            continue
+        out.append(base)
+    return out
+
+
+def tokens_file_lines(path):
+    out = []
+    with open(path, "r", encoding="utf-8-sig") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                out.append(line)
+    return out
+
+
+def load_tokens(index_path, decors_path, min_len, names_dirs=(), tokens_path=None):
+    """Возвращает (cyr, lat, counts) — counts: сколько токенов дал каждый источник."""
     stop = STOP | load_decor_words(decors_path)
     cyr, lat = set(), set()
-    for s in split:
-        for comp in s[prefix:]:
-            comp = os.path.splitext(comp)[0]
-            for w in WORD_RX.findall(comp):
-                w = w.lower()
-                if w in stop or len(w) < min_len:
-                    continue
-                if re.fullmatch(r"[а-яё]+", w):
-                    cyr.add(w)
-                elif re.fullmatch(r"[a-z]+", w):
-                    lat.add(w)
+    counts = {}
+
+    def take(label, components):
+        c, l = set(), set()
+        for comp in components:
+            add_words(comp, stop, min_len, c, l)
+        counts[label] = counts.get(label, 0) + len(c) + len(l)
+        cyr.update(c)
+        lat.update(l)
+
+    take("index", index_components(index_path))
+    for d in names_dirs:
+        take("names-dir", names_dir_components(d))
+    if tokens_path:
+        take("tokens", tokens_file_lines(tokens_path))
     for w in list(cyr):
         lat |= translits(w)
     lat = {w for w in lat if w not in stop and len(w) >= max(4, min_len)}
-    return cyr, lat
+    return cyr, lat, counts
 
 
 def build_regex(cyr, lat):
@@ -177,8 +229,14 @@ def main(argv):
     ap.add_argument("--exclude", action="append", default=[])
     ap.add_argument("--index", default=DEFAULT_INDEX)
     ap.add_argument("--decors", default=DEFAULT_DECORS)
+    ap.add_argument("--names-dir", action="append", default=None,
+                    help="папка с проектами клиентов: имена файлов/папок → токены (по умолчанию studio/public/local-projects)")
+    ap.add_argument("--tokens", default=None,
+                    help="файл со словами-токенами, по одному в строке (по умолчанию Кухни/corpus/privacy-tokens.txt, если есть)")
     ap.add_argument("--min-len", type=int, default=4)
     ap.add_argument("--quiet", action="store_true", help="только итог и код возврата")
+    ap.add_argument("--strict", action="store_true",
+                    help="все три источника обязательны: без local-projects и privacy-tokens.txt — код 2 (для publish.ps1)")
     ap.add_argument("--ext", default="", help="ограничить расширениями, через запятую: .md,.txt")
     a = ap.parse_args(argv)
     if a.ext:
@@ -190,10 +248,29 @@ def main(argv):
     if not os.path.isfile(a.index):
         print("privacy-scan: нет index.json: %s" % a.index)
         return 2
+    names_dirs = a.names_dir
+    if names_dirs is None:
+        if a.strict and not os.path.isdir(DEFAULT_NAMES_DIR):
+            print("privacy-scan: --strict: нет папки проектов клиентов: %s" % DEFAULT_NAMES_DIR)
+            return 2
+        names_dirs = [DEFAULT_NAMES_DIR] if os.path.isdir(DEFAULT_NAMES_DIR) else []
+    if a.tokens is None and a.strict and not os.path.isfile(DEFAULT_TOKENS):
+        print("privacy-scan: --strict: нет файла токенов: %s" % DEFAULT_TOKENS)
+        return 2
+    for d in names_dirs:
+        if not os.path.isdir(d):
+            print("privacy-scan: нет папки --names-dir: %s" % d)
+            return 2
+    tokens_path = a.tokens
+    if tokens_path is None:
+        tokens_path = DEFAULT_TOKENS if os.path.isfile(DEFAULT_TOKENS) else None
+    elif not os.path.isfile(tokens_path):
+        print("privacy-scan: нет файла --tokens: %s" % tokens_path)
+        return 2
     try:
-        cyr, lat = load_tokens(a.index, a.decors, a.min_len)
+        cyr, lat, counts = load_tokens(a.index, a.decors, a.min_len, names_dirs, tokens_path)
     except Exception as e:
-        print("privacy-scan: не прочитан index.json: %s" % e)
+        print("privacy-scan: не прочитаны источники токенов: %s" % e)
         return 2
     rx = build_regex(cyr, lat)
     if rx is None:
@@ -221,6 +298,8 @@ def main(argv):
     if not a.quiet:
         for fp, n, m in hits:
             print("%s:%d  %s" % (fp, n, m))
+    print("privacy-scan: источники: index %d, names-dir %d, tokens %d" % (
+        counts.get("index", 0), counts.get("names-dir", 0), counts.get("tokens", 0)))
     print("privacy-scan: файлов %d, токенов %d (+%d лат.), совпадений %d" % (files, len(cyr), len(lat), len(hits)))
     return 1 if hits else 0
 

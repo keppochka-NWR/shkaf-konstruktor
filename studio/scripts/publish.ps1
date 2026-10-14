@@ -9,7 +9,8 @@
 #   2. npm test + parts-snapshot "shkafy bez izmeneniy" (skipped with -SkipTests)
 #   3. npm run build; web/studio/index.html must be newer than the newest file in studio/src; assets/index-*.js must exist;
 #      web/studio/models must contain every file of studio/public/models (untracked GLB are copied by vite only if present)
-#   4. privacy scan of web/ (py -I scripts/privacy-scan.py ../web --exclude local-projects) -> exit 0 required
+#   4. privacy scan of web/ (py -I scripts/privacy-scan.py ../web --exclude local-projects --strict) -> exit 0 required;
+#      --strict = all three token sources must exist (corpus index.json, public/local-projects, corpus privacy-tokens.txt)
 #   5. web/studio/version.json = { commit, srcCommit, builtAt }
 #   6. robocopy web -> $Pages /MIR /XD local-projects .git   (exit code >= 8 = error; with -DryRun robocopy runs with /L = list only)
 #   7. git add -A; git commit "Publish studio from <commit>"; git push origin HEAD:gh-pages   (skipped with -DryRun)
@@ -113,9 +114,9 @@ if (Test-Path $pubModels) {
 }
 
 # ---------------------------------------------------------------- 4. privacy scan of web/
-Step 4 "privacy scan of web/ (without local-projects)"
-py -I (Join-Path $PSScriptRoot 'privacy-scan.py') $web --exclude local-projects --exclude .git
-if (-not $?) { Fail "privacy-scan found client names in web/ (or could not run)" }
+Step 4 "privacy scan of web/ (without local-projects), all token sources required"
+py -I (Join-Path $PSScriptRoot 'privacy-scan.py') $web --exclude local-projects --exclude .git --strict
+if (-not $?) { Fail "privacy-scan found client names in web/ (or a token source is missing)" }
 
 # ---------------------------------------------------------------- 5. version.json
 Step 5 "web/studio/version.json"
