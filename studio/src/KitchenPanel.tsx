@@ -1,3 +1,4 @@
+import {SettingsTree} from './SettingsTree';
 import {applyFacadeStyle} from './applyFacadeStyle';
 import {OVEN} from './ovenDimensions';
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
@@ -67,7 +68,7 @@ export type KitchenPanelProps = {
   m: Module; placed: PlacedModule; project: Project; stage: string; allowEmpty?: boolean;
   modify: (update: (draft: Module) => void) => boolean;
   commit: (p: Project) => boolean;
-  move: (axis: "x" | "y" | "z", v: number) => void;
+  move: (axis: "x" | "y" | "z", v: number) => boolean | void;
   position: { x: number; y: number; z: number; w: number; d: number; h: number }; room: Room;
   rotate: (r: 0 | 90 | 180 | 270) => boolean;
   material: (target: "decor" | "facadeDecor" | "drawerFacadeDecor") => void;
@@ -83,10 +84,10 @@ export function KitchenPanel(props: KitchenPanelProps) {
 }
 
 /** Положение модуля в комнате — как в общей панели (отступы по монтажному габариту, поворот, удаление). */
-function Position({ placed, project, position, room, move, rotate, commit, modify, open, allowEmpty }: KitchenPanelProps & { open?: boolean }) {
+function Position({ placed, project, position, room, move, rotate, commit, modify, open, allowEmpty }: KitchenPanelProps & { open?: boolean; settingsTitle?:string }) {
   return <Group icon={<Move size={15} />} title="Положение" open={open}>
     {(["y", "x", "z"] as const).map((axis) => <Num key={axis} label={{ x: "От левой стены", z: "От задней стены", y: "От пола" }[axis]} value={position[axis]} min={0}
-      max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => { move(axis, v); }} />)}
+      max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => move(axis, v)} />)}
     <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={placed.rotation ?? 0} onChange={(e) => rotate(Number(e.target.value) as 0 | 90 | 180 | 270)}>{[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}</select></label>
     {placed.module.kitchen&&<Check label="Автофальши у стен и в углах" checked={!placed.module.autoFillersOff} change={v=>modify(n=>{if(v)delete n.autoFillersOff;else{n.autoFillersOff=true;delete n.wallFiller;delete n.cornerFiller;delete n.cornerKind;}})}/>}
     {placed.module.kitchen && (placed.rotation ?? 0) === 0 && <button className="outline full" onClick={() => commit(alignKitchenRow(project, placed.id))}>Выровнять ряд по фасадам</button>}
@@ -96,7 +97,7 @@ function Position({ placed, project, position, room, move, rotate, commit, modif
 }
 
 /** Фурнитура модуля списком (то, что видно в 3D моделями Базиса) и проверка пересечений деталей. */
-function Hardware({ list, m, showInside }: { list: Part[]; m: Module; showInside: () => void }) {
+function Hardware({ list, m, showInside }: { list: Part[]; m: Module; showInside: () => void; settingsTitle?:string }) {
   const rows = useMemo(() => hardwareRows(list), [list]);
   const collisions = useMemo(() => partCollisions(list, m), [list, m]);
   // фурнитура в воздухе, как в проекте Базиса (навесы над корпусом: k26–k28, k31) — студия положение не меняет, но говорит о нём
@@ -148,7 +149,7 @@ function CabinetPanel(props: KitchenPanelProps) {
   // Петли: текущая высота фасада и фактические ручные высоты (scaleHingeY), чтобы панель показывала и сохраняла то, что стоит в 3D
   const dhNow = door ? Math.round(door.size[1] * 10) / 10 : 0;
   const shownY = s.hingeY?.length ? scaleHingeY(s.hingeY, s.hingeYFor ?? dhNow, dhNow).map((y) => Math.round(y * 10) / 10) : [];
-  return <div className="kitchen-panel">
+  return <SettingsTree className="kitchen-panel">
     <div className="property-section kitchen-head">
       <span className="eyebrow">{ROLE[role] ?? "Кухонный модуль"}{appliance ? " · " + appliance.label.toLowerCase() : ""}</span>
       <h2>{m.name}</h2>
@@ -173,7 +174,7 @@ function CabinetPanel(props: KitchenPanelProps) {
     <Group icon={<Box size={15} />} title="Корпус" open={stage === "bodies"}>
       {item && kinds.length > 1 && <label className="hardware-field">Назначение<select aria-label="Назначение кухонного модуля" value={item} onChange={(e) => modify((n) => { const r = rebuildKitchen(n, e.target.value as KitchenItem); for (const key of Object.keys(n)) delete (n as Record<string, unknown>)[key]; Object.assign(n, r); })}>
         {kinds.map((x) => <option key={x} value={x}>{KITCHEN_ITEMS[x].label}</option>)}</select></label>}
-      {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (ширина, цвета, петли и ручки сохраняются).</p>}
+      {item && kinds.length > 1 && <p className="field-note">Смена назначения пересобирает модуль по регламенту Базиса (габариты, цвета, петли и ручки сохраняются).</p>}
       <label className="hardware-field">Название<input aria-label="Название кухонного модуля" key={m.name} defaultValue={m.name} maxLength={80} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.name) modify((n) => { n.name = v; }); }} /></label>
       {/* предел — как в проверке кухни (KITCHEN.maxModuleWidth 1650: мойка 1480 k28 m17), не 1200 нарезки ряда */}
       <Check label="Менять ширину только этого корпуса" checked={!!m.ownWidthOnly} change={v=>modify(n=>{if(v)n.ownWidthOnly=true;else delete n.ownWidthOnly;})}/>
@@ -242,6 +243,10 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!k.appliance&&<label className="hardware-field">Ящики нижнего модуля<select aria-label="Ящики нижнего модуля" value={m.kdrawers?.length??0} onChange={e=>modify(n=>setKitchenDrawerCount(n,Number(e.target.value)))}>
         <option value="0">Без ящиков · распашные фасады</option>{[1,2,3,4].map(n=><option key={n} value={n}>{n} {n===1?'ящик':'ящика'}</option>)}
       </select></label>}
+
+    </Group>}
+
+    {role === "base" && <Group icon={<Wrench size={15}/>} title="Тип открывания">
       {k.appliance!=='oven'&&<Check label="Профиль Gola" checked={!!m.gola} change={v=>modify(n=>setKitchenGola(n,v))}/>}
       {m.gola&&<p className="field-note">Верхний L-профиль; между ящиками — C-профили. Вырезы боковин и зазоры фасадов показаны в модели. Обычные ручки отключены.</p>}
       {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
@@ -338,9 +343,9 @@ function CabinetPanel(props: KitchenPanelProps) {
 
     {appliance && <div className="property-section kitchen-note"><Info size={14} /><p>{appliance.label}{appliance.niche[0] ? `: ниша ${appliance.niche.join(" × ")} мм по паспорту типовой модели.` : "."} {k.appliance === "sink" ? "Задника нет, передняя царга на ребре — под сифон и трубы." : k.appliance === "oven" ? "Без задника и царг — под вентиляцию и розетку." : ""}</p></div>}
 
-    <Hardware list={list} m={m} showInside={props.showInside} />
-    <Position {...props} />
-  </div>;
+    <Hardware settingsTitle="Фурнитура модуля" list={list} m={m} showInside={props.showInside} />
+    <Position settingsTitle="Положение" {...props} />
+  </SettingsTree>;
 }
 
 function WorktopPanel(props: KitchenPanelProps) {

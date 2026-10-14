@@ -73,7 +73,7 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, chil
       <p className="field-note">Проекты Базиса цеха, перенесённые в студию. Открываются здесь же, исходный файл не меняется.</p>
       <ul>{bases.map((b) => <li key={b.id}><a href={`?project=kitchen-${b.id}&fresh=1`}>{b.title}</a></li>)}</ul>
     </details>}
-    <WardrobeBase />
+
     {opened && <a className="text-action kp-back" href="?order=kitchen"><ArrowLeft size={14} />К своей кухне</a>}
   </details>;
 }

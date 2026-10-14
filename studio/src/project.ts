@@ -69,6 +69,7 @@ export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
+    if(a.module.worktop&&!isBazisModule(n,a)){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner||a.module.autoFillersOff)continue;
     // Кухня из Базиса (правило Макса 09.10.2026): фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней

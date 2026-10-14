@@ -1,10 +1,10 @@
 import type {Module} from './model';
-import {relayoutKDrawers,type KDrawerSystem} from './kitchenDrawers';
+import {relayoutKDrawers,axisFits,withAxisH,AXIS_HEIGHTS,axisAvailable,type KDrawerSystem} from './kitchenDrawers';
 
 const frontInset=(index:number,count:number)=>(index?13.5:0)+(index===count-1?28.5:13.5);
 const proportions=(m:Module)=>m.kdrawers?.map((d,i)=>d.y1-d.y0+(m.gola?frontInset(i,m.kdrawers!.length):0));
 /** Reconfigure a whole base-unit drawer stack without replacing its carcass or dimensions. */
-export function layoutKitchenDrawers(m:Module,count:number,ratios?:number[],system?:KDrawerSystem){
+export function layoutKitchenDrawers(m:Module,count:number,ratios?:number[],system?:KDrawerSystem,adjustment=0){
   ratios??=m.kdrawers?.length===count?proportions(m):undefined;
   const plain={...m,gola:undefined};
   let drawers=relayoutKDrawers(plain,count,ratios,system);
@@ -17,6 +17,15 @@ export function layoutKitchenDrawers(m:Module,count:number,ratios?:number[],syst
     m.gola={cuts,faceTop:30};
     drawers=relayoutKDrawers(m,count,ratios,system).map((d,i)=>({...d,
       y0:d.y0+(i?13.5:0),y1:d.y1-(i===count-1?28.5:13.5)}));
+    drawers=drawers.map(d=>d.system==='axis-pro'&&!axisFits(m,d)?[...AXIS_HEIGHTS].reverse().map(h=>withAxisH(m,d,h)).find(k=>axisFits(m,k)&&axisAvailable(k))??d:d);
+    const failed=drawers.findIndex(d=>!axisFits(m,d));
+    if(failed>=0){
+      // Preserve the bottom front requested by the manager; share the remaining height
+      // between the upper fronts until the real boxes clear both Gola profiles.
+      const donor=drawers.map((d,i)=>({i,h:d.y1-d.y0})).filter(d=>d.i!==failed&&(count<3||d.i!==0)).sort((a,b)=>b.h-a.h)[0];
+      if(adjustment<80&&donor&&donor.h>100){const next=drawers.map((d,i)=>d.y1-d.y0+frontInset(i,count));next[failed]+=1;next[donor.i]-=1;return layoutKitchenDrawers(m,count,next,system,adjustment+1);}
+      throw Error('Для Gola не хватает высоты одного из ящиков. Увеличьте верхний фасад, уменьшив нижний, либо уменьшите число ящиков.');
+    }
   }
   return drawers;
 }

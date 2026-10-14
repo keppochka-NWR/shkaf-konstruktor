@@ -317,6 +317,8 @@ export type Module = {
   ownWidthOnly?: boolean;
   /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
   hingeBrand?: HingeBrand;
+  /** Explicit repair command only: preserve legacy and imported hardware until requested. */
+  hingeFit?: true;
   /** Кромка видимых торцов корпуса и кромка фасадов, мм. По умолчанию 2; скрытые торцы всегда 0,4. */
   edgeBody?: EdgeThickness;
   edgeFacade?: EdgeThickness;
@@ -1385,7 +1387,7 @@ function hardwareParts(m: Module, out: Part[]) {
         // петли — как в моделях Базиса. Чашка — по преобразованию из моделей: поворот Ry 90°, сдвиг 4,5 по Y.
         const qb: Quat = dir > 0 ? [0.5, 0.5, 0.5, -0.5] : [0.5, -0.5, 0.5, 0.5], o: [number, number, number] = [sideX, y, back];
         // Центр чашки — в 7,5 мм от внутренней плоскости стойки (присадка «Петля накладная» в проектах Базиса цеха).
-        const co = qrot(qb, [0, ffHinge ? 22 : 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
+        const co = qrot(qb, [0, ffHinge ? 22 : m.hingeFit && !m.kitchen ? Math.max(7.5, dir * (edgeX - sideX) + 22.5) : 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
         const cup: Part = { ...metal(cupId, (ffHinge ? "Петля под фальшпанель" : "Петля " + brand) + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
           model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qb, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
           collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }], ...(ffHinge ? { falsePanelHinge: true as const } : {}) };
@@ -1437,7 +1439,7 @@ function hardwareParts(m: Module, out: Part[]) {
     hys.forEach((hy, n) => {
       const ideal = cy - dh / 2 + hy;
       let pair = hingeAt(ideal, n);
-      for (const s of hingeShifts()) {
+      for (const s of hingeShifts(m.hingeFit && !m.kitchen ? Math.ceil(dh) : 200)) {
         const y = ideal + s;
         if (y < lo || y > hi) continue;
         const cand = hingeAt(y, n);
@@ -2006,6 +2008,7 @@ export function parseModule(input: unknown): Module {
     ...(x.rodType===undefined?{}:{rodType:x.rodType as Module['rodType']}),
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
+    ...(x.hingeFit===true?{hingeFit:true as const}:{}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
     ...(x.kitchen===undefined?{}:{kitchen:parseKitchenSpec(x.kitchen,{parseKitchenRafix,parseGridRecord})}),
     ...(x.autoFillersOff===true?{autoFillersOff:true}:{}),

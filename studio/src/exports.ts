@@ -189,8 +189,10 @@ export function saveFile(
     a = document.createElement("a");
   a.href = url;
   a.download = name;
+  document.body.append(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 /** Пазы детали для деталировки: паз под ЛХДФ (если задник в паз) и пазы под подсветку — тот же текст, что на бирке. */
 function detailGrooves(p: Project, moduleId: string, partId: string) {

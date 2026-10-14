@@ -1,3 +1,4 @@
+import {SettingsTree} from './SettingsTree';
 import {useEffect,useState} from 'react';
 import type {Module,Section} from './model';
 import {cornerBoxes,cornerDrawer,cornerOffsets} from './cornerWardrobe';
@@ -25,9 +26,9 @@ export function CornerModulePanel({module:m,stage,selected,update,select,materia
  const labels=upper?['Антресоль']:['Левый блок','Правый блок','Центр'];
  const change=(fn:(n:Module)=>void)=>{const n=structuredClone(m);fn(n);return update(n);};
  const changeSection=(fn:(s:Section,n:Module)=>void)=>change(n=>fn(n.sections[index],n));
- return <div className="corner-properties">
+ return <SettingsTree className="corner-properties">
   <div className="property-section"><h2>{upper?'Угловая антресоль':'Пятиугольный угловой шкаф'}</h2><p className="field-note">Корпус в общей комнате. Перемещайте и поворачивайте его вместе с остальной мебелью. В наполнении выберите блок ниже или нажмите на деталь.</p></div>
-  <details className="property-section" open={stage==='bodies'} key={'geometry-'+stage}><summary>Корпус и положение</summary>
+  <details className="property-section" key={'geometry-'+stage}><summary>Корпус и положение</summary>
    <label className="hardware-field">Название<input aria-label="Название углового модуля" key={m.name} defaultValue={m.name} maxLength={80} onBlur={e=>{if(e.target.value.trim())change(n=>n.name=e.target.value.trim());}}/></label>
    <Numeric label="Сторона угла" value={m.width} min={950} max={1400} change={v=>change(n=>{n.width=v;n.depth=v;})}/>
    <Numeric label="Высота углового корпуса" value={m.height} min={upper?300:1400} max={2200} change={v=>change(n=>{n.height=v;})}/>
@@ -36,7 +37,7 @@ export function CornerModulePanel({module:m,stage,selected,update,select,materia
    <label className="hardware-field">Поворот корпуса<select aria-label="Поворот углового корпуса" value={rotation} onChange={e=>rotate(Number(e.target.value) as typeof rotation)}>{[0,90,180,270].map(r=><option key={r} value={r}>{r}°</option>)}</select></label>
    {(['x','z','y'] as const).map(axis=><Numeric key={axis} label={{x:'От левой стены',z:'От задней стены',y:'От пола'}[axis]} value={position[axis]} min={0} max={{x:room.width-position.w,z:room.depth-position.d,y:room.height-position.h}[axis]} change={v=>{move(axis,v);return true;}}/>)}
   </details>
-  <details className="property-section" open={stage==='filling'} key={'fill-'+stage}><summary>Наполнение угла</summary>
+  <details className="property-section" key={'fill-'+stage}><summary>Наполнение угла</summary>
    <div className="segmented">{m.sections.map((sec,i)=><button type="button" key={sec.id} aria-pressed={s.id===sec.id} onClick={()=>select(sec.id)}>{labels[i]}</button>)}</div>
    <p className="field-note">{labels[index]} · ширина в свету {Math.round(b.width)} мм · высота {Math.round(span)} мм</p>
    <label className="hardware-field">Количество полок<select aria-label="Количество полок угловой секции" value={s.shelves.length} onChange={e=>changeSection((sec,n)=>distributeCornerShelves(n,sec,Number(e.target.value)))}>{Array.from({length:7},(_,n)=><option key={n} value={n}>{n}</option>)}</select></label>
@@ -48,12 +49,12 @@ export function CornerModulePanel({module:m,stage,selected,update,select,materia
    {!upper&&index===2&&<><label className="hardware-field"><span><input type="checkbox" checked={s.rod} onChange={e=>changeSection(sec=>sec.rod=e.target.checked)}/> Штанга в центре</span></label>{s.rod&&<Numeric label="Штанга от дна центрального отделения" value={(s.rodAt??(span-70)/span)*span} min={100} max={Math.floor(span-30)} change={v=>changeSection(sec=>sec.rodAt=v/span)}/>}</>}
    <button className="text-action danger" onClick={()=>changeSection(sec=>{sec.drawers=0;sec.drawerConfigs=[];sec.shelves=[];sec.rod=false;delete sec.rodAt;})}>Очистить выбранный блок</button>
   </details>
-  <details className="property-section" open={stage==='facades'} key={'finish-'+stage}><summary>Материалы и фасады</summary>
+  <details className="property-section" key={'finish-'+stage}><summary>Материалы и фасады</summary>
    <button className="text-action" onClick={()=>material('decor')}>Корпус: {m.decor}</button><button className="text-action" onClick={()=>material('facadeDecor')}>Фасады: {m.facadeDecor}</button><button className="text-action" onClick={()=>material('drawerFacadeDecor')}>Фасады ящиков: {m.drawerFacadeDecor??m.facadeDecor}</button>
    <label className="hardware-field">Задняя стенка<select aria-label="Задняя стенка углового модуля" value={m.backType??'nailed'} onChange={e=>change(n=>{n.backType=e.target.value as 'nailed'|'none';})}><option value="nailed">Накладной ХДФ 3 мм</option><option value="none">Без задней стенки</option></select></label>
    <label className="hardware-field"><span><input type="checkbox" aria-label="Диагональные двери" checked={m.doors} onChange={e=>change(n=>n.doors=e.target.checked)}/> Две диагональные распашные двери</span></label>
    {!!m.sections.at(-1)?.removedDoors?.length&&<button className="outline" onClick={()=>change(n=>{delete n.sections.at(-1)!.removedDoors;n.doors=true;})}>Восстановить удалённые двери</button>}
    <p className="field-note">Конкретные петли для диагональных дверей и присадку проверяет технолог. Показ открывания — геометрическое приближение.</p>
   </details>
- </div>;
+ </SettingsTree>;
 }

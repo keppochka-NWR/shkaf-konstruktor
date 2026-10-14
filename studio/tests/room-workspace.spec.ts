@@ -16,8 +16,14 @@ test('right-click rehangs the selected facade and supports undo redo reload',asy
  await page.keyboard.press('Control+y');expect((await hinges())[0]).toBe('right');await page.reload();expect((await hinges())[0]).toBe('right');
 });
 async function openSettings(page:any,title:string){
- const summary=page.locator('.properties summary').filter({hasText:new RegExp('^'+title)}).first();
+ const summary=page.locator('.properties details:not(.settings-category)>summary').filter({hasText:new RegExp('^'+title)}).first();
+ const parent=summary.locator('xpath=ancestor::details[contains(@class,"settings-category")]');
+ if(await parent.count()&&!await parent.evaluate((e:HTMLDetailsElement)=>e.open))await parent.locator(':scope>summary').click();
  if(!await summary.evaluate((e:HTMLElement)=>(e.parentElement as HTMLDetailsElement).open))await summary.click();
+}
+async function kitchenCatalog(page:any,presets=false){
+ await page.getByRole('tab',{name:'Кухонные модули',exact:true}).click();
+ if(presets){const details=page.locator('.catalog-presets');if(!await details.evaluate((e:HTMLDetailsElement)=>e.open))await details.locator(':scope>summary').click();}
 }
 
 test('unified workflow keeps communications through furniture, undo and reload',async({page})=>{
@@ -31,7 +37,7 @@ test('unified workflow keeps communications through furniture, undo and reload',
  await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  for(const title of ['Полки','Ящики','Штанги','Опоры','Подсветка','Фасад','Ручки','Тип открывания']){
-  const summary=page.locator('.properties summary').getByText(title,{exact:true});await expect(summary).toBeVisible();
+  const summary=page.locator('.properties summary').getByText(title,{exact:true});await expect(summary).toBeAttached();
   expect(await summary.evaluate(e=>(e.closest('details') as HTMLDetailsElement).open)).toBe(false);
  }
  expect((await state()).room.fixtures).toEqual(fixtures);
@@ -52,7 +58,7 @@ test('unified workflow keeps communications through furniture, undo and reload',
 
 test('straight kitchen creates the entered dimensions without self-overlap',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
- await page.getByRole('button',{name:'Кухня прямая',exact:true}).click();
+ await kitchenCatalog(page);await page.getByRole('button',{name:'Кухня прямая',exact:true}).click();
  for(const [name,value] of [['Ширина','2000'],['Высота','900'],['Глубина','600']])await page.getByLabel(name+' новой мебели',{exact:true}).fill(value);
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
  await expect(page.getByRole('alert')).toHaveCount(0);
@@ -96,7 +102,7 @@ test('unified Ctrl+Z undoes furniture, room commands and last-module removal; Ru
 
 test('shelf module exposes a direct facade action in section controls, supports undo and reload',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Стеллаж',exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
- await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.locator('.properties summary').getByText('Фасад',{exact:true}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Фасад');
  await page.getByRole('button',{name:'Добавить распашные фасады',exact:true}).click();
  const hasDoors=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.doors);
  expect(await hasDoors()).toBe(true);await page.keyboard.press('Control+z');expect(await hasDoors()).toBe(false);
@@ -107,7 +113,7 @@ test('drawer front increase shifts fixed upper drawers as one undoable command',
  await page.goto('/');const p=newProject();p.modules[0].module.height=2000;p.modules[0].module.doors=false;
  const s=p.modules[0].module.sections[0];s.shelves=[];s.drawers=3;s.drawerConfigs=[0,200,400].map(y=>({slide:'ball',height:160,length:450,y}));
  await page.evaluate(p=>localStorage.setItem('module-studio-v3',JSON.stringify(p)),p);await page.reload();
- await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.locator('.properties summary').filter({hasText:/^Ящики( и бутылочницы)?$/}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Ящики');
  const input=page.getByLabel('Высота фасада ящика',{exact:true});await input.fill('350');await input.press('Enter');
  const values=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.sections[0].drawerConfigs);
  expect((await values()).map((c:any)=>c.y)).toEqual([0,353,553]);
@@ -281,14 +287,14 @@ test('empty project: delete last module, undo, reload and export without losing 
 
 test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persistence and zoom bounds',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/?rooms=1');await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
- await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await page.locator('.properties summary').filter({hasText:/^Ящики( и бутылочницы)?$/}).click();
- await page.getByLabel('Ящики нижнего модуля',{exact:true}).selectOption('3');await page.getByLabel('Профиль Gola',{exact:true}).check();
+ await page.goto('/?rooms=1');await kitchenCatalog(page);await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Ящики');
+ await page.getByLabel('Ящики нижнего модуля',{exact:true}).selectOption('3');await openSettings(page,'Тип открывания');await page.getByLabel('Профиль Gola',{exact:true}).check();
  await expect(page.getByRole('button',{name:'Добавить пантограф',exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
- await page.getByRole('button',{name:'Под мойку 600',exact:true}).click();await page.getByRole('button',{name:'Нижний распашной 600',exact:true}).click();
+ await kitchenCatalog(page,true);await page.getByRole('button',{name:'Под мойку 600',exact:true}).click();await page.getByRole('button',{name:'Нижний распашной 600',exact:true}).click();
  await page.getByRole('button',{name:'Навесной 600',exact:true}).click();await page.getByRole('button',{name:'Навесной 600',exact:true}).click();
- await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
+ await kitchenCatalog(page,true);await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
  const read=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)!).rooms[0].project,KEY);
  const before=await read(),top=before.modules.find((m:any)=>m.module.worktop);expect(top.y).toBe(820);expect(before.modules).toHaveLength(6);
  const facadePlanes=before.modules.filter((a:any)=>a.module.kitchen?.role==='base').map((a:any)=>a.z+a.module.depth+(a.module.faceAir??2)+(a.module.facadeT??16));expect(new Set(facadePlanes).size).toBe(1);
@@ -310,7 +316,7 @@ test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persisten
 
 test('kitchen correction: depth without shelves, reversible facades and supports',async({page})=>{
  await page.goto('/?rooms=1');
- await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
+ await kitchenCatalog(page);await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await openSettings(page,'Корпус');
@@ -334,13 +340,13 @@ test('kitchen correction: depth without shelves, reversible facades and supports
 test('Premial bottle pullout: one-click template, handedness, invalid resize, persistence',async({page})=>{
  test.setTimeout(90000);
  await page.goto('/?rooms=1&workspace=premial-regression-'+Date.now());
- await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
+ await kitchenCatalog(page);await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('checkbox',{name:'Все настройки',exact:true}).check();
- await page.getByRole('button',{name:'Бутылочница 200',exact:true}).click();
+ await kitchenCatalog(page,true);await page.getByRole('button',{name:'Бутылочница 200',exact:true}).click();
  const props=page.getByRole('complementary').last();
- await props.getByText('Ящики и бутылочницы',{exact:true}).click();
+ await openSettings(page,'Ящики и бутылочницы');
  const select=page.getByRole('combobox',{name:'Бутылочница Premial',exact:true});
  await expect(select).toHaveValue('060502');
  await select.selectOption('060503');
@@ -350,7 +356,7 @@ test('Premial bottle pullout: one-click template, handedness, invalid resize, pe
  await expect(page.getByRole('alert')).toContainText('457');
  await page.reload();
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
- if(!await select.isVisible()) await props.getByText('Ящики и бутылочницы',{exact:true}).click();
+ if(!await select.isVisible()) await openSettings(page,'Ящики и бутылочницы');
  await expect(select).toHaveValue('060503');
  await expect(props.getByText('Петли',{exact:true})).toHaveCount(0);
  await page.getByRole('button',{name:'Прозрачный корпус',exact:true}).click();
@@ -367,14 +373,14 @@ test('Premial sink: real cutout, persistence, invalid edit and small viewport ca
  test.setTimeout(90000);await page.setViewportSize({width:1280,height:720});
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/?rooms=1&workspace=premial-sink-regression-'+Date.now());
- await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
+ await kitchenCatalog(page);await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
  await page.getByRole('spinbutton',{name:'Ширина новой мебели',exact:true}).fill('800');
  await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
  await page.getByRole('checkbox',{name:'Все настройки',exact:true}).check();
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
- await page.locator('.properties summary').filter({hasText:/^Корпус$/}).click();await page.getByRole('combobox',{name:'Назначение кухонного модуля',exact:true}).selectOption({label:'Под мойку'});
- await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
- await page.locator('.properties summary').filter({hasText:/^Столешница$/}).click();await page.getByRole('button',{name:'+ под мойку',exact:true}).click();
+ await openSettings(page,'Корпус');await page.getByRole('combobox',{name:'Назначение кухонного модуля',exact:true}).selectOption({label:'Под мойку'});
+ await kitchenCatalog(page,true);await page.getByRole('button',{name:'Столешница над нижними',exact:true}).click();
+ await openSettings(page,'Столешница');await page.getByRole('button',{name:'+ под мойку',exact:true}).click();
  await page.getByRole('combobox',{name:'Модель мойки',exact:true}).selectOption('210245');
  await page.getByRole('checkbox',{name:'Показать сифон для компоновки',exact:true}).check();
  const cw=page.getByRole('spinbutton',{name:'Ширина выреза',exact:true});await cw.fill('500');await cw.press('Tab');

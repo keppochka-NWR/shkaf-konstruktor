@@ -2,7 +2,7 @@ import {downloadReviewArchive} from './reviewPackage';
 import {estimate} from './pricing';
 import {placementHTML} from './placementPlan';
 import {DrawingsPanel} from './DrawingsPanel';
-import {EstimatePanel} from './EstimatePanel';
+import {SalesSummary} from './SalesSummary';
 import { useState, useMemo } from "react";
 import { type Project } from "./project";
 import type { OutputTab } from "./ProjectDock";
@@ -56,8 +56,8 @@ export function OutputPanel({
   return (
     <div className="output-panel">
       <div className="review-package">
-        <div><b>Передать технологу</b><p className="field-note">Один ZIP: проект, документы, карты, бирки и внутренняя смета из одной версии.</p></div>
-        <button className="outline" disabled={packing} onClick={async()=>{setPacking(true);setPackageMessage('');setPackageError('');try{await downloadReviewArchive(project);setPackageMessage('Комплект передан браузеру для скачивания. Внутри — памятка и замечания. Серверное сохранение выполняется отдельно в кабинете.');}catch(e){setPackageError(e instanceof Error?e.message:'Не удалось сформировать комплект. Попробуйте ещё раз.');}finally{setPacking(false);}}}>{packing?'Готовим комплект…':'Скачать комплект ZIP'}</button>
+        <div><b>Комплект документов</b><p className="field-note">Один ZIP: чертежи, карты, бирки и итоговая стоимость из одной версии.</p></div>
+        <button className="outline" disabled={packing} onClick={async()=>{setPacking(true);setPackageMessage('');setPackageError('');try{await downloadReviewArchive(project,true);setPackageMessage('Комплект передан браузеру для скачивания. Внутри — памятка и замечания. Серверное сохранение выполняется отдельно в кабинете.');}catch(e){setPackageError(e instanceof Error?e.message:'Не удалось сформировать комплект. Попробуйте ещё раз.');}finally{setPacking(false);}}}>{packing?'Готовим комплект…':'Скачать комплект ZIP'}</button>
       </div>
       {packageMessage&&<p role="status" className="field-note">{packageMessage}</p>}{packageError&&<p role="alert" className="cloud-error">{packageError}</p>}
       <div className="output-tabs">
@@ -74,7 +74,7 @@ export function OutputPanel({
         <button aria-pressed={tab === "specification"} onClick={()=>setTab("specification")}>Ведомость</button>
         <button aria-pressed={tab === "drawings"} onClick={()=>setTab("drawings")}>Чертежи модулей</button>
         <button aria-pressed={tab === 'labels'} onClick={()=>setTab('labels')}>Бирки деталей</button>
-        <button aria-pressed={tab === 'estimate'} onClick={()=>setTab('estimate')}>Смета</button>
+        <button aria-pressed={tab === 'estimate'} onClick={()=>setTab('estimate')}>Стоимость</button>
       </div>
       {tab === "sheets" ? (
         <>
@@ -180,7 +180,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план / PDF</button><p className="field-note">Вид сверху и таблица отступов для согласования.</p></div><iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки / PDF</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{labelOrder(project)}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <EstimatePanel project={project} update={update}/> : (
+      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план / PDF</button><p className="field-note">Вид сверху и таблица отступов для согласования.</p></div><iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки / PDF</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{labelOrder(project)}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <SalesSummary project={project}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение
@@ -189,7 +189,7 @@ export function OutputPanel({
           </p>
           <div className="quote-price-check">
             {calculated?.retail==null?<p>Смета ещё не завершена: незаполненных цен — {calculated?.missing.length??0}. Указанную вручную цену КП нужно проверить.</p>:<><p>По текущей смете: <b>{calculated.retail.toLocaleString('ru-RU')} ₽</b>.</p>{q.price.trim()&&Number(q.price)!==calculated.retail&&<p>Цена КП отличается от сметы. Проверьте её после изменения мебели; согласованную скидку можно оставить.</p>}<button className="outline" onClick={()=>update({...project,offer:{...q,price:String(calculated.retail)}})}>Подставить текущую смету</button></>}
-            <button className="text-action" onClick={()=>setTab('estimate')}>Открыть смету</button>
+            <button className="text-action" onClick={()=>setTab('estimate')}>Открыть стоимость</button>
           </div>
           <label className="hardware-field">
             Клиент / название предложения
@@ -198,7 +198,7 @@ export function OutputPanel({
               key={'customer:'+q.customer}
               defaultValue={q.customer}
               maxLength={120}
-              onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape')e.currentTarget.blur();}}
+              onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=q.customer;e.currentTarget.blur();}else if(e.key==='Enter')e.currentTarget.blur();}}
               onBlur={e=>{if(e.target.value!==q.customer&&!update({...project,offer:{...q,customer:e.target.value}}))e.target.value=q.customer;}}
             />
           </label>
@@ -210,7 +210,7 @@ export function OutputPanel({
               min="0"
               key={'price:'+q.price}
               defaultValue={q.price}
-              onKeyDown={e=>{if(e.key==='Enter'||e.key==='Escape')e.currentTarget.blur();}}
+              onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=q.price;e.currentTarget.blur();}else if(e.key==='Enter')e.currentTarget.blur();}}
               onBlur={e=>{if(e.target.value!==q.price&&!update({...project,offer:{...q,price:e.target.value}}))e.target.value=q.price;}}
             />
           </label>
@@ -222,7 +222,7 @@ export function OutputPanel({
               rows={4}
               key={'notes:'+q.notes}
               defaultValue={q.notes}
-              onKeyDown={e=>{if(e.key==='Escape')e.currentTarget.blur();}}
+              onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();e.currentTarget.value=q.notes;e.currentTarget.blur();}}}
               onBlur={e=>{if(e.target.value!==q.notes&&!update({...project,offer:{...q,notes:e.target.value}}))e.target.value=q.notes;}}
             />
           </label>

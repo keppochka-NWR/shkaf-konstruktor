@@ -4,6 +4,7 @@ import {drawingsHTML} from './drawings';
 import {placementHTML} from './placementPlan';
 import {estimate,estimateCSV} from './pricing';
 import {roomWarnings} from './roomWarnings';
+import {salesCSV} from './SalesSummary';
 
 /** A single immutable snapshot is shared by all documents in the archive. */
 export function reviewFiles(project:Project,created=new Date()):Record<string,string>{
@@ -45,18 +46,27 @@ export function reviewFiles(project:Project,created=new Date()):Record<string,st
     '08-Смета.csv':estimateCSV(p,cost),
   };
 }
-export async function reviewArchive(project:Project){
+export function managerReviewFiles(project:Project,created=new Date()):Record<string,string>{
+  const files=reviewFiles(project,created);
+  delete files['01-Проект.project.json'];delete files['08-Смета.csv'];
+  files['00-Прочитайте.txt']='\ufeffДокументы проекта · '+created.toLocaleString('ru-RU')+'\r\nЧертежи, деталировка, карты и бирки одной версии. Итоговая стоимость без доставки и монтажа. Для продолжения редактирования сохраните проект отдельно в редакторе. Перед производством технолог должен проверить замер, соединения, зазоры и присадку. Бирки 120 × 75 мм; масштаб печати 100%.\r\n';
+  files['08-Стоимость.csv']=salesCSV(project);
+  const warnings=roomWarnings(project),missing=estimate(project).missing;
+  files['00-Прочитайте.txt']+='\r\nЗамечания по расстановке: '+warnings.length+'\r\n'+warnings.map(w=>'• '+w.message).join('\r\n')+'\r\nСтоимость требует уточнения: '+missing.length+' позиций\r\n'+missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit).join('\r\n');
+  return files;
+}
+export async function reviewArchive(project:Project,manager=false){
   const snapshot=structuredClone(project),created=new Date();
   const {zipSync,strToU8}=await import('three/addons/libs/fflate.module.js');
-  const files=reviewFiles(snapshot,created);
+  const files=manager?managerReviewFiles(snapshot,created):reviewFiles(snapshot,created);
   return zipSync(Object.fromEntries(Object.entries(files).map(([name,text])=>[name,strToU8(text)])),{level:6});
 }
 export function reviewArchiveName(project:Project){
   const name=labelOrder(project).replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim().slice(0,80);
   return (name||'Проект')+' — комплект технологу.zip';
 }
-export async function downloadReviewArchive(project:Project){
-  const snapshot=structuredClone(project),data=await reviewArchive(snapshot);
+export async function downloadReviewArchive(project:Project,manager=false){
+  const snapshot=structuredClone(project),data=await reviewArchive(snapshot,manager);
   const url=URL.createObjectURL(new Blob([new Uint8Array(data).buffer],{type:'application/zip'})),link=document.createElement('a');
   link.href=url;link.download=reviewArchiveName(snapshot);link.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);

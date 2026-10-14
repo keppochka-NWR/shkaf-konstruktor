@@ -1,5 +1,5 @@
 import {refitKDrawers} from './kitchenDrawers';
-import {useState} from 'react';
+import {useState,type ReactNode} from 'react';
 import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal} from 'lucide-react';
 import {initialModule,section,deskModule,distribute,validate,id,type Module} from './model';
 import {createCornerModule} from './cornerWardrobe';
@@ -41,9 +41,16 @@ export function createKitchenRow(length:number,source:Module,height:number=KITCH
   return out;
 }
 export function createModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module):Module {
-  if(kind==='kitchen-base')return {...kitchenBase(initialModule(),width),height,depth,decor:source.decor,facadeDecor:source.facadeDecor};
-  if(kind==='kitchen-wall')return {...kitchenWall(initialModule(),width),height,depth,decor:source.decor,facadeDecor:source.facadeDecor};
-  if(kind==='worktop')return {...kitchenWorktop(initialModule(),width),depth,decor:source.decor};
+  if(kind==='kitchen-base'||kind==='kitchen-wall'){
+    const m={...(kind==='kitchen-base'?kitchenBase(initialModule(),width):kitchenWall(initialModule(),width)),height,depth,decor:source.decor,facadeDecor:source.facadeDecor};
+    m.sections.forEach(s=>s.shelfDepth=depth-(kind==='kitchen-base'?2.5:22));
+    const error=validate(m)[0];if(error)throw Error(error);return m;
+  }
+  if(kind==='worktop'){
+    const m=kitchenWorktop(initialModule(),width);m.height=height;m.depth=depth;m.decor=source.decor;m.worktop!.thickness=height;
+    m.sections=[{...section(),shelves:[],drawers:0,rod:false}];
+    const error=validate(m)[0];if(error)throw Error(error);return m;
+  }
   if(kind==='corner')return createCornerModule(width,height,depth,source);
   if(kind==='kupe')return createKupeModule(width,height,source);
   let m:Module={...initialModule(),name:choices.find(c=>c.id===kind)!.label,width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,sections:[section()]};
@@ -57,8 +64,11 @@ export function createModule(kind:ModuleKind,width:number,height:number,depth:nu
   const error=validate(m)[0];if(error)throw Error(error);
   return m;
 }
-export function ModulePalette({source,onAdd,onAddGroup}:{source:Module;onAdd:(module:Module)=>boolean;onAddGroup:(group:PlacedModule[])=>boolean}) {
+const categories=[{id:'wardrobe',label:'Шкафы распашные',kinds:['empty','shelves','wardrobe','drawers','corner','desk']},{id:'kitchen',label:'Кухонные модули',kinds:['kitchen-row','kitchen-base','kitchen-wall','worktop']},{id:'kupe',label:'Шкафы-купе',kinds:['kupe-wardrobe','kupe']}] as const;
+export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source:Module;onAdd:(module:Module)=>boolean;onAddGroup:(group:PlacedModule[])=>boolean;kitchenTemplates?:ReactNode}) {
   const [kind,setKind]=useState<ModuleKind>('empty'),[width,setWidth]=useState(600),[height,setHeight]=useState(2000),[depth,setDepth]=useState(550),[error,setError]=useState('');
+  const [category,setCategory]=useState<string>('wardrobe');
+  const pick=(next:ModuleKind)=>{setKind(next);const sz=SIZES[next]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);setError('');};
   const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'
     :kind==='kupe-wardrobe'?'Корпуса без распашных дверей и двери купе на всю ширину. Глубина — общая, 100 мм из неё занимают направляющие.'
@@ -68,10 +78,12 @@ export function ModulePalette({source,onAdd,onAddGroup}:{source:Module;onAdd:(mo
     :kind==='worktop'?'Столешница — отдельным объектом. Ставьте сверху на нижние корпуса.'
     :'Размеры в мм. Создаётся отдельный корпус.';
   return <details className="module-palette" open><summary>Добавить мебель</summary>
-    <div className="module-kinds">{choices.map(c=><button key={c.id} type="button" aria-pressed={kind===c.id} onClick={()=>{setKind(c.id);const sz=SIZES[c.id]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);setError('');}}><c.icon size={23}/><span>{c.label}</span></button>)}</div>
+    <div className="catalog-tabs" role="tablist" aria-label="Категория мебели">{categories.map(c=><button type="button" role="tab" key={c.id} aria-selected={category===c.id} onClick={()=>{setCategory(c.id);pick(c.kinds[0]);}}>{c.label}</button>)}</div>
+    <div className="module-kinds">{choices.filter(c=>(categories.find(x=>x.id===category)!.kinds as readonly string[]).includes(c.id)).map(c=><button key={c.id} type="button" aria-pressed={kind===c.id} onClick={()=>pick(c.id)}><c.icon size={23}/><span>{c.label}</span></button>)}</div>
     <div className="module-sizes">{[{label:kind==='corner'?'Сторона угла':kind==='kupe'?'Ширина проёма':'Ширина',value:width,set:setWidth},{label:kind==='kupe'?'Высота проёма':'Высота',value:height,set:setHeight},...(kind==='kupe'?[]:[{label:kind==='corner'?'Глубина боковины':'Глубина',value:depth,set:setDepth}])].map(f=><label key={f.label}>{f.label}<input aria-label={`${f.label} новой мебели`} type="number" value={f.value} onChange={e=>f.set(Number(e.target.value))}/></label>)}</div>
     <small>{note}</small>
     {error&&<p role="alert">{error}</p>}
     <button className="primary full" onClick={()=>{try{const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source)):kind==='kitchen-row'?onAddGroup(createKitchenRow(width,source,height,depth)):onAdd(createModule(kind,width,height,depth,source));if(ok)setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
+    {category==='kitchen'&&kitchenTemplates&&<details className="catalog-presets"><summary>Готовые кухонные модули</summary>{kitchenTemplates}</details>}
   </details>;
 }
