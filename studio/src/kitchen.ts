@@ -4,6 +4,7 @@
 // столешница как отдельный объект и шаблоны для палитры.
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
+import { OVEN_BASE_NICHE } from './ovenDimensions';
 import { sinkParts, worktopCutErrors } from './premialSink';
 import {ovenErrors,ovenParts,type OvenSpec} from './kitchenOven';
 import type { GolaCut, Module, Part } from "./model";
@@ -236,7 +237,7 @@ export const KITCHEN = {
 /** Техника: размеры ниши/корпуса по паспортам типовых встраиваемых моделей (ширина × высота × глубина, мм). */
 export const APPLIANCES: Record<ApplianceKind, { label: string; niche: [number, number, number]; widths: number[] }> = {
   sink: { label: "Мойка", niche: [0, 0, 0], widths: [450, 500, 600, 800] },
-  oven: { label: "Духовой шкаф", niche: [560, 595, 550], widths: [600] },
+  oven: { label: "Духовой шкаф", niche: OVEN_BASE_NICHE, widths: [600] },
   microwave: { label: "Встраиваемая СВЧ", niche: [560, 380, 550], widths: [600] },
   dishwasher: { label: "Посудомоечная машина", niche: [450, 820, 560], widths: [450, 600] },
   hob: { label: "Варочная панель", niche: [560, 50, 490], widths: [450, 600, 800] },

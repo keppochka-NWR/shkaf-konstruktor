@@ -3,7 +3,7 @@ import type {WorktopCutout} from './kitchen';
 export const SINK_SOURCE='https://allpremial.ru/catalog/kukhonnye-moyki-iz-nerzhaveyushchey-stali-3-mm/59143/';
 export const SINK_ARTICLE='210245';
 // Official envelope and bowl dimensions; radii, wall taper, drain and cutout clearance
-// are layout approximations. Never use this as a factory cutting/drilling template.
+// are layout approximations; 3 mm body walls and cutout limits below are estimates. Never use this as a factory cutting/drilling template.
 export function worktopCutErrors(m:Module):string[]{
  const errors:string[]=[],cuts=m.worktop?.cutouts??[];
  for(const [i,c] of cuts.entries()){
@@ -14,7 +14,7 @@ export function worktopCutErrors(m:Module):string[]{
   for(const b of cuts.slice(0,i)){const bz=b.z??(m.depth-b.depth)/2;if(c.x<b.x+b.width+50&&c.x+c.width+50>b.x&&z<bz+b.depth+50&&z+c.depth+50>bz)errors.push('Столешница: между вырезами оставьте перемычку не менее 50 мм.');}
   if(c.fixture){
    if(c.fixture!==SINK_ARTICLE||c.kind!=='sink')errors.push('Мойка: неизвестный артикул или выбран вырез для варочной панели.');
-   if(c.width<556||c.width>580||c.depth<356||c.depth>380)errors.push('PRODIGY 6045: для компоновки нужен вырез 556–580 × 356–380 мм; шаблон производителя проверить перед изготовлением.');
+   if(c.width<556||c.width>580||c.depth<356||c.depth>380)errors.push('PRODIGY 6045: оценочный диапазон выреза для этой 3D-компоновки 556–580 × 356–380 мм; шаблон производителя проверить перед изготовлением.');
    const cx=c.x+c.width/2,cz=z+c.depth/2-25;
    if(cx-300<0||cx+300>m.width||cz-225<0||cz+225>m.depth)errors.push('PRODIGY 6045: борт мойки выходит за столешницу.');
   }
