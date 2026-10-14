@@ -9,7 +9,7 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -205,7 +205,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {(m.backType ?? "nailed") === "nailed" && <Num label="Отступ ХДФ от кромок" value={m.backGap ?? 2} min={0} max={10} step={0.5} change={(v) => modify((n) => { n.backGap = v; })} note={`Базис: ${KITCHEN.backGap} → ХДФ (W−3)×(H−3)`} />}
       {m.backType === "groove" && <>
         {/* предел — как в проверке модуля (model.ts validate): у кухни паз может стоять глубоко (k20 m05: 119), у шкафов — 30 */}
-        <Num label="Паз от задней кромки" value={m.grooveInset ?? 16} min={8} max={m.kitchen ? m.depth - 32 : 30} change={(v) => modify((n) => { n.grooveInset = v; })} />
+        <Num label="Паз от задней кромки" value={m.grooveInset ?? 16} min={8} max={grooveInsetMax(m)} change={(v) => modify((n) => { n.grooveInset = v; })} />
         <Num label="Ширина паза" value={m.grooveWidth ?? 4} min={3} max={10} step={0.5} change={(v) => modify((n) => { n.grooveWidth = v; })} />
         <Num label="Глубина паза" value={m.grooveDepth ?? 8} min={4} max={10} change={(v) => modify((n) => { n.grooveDepth = v; })} />
         <Num label="Недоход ХДФ до дна паза" value={m.grooveClear ?? 0.5} min={0} max={3} step={0.5} change={(v) => modify((n) => { n.grooveClear = v; })} note="Базис П16-4×8: ХДФ (W−18)×(H−18)" />

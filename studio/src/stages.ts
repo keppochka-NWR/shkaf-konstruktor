@@ -12,6 +12,8 @@ export const STAGES: { id: Stage; n: number; title: string; short: string; color
 /** Подсказка этапа «Наполнение», когда выбран сырой модуль из Базиса (m.raw): полки, ящики и штанги у него не настраиваются (A5, 11.10.2026). */
 export const RAW_FILLING_HINT = "Выбран модуль из Базиса: наполнение правится в Базисе (переимпорт). Здесь — положение в комнате, смета и раскрой.";
 export const stageIndex = (s: Stage) => STAGES.findIndex((x) => x.id === s);
+/** Подсказка полосы этапов: на «Наполнении» с выбранным сырым модулем Базиса — RAW_FILLING_HINT, иначе подсказка этапа. */
+export const stageHint = (s: Stage, rawSelected?: boolean) => (rawSelected && s === "filling" ? RAW_FILLING_HINT : STAGES[stageIndex(s)].hint);
 export const nextStage = (s: Stage) => STAGES[Math.min(STAGES.length - 1, stageIndex(s) + 1)].id;
 export const prevStage = (s: Stage) => STAGES[Math.max(0, stageIndex(s) - 1)].id;
 export const STAGE_KEY = "studio-stage";
