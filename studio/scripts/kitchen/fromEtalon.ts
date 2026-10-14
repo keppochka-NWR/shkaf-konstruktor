@@ -450,7 +450,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // шире 1300 при двух рядах (мойки k28 m17 1480, k31 m22 1347, остров k30 m01 1324 — все широкие модули Базиса с правильной
     // раскладкой) — без третьего ряда студии посередине (rows2); симметричные — по отступу от торцов, правые идут за боковиной
     const wide2 = xs.length === 2 && W > 1300;
-    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0], ...(wide2 ? { rows2: true as const } : {}) } : { xs }) };
+    // нестандартная раскладка — по правилу «от ближнего торца» (пакет 0): левая половина xs от левого, правая xr от правого торца
+    const xl = xs.filter((x) => x <= W / 2), xr = xs.filter((x) => x > W / 2).map((x) => r1(W - x)).sort((a, c) => a - c);
+    m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]), ...(sym ? { side: xs[0], ...(wide2 ? { rows2: true as const } : {}) } : { ...(xl.length ? { xs: xl } : {}), ...(xr.length ? { xr } : {}) }) };
     if (W < 250 && xs.length === 1 && Math.abs(xs[0] - W / 2) < 0.6) m.kitchen.legs = { back: zs[0], front: r1(d - zs[zs.length - 1]) };
     if (legScrews(ref.hardware)) m.kitchen.legs.screws = true;
     // левые опоры у большинства проектов — своя сетка (cb84c30b57a5); в части проектов (k26, k27) — та же, что у правых
@@ -607,7 +609,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       const cz = confs.filter((h) => Math.abs(h.pos[1] - (bot.b.y0 + 8)) < 1).map((h) => r1(h.pos[2] - b.z0)).sort((a, c) => a - c);
       if (cz.length && cz[0] !== FIRMAX.confBottom) box.confBottom = cz[0];
       const fs = fal ? ref.hardware.filter((h) => /^Шуруп 3,5х30/.test(h.name) && Math.abs(h.pos[2] - fal.b.z0) < 0.6 && h.pos[1] > fal.b.y0 - 0.5 && h.pos[1] < fal.b.y1 + 0.5 && h.pos[0] > b.x1 && h.pos[0] < W - b.x1) : [];
-      if (fs.length) box.faceScrews = fs.map((h) => [r1(h.pos[0] - b.x1), r1(h.pos[1] - fal!.b.y0)]);
+      // пакет 0: шурупы правой половины — от внутренней грани правой боковины ящика (маркер −1), переживают смену ширины
+      if (fs.length) box.faceScrews = fs.map((h) => (h.pos[0] <= W / 2 || !rs ? [r1(h.pos[0] - b.x1), r1(h.pos[1] - fal!.b.y0)] : [r1(h.pos[0] - rs.b.x0), r1(h.pos[1] - fal!.b.y0), -1]));
       if (ref.hardware.some((h) => (h.name === "3x3" || /^Шуруп 3,5х16/.test(h.name)) && Math.abs(h.pos[0] - left.b.x1) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.screws = true;
       if (!ref.hardware.some((h) => h.name === "5x12" && Math.abs(h.pos[2] - b.z0) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.rearHoles = false;
       // точки направляющих Базиса: каждая — ящику с ближайшим низом короба не ниже точки (иначе — верхнему); не две в «x0, runnerY, F» — храним как есть
@@ -615,7 +618,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       // без своих точек (k22/m03: все 4 у нижнего ящика) — точка по правилу раскладки: низ своего фасада, а не чужая
       const runY = mine[0]?.pos[1] ?? f.b.y0;
       const std = mine.length === 2 && mine.every((h) => Math.abs(h.pos[0] - left.b.x1) < 0.05 && Math.abs(h.pos[1] - runY) < 0.05 && Math.abs(h.pos[2] - sideZ1) < 0.05);
-      if (!std) box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
+      // пакет 0: точки правой половины — от внутренней грани правой боковины корпуса (маркер −1), переживают смену ширины
+      if (!std) box.runs = mine.map((h) => (h.pos[0] <= W / 2 ? [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)] : [r1(h.pos[0] - right.b.x0), r1(h.pos[1]), r1(h.pos[2] - sideZ1), -1]));
       kd.push({ system: "firmax-ldsp", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(runY), box });
     });
     if (kd.length) m.kdrawers = axisInnerOnly ? [...m.kdrawers!, ...kd].sort((x, y) => x.runnerY - y.runnerY) : kd;
@@ -646,11 +650,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       const cu = confs.filter((h) => Math.abs(h.pos[1] - bot.b.y0) < 0.3 && h.pos[0] > b.x1 && h.pos[0] < bot.b.x1 && h.pos[2] > b.z0 && h.pos[2] < b.z1).map((h) => r1(h.pos[0] - b.x1)).sort((a, c) => a - c);
       if (cu.length && cu[0] !== MODERN.confUnder) box.confUnder = cu[0];
       const fs = fal ? ref.hardware.filter((h) => /^Саморез 4х30/.test(h.name) && Math.abs(h.pos[2] - fal.b.z0) < 0.6 && h.pos[1] > fal.b.y0 - 0.5 && h.pos[1] < fal.b.y1 + 0.5) : [];
-      if (fs.length) box.faceScrews = fs.map((h) => [r1(h.pos[0] - b.x1), r1(h.pos[1] - fal!.b.y0)] as [number, number]);
+      if (fs.length) box.faceScrews = fs.map((h) => (h.pos[0] <= W / 2 || !rs ? ([r1(h.pos[0] - b.x1), r1(h.pos[1] - fal!.b.y0)] as [number, number]) : ([r1(h.pos[0] - rs.b.x0), r1(h.pos[1] - fal!.b.y0), -1] as [number, number, -1]))); // правая половина — от правой боковины ящика (пакет 0)
       if (!ref.hardware.some((h) => /^Саморез 3,5х16/.test(h.name) && Math.abs(h.pos[0] - left.b.x1) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.screws = false;
       if (!ref.hardware.some((h) => h.name === "5x12" && Math.abs(h.pos[2] - b.z0) < 0.6 && h.pos[1] > b.y0 - 0.5 && h.pos[1] < b.y0 + 40)) box.rearHoles = false;
       const mine = msRuns.filter((h) => (lefts.find((q) => q.b.y0 >= h.pos[1] - 0.1) ?? lefts[lefts.length - 1]) === s);
-      box.runs = mine.map((h) => [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)]);
+      box.runs = mine.map((h) => (h.pos[0] <= W / 2 ? [r1(h.pos[0] - left.b.x1), r1(h.pos[1]), r1(h.pos[2] - sideZ1)] : [r1(h.pos[0] - right.b.x0), r1(h.pos[1]), r1(h.pos[2] - sideZ1), -1])); // правая половина — от правой боковины (пакет 0)
       kd.push({ system: "modern-slide", y0: r1(f.b.y0), y1: r1(f.b.y1), runnerY: r1(b.y0), box });
     });
     if (kd.length) m.kdrawers = kd;

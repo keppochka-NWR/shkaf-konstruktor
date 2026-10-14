@@ -220,7 +220,9 @@ export type Module = {
     /** кухни Базиса: царга лёжа — конфирматы через боковины в её торец, мм от задней кромки царги, если в проекте не один посередине
      *  (k27 m02: 21,5 у царги 60; k01 m01/m02/m04 — 34 и 66 у царги 100; по базе посередине — 97 из 102) */ confZ?: number[];
     /** кухни Базиса: глубина D5 конфирматов в торец царги, если не как у корпуса (k31 m16: передняя 35 при 42) */ confDepth?: number;
-    /** кухни Базиса: конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от её левого конца (k03: 60 и 508) */ topConf?: number[] }[];
+    /** кухни Базиса: конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от её левого конца (k03: 60 и 508) */ topConf?: number[];
+    /** пакет 0: те же конфирматы правой половины стяжки — мм от её ПРАВОГО конца (k03: 60 и 508 у стяжки 568 → topConf [60], topConfR [60]) */ topConfR?: number[];
+    /** пакет 0: стяжка на ребре не у кромки — верхняя половина: от ВЕРХА модуля до верха стяжки (вместо at от пола), переживает смену высоты */ atTop?: number }[];
   /** Дно под боковинами на всю ширину (кухонные низы и пеналы Базиса: боковины стоят на дне). По умолчанию дно между боковинами. */
   bottomUnder?: boolean;
   /** Отступ фасадов от кромок корпуса и зазор между фасадами, мм (по умолчанию RULES.faceGap; кухни Базиса цеха — 1,5 и 3). */
@@ -747,10 +749,11 @@ export function parts(m: Module): Part[] {
       continue;
     }
     // at — низ стяжки на ребре от пола модуля (мойка Базиса: задняя стяжка посередине высоты, под трубы)
-    const y0 = r.at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
+    const at = r.atTop !== undefined ? m.height - r.atTop - r.height : r.at; // atTop — от верха модуля (пакет 0), at — от пола
+    const y0 = at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
     // кухни Базиса: стяжка на ребре бывает отступлена от кромки боковин на 1–2 мм (setback — от задней кромки у задней, от лица у передней)
     const esb = m.kitchen ? r.setback ?? 0 : 0;
-    add("rail:" + r.place, r.at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(r.at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - esb - t / 2 : esb + t / 2], m.width - 2 * t, r.height, t);
+    add("rail:" + r.place, at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - esb - t / 2 : esb + t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
   if (m.topStrip) {
@@ -1251,9 +1254,10 @@ export function parts(m: Module): Part[] {
       }
     // конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — только по проекту Базиса (rails[].topConf,
     // мм от левого конца стяжки; n4-wall, n4-antresol)
-    const topConf = m.kitchen ? railsOf(m).find((q) => "rail:" + q.place === r.id)?.topConf : undefined;
+    const rq = m.kitchen ? railsOf(m).find((q) => "rail:" + q.place === r.id) : undefined, x1 = r.position[0] + r.size[0] / 2;
+    const topConf = rq && (rq.topConf?.length || rq.topConfR?.length) ? [...(rq.topConf ?? []), ...(rq.topConfR ?? []).map((dx) => r.size[0] - dx)] : undefined; // topConfR — от правого конца (пакет 0)
     if (topConf?.length) {
-      const y0 = r.position[1] - r.size[1] / 2, y1 = r.position[1] + r.size[1] / 2, x0 = r.position[0] - r.size[0] / 2;
+      const y0 = r.position[1] - r.size[1] / 2, y1 = r.position[1] + r.size[1] / 2, x0 = x1 - r.size[0];
       const hz = out.find((p) => (p.id === "top" || p.id === "bottom") && Math.abs((p.id === "top" ? p.position[1] - p.size[1] / 2 : p.position[1] + p.size[1] / 2) - (p.id === "top" ? y1 : y0)) < 0.6);
       if (hz) topConf.forEach((dx, k) => confirmat(`fast:${r.id}:${hz.id}:${k}`, [x0 + dx, hz.id === "top" ? y1 + hz.size[1] : y0 - hz.size[1], r.position[2]], hz.id === "top" ? "-y" : "+y"));
     }
@@ -1265,8 +1269,9 @@ export function parts(m: Module): Part[] {
     const ru = m.kitchen?.railUnder?.[r.id.slice(5)], bt = out.find((p) => p.id === "bottom");
     if (ru && bt && Math.abs(bt.position[1] + bt.size[1] / 2 - (r.position[1] - r.size[1] / 2)) < 0.6) {
       const x0 = r.position[0] - r.size[0] / 2, yb = r.position[1] - r.size[1] / 2, zc = r.position[2], zf = zc + (ru.face === "front" ? 1 : -1) * r.size[2] / 2;
-      ru.ecc.forEach((dx, k) => { add(`ecc:rail-under:${r.id.slice(5)}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelD, RULES.eccBarrelD, RULES.eccBarrelH], [x0 + dx, yb + 34, zf - (ru.face === "front" ? 1 : -1) * RULES.eccBarrelH / 2], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", r.sectionId, "metal"); out.at(-1)!.anchor = [x0 + dx, yb, zf]; });
-      ru.dowel.forEach((dx, k) => { add(`dowel:rail-under:${r.id.slice(5)}:${k}`, "Шкант 8×30", [8, 30, 8], [x0 + dx, yb + 3, zc], 30, 8, 8, "fastener", r.sectionId, "metal"); out.at(-1)!.anchor = [x0 + dx, bt.position[1] - bt.size[1] / 2, zc]; });
+      const fromR = (v: number[] | undefined) => (v ?? []).map((dx) => r.size[0] - dx); // eccR/dowelR — от правого конца стяжки (пакет 0)
+      [...ru.ecc, ...fromR(ru.eccR)].forEach((dx, k) => { add(`ecc:rail-under:${r.id.slice(5)}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelD, RULES.eccBarrelD, RULES.eccBarrelH], [x0 + dx, yb + 34, zf - (ru.face === "front" ? 1 : -1) * RULES.eccBarrelH / 2], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", r.sectionId, "metal"); out.at(-1)!.anchor = [x0 + dx, yb, zf]; });
+      [...ru.dowel, ...fromR(ru.dowelR)].forEach((dx, k) => { add(`dowel:rail-under:${r.id.slice(5)}:${k}`, "Шкант 8×30", [8, 30, 8], [x0 + dx, yb + 3, zc], 30, 8, 8, "fastener", r.sectionId, "metal"); out.at(-1)!.anchor = [x0 + dx, bt.position[1] - bt.size[1] / 2, zc]; });
     }
   }
   // кухня Базиса: стяжка с соседним корпусом — конфирмат изнутри через боковину наружу (kitchen.outConf, k15 m12), n4-antresol

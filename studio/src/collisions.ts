@@ -5,6 +5,7 @@
 // планка петли — на своей стойке, ХДФ — в пазу на глубину паза, ручка — на своём фасаде, направляющая — между ящиком и стойкой и т. п.
 import type { Module, Part } from "./model";
 import {kupeParts} from './kupe';
+import { grooveHoleAt } from "./kitchen";
 
 /** bazis — пересечение есть в самом проекте Базиса (модуль из Базиса повторён как есть): показывается с пометкой, не прячется. */
 export type Collision = { a: string; b: string; names: [string, string]; depth: number; bazis?: true };
@@ -145,7 +146,7 @@ export function partPenetration(a: Part, b: Part): number {
 const bazisHoleInGroove = (p: Part, q: Part, m?: Module) => !!m?.bazis && !!m.kitchen && [[p, q], [q, p]].some(([a, b]) => {
   if (!isFastener(a) || b.role !== "light" || !b.id.startsWith("groove:")) return false;
   const o = a.model?.origin ?? a.position;
-  return (m.kitchen!.grooveHoles ?? []).some((h) => Math.hypot(h[0] - o[0], h[1] - o[1], h[2] - o[2]) <= 0.5);
+  return (m.kitchen!.grooveHoles ?? []).map((h) => grooveHoleAt(h, m)).some((h) => Math.hypot(h[0] - o[0], h[1] - o[1], h[2] - o[2]) <= 0.5);
 });
 
 /** Все неразрешённые пересечения деталей модуля. */

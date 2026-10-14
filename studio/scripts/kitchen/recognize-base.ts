@@ -36,7 +36,11 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (sd && (k.role === "base" || k.role === "tall") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
-  if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
+  if (pts && k.legs) {
+    // пакет 0: точки правой половины — от правого торца (ptsR), чтобы при смене ширины идти за правой боковиной
+    const W = m.width, r1 = (v: number) => Math.round(v * 10) / 10, pl = pts.filter(([x]) => x <= W / 2), pr = pts.filter(([x]) => x > W / 2).map(([x, z]) => [r1(W - x), z] as [number, number]);
+    k.legs = { ...k.legs, ...(pl.length ? { pts: pl } : {}), ...(pr.length ? { ptsR: pr } : {}) }; delete k.legs.xs; delete k.legs.xr; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`);
+  }
   // фасад без петель под нишей техники (k03 m01, k06 m04: глухой «Фасад ящика»/«Дверь» под духовкой) — верх фасада ниже верха корпуса
   // на высоту ниши; с петлями не берём (k22 m06: петли считаются от двери, ниша — не зазор)
   const fg = faceGapsTB(ref, m.faceGap ?? 0, noHinges);

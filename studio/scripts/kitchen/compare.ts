@@ -7,6 +7,7 @@ import { parts, type Module, type Part } from "../../src/model";
 import { parseProject } from "../../src/project";
 import { holes as studioHoles } from "../../src/drilling";
 import { partCollisions } from "../../src/collisions";
+import { grooveHoleOf, type GrooveHole } from "../../src/kitchen";
 import { edgeByDir } from "../../src/edges";
 import { refGrooves as refGroovesOf } from "./fromEtalon";
 import { normalizeRefHardware } from "./refHardware";
@@ -387,7 +388,7 @@ export const honestPass = (c: Pick<Comparison, "pass">, errors: string[], unsupp
  *  обычным пересечением (критик n4-antresol). */
 export function grooveTwins(ref: RefModule, m: Module, c: Comparison = compareModule(ref, m)): Module {
   if (!m.kitchen) return m;
-  const ps = parts(m), at: [number, number, number][] = [];
+  const ps = parts(m), at: GrooveHole[] = [];
   // и паз должен быть тем же, что у Базиса: пазы и фигурные контуры деталей сверились (k06 m06 — у Базиса вместо паза вырез контура дна)
   const same = !c.contours?.length && !c.edges?.bad.some((b) => b.startsWith("пазы:"));
   // отверстия крепежа: src — id детали или id с суффиксом (:pin, :side, :bottom); шток эксцентрика (…:pin) — того же крепежа
@@ -396,7 +397,8 @@ export function grooveTwins(ref: RefModule, m: Module, c: Comparison = compareMo
   for (const x of partCollisions(ps, m)) for (const [f, g] of [[x.a, x.b], [x.b, x.a]]) {
     if (!g.startsWith("groove:") || !twin(f)) continue;
     const p = ps.find((q) => q.id === f)!, o = p.model?.origin ?? p.position;
-    if (!at.some((a) => a.every((v, i) => v === o[i]))) at.push([o[0], o[1], o[2]]);
+    const gh = grooveHoleOf([o[0], o[1], o[2]], m); // от ближней кромки (пакет 0): переживает смену ширины/высоты
+    if (!at.some((a) => a.every((v, i) => v === gh[i]))) at.push(gh);
   }
   const { grooveHoles: _, ...k } = m.kitchen;
   return { ...m, kitchen: { ...k, ...(at.length ? { grooveHoles: at } : {}) } };

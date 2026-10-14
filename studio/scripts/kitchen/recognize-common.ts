@@ -11,7 +11,9 @@ export type Rail = NonNullable<Module["rails"]>[number];
 export function edgeRail(b: Box, top: number, sideZ0: number, sideZ1: number): Rail {
   const front = b.z1 >= sideZ1 - 30, atTop = b.y1 >= top - 0.5;
   const sb = r1(front ? sideZ1 - b.z1 : b.z0 - sideZ0);
-  return { place: front ? "front-top" : "rear-top", height: r1(b.y1 - b.y0), ...(atTop ? {} : { at: r1(b.y0) }), ...(sb > 0.5 ? { setback: sb } : {}) };
+  // пакет 0: стяжка не у верха в верхней половине корпуса — от верха (atTop), в нижней — от пола (at): переживает смену высоты
+  const pos = atTop ? {} : b.y1 > top / 2 ? { atTop: r1(top - b.y1) } : { at: r1(b.y0) };
+  return { place: front ? "front-top" : "rear-top", height: r1(b.y1 - b.y0), ...pos, ...(sb > 0.5 ? { setback: sb } : {}) };
 }
 
 type Hw = { name: string; category: string; pos: number[] };
@@ -65,20 +67,22 @@ export function railConfZ(b: Box, hardware: Hw[], xL: number, xR: number): numbe
 /** Конфирматы через крышу (стяжка под ней) или дно (стяжка на нём) в торец стяжки — мм от левого конца стяжки, по проекту Базиса:
  *  точки на наружной пласти горизонтали hz в пределах ширины стяжки (k03: 2 через крышу в 51–60 от концов; k04: 56–65; k20: один
  *  по центру; у каждого проекта своё — общего правила нет). Нет таких — undefined. */
-export function railTopConf(b: Box, hardware: Hw[], hz?: Box): number[] | undefined {
+export function railTopConf(b: Box, hardware: Hw[], hz?: Box): Pick<Rail, "topConf" | "topConfR"> | undefined {
   if (!hz) return undefined;
   const yo = hz.y0 >= b.y1 - 0.5 ? hz.y1 : hz.y0; // наружная пласть крыши (над стяжкой) или дна (под ней)
-  const xs = hardware.filter((h) => isConf(h) && h.pos[2] >= b.z0 - 0.5 && h.pos[2] <= b.z1 + 0.5 && Math.abs(h.pos[1] - yo) < 0.6 && h.pos[0] > b.x0 + 0.5 && h.pos[0] < b.x1 - 0.5)
-    .map((h) => r1(h.pos[0] - b.x0)).sort((a, c) => a - c);
-  return xs.length ? xs : undefined;
+  const xs = hardware.filter((h) => isConf(h) && h.pos[2] >= b.z0 - 0.5 && h.pos[2] <= b.z1 + 0.5 && Math.abs(h.pos[1] - yo) < 0.6 && h.pos[0] > b.x0 + 0.5 && h.pos[0] < b.x1 - 0.5).map((h) => h.pos[0]);
+  if (!xs.length) return undefined;
+  // пакет 0: левая половина стяжки — от левого конца (topConf), правая — от правого (topConfR): переживают смену ширины
+  const mid = (b.x0 + b.x1) / 2, l = xs.filter((x) => x <= mid).map((x) => r1(x - b.x0)).sort((a, c) => a - c), r = xs.filter((x) => x > mid).map((x) => r1(b.x1 - x)).sort((a, c) => a - c);
+  return { ...(l.length ? { topConf: l } : {}), ...(r.length ? { topConfR: r } : {}) };
 }
 
 /** Крепёж стяжки на ребре по проекту Базиса — одно правило для нижних, навесных и антресолей (слияние n4-base railConfY, n4-wall railConf,
  *  n4-antresol railConfirmats):
  *  confY — конфирматы через боковины (Module.rails[].confY), topConf — через крышу/дно (rails[].topConf). Без полей — правило студии. */
-export function railConf(b: Box, hardware: Hw[], xL: number, xR: number, hz?: Box): Pick<Rail, "confY" | "topConf"> {
+export function railConf(b: Box, hardware: Hw[], xL: number, xR: number, hz?: Box): Pick<Rail, "confY" | "topConf" | "topConfR"> {
   const confY = railConfY(b, hardware, xL, xR), topConf = railTopConf(b, hardware, hz);
-  return { ...(confY ? { confY } : {}), ...(topConf ? { topConf } : {}) };
+  return { ...(confY ? { confY } : {}), ...(topConf ?? {}) };
 }
 
 /** Служебные сквозные отверстия проекта Базиса — как в Базисе (k28 m14: «10» из комплекта «Наполнение корпуса (Крыша)» — D10 насквозь
