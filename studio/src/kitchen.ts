@@ -166,6 +166,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2; n3-base).
    *  faceBottom у корпуса без опор — низ фасадов от пола, мм, как в Базисе (над нишей под техникой — от дна; n3-tall). */
   faceTop?: number; faceBottom?: number;
+  /** Фасад шире корпуса (свес за боковину, F_WIDE_FACADE): кромка фасадов крайней секции на right/left мм за наружной пластью боковины,
+   *  а не на зазор внутри неё (антресоли k19 m03/m04 — свес 12,5 справа). Корпус и его детали — по ширине модуля, как в Базисе. */
+  faceOver?: { left?: number; right?: number };
   /** Угловая мойка Базиса с фальшпанелью (n4-base): у края модуля в плоскости фасадов — фальш ЛДСП корпуса width мм (от низа дна до верха),
    *  рядом планка из фасадного материала strip мм; фасады — после них через faceGap, дверь у фальша на «Петля под фальшпанель»
    *  (точка — кромка двери, чашка в 22 от кромки, без наколок под планку). Только плоский фальш (k25 m02, k01 m03); Г-образный — нет. */
@@ -411,6 +414,7 @@ export function mirrorKitchen(m: Module): void {
   if (k.hoodBox) { const h = k.hoodBox; put(h, "dx", h.dx ? -h.dx : undefined); if (h.front.over) h.front.over = [h.front.over[1], h.front.over[0]]; }
   const rt = k.raise?.conf?.top; if (rt) { const { xs, xr } = rt; rt.xs = xr ?? []; put(rt, "xr", xs.length ? xs : undefined); } // крепёж панели под дном: от левого конца ↔ от правого
   if (k.sideStrip) k.sideStrip = { ...k.sideStrip, side: k.sideStrip.side === "left" ? "right" : "left" };
+  if (k.faceOver) k.faceOver = { ...(k.faceOver.right ? { left: k.faceOver.right } : {}), ...(k.faceOver.left ? { right: k.faceOver.left } : {}) };
   if (k.sideRecess) k.sideRecess = { ...k.sideRecess, side: k.sideRecess.side === "left" ? "right" : "left" };
   // задник ЛДСП: сетки рафиксов в дно/крышу — от левой/правой кромки, зеркало меняет их местами; в боковины — симметричны
   if (k.backBoard?.rafix) for (const key of ["bottom", "top"] as const) { const g = k.backBoard.rafix[key]; if (g) k.backBoard.rafix[key] = { ...g, rear: g.front, front: g.rear }; }
@@ -1125,6 +1129,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}) } } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
     ...parseSideStrip(k.sideStrip),
     ...(k.faceTop !== undefined ? { faceTop: num(k.faceTop) } : {}),
+    ...(k.faceOver && (num(k.faceOver.left) > 0 || num(k.faceOver.right) > 0) ? { faceOver: { ...(num(k.faceOver.left) > 0 ? { left: num(k.faceOver.left) } : {}), ...(num(k.faceOver.right) > 0 ? { right: num(k.faceOver.right) } : {}) } } : {}),
     ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
     ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),
     ...(k.sideDown && (k.sideDown.side === "left" || k.sideDown.side === "right") ? { sideDown: { side: k.sideDown.side, y0: num(k.sideDown.y0) } } : {}),

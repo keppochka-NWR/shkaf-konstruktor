@@ -392,8 +392,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const sides = P.filter(({ p, b }) => p.axis === "x" && board(p.kind) && b.y1 - b.y0 > 200).sort((a, c) => a.b.x0 - c.b.x0);
   const left = sides[0], right = sides[sides.length - 1];
   if (!left || left === right) throw Error("нет двух боковин");
-  const W = ss ? r1(right.b.x1 - left.b.x0) : ref.size[0];
-  if (ss) ref.size = [W, ref.size[1], ref.size[2]]; // ширина корпуса для правил, читающих ref.size (опоры, эксцентрики)
+  // фасад шире корпуса (F_WIDE_FACADE): габарит Базиса справа за наружной пластью правой боковины — только фасады (k19 m03/m04:
+  // свес 12,5). Корпус — по боковинам, свес — kitchen.faceOver.right; прочее (фальш пенала шире корпуса k21 m04, k29 m01,
+  // дверь ПММ на тумбе 150 k27 m17) — другие конструкции, сюда не попадают (там за боковиной не фасад двери или левый край ≠ 0)
+  const overR = !ss && left.b.x0 <= 0.5 && ref.size[0] - right.b.x1 > 0.5 && ref.panels.filter((p) => p.box[3] > right.b.x1 + 0.5).every((p) => p.axis === "z" && /^Дверь/.test(p.name)) ? r1(ref.size[0] - right.b.x1) : 0;
+  const W = ss ? r1(right.b.x1 - left.b.x0) : overR ? r1(right.b.x1 - left.b.x0) : ref.size[0];
+  if (ss || overR) ref.size = [W, ref.size[1], ref.size[2]]; // ширина корпуса для правил, читающих ref.size (опоры, эксцентрики)
   const t = left.b.x1 - left.b.x0;
   // боковина до плоскости фасадов (k23 m04, k29 m02, k27 m13): перед корпуса — по мелкой боковине, иначе двери оказывались «внутри»
   // корпуса и терялись (n4-tall). Сам выступ студия не строит — честно «не поддержано»
@@ -456,6 +460,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   m.kitchen = { role }; m.bazis = true;
+  if (overR) { m.kitchen.faceOver = { right: overR }; notes.push(`фасад шире корпуса: свес ${overR} мм за правую боковину — как в Базисе`); }
   if (ss) { m.kitchen.sideStrip = ss.strip; notes.push(`доборная планка ${ss.strip.side === "left" ? "слева" : "справа"} ${ss.strip.ext} мм: планок ЛДСП ${ss.strip.planks.length}${ss.strip.facade ? `, планка ${ss.strip.facade.ldsp ? "ЛДСП" : "из фасада"} ${ss.strip.facade.w}` : ""}${ss.strip.conf ? `, конфирматов ${ss.strip.conf.length}` : ", без крепежа"} — как в Базисе`); } // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.confirmatName = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно

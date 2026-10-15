@@ -573,6 +573,8 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
   const ff=m.kitchen?.faceFiller,fx=faceFillerEdge(m);
   if(ff&&fx!==undefined&&ff.side==='left'&&i===0)left=fx;
   if(ff&&fx!==undefined&&ff.side==='right'&&i===m.sections.length-1)right=fx;
+  // фасад шире корпуса (kitchen.faceOver, F_WIDE_FACADE): кромка крайнего фасада за наружной пластью боковины
+  const fo=m.kitchen?.faceOver;if(fo?.left&&i===0)left=-fo.left;if(fo?.right&&i===m.sections.length-1)right=m.width+fo.right;
   return {left,right};
 }
 /** Кромка фасадов у фальша угловой мойки Базиса (kitchen.faceFiller): x = фальш + планка + зазор faceGap от края модуля.
