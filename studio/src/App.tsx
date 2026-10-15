@@ -568,7 +568,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:()=>{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}},
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
-    const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Действия со всем корпусом',children:bodyRing};
+    const facades:RadialItem={...bodyRing.find(item=>item.id==='facades')!,label:'Фасад'};
+    const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades')};
+    const facadeMenu=(items:RadialItem[]):RadialItem[]=>[
+      {id:'facade',label:'Фасад',icon:DoorOpen,hint:'Материал, ручки, петли и открывание выбранного фасада',children:items.filter(item=>item.id!=='body'&&item.id!=='hide-module')},body,
+    ];
     if(mod.kupe){
       // Двери купе: своё кольцо — наполнение, количество дверей, доводчики, сдвинуть, профиль, размеры, копия, удалить.
       const k=mod.kupe,setK=(patch:Partial<NonNullable<Module['kupe']>>)=>modifyAt(a.id,n=>{n.kupe={...n.kupe!,...patch};});
@@ -594,14 +598,16 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const j=Number(pid.split(':shelf:')[1]),isFixed=!!sec.fixed?.includes(j),p=part('Полка');
       return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},p.params,body,p.remove]};
     }
-    if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:[editFacade,body]};
+    if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:facadeMenu([editFacade])};
     if(pid.includes(':drawer:')){
       const j=Number(pid.split(':drawer:')[1].split(':')[0]),cfg=drawerConfig(mod,sec,j),cur=slideSystem(cfg),p=part('Ящик');
       const slideItem=(id:string):RadialItem=>{const s=SLIDE_SYSTEMS.find(x=>x.id===id)!,q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:cfg.length});return {id:'slide-'+id,label:s.slide==='ball'?SLIDE_MOTIONS[s.motion].replace(/^./,ch=>ch.toUpperCase()):SLIDE_BRANDS[s.brand]+(s.motion==='push'?' · push':' · доводчик'),icon:s.motion==='push'?MousePointerClick:Spline,active:cur.id===id,hint:s.label+(q.price===null?' · цена требует уточнения':''),run:()=>modifyAt(a.id,n=>{const ns=n.sections.find(x=>x.id===c.sid)!;ns.drawerConfigs=Array.from({length:ns.drawers},(_,k)=>k===j?withSlideSystem(n,ns,{...drawerConfig(n,ns,k)},id):{...drawerConfig(n,ns,k)});})};};
       const slides:RadialItem={id:'slides',label:'Направляющие',icon:Spline,hint:'Сейчас: '+cur.label,children:[
         {id:'ball',label:'Шариковые',icon:Spline,hint:'GTV: с доводчиком, без, push',active:cur.slide==='ball',children:SLIDE_SYSTEMS.filter(s=>s.slide==='ball').map(s=>slideItem(s.id))},
         {id:'hidden',label:'Скрытые',icon:Spline,hint:'Unihopper, DTC, Premial',active:cur.slide==='gtv0fpo',children:SLIDE_SYSTEMS.filter(s=>s.slide==='gtv0fpo').map(s=>slideItem(s.id))}]};
-      return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:[...(pid.endsWith(':facade')?[editFacade]:[]),slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},p.up,p.down,p.copy,p.params,body,p.remove]};
+      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},p.up,p.down,p.copy,p.params,p.remove];
+      return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
+        [...facadeMenu([editFacade,drawerItems[1]]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle')}]:[...drawerItems,body]};
     }
     if(pid.includes(':door:')||/:(hingecup|hingearm|hingeplate):/.test(pid)||pid.includes(':handle:')){
       const doorId=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),p={...part('Фасад')};
@@ -611,17 +617,17 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'hinge-top',label:'Петли сверху',icon:ArrowUp,children:([{id:'adagio',label:'Газлифты АДАЖИО'},{id:'sempre',label:'Подъёмник СЕМПРЕ'}] as const).map(l=>({id:l.id,label:l.label,icon:ArrowUp,hint:'Premial · усилие и цена требуют подбора',run:()=>modifyAt(a.id,n=>setDoorHinge(n,doorId,'top',l.id))}))},
         ...(opening.children??[]),
       ]};
-      return {title:'Фасад',subtitle:mod.name,items:[editFacade,{id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого фасада',disabled:mod.doorOpen==='push',run:()=>{setActive(a.id);setHandleFace(doorId);setModal('handles');}},
+      return {title:'Фасад',subtitle:mod.name,items:facadeMenu([editFacade,{id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого фасада',disabled:mod.doorOpen==='push',run:()=>{setActive(a.id);setHandleFace(doorId);setModal('handles');}},
         hinges,doorOpening,{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
-        {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]};
+        {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}])};
     }
     if(pid.endsWith(':rod')||pid.includes(':flange:')){
       const p=part('Штанга');
       return {title:'Штанга',subtitle:mod.name,items:[p.up,p.down,p.params,body,{...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,c.sid+':rod')))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]};
     }
-    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:bodyRing};
+    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,body]};
   }
   // Папка клиента: новый проект сразу пишется в браузер под своим ключом, а вкладка получает цену без ожидания первой правки.
   useEffect(()=>{
@@ -1192,7 +1198,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             </div>
           )}
-          {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items.some(i=>i.id==='hide-module')?r.items:[...r.items,{id:"hide-module",label:"Скрыть модуль",icon:EyeOff,hint:"Целиком, вместе с наполнением",run:()=>hideModule(ctxMenu.mid)}]} onClose={()=>setCtxMenu(null)}/>;})()}
+          {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items} onClose={()=>setCtxMenu(null)}/>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
               aria-label="Прозрачный корпус"
@@ -1281,7 +1287,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
-            Колесо — масштаб <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
+            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}>
