@@ -25,6 +25,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Корпус приподнят без опор, и в модуле Базиса под дном есть фронтальная панель ЛДСП (цоколь/планка под другим именем) —
    *  студия ставит «Цоколь» по высоте подъёма. Без флага у кухни такого цоколя нет (у навесного фасад свисает ниже дна). */
   lowFront?: boolean;
+  /** Пакет 3: крепёж щита под дном по проекту Базиса (k14 m03) — конфирматы через боковины в торцы щита (side: мм от низа щита) и через
+   *  дно в его верхний торец (top: мм от концов щита, парой). Нет — щит без крепежа, как раньше. */
+  lowFrontConf?: { side: number[]; top: number[] };
   /** Низ навесного без опор (Базис): дно поднято на plinthHeight, стандартного цоколя нет. front — фронтальная панель ЛДСП под дном
    *  (в Базисе «Фронтальная», «ФП» — закрывает низ, как цоколь) с утопанием от лица боковин; без front панели нет.
    *  doorsToFloor — фасады опущены до низа модуля (корпус поднят, фасад закрывает подсветку: k23, k28, k30). */
@@ -103,7 +106,15 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   bazis?: boolean;
   /** Дно под боковинами на эксцентриках (Базис k16, k28, k31; jointFastening bottom:left/right = eccentric): отступы стяжек
    *  от задней и передней кромки дна, мм (у Базиса несимметрично: сзади на 20 больше — за пазом ХДФ). */
-  underEcc?: { back: number; front: number };
+  /** Пакет 3 (m_PINS): полкодержатели стойки на своих местах — [от заднего, от переднего торца полки], мм, если у левой и правой
+   *  по-разному (k16 m03: левая 64,5/64,5, правая — общее правило shelfPinInset/shelfPinInsetFront). Нет стороны — общее правило. */
+  pinSide?: { left?: [number, number]; right?: [number, number] };
+  /** Пакет 3 (m_PINS): перфорация Базиса — ряды полкодержателей без полки, мм от низа каждой съёмной полки (по базе k26 m02/m03/m04:
+   *  −100, −50, 50, 100); места по глубине — как у полки. */
+  pinRows?: number[];
+  underEcc?: { back: number; front: number;
+    /** пакет 3: ещё эксцентрики без шканта — мм от задней кромки дна, по сторонам (по базе 8 у обеих: k27 m04/m05, k28 m08; у левой: k28 m12) */
+    extra?: { left?: number[]; right?: number[] } };
   /** ХДФ в пазу: зазор до дна паза снизу и сверху, мм, как в проекте Базиса (k28 m10: 2,5 и 1); без поля — grooveClear с обеих сторон. */
   backClearY?: [number, number];
   // Глубина D5 конфирмата по проекту — только drill.confirmat (бывшее confDepth: k11 — 37, k31 — 42; parse-алиас в parseKitchenSpec).
@@ -130,8 +141,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Корпус без опор (33 модуля 13 кухонь Базиса: дно на полу или на своём цоколе) — не ошибка для кухни из Базиса. */
   noLegs?: true;
   /** Гвозди набивного ХДФ по Базису (11 навесных/антресолей k01, k03): ряды по периметру в 7,5 от края, round(W/125) и round(H/125)
-   *  гвоздей (см. scripts/kitchen/recognize-nails.ts); q — поворот сетки по рядам, mesh — сетка Базиса. Нет — студия гвоздей не ставит. */
-  nails?: { mesh?: string; q: Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> };
+   *  гвоздей (см. scripts/kitchen/recognize-nails.ts); q — поворот сетки по рядам, mesh — сетка Базиса. Нет — студия гвоздей не ставит.
+   *  name — крепёж ХДФ по проекту вместо гвоздя (пакет 3: «Саморез 3,5х12 мм, Zn» — 86 шт. в 5 модулях k09/k24, по той же раскладке 3). */
+  nails?: { mesh?: string; name?: string; q: Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> };
   /** Ручка распашного фасада по проекту Базиса (k07, k09: 36 ручек «рейлинг 128/160»): горизонтальная — по центру ширины,
    *  вертикальная — у свободного края; dy — от низа (from "bottom") или верха фасада до точки ручки на лицевой плоскости.
    *  holes — отверстия под ручку, если они есть в проекте (k07: 2 × D5×18 насквозь, межосевое 160; у k09 отверстий нет).
@@ -519,7 +531,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       ...r.left.map((y) => [7.5, y, q.left] as [number, number, [number, number, number, number]]), ...r.right.map((y) => [W - 7.5, y, q.right] as [number, number, [number, number, number, number]])];
     pts.forEach(([x, y, qq], n) => {
       const o: [number, number, number] = [x0 + x, y0 + y, z];
-      const p = metal(`nail:${n}`, "Гвоздь", [0.01, 0.01, 0.01], o, k.nails!.mesh ? { file: `hardware/bazis/${k.nails!.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(qq) } : undefined);
+      const p = metal(`nail:${n}`, k.nails!.name ?? "Гвоздь", [0.01, 0.01, 0.01], o, k.nails!.mesh ? { file: `hardware/bazis/${k.nails!.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(qq) } : undefined);
       p.anchor = o; out.push(p);
     });
   }
@@ -792,6 +804,12 @@ export function kitchenErrors(m: Module): string[] {
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m));
+    // пакет 3: эксцентрики стяжки на ребре в боковины (rails[].eccY) — бочонок Ø15 целиком в высоте стяжки (8 мм от её кромок)
+    if (k.lowFrontConf && (!k.lowFront || k.lowFrontConf.side.some((v) => !Number.isFinite(v) || v < 8 || v > m.height / 2) || k.lowFrontConf.top.some((v) => !Number.isFinite(v) || v < 20 || v > m.width / 2 - 8))) e.push("Крепёж щита под дном: только у щита, от 8 мм до его кромок.");
+    if ((k.pinRows ?? []).some((v) => !Number.isFinite(v) || Math.abs(v) < 32 || Math.abs(v) > 500)) e.push("Ряды полкодержателей: от 32 до 500 мм от полки.");
+    if (Object.values(k.pinSide ?? {}).some((v) => !v || v.some((x) => !Number.isFinite(x) || x < 10) || v[0] + v[1] > m.depth - 30)) e.push("Полкодержатели стойки: от 10 мм до торцов полки.");
+    if (Object.values(k.underEcc?.extra ?? {}).some((vs) => (vs ?? []).some((v) => !Number.isFinite(v) || v < 7.5 || v > m.depth - 7.5))) e.push("Эксцентрики дна у задней кромки: бочонок Ø15 в пределах глубины дна.");
+    if ((m.rails ?? []).some((r) => r && r.eccY && (r.lay === "flat" || r.eccY.some((v) => !Number.isFinite(v) || v < 8 || v > r.height - 8)))) e.push("Эксцентрики стяжки: только у стяжки на ребре, 8 мм от её кромок.");
     // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
     if (k.legs) {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
@@ -879,12 +897,23 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.blindFronts) ? { blindFronts: k.blindFronts.filter((b) => b && num(b.y1) > num(b.y0)).map((b) => ({ y0: num(b.y0), y1: num(b.y1) })) } : {}),
     ...(k.golaTies && typeof k.golaTies === "object" ? { golaTies: { ...(k.golaTies.left === 1 || k.golaTies.left === -1 ? { left: k.golaTies.left } : {}), ...(k.golaTies.right === 1 || k.golaTies.right === -1 ? { right: k.golaTies.right } : {}), ...(num(k.golaTies.depth) > 0 ? { depth: num(k.golaTies.depth) } : {}) } } : {}),
     ...(Array.isArray(k.backClearY) && k.backClearY.length === 2 && k.backClearY.every(fin) ? { backClearY: [num(k.backClearY[0]), num(k.backClearY[1])] as [number, number] } : {}),
-    ...(k.underEcc ? { underEcc: { back: num(k.underEcc.back), front: num(k.underEcc.front) } } : {}),
+    ...(Array.isArray(k.pinRows) && k.pinRows.some(fin) ? { pinRows: k.pinRows.filter(fin).map(num) } : {}),
+    ...(k.pinSide && typeof k.pinSide === "object" ? (() => { // пакет 3: полкодержатели стороны [задний, передний]
+      const two = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(fin) ? [num(v[0]), num(v[1])] as [number, number] : undefined;
+      const l = two(k.pinSide!.left), r = two(k.pinSide!.right);
+      return l || r ? { pinSide: { ...(l ? { left: l } : {}), ...(r ? { right: r } : {}) } } : {};
+    })() : {}),
+    ...(k.underEcc ? { underEcc: { back: num(k.underEcc.back), front: num(k.underEcc.front), ...(() => { // пакет 3: extra — по сторонам, числа ≥ 0
+      const ex = k.underEcc!.extra, side = (v: unknown) => Array.isArray(v) ? v.map(Number).filter((x) => Number.isFinite(x) && x >= 0) : [];
+      const l = side(ex?.left), r = side(ex?.right);
+      return l.length || r.length ? { extra: { ...(l.length ? { left: l } : {}), ...(r.length ? { right: r } : {}) } } : {};
+    })() } } : {}),
     ...(k.lowFront ? { lowFront: true } : {}),
+    ...(k.lowFrontConf && Array.isArray(k.lowFrontConf.side) && Array.isArray(k.lowFrontConf.top) ? { lowFrontConf: { side: k.lowFrontConf.side.filter(fin).map(num), top: k.lowFrontConf.top.filter(fin).map(num) } } : {}),
     ...(k.hinges === false ? { hinges: false } : {}),
     ...(k.noLegs ? { noLegs: true } : {}),
     ...(k.railUnder && typeof k.railUnder === "object" ? { railUnder: Object.fromEntries(Object.entries(k.railUnder).filter(([, v]) => v && Array.isArray(v.ecc) && Array.isArray(v.dowel)).map(([key, v]) => [key, { ecc: v.ecc.map(Number), dowel: v.dowel.map(Number), ...(Array.isArray(v.eccR) && v.eccR.length ? { eccR: v.eccR.map(Number) } : {}), ...(Array.isArray(v.dowelR) && v.dowelR.length ? { dowelR: v.dowelR.map(Number) } : {}), face: v.face === "back" ? ("back" as const) : ("front" as const) }])) } : {}),
-    ...(k.nails && k.nails.q ? { nails: { ...(typeof k.nails.mesh === "string" && MESH.test(k.nails.mesh) ? { mesh: k.nails.mesh } : {}), q: Object.fromEntries((["bottom", "top", "left", "right"] as const).map((s) => { const v = k.nails!.q[s] as unknown; return [s, (Array.isArray(v) && v.length === 4 ? v.map(Number) : [1, 0, 0, 0]) as [number, number, number, number]]; })) as Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> } } : {}),
+    ...(k.nails && k.nails.q ? { nails: { ...(typeof k.nails.mesh === "string" && MESH.test(k.nails.mesh) ? { mesh: k.nails.mesh } : {}), ...(typeof k.nails.name === "string" && k.nails.name.trim() ? { name: k.nails.name.trim() } : {}), q: Object.fromEntries((["bottom", "top", "left", "right"] as const).map((s) => { const v = k.nails!.q[s] as unknown; return [s, (Array.isArray(v) && v.length === 4 ? v.map(Number) : [1, 0, 0, 0]) as [number, number, number, number]]; })) as Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> } } : {}),
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
     ...(k.plateHoles === false ? { plateHoles: false } : {}),
@@ -952,6 +981,7 @@ export function parseRails(input: unknown): Rail[] {
   if (!Array.isArray(input)) return [];
   return (input as Record<string, unknown>[]).map((r) => ({ place: r?.place as Rail["place"], height: num(r?.height), ...(r?.lay === undefined ? {} : { lay: r.lay as "edge" | "flat" }), ...(r?.setback === undefined ? {} : { setback: num(r.setback) }), ...(r?.at === undefined ? {} : { at: num(r.at) }), ...(r?.atTop === undefined ? {} : { atTop: num(r.atTop) }), ...(Array.isArray(r?.topConfR) ? { topConfR: (r.topConfR as unknown[]).map(Number).filter(Number.isFinite) } : {}),
     ...(r?.fasten === false ? { fasten: false as const } : {}), ...(Array.isArray(r?.confY) ? { confY: (r.confY as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(num(r?.confDepth) > 0 ? { confDepth: num(r.confDepth) } : {}),
+    ...(Array.isArray(r?.eccY) ? { eccY: (r.eccY as unknown[]).map(Number).filter(Number.isFinite) } : {}), // пакет 3: эксцентрики стяжки в боковины
     ...(Array.isArray(r?.confZ) ? { confZ: (r.confZ as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(Array.isArray(r?.topConf) ? { topConf: (r.topConf as unknown[]).map(Number).filter(Number.isFinite) } : {}) }));
 }
 

@@ -11,10 +11,14 @@ import type { RefModule } from "./compare";
 type Q = [number, number, number, number];
 type Box = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
 
-/** Гвозди ХДФ модуля Базиса, если раскладка совпадает с правилом точно (±0,6 мм), иначе undefined. */
+// Пакет 3 (m_HDF_FIX): тот же крепёж саморезами «Саморез 3,5х12 мм, Zn» — 86 шт. в 5 модулях (k09 m04/m05, k24 m01/m02/m05), по правилу
+// nailRows у k09 m04/m05 и k24 m05 — имя крепежа из проекта в kitchen.nails.name; k24 m01/m02 (12 при правиле 18/10) — иначе, не ставим.
+const HDF_FIX = /^Гвоздь$|^Саморез 3,5х12\b/;
+
+/** Гвозди (или саморезы 3,5×12) ХДФ модуля Базиса, если раскладка совпадает с правилом точно (±0,6 мм), иначе undefined. */
 export function recognizeNails(ref: RefModule, back: Box): NonNullable<KitchenSpec["nails"]> | undefined {
-  const ns = ref.hardware.filter((h) => h.name === "Гвоздь");
-  if (!ns.length) return undefined;
+  const ns = ref.hardware.filter((h) => HDF_FIX.test(h.name));
+  if (!ns.length || new Set(ns.map((h) => h.name)).size !== 1) return undefined;
   const W = back.x1 - back.x0, H = back.y1 - back.y0, r = nailRows(W, H);
   const exp: { side: "bottom" | "top" | "left" | "right"; p: [number, number] }[] = [
     ...r.bottom.map((x) => ({ side: "bottom" as const, p: [x, 7.5] as [number, number] })),
@@ -31,6 +35,6 @@ export function recognizeNails(ref: RefModule, back: Box): NonNullable<KitchenSp
     used.add(j);
     q[e.side] ??= (ns[j].quat ?? [1, 0, 0, 0]) as Q;
   }
-  const mesh = ns[0].mesh;
-  return { ...(mesh && ns.every((h) => h.mesh === mesh) ? { mesh } : {}), q: { bottom: q.bottom!, top: q.top!, left: q.left!, right: q.right! } };
+  const mesh = ns[0].mesh, name = ns[0].name;
+  return { ...(mesh && ns.every((h) => h.mesh === mesh) ? { mesh } : {}), ...(name === "Гвоздь" ? {} : { name }), q: { bottom: q.bottom!, top: q.top!, left: q.left!, right: q.right! } };
 }

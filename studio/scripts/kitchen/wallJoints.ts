@@ -80,7 +80,7 @@ export function wallJointNone(hardware: RefHardware[], joints: [string, PB | und
 }
 
 /** Отступы крепежа стыков «горизонталь × боковина» [от задней кромки, от передней] там, где они отличаются от общего inset. */
-export function wallJointZ(hardware: RefHardware[], joints: [string, PB | undefined][], left: PB, right: PB, inset: number): Record<string, [number, number]> {
+export function wallJointZ(hardware: RefHardware[], joints: [string, PB | undefined][], left: PB, right: PB, inset: number, frontShift: Record<string, number> = {}): Record<string, [number, number]> {
   const out: Record<string, [number, number]> = {};
   const fast = hardware.filter((h) => h.category === "конфирмат" || h.category === "эксцентрик");
   for (const [id, q] of joints) {
@@ -89,8 +89,28 @@ export function wallJointZ(hardware: RefHardware[], joints: [string, PB | undefi
       const zs = fast.filter((h) => h.pos[0] >= s.b.x0 - 1 && h.pos[0] <= s.b.x1 + 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1 && h.pos[2] > q.b.z0 && h.pos[2] < q.b.z1).map((h) => h.pos[2]).sort((a, c) => a - c);
       if (zs.length !== 2) continue;
       const v: [number, number] = [r1(zs[0] - q.b.z0), r1(q.b.z1 - zs[1])];
-      if (Math.abs(v[0] - inset) > 0.5 || Math.abs(v[1] - inset) > 0.5) out[`${id}:${side}`] = v;
+      // пакет 3: у дна короче спереди (bottomFront) правило студии ставит передний крепёж от лица боковин — от кромки дна это inset - bottomFront;
+      // в Базисе бывает и от кромки дна (k26 m02/m03: 53/53, k10 m08/m09, k27 m16) — тогда свои отступы стыка
+      if (Math.abs(v[0] - inset) > 0.5 || Math.abs(v[1] - (inset - (frontShift[id] ?? 0))) > 0.5) out[`${id}:${side}`] = v;
     }
   }
   return out;
+}
+
+/** Пакет 3 (m_FAST): крепёж щита под дном навесного (kitchen.lowFront) по проекту Базиса — конфирматы через боковины в торцы щита
+ *  (side: высоты от низа щита) и через дно в верхний торец (top: отступы от концов щита, парой с обеих сторон). По базе щит под дном — 9
+ *  модулей: k14 m03 — 71,5/199,5 через боковины и 60 от концов через дно; k15 m08, k18 m12, k22 m10 — через боковины 2 конфирмата, через
+ *  дно эксцентрики со шкантами (не этот крепёж — не берём); k20 m09/m10, k30 m15 — один по центру; k25 m16, k32 m13 — крепежа нет.
+ *  Берём, только если каждый конфирмат у щита объяснён и слева/справа одинаково; иначе undefined (правило студии — без крепежа). */
+export function lowFrontConf(hardware: RefHardware[], panel: B, left: B, right: B, bottom: B): { side: number[]; top: number[] } | undefined {
+  const near = hardware.filter((h) => /конфирмат|эксцентрик|шкант/.test(h.category) && h.pos[2] >= panel.z0 - 1 && h.pos[2] <= panel.z1 + 1 && h.pos[1] >= panel.y0 - 1 && h.pos[1] <= bottom.y1 + 1 && h.pos[0] >= left.x0 - 1 && h.pos[0] <= right.x1 + 1);
+  if (!near.length || near.some((h) => h.category !== "конфирмат")) return undefined;
+  const at = (x: number) => near.filter((h) => Math.abs(h.pos[0] - x) < 0.6 && h.pos[1] < panel.y1 - 0.5).map((h) => r1(h.pos[1] - panel.y0)).sort((a, c) => a - c);
+  const L = at(left.x0), R = at(right.x1);
+  if (!L.length || L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  const tops = near.filter((h) => Math.abs(h.pos[1] - bottom.y1) < 0.6);
+  const fromL = tops.map((h) => r1(h.pos[0] - panel.x0)).sort((a, c) => a - c), fromR = tops.map((h) => r1(panel.x1 - h.pos[0])).sort((a, c) => a - c);
+  if (fromL.length % 2 || fromL.some((v, i) => Math.abs(v - fromR[i]) > 0.6)) return undefined;
+  if (L.length * 2 + tops.length !== near.length) return undefined;
+  return { side: L, top: fromL.slice(0, fromL.length / 2) };
 }

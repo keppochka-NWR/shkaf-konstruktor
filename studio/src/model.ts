@@ -220,6 +220,7 @@ export type Module = {
    *  lay 'flat' — лёжа, как царги кухонных низов Базиса (ширина height в глубину, заподлицо с верхом); setback — утопание от фронта (под Gola). */
   rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number; at?: number; /** кухни Базиса: false — без конфирматов (k21 m02: передняя стяжка мойки без крепежа в проекте) */ fasten?: false; /** кухни Базиса: высоты конфирматов стяжки на ребре через боковины от её низа, если в проекте не один по центру (k01 m03, k03 m08: 34 и 66
      *  у стяжки 100); [] — в боковинах конфирматов нет */ confY?: number[];
+    /** кухни Базиса (пакет 3): стяжка на ребре на эксцентриках в боковины — высоты от её низа (k04 m05: один на 50 у стяжки 100; бочонок с внутренней пласти стяжки) */ eccY?: number[];
     /** кухни Базиса: царга лёжа — конфирматы через боковины в её торец, мм от задней кромки царги, если в проекте не один посередине
      *  (k27 m02: 21,5 у царги 60; k01 m01/m02/m04 — 34 и 66 у царги 100; по базе посередине — 97 из 102) */ confZ?: number[];
     /** кухни Базиса: глубина D5 конфирматов в торец царги, если не как у корпуса (k31 m16: передняя 35 при 42) */ confDepth?: number;
@@ -1120,6 +1121,21 @@ export function parts(m: Module): Part[] {
     add(key, m.kitchen?.confirmatName ?? "Конфирмат 7×50", deep ? [D, D, L] : vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal"); // кухня Базиса — имя крепежа по проекту (k33/k34: «Евровинт 6х50»)
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
+  // пакет 3: щит под дном навесного на конфирматах по проекту Базиса (kitchen.lowFrontConf, k14 m03): через боковины в торцы щита на высотах
+  // от его низа и через дно в верхний торец — парой от концов щита; ось — по середине толщины щита
+  const lfc = m.kitchen?.lowFront && m.kitchen.lowFrontConf && fastenersMode(m.kitchen) !== "pins" && fastenersMode(m.kitchen) !== false ? m.kitchen.lowFrontConf : undefined;
+  const lfp = lfc ? out.find((p) => p.id === "plinth") : undefined, lfb = lfp ? out.find((p) => p.id === "bottom") : undefined;
+  if (lfc && lfp && lfb) {
+    const [px, py, pz] = lfp.position, [pw, ph] = lfp.size, y0 = py - ph / 2, yt = lfb.position[1] + lfb.size[1] / 2;
+    for (const [k, v] of lfc.side.filter((v) => v < ph - 8).entries()) {
+      confirmat(`fast:plinth:left:${k}`, [px - pw / 2 - t, y0 + v, pz], "+x");
+      confirmat(`fast:plinth:right:${k}`, [px + pw / 2 + t, y0 + v, pz], "-x");
+    }
+    for (const [k, v] of lfc.top.filter((v) => v < pw / 2).entries()) {
+      confirmat(`fast:plinth:top:${k}:0`, [px - pw / 2 + v, yt, pz], "-y");
+      confirmat(`fast:plinth:top:${k}:1`, [px + pw / 2 - v, yt, pz], "-y");
+    }
+  }
   const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id === "raise-plank" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   // Точки крепежа стыка по глубине: задняя (k 0), передняя (k 1), средние (k 2…):
   //  — свои отступы стыка из Базиса (kitchen.jointZ «bottom:left», n3-wall);
@@ -1174,6 +1190,13 @@ export function parts(m: Module): Part[] {
               add(`dowel:under:${side}:${k}`, "Шкант 8×30", [8, 30, 8], [x, yt + 3, z + dz], 30, 8, 8, "fastener", hp.sectionId, "metal");
               out.at(-1)!.anchor = [x, yb, z + dz];
             }
+          }
+          // пакет 3: эксцентрики без шканта у задней кромки дна (underEcc.extra, k27 m04/m05, k28 m08, k28 m12: 8 от задней кромки) — тот же стык
+          for (const [k, v] of (ue.extra?.[side] ?? []).entries()) {
+            const z = z0 + v;
+            add(`ecc:under:${side}:x${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [ox + inward * RULES.eccBarrelH / 2, yt + 34, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+            out.at(-1)!.anchor = [ox, yt, z];
+            add(`ecc:under:${side}:x${k}:pin`, "Эксцентрик D15 · шток", [7, 34, 7], [x, yt + 17, z], 34, 7, 7, "fastener", hp.sectionId, "metal");
           }
           continue;
         }
@@ -1240,6 +1263,18 @@ export function parts(m: Module): Part[] {
     // кухня Базиса: стяжка на ребре со своими высотами конфирматов из проекта (rails[].confY: k01 m03, k03 m08 — 34 и 66 у стяжки 100;
     // [] — в боковинах их нет, как в Базисе), иначе один по центру. Одно правило для нижних, навесных и антресолей (n4-base, n4-wall)
     const spec = m.kitchen && r.size[1] !== t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay !== "flat") : undefined;
+    // пакет 3: стяжка на ребре на эксцентриках в боковины (rails[].eccY, k04 m05 — по базе 3 стяжки из 308): бочонок с внутренней
+    // (обращённой в корпус) пласти стяжки в 34 от боковины, шток в торец стяжки, D5 в боковину (drilling «ecc:rail:»); конфирматов нет
+    if (spec?.eccY?.length) {
+      const zIn = r.id.startsWith("rail:rear") ? 1 : -1, y0 = r.position[1] - r.size[1] / 2;
+      for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
+        spec.eccY.forEach((v, k) => {
+          add(`ecc:rail:${r.id.slice(5)}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelD, RULES.eccBarrelD, RULES.eccBarrelH], [edgeX + dir * RULES.eccCenter, y0 + v, r.position[2] + zIn * (r.size[2] / 2 - RULES.eccBarrelH / 2 + 0.3)], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", r.sectionId, "metal");
+          out.at(-1)!.anchor = [edgeX, y0 + v, r.position[2] + zIn * r.size[2] / 2]; // точка Базиса — на внутренней пласти стяжки
+          add(`ecc:rail:${r.id.slice(5)}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [RULES.eccCenter + t / 2, 7, 7], [edgeX + dir * (RULES.eccCenter - t / 2) / 2, y0 + v, r.position[2]], RULES.eccCenter + t / 2, 7, 7, "fastener", r.sectionId, "metal");
+        });
+      continue;
+    }
     const ys = spec?.confY ? spec.confY.map((v) => r.position[1] - r.size[1] / 2 + v) : [r.position[1]];
     // царга лёжа со своими точками конфирматов по глубине из проекта (rails[].confZ, k27 m02) — в них, без поиска места
     const flat = m.kitchen && r.size[1] === t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay === "flat") : undefined;
@@ -1393,14 +1428,29 @@ function hardwareParts(m: Module, out: Part[]) {
   const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   // кухня Базиса: съёмная полка без полкодержателей в проекте (kitchen.bareShelves) — студия их не добавляет
   const bareSh = new Set((m.kitchen?.bareShelves ?? []).map((j) => `${m.sections[0].id}:shelf:${j}`));
+  // пакет 3 (m_PINS): перфорация Базиса — ряды полкодержателей без полки на kitchen.pinRows мм от низа полки (k26 m02/m03: −100, −50, 50, 100);
+  // ряд, совпавший с полкой или другим рядом, и ряд вне корпуса (между дном и крышей) — не ставим
+  const pinRows = m.kitchen?.pinRows ?? [], usedRows = new Set<number>();
+  const btm = out.find((p) => p.id === "bottom"), tpp = out.find((p) => p.id === "top");
+  const rowLo = btm ? btm.position[1] + btm.size[1] / 2 : 0, rowHi = tpp ? tpp.position[1] - tpp.size[1] / 2 : m.height;
+  if (pinRows.length) for (const p of out) if (p.role === "shelf" || p.id === "bottom" || p.id === "top") usedRows.add(Math.round(p.position[1] - p.size[1] / 2));
   for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !bareSh.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     const pi = m.shelfPinInset ?? 40, sg = sh.material === "glass" ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap; // держатель — на грани стойки
     const pf = m.kitchen ? m.shelfPinInsetFront ?? pi : pi; // передние — свой отступ только у кухни Базиса
-    [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pf], [x + w / 2 - 4, z + dd / 2 - pf]].forEach(([px, pz], k) =>
+    const sL = m.kitchen?.pinSide?.left, sR = m.kitchen?.pinSide?.right; // пакет 3: у стойки свои места (k16 m03)
+    [[x - w / 2 + 4, z - dd / 2 + (sL?.[0] ?? pi)], [x + w / 2 - 4, z - dd / 2 + (sR?.[0] ?? pi)], [x - w / 2 + 4, z + dd / 2 - (sL?.[1] ?? pf)], [x + w / 2 - 4, z + dd / 2 - (sR?.[1] ?? pf)]].forEach(([px, pz], k) =>
       out.push({ ...metal(`shp:${sh.id}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, y - sh.size[1] / 2 - 3, pz], "fastener", sh.sectionId),
         // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
         model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
+    for (const [r, o] of pinRows.entries()) {
+      const yb = y - sh.size[1] / 2 + o;
+      if (usedRows.has(Math.round(yb)) || yb - 6 < rowLo + 10 || yb > rowHi - 10) continue;
+      usedRows.add(Math.round(yb));
+      [[x - w / 2 + 4, z - dd / 2 + (sL?.[0] ?? pi)], [x + w / 2 - 4, z - dd / 2 + (sR?.[0] ?? pi)], [x - w / 2 + 4, z + dd / 2 - (sL?.[1] ?? pf)], [x + w / 2 - 4, z + dd / 2 - (sR?.[1] ?? pf)]].forEach(([px, pz], k) =>
+        out.push({ ...metal(`shp:${sh.id}:r${r}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, yb - 3, pz], "fastener", sh.sectionId),
+          model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, yb, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
+    }
   }
   // кухня: фасад техники без петель (section.hingeless) — помечаем и не ставим петли
   if (m.kitchen) for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:"))) {
@@ -1597,7 +1647,7 @@ export function fastenerCounts(m: Module) {
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   const rafix = m.kitchen ? rafixCount(ps) : 0; // рафиксы — только у кухонь Базиса (kitchenRafix.ts)
   for (const j of m.kitchen?.bareShelves ?? []) fixedIds.add(`${m.sections[0].id}:shelf:${j}`); // полка без крепежа в Базисе — без полкодержателей
-  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
+  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length + ps.filter((p) => /^shp:.*:r\d+:\d+$/.test(p.id)).length /* перфорация kitchen.pinRows */, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
 export function maxHeightOf(m: Module): number {

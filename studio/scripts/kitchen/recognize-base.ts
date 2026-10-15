@@ -62,6 +62,10 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (fe && m.edgeScheme?.t) { m.edgeScheme = { ...m.edgeScheme, t: fe.other, front: fe.front }; notes.push(`передние торцы корпуса — кромка ${fe.front}, остальные ${fe.other} — как в Базисе`); }
   const pf = pinInsetFront(ref, m.shelfPinInset);
   if (pf !== undefined) { m.shelfPinInsetFront = pf; notes.push(`передние полкодержатели в ${pf} от переднего торца полки (задние в ${m.shelfPinInset}) — как в Базисе`); }
+  const psd = m.shelfPinInset === undefined ? undefined : pinSides(ref, m.shelfPinInset, m.shelfPinInsetFront ?? m.shelfPinInset);
+  const prw = pinRowsOf(ref);
+  if (prw) { k.pinRows = prw; notes.push(`перфорация: ряды полкодержателей без полки на ${prw.join(", ")} от низа полки — как в Базисе`); }
+  if (psd) { k.pinSide = psd; notes.push(`полкодержатели ${Object.entries(psd).map(([s, [r, f]]) => `${s === "left" ? "левой" : "правой"} стойки в ${r}/${f} от заднего/переднего торца полки`).join(", ")} — как в Базисе`); }
   // фасады без петель — только если студия строит ровно фасады Базиса (число и габариты, после зазоров faceTop/faceBottom выше).
   // Несколько рядов, ниша под технику, фасады ящиков разной ширины — студия поставила бы распашные, которых в Базисе нет
   // (k20 m09: два фасада по 2398 вместо двери 597×330 и стёкол) → фасадов не ставим: лучше «нет», чем лишнее (правило Макса)
@@ -265,6 +269,55 @@ export function pinInsetFront(ref: RefModule, back: number | undefined): number 
     return Math.abs(front - back) > 0.5 && front >= 10 ? front : undefined;
   }
   return undefined;
+}
+
+/** Пакет 3 (m_PINS): полкодержатели у левой и правой стойки на разных местах по глубине — свои отступы стороны [задний, передний] от
+ *  торцов полки, если на всех уровнях полок сторона отличается от общего правила (rear/front) больше чем на 0,5 мм. По базе: 138 модулей
+ *  с полкодержателями у двух стоек, несимметрично 6 — k16 m03 (левая 64,5/64,5 при правой 43,5/53,5), k27 m07 (54/150 и 50,5/153,5),
+ *  k27 m03/m16 (у правой 3 держателя — не берём: число не то), k08 m01 и k31 m05 (≤ 0,5 — округление Базиса, не берём). */
+export function pinSides(ref: RefModule, rear: number, front: number): { left?: [number, number]; right?: [number, number] } | undefined {
+  const pins = ref.hardware.filter((h) => h.category === "полкодержатель");
+  const out: { left?: [number, number]; right?: [number, number] } = {};
+  const seen: Record<"left" | "right", string[]> = { left: [], right: [] };
+  for (const s of ref.panels.filter((p) => p.axis === "y")) {
+    const ps = pins.filter((h) => Math.abs(h.pos[1] - s.box[1]) < 2 && h.pos[0] > s.box[0] - 20 && h.pos[0] < s.box[3] + 20);
+    if (!ps.length) continue;
+    const cx = (s.box[0] + s.box[3]) / 2;
+    for (const side of ["left", "right"] as const) {
+      const zs = ps.filter((h) => (side === "left" ? h.pos[0] < cx : h.pos[0] > cx)).map((h) => h.pos[2]).sort((a, c) => a - c);
+      if (zs.length !== 2) return undefined; // не пара на стойку — правила нет
+      seen[side].push(`${r1(zs[0] - s.box[2])}/${r1(s.box[5] - zs[1])}`);
+    }
+  }
+  for (const side of ["left", "right"] as const) {
+    const v = [...new Set(seen[side])];
+    if (v.length !== 1) continue; // на разных полках по-разному — не обобщаем
+    const [r, f] = v[0].split("/").map(Number);
+    if (Math.abs(r - rear) > 0.5 || Math.abs(f - front) > 0.5) out[side] = [r, f];
+  }
+  return out.left || out.right ? out : undefined;
+}
+
+/** Пакет 3 (m_PINS): перфорация Базиса — ряды полкодержателей без полки (по 4 на ряд), мм от низа съёмной полки. По базе полкодержатели
+ *  вне полок — 6 модулей: k26 m02/m03 (−100, −50, 50, 100 у обеих полок), k26 m04 (то же, ряд над крышей не ставится), k20 m09 (−200…250
+ *  только у одной из двух полок — правила нет), k14 m04/m07 (стеклянные полки, держатели без полки в проекте — другое). Берём, только если
+ *  ряды Базиса ровно те, что даёт правило у каждой полки с держателями (без совпавших с полками/друг с другом и без вышедших за корпус). */
+export function pinRowsOf(ref: RefModule): number[] | undefined {
+  const pins = ref.hardware.filter((h) => h.category === "полкодержатель");
+  const hz = ref.panels.filter((p) => p.axis === "y" && p.kind === "ldsp").sort((a, b) => a.box[1] - b.box[1]);
+  if (!pins.length || hz.length < 3) return undefined;
+  const at = (y: number) => hz.find((p) => Math.abs(p.box[1] - y) < 2);
+  const shelves = [...new Set(pins.filter((h) => at(h.pos[1])).map((h) => r1(h.pos[1])))].sort((a, b) => a - b);
+  const free = pins.filter((h) => !at(h.pos[1]));
+  if (!free.length || !shelves.length) return undefined;
+  const rows = [...new Set(free.map((h) => r1(h.pos[1])))].sort((a, b) => a - b);
+  if (rows.some((y) => free.filter((h) => Math.abs(h.pos[1] - y) < 0.6).length !== 4)) return undefined;
+  const offs = [...new Set(rows.map((y) => r1(y - shelves.reduce((s, c) => (Math.abs(c - y) < Math.abs(s - y) ? c : s)))))].sort((a, b) => a - b);
+  const lo = hz[0].box[4], hi = hz[hz.length - 1].box[1], used = new Set(hz.map((p) => Math.round(p.box[1])));
+  const want: number[] = [];
+  for (const s of shelves) for (const o of offs) { const y = r1(s + o); if (used.has(Math.round(y)) || y - 6 < lo + 10 || y > hi - 10) continue; used.add(Math.round(y)); want.push(y); }
+  want.sort((a, b) => a - b);
+  return want.length === rows.length && want.every((y, i) => Math.abs(y - rows[i]) < 0.6) ? offs : undefined;
 }
 
 /** Нижний: боковины кромлены, но верхний торец — нет (9 модулей двух кухонь: k03, k20). */

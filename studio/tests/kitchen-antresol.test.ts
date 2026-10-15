@@ -526,7 +526,7 @@ test('etalon k15/m12: neighbour confirmats as in Bazis',{skip:!existsSync(ET+'k1
 test('etalon k04/m05: a wall bottom rail fixed to the bottom in Bazis gets no studio confirmats into the sides',{skip:!existsSync(ET+'k04.json')},()=>{
   const ref=refOf('k04','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
   const rail=m.rails?.find(r=>r.place==='rear-bottom');
-  assert.ok(rail,'rear-bottom rail');assert.equal(rail!.fasten,false);
+  assert.ok(rail,'rear-bottom rail');assert.notEqual(rail!.fasten,false);assert.deepEqual(rail!.eccY,[50]); // пакет 3: стяжка на эксцентриках в боковины (rails[].eccY), конфирматов нет
   assert.ok(!parts(m).some(p=>p.id.startsWith('fast:rail:rear-bottom')),'no confirmats into the rail ends');
   const c=compareModule(ref,m),conf=c.hardware.find(h=>h.category==='конфирмат')!;
   assert.equal(conf.studio,conf.ref,'confirmats as in Bazis');

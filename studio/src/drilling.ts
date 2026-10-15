@@ -97,6 +97,14 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const y = p.position[1] - 3;
       push(p.id, [p.position[0], y, p.position[2]], [0, 1, 0], 8, 22);
       push(p.id + ":bottom", [p.position[0], y, p.position[2]], [0, -1, 0], 8, 12);
+    } else if (p.id.startsWith("ecc:rail:") && !p.id.endsWith(":pin") && p.anchor) {
+      // пакет 3: стяжка на ребре на эксцентриках в боковины (rails[].eccY, k04 m05): D15×12 с внутренней пласти стяжки в 34 от боковины,
+      // шток D8×34 в торец стяжки, D5×12 в боковину — точка «пласть боковины × внутренняя пласть стяжки» (как у Базиса)
+      const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, into = p.position[2] > ez ? 1 : -1, e = m.kitchen?.ecc;
+      const zc = ez + into * Math.min(...(ps.find((q) => q.id === "rail:" + p.id.split(":")[2])?.size ?? [16])) / 2; // середина толщины стяжки
+      push(p.id, [ex + inward * 34, ey, ez], [0, 0, into], 15, e?.barrel ?? 12);
+      push(p.id + ":pin", [ex, ey, zc], [inward, 0, 0], e?.stem?.[0] ?? 8, e?.stem?.[1] ?? 34);
+      push(p.id + ":side", [ex, ey, zc], [-inward, 0, 0], 5, e?.side ?? 12);
     } else if (p.id.startsWith("ecc:") && !p.id.endsWith(":pin") && p.anchor) {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;

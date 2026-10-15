@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
 import { jointPointsRule, fastenersMode, kitchenEndsRule, nearRight, sideDists, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
+import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railEccY, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { sideStripOf, shiftRefX } from "./recognize-fillers";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
@@ -18,7 +18,7 @@ import { aluFacadeReason } from "./aluFacade";
 import { hoodBoxReason, hoodBoxSimple, hoodBoxField, hoodBoxPanels } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
-import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
@@ -234,21 +234,29 @@ export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner:
 
 /** Боковины стоят на дне (дно под боковинами) на эксцентриках: стяжка Базиса — на наружной пласти боковины на уровне верха дна
  *  (k16 m08–m10, k28 m10–m12, k31 m03/m04). Отступы стяжек от задней/передней кромки дна, стороны и отступ шкантов (по оси боковины, низ дна). */
-export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B): { at: { back: number; front: number }; sides: ("left" | "right")[]; dowel?: number } | null {
+export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B): { at: { back: number; front: number; extra?: { left?: number[]; right?: number[] } }; sides: ("left" | "right")[]; dowel?: number } | null {
   const outer = { left: left.x0, right: right.x1 };
   const ecc = hardware.filter((h) => h.category === "эксцентрик" && Math.abs(h.pos[1] - bottom.y1) < 0.6);
   const bySide = (s: "left" | "right") => ecc.filter((h) => Math.abs(h.pos[0] - outer[s]) < 0.6);
-  // третий эксцентрик Базиса в углу (k28 m12: z=8 у левой боковины — ошибка проекта, не повторяем): боковина с той же парой стяжек, что
-  // у другой, тоже стоит на эксцентриках — иначе студия ставила там конфирматы, которых нет в Базисе, и они выходили в паз подсветки (n4-antresol)
-  const two = (["left", "right"] as const).filter((s) => bySide(s).length === 2);
-  const samePair = (s: "left" | "right") => two.length === 1 && s !== two[0] && bySide(s).length > 2 && bySide(two[0]).every((h) => bySide(s).some((g) => Math.abs(g.pos[2] - h.pos[2]) < 0.6));
-  const sides = (["left", "right"] as const).filter((s) => two.includes(s) || samePair(s));
+  const dowelsOf = (s: "left" | "right") => { const cx = s === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2; return hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[0] - cx) < 0.6); };
+  // пакет 3: третий эксцентрик Базиса у задней кромки дна (по базе: z=8 у обеих боковин — k27 m04, k27 m05, k28 m08; у левой — k28 m12)
+  // — такой же стык (D8×34 в торец боковины, D15×12 в наружную пласть, D5×12 в дно), но без шканта. Пара стяжки — эксцентрики со своим
+  // шкантом (≤ 40 по глубине, по оси боковины, низ дна); остальные — kitchen.underEcc.extra (мм от задней кромки дна по сторонам).
+  const pairOf = (s: "left" | "right") => {
+    const e = bySide(s);
+    if (e.length === 2) return e;
+    if (e.length < 3) return [];
+    const d = dowelsOf(s), withDowel = e.filter((h) => d.some((g) => Math.abs(g.pos[2] - h.pos[2]) > 1 && Math.abs(g.pos[2] - h.pos[2]) <= 40));
+    return withDowel.length === 2 ? withDowel : [];
+  };
+  const sides = (["left", "right"] as const).filter((s) => pairOf(s).length === 2);
   if (!sides.length) return null;
-  const pairOf = (s: "left" | "right") => two.includes(s) ? bySide(s) : bySide(s).filter((g) => bySide(two[0]).some((h) => Math.abs(g.pos[2] - h.pos[2]) < 0.6));
   const zs = sides.flatMap((s) => pairOf(s).map((h) => h.pos[2]));
-  const at = { back: r1(Math.min(...zs) - bottom.z0), front: r1(bottom.z1 - Math.max(...zs)) };
-  const e0 = pairOf(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0], cx = sides[0] === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2;
-  const d0 = hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[0] - cx) < 0.6).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
+  const ex: { left?: number[]; right?: number[] } = {};
+  for (const s of sides) { const p = pairOf(s), x = bySide(s).filter((h) => !p.includes(h)).map((h) => r1(h.pos[2] - bottom.z0)).sort((a, c) => a - c); if (x.length) ex[s] = x; }
+  const at = { back: r1(Math.min(...zs) - bottom.z0), front: r1(bottom.z1 - Math.max(...zs)), ...(ex.left || ex.right ? { extra: ex } : {}) };
+  const e0 = pairOf(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0];
+  const d0 = dowelsOf(sides[0]).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
   return { at, sides: [...sides], ...(d0 ? { dowel: r1(Math.abs(d0.pos[2] - e0.pos[2])) } : {}) };
 }
 
@@ -486,6 +494,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // нет такой панели — цоколя нет (навесной со свесом фасада ниже дна: правило Макса — не добавлять того, чего нет в Базисе)
   const lowFront = !legs.length && bottom && bottom.b.y0 > 0.5 ? P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y1 <= bottom.b.y0 + 1 && b.z1 >= sideZ1 - 30 && !fronts.some((f) => f.b === b)) : undefined;
   if (lowFront) m.kitchen.lowFront = true;
+  // пакет 3: крепёж щита под дном по проекту (k14 m03: конфирматы через боковины и через дно)
+  const lfc = lowFront && bottom ? lowFrontConf(ref.hardware, lowFront.b, left.b, right.b, bottom.b) : undefined;
+  if (lfc) { m.kitchen.lowFrontConf = lfc; notes.push(`щит под дном на конфирматах: через боковины на ${lfc.side.join(", ")} от его низа, через дно в ${lfc.top.join(", ")} от концов — как в Базисе`); }
   // царги
   const railList: NonNullable<Module["rails"]> = [];
   for (const r of rails) {
@@ -506,7 +517,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // не строит — «не поддержано» (критик n4-antresol)
     if (wallRailOnBottom(role, r, bottom)) {
       const place = front ? "front-bottom" : "rear-bottom", fx = railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
-      railList.push({ place, height: r1(r.b.y1 - r.b.y0), ...(fx ? {} : { fasten: false as const }) });
+      // пакет 3: эксцентрики в боковины на высоте стяжки (k04 m05) — своё поле rails[].eccY, конфирматов тогда нет (fasten не нужен)
+      const ey = fastenersMode(m.kitchen) !== "pins" ? railEccY(r.b, ref.hardware, left.b.x1, right.b.x0) : undefined;
+      railList.push({ place, height: r1(r.b.y1 - r.b.y0), ...(fx ? {} : ey ? {} : { fasten: false as const }), ...(ey ? { eccY: ey } : {}) });
+      if (ey) notes.push(`стяжка ${place} на эксцентриках в боковины на ${ey.join(", ")} от её низа — как в Базисе`);
       const ru = bottom ? railUnder(ref.hardware, r.b, bottom.b) : undefined; if (ru) m.kitchen.railUnder = { ...m.kitchen.railUnder, [place]: ru }; // эксцентрики и шканты снизу (n4-wall)
       // эксцентрики и шканты стяжки в дно, которых railUnder не повторяет (k04 m05: 6 эксцентриков у Базиса, railUnder — 2 из них)
       const inRail = ref.hardware.filter((h) => /эксцентрик|шкант/.test(h.category) && h.pos[0] > left.b.x1 && h.pos[0] < right.b.x0 && h.pos[1] >= r.b.y0 - 1 && h.pos[1] <= r.b.y1 + 1 && h.pos[2] >= r.b.z0 - 1 && h.pos[2] <= r.b.z1 + 1).length;
@@ -518,7 +532,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // railConf для нижних, навесных и антресолей (слияние n4-base railConfY и n4-wall railConf)
     const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
     const hz = topPanel && Math.abs(topPanel.b.y0 - r.b.y1) < 0.6 ? topPanel.b : bottom && Math.abs(bottom.b.y1 - r.b.y0) < 0.6 ? bottom.b : undefined;
-    const rc = fastened && fastenersMode(m.kitchen) !== "pins" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
+    const rc = fastened && fastenersMode(m.kitchen) !== "pins" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz, [left.b.x1, right.b.x0]) : {};
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...rc });
   }
   if (railList.length) m.rails = railList;
@@ -1005,7 +1019,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     // жёсткие полки (k05 m10/m11: полка над сушкой на конфирматах 53/52 при общем 63) — тоже свои отступы
     const fixedJ = (m.sections[0].fixed ?? []).map((j) => [`${m.sections[0].id}:shelf:${j}`, sh[j]] as [string, (typeof sh)[number] | undefined]);
-    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right, m.confirmatInset);
+    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right, m.confirmatInset, { bottom: m.kitchen.bottomFront ?? 0 });
     if (Object.keys(jz).length) m.kitchen.jointZ = jz;
     // жёсткая полка без крепежа в проекте (k21 m05: полка над сушкой на 724 — в Базисе ни конфирматов, ни эксцентриков) — студия его не добавляет
     const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right);
