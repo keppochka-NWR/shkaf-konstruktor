@@ -113,6 +113,7 @@ function studioCategory(p: Part): string | null {
   if (id.startsWith("kitchen-hanger-cap:")) return "заглушка";
   if (id.startsWith("kitchen-hanger:")) return "навес";
   if (id.startsWith("kitchen-dryer:")) return "сушка";
+  if (id.startsWith("kitchen-dryer-fix:")) return "прочее"; // элемент комплекта сушки («10x13», «Вращение») — у Базиса «прочее» (F_DRYER)
   if (id.startsWith("kitchen-svc:")) return "прочее"; // служебное отверстие Базиса («10» k28 m14) — у Базиса «прочее»
   if (id.startsWith("kitchen-tie:")) return "прочее"; // стяжка соседних модулей в Gola («5» Базиса) — у Базиса «прочее»
   if (id.startsWith("kitchen-back-cap:")) return "прочее"; // «8» Базиса с лицевой пласти задника ЛДСП в точке рафикса (k18) — у Базиса «прочее»

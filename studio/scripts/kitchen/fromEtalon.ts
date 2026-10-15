@@ -1240,7 +1240,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (hg && !hg.note) { m.kitchen.hangers = true; if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; }
   }
   // сушка навесного: элементы с сеткой Базиса — в точке и с поворотом проекта; без сетки — только заметка
-  if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
+  if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0, ref.holes); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
   if (fastenersAbsent(ref)) { if (m.kitchen.fasteners !== false) m.kitchen.fasteners = "pins"; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }
   // глубина D5 конфирмата по проекту — одно поле drill.confirmat (присадка по k33/k34 выше главнее, если уже записана)
   const cd = confDepthFromEtalon(ref);

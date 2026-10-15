@@ -198,5 +198,7 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
   kitchenDrawerHoles(m, ps, push);
   // служебные сквозные отверстия кухни Базиса (kitchen.svcHoles, k28 m14: D10 под провод), n4-antresol
   for (const [i, h] of (m.kitchen?.svcHoles ?? []).entries()) push(`kitchen-svc:${i}`, [...h.at], [...h.dir], h.d, h.depth);
+  // элемент комплекта сушки с отверстием Базиса («10x13» k25 m14): в боковину у своей стороны, из точки на её внутренней грани
+  for (const [i, d] of (m.kitchen?.dryer ?? []).entries()) if (d.fix && d.hole) push(`kitchen-dryer-fix:${i}`, [d.side === "left" ? d.x : m.width - d.x, d.y, d.z], [d.side === "left" ? -1 : 1, 0, 0], d.hole[0], d.hole[1]);
   return out;
 }

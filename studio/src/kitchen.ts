@@ -68,7 +68,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  остаются (бывшее noFasteners: n3-wall, n3-antresol). Без поля / true — как у шкафов. Читать через fastenersMode(k). */
   fasteners?: boolean | "pins";
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
-  dryer?: { name: string; /** сетка библиотеки Базиса; нет — у Базиса элемент без геометрии (k01, k02, k06, k08): точка и строка спецификации */ mesh?: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  dryer?: { name: string; /** сетка библиотеки Базиса; нет — у Базиса элемент без геометрии (k01, k02, k06, k08): точка и строка спецификации */ mesh?: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number];
+    /** элемент комплекта сушки, который Базис пишет в «прочее» («10x13», «Вращение», «Отверстие 3х2» — F_DRYER): деталь «прочее»;
+     *  hole — отверстие Базиса из этой точки в боковину [d, глубина] (у «10x13» k25 m14 — D10×13), без него отверстия нет, как в Базисе */
+    fix?: true; hole?: [number, number] }[];
   /** Имя крепежа корпуса по проекту Базиса, если это не «Конфирмат 7х50» (k33, k34: «Евровинт 6х50») — в деталях и смете. */
   confirmatName?: string;
   /** Глубина присадки по проекту Базиса, если она не типовая: confirmat — D5 в торец (обычно 35; k33/k34 «Евровинт 6х50» — 36), pin — D5 под полкодержатель (обычно 12; k33/k34 — 9). */
@@ -746,6 +749,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
   // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
   for (const [n, d] of (k.dryer ?? []).entries()) {
     const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
+    if (d.fix) { const p = metal(`kitchen-dryer-fix:${n}`, d.name, [0.01, 0.01, 0.01], o); p.anchor = o; out.push(p); continue; } // элемент комплекта сушки — «прочее» Базиса, точка
     out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
        d.mesh ? { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) } : undefined)); // без сетки — как в Базисе: только точка
   }
@@ -1146,7 +1150,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(confirmatName ? { confirmatName } : {}),
     ...(k.sideNotch && typeof k.sideNotch === "object" ? { sideNotch: Object.fromEntries((["left", "right"] as const).filter((s) => k.sideNotch?.[s]).map((s) => [s, { height: num(k.sideNotch![s]!.height), depth: num(k.sideNotch![s]!.depth) }])) } : {}),
     ...(Object.keys(drill).length ? { drill } : {}),
-    ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number] })) } : {}),
+    ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number], ...(d.fix ? { fix: true as const } : {}), ...(Array.isArray(d.hole) && d.hole.length === 2 && d.hole.every((v) => num(v) > 0) ? { hole: [num(d.hole[0]), num(d.hole[1])] as [number, number] } : {}) })) } : {}),
     ...(k.jointZ && typeof k.jointZ === "object" ? { jointZ: Object.fromEntries(Object.entries(k.jointZ).filter(([, v]) => Array.isArray(v) && (v.length === 2 || v.length === 3)).map(([key, v]) => [key, (v.length === 3 ? [num(v[0]), num(v[1]), num(v[2])] : [num(v[0]), num(v[1])]) as [number, number] | [number, number, number]])) } : {}),
     ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}), ...(k.raise.plank && num(k.raise.plank.depth) > 0 ? { plank: { depth: num(k.raise.plank.depth) } } : {}),
       ...(k.raise.conf && typeof k.raise.conf === "object" ? { conf: { ...(Array.isArray(k.raise.conf.side) && k.raise.conf.side.length ? { side: (k.raise.conf.side as unknown[]).map(num) } : {}),
