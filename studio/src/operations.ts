@@ -5,6 +5,7 @@ import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
+import {mirrorKitchen} from './kitchen';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
@@ -108,6 +109,7 @@ export function mirrorModule(p:Project,mid:string):Project {
  if(m.sectionLayout)mirrorOpenings(m);
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
+ if(m.kitchen)mirrorKitchen(m); // поля кухни со стороной (пакет 0): xs↔xr, topConf↔topConfR, маркер −1 у направляющих и т. д.
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }

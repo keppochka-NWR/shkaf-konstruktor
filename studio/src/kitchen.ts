@@ -9,7 +9,7 @@ import { sinkParts, worktopCutErrors } from './premialSink';
 import {ovenErrors,ovenParts,type OvenSpec} from './kitchenOven';
 import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
-import { axisLayout } from "./kitchenDrawers";
+import { axisLayout, type FirmaxBox } from "./kitchenDrawers";
 import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
 import { allegroErrors, parsePremialPullout, type PremialPullout } from './premialPullout';
 
@@ -294,6 +294,28 @@ export function sideDists(xs: readonly number[], x0: number, x1: number): { left
 export function grooveHoleOf(o: [number, number, number], m: Pick<Module, "width" | "height">): GrooveHole {
   const sx: 1 | -1 = nearRight(o[0], 0, m.width) ? -1 : 1, sy: 1 | -1 = nearRight(o[1], 0, m.height) ? -1 : 1;
   return [sx === -1 ? m.width - o[0] : o[0], sy === -1 ? m.height - o[1] : o[1], o[2], sx, sy];
+}
+
+/** Зеркальное отражение полей кухни со стороной (пакет 0): xs↔xr, pts↔ptsR, topConf↔topConfR, ecc↔eccR, dowel↔dowelR, маркер −1 у
+ *  точек направляющих и шурупов фальшпанели (runs/faceScrews), grooveHoles (сторона по ширине), опущенная боковина (sideDown).
+ *  Всё, что записано «от левой кромки», становится «от правой» и наоборот — числа не пересчитываются, второе отражение возвращает
+ *  исходное. Правит модуль на месте (mirrorModule зовёт на клоне проекта). Пустой массив не оставляем: xs [] для kitchenLegs — «раскладка задана». */
+export function mirrorKitchen(m: Module): void {
+  const k = m.kitchen;
+  if (!k) return;
+  const put = <O extends object, K extends keyof O>(o: O, key: K, v: O[K] | undefined) => { if (v === undefined || (Array.isArray(v) && !v.length)) delete o[key]; else o[key] = v; };
+  if (k.legs) { const { xs, xr, pts, ptsR } = k.legs; put(k.legs, "xs", xr); put(k.legs, "xr", xs); put(k.legs, "pts", ptsR); put(k.legs, "ptsR", pts); }
+  if (k.sideDown) k.sideDown = { ...k.sideDown, side: k.sideDown.side === "left" ? "right" : "left" };
+  if (k.railUnder) for (const u of Object.values(k.railUnder)) { const { ecc, dowel, eccR, dowelR } = u; u.ecc = eccR ?? []; u.dowel = dowelR ?? []; put(u, "eccR", ecc); put(u, "dowelR", dowel); }
+  if (k.grooveHoles) k.grooveHoles = k.grooveHoles.map((h): GrooveHole => (h.length >= 5 ? [h[0], h[1], h[2], h[3] === -1 ? 1 : -1, h[4] === -1 ? -1 : 1] : [m.width - h[0], h[1], h[2]]));
+  for (const r of m.rails ?? []) { if (!r) continue; const { topConf, topConfR } = r; put(r, "topConf", topConfR); put(r, "topConfR", topConf); }
+  for (const d of m.kdrawers ?? []) {
+    const b: FirmaxBox | undefined = d.box;
+    if (!b) continue;
+    // x точки = внутренняя грань боковины + v с обеих сторон (слева v > 0 внутрь, справа v < 0): зеркало — знак v и маркер вместе
+    if (b.runs) b.runs = b.runs.map((r) => (r.length > 3 ? [-r[0], r[1], r[2]] : [-r[0], r[1], r[2], -1]));
+    if (Array.isArray(b.faceScrews)) b.faceScrews = b.faceScrews.map((s) => (s.length > 2 ? [-s[0], s[1]] : [-s[0], s[1], -1]));
+  }
 }
 
 export const isKitchen = (m: Module) => !!m.kitchen;

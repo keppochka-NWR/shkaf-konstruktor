@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import {initialModule,parseModule,parts,validate,railAt,type Module} from '../src/model';
-import {kitchenBase,kitchenWall,kitchenLegs,grooveHoleAt,grooveHoleOf,parseGrooveHole,nearRight,splitSides,sideDists} from '../src/kitchen';
+import {kitchenBase,kitchenWall,kitchenLegs,grooveHoleAt,grooveHoleOf,parseGrooveHole,nearRight,splitSides,sideDists,mirrorKitchen} from '../src/kitchen';
+import {mirrorModule} from '../src/operations';
 import {partCollisions} from '../src/collisions';
 import {relayoutKDrawers,isFirmax,parseKDrawers,axisCeiling} from '../src/kitchenDrawers';
 import {ETALON_DIR,resizeSweep,RESIZE_CHANGES} from '../scripts/kitchen/resize-sweep';
@@ -144,6 +145,39 @@ test('щит: partCollisions у модуля с относительными п�
   const m=kitchenWall(initialModule(),600);m.height=720;m.kitchen!.hangers=false;m.rails=[{place:'rear-top',height:100,confY:[34,66],topConf:[60],topConfR:[60]}];
   assert.deepEqual(partCollisions(parts(m),m).filter(c=>/rail:rear-top/.test(c.a+c.b)),[]);
   assert.deepEqual(partCollisions(parts({...m,width:500}),m).filter(c=>/rail:rear-top/.test(c.a+c.b)),[]);
+});
+
+test('зеркало (mirrorModule): поля кухни со стороной отражаются — xs↔xr, pts↔ptsR, topConf↔topConfR, ecc↔eccR, маркер −1 у runs/faceScrews, grooveHoles, sideDown; дважды — исходное',()=>{
+  const p=kitchenProject(),a=p.modules.find(q=>q.module.kitchen?.role==='base'&&!!q.module.feet)!;
+  const m=kitchenBase(initialModule(),a.module.width,'drawers');m.doors=false;m.sections[0].shelves=[];m.sections[0].drawers=0;
+  m.kitchen!.legs={back:70,front:70,xs:[70],xr:[120]};
+  m.rails=[{place:'rear-top',height:100,lay:'flat',topConf:[60],topConfR:[90]}];
+  m.kitchen!.railUnder={'rear-bottom':{ecc:[50],dowel:[150],face:'back'}};
+  m.kitchen!.grooveHoles=[[20,100,20],[30,200,20,-1,1]];
+  m.kitchen!.sideDown={side:'left',y0:0};
+  m.kdrawers=relayoutKDrawers(m,2,undefined,'firmax-ldsp');
+  const k=m.kdrawers![0];assert.ok(isFirmax(k));
+  k.box.runs=[[8.5,k.runnerY,-500],[-8.5,k.runnerY,-500,-1]];k.box.faceScrews=[[30,20],[-30,20,-1]];
+  const legs0=kitchenLegs(m).map(l=>[l.x,l.z]);
+  const n=structuredClone(m);mirrorKitchen(n);
+  assert.deepEqual(n.kitchen!.legs,{back:70,front:70,xs:[120],xr:[70]});
+  assert.deepEqual(kitchenLegs(n).map(l=>[m.width-l.x,l.z]).sort(),legs0.sort(),'опоры — зеркально по ширине');
+  assert.deepEqual(n.rails,[{place:'rear-top',height:100,lay:'flat',topConf:[90],topConfR:[60]}]);
+  assert.deepEqual(n.kitchen!.railUnder,{'rear-bottom':{ecc:[],dowel:[],eccR:[50],dowelR:[150],face:'back'}});
+  assert.deepEqual(n.kitchen!.grooveHoles,[[m.width-20,100,20],[30,200,20,1,1]]);
+  assert.equal(n.kitchen!.sideDown!.side,'right');
+  const nk=n.kdrawers![0];assert.ok(isFirmax(nk));
+  // x точки = грань боковины + v (слева v > 0, справа v < 0): зеркало меняет знак v и маркер вместе
+  assert.deepEqual(nk.box.runs,[[-8.5,k.runnerY,-500,-1],[8.5,k.runnerY,-500]]);assert.deepEqual(nk.box.faceScrews,[[-30,20,-1],[30,20]]);
+  // точки направляющих в деталях: левая «8,5 внутрь от левой боковины» стала «8,5 внутрь от правой» — x зеркально
+  const sx=(mm:Module)=>parts(mm).filter(q=>q.id.startsWith('kd:0:slide:')).map(q=>(q.anchor??q.model?.origin??q.position)[0]).sort((a,b)=>a-b);
+  assert.deepEqual(sx(n).map(x=>Math.round((m.width-x)*10)/10).sort((a,b)=>a-b),sx(m).map(x=>Math.round(x*10)/10));
+  const back=structuredClone(n);mirrorKitchen(back);
+  assert.deepEqual(back,m,'второе отражение возвращает исходное');
+  // через операцию проекта (на месте нижнего из ряда по умолчанию): кухня отражается вместе с секциями, валидна
+  a.module=structuredClone(m);
+  const pm=mirrorModule(p,a.id).modules.find(q=>q.id===a.id)!.module;
+  assert.deepEqual(pm.kitchen!.legs,{back:70,front:70,xs:[120],xr:[70]});assert.deepEqual(validate(pm),[]);
 });
 
 // Одно правило «половина → от ближней кромки» вместо восьми рукописных: середина — к левой стороне, как было в каждом месте.
