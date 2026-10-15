@@ -1127,6 +1127,22 @@ export function parts(m: Module): Part[] {
     add(key, m.kitchen?.confirmatName ?? "Конфирмат 7×50", deep ? [D, D, L] : vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal"); // кухня Базиса — имя крепежа по проекту (k33/k34: «Евровинт 6х50»)
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
+  // пакет 3: щит под дном навесного на конфирматах по проекту Базиса (kitchen.lowFrontConf, k14 m03): через боковины в торцы щита на высотах
+  // от его низа и через дно в верхний торец — парой от концов щита; ось — по середине толщины щита
+  // при raise.conf (тот же щит, крепёж короба вытяжки — kitchen.ts raiseFrontParts) не дублируем
+  const lfc = m.kitchen?.lowFront && m.kitchen.lowFrontConf && !m.kitchen.raise?.conf && fastenersMode(m.kitchen) !== "pins" && fastenersMode(m.kitchen) !== false ? m.kitchen.lowFrontConf : undefined;
+  const lfp = lfc ? out.find((p) => p.id === "plinth") : undefined, lfb = lfp ? out.find((p) => p.id === "bottom") : undefined;
+  if (lfc && lfp && lfb) {
+    const [px, py, pz] = lfp.position, [pw, ph] = lfp.size, y0 = py - ph / 2, yt = lfb.position[1] + lfb.size[1] / 2;
+    for (const [k, v] of lfc.side.filter((v) => v < ph - 8).entries()) {
+      confirmat(`fast:plinth:left:${k}`, [px - pw / 2 - t, y0 + v, pz], "+x");
+      confirmat(`fast:plinth:right:${k}`, [px + pw / 2 + t, y0 + v, pz], "-x");
+    }
+    for (const [k, v] of lfc.top.filter((v) => v < pw / 2).entries()) {
+      confirmat(`fast:plinth:top:${k}:0`, [px - pw / 2 + v, yt, pz], "-y");
+      confirmat(`fast:plinth:top:${k}:1`, [px + pw / 2 - v, yt, pz], "-y");
+    }
+  }
   const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id === "raise-plank" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   // Точки крепежа стыка по глубине: задняя (k 0), передняя (k 1), средние (k 2…):
   //  — свои отступы стыка из Базиса (kitchen.jointZ «bottom:left», n3-wall);

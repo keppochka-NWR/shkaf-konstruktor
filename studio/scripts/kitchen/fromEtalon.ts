@@ -18,7 +18,7 @@ import { aluFacadeReason } from "./aluFacade";
 import { hoodBoxReason, hoodBoxSimple, hoodBoxField, hoodBoxPanels, hoodSidePieces } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
-import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 /** Узлы комплекта газлифта GL104 в проектах Базиса (k01 m11–m13). */
 const GL_NAMES = /^(Шток для GL\s*104|Газ патрон|Кронштейн на боковину|Кронштейн на фасад)\s*$/;
@@ -526,6 +526,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // пакет 3: крепёж щита под дном по проекту (k14 m03: конфирматы через боковины и через дно). Панель под поднятым дном навесного
   // уже с крепежом raise.conf (короб вытяжки, 809b416: конфирматы/эксцентрики, глубина, отступы по сторонам) — это тот же щит,
   // общий механизм главнее: второй набор конфирматов не пишем (слияние пакетов 15.10: k14 m03 получал оба — 22 конфирмата при 16)
+  const lfc = lowFront && bottom && !m.kitchen.raise?.conf ? lowFrontConf(ref.hardware, lowFront.b, left.b, right.b, bottom.b) : undefined;
+  if (lfc) { m.kitchen.lowFrontConf = lfc; notes.push(`щит под дном на конфирматах: через боковины на ${lfc.side.join(", ")} от его низа, через дно в ${lfc.top.join(", ")} от концов — как в Базисе`); }
   // царги
   const railList: NonNullable<Module["rails"]> = [];
   for (const r of rails) {
