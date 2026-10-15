@@ -155,7 +155,15 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   faceFiller?: { side: "left" | "right"; width: number; strip?: number; /** планка по высоте фальша, а не фасадов (k28 m17) */ stripFull?: true;
     /** конфирматы через фальш, если они есть в проекте (k01 m03): bottom — в передний торец дна, x от края модуля со стороны фальша;
      *  side — в передний торец боковины, y от низа фальша. Нет поля — фальш без крепежа (k25 m02, k28 m17 — как в Базисе) */
-    conf?: { bottom?: number[]; side?: number[] } };
+    conf?: { bottom?: number[]; side?: number[] };
+    /** фальш из фасадного материала по высоте ряда дверей в плоскости фасадов (навесные/антресоли/пеналы: k06 m11, k22 m08; F_FILLER_FLAT, пакет 2);
+     *  inset — отступ фальша от края модуля (k22 m08: 2), без поля — от края; дверь у фальша — через faceGap, как у мойки */
+    facadeMat?: true; inset?: number };
+  /** Доборная планка сбоку модуля Базиса (F_FILLER_STRIP, 16 модулей базы): снаружи боковины стоят планки ЛДСП 16 в плоскостях,
+   *  параллельных фасадам (передняя — у лица корпуса), перед ними — планка из фасадного материала в плоскости фасадов. Корпус студии
+   *  остаётся шириной между боковинами, модуль в ряду шире на ext (sideExtension). Высоты — от низа дна, z планок — от задней кромки
+   *  боковин, конфирматы — из боковины в торец передней планки (головка на внутренней пласти), y от низа планки. */
+  sideStrip?: KitchenSideStrip;
   /** Накладной ХДФ: зазоры снизу и сверху, если не равны боковому backGap (24 модуля 13 кухонь Базиса; k32 m06: 2 и 4 при 1,5). */
   backGaps?: { bottom: number; top: number };
   // Эксцентрик дна снизу (56 из 380 эксцентриков дна Базиса, 12 модулей 10 кухонь) — только ecc.bottomOut (бывшее eccBelow; parse-алиас).
@@ -551,7 +559,11 @@ export function kitchenEdges(m: Module, out: Part[]) {
   // фальш угловой мойки (kitchen.faceFiller) — ЛДСП корпуса, кромка корпуса по кругу (k25 m02: 1, k01 m03 и k28 m17: 0,5)
   const ffp = out.find((p) => p.id === "face-filler:panel:facade");
   if (ffp && m.edgeScheme?.t !== undefined) setEdges(ffp, edgeDirs(ffp), m.edgeScheme.t);
-  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { contourEdgeLens(m, out); golaSides(m, out); rearNotches(m, out); return; } // вырезы Gola и задних углов — и без схемы кромки
+  // доборные планки ЛДСП (kitchen.sideStrip): кромка по проекту Базиса — списком торцов планки (k25: только концы, k15/k18: по кругу)
+  for (const [i, pl] of (m.kitchen?.sideStrip?.planks ?? []).entries()) { const sp = out.find((p) => p.id === `side-strip:plank:${i}`); if (sp) setEdges(sp, pl.edges ?? [], pl.edgeT ?? m.edgeScheme?.t ?? 0); }
+  const fpS = out.find((p) => p.id === "side-strip:fp:facade");
+  if (fpS && m.edgeScheme?.t !== undefined) setEdges(fpS, edgeDirs(fpS), m.edgeScheme.t);
+  const t = m.edgeScheme?.t; if (!t || !m.kitchen) { contourEdgeLens(m, out); golaSides(m, out); rearNotches(m, out); return; } // кромка по контуру, вырезы Gola и задних углов — и без схемы кромки
   const wall = m.kitchen.role === "wall" || m.kitchen.role === "antresol";
   // торцы дна/крыши у боковин — по спискам проекта Базиса (edgeScheme.ends: k32 — по кругу, k31 m13 — только дно; бывший endsX —
   // parse-алиас в parseEdgeScheme), иначе правило kitchenEndsRule
@@ -797,6 +809,30 @@ export function kitchenErrors(m: Module): string[] {
 // screw:'euro-6x50' → confirmatName:'Евровинт 6х50'; edgeScheme.endsX → ends (parseEdgeScheme); kitchen.bazis → Module.bazis (parseModule).
 const num = (v: unknown) => Number(v);
 const fin = (v: unknown) => Number.isFinite(Number(v));
+
+/** Доборная планка сбоку (kitchen.sideStrip, F_FILLER_STRIP). Размеры — как в проекте Базиса: ext — на сколько модуль шире корпуса;
+ *  planks — планки ЛДСП 16 снаружи боковины (z — задняя пласть от задней кромки боковин, w — ширина наружу от боковины, y0/y1 — от
+ *  низа дна, edges — кромленые торцы по проекту, edgeT — её толщина); facade — планка в плоскости фасадов (w, inset — от наружного края
+ *  модуля, t — толщина, air — зазор от лица корпуса, ldsp — из ЛДСП корпуса, иначе фасадный материал); conf — конфирматы из боковины
+ *  в торец передней планки, y от её низа. Без conf — планки без крепежа, как в Базисе (k25). */
+export type KitchenSideStrip = {
+  side: "left" | "right"; ext: number;
+  planks: { z: number; w: number; y0: number; y1: number; edges?: string[]; edgeT?: number }[];
+  facade?: { w: number; inset: number; y0: number; y1: number; t: number; air: number; ldsp?: true };
+  conf?: number[];
+  /** глубина D5 под конфирмат в торце планки по проекту, если не как у корпуса (k28 m18: 42 при 35) */
+  confDepth?: number;
+};
+function parseSideStrip(x: unknown): { sideStrip?: KitchenSideStrip } {
+  const s = x as Partial<KitchenSideStrip> | undefined;
+  if (!s || (s.side !== "left" && s.side !== "right") || !fin(s.ext) || !Array.isArray(s.planks)) return {};
+  const planks = s.planks.filter((p) => p && fin(p.z) && fin(p.w) && fin(p.y0) && fin(p.y1)).map((p) => ({ z: num(p.z), w: num(p.w), y0: num(p.y0), y1: num(p.y1),
+    ...(Array.isArray(p.edges) ? { edges: p.edges.map(String) } : {}), ...(fin(p.edgeT) ? { edgeT: num(p.edgeT) } : {}) }));
+  const f = s.facade;
+  const facade = f && fin(f.w) && fin(f.inset) && fin(f.y0) && fin(f.y1) && fin(f.t) ? { w: num(f.w), inset: num(f.inset), y0: num(f.y0), y1: num(f.y1), t: num(f.t), air: fin(f.air) ? num(f.air) : 0, ...(f.ldsp ? { ldsp: true as const } : {}) } : undefined;
+  const conf = Array.isArray(s.conf) ? s.conf.map(Number).filter(Number.isFinite) : [];
+  return { sideStrip: { side: s.side, ext: num(s.ext), planks, ...(facade ? { facade } : {}), ...(conf.length ? { conf } : {}), ...(fin(s.confDepth) ? { confDepth: num(s.confDepth) } : {}) } };
+}
 const v3 = (a: unknown[]) => a.slice(0, 3).map(Number) as [number, number, number];
 const v4 = (a: unknown[]) => a.slice(0, 4).map(Number) as [number, number, number, number];
 const MESH = /^[0-9a-f]{12}$/;
@@ -839,7 +875,8 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
     ...(k.plateHoles === false ? { plateHoles: false } : {}),
-    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}) } } : {}) } } : {}),
+    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}) } } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
+    ...parseSideStrip(k.sideStrip),
     ...(k.faceTop !== undefined ? { faceTop: num(k.faceTop) } : {}),
     ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
     ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),

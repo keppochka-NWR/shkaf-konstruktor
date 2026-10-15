@@ -64,7 +64,9 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
       // царга со своей глубиной по проекту (rails[].confDepth, k31 m16: 35 при 42 у корпуса) — главнее глубины модуля
       const rd = m.kitchen && p.id.startsWith("fast:rail:") ? railsOf(m).find((q) => q.place === p.id.split(":")[2])?.confDepth : undefined;
-      const d5 = p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : rd ?? m.kitchen?.drill?.confirmat ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
+      // конфирмат в торец доборной планки (kitchen.sideStrip.confDepth, k28 m18: 42 при 35 у корпуса) — своя глубина по проекту
+      const sd = p.id.startsWith("fast:side-strip:") ? m.kitchen?.sideStrip?.confDepth : undefined;
+      const d5 = p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : sd ?? rd ?? m.kitchen?.drill?.confirmat ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
       // стяжка с соседним корпусом (kitchen.outConf): D5 — в соседа; у Базиса оно записано на наружной грани своей боковины навстречу
       if (p.id.startsWith("fast:out:")) push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], [-a[0], -a[1], -a[2]], 5, d5);
       else push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, d5);

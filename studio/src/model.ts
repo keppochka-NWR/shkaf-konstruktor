@@ -575,7 +575,7 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
 }
 /** Кромка фасадов у фальша угловой мойки Базиса (kitchen.faceFiller): x = фальш + планка + зазор faceGap от края модуля.
  *  Одно место для размаха фасадов (facadeSpan) и точки «Петля под фальшпанель» (hardwareParts). */
-export function faceFillerEdge(m:Module):number|undefined{const ff=m.kitchen?.faceFiller;if(!ff)return undefined;const w=ff.width+(ff.strip??0)+fe(m);return ff.side==='left'?w:m.width-w;}
+export function faceFillerEdge(m:Module):number|undefined{const ff=m.kitchen?.faceFiller;if(!ff)return undefined;const w=(ff.inset??0)+ff.width+(ff.strip??0)+fe(m);return ff.side==='left'?w:m.width-w;}
 export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
 /** Верхний предел «Паз от задней кромки»: шкафы — 30 мм, кухня из Базиса — до depth−32 (k20 m05: 119). Одна точка для validate и поля KitchenPanel (A5). */
 export const grooveInsetMax=(m:Pick<Module,'kitchen'|'depth'>)=>m.kitchen?m.depth-32:30;
@@ -1302,7 +1302,13 @@ export function parts(m: Module): Part[] {
   // угловая мойка Базиса (kitchen.faceFiller): фальш ЛДСП корпуса у края модуля в плоскости фасадов — от низа дна до верха корпуса,
   // рядом планка из фасадного материала по высоте фасадов (k25 m02: 273 + 59, k01 m03: 500 без планки)
   const ffl=m.kitchen?.faceFiller;
-  if(ffl){
+  if(ffl&&ffl.facadeMat){
+    // плоская фальшпанель углового стыка из фасадного материала (навесные/антресоли, k06 m11, k22 m08): по высоте ряда дверей,
+    // в плоскости фасадов, от края модуля через inset; дверь у фальша — через faceGap (faceFillerEdge)
+    const ft=m.facadeT??t,y0=facadeBottom(m),y1=facadeTop(m),L=ffl.side==='left',ins=ffl.inset??0,x=L?ins+ffl.width/2:m.width-ins-ffl.width/2;
+    add('face-filler:fp:facade','Фальшпанель из фасада',[ffl.width,y1-y0,ft],[x,(y0+y1)/2,d+ft/2+(m.faceAir??2)],y1-y0,ffl.width,ft,'body');
+    out.at(-1)!.decor=m.facadeDecor;
+  } else if(ffl){
     const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,L=ffl.side==='left';
     add('face-filler:panel:facade','Фальшпанель мойки',[ffl.width,m.height-yb,t],[L?ffl.width/2:m.width-ffl.width/2,(yb+m.height)/2,d+t/2],m.height-yb,ffl.width,t,'body');
     if(ffl.strip){
@@ -1317,6 +1323,27 @@ export function parts(m: Module): Part[] {
       for(const [k,y] of (ffl.conf.side??[]).entries())confirmat(`fast:face-filler:side:${k}`,[sx,yb+y,zf],'-z');
     }
   }
+  // доборная планка кухни Базиса (kitchen.sideStrip, F_FILLER_STRIP): планки ЛДСП снаружи боковины от её наружной пласти наружу,
+  // в плоскостях, параллельных фасадам (z от задней кромки боковин), перед ними планка из фасадного материала (или ЛДСП: k32 m11)
+  // в плоскости фасадов; высоты — от низа дна. Конфирматы из боковины в торец передней планки — только если они есть в проекте (conf).
+  const ss=m.kitchen?.sideStrip;
+  if(ss){
+    const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,L=ss.side==='left',ox=L?-ss.ext:m.width+ss.ext;
+    for(const [i,pl] of ss.planks.entries()){
+      const x=L?-pl.w/2:m.width+pl.w/2,h=pl.y1-pl.y0;
+      add(`side-strip:plank:${i}`,'Планка доборная ЛДСП',[pl.w,h,t],[x,yb+(pl.y0+pl.y1)/2,pl.z+t/2],h,pl.w,t,'body');
+    }
+    const f=ss.facade;
+    if(f){
+      const ft=f.t,h=f.y1-f.y0,x=L?ox+f.inset+f.w/2:ox-f.inset-f.w/2;
+      add(f.ldsp?'side-strip:fp:facade':'side-strip:facade',f.ldsp?'Планка доборная ЛДСП в плоскости фасадов':'Планка доборная из фасада',[f.w,h,ft],[x,yb+(f.y0+f.y1)/2,d+f.air+ft/2],h,f.w,ft,'body');
+      if(!f.ldsp)out.at(-1)!.decor=m.facadeDecor;
+    }
+    if(ss.conf&&ss.planks.length&&fastenersMode(m.kitchen)===true){
+      const pl=ss.planks[0],zc=pl.z+t/2;
+      for(const [k,y] of ss.conf.entries())confirmat(`fast:side-strip:${k}`,[L?t:m.width-t,yb+pl.y0+y,zc],L?'-x':'+x');
+    }
+  }
   hardwareParts(m,out);
   kitchenExtraParts(m,out);
   kitchenDrawerParts(m,out,fe(m),m.facadeT??RULES.panel,m.faceAir??2);
@@ -1326,7 +1353,7 @@ export function parts(m: Module): Part[] {
   (m.grooves??[]).forEach((g,i)=>{const hostPart=out.find(p=>p.id===g.host);if(!hostPart)return;const b=grooveBox(hostPart,g);if(!b)return;const [x0,y0,z0,x1,y1,z1]=b,size:[number,number,number]=[x1-x0,y1-y0,z1-z0],dims=[...size].sort((a,b)=>b-a);
     out.push({id:`groove:${i}`,name:g.name,size,position:[(x0+x1)/2,(y0+y1)/2,(z0+z1)/2],length:dims[0],width:dims[1],thickness:dims[2],role:'light',material:'metal',decor:'',grain:'length',grainAxis:0,edge:[0,0,0,0],external:true,look:{color:0x2a2c2e,metalness:0.2,roughness:0.8}});});
   // Фасады из фасадного материала (МДФ, плёнка, эмаль) — сторонний участок: не в раскрой ЛДСП, без кромки.
-  if(m.facadeMaterial==='external')for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.id!=='face-filler:panel:facade'){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
+  if(m.facadeMaterial==='external')for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.id!=='face-filler:panel:facade'&&p.id!=='side-strip:fp:facade'){const fk=m.facadeEdge??0;p.external=true;p.edge=[fk,fk,fk,fk];if(!p.name.includes('фасадный материал'))p.name+=' · фасадный материал';}
   // Фасады «Вернисаж» (МДФ с фрезеровкой) — сторонний участок: не в раскрой ЛДСП, без кромки цеха; 3D и цена — по фрезеровке и прайсу.
   if(m.vernissage)for(const p of out)if((p.role==='door'||p.id.endsWith(':facade'))&&p.material==='board'&&!p.id.startsWith('face-filler')&&!p.taper&&!p.look&&!p.model){p.external=true;p.vernissage=true;p.edge=[0,0,0,0];if(!p.name.includes('Вернисаж'))p.name+=` · Вернисаж №${m.vernissage.milling}`;}
   // Выбор кромки (решение Макса 06.10.2026): видимые торцы корпуса и фасады — 2 мм по умолчанию, можно 1 или 0,8; скрытые 0,4 не меняются.

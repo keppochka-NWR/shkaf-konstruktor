@@ -64,6 +64,10 @@
 - `src/kitchenProject.ts` — ряды кухни, `rowResize.ts` — изменение ширины ряда.
 - `scripts/kitchen/*` — распознаватели эталонов и сверки: `batch.ts` (пакеты base-doors, wall, base-drawers, base-sink, antresol, tall),
   `whole.ts` (целая кухня), `bazis-only.ts` (ничего сверх Базиса), `audit-additions.ts` (строки сверх Базиса), `compare.ts`.
+  Распознаватели по узлам: `recognize-base.ts` (нижние: без петель/опор/крепежа, кромка, зазоры), `recognize-sink.ts` (фальш угловой
+  мойки `faceFiller`, с 15.10 и фальш из фасада по высоте ряда дверей у навесных/антресолей — `faceFiller.facadeMat`),
+  `recognize-fillers.ts` (доборная планка сбоку `kitchen.sideStrip`: планки ЛДСП снаружи боковины + планка из фасада, корпус студии —
+  между боковинами, модуль в ряду шире на `ext` через `sideExtension`), `recognize-drawers.ts`, `recognize-tall.ts`, `recognize-wallrail.ts`.
 
 Эталоны (`Кухни/corpus`, `public/local-projects`) и имена клиентских папок в git не хранятся; в коде, тестах и отчётах —
 только номера проектов (k25, wardrobe-012). Проверка — `py -I scripts/privacy-scan.py`.

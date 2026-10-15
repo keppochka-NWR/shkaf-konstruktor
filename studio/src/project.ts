@@ -28,7 +28,7 @@ export function localToRoom(a:PlacedModule,u:number,v:number){return transform(a
 export function roomToLocal(a:PlacedModule,x:number,z:number){const p=inverseTransform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,x,z);return p;}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
-export function sideExtension(m:Module,side:'left'|'right'){if(m.sidePanels?.[side])return RULES.panel;if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
+export function sideExtension(m:Module,side:'left'|'right'){if(m.kitchen?.sideStrip?.side===side)return m.kitchen.sideStrip.ext;/* доборная планка кухни Базиса (kitchen.sideStrip) */if(m.sidePanels?.[side])return RULES.panel;if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
 export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
  const c=a.module.corner;
  if(c){const w=a.module.width,d=c.sideDepth,rear=a.module.backType==='none'?0:3,front=a.module.doors?26:0;return [[-rear,-rear],[w,-rear],[w,d+front],[d+front,w],[-rear,w]].map(([u,v])=>localToRoom(a,u,v));}
