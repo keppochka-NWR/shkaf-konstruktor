@@ -34,3 +34,23 @@ test('faceOver: поле читается, зеркало переносит с�
   const plain=parseModule(JSON.parse(JSON.stringify(base)));delete plain.kitchen!.faceOver;
   assert.equal(Math.max(...parts(plain).filter(p=>p.role==='door').map(p=>p.position[0]+p.size[0]/2)),668.5);
 });
+
+// все срабатывания распознавателя по 34 эталонам: k19 m03 (12,5 при 670), k22 m04 (18 при 1200, фасад на корпусе) — свес;
+// k27 m17 «ПМ» (448 при 150) — дверь ПММ на тумбе, не свес: предел faceOverOk (меньше половины ширины корпуса) отсекает
+test('faceOver: распознаватель — k22 m04 свес 18, k27 m17 (дверь ПММ на тумбе 150) без свеса',{skip:!has('k22')||!has('k27')},()=>{
+  assert.deepEqual(moduleFromEtalon(load('k22','m04')).module.kitchen?.faceOver,{right:18});
+  assert.equal(moduleFromEtalon(load('k27','m17')).module.kitchen?.faceOver,undefined);
+});
+
+test('faceOver: validate — свес больше 0 и меньше половины ширины корпуса',{skip:!has('k19')},()=>{
+  const base=parseModule(JSON.parse(JSON.stringify(moduleFromEtalon(load('k19','m03')).module)));
+  const err=(fo:unknown)=>{const m=parseModule(JSON.parse(JSON.stringify(base)));m.kitchen!.faceOver=fo as never;return validate(m).filter(e=>/Свес фасада/.test(e)).length;};
+  assert.equal(err({right:12.5}),0);
+  assert.equal(err({left:334.9}),0);
+  assert.equal(err({right:335}),1,'половина ширины 670 — уже не свес');
+  assert.equal(err({right:448}),1);
+  assert.equal(err({right:-5}),1);
+  assert.equal(err({right:Number.NaN}),1);
+  const json=JSON.parse(JSON.stringify(base));json.kitchen.faceOver={right:448};
+  assert.throws(()=>parseModule(json),/Свес фасада/,'произвольный свес из файла проекта не принимается');
+});

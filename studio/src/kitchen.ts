@@ -991,6 +991,13 @@ export function worktopParts(m: Module): Part[] {
 }
 export function worktopLabel(w: WorktopSpec) { return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень" }[w.material]; }
 
+/** F_WIDE_FACADE: свес фасада за боковину (kitchen.faceOver) — фасад на корпусе, свес меньше половины ширины корпуса. По 34 эталонам
+ *  свес за боковину: k19 m03 — 12,5 при 670, k22 m04 — 18 при 1200 (фасады на корпусе); k27 m17 «ПМ» — 448 при 150: дверь ПММ на тумбе,
+ *  фасад почти весь вне корпуса — другая конструкция, не свес. Один предел для распознавателя (fromEtalon) и validate. */
+export function faceOverOk(over: number, width: number): boolean {
+  return Number.isFinite(over) && over > 0 && over < width / 2;
+}
+
 export function kitchenErrors(m: Module): string[] {
   const e: string[] = [...allegroErrors(m),...ovenErrors(m)];
   if (m.worktop) {
@@ -1016,6 +1023,8 @@ export function kitchenErrors(m: Module): string[] {
     const rc = k.raise?.conf, ok = (a: number[] | undefined, lo: number) => !a || a.every((v) => Number.isFinite(v) && v >= lo);
     if (rc && !(ok(rc.side, 10) && ok(rc.top?.xs, 20) && ok(rc.top?.xr, 20))) e.push("Крепёж панели под дном: высоты от низа панели и отступы от её концов — от 10 и 20 мм.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
+    // F_WIDE_FACADE: свес фасада за боковину — меньше половины ширины корпуса (тот же предел, что у распознавателя faceOverOk)
+    if (k.faceOver && [k.faceOver.left, k.faceOver.right].some((v) => v !== undefined && !faceOverOk(v, m.width))) e.push("Свес фасада за боковину: больше 0 и меньше половины ширины корпуса.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m), ...backBoardErrors(m), ...sideRecessErrors(m));
     // пакет 3: эксцентрики стяжки на ребре в боковины (rails[].eccY) — бочонок Ø15 целиком в высоте стяжки (8 мм от её кромок)
     if (k.lowFrontConf && (!k.lowFront || k.lowFrontConf.side.some((v) => !Number.isFinite(v) || v < 8 || v > m.height / 2) || k.lowFrontConf.top.some((v) => !Number.isFinite(v) || v < 20 || v > m.width / 2 - 8))) e.push("Крепёж щита под дном: только у щита, от 8 мм до его кромок.");

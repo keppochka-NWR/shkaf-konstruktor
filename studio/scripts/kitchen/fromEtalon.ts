@@ -5,7 +5,7 @@ import { initialModule, section, parts, scaleHingeY, doorRowCount, facadeBottom,
 import { partAxes, edgeByDir } from "../../src/edges";
 import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
-import { jointPointsRule, fastenersMode, kitchenEndsRule, nearRight, sideDists, type KitchenRole } from "../../src/kitchen";
+import { jointPointsRule, fastenersMode, kitchenEndsRule, nearRight, sideDists, faceOverOk, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railEccY, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
@@ -392,10 +392,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const sides = P.filter(({ p, b }) => p.axis === "x" && board(p.kind) && b.y1 - b.y0 > 200).sort((a, c) => a.b.x0 - c.b.x0);
   const left = sides[0], right = sides[sides.length - 1];
   if (!left || left === right) throw Error("нет двух боковин");
-  // фасад шире корпуса (F_WIDE_FACADE): габарит Базиса справа за наружной пластью правой боковины — только фасады (k19 m03/m04:
-  // свес 12,5). Корпус — по боковинам, свес — kitchen.faceOver.right; прочее (фальш пенала шире корпуса k21 m04, k29 m01,
-  // дверь ПММ на тумбе 150 k27 m17) — другие конструкции, сюда не попадают (там за боковиной не фасад двери или левый край ≠ 0)
-  const overR = !ss && left.b.x0 <= 0.5 && ref.size[0] - right.b.x1 > 0.5 && ref.panels.filter((p) => p.box[3] > right.b.x1 + 0.5).every((p) => p.axis === "z" && /^Дверь/.test(p.name)) ? r1(ref.size[0] - right.b.x1) : 0;
+  // фасад шире корпуса (F_WIDE_FACADE): габарит Базиса справа за наружной пластью правой боковины — только двери. По 34 эталонам
+  // срабатывает на k19 m03 (свес 12,5, PASS) и k22 m04 (угловая мойка, свес 18 — фасад на корпусе, модуль сырой по другой причине).
+  // Дверь ПММ на тумбе 150 (k27 m17, «свес» 448) — фасад почти весь вне корпуса, не свес: отсекает предел faceOverOk (меньше
+  // половины ширины корпуса, он же в validate). Фальш пенала шире корпуса (k21 m04, k29 m01) — за боковиной не дверь, сюда не попадает
+  const overR0 = !ss && left.b.x0 <= 0.5 && ref.size[0] - right.b.x1 > 0.5 && ref.panels.filter((p) => p.box[3] > right.b.x1 + 0.5).every((p) => p.axis === "z" && /^Дверь/.test(p.name)) ? r1(ref.size[0] - right.b.x1) : 0;
+  const overR = overR0 && faceOverOk(overR0, right.b.x1 - left.b.x0) ? overR0 : 0;
   const W = ss ? r1(right.b.x1 - left.b.x0) : overR ? r1(right.b.x1 - left.b.x0) : ref.size[0];
   if (ss || overR) ref.size = [W, ref.size[1], ref.size[2]]; // ширина корпуса для правил, читающих ref.size (опоры, эксцентрики)
   const t = left.b.x1 - left.b.x0;
