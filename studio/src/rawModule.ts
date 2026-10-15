@@ -311,6 +311,24 @@ export function rawParts(m: Module): Part[] {
       else if ((p.plane === "xy" && thin === 2) || (p.plane === "yz" && thin === 0)) q.faceContour = rel;
     }
   });
+  // Сторона петель фасада «как есть» — по петлям Базиса у его кромок: каждая петля голосует за ближайшую кромку фасада.
+  // Без этого сцена открывала вбок фасад на петлях сверху (навесной откидной: 42 фасада в 34 кухнях). Петли не нашлись (повёрнутый фасад
+  // угловых модулей, дверь холодильника) — стороны нет, сцена открывает как раньше.
+  const rawHinges = r.hardware.filter((h) => h.category === "петля");
+  r.panels.forEach((p, i) => {
+    if (!p.facade) return;
+    const [x0, y0, z0, x1, y1, z1] = p.box, zc = (z0 + z1) / 2, votes = { left: 0, right: 0, top: 0, bottom: 0 };
+    for (const h of rawHinges) {
+      const [x, y, z] = h.pos;
+      if (x < x0 - 30 || x > x1 + 30 || y < y0 - 30 || y > y1 + 30 || Math.abs(z - zc) > 100) continue;
+      const d = { left: x - x0, right: x1 - x, top: y1 - y, bottom: y - y0 };
+      const side = (Object.keys(d) as (keyof typeof d)[]).reduce((a, b) => (d[b] < d[a] ? b : a));
+      votes[side]++;
+    }
+    const best = (Object.keys(votes) as (keyof typeof votes)[]).reduce((a, b) => (votes[b] > votes[a] ? b : a));
+    const q = out.find((o) => o.id === `raw:p${i}`);
+    if (q && votes[best] > 0) q.hinge = best;
+  });
   r.hardware.forEach((h0, i) => {
     const mesh = h0.mesh ?? RAW_FALLBACK_MESH[h0.category];
     if (!mesh) return;
