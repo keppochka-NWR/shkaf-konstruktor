@@ -3,6 +3,7 @@ import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawS
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
 import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { facadeSideToFloor, droppedSide, finishFacadeSides } from './kitchenFacadeSides';
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
 import { kitchenDividerZ } from "./kitchenDivider";
@@ -375,6 +376,7 @@ export type GolaCut = { top0: number; top1: number; depth: number; r: number; /*
   /** Средний вырез: верхний угол без скругления (k10, k15, k17, k30 — в нём стяжка соседних модулей «5»), скруглён только нижний. */ sharpTop?: boolean;
   /** Вырез только в этой боковине (k30 m12: средний — только в правой; k30 m14: в правой вырезов нет). Без поля — в обеих. */ side?: 'left' | 'right' };
 export type Part = {
+  facadeSide?: boolean;
   /** Вырезы Gola в боковине (координаты детали: от её верха вниз по Y, глубина — от переднего торца +Z); раскрой — по габариту. */
   golaCuts?: GolaCut[];
   /** Вырез в заднем верхнем углу боковины (кухни Базиса k32): height — от верха по Y, depth — от задней грани по Z; раскрой — по габариту. */
@@ -718,10 +720,10 @@ export function parts(m: Module): Part[] {
   const under = !!m.bottomUnder && hasBottom(m), sideY0 = under ? bottom + t : floorY;
   // кухня Базиса: одна боковина опущена (до низа дна или до пола), дно — под другой (kitchen.sideDown)
   const sd = under && m.kitchen?.sideDown ? m.kitchen.sideDown : undefined;
-  const yL = sd?.side === "left" ? sd.y0 : sideY0, yR = sd?.side === "right" ? sd.y0 : sideY0;
+  const yL = facadeSideToFloor(m,"left") ? 0 : sd?.side === "left" ? sd.y0 : sideY0, yR = facadeSideToFloor(m,"right") ? 0 : sd?.side === "right" ? sd.y0 : sideY0;
   add("left", "Боковина левая", [t, lT - yL, dL], [t / 2, (lT + yL) / 2, dL / 2], lT - yL, dL, t);
   add("right", "Боковина правая", [t, rT - yR, dR], [m.width - t / 2, (rT + yR) / 2, dR / 2], rT - yR, dR, t);
-  const bx0 = sd?.side === "left" ? t : 0, bx1 = sd?.side === "right" ? m.width - t : m.width;
+  const bx0 = droppedSide(m,"left") ? t : 0, bx1 = droppedSide(m,"right") ? m.width - t : m.width;
   // кухня Базиса: дно может быть короче спереди (ниша под подсветку) и сзади (навесной под вытяжку: дно перед ХДФ, k08 m10)
   const bb = m.kitchen?.bottomBack ?? 0, bd = d - (m.kitchen?.bottomFront ?? 0) - bb;
   if (under) add("bottom", sd ? `Дно · под ${sd.side === "left" ? "правой" : "левой"} боковиной` : "Дно · под боковинами", [bx1 - bx0, t, bd], [(bx0 + bx1) / 2, bottom + t / 2, bb + bd / 2], bx1 - bx0, bd, t);
@@ -1181,9 +1183,9 @@ export function parts(m: Module): Part[] {
     if (hp.id === "bottom" && m.bottomUnder) {
       // Дно под боковинами (кухни Базиса): конфирмат снизу через дно в торец боковины — головка на нижней пласти дна.
       const yb = hp.position[1] - t / 2;
-      const sdn = m.kitchen?.sideDown, ue = m.kitchen?.underEcc;
+      const ue = m.kitchen?.underEcc;
       for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) {
-        if (sdn?.side === side) continue; // опущенная боковина — стык ниже (n3-base)
+        if (droppedSide(m,side)) continue; // опущенная боковина — стык ниже (n3-base)
         if (m.kitchen?.jointNone?.includes(`${hp.id}:${side}`)) continue; // стык без крепежа в проекте Базиса
         // боковина стоит на дне на эксцентрике с наружной пласти (kitchen.underEcc, n3-antresol); с внутренней — ниже, правило n3-base
         if (ue && m.jointFastening?.[`${hp.id}:${side}`] === "eccentric") {
@@ -1226,12 +1228,12 @@ export function parts(m: Module): Part[] {
         }
       }
       // опущенная боковина (kitchen.sideDown): дно примыкает к ней торцом — стык как у дна между боковинами (конфирмат или эксцентрик)
-      if (!sdn) continue;
+      if (!droppedSide(m,"left") && !droppedSide(m,"right")) continue;
     }
-    const downSide = hp.id === "bottom" && m.bottomUnder ? m.kitchen?.sideDown?.side : undefined;
+    const bottomUnderSides = hp.id === "bottom" && m.bottomUnder;
     const x0 = hp.position[0] - hp.size[0] / 2, x1 = hp.position[0] + hp.size[0] / 2; // грани горизонтали у боковин/перегородок
     for (const [side, edgeX, dir] of [["left", x0, 1], ["right", x1, -1]] as const) {
-      if (downSide && side !== downSide) continue;
+      if (bottomUnderSides && !droppedSide(m,side)) continue;
       // кухня Базиса: жёсткая полка без своего крепежа в jointFastening — на рафиксах по сетке Базиса (kitchenRafix.ts)
       // крыша на рафиксах (kitchen.rafix.top, k20 m09) — тоже по сетке Базиса (n4-tall)
       const rg = m.kitchen && !m.jointFastening?.[`${hp.id}:${side}`] ? (fixedIds.has(hp.id) ? rafixGrid(m, hp.sectionId === m.sections[0].id ? Number(hp.id.split(":shelf:")[1]) : -1) : hp.id === "top" ? m.kitchen.rafix?.top : undefined) : undefined; // своя сетка (per) — только у полок секции 1
@@ -1444,6 +1446,7 @@ export function parts(m: Module): Part[] {
     if(bk&&sh&&m.sections[0].fixed?.includes(m.kitchen.backFromShelf)){const y0=sh.position[1]-sh.size[1]/2+(m.grooveClear??0),y1=bk.position[1]+bk.size[1]/2;
       if(y1-y0>=50){bk.size=[bk.size[0],y1-y0,bk.size[2]];bk.position=[bk.position[0],(y0+y1)/2,bk.position[2]];bk.length=y1-y0;}}}
   for(const id of m.kitchen?.dupParts??[]){const p=out.find(q=>q.id===id);if(p&&!out.some(q=>q.id===id+':dup'))out.push({...p,id:id+':dup',position:[...p.position] as Part['position']});}
+  finishFacadeSides(m, out);
   applyAllegroParts(m, out);
   return out;
 }

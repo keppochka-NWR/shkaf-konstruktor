@@ -185,6 +185,13 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
       {(role === "base" || role === "tall") && <Check label="Опоры под корпусом" checked={!!m.feet && !k.noLegs} change={v => modify(n => { if (v) { n.feet = { height: 100 }; delete n.kitchen!.noLegs; } else { delete n.feet; n.plinthHeight = 0; n.kitchen!.noLegs = true; n.kitchen!.plinth = { height: n.kitchen!.plinth?.height ?? 95, ...n.kitchen!.plinth, off: true }; } })} />}
+      <fieldset className="kitchen-rails"><legend>Боковины из фасадного материала</legend>
+        {(['left','right'] as const).map(side=><Check key={side} label={side==='left'?'Левая боковина — материал фасадов':'Правая боковина — материал фасадов'} checked={!!k.facadeSides?.[side]} change={v=>setK({facadeSides:{...k.facadeSides,[side]:v}})}/>)}
+        {(k.facadeSides?.left||k.facadeSides?.right)&&<>
+          {!hanging&&<Check label="Фасадные боковины до пола" checked={k.facadeSides.toFloor!==false} change={v=>setK({facadeSides:{...k.facadeSides,toFloor:v}})}/>}
+          <p className="field-note">Замена стойки, без накладки. Плитный материал 16 мм, декор и кромка как у фасадов. У стойки до пола фронтальный цоколь заканчивается на внутренней грани; боковой цоколь не нужен. МДФ другой толщины и рамочные фасады пока не поддержаны.</p>
+        </>}
+      </fieldset>
       <Check label="Дно корпуса" checked={m.bottomType !== "none"} change={v => modify(n => { if (v) delete n.bottomType; else n.bottomType = "none"; })} />
       <Check label="Дно под боковинами (боковины стоят на дне)" checked={!!m.bottomUnder} change={(v) => modify((n) => { if (v) n.bottomUnder = true; else delete n.bottomUnder; })} />
       <Check label={role === "base" ? "Крыша (у нижних обычно нет — царги под столешницу)" : "Крыша"} checked={m.topType !== "none"} change={(v) => modify((n) => { if (v) delete n.topType; else n.topType = "none"; })} />

@@ -360,7 +360,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const v=a.module.vernissage,pr=vernissageFacadePrice(v,d.size[0],d.size[1]);
         add(`vernissage:${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,`Фасады МДФ ${vernissageLabel(v)} — сторонний участок, без раскроя ЛДСП`,Math.round(pr.billArea*1e4)/1e4,'м²',pr.perM2,
           `Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`);}
-      else if((d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.size[0]*d.size[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
+      else if((d.facadeSide||d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.length*d.width/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       // кухня из Базиса без петель (kitchen.hinges:false, n3-base) или фасад без петель (фасад холодильника на двери техники,
       // sections.hingeless, n3-tall) — петель и толкателя в смете нет, как в Базисе
       if(d.role==='door'&&d.id!=='slope-filler'&&a.module.kitchen?.hinges!==false&&!d.hingeless){
