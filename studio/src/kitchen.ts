@@ -26,6 +26,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Корпус приподнят без опор, и в модуле Базиса под дном есть фронтальная панель ЛДСП (цоколь/планка под другим именем) —
    *  студия ставит «Цоколь» по высоте подъёма. Без флага у кухни такого цоколя нет (у навесного фасад свисает ниже дна). */
   lowFront?: boolean;
+  /** Пакет 3: крепёж щита под дном по проекту Базиса (k14 m03) — конфирматы через боковины в торцы щита (side: мм от низа щита) и через
+   *  дно в его верхний торец (top: мм от концов щита, парой). Нет — щит без крепежа, как раньше. */
+  lowFrontConf?: { side: number[]; top: number[] };
   /** Низ навесного без опор (Базис): дно поднято на plinthHeight, стандартного цоколя нет. front — фронтальная панель ЛДСП под дном
    *  (в Базисе «Фронтальная», «ФП» — закрывает низ, как цоколь) с утопанием от лица боковин; без front панели нет.
    *  doorsToFloor — фасады опущены до низа модуля (корпус поднят, фасад закрывает подсветку: k23, k28, k30). */
@@ -1011,6 +1014,7 @@ export function kitchenErrors(m: Module): string[] {
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m), ...backBoardErrors(m), ...sideRecessErrors(m), ...kitchenDividerErrors(m));
     // пакет 3: эксцентрики стяжки на ребре в боковины (rails[].eccY) — бочонок Ø15 целиком в высоте стяжки (8 мм от её кромок)
+    if (k.lowFrontConf && (!k.lowFront || k.lowFrontConf.side.some((v) => !Number.isFinite(v) || v < 8 || v > m.height / 2) || k.lowFrontConf.top.some((v) => !Number.isFinite(v) || v < 20 || v > m.width / 2 - 8))) e.push("Крепёж щита под дном: только у щита, от 8 мм до его кромок.");
     if ((k.pinRows ?? []).some((v) => !Number.isFinite(v) || Math.abs(v) < 32 || Math.abs(v) > 500)) e.push("Ряды полкодержателей: от 32 до 500 мм от полки.");
     if (Object.values(k.pinSide ?? {}).some((v) => !v || v.some((x) => !Number.isFinite(x) || x < 10) || v[0] + v[1] > m.depth - 30)) e.push("Полкодержатели стойки: от 10 мм до торцов полки.");
     if (Object.values(k.underEcc?.extra ?? {}).some((vs) => (vs ?? []).some((v) => !Number.isFinite(v) || v < 7.5 || v > m.depth - 7.5))) e.push("Эксцентрики дна у задней кромки: бочонок Ø15 в пределах глубины дна.");
@@ -1114,6 +1118,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
       return l.length || r.length ? { extra: { ...(l.length ? { left: l } : {}), ...(r.length ? { right: r } : {}) } } : {};
     })() } } : {}),
     ...(k.lowFront ? { lowFront: true } : {}),
+    ...(k.lowFrontConf && Array.isArray(k.lowFrontConf.side) && Array.isArray(k.lowFrontConf.top) ? { lowFrontConf: { side: k.lowFrontConf.side.filter(fin).map(num), top: k.lowFrontConf.top.filter(fin).map(num) } } : {}),
     ...(k.hinges === false ? { hinges: false } : {}),
     ...(k.noLegs ? { noLegs: true } : {}),
     ...(k.railUnder && typeof k.railUnder === "object" ? { railUnder: Object.fromEntries(Object.entries(k.railUnder).filter(([, v]) => v && Array.isArray(v.ecc) && Array.isArray(v.dowel)).map(([key, v]) => [key, { ecc: v.ecc.map(Number), dowel: v.dowel.map(Number), ...(Array.isArray(v.eccR) && v.eccR.length ? { eccR: v.eccR.map(Number) } : {}), ...(Array.isArray(v.dowelR) && v.dowelR.length ? { dowelR: v.dowelR.map(Number) } : {}), face: v.face === "back" ? ("back" as const) : ("front" as const) }])) } : {}),

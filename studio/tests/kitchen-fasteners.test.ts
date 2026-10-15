@@ -9,7 +9,7 @@ import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compar
 import {moduleFromEtalon,underEccFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {railEccY} from '../scripts/kitchen/recognize-common';
 import {pinSides,pinRowsOf} from '../scripts/kitchen/recognize-base';
-import {wallJointZ} from '../scripts/kitchen/wallJoints';
+import {wallJointZ,lowFrontConf} from '../scripts/kitchen/wallJoints';
 
 // Пакет 3 (крепёж по Базису): стяжка на ребре на эксцентриках в боковины — rails[].eccY. Эталоны лежат вне репозитория — без них тесты по ним пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -269,9 +269,55 @@ test('k26 m02: перфорация полкодержателей и крепё
   assert.equal(c.holes?.matched,c.holes?.ref);
 });
 
+// m_FAST: щит под дном навесного на конфирматах по проекту (kitchen.lowFrontConf, k14 m03: через боковины 71,5/199,5 от низа щита, через дно 60 от концов)
+// слияние пакетов 15.10: у k14 m03 тот же щит распознаётся и как панель под поднятым дном с raise.conf (короб вытяжки) — общий механизм
+// главнее, у k14 m03 lowFrontConf не пишется; поле lowFrontConf — для щита под дном без поднятого дна (raise.conf нет: k20 m10, k30 m09)
+// и не дублирует raise.conf
+test('lowFrontConf: конфирматы через боковины в торцы щита и через дно в его верхний торец, от низа и концов щита; без поля — без крепежа',{skip:!has('k14')},()=>{
+  const m0=moduleFromEtalon(load('k14','m03')).module;
+  const m=JSON.parse(JSON.stringify(m0));delete m.kitchen.raise.conf;m.kitchen.lowFrontConf={side:[71.5,199.5],top:[60]};
+  const at=(mm:typeof m)=>{const ps=parts(mm),pl=ps.find(p=>p.id==='plinth')!,f=ps.filter(p=>p.id.startsWith('fast:plinth:'));
+    return {n:f.length,side:f.filter(p=>p.id.startsWith('fast:plinth:left:')).map(p=>Math.round((p.model!.origin![1]-(pl.position[1]-pl.size[1]/2))*10)/10),
+      top:f.filter(p=>p.id.startsWith('fast:plinth:top:')).map(p=>Math.round(Math.min(p.model!.origin![0]-(pl.position[0]-pl.size[0]/2),pl.position[0]+pl.size[0]/2-p.model!.origin![0])*10)/10)};};
+  assert.deepEqual(at(m),{n:6,side:[71.5,199.5],top:[60,60]});
+  const w=JSON.parse(JSON.stringify(m));w.width+=100;
+  assert.deepEqual(at(parseModule(w)),{n:6,side:[71.5,199.5],top:[60,60]},'шире на 100 — те же отступы от концов щита');
+  assert.deepEqual(validate(parseModule(w)),[]);
+  const no=JSON.parse(JSON.stringify(m));delete no.kitchen.lowFrontConf;
+  assert.equal(at(parseModule(no)).n,0,'без поля — щит без крепежа, как раньше');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.lowFrontConf,{side:[71.5,199.5],top:[60]});
+  const bad=kitchenWall(initialModule(),600);bad.kitchen!.lowFrontConf={side:[71.5],top:[60]};
+  assert.ok(validate(bad).some(e=>/Крепёж щита под дном/.test(e)),'без щита — ошибка');
+  const both=JSON.parse(JSON.stringify(m0));both.kitchen.lowFrontConf={side:[71.5,199.5],top:[60]};
+  const conf=(mm:typeof m)=>parts(parseModule(mm)).filter(p=>/^fast:(plinth|raise-front):/.test(p.id)).map(p=>p.id.split(':')[1]);
+  assert.deepEqual([...new Set(conf(both))],['raise-front'],'при raise.conf щит крепится один раз — по raise.conf');
+  assert.equal(conf(both).length,6);
+});
+
+test('lowFrontConf (распознаватель): берём только конфирматы, одинаково слева и справа, через дно — парой; эксцентрики через дно — нет',()=>{
+  const B=(x0:number,y0:number,z0:number,x1:number,y1:number,z1:number)=>({x0,y0,z0,x1,y1,z1});
+  const panel=B(16,0,314,584,255,330),left=B(0,0,0,16,740,330),right=B(584,0,0,600,740,330),bottom=B(16,255,0,584,271,330);
+  const c=(x:number,y:number,cat='конфирмат')=>({name:cat,category:cat,pos:[x,y,322]});
+  const hw=[c(0,71.5),c(0,199.5),c(600,71.5),c(600,199.5),c(76,271),c(524,271)];
+  assert.deepEqual(lowFrontConf(hw as never,panel,left,right,bottom),{side:[71.5,199.5],top:[60]});
+  assert.equal(lowFrontConf([...hw.slice(0,4),c(60,255,'эксцентрик')] as never,panel,left,right,bottom),undefined);
+  assert.equal(lowFrontConf(hw.slice(0,3) as never,panel,left,right,bottom),undefined,'слева и справа по-разному');
+});
+
+// щит под дном без поднятого дна (raise.conf нет) — крепёж только lowFrontConf; удаление поля (9118ea2) снимало у k20 m10 4 конфирмата и 8 отверстий Базиса
+test('k20 m10: щит под дном без raise.conf — lowFrontConf из Базиса, 4 конфирмата щита, конфирматы 10 из 20 и отверстия 20 из 48 совпадают',{skip:!has('k20')},()=>{
+  const ref=load('k20','m10'),{module:m}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.raise?.conf,undefined);
+  assert.deepEqual(m.kitchen?.lowFrontConf,{side:[35],top:[305.5]});
+  assert.deepEqual(parts(m).filter(p=>p.id.startsWith('fast:plinth:')).map(p=>p.id),['fast:plinth:left:0','fast:plinth:right:0','fast:plinth:top:0:0','fast:plinth:top:0:1']);
+  const c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='конфирмат')!;
+  assert.deepEqual([row.ref,row.studio],[20,10]);
+  assert.deepEqual([c.holes?.ref,c.holes?.matched],[48,20]);
+});
+
 test('k14 m03: щит под дном на конфирматах по проекту — PASS',{skip:!has('k14')},()=>{
   const ref=load('k14','m03'),{module:m,unsupported}=moduleFromEtalon(ref);
-  assert.equal(parts(m).filter(p=>p.id.startsWith('fast:plinth:')).length,0,'щит крепится одним механизмом — raise.conf (lowFrontConf удалён в пакете 5)');
+  assert.equal(m.kitchen?.lowFrontConf,undefined,'тот же щит — raise.conf, второй набор не пишется');
   assert.deepEqual(m.kitchen?.raise?.conf,{side:[71.5,199.5],top:{kind:'conf',xs:[60],xr:[60]}});
   const err=validate(m),c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='конфирмат')!;
   assert.deepEqual([row.ref,row.studio,row.maxPosDelta],[16,16,0]);
