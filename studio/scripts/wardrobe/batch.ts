@@ -56,6 +56,17 @@ export function reasonKey(w: string): string {
   return w.replace(/[\d.]+/g, "#").replace(/:.*$/, "").slice(0, 40);
 }
 
+/** Свод причин FAIL: ключ → число модулей. Части (архетип part — короб ящика, фасад, полка отдельной сборкой Базиса) — не корпуса,
+ *  поэтому свод по корпусам считается без них (corpusOnly), а части — своим сводом. */
+export function reasonSummary(res: WardrobeVerdict[], corpusOnly: boolean | null): [string, number][] {
+  const sum = new Map<string, number>();
+  for (const v of res) {
+    if (v.pass || (corpusOnly === true && v.archetype === "part") || (corpusOnly === false && v.archetype !== "part")) continue;
+    for (const k of new Set(v.why.map(reasonKey))) sum.set(k, (sum.get(k) ?? 0) + 1);
+  }
+  return [...sum].sort((p, q) => q[1] - p[1] || (p[0] < q[0] ? -1 : 1));
+}
+
 export function runBatch(archs: Set<string> | null) {
   const out: WardrobeVerdict[] = [];
   for (const f of readdirSync(ETALON_W).filter((f) => /^w\d{3}\.json$/.test(f)).sort()) {
@@ -76,18 +87,19 @@ if (process.argv[1]?.replace(/\\/g, "/").endsWith("scripts/wardrobe/batch.ts")) 
     for (const k of new Set(v.why.map(reasonKey))) a.reasons.set(k, (a.reasons.get(k) ?? 0) + 1);
     byArch.set(v.archetype, a);
   }
-  const all = new Map<string, number>();
-  for (const v of res) if (!v.pass) for (const k of new Set(v.why.map(reasonKey))) all.set(k, (all.get(k) ?? 0) + 1);
+  const corp = reasonSummary(res, true), part = reasonSummary(res, false);
+  const nCorp = res.filter((v) => v.archetype !== "part").length;
   lines.push(`# Сверка шкафов: PASS ${res.filter((v) => v.pass).length} из ${res.length}, панели совпали у ${res.filter((v) => v.geom).length}, всё кроме кромки — у ${res.filter((v) => v.noEdge).length}`, "", "| архетип | модулей | PASS | панели совпали | всё кроме кромки | главные причины FAIL |", "|---|---|---|---|---|---|");
   for (const a of ARCHETYPES) {
     const x = byArch.get(a); if (!x) continue;
     lines.push(`| ${a} | ${x.n} | ${x.pass} | ${x.geom} | ${x.noEdge} | ${[...x.reasons].sort((p, q) => q[1] - p[1]).slice(0, 4).map(([k, n]) => `${k} ×${n}`).join("; ")} |`);
   }
-  lines.push("", "## Топ причин FAIL (модулей)", ...[...all].sort((p, q) => q[1] - p[1]).slice(0, 30).map(([k, n]) => `- ${n} × ${k}`));
+  lines.push("", `## Причины FAIL по корпусам (${nCorp} модулей, без part), все`, ...corp.map(([k, n]) => `- ${n} × ${k}`));
+  lines.push("", `## Причины FAIL по частям (part, ${res.length - nCorp} модулей), все`, ...part.map(([k, n]) => `- ${n} × ${k}`));
   lines.push("", "## Модули", "| файл | модуль | архетип | итог | причины |", "|---|---|---|---|---|",
     ...res.map((v) => `| ${v.file} | ${v.key} | ${v.archetype} | ${v.pass ? "PASS" : "FAIL"} | ${v.why.join("; ").replace(/\|/g, "/").slice(0, 300)} |`));
   if (outMd) writeFileSync(outMd, lines.join("\n") + "\n");
   if (outJson) writeFileSync(outJson, JSON.stringify(res.map((v) => ({ file: v.file, key: v.key, archetype: v.archetype, pass: v.pass, geom: v.geom, noEdge: !!v.noEdge })), null, 1));
   console.log(lines.slice(0, 16 + byArch.size).join("\n"));
-  console.log([...all].sort((p, q) => q[1] - p[1]).slice(0, 25).map(([k, n]) => `${n} × ${k}`).join("\n"));
+  console.log(`корпуса (${nCorp}):\n` + corp.slice(0, 25).map(([k, n]) => `${n} × ${k}`).join("\n"));
 }

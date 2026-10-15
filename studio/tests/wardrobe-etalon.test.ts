@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {parts,initialModule,section,validate,type Module,type Part} from '../src/model';
 import {compareModule} from '../scripts/kitchen/compare';
 import {wardrobeFromEtalon,type WRefModule,type WRefPanel} from '../scripts/wardrobe/fromEtalon';
-import {reasonKey,ETALON_W} from '../scripts/wardrobe/batch';
+import {reasonKey,reasonSummary,ETALON_W,type WardrobeVerdict} from '../scripts/wardrobe/batch';
 import {existsSync,readFileSync} from 'node:fs';
 
 // Шкафы, этап 1: распознаватель эталона шкафа Базиса (Кухни/etalon-w) → модуль шкафа студии. Правила шкафов студии не меняются —
@@ -51,6 +51,14 @@ test('свод причин: коды W_*, пределы и кромка сту
   assert.equal(reasonKey('конфирмат 8/12 Δ15'), 'H_конфирмат');
   assert.equal(reasonKey('нет 2: ldsp/16/z/корпус'), 'G_MISSING');
 });
+test('свод причин: корпуса отдельно от частей (part), редкие причины (H_прочее) не теряются', () => {
+  const v = (archetype: string, why: string[], pass = false): WardrobeVerdict => ({file: 'w000', key: 'm01', archetype, pass, geom: false, why});
+  const res = [v('swing', ['конфирмат 8/12 Δ15', 'прочее 1/0']), v('part', ['конфирмат 2/0', 'лишних 1: Бок']), v('part', ['W_PART: не корпус']), v('open', [], true)];
+  assert.deepEqual(reasonSummary(res, true), [['H_конфирмат', 1], ['H_прочее', 1]]);
+  assert.deepEqual(reasonSummary(res, false), [['G_EXTRA', 1], ['H_конфирмат', 1], ['W_PART', 1]]);
+  assert.deepEqual(reasonSummary(res, null)[0], ['H_конфирмат', 2]);
+});
+
 // Эталоны шкафов (Кухни/etalon-w, строит Кухни/scripts/etalon_wardrobe.py) — вне git; проверка полноты, если они есть на машине.
 const STATS = `${ETALON_W}/_stats.json`;
 test('эталон шкафов не теряет фурнитуру: все сверловки и профили corpus — в модулях или в row.hardware (сборки без панелей)', {skip: !existsSync(STATS)}, () => {
