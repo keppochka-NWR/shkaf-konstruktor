@@ -81,7 +81,10 @@ export function place(ref: RefModule, m: Module): PlacedModule {
   // параметрический модуль с накладным ХДФ: у студии боковины с z = 0 (ХДФ на −3), у Базиса начало — по ХДФ: сдвиг на 3 вдоль оси модуля
   // боковины разной глубины (kitchen.sideRecess): ХДФ внутри габарита — за длинной боковиной, сдвига нет (k28 m16)
   const s = !m.raw && m.backType === "nailed" && !m.kitchen?.sideRecess ? 3 + (m.kitchen?.backAir ?? 0) : 0, a = ((yaw || 0) * Math.PI) / 180; // + зазор ХДФ от корпуса (kitchen.backAir)
-  const [ox, oy, oz] = [o0[0] + s * Math.sin(a), o0[1], o0[2] + s * Math.cos(a)];
+  // доборная планка слева (kitchen.sideStrip, пакет 2): начало модуля Базиса — по наружной планке, у студии x = 0 — левая боковина,
+  // планки на −ext: сдвиг на ext вдоль локальной x (Ry: x → (cos, −sin)); без него модуль стоял на ext в стороне (whole: k18 m01 −67, k25 m09 −44)
+  const ex = !m.raw && m.kitchen?.sideStrip?.side === "left" ? m.kitchen.sideStrip.ext : 0;
+  const [ox, oy, oz] = [o0[0] + s * Math.sin(a) + ex * Math.cos(a), o0[1], o0[2] + s * Math.cos(a) - ex * Math.sin(a)];
   const w = m.width, d = m.depth;
   const [x, z] = yaw === 90 ? [ox, oz - w] : yaw === 180 ? [ox - w, oz - d] : yaw === 270 ? [ox - d, oz] : [ox, oz];
   return { id: id(), x: r1(x), y: r1(oy), z: r1(z), rotation: (yaw || 0) as PlacedModule["rotation"], module: m };

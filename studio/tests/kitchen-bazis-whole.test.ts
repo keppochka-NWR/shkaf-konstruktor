@@ -9,7 +9,7 @@ import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {kitchenProject} from '../src/kitchenProject';
 import {bazisItems,bazisNames} from '../src/rawModule';
-import {buildKitchen,bazisDecor} from '../scripts/kitchen/buildKitchen';
+import {buildKitchen,bazisDecor,place} from '../scripts/kitchen/buildKitchen';
 
 const ET='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
 const has=(k:string)=>existsSync(`${ET}/${k}.json`);
@@ -116,6 +116,22 @@ test('B6: материалы — из Базиса: ЛДСП «Черный»/«
   assert.ok(d30.has('Альберо:16')&&d30.has('IDM ETERNO Libra:18'),[...d30].join(', '));
   assert.ok(!d30.has('Белый:18')&&!d30.has('Слэйт:18'),'МДФ не превращается в «Lamarty 18 мм · Белый/Слэйт»');
   assert.ok(estimate(k30).lines.some(l=>l.label==='Плита 18 мм · IDM ETERNO Libra'));
+});
+
+// Слияние пакетов 15.10 (whole.ts: 24 замечания на k18/k25 после импорта пакета 2): начало модуля Базиса с доборной планкой слева
+// (kitchen.sideStrip.side 'left') — по наружной планке, у студии x = 0 — левая боковина; place сдвигает на ext вдоль локальной x
+test('place: module with a left side strip starts at the Bazis origin plus ext along its local x (k18 m01, k25 m09)',async()=>{
+  const {kitchenWall}=await import('../src/kitchen');
+  const m=kitchenWall({...initialModule(),sections:[section()]},600);m.kitchen!.sideStrip={side:'left',ext:44,planks:[]};
+  const ref=(yaw:number)=>({world:{origin:[1000,0,2000],yaw}}) as never;
+  const at=(mm:Module,yaw:number)=>{const a=place(ref(yaw),mm);return [a.x,a.z];};
+  assert.deepEqual(at(m,0),[1044,2000]);
+  assert.deepEqual(at(m,270),[1000-m.depth,2044],'yaw 270: local x → world +z');
+  assert.deepEqual(at(m,90),[1000,2000-44-m.width],'yaw 90: local x → world −z');
+  const r=structuredClone(m);r.kitchen!.sideStrip!.side='right';
+  assert.deepEqual(at(r,0),[1000,2000],'planks on the right — origin unchanged');
+  if(has('k25')){const {interModule}=await import('../scripts/kitchen/interModule');
+    assert.ok(!JSON.stringify(interModule(kitchen('k25'))).includes('Планка доборная'),'k25 m09: strip planks do not enter the neighbour');}
 });
 
 // Пересечения разных модулей (whole.ts → interModule.ts): опора и клипса нижнего модуля разрешены только у цоколя «Ряда» — правилом
