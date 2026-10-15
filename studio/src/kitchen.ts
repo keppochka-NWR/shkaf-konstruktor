@@ -215,7 +215,43 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  Базиса стоят дальше от тыльной пласти задника (k18: на 100, отверстие штока в крыше там же) — повторяем проект. caps — «8» Базиса:
    *  отверстие D8×16 с лицевой пласти задника в точке каждого рафикса (k18). Без rafix — задник без крепежа (k01 m08).
    *  Кромка задника — по edgeScheme.parts (k01 m08: по кругу 0,5), иначе без кромки (k18). Крыша перед утопленным задником — topBack. */
-  backBoard?: { inset: number; gap?: { side: number; bottom: number; top: number }; rafix?: { side?: RafixGrid; bottom?: RafixGrid; top?: RafixGrid; topShift?: number; caps?: true } } };
+  backBoard?: { inset: number; gap?: { side: number; bottom: number; top: number }; rafix?: { side?: RafixGrid; bottom?: RafixGrid; top?: RafixGrid; topShift?: number; caps?: true } };
+  /** Боковины разной глубины (F_ASYM_SIDES, пакет 4; 13 модулей базы — обход стояка, примыкание угла): одна боковина во всю глубину модуля,
+   *  вторая (side) короче сзади на back, и всё между боковинами (дно, крыша, царги, полки, задник, опоры, фасады) стоит от её задней
+   *  кромки — корпус глубиной depth − back, сдвинутый к лицу (k28 m16: левая короче на 203, k03 m03: правая на 54). ХДФ набивной
+   *  на короткой боковине и дне, а в длинной — в пазу: заходит в неё на groove.into (k28: паз 6 − зазор 2 = 4, k03: 8 − 1 = 7).
+   *  Правило «от кромки»: back — от задней кромки длинной боковины, ширина/высота меняются как у обычного корпуса. */
+  sideRecess?: { side: "left" | "right"; back: number; groove?: { into: number } } };
+
+/** Корпус с боковинами разной глубины (kitchen.sideRecess): детали строятся для корпуса глубиной depth − back и сдвигаются к лицу на back;
+ *  длинная боковина — во всю глубину, набивной ХДФ заходит в её паз на groove.into. Вызывается из parts() вместо обычной сборки. */
+export function sideRecessParts(m: Module, build: (inner: Module) => Part[]): Part[] {
+  const sr = m.kitchen!.sideRecess!, rec = sr.back, full = sr.side === "left" ? "right" : "left";
+  const inner: Module = { ...m, depth: m.depth - rec, kitchen: { ...m.kitchen!, sideRecess: undefined } };
+  const out = build(inner);
+  for (const p of out) {
+    p.position = [p.position[0], p.position[1], p.position[2] + rec];
+    if (p.anchor) p.anchor = [p.anchor[0], p.anchor[1], p.anchor[2] + rec];
+    if (p.model?.origin) p.model = { ...p.model, origin: [p.model.origin[0], p.model.origin[1], p.model.origin[2] + rec] };
+    if (p.collide) p.collide = p.collide.map((c) => ({ ...c, position: [c.position[0], c.position[1], c.position[2] + rec] }));
+    if (p.id === full) { p.size = [p.size[0], p.size[1], p.size[2] + rec]; p.position = [p.position[0], p.position[1], p.position[2] - rec / 2]; p.width += rec; }
+    else if (p.id === "back" && p.material === "hdf" && sr.groove) {
+      // кромка ХДФ у длинной боковины — в её пазу: от внутренней пласти боковины на groove.into (правило «от кромки»), другая — как построена
+      const t = RULES.panel, x0 = p.position[0] - p.size[0] / 2, x1 = p.position[0] + p.size[0] / 2;
+      const [a, b] = full === "right" ? [x0, m.width - t + sr.groove.into] : [t - sr.groove.into, x1];
+      p.size = [b - a, p.size[1], p.size[2]]; p.position = [(a + b) / 2, p.position[1], p.position[2]]; p.width = b - a;
+    }
+  }
+  return out;
+}
+/** Ошибки боковин разной глубины: укорочение от 20 мм и не глубже depth − 150, заход ХДФ в паз 0–8. */
+export function sideRecessErrors(m: Module): string[] {
+  const s = m.kitchen?.sideRecess; if (!s) return [];
+  const e: string[] = [];
+  if (!Number.isFinite(s.back) || s.back < 20 || s.back > m.depth - 150) e.push("Боковина короче сзади: от 20 мм и не глубже глубины корпуса минус 150.");
+  if (s.groove && (!Number.isFinite(s.groove.into) || s.groove.into < 0 || s.groove.into > 8)) e.push("Боковина короче сзади: заход ХДФ в паз длинной боковины 0–8 мм.");
+  return e;
+}
 
 /** Своя сетка крепежа стыка горизонтали (bottom/top/жёсткая полка) кухни Базиса; undefined — по общему правилу. */
 export function kitchenJointGrid(m: Module, hid: string): RafixGrid | undefined {
@@ -348,6 +384,7 @@ export function mirrorKitchen(m: Module): void {
   for (const r of m.rails ?? []) { if (!r) continue; const { topConf, topConfR } = r; put(r, "topConf", topConfR); put(r, "topConfR", topConf); }
   if (k.hoodBox) { const h = k.hoodBox; put(h, "dx", h.dx ? -h.dx : undefined); if (h.front.over) h.front.over = [h.front.over[1], h.front.over[0]]; }
   if (k.sideStrip) k.sideStrip = { ...k.sideStrip, side: k.sideStrip.side === "left" ? "right" : "left" };
+  if (k.sideRecess) k.sideRecess = { ...k.sideRecess, side: k.sideRecess.side === "left" ? "right" : "left" };
   // задник ЛДСП: сетки рафиксов в дно/крышу — от левой/правой кромки, зеркало меняет их местами; в боковины — симметричны
   if (k.backBoard?.rafix) for (const key of ["bottom", "top"] as const) { const g = k.backBoard.rafix[key]; if (g) k.backBoard.rafix[key] = { ...g, rear: g.front, front: g.rear }; }
   for (const d of m.kdrawers ?? []) {
@@ -844,7 +881,7 @@ export function kitchenErrors(m: Module): string[] {
     if (k.backTopGap !== undefined && (!Number.isFinite(k.backTopGap) || k.backTopGap < 0 || k.backTopGap > 20)) e.push("Зазор ХДФ до верха: 0–20 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
-    e.push(...hoodBoxErrors(m), ...sideStripErrors(m), ...backBoardErrors(m));
+    e.push(...hoodBoxErrors(m), ...sideStripErrors(m), ...backBoardErrors(m), ...sideRecessErrors(m));
     // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
     if (k.legs) {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
@@ -969,6 +1006,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.bareShelves) && k.bareShelves.length ? { bareShelves: k.bareShelves.map(Number).filter(Number.isInteger) } : {}),
     ...(Array.isArray(k.dupParts) && k.dupParts.length ? { dupParts: k.dupParts.map(String) } : {}),
     ...(Number.isInteger(k.backFromShelf) && k.backFromShelf! >= 0 ? { backFromShelf: k.backFromShelf } : {}),
+    ...(k.sideRecess && (k.sideRecess.side === "left" || k.sideRecess.side === "right") && fin(k.sideRecess.back) ? { sideRecess: { side: k.sideRecess.side, back: num(k.sideRecess.back), ...(k.sideRecess.groove && fin(k.sideRecess.groove.into) ? { groove: { into: num(k.sideRecess.groove.into) } } : {}) } } : {}),
     ...(k.backBoard && typeof k.backBoard === "object" && fin(k.backBoard.inset) ? { backBoard: { inset: num(k.backBoard.inset),
       ...(k.backBoard.gap && typeof k.backBoard.gap === "object" ? { gap: { side: num(k.backBoard.gap.side), bottom: num(k.backBoard.gap.bottom), top: num(k.backBoard.gap.top) } } : {}),
       ...(k.backBoard.rafix && typeof k.backBoard.rafix === "object" ? { rafix: (() => { const rr = k.backBoard!.rafix!, gr = deps.parseGridRecord({ bottom: rr.side, top: rr.bottom, "shelf:0": rr.top }) ?? {};

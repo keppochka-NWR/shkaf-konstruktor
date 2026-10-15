@@ -25,6 +25,7 @@ import { recognizeNails } from "./recognize-nails";
 import { railUnder } from "./recognize-wallrail";
 import { contourEdgesFromEtalon, rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
+import { sideRecessOf, sideRecessInner } from "./recognize-asym";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -357,6 +358,17 @@ export function golaCutEdges(gc: GolaCut[], edges: { side: string; thick: number
 }
 
 export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeDecor: string } = { decor: "Белый", facadeDecor: "Белый" }): Recognized {
+  // боковины разной глубины (пакет 4, F_ASYM_SIDES, recognize-asym.ts): разбираем «внутренний» корпус у лица, затем — поле и глубина
+  const sr = sideRecessOf(ref0);
+  if (sr) {
+    const r = moduleFromEtalon(sideRecessInner(ref0, sr), look), m = r.module;
+    if (m.kitchen) {
+      m.depth = r1(m.depth + sr.back);
+      m.kitchen.sideRecess = { side: sr.side, back: sr.back, groove: { into: sr.into } };
+      r.notes.push(`${sr.side === "left" ? "левая" : "правая"} боковина короче сзади на ${sr.back}, ХДФ в пазу другой на ${sr.into} — как в Базисе`);
+    }
+    return r;
+  }
   // доборная планка сбоку (recognize-fillers.ts, F_FILLER_STRIP): корпус студии — между боковинами, планки снаружи; планка слева —
   // отсчёт x проекта переносим на наружную пласть левой боковины (остальные правила читают x от неё)
   const ss = sideStripOf(ref0);

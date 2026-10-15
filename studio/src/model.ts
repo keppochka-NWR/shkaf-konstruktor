@@ -2,7 +2,7 @@ import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
-import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
 import { partPenetration, allowedContact } from "./collisions";
@@ -642,6 +642,7 @@ export function parts(m: Module): Part[] {
   if(m.worktop)return worktopParts(m);
   if(m.corner)return cornerParts(m);
   if(m.casework)return caseworkParts(m);
+  if(m.kitchen?.sideRecess)return sideRecessParts(m,parts); // кухня Базиса: боковины разной глубины (пакет 4) — корпус depth − back у лица, длинная боковина во всю глубину
   const out: Part[] = [];
   const t = RULES.panel;
   const d = m.depth;
