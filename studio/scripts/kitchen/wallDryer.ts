@@ -14,7 +14,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 // (69/329 и 56,4/316,4 от низа, z 35/255 и 69,5/289,5) — правила по сетке нет, паспортов сушек в hardware-lib нет.
 const kitOf = (h: RefHardware) => (h as RefHardware & { kit?: string | null }).kit ?? "";
 export function wallDryer(hardware: RefHardware[], W: number, sideZ0: number, holes: RefHole[] = []): { dryer?: NonNullable<KitchenSpec["dryer"]>; notes: string[] } {
-  const items = hardware.filter((h) => h.category === "сушка" || (h.category === "прочее" && /^Сушка/.test(kitOf(h))));
+  const items = hardware.filter((h) => h.category === "сушка" || (h.category === "прочее" && /^Сушка/.test(kitOf(h)) && !/^Профиль/.test(h.name)) /* профиль-экструзия без сетки — в реестре отступлений compare.ts, не элемент (k02 m03) */);
   const notes = items.filter((h) => !h.mesh && h.category === "сушка").map((h) => `сушка «${h.name}» в Базисе без сетки — в студии точка без геометрии, как в Базисе`);
   if (!items.length) return { notes };
   return {
