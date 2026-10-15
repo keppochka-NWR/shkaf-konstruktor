@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parts,initialModule,section,validate,type Module,type Part} from '../src/model';
 import {compareModule} from '../scripts/kitchen/compare';
-import {wardrobeFromEtalon,type WRefModule,type WRefPanel} from '../scripts/wardrobe/fromEtalon';
+import {wardrobeFromEtalon,layoutWardrobe,type WRefModule,type WRefPanel} from '../scripts/wardrobe/fromEtalon';
 import {reasonKey,reasonSummary,ETALON_W,type WardrobeVerdict} from '../scripts/wardrobe/batch';
 import {existsSync,readFileSync} from 'node:fs';
+import type {PlacedModule} from '../src/project';
 
 // Шкафы, этап 1: распознаватель эталона шкафа Базиса (Кухни/etalon-w) → модуль шкафа студии. Правила шкафов студии не меняются —
 // поэтому шкаф, построенный самой студией и переписанный в формат эталона, должен распознаться обратно в те же детали.
@@ -57,6 +58,17 @@ test('свод причин: корпуса отдельно от частей (
   assert.deepEqual(reasonSummary(res, true), [['H_конфирмат', 1], ['H_прочее', 1]]);
   assert.deepEqual(reasonSummary(res, false), [['G_EXTRA', 1], ['H_конфирмат', 1], ['W_PART', 1]]);
   assert.deepEqual(reasonSummary(res, null)[0], ['H_конфирмат', 2]);
+});
+
+test('параметрическое изделие: расстановка по place() с поворотом 90 — габарит по занимаемому прямоугольнику, отступ 300 от стен', () => {
+  const mod = (width: number, depth: number, height: number) => ({...initialModule(), width, depth, height});
+  // A: yaw 0, x 0..800, z 0..500; B: yaw 90 (по x — глубина 400, по z — ширина 1000), x −600..−200, z −200..800, стоит на 100 ниже
+  const a: PlacedModule = {id: 'a', x: 0, y: 0, z: 0, rotation: 0, module: mod(800, 500, 2000)};
+  const b: PlacedModule = {id: 'b', x: -600, y: -100, z: -200, rotation: 90, module: mod(1000, 400, 2100)};
+  const {size, room} = layoutWardrobe([a, b], 300);
+  assert.deepEqual(size, [1400, 2100, 1000]);
+  assert.deepEqual([a.x, a.y, a.z, b.x, b.y, b.z], [900, 100, 500, 300, 0, 300]);
+  assert.deepEqual(room, {width: 2000, depth: 1600, height: 2700});
 });
 
 // Эталоны шкафов (Кухни/etalon-w, строит Кухни/scripts/etalon_wardrobe.py) — вне git; проверка полноты, если они есть на машине.

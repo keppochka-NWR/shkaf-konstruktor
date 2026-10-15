@@ -20,7 +20,7 @@ import { packRows, splitWide } from "./pack";
 import { profileSection, snapToHolders } from "./profiles";
 import { panelExtras } from "../kitchen/rowWorktop";
 import { maskPersonal } from "./files";
-import { wardrobeFromEtalon, type WRefModule } from "./fromEtalon";
+import { wardrobeFromEtalon, layoutWardrobe, type WRefModule } from "./fromEtalon";
 import { verdict, ETALON_W } from "./batch";
 import { place } from "../kitchen/buildKitchen";
 type CProf = { name: string; length: number; width?: number; trans: Trans; chain?: Trans[] };
@@ -127,12 +127,9 @@ function parametricProject(wid: string): { project: ReturnType<typeof newProject
   const e = JSON.parse(readFileSync(path, "utf8")) as { modules: WRefModule[] };
   if (!e.modules.length || !e.modules.every((ref) => verdict(`w${wid}`, ref).pass)) return null;
   const placed = e.modules.map((ref) => place(ref, { ...wardrobeFromEtalon(ref).module, name: maskPersonal(ref.name).slice(0, 60) }));
-  const M = 300, ext = placed.map((a) => { const rot = a.rotation === 90 || a.rotation === 270; return [a.x, a.y ?? 0, a.z, a.x + (rot ? a.module.depth : a.module.width), (a.y ?? 0) + a.module.height, a.z + (rot ? a.module.width : a.module.depth)]; });
-  const g0 = [0, 1, 2].map((i) => Math.min(...ext.map((b) => b[i]))), g1 = [3, 4, 5].map((i) => Math.max(...ext.map((b) => b[i])));
-  for (const pm of placed) { pm.x = r1(pm.x - g0[0] + M); pm.y = r1((pm.y ?? 0) - g0[1]); pm.z = r1(pm.z - g0[2] + M); }
+  const { size, room } = layoutWardrobe(placed, 300);
   const p = newProject({ ...initialModule(), sections: [section()] });
-  const size = [g1[0] - g0[0], g1[1] - g0[1], g1[2] - g0[2]];
-  p.room = { ...p.room, width: Math.ceil(size[0] + 2 * M), depth: Math.ceil(size[2] + 2 * M), height: Math.max(2700, Math.ceil(size[1] + 100)), openings: [] };
+  p.room = { ...p.room, ...room, openings: [] };
   p.modules = placed;
   return { project: p, panels: e.modules.reduce((s, m) => s + m.panels.length, 0), size: size.map((v) => Math.round(v)).join("×") };
 }

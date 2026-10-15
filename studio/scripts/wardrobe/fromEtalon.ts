@@ -4,6 +4,7 @@
 // здесь НЕ меняются: чего текущие правила не умеют — в unsupported (это запись в backlog-wardrobes.md, а не правка правил).
 import { initialModule, section, deskModule, RULES, type Module, type Section } from "../../src/model";
 import type { RefModule, RefPanel, RefHardware } from "../kitchen/compare";
+import type { PlacedModule } from "../../src/project";
 
 export type WRefPanel = RefPanel & { role?: string; edges?: { side: string | null; thick: number; len?: number | null }[] };
 export type WRefModule = Omit<RefModule, "panels"> & { panels: WRefPanel[]; carcass?: number[]; level?: string };
@@ -142,4 +143,18 @@ export function wardrobeFromEtalon(ref: WRefModule): WardrobeRecognition {
   if (ref.hardware.some(isDrawerHw) && !drawers.length) notes.push("направляющие без деталей ящика");
   if (facades.some((p) => p.axis !== "z")) unsupported.push("W_FACADE_SIDE: фасад/декор не во фронтальной плоскости");
   return { module: m, unsupported, notes };
+}
+
+/** Расстановка параметрического изделия в помещении (import.ts): модули уже поставлены place() кухонь (p_world = origin + Ry(yaw)·p_mod);
+ *  габарит сцены — по занимаемым прямоугольникам (при повороте 90/270 по x — глубина, по z — ширина), сцена сдвигается так, чтобы
+ *  до стен было по margin, пол — y = 0. Меняет x/y/z модулей; возвращает габарит сцены и размеры помещения. */
+export function layoutWardrobe(placed: PlacedModule[], margin = 300): { size: number[]; room: { width: number; depth: number; height: number } } {
+  const ext = placed.map((a) => {
+    const rot = a.rotation === 90 || a.rotation === 270, y = a.y ?? 0;
+    return [a.x, y, a.z, a.x + (rot ? a.module.depth : a.module.width), y + a.module.height, a.z + (rot ? a.module.width : a.module.depth)];
+  });
+  const g0 = [0, 1, 2].map((i) => Math.min(...ext.map((b) => b[i]))), g1 = [3, 4, 5].map((i) => Math.max(...ext.map((b) => b[i])));
+  for (const pm of placed) { pm.x = r1(pm.x - g0[0] + margin); pm.y = r1((pm.y ?? 0) - g0[1]); pm.z = r1(pm.z - g0[2] + margin); }
+  const size = [g1[0] - g0[0], g1[1] - g0[1], g1[2] - g0[2]];
+  return { size, room: { width: Math.ceil(size[0] + 2 * margin), depth: Math.ceil(size[2] + 2 * margin), height: Math.max(2700, Math.ceil(size[1] + 100)) } };
 }
