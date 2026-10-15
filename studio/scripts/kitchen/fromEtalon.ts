@@ -18,7 +18,7 @@ import { aluFacadeReason } from "./aluFacade";
 import { hoodBoxReason, hoodBoxSimple, hoodBoxField, hoodBoxPanels } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
-import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset } from "./wallJoints";
+import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
@@ -494,6 +494,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // нет такой панели — цоколя нет (навесной со свесом фасада ниже дна: правило Макса — не добавлять того, чего нет в Базисе)
   const lowFront = !legs.length && bottom && bottom.b.y0 > 0.5 ? P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y1 <= bottom.b.y0 + 1 && b.z1 >= sideZ1 - 30 && !fronts.some((f) => f.b === b)) : undefined;
   if (lowFront) m.kitchen.lowFront = true;
+  // пакет 3: крепёж щита под дном по проекту (k14 m03: конфирматы через боковины и через дно)
+  const lfc = lowFront && bottom ? lowFrontConf(ref.hardware, lowFront.b, left.b, right.b, bottom.b) : undefined;
+  if (lfc) { m.kitchen.lowFrontConf = lfc; notes.push(`щит под дном на конфирматах: через боковины на ${lfc.side.join(", ")} от его низа, через дно в ${lfc.top.join(", ")} от концов — как в Базисе`); }
   // царги
   const railList: NonNullable<Module["rails"]> = [];
   for (const r of rails) {
