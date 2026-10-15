@@ -5,6 +5,7 @@ import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift
 import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
+import { kitchenDividerZ } from "./kitchenDivider";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
@@ -863,12 +864,13 @@ export function parts(m: Module): Part[] {
       h = b.top - b.bottom,
       sd = d - rear - RULES.shelfDepthMinus;
     if (i > 0 && !m.sectionLayout) {
-      const dd = depthAt(m, b.x - t / 2) - rear - RULES.shelfDepthMinus;
+      const kz = kitchenDividerZ(m); // кухня Базиса (пакет 5): глубина перегородки по проекту — от задней кромки боковин до лица
+      const dd = kz ? kz[1] - kz[0] : depthAt(m, b.x - t / 2) - rear - RULES.shelfDepthMinus, dz0 = kz ? kz[0] : rear;
       add(
         `${s.id}:divider`,
         "Перегородка",
         [t, h, dd],
-        [b.x - t / 2, b.bottom + h / 2, rear + dd / 2],
+        [b.x - t / 2, b.bottom + h / 2, dz0 + dd / 2],
         h,
         dd,
         t,
@@ -1326,6 +1328,28 @@ export function parts(m: Module): Part[] {
   for (const [k, c] of (m.kitchen?.outConf ?? []).entries()) confirmat(`fast:out:${c.side}:${k}`, [c.side === "left" ? t : m.width - t, c.y, c.z], c.side === "left" ? "-x" : "+x");
   for (const dv of fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;
+    const kd = m.kitchen?.divider;
+    if (kd) {
+      // кухня Базиса (пакет 5, kitchenDivider.ts): крепёж каждого конца по проекту — конфирмат через дно/крышу в торец или эксцентрик
+      // в пласть перегородки в 34 от стыка (шток D8×34 в торец, D5×12 в горизонталь) + шкант 8×30 ближе к середине — как «боковина на дне»
+      for (const edge of ["bottom", "top"] as const) {
+        const e = kd[edge], jy = edge === "top" ? innerTop(m) : innerBottom(m), up = edge === "top" ? -1 : 1;
+        if (!e) continue;
+        [z0 + e.ins[0], z1 - e.ins[1]].forEach((z, k) => {
+          if (e.kind === "conf") return confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], jy - up * t, z], edge === "top" ? "-y" : "+y", dv.sectionId);
+          const face = e.face ?? "left", inward = face === "left" ? 1 : -1, fx = dv.position[0] - inward * t / 2, eid = `ecc:kdiv-${edge}-${face}:${dv.id}:${k}`;
+          add(eid, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [fx + inward * RULES.eccBarrelH / 2, jy + up * 34, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
+          out.at(-1)!.anchor = [fx, jy, z];
+          add(eid + ":pin", "Эксцентрик D15 · шток", [7, 34, 7], [dv.position[0], jy + up * 17, z], 34, 7, 7, "fastener", dv.sectionId, "metal");
+          if (e.dowel) {
+            const zd = z + (k === 0 ? e.dowel : -e.dowel);
+            add(`dowel:kdiv-${edge}:${dv.id}:${k}`, "Шкант 8×30", [8, 30, 8], [dv.position[0], jy + up * 3, zd], 30, 8, 8, "fastener", dv.sectionId, "metal");
+            out.at(-1)!.anchor = [dv.position[0], jy, zd];
+          }
+        });
+      }
+      continue;
+    }
     for (const [edge, y] of [["top", innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");

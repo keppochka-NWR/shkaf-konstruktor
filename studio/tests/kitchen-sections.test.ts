@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts,initialModule,facadeTop} from '../src/model';
+import {validate,parts,initialModule,facadeTop,section,parseModule} from '../src/model';
+import {kitchenWall,mirrorKitchen} from '../src/kitchen';
+import {holes} from '../src/drilling';
+import {partCollisions} from '../src/collisions';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 
@@ -33,4 +36,66 @@ test('F_STACKED (k31 m18, m19): фасады выше боковин на 388,5 
     const h=c.hardware.find(x=>x.category==='петля')!;assert.equal(h.ref,h.studio,key+' петли');assert.equal(h.maxPosDelta,0,key+' места петель');
     assert.ok(!validate(r.module).length,key+' '+validate(r.module).join('; '));
   }
+});
+
+test('F_STACKED: пенал из двух корпусов (k30 m05: боковины 850, фасады до 2469, верхний ряд от 712) — не разрез, честно «не поддержано»',{skip:!has('k30')},()=>{
+  const r=moduleFromEtalon(load('k30','m05'));
+  assert.equal(r.module.kitchen?.faceTop,undefined);assert.ok(r.unsupported.some(u=>/выше боковин/.test(u)),r.unsupported.join('; '));
+});
+
+// F_PARTITION: навесной k31 m11 своими словами — 1000×795×320, ХДФ в паз, перегородка от задней кромки паза (20) до лица,
+// снизу эксцентрик в левую пласть + шкант на 32 ближе к середине, сверху конфирматы; точки в 54 от кромок перегородки
+function wall2(){
+  const m=kitchenWall(initialModule(),1000);m.name='ВМ синт.';m.height=795;m.depth=320;m.bazis=true;m.doors=false;
+  const s1={...section(),shelves:[0.5],drawers:0,shelfDepth:280};m.sections=[{...m.sections[0],shelves:[0.5],drawers:0,shelfDepth:280,weight:500},{...s1,weight:452}];
+  m.kitchen={...m.kitchen!,divider:{z0:20,bottom:{kind:'ecc',ins:[54,54],face:'left',dowel:32},top:{kind:'conf',ins:[54,54]}}};
+  return m;
+}
+const pid=(m:ReturnType<typeof wall2>,re:RegExp)=>parts(m).filter(p=>re.test(p.id));
+
+test('F_PARTITION: перегородка секций кухни Базиса — от z0 до лица боковин, между дном и крышей (шкаф студии — как прежде)',()=>{
+  const m=wall2(),dv=pid(m,/:divider$/);
+  assert.equal(dv.length,1);assert.deepEqual(box(dv[0])[2],[20,320],'по глубине — от z0 до лица');
+  assert.deepEqual(box(dv[0])[0],[516,532],'после первой секции 500');
+  assert.deepEqual(validate(m),[]);
+  const w=initialModule();w.sections=[w.sections[0],{...section(),weight:1}];
+  const wd=parts(w).find(p=>p.id.endsWith(':divider'))!;assert.ok(box(wd)[2][1]<w.depth,'шкаф: перегородка короче глубины, как раньше');
+});
+
+test('F_PARTITION: крепёж концов по проекту — эксцентрик (бочонок в пласть в 34 от дна, шток в торец, D5 в дно) + шкант; конфирматы через крышу',()=>{
+  const m=wall2(),ps=parts(m),hs=holes(m,ps);
+  assert.equal(pid(m,/^ecc:kdiv-bottom-left:/).filter(p=>!p.id.endsWith(':pin')).length,2);
+  assert.equal(pid(m,/^dowel:kdiv-bottom:/).length,2);
+  assert.equal(pid(m,/^fast:.*:divider:top:/).length,2);
+  const dvId=ps.find(p=>p.id.endsWith(':divider'))!.id,onDv=hs.filter(h=>h.part===dvId);
+  const barrel=onDv.filter(h=>h.d===15);assert.deepEqual(barrel.map(h=>h.at).sort((a,b)=>a[2]-b[2]),[[516,50,74],[516,50,266]],'D15 в левой пласти в 34 над дном, 54 от кромок');
+  assert.ok(barrel.every(h=>h.dir[0]===1&&h.depth===12));
+  assert.equal(onDv.filter(h=>h.d===8&&h.depth===34).length,2,'шток D8×34 в нижний торец');
+  assert.deepEqual(onDv.filter(h=>h.d===8&&h.depth===22).map(h=>h.at[2]).sort((a,b)=>a-b),[106,234],'шканты на 32 ближе к середине');
+  assert.equal(hs.filter(h=>h.part==='bottom'&&h.d===5&&h.depth===12).length,2,'D5×12 в дно');
+  assert.equal(onDv.filter(h=>h.d===5&&h.at[1]>700).length,2,'конфирматы сверху — D5 в торец перегородки');
+  assert.deepEqual(partCollisions(ps,m).filter(c=>c.names.some(n=>/Перегородка|Эксцентрик|Шкант/.test(n))),[]);
+});
+
+test('F_PARTITION: зеркало переносит бочонок в другую пласть, поле переживает сохранение; ошибки — честные',()=>{
+  const m=wall2();mirrorKitchen(m);assert.equal(m.kitchen!.divider!.bottom!.face,'right');
+  const back=parseModule(JSON.parse(JSON.stringify(wall2())));assert.deepEqual(back.kitchen?.divider,wall2().kitchen!.divider);
+  const bad=wall2();bad.kitchen!.divider!.bottom!.ins=[200,200];assert.ok(validate(bad).some(e=>/Перегородка кухни/.test(e)));
+  const one=wall2();one.sections=[one.sections[0]];assert.ok(validate(one).some(e=>/двух секций/.test(e)));
+});
+
+test('F_PARTITION (k31 m11): перегородка — вторая секция, крепёж как в Базисе: эксцентрики/шканты/конфирматы сходятся, панели все на месте',{skip:!has('k31')},()=>{
+  const ref=load('k31','m11'),r=moduleFromEtalon(ref),c=compareModule(ref,r.module);
+  assert.equal(r.module.sections.length,2);
+  assert.deepEqual(r.module.kitchen?.divider,{z0:20,bottom:{kind:'ecc',ins:[54,54],face:'left',dowel:32},top:{kind:'conf',ins:[54,54]}});
+  assert.ok(!r.unsupported.length,r.unsupported.join('; '));
+  assert.equal(c.missing.length,0);assert.equal(c.extra.length,0);
+  for(const cat of ['эксцентрик','конфирмат','шкант']){const h=c.hardware.find(x=>x.category===cat)!;assert.equal(h.ref,h.studio,cat);}
+  // остаётся особенность Базиса: полки правой секции на 9 мм заходят в правую боковину (544,5…1393 при боковине от 1384) — не правило
+  assert.ok(c.pairs.some(p=>p.delta===10));
+});
+
+test('F_PARTITION: перегородка до жёсткой полки (k03 m12) и пенал с фасадами не по секциям (k14 m01) — честно не распознаются',{skip:!has('k03')||!has('k14')},()=>{
+  assert.equal(moduleFromEtalon(load('k03','m12')).module.sections.length,1);
+  const r=moduleFromEtalon(load('k14','m01'));assert.equal(r.module.sections.length,1);assert.ok(r.unsupported.some(u=>/сетка фасадов/.test(u)));
 });

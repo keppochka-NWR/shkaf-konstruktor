@@ -26,6 +26,7 @@ import { railUnder } from "./recognize-wallrail";
 import { contourEdgesFromEtalon, rearNotchFromContour, topCornerNotchFromContour } from "./sideNotch";
 import { rafixZs, type KitchenRafix, type RafixGrid } from "../../src/kitchenRafix";
 import { sideRecessOf, sideRecessInner } from "./recognize-asym";
+import { partitionsOf, dividerOf } from "./recognize-sections";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type B = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -888,7 +889,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const niche = rowsOk && role === "tall" && rowsGap > 10 ? nicheFromRows(lowRow.map((q) => q.b), upRow.map((q) => q.b)) : undefined;
     // F_STACKED (пакет 5): пенал на опорах, верхний ряд дверей выше боковин (закрывает антресоль над пеналом — k31 m18/m19: +388,5) —
     // тот же разрез фасадов doorSplit, верх фасадов — kitchen.faceTop < 0 (от верха корпуса); без опор/с нишей/рядов разной ширины — нет
+    // верхний ряд начинается в корпусе не выше 200 от верха (предел разреза validate): у k30 m05 (боковины 850, фасады до 2469) — составной пенал, не разрез
     const overTop = tallRows && role === "tall" && !!m.feet && upOver > 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5 && rowsGap <= 10
+      && Math.min(...upRow.map((q) => q.b.y0)) < top - 200
       && lowRow.every((q, i) => Math.abs(q.b.x0 - upRow[i].b.x0) < 0.6 && Math.abs(q.b.x1 - upRow[i].b.x1) < 0.6);
     if (overTop) { m.kitchen.faceTop = r1(top - Math.max(...upRow.map((q) => q.b.y1))); notes.push(`фасады выше боковин на ${upOver} мм (верхний ряд закрывает антресоль) — как в Базисе`); }
     const split = (rowsOk || overTop) && rowsGap <= 10;
@@ -1278,7 +1281,43 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // панель у пола под дном — цоколь только у нижних и пеналов; у навесных/антресолей её берёт lowFront или wallRaise (wr.panel),
   // иначе она не распознана (k31 m20/m21: задняя вертикаль 568×537 под поднятым корпусом) — не терять молча
   const plinthUsed = role === "base" || role === "tall" ? plinthPanel : undefined;
-  const known = [left, right, bottom, topPanel, back, ...(lbFull ? [lb] : []), ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, wr?.plank, ...drawerPanels, ...(hoodSimple ? P.filter((x) => hoodBoxPanels(ref, hoodSimple).includes(x.p)) : []), ...P.filter(isStrip)];
+  // пакет 5 (F_PARTITION): перегородка во всю высоту — вторая секция студии (sections + `<секция>:divider`, как у шкафов),
+  // глубина и крепёж концов — kitchen.divider по проекту; полки и двери — по своим секциям, как в Базисе
+  const partsK = !hoodSimple && !m.kdrawers?.length && ref.archetype !== "wall-dryer" ? partitionsOf(P, left, right, bottom, topPanel, sideZ1) : [];
+  const partUsed = partsK.length === 1 ? splitByPartition(partsK[0]) : undefined;
+  if (partsK.length > 1) unsupported.push(`перегородок ${partsK.length} — пока только одна`);
+  function splitByPartition(pt: (typeof P)[number]): (typeof P)[number] | undefined {
+    const dv = dividerOf(ref, pt, sideZ0, sideZ1), s0 = m.sections[0], pc = (pt.b.x0 + pt.b.x1) / 2;
+    const shL = sh.filter((q) => q.b.x1 <= pt.b.x0 + 1), shR = sh.filter((q) => q.b.x0 >= pt.b.x1 - 1);
+    const dl = m.doors ? fronts.filter((f) => (f.b.x0 + f.b.x1) / 2 < pc) : [], dr = m.doors ? fronts.filter((f) => (f.b.x0 + f.b.x1) / 2 >= pc) : [];
+    const why = typeof dv === "string" ? dv
+      : shL.length + shR.length !== sh.length ? "перегородка: полка через перегородку — пока не поддержано"
+      : s0.shelfAt || s0.glassShelves?.length || m.kitchen!.bareShelves?.length || m.kitchen!.rafix ? "перегородка: полки со своей глубиной, стеклянные, без крепежа или на рафиксах — по секциям пока не поддержано"
+      : m.doors && (s0.doorSplit !== undefined || s0.hingeless?.length || s0.doorHinges?.includes("top") || fronts.some((f) => f.b.x0 < pc - 1 && f.b.x1 > pc + 1) || !dl.length || !dr.length || dl.length > 2 || dr.length > 2)
+        ? "перегородка: фасады не по секциям (через перегородку, ряды, подъёмные) — сетка фасадов пока не поддержана" : undefined;
+    if (why) { unsupported.push(why); return undefined; }
+    const s1 = { ...structuredClone(s0), id: section().id }, fixedSet = new Set((s0.fixed ?? []).map((j) => sh[j]));
+    const jf = m.jointFastening ?? {}, frac = (q: (typeof sh)[number]) => ((q.b.y0 + q.b.y1) / 2 - innerBottom) / (innerTop - innerBottom);
+    const moved: Record<string, "eccentric" | "confirmat"> = {};
+    for (const [s, list, ds] of [[s0, shL, dl], [s1, shR, dr]] as const) {
+      s.shelves = list.map(frac);
+      const fx = list.map((q, j) => (fixedSet.has(q) ? j : -1)).filter((j) => j >= 0);
+      if (fx.length) s.fixed = fx; else delete s.fixed;
+      // крепёж жёстких полок у стоек (jointFastening по номеру полки секции 0) — к своей секции и номеру
+      list.forEach((q, j) => { for (const side of ["left", "right"] as const) { const v = jf[`${s0.id}:shelf:${sh.indexOf(q)}:${side}`]; if (v) moved[`${s.id}:shelf:${j}:${side}`] = v; } });
+      if (list.length) s.shelfDepth = r1(list[0].b.z1 - list[0].b.z0);
+      if (m.doors) {
+        s.doorLeaves = ds.length as 1 | 2; delete s.doorHinges; delete s.hingeSide;
+        if (ds.length === 1) { const f = ds[0], hs = hw("петля").filter((h) => h.pos[0] >= f.b.x0 - 30 && h.pos[0] <= f.b.x1 + 30); s.hingeSide = hs.filter((h) => h.pos[0] > (f.b.x0 + f.b.x1) / 2).length > hs.length / 2 ? "right" : "left"; }
+      }
+    }
+    if (m.jointFastening) { for (const k of Object.keys(m.jointFastening)) if (k.startsWith(`${s0.id}:shelf:`)) delete m.jointFastening[k]; Object.assign(m.jointFastening, moved); }
+    s0.weight = r1(pt.b.x0 - left.b.x1); s1.weight = r1(right.b.x0 - pt.b.x1);
+    m.sections = [s0, s1]; m.kitchen!.divider = dv as Exclude<typeof dv, string>;
+    notes.push(`перегородка на ${r1(pt.b.x0)}: секции ${s0.weight} и ${s1.weight}, крепёж низ ${dv && typeof dv !== "string" ? dv.bottom?.kind ?? "нет" : ""}, верх ${typeof dv !== "string" ? dv.top?.kind ?? "нет" : ""} — как в Базисе`);
+    return pt;
+  }
+  const known = [left, right, bottom, topPanel, back, ...(partUsed ? [partUsed] : []), ...(lbFull ? [lb] : []), ...rails, ...railsEdge, ...shelves, ...glassSh, ...fronts, ...(m.kitchen?.faceFiller ? ffFlat?.panels ?? [] : []), plinthUsed, lowFront, wr?.panel, wr?.plank, ...drawerPanels, ...(hoodSimple ? P.filter((x) => hoodBoxPanels(ref, hoodSimple).includes(x.p)) : []), ...P.filter(isStrip)];
   const other = ref.panels.length - P.filter((x) => known.includes(x)).length;
   // полка из фасадного материала внутри корпуса (k23 m07: «Горизонтальная» 19 мм, «Фасадный мат-л», без полкодержателей) — причина прямо
   const facShelf = P.find((x) => !known.includes(x) && x.p.axis === "y" && x.p.kind === "other" && x.b.x0 >= left.b.x1 - 0.6 && x.b.x1 <= right.b.x0 + 0.6 && x.b.z1 <= sideZ1 + 0.5);

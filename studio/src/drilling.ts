@@ -101,6 +101,18 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const [x, yb, z] = p.anchor, yt = yb + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16]));
       push(p.id, [x, yt, z], [0, 1, 0], 8, 22);
       push(p.id + ":side", [x, yt, z], [0, -1, 0], 8, 12);
+    } else if (p.id.startsWith("ecc:kdiv-") && !p.id.endsWith(":pin") && p.anchor) {
+      // перегородка кухни Базиса на эксцентрике (пакет 5): точка — пласть перегородки × плоскость стыка с дном/крышей; бочонок D15×12
+      // в пласть в 34 от стыка, шток D8×34 в торец перегородки по её оси, D5×12 в горизонталь (k31 m11, k15 m07)
+      const [fx, jy, z] = p.anchor, inward = p.id.startsWith("ecc:kdiv-bottom-left") || p.id.startsWith("ecc:kdiv-top-left") ? 1 : -1, up = p.id.startsWith("ecc:kdiv-top") ? -1 : 1, cx = fx + inward * 8;
+      push(p.id, [fx, jy + up * 34, z], [inward, 0, 0], 15, 12);
+      push(p.id + ":pin", [cx, jy, z], [0, up, 0], 8, 34);
+      push(p.id + ":side", [cx, jy, z], [0, -up, 0], 5, 12);
+    } else if (p.id.startsWith("dowel:kdiv-") && p.anchor) {
+      // шкант перегородки: D8×22 в торец перегородки, D8×12 в горизонталь — из плоскости стыка
+      const [x, jy, z] = p.anchor, up = p.id.startsWith("dowel:kdiv-top") ? -1 : 1;
+      push(p.id, [x, jy, z], [0, up, 0], 8, 22);
+      push(p.id + ":side", [x, jy, z], [0, -up, 0], 8, 12);
     } else if (p.id.startsWith("ecc:under:") && !p.id.endsWith(":pin") && p.anchor) {
       // боковина на дне (кухни Базиса k16/k28/k31): точка — наружная пласть боковины × верх дна; шток D8×34 вверх в торец боковины
       // по её оси, бочонок D15×12 в наружную пласть в 34 мм над дном, D5×12 вниз в верхнюю пласть дна
