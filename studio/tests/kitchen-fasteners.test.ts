@@ -95,6 +95,27 @@ test('гвозди Базиса без имени в поле (как раньш
   assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.nails?.name,'Саморез 3,5х12 мм, Zn');
 });
 
+// m_HANDLE: ручка Базиса на фасадах ящиков Базиса — по тому же правилу kitchen.handle, что у дверей (k09 m05: рейлинг 128, 31,5 от верха, по центру)
+test('ручки Базиса на фасадах ящиков (k09 m05): по одной на фасад, 31,5 от верха, по центру; сверка «ручка» 3/3 — PASS',{skip:!has('k09')},()=>{
+  const ref=load('k09','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual([m.kitchen?.handle?.dy,m.kitchen?.handle?.from,m.kitchen?.handle?.horizontal],[31.5,'top',true]);
+  const ps=parts(m),hs=ps.filter(p=>p.role==='handle');
+  assert.equal(hs.length,3);
+  assert.ok(hs.every(p=>/^kd:\d+:drawer:handle$/.test(p.id)&&p.name==='Ручка фасада · Мебельная ручка рейлинг 128'));
+  for(const h of hs){const f=ps.find(p=>p.id===h.id.replace(':drawer:handle',':facade'))!;assert.ok(f,'фасад ящика');
+    assert.equal(Math.round((f.position[1]+f.size[1]/2-h.position[1])*10)/10,31.5);assert.equal(h.position[0],f.position[0]);}
+  const err=validate(m),c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='ручка')!;
+  assert.deepEqual([row.ref,row.studio,row.maxPosDelta],[3,3,0]);
+  assert.deepEqual(err,[],'ручка на фасаде ящика не считается длиннее фасада');
+  assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported}));
+  assert.deepEqual(partCollisions(ps,m),[]);
+});
+
+test('ручки на фасадах ящиков — только у кухни Базиса с kitchen.handle; без него и при noHandles ручек нет',()=>{
+  const base=parseModule(JSON.parse(JSON.stringify(initialModule())));
+  assert.ok(!parts(base).some(p=>/^kd:\d+:drawer:handle$/.test(p.id)));
+});
+
 test('k04 m05 (навесной 400×1000): нижняя задняя стяжка на эксцентриках в боковины по проекту — PASS',{skip:!has('k04')},()=>{
   const ref=load('k04','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
   const r=m.rails?.find(x=>x.place==='rear-bottom');

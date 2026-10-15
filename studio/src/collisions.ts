@@ -78,7 +78,7 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.id.includes(":hingeplate:") && p.size[0] > p.size[1] && isBoard(q) && q.role === "body" && q.size[1] <= 40 && q.size[0] > 60 && depth <= 3) return true;
     // Ручка — на своём фасаде (винты через фасад); ручка ящика — на фасаде своего ящика.
     if (p.role === "handle" && q.role === "door" && p.id.replace(":handle:", ":door:") === q.id) return true;
-    if (p.role === "handle" && q.id.endsWith(":facade") && p.id.replace(/:handle$/, "") === q.id.replace(/:facade$/, "")) return true;
+    if (p.role === "handle" && q.id.endsWith(":facade") && p.id.replace(/(:drawer)?:handle$/, "") === q.id.replace(/:facade$/, "")) return true; // ручка Базиса на фасаде ящика Базиса — kd:N:drawer:handle (пакет 3)
     // Направляющая Axis PRO — только касание своей боковины корпуса (сетка начинается от её пласти).
     if (p.id.startsWith("kd:") && p.id.includes(":slide:") && (q.id === "left" || q.id === "right") && depth <= 0.5) return true;
     // Ящик Axis PRO — сборочная единица (царги, держатели, дно в канале царги, задняя стенка); фасад со своими деталями — только касание.

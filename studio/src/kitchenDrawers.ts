@@ -823,8 +823,20 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     const sideIn = (s: 0 | 1) => (s ? xr : x0), dir = (s: 0 | 1) => (s ? -1 : 1);
     // фасад ящика (фасадный материал или ЛДСП — как у дверей модуля)
     const fw = m.width - 2 * faceGap, fh = k.y1 - k.y0;
-    if (!((isStart(k) || isAxis(k)) && k.inner)) out.push({ id: `${id}:facade`, name: `Фасад ящика ${j + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (k.y0 + k.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
-      role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+    if (!((isStart(k) || isAxis(k)) && k.inner)) {
+      out.push({ id: `${id}:facade`, name: `Фасад ящика ${j + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (k.y0 + k.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
+        role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+      // пакет 3 (m_HANDLE): ручка Базиса на фасаде ящика — то же место, что у дверей модуля (kitchen.handle: горизонтально по центру,
+      // dy от верха/низа фасада; по базе 6 модулей с ручками на фасадах ящиков, по одному правилу с дверями — k09 m03/m05: 31,5 от верха;
+      // k07 — свои 15/19/21 и сдвиг ±4, правила нет — не ставим). Только горизонтальная; ручки не заложены (noHandles) — без ручки
+      const kh = m.kitchen?.handle;
+      if (kh?.horizontal && kh.name && !m.noHandles) {
+        const hx = m.width / 2, hy = kh.from === "top" ? k.y1 - kh.dy : k.y0 + kh.dy, fz = F + faceAir + facadeT, [L, W, D] = kh.size ?? [128, 10, 25];
+        // id с «:drawer:» — как у ручек ящиков студии: сцена и проверки длины ручки ищут фасад по этому маркеру
+        out.push({ id: `${id}:drawer:handle`, name: "Ручка фасада · " + kh.name, size: [L, W, D], position: [hx, hy, fz + (kh.size ? D / 2 : 13)], length: L, width: D, thickness: W, role: "handle", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], anchor: [hx, hy, fz],
+          ...(kh.mesh && kh.quat ? { model: { file: `hardware/bazis/${kh.mesh}.glb`, length: "x", native: true, origin: [hx, hy, fz], quat: kh.quat } } : {}) });
+      }
+    }
     if (isIndigo(k)) {
       // Indigo: дно и задняя стенка ЛДСП 16, царги и направляющие сетками Базиса, «3x3» — как в проекте
       const s0 = INDIGO[k.hc], y = k.runnerY, bd = 479.2, backH = k.backH ?? s0.back, bw = xr - x0 - 19, kw = xr - x0 - 42;
