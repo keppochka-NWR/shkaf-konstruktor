@@ -65,7 +65,7 @@ export function markBazis(m: Module, ref: RefModule): Module {
   const sys = new Set((m.kdrawers ?? []).map((k) => k.system ?? "axis-pro")), axis = sys.has("axis-pro"), firmax = sys.has("firmax-ldsp");
   // ящики, которые строит параметрика (n3-runners: Indigo, MODERN SLIDE, СТАРТ, Versalite), считаются комплектом/парой своей строкой сметы
   const runner = (n: string) => (sys.has("indigo") && /indigo/i.test(n)) || (sys.has("modern-slide") && /modern slide/i.test(n)) || (sys.has("start-sc") && /старт|start/i.test(n)) || (sys.has("versalite-h45") && /versalite/i.test(n));
-  const items = bazisItems(normalizeRefHardware(ref.hardware), (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || runner(h.name) || (!!m.kitchenLift && /PD-G-N02/i.test(h.name)) || (!!m.gola && /gola/i.test(h.name))
+  const items = bazisItems(normalizeRefHardware(ref.hardware), (h) => (!!axis && /axis\s*pro/i.test(h.name)) || (!!firmax && /firmax/i.test(h.name)) || runner(h.name) || (!!m.kitchenLift && (/PD-G-N02/i.test(h.name) || (m.kitchenLift.system === "gl104" && /^(Шток для GL\s*104|Газ патрон|Кронштейн на (боковину|фасад))\s*$/.test(h.name)))) || (!!m.gola && /gola/i.test(h.name))
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
     || (/заглушк/i.test(h.name) && /навес/i.test(h.name))
     // рафиксы жёстких полок строит параметрика (kitchen.rafix, n3-tall) — строкой по деталям сцены, не второй раз по Базису

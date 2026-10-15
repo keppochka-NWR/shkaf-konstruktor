@@ -8,8 +8,17 @@
 import type { Module, Part } from "./model";
 import { qrot, type Quat } from "./quat";
 
-export type KitchenLift = { system: "pd-g-n02" };
-export const LIFT_SYSTEMS: Record<KitchenLift["system"], { label: string }> = { "pd-g-n02": { label: "Газлифт PD-G-N02" } };
+export type KitchenLift = { system: "pd-g-n02" | "gl104" };
+export const LIFT_SYSTEMS: Record<KitchenLift["system"], { label: string }> = { "pd-g-n02": { label: "Газлифт PD-G-N02" }, "gl104": { label: "Газлифт GL104" } };
+// Газлифт GL104 с фиксацией положения (комплект Базиса «Газовые лифты с фиксацией положения GL104, 50Н») — по всей базе
+// (corpus 447 файлов, 34 кухни) только k01 m11–m13: антресоли 800/600×350×467, накладной фасад, комплект на каждую боковину:
+// шток «Шток для GL 104», «Газ патрон», «Кронштейн на боковину» (3 самореза D3×3 в боковину), «Кронштейн на фасад» (2 D3×3 в фасад).
+// Во всех трёх точки одинаковы в осях модуля: x — от внутренней грани боковины внутрь, y — от низа боковины, z — от тыльной
+// плоскости фасада. Высота у всех трёх одна (350), поэтому выбор опоры «от низа» статистикой не проверен: комплект жёсткий
+// (кронштейн на боковину внизу, шток и патрон на нём), верх фасада у k01 m13 на 0,5 выше — точки те же, значит не «от верха фасада».
+// Паспорта GL104 в hardware-lib нет — размеры только из узлов Базиса (сетки и точки), без допущений сверх них.
+export const GL104 = { rod: [10, 21.65, -35.55], block: [10, 97, -30], side: [0, 99, -25], face: [14, 268.5, 0],
+  sideScrews: [[1, 9.81], [9, -5.2], [-9, -5.2]], faceScrewDy: 16 } as const;
 export const LIFT = { faceDown: 90.5, sideDown: 254.5, sideBack: 25, blockBack: 16, rodInto: 4, rodDown: 0.36, rodBack: 0.02, faceIn: 12, faceScrewDy: 14, faceScrewZ: 1.5 } as const;
 
 type V3 = [number, number, number];
@@ -26,6 +35,19 @@ const Q: Record<"left" | "right", Record<keyof typeof MESH, Quat>> = {
   right: { rod: n4([0.71, 0.02, -0.71, -0.02]), block: n4([0.71, 0.02, -0.71, -0.02]), face: [0, 0, -1, 0], side: [Math.SQRT1_2, 0, -Math.SQRT1_2, 0] },
   left: { rod: n4([0.71, 0.02, 0.71, 0.02]), block: n4([0.71, 0.02, 0.71, 0.02]), face: [0, 0, 1, 0], side: [Math.SQRT1_2, 0, Math.SQRT1_2, 0] },
 };
+// GL104: сетки левая/правая — зеркальные (свои габариты по GLB), кватернионы — из узлов Базиса k01 m11.
+const GL_MESH = {
+  rod: { name: "Шток для GL 104", left: { id: "5472ded6ddb1", lo: [-257.5, -9.75, 0], hi: [-130.5, 9.75, 20] }, right: { id: "31f183827b28", lo: [130.5, -9.75, 0], hi: [257.5, 9.75, 20] } },
+  block: { name: "Газ патрон", left: { id: "27755269a0ac", lo: [-130.5, -9.85, 0], hi: [18.5, 9.85, 20] }, right: { id: "85e782489f97", lo: [-18.5, -9.85, 0], hi: [130.5, 9.85, 20] } },
+  side: { name: "Кронштейн на боковину", left: { id: "0e5165c76171", lo: [-15.5, -15.42, 0], hi: [15.5, 15.42, 20.5] }, right: { id: "2e1055a4b381", lo: [-15.5, -15.42, 0], hi: [15.5, 15.42, 20.5] } },
+  face: { name: "Кронштейн на фасад", left: { id: "51e40f387d5b", lo: [-11.75, -25.5, 0], hi: [6.75, 25.5, 21.5] }, right: { id: "a60c89f79136", lo: [-6.75, -25.5, 0], hi: [11.75, 25.5, 21.5] } },
+} as const;
+const GL_Q: Record<"left" | "right", Record<keyof typeof GL_MESH, Quat>> = {
+  left: { rod: n4([0.52, -0.48, 0.52, -0.48]), block: n4([0.52, -0.48, 0.52, -0.48]), side: n4([0.68, 0.18, 0.68, 0.18]), face: [0, 0, 1, 0] },
+  right: { rod: n4([0.52, -0.48, -0.52, 0.48]), block: n4([0.52, -0.48, -0.52, 0.48]), side: n4([0.68, 0.18, -0.68, -0.18]), face: [0, 0, 1, 0] },
+};
+/** Верх кронштейна GL104 на фасаде от низа боковины: фасад должен его перекрывать. */
+export const GL_FACE_TOP = GL104.face[1] + GL_MESH.face.left.hi[1];
 /** Габаритный короб сетки в осях модуля (по 8 углам, повёрнутым кватернионом). */
 export function meshBox(o: V3, q: Quat, lo: V3, hi: V3): { size: V3; position: V3 } {
   const a: V3 = [Infinity, Infinity, Infinity], b: V3 = [-Infinity, -Infinity, -Infinity];
@@ -49,6 +71,16 @@ export function kitchenLiftParts(m: Module, out: Part[]) {
   const part = (id: string, name: string, box: { size: V3; position: V3 }, model?: Part["model"], anchor?: V3): Part => ({
     id, name, size: box.size, position: box.position, length: Math.max(...box.size), width: [...box.size].sort((a, c) => c - a)[1], thickness: Math.min(...box.size),
     role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], sectionId: door.sectionId, ...(model ? { model } : {}), ...(anchor ? { anchor } : {}) });
+  if (m.kitchenLift.system === "gl104") {
+    for (const side of ["left", "right"] as const) {
+      const sp = side === "left" ? L : R, dir = side === "left" ? 1 : -1, inner = sp.position[0] + dir * sp.size[0] / 2, bot = sp.position[1] - sp.size[1] / 2;
+      for (const k of Object.keys(GL_MESH) as (keyof typeof GL_MESH)[]) {
+        const [dx, dy, dz] = GL104[k], at: V3 = [inner + dir * dx, bot + dy, back + dz], mm = GL_MESH[k][side], q = GL_Q[side][k];
+        out.push(part(`lift:${side}:gl-${k}`, `${label} · ${GL_MESH[k].name}`, meshBox(at, q, mm.lo as unknown as V3, mm.hi as unknown as V3), { file: `hardware/bazis/${mm.id}.glb`, length: "y", native: true, origin: at, quat: q }));
+      }
+    }
+    return;
+  }
   for (const side of ["left", "right"] as const) {
     const sp = side === "left" ? L : R, dir = side === "left" ? 1 : -1, inner = sp.position[0] + dir * sp.size[0] / 2;
     const yF = top - LIFT.faceDown, yS = top - LIFT.sideDown, zS = back - LIFT.sideBack;
@@ -70,7 +102,7 @@ export function kitchenLiftParts(m: Module, out: Part[]) {
 /** Низ комплекта от верха фасада: фиксатор на боковину (254,5 ниже верха + половина сетки 14,5) — самая низкая деталь (шток ниже верха на 266,86). */
 export const LIFT_DROP = LIFT.sideDown + Math.max(-MESH.side.lo[1], LIFT.rodDown - MESH.rod.lo[1], 5 + 1.5);
 /** Геометрия корпуса для проверки газлифта (из model.ts, чтобы не тянуть цикл импорта). */
-export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number };
+export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number; carcassBottom?: number };
 /** Ошибки поля kitchenLift (validate): только кухня, один накладной подъёмный фасад в одну створку, и газлифт не входит в дно. */
 export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (!m.kitchenLift) return [];
@@ -79,9 +111,13 @@ export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (!(m.kitchenLift.system in LIFT_SYSTEMS)) e.push("Неизвестная система газлифта.");
   const tops = m.doors ? m.sections.reduce((n, s) => n + (s.doorHinges ?? []).slice(0, g ? g.leaves(s) : 4).filter((h) => h === "top").length, 0) : 0;
   if (!tops) e.push("Газлифт нужен фасаду с петлями по верху (подъёмному).");
-  else if (tops > 1) e.push("Газлифт PD-G-N02 по Базису ставится на один подъёмный фасад в одну створку (комплект на каждую боковину).");
-  if (m.doorMount === "inset") e.push("Газлифт PD-G-N02 по Базису — только для накладного подъёмного фасада (у вкладного петли на крыше не ставятся).");
-  if (g && g.facadeTop - LIFT_DROP < g.innerBottom - 1e-6) {
+  const label = LIFT_SYSTEMS[m.kitchenLift.system]?.label ?? "Газлифт";
+  if (tops > 1) e.push(`${label} по Базису ставится на один подъёмный фасад в одну створку (комплект на каждую боковину).`);
+  if (m.doorMount === "inset") e.push(`${label} по Базису — только для накладного подъёмного фасада (у вкладного петли на крыше не ставятся).`);
+  if (m.kitchenLift.system === "gl104") {
+    // кронштейн на фасад стоит от низа боковины (k01 m11–m13) — фасад должен его перекрывать
+    if (g && g.facadeTop < (g.carcassBottom ?? 0) + GL_FACE_TOP - 1e-6) e.push(`Газлифт GL104: кронштейн на фасад стоит на ${GL104.face[1]} мм от низа боковины — высота фасада от ${Math.ceil(GL_FACE_TOP)} мм от низа корпуса.`);
+  } else if (g && g.facadeTop - LIFT_DROP < g.innerBottom - 1e-6) {
     const minH = Math.ceil(m.height + g.innerBottom - (g.facadeTop - LIFT_DROP));
     e.push(`Газлифт PD-G-N02: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха фасада и входит в дно — высота корпуса от ${minH} мм.`);
   }
@@ -94,5 +130,5 @@ export function syncKitchenLift(m: Module) {
 export function parseKitchenLift(x: unknown): KitchenLift | undefined {
   if (!x || typeof x !== "object") return undefined;
   const s = (x as { system?: unknown }).system;
-  return s === "pd-g-n02" ? { system: s } : undefined;
+  return s === "pd-g-n02" || s === "gl104" ? { system: s } : undefined;
 }

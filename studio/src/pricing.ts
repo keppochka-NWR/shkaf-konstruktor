@@ -347,8 +347,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
 
     const allParts=parts(a.module);
     // газлифт подъёмного фасада кухни (Базис: PD-G-N02 — шток, газблок, фиксаторы на фасад и боковину; комплект на боковину), без цены
-    const lifts=a.module.kitchenLift?allParts.filter(p=>p.id.startsWith('lift:')&&p.id.endsWith(':block')).length:0;
-    if(lifts)add('kitchen-lift:'+a.module.kitchenLift!.system,'Газлифт PD-G-N02 — комплект на боковину (шток, газблок, 2 фиксатора, саморезы)',lifts,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+    const lifts=a.module.kitchenLift?allParts.filter(p=>p.id.startsWith('lift:')&&/:(gl-)?block$/.test(p.id)).length:0;
+    if(lifts)add('kitchen-lift:'+a.module.kitchenLift!.system,(a.module.kitchenLift!.system==='gl104'?'Газлифт GL104 с фиксацией положения — комплект на боковину (шток, газ патрон, кронштейны на боковину и фасад)':'Газлифт PD-G-N02 — комплект на боковину (шток, газблок, 2 фиксатора, саморезы)'),lifts,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     for(const d of allParts){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха

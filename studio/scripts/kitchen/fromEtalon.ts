@@ -20,6 +20,8 @@ import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
+/** Узлы комплекта газлифта GL104 в проектах Базиса (k01 m11–m13). */
+const GL_NAMES = /^(Шток для GL\s*104|Газ патрон|Кронштейн на боковину|Кронштейн на фасад)\s*$/;
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
 import { railUnder } from "./recognize-wallrail";
@@ -939,7 +941,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       m.sections[0].doorHinges = ["top"];
       // газлифт PD-G-N02 Базиса (шток, газблок, фиксаторы) — комплект на боковину
       if (hw("газлифт").some((h) => /PD-G-N02/.test(h.name))) m.kitchenLift = { system: "pd-g-n02" };
-      if (hw("газлифт").some((h) => !/PD-G-N02/.test(h.name))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !/PD-G-N02/.test(h.name))!.name}`);
+      // GL104 (k01 m11–m13): шток, газ патрон, кронштейны на боковину и на фасад — по комплекту на каждую боковину (8 узлов)
+      const glKit = (h: { name: string }) => GL_NAMES.test(h.name ?? "");
+      if (!m.kitchenLift && hw("газлифт").some((h) => /GL\s*104/.test(h.name)) && hw("газлифт").every(glKit) && hw("газлифт").length === 8) m.kitchenLift = { system: "gl104" };
+      const liftKnown = (h: { name: string }) => /PD-G-N02/.test(h.name) || (m.kitchenLift?.system === "gl104" && glKit(h));
+      if (hw("газлифт").some((h) => !liftKnown(h))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !liftKnown(h))!.name}`);
       const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = r1(f0.b.x1 - f0.b.x0);
       const hx = liftHingeX(xs, dw, r1(f0.b.y1 - f0.b.y0));
       if (hx) { m.sections[0].hingeX = hx; m.sections[0].hingeXFor = dw; notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")} — как в проекте`); }
