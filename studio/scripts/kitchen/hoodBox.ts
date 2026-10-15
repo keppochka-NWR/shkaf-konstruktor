@@ -88,7 +88,28 @@ export function hoodBoxSpecs(ref: RefModule): HoodBoxSpec[] {
  *  выреза (П-вырез горизонталей — planContours). Иначе null — модуль честно «не поддержано» (hoodBoxReason). */
 export function hoodBoxSimple(ref: RefModule): HoodBoxSpec | null {
   const hs = hoodBoxSpecs(ref);
-  return hs.length === 1 && !hs[0].shelves.length && !hs[0].hdfSplit && !hs[0].cut.round && frontOnConfirmats(ref, hs[0]) ? hs[0] : null;
+  if (hs.length !== 1 || hs[0].cut.round) return null;
+  const h = hs[0];
+  // полки по сторонам — парами на уровень (левая и правая), у всех один срез у стенки (apex) — иначе честно «не поддержано»
+  const levels = [...new Set(h.shelves.map((s) => s.y))];
+  const paired = levels.every((y) => h.shelves.filter((s) => s.y === y).map((s) => s.side).sort().join() === "left,right") && new Set(h.shelves.map((s) => s.apexGap)).size <= 1;
+  return paired && (frontOnConfirmats(ref, h) || frontEccentrics(ref, h).length > 0) ? h : null;
+}
+/** Эксцентрики фронта короба: высоты от низа стенки (накладной — в наружной пласти стенки у её переднего торца, вкладной — у внутренней грани). */
+export function frontEccentrics(ref: RefModule, h: HoodBoxSpec): number[] {
+  const xs = h.front.mount === "overlay" ? (frontEccInner(ref, h) ? [h.x0 + 16, h.x1 - 16] : [h.x0, h.x1]) : [h.x0 + 16, h.x1 - 16], z = h.front.z0;
+  return [...new Set(ref.hardware.filter((q) => q.category === "эксцентрик" && xs.some((x) => Math.abs(q.pos[0] - x) < 0.6) && Math.abs(q.pos[2] - z) < 0.6 && q.pos[1] > h.y0 && q.pos[1] < h.y1).map((q) => r1(q.pos[1] - h.y0)))].sort((a, b) => a - b);
+}
+/** Накладной фронт: бочонки эксцентриков с внутренней пласти стенок (k18 m12), а не с наружной (остальные 11). */
+export function frontEccInner(ref: RefModule, h: HoodBoxSpec): boolean {
+  if (h.front.mount !== "overlay") return false;
+  const at = (xs: number[]) => ref.hardware.filter((q) => q.category === "эксцентрик" && xs.some((x) => Math.abs(q.pos[0] - x) < 0.6) && Math.abs(q.pos[2] - h.front.z0) < 0.6 && q.pos[1] > h.y0 && q.pos[1] < h.y1).length;
+  return at([h.x0, h.x1]) === 0 && at([h.x0 + 16, h.x1 - 16]) > 0;
+}
+/** Куски полок по сторонам короба в эталоне (левые и правые) — правые в распознавателе не считаются отдельной полкой. */
+export function hoodSidePieces(ref: RefModule, h: HoodBoxSpec): { left: RefModule["panels"]; right: RefModule["panels"] } {
+  const pieces = ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && p.axis === "y" && p.box[1] > h.y0 && p.box[4] < h.y1 && (p.box[3] <= h.x0 + 1 && h.x0 - p.box[3] <= 5 || p.box[0] >= h.x1 - 1 && p.box[0] - h.x1 <= 5));
+  return { left: pieces.filter((p) => p.box[3] <= h.x0 + 1), right: pieces.filter((p) => p.box[3] > h.x0 + 1) };
 }
 /** Фронт короба крепится к стенкам конфирматами с лица (k24 m09); на эксцентриках и шкантах (k25 m16) параметрика пока не строит. */
 export function frontOnConfirmats(ref: RefModule, h: HoodBoxSpec): boolean {
@@ -103,21 +124,45 @@ export function hoodBoxField(h: HoodBoxSpec, ref: RefModule, sideZ0: number, geo
   const conf = ref.hardware.filter((q) => q.category === "конфирмат" && q.pos[0] > h.x0 - 1 && q.pos[0] < h.x1 + 1);
   const uniq = (v: number[]) => [...new Set(v.map(r1))].sort((a, b) => a - b);
   const front = uniq(conf.filter((q) => Math.abs(q.pos[2] - h.depth) < 0.6 && q.pos[1] > h.y0 && q.pos[1] < h.y1).map((q) => q.pos[1] - h.y0));
-  const below = uniq(conf.filter((q) => Math.abs(q.pos[1] - (h.y0 - 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
-  const above = uniq(conf.filter((q) => Math.abs(q.pos[1] - (h.y1 + 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
+  const inWall = (q: { pos: number[] }) => Math.abs(q.pos[0] - (h.x0 + 8)) < 1 || Math.abs(q.pos[0] - (h.x1 - 8)) < 1;
+  const below = uniq(conf.filter((q) => inWall(q) && Math.abs(q.pos[1] - (h.y0 - 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
+  const above = uniq(conf.filter((q) => inWall(q) && Math.abs(q.pos[1] - (h.y1 + 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
+  // вкладной фронт стоит на горизонтали: конфирматы через дно/крышу в его торцы (k06 m09: 54 от концов фронта) — от левого конца фронта
+  const fx0 = h.front.mount === "inset" ? h.x0 + 16 : h.x0 - h.front.over[0];
+  const frontBelow = uniq(conf.filter((q) => !inWall(q) && Math.abs(q.pos[1] - (h.y0 - 16)) < 0.6 && Math.abs(q.pos[2] - (h.depth - 8)) < 0.6).map((q) => q.pos[0] - fx0));
+  const frontAbove = uniq(conf.filter((q) => !inWall(q) && Math.abs(q.pos[1] - (h.y1 + 16)) < 0.6 && Math.abs(q.pos[2] - (h.depth - 8)) < 0.6).map((q) => q.pos[0] - fx0));
   const over = h.front.over.some((v) => Math.abs(v) > 0.05) ? { over: h.front.over } : {};
-  const c = { ...(front.length ? { front } : {}), ...(below.length ? { below } : {}), ...(above.length ? { above } : {}) };
+  const c = { ...(front.length ? { front } : {}), ...(below.length ? { below } : {}), ...(above.length ? { above } : {}), ...(frontBelow.length ? { frontBelow } : {}), ...(frontAbove.length ? { frontAbove } : {}) };
   const dx = r1((h.x0 + h.x1) / 2 - geo.width / 2);
   // полка, на которой короб стоит (её верх у низа стенок) и полка над ним (её низ у верха стенок) — иначе дно и крыша
   const on = geo.shelves.findIndex((s) => Math.abs(s.y1 - h.y0) <= 5 && s.y1 <= h.y0 + 0.5), under = geo.shelves.findIndex((s) => Math.abs(s.y0 - h.y1) <= 5 && s.y0 >= h.y1 - 0.5);
   const gapBelow = r1(h.y0 - (on >= 0 ? geo.shelves[on].y1 : geo.innerBottom)), gapAbove = r1((under >= 0 ? geo.shelves[under].y0 : geo.innerTop) - h.y1);
-  return { w: r1(h.x1 - h.x0), ...(dx ? { dx } : {}), ...(on >= 0 ? { on } : {}), ...(under >= 0 ? { under } : {}), gapBelow, gapAbove, z0: r1(h.wallZ[0] - sideZ0), z1: r1(h.wallZ[1] - sideZ0), front: { mount: h.front.mount, ...over }, ...(Object.keys(c).length ? { conf: c } : {}) };
+  // фронт на эксцентриках: высоты от низа стенки; шканты рядом — есть ли они в проекте (k05 — нет)
+  const ecc = frontEccentrics(ref, h), Hw = r1(h.y1 - h.y0);
+  // правило пакета 0 (переживает смену высоты): нижняя половина стенки — от низа (ecc), верхняя — от верха (eccTop), средний ±1 — eccMid
+  const eccMid = ecc.some((v) => Math.abs(v - Hw / 2) <= 1);
+  const eccLow = ecc.filter((v) => v < Hw / 2 - 1), eccTop = ecc.filter((v) => v > Hw / 2 + 1).map((v) => r1(Hw - v)).sort((a, b) => a - b);
+  const dowels = ecc.length ? ref.hardware.some((q) => q.category === "шкант" && q.pos[0] > h.x0 - 1 && q.pos[0] < h.x1 + 1 && q.pos[1] > h.y0 && q.pos[1] < h.y1 && Math.abs(q.pos[2] - (h.front.mount === "overlay" ? h.depth : h.front.z0 + 8)) < 1) : true;
+  // полки по сторонам: зазор до стенки, срез у стенки от лица фронта, полкодержатели в стенке (от задней кромки полки) — если не как у боковины
+  const pieces = hoodSidePieces(ref, h);
+  let shelves: NonNullable<KitchenSpec["hoodBox"]>["shelves"];
+  if (pieces.left.length) {
+    const l = pieces.left[0], gap = r1(h.x0 - l.box[3]), apex = h.shelves.find((s) => s.side === "left")?.apexGap ?? 0;
+    const pinZ = (xs: number[]) => [...new Set(ref.hardware.filter((q) => q.category === "полкодержатель" && xs.some((x) => Math.abs(q.pos[0] - x) < 1) && Math.abs(q.pos[1] - l.box[1]) < 2).map((q) => r1(q.pos[2] - l.box[2])))].sort((a, b) => a - b);
+    const atBox = pinZ([h.x0, h.x1]), atSide = pinZ([l.box[0] - 1, l.box[0] - 1.5, l.box[0] - 2, l.box[0] - 2.5]);
+    shelves = { ...(Math.abs(gap - (l.box[0] - 16)) > 0.05 ? { gap } : {}), apex, ...(atBox.length === 2 && atBox.join() !== atSide.join() ? { pins: [atBox[0], atBox[1]] as [number, number] } : {}) };
+  }
+  return { w: r1(h.x1 - h.x0), ...(dx ? { dx } : {}), ...(on >= 0 ? { on } : {}), ...(under >= 0 ? { under } : {}), gapBelow, gapAbove, z0: r1(h.wallZ[0] - sideZ0), z1: r1(h.wallZ[1] - sideZ0),
+    front: { mount: h.front.mount, ...over, ...(eccLow.length ? { ecc: eccLow } : {}), ...(eccTop.length ? { eccTop } : {}), ...(eccMid ? { eccMid: true as const } : {}),...(ecc.length && frontEccInner(ref, h) ? { eccIn: true as const } : {}), ...(dowels ? {} : { dowels: false as const }) }, ...(Object.keys(c).length ? { conf: c } : {}), ...(shelves ? { shelves } : {}), ...(h.hdfSplit ? { hdfSplit: true } : {}) };
 }
 
 /** Панели короба в эталоне (стенки и фронт) — чтобы распознаватель не считал их «не распознанными». */
 export function hoodBoxPanels(ref: RefModule, h: HoodBoxSpec): RefModule["panels"] {
-  return ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && ((p.axis === "x" && (Math.abs(p.box[0] - h.x0) < 0.6 || Math.abs(p.box[3] - h.x1) < 0.6) && Math.abs(p.box[1] - h.y0) < 1)
-    || (p.axis === "z" && Math.abs(p.box[5] - h.depth) < 0.6 && p.box[0] <= h.x0 + 20 && p.box[3] >= h.x1 - 20 && p.box[4] - p.box[1] > 200)));
+  const pieces = hoodSidePieces(ref, h);
+  // ХДФ двумя кусками: второй кусок (за коробом задника нет) — тоже деталь короба
+  const hdf = h.hdfSplit ? ref.panels.filter((p) => p.kind === "hdf" && (p.box[3] <= h.x0 + 20 || p.box[0] >= h.x1 - 20)) : [];
+  return [...ref.panels.filter((p) => (p.kind === "ldsp" || p.kind === "mdf") && ((p.axis === "x" && (Math.abs(p.box[0] - h.x0) < 0.6 || Math.abs(p.box[3] - h.x1) < 0.6) && Math.abs(p.box[1] - h.y0) < 1)
+    || (p.axis === "z" && Math.abs(p.box[5] - h.depth) < 0.6 && p.box[0] <= h.x0 + 20 && p.box[3] >= h.x1 - 20 && p.box[4] - p.box[1] > 200))), ...pieces.left, ...pieces.right, ...hdf];
 }
 
 /** Причина «не поддержано» для навесного с коробом под вытяжку или null: что именно в коробе Базиса (фронт, вырез, полки, ХДФ). */

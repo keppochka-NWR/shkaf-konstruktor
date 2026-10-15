@@ -97,6 +97,17 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const y = p.position[1] - 3;
       push(p.id, [p.position[0], y, p.position[2]], [0, 1, 0], 8, 22);
       push(p.id + ":bottom", [p.position[0], y, p.position[2]], [0, -1, 0], 8, 12);
+    } else if (p.id.startsWith("ecc:hood:") && !p.id.endsWith(":pin") && p.anchor) {
+      // фронт короба вытяжки на эксцентриках (kitchen.hoodBox.front.ecc). Накладной (k25, k15…): точка — наружная пласть стенки × тыл
+      // фронта; бочонок D15×12 в пласть стенки в 34 от торца, шток D8×34 в торец стенки по её оси, D5×12 в тыл фронта.
+      // Вкладной (k06): точка — внутренняя грань стенки × тыл фронта; бочонок в тыл фронта в 34 от стенки, шток в торец фронта, D5×12 в стенку.
+      const [ax, ay, az] = p.anchor, pin = ps.find((q) => q.id === p.id + ":pin");
+      if (pin && pin.size[2] > pin.size[0]) { const cx = pin.position[0]; push(p.id, [ax, ay, az - 34], [Math.sign(cx - ax), 0, 0], 15, 12); push(p.id + ":pin", [cx, ay, az], [0, 0, -1], 8, 34); push(p.id + ":side", [cx, ay, az], [0, 0, 1], 5, 12); }
+      else if (pin) { const inward = Math.sign(pin.position[0] - ax), zc = pin.position[2]; push(p.id, [ax + inward * 34, ay, az], [0, 0, 1], 15, 12); push(p.id + ":pin", [ax, ay, zc], [inward, 0, 0], 8, 34); push(p.id + ":side", [ax, ay, zc], [-inward, 0, 0], 5, 12); }
+    } else if (p.id.startsWith("dowel:hood:") && p.anchor) {
+      // шкант 8×30 фронта короба: накладной — D8×22 в торец стенки, D8×12 в тыл фронта; вкладной — D8×22 в торец фронта, D8×12 в стенку
+      if (p.size[2] > p.size[0]) { const z = p.position[2] + 3; push(p.id, [p.position[0], p.position[1], z], [0, 0, -1], 8, 22); push(p.id + ":side", [p.position[0], p.position[1], z], [0, 0, 1], 8, 12); }
+      else { const inward = Math.sign(p.position[0] - p.anchor[0]), x = p.position[0] - inward * 3; push(p.id, [x, p.position[1], p.position[2]], [inward, 0, 0], 8, 22); push(p.id + ":side", [x, p.position[1], p.position[2]], [-inward, 0, 0], 8, 12); }
     } else if (p.id.startsWith("ecc:") && !p.id.endsWith(":pin") && p.anchor) {
       // эксцентрик Ф15: D15×12 в пласть горизонтали в 34 мм от стойки, шток D8×34 в торец горизонтали, D5×12 в стойку
       const [ex, ey, ez] = p.anchor, inward = p.position[0] > ex ? 1 : -1, down = p.position[1] < ey ? -1 : 1;
