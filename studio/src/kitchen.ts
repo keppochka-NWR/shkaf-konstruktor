@@ -32,7 +32,11 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
     /** Планка ЛДСП лёжа у задней кромки под поднятым дном (между боковинами, y 0…16, от задней кромки на depth; конфирматы через боковины
      *  по правилу стыка — одна точка посередине у планки до 120). По базе — 7 навесных с поднятым дном: k04 m06 (50), k04 m09 (100),
      *  k08 m08, k10 m07, k14 m03 (50), k18 m12 (60), k32 m13 (50); кромка перед и зад (5 из 7), k10 — без, k32 — по кругу (edgeScheme.parts). */
-    plank?: { depth: number } };
+    plank?: { depth: number };
+    /** Крепёж фронтальной панели под дном по Базису (pkg-hoodbox; 4 из 6 навесных с панелью: k14 m03, k15 m08, k18 m12, k22 m10): side — конфирматы
+     *  через боковины в торцы панели, мм от её низа; top — сверху через дно: конфирматы (conf, k14) или эксцентрик в тыльной пласти панели
+     *  в 34 от её верха + шкант 8×30 на 32 ближе к середине (ecc); xs — от левого конца панели, xr — от правого, mid — посередине. */
+    conf?: { side?: number[]; top?: { kind: "conf" | "ecc"; xs: number[]; xr?: number[]; mid?: true; dowels?: false }; /** D5 конфирматов в панель, если не как у корпуса (k22 m10: 42) */ depth?: number } };
   /** Дно короче спереди на столько мм (Базис k06, k10, k15: 24,5 — ниша под подсветку у лица навесного); по умолчанию 0. */
   bottomFront?: number;
   /** Дно короче сзади (Базис: навесной под вытяжку, дно перед ХДФ — k08 m10, k04, k13, k14: 20). */
@@ -212,7 +216,8 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  ХДФ двумя кусками по сторонам короба (hdfSplit; k05, k15, k22, k27): до внутренней грани стенки минус 1, за коробом задника нет. */
   hoodBox?: { w: number; dx?: number; on?: number; under?: number; gapBelow: number; gapAbove: number; z0: number; z1: number;
     front: { mount: "overlay" | "inset"; over?: [number, number]; /** эксцентрики нижней половины стенки — от её низа; верхней — от верха (eccTop); средний (стенка выше 600: k05, k22, k30) — eccMid (пакет 0: переживают смену высоты) */ ecc?: number[]; eccTop?: number[]; eccMid?: true; /** бочонок с внутренней пласти стенки (k18 m12; обычно — с наружной) */ eccIn?: true; dowels?: false }; conf?: { front?: number[]; below?: number[]; above?: number[]; frontBelow?: number[]; frontAbove?: number[] };
-    shelves?: { gap?: number; apex: number; pins?: [number, number] }; hdfSplit?: boolean };
+    shelves?: { gap?: number; apex: number; pins?: [number, number] }; hdfSplit?: boolean;
+    /** D5 конфирматов в торцы стенок короба, если не как у корпуса (k22 m10: 42 при 35; так же царга rails[].confDepth) */ confDepth?: number };
   /** ХДФ в пазу только от жёсткой полки (номер в секции 1) до верха: пенал под холодильник (k25 m10), ниже полки — ниша без задника.
    *  Низ ХДФ — низ полки плюс зазор паза (grooveClear), как в Базисе. Работает вместе с topBack/backTopGap и bottomBack. */
   backFromShelf?: number };
@@ -347,6 +352,7 @@ export function mirrorKitchen(m: Module): void {
   if (k.grooveHoles) k.grooveHoles = k.grooveHoles.map((h): GrooveHole => (h.length >= 5 ? [h[0], h[1], h[2], h[3] === -1 ? 1 : -1, h[4] === -1 ? -1 : 1] : [m.width - h[0], h[1], h[2]]));
   for (const r of m.rails ?? []) { if (!r) continue; const { topConf, topConfR } = r; put(r, "topConf", topConfR); put(r, "topConfR", topConf); }
   if (k.hoodBox) { const h = k.hoodBox; put(h, "dx", h.dx ? -h.dx : undefined); if (h.front.over) h.front.over = [h.front.over[1], h.front.over[0]]; }
+  const rt = k.raise?.conf?.top; if (rt) { const { xs, xr } = rt; rt.xs = xr ?? []; put(rt, "xr", xs.length ? xs : undefined); } // крепёж панели под дном: от левого конца ↔ от правого
   if (k.sideStrip) k.sideStrip = { ...k.sideStrip, side: k.sideStrip.side === "left" ? "right" : "left" };
   for (const d of m.kdrawers ?? []) {
     const b: FirmaxBox | undefined = d.box;
@@ -554,10 +560,36 @@ export function hoodBoxParts(m: Module, out: Part[]) {
   if (y1 + t <= m.height) for (const [k, x] of (h.conf?.frontAbove ?? []).entries()) conf(`fast:hood:front:above:${k}`, [fx0 + x, y1 + t, fz], "-y");
 }
 
+/** Крепёж фронтальной панели под поднятым дном навесного (kitchen.raise.conf): конфирматы через боковины в торцы панели и сверху через дно
+ *  (top.kind «conf») или эксцентрик в тыльной пласти панели в 34 от её верха + шкант 8×30 на 32 ближе к середине (top.kind «ecc»);
+ *  точка эксцентрика — верх панели × тыльная пласть, шканта — верх дна по оси панели (так в Базисе: k15, k18, k22). Присадка — drilling.ts. */
+export function raiseFrontParts(m: Module, out: Part[]) {
+  const rc = m.kitchen?.raise?.conf, pf = out.find((p) => p.id === "plinth"), bt = out.find((p) => p.id === "bottom");
+  if (!rc || !pf || !bt || fastenersMode(m.kitchen) !== true) return;
+  const L = RULES.confirmatL, Dc = RULES.confirmatD, bh = RULES.eccBarrelH, bd = RULES.eccBarrelD;
+  const len = pf.size[0], px0 = pf.position[0] - len / 2, py0 = pf.position[1] - pf.size[1] / 2, yTop = pf.position[1] + pf.size[1] / 2, zc = pf.position[2], zb = zc - pf.size[2] / 2, yb1 = bt.position[1] + bt.size[1] / 2;
+  const metal = (id: string, name: string, size: Part["size"], position: Part["position"], extra: Partial<Part>): Part =>
+    ({ id, name, size, position, length: Math.max(...size), width: [...size].sort((a, b) => b - a)[1], thickness: Math.min(...size), role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], ...extra });
+  const conf = (id: string, head: [number, number, number], axis: "+x" | "-x" | "-y") => {
+    const s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y");
+    out.push(metal(id, m.kitchen?.confirmatName ?? "Конфирмат 7×50", vertical ? [Dc, L, Dc] : [L, Dc, Dc], vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]],
+      { model: { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONFIRMAT_QUATS[axis] } }));
+  };
+  for (const [k, y] of (rc.side ?? []).entries()) { conf(`fast:raise-front:left:${k}`, [0, py0 + y, zc], "+x"); conf(`fast:raise-front:right:${k}`, [m.width, py0 + y, zc], "-x"); }
+  const top = rc.top; if (!top) return;
+  const pts = [...top.xs.map((x) => [px0 + x, 1]), ...(top.mid ? [[px0 + len / 2, 1]] : []), ...(top.xr ?? []).map((x) => [px0 + len - x, -1])].sort((a, b) => a[0] - b[0]);
+  for (const [k, [x, dir]] of pts.entries()) {
+    if (top.kind === "conf") { conf(`fast:raise-front:top:${k}`, [x, yb1, zc], "-y"); continue; }
+    out.push(metal(`ecc:raise-front:${k}`, "Эксцентрик D15 · бочонок", [bd, bd, bh], [x, yTop - 34, zb + bh / 2], { anchor: [x, yTop, zb] }));
+    if (top.dowels !== false) out.push(metal(`dowel:raise-front:${k}`, "Шкант 8×30", [8, 30, 8], [x + dir * 32, yTop - 3, zc], { anchor: [x + dir * 32, yb1, zc] }));
+  }
+}
+
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
   out.push(...ovenParts(m));
   hoodBoxParts(m, out);
+  raiseFrontParts(m, out);
   kitchenStrip(m, out);
   const t = 16;
   const metal = (id: string, name: string, size: Part["size"], position: Part["position"], model?: Part["model"]): Part =>
@@ -871,6 +903,8 @@ export function kitchenErrors(m: Module): string[] {
     if (k.topBack !== undefined && (!Number.isFinite(k.topBack) || k.topBack < 0 || k.topBack > 120)) e.push("Крыша короче сзади: 0–120 мм.");
     if (k.backTopGap !== undefined && (!Number.isFinite(k.backTopGap) || k.backTopGap < 0 || k.backTopGap > 20)) e.push("Зазор ХДФ до верха: 0–20 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
+    const rc = k.raise?.conf, ok = (a: number[] | undefined, lo: number) => !a || a.every((v) => Number.isFinite(v) && v >= lo);
+    if (rc && !(ok(rc.side, 10) && ok(rc.top?.xs, 20) && ok(rc.top?.xr, 20))) e.push("Крепёж панели под дном: высоты от низа панели и отступы от её концов — от 10 и 20 мм.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m));
     // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
@@ -990,7 +1024,9 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Object.keys(drill).length ? { drill } : {}),
     ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number] })) } : {}),
     ...(k.jointZ && typeof k.jointZ === "object" ? { jointZ: Object.fromEntries(Object.entries(k.jointZ).filter(([, v]) => Array.isArray(v) && (v.length === 2 || v.length === 3)).map(([key, v]) => [key, (v.length === 3 ? [num(v[0]), num(v[1]), num(v[2])] : [num(v[0]), num(v[1])]) as [number, number] | [number, number, number]])) } : {}),
-    ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}), ...(k.raise.plank && num(k.raise.plank.depth) > 0 ? { plank: { depth: num(k.raise.plank.depth) } } : {}) } } : {}),
+    ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}), ...(k.raise.plank && num(k.raise.plank.depth) > 0 ? { plank: { depth: num(k.raise.plank.depth) } } : {}),
+      ...(k.raise.conf && typeof k.raise.conf === "object" ? { conf: { ...(Array.isArray(k.raise.conf.side) && k.raise.conf.side.length ? { side: (k.raise.conf.side as unknown[]).map(num) } : {}),
+        ...(k.raise.conf.top && (k.raise.conf.top.kind === "conf" || k.raise.conf.top.kind === "ecc") ? { top: { kind: k.raise.conf.top.kind, xs: (Array.isArray(k.raise.conf.top.xs) ? k.raise.conf.top.xs as unknown[] : []).map(num), ...(Array.isArray(k.raise.conf.top.xr) && k.raise.conf.top.xr.length ? { xr: (k.raise.conf.top.xr as unknown[]).map(num) } : {}), ...(k.raise.conf.top.mid ? { mid: true as const } : {}), ...(k.raise.conf.top.dowels === false ? { dowels: false as const } : {}) } } : {}), ...(k.raise.conf.depth === undefined ? {} : { depth: num(k.raise.conf.depth) }) } } : {}) } } : {}),
     ...(k.legs ? { legs: { back: num(k.legs.back), front: num(k.legs.front), ...(k.legs.side === undefined ? {} : { side: num(k.legs.side) }), ...(Array.isArray(k.legs.xs) ? { xs: k.legs.xs.map(Number) } : {}), ...(Array.isArray(k.legs.pts) ? { pts: k.legs.pts.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(Array.isArray(k.legs.xr) && k.legs.xr.length ? { xr: k.legs.xr.map(Number) } : {}), ...(Array.isArray(k.legs.ptsR) && k.legs.ptsR.length ? { ptsR: k.legs.ptsR.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(k.legs.screws ? { screws: true as const } : {}), ...(k.legs.same ? { same: true as const } : {}), ...(k.legs.rows2 ? { rows2: true as const } : {}) } } : {}),
     ...(() => { const r = k.rafix === undefined ? undefined : deps.parseKitchenRafix(k.rafix); return r ? { rafix: r } : {}; })(),
     ...(k.jointPoints === 2 || k.jointPoints === 3 ? { jointPoints: k.jointPoints } : {}),
@@ -1003,7 +1039,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
       front: { mount: k.hoodBox.front.mount, ...(Array.isArray(k.hoodBox.front.over) ? { over: [num(k.hoodBox.front.over[0]), num(k.hoodBox.front.over[1])] as [number, number] } : {}),
         ...(Array.isArray(k.hoodBox.front.ecc) && k.hoodBox.front.ecc.length ? { ecc: (k.hoodBox.front.ecc as unknown[]).map(num) } : {}), ...(Array.isArray(k.hoodBox.front.eccTop) && k.hoodBox.front.eccTop.length ? { eccTop: (k.hoodBox.front.eccTop as unknown[]).map(num) } : {}), ...(k.hoodBox.front.eccMid ? { eccMid: true as const } : {}),...(k.hoodBox.front.eccIn ? { eccIn: true as const } : {}), ...(k.hoodBox.front.dowels === false ? { dowels: false as const } : {}) },
       ...(k.hoodBox.shelves && typeof k.hoodBox.shelves === "object" ? { shelves: { ...(k.hoodBox.shelves.gap === undefined ? {} : { gap: num(k.hoodBox.shelves.gap) }), apex: num(k.hoodBox.shelves.apex), ...(Array.isArray(k.hoodBox.shelves.pins) ? { pins: [num(k.hoodBox.shelves.pins[0]), num(k.hoodBox.shelves.pins[1])] as [number, number] } : {}) } } : {}),
-      ...(k.hoodBox.hdfSplit ? { hdfSplit: true } : {}),
+      ...(k.hoodBox.hdfSplit ? { hdfSplit: true } : {}), ...(k.hoodBox.confDepth === undefined ? {} : { confDepth: num(k.hoodBox.confDepth) }),
       ...(k.hoodBox.conf && typeof k.hoodBox.conf === "object" ? { conf: Object.fromEntries((["front", "below", "above", "frontBelow", "frontAbove"] as const).filter((s) => Array.isArray(k.hoodBox!.conf![s])).map((s) => [s, (k.hoodBox!.conf![s] as unknown[]).map(num)])) } : {}) } } : {}),
     ...(k.contourEdges && typeof k.contourEdges === "object" ? { contourEdges: Object.fromEntries(Object.entries(k.contourEdges as Record<string, unknown>).filter(([, c]) => Array.isArray(c)).map(([id, c]) => [id, (c as unknown[]).map((v) => Math.max(0, num(v)))])) } : {}),
     ...(k.bareBottom === true ? { bareBottom: true as const } : {}),

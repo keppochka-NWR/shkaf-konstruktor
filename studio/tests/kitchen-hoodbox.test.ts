@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,parseModule} from '../src/model';
+import {mirrorKitchen} from '../src/kitchen';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon,backClearY} from '../scripts/kitchen/fromEtalon';
 
@@ -71,6 +72,26 @@ test('третий конфирмат стыка у задней кромки (k
   assert.equal(parts(m).filter(p=>/^fast:top:left:\d+$/.test(p.id)).length,3);
   assert.deepEqual(moduleFromEtalon(load('k31','m08')).module.kitchen?.jointZ?.['bottom:right'],[74,54,8]);
   assert.equal(moduleFromEtalon(load('k10','m02')).module.kitchen?.jointZ,undefined);
+});
+
+test('крепёж панели под поднятым дном (kitchen.raise.conf): 4 из 6 навесных с панелью — конфирматы через боковины и сверху через дно (k14) или эксцентрик+шкант (k15, k18, k22); без крепежа — k25, k32',skip,()=>{
+  const raise=(k:string,key:string)=>moduleFromEtalon(load(k,key)).module.kitchen?.raise;
+  assert.deepEqual(raise('k14','m03')?.conf,{side:[71.5,199.5],top:{kind:'conf',xs:[60],xr:[60]}});
+  assert.deepEqual(raise('k15','m08')?.conf,{side:[51,147],top:{kind:'ecc',xs:[60],xr:[60]}});
+  assert.deepEqual(raise('k18','m12')?.conf,{side:[67,227],top:{kind:'ecc',xs:[64],xr:[64],mid:true}});
+  // k22 m10: D5 конфирматов в панель и в стенки короба 42 при 35 у корпуса — по проекту
+  assert.deepEqual(raise('k22','m10')?.conf,{side:[45.5,109.5],top:{kind:'ecc',xs:[60],xr:[60]},depth:42});
+  assert.equal(moduleFromEtalon(load('k22','m10')).module.kitchen?.hoodBox?.confDepth,42);
+  assert.equal(raise('k25','m16')?.conf,undefined);assert.equal(raise('k32','m13')?.conf,undefined);
+  // модули сходятся с Базисом
+  for(const [k,key] of [['k14','m03'],['k22','m10']]){const ref=load(k,key),r=moduleFromEtalon(ref);assert.ok(honestPass(compareModule(ref,r.module),validate(r.module),r.unsupported),`${k} ${key} PASS`);}
+  // поле переживает сохранение; зеркало — отступы от левого и правого конца меняются местами
+  const m=moduleFromEtalon(load('k22','m10')).module;
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.raise,m.kitchen?.raise);
+  const w=structuredClone(m);w.kitchen!.raise!.conf!.top={kind:'ecc',xs:[50],xr:[70]};mirrorKitchen(w);assert.deepEqual(w.kitchen!.raise!.conf!.top,{kind:'ecc',xs:[70],xr:[50]});
+  // ширина +100: крепёж по-прежнему у концов панели, без ошибок
+  const m2=structuredClone(m);m2.width+=100;assert.deepEqual(validate(m2),[]);
+  const ex=parts(m2).filter(p=>p.id.startsWith('ecc:raise-front:')).map(p=>p.anchor![0]);assert.deepEqual(ex,[16+60,m2.width-16-60]);
 });
 
 test('k10 m07: ХДФ на 0,5 ниже дна паза — особенность (1 из 175 ХДФ в пазу дна по базе, 128 — на 7 в дно), студия ставит ХДФ в паз по правилу',skip,()=>{

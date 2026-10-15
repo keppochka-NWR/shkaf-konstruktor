@@ -21,6 +21,23 @@ export function raisePlank(P: PB[], left: PB, right: PB, bottom: PB, sideZ0: num
     && b.x0 >= left.b.x1 - 5 && b.x1 <= right.b.x0 + 5 && b.x1 - b.x0 >= (right.b.x0 - left.b.x1) - 10);
 }
 
+/** Крепёж фронтальной панели под поднятым дном (kitchen.raise.conf, pkg-hoodbox 15.10.2026). По базе 6 навесных с панелью под дном:
+ *  без крепежа k25 m16, k32 m13; с крепежом 4 — по 2 конфирмата через каждую боковину в торцы панели (side — от низа панели: k14 71,5/199,5,
+ *  k15 51/147, k18 67/227, k22 45,5/109,5) и сверху через дно: конфирматы (k14: 76 от концов) или эксцентрик в тыльной пласти панели +
+ *  шкант на 32 ближе к середине (k15, k22: 76 от концов; k18: 80 от концов и посередине). xs — от левого конца панели, xr — от правого, mid. */
+export function raiseFrontConf(hw: { category: string; pos: number[] }[], panel: B, bottom: B): NonNullable<NonNullable<KitchenSpec["raise"]>["conf"]> | undefined {
+  const zc = (panel.z0 + panel.z1) / 2, len = panel.x1 - panel.x0;
+  const side = [...new Set(hw.filter((h) => h.category === "конфирмат" && (h.pos[0] <= panel.x0 + 0.5 || h.pos[0] >= panel.x1 - 0.5) && (h.pos[0] < panel.x0 - 1 || h.pos[0] > panel.x1 + 1) && h.pos[1] > panel.y0 && h.pos[1] < panel.y1 && Math.abs(h.pos[2] - zc) < 1).map((h) => r1(h.pos[1] - panel.y0)))].sort((a, c) => a - c);
+  const inX = (h: { pos: number[] }) => h.pos[0] > panel.x0 + 1 && h.pos[0] < panel.x1 - 1;
+  const topConf = hw.filter((h) => h.category === "конфирмат" && inX(h) && Math.abs(h.pos[1] - bottom.y1) < 0.6 && Math.abs(h.pos[2] - zc) < 1);
+  const ecc = hw.filter((h) => h.category === "эксцентрик" && inX(h) && Math.abs(h.pos[1] - panel.y1) < 0.6 && (Math.abs(h.pos[2] - panel.z0) < 0.6 || Math.abs(h.pos[2] - panel.z1) < 0.6));
+  const pts = (ecc.length ? ecc : topConf).map((h) => r1(h.pos[0] - panel.x0)).sort((a, c) => a - c);
+  const dowels = ecc.length > 0 && hw.some((h) => h.category === "шкант" && inX(h) && Math.abs(h.pos[1] - bottom.y1) < 0.6 && Math.abs(h.pos[2] - zc) < 1);
+  if (!side.length && !pts.length) return undefined;
+  const mid = pts.some((x) => Math.abs(x - len / 2) < 0.6), xs = pts.filter((x) => x < len / 2 - 0.6), xr = pts.filter((x) => x > len / 2 + 0.6).map((x) => r1(len - x)).sort((a, c) => a - c);
+  return { ...(side.length ? { side } : {}), ...(pts.length ? { top: { kind: ecc.length ? "ecc" as const : "conf" as const, xs, ...(xr.length ? { xr } : {}), ...(mid ? { mid: true as const } : {}), ...(ecc.length && !dowels ? { dowels: false as const } : {}) } } : {}) };
+}
+
 /** Планка на ребре навесного стоит на дне (низ планки = верх дна): это нижняя стяжка (k04 m05, m07, m08 — задние планки навески сверху и снизу). */
 export function wallRailOnBottom(role: string, rail: PB, bottom: PB | undefined): boolean {
   return (role === "wall" || role === "antresol") && !!bottom && Math.abs(rail.b.y0 - bottom.b.y1) < 0.5;

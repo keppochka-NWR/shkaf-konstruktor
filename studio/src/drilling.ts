@@ -48,6 +48,22 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       push(p.id + ":bottom", [x, yb, zc], [0, -1, 0], 5, 12);
       continue;
     }
+    if (p.id.startsWith("ecc:raise-front:") && p.anchor) {
+      // панель под поднятым дном (kitchen.raise.conf): бочонок D15×12 в тыльную пласть панели в 34 под её верхом, шток D8×34 вниз в торец
+      // панели, D5×12 вверх в дно — зеркально стяжке на дне
+      const [x, yt, zf] = p.anchor, zc = zf + 8;
+      push(p.id, [x, yt - 34, zf], [0, 0, 1], 15, 12);
+      push(p.id + ":pin", [x, yt, zc], [0, -1, 0], 8, 34);
+      push(p.id + ":bottom", [x, yt, zc], [0, 1, 0], 5, 12);
+      continue;
+    }
+    if (p.id.startsWith("dowel:raise-front:") && p.anchor) {
+      // шкант 8×30: D8×22 вниз в торец панели, D8×12 вверх в дно — из плоскости стыка (низ дна)
+      const yt = p.position[1] + 3;
+      push(p.id, [p.anchor[0], yt, p.anchor[2]], [0, -1, 0], 8, 22);
+      push(p.id + ":bottom", [p.anchor[0], yt, p.anchor[2]], [0, 1, 0], 8, 12);
+      continue;
+    }
     if (p.id.startsWith("dowel:rail-under:") && p.anchor) {
       // шкант 8×30 стяжки на дне: D8×22 вверх в торец стяжки, D8×12 вниз в дно — из плоскости стыка (верх дна)
       const yb = p.position[1] - 3;
@@ -65,7 +81,7 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // царга со своей глубиной по проекту (rails[].confDepth, k31 m16: 35 при 42 у корпуса) — главнее глубины модуля
       const rd = m.kitchen && p.id.startsWith("fast:rail:") ? railsOf(m).find((q) => q.place === p.id.split(":")[2])?.confDepth : undefined;
       // конфирмат в торец доборной планки (kitchen.sideStrip.confDepth, k28 m18: 42 при 35 у корпуса) — своя глубина по проекту
-      const sd = p.id.startsWith("fast:side-strip:") ? m.kitchen?.sideStrip?.confDepth : undefined;
+      const sd = p.id.startsWith("fast:side-strip:") ? m.kitchen?.sideStrip?.confDepth : p.id.startsWith("fast:hood:") ? m.kitchen?.hoodBox?.confDepth : p.id.startsWith("fast:raise-front:") ? m.kitchen?.raise?.conf?.depth : undefined; // стенки короба, панель под дном — по проекту (k22 m10)
       const d5 = p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : sd ?? rd ?? m.kitchen?.drill?.confirmat ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
       // стяжка с соседним корпусом (kitchen.outConf): D5 — в соседа; у Базиса оно записано на наружной грани своей боковины навстречу
       if (p.id.startsWith("fast:out:")) push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], [-a[0], -a[1], -a[2]], 5, d5);
