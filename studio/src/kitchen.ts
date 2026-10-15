@@ -130,8 +130,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Корпус без опор (33 модуля 13 кухонь Базиса: дно на полу или на своём цоколе) — не ошибка для кухни из Базиса. */
   noLegs?: true;
   /** Гвозди набивного ХДФ по Базису (11 навесных/антресолей k01, k03): ряды по периметру в 7,5 от края, round(W/125) и round(H/125)
-   *  гвоздей (см. scripts/kitchen/recognize-nails.ts); q — поворот сетки по рядам, mesh — сетка Базиса. Нет — студия гвоздей не ставит. */
-  nails?: { mesh?: string; q: Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> };
+   *  гвоздей (см. scripts/kitchen/recognize-nails.ts); q — поворот сетки по рядам, mesh — сетка Базиса. Нет — студия гвоздей не ставит.
+   *  name — крепёж ХДФ по проекту вместо гвоздя (пакет 3: «Саморез 3,5х12 мм, Zn» — 86 шт. в 5 модулях k09/k24, по той же раскладке 3). */
+  nails?: { mesh?: string; name?: string; q: Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> };
   /** Ручка распашного фасада по проекту Базиса (k07, k09: 36 ручек «рейлинг 128/160»): горизонтальная — по центру ширины,
    *  вертикальная — у свободного края; dy — от низа (from "bottom") или верха фасада до точки ручки на лицевой плоскости.
    *  holes — отверстия под ручку, если они есть в проекте (k07: 2 × D5×18 насквозь, межосевое 160; у k09 отверстий нет).
@@ -519,7 +520,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
       ...r.left.map((y) => [7.5, y, q.left] as [number, number, [number, number, number, number]]), ...r.right.map((y) => [W - 7.5, y, q.right] as [number, number, [number, number, number, number]])];
     pts.forEach(([x, y, qq], n) => {
       const o: [number, number, number] = [x0 + x, y0 + y, z];
-      const p = metal(`nail:${n}`, "Гвоздь", [0.01, 0.01, 0.01], o, k.nails!.mesh ? { file: `hardware/bazis/${k.nails!.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(qq) } : undefined);
+      const p = metal(`nail:${n}`, k.nails!.name ?? "Гвоздь", [0.01, 0.01, 0.01], o, k.nails!.mesh ? { file: `hardware/bazis/${k.nails!.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(qq) } : undefined);
       p.anchor = o; out.push(p);
     });
   }
@@ -886,7 +887,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.hinges === false ? { hinges: false } : {}),
     ...(k.noLegs ? { noLegs: true } : {}),
     ...(k.railUnder && typeof k.railUnder === "object" ? { railUnder: Object.fromEntries(Object.entries(k.railUnder).filter(([, v]) => v && Array.isArray(v.ecc) && Array.isArray(v.dowel)).map(([key, v]) => [key, { ecc: v.ecc.map(Number), dowel: v.dowel.map(Number), ...(Array.isArray(v.eccR) && v.eccR.length ? { eccR: v.eccR.map(Number) } : {}), ...(Array.isArray(v.dowelR) && v.dowelR.length ? { dowelR: v.dowelR.map(Number) } : {}), face: v.face === "back" ? ("back" as const) : ("front" as const) }])) } : {}),
-    ...(k.nails && k.nails.q ? { nails: { ...(typeof k.nails.mesh === "string" && MESH.test(k.nails.mesh) ? { mesh: k.nails.mesh } : {}), q: Object.fromEntries((["bottom", "top", "left", "right"] as const).map((s) => { const v = k.nails!.q[s] as unknown; return [s, (Array.isArray(v) && v.length === 4 ? v.map(Number) : [1, 0, 0, 0]) as [number, number, number, number]]; })) as Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> } } : {}),
+    ...(k.nails && k.nails.q ? { nails: { ...(typeof k.nails.mesh === "string" && MESH.test(k.nails.mesh) ? { mesh: k.nails.mesh } : {}), ...(typeof k.nails.name === "string" && k.nails.name.trim() ? { name: k.nails.name.trim() } : {}), q: Object.fromEntries((["bottom", "top", "left", "right"] as const).map((s) => { const v = k.nails!.q[s] as unknown; return [s, (Array.isArray(v) && v.length === 4 ? v.map(Number) : [1, 0, 0, 0]) as [number, number, number, number]]; })) as Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> } } : {}),
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
     ...(k.plateHoles === false ? { plateHoles: false } : {}),

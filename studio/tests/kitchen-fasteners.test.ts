@@ -72,6 +72,29 @@ test('railEccY: эксцентрики на внутренней пласти б
   assert.equal(railEccY(b,hw([[0,66,8],[400,66,8]]),16,384),undefined,'на наружной пласти — не стык стяжки');
 });
 
+// m_HDF_FIX: ХДФ на саморезах 3,5×12 по той же раскладке, что гвозди (nailRows): имя крепежа из проекта в kitchen.nails.name
+test('ХДФ на саморезах 3,5×12 (k09 m04): раскладка nailRows, имя крепежа из проекта, сверка «прочее» 18/18 — PASS',{skip:!has('k09')},()=>{
+  const ref=load('k09','m04'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.equal(m.kitchen?.nails?.name,'Саморез 3,5х12 мм, Zn');
+  const ns=parts(m).filter(p=>p.id.startsWith('nail:'));
+  assert.equal(ns.length,18);assert.ok(ns.every(p=>p.name==='Саморез 3,5х12 мм, Zn'),'деталь названа как в проекте, не «Гвоздь»');
+  const err=validate(m),c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='прочее')!;
+  assert.deepEqual([row.ref,row.studio],[18,18]);assert.ok((row.maxPosDelta??0)<=1);
+  assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported}));
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.nails,m.kitchen?.nails,'имя крепежа переживает сохранение');
+  assert.deepEqual(partCollisions(parts(m),m),[]);
+});
+
+test('гвозди Базиса без имени в поле (как раньше): деталь «Гвоздь»; смешанные имена крепежа ХДФ — не распознаём',()=>{
+  const m=kitchenWall(initialModule(),600);m.height=720;m.kitchen!.hangers=false;m.backType='nailed';
+  const q:[number,number,number,number]=[1,0,0,0];m.kitchen!.nails={q:{bottom:q,top:q,left:q,right:q}};
+  const ns=parts(m).filter(p=>p.id.startsWith('nail:'));
+  assert.ok(ns.length>0);assert.ok(ns.every(p=>p.name==='Гвоздь'));
+  m.kitchen!.nails={name:'Саморез 3,5х12 мм, Zn',q:{bottom:q,top:q,left:q,right:q}};
+  assert.ok(parts(m).filter(p=>p.id.startsWith('nail:')).every(p=>p.name==='Саморез 3,5х12 мм, Zn'));
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.nails?.name,'Саморез 3,5х12 мм, Zn');
+});
+
 test('k04 m05 (навесной 400×1000): нижняя задняя стяжка на эксцентриках в боковины по проекту — PASS',{skip:!has('k04')},()=>{
   const ref=load('k04','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
   const r=m.rails?.find(x=>x.place==='rear-bottom');
