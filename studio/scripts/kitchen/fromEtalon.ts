@@ -13,9 +13,9 @@ import { sideStripOf, shiftRefX } from "./recognize-fillers";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
 import { recognizeBaseExtras, eccFromBelow } from "./recognize-base";
 import { axisAsBazis, firmaxAsBazis } from "./recognize-drawers";
-import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, type WallRaise } from "./wallRaise";
+import { wallRaise, bottomFrontRecess, bottomBackRecess, wallRailOnBottom, raiseFrontConf, type WallRaise } from "./wallRaise";
 import { aluFacadeReason } from "./aluFacade";
-import { hoodBoxReason, hoodBoxSimple, hoodBoxField, hoodBoxPanels } from "./hoodBox";
+import { hoodBoxReason, hoodBoxSimple, hoodBoxField, hoodBoxPanels, hoodSidePieces } from "./hoodBox";
 import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
@@ -448,7 +448,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const plinthPanel = floorRole ? P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.y0 < 5 && b.y1 <= (bottom?.b.y0 ?? 0) + 1 && b.y1 - b.y0 > 40 && b.z1 > (sideZ0 + sideZ1) / 2).sort((a, c) => c.b.z1 - a.b.z1)[0] : undefined;
   // цоколь — не стяжка на ребре (k20 m09: «Фронтальная» 0–70 была и стяжкой «на высоте 0», и цоколем — студия ставила деталь дважды)
   const railsEdge = P.filter(({ p, b }) => p.axis === "z" && board(p.kind) && b.z1 <= sideZ1 + 0.5 && b.y1 - b.y0 <= 160 && b.x0 >= left.b.x1 - 0.5 && b.x1 <= right.b.x0 + 0.5 && !fronts.some((f) => f.b === b) && !/выдв/i.test(p.name) && !fxBox(p.name) && plinthPanel?.b !== b);
-  const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name)); // дно ящика — не полка
+  // полки по сторонам короба вытяжки (hoodBox.shelves) — правый кусок не отдельная полка: уровень задаёт левый
+  const hoodRight = hoodSimple ? hoodSidePieces(ref, hoodSimple).right : [];
+  const shelves = horiz.filter((h) => h !== bottom && h !== topPanel && !rails.includes(h) && !/выдв/i.test(h.p.name) && !fxBox(h.p.name) && !hoodRight.includes(h.p)); // дно ящика — не полка
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   m.kitchen = { role }; m.bazis = true;
@@ -468,6 +470,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (legs.length) m.feet = { height: r1(bottom.b.y0) };
     else if (bottom.b.y0 > 0.5 && (role === "wall" || role === "antresol") && (wr = wallRaise(P, left, right, bottom, fronts, sideZ1, sideZ0))) {
       m.plinthHeight = wr.plinthHeight; if (wr.raisedSides) m.raisedSides = true; m.kitchen.raise = wr.raise; notes.push(wr.note); if (wr.unsupported) unsupported.push(wr.unsupported);
+      { const rc = wr.panel && m.kitchen.raise.front !== undefined ? raiseFrontConf(ref.hardware, wr.panel.b, bottom.b) : undefined; if (rc) m.kitchen.raise = { ...m.kitchen.raise, conf: rc }; } // крепёж панели под дном как в Базисе (raise.conf)
     } else if (bottom.b.y0 > 0.5) {
       m.plinthHeight = r1(bottom.b.y0);
       // цоколь — деталь, закрывающая низ под дном (у Базиса бывает «Фронтальная» ЛДСП): панель в плоскости фронта под дном.
@@ -564,7 +567,9 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     .filter((c) => !(ss?.strip.conf && c.side === ss.strip.side && ss.strip.planks[0] && Math.abs(c.z - (ss.strip.planks[0].z + 8)) < 0.6));
   if (oc.length) m.kitchen.outConf = oc;
   // задник
-  const back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
+  let back = hdf.sort((a, c) => (c.b.x1 - c.b.x0) * (c.b.y1 - c.b.y0) - (a.b.x1 - a.b.x0) * (a.b.y1 - a.b.y0))[0];
+  // ХДФ двумя кусками по сторонам короба вытяжки (hoodBox.hdfSplit): паз и зазоры — по объединённому габариту кусков
+  if (back && hoodSimple?.hdfSplit && hdf.length > 1) back = { p: back.p, b: { ...back.b, x0: Math.min(...hdf.map((q) => q.b.x0)), x1: Math.max(...hdf.map((q) => q.b.x1)) } };
   // задник из ЛДСП (F_BACK_LDSP, пакет 4): панель ЛДСП по оси z между боковинами за лицом корпуса, выше стяжки на ребре (160), во всю
   // ширину между боковинами (±3) — kitchen.backBoard: утопание от задней кромки боковин, зазоры, рафиксы по сетке от кромок задника.
   // На части высоты (k27 m08, k10 m01 — сегменты вокруг ниши) — честно «не поддержано».
@@ -991,7 +996,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // своя глубина/отступ у отдельных полок, как в Базисе (recognize-tall.ts)
     const own = shelfAtFromEtalon(sh.map((q) => q.b), m.sections[0].shelfDepth, m.shelfRear, sideZ0 + rear);
     if (own) m.sections[0].shelfAt = own;
-    const pins = hw("полкодержатель").filter((h) => Math.abs(h.pos[1] - s0.b.y0) < 2);
+    // полкодержатели в стенках короба вытяжки (hoodBox.shelves.pins) — не отступ полки у боковин
+    const pins = hw("полкодержатель").filter((h) => Math.abs(h.pos[1] - s0.b.y0) < 2 && !(hoodSimple && (Math.abs(h.pos[0] - hoodSimple.x0) < 1 || Math.abs(h.pos[0] - hoodSimple.x1) < 1)));
     if (pins.length) m.shelfPinInset = r1(Math.min(...pins.map((h) => h.pos[2] - s0.b.z0)));
     const noPins = sh.map((s, j) => (hw("полкодержатель").some((h) => Math.abs(h.pos[1] - s.b.y0) < 2) ? -1 : j)).filter((j) => j >= 0);
     // полка с зазорами у стоек (как съёмная), но без полкодержателей и крепежа в Базисе (k23 «Пустой») — съёмная без фурнитуры, не жёсткая
@@ -1052,7 +1058,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // крепёж дна/крыши: отступ конфирматов от концов стыка (снизу через дно — у дна под боковинами; через боковину — в пределах толщины дна/крыши)
   const conf = [...hw("конфирмат"), ...ref.hardware.filter(isEuro6), ...ecc].filter((h) => [bottom, topPanel].some((q) => q && (Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1))));
   // отступ модуля — наименьший от задней кромки дна/крыши, но не ближе 20 (пределы validate): дно перед утопленным задником ЛДСП
-  // (k18 m17: конфирмат в 1 от задней кромки дна — своя сетка joints) отступ модулю не задаёт
+  // (k18 m17: конфирмат в 1 от задней кромки дна — своя сетка joints) отступ модулю не задаёт; третий конфирмат у самой задней
+  // кромки (< 20, k25 m16 крыша, k31 m08 дно) — не отступ правила, а третья точка стыка (jointZ[2])
   const insOf = (q: typeof bottom) => (q ? conf.filter((h) => Math.abs(h.pos[1] - q.b.y0) < 1 || (h.pos[1] > q.b.y0 && h.pos[1] < q.b.y1)).map((h) => h.pos[2] - q.b.z0) : []);
   const insAll = [...insOf(bottom), ...insOf(topPanel)], insOk = insAll.filter((v) => v >= 20);
   if (insAll.length) m.confirmatInset = r1(Math.min(...(insOk.length ? insOk : insAll)));
@@ -1225,6 +1232,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // глубина D5 конфирмата по проекту — одно поле drill.confirmat (присадка по k33/k34 выше главнее, если уже записана)
   const cd = confDepthFromEtalon(ref);
   if (cd !== undefined && m.kitchen.drill?.confirmat === undefined) (m.kitchen.drill ??= {}).confirmat = cd;
+  // стенки короба вытяжки и панель под дном со своей глубиной D5 конфирматов (k22 m10: 42 при 35 у корпуса) — по проекту, как царга
+  const confD = (ids: (number | undefined)[]) => [...new Set((ref.holes ?? []).filter((h) => h.d === 5 && ids.includes(h.panel) && ref.hardware.find((x) => x.i === h.src)?.category === "конфирмат").map((h) => r1(h.depth)))];
+  const ownD = m.kitchen.drill?.confirmat ?? 35;
+  if (hoodSimple && m.kitchen.hoodBox) { const ds = confD(hoodBoxPanels(ref, hoodSimple).filter((p) => p.axis === "x").map((p) => (p as { i?: number }).i)); if (ds.length === 1 && Math.abs(ds[0] - ownD) > 0.05) m.kitchen.hoodBox.confDepth = ds[0]; }
+  if (wr?.panel && m.kitchen.raise?.conf) { const ds = confD([(wr.panel.p as { i?: number }).i]); if (ds.length === 1 && Math.abs(ds[0] - ownD) > 0.05) m.kitchen.raise.conf.depth = ds[0]; }
   // пазы (кроме паза под задник): проходы фрезы одного паза сливаем (2×10 внахлёст = паз 17)
   // пазы — относительно детали-носителя студии (идут за деталью при изменении размеров)
   const g = refGrooves(ref, back ? r1(back.b.z0) : null);

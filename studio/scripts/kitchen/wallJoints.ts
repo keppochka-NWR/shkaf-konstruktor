@@ -80,18 +80,23 @@ export function wallJointNone(hardware: RefHardware[], joints: [string, PB | und
 }
 
 /** Отступы крепежа стыков «горизонталь × боковина» [от задней кромки, от передней] там, где они отличаются от общего inset. */
-export function wallJointZ(hardware: RefHardware[], joints: [string, PB | undefined][], left: PB, right: PB, inset: number, frontShift: Record<string, number> = {}): Record<string, [number, number]> {
-  const out: Record<string, [number, number]> = {};
+export function wallJointZ(hardware: RefHardware[], joints: [string, PB | undefined][], left: PB, right: PB, inset: number, frontShift: Record<string, number> = {}): Record<string, [number, number] | [number, number, number]> {
+  const out: Record<string, [number, number] | [number, number, number]> = {};
   const fast = hardware.filter((h) => h.category === "конфирмат" || h.category === "эксцентрик");
   for (const [id, q] of joints) {
     if (!q) continue;
     for (const [side, s] of [["left", left], ["right", right]] as const) {
-      const zs = fast.filter((h) => h.pos[0] >= s.b.x0 - 1 && h.pos[0] <= s.b.x1 + 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1 && h.pos[2] > q.b.z0 && h.pos[2] < q.b.z1).map((h) => h.pos[2]).sort((a, c) => a - c);
+      const at = fast.filter((h) => h.pos[0] >= s.b.x0 - 1 && h.pos[0] <= s.b.x1 + 1 && h.pos[1] >= q.b.y0 - 1 && h.pos[1] <= q.b.y1 + 1 && h.pos[2] > q.b.z0 && h.pos[2] < q.b.z1);
+      const zs = at.map((h) => h.pos[2]).sort((a, c) => a - c);
+      // три конфирмата, первый у самой задней кромки (< 20: k25 m16 крыша, k31 m08 дно — 8 при паре 74/54) — пара + третий от задней кромки
+      // (три эксцентрика стыка — другое правило, jointPoints: k10 m02)
+      const extra = zs.length === 3 && at.every((h) => h.category === "конфирмат") && zs[0] - q.b.z0 < 20 ? r1(zs.shift()! - q.b.z0) : undefined;
       if (zs.length !== 2) continue;
       const v: [number, number] = [r1(zs[0] - q.b.z0), r1(q.b.z1 - zs[1])];
       // пакет 3: у дна короче спереди (bottomFront) правило студии ставит передний крепёж от лица боковин — от кромки дна это inset - bottomFront;
       // в Базисе бывает и от кромки дна (k26 m02/m03: 53/53, k10 m08/m09, k27 m16) — тогда свои отступы стыка
-      if (Math.abs(v[0] - inset) > 0.5 || Math.abs(v[1] - (inset - (frontShift[id] ?? 0))) > 0.5) out[`${id}:${side}`] = v;
+      if (extra !== undefined) out[`${id}:${side}`] = [v[0], v[1], extra];
+      else if (Math.abs(v[0] - inset) > 0.5 || Math.abs(v[1] - (inset - (frontShift[id] ?? 0))) > 0.5) out[`${id}:${side}`] = v;
     }
   }
   return out;

@@ -492,7 +492,7 @@ export function fe(m:Module){return m.faceGap??RULES.faceGap;}
 export function fb(m:Module){return m.faceGapBetween??RULES.faceGap;}
 /** Уровень низа корпуса над полом: цоколь или высота ножек. */
 /** Кухня Базиса: свои отступы крепежа стыка горизонтали (kitchen.jointZ) от её задней и передней кромки; нет - общее правило. */
-export function jointZs(m:Module,key:string,z0:number,z1:number):[number,number]|undefined{const j=m.kitchen?.jointZ?.[key];return j?[z0+j[0],z1-j[1]]:undefined;}
+export function jointZs(m:Module,key:string,z0:number,z1:number):number[]|undefined{const j=m.kitchen?.jointZ?.[key];return j?(j.length===3?[z0+j[0],z1-j[1],z0+j[2]]:[z0+j[0],z1-j[1]]):undefined;} // третий — у задней кромки (kitchen.jointZ)
 export function baseLevel(m:Module){return m.feet?m.feet.height:plinth(m);}
 export function hasBottom(m:Module){return m.bottomType!=='none';}
 export function hasTop(m:Module){return m.topType!=='none';}

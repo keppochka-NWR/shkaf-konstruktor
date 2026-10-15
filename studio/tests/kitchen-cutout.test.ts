@@ -130,9 +130,10 @@ test('k24 m09 (навесной с коробом под вытяжку, фро�
   assert.deepEqual(r.unsupported,[]);
   // правилами: ширина 212 по центру, стоит на жёсткой полке 0 без зазора, до крыши без зазора (Базис: стенки 119–331 × 323,5–1023,5)
   assert.deepEqual(m.kitchen?.hoodBox,{w:212,on:0,gapBelow:0,gapAbove:0,z0:21,z1:253.5,front:{mount:'overlay'},conf:{front:[62,350,638],below:[52.3,180.3],above:[52.3,180.3]}});
-  // k25 m16: фронт короба на эксцентриках и шкантах — параметрика ставит конфирматы, поэтому честно «не поддержано»
+  // k25 m16: фронт короба на эксцентриках и шкантах (pkg-hoodbox) — строится правилом front.ecc/eccTop, модуль PASS
   const q=moduleFromEtalon(load('k25','m16'));
-  assert.equal(q.module.kitchen?.hoodBox,undefined);assert.match(q.unsupported.join(';'),/фронт на эксцентриках/);
+  assert.deepEqual(q.module.kitchen?.hoodBox?.front,{mount:'overlay',over:[2,0],ecc:[50],eccTop:[50]});assert.deepEqual(q.unsupported,[]);
+  assert.ok(honestPass(compareModule(load('k25','m16'),q.module),validate(q.module),q.unsupported),'k25 m16 PASS');
   assert.deepEqual(validate(m),[]);
   const c=compareModule(ref,m);
   assert.equal(c.missing.length+c.extra.length,0);

@@ -34,7 +34,8 @@ test('навесной с поднятым корпусом (k30 m06): фаса�
 test('навесной с поднятым дном и фронтальной ЛДСП под дном (k14 m03): панель под дном вместо цоколя, фасад с зазором 1,5',{skip:!existsSync(`${ETALON}/k14.json`)},()=>{
   const ref=load('k14','m03'),{module:m}=moduleFromEtalon(ref);
   assert.equal(m.plinthHeight,255);
-  assert.deepEqual(m.kitchen?.raise,{front:0,plank:{depth:50}}); // планка 568×50 лёжа у задней кромки под дном — raise.plank (pkg1), не полка
+  // + крепёж панели под дном по проекту (raise.conf, pkg-hoodbox): конфирматы через боковины и сверху через дно
+  assert.deepEqual(m.kitchen?.raise,{front:0,plank:{depth:50},conf:{side:[71.5,199.5],top:{kind:'conf',xs:[60],xr:[60]}}}); // планка 568×50 лёжа у задней кромки под дном — raise.plank (pkg1), не полка
   const pl=plinthLike(m);
   assert.equal(pl.length,1);
   assert.equal(pl[0].name,'Фронтальная под дном');
@@ -347,7 +348,9 @@ test('фасад в алюминиевом профиле Базиса (k20 m02,
 test('короб под вытяжку (k25 m16 накладной фронт, k06 m09 вкладной) — по геометрии, честно «не поддержано»; навесной без короба (k08 m10) причины не получает',{skip:!existsSync(`${ETALON}/k25.json`)},()=>{
   assert.deepEqual(hoodBoxes(load('k25','m16')),[{x0:179,x1:400,depth:250,y0:166,y1:714}]);
   assert.equal(hoodBoxes(load('k06','m09')).length,1);
-  assert.match(moduleFromEtalon(load('k25','m16')).unsupported.join(';'),/короб под вытяжку/);
+  // k25 m16 строится параметрикой (pkg-hoodbox); честно «не поддержано» остаются два короба (k27 m04) и круглый вырез (k32 m13)
+  assert.ok(!moduleFromEtalon(load('k25','m16')).unsupported.some(u=>/короб/.test(u)));
+  assert.match(moduleFromEtalon(load('k27','m04')).unsupported.join(';'),/короб под вытяжку ×2/);
   assert.equal(hoodBoxes(load('k08','m10')).length,0);
   assert.ok(!moduleFromEtalon(load('k08','m10')).unsupported.some(u=>/короб/.test(u)));
 });
@@ -360,7 +363,14 @@ test('короб под вытяжку — разбор Базиса для па
   assert.equal(hoodBoxSpecs(load('k06','m09'))[0].front.mount,'inset');
   // полка в соседней секции за перегородкой (k16 m11) — не полка короба
   assert.equal(hoodBoxSpecs(load('k16','m11'))[0].shelves.length,2);
-  assert.match(moduleFromEtalon(load('k31','m08')).unsupported.join(';'),/фронт накладной в 216 от задней кромки, вырез П под коробом, полок трапецией 2(, фронт на эксцентриках)?\)/); // pkg1: фронт k31 на эксцентриках — причина дописана
+  // pkg-hoodbox: короб k31 m08 с полками по сторонам и фронтом на эксцентриках строится параметрикой — «не поддержано» больше нет
+  const q31=moduleFromEtalon(load('k31','m08'));
+  assert.equal(q31.unsupported.filter(s=>s.includes('короб')).length,0);
+  assert.deepEqual(q31.module.kitchen?.hoodBox?.front,{mount:'overlay',over:[2,2],ecc:[58.5],eccTop:[58.5]});
+  // зазор полки до стенки короба 3,5 (у боковины — свой), срез у стенки 1,5 от лица фронта, полкодержатели в стенке 64,5/154,5 от задней кромки
+  assert.deepEqual(q31.module.kitchen?.hoodBox?.shelves,{gap:3.5,apex:1.5,pins:[64.5,154.5]});
+  // k32 m13: три короба и круглый вырез — по-прежнему честно «не поддержано»
+  assert.match(moduleFromEtalon(load('k32','m13')).unsupported.join(';'),/короб под вытяжку ×3/);
 });
 test('кромка детали по проекту своей толщины (k31 m07: стяжка у задника 0,5 только по верхнему торцу при корпусе 1) — partsT, сохраняется в проекте',{skip:!existsSync(`${ETALON}/k31.json`)},()=>{
   const ref=load('k31','m07'),{module:m}=moduleFromEtalon(ref);
