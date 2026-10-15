@@ -30,6 +30,20 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     const part = host(at, dir, probe);
     if (part) out.push({ part, at: at.map((v) => Math.round(v * 100) / 100) as [number, number, number], dir, d, depth, src });
   };
+  // Стык «стойка торцом на горизонтали» на эксцентрике — общий для боковины на дне (ecc:under, k16/k28/k31) и перегородки кухни
+  // (ecc:kdiv, k31 m11, k15 m07): точка — пласть стойки × плоскость стыка; шток D8×34 в торец стойки по её оси (8 от пласти),
+  // бочонок D15×12 в пласть в 34 от стыка, D5×12 в горизонталь. up — от стыка в стойку (+1 снизу, −1 сверху).
+  const eccJoint = (id: string, [fx, jy, z]: [number, number, number], inward: number, up: number, tail: string) => {
+    const cx = fx + inward * 8;
+    push(id + ":pin", [cx, jy, z], [0, up, 0], 8, 34);
+    push(id, [fx, jy + up * 34, z], [inward, 0, 0], 15, 12);
+    push(id + tail, [cx, jy, z], [0, -up, 0], 5, 12);
+  };
+  // шкант 8×30 того же стыка: D8×22 в торец стойки, D8×12 в горизонталь — из плоскости стыка
+  const dowelJoint = (id: string, [x, jy, z]: [number, number, number], up: number, tail: string) => {
+    push(id, [x, jy, z], [0, up, 0], 8, 22);
+    push(id + tail, [x, jy, z], [0, -up, 0], 8, 12);
+  };
   for (const p of ps) {
     if (p.id.endsWith(":dup")) continue; // дубль Базиса (kitchen.dupParts) — отверстие уже есть от оригинала
     const hh = p.role === "handle" && p.anchor ? m.kitchen?.handle : undefined;
@@ -101,18 +115,21 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       const [x, yb, z] = p.anchor, yt = yb + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16]));
       push(p.id, [x, yt, z], [0, 1, 0], 8, 22);
       push(p.id + ":side", [x, yt, z], [0, -1, 0], 8, 12);
+    } else if (p.id.startsWith("ecc:kdiv-") && !p.id.endsWith(":pin") && p.anchor) {
+      // перегородка кухни Базиса на эксцентрике (пакет 5): точка — пласть перегородки × плоскость стыка с дном/крышей; бочонок D15×12
+      // в пласть в 34 от стыка, шток D8×34 в торец перегородки по её оси, D5×12 в горизонталь (k31 m11, k15 m07)
+      const inward = p.id.startsWith("ecc:kdiv-bottom-left") || p.id.startsWith("ecc:kdiv-top-left") ? 1 : -1;
+      eccJoint(p.id, p.anchor, inward, p.id.startsWith("ecc:kdiv-top") ? -1 : 1, ":side");
+    } else if (p.id.startsWith("dowel:kdiv-") && p.anchor) {
+      // шкант перегородки — тот же стык; точка снизу на нижней пласти дна (как dowel:under, k31 m11), сверху — плоскость стыка
+      const up = p.id.startsWith("dowel:kdiv-top") ? -1 : 1, [x, ay, z] = p.anchor;
+      dowelJoint(p.id, [x, up > 0 ? ay + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16])) : ay, z], up, ":side");
     } else if (p.id.startsWith("ecc:under:") && !p.id.endsWith(":pin") && p.anchor) {
-      // боковина на дне (кухни Базиса k16/k28/k31): точка — наружная пласть боковины × верх дна; шток D8×34 вверх в торец боковины
-      // по её оси, бочонок D15×12 в наружную пласть в 34 мм над дном, D5×12 вниз в верхнюю пласть дна
-      const [ox, y, z] = p.anchor, inward = p.id.includes(":left:") ? 1 : -1, cx = ox + inward * 8;
-      push(p.id + ":pin", [cx, y, z], [0, 1, 0], 8, 34);
-      push(p.id, [ox, y + 34, z], [inward, 0, 0], 15, 12);
-      push(p.id + ":bottom", [cx, y, z], [0, -1, 0], 5, 12);
+      // боковина на дне (кухни Базиса k16/k28/k31): точка — наружная пласть боковины × верх дна
+      eccJoint(p.id, p.anchor, p.id.includes(":left:") ? 1 : -1, 1, ":bottom");
     } else if (p.id.startsWith("dowel:under:") && p.anchor) {
-      // шкант 8×30 по оси боковины, стоящей на дне: D8×22 вверх в торец боковины, D8×12 вниз в верхнюю пласть дна
-      const y = p.position[1] - 3;
-      push(p.id, [p.position[0], y, p.position[2]], [0, 1, 0], 8, 22);
-      push(p.id + ":bottom", [p.position[0], y, p.position[2]], [0, -1, 0], 8, 12);
+      // шкант 8×30 по оси боковины, стоящей на дне (тело 30 от 3 ниже стыка)
+      dowelJoint(p.id, [p.position[0], p.position[1] - 3, p.position[2]], 1, ":bottom");
     } else if (p.id.startsWith("ecc:rail:") && !p.id.endsWith(":pin") && p.anchor) {
       // пакет 3: стяжка на ребре на эксцентриках в боковины (rails[].eccY, k04 m05): D15×12 с внутренней пласти стяжки в 34 от боковины,
       // шток D8×34 в торец стяжки, D5×12 в боковину — точка «пласть боковины × внутренняя пласть стяжки» (как у Базиса)

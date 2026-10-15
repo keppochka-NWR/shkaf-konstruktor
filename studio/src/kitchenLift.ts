@@ -37,15 +37,23 @@ export function meshBox(o: V3, q: Quat, lo: V3, hi: V3): { size: V3; position: V
 }
 export const isLiftPart = (p: Part) => p.id.startsWith("lift:");
 
-/** Детали газлифта: по комплекту на каждую боковину у фасада с петлями по верху. */
+/** Детали газлифта: по комплекту на каждую боковину у каждого фасада с петлями по верху (пакет 5, F_LIFT_MULTI: навесной k07 m08/m11 —
+ *  два ряда подъёмных фасадов, у каждого свой комплект). Привязка — от верха ряда: у верхнего ряда это верх фасада, у нижнего — середина
+ *  зазора до фасада над ним (Базис k07: газблок нижнего ряда на 90,5 ниже 460 при верхе фасада 458,5 и зазоре 3). */
 export function kitchenLiftParts(m: Module, out: Part[]) {
   if (!m.kitchen || !m.kitchenLift) return;
-  const door = out.find((p) => p.role === "door" && p.id.includes(":door:") && p.hinge === "top" && !p.rotY);
-  if (!door) return;
+  const doors = out.filter((p) => p.role === "door" && p.id.includes(":door:") && p.hinge === "top" && !p.rotY);
   const L = out.find((p) => p.id === "left"), R = out.find((p) => p.id === "right");
   if (!L || !R) return;
-  const top = door.position[1] + door.size[1] / 2, back = door.position[2] - door.size[2] / 2;
-  const label = LIFT_SYSTEMS[m.kitchenLift.system].label;
+  doors.forEach((door, row) => {
+    const top0 = door.position[1] + door.size[1] / 2, x0 = door.position[0] - door.size[0] / 2, x1 = door.position[0] + door.size[0] / 2;
+    const above = doors.map((d) => d.position[1] - d.size[1] / 2).filter((y, k) => k !== row && y >= top0 - 0.01 && y - top0 < 20 && doors[k].position[0] - doors[k].size[0] / 2 < x1 && doors[k].position[0] + doors[k].size[0] / 2 > x0);
+    liftSet(m, out, door, L, R, above.length ? (top0 + Math.min(...above)) / 2 : top0, row ? `r${row}:` : "");
+  });
+}
+function liftSet(m: Module, out: Part[], door: Part, L: Part, R: Part, top: number, rowId: string) {
+  const back = door.position[2] - door.size[2] / 2;
+  const label = LIFT_SYSTEMS[m.kitchenLift!.system].label;
   const part = (id: string, name: string, box: { size: V3; position: V3 }, model?: Part["model"], anchor?: V3): Part => ({
     id, name, size: box.size, position: box.position, length: Math.max(...box.size), width: [...box.size].sort((a, c) => c - a)[1], thickness: Math.min(...box.size),
     role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], sectionId: door.sectionId, ...(model ? { model } : {}), ...(anchor ? { anchor } : {}) });
@@ -60,31 +68,50 @@ export function kitchenLiftParts(m: Module, out: Part[]) {
     };
     for (const k of Object.keys(MESH) as (keyof typeof MESH)[]) {
       const mm = MESH[k], q = Q[side][k];
-      out.push(part(`lift:${side}:${k}`, `${label} · ${mm.name}`, meshBox(at[k], q, mm.lo, mm.hi), { file: `hardware/bazis/${mm[side]}.glb`, length: "y", native: true, origin: at[k], quat: q }));
+      out.push(part(`lift:${side}:${rowId}${k}`, `${label} · ${mm.name}`, meshBox(at[k], q, mm.lo, mm.hi), { file: `hardware/bazis/${mm[side]}.glb`, length: "y", native: true, origin: at[k], quat: q }));
     }
     // саморезы фиксаторов (в Базисе — «3x4» в фасаде и «3x3» в боковине, без сеток)
-    for (const dy of [14, -14]) { const o: V3 = [at.face[0], yF + dy, back - LIFT.faceScrewZ]; out.push(part(`lift:${side}:screw:f${dy > 0 ? 0 : 1}`, "Саморез 3×4 (фиксатор газлифта на фасад)", { size: [3, 3, 4], position: [o[0], o[1], back + 0.5] }, undefined, o)); }
-    ([[-5, -8.66], [10, 0], [-5, 8.66]] as const).forEach(([dy, dz], n) => { const o: V3 = [inner, yS + dy, zS + dz]; out.push(part(`lift:${side}:screw:s${n}`, "Саморез 3×3 (фиксатор газлифта на боковину)", { size: [3, 3, 3], position: [inner + dir * 0.75, o[1], o[2]] }, undefined, o)); });
+    for (const dy of [14, -14]) { const o: V3 = [at.face[0], yF + dy, back - LIFT.faceScrewZ]; out.push(part(`lift:${side}:${rowId}screw:f${dy > 0 ? 0 : 1}`, "Саморез 3×4 (фиксатор газлифта на фасад)", { size: [3, 3, 4], position: [o[0], o[1], back + 0.5] }, undefined, o)); }
+    ([[-5, -8.66], [10, 0], [-5, 8.66]] as const).forEach(([dy, dz], n) => { const o: V3 = [inner, yS + dy, zS + dz]; out.push(part(`lift:${side}:${rowId}screw:s${n}`, "Саморез 3×3 (фиксатор газлифта на боковину)", { size: [3, 3, 3], position: [inner + dir * 0.75, o[1], o[2]] }, undefined, o)); });
   }
 }
 /** Низ комплекта от верха фасада: фиксатор на боковину (254,5 ниже верха + половина сетки 14,5) — самая низкая деталь (шток ниже верха на 266,86). */
 export const LIFT_DROP = LIFT.sideDown + Math.max(-MESH.side.lo[1], LIFT.rodDown - MESH.rod.lo[1], 5 + 1.5);
 /** Геометрия корпуса для проверки газлифта (из model.ts, чтобы не тянуть цикл импорта). */
-export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number };
-/** Ошибки поля kitchenLift (validate): только кухня, один накладной подъёмный фасад в одну створку, и газлифт не входит в дно. */
+export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number; rows?: (s: Module["sections"][number]) => number };
+/** Ошибки поля kitchenLift (validate): только кухня, в каждом ряду один накладной подъёмный фасад в одну створку (F_LIFT_MULTI: рядов
+ *  может быть несколько, k07 m08), и газлифт верхнего ряда не входит в дно (нижние ряды — kitchenLiftRowErrors по деталям). */
 export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (!m.kitchenLift) return [];
   const e: string[] = [];
   if (!m.kitchen) e.push("Газлифт задаётся только кухонному модулю.");
   if (!(m.kitchenLift.system in LIFT_SYSTEMS)) e.push("Неизвестная система газлифта.");
-  const tops = m.doors ? m.sections.reduce((n, s) => n + (s.doorHinges ?? []).slice(0, g ? g.leaves(s) : 4).filter((h) => h === "top").length, 0) : 0;
+  // подъёмные фасады по рядам (индекс створки k = ряд·2 + колонка, как в parts()); ряды всех секций на одной высоте — один ряд
+  const perRow: number[] = [];
+  if (m.doors) for (const s of m.sections) {
+    const leaves = g ? g.leaves(s) : 4, rows = g?.rows ? g.rows(s) : 1;
+    for (let r = 0; r < rows; r++) perRow[r] = (perRow[r] ?? 0) + (s.doorHinges ?? []).slice(rows === 1 ? 0 : r * 2, rows === 1 ? leaves : r * 2 + Math.min(leaves, 2)).filter((h) => h === "top").length;
+  }
+  const tops = perRow.reduce((a, n) => a + (n ?? 0), 0);
   if (!tops) e.push("Газлифт нужен фасаду с петлями по верху (подъёмному).");
-  else if (tops > 1) e.push("Газлифт PD-G-N02 по Базису ставится на один подъёмный фасад в одну створку (комплект на каждую боковину).");
+  else if (perRow.some((n) => n > 1)) e.push("Газлифт PD-G-N02 по Базису ставится в каждом ряду на один подъёмный фасад в одну створку (комплект на каждую боковину); два подъёмных фасада рядом в одном ряду — не по Базису.");
   if (m.doorMount === "inset") e.push("Газлифт PD-G-N02 по Базису — только для накладного подъёмного фасада (у вкладного петли на крыше не ставятся).");
   if (g && g.facadeTop - LIFT_DROP < g.innerBottom - 1e-6) {
     const minH = Math.ceil(m.height + g.innerBottom - (g.facadeTop - LIFT_DROP));
     e.push(`Газлифт PD-G-N02: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха фасада и входит в дно — высота корпуса от ${minH} мм.`);
   }
+  return e;
+}
+/** Газлифт каждого ряда не входит в дно (F_LIFT_MULTI): верх ряда — по фиксатору на фасад построенного комплекта (верх фасада или середина
+ *  зазора до ряда над ним, см. kitchenLiftParts), тот же предел LIFT_DROP, что у верхнего ряда в kitchenLiftErrors. */
+export function kitchenLiftRowErrors(m: Module, ps: Part[], innerBottom: number): string[] {
+  if (!m.kitchen || !m.kitchenLift) return [];
+  const tops = ps.filter((p) => /^lift:left:(r\d+:)?face$/.test(p.id) && p.model?.origin).map((p) => p.model!.origin![1] + LIFT.faceDown).sort((a, b) => a - b);
+  const e: string[] = [];
+  tops.forEach((top, i) => {
+    const lack = innerBottom - (top - LIFT_DROP);
+    if (lack > 1e-6) e.push(`Газлифт PD-G-N02, ${i + 1}-й ряд фасадов снизу: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха ряда и входит в дно — поднимите верх этого ряда на ${Math.ceil(lack)} мм.`);
+  });
   return e;
 }
 /** После смены открывания: газлифт без подъёмного фасада снимается (иначе правку нельзя сохранить). */

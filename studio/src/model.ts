@@ -1,10 +1,11 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
-import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
+import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
 import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
+import { kitchenDividerZ } from "./kitchenDivider";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
@@ -863,12 +864,13 @@ export function parts(m: Module): Part[] {
       h = b.top - b.bottom,
       sd = d - rear - RULES.shelfDepthMinus;
     if (i > 0 && !m.sectionLayout) {
-      const dd = depthAt(m, b.x - t / 2) - rear - RULES.shelfDepthMinus;
+      const kz = kitchenDividerZ(m); // кухня Базиса (пакет 5): глубина перегородки по проекту — от задней кромки боковин до лица
+      const dd = kz ? kz[1] - kz[0] : depthAt(m, b.x - t / 2) - rear - RULES.shelfDepthMinus, dz0 = kz ? kz[0] : rear;
       add(
         `${s.id}:divider`,
         "Перегородка",
         [t, h, dd],
-        [b.x - t / 2, b.bottom + h / 2, rear + dd / 2],
+        [b.x - t / 2, b.bottom + h / 2, dz0 + dd / 2],
         h,
         dd,
         t,
@@ -1125,22 +1127,7 @@ export function parts(m: Module): Part[] {
     add(key, m.kitchen?.confirmatName ?? "Конфирмат 7×50", deep ? [D, D, L] : vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal"); // кухня Базиса — имя крепежа по проекту (k33/k34: «Евровинт 6х50»)
     out.at(-1)!.model = { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONF_Q[axis] };
   };
-  // пакет 3: щит под дном навесного на конфирматах по проекту Базиса (kitchen.lowFrontConf, k14 m03): через боковины в торцы щита на высотах
-  // от его низа и через дно в верхний торец — парой от концов щита; ось — по середине толщины щита
-  // при raise.conf (тот же щит, крепёж короба вытяжки — kitchen.ts raiseFrontParts) не дублируем
-  const lfc = m.kitchen?.lowFront && m.kitchen.lowFrontConf && !m.kitchen.raise?.conf && fastenersMode(m.kitchen) !== "pins" && fastenersMode(m.kitchen) !== false ? m.kitchen.lowFrontConf : undefined;
-  const lfp = lfc ? out.find((p) => p.id === "plinth") : undefined, lfb = lfp ? out.find((p) => p.id === "bottom") : undefined;
-  if (lfc && lfp && lfb) {
-    const [px, py, pz] = lfp.position, [pw, ph] = lfp.size, y0 = py - ph / 2, yt = lfb.position[1] + lfb.size[1] / 2;
-    for (const [k, v] of lfc.side.filter((v) => v < ph - 8).entries()) {
-      confirmat(`fast:plinth:left:${k}`, [px - pw / 2 - t, y0 + v, pz], "+x");
-      confirmat(`fast:plinth:right:${k}`, [px + pw / 2 + t, y0 + v, pz], "-x");
-    }
-    for (const [k, v] of lfc.top.filter((v) => v < pw / 2).entries()) {
-      confirmat(`fast:plinth:top:${k}:0`, [px - pw / 2 + v, yt, pz], "-y");
-      confirmat(`fast:plinth:top:${k}:1`, [px + pw / 2 - v, yt, pz], "-y");
-    }
-  }
+  // щит под дном навесного на крепеже по проекту Базиса — kitchen.raise.conf (kitchen.ts raiseFrontParts); lowFrontConf удалён (пакет 5)
   const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id === "raise-plank" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
   // Точки крепежа стыка по глубине: задняя (k 0), передняя (k 1), средние (k 2…):
   //  — свои отступы стыка из Базиса (kitchen.jointZ «bottom:left», n3-wall);
@@ -1326,6 +1313,29 @@ export function parts(m: Module): Part[] {
   for (const [k, c] of (m.kitchen?.outConf ?? []).entries()) confirmat(`fast:out:${c.side}:${k}`, [c.side === "left" ? t : m.width - t, c.y, c.z], c.side === "left" ? "-x" : "+x");
   for (const dv of fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.id.endsWith(":divider"))) {
     const z0 = dv.position[2] - dv.size[2] / 2, z1 = dv.position[2] + dv.size[2] / 2;
+    const kd = m.kitchen?.divider;
+    if (kd) {
+      // кухня Базиса (пакет 5, kitchenDivider.ts): крепёж каждого конца по проекту — конфирмат через дно/крышу в торец или эксцентрик
+      // в пласть перегородки в 34 от стыка (шток D8×34 в торец, D5×12 в горизонталь) + шкант 8×30 ближе к середине — как «боковина на дне»
+      for (const edge of ["bottom", "top"] as const) {
+        const e = kd[edge], jy = edge === "top" ? innerTop(m) : innerBottom(m), up = edge === "top" ? -1 : 1;
+        if (!e) continue;
+        [z0 + e.ins[0], z1 - e.ins[1]].forEach((z, k) => {
+          if (e.kind === "conf") return confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], jy - up * t, z], edge === "top" ? "-y" : "+y", dv.sectionId);
+          const face = e.face ?? "left", inward = face === "left" ? 1 : -1, fx = dv.position[0] - inward * t / 2, eid = `ecc:kdiv-${edge}-${face}:${dv.id}:${k}`;
+          add(eid, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [fx + inward * RULES.eccBarrelH / 2, jy + up * 34, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
+          out.at(-1)!.anchor = [fx, jy, z];
+          add(eid + ":pin", "Эксцентрик D15 · шток", [7, 34, 7], [dv.position[0], jy + up * 17, z], 34, 7, 7, "fastener", dv.sectionId, "metal");
+          if (e.dowel) {
+            const zd = z + (k === 0 ? e.dowel : -e.dowel);
+            add(`dowel:kdiv-${edge}:${dv.id}:${k}`, "Шкант 8×30", [8, 30, 8], [dv.position[0], jy + up * 3, zd], 30, 8, 8, "fastener", dv.sectionId, "metal");
+            // точка сверки — как у Базиса и dowel:under: снизу на нижней пласти дна (k31 m11 pos y=0); у верха данных в базе нет — плоскость стыка
+            out.at(-1)!.anchor = [dv.position[0], edge === "bottom" ? jy - t : jy, zd];
+          }
+        });
+      }
+      continue;
+    }
     for (const [edge, y] of [["top", innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
@@ -1743,7 +1753,7 @@ export function validate(m: Module): string[] {
   if(m.kitchen && !m.feet && plinth(m)>0 && m.height-plinth(m)-2*RULES.panel<=0)errors.push("Кухня: низ корпуса поднят выше крыши — внутри корпуса не остаётся места.");
   // кухня: паз под ХДФ бывает утоплен вглубь корпуса (Базис k20 m05 — 119 мм от задней кромки) — предел по глубине корпуса (n3-antresol)
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
+  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
@@ -1944,6 +1954,7 @@ export function validate(m: Module): string[] {
   }
   // фасады «Вернисаж»: габарит по таблице размеров паспорта PDF (глухой / витрина / решётка / ящик). Меньше минимума ящика при
   // примечании паспорта «Ящик < Min размера изготавливается без фрезеровки» — не ошибка: фасад без фрезеровки (предупреждение в выборе).
+  errors.push(...kitchenLiftRowErrors(m,geometry,innerBottom(m)));
   if(m.vernissage)for(const p of geometry)if(p.vernissage)errors.push(...vernissageSizeCheck(m.vernissage.milling,m.vernissage.open,p.size[0],p.size[1]).errors.map(e=>'Фасад Вернисаж '+e+'. Выберите другую фрезеровку или измените размер.'));
   return [...new Set(errors)];
 }
