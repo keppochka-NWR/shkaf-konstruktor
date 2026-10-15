@@ -470,3 +470,56 @@ test('top and bottom facade menus save Premial selection with undo and reload',a
  await page.keyboard.press('Control+y');expect((await section()).doorLifts).toContain('sempre');
  await page.reload();expect((await section()).doorLifts).toContain('sempre');
 });
+
+
+test('facade editor via right click: film, enamel, cancel, undo and reload',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.getByRole('button',{name:'Спереди',exact:true}).click();
+ await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
+ const open=async()=>{await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();await expect(page.getByRole('dialog',{name:'Редактор фасадов'})).toBeVisible();};
+ const value=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.vernissage);
+ await open();await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await expect(page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Фрезеровка Вернисаж',{exact:true})).toBeVisible();
+ await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
+ await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Цвет эмали Вернисаж',{exact:true}).fill('RAL 9003');
+ await page.getByRole('button',{name:'Отмена',exact:true}).click();expect(await value()).toBeUndefined();
+ await open();await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await page.getByRole('button',{name:'Применить к корпусу',exact:true}).click();expect((await value()).cover).toBe('film');
+ await open();await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
+ await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Цвет эмали Вернисаж',{exact:true}).fill('RAL 9003');
+ await page.screenshot({path:'.qa/facade-editor/editor.png',fullPage:true});
+ await page.getByRole('button',{name:'Применить к корпусу',exact:true}).click();expect((await value()).cover).toBe('enamel-matte');
+ await page.keyboard.press('Control+z');expect((await value()).cover).toBe('film');
+ await page.keyboard.press('Control+y');await page.reload();expect((await value()).enamelColor).toBe('RAL 9003');
+});
+
+
+test('Ctrl module group: list, plan and scene selection, selected facade apply and undo',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Добавить первый шкаф'}).click();
+ await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.getByRole('button',{name:'Копировать с наполнением',exact:true}).click();
+ await page.getByRole('button',{name:'Копировать с наполнением',exact:true}).click();
+ const items=page.locator('.module-list .module-item');await expect(items).toHaveCount(3);
+ await items.nth(0).click({modifiers:['Control']});await items.nth(2).click({modifiers:['Control']});
+ await expect(page.getByRole('button',{name:'Фасады выделенных (2)',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Фасады выделенных (2)',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Область применения фасадов',{exact:true})).toHaveValue('group');
+ await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await page.getByRole('button',{name:'Применить к выделенным (2)',exact:true}).click();
+ const covers=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules.map((a:any)=>a.module.vernissage?.cover??null));
+ expect(await covers()).toEqual(['film',null,'film']);await page.keyboard.press('Control+z');expect(await covers()).toEqual([null,null,null]);
+ await page.keyboard.press('Control+y');expect(await covers()).toEqual(['film',null,'film']);
+ await items.nth(0).click({modifiers:['Control']});await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Снять выделение',exact:true}).click();
+ await page.getByRole('button',{name:'План',exact:true}).click();
+ await expect(page.locator('.room-plan')).toBeVisible();
+ await page.locator('.room-plan g[role="button"]').filter({has:page.locator('polygon')}).first().click({modifiers:['Control']});
+ await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Снять выделение',exact:true}).click();
+ await page.getByRole('button',{name:'Спереди',exact:true}).click();
+ await items.nth(1).click();await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();await page.waitForTimeout(700);
+ const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({modifiers:['Control'],position:{x:b.width/2,y:b.height/2}});
+ await expect(page.getByRole('button',{name:'Фасады выделенных (1)',exact:true})).toBeVisible();
+ await page.reload();expect(await covers()).toEqual(['film',null,'film']);
+});
