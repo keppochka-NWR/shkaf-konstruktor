@@ -8,6 +8,7 @@ import { parts, railsOf, type Module, type Part } from "./model";
 import { qrot } from "./quat";
 import { kitchenDrawerHoles, kdConfDepth } from "./kitchenDrawers";
 import { rafixHoles, rafixBackHoles } from "./kitchenRafix";
+import { GL104 } from "./kitchenLift";
 
 export type Hole = { part: string; at: [number, number, number]; dir: [number, number, number]; d: number; depth: number; src: string };
 
@@ -186,7 +187,10 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     } else if (p.id.startsWith("lift:") && (p.model?.origin || p.anchor)) {
       // газлифт PD-G-N02 (Базис): фиксатор на фасад — 2×D4×1,8 (±12 по высоте), его саморезы — D3×4; фиксатор на боковину — 3×D4×2, саморезы — D3×3
       const o = (p.model?.origin ?? p.anchor)!, out_: [number, number, number] = [p.id.startsWith("lift:left:") ? -1 : 1, 0, 0];
-      if (p.id.endsWith(":face")) for (const dy of [12, -12]) push(p.id, [o[0], o[1] + dy, o[2]], [0, 0, 1], 4, 1.8);
+      // GL104 (k01 m11–m13): кронштейн на боковину — 3 самореза D3×3 в боковину, кронштейн на фасад — 2 D3×3 (±16 по высоте) в фасад
+      if (p.id.endsWith(":gl-side")) for (const [dy, dz] of GL104.sideScrews) push(p.id, [o[0], o[1] + dy, o[2] + dz], out_, 3, 3);
+      else if (p.id.endsWith(":gl-face")) for (const dy of [GL104.faceScrewDy, -GL104.faceScrewDy]) push(p.id, [o[0], o[1] + dy, o[2]], [0, 0, 1], 3, 3);
+      else if (p.id.endsWith(":face")) for (const dy of [12, -12]) push(p.id, [o[0], o[1] + dy, o[2]], [0, 0, 1], 4, 1.8);
       else if (p.id.endsWith(":side")) for (const [dy, dz] of [[-5, 8.66], [10, 0], [-5, -8.66]]) push(p.id, [o[0], o[1] + dy, o[2] + dz], out_, 4, 2);
       else if (p.id.includes(":screw:f")) push(p.id, o, [0, 0, 1], 3, 4, 2); // точка самореза Базиса — 1,5 мм за плоскостью фасада (в фиксаторе)
       else if (p.id.includes(":screw:s")) push(p.id, o, out_, 3, 3);
@@ -211,5 +215,7 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
   kitchenDrawerHoles(m, ps, push);
   // служебные сквозные отверстия кухни Базиса (kitchen.svcHoles, k28 m14: D10 под провод), n4-antresol
   for (const [i, h] of (m.kitchen?.svcHoles ?? []).entries()) push(`kitchen-svc:${i}`, [...h.at], [...h.dir], h.d, h.depth);
+  // элемент комплекта сушки с отверстием Базиса («10x13» k25 m14): в боковину у своей стороны, из точки на её внутренней грани
+  for (const [i, d] of (m.kitchen?.dryer ?? []).entries()) if (d.fix && d.hole) push(`kitchen-dryer-fix:${i}`, [d.side === "left" ? d.x : m.width - d.x, d.y, d.z], [d.side === "left" ? -1 : 1, 0, 0], d.hole[0], d.hole[1]);
   return out;
 }

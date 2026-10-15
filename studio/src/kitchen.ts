@@ -69,7 +69,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  остаются (бывшее noFasteners: n3-wall, n3-antresol). Без поля / true — как у шкафов. Читать через fastenersMode(k). */
   fasteners?: boolean | "pins";
   /** Сушка навесного — элементы с сеткой Базиса (набор SU01/03: держатели, решётки, поддоны): x — от боковины side, y — от низа, z — от задней кромки. */
-  dryer?: { name: string; /** сетка библиотеки Базиса; нет — у Базиса элемент без геометрии (k01, k02, k06, k08): точка и строка спецификации */ mesh?: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number] }[];
+  dryer?: { name: string; /** сетка библиотеки Базиса; нет — у Базиса элемент без геометрии (k01, k02, k06, k08): точка и строка спецификации */ mesh?: string; side: "left" | "right"; x: number; y: number; z: number; quat: [number, number, number, number];
+    /** элемент комплекта сушки, который Базис пишет в «прочее» («10x13», «Вращение», «Отверстие 3х2» — F_DRYER): деталь «прочее»;
+     *  hole — отверстие Базиса из этой точки в боковину [d, глубина] (у «10x13» k25 m14 — D10×13), без него отверстия нет, как в Базисе */
+    fix?: true; hole?: [number, number] }[];
   /** Имя крепежа корпуса по проекту Базиса, если это не «Конфирмат 7х50» (k33, k34: «Евровинт 6х50») — в деталях и смете. */
   confirmatName?: string;
   /** Глубина присадки по проекту Базиса, если она не типовая: confirmat — D5 в торец (обычно 35; k33/k34 «Евровинт 6х50» — 36), pin — D5 под полкодержатель (обычно 12; k33/k34 — 9). */
@@ -167,6 +170,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Нижний на опорах: зазор верха фасадов от верха боковин и низа фасадов от низа дна, если не равен faceGap (k18 m03: 3 и 1,5 при 2; n3-base).
    *  faceBottom у корпуса без опор — низ фасадов от пола, мм, как в Базисе (над нишей под техникой — от дна; n3-tall). */
   faceTop?: number; faceBottom?: number;
+  /** Фасад шире корпуса (свес за боковину, F_WIDE_FACADE): кромка фасадов крайней секции на right/left мм за наружной пластью боковины,
+   *  а не на зазор внутри неё (антресоли k19 m03/m04 — свес 12,5 справа). Корпус и его детали — по ширине модуля, как в Базисе. */
+  faceOver?: { left?: number; right?: number };
   /** Угловая мойка Базиса с фальшпанелью (n4-base): у края модуля в плоскости фасадов — фальш ЛДСП корпуса width мм (от низа дна до верха),
    *  рядом планка из фасадного материала strip мм; фасады — после них через faceGap, дверь у фальша на «Петля под фальшпанель»
    *  (точка — кромка двери, чашка в 22 от кромки, без наколок под планку). Только плоский фальш (k25 m02, k01 m03); Г-образный — нет. */
@@ -414,8 +420,10 @@ export function mirrorKitchen(m: Module): void {
   if (k.hoodBox) { const h = k.hoodBox; put(h, "dx", h.dx ? -h.dx : undefined); if (h.front.over) h.front.over = [h.front.over[1], h.front.over[0]]; }
   const rt = k.raise?.conf?.top; if (rt) { const { xs, xr } = rt; rt.xs = xr ?? []; put(rt, "xr", xs.length ? xs : undefined); } // крепёж панели под дном: от левого конца ↔ от правого
   if (k.sideStrip) k.sideStrip = { ...k.sideStrip, side: k.sideStrip.side === "left" ? "right" : "left" };
+  if (k.faceOver) k.faceOver = { ...(k.faceOver.right ? { left: k.faceOver.right } : {}), ...(k.faceOver.left ? { right: k.faceOver.left } : {}) };
   if (k.sideRecess) k.sideRecess = { ...k.sideRecess, side: k.sideRecess.side === "left" ? "right" : "left" };
   if (k.divider) k.divider = mirrorDivider(k.divider);
+  // kitchen.dryer не трогаем: комплекты сушки в базе симметричны по сторонам (тест kitchen-dryer-kit), зеркало даёт тот же набор
   // задник ЛДСП: сетки рафиксов в дно/крышу — от левой/правой кромки, зеркало меняет их местами; в боковины — симметричны
   if (k.backBoard?.rafix) for (const key of ["bottom", "top"] as const) { const g = k.backBoard.rafix[key]; if (g) k.backBoard.rafix[key] = { ...g, rear: g.front, front: g.rear }; }
   for (const d of m.kdrawers ?? []) {
@@ -746,6 +754,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
   // сушка (Базис): элементы по сетке библиотеки фурнитуры, в точке и с поворотом проекта; в раскрой не идут
   for (const [n, d] of (k.dryer ?? []).entries()) {
     const o: [number, number, number] = [d.side === "left" ? d.x : m.width - d.x, d.y, d.z];
+    if (d.fix) { const p = metal(`kitchen-dryer-fix:${n}`, d.name, [0.01, 0.01, 0.01], o); p.anchor = o; out.push(p); continue; } // элемент комплекта сушки — «прочее» Базиса, точка
     out.push(metal(`kitchen-dryer:${n}`, d.name, [0.01, 0.01, 0.01], o, // габарит сетки неизвестен — точка привязки, геометрия из GLB
        d.mesh ? { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) } : undefined)); // без сетки — как в Базисе: только точка
   }
@@ -987,6 +996,13 @@ export function worktopParts(m: Module): Part[] {
 }
 export function worktopLabel(w: WorktopSpec) { return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень" }[w.material]; }
 
+/** F_WIDE_FACADE: свес фасада за боковину (kitchen.faceOver) — фасад на корпусе, свес меньше половины ширины корпуса. По 34 эталонам
+ *  свес за боковину: k19 m03 — 12,5 при 670, k22 m04 — 18 при 1200 (фасады на корпусе); k27 m17 «ПМ» — 448 при 150: дверь ПММ на тумбе,
+ *  фасад почти весь вне корпуса — другая конструкция, не свес. Один предел для распознавателя (fromEtalon) и validate. */
+export function faceOverOk(over: number, width: number): boolean {
+  return Number.isFinite(over) && over > 0 && over < width / 2;
+}
+
 export function kitchenErrors(m: Module): string[] {
   const e: string[] = [...allegroErrors(m),...ovenErrors(m)];
   if (m.worktop) {
@@ -1012,6 +1028,8 @@ export function kitchenErrors(m: Module): string[] {
     const rc = k.raise?.conf, ok = (a: number[] | undefined, lo: number) => !a || a.every((v) => Number.isFinite(v) && v >= lo);
     if (rc && !(ok(rc.side, 10) && ok(rc.top?.xs, 20) && ok(rc.top?.xr, 20))) e.push("Крепёж панели под дном: высоты от низа панели и отступы от её концов — от 10 и 20 мм.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
+    // F_WIDE_FACADE: свес фасада за боковину — меньше половины ширины корпуса (тот же предел, что у распознавателя faceOverOk)
+    if (k.faceOver && [k.faceOver.left, k.faceOver.right].some((v) => v !== undefined && !faceOverOk(v, m.width))) e.push("Свес фасада за боковину: больше 0 и меньше половины ширины корпуса.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m), ...backBoardErrors(m), ...sideRecessErrors(m), ...kitchenDividerErrors(m));
     // пакет 3: эксцентрики стяжки на ребре в боковины (rails[].eccY) — бочонок Ø15 целиком в высоте стяжки (8 мм от её кромок)
     if (k.lowFrontConf && (!k.lowFront || k.lowFrontConf.side.some((v) => !Number.isFinite(v) || v < 8 || v > m.height / 2) || k.lowFrontConf.top.some((v) => !Number.isFinite(v) || v < 20 || v > m.width / 2 - 8))) e.push("Крепёж щита под дном: только у щита, от 8 мм до его кромок.");
@@ -1130,6 +1148,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...parseSideStrip(k.sideStrip),
     ...parseDivider(k.divider),
     ...(k.faceTop !== undefined ? { faceTop: num(k.faceTop) } : {}),
+    ...(k.faceOver && (num(k.faceOver.left) > 0 || num(k.faceOver.right) > 0) ? { faceOver: { ...(num(k.faceOver.left) > 0 ? { left: num(k.faceOver.left) } : {}), ...(num(k.faceOver.right) > 0 ? { right: num(k.faceOver.right) } : {}) } } : {}),
     ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
     ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),
     ...(k.sideDown && (k.sideDown.side === "left" || k.sideDown.side === "right") ? { sideDown: { side: k.sideDown.side, y0: num(k.sideDown.y0) } } : {}),
@@ -1146,7 +1165,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(confirmatName ? { confirmatName } : {}),
     ...(k.sideNotch && typeof k.sideNotch === "object" ? { sideNotch: Object.fromEntries((["left", "right"] as const).filter((s) => k.sideNotch?.[s]).map((s) => [s, { height: num(k.sideNotch![s]!.height), depth: num(k.sideNotch![s]!.depth) }])) } : {}),
     ...(Object.keys(drill).length ? { drill } : {}),
-    ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number] })) } : {}),
+    ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number], ...(d.fix ? { fix: true as const } : {}), ...(Array.isArray(d.hole) && d.hole.length === 2 && d.hole.every((v) => num(v) > 0) ? { hole: [num(d.hole[0]), num(d.hole[1])] as [number, number] } : {}) })) } : {}),
     ...(k.jointZ && typeof k.jointZ === "object" ? { jointZ: Object.fromEntries(Object.entries(k.jointZ).filter(([, v]) => Array.isArray(v) && (v.length === 2 || v.length === 3)).map(([key, v]) => [key, (v.length === 3 ? [num(v[0]), num(v[1]), num(v[2])] : [num(v[0]), num(v[1])]) as [number, number] | [number, number, number]])) } : {}),
     ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}), ...(k.raise.plank && num(k.raise.plank.depth) > 0 ? { plank: { depth: num(k.raise.plank.depth) } } : {}),
       ...(k.raise.conf && typeof k.raise.conf === "object" ? { conf: { ...(Array.isArray(k.raise.conf.side) && k.raise.conf.side.length ? { side: (k.raise.conf.side as unknown[]).map(num) } : {}),

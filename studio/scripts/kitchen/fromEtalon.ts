@@ -5,7 +5,7 @@ import { initialModule, section, parts, scaleHingeY, doorRowCount, facadeBottom,
 import { partAxes, edgeByDir } from "../../src/edges";
 import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
-import { jointPointsRule, fastenersMode, kitchenEndsRule, nearRight, sideDists, type KitchenRole } from "../../src/kitchen";
+import { jointPointsRule, fastenersMode, kitchenEndsRule, nearRight, sideDists, faceOverOk, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
 import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railEccY, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
@@ -20,6 +20,8 @@ import { wallDryer } from "./wallDryer";
 import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
+/** Узлы комплекта газлифта GL104 в проектах Базиса (k01 m11–m13). */
+export const GL_NAMES = /^(Шток для GL\s*104|Газ патрон|Кронштейн на боковину|Кронштейн на фасад)\s*$/;
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
 import { railUnder } from "./recognize-wallrail";
@@ -391,8 +393,14 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   const sides = P.filter(({ p, b }) => p.axis === "x" && board(p.kind) && b.y1 - b.y0 > 200).sort((a, c) => a.b.x0 - c.b.x0);
   const left = sides[0], right = sides[sides.length - 1];
   if (!left || left === right) throw Error("нет двух боковин");
-  const W = ss ? r1(right.b.x1 - left.b.x0) : ref.size[0];
-  if (ss) ref.size = [W, ref.size[1], ref.size[2]]; // ширина корпуса для правил, читающих ref.size (опоры, эксцентрики)
+  // фасад шире корпуса (F_WIDE_FACADE): габарит Базиса справа за наружной пластью правой боковины — только двери. По 34 эталонам
+  // срабатывает на k19 m03 (свес 12,5, PASS) и k22 m04 (угловая мойка, свес 18 — фасад на корпусе, модуль сырой по другой причине).
+  // Дверь ПММ на тумбе 150 (k27 m17, «свес» 448) — фасад почти весь вне корпуса, не свес: отсекает предел faceOverOk (меньше
+  // половины ширины корпуса, он же в validate). Фальш пенала шире корпуса (k21 m04, k29 m01) — за боковиной не дверь, сюда не попадает
+  const overR0 = !ss && left.b.x0 <= 0.5 && ref.size[0] - right.b.x1 > 0.5 && ref.panels.filter((p) => p.box[3] > right.b.x1 + 0.5).every((p) => p.axis === "z" && /^Дверь/.test(p.name)) ? r1(ref.size[0] - right.b.x1) : 0;
+  const overR = overR0 && faceOverOk(overR0, right.b.x1 - left.b.x0) ? overR0 : 0;
+  const W = ss ? r1(right.b.x1 - left.b.x0) : overR ? r1(right.b.x1 - left.b.x0) : ref.size[0];
+  if (ss || overR) ref.size = [W, ref.size[1], ref.size[2]]; // ширина корпуса для правил, читающих ref.size (опоры, эксцентрики)
   const t = left.b.x1 - left.b.x0;
   // боковина до плоскости фасадов (k23 m04, k29 m02, k27 m13): перед корпуса — по мелкой боковине, иначе двери оказывались «внутри»
   // корпуса и терялись (n4-tall). Сам выступ студия не строит — честно «не поддержано»
@@ -455,6 +463,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   m.kitchen = { role }; m.bazis = true;
+  if (overR) { m.kitchen.faceOver = { right: overR }; notes.push(`фасад шире корпуса: свес ${overR} мм за правую боковину — как в Базисе`); }
   if (ss) { m.kitchen.sideStrip = ss.strip; notes.push(`доборная планка ${ss.strip.side === "left" ? "слева" : "справа"} ${ss.strip.ext} мм: планок ЛДСП ${ss.strip.planks.length}${ss.strip.facade ? `, планка ${ss.strip.facade.ldsp ? "ЛДСП" : "из фасада"} ${ss.strip.facade.w}` : ""}${ss.strip.conf ? `, конфирматов ${ss.strip.conf.length}` : ", без крепежа"} — как в Базисе`); } // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.confirmatName = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно
@@ -950,7 +959,11 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       m.sections[0].doorHinges = ["top"];
       // газлифт PD-G-N02 Базиса (шток, газблок, фиксаторы) — комплект на боковину
       if (hw("газлифт").some((h) => /PD-G-N02/.test(h.name))) m.kitchenLift = { system: "pd-g-n02" };
-      if (hw("газлифт").some((h) => !/PD-G-N02/.test(h.name))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !/PD-G-N02/.test(h.name))!.name}`);
+      // GL104 (k01 m11–m13): шток, газ патрон, кронштейны на боковину и на фасад — по комплекту на каждую боковину (8 узлов)
+      const glKit = (h: { name: string }) => GL_NAMES.test(h.name ?? "");
+      if (!m.kitchenLift && hw("газлифт").some((h) => /GL\s*104/.test(h.name)) && hw("газлифт").every(glKit) && hw("газлифт").length === 8) m.kitchenLift = { system: "gl104" };
+      const liftKnown = (h: { name: string }) => /PD-G-N02/.test(h.name) || (m.kitchenLift?.system === "gl104" && glKit(h));
+      if (hw("газлифт").some((h) => !liftKnown(h))) unsupported.push(`газлифт ${hw("газлифт").find((h) => !liftKnown(h))!.name}`);
       const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = r1(f0.b.x1 - f0.b.x0);
       const hx = liftHingeX(xs, dw, r1(f0.b.y1 - f0.b.y0));
       if (hx) { m.sections[0].hingeX = hx; m.sections[0].hingeXFor = dw; notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")} — как в проекте`); }
@@ -1243,7 +1256,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     if (hg && !hg.note) { m.kitchen.hangers = true; if (hg.hangerAt) m.kitchen.hangerAt = hg.hangerAt; }
   }
   // сушка навесного: элементы с сеткой Базиса — в точке и с поворотом проекта; без сетки — только заметка
-  if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
+  if (role === "wall") { const dr = wallDryer(ref.hardware, W, sideZ0, ref.holes); if (dr.dryer) m.kitchen.dryer = dr.dryer; notes.push(...dr.notes); }
   if (fastenersAbsent(ref)) { if (m.kitchen.fasteners !== false) m.kitchen.fasteners = "pins"; notes.push("крепёж корпуса в Базисе не заложен — студия не добавляет"); }
   // глубина D5 конфирмата по проекту — одно поле drill.confirmat (присадка по k33/k34 выше главнее, если уже записана)
   const cd = confDepthFromEtalon(ref);

@@ -274,7 +274,9 @@ test('«Евровинт 6х50» из «прочего» эталона — ко
 });
 test('сушка навесного k21 m05: набор SU01/03 с сеткой Базиса — в точках и с поворотами проекта; без сетки (k06 m07) — только заметка',{skip:!existsSync(`${ETALON}/k21.json`)},()=>{
   const ref=load('k21','m05'),{module:m}=moduleFromEtalon(ref);
-  assert.equal(m.kitchen?.dryer?.length,8);
+  assert.equal(m.kitchen?.dryer?.filter(d=>!d.fix).length,8);
+  // пакет 6 (F_DRYER): саморезы «3x3» комплекта SU03 в «прочем» Базиса — элементы fix с отверстием D3 из проекта
+  assert.equal(m.kitchen?.dryer?.filter(d=>d.fix&&d.hole).length,8);
   const ps=parts(m).filter(p=>p.id.startsWith('kitchen-dryer:'));
   assert.equal(ps.length,8);
   assert.ok(ps.every(p=>p.model?.native&&/^hardware\/bazis\/[0-9a-f]{12}\.glb$/.test(p.model.file)));
@@ -303,7 +305,7 @@ test('сушка навесного k21 m05: набор SU01/03 с сеткой 
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify({...kitchenWall(initialModule(),600),kitchen:{role:'wall',dryer:m.kitchen?.dryer}}))).kitchen?.dryer,m.kitchen?.dryer,'сушка переживает сохранение');
   const k6=moduleFromEtalon(load('k06','m07'));
   // n4-wall: сушка без сетки — точка проекта без тела (как в Базисе), геометрия не выдумывается
-  assert.deepEqual(k6.module.kitchen?.dryer?.map(d=>d.mesh),[undefined]);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
+  assert.deepEqual(k6.module.kitchen?.dryer?.filter(d=>!d.fix).map(d=>d.mesh),[undefined]);assert.ok(k6.notes.some(n=>/без сетки/.test(n)));
   assert.ok(parts(k6.module).filter(p=>p.id.startsWith('kitchen-dryer:')).every(p=>!p.model));
 });
 test('навесной под вытяжку k08 m10: дно короче сзади (перед ХДФ) и без крепежа, как в Базисе — сверка PASS',{skip:!existsSync(`${ETALON}/k08.json`)},()=>{

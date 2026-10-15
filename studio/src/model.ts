@@ -574,6 +574,8 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
   const ff=m.kitchen?.faceFiller,fx=faceFillerEdge(m);
   if(ff&&fx!==undefined&&ff.side==='left'&&i===0)left=fx;
   if(ff&&fx!==undefined&&ff.side==='right'&&i===m.sections.length-1)right=fx;
+  // фасад шире корпуса (kitchen.faceOver, F_WIDE_FACADE): кромка крайнего фасада за наружной пластью боковины
+  const fo=m.kitchen?.faceOver;if(fo?.left&&i===0)left=-fo.left;if(fo?.right&&i===m.sections.length-1)right=m.width+fo.right;
   return {left,right};
 }
 /** Кромка фасадов у фальша угловой мойки Базиса (kitchen.faceFiller): x = фальш + планка + зазор faceGap от края модуля.
@@ -1095,7 +1097,7 @@ export function parts(m: Module): Part[] {
           out.at(-1)!.decor=aluLabel(m.alu);out.at(-1)!.edge=[0,0,0,0];
         } else add(s.id+':door:'+k,inset?'Фасад распашной вкладной':'Фасад распашной',[dw,dh,ft],[fp?fp.x:cx,(y0+y1)/2,fp?fp.z:dz],dh,dw,ft,'door',s.id);
         if(fp)out.at(-1)!.rotY=fp.rotY;
-        out.at(-1)!.hinge=hinge;if(hinge==='bottom')out.at(-1)!.name='Фасад откидной · петли снизу';if(hinge==='top')out.at(-1)!.name=m.kitchen&&m.kitchenLift?'Фасад подъёмный · газлифт PD-G-N02':m.bazis?'Фасад подъёмный · на петлях, без подъёмника (как в проекте Базиса)':'Фасад подъёмный · механизм требует подбора'; /* модуль из Базиса без подъёмника: строки механизма в смете нет — и в названии фасада его нет */
+        out.at(-1)!.hinge=hinge;if(hinge==='bottom')out.at(-1)!.name='Фасад откидной · петли снизу';if(hinge==='top')out.at(-1)!.name=m.kitchen&&m.kitchenLift?'Фасад подъёмный · '+(m.kitchenLift.system==='gl104'?'газлифт GL104':'газлифт PD-G-N02'):m.bazis?'Фасад подъёмный · на петлях, без подъёмника (как в проекте Базиса)':'Фасад подъёмный · механизм требует подбора'; /* модуль из Базиса без подъёмника: строки механизма в смете нет — и в названии фасада его нет */
         if(m.doorOpen==='push'||m.noHandles)continue; // push-to-open или ручки не заложены: без ручки
         const hl=handleById(s.doorHandles?.[k]??m.handleId).len;
         const hp=m.skew?frontPoint(m,cx,t+2+13,(hinge==='top'||hinge==='bottom')?0:(hinge==='left'?1:-1)*(dw/2-40)):undefined;
@@ -1768,7 +1770,7 @@ export function validate(m: Module): string[] {
   if(m.kitchen && !m.feet && plinth(m)>0 && m.height-plinth(m)-2*RULES.panel<=0)errors.push("Кухня: низ корпуса поднят выше крыши — внутри корпуса не остаётся места.");
   // кухня: паз под ХДФ бывает утоплен вглубь корпуса (Базис k20 m05 — 119 мм от задней кромки) — предел по глубине корпуса (n3-antresol)
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
+  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
