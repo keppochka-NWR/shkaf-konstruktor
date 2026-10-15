@@ -1,3 +1,4 @@
+import {setDoorHinge} from '../src/facadeEditing';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,parts,validate,parseModule,type Module} from '../src/model';
@@ -89,7 +90,7 @@ test('gas lift: switching the front from top to side hinges drops the lift (no d
   const keep=antresol();syncKitchenLift(keep);assert.deepEqual(keep.kitchenLift,{system:'pd-g-n02'});
   const app=readFileSync(new URL('../src/App.tsx',import.meta.url),'utf8');
   assert.ok(app.includes('aria-label="Газлифт PD-G-N02 подъёмного фасада"'),'checkbox to switch the lift on/off');
-  assert.ok(/a\.doorHinges\[k\]=e\.target\.value[^}]*syncKitchenLift\(next\)/.test(app),'hinge change drops a lift without a lift-up front');
+  const changed=antresol(),door=parts(changed).find(p=>p.role==='door')!;setDoorHinge(changed,door.id,'left');assert.equal(changed.kitchenLift,undefined);assert.deepEqual(validate(changed),[]);
 });
 
 test('gas lift minor: left side bracket uses the majority Bazis mesh cd44e1c91574 (same geometry), GLB is present',()=>{
