@@ -886,7 +886,12 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const upOver = tallRows && upRow.length ? r1(Math.max(...upRow.map((q) => q.b.y1)) - top) : 0;
     const rowsOk = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5;
     const niche = rowsOk && role === "tall" && rowsGap > 10 ? nicheFromRows(lowRow.map((q) => q.b), upRow.map((q) => q.b)) : undefined;
-    const split = rowsOk && rowsGap <= 10;
+    // F_STACKED (пакет 5): пенал на опорах, верхний ряд дверей выше боковин (закрывает антресоль над пеналом — k31 m18/m19: +388,5) —
+    // тот же разрез фасадов doorSplit, верх фасадов — kitchen.faceTop < 0 (от верха корпуса); без опор/с нишей/рядов разной ширины — нет
+    const overTop = tallRows && role === "tall" && !!m.feet && upOver > 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5 && rowsGap <= 10
+      && lowRow.every((q, i) => Math.abs(q.b.x0 - upRow[i].b.x0) < 0.6 && Math.abs(q.b.x1 - upRow[i].b.x1) < 0.6);
+    if (overTop) { m.kitchen.faceTop = r1(top - Math.max(...upRow.map((q) => q.b.y1))); notes.push(`фасады выше боковин на ${upOver} мм (верхний ряд закрывает антресоль) — как в Базисе`); }
+    const split = (rowsOk || overTop) && rowsGap <= 10;
     // 3+ ряда распашных у пенала: все фасады — двери (на петлях), верхний ряд в пределах корпуса
     const allRows = rowYs.map(inRow), topOver = fronts.length ? r1(Math.max(...fronts.map((q) => q.b.y1)) - top) : 0;
     const multi = role === "tall" && rowYs.length >= 3 && rowYs.length <= 5 && !m.kdrawers && topOver <= 20 && hw("петля").length > 0 && !hw("направляющая").length && !fronts.some((q) => /^Фронтал/i.test(q.p.name)) ? doorRowsFromFronts(allRows.map((r) => r.map((q) => q.b))) : undefined;
@@ -896,7 +901,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       m.sections[0].doorSplit = niche.split;
       m.sections[0].doorNiche = niche.niche;
       notes.push(`ниша под технику ${niche.niche} мм между рядами фасадов`);
-    } else if (tallRows && upOver > 20) unsupported.push(`фасады пенала выше боковин на ${upOver} мм (пенал из нескольких корпусов) — пока не поддержано`);
+    } else if (tallRows && upOver > 20 && !overTop) unsupported.push(`фасады пенала выше боковин на ${upOver} мм (пенал из нескольких корпусов) — пока не поддержано`);
     else if (tallRows && rowsGap > 10) unsupported.push(`ниша под технику между фасадами ${r1(rowsGap)} мм (пенал под духовку/СВЧ), ряды фасадов разные — пока не поддержано`);
     else if (split) {
       const gapY = r1(upRow[0].b.y0 - lowRow[0].b.y1);
