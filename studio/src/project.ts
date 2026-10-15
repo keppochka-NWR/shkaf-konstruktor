@@ -32,14 +32,14 @@ export function sideExtension(m:Module,side:'left'|'right'){if(m.kitchen?.sideSt
 export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
  const c=a.module.corner;
  if(c){const w=a.module.width,d=c.sideDepth,rear=a.module.backType==='none'?0:3,front=a.module.doors?26:0;return [[-rear,-rear],[w,-rear],[w,d+front],[d+front,w],[-rear,w]].map(([u,v])=>localToRoom(a,u,v));}
- const m=a.module,rear=m.kupe?0:!m.backType||m.backType==='nailed'?3:0;
+ const m=a.module,rear=m.kupe||m.kitchen?.sideRecess?0:!m.backType||m.backType==='nailed'?3:0;
  const faces=!m.kupe&&((m.doors&&m.doorMount!=='inset')||m.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(m.doors&&!s.externalDrawers))||!!m.desk);
  const front=m.openJunction?m.depth:Math.max(m.depth+(faces?18:0),m.cornerFiller&&!cornerStrip(m)?m.depth+RULES.cornerFillerExtra:0);
  return [[-sideExtension(m,'left'),-rear],[m.width+sideExtension(m,'right'),-rear],[m.width+sideExtension(m,'right'),front],[-sideExtension(m,'left'),front]].map(([u,v])=>localToRoom(a,u,v));
 }
 export function bounds(a:PlacedModule){
  if(a.module.corner){const points=moduleFootprint(a),xs=points.map(p=>p.x),zs=points.map(p=>p.z);return {x:Math.min(...xs),z:Math.min(...zs),y:a.y??0,w:Math.max(...xs)-Math.min(...xs),d:Math.max(...zs)-Math.min(...zs),h:a.module.height};}
- const rear=a.module.kupe?0:!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;/* вкладные фасады (двери и ящики) внутри корпуса — спереди не выступают */const faces=!a.module.kupe&&((a.module.doors&&a.module.doorMount!=='inset')||a.module.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(a.module.doors&&!s.externalDrawers))||!!a.module.desk);const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+(faces?18:0),cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[[-sideExtension(a.module,'left'),-rear],[a.module.width+sideExtension(a.module,'right'),-rear],[a.module.width+sideExtension(a.module,'right'),front],[-sideExtension(a.module,'left'),front]].map(([u,v])=>localToRoom(a,u,v));return {...polygonBounds(points),y:a.y??0,h:a.module.height};}
+ const rear=a.module.kupe||a.module.kitchen?.sideRecess?0:!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;/* вкладные фасады (двери и ящики) внутри корпуса — спереди не выступают */const faces=!a.module.kupe&&((a.module.doors&&a.module.doorMount!=='inset')||a.module.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(a.module.doors&&!s.externalDrawers))||!!a.module.desk);const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+(faces?18:0),cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[[-sideExtension(a.module,'left'),-rear],[a.module.width+sideExtension(a.module,'right'),-rear],[a.module.width+sideExtension(a.module,'right'),front],[-sideExtension(a.module,'left'),front]].map(([u,v])=>localToRoom(a,u,v));return {...polygonBounds(points),y:a.y??0,h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
 /**

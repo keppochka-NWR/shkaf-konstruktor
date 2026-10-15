@@ -3,7 +3,8 @@ import type { PlacedModule, Project } from "./project";
 
 // Virtual closed facade plane excludes handles and is shared by doors and drawer fronts.
 export const kitchenFaceOffset = (m: Module) => m.depth + (m.faceAir ?? 2) + (m.facadeT ?? 16);
-export const kitchenRearClearance = (m: Module) => m.backType === "nailed" ? 3 : 0;
+// боковины разной глубины (kitchen.sideRecess): ХДФ внутри габарита, за длинной боковиной ничего нет
+export const kitchenRearClearance = (m: Module) => m.backType === "nailed" && !m.kitchen?.sideRecess ? 3 : 0;
 export function kitchenRowZ(p: Project, m: Module, y: number): number {
   const peers = p.modules.filter(a => a.module.kitchen?.role === m.kitchen?.role && (a.rotation ?? 0) === 0 && Math.abs((a.y ?? 0) - y) < 1);
   const face = peers.length ? peers[peers.length - 1].z + kitchenFaceOffset(peers[peers.length - 1].module) : kitchenRearClearance(m) + kitchenFaceOffset(m);

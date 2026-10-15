@@ -7,7 +7,7 @@
 import { parts, railsOf, type Module, type Part } from "./model";
 import { qrot } from "./quat";
 import { kitchenDrawerHoles, kdConfDepth } from "./kitchenDrawers";
-import { rafixHoles } from "./kitchenRafix";
+import { rafixHoles, rafixBackHoles } from "./kitchenRafix";
 
 export type Hole = { part: string; at: [number, number, number]; dir: [number, number, number]; d: number; depth: number; src: string };
 
@@ -113,6 +113,10 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       push(p.id, [ex + inward * 34, ey, ez], [0, down, 0], 15, e?.barrel ?? 12);
       push(p.id + ":pin", [ex, hpY, ez], [inward, 0, 0], e?.stem?.[0] ?? 8, e?.stem?.[1] ?? 34);
       push(p.id + ":side", [ex, hpY, ez], [-inward, 0, 0], 5, e?.side ?? 12);
+    } else if (p.id.startsWith("rafix:back:")) {
+      rafixBackHoles(p, push); // рафикс задника ЛДСП кухни: D20×13 с тыльной пласти задника, D5×13 в боковину/дно/крышу (kitchenRafix.ts)
+    } else if (p.id.startsWith("kitchen-back-cap:") && p.anchor) {
+      push(p.id, p.anchor, [0, 0, -1], 8, 16); // «8» Базиса: D8×16 с лицевой пласти задника ЛДСП в точке рафикса (k18 m16–m18)
     } else if (p.id.startsWith("rafix:")) {
       rafixHoles(p, push); // рафикс кухни: D20×13 в полку, D5×13 в стойку (kitchenRafix.ts)
     } else if (p.id.startsWith("dowel:")) {

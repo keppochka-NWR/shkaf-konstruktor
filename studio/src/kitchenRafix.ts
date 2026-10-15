@@ -61,6 +61,17 @@ export function rafixHoles(p: Part, push: (src: string, at: [number, number, num
   push(p.id + ":side", [ex, ey + RAFIX.pinUp, ez], [-inward, 0, 0], RAFIX.pinD, RAFIX.pinDepth);
 }
 
+/** Присадка рафикса задника ЛДСП (kitchen.backBoard, пакет 4; id rafix:back:<left|right|bottom|top>:k): корпус D20×13 с тыльной пласти
+ *  задника в 9,5 от кромки (по оси z), шток D5×13 в стойку в 8 от тыльной пласти: в боковину — по x, в дно/крышу — по y (k18 m16–m18).
+ *  anchor корпуса — точка Базиса (кромка задника у стойки × тыльная пласть; у верхних — со сдвигом topShift, как в проекте). */
+export function rafixBackHoles(p: Part, push: (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number) => void) {
+  if (!p.id.startsWith("rafix:back:") || p.id.endsWith(":pin") || !p.anchor) return;
+  const [ex, ey, ez] = p.anchor, side = p.id.split(":")[2];
+  const axisX = side === "left" || side === "right", inward = axisX ? (p.position[0] > ex ? 1 : -1) : (p.position[1] > ey ? 1 : -1);
+  push(p.id, [axisX ? ex + inward * RAFIX.bodyInset : ex, axisX ? ey : ey + inward * RAFIX.bodyInset, ez], [0, 0, 1], RAFIX.bodyD, RAFIX.bodyDepth);
+  push(p.id + ":side", [ex, ey, ez + RAFIX.pinUp], axisX ? [-inward, 0, 0] : [0, -inward, 0], RAFIX.pinD, RAFIX.pinDepth);
+}
+
 /** Число рафиксов модуля (смета): корпуса без штоков. */
 export const rafixCount = (ps: Part[]) => ps.filter((p) => p.id.startsWith("rafix:") && !p.id.endsWith(":pin")).length;
 

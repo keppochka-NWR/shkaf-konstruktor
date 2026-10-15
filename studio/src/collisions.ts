@@ -89,12 +89,17 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.role === "drawer" && q.role === "drawer" && !p.id.startsWith("kd:") && !q.id.startsWith("kd:") && p.id.replace(/:[a-z0-9]+(:\d+)?$/, "") === q.id.replace(/:[a-z0-9]+(:\d+)?$/, "")) return true;
     // ХДФ задника в пазу стоек/дна/крыши: проникновение не глубже паза.
     if (p.material === "hdf" && p.role === "body" && isBoard(q) && q.role === "body" && m?.backType === "groove" && depth <= (m.grooveDepth ?? 8) + 0.5) return true;
+    // боковины разной глубины (kitchen.sideRecess, пакет 4): набивной ХДФ заходит в паз длинной боковины на groove.into, как в Базисе (k28 m16)
+    const sr = m?.kitchen?.sideRecess;
+    if (sr?.groove && p.id === "back" && p.material === "hdf" && q.id === (sr.side === "left" ? "right" : "left") && depth <= sr.groove.into + 0.1) return true;
     // Штанга — в своих фланцах; фланец — на стойке.
     if ((p.role === "rod" && q.role === "flange") || (p.role === "flange" && isBoard(q) && depth <= 2)) return true;
     // Кухонная фурнитура: опора — под дном, клипса — на опоре и цоколе, навес — в углу боковины, проходит через полосу ХДФ.
     if (p.id.startsWith("leg:") && isBoard(q) && depth <= 3) return true;
     // саморез площадки опоры — в своём отверстии D3×3 в нижней пласти дна
     if (p.id.startsWith("kitchen-leg-screw:") && isBoard(q) && q.role === "body" && depth <= 3.5) return true;
+    // «8» Базиса с лицевой пласти задника ЛДСП в точке рафикса (kitchen.backBoard.rafix.caps, k18) — в своём отверстии D8×16 задника, рядом со своим рафиксом
+    if (p.id.startsWith("kitchen-back-cap:") && (q.id === "back" || q.id === "rafix:back:" + p.id.slice(17) || q.id === "rafix:back:" + p.id.slice(17) + ":pin")) return true;
     // «8x45» в нижнем торце опущенной боковины — в своём отверстии D8×45 (n4-tall)
     if (p.id.startsWith("kitchen-side-screw:") && isBoard(q) && q.role === "body" && q.id === p.id.split(":")[1]) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;

@@ -69,7 +69,8 @@ export function markBazis(m: Module, ref: RefModule): Module {
     // заглушка навеса — строкой «Заглушка для мебельного навеса ABS» на каждый навес сцены (pricing.ts), не второй раз по Базису
     || (/заглушк/i.test(h.name) && /навес/i.test(h.name))
     // рафиксы жёстких полок строит параметрика (kitchen.rafix, n3-tall) — строкой по деталям сцены, не второй раз по Базису
-    || (!!m.kitchen?.rafix && /рафикс/i.test(h.name))
+    // и рафиксы задника ЛДСП (kitchen.backBoard.rafix, пакет 4, k18 m18): у параметрического модуля все рафиксы Базиса — в сцене
+    || ((!!m.kitchen?.rafix || !!m.kitchen?.backBoard?.rafix) && /рафикс/i.test(h.name))
     // ручки Базиса на фасадах ставит параметрика (kitchen.handle.name, n4-wall) — строкой по ручкам сцены, не второй раз по Базису
     || (!!m.kitchen?.handle?.name && h.category === "ручка" && h.name.trim() === m.kitchen.handle.name)).concat(bazisHoles(ref.hardware));
   const names = bazisNames(ref.hardware);
@@ -78,7 +79,8 @@ export function markBazis(m: Module, ref: RefModule): Module {
 export function place(ref: RefModule, m: Module): PlacedModule {
   const o0 = (ref as unknown as { world: { origin: number[] } }).world.origin, yaw = (ref as unknown as { world: { yaw: number } }).world.yaw;
   // параметрический модуль с накладным ХДФ: у студии боковины с z = 0 (ХДФ на −3), у Базиса начало — по ХДФ: сдвиг на 3 вдоль оси модуля
-  const s = !m.raw && m.backType === "nailed" ? 3 + (m.kitchen?.backAir ?? 0) : 0, a = ((yaw || 0) * Math.PI) / 180; // + зазор ХДФ от корпуса (kitchen.backAir)
+  // боковины разной глубины (kitchen.sideRecess): ХДФ внутри габарита — за длинной боковиной, сдвига нет (k28 m16)
+  const s = !m.raw && m.backType === "nailed" && !m.kitchen?.sideRecess ? 3 + (m.kitchen?.backAir ?? 0) : 0, a = ((yaw || 0) * Math.PI) / 180; // + зазор ХДФ от корпуса (kitchen.backAir)
   const [ox, oy, oz] = [o0[0] + s * Math.sin(a), o0[1], o0[2] + s * Math.cos(a)];
   const w = m.width, d = m.depth;
   const [x, z] = yaw === 90 ? [ox, oz - w] : yaw === 180 ? [ox - w, oz - d] : yaw === 270 ? [ox - d, oz] : [ox, oz];

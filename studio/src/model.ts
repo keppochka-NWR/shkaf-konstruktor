@@ -2,7 +2,7 @@ import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
-import { kitchenExtraParts, kitchenErrors, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
 import { partPenetration, allowedContact } from "./collisions";
@@ -578,7 +578,7 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
 /** Кромка фасадов у фальша угловой мойки Базиса (kitchen.faceFiller): x = фальш + планка + зазор faceGap от края модуля.
  *  Одно место для размаха фасадов (facadeSpan) и точки «Петля под фальшпанель» (hardwareParts). */
 export function faceFillerEdge(m:Module):number|undefined{const ff=m.kitchen?.faceFiller;if(!ff)return undefined;const w=(ff.inset??0)+ff.width+(ff.strip??0)+fe(m);return ff.side==='left'?w:m.width-w;}
-export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1:m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
+export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1+(m.kitchen?.backBoard?.inset??0):m.backType==='groove'?(m.grooveInset??16)+RULES.back+1:0;}
 /** Верхний предел «Паз от задней кромки»: шкафы — 30 мм, кухня из Базиса — до depth−32 (k20 m05: 119). Одна точка для validate и поля KitchenPanel (A5). */
 export const grooveInsetMax=(m:Pick<Module,'kitchen'|'depth'>)=>m.kitchen?m.depth-32:30;
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
@@ -644,6 +644,7 @@ export function parts(m: Module): Part[] {
   if(m.worktop)return worktopParts(m);
   if(m.corner)return cornerParts(m);
   if(m.casework)return caseworkParts(m);
+  if(m.kitchen?.sideRecess)return sideRecessParts(m,parts); // кухня Базиса: боковины разной глубины (пакет 4) — корпус depth − back у лица, длинная боковина во всю глубину
   const out: Part[] = [];
   const t = RULES.panel;
   const d = m.depth;
@@ -833,7 +834,10 @@ export function parts(m: Module): Part[] {
   // кухня Базиса: набивной ХДФ с зазором от корпуса (kitchen.backAir, k01 m14 — 2 мм, так в проекте), n4-antresol
   const backZ0=groove?(m.grooveInset??16)+(m.grooveWidth!==undefined?m.grooveWidth-RULES.back:0):-RULES.back-(m.kitchen?.backAir??0);
   const backTopL = m.slope ? slopeAt(m, 2) - 2 : m.height, backTopR = m.slope ? slopeAt(m, m.width - 2) - 2 : m.height;
-  if(m.backType==='board'){const bh=innerTop(m)-bottom-t;add('back','Задняя стенка · ЛДСП вкладная',[m.width-2*t,bh,t],[m.width/2,bottom+t+bh/2,t/2],bh,m.width-2*t,t,'body');out.at(-1)!.edge=[0.4,0.4,0.4,0.4];}
+  if(m.backType==='board'){
+    // кухня Базиса (kitchen.backBoard, пакет 4): задник ЛДСП утоплен на inset от задней кромки, зазоры до боковин/дна/крыши — по проекту; у шкафов — как прежде
+    const bb=m.kitchen?.backBoard,g=bb?.gap??{side:0,bottom:0,top:0},bw=m.width-2*t-2*g.side,bh=innerTop(m)-bottom-t-g.bottom-g.top;
+    add('back','Задняя стенка · ЛДСП вкладная',[bw,bh,t],[m.width/2,bottom+t+g.bottom+bh/2,(bb?.inset??0)+t/2],bh,bw,t,'body');out.at(-1)!.edge=[0.4,0.4,0.4,0.4];}
   else if(m.backType!=='none'){
     if(m.slope&&!groove){const maxH=Math.max(backTopL,backTopR)-2;add('back','Задняя стенка · набивная · скос',[backW,maxH,RULES.back],[m.width/2,2+maxH/2,-RULES.back/2],maxH,backW,RULES.back,'body',undefined,'hdf');out.at(-1)!.taper=[backTopL-2,backTopR-2];}
     else if(groove&&m.kitchen?.backTopGap!==undefined&&!m.slope){
