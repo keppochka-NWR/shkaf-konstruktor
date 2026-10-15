@@ -72,6 +72,8 @@ test('F_PARTITION: крепёж концов по проекту — эксце�
   assert.ok(barrel.every(h=>h.dir[0]===1&&h.depth===12));
   assert.equal(onDv.filter(h=>h.d===8&&h.depth===34).length,2,'шток D8×34 в нижний торец');
   assert.deepEqual(onDv.filter(h=>h.d===8&&h.depth===22).map(h=>h.at[2]).sort((a,b)=>a-b),[106,234],'шканты на 32 ближе к середине');
+  assert.deepEqual(onDv.filter(h=>h.d===8&&h.depth===22).map(h=>h.at[1]),[16,16],'шканты сверлятся из плоскости стыка с дном');
+  assert.deepEqual(pid(m,/^dowel:kdiv-bottom:/).map(p=>p.anchor![1]),[0,0],'точка шканта — нижняя пласть дна, как у Базиса и dowel:under');
   assert.equal(hs.filter(h=>h.part==='bottom'&&h.d===5&&h.depth===12).length,2,'D5×12 в дно');
   assert.equal(onDv.filter(h=>h.d===5&&h.at[1]>700).length,2,'конфирматы сверху — D5 в торец перегородки');
   assert.deepEqual(partCollisions(ps,m).filter(c=>c.names.some(n=>/Перегородка|Эксцентрик|Шкант/.test(n))),[]);
@@ -90,7 +92,7 @@ test('F_PARTITION (k31 m11): перегородка — вторая секци�
   assert.deepEqual(r.module.kitchen?.divider,{z0:20,bottom:{kind:'ecc',ins:[54,54],face:'left',dowel:32},top:{kind:'conf',ins:[54,54]}});
   assert.ok(!r.unsupported.length,r.unsupported.join('; '));
   assert.equal(c.missing.length,0);assert.equal(c.extra.length,0);
-  for(const cat of ['эксцентрик','конфирмат','шкант']){const h=c.hardware.find(x=>x.category===cat)!;assert.equal(h.ref,h.studio,cat);}
+  for(const cat of ['эксцентрик','конфирмат','шкант']){const h=c.hardware.find(x=>x.category===cat)!;assert.equal(h.ref,h.studio,cat);assert.equal(h.maxPosDelta,0,cat+' места');}
   // остаётся особенность Базиса: полки правой секции на 9 мм заходят в правую боковину (544,5…1393 при боковине от 1384) — не правило
   assert.ok(c.pairs.some(p=>p.delta===10));
 });

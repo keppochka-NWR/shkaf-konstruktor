@@ -110,7 +110,8 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       push(p.id + ":side", [cx, jy, z], [0, -up, 0], 5, 12);
     } else if (p.id.startsWith("dowel:kdiv-") && p.anchor) {
       // шкант перегородки: D8×22 в торец перегородки, D8×12 в горизонталь — из плоскости стыка
-      const [x, jy, z] = p.anchor, up = p.id.startsWith("dowel:kdiv-top") ? -1 : 1;
+      // точка снизу — на нижней пласти дна (как dowel:under), сверху — плоскость стыка
+      const up = p.id.startsWith("dowel:kdiv-top") ? -1 : 1, [x, ay, z] = p.anchor, jy = up > 0 ? ay + Math.min(...(ps.find((q) => q.id === "bottom")?.size ?? [16])) : ay;
       push(p.id, [x, jy, z], [0, up, 0], 8, 22);
       push(p.id + ":side", [x, jy, z], [0, -up, 0], 8, 12);
     } else if (p.id.startsWith("ecc:under:") && !p.id.endsWith(":pin") && p.anchor) {

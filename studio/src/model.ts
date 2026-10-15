@@ -1329,7 +1329,8 @@ export function parts(m: Module): Part[] {
           if (e.dowel) {
             const zd = z + (k === 0 ? e.dowel : -e.dowel);
             add(`dowel:kdiv-${edge}:${dv.id}:${k}`, "Шкант 8×30", [8, 30, 8], [dv.position[0], jy + up * 3, zd], 30, 8, 8, "fastener", dv.sectionId, "metal");
-            out.at(-1)!.anchor = [dv.position[0], jy, zd];
+            // точка сверки — как у Базиса и dowel:under: снизу на нижней пласти дна (k31 m11 pos y=0); у верха данных в базе нет — плоскость стыка
+            out.at(-1)!.anchor = [dv.position[0], edge === "bottom" ? jy - t : jy, zd];
           }
         });
       }
