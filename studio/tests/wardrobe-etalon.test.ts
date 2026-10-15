@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {parts,initialModule,section,validate,type Module,type Part} from '../src/model';
 import {compareModule} from '../scripts/kitchen/compare';
 import {wardrobeFromEtalon,layoutWardrobe,type WRefModule,type WRefPanel} from '../scripts/wardrobe/fromEtalon';
-import {reasonKey,reasonSummary,ETALON_W,type WardrobeVerdict} from '../scripts/wardrobe/batch';
+import {reasonKey,reasonSummary,verdict,ETALON_W,type WardrobeVerdict} from '../scripts/wardrobe/batch';
 import {existsSync,readFileSync} from 'node:fs';
 import type {PlacedModule} from '../src/project';
 
@@ -86,4 +86,19 @@ test('эталон шкафов не теряет фурнитуру: все с�
   const hw = (w: string) => (JSON.parse(readFileSync(`${ETALON_W}/${w}.json`, 'utf8')) as {modules: WRefModule[]}).modules.flatMap((m) => m.hardware as {kit?: string; node?: string}[]);
   assert.equal(hw('w119').filter((h) => /Versalite/.test(h.kit ?? '')).length, 18);
   assert.equal(hw('w188').filter((h) => h.node === 'profile').length, 3);
+});
+// Разбор замечаний критика на данных эталонов (пропуск, если эталонов на машине нет).
+test('эталон шкафов: сверка честная, а расхождения объяснены (w049 m03, w060 m02, w021 m07)', {skip: !existsSync(STATS)}, () => {
+  const mod = (w: string, k: string) => (JSON.parse(readFileSync(`${ETALON_W}/${w}.json`, 'utf8')) as {modules: WRefModule[]}).modules.find((m) => m.key === k)!;
+  // w049 m03: панели совпали, но отверстия 0/16. Это присадка конфирмата: у Базиса «Евровинт 7х50» D7 сквозное + D5×34, у студии D8×16 + D5×35 (S_DRILL, вопрос Максу)
+  const v49 = verdict('w049', mod('w049', 'm03'));
+  assert.ok(v49.geom && !v49.pass && !v49.noEdge, v49.why.join('; '));
+  assert.ok(v49.why.map(reasonKey).includes('S_DRILL'));
+  // w060 m02: расходится только кромка. Мутация модуля (height+1) даёт Δ=1 и FAIL, то есть сверка не подгоняется
+  const ref = mod('w060', 'm02'), m = wardrobeFromEtalon(ref).module;
+  assert.ok(verdict('w060', ref).noEdge);
+  const c = compareModule(ref, {...m, height: m.height + 1});
+  assert.ok(c.pairs.some((x) => x.delta >= 1) || c.missing.length > 0);
+  // импорт (import.ts) отбрасывает деталь 0×0 мм, а эталон её хранит, как в Базисе: отсюда 11 960 и 11 961 панелей
+  assert.equal(mod('w021', 'm07').panels.filter((p) => (p as unknown as {lw: number[]}).lw.every((x) => x < 0.5)).length, 1);
 });
