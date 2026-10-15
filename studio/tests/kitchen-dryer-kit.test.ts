@@ -32,3 +32,16 @@ test('сушка k06 m07: «Вращение» без отверстий (как
   assert.equal(fix.length,8);assert.ok(fix.every(d=>!d.hole));
   const pr=c.hardware.find(h=>h.category==='прочее')!;assert.equal(pr.ref,pr.studio);
 });
+
+// mirrorKitchen не трогает kitchen.dryer: по всей базе комплекты элементов «прочего» симметричны (каждому слева — такой же справа в
+// тех же x от своей боковины, y, z), поэтому зеркало модуля даёт тот же набор. Если появится несимметричный комплект — тест упадёт,
+// и зеркало придётся учить (сетки Базиса левые/правые, простой сменой стороны не обойтись)
+test('сушка: элементы комплекта симметричны по сторонам во всех модулях базы с ними (k06 m07, k08 m08, k21 m05/m06, k25 m14) — зеркало без изменений верно',()=>{
+  const mods=[['k06','m07'],['k08','m08'],['k21','m05'],['k21','m06'],['k25','m14']].filter(([k])=>has(k));
+  for(const [k,key] of mods){
+    const fix=(moduleFromEtalon(load(k,key)).module.kitchen?.dryer??[]).filter(d=>d.fix);
+    const sig=(s:string)=>fix.filter(d=>d.side===s).map(d=>[d.name,d.x,d.y,d.z,d.hole?.join('x')??''].join('|')).sort();
+    assert.ok(fix.length>0,`${k} ${key}`);
+    assert.deepEqual(sig('left'),sig('right'),`${k} ${key}`);
+  }
+});

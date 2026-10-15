@@ -419,6 +419,7 @@ export function mirrorKitchen(m: Module): void {
   if (k.sideStrip) k.sideStrip = { ...k.sideStrip, side: k.sideStrip.side === "left" ? "right" : "left" };
   if (k.faceOver) k.faceOver = { ...(k.faceOver.right ? { left: k.faceOver.right } : {}), ...(k.faceOver.left ? { right: k.faceOver.left } : {}) };
   if (k.sideRecess) k.sideRecess = { ...k.sideRecess, side: k.sideRecess.side === "left" ? "right" : "left" };
+  // kitchen.dryer не трогаем: комплекты сушки в базе симметричны по сторонам (тест kitchen-dryer-kit), зеркало даёт тот же набор
   // задник ЛДСП: сетки рафиксов в дно/крышу — от левой/правой кромки, зеркало меняет их местами; в боковины — симметричны
   if (k.backBoard?.rafix) for (const key of ["bottom", "top"] as const) { const g = k.backBoard.rafix[key]; if (g) k.backBoard.rafix[key] = { ...g, rear: g.front, front: g.rear }; }
   for (const d of m.kdrawers ?? []) {
