@@ -516,8 +516,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   // нет такой панели — цоколя нет (навесной со свесом фасада ниже дна: правило Макса — не добавлять того, чего нет в Базисе)
   const lowFront = !legs.length && bottom && bottom.b.y0 > 0.5 ? P.find(({ p, b }) => p.axis === "z" && board(p.kind) && b.y1 <= bottom.b.y0 + 1 && b.z1 >= sideZ1 - 30 && !fronts.some((f) => f.b === b)) : undefined;
   if (lowFront) m.kitchen.lowFront = true;
-  // пакет 3: крепёж щита под дном по проекту (k14 m03: конфирматы через боковины и через дно)
-  const lfc = lowFront && bottom ? lowFrontConf(ref.hardware, lowFront.b, left.b, right.b, bottom.b) : undefined;
+  // пакет 3: крепёж щита под дном по проекту (k14 m03: конфирматы через боковины и через дно). Панель под поднятым дном навесного
+  // уже с крепежом raise.conf (короб вытяжки, 809b416: конфирматы/эксцентрики, глубина, отступы по сторонам) — это тот же щит,
+  // общий механизм главнее: второй набор конфирматов не пишем (слияние пакетов 15.10: k14 m03 получал оба — 22 конфирмата при 16)
+  const lfc = lowFront && bottom && !m.kitchen.raise?.conf ? lowFrontConf(ref.hardware, lowFront.b, left.b, right.b, bottom.b) : undefined;
   if (lfc) { m.kitchen.lowFrontConf = lfc; notes.push(`щит под дном на конфирматах: через боковины на ${lfc.side.join(", ")} от его низа, через дно в ${lfc.top.join(", ")} от концов — как в Базисе`); }
   // царги
   const railList: NonNullable<Module["rails"]> = [];

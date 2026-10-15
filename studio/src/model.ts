@@ -1127,7 +1127,8 @@ export function parts(m: Module): Part[] {
   };
   // пакет 3: щит под дном навесного на конфирматах по проекту Базиса (kitchen.lowFrontConf, k14 m03): через боковины в торцы щита на высотах
   // от его низа и через дно в верхний торец — парой от концов щита; ось — по середине толщины щита
-  const lfc = m.kitchen?.lowFront && m.kitchen.lowFrontConf && fastenersMode(m.kitchen) !== "pins" && fastenersMode(m.kitchen) !== false ? m.kitchen.lowFrontConf : undefined;
+  // при raise.conf (тот же щит, крепёж короба вытяжки — kitchen.ts raiseFrontParts) не дублируем
+  const lfc = m.kitchen?.lowFront && m.kitchen.lowFrontConf && !m.kitchen.raise?.conf && fastenersMode(m.kitchen) !== "pins" && fastenersMode(m.kitchen) !== false ? m.kitchen.lowFrontConf : undefined;
   const lfp = lfc ? out.find((p) => p.id === "plinth") : undefined, lfb = lfp ? out.find((p) => p.id === "bottom") : undefined;
   if (lfc && lfp && lfb) {
     const [px, py, pz] = lfp.position, [pw, ph] = lfp.size, y0 = py - ph / 2, yt = lfb.position[1] + lfb.size[1] / 2;
