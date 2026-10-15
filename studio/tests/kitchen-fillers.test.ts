@@ -44,7 +44,7 @@ test('доборная планка (F_FILLER_STRIP): распознаётся �
     assert.equal(f.strip.side,side);
     assert.equal(f.strip.ext,60);
     assert.equal(f.strip.planks.length,1);
-    assert.deepEqual(f.strip.planks[0],{z:541,w:60,y0:0,y1:740,edges:['+y','-y'],edgeT:0.5});
+    assert.deepEqual(f.strip.planks[0],{z:541,w:60,y0:0,yt:0,edges:['+y','-y'],edgeT:0.5},'низ от низа дна, верх от верха корпуса (пакет 0)');
     assert.equal(f.strip.facade?.w,58);
     assert.equal(f.strip.facade?.inset,side==='left'?1:0,'отступ планки из фасада от наружного края модуля');
     assert.equal(f.strip.conf,undefined,'крепежа планки в проекте нет — поле не пишется');
@@ -95,7 +95,7 @@ test('доборная планка: конфирматы из боковины 
   const conf=(i:number,y:number)=>({i,name:'Конфирмат 7х50 мм, Zn',category:'конфирмат',pos:[584,y,552],quat:[0.71,-0.71,0,0],host:1});
   const r2={...ref,hardware:[...ref.hardware,conf(0,200),conf(1,600)],holes:[{panel:7,face:'-x',at:[600,200,552],dir:[1,0,0],d:5,depth:42,src:0},{panel:7,face:'-x',at:[600,600,552],dir:[1,0,0],d:5,depth:42,src:1},{panel:1,face:'-x',at:[584,200,552],dir:[1,0,0],d:8,depth:16,src:0},{panel:1,face:'-x',at:[584,600,552],dir:[1,0,0],d:8,depth:16,src:1}]};
   const f=sideStripOf(r2)!;
-  assert.deepEqual(f.strip.conf,[100,500],'y от низа планки');
+  assert.deepEqual([f.strip.conf,f.strip.confTop],[[100],[240]],'нижняя половина планки — от её низа, верхняя — от верха (пакет 0)');
   assert.equal(f.strip.confDepth,42,'глубина по проекту, не как у корпуса (35)');
   const m=moduleFromEtalon(r2).module;
   assert.equal(m.kitchen?.outConf,undefined,'те же конфирматы — не стяжка с соседом');
@@ -125,11 +125,14 @@ test('доборная планка: сохраняется в проекте (p
 test('доборная планка по базе Базиса: k25 m09 (две планки, без крепежа), k18 m01 (конфирматы), k20 m07 (антресоль), k26 m07 (три планки), k32 m10 (без планки из фасада), k29 m07 (только планка из фасада) — сверка PASS',{skip:!has('k25')||!has('k18')||!has('k20')||!has('k26')||!has('k32')||!has('k29')},()=>{
   const r25=pass('k25','m09');
   assert.ok(r25.ok,r25.info);
-  assert.deepEqual(r25.m.kitchen?.sideStrip,{side:'left',ext:44,planks:[{z:491,w:44,y0:0,y1:762,edges:['+y','-y'],edgeT:1},{z:41,w:44,y0:0,y1:762,edges:['+y','-y'],edgeT:1}],facade:{w:40,inset:3,y0:1.5,y1:760.5,t:19,air:0}});
+  assert.deepEqual(r25.m.kitchen?.sideStrip,{side:'left',ext:44,planks:[{z:491,w:44,y0:0,yt:0,edges:['+y','-y'],edgeT:1},{z:41,w:44,y0:0,yt:0,edges:['+y','-y'],edgeT:1}],facade:{w:40,inset:3,y0:1.5,yt:1.5,t:19,air:0}});
   assert.equal(r25.m.width,290);
   const r18=pass('k18','m01');
   assert.ok(r18.ok,r18.info);
-  assert.deepEqual(r18.m.kitchen?.sideStrip?.conf,[66,418,770]);
+  // конфирматы Базиса на 66, 418, 770 от низа планки: нижний — от низа (conf), два верхних — от верха (confTop), пакет 0
+  const s18=r18.m.kitchen!.sideStrip!,h18=parts(r18.m).find(p=>p.id==='side-strip:plank:0')!.size[1];
+  assert.deepEqual(s18.conf,[66]);
+  assert.deepEqual(s18.confTop?.map(y=>Math.round((h18-y)*10)/10),[770,418]);
   assert.equal(r18.m.kitchen?.outConf,undefined);
   for(const [k,key,side,n] of [['k20','m07','right',1],['k26','m07','right',3],['k32','m10','right',1],['k29','m07','right',0]] as const){
     const r=pass(k,key);

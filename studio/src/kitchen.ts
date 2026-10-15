@@ -338,6 +338,7 @@ export function mirrorKitchen(m: Module): void {
   if (k.grooveHoles) k.grooveHoles = k.grooveHoles.map((h): GrooveHole => (h.length >= 5 ? [h[0], h[1], h[2], h[3] === -1 ? 1 : -1, h[4] === -1 ? -1 : 1] : [m.width - h[0], h[1], h[2]]));
   for (const r of m.rails ?? []) { if (!r) continue; const { topConf, topConfR } = r; put(r, "topConf", topConfR); put(r, "topConfR", topConf); }
   if (k.hoodBox) { const h = k.hoodBox; put(h, "dx", h.dx ? -h.dx : undefined); if (h.front.over) h.front.over = [h.front.over[1], h.front.over[0]]; }
+  if (k.sideStrip) k.sideStrip = { ...k.sideStrip, side: k.sideStrip.side === "left" ? "right" : "left" };
   for (const d of m.kdrawers ?? []) {
     const b: FirmaxBox | undefined = d.box;
     if (!b) continue;
@@ -790,7 +791,7 @@ export function kitchenErrors(m: Module): string[] {
     if (k.backTopGap !== undefined && (!Number.isFinite(k.backTopGap) || k.backTopGap < 0 || k.backTopGap > 20)) e.push("Зазор ХДФ до верха: 0–20 мм.");
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
-    e.push(...hoodBoxErrors(m));
+    e.push(...hoodBoxErrors(m), ...sideStripErrors(m));
     // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
     if (k.legs) {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
@@ -810,28 +811,40 @@ export function kitchenErrors(m: Module): string[] {
 const num = (v: unknown) => Number(v);
 const fin = (v: unknown) => Number.isFinite(Number(v));
 
-/** Доборная планка сбоку (kitchen.sideStrip, F_FILLER_STRIP). Размеры — как в проекте Базиса: ext — на сколько модуль шире корпуса;
- *  planks — планки ЛДСП 16 снаружи боковины (z — задняя пласть от задней кромки боковин, w — ширина наружу от боковины, y0/y1 — от
- *  низа дна, edges — кромленые торцы по проекту, edgeT — её толщина); facade — планка в плоскости фасадов (w, inset — от наружного края
- *  модуля, t — толщина, air — зазор от лица корпуса, ldsp — из ЛДСП корпуса, иначе фасадный материал); conf — конфирматы из боковины
- *  в торец передней планки, y от её низа. Без conf — планки без крепежа, как в Базисе (k25). */
+/** Доборная планка сбоку (kitchen.sideStrip, F_FILLER_STRIP). Размеры — как в проекте Базиса, высоты — правилом «от ближней кромки»
+ *  (пакет 0: планки идут за высотой модуля): ext — на сколько модуль шире корпуса; planks — планки ЛДСП 16 снаружи боковины (z — задняя
+ *  пласть от задней кромки боковин, w — ширина наружу от боковины, y0 — низ от низа дна, yt — верх от верха корпуса, edges — кромленые
+ *  торцы по проекту, edgeT — её толщина); facade — планка в плоскости фасадов (w, inset — от наружного края модуля, y0/yt, t — толщина,
+ *  air — зазор от лица корпуса, ldsp — из ЛДСП корпуса, иначе фасадный материал); conf — конфирматы из боковины в торец передней планки
+ *  от её низа (нижняя половина), confTop — от её верха (верхняя половина). Без conf/confTop — планки без крепежа, как в Базисе (k25). */
 export type KitchenSideStrip = {
   side: "left" | "right"; ext: number;
-  planks: { z: number; w: number; y0: number; y1: number; edges?: string[]; edgeT?: number }[];
-  facade?: { w: number; inset: number; y0: number; y1: number; t: number; air: number; ldsp?: true };
+  planks: { z: number; w: number; y0: number; yt: number; edges?: string[]; edgeT?: number }[];
+  facade?: { w: number; inset: number; y0: number; yt: number; t: number; air: number; ldsp?: true };
   conf?: number[];
+  confTop?: number[];
   /** глубина D5 под конфирмат в торце планки по проекту, если не как у корпуса (k28 m18: 42 при 35) */
   confDepth?: number;
 };
 function parseSideStrip(x: unknown): { sideStrip?: KitchenSideStrip } {
   const s = x as Partial<KitchenSideStrip> | undefined;
   if (!s || (s.side !== "left" && s.side !== "right") || !fin(s.ext) || !Array.isArray(s.planks)) return {};
-  const planks = s.planks.filter((p) => p && fin(p.z) && fin(p.w) && fin(p.y0) && fin(p.y1)).map((p) => ({ z: num(p.z), w: num(p.w), y0: num(p.y0), y1: num(p.y1),
+  const planks = s.planks.filter((p) => p && fin(p.z) && fin(p.w) && fin(p.y0) && fin(p.yt)).map((p) => ({ z: num(p.z), w: num(p.w), y0: num(p.y0), yt: num(p.yt),
     ...(Array.isArray(p.edges) ? { edges: p.edges.map(String) } : {}), ...(fin(p.edgeT) ? { edgeT: num(p.edgeT) } : {}) }));
   const f = s.facade;
-  const facade = f && fin(f.w) && fin(f.inset) && fin(f.y0) && fin(f.y1) && fin(f.t) ? { w: num(f.w), inset: num(f.inset), y0: num(f.y0), y1: num(f.y1), t: num(f.t), air: fin(f.air) ? num(f.air) : 0, ...(f.ldsp ? { ldsp: true as const } : {}) } : undefined;
-  const conf = Array.isArray(s.conf) ? s.conf.map(Number).filter(Number.isFinite) : [];
-  return { sideStrip: { side: s.side, ext: num(s.ext), planks, ...(facade ? { facade } : {}), ...(conf.length ? { conf } : {}), ...(fin(s.confDepth) ? { confDepth: num(s.confDepth) } : {}) } };
+  const facade = f && fin(f.w) && fin(f.inset) && fin(f.y0) && fin(f.yt) && fin(f.t) ? { w: num(f.w), inset: num(f.inset), y0: num(f.y0), yt: num(f.yt), t: num(f.t), air: fin(f.air) ? num(f.air) : 0, ...(f.ldsp ? { ldsp: true as const } : {}) } : undefined;
+  const nums = (a: unknown) => (Array.isArray(a) ? a.map(Number).filter(Number.isFinite) : []);
+  const conf = nums(s.conf), confTop = nums(s.confTop);
+  return { sideStrip: { side: s.side, ext: num(s.ext), planks, ...(facade ? { facade } : {}), ...(conf.length ? { conf } : {}), ...(confTop.length ? { confTop } : {}), ...(fin(s.confDepth) ? { confDepth: num(s.confDepth) } : {}) } };
+}
+/** Ошибки доборной планки (validate → kitchenErrors): планки и планка из фасада в пределах высоты корпуса, крепёж в пределах передней планки. */
+export function sideStripErrors(m: Module): string[] {
+  const s = m.kitchen?.sideStrip; if (!s) return [];
+  const e: string[] = [], H = m.height, fits = (q: { y0: number; yt: number }) => Number.isFinite(q.y0) && Number.isFinite(q.yt) && q.y0 >= 0 && q.yt >= 0 && H - q.y0 - q.yt >= 50;
+  if (!(Number.isFinite(s.ext) && s.ext >= 10 && s.ext <= 100) || !s.planks.every((p) => Number.isFinite(p.z) && p.z >= 0 && p.w > 0 && p.w <= s.ext + 0.01 && fits(p)) || (s.facade && !fits(s.facade))) e.push("Доборная планка: выступ 10–100 мм, планки в пределах высоты корпуса (от 50 мм) и выступа.");
+  const pl = s.planks[0];
+  if (pl && (s.conf || s.confTop)) { const h = H - pl.y0 - pl.yt; if (![...(s.conf ?? []), ...(s.confTop ?? [])].every((y) => Number.isFinite(y) && y >= 0 && y <= h)) e.push("Доборная планка: конфирматы в пределах передней планки."); }
+  return e;
 }
 const v3 = (a: unknown[]) => a.slice(0, 3).map(Number) as [number, number, number];
 const v4 = (a: unknown[]) => a.slice(0, 4).map(Number) as [number, number, number, number];

@@ -144,18 +144,35 @@ test('короб вытяжки (пакет 1 на правилах пакета
   assert.deepEqual(rt(m).kitchen!.hoodBox,m.kitchen!.hoodBox,'поле переживает сохранение');
 });
 
+test('доборная планка (пакет 2 на правилах пакета 0): планки от низа дна до верха корпуса идут за высотой, конфирматы верхней половины — от верха планки; зеркало — сторона',()=>{
+  const m=kitchenBase(initialModule(),600);m.doors=false;m.sections[0].shelves=[];
+  m.kitchen!.sideStrip={side:'right',ext:60,planks:[{z:541,w:60,y0:0,yt:0,edges:['+y','-y'],edgeT:0.5}],facade:{w:58,inset:0,y0:2,yt:2,t:16,air:0},conf:[66],confTop:[50]};
+  const geo=(mm:Module)=>{const ps=parts(mm);const pl=ps.find(p=>p.id==='side-strip:plank:0')!,bot=ps.find(p=>p.id==='bottom')!;const cs=ps.filter(p=>p.id.startsWith('fast:side-strip:')).map(p=>p.model!.origin![1]).sort((a,b)=>a-b);
+    return {y0:pl.position[1]-pl.size[1]/2,y1:pl.position[1]+pl.size[1]/2,yb:bot.position[1]-bot.size[1]/2,top:mm.height,conf:cs};};
+  for(const mm of [m,{...m,height:m.height-100},{...m,height:m.height+100}]){
+    const g=geo(mm);assert.equal(g.y0,g.yb,'низ планки — низ дна');assert.equal(g.y1,g.top,'верх планки — верх корпуса');
+    assert.deepEqual(g.conf,[g.y0+66,g.y1-50],'нижний конфирмат от низа планки, верхний — от её верха');
+    assert.deepEqual(validate(mm),[]);assert.deepEqual(partCollisions(parts(mm),mm).filter(c=>!c.bazis&&/side-strip/.test(c.a+c.b)),[]);
+  }
+  assert.ok(validate({...m,kitchen:{...m.kitchen!,sideStrip:{...m.kitchen!.sideStrip!,confTop:[2000]}}}).some(e=>/Доборная планка: конфирматы/.test(e)),'крепёж вне планки — честная ошибка');
+  const z=structuredClone(m);mirrorKitchen(z);assert.equal(z.kitchen!.sideStrip!.side,'left');mirrorKitchen(z);assert.deepEqual(z.kitchen!.sideStrip,m.kitchen!.sideStrip);
+  assert.deepEqual(rt(m).kitchen!.sideStrip,m.kitchen!.sideStrip,'поле переживает сохранение');
+});
+
 // Честный список исключений общего прогона: прогоны без ошибки validate, где после ±100 остаётся пересечение/потеря пометки.
 // Не поля пакета 0: газлифт против полки (положение полки — правило шкафа), число точек стыка при ширине 292 (правило kitchenJointPoints).
 const EXCEPTIONS=new Set(['k07/m07/height-100','k10/m10/width-100']);
 test('все PASS-модули базы переживают ширину ±100 и высоту ±100: либо чисто, либо проверка говорит об этом (validate); тихих — только список исключений',{skip:!existsSync(ETALON_DIR)},()=>{
   const r=resizeSweep(RESIZE_CHANGES);
-  assert.ok(r.modules>=173,`PASS-модулей ${r.modules}`);
+  assert.ok(r.modules>=181,`PASS-модулей ${r.modules} (173 после пакета 0, 174 с коробом вытяжки, 181 с доборными планками и фальшью из фасада)`);
   assert.deepEqual(r.skipped,[],'на исходном размере все PASS-модули без ошибок и пересечений');
   const silent=r.hits.filter(h=>!h.errors.length).map(h=>`${h.kitchen}/${h.key}/${h.change}`);
   assert.deepEqual(silent.filter(s=>!EXCEPTIONS.has(s)),[],'тихие поломки вне списка исключений');
   // ни одного крепежа/опоры за габаритом и фурнитуры в воздухе без ошибки validate
   assert.deepEqual(r.hits.filter(h=>!h.errors.length&&(h.outside.length||h.air.length)).map(h=>`${h.kitchen}/${h.key}/${h.change}`),[]);
-  assert.ok(r.hits.length<=49,`прогонов с замечаниями ${r.hits.length} (было 84 до пакета 0, 49 после)`);
+  // ратчет: 84 до пакета 0, 49 после; 50 после слияния пакетов 1–2 — новый PASS k20 m07 (антресоль 250 мм) при height−100 честно
+  // упирается в лимит высоты validate; короб вытяжки и доборные планки на правилах — тихих поломок не добавили
+  assert.ok(r.hits.length<=50,`прогонов с замечаниями ${r.hits.length} (было 84 до пакета 0, 49 после, 50 после пакетов 1–2)`);
 });
 
 test('щит: partCollisions у модуля с относительными полями на исходном размере — пусто (сверка не меняется)',()=>{

@@ -1328,20 +1328,24 @@ export function parts(m: Module): Part[] {
   // в плоскости фасадов; высоты — от низа дна. Конфирматы из боковины в торец передней планки — только если они есть в проекте (conf).
   const ss=m.kitchen?.sideStrip;
   if(ss){
+    // высоты по правилу «от ближней кромки» (пакет 0): y0 — от низа дна, yt — от верха корпуса; планки идут за высотой модуля
     const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,L=ss.side==='left',ox=L?-ss.ext:m.width+ss.ext;
+    const span=(q:{y0:number;yt:number})=>{const a=yb+q.y0,b=m.height-q.yt;return {a,b,h:b-a,c:(a+b)/2};};
     for(const [i,pl] of ss.planks.entries()){
-      const x=L?-pl.w/2:m.width+pl.w/2,h=pl.y1-pl.y0;
-      add(`side-strip:plank:${i}`,'Планка доборная ЛДСП',[pl.w,h,t],[x,yb+(pl.y0+pl.y1)/2,pl.z+t/2],h,pl.w,t,'body');
+      const x=L?-pl.w/2:m.width+pl.w/2,s=span(pl);
+      add(`side-strip:plank:${i}`,'Планка доборная ЛДСП',[pl.w,s.h,t],[x,s.c,pl.z+t/2],s.h,pl.w,t,'body');
     }
     const f=ss.facade;
     if(f){
-      const ft=f.t,h=f.y1-f.y0,x=L?ox+f.inset+f.w/2:ox-f.inset-f.w/2;
-      add(f.ldsp?'side-strip:fp:facade':'side-strip:facade',f.ldsp?'Планка доборная ЛДСП в плоскости фасадов':'Планка доборная из фасада',[f.w,h,ft],[x,yb+(f.y0+f.y1)/2,d+f.air+ft/2],h,f.w,ft,'body');
+      const ft=f.t,s=span(f),x=L?ox+f.inset+f.w/2:ox-f.inset-f.w/2;
+      add(f.ldsp?'side-strip:fp:facade':'side-strip:facade',f.ldsp?'Планка доборная ЛДСП в плоскости фасадов':'Планка доборная из фасада',[f.w,s.h,ft],[x,s.c,d+f.air+ft/2],s.h,f.w,ft,'body');
       if(!f.ldsp)out.at(-1)!.decor=m.facadeDecor;
     }
-    if(ss.conf&&ss.planks.length&&fastenersMode(m.kitchen)===true){
-      const pl=ss.planks[0],zc=pl.z+t/2;
-      for(const [k,y] of ss.conf.entries())confirmat(`fast:side-strip:${k}`,[L?t:m.width-t,yb+pl.y0+y,zc],L?'-x':'+x');
+    if((ss.conf||ss.confTop)&&ss.planks.length&&fastenersMode(m.kitchen)===true){
+      const pl=ss.planks[0],zc=pl.z+t/2,s=span(pl),xh=L?t:m.width-t;
+      // conf — от низа планки (нижняя половина), confTop — от её верха (верхняя половина): при смене высоты крепёж остаётся в планке
+      for(const [k,y] of (ss.conf??[]).entries())confirmat(`fast:side-strip:${k}`,[xh,s.a+y,zc],L?'-x':'+x');
+      for(const [k,y] of (ss.confTop??[]).entries())confirmat(`fast:side-strip:top:${k}`,[xh,s.b-y,zc],L?'-x':'+x');
     }
   }
   hardwareParts(m,out);

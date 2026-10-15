@@ -6,7 +6,7 @@
 // боковины в торец передней планки (k15 m01: 5, k18 m01: 3, k28 m18: 3) или без крепежа в проекте (k25, k20). Габарит модуля в
 // Базисе шире корпуса на планку — у студии корпус остаётся шириной между боковинами, планки стоят снаружи (как wallFiller у шкафов).
 import type { RefModule, RefPanel } from "./compare";
-import type { KitchenSideStrip } from "../../src/kitchen";
+import { sideDists, type KitchenSideStrip } from "../../src/kitchen";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 type EP = RefPanel & { edges?: { side: string; thick: number }[] };
@@ -23,7 +23,8 @@ export function sideStripOf(ref: RefModule): SideStripFound | undefined {
   const L = sides[0], R = sides[sides.length - 1];
   const zF = Math.max(L.box[5], R.box[5]), zB = Math.min(L.box[2], R.box[2]);
   const horiz = ref.panels.filter((p) => p.axis === "y" && board(p));
-  const y0 = horiz.length ? Math.min(...horiz.map((p) => p.box[1])) : Math.min(L.box[1], R.box[1]); // низ дна — отсчёт высот (пакет 0: от кромки детали)
+  const y0 = horiz.length ? Math.min(...horiz.map((p) => p.box[1])) : Math.min(L.box[1], R.box[1]); // низ дна — отсчёт низа (пакет 0: от кромки детали)
+  const yT = Math.max(L.box[4], R.box[4]); // верх корпуса — отсчёт верха планок (yt): планки идут за высотой модуля
   for (const side of ["left", "right"] as const) {
     const edge = side === "left" ? L.box[0] : R.box[3];
     const beyond = (p: RefPanel) => (side === "left" ? p.box[0] < edge - 1 : p.box[3] > edge + 1);
@@ -40,18 +41,19 @@ export function sideStripOf(ref: RefModule): SideStripFound | undefined {
     if (ext < 20 || ext > 80) return undefined;
     const planks = planksP.sort((a, b) => b.box[2] - a.box[2]).map((p) => {
       const ed = ((p as EP).edges ?? []).filter((e) => e.thick > 0);
-      return { z: r1(p.box[2] - zB), w: r1(p.box[3] - p.box[0]), y0: r1(p.box[1] - y0), y1: r1(p.box[4] - y0), ...(ed.length ? { edges: [...new Set(ed.map((e) => e.side))].sort(), edgeT: ed[0].thick } : {}) };
+      return { z: r1(p.box[2] - zB), w: r1(p.box[3] - p.box[0]), y0: r1(p.box[1] - y0), yt: r1(yT - p.box[4]), ...(ed.length ? { edges: [...new Set(ed.map((e) => e.side))].sort(), edgeT: ed[0].thick } : {}) };
     });
     const fp = faceP[0];
-    const facade = fp ? { w: r1(fp.box[3] - fp.box[0]), inset: r1(side === "left" ? fp.box[0] - outer : outer - fp.box[3]), y0: r1(fp.box[1] - y0), y1: r1(fp.box[4] - y0), t: r1(fp.thick), air: r1(fp.box[2] - zF), ...(fp.kind === "ldsp" ? { ldsp: true as const } : {}) } : undefined;
-    // конфирматы из боковины в торец передней планки: головка на внутренней пласти боковины, ось — середина толщины планки
-    const front = planks[0], sideP = side === "left" ? L : R, inner = side === "left" ? L.box[3] : R.box[0];
-    const conf = front ? ref.hardware.filter((h) => h.category === "конфирмат" && Math.abs(h.pos[0] - inner) < 0.6 && Math.abs(h.pos[2] - (zB + front.z + 8)) < 0.6 && h.pos[1] >= sideP.box[1] - 0.5)
-      .map((h) => r1(h.pos[1] - (y0 + front.y0))).sort((a, b) => a - b) : [];
+    const facade = fp ? { w: r1(fp.box[3] - fp.box[0]), inset: r1(side === "left" ? fp.box[0] - outer : outer - fp.box[3]), y0: r1(fp.box[1] - y0), yt: r1(yT - fp.box[4]), t: r1(fp.thick), air: r1(fp.box[2] - zF), ...(fp.kind === "ldsp" ? { ldsp: true as const } : {}) } : undefined;
+    // конфирматы из боковины в торец передней планки: головка на внутренней пласти боковины, ось — середина толщины планки;
+    // нижняя половина планки — от её низа (conf), верхняя — от её верха (confTop): одно правило стороны (sideDists, пакет 0)
+    const front = planks[0], frontP = planksP[0], sideP = side === "left" ? L : R, inner = side === "left" ? L.box[3] : R.box[0];
+    const confYs = front ? ref.hardware.filter((h) => h.category === "конфирмат" && Math.abs(h.pos[0] - inner) < 0.6 && Math.abs(h.pos[2] - (zB + front.z + 8)) < 0.6 && h.pos[1] >= sideP.box[1] - 0.5).map((h) => h.pos[1]) : [];
+    const { left: conf, right: confTop } = front ? sideDists(confYs, frontP.box[1], frontP.box[4]) : { left: [], right: [] };
     // глубина D5 в торце планки — по отверстиям проекта (k28 m18: 42; остальные 35, как у корпуса — тогда поле не пишем)
-    const dep = conf.length && planksP.length ? (ref.holes ?? []).find((h) => h.panel === planksP[0].i && h.d === 5)?.depth : undefined;
+    const dep = confYs.length && planksP.length ? (ref.holes ?? []).find((h) => h.panel === planksP[0].i && h.d === 5)?.depth : undefined;
     const base = ref.holes?.find((h) => h.d === 5 && h.panel !== planksP[0]?.i && h.depth >= 30)?.depth;
-    return { strip: { side, ext, planks, ...(facade ? { facade } : {}), ...(conf.length ? { conf } : {}), ...(dep !== undefined && dep !== base ? { confDepth: r1(dep) } : {}) }, panels: cand.map((p) => p.i) };
+    return { strip: { side, ext, planks, ...(facade ? { facade } : {}), ...(conf.length ? { conf } : {}), ...(confTop.length ? { confTop } : {}), ...(dep !== undefined && dep !== base ? { confDepth: r1(dep) } : {}) }, panels: cand.map((p) => p.i) };
   }
   return undefined;
 }
