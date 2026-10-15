@@ -34,8 +34,10 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (all) { m.edgeScheme = { ...(m.edgeScheme ?? { t: all }), all: true }; notes.push("кромка по кругу у всех деталей корпуса — как в Базисе"); }
   else if (!m.edgeScheme && edgesNone(ref)) { m.edgeScheme = { t: 0 }; notes.push("без кромки — как в Базисе"); }
   else if (k.role === "base" && m.edgeScheme?.t && sideTopBare(ref)) { m.edgeScheme = { ...m.edgeScheme, sideTop: false }; notes.push("верх боковин без кромки — как в Базисе"); }
+  // пакет 4 (m_ONESIDE): у навесных и антресолей тоже — дно под одной боковиной, вторая до низа дна (k06 m08, k16 m12, k17 m06/m08, k19 m02:
+  // 7 модулей базы); у навесного без подъёма дна низ опущенной боковины = низ дна (y0 = 0), у поднятого — низ дна над подсветкой
   const sd = sideDown(ref);
-  if (sd && (k.role === "base" || k.role === "tall") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
+  if (sd && m.bottomType !== "none" && !m.raisedSides) { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
   if (pts && k.legs) {

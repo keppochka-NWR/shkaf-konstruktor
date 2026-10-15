@@ -95,6 +95,8 @@ export function allowedContact(a: Part, b: Part, depth: number, m?: Module): boo
     if (p.id.startsWith("leg:") && isBoard(q) && depth <= 3) return true;
     // саморез площадки опоры — в своём отверстии D3×3 в нижней пласти дна
     if (p.id.startsWith("kitchen-leg-screw:") && isBoard(q) && q.role === "body" && depth <= 3.5) return true;
+    // «8» Базиса с лицевой пласти задника ЛДСП в точке рафикса (kitchen.backBoard.rafix.caps, k18) — в своём отверстии D8×16 задника, рядом со своим рафиксом
+    if (p.id.startsWith("kitchen-back-cap:") && (q.id === "back" || q.id === "rafix:back:" + p.id.slice(17) || q.id === "rafix:back:" + p.id.slice(17) + ":pin")) return true;
     // «8x45» в нижнем торце опущенной боковины — в своём отверстии D8×45 (n4-tall)
     if (p.id.startsWith("kitchen-side-screw:") && isBoard(q) && q.role === "body" && q.id === p.id.split(":")[1]) return true;
     if (p.id.startsWith("kitchen-clip:") && (q.id.startsWith("leg:") || q.id.startsWith("kitchen-plinth"))) return true;
