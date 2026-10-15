@@ -1745,7 +1745,7 @@ export function validate(m: Module): string[] {
   if(m.kitchen && !m.feet && plinth(m)>0 && m.height-plinth(m)-2*RULES.panel<=0)errors.push("Кухня: низ корпуса поднят выше крыши — внутри корпуса не остаётся места.");
   // кухня: паз под ХДФ бывает утоплен вглубь корпуса (Базис k20 m05 — 119 мм от задней кромки) — предел по глубине корпуса (n3-antresol)
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
+  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)

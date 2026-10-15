@@ -102,7 +102,7 @@ export function kitchenLiftParts(m: Module, out: Part[]) {
 /** Низ комплекта от верха фасада: фиксатор на боковину (254,5 ниже верха + половина сетки 14,5) — самая низкая деталь (шток ниже верха на 266,86). */
 export const LIFT_DROP = LIFT.sideDown + Math.max(-MESH.side.lo[1], LIFT.rodDown - MESH.rod.lo[1], 5 + 1.5);
 /** Геометрия корпуса для проверки газлифта (из model.ts, чтобы не тянуть цикл импорта). */
-export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number; carcassBottom?: number };
+export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number; carcassBottom?: number; innerTop?: number };
 /** Ошибки поля kitchenLift (validate): только кухня, один накладной подъёмный фасад в одну створку, и газлифт не входит в дно. */
 export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (!m.kitchenLift) return [];
@@ -116,7 +116,8 @@ export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (m.doorMount === "inset") e.push(`${label} по Базису — только для накладного подъёмного фасада (у вкладного петли на крыше не ставятся).`);
   if (m.kitchenLift.system === "gl104") {
     // кронштейн на фасад стоит от низа боковины (k01 m11–m13) — фасад должен его перекрывать
-    if (g && g.facadeTop < (g.carcassBottom ?? 0) + GL_FACE_TOP - 1e-6) e.push(`Газлифт GL104: кронштейн на фасад стоит на ${GL104.face[1]} мм от низа боковины — высота фасада от ${Math.ceil(GL_FACE_TOP)} мм от низа корпуса.`);
+    // и не входит в крышу: верх кронштейна (294 от низа боковины) не выше нижней пласти крыши (прогон высот 280–420: при 300–305 кронштейн входил в крышу тихо)
+    if (g && Math.min(g.facadeTop, g.innerTop ?? Infinity) < (g.carcassBottom ?? 0) + GL_FACE_TOP - 1e-6) e.push(`Газлифт GL104: кронштейн на фасад стоит на ${GL104.face[1]} мм от низа боковины — фасад и низ крыши — не ниже ${Math.ceil(GL_FACE_TOP)} мм от низа корпуса.`);
   } else if (g && g.facadeTop - LIFT_DROP < g.innerBottom - 1e-6) {
     const minH = Math.ceil(m.height + g.innerBottom - (g.facadeTop - LIFT_DROP));
     e.push(`Газлифт PD-G-N02: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха фасада и входит в дно — высота корпуса от ${minH} мм.`);

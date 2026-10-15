@@ -48,4 +48,8 @@ test('GL104: точки от низа боковины, внутренней г�
   // ниже 300: кронштейн на фасад (268,5 + 25,5 от низа боковины) уже не перекрыт фасадом — честная ошибка
   const low=parseModule(JSON.parse(JSON.stringify(m)));low.height=280;
   assert.ok(validate(low).some(e=>e.includes('GL104')),JSON.stringify(validate(low)));
+  // каждая принятая высота — без пересечений комплекта (300–305: кронштейн входил в крышу тихо — теперь ошибка validate)
+  for(let H=280;H<=420;H+=5){const h=parseModule(JSON.parse(JSON.stringify(m)));h.height=H;
+    if(!validate(h).length)assert.deepEqual(partCollisions(parts(h),h).filter(c=>c.a.startsWith('lift:')||c.b.startsWith('lift:')).map(c=>c.names.join('×')),[],`H=${H}`);
+    else assert.ok(H<310,`H=${H}: ${validate(h)}`);}
 });
