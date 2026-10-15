@@ -138,7 +138,8 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       // подъёмный фасад: планка на нижней плоскости крыши (две наколки D3×3 вверх), чашка Ø35×13 — в точке чашки (22 от верхней кромки
       // фасада, model.ts; n3-antresol); без детали чашки — 7,5 под крышей
       const [x, y, back] = p.model.origin, cupId = p.id.replace(":hingeplate:", ":hingecup:"), cy = ps.find((q) => q.id === cupId)?.model?.origin?.[1] ?? y - 7.5;
-      if (m.kitchen?.plateHoles !== false) for (const dx of [16, -16]) push(p.id, [x + dx, y, back - 37], [0, 1, 0], 3, 3);
+      const bottom=ps.find(q=>q.id===p.id.replace(":hingeplate:",":door:").replace(/:\d+$/,''))?.hinge==='bottom';
+      if (m.kitchen?.plateHoles !== false) for (const dx of [16, -16]) push(p.id, [x + dx, y, back - 37], [0, bottom?-1:1, 0], 3, 3);
       push(cupId, [x, cy, back], [0, 0, 1], 35, 13);
     } else if (p.id.includes(":hingeplate:") && p.model?.native && p.model.origin) {
       const [sx, y, back] = p.model.origin, inward = p.position[0] > sx ? 1 : -1; // плечо — внутрь корпуса от стойки

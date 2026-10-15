@@ -59,6 +59,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
+  hiddenModuleIds?:string[];
   viewKey?:string;
   isoDirection?: [number, number];
   captureReady: (fn: (() => string) | undefined) => void;
@@ -305,6 +306,7 @@ export function Scene(p: Props) {
       }
       sceneOrigin=nextOrigin;
       for (const placed of state.hideFurniture?[]:state.arrangement) {
+        if(state.hiddenModuleIds?.includes(placed.id))continue;
         const moduleGroup=new THREE.Group();moduleGroups.set(placed.id,moduleGroup);modelGroup.add(moduleGroup);
         const doorPivots=new Map<string,THREE.Group>();
         const m = placed.module,
@@ -533,12 +535,12 @@ export function Scene(p: Props) {
             // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
-            const sign=part.hinge==='right'?-1:1;
-            const hingeOff=new THREE.Vector3(part.hinge==='top'?0:sign*part.size[0]/2,part.hinge==='top'?-part.size[1]/2:0,0).applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
+            const sign=part.hinge==='right'?-1:1,horizontal=part.hinge==='top'||part.hinge==='bottom',verticalOffset=part.hinge==='bottom'?part.size[1]/2:-part.size[1]/2;
+            const hingeOff=new THREE.Vector3(horizontal?0:sign*part.size[0]/2,horizontal?verticalOffset:0,0).applyAxisAngle(new THREE.Vector3(0,1,0),rotY);
             pivot.position.sub(hingeOff);
-            mesh.position.set(part.hinge==='top'?0:sign*part.size[0]/2,part.hinge==='top'?-part.size[1]/2:0,0);mesh.rotation.y=0;
+            mesh.position.set(horizontal?0:sign*part.size[0]/2,horizontal?verticalOffset:0,0);mesh.rotation.y=0;
             pivot.add(mesh);
-            pivot.rotation.y=rotY;if(part.hinge==='top')pivot.rotation.x=-Math.PI/2;else pivot.rotation.y-=Math.PI*.58*sign;pivot.userData.rotY=rotY;
+            pivot.rotation.y=rotY;if(horizontal)pivot.rotation.x=part.hinge==='bottom'?Math.PI/2:-Math.PI/2;else pivot.rotation.y-=Math.PI*.58*sign;pivot.userData.rotY=rotY;
             doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
             const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));mesh.rotation.y=0;pivot.add(mesh);
@@ -668,7 +670,7 @@ export function Scene(p: Props) {
         }
         const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
-      const b = state.hideFurniture||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
+      const b = state.hideFurniture||state.hiddenModuleIds?.includes(focus.id)||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
       if (b) {
         const geo = new THREE.BoxGeometry(
           b.width,
@@ -703,7 +705,7 @@ export function Scene(p: Props) {
           label(`${Math.round(top - b.bottom)} мм от дна`, new THREE.Vector3(gx, (b.bottom + top) / 2 + fy, zz + 10), () => current.current.onDrawerStack?.(b.id), true);
         }
       }
-      if (state.dimensions&&!state.hideFurniture) {
+      if (state.dimensions&&!state.hideFurniture&&!state.hiddenModuleIds?.includes(focus.id)) {
         const fy=focus.y??0;
         const z = m.depth / 2 + 110,
           x = -m.width / 2 - 150;
@@ -1017,6 +1019,7 @@ export function Scene(p: Props) {
       p.clearFacades,
       p.hideFacades,
       p.hideFurniture,
+      p.hiddenModuleIds?.join(','),
       p.selected,
       p.selectedPart,
       p.texture,

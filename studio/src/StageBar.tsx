@@ -8,7 +8,7 @@ export function StageBar({stage,advanced,onStage,onAdvanced,done,rawSelected}:Pr
   const hint=stageHint(stage,rawSelected);
   return <nav className="stage-bar" aria-label="Этапы работы" style={{'--stage':current.color} as React.CSSProperties}>
     <ol className="stage-steps">
-      {STAGES.map((s,k)=><li key={s.id}><button className={'stage-step'+(s.id===stage?' current':'')+(k<i?' passed':'')} style={{'--step':s.color} as React.CSSProperties} aria-current={s.id===stage?'step':undefined} onClick={()=>onStage(s.id)}><span className="stage-num">{done[s.id]&&s.id!==stage?<Check size={13}/>:s.n}</span><span className="stage-title">{s.title}</span></button></li>)}
+      {STAGES.map((s,k)=><li key={s.id}><button className={'stage-step'+(s.id===stage?' current':'')+(k<i?' passed':'')} style={{'--step':s.color} as React.CSSProperties} aria-label={s.title} aria-current={s.id===stage?'step':undefined} onClick={()=>onStage(s.id)}><span className="stage-num">{done[s.id]&&s.id!==stage?<Check size={13}/>:s.n}</span><span className="stage-title">{s.title}</span></button></li>)}
     </ol>
     <p className="stage-hint" aria-live="polite"><b>{current.n}. {current.title}.</b> {hint}</p>
     <div className="stage-actions">

@@ -1,3 +1,5 @@
+import {PanelTopOpen,PanelTopClose} from 'lucide-react';
+import './editor-visibility.css';
 import {WorkspacePanels} from './WorkspacePanels';
 import {useEffect,useMemo,useState,type ReactNode} from 'react';
 import {Download,Plus,RotateCcw,Box,FileText} from 'lucide-react';
@@ -16,12 +18,14 @@ import {ModulePalette} from './ModulePalette';
 export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload}:{project:Project;update:(p:Project)=>boolean;viewKey:string;title:string;bar:ReactNode;onAdd:()=>void;onDownload:()=>void}){
  const dummy=useMemo(()=>newProject().modules[0],[]),[plan,setPlan]=useState(false),[view,setView]=useState<View>('iso'),[fit,setFit]=useState(0),[stage,setStage]=useState<Stage>('room'),[advanced,setAdvanced]=useState(false),[selected,setSelected]=useState<EnvironmentSelection|null>(null);
  useEffect(()=>{setSelected(null);},[viewKey]);
+ const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});
+ const toggleTop=()=>setCompactTop(v=>{try{localStorage.setItem('yo-compact-top',v?'0':'1');}catch{}return !v;});
  const change=(room:Room)=>update({...project,room});
  const pick=(kind:EnvironmentSelection['kind'],id:string)=>setSelected({kind,id});
  const go=(s:Stage)=>{setStage(normalizeStage(s));setSelected(null);};
- return <div className={'app empty-room-app'+(advanced?' advanced':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
- <header className="header"><EditorBrand/><div className="document-name"><strong>{title}</strong><span>Помещение · без мебели</span></div><div className="header-actions"><button className="outline" onClick={onAdd}><Plus size={16}/>Добавить первый шкаф</button><button className="primary" onClick={onDownload}><Download size={16}/><span>Скачать документ</span></button></div></header>
- {bar}
+ return <div className={'app empty-room-app'+(advanced?' advanced':'')+(compactTop?' compact-top':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
+ <header className="header"><EditorBrand/><button className="top-toggle" aria-label={compactTop?"Заказ и инструменты":"Свернуть верхнюю панель"} aria-expanded={!compactTop} onClick={toggleTop}>{compactTop?<PanelTopOpen size={18}/>:<PanelTopClose size={18}/>}<span>{compactTop?'Заказ и инструменты':'Свернуть верхнюю панель'}</span></button><div className="document-name"><strong>{title}</strong><span>Помещение · без мебели</span></div><div className="header-actions"><button className="outline" onClick={onAdd}><Plus size={16}/>Добавить первый шкаф</button><button className="primary" onClick={onDownload}><Download size={16}/><span>Скачать документ</span></button></div></header>
+ <div className="editor-order-area" hidden={compactTop}>{bar}</div>
  <StageBar stage={stage} advanced={advanced} onStage={go} onAdvanced={setAdvanced} done={{}}/>
  <WorkspacePanels>
  <aside className="library"><div className="panel-heading"><span className="eyebrow">ПОМЕЩЕНИЕ</span><h1>{title}</h1><p>{project.room.width} × {project.room.depth} × {project.room.height} мм</p></div>

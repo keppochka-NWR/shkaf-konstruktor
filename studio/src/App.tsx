@@ -1,3 +1,5 @@
+import {Eye,EyeOff,PanelTopClose,PanelTopOpen} from 'lucide-react';
+import './editor-visibility.css';
 import {repairHinges} from './hingeRepair';
 import {savePng} from './savePng';
 import {SettingsTree,revealSettings} from './SettingsTree';
@@ -310,6 +312,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [transparent, setTransparent] = useState(false);
   const [clearFacades, setClearFacades] = useState(false);
   const [hideFacades,setHideFacades]=useState(false);
+  const [hiddenModules,setHiddenModules]=useState<string[]>([]);
+  const hiddenIds=hiddenModules.filter(id=>project.modules.some(a=>a.id===id));
+  const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});
+  const toggleTop=()=>setCompactTop(v=>{try{localStorage.setItem('yo-compact-top',v?'0':'1');}catch{}return !v;});
+  const hideModule=(id:string)=>{setHiddenModules(ids=>ids.includes(id)?ids:[...ids,id]);setSelectedPart(null);setCtxMenu(null);};
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
   const [selectedOpening,setSelectedOpening]=useState<string>();
@@ -339,6 +346,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setDirectValue(String(value));
   }
   function selectModule(mid: string) {
+    setHiddenModules(ids=>ids.filter(id=>id!==mid));
     setSelectedOpening(undefined);
     setSelectedObstacle(undefined);
     setDrawerPreview(false);
@@ -541,7 +549,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
       {id:'open-handle',label:'С ручками',icon:Hand,active:mod.doorOpen!=='push',hint:'Ручка и петли с доводчиком',run:()=>modifyAt(a.id,n=>{delete n.doorOpen;})},
       {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})}]};
-    const bodyRing:RadialItem[]=[
+    const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
+    const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
       {id:'fill',label:'Добавить',icon:Plus,...(mod.kitchen?{hint:'Кухонные ящики, полки и Gola — в панели справа',run:()=>{setActive(a.id);goStage('filling');}}:{hint:'Наполнение секции',children:[fill('shelf','Полку',Rows3,'Встанет на высоте клика'),fill('drawer','Ящик',Archive,'Ящик в эту секцию'),fill('rod','Штангу',Shirt,'Штанга для одежды')]})},
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
@@ -562,7 +571,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const k=mod.kupe,setK=(patch:Partial<NonNullable<Module['kupe']>>)=>modifyAt(a.id,n=>{n.kupe={...n.kupe!,...patch};});
       const fillItem=(name:string,label:string):RadialItem=>({id:'kf-'+name,label,icon:Palette,active:k.fills.every(f=>f===name),hint:name,run:()=>setK({fills:[name]})});
       const panel=()=>{selectModule(a.id);setTab('module');};
-      return {title:'Двери купе',subtitle:`${mod.width} × ${mod.height} · ${k.doors} дв.`,items:[
+      return {title:'Двери купе',subtitle:`${mod.width} × ${mod.height} · ${k.doors} дв.`,items:[hideItem,
         {id:'kupe-fill',label:'Наполнение',icon:Palette,hint:'Зеркало, стекло, ЛДСП — для всех дверей',children:[fillItem('Зеркало Серебро 4мм','Зеркало'),fillItem('Зеркало Бронза 4мм','Бронза'),fillItem('Зеркало Графит 4мм','Графит'),fillItem('Стекло сатин матовый 4мм','Сатин'),fillItem(mod.decor,'ЛДСП корпуса'),{id:'kf-more',label:'Другое…',icon:SlidersHorizontal,hint:'Весь каталог наполнений и разное по дверям',run:panel}]},
         {id:'kupe-doors',label:'Дверей',icon:Columns2,hint:`Сейчас ${k.doors}, полотно ${Math.round(mod.width/k.doors)} мм`,children:[2,3,4,5].map(n=>({id:'kd-'+n,label:String(n),icon:Columns2,active:k.doors===n,hint:`Полотно ${Math.round(mod.width/n)} мм`,run:()=>setK({doors:n,fills:k.fills.slice(0,n)})}))},
         {id:'kupe-soft',label:k.softClose?'Без доводчиков':'Доводчики',icon:Hand,hint:'Плавное закрывание дверей',run:()=>setK({softClose:k.softClose?undefined:true})},
@@ -593,8 +602,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     if(pid.includes(':door:')||/:(hingecup|hingearm|hingeplate):/.test(pid)||pid.includes(':handle:')){
       const doorId=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),p={...part('Фасад')};
       const currentHinge=parts(mod).find(p=>p.id===doorId)?.hinge;
-      const doorOpening:RadialItem={...opening,hint:'Перевесить выбранную дверь: петли слева или справа',children:[
-        ...(['left','right'] as const).map(side=>({id:'hinge-side-'+side,label:side==='left'?'Петли слева':'Петли справа',icon:DoorOpen,active:currentHinge===side,hint:'Только выбранный фасад; ручка переходит на свободный край',run:()=>modifyAt(a.id,n=>setDoorHinge(n,doorId,side))})),
+      const doorOpening:RadialItem={...opening,hint:'Сторона петель и подъёмный механизм выбранного фасада',children:[
+        ...(['left','right','bottom'] as const).map(side=>({id:'hinge-side-'+side,label:side==='left'?'Петли слева':side==='right'?'Петли справа':'Петли снизу',icon:DoorOpen,active:currentHinge===side,hint:'Только выбранный фасад; ручка переходит на свободный край',run:()=>modifyAt(a.id,n=>setDoorHinge(n,doorId,side))})),
+        {id:'hinge-top',label:'Петли сверху',icon:ArrowUp,children:([{id:'adagio',label:'Газлифты АДАЖИО'},{id:'sempre',label:'Подъёмник СЕМПРЕ'}] as const).map(l=>({id:l.id,label:l.label,icon:ArrowUp,hint:'Premial · усилие и цена требуют подбора',run:()=>modifyAt(a.id,n=>setDoorHinge(n,doorId,'top',l.id))}))},
         ...(opening.children??[]),
       ]};
       return {title:'Фасад',subtitle:mod.name,items:[{id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого фасада',disabled:mod.doorOpen==='push',run:()=>{setActive(a.id);setHandleFace(doorId);setModal('handles');}},
@@ -734,9 +744,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const texture = (name: string) =>
     catalog.find((c) => c.n === name)?.tex || undefined;
   return (
-    <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')+(kitchenMode?' kitchen-mode':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
+    <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')+(kitchenMode?' kitchen-mode':'')+(compactTop?' compact-top':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
       <header className="header">
         <EditorBrand kitchen={kitchenMode}/>
+        {!presentation&&<button className="top-toggle" aria-label={compactTop?"Заказ и инструменты":"Свернуть верхнюю панель"} aria-expanded={!compactTop} onClick={toggleTop} title="Свернуть или раскрыть управление заказом и комнатами">{compactTop?<PanelTopOpen size={18}/>:<PanelTopClose size={18}/>}<span>{compactTop?'Заказ и инструменты':'Свернуть верхнюю панель'}</span></button>}
         <div className="document-name">
           <input
             aria-label="Название модуля"
@@ -778,7 +789,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </button>
         </div>
       </header>
-      {!presentation&&clientBar}
+      {!presentation&&<div className="editor-order-area" hidden={compactTop}>{clientBar}</div>}
       {!presentation&&(selectedOpening||selectedFixture||selectedObstacle)&&<button className="environment-properties-trigger" onClick={()=>setEnvironmentSelection(selectedOpening?{kind:'opening',id:selectedOpening}:selectedFixture?{kind:'fixture',id:selectedFixture}:{kind:'obstacle',id:selectedObstacle!})}>Свойства выбранного объекта</button>}
       {environmentSelection&&!presentation&&<RoomObjectProperties room={project.room} selection={environmentSelection} onChange={room=>commitProject({...project,room})} onClose={()=>setEnvironmentSelection(null)}/>}
       {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone} rawSelected={!!m.raw}/>}
@@ -919,14 +930,15 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             {visibleModules.map(({a,i}) => (
               <button
                 key={a.id}
-                className="module-item"
+                className={"module-item"+(hiddenIds.includes(a.id)?" module-hidden":"")}
+                onContextMenu={e=>{e.preventDefault();setCtxMenu({mid:a.id,sid:a.module.sections[0]?.id??"",x:e.clientX,y:e.clientY});}}
                 title={a.module.name}
                 aria-pressed={a.id === placed.id}
                 onClick={() => selectModule(a.id)}
               >
                 <Box size={18} />
                 <span>
-                  <b>{a.module.name}</b>
+                  <b>{a.module.name}</b>{hiddenIds.includes(a.id)&&<small className="hidden-module-note">Скрыт · нажмите, чтобы показать</small>}
                   <small>
                     {a.module.width} × {a.module.height} × {a.module.depth}
                     {a.module.raw&&<em className="module-badge" title="Детали и фурнитура — как в проекте Базиса; наполнение правится в Базисе">Базис · как есть</em>}
@@ -1074,7 +1086,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <span className="scale-label">РАЗМЕРЫ В ММ</span>
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
-          {roomPlan?<RoomPlan onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene viewKey={viewKey}
+          {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
+          {roomPlan?<RoomPlan hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation?'orbit':mode}
@@ -1174,7 +1187,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             </div>
           )}
-          {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items} onClose={()=>setCtxMenu(null)}/>;})()}
+          {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items.some(i=>i.id==='hide-module')?r.items:[...r.items,{id:"hide-module",label:"Скрыть модуль",icon:EyeOff,hint:"Целиком, вместе с наполнением",run:()=>hideModule(ctxMenu.mid)}]} onClose={()=>setCtxMenu(null)}/>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
               aria-label="Прозрачный корпус"
@@ -1686,11 +1699,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               {m.doors&&<details className="section-facades" open={stage==='facades'||selectedDetail?.role==='door'||undefined}><summary>Фасады секции {idx+1}</summary>
 <div className="facade-pick-list" role="group" aria-label="Выбрать отдельный фасад">{parts(m).filter(p=>p.sectionId===s.id&&(p.role==='door'||p.id.endsWith(':facade'))).map((p,i)=><button key={p.id} className="outline" aria-pressed={selectedPart?.pid===p.id} onClick={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:p.id});setDrawerIndex(p.id.includes(':drawer:')?Number(p.id.split(':drawer:')[1].split(':')[0]):null);setMode('select');}}>{p.role==='door'?'Дверь '+(i+1):p.name} · {Math.round(p.width)}×{Math.round(p.length)}</button>)}</div>
 {selectedDetail?.role==='door'&&<button className="outline full" onClick={()=>{setHandleFace(selectedDetail.id);setHandleTarget('doors');setModal('handles');}}>Ручка выбранной двери</button>}
-{selectedDetail?.role==='door'&&<label className="hardware-field">Открывание выбранной двери<select aria-label="Открывание выбранной двери" value={selectedDetail.hinge??'left'} onChange={e=>modifySection((a,next)=>{const k=Number(selectedDetail.id.split(':door:')[1]);a.doorHinges=Array.from({length:4},(_,i)=>a.doorHinges?.[i]??null);a.doorHinges[k]=e.target.value as 'left'|'right'|'top';syncKitchenLift(next);})}><option value="left">Петли слева</option><option value="right">Петли справа</option><option value="top">Подъёмный, ось сверху</option></select></label>}
-{s.doorHinges?.includes('top')&&m.kitchen&&<label className="rail-row"><input type="checkbox" aria-label="Газлифт PD-G-N02 подъёмного фасада" checked={!!m.kitchenLift} onChange={e=>{const on=e.target.checked;modify(n=>{if(on)n.kitchenLift={system:'pd-g-n02'};else delete n.kitchenLift;});}}/>Газлифт PD-G-N02 на обе боковины (как в Базисе)</label>}
+{selectedDetail?.role==='door'&&<label className="hardware-field">Открывание выбранной двери<select aria-label="Открывание выбранной двери" value={selectedDetail.hinge??'left'} onChange={e=>modify(n=>setDoorHinge(n,selectedDetail.id,e.target.value as 'left'|'right'|'top'|'bottom'))}><option value="left">Петли слева</option><option value="right">Петли справа</option><option value="top">Петли сверху · подъёмный</option><option value="bottom">Петли снизу · откидной</option></select></label>}
+{selectedDetail?.role==='door'&&selectedDetail.hinge==='top'&&<label className="hardware-field">Подъёмный механизм<select aria-label="Подъёмный механизм фасада" value={s.doorLifts?.[Number(selectedDetail.id.split(':door:')[1])]??''} onChange={e=>{if(e.target.value)modify(n=>setDoorHinge(n,selectedDetail.id,'top',e.target.value as 'adagio'|'sempre'));}}><option value="" disabled>Как в исходном проекте</option><option value="adagio">Premial АДАЖИО · газлифты</option><option value="sempre">Premial СЕМПРЕ · механический</option></select><small>Артикул, усилие, присадка и цена — после подбора по фасаду.</small></label>}
+{s.doorHinges?.includes('top')&&m.kitchen&&!s.doorLifts?.some(Boolean)&&<label className="rail-row"><input type="checkbox" aria-label="Газлифт PD-G-N02 подъёмного фасада" checked={!!m.kitchenLift} onChange={e=>{const on=e.target.checked;modify(n=>{if(on)n.kitchenLift={system:'pd-g-n02'};else delete n.kitchenLift;});}}/>Газлифт PD-G-N02 на обе боковины (как в Базисе)</label>}
 {s.doorHinges?.includes('top')&&m.kitchen&&m.kitchenLift&&<p className="construction-note" role="status">Подъёмный фасад по Базису: петли на крыше, газлифт PD-G-N02 на обеих боковинах (присадка рассчитана, цена газлифта не задана).</p>}
-{s.doorHinges?.includes('top')&&!m.kitchenLift&&m.bazis&&<p className="construction-note" role="status">Подъёмный фасад по проекту Базиса: петли на крыше, подъёмника в проекте нет — студия его не добавляет.</p>}
-{s.doorHinges?.includes('top')&&!(m.kitchen&&m.kitchenLift)&&!m.bazis&&<p className="construction-note" role="status">Подъёмный фасад показан геометрически. Механизм нужно подобрать по массе и размерам; его цена не задана, присадка не рассчитана.</p>}
+{s.doorHinges?.includes('top')&&!m.kitchenLift&&!s.doorLifts?.some(Boolean)&&m.bazis&&<p className="construction-note" role="status">Подъёмный фасад по проекту Базиса: петли на крыше, подъёмника в проекте нет — студия его не добавляет.</p>}
+{s.doorHinges?.includes('top')&&!(m.kitchen&&m.kitchenLift)&&!s.doorLifts?.some(Boolean)&&!m.bazis&&<p className="construction-note" role="status">Подъёмный фасад показан геометрически. Механизм нужно подобрать по массе и размерам; его цена не задана, присадка не рассчитана.</p>}
 <label className="hardware-field">Створки<select aria-label="Створки выбранной секции" value={s.doorLeaves??'auto'} onChange={e=>modifySection(a=>{a.doorLeaves=e.target.value==='auto'?undefined:Number(e.target.value) as 1|2;delete a.removedDoors;})}><option value="auto">Автоматически по ширине</option><option value="1">Одна створка</option><option value="2">Две створки</option></select></label>
 <label className="hardware-field">Петли одной створки<select aria-label="Петли выбранной секции" value={s.hingeSide??m.hingeSide??'left'} onChange={e=>modifySection(a=>a.hingeSide=e.target.value as 'left'|'right')}><option value="left">Слева</option><option value="right">Справа</option></select></label>
 <p className="field-note">Выберите дверь выше: её ручка и сторона открывания меняются независимо.</p>
@@ -1698,7 +1712,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 <p className="field-note">Дверь начинается над полкой ящиков. Ручка каждого фасада выбирается отдельно нажатием на фасад в модели.</p>
 <label className="hardware-field"><span><input type="checkbox" checked={s.doorSplit!==undefined} onChange={e=>modifySection(a=>{a.doorSplit=e.target.checked?Math.round((facadeTop(m)-(a.externalDrawers&&a.drawers?drawerCapTop(m,a)+(a.doorGap??RULES.faceGap):facadeBottom(m)))/2):undefined;delete a.removedDoors;})}/> Разделить фасады по высоте</span></label>
 {s.doorSplit!==undefined&&<NumberField label="Высота нижнего ряда фасадов" value={s.doorSplit} min={RULES.doorMinH} max={m.height-RULES.doorMinH} onChange={v=>modifySection(a=>a.doorSplit=v)}/>}
-{s.doorSplit!==undefined&&m.kitchen&&<label className="hardware-field">Рядов фасадов<select aria-label="Рядов фасадов пенала" value={2+(s.doorRows?.length??0)} onChange={e=>modifySection(a=>{const n=Number(e.target.value)-2,r=[...(a.doorRows??[])].slice(0,n);while(r.length<n)r.push(400);if(r.length)a.doorRows=r;else delete a.doorRows;delete a.removedDoors;delete a.doorHinges;if(a.hingeYMid){const hm=a.hingeYMid.slice(0,n),hf=(a.hingeYMidFor??[]).slice(0,n);if(hm.length){a.hingeYMid=hm;a.hingeYMidFor=hf;}else{delete a.hingeYMid;delete a.hingeYMidFor;}}if(a.hingeless){const hl=a.hingeless.filter(k=>k<2*(n+2));if(hl.length)a.hingeless=hl;else delete a.hingeless;}})}>{[2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
+{s.doorSplit!==undefined&&m.kitchen&&<label className="hardware-field">Рядов фасадов<select aria-label="Рядов фасадов пенала" value={2+(s.doorRows?.length??0)} onChange={e=>modifySection(a=>{const n=Number(e.target.value)-2,r=[...(a.doorRows??[])].slice(0,n);while(r.length<n)r.push(400);if(r.length)a.doorRows=r;else delete a.doorRows;delete a.removedDoors;delete a.doorHinges;delete a.doorLifts;if(a.hingeYMid){const hm=a.hingeYMid.slice(0,n),hf=(a.hingeYMidFor??[]).slice(0,n);if(hm.length){a.hingeYMid=hm;a.hingeYMidFor=hf;}else{delete a.hingeYMid;delete a.hingeYMidFor;}}if(a.hingeless){const hl=a.hingeless.filter(k=>k<2*(n+2));if(hl.length)a.hingeless=hl;else delete a.hingeless;}})}>{[2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
 {s.doorSplit!==undefined&&m.kitchen&&(s.doorRows??[]).map((h,i)=><NumberField key={'dr'+i} label={`Высота фасада ${i+2}-го ряда`} value={h} min={100} max={m.height-200} onChange={v=>modifySection(a=>{const r=[...(a.doorRows??[])];r[i]=v;a.doorRows=r;})}/>)}
 {s.doorSplit!==undefined&&m.kitchen&&<NumberField label="Ниша под технику между рядами, мм (0 — без ниши)" value={s.doorNiche??0} min={0} max={Math.max(0,m.height-200-s.doorSplit)} onChange={v=>modifySection(a=>{if(v>0)a.doorNiche=v;else delete a.doorNiche;})}/>}
 <NumberField label="Зазор между створками" value={s.doorGap??RULES.faceGap} min={2} max={10} onChange={v=>modifySection(a=>a.doorGap=v)}/>

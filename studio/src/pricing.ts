@@ -371,7 +371,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const bk=a.module.hingeBrand??'gtv',hb=HINGE_BRANDS[bk],suffix=bk==='gtv'?'':':'+bk;
         if(d.vernissage&&d.hinge!=='top'||d.vernissage&&placedHinges)add('vernissage-hinge-boring','Присадка под петли на фасадах Вернисаж',n,'шт',VERNISSAGE_NOTES.hingeBoringPerPc,`Прайс Вернисаж от ${priceDateRu()}: присадка под петли`);
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
-        if(d.hinge==='top'&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
+        const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
+        if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,selectedLift==='adagio'?'Газлифты Premial АДАЖИО — подбор усилия и комплектации':'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
+        if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
         else if(nm?.hinges&&!push)bzHinges+=n; // тип петли — по Базису (после цикла)
