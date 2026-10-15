@@ -155,6 +155,9 @@ export function Scene(p: Props) {
     const scene = new THREE.Scene(),perspective=new THREE.PerspectiveCamera(34,1,5,250000),orthographic=new THREE.OrthographicCamera(-1000,1000,1000,-1000,5,250000);
     let camera:THREE.PerspectiveCamera|THREE.OrthographicCamera=perspective;
     const controls = new OrbitControls<THREE.PerspectiveCamera|THREE.OrthographicCamera>(camera, renderer.domElement);
+    controls.mouseButtons.MIDDLE=THREE.MOUSE.ROTATE;
+    const preventMiddleScroll=(e:MouseEvent)=>{if(e.button===1)e.preventDefault();};
+    renderer.domElement.addEventListener('mousedown',preventMiddleScroll);
     const cameraKey=p.viewKey?'garderyob-camera:'+p.viewKey:undefined;
     let fitting=false;
     function saveCamera(){if(!cameraKey||fitting||current.current.presentation)return;try{sessionStorage.setItem(cameraKey,JSON.stringify({origin:sceneOrigin,view:current.current.view,position:camera.position.toArray(),target:controls.target.toArray(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null}));}catch{/* view state must not block document saving */}}
@@ -990,7 +993,7 @@ export function Scene(p: Props) {
       current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
       observer.disconnect();
-      controls.removeEventListener('change',requestRender);controls.dispose();
+      controls.removeEventListener('change',requestRender);renderer.domElement.removeEventListener('mousedown',preventMiddleScroll);controls.dispose();
       disposeGroup(modelGroup);
       floor.geometry.dispose();
       (floor.material as THREE.Material).dispose();
@@ -1047,7 +1050,7 @@ export function Scene(p: Props) {
 
     ],
   );
-  useEffect(()=>{const action=p.presentation||p.mode==='orbit'?'Перетаскивание — поворот вида':p.mode==='fill'?'Перетаскивайте полки и ящики по высоте, перегородки по ширине':p.moveAll?'Перетаскивание корпуса перемещает всю композицию':'Перетаскивайте корпуса для расстановки';host.current?.querySelector('canvas')?.setAttribute('aria-label','3D-модель мебели. '+action+'. Колесо — масштаб.');},[p.mode,p.moveAll,p.presentation]);
+  useEffect(()=>{const action=p.presentation||p.mode==='orbit'?'Перетаскивание — поворот вида':p.mode==='fill'?'Перетаскивайте полки и ящики по высоте, перегородки по ширине':p.moveAll?'Перетаскивание корпуса перемещает всю композицию':'Перетаскивайте корпуса для расстановки';host.current?.querySelector('canvas')?.setAttribute('aria-label','3D-модель мебели. '+action+'. Колесо — масштаб, зажатое колесо — вращение камеры.');},[p.mode,p.moveAll,p.presentation]);
   return (
     <div className="scene" ref={host} data-testid="scene">
       {error && (
