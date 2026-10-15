@@ -29,5 +29,5 @@ test('facade style applies to eligible bodies atomically and preserves layout an
  const target=structuredClone(source);target.id='target';target.x=1600;target.module.facadeDecor='Белый';target.module.doors=false;target.module.sections[0].doorHandles=['uz819-128'];
  const imported=structuredClone(target);imported.id='raw';imported.module.bazis=true;
  p.modules.push(target,imported);const before=JSON.stringify(p),q=applyFacadeStyle(p,source.id);
- assert.equal(JSON.stringify(p),before);assert.equal(q.modules[1].module.facadeDecor,'Графит');assert.equal(q.modules[1].module.doors,true);assert.deepEqual(q.modules[1].module.sections[0].doorHandles,['uz819-128']);assert.equal(q.modules[1].x,1600);assert.equal(q.modules[2].module.facadeDecor,'Белый');
+ assert.equal(JSON.stringify(p),before);assert.equal(q.modules[1].module.facadeDecor,'Графит');assert.equal(q.modules[1].module.doors,false);assert.deepEqual(q.modules[1].module.sections[0].doorHandles,['uz819-128']);assert.equal(q.modules[1].x,1600);assert.equal(q.modules[2].module.facadeDecor,'Белый');
 });

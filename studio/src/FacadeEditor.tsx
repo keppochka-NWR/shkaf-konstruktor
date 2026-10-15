@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {vernissageSizes} from './model';
 import type {Project} from './project';
 import {catalog} from './catalog';
@@ -7,14 +7,20 @@ import {VernissagePicker} from './VernissagePicker';
 import {applyFacadeAppearance,changeFacadeKind,facadeKind,type FacadeKind} from './facadeAppearance';
 
 /** Local draft: close cancels, Apply commits one undoable project command. */
-export function FacadeEditor({project,moduleId,selectedIds=[],commit,close}:{project:Project;moduleId:string;selectedIds?:string[];commit:(p:Project)=>boolean;close:()=>void}){
+export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPreview}:{project:Project;moduleId:string;selectedIds?:string[];commit:(p:Project)=>boolean;close:()=>void;onPreview:(preview:{base:Project;next:Project}|null)=>void}){
  const source=project.modules.find(a=>a.id===moduleId)!.module;
  const [draft,setDraft]=useState(()=>structuredClone(source)),[scope,setScope]=useState<'module'|'group'|'all'>(()=>selectedIds.includes(moduleId)?'group':'module'),[error,setError]=useState('');
+ const selectedKey=selectedIds.join('|');
+ useEffect(()=>{
+  try {const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all');onPreview({base:project,next});setError('');}
+  catch(e){onPreview(null);setError((e as Error).message);}
+  return ()=>onPreview(null);
+ },[draft,scope,project,moduleId,selectedKey,onPreview]);
  const kind=facadeKind(draft);
  const apply=()=>{try{const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all');if(commit(next))close();else setError('Изменение не принято. Проверьте ограничения проекта; исходные фасады сохранены.');}catch(e){setError((e as Error).message);}};
  return <div className="facade-editor">
   <p><b>{source.name}</b></p>
-  <p className="field-note">Оформление всех дверей и фасадов ящиков этого корпуса. Отдельный рисунок для одной створки здесь не задаётся. Изменения сохранятся после «Применить».</p>
+  <p className="field-note">Оформление всех дверей и фасадов ящиков этого корпуса. Отдельный рисунок для одной створки здесь не задаётся. В сцене — предварительный просмотр. Изменения сохранятся после «Применить».</p>
   <label className="hardware-field">Основа фасадов<select aria-label="Основа фасадов" value={kind} onChange={e=>{setDraft(changeFacadeKind(draft,e.target.value as FacadeKind));setError('');}}>
    <option value="ldsp">ЛДСП</option><option value="vernissage">МДФ Вернисаж — плёнка или краска, фрезеровки</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="external">Другой заказной материал — цена уточняется</option>
   </select></label>

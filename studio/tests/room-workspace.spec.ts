@@ -82,7 +82,7 @@ test('apply facade style to all is one reversible saved command',async({page})=>
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();await openSettings(page,'Фасад');
  const modules=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules);
  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('module-studio-v3')!).modules);await page.getByRole('button',{name:'Применить ко всем модулям',exact:true}).click();
- await expect(page.getByRole('alert')).toHaveCount(0);expect((await modules())[1].module.facadeDecor).toBe('Графит');expect((await modules())[1].module.doors).toBe(true);
+ await expect(page.getByRole('alert')).toHaveCount(0);expect((await modules())[1].module.facadeDecor).toBe('Графит');expect((await modules())[1].module.doors).toBe(false);
  await page.keyboard.press('Control+z');expect(await modules()).toEqual(before);
  await page.keyboard.press('Control+y');await page.reload();expect((await modules())[1].module.facadeDecor).toBe('Графит');
 });
@@ -478,17 +478,17 @@ test('facade editor via right click: film, enamel, cancel, undo and reload',asyn
  await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
  await page.getByRole('button',{name:'Спереди',exact:true}).click();
  await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
- const open=async()=>{await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Фасад\./}).click();await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();await expect(page.getByRole('dialog',{name:'Редактор фасадов'})).toBeVisible();};
+ const open=async()=>{await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Фасад\./}).click();await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();await expect(page.getByRole('region',{name:'Редактор фасадов'})).toBeVisible();await expect(page.locator('.modal-backdrop')).toHaveCount(0);};
  const value=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.vernissage);
- await open();await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
- await expect(page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Фрезеровка Вернисаж',{exact:true})).toBeVisible();
- await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
- await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Цвет эмали Вернисаж',{exact:true}).fill('RAL 9003');
+ await open();await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await expect(page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Фрезеровка Вернисаж',{exact:true})).toBeVisible();
+ await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
+ await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Цвет эмали Вернисаж',{exact:true}).fill('RAL 9003');
  await page.getByRole('button',{name:'Отмена',exact:true}).click();expect(await value()).toBeUndefined();
- await open();await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await open();await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
  await page.getByRole('button',{name:'Применить к корпусу',exact:true}).click();expect((await value()).cover).toBe('film');
- await open();await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
- await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Цвет эмали Вернисаж',{exact:true}).fill('RAL 9003');
+ await open();await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
+ await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Цвет эмали Вернисаж',{exact:true}).fill('RAL 9003');
  await page.screenshot({path:'.qa/facade-editor/editor.png',fullPage:true});
  await page.getByRole('button',{name:'Применить к корпусу',exact:true}).click();expect((await value()).cover).toBe('enamel-matte');
  await page.keyboard.press('Control+z');expect((await value()).cover).toBe('film');
@@ -505,8 +505,8 @@ test('Ctrl module group: list, plan and scene selection, selected facade apply a
  await items.nth(0).click({modifiers:['Control']});await items.nth(2).click({modifiers:['Control']});
  await expect(page.getByRole('button',{name:'Фасады выделенных (2)',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Фасады выделенных (2)',exact:true}).click();
- await expect(page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Область применения фасадов',{exact:true})).toHaveValue('group');
- await page.getByRole('dialog',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await expect(page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Область применения фасадов',{exact:true})).toHaveValue('group');
+ await page.getByRole('region',{name:'Редактор фасадов'}).getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
  await page.getByRole('button',{name:'Применить к выделенным (2)',exact:true}).click();
  const covers=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules.map((a:any)=>a.module.vernissage?.cover??null));
  expect(await covers()).toEqual(['film',null,'film']);await page.keyboard.press('Control+z');expect(await covers()).toEqual([null,null,null]);
@@ -579,4 +579,38 @@ test('middle mouse rotates camera in edit modes without changing furniture',asyn
   expect(dist(second)).toBeCloseTo(dist(first),3);
   expect(await document()).toBe(before);await expect(page.getByRole('menu')).toHaveCount(0);
  }
+});
+
+test('kitchen facade sides: choose both, floor default, undo redo and reload through UI',async({page})=>{
+ await page.goto('/');await kitchenCatalog(page);await page.getByRole('button',{name:'Нижний кухонный',exact:true}).click();
+ await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();
+ await page.getByRole('button',{name:'Построение мебели',exact:true}).click();await openSettings(page,'Корпус');
+ await page.getByLabel('Левая боковина — материал фасадов',{exact:true}).check();
+ await expect(page.getByLabel('Фасадные боковины до пола',{exact:true})).toBeChecked();
+ await page.getByLabel('Правая боковина — материал фасадов',{exact:true}).check();
+ const sides=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.kitchen.facadeSides);
+ expect(await sides()).toMatchObject({left:true,right:true});
+ await page.locator('.scene canvas').click({position:{x:10,y:10}});await page.keyboard.press('Control+z');expect((await sides()).right).not.toBe(true);
+ await page.keyboard.press('Control+y');expect((await sides()).right).toBe(true);await page.reload();expect(await sides()).toMatchObject({left:true,right:true});
+ await page.getByRole('button',{name:'Построение мебели',exact:true}).click();await openSettings(page,'Корпус');
+ await expect(page.getByLabel('Правая боковина — материал фасадов',{exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();await page.waitForTimeout(700);
+ await page.screenshot({path:'.qa/release/facade-sides.png',fullPage:true});
+});
+
+test('facade preview panel fits laptop viewport and never saves an unapplied draft',async({page})=>{
+ await page.setViewportSize({width:1280,height:720});
+ await page.goto('/');await page.getByRole('button',{name:'Свернуть верхнюю панель',exact:true}).click();await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();
+ await page.getByRole('button',{name:'Спереди',exact:true}).click();await page.getByRole('button',{name:'Приблизить выбранный корпус',exact:true}).click();
+ await page.waitForTimeout(700);const canvas=page.locator('.scene canvas'),b=(await canvas.boundingBox())!;
+ await canvas.click({button:'right',position:{x:b.width/2,y:b.height/2}});await page.getByRole('menuitem',{name:/^Фасад\./}).click();await page.getByRole('menuitem',{name:/^Редактировать фасад\./}).click();
+ const panel=page.getByRole('region',{name:'Редактор фасадов'});await expect(panel).toBeVisible();await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+ const before=await page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'));
+ await panel.getByLabel('Основа фасадов',{exact:true}).selectOption('vernissage');
+ await panel.getByLabel('Покрытие Вернисаж',{exact:true}).selectOption('enamel-matte');
+ const apply=panel.getByRole('button',{name:'Применить к корпусу',exact:true});await apply.scrollIntoViewIfNeeded();const box=(await apply.boundingBox())!;expect(box.y+box.height).toBeLessThanOrEqual(720);
+ const pb=(await panel.boundingBox())!,cb=(await canvas.boundingBox())!;expect(pb.x).toBeGreaterThanOrEqual(cb.x+cb.width-1);
+ expect(await page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'))).toBe(before);
+ await page.screenshot({path:'.qa/release/panel-laptop.png'});await panel.getByRole('button',{name:'Отмена',exact:true}).click();
+ expect(await page.evaluate(()=>localStorage.getItem('garderyob-rooms-v1'))).toBe(before);
 });

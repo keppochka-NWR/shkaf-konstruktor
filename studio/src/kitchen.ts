@@ -4,6 +4,7 @@
 // столешница как отдельный объект и шаблоны для палитры.
 // Источник чисел: 30 кухонь, 372 модуля Базиса (Кухни\etalon\archetypes.md, отчёты разведки 09.10.2026). Оси Базиса = оси студии
 // (X вправо, Y вверх, фасады на +Z), проверено снимком на кухне 2777.
+import { facadeSideToFloor, facadeSideErrors, type FacadeSides } from './kitchenFacadeSides';
 import { OVEN_BASE_NICHE } from './ovenDimensions';
 import { sinkParts, worktopCutErrors } from './premialSink';
 import {ovenErrors,ovenParts,type OvenSpec} from './kitchenOven';
@@ -17,6 +18,7 @@ import { allegroErrors, parsePremialPullout, type PremialPullout } from './premi
 export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
+  facadeSides?: FacadeSides;
   oven?: OvenSpec;
   premialPullout?: PremialPullout;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
@@ -413,6 +415,7 @@ export function mirrorKitchen(m: Module): void {
   if (!k) return;
   const put = <O extends object, K extends keyof O>(o: O, key: K, v: O[K] | undefined) => { if (v === undefined || (Array.isArray(v) && !v.length)) delete o[key]; else o[key] = v; };
   if (k.legs) { const { xs, xr, pts, ptsR } = k.legs; put(k.legs, "xs", xr); put(k.legs, "xr", xs); put(k.legs, "pts", ptsR); put(k.legs, "ptsR", pts); }
+  if (k.facadeSides) k.facadeSides = { ...k.facadeSides, left:k.facadeSides.right, right:k.facadeSides.left };
   if (k.sideDown) k.sideDown = { ...k.sideDown, side: k.sideDown.side === "left" ? "right" : "left" };
   if (k.railUnder) for (const u of Object.values(k.railUnder)) { const { ecc, dowel, eccR, dowelR } = u; u.ecc = eccR ?? []; u.dowel = dowelR ?? []; put(u, "eccR", ecc); put(u, "dowelR", dowel); }
   if (k.grooveHoles) k.grooveHoles = k.grooveHoles.map((h): GrooveHole => (h.length >= 5 ? [h[0], h[1], h[2], h[3] === -1 ? 1 : -1, h[4] === -1 ? -1 : 1] : [m.width - h[0], h[1], h[2]]));
@@ -733,7 +736,8 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
     if (!k.plinth?.off) {
       const ph = k.plinth?.height ?? KITCHEN.plinthHeight, zb = m.depth - (k.legs?.front ?? KITCHEN.legInset) + KITCHEN.clipReach;
       // Цоколь ЛДСП 16 на клипсах передних опор: задняя грань — по выступу клипсы, на 5 мм ниже дна.
-      out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [m.width, ph, t], position: [m.width / 2, ph / 2, zb + t / 2], length: m.width, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
+      const x0=facadeSideToFloor(m,"left")?t:0, x1=m.width-(facadeSideToFloor(m,"right")?t:0);
+      out.push({ id: "kitchen-plinth", name: `Цоколь ${ph} ЛДСП 16 (на клипсах)`, size: [x1-x0, ph, t], position: [(x0+x1) / 2, ph / 2, zb + t / 2], length: x1-x0, width: ph, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 0, 0, 0] });
     }
   }
   // гвозди набивного ХДФ — только если они есть в проекте Базиса (kitchen.nails), точка — на тыльной пласти ХДФ
@@ -1014,6 +1018,7 @@ export function kitchenErrors(m: Module): string[] {
   }
   if (m.kitchen) {
     const k = m.kitchen;
+    e.push(...facadeSideErrors(m));
     if (!["base", "wall", "tall", "antresol"].includes(k.role)) e.push("Кухня: тип корпуса — нижний, навесной, пенал или антресоль.");
     if (k.appliance && !(k.appliance in APPLIANCES)) e.push("Кухня: неизвестная техника.");
     // без опор — у кухни из Базиса (noLegs) или при явном низе (plinthHeight): в Базисе мойки и корпуса без опор бывают
@@ -1151,6 +1156,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.faceOver && (num(k.faceOver.left) > 0 || num(k.faceOver.right) > 0) ? { faceOver: { ...(num(k.faceOver.left) > 0 ? { left: num(k.faceOver.left) } : {}), ...(num(k.faceOver.right) > 0 ? { right: num(k.faceOver.right) } : {}) } } : {}),
     ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
     ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),
+    ...(k.facadeSides && typeof k.facadeSides === "object" ? {facadeSides:{left:k.facadeSides.left===true,right:k.facadeSides.right===true,...(k.facadeSides.toFloor===false?{toFloor:false}:{})}} : {}),
     ...(k.sideDown && (k.sideDown.side === "left" || k.sideDown.side === "right") ? { sideDown: { side: k.sideDown.side, y0: num(k.sideDown.y0) } } : {}),
     ...(Array.isArray(k.sideScrews) && k.sideScrews.length && k.sideScrews.every(fin) ? { sideScrews: k.sideScrews.map(Number) } : {}),
     ...(k.bottomFront === undefined ? {} : { bottomFront: num(k.bottomFront) }),

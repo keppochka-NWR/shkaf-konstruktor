@@ -437,6 +437,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       "decor",
     ),
     [search, setSearch] = useState("");
+  const [facadePreview,setFacadePreview]=useState<{base:Project;next:Project}|null>(null);
+  const editingFacades=modal==='facade-editor';
+  const sceneProject=editingFacades&&facadePreview?.base===project?facadePreview.next:project;
+  useEffect(()=>{setFacadePreview(null);setModal(value=>value==='facade-editor'?null:value);},[project,active,stage]);
   const [composer,setComposerState]=useState<'shelf'|'drawer'|null>(null);
   // композер полок/ящиков для сырого модуля Базиса не открывается (наполнение правится в Базисе)
   const setComposer=(kind:'shelf'|'drawer'|null)=>{if(kind&&m.raw)return;setComposerState(kind);};
@@ -1101,8 +1105,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {roomPlan?<RoomPlan onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
-            mode={presentation?'orbit':mode}
-            presentation={presentation}
+            mode={presentation||editingFacades?'orbit':mode}
+            presentation={presentation||editingFacades}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
@@ -1114,8 +1118,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onDropItem={dropFilling}
             onTransfer={(mid,sid,pid,toMid,toSid,y)=>{try{const next=transferPart(project,mid,sid,pid,toMid,toSid,y);if(commitProject(next)){selectInserted(next,toMid,toSid,pid.includes(':pantograph:')?'pantograph':pid.includes(':drawer:')?'drawer':pid.includes(':shelf:')?'shelf':'rod');return true;}}catch(e){setError((e as Error).message);}return false;}}
             captureReady={(fn) => (capture.current = fn)}
-            module={m}
-            arrangement={project.modules}
+            module={sceneProject.modules.find(a=>a.id===placed.id)?.module??m}
+            arrangement={sceneProject.modules}
             activeId={placed.id}
             room={showRoom ? project.room : undefined}
             appliances={project.room.obstacles}
@@ -1291,6 +1295,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}>
+          {editingFacades?<section className="facade-panel" role="region" aria-label="Редактор фасадов" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setModal(null);}}}>
+            <header><h2>Редактор фасадов</h2><button className="text-action" aria-label="Закрыть редактор фасадов" onClick={()=>setModal(null)}><X size={18}/></button></header>
+            <p className="facade-preview-note">Предпросмотр · камера доступна. Чтобы продолжить построение, примените изменения или отмените.</p>
+            <FacadeEditor key={placed.id} project={project} moduleId={placed.id} selectedIds={liveGroupIds} commit={commitProject} close={()=>setModal(null)} onPreview={setFacadePreview}/>
+          </section>:<>
+
           {composer&&<div><FillingComposer key={placed.id+selectedId+composer} module={m} sid={selectedId} kind={composer} onCancel={()=>setComposer(null)} onApply={(count,config,fit)=>{try{const next=composer==='drawer'&&fit&&config?addFittedDrawers(project,placed.id,selectedId,count,config):addFillingBatch(project,placed.id,selectedId,composer,count,config);if(commitProject(next)){selectInserted(next,placed.id,selectedId,composer);setComposer(null);return true;}}catch(e){setError((e as Error).message);}return false;}}/></div>}
           {tab!=='room'&&!m.raw&&!m.worktop&&!m.kupe&&<div className="selected-module-heading"><strong>{m.name}</strong><label>Секция<select aria-label="Выбранная секция" value={selectedId} onChange={e=>chooseSection(e.target.value)}>{m.sections.map((section,i)=><option key={section.id} value={section.id}>Секция {i+1}</option>)}</select></label></div>}
           {tab === "room" ? (
@@ -1872,10 +1882,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <span>Детали помещаются в лист</span>
             </div>
           </div>
+        </>}
         </aside>
       </WorkspacePanels>
       {!presentation&&<ProjectDock project={project} commit={commitProject} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/>}
-      {modal && (
+      {modal && modal!=="facade-editor" && (
         <div
           className="modal-backdrop"
           onMouseDown={(e) => {
@@ -1892,7 +1903,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div>
                 <span className="eyebrow">МОДУЛЬ</span>
                 <h2 id="modal-title">
-                  {modal === "facade-editor" ? "Редактор фасадов" : modal === "room-setup" ? "Шаг 1 · Параметры помещения" : modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
+                  {modal === "room-setup" ? "Шаг 1 · Параметры помещения" : modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
                     : modal === "materials"
                       ? "Материалы Lamarty"
@@ -1911,7 +1922,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <X />
               </button>
             </div>
-            {modal === "facade-editor" ? <FacadeEditor project={project} moduleId={placed.id} selectedIds={liveGroupIds} commit={commitProject} close={()=>setModal(null)}/> : modal === "room-setup" ? <div className="room-setup">
+            {modal === "room-setup" ? <div className="room-setup">
                 <p className="field-note">Начнём с комнаты: размеры, потолок и номер замера. Потом окна, двери и коммуникации, затем каркасы, наполнение и фасады. Всё можно изменить позже во вкладке помещения.</p>
                 {(["width","depth","height"] as const).map(k=><NumberField key={k} label={{width:'Ширина комнаты (стена с мебелью)',depth:'Глубина комнаты',height:'Высота потолка'}[k]} value={project.room[k]} min={500} max={20000} onChange={v=>commitProject({...project,room:{...project.room,[k]:v}})}/>)}
                 <label className="hardware-field">Тип потолка<select aria-label="Тип потолка" value={project.room.ceiling??'stationary'} onChange={e=>commitProject({...project,room:{...project.room,ceiling:e.target.value as typeof project.room.ceiling}})}><option value="stationary">Стационарный · зазор 30 мм</option><option value="stretch">Натяжной · зазор 20 мм</option></select></label>

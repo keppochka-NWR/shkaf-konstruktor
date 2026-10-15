@@ -20,3 +20,15 @@
 .facade-editor > .field-note, .facade-editor [role="alert"] {display:block !important;}
 
 .module-selection-hint {font-size:12px;color:#526570;margin:8px 0;}
+
+/* Facade drafts live in the existing resizable inspector; the canvas stays unobstructed. */
+.facade-panel {padding:16px;min-width:0;overflow-wrap:anywhere}
+.facade-panel > header {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.facade-panel h2 {font-size:16px;margin:0}
+.facade-preview-note {font-size:12px;line-height:1.5;color:#526570;margin:12px 0}
+.facade-panel .hardware-field {min-width:0;display:flex;flex-direction:column;gap:6px}
+.facade-panel select,.facade-panel input {max-width:100%;min-width:0;width:100%}
+.facade-panel .facade-editor > div:last-child {flex-wrap:wrap}
+/* The hint must never intercept right-clicks on furniture. */
+.app .rmb-tip {left:12px;bottom:44px;transform:none;max-width:min(320px,calc(100% - 80px));pointer-events:none;font-size:11px}
+.app .rmb-tip button {pointer-events:auto}
