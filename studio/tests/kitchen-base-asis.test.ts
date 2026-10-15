@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,parseModule,initialModule,fastenerCounts} from '../src/model';
-import {kitchenBase} from '../src/kitchen';
+import {kitchenBase,kitchenLegs} from '../src/kitchen';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {compareModule,type RefModule} from '../scripts/kitchen/compare';
@@ -178,7 +178,11 @@ test('стяжка на ребре в 1 мм от задней кромки бо
 test('опоры не сеткой (k15 m02: правая задняя на 23 глубже левой) — точки как в Базисе, клипсы на передних, PASS; сетка — как раньше',{skip:!has('k15')},()=>{
   const ref=load('k15','m02'),{module:m}=moduleFromEtalon(ref);
   assert.deepEqual(irregularLegs(ref),[[70,71],[70,425],[640,94],[640,425]]);
-  assert.deepEqual(m.kitchen?.legs?.pts,[[70,71],[70,425],[640,94],[640,425]]);
+  // пакет 0: точки правой половины — от правого торца (ptsR: 710−640=70), чтобы при смене ширины идти за правой боковиной
+  assert.equal(m.width,710);
+  assert.deepEqual([m.kitchen?.legs?.pts,m.kitchen?.legs?.ptsR],[[[70,71],[70,425]],[[70,94],[70,425]]]);
+  assert.deepEqual(kitchenLegs(m).map(l=>[l.x,l.z]),[[70,71],[70,425],[640,94],[640,425]],'на исходной ширине — точка в точку как в Базисе');
+  assert.deepEqual(kitchenLegs({...m,width:m.width-100}).map(l=>l.x),[70,70,540,540],'при −100 правые опоры идут за правой боковиной');
   assert.equal(parts(m).filter(p=>p.id.startsWith('leg:')).length,4);
   assert.equal(parts(m).filter(p=>p.id.startsWith('kitchen-clip:')).length,2);
   const c=compareModule(ref,m);

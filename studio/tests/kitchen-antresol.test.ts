@@ -390,14 +390,14 @@ test('rail confirmats recognizer: two per side and through the top (k03), one ce
   const {railConf}=await import('../scripts/kitchen/recognize-common');
   const b={x0:16,y0:274,z0:3,x1:584,y1:374,z1:19},roof={x0:16,y0:374,z0:0,x1:584,y1:390,z1:350},c=(pos:number[])=>hw('Конфирмат 7х50 мм, Zn','конфирмат',pos);
   const k03=[c([0,308,11]),c([0,340,11]),c([600,308,11]),c([600,340,11]),c([76,390,11]),c([524,390,11]),c([0,382,278.5]),c([600,8,54.5])];
-  assert.deepEqual(railConf(b,k03,0,600,roof),{confY:[34,66],topConf:[60,508]});
+  assert.deepEqual(railConf(b,k03,0,600,roof),{confY:[34,66],topConf:[60],topConfR:[60]}); // пакет 0: правая половина — от правого конца (584−524)
   assert.deepEqual(railConf(b,[c([0,324,11]),c([600,324,11])],0,600,roof),{});
   // стяжка не под крышей — конфирматы крыши к ней не относятся
   assert.equal(railConf({...b,y0:100,y1:200},[c([76,390,11])],0,600,undefined).topConf,undefined);
 });
 
 test('studio places rail confirmats and HDF nails from the Bazis project, only for kitchens; fields survive save/load',()=>{
-  const m=antresol();m.kitchen!.hangers=false;m.backType='nailed';m.backGap=1;m.rails=[{place:'rear-top',height:100,confY:[34,66],topConf:[60,508]}];
+  const m=antresol();m.kitchen!.hangers=false;m.backType='nailed';m.backGap=1;m.rails=[{place:'rear-top',height:100,confY:[34,66],topConf:[60],topConfR:[60]}];
   const q=[0.7071,0,-0.7071,0] as [number,number,number,number];
   m.kitchen!.nails={q:{bottom:q,top:q,left:q,right:q}}; // правило раскладки Базиса (n4-wall): ряды в 7,5 от края, первый — в 23 от края ХДФ
   const ps=parts(m),o=(id:string)=>ps.find(p=>p.id===id)?.model?.origin;

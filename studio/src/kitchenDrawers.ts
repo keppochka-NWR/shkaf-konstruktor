@@ -13,11 +13,13 @@ export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "star
  *  Конфирматы ставятся в Базисе вручную (шаг разный), поэтому их высоты храним как в проекте: conf — от низа задней стенки
  *  (фальшпанель — те же), confBottom — от торцов дна. По умолчанию — самые частые в базе. */
 export type FirmaxBox = { y: number; h: number; len: number; bottomUp?: number; gap?: number; front?: number; conf?: number[]; confBottom?: number; screws?: boolean; rearHoles?: boolean;
-  /** Точки направляющих Базиса (у Firmax без сетки ставятся произвольно): [от внутренней грани левой боковины, от пола, от передней кромки]. По умолчанию — две в точке runnerY. */
-  runs?: [number, number, number][];
-  /** Шурупы 3,5×30 фальшпанели в фасад (часть проектов): [от внутренней грани левой боковины ящика, от низа фальшпанели]; true — по правилу
-   *  большинства (два в 60 от боковин и 40 ниже верха, один посередине в 60 над низом). */
-  faceScrews?: true | [number, number][];
+  /** Точки направляющих Базиса (у Firmax без сетки ставятся произвольно): [от внутренней грани левой боковины, от пола, от передней кромки];
+   *  пакет 0: четвёртый элемент −1 — x от внутренней грани ПРАВОЙ боковины (правая половина, переживает смену ширины; знак x не годится —
+   *  у Базиса точки бывают и левее левой боковины, k19 m10). По умолчанию — две в точке runnerY. */
+  runs?: ([number, number, number] | [number, number, number, -1])[];
+  /** Шурупы 3,5×30 фальшпанели в фасад (часть проектов): [от внутренней грани левой боковины ящика, от низа фальшпанели]; пакет 0: третий
+   *  элемент −1 — x от внутренней грани ПРАВОЙ боковины ящика; true — по правилу большинства (два в 60 от боковин и 40 ниже верха, один посередине в 60 над низом). */
+  faceScrews?: true | ([number, number] | [number, number, -1])[];
   /** Конфирматы дна в заднюю стенку и фальшпанель снизу. Число — пара, от внутренней грани каждой боковины ящика (Versalite —
    *  по умолчанию 59, MODERN SLIDE — 83,5); список — свои точки от внутренней грани левой боковины ящика (Firmax k31: 67, середина,
    *  67 от правой). У Firmax по умолчанию их нет. */
@@ -359,7 +361,8 @@ export const AXIS_FIT = { facadeTop: 21.5, ceiling: 5 };
 export function axisTop(k: KDrawer) { if (isBox(k)) return k.box.y + k.box.h; if (isStart(k)) return startTop(k); if (isIndigo(k)) return indigoTop(k); return k.runnerY + Math.max(-22 + (k.backH ?? AXIS_BACK[k.h]), SIDE_TOP[k.h], REAR_TOP[k.h]); }
 /** Низ под царгами/крышей корпуса (нижний кухонный: царги 16 лёжа у верха; на ребре — их высота). */
 export function axisCeiling(m: Module) {
-  const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : r.height));
+  // верхняя стяжка с atTop (пакет 0) стоит ниже кромки: её низ от верха = atTop + height (та же формула, что railAt в model.ts), а не высота стяжки
+  const top = (m.rails ?? []).filter((r) => r.place.endsWith("top") && r.at === undefined).map((r) => (r.lay === "flat" ? 16 : (r.atTop ?? 0) + r.height));
   return m.height - Math.max(m.topType === "none" ? 0 : 16, ...top, 0);
 }
 /** Профили Gola нижнего/пенала по высоте от пола модуля [низ, верх] — по вырезам боковин (top0/top1 от верха боковины). */
@@ -748,7 +751,7 @@ export function firmaxLayout(m: Module, n: number, ratios?: number[], keep?: Fir
         else if (oc.length === def.length && moved.every((c) => c >= 8 && c <= backH - 8) && (moved.length < 2 || moved[1] - moved[0] >= 32)) box.conf = moved;
       }
       if (o.faceScrews === true) box.faceScrews = true;
-      else if (Array.isArray(o.faceScrews)) box.faceScrews = same && o.faceScrews.every(([, sy]) => sy > 0 && sy < backH) ? o.faceScrews.map((p) => [p[0], p[1]] as [number, number]) : true;
+      else if (Array.isArray(o.faceScrews)) box.faceScrews = same && o.faceScrews.every(([, sy]) => sy > 0 && sy < backH) ? o.faceScrews.map((p) => (p[2] === -1 ? ([p[0], p[1], -1] as [number, number, -1]) : ([p[0], p[1]] as [number, number]))) : true;
     }
     return { system: "firmax-ldsp" as const, y0: a.y0, y1: a.y1, runnerY: Math.round(Math.max(a.y0, floor) * 10) / 10, box };
   });
@@ -907,11 +910,11 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       (b.runs ?? [[g.gap, b.y, rz], [xr - x0 - g.gap, b.y, rz]]).forEach((r, i) => {
         const s = (i % 2) as 0 | 1, lr = s ? "R" : "L", side = s ? "правая" : "левая", d = dir(s), inner = s ? g.sr - g.t : g.sl + g.t, rx0 = inner + d * 0.5, rx1 = inner + d * (0.5 + FIRMAX.rail.w);
         out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая MODERN SLIDE ${MODERN.runner} ${side} (процедурная: в Базисе без сетки)`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
-          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
+          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [r[3] === -1 ? xr + r[0] : x0 + r[0], r[1], F + r[2]] });
       });
       if (b.faceScrews) {
-        const iw = g.sr - g.sl - 2 * g.t, pts = b.faceScrews === true ? [[67.5, g.backH - 31.5], [iw - 67.5, g.backH - 31.5]] : b.faceScrews;
-        pts.forEach(([dx, dy], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Саморез 4×30 (фальшпанель в фасад)")));
+        const iw = g.sr - g.sl - 2 * g.t, pts: ([number, number] | [number, number, -1])[] = b.faceScrews === true ? [[67.5, g.backH - 31.5], [iw - 67.5, g.backH - 31.5]] : b.faceScrews;
+        pts.forEach(([dx, dy, fr], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [fr === -1 ? g.sr - g.t + dx : g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Саморез 4×30 (фальшпанель в фасад)")));
       }
       for (const s of [0, 1] as const) {
         const lr = s ? "R" : "L", d = dir(s), head = s ? g.sr : g.sl, ax: "+x" | "-x" = s ? "-x" : "+x";
@@ -938,12 +941,12 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         const s = (i % 2) as 0 | 1, lr = s ? "R" : "L", side = s ? "правая" : "левая", d = dir(s), inner = s ? g.sr - g.t : g.sl + g.t;
         const rx0 = inner + d * 0.5, rx1 = inner + d * (0.5 + FIRMAX.rail.w);
         out.push({ id: `${id}:slide:${lr}${i > 1 ? i : ""}`, name: `Направляющая скрытого монтажа Firmax ${b.len} ${side}`, size: [FIRMAX.rail.w, Math.max(1, g.bu - 1), b.len - 10], position: [(rx0 + rx1) / 2, b.y + g.bu / 2, g.zf - (b.len - 10) / 2],
-          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [x0 + r[0], r[1], F + r[2]] });
+          length: b.len - 10, width: FIRMAX.rail.w, thickness: Math.max(1, g.bu - 1), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 2, edge: [0, 0, 0, 0], anchor: [r[3] === -1 ? xr + r[0] : x0 + r[0], r[1], F + r[2]] }); // −1 — от правой боковины (пакет 0)
       });
       if (b.faceScrews) {
         // фальшпанель ниже 100 (низкий верхний ящик после смены высоты): 60 и «40 ниже верха» выходят за неё — все три посередине по высоте
-        const iw = g.sr - g.sl - 2 * g.t, lo = g.backH < 100, pts = b.faceScrews === true ? [[60, lo ? g.backH / 2 : g.backH - 40], [iw - 60, lo ? g.backH / 2 : g.backH - 40], [iw / 2, lo ? g.backH / 2 : 60]] : b.faceScrews;
-        pts.forEach(([dx, dy], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Шуруп 3,5×30 (фальшпанель в фасад)")));
+        const iw = g.sr - g.sl - 2 * g.t, lo = g.backH < 100, pts: ([number, number] | [number, number, -1])[] = b.faceScrews === true ? [[60, lo ? g.backH / 2 : g.backH - 40], [iw - 60, lo ? g.backH / 2 : g.backH - 40], [iw / 2, lo ? g.backH / 2 : 60]] : b.faceScrews;
+        pts.forEach(([dx, dy, fr], i) => out.push(screwAt(`${id}:screw:fxf:${i}`, [fr === -1 ? g.sr - g.t + dx : g.sl + g.t + dx, g.backY + dy, g.zf - g.t], "Шуруп 3,5×30 (фальшпанель в фасад)"))); // −1 — от правой боковины ящика (пакет 0)
       }
       for (const s of [0, 1] as const) {
         const lr = s ? "R" : "L", d = dir(s);
@@ -1259,8 +1262,9 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
       if (Array.isArray(b.conf)) box.conf = b.conf.slice(0, 6).map(Number);
       if (b.screws) box.screws = true;
       if (b.rearHoles === false) box.rearHoles = false;
-      if (b.faceScrews === true) box.faceScrews = true; else if (Array.isArray(b.faceScrews)) box.faceScrews = b.faceScrews.slice(0, 8).map((r) => [Number(r[0]), Number(r[1])] as [number, number]);
-      if (Array.isArray(b.runs)) box.runs = b.runs.slice(0, 8).filter((r) => Array.isArray(r) && r.length === 3).map((r) => r.map(Number) as [number, number, number]);
+      // пакет 0: маркер −1 «от правой боковины» (третий элемент шурупа, четвёртый — точки направляющей) переживает сохранение
+      if (b.faceScrews === true) box.faceScrews = true; else if (Array.isArray(b.faceScrews)) box.faceScrews = b.faceScrews.slice(0, 8).map((r) => (Number(r[2]) === -1 ? ([Number(r[0]), Number(r[1]), -1] as [number, number, -1]) : ([Number(r[0]), Number(r[1])] as [number, number])));
+      if (Array.isArray(b.runs)) box.runs = b.runs.slice(0, 8).filter((r) => Array.isArray(r) && (r.length === 3 || r.length === 4)).map((r) => (Number(r[3]) === -1 ? ([Number(r[0]), Number(r[1]), Number(r[2]), -1] as [number, number, number, -1]) : ([Number(r[0]), Number(r[1]), Number(r[2])] as [number, number, number])));
       return { system: k0.system === "modern-slide" ? "modern-slide" : "firmax-ldsp", y0: Number(k0.y0), y1: Number(k0.y1), runnerY: Number(k0.runnerY), box } as FirmaxDrawer | ModernDrawer;
     }
     const k = k0 as Partial<AxisDrawer>;

@@ -9,7 +9,7 @@ import { sinkParts, worktopCutErrors } from './premialSink';
 import {ovenErrors,ovenParts,type OvenSpec} from './kitchenOven';
 import type { GolaCut, Module, Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
-import { axisLayout } from "./kitchenDrawers";
+import { axisLayout, type FirmaxBox } from "./kitchenDrawers";
 import type { KitchenRafix, RafixGrid } from "./kitchenRafix";
 import { allegroErrors, parsePremialPullout, type PremialPullout } from './premialPullout';
 
@@ -50,7 +50,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   // (одно правило для нижних, навесных и антресолей; слияние n4-base, n4-wall).
   /** Стяжка на дне навесного на эксцентриках и шкантах снизу по Базису (n4-wall; k04 m08, k31): ключ — место стяжки; ecc и dowel —
    *  мм от левого конца стяжки; face — пласть стяжки с бочонком D15×12 (front — к фасаду, back — к стене). */
-  railUnder?: Record<string, { ecc: number[]; dowel: number[]; face: "front" | "back" }>;
+  railUnder?: Record<string, { ecc: number[]; dowel: number[]; /** пакет 0: точки правой половины стяжки — мм от её ПРАВОГО конца (переживают смену ширины) */ eccR?: number[]; dowelR?: number[]; face: "front" | "back" }>;
   /** Крепёж корпуса по проекту Базиса (одно поле на один факт, n7-spec-dedupe): false — крепежа нет вовсе (ни конфирматов, ни эксцентриков,
    *  ни шкантов, ни полкодержателей; только k32 — 22 модуля); 'pins' — нет крепежа стыков (конфирматы, эксцентрики, шканты), полкодержатели
    *  остаются (бывшее noFasteners: n3-wall, n3-antresol). Без поля / true — как у шкафов. Читать через fastenersMode(k). */
@@ -93,7 +93,7 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   outConf?: { side: "left" | "right"; y: number; z: number }[];
   /** Точки крепления крепежа, чьё отверстие и в проекте Базиса вскрывает паз подсветки (k31, k28 m12): только это пересечение
    *  подписывается «как в проекте Базиса» (collisions.ts). Ставит импорт по двойнику в Базисе (compare.ts grooveTwins). */
-  grooveHoles?: [number, number, number][];
+  grooveHoles?: GrooveHole[];
   /** @deprecated Признак «из Базиса» живёт в Module.bazis (isBazisModule в project.ts — единственная точка); parse переносит
    *  kitchen.bazis → m.bazis. Поле оставлено в типе до перехода pricing.ts / App.tsx / KitchenPanel.tsx (A3/A5), потом удалить. */
   bazis?: boolean;
@@ -113,7 +113,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
      *  отступу side от торцов, поэтому правые опоры идут за боковиной при смене ширины. */
     rows2?: true;
     /** Нерегулярная раскладка Базиса (17 модулей 10 кухонь: не сетка «ряды × перед/зад»): точки [x, z от задней кромки боковин]. */
-    pts?: [number, number][] };
+    pts?: [number, number][];
+    /** Пакет 0 (правило «от кромки детали + сторона»): позиции и точки ПРАВОЙ половины дна — мм от правого торца (x = W − v), чтобы
+     *  при смене ширины правые опоры шли за правой боковиной, а не оставались на старом x. Импорт делит xs/pts по середине ширины. */
+    xr?: number[]; ptsR?: [number, number][] };
   /** @deprecated Крепёж «Евровинт 6х50» (шаблоны «Т_» k33, k34: D8×16 + D5×36) — только confirmatName; parse переводит screw → confirmatName,
    *  поле в типе оставлено до перехода pricing.ts (A3: единый ключ сметы confirmat:<name>), потом удалить. */
   screw?: "euro-6x50";
@@ -261,18 +264,73 @@ export const KITCHEN_MODELS: Partial<Record<"leg" | "clip" | "leg-left" | "clip-
   "hanger-cap-right": { file: "hardware/bazis/19a5dd31bc40.glb" }, // … правая
 };
 
+/** Точка крепежа в пазу подсветки с двойником в Базисе (kitchen.grooveHoles): [x, y, z] — от левого торца, низа модуля, задней кромки;
+ *  пакет 0 — пятый и четвёртый элементы: sx = −1 — x от ПРАВОГО торца (x = W − v), sy = −1 — y от ВЕРХА модуля (y = H − v), иначе 1.
+ *  Трёхэлементная запись (старые файлы) — абсолютная, как прежде. */
+export type GrooveHole = [number, number, number] | [number, number, number, 1 | -1, 1 | -1];
+export function parseGrooveHole(g: unknown[]): GrooveHole {
+  const v = g.map(Number);
+  const s = (x: unknown): 1 | -1 => (Number(x) === -1 ? -1 : 1);
+  return g.length >= 5 ? [v[0], v[1], v[2], s(g[3]), s(g[4])] : [v[0], v[1], v[2]];
+}
+/** Точка grooveHoles в координатах модуля текущего размера. */
+export function grooveHoleAt(h: GrooveHole, m: Pick<Module, "width" | "height">): [number, number, number] {
+  return [h.length >= 5 && h[3] === -1 ? m.width - h[0] : h[0], h.length >= 5 && h[4] === -1 ? m.height - h[1] : h[1], h[2]];
+}
+/** Пакет 0, ОДНО правило «половина → от ближней кромки» для всех полей со стороной (legs xs/xr и pts/ptsR, rails topConf/topConfR и
+ *  ecc/eccR, dowel/dowelR, runs и faceScrews с маркером −1, grooveHoles): точка в левой половине отрезка [x0, x1] считается от левого
+ *  конца, в правой (строго дальше середины) — от правого. Середина — к левой: так же, как было написано вручную в каждом месте. */
+export const nearRight = (x: number, x0: number, x1: number) => x > (x0 + x1) / 2;
+/** Разложить элементы по сторонам по координате x: left — считать от левой кромки, right — от правой (порядок сохраняется). */
+export function splitSides<T>(items: readonly T[], x: (t: T) => number, x0: number, x1: number): { left: T[]; right: T[] } {
+  return { left: items.filter((t) => !nearRight(x(t), x0, x1)), right: items.filter((t) => nearRight(x(t), x0, x1)) };
+}
+/** То же для списка координат: расстояния от ближнего конца, до 0,1 мм, по возрастанию — как хранятся topConf/topConfR, xs/xr, ecc/eccR. */
+export function sideDists(xs: readonly number[], x0: number, x1: number): { left: number[]; right: number[] } {
+  const r1 = (v: number) => Math.round(v * 10) / 10, s = splitSides(xs, (x) => x, x0, x1), asc = (a: number, c: number) => a - c;
+  return { left: s.left.map((x) => r1(x - x0)).sort(asc), right: s.right.map((x) => r1(x1 - x)).sort(asc) };
+}
+/** Запись точки модуля в grooveHoles по правилу «от ближней кромки»: правая половина — от правого торца, верхняя — от верха. */
+export function grooveHoleOf(o: [number, number, number], m: Pick<Module, "width" | "height">): GrooveHole {
+  const sx: 1 | -1 = nearRight(o[0], 0, m.width) ? -1 : 1, sy: 1 | -1 = nearRight(o[1], 0, m.height) ? -1 : 1;
+  return [sx === -1 ? m.width - o[0] : o[0], sy === -1 ? m.height - o[1] : o[1], o[2], sx, sy];
+}
+
+/** Зеркальное отражение полей кухни со стороной (пакет 0): xs↔xr, pts↔ptsR, topConf↔topConfR, ecc↔eccR, dowel↔dowelR, маркер −1 у
+ *  точек направляющих и шурупов фальшпанели (runs/faceScrews), grooveHoles (сторона по ширине), опущенная боковина (sideDown).
+ *  Всё, что записано «от левой кромки», становится «от правой» и наоборот — числа не пересчитываются, второе отражение возвращает
+ *  исходное. Правит модуль на месте (mirrorModule зовёт на клоне проекта). Пустой массив не оставляем: xs [] для kitchenLegs — «раскладка задана». */
+export function mirrorKitchen(m: Module): void {
+  const k = m.kitchen;
+  if (!k) return;
+  const put = <O extends object, K extends keyof O>(o: O, key: K, v: O[K] | undefined) => { if (v === undefined || (Array.isArray(v) && !v.length)) delete o[key]; else o[key] = v; };
+  if (k.legs) { const { xs, xr, pts, ptsR } = k.legs; put(k.legs, "xs", xr); put(k.legs, "xr", xs); put(k.legs, "pts", ptsR); put(k.legs, "ptsR", pts); }
+  if (k.sideDown) k.sideDown = { ...k.sideDown, side: k.sideDown.side === "left" ? "right" : "left" };
+  if (k.railUnder) for (const u of Object.values(k.railUnder)) { const { ecc, dowel, eccR, dowelR } = u; u.ecc = eccR ?? []; u.dowel = dowelR ?? []; put(u, "eccR", ecc); put(u, "dowelR", dowel); }
+  if (k.grooveHoles) k.grooveHoles = k.grooveHoles.map((h): GrooveHole => (h.length >= 5 ? [h[0], h[1], h[2], h[3] === -1 ? 1 : -1, h[4] === -1 ? -1 : 1] : [m.width - h[0], h[1], h[2]]));
+  for (const r of m.rails ?? []) { if (!r) continue; const { topConf, topConfR } = r; put(r, "topConf", topConfR); put(r, "topConfR", topConf); }
+  for (const d of m.kdrawers ?? []) {
+    const b: FirmaxBox | undefined = d.box;
+    if (!b) continue;
+    // x точки = внутренняя грань боковины + v с обеих сторон (слева v > 0 внутрь, справа v < 0): зеркало — знак v и маркер вместе
+    if (b.runs) b.runs = b.runs.map((r) => (r.length > 3 ? [-r[0], r[1], r[2]] : [-r[0], r[1], r[2], -1]));
+    if (Array.isArray(b.faceScrews)) b.faceScrews = b.faceScrews.map((s) => (s.length > 2 ? [-s[0], s[1]] : [-s[0], s[1], -1]));
+  }
+}
+
 export const isKitchen = (m: Module) => !!m.kitchen;
 export const kitchenRole = (m: Module) => m.kitchen?.role;
 
 /** Опоры нижнего модуля: в 70 мм от краёв дна; узкие (< 250) — по центру ширины, широкие (> 1300) — третий ряд посередине. */
 export function kitchenLegs(m: Module): { x: number; z: number; front: boolean }[] {
   const w = m.width, d = m.depth, a = KITCHEN.legInset, L = m.kitchen?.legs;
-  if (L?.pts?.length) return L.pts.map(([x, z]) => ({ x, z, front: z > d / 2 })); // как в Базисе, точка в точку
+  // как в Базисе, точка в точку: pts — от левого торца, ptsR — от правого (пакет 0: правые опоры идут за правой боковиной)
+  if (L?.pts?.length || L?.ptsR?.length) return [...(L.pts ?? []).map(([x, z]) => ({ x, z, front: z > d / 2 })), ...(L.ptsR ?? []).map(([x, z]) => ({ x: w - x, z, front: z > d / 2 }))];
   // отступ от торцов (side) — относительный, переживает изменение ширины; xs — абсолютные позиции нестандартной раскладки
   // узкий (< 250) — один ряд по центру, если отступ от торцов не задан явно (Базис k05 m02: 200 мм, ряды в 70 от торцов) или ряды
   // легли бы внахлёст (площадка опоры 58: Базис k16 m07 — 150 мм, опоры на 70 и 80 пересекаются; студия так не ставит)
   const s = L?.side ?? a, narrow = w < 250 && (L?.side === undefined || w - 2 * s < KITCHEN.legPad);
-  const xs = L?.xs ?? (narrow ? [w / 2] : w > 1300 && !L?.rows2 ? [s, w / 2, w - s] : [s, w - s]);
+  const xs = L?.xs || L?.xr ? [...(L.xs ?? []), ...(L.xr ?? []).map((v) => w - v)] : narrow ? [w / 2] : w > 1300 && !L?.rows2 ? [s, w / 2, w - s] : [s, w - s];
   return xs.flatMap((x) => [{ x, z: L?.back ?? a, front: false }, { x, z: d - (L?.front ?? a), front: true }]);
 }
 
@@ -603,8 +661,8 @@ export function kitchenErrors(m: Module): string[] {
     if (k.legs) {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
       if (!inDepth(l.back) || !inDepth(l.front) || (l.side !== undefined && !(Number.isFinite(l.side) && l.side >= 0 && l.side <= m.width))) e.push("Опоры: отступы рядов от кромок в пределах дна.");
-      if (l.xs?.some((x) => !Number.isFinite(x) || x < 0 || x > m.width)) e.push("Опоры: позиции по ширине в пределах дна.");
-      if (l.pts?.some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z) || x < 0 || x > m.width || z < 0 || z > m.depth)) e.push("Опоры: точки в пределах дна.");
+      if ([...(l.xs ?? []), ...(l.xr ?? [])].some((x) => !Number.isFinite(x) || x < 0 || x > m.width)) e.push("Опоры: позиции по ширине в пределах дна.");
+      if ([...(l.pts ?? []), ...(l.ptsR ?? [])].some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z) || x < 0 || x > m.width || z < 0 || z > m.depth)) e.push("Опоры: точки в пределах дна.");
     }
   }
   // глубина столешницы — в диапазоне поля UI (KitchenPanel 400–1200); у модулей без столешницы глубина проверяется правилами корпуса
@@ -644,7 +702,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.hangers === false ? { hangers: false } : k.hangers === true ? { hangers: true } : {}),
     ...(k.hangerAt && Array.isArray(k.hangerAt.left) && Array.isArray(k.hangerAt.right) ? { hangerAt: { left: v3(k.hangerAt.left), right: v3(k.hangerAt.right), ...(k.hangerAt.caps && Array.isArray(k.hangerAt.caps.left) && Array.isArray(k.hangerAt.caps.right) ? { caps: { left: v3(k.hangerAt.caps.left), right: v3(k.hangerAt.caps.right) } } : {}) } } : {}),
     ...(num(k.backAir) > 0 ? { backAir: num(k.backAir) } : {}),
-    ...(Array.isArray(k.grooveHoles) ? { grooveHoles: k.grooveHoles.filter((g) => Array.isArray(g) && g.length >= 3).map((g) => v3(g)) } : {}),
+    ...(Array.isArray(k.grooveHoles) ? { grooveHoles: k.grooveHoles.filter((g) => Array.isArray(g) && g.length >= 3).map((g) => parseGrooveHole(g)) } : {}),
     ...(Array.isArray(k.outConf) ? { outConf: k.outConf.filter((c) => c && (c.side === "left" || c.side === "right")).map((c) => ({ side: c.side, y: num(c.y), z: num(c.z) })) } : {}),
     ...(Array.isArray(k.svcHoles) ? { svcHoles: k.svcHoles.filter((s) => s && Array.isArray(s.at) && Array.isArray(s.dir)).map((s) => ({ at: v3(s.at), dir: v3(s.dir), d: num(s.d), depth: num(s.depth) })) } : {}),
     ...(Array.isArray(k.blindFronts) ? { blindFronts: k.blindFronts.filter((b) => b && num(b.y1) > num(b.y0)).map((b) => ({ y0: num(b.y0), y1: num(b.y1) })) } : {}),
@@ -654,7 +712,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.lowFront ? { lowFront: true } : {}),
     ...(k.hinges === false ? { hinges: false } : {}),
     ...(k.noLegs ? { noLegs: true } : {}),
-    ...(k.railUnder && typeof k.railUnder === "object" ? { railUnder: Object.fromEntries(Object.entries(k.railUnder).filter(([, v]) => v && Array.isArray(v.ecc) && Array.isArray(v.dowel)).map(([key, v]) => [key, { ecc: v.ecc.map(Number), dowel: v.dowel.map(Number), face: v.face === "back" ? ("back" as const) : ("front" as const) }])) } : {}),
+    ...(k.railUnder && typeof k.railUnder === "object" ? { railUnder: Object.fromEntries(Object.entries(k.railUnder).filter(([, v]) => v && Array.isArray(v.ecc) && Array.isArray(v.dowel)).map(([key, v]) => [key, { ecc: v.ecc.map(Number), dowel: v.dowel.map(Number), ...(Array.isArray(v.eccR) && v.eccR.length ? { eccR: v.eccR.map(Number) } : {}), ...(Array.isArray(v.dowelR) && v.dowelR.length ? { dowelR: v.dowelR.map(Number) } : {}), face: v.face === "back" ? ("back" as const) : ("front" as const) }])) } : {}),
     ...(k.nails && k.nails.q ? { nails: { ...(typeof k.nails.mesh === "string" && MESH.test(k.nails.mesh) ? { mesh: k.nails.mesh } : {}), q: Object.fromEntries((["bottom", "top", "left", "right"] as const).map((s) => { const v = k.nails!.q[s] as unknown; return [s, (Array.isArray(v) && v.length === 4 ? v.map(Number) : [1, 0, 0, 0]) as [number, number, number, number]]; })) as Record<"bottom" | "top" | "left" | "right", [number, number, number, number]> } } : {}),
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
@@ -680,7 +738,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.dryer) ? { dryer: k.dryer.filter((d) => d && (d.mesh === undefined || (typeof d.mesh === "string" && MESH.test(d.mesh)))).map((d) => ({ name: String(d.name), ...(d.mesh ? { mesh: d.mesh } : {}), side: d.side === "right" ? ("right" as const) : ("left" as const), x: num(d.x), y: num(d.y), z: num(d.z), quat: (Array.isArray(d.quat) && d.quat.length === 4 ? d.quat.map(Number) : [1, 0, 0, 0]) as [number, number, number, number] })) } : {}),
     ...(k.jointZ && typeof k.jointZ === "object" ? { jointZ: Object.fromEntries(Object.entries(k.jointZ).filter(([, v]) => Array.isArray(v) && v.length === 2).map(([key, v]) => [key, [num(v[0]), num(v[1])] as [number, number]])) } : {}),
     ...(k.raise && typeof k.raise === "object" ? { raise: { ...(k.raise.front === undefined ? {} : { front: num(k.raise.front) }), ...(k.raise.doorsToFloor ? { doorsToFloor: true } : {}) } } : {}),
-    ...(k.legs ? { legs: { back: num(k.legs.back), front: num(k.legs.front), ...(k.legs.side === undefined ? {} : { side: num(k.legs.side) }), ...(Array.isArray(k.legs.xs) ? { xs: k.legs.xs.map(Number) } : {}), ...(Array.isArray(k.legs.pts) ? { pts: k.legs.pts.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(k.legs.screws ? { screws: true as const } : {}), ...(k.legs.same ? { same: true as const } : {}), ...(k.legs.rows2 ? { rows2: true as const } : {}) } } : {}),
+    ...(k.legs ? { legs: { back: num(k.legs.back), front: num(k.legs.front), ...(k.legs.side === undefined ? {} : { side: num(k.legs.side) }), ...(Array.isArray(k.legs.xs) ? { xs: k.legs.xs.map(Number) } : {}), ...(Array.isArray(k.legs.pts) ? { pts: k.legs.pts.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(Array.isArray(k.legs.xr) && k.legs.xr.length ? { xr: k.legs.xr.map(Number) } : {}), ...(Array.isArray(k.legs.ptsR) && k.legs.ptsR.length ? { ptsR: k.legs.ptsR.map((q) => [num(q?.[0]), num(q?.[1])] as [number, number]) } : {}), ...(k.legs.screws ? { screws: true as const } : {}), ...(k.legs.same ? { same: true as const } : {}), ...(k.legs.rows2 ? { rows2: true as const } : {}) } } : {}),
     ...(() => { const r = k.rafix === undefined ? undefined : deps.parseKitchenRafix(k.rafix); return r ? { rafix: r } : {}; })(),
     ...(k.jointPoints === 2 || k.jointPoints === 3 ? { jointPoints: k.jointPoints } : {}),
     ...(Array.isArray(k.bareShelves) && k.bareShelves.length ? { bareShelves: k.bareShelves.map(Number).filter(Number.isInteger) } : {}),
@@ -715,7 +773,7 @@ type Rail = NonNullable<Module["rails"]>[number];
 /** Стяжки/царги из JSON: место и высота, lay/setback/at, fasten:false, конфирматы по Базису (confY/confZ/topConf), своя глубина D5 (confDepth — законное поле царги). */
 export function parseRails(input: unknown): Rail[] {
   if (!Array.isArray(input)) return [];
-  return (input as Record<string, unknown>[]).map((r) => ({ place: r?.place as Rail["place"], height: num(r?.height), ...(r?.lay === undefined ? {} : { lay: r.lay as "edge" | "flat" }), ...(r?.setback === undefined ? {} : { setback: num(r.setback) }), ...(r?.at === undefined ? {} : { at: num(r.at) }),
+  return (input as Record<string, unknown>[]).map((r) => ({ place: r?.place as Rail["place"], height: num(r?.height), ...(r?.lay === undefined ? {} : { lay: r.lay as "edge" | "flat" }), ...(r?.setback === undefined ? {} : { setback: num(r.setback) }), ...(r?.at === undefined ? {} : { at: num(r.at) }), ...(r?.atTop === undefined ? {} : { atTop: num(r.atTop) }), ...(Array.isArray(r?.topConfR) ? { topConfR: (r.topConfR as unknown[]).map(Number).filter(Number.isFinite) } : {}),
     ...(r?.fasten === false ? { fasten: false as const } : {}), ...(Array.isArray(r?.confY) ? { confY: (r.confY as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(num(r?.confDepth) > 0 ? { confDepth: num(r.confDepth) } : {}),
     ...(Array.isArray(r?.confZ) ? { confZ: (r.confZ as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(Array.isArray(r?.topConf) ? { topConf: (r.topConf as unknown[]).map(Number).filter(Number.isFinite) } : {}) }));
 }

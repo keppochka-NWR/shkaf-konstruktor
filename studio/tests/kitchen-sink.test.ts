@@ -51,7 +51,9 @@ test('recognize-common edgeRail: rear rail 1 mm from the back edge, front rail a
   const {edgeRail}=await import('../scripts/kitchen/recognize-common');
   assert.deepEqual(edgeRail({x0:16,y0:720,z0:1,x1:584,y1:820,z1:17},820,0,557),{place:'rear-top',height:100,setback:1});
   assert.deepEqual(edgeRail({x0:16,y0:760,z0:541,x1:584,y1:820,z1:557},820,0,557),{place:'front-top',height:60});
-  assert.deepEqual(edgeRail({x0:16,y0:550,z0:0,x1:584,y1:620,z1:16},820,0,557),{place:'rear-top',height:70,at:550});
+  // пакет 0: стяжка не у кромки в верхней половине корпуса — от верха (atTop = 820−620), в нижней — от пола (at)
+  assert.deepEqual(edgeRail({x0:16,y0:550,z0:0,x1:584,y1:620,z1:16},820,0,557),{place:'rear-top',height:70,atTop:200});
+  assert.deepEqual(edgeRail({x0:16,y0:150,z0:0,x1:584,y1:220,z1:16},820,0,557),{place:'rear-top',height:70,at:150});
 });
 
 test('Bazis k24: leg plate screws 3x3 only when the project has them; D3x3 holes in the bottom, no collisions',async()=>{

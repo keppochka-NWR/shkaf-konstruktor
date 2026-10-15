@@ -9,7 +9,9 @@
 //  - одна-две кухни (статистической опоры нет — это чтение конкретного проекта, не обобщение): кромка по кругу 33 / 2 (k11, k32),
 //    без кромки 15 / 1 (k23), верх боковин без кромки 9 / 2 (k03, k20), толстый передний торец 8 / 2 (k27, k29).
 import { parts, type Module } from "../../src/model";
+import { splitSides } from "../../src/kitchen";
 import type { RefModule } from "./compare";
+import { r1 } from "./recognize-common";
 
 const FASTENERS = ["конфирмат", "эксцентрик", "шкант", "полкодержатель"];
 
@@ -36,7 +38,11 @@ export function recognizeBaseExtras(ref: RefModule, m: Module, fronts: number): 
   if (sd && (k.role === "base" || k.role === "tall") && m.bottomType !== "none") { m.bottomUnder = true; k.sideDown = sd; notes.push(`${sd.side === "left" ? "левая" : "правая"} боковина опущена до ${sd.y0}, дно под другой — как в Базисе`); }
   if (hingePlateHoles(ref) === false) { k.plateHoles = false; notes.push("у петель нет наколок под планку — как в Базисе"); }
   const pts = irregularLegs(ref);
-  if (pts && k.legs) { k.legs = { ...k.legs, pts }; delete k.legs.xs; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`); }
+  if (pts && k.legs) {
+    // пакет 0: точки правой половины — от правого торца (ptsR), чтобы при смене ширины идти за правой боковиной (splitSides — одно правило)
+    const W = m.width, s = splitSides(pts, ([x]) => x, 0, W), pl = s.left, pr = s.right.map(([x, z]) => [r1(W - x), z] as [number, number]);
+    k.legs = { ...k.legs, ...(pl.length ? { pts: pl } : {}), ...(pr.length ? { ptsR: pr } : {}) }; delete k.legs.xs; delete k.legs.xr; delete k.legs.side; notes.push(`опоры не сеткой — ${pts.length} точек как в Базисе`);
+  }
   // фасад без петель под нишей техники (k03 m01, k06 m04: глухой «Фасад ящика»/«Дверь» под духовкой) — верх фасада ниже верха корпуса
   // на высоту ниши; с петлями не берём (k22 m06: петли считаются от двери, ниша — не зазор)
   const fg = faceGapsTB(ref, m.faceGap ?? 0, noHinges);

@@ -155,7 +155,11 @@ test('гвоздей нет в Базисе — студия их не став�
 test('стяжка навесного k03 m08 на крепеже Базиса: 2 конфирмата через боковину и 2 через крышу (rails[].confY/topConf — одно правило с нижними, слияние n4)',{skip:!has('k03')},()=>{
   const {m,c,ok}=pass('k03','m08');
   const rt=m.rails?.find(r=>r.place==='rear-top');
-  assert.deepEqual([rt?.confY,rt?.topConf],[[34,66],[60,508]]);
+  // пакет 0: конфирмат правой половины стяжки — от её правого конца (topConfR), при смене ширины остаётся у правой боковины
+  assert.deepEqual([rt?.confY,rt?.topConf,rt?.topConfR],[[34,66],[60],[60]]);
+  const tx=(mm:typeof m)=>parts(mm).filter(p=>p.id.startsWith('fast:rail:rear-top:top:')).map(p=>p.model?.origin?.[0]??p.position[0]).sort((a,b)=>a-b);
+  assert.deepEqual(tx(m),[76,524],'на исходной ширине — как в Базисе');
+  assert.deepEqual(tx({...m,width:m.width-100}),[76,424],'при −100 правый конфирмат идёт за правой боковиной');
   const row=c.hardware.find(h=>h.category==='конфирмат')!;
   assert.deepEqual([row.ref,row.studio],[14,14]);
   assert.equal(c.holes?.matched,c.holes?.ref);
@@ -178,9 +182,14 @@ test('бочонок эксцентрика крыши с наружной пл�
 
 test('стяжка на дне на эксцентриках и шкантах снизу, как в Базисе (k04 m08: kitchen.railUnder) — присадка 55/55',{skip:!has('k04')},()=>{
   const {m,c,ok}=pass('k04','m08');
-  assert.deepEqual(m.kitchen?.railUnder?.['front-bottom']??m.kitchen?.railUnder?.['rear-bottom'],{ecc:[65,353],dowel:[97,321],face:'front'});
+  // пакет 0: точки правой половины стяжки — от её правого конца (eccR/dowelR), при смене ширины остаются у правой боковины
+  assert.deepEqual(m.kitchen?.railUnder?.['front-bottom']??m.kitchen?.railUnder?.['rear-bottom'],{ecc:[65],dowel:[97],eccR:[65],dowelR:[97],face:'front'});
   const e=parts(m).filter(p=>p.id.startsWith('ecc:rail-under:')),d=parts(m).filter(p=>p.id.startsWith('dowel:rail-under:'));
   assert.deepEqual([e.length,d.length],[2,2]);
+  const rail=parts(m).find(p=>p.id.startsWith('rail:'))!,rx0=rail.position[0]-rail.size[0]/2;
+  assert.deepEqual(e.map(p=>Math.round(p.anchor![0]-rx0)).sort((a,b)=>a-b),[65,353],'эксцентрики на исходной ширине — как в Базисе (65 и 353 от левого конца)');
+  const n=parts({...m,width:m.width-100}),rn=n.find(p=>p.id.startsWith('rail:'))!;
+  assert.deepEqual(n.filter(p=>p.id.startsWith('ecc:rail-under:')).map(p=>Math.round(rn.position[0]+rn.size[0]/2-p.anchor![0])).sort((a,b)=>a-b),[65,253],'при −100 правый эксцентрик — в 65 от правого конца (левый — в 65 от левого: стяжка 318)');
   assert.ok(holes(m).filter(h=>h.src.startsWith('ecc:rail-under:')&&h.d===15).every(h=>h.dir[2]===-1&&h.depth===12),'бочонок с лицевой пласти стяжки');
   assert.deepEqual(partCollisions(parts(m),m),[]);
   assert.equal(c.holes?.matched,c.holes?.ref);
