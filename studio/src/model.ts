@@ -1416,7 +1416,8 @@ function hardwareParts(m: Module, out: Part[]) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     const pi = m.shelfPinInset ?? 40, sg = sh.material === "glass" ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap; // держатель — на грани стойки
     const pf = m.kitchen ? m.shelfPinInsetFront ?? pi : pi; // передние — свой отступ только у кухни Базиса
-    [[x - w / 2 + 4, z - dd / 2 + pi], [x + w / 2 - 4, z - dd / 2 + pi], [x - w / 2 + 4, z + dd / 2 - pf], [x + w / 2 - 4, z + dd / 2 - pf]].forEach(([px, pz], k) =>
+    const sL = m.kitchen?.pinSide?.left, sR = m.kitchen?.pinSide?.right; // пакет 3: у стойки свои места (k16 m03)
+    [[x - w / 2 + 4, z - dd / 2 + (sL?.[0] ?? pi)], [x + w / 2 - 4, z - dd / 2 + (sR?.[0] ?? pi)], [x - w / 2 + 4, z + dd / 2 - (sL?.[1] ?? pf)], [x + w / 2 - 4, z + dd / 2 - (sR?.[1] ?? pf)]].forEach(([px, pz], k) =>
       out.push({ ...metal(`shp:${sh.id}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, y - sh.size[1] / 2 - 3, pz], "fastener", sh.sectionId),
         // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
         model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));

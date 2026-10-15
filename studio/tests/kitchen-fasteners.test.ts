@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,initialModule,parseModule} from '../src/model';
-import {kitchenWall} from '../src/kitchen';
+import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon,underEccFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {railEccY} from '../scripts/kitchen/recognize-common';
+import {pinSides} from '../scripts/kitchen/recognize-base';
 
 // Пакет 3 (крепёж по Базису): стяжка на ребре на эксцентриках в боковины — rails[].eccY. Эталоны лежат вне репозитория — без них тесты по ним пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -176,3 +177,39 @@ for(const [k,key] of [['k27','m05'],['k28','m12']] as const)
     assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported,hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2)}));
     assert.equal(c.holes?.matched,c.holes?.ref);
   });
+// m_PINS: полкодержатели у левой и правой стойки на разных местах по глубине — kitchen.pinSide (k16 m03: левая 64,5/64,5)
+const baseShelves=()=>{const m=kitchenBase(initialModule(),575);m.sections[0].shelves=[0.4];m.shelfPinInset=43.5;m.shelfPinInsetFront=53.5;return m;};
+const pinZ=(m:ReturnType<typeof baseShelves>)=>{const ps=parts(m),sh=ps.find(p=>p.role==='shelf')!,z0=sh.position[2]-sh.size[2]/2,z1=sh.position[2]+sh.size[2]/2;
+  const at=(k:number)=>ps.find(p=>p.id===`shp:${sh.id}:${k}`)!.position[2];return {lr:Math.round((at(0)-z0)*10)/10,rr:Math.round((at(1)-z0)*10)/10,lf:Math.round((z1-at(2))*10)/10,rf:Math.round((z1-at(3))*10)/10};};
+
+test('pinSide: у левой стойки свои места полкодержателей, у правой — общее правило; от торцов полки при смене глубины',()=>{
+  const m=baseShelves();m.kitchen!.pinSide={left:[64.5,64.5]};
+  assert.deepEqual(validate(m),[]);
+  assert.deepEqual(pinZ(m),{lr:64.5,rr:43.5,lf:64.5,rf:53.5});
+  const d=baseShelves();d.kitchen!.pinSide={left:[64.5,64.5]};d.depth+=60;
+  assert.deepEqual(pinZ(d),{lr:64.5,rr:43.5,lf:64.5,rf:53.5},'отступы — от торцов полки');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.pinSide,{left:[64.5,64.5]});
+  const no=baseShelves();assert.deepEqual(pinZ(no),{lr:43.5,rr:43.5,lf:53.5,rf:53.5},'без поля — как раньше');
+  const bad=baseShelves();bad.kitchen!.pinSide={right:[5,50]};
+  assert.ok(validate(bad).some(e=>/Полкодержатели стойки/.test(e)));
+});
+
+test('pinSides: сторона берётся, только если на всех полках одинаково и отличается от правила больше 0,5; не пара на стойку — нет',()=>{
+  const sh=(y:number)=>({i:0,name:'Полка',mat:'',thick:16,kind:'ldsp',box:[17,y,4,558,y+16,549],axis:'y'});
+  const pin=(x:number,y:number,z:number)=>({i:0,name:'Полкодержатель',category:'полкодержатель',pos:[x,y,z]});
+  const ref=(pins:ReturnType<typeof pin>[])=>({key:'m',name:'',archetype:'base-doors',size:[575,840,566],panels:[sh(341),sh(582)],hardware:pins} as unknown as RefModule);
+  const lvl=(y:number)=>[pin(559,y,47.5),pin(559,y,495.5),pin(16,y,68.5),pin(16,y,484.5)];
+  assert.deepEqual(pinSides(ref([...lvl(341),...lvl(582)]),43.5,53.5),{left:[64.5,64.5]});
+  assert.equal(pinSides(ref([...lvl(341),pin(559,582,47.5),pin(559,582,495.5),pin(16,582,47.5),pin(16,582,495.5)]),43.5,53.5),undefined,'на разных полках по-разному — правила нет');
+  assert.equal(pinSides(ref([pin(559,341,47.5),pin(559,341,495.5),pin(16,341,47.8),pin(16,341,495.3)]),43.5,53.5),undefined,'≤ 0,5 — округление Базиса');
+  assert.equal(pinSides(ref([pin(559,341,47.5),pin(559,341,200),pin(559,341,495.5),pin(16,341,47.5),pin(16,341,495.5)]),43.5,53.5),undefined,'три держателя у стойки — не пара');
+});
+
+test('k16 m03: полкодержатели левой стойки 64,5/64,5 по проекту — PASS',{skip:!has('k16')},()=>{
+  const ref=load('k16','m03'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.pinSide,{left:[64.5,64.5]});
+  const err=validate(m),c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='полкодержатель')!;
+  assert.deepEqual([row.ref,row.studio,row.maxPosDelta],[8,8,0]);
+  assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported}));
+  assert.equal(c.holes?.matched,c.holes?.ref);
+});
