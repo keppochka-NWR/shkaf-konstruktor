@@ -95,9 +95,11 @@ export function frontOnConfirmats(ref: RefModule, h: HoodBoxSpec): boolean {
   return ref.hardware.some((q) => q.category === "конфирмат" && Math.abs(q.pos[2] - h.depth) < 0.6 && q.pos[0] > h.x0 - 1 && q.pos[0] < h.x1 + 1 && q.pos[1] > h.y0 && q.pos[1] < h.y1);
 }
 
-/** Поле kitchen.hoodBox из разбора Базиса: координаты в осях модуля (z — от задней кромки боковин sideZ0), конфирматы короба по проекту:
- *  с лица фронта в торцы стенок (от низа стенки), снизу из горизонтали и сверху в торцы стенок (от задней кромки стенки). */
-export function hoodBoxField(h: HoodBoxSpec, ref: RefModule, sideZ0: number): NonNullable<KitchenSpec["hoodBox"]> {
+/** Поле kitchen.hoodBox из разбора Базиса — правилами, не координатами (пакет 0): ширина по стенкам и смещение от центра модуля (x),
+ *  полка под/над коробом по номеру в секции и зазор до её поверхности (y; нет полки — дно/крыша: innerBottom/innerTop), z — от задней кромки
+ *  боковин sideZ0. Конфирматы короба по проекту: с лица фронта в торцы стенок (от низа стенки), снизу из горизонтали и сверху в торцы стенок
+ *  (от задней кромки стенки). */
+export function hoodBoxField(h: HoodBoxSpec, ref: RefModule, sideZ0: number, geo: { width: number; shelves: { y0: number; y1: number }[]; innerBottom: number; innerTop: number }): NonNullable<KitchenSpec["hoodBox"]> {
   const conf = ref.hardware.filter((q) => q.category === "конфирмат" && q.pos[0] > h.x0 - 1 && q.pos[0] < h.x1 + 1);
   const uniq = (v: number[]) => [...new Set(v.map(r1))].sort((a, b) => a - b);
   const front = uniq(conf.filter((q) => Math.abs(q.pos[2] - h.depth) < 0.6 && q.pos[1] > h.y0 && q.pos[1] < h.y1).map((q) => q.pos[1] - h.y0));
@@ -105,7 +107,11 @@ export function hoodBoxField(h: HoodBoxSpec, ref: RefModule, sideZ0: number): No
   const above = uniq(conf.filter((q) => Math.abs(q.pos[1] - (h.y1 + 16)) < 0.6).map((q) => q.pos[2] - h.wallZ[0]));
   const over = h.front.over.some((v) => Math.abs(v) > 0.05) ? { over: h.front.over } : {};
   const c = { ...(front.length ? { front } : {}), ...(below.length ? { below } : {}), ...(above.length ? { above } : {}) };
-  return { x0: h.x0, x1: h.x1, y0: h.y0, y1: h.y1, z0: r1(h.wallZ[0] - sideZ0), z1: r1(h.wallZ[1] - sideZ0), front: { mount: h.front.mount, ...over }, ...(Object.keys(c).length ? { conf: c } : {}) };
+  const dx = r1((h.x0 + h.x1) / 2 - geo.width / 2);
+  // полка, на которой короб стоит (её верх у низа стенок) и полка над ним (её низ у верха стенок) — иначе дно и крыша
+  const on = geo.shelves.findIndex((s) => Math.abs(s.y1 - h.y0) <= 5 && s.y1 <= h.y0 + 0.5), under = geo.shelves.findIndex((s) => Math.abs(s.y0 - h.y1) <= 5 && s.y0 >= h.y1 - 0.5);
+  const gapBelow = r1(h.y0 - (on >= 0 ? geo.shelves[on].y1 : geo.innerBottom)), gapAbove = r1((under >= 0 ? geo.shelves[under].y0 : geo.innerTop) - h.y1);
+  return { w: r1(h.x1 - h.x0), ...(dx ? { dx } : {}), ...(on >= 0 ? { on } : {}), ...(under >= 0 ? { under } : {}), gapBelow, gapAbove, z0: r1(h.wallZ[0] - sideZ0), z1: r1(h.wallZ[1] - sideZ0), front: { mount: h.front.mount, ...over }, ...(Object.keys(c).length ? { conf: c } : {}) };
 }
 
 /** Панели короба в эталоне (стенки и фронт) — чтобы распознаватель не считал их «не распознанными». */

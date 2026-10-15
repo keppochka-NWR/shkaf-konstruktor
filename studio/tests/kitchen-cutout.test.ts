@@ -100,7 +100,8 @@ test('k14 m03: планка 50 под дном распознана, конфи�
 
 test('короб под вытяжку (kitchen.hoodBox): стенки, фронт накладной со свесом, конфирматы по проекту и по правилу; вне корпуса — не строится',()=>{
   const m=initialModule();m.width=450;m.height=1040;m.depth=400;m.sections[0].shelves=[];m.sections[0].drawers=0;m.plinthHeight=0;
-  m.kitchen={role:'wall',hoodBox:{x0:119,x1:331,y0:323.5,y1:1023.5,z0:21,z1:253.5,front:{mount:'overlay'},conf:{front:[62,350,638],below:[52.2,180.2],above:[52.2,180.2]}}};
+  // правилами (пакет 0): ширина 212 по центру, от дна (верх дна 16) с зазором 307,5 до крыши (низ 1024) с зазором 0,5 → стенки 119–331 × 323,5–1023,5
+  m.kitchen={role:'wall',hoodBox:{w:212,gapBelow:307.5,gapAbove:0.5,z0:21,z1:253.5,front:{mount:'overlay'},conf:{front:[62,350,638],below:[52.2,180.2],above:[52.2,180.2]}}};
   const ps=parts(m),w=ps.find(p=>p.id==='hood:wall:left')!,f=ps.find(p=>p.id==='hood:front')!;
   assert.deepEqual([w.size,w.position],[[16,700,232.5],[127,673.5,137.25]]);
   assert.deepEqual([f.size,f.position],[[212,700,16],[225,673.5,261.5]]);
@@ -109,20 +110,26 @@ test('короб под вытяжку (kitchen.hoodBox): стенки, фрон
   assert.deepEqual(cf.find(p=>p.id==='fast:hood:left:front:1')!.model?.origin,[127,673.5,269.5],'головка на лице фронта');
   assert.deepEqual(cf.find(p=>p.id==='fast:hood:right:below:0')!.model?.origin,[323,307.5,73.2],'снизу через полку в торец стенки');
   // вкладной фронт между стенками; без conf — по правилу стыка (confirmatInset от концов, середина у стенки выше 600)
-  m.kitchen.hoodBox={x0:150,x1:450,y0:169,y1:542,z0:20,z1:220,front:{mount:'inset'}};m.width=600;m.height=558;m.depth=300;m.confirmatInset=40;
+  m.kitchen!.hoodBox={w:300,gapBelow:153,gapAbove:0,z0:20,z1:220,front:{mount:'inset'}};m.width=600;m.height=558;m.depth=300;m.confirmatInset=40; // стенки 150–450 × 169–542
   const ps2=parts(m),f2=ps2.find(p=>p.id==='hood:front')!;
   assert.deepEqual([f2.size,f2.position],[[268,373,16],[300,355.5,212]]);
   assert.deepEqual(ps2.filter(p=>p.id.startsWith('fast:hood:left:front:')).map(p=>p.model!.origin![1]),[209,502],'две точки у стенки 373');
-  // короб шире корпуса — не строится
-  m.kitchen.hoodBox={x0:0,x1:600,y0:169,y1:542,z0:20,z1:220,front:{mount:'inset'}};
+  // короб шире корпуса — не строится, и validate говорит об этом (не молча)
+  m.kitchen!.hoodBox={w:600,gapBelow:153,gapAbove:0,z0:20,z1:220,front:{mount:'inset'}};
   assert.equal(parts(m).find(p=>p.id.startsWith('hood:')),undefined);
-  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.hoodBox,{x0:0,x1:600,y0:169,y1:542,z0:20,z1:220,front:{mount:'inset'}});
+  assert.ok(validate(m).some(e=>/Короб вытяжки: стенки внутри корпуса/.test(e)));
+  // номер полки, которой нет — ошибка; смещение от центра, полка и зазоры переживают сохранение
+  m.kitchen!.hoodBox={w:300,dx:-50,on:0,gapBelow:1,gapAbove:0,z0:20,z1:220,front:{mount:'overlay',over:[1,2]}};
+  assert.ok(validate(m).some(e=>/Короб вытяжки: полка снизу/.test(e)));
+  m.sections[0].shelves=[0.3];assert.deepEqual(validate(m),[]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.hoodBox,m.kitchen!.hoodBox);
 });
 
 test('k24 m09 (навесной с коробом под вытяжку, фронт накладной, без полок): модуль построен функциями студии и сошёлся с Базисом — PASS',{skip:!existsSync(`${ETALON}/k24.json`)},()=>{
   const ref=load('k24','m09'),r=moduleFromEtalon(ref),m=r.module;
   assert.deepEqual(r.unsupported,[]);
-  assert.deepEqual(m.kitchen?.hoodBox,{x0:119,x1:331,y0:323.5,y1:1023.5,z0:21,z1:253.5,front:{mount:'overlay'},conf:{front:[62,350,638],below:[52.3,180.3],above:[52.3,180.3]}});
+  // правилами: ширина 212 по центру, стоит на жёсткой полке 0 без зазора, до крыши без зазора (Базис: стенки 119–331 × 323,5–1023,5)
+  assert.deepEqual(m.kitchen?.hoodBox,{w:212,on:0,gapBelow:0,gapAbove:0,z0:21,z1:253.5,front:{mount:'overlay'},conf:{front:[62,350,638],below:[52.3,180.3],above:[52.3,180.3]}});
   // k25 m16: фронт короба на эксцентриках и шкантах — параметрика ставит конфирматы, поэтому честно «не поддержано»
   const q=moduleFromEtalon(load('k25','m16'));
   assert.equal(q.module.kitchen?.hoodBox,undefined);assert.match(q.unsupported.join(';'),/фронт на эксцентриках/);

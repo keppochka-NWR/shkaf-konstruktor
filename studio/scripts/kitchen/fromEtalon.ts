@@ -416,7 +416,6 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
 
   const m: Module = { ...initialModule(), name: ref.name, width: r1(W), height: H, depth: d, decor: look.decor, facadeDecor: look.facadeDecor, sections: [section()] };
   m.kitchen = { role }; m.bazis = true; // из проекта Базиса (Module.bazis — единственный признак, isBazisModule): смета — без того, чего в Базисе нет (pricing.ts; n3-antresol)
-  if (hoodSimple) { m.kitchen.hoodBox = hoodBoxField(hoodSimple, ref, sideZ0); notes.push(`короб под вытяжку: стенки ${hoodSimple.x0}–${hoodSimple.x1}, фронт ${hoodSimple.front.mount === "overlay" ? "накладной" : "вкладной"}, конфирматы ${JSON.stringify(m.kitchen.hoodBox.conf ?? "по правилу")}`); }
   const sk = screwKind(ref0.hardware); if (sk) m.kitchen.confirmatName = sk; // по исходной категории Базиса: «Евровинт 6х50» в «прочем» (normalizeRefHardware переносит его в конфирматы)
   // опоры и дно
   let wr: WallRaise | null = null;
@@ -920,6 +919,8 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const fixed = noPins.filter((j) => !looseBare.includes(j));
     if (fixed.length) m.sections[0].fixed = fixed;
   }
+  // короб под вытяжку — правилами от полок/дна/крыши и центра модуля (после полок: номер полки под/над коробом)
+  if (hoodSimple) { m.kitchen.hoodBox = hoodBoxField(hoodSimple, ref, sideZ0, { width: m.width, shelves: sh.map((q) => q.b), innerBottom, innerTop }); notes.push(`короб под вытяжку: стенки ${hoodSimple.x0}–${hoodSimple.x1} (ширина ${m.kitchen.hoodBox.w}, от центра ${m.kitchen.hoodBox.dx ?? 0}, полка снизу ${m.kitchen.hoodBox.on ?? "дно"}, сверху ${m.kitchen.hoodBox.under ?? "крыша"}), фронт ${hoodSimple.front.mount === "overlay" ? "накладной" : "вкладной"}, конфирматы ${JSON.stringify(m.kitchen.hoodBox.conf ?? "по правилу")}`); }
   // пенал под холодильник (k25 m10): ХДФ в пазу только над жёсткой полкой, ниша под технику без задника (recognize-tall.ts)
   if (role === "tall" && m.backType === "groove" && m.kitchen.backTopGap !== undefined && back && bottom && back.b.y0 > bottom.b.y1 + 20) {
     const j = backFromShelfOf(back.b, sh.map((q) => q.b), m.sections[0].fixed ?? [], m.grooveClear ?? 0);

@@ -127,6 +127,23 @@ test('«Вернуть по правилу»: снимает xs, xr, pts и ptsR
   assert.ok(!legsFromBazis({back:70,front:70,side:100}));
 });
 
+test('короб вытяжки (пакет 1 на правилах пакета 0): ширина по стенкам и центр — от центра модуля, низ — от полки, верх — от крыши; при ±100 нет тихих пересечений с навесами и полкой; зеркало — знак dx и свес',()=>{
+  const m=kitchenWall(initialModule(),450);m.height=1040;m.depth=400;m.sections[0].shelves=[0.3];m.sections[0].fixed=[0];
+  m.kitchen!.hoodBox={w:212,on:0,gapBelow:0,gapAbove:0,z0:21,z1:253.5,front:{mount:'overlay'}};
+  const box=(mm:Module)=>{const ps=parts(mm);const l=ps.find(p=>p.id==='hood:wall:left')!,r=ps.find(p=>p.id==='hood:wall:right')!,sh=ps.find(p=>p.id.endsWith(':shelf:0'))!,top=ps.find(p=>p.id==='top')!;
+    return {x:[l.position[0]-8,r.position[0]+8],y0:l.position[1]-l.size[1]/2,y1:l.position[1]+l.size[1]/2,shelfTop:sh.position[1]+sh.size[1]/2,topBottom:top.position[1]-top.size[1]/2};};
+  const near=(a:number,b:number,msg?:string)=>assert.ok(Math.abs(a-b)<0.011,`${msg??''} ${a} ≠ ${b}`);
+  const b=box(m);assert.deepEqual(b.x,[119,331]);near(b.y0,b.shelfTop);near(b.y1,b.topBottom);
+  const w=box({...m,width:350});assert.deepEqual(w.x,[69,281],'ширина короба 212 — ширина вытяжки, по центру и после сужения');
+  const h=box({...m,height:1140});near(h.y0,h.shelfTop,'низ идёт за полкой');near(h.y1,h.topBottom,'верх — за крышей');
+  for(const mm of [m,{...m,width:350},{...m,width:550},{...m,height:940},{...m,height:1140}]){assert.deepEqual(validate(mm),[]);assert.deepEqual(partCollisions(parts(mm),mm).filter(c=>!c.bazis).map(c=>c.a+'×'+c.b),[]);}
+  // не помещается — честная ошибка, не молча пропавший короб
+  assert.ok(validate({...m,width:240}).some(e=>/Короб вытяжки/.test(e)));
+  const z=structuredClone(m);z.kitchen!.hoodBox!.dx=-10;z.kitchen!.hoodBox!.front.over=[2,0];mirrorKitchen(z);
+  assert.equal(z.kitchen!.hoodBox!.dx,10);assert.deepEqual(z.kitchen!.hoodBox!.front.over,[0,2]);mirrorKitchen(z);assert.deepEqual(z.kitchen!.hoodBox,{...m.kitchen!.hoodBox,dx:-10,front:{mount:'overlay',over:[2,0]}});
+  assert.deepEqual(rt(m).kitchen!.hoodBox,m.kitchen!.hoodBox,'поле переживает сохранение');
+});
+
 // Честный список исключений общего прогона: прогоны без ошибки validate, где после ±100 остаётся пересечение/потеря пометки.
 // Не поля пакета 0: газлифт против полки (положение полки — правило шкафа), число точек стыка при ширине 292 (правило kitchenJointPoints).
 const EXCEPTIONS=new Set(['k07/m07/height-100','k10/m10/width-100']);
