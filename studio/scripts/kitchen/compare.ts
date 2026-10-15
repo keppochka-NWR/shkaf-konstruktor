@@ -172,6 +172,20 @@ export function refCutArea(p: { figure?: boolean; contour?: number[][] }): numbe
   const { area, box } = polyArea(c), cut = box - area;
   return cut > 200 ? Math.round(cut) : 0;
 }
+/** Толщина кромки Базиса по сторонам детали: у фигурной детали на одной стороне бывают отрезки разной толщины (k10 m07 дно: зад 184 + 184
+ *  по 0,4 и дно выреза 200 по 0,5) — у студии одна толщина на сторону, поэтому сторона получает толщину с наибольшей суммарной длиной
+ *  (равные — последняя запись, как раньше). Записи без стороны и длины (пустые элементы Базиса) не учитываются. */
+export function wantEdges(edges: { side: string | null; thick: number; len?: number | null }[]): Record<string, number> {
+  const sum: Record<string, Record<number, number>> = {}, want: Record<string, number> = {};
+  for (const e of edges) {
+    if (!(e.thick > 0) || !(e.side || (e.len ?? 0) > 0)) continue;
+    const s = String(e.side), m = (sum[s] ??= {});
+    m[e.thick] = (m[e.thick] ?? 0) + (e.len ?? 0);
+    const cur = want[s];
+    if (cur === undefined || m[e.thick] >= m[cur]) want[s] = e.thick;
+  }
+  return want;
+}
 /** Вырезы детали студии, мм²: контур в плане (planContour) — по площади; Gola в боковине — есть (геометрию сверяет кромка выреза). */
 function studioCut(p: Part): number | "gola" {
   if (p.golaCuts?.length) return "gola";
@@ -320,7 +334,7 @@ export function compareModule(ref00: RefModule, m: Module, tol = 0.5): Compariso
     edgeCheck.checked++;
     // кромка на несуществующем элементе контура (k19 m05: elem 4 у прямоугольника из 4 элементов — без стороны и без длины) —
     // в Базисе это пустая запись, длины у неё нет; не сверяем
-    const want: Record<string, number> = {}; for (const e of rp.edges as { side: string | null; thick: number; len?: number | null }[]) if (e.thick > 0 && (e.side || (e.len ?? 0) > 0)) want[String(e.side)] = e.thick;
+    const want = wantEdges(rp.edges as { side: string | null; thick: number; len?: number | null }[]);
     const have = edgeByDir(sp), keys = new Set([...Object.keys(want), ...Object.keys(have)]);
     const diff = [...keys].filter((k) => Math.abs((want[k] ?? 0) - (have[k] ?? 0)) > 0.01);
     // длина кромки по стороне: у Базиса кромка — отрезками контура; сумма меньше стороны — вырез (Gola и т. п.), которого нет у прямоугольника студии
