@@ -6,7 +6,7 @@ import {kitchenWall} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
-import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {moduleFromEtalon,underEccFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {railEccY} from '../scripts/kitchen/recognize-common';
 
 // Пакет 3 (крепёж по Базису): стяжка на ребре на эксцентриках в боковины — rails[].eccY. Эталоны лежат вне репозитория — без них тесты по ним пропускаются.
@@ -124,3 +124,55 @@ test('k04 m05 (навесной 400×1000): нижняя задняя стяжк
   assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported,hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2)}));
   assert.equal(c.holes?.matched,c.holes?.ref);
 });
+
+// m_FAST: третий эксцентрик «боковина на дне» у задней кромки дна без шканта (kitchen.underEcc.extra) — по базе 8 от задней кромки
+// у обеих боковин (k27 m04, k27 m05, k28 m08) и у левой (k28 m12); пара стяжки — эксцентрики со своим шкантом
+const wallUnder=(depth=336)=>{const m=kitchenWall(initialModule(),500);m.height=750;m.depth=depth;m.kitchen!.hangers=false;m.bottomUnder=true;
+  m.jointFastening={'bottom:left':'eccentric','bottom:right':'eccentric'};m.dowels={offset:32};m.kitchen!.underEcc={back:82.5,front:61.5,extra:{left:[8],right:[8]}};return m;};
+
+test('underEcc.extra: эксцентрик без шканта в 8 от задней кромки дна у обеих боковин — D8×34 в торец боковины, D15×12 в пласть, D5×12 в дно',()=>{
+  const m=wallUnder(),ps=parts(m);
+  assert.deepEqual(validate(m),[]);
+  const bottom=ps.find(p=>p.id==='bottom')!,z0=bottom.position[2]-bottom.size[2]/2;
+  for(const s of ['left','right']){
+    const b=ps.find(p=>p.id===`ecc:under:${s}:x0`)!;assert.ok(b,'бочонок '+s);
+    assert.ok(ps.some(p=>p.id===`ecc:under:${s}:x0:pin`),'шток '+s);
+    assert.equal(Math.round((b.anchor![2]-z0)*10)/10,8);
+    assert.ok(!ps.some(p=>p.id===`dowel:under:${s}:x0`),'шканта у третьего нет');
+    const hs=holes(m,ps).filter(h=>h.src.startsWith(`ecc:under:${s}:x0`));
+    assert.deepEqual(hs.map(h=>[h.d,h.depth]).sort(),[[15,12],[5,12],[8,34]].sort());
+  }
+  assert.equal(ps.filter(p=>/^ecc:under:/.test(p.id)&&!p.id.endsWith(':pin')).length,6,'по 2 стяжки + 1 у каждой боковины');
+  assert.equal(ps.filter(p=>/^dowel:under:/.test(p.id)).length,4,'шканты только у пары');
+});
+
+test('underEcc.extra — правило «от задней кромки дна»: при смене глубины остаётся в 8 от неё; переживает сохранение; validate — в пределах дна',()=>{
+  const a=parts(wallUnder(336)),b=parts(wallUnder(400));
+  const off=(ps:ReturnType<typeof parts>)=>{const bt=ps.find(p=>p.id==='bottom')!;return Math.round((ps.find(p=>p.id==='ecc:under:left:x0')!.anchor![2]-(bt.position[2]-bt.size[2]/2))*10)/10;};
+  assert.equal(off(a),8);assert.equal(off(b),8);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(wallUnder()))).kitchen?.underEcc,{back:82.5,front:61.5,extra:{left:[8],right:[8]}});
+  const bad=wallUnder();bad.kitchen!.underEcc!.extra={left:[3]};
+  assert.ok(validate(bad).some(e=>/Эксцентрики дна у задней кромки/.test(e)));
+  const one=wallUnder();one.kitchen!.underEcc!.extra={left:[8]};
+  assert.ok(parts(one).some(p=>p.id==='ecc:under:left:x0')&&!parts(one).some(p=>p.id==='ecc:under:right:x0'),'только у левой');
+});
+
+test('underEccFromEtalon: пара — эксцентрики со шкантом, остальные — extra по сторонам; без шкантов при трёх — не берём',()=>{
+  const bottom={x0:0,y0:0,z0:0,x1:500,y1:16,z1:336},left={x0:0,y0:16,z0:0,x1:16,y1:750,z1:336},right={x0:484,y0:16,z0:0,x1:500,y1:750,z1:336};
+  const e=(x:number,z:number)=>({name:'Стяжка эксц. (компл.)',category:'эксцентрик',pos:[x,16,z]}),d=(x:number,z:number)=>({name:'Шкант 8х30 мм',category:'шкант',pos:[x,0,z]});
+  const hw=[e(0,274.5),e(0,82.5),e(0,8),e(500,274.5),e(500,82.5),e(500,8),d(8,114.5),d(8,242.5),d(492,114.5),d(492,242.5)];
+  assert.deepEqual(underEccFromEtalon(hw as never,bottom,left,right),{at:{back:82.5,front:61.5,extra:{left:[8],right:[8]}},sides:['left','right'],dowel:32});
+  const noDowels=hw.filter(h=>h.category!=='шкант');
+  assert.equal(underEccFromEtalon(noDowels as never,bottom,left,right),null);
+  const two=[e(0,274.5),e(0,82.5),e(500,274.5),e(500,82.5),d(8,114.5)];
+  assert.deepEqual(underEccFromEtalon(two as never,bottom,left,right)?.at,{back:82.5,front:61.5},'две стяжки — без extra, как раньше');
+});
+
+for(const [k,key] of [['k27','m05'],['k28','m12']] as const)
+  test(`${k} ${key}: эксцентрик у задней кромки дна по проекту — PASS`,{skip:!has(k)},()=>{
+    const ref=load(k,key),{module:m,unsupported}=moduleFromEtalon(ref);
+    assert.ok(m.kitchen?.underEcc?.extra?.left?.includes(8));
+    const err=validate(m),c=compareModule(ref,m);
+    assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported,hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2)}));
+    assert.equal(c.holes?.matched,c.holes?.ref);
+  });

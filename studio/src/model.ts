@@ -1175,6 +1175,13 @@ export function parts(m: Module): Part[] {
               out.at(-1)!.anchor = [x, yb, z + dz];
             }
           }
+          // пакет 3: эксцентрики без шканта у задней кромки дна (underEcc.extra, k27 m04/m05, k28 m08, k28 m12: 8 от задней кромки) — тот же стык
+          for (const [k, v] of (ue.extra?.[side] ?? []).entries()) {
+            const z = z0 + v;
+            add(`ecc:under:${side}:x${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [ox + inward * RULES.eccBarrelH / 2, yt + 34, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+            out.at(-1)!.anchor = [ox, yt, z];
+            add(`ecc:under:${side}:x${k}:pin`, "Эксцентрик D15 · шток", [7, 34, 7], [x, yt + 17, z], 34, 7, 7, "fastener", hp.sectionId, "metal");
+          }
           continue;
         }
         for (const [k, z] of jointPts(m, hp.id, side, z0, z0 + hp.size[2], z0 + hp.size[2] + (m.kitchen?.bottomFront ?? 0)).entries()) {

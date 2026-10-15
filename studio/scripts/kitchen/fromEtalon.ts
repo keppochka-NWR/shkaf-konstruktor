@@ -234,21 +234,29 @@ export function hangersFromEtalon(hardware: Hw[], leftInner: number, rightInner:
 
 /** Боковины стоят на дне (дно под боковинами) на эксцентриках: стяжка Базиса — на наружной пласти боковины на уровне верха дна
  *  (k16 m08–m10, k28 m10–m12, k31 m03/m04). Отступы стяжек от задней/передней кромки дна, стороны и отступ шкантов (по оси боковины, низ дна). */
-export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B): { at: { back: number; front: number }; sides: ("left" | "right")[]; dowel?: number } | null {
+export function underEccFromEtalon(hardware: Hw[], bottom: B, left: B, right: B): { at: { back: number; front: number; extra?: { left?: number[]; right?: number[] } }; sides: ("left" | "right")[]; dowel?: number } | null {
   const outer = { left: left.x0, right: right.x1 };
   const ecc = hardware.filter((h) => h.category === "эксцентрик" && Math.abs(h.pos[1] - bottom.y1) < 0.6);
   const bySide = (s: "left" | "right") => ecc.filter((h) => Math.abs(h.pos[0] - outer[s]) < 0.6);
-  // третий эксцентрик Базиса в углу (k28 m12: z=8 у левой боковины — ошибка проекта, не повторяем): боковина с той же парой стяжек, что
-  // у другой, тоже стоит на эксцентриках — иначе студия ставила там конфирматы, которых нет в Базисе, и они выходили в паз подсветки (n4-antresol)
-  const two = (["left", "right"] as const).filter((s) => bySide(s).length === 2);
-  const samePair = (s: "left" | "right") => two.length === 1 && s !== two[0] && bySide(s).length > 2 && bySide(two[0]).every((h) => bySide(s).some((g) => Math.abs(g.pos[2] - h.pos[2]) < 0.6));
-  const sides = (["left", "right"] as const).filter((s) => two.includes(s) || samePair(s));
+  const dowelsOf = (s: "left" | "right") => { const cx = s === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2; return hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[0] - cx) < 0.6); };
+  // пакет 3: третий эксцентрик Базиса у задней кромки дна (по базе: z=8 у обеих боковин — k27 m04, k27 m05, k28 m08; у левой — k28 m12)
+  // — такой же стык (D8×34 в торец боковины, D15×12 в наружную пласть, D5×12 в дно), но без шканта. Пара стяжки — эксцентрики со своим
+  // шкантом (≤ 40 по глубине, по оси боковины, низ дна); остальные — kitchen.underEcc.extra (мм от задней кромки дна по сторонам).
+  const pairOf = (s: "left" | "right") => {
+    const e = bySide(s);
+    if (e.length === 2) return e;
+    if (e.length < 3) return [];
+    const d = dowelsOf(s), withDowel = e.filter((h) => d.some((g) => Math.abs(g.pos[2] - h.pos[2]) > 1 && Math.abs(g.pos[2] - h.pos[2]) <= 40));
+    return withDowel.length === 2 ? withDowel : [];
+  };
+  const sides = (["left", "right"] as const).filter((s) => pairOf(s).length === 2);
   if (!sides.length) return null;
-  const pairOf = (s: "left" | "right") => two.includes(s) ? bySide(s) : bySide(s).filter((g) => bySide(two[0]).some((h) => Math.abs(g.pos[2] - h.pos[2]) < 0.6));
   const zs = sides.flatMap((s) => pairOf(s).map((h) => h.pos[2]));
-  const at = { back: r1(Math.min(...zs) - bottom.z0), front: r1(bottom.z1 - Math.max(...zs)) };
-  const e0 = pairOf(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0], cx = sides[0] === "left" ? (left.x0 + left.x1) / 2 : (right.x0 + right.x1) / 2;
-  const d0 = hardware.filter((h) => h.category === "шкант" && Math.abs(h.pos[1] - bottom.y0) < 0.6 && Math.abs(h.pos[0] - cx) < 0.6).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
+  const ex: { left?: number[]; right?: number[] } = {};
+  for (const s of sides) { const p = pairOf(s), x = bySide(s).filter((h) => !p.includes(h)).map((h) => r1(h.pos[2] - bottom.z0)).sort((a, c) => a - c); if (x.length) ex[s] = x; }
+  const at = { back: r1(Math.min(...zs) - bottom.z0), front: r1(bottom.z1 - Math.max(...zs)), ...(ex.left || ex.right ? { extra: ex } : {}) };
+  const e0 = pairOf(sides[0]).sort((a, c) => a.pos[2] - c.pos[2])[0];
+  const d0 = dowelsOf(sides[0]).sort((a, c) => Math.abs(a.pos[2] - e0.pos[2]) - Math.abs(c.pos[2] - e0.pos[2]))[0];
   return { at, sides: [...sides], ...(d0 ? { dowel: r1(Math.abs(d0.pos[2] - e0.pos[2])) } : {}) };
 }
 
