@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync,readFileSync,readdirSync} from 'node:fs';
 import {validate,parts,initialModule,facadeTop,section,parseModule} from '../src/model';
 import {kitchenWall,mirrorKitchen} from '../src/kitchen';
 import {holes} from '../src/drilling';
@@ -41,6 +41,17 @@ test('F_STACKED (k31 m18, m19): фасады выше боковин на 388,5 
 test('F_STACKED: пенал из двух корпусов (k30 m05: боковины 850, фасады до 2469, верхний ряд от 712) — не разрез, честно «не поддержано»',{skip:!has('k30')},()=>{
   const r=moduleFromEtalon(load('k30','m05'));
   assert.equal(r.module.kitchen?.faceTop,undefined);assert.ok(r.unsupported.some(u=>/выше боковин/.test(u)),r.unsupported.join('; '));
+});
+
+test('F_STACKED по всей базе: фасады выше боковин только у k31 m18/m19 (разрез) и k30 m05 (не поддержано) — правило не шире данных',{skip:!has('k01')},()=>{
+  const found:string[]=[];
+  for(const f of readdirSync(ETALON).filter(f=>/^k\d+\.json$/.test(f)).sort())
+    for(const ref of JSON.parse(readFileSync(`${ETALON}/${f}`,'utf8')).modules as RefModule[]){
+      let r;try{r=moduleFromEtalon(ref);}catch{continue;}
+      if(r.module.kitchen?.faceTop!==undefined&&r.module.kitchen.faceTop<0)found.push(f.slice(0,-5)+' '+ref.key+' разрез');
+      if(r.unsupported.some(u=>/выше боковин/.test(u)))found.push(f.slice(0,-5)+' '+ref.key+' не поддержано');
+    }
+  assert.deepEqual(found,['k30 m05 не поддержано','k31 m18 разрез','k31 m19 разрез']);
 });
 
 // F_PARTITION: навесной k31 m11 своими словами — 1000×795×320, ХДФ в паз, перегородка от задней кромки паза (20) до лица,
