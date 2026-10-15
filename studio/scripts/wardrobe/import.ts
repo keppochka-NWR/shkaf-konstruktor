@@ -20,6 +20,9 @@ import { packRows, splitWide } from "./pack";
 import { profileSection, snapToHolders } from "./profiles";
 import { panelExtras } from "../kitchen/rowWorktop";
 import { maskPersonal } from "./files";
+import { wardrobeFromEtalon, layoutWardrobe, type WRefModule } from "./fromEtalon";
+import { verdict, ETALON_W } from "./batch";
+import { place } from "../kitchen/buildKitchen";
 type CProf = { name: string; length: number; width?: number; trans: Trans; chain?: Trans[] };
 type CAsm = { name: string; trans?: Trans; panels?: (CPanel & { contour?: CElem[] })[]; subs?: CAsm[]; drills?: { name: string; chain?: Trans[] }[]; profiles?: CProf[] };
 type IndexRow = { path: string; sha: string; json: string; panels: number; kitchen_hits: unknown[]; kitchen_name: boolean };
@@ -114,12 +117,37 @@ const seen = new Set<string>();
 const picked = all.filter((r) => !(r.kitchen_hits?.length) && !r.kitchen_name && r.panels > 0 && !seen.has(r.sha) && seen.add(r.sha)).slice(0, LIMIT);
 console.log(`отобрано моделей: ${picked.length} (из ${all.length})`);
 if (!existsSync(OUTDIR)) mkdirSync(OUTDIR, { recursive: true });
-const index: { id: string; title: string; modules: number; panels: number; hardware?: number; size: string; packed?: boolean; error?: string }[] = [];
+const index: { id: string; title: string; modules: number; panels: number; hardware?: number; size: string; packed?: boolean; error?: string; parametric?: number }[] = [];
 
+/** Параметрический проект изделия wNNN: только если ВСЕ модули эталона прошли честную сверку (verdict.pass). Расстановка — place() кухонь
+ *  (p_world = origin + Ry(yaw)·p_mod), затем сдвиг всей сцены на отступ 300 от стен помещения. */
+function parametricProject(wid: string): { project: ReturnType<typeof newProject>; panels: number; size: string } | null {
+  const path = `${ETALON_W}/w${wid}.json`;
+  if (!existsSync(path)) return null;
+  const e = JSON.parse(readFileSync(path, "utf8")) as { modules: WRefModule[] };
+  if (!e.modules.length || !e.modules.every((ref) => verdict(`w${wid}`, ref).pass)) return null;
+  const placed = e.modules.map((ref) => place(ref, { ...wardrobeFromEtalon(ref).module, name: maskPersonal(ref.name).slice(0, 60) }));
+  const { size, room } = layoutWardrobe(placed, 300);
+  const p = newProject({ ...initialModule(), sections: [section()] });
+  p.room = { ...p.room, ...room, openings: [] };
+  p.modules = placed;
+  return { project: p, panels: e.modules.reduce((s, m) => s + m.panels.length, 0), size: size.map((v) => Math.round(v)).join("×") };
+}
+
+let parametricFiles = 0;
 picked.forEach((row, n) => {
   const wid = String(n + 1).padStart(3, "0");
   const parts = row.path.split(/[\\/]/), file = parts[parts.length - 1].replace(/\.b3d$/i, ""), folder = parts[parts.length - 2] ?? "";
   const title = maskPersonal(`${folder} · ${file}`).slice(0, 80);
+  // как у кухонь: изделие, все модули которого прошли честную сверку с эталоном (etalon-w/wNNN.json, honestPass), —
+  // параметрическое (построено функциями калькулятора); иначе — сырое, как раньше
+  const par = parametricProject(wid);
+  if (par) {
+    writeFileSync(`${OUTDIR}/wardrobe-${wid}.json`, JSON.stringify(par.project));
+    index.push({ id: wid, title, modules: par.project.modules.length, panels: par.panels, size: par.size, parametric: par.project.modules.length });
+    parametricFiles++;
+    return;
+  }
   try {
     const doc = JSON.parse(readFileSync(row.json, "utf8")) as { assemblies?: CAsm[] };
     const top = doc.assemblies ?? [];
@@ -198,4 +226,5 @@ console.log(`профилей ${STATS.profiles}: нарисовано ${STATS.pr
 for (const [n, c] of [...STATS.profilesSkipped].sort((a, b) => b[1] - a[1])) console.log(`  не нарисован: ${c} × ${n}`);
 console.log(`поворот фурнитуры против матрицы Базиса: сверено ${STATS.quatChecked}, расходится ${STATS.quatBad}`);
 for (const [n, c] of [...STATS.quatBadNames].sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`  поворот ≠ Базису: ${c} × ${n}`);
+console.log(`параметрических изделий (все модули PASS по эталону etalon-w): ${parametricFiles}, сырых ${index.length - parametricFiles}`);
 console.log(`готово: ${index.length} проектов, с ошибками ${bad}; модулей ${index.reduce((s, x) => s + x.modules, 0)}, панелей ${index.reduce((s, x) => s + x.panels, 0)}`);
