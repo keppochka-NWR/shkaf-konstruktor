@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {parts,initialModule,section,validate,type Module,type Part} from '../src/model';
 import {compareModule} from '../scripts/kitchen/compare';
 import {wardrobeFromEtalon,type WRefModule,type WRefPanel} from '../scripts/wardrobe/fromEtalon';
-import {reasonKey} from '../scripts/wardrobe/batch';
+import {reasonKey,ETALON_W} from '../scripts/wardrobe/batch';
+import {existsSync,readFileSync} from 'node:fs';
 
 // Шкафы, этап 1: распознаватель эталона шкафа Базиса (Кухни/etalon-w) → модуль шкафа студии. Правила шкафов студии не меняются —
 // поэтому шкаф, построенный самой студией и переписанный в формат эталона, должен распознаться обратно в те же детали.
@@ -49,4 +50,20 @@ test('свод причин: коды W_*, пределы и кромка сту
   assert.equal(reasonKey('кромка: Бок: -y Базис 0 / студия 0.4'), 'S_EDGE_HIDDEN');
   assert.equal(reasonKey('конфирмат 8/12 Δ15'), 'H_конфирмат');
   assert.equal(reasonKey('нет 2: ldsp/16/z/корпус'), 'G_MISSING');
+});
+// Эталоны шкафов (Кухни/etalon-w, строит Кухни/scripts/etalon_wardrobe.py) — вне git; проверка полноты, если они есть на машине.
+const STATS = `${ETALON_W}/_stats.json`;
+test('эталон шкафов не теряет фурнитуру: все сверловки и профили corpus — в модулях или в row.hardware (сборки без панелей)', {skip: !existsSync(STATS)}, () => {
+  const st = JSON.parse(readFileSync(STATS, 'utf8')) as Record<string, {counts?: Record<string, number>; error?: string}>;
+  const files = Object.entries(st).filter(([, x]) => x.counts);
+  assert.ok(files.length >= 271, `файлов ${files.length}`);
+  for (const [w, x] of files) {
+    const c = x.counts!;
+    assert.equal(c.hw_lost ?? NaN, 0, `${w}: потеряно ${c.hw_lost}`);
+    assert.equal((c.hardware ?? 0) + (c.orphan_far_hw ?? 0), (c.drills_src ?? 0) + (c.profiles_src ?? 0), w);
+  }
+  // находки критика: w119 — две сборки «Направ. шарик. Versalite» (18 сверловок), w188 — сборка с 3 профилями
+  const hw = (w: string) => (JSON.parse(readFileSync(`${ETALON_W}/${w}.json`, 'utf8')) as {modules: WRefModule[]}).modules.flatMap((m) => m.hardware as {kit?: string; node?: string}[]);
+  assert.equal(hw('w119').filter((h) => /Versalite/.test(h.kit ?? '')).length, 18);
+  assert.equal(hw('w188').filter((h) => h.node === 'profile').length, 3);
 });
