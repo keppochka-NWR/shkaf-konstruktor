@@ -81,9 +81,21 @@ export function railTopConf(b: Box, hardware: Hw[], hz?: Box): Pick<Rail, "topCo
 /** Крепёж стяжки на ребре по проекту Базиса — одно правило для нижних, навесных и антресолей (слияние n4-base railConfY, n4-wall railConf,
  *  n4-antresol railConfirmats):
  *  confY — конфирматы через боковины (Module.rails[].confY), topConf — через крышу/дно (rails[].topConf). Без полей — правило студии. */
-export function railConf(b: Box, hardware: Hw[], xL: number, xR: number, hz?: Box): Pick<Rail, "confY" | "topConf" | "topConfR"> {
-  const confY = railConfY(b, hardware, xL, xR), topConf = railTopConf(b, hardware, hz);
-  return { ...(confY ? { confY } : {}), ...(topConf ?? {}) };
+export function railConf(b: Box, hardware: Hw[], xL: number, xR: number, hz?: Box, inner?: [number, number]): Pick<Rail, "confY" | "topConf" | "topConfR" | "eccY"> {
+  const confY = railConfY(b, hardware, xL, xR), topConf = railTopConf(b, hardware, hz), eccY = inner ? railEccY(b, hardware, inner[0], inner[1]) : undefined;
+  return { ...(confY ? { confY } : {}), ...(topConf ?? {}), ...(eccY ? { eccY } : {}) };
+}
+
+/** Пакет 3: стяжка на ребре на эксцентриках в боковины — высоты от низа стяжки (точка эксцентрика Базиса — на внутренней пласти
+ *  боковины xLi/xRi внутри полосы стяжки, не на её кромках). По всем 34 кухням: 308 стяжек на ребре между боковинами, на эксцентриках 3
+ *  (k04 m05 — по одному на 50 у стяжки 100, k04 m07 — только слева, k03 m12 — 34 и 66 вместе с конфирматами). Берём, только если слева
+ *  и справа одинаково; иначе undefined (правило студии). */
+export function railEccY(b: Box, hardware: Hw[], xLi: number, xRi: number): number[] | undefined {
+  const inBand = (h: Hw) => h.category === "эксцентрик" && h.pos[1] > b.y0 + 5 && h.pos[1] < b.y1 - 5 && h.pos[2] >= b.z0 - 1 && h.pos[2] <= b.z1 + 1;
+  const ys = (f: (h: Hw) => boolean) => hardware.filter((h) => inBand(h) && f(h)).map((h) => r1(h.pos[1] - b.y0)).sort((a, c) => a - c);
+  const L = ys((h) => Math.abs(h.pos[0] - xLi) < 1), R = ys((h) => Math.abs(h.pos[0] - xRi) < 1);
+  if (!L.length || L.length !== R.length || L.some((v, i) => Math.abs(v - R[i]) > 0.6)) return undefined;
+  return L;
 }
 
 /** Служебные сквозные отверстия проекта Базиса — как в Базисе (k28 m14: «10» из комплекта «Наполнение корпуса (Крыша)» — D10 насквозь

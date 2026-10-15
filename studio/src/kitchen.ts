@@ -792,6 +792,8 @@ export function kitchenErrors(m: Module): string[] {
     if (k.raise && (m.feet || (k.raise.front !== undefined && (!Number.isFinite(k.raise.front) || k.raise.front < 0 || k.raise.front > m.depth - 16)))) e.push("Подъём дна навесного: без опор, панель под дном в пределах глубины корпуса.");
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m));
+    // пакет 3: эксцентрики стяжки на ребре в боковины (rails[].eccY) — бочонок Ø15 целиком в высоте стяжки (8 мм от её кромок)
+    if ((m.rails ?? []).some((r) => r && r.eccY && (r.lay === "flat" || r.eccY.some((v) => !Number.isFinite(v) || v < 8 || v > r.height - 8)))) e.push("Эксцентрики стяжки: только у стяжки на ребре, 8 мм от её кромок.");
     // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
     if (k.legs) {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
@@ -952,6 +954,7 @@ export function parseRails(input: unknown): Rail[] {
   if (!Array.isArray(input)) return [];
   return (input as Record<string, unknown>[]).map((r) => ({ place: r?.place as Rail["place"], height: num(r?.height), ...(r?.lay === undefined ? {} : { lay: r.lay as "edge" | "flat" }), ...(r?.setback === undefined ? {} : { setback: num(r.setback) }), ...(r?.at === undefined ? {} : { at: num(r.at) }), ...(r?.atTop === undefined ? {} : { atTop: num(r.atTop) }), ...(Array.isArray(r?.topConfR) ? { topConfR: (r.topConfR as unknown[]).map(Number).filter(Number.isFinite) } : {}),
     ...(r?.fasten === false ? { fasten: false as const } : {}), ...(Array.isArray(r?.confY) ? { confY: (r.confY as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(num(r?.confDepth) > 0 ? { confDepth: num(r.confDepth) } : {}),
+    ...(Array.isArray(r?.eccY) ? { eccY: (r.eccY as unknown[]).map(Number).filter(Number.isFinite) } : {}), // пакет 3: эксцентрики стяжки в боковины
     ...(Array.isArray(r?.confZ) ? { confZ: (r.confZ as unknown[]).map(Number).filter(Number.isFinite) } : {}), ...(Array.isArray(r?.topConf) ? { topConf: (r.topConf as unknown[]).map(Number).filter(Number.isFinite) } : {}) }));
 }
 

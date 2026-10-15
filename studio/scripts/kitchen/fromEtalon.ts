@@ -7,7 +7,7 @@ import { hingePositions } from "../../src/hardware";
 import { proudSideFront, type RefModule, type RefPanel } from "./compare";
 import { jointPointsRule, fastenersMode, kitchenEndsRule, nearRight, sideDists, type KitchenRole } from "../../src/kitchen";
 import { AXIS_BACK, FIRMAX, VERSALITE, MODERN, firmaxConf, type AxisDrawer, type FirmaxBox, type KDrawer, type VersaliteLen } from "../../src/kitchenDrawers";
-import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
+import { edgeRail, golaTies, isEuro6, legScrews, outConfirmats, railConf, railConfZ, railEccY, railFastened, screwKind, serviceHoles, sideTopEdged } from "./recognize-common";
 import { cornerFillerSink, faceFillerFlat } from "./recognize-sink";
 import { sideStripOf, shiftRefX } from "./recognize-fillers";
 import { dupPartsFromEtalon, shelfAtFromEtalon, topBackTall, planContoursFromEtalon, backFromShelfOf, doorsAboveDrawers } from "./recognize-tall";
@@ -506,7 +506,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // не строит — «не поддержано» (критик n4-antresol)
     if (wallRailOnBottom(role, r, bottom)) {
       const place = front ? "front-bottom" : "rear-bottom", fx = railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
-      railList.push({ place, height: r1(r.b.y1 - r.b.y0), ...(fx ? {} : { fasten: false as const }) });
+      // пакет 3: эксцентрики в боковины на высоте стяжки (k04 m05) — своё поле rails[].eccY, конфирматов тогда нет (fasten не нужен)
+      const ey = fastenersMode(m.kitchen) !== "pins" ? railEccY(r.b, ref.hardware, left.b.x1, right.b.x0) : undefined;
+      railList.push({ place, height: r1(r.b.y1 - r.b.y0), ...(fx ? {} : ey ? {} : { fasten: false as const }), ...(ey ? { eccY: ey } : {}) });
+      if (ey) notes.push(`стяжка ${place} на эксцентриках в боковины на ${ey.join(", ")} от её низа — как в Базисе`);
       const ru = bottom ? railUnder(ref.hardware, r.b, bottom.b) : undefined; if (ru) m.kitchen.railUnder = { ...m.kitchen.railUnder, [place]: ru }; // эксцентрики и шканты снизу (n4-wall)
       // эксцентрики и шканты стяжки в дно, которых railUnder не повторяет (k04 m05: 6 эксцентриков у Базиса, railUnder — 2 из них)
       const inRail = ref.hardware.filter((h) => /эксцентрик|шкант/.test(h.category) && h.pos[0] > left.b.x1 && h.pos[0] < right.b.x0 && h.pos[1] >= r.b.y0 - 1 && h.pos[1] <= r.b.y1 + 1 && h.pos[2] >= r.b.z0 - 1 && h.pos[2] <= r.b.z1 + 1).length;
@@ -518,7 +521,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // railConf для нижних, навесных и антресолей (слияние n4-base railConfY и n4-wall railConf)
     const fastened = role !== "base" || railFastened(r.b, ref.hardware, left.b.x0, right.b.x1);
     const hz = topPanel && Math.abs(topPanel.b.y0 - r.b.y1) < 0.6 ? topPanel.b : bottom && Math.abs(bottom.b.y1 - r.b.y0) < 0.6 ? bottom.b : undefined;
-    const rc = fastened && fastenersMode(m.kitchen) !== "pins" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz) : {};
+    const rc = fastened && fastenersMode(m.kitchen) !== "pins" ? railConf(r.b, ref.hardware, left.b.x0, right.b.x1, hz, [left.b.x1, right.b.x0]) : {};
     railList.push({ ...edgeRail(r.b, top, sideZ0, sideZ1), ...(fastened ? {} : { fasten: false as const }), ...rc });
   }
   if (railList.length) m.rails = railList;

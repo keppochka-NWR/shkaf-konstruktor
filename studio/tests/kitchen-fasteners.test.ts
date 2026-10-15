@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {existsSync,readFileSync} from 'node:fs';
+import {validate,parts,initialModule,parseModule} from '../src/model';
+import {kitchenWall} from '../src/kitchen';
+import {holes} from '../src/drilling';
+import {partCollisions} from '../src/collisions';
+import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
+import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {railEccY} from '../scripts/kitchen/recognize-common';
+
+// Пакет 3 (крепёж по Базису): стяжка на ребре на эксцентриках в боковины — rails[].eccY. Эталоны лежат вне репозитория — без них тесты по ним пропускаются.
+const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
+const has=(k:string)=>existsSync(`${ETALON}/${k}.json`);
+const load=(k:string,key:string)=>(JSON.parse(readFileSync(`${ETALON}/${k}.json`,'utf8')).modules as RefModule[]).find(m=>m.key===key)!;
+
+const wallWithRail=(w=600)=>{const m=kitchenWall(initialModule(),w);m.height=720;m.kitchen!.hangers=false;m.rails=[{place:'rear-bottom',height:100,eccY:[50]}];return m;};
+
+test('стяжка на ребре на эксцентриках в боковины (rails[].eccY): бочонок с внутренней пласти в 34 от боковины, шток в торец, D5 в боковину; конфирматов нет',()=>{
+  const m=wallWithRail();
+  assert.deepEqual(validate(m),[]);
+  const ps=parts(m),rail=ps.find(p=>p.id==='rail:rear-bottom')!;
+  assert.ok(rail,'стяжка построена');
+  const barrels=ps.filter(p=>/^ecc:rail:rear-bottom:(left|right):0$/.test(p.id)),pins=ps.filter(p=>/^ecc:rail:rear-bottom:(left|right):0:pin$/.test(p.id));
+  assert.equal(barrels.length,2);assert.equal(pins.length,2);
+  assert.ok(!ps.some(p=>p.id.startsWith('fast:rail:rear-bottom')),'конфирматов в стяжку нет');
+  const y=rail.position[1]-rail.size[1]/2+50,zf=rail.position[2]+rail.size[2]/2; // задняя стяжка: внутренняя пласть — передняя (+z)
+  const L=barrels.find(p=>p.id.includes(':left:'))!;
+  assert.equal(Math.round(L.position[0]*10)/10,16+34);assert.equal(Math.round(L.position[1]*10)/10,Math.round(y*10)/10);
+  assert.deepEqual(L.anchor?.map(v=>Math.round(v*10)/10),[16,Math.round(y*10)/10,Math.round(zf*10)/10]);
+  // присадка: D15×12 с пласти стяжки внутрь (−z), D8×34 в торец стяжки (+x), D5×12 в боковину (−x) — все по одной высоте
+  const hs=holes(m,ps).filter(h=>h.src.startsWith('ecc:rail:rear-bottom:left:0'));
+  const at=(id:string)=>hs.find(h=>h.src===id)!;
+  assert.deepEqual([at('ecc:rail:rear-bottom:left:0').d,at('ecc:rail:rear-bottom:left:0').depth,at('ecc:rail:rear-bottom:left:0').dir],[15,12,[0,0,-1]]);
+  assert.deepEqual(at('ecc:rail:rear-bottom:left:0').at.map(v=>Math.round(v*10)/10),[50,Math.round(y*10)/10,Math.round(zf*10)/10]);
+  assert.deepEqual([at('ecc:rail:rear-bottom:left:0:pin').d,at('ecc:rail:rear-bottom:left:0:pin').depth,at('ecc:rail:rear-bottom:left:0:pin').dir],[8,34,[1,0,0]]);
+  assert.deepEqual([at('ecc:rail:rear-bottom:left:0:side').d,at('ecc:rail:rear-bottom:left:0:side').depth,at('ecc:rail:rear-bottom:left:0:side').dir],[5,12,[-1,0,0]]);
+  assert.equal(Math.round(at('ecc:rail:rear-bottom:left:0:pin').at[2]*10)/10,Math.round((zf-rail.size[2]/2)*10)/10,'шток — по середине толщины стяжки');
+  assert.ok(!partCollisions(ps,m).some(c=>/ecc:rail/.test(c.a)||/ecc:rail/.test(c.b)),'эксцентрики стяжки ничего не пересекают');
+});
+
+test('eccY — правило «от низа стяжки»: при смене ширины эксцентрики остаются у боковин, при смене высоты — на стяжке; сохраняется в проекте',()=>{
+  const m=wallWithRail(600),w=wallWithRail(700);
+  const R=(x:ReturnType<typeof parts>)=>x.find(p=>p.id==='ecc:rail:rear-bottom:right:0')!;
+  assert.equal(Math.round((R(parts(w)).position[0]-R(parts(m)).position[0])*10)/10,100);
+  assert.equal(Math.round(parts(m).find(p=>p.id==='ecc:rail:rear-bottom:left:0')!.position[0]*10)/10,Math.round(parts(w).find(p=>p.id==='ecc:rail:rear-bottom:left:0')!.position[0]*10)/10);
+  const h=wallWithRail();h.height=820;
+  const rail=parts(h).find(p=>p.id==='rail:rear-bottom')!,e=parts(h).find(p=>p.id==='ecc:rail:rear-bottom:left:0')!;
+  assert.equal(Math.round((e.position[1]-(rail.position[1]-rail.size[1]/2))*10)/10,50);
+  assert.deepEqual(validate(h),[]);
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.deepEqual(back.rails?.[0]?.eccY,[50],'eccY переживает сохранение');
+  assert.ok(!(initialModule().rails??[]).some(r=>r.eccY),'шкаф студии — без eccY');
+});
+
+test('validate: эксцентрики стяжки только у стяжки на ребре и в 8 мм от её кромок',()=>{
+  const a=wallWithRail();a.rails=[{place:'rear-bottom',height:100,eccY:[4]}];
+  assert.ok(validate(a).some(e=>/Эксцентрики стяжки/.test(e)));
+  const b=wallWithRail();b.rails=[{place:'rear-bottom',height:100,eccY:[96]}];
+  assert.ok(validate(b).some(e=>/Эксцентрики стяжки/.test(e)));
+  const c=wallWithRail();c.rails=[{place:'rear-top',height:100,lay:'flat',eccY:[50]}];
+  assert.ok(validate(c).some(e=>/Эксцентрики стяжки/.test(e)));
+});
+
+test('railEccY: эксцентрики на внутренней пласти боковин внутри полосы стяжки, одинаково слева и справа; иначе undefined',()=>{
+  const b={x0:16,y0:16,z0:0,x1:384,y1:116,z1:16};
+  const hw=(pts:number[][])=>pts.map(([x,y,z])=>({name:'Эксцентрик',category:'эксцентрик',pos:[x,y,z]}));
+  assert.deepEqual(railEccY(b,hw([[16,66,8],[384,66,8]]),16,384),[50]);
+  assert.deepEqual(railEccY(b,hw([[16,50,8],[16,82,8],[384,50,8],[384,82,8]]),16,384),[34,66]);
+  assert.equal(railEccY(b,hw([[16,66,8]]),16,384),undefined,'только слева — правило студии');
+  assert.equal(railEccY(b,hw([[16,16,8],[384,16,8]]),16,384),undefined,'на кромке стяжки — это крепёж дна (railUnder), не стяжки');
+  assert.equal(railEccY(b,hw([[0,66,8],[400,66,8]]),16,384),undefined,'на наружной пласти — не стык стяжки');
+});
+
+test('k04 m05 (навесной 400×1000): нижняя задняя стяжка на эксцентриках в боковины по проекту — PASS',{skip:!has('k04')},()=>{
+  const ref=load('k04','m05'),{module:m,unsupported}=moduleFromEtalon(ref);
+  const r=m.rails?.find(x=>x.place==='rear-bottom');
+  assert.deepEqual(r?.eccY,[50]);assert.notEqual(r?.fasten,false);
+  const err=validate(m),c=compareModule(ref,m);
+  assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported,hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2)}));
+  assert.equal(c.holes?.matched,c.holes?.ref);
+});

@@ -219,6 +219,7 @@ export type Module = {
    *  lay 'flat' — лёжа, как царги кухонных низов Базиса (ширина height в глубину, заподлицо с верхом); setback — утопание от фронта (под Gola). */
   rails?: { place: "rear-bottom" | "rear-top" | "front-bottom" | "front-top"; height: number; lay?: "edge" | "flat"; setback?: number; at?: number; /** кухни Базиса: false — без конфирматов (k21 m02: передняя стяжка мойки без крепежа в проекте) */ fasten?: false; /** кухни Базиса: высоты конфирматов стяжки на ребре через боковины от её низа, если в проекте не один по центру (k01 m03, k03 m08: 34 и 66
      *  у стяжки 100); [] — в боковинах конфирматов нет */ confY?: number[];
+    /** кухни Базиса (пакет 3): стяжка на ребре на эксцентриках в боковины — высоты от её низа (k04 m05: один на 50 у стяжки 100; бочонок с внутренней пласти стяжки) */ eccY?: number[];
     /** кухни Базиса: царга лёжа — конфирматы через боковины в её торец, мм от задней кромки царги, если в проекте не один посередине
      *  (k27 m02: 21,5 у царги 60; k01 m01/m02/m04 — 34 и 66 у царги 100; по базе посередине — 97 из 102) */ confZ?: number[];
     /** кухни Базиса: глубина D5 конфирматов в торец царги, если не как у корпуса (k31 m16: передняя 35 при 42) */ confDepth?: number;
@@ -1239,6 +1240,18 @@ export function parts(m: Module): Part[] {
     // кухня Базиса: стяжка на ребре со своими высотами конфирматов из проекта (rails[].confY: k01 m03, k03 m08 — 34 и 66 у стяжки 100;
     // [] — в боковинах их нет, как в Базисе), иначе один по центру. Одно правило для нижних, навесных и антресолей (n4-base, n4-wall)
     const spec = m.kitchen && r.size[1] !== t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay !== "flat") : undefined;
+    // пакет 3: стяжка на ребре на эксцентриках в боковины (rails[].eccY, k04 m05 — по базе 3 стяжки из 308): бочонок с внутренней
+    // (обращённой в корпус) пласти стяжки в 34 от боковины, шток в торец стяжки, D5 в боковину (drilling «ecc:rail:»); конфирматов нет
+    if (spec?.eccY?.length) {
+      const zIn = r.id.startsWith("rail:rear") ? 1 : -1, y0 = r.position[1] - r.size[1] / 2;
+      for (const [side, edgeX, dir] of [["left", r.position[0] - r.size[0] / 2, 1], ["right", r.position[0] + r.size[0] / 2, -1]] as const)
+        spec.eccY.forEach((v, k) => {
+          add(`ecc:rail:${r.id.slice(5)}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelD, RULES.eccBarrelD, RULES.eccBarrelH], [edgeX + dir * RULES.eccCenter, y0 + v, r.position[2] + zIn * (r.size[2] / 2 - RULES.eccBarrelH / 2 + 0.3)], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", r.sectionId, "metal");
+          out.at(-1)!.anchor = [edgeX, y0 + v, r.position[2] + zIn * r.size[2] / 2]; // точка Базиса — на внутренней пласти стяжки
+          add(`ecc:rail:${r.id.slice(5)}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [RULES.eccCenter + t / 2, 7, 7], [edgeX + dir * (RULES.eccCenter - t / 2) / 2, y0 + v, r.position[2]], RULES.eccCenter + t / 2, 7, 7, "fastener", r.sectionId, "metal");
+        });
+      continue;
+    }
     const ys = spec?.confY ? spec.confY.map((v) => r.position[1] - r.size[1] / 2 + v) : [r.position[1]];
     // царга лёжа со своими точками конфирматов по глубине из проекта (rails[].confZ, k27 m02) — в них, без поиска места
     const flat = m.kitchen && r.size[1] === t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay === "flat") : undefined;
