@@ -1,6 +1,7 @@
 // Общие правила распознавания модулей Базиса (кухни), которыми пользуются разные архетипы (мойки, нижние распашные, ящики…).
 // Функции маленькие и чистые: на вход — коробки панелей эталона, на выход — параметры модуля студии. Правила — по статистике 34 кухонь.
 import type { Module } from "../../src/model";
+import { sideDists } from "../../src/kitchen";
 
 export const r1 = (v: number) => Math.round(v * 10) / 10;
 export type Box = { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number };
@@ -72,8 +73,8 @@ export function railTopConf(b: Box, hardware: Hw[], hz?: Box): Pick<Rail, "topCo
   const yo = hz.y0 >= b.y1 - 0.5 ? hz.y1 : hz.y0; // наружная пласть крыши (над стяжкой) или дна (под ней)
   const xs = hardware.filter((h) => isConf(h) && h.pos[2] >= b.z0 - 0.5 && h.pos[2] <= b.z1 + 0.5 && Math.abs(h.pos[1] - yo) < 0.6 && h.pos[0] > b.x0 + 0.5 && h.pos[0] < b.x1 - 0.5).map((h) => h.pos[0]);
   if (!xs.length) return undefined;
-  // пакет 0: левая половина стяжки — от левого конца (topConf), правая — от правого (topConfR): переживают смену ширины
-  const mid = (b.x0 + b.x1) / 2, l = xs.filter((x) => x <= mid).map((x) => r1(x - b.x0)).sort((a, c) => a - c), r = xs.filter((x) => x > mid).map((x) => r1(b.x1 - x)).sort((a, c) => a - c);
+  // пакет 0: левая половина стяжки — от левого конца (topConf), правая — от правого (topConfR): переживают смену ширины (sideDists — одно правило)
+  const { left: l, right: r } = sideDists(xs, b.x0, b.x1);
   return { ...(l.length ? { topConf: l } : {}), ...(r.length ? { topConfR: r } : {}) };
 }
 

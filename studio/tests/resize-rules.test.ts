@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync} from 'node:fs';
 import {initialModule,parseModule,parts,validate,railAt,type Module} from '../src/model';
-import {kitchenBase,kitchenWall,kitchenLegs,grooveHoleAt,grooveHoleOf,parseGrooveHole} from '../src/kitchen';
+import {kitchenBase,kitchenWall,kitchenLegs,grooveHoleAt,grooveHoleOf,parseGrooveHole,nearRight,splitSides,sideDists} from '../src/kitchen';
 import {partCollisions} from '../src/collisions';
 import {relayoutKDrawers,isFirmax,parseKDrawers,axisCeiling} from '../src/kitchenDrawers';
 import {ETALON_DIR,resizeSweep,RESIZE_CHANGES} from '../scripts/kitchen/resize-sweep';
@@ -144,4 +144,21 @@ test('щит: partCollisions у модуля с относительными п�
   const m=kitchenWall(initialModule(),600);m.height=720;m.kitchen!.hangers=false;m.rails=[{place:'rear-top',height:100,confY:[34,66],topConf:[60],topConfR:[60]}];
   assert.deepEqual(partCollisions(parts(m),m).filter(c=>/rail:rear-top/.test(c.a+c.b)),[]);
   assert.deepEqual(partCollisions(parts({...m,width:500}),m).filter(c=>/rail:rear-top/.test(c.a+c.b)),[]);
+});
+
+// Одно правило «половина → от ближней кромки» вместо восьми рукописных: середина — к левой стороне, как было в каждом месте.
+test('пакет 0: nearRight/splitSides/sideDists — одно правило стороны для xs/xr, pts/ptsR, topConf/topConfR, ecc/eccR, runs, grooveHoles',()=>{
+  assert.equal(nearRight(300,0,600),false);assert.equal(nearRight(300.1,0,600),true);assert.equal(nearRight(1016,1000,1032),false);assert.equal(nearRight(1017,1000,1032),true);
+  // k03: конфирматы на 60 и 508 у стяжки 568 → topConf [60], topConfR [60]; порядок — по возрастанию расстояний
+  assert.deepEqual(sideDists([508,60],0,568),{left:[60],right:[60]});
+  assert.deepEqual(sideDists([1032+508,1032+60,1032+284],1032,1600),{left:[60,284],right:[60]});
+  // опоры k16/m01: 70, 390, 810, 1130 при ширине 1200 → xs [70, 390], xr [70, 390]
+  assert.deepEqual(sideDists([70,390,810,1130],0,1200),{left:[70,390],right:[70,390]});
+  // точки опор: элементы сохраняются как есть, порядок исходный
+  const pts:[number,number][]=[[640,94],[70,71],[70,425],[640,425]];
+  assert.deepEqual(splitSides(pts,([x])=>x,0,710),{left:[[70,71],[70,425]],right:[[640,94],[640,425]]});
+  assert.deepEqual(sideDists([],0,600),{left:[],right:[]});
+  // grooveHoleOf — через то же правило: середина ширины остаётся «от левого», середина высоты — «от низа»
+  assert.deepEqual(grooveHoleOf([300,360,20],{width:600,height:720}),[300,360,20,1,1]);
+  assert.deepEqual(grooveHoleOf([301,361,20],{width:600,height:720}),[299,359,20,-1,-1]);
 });

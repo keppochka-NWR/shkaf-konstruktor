@@ -277,9 +277,22 @@ export function parseGrooveHole(g: unknown[]): GrooveHole {
 export function grooveHoleAt(h: GrooveHole, m: Pick<Module, "width" | "height">): [number, number, number] {
   return [h.length >= 5 && h[3] === -1 ? m.width - h[0] : h[0], h.length >= 5 && h[4] === -1 ? m.height - h[1] : h[1], h[2]];
 }
+/** Пакет 0, ОДНО правило «половина → от ближней кромки» для всех полей со стороной (legs xs/xr и pts/ptsR, rails topConf/topConfR и
+ *  ecc/eccR, dowel/dowelR, runs и faceScrews с маркером −1, grooveHoles): точка в левой половине отрезка [x0, x1] считается от левого
+ *  конца, в правой (строго дальше середины) — от правого. Середина — к левой: так же, как было написано вручную в каждом месте. */
+export const nearRight = (x: number, x0: number, x1: number) => x > (x0 + x1) / 2;
+/** Разложить элементы по сторонам по координате x: left — считать от левой кромки, right — от правой (порядок сохраняется). */
+export function splitSides<T>(items: readonly T[], x: (t: T) => number, x0: number, x1: number): { left: T[]; right: T[] } {
+  return { left: items.filter((t) => !nearRight(x(t), x0, x1)), right: items.filter((t) => nearRight(x(t), x0, x1)) };
+}
+/** То же для списка координат: расстояния от ближнего конца, до 0,1 мм, по возрастанию — как хранятся topConf/topConfR, xs/xr, ecc/eccR. */
+export function sideDists(xs: readonly number[], x0: number, x1: number): { left: number[]; right: number[] } {
+  const r1 = (v: number) => Math.round(v * 10) / 10, s = splitSides(xs, (x) => x, x0, x1), asc = (a: number, c: number) => a - c;
+  return { left: s.left.map((x) => r1(x - x0)).sort(asc), right: s.right.map((x) => r1(x1 - x)).sort(asc) };
+}
 /** Запись точки модуля в grooveHoles по правилу «от ближней кромки»: правая половина — от правого торца, верхняя — от верха. */
 export function grooveHoleOf(o: [number, number, number], m: Pick<Module, "width" | "height">): GrooveHole {
-  const sx: 1 | -1 = o[0] > m.width / 2 ? -1 : 1, sy: 1 | -1 = o[1] > m.height / 2 ? -1 : 1;
+  const sx: 1 | -1 = nearRight(o[0], 0, m.width) ? -1 : 1, sy: 1 | -1 = nearRight(o[1], 0, m.height) ? -1 : 1;
   return [sx === -1 ? m.width - o[0] : o[0], sy === -1 ? m.height - o[1] : o[1], o[2], sx, sy];
 }
 
