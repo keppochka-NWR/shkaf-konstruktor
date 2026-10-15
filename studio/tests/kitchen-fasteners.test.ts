@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {validate,parts,initialModule,parseModule} from '../src/model';
+import {validate,parts,initialModule,parseModule,fastenerCounts} from '../src/model';
 import {kitchenWall,kitchenBase} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon,underEccFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {railEccY} from '../scripts/kitchen/recognize-common';
-import {pinSides} from '../scripts/kitchen/recognize-base';
+import {pinSides,pinRowsOf} from '../scripts/kitchen/recognize-base';
+import {wallJointZ} from '../scripts/kitchen/wallJoints';
 
 // Пакет 3 (крепёж по Базису): стяжка на ребре на эксцентриках в боковины — rails[].eccY. Эталоны лежат вне репозитория — без них тесты по ним пропускаются.
 const ETALON='C:/Users/My PC/Desktop/Claude Project/Кухни/etalon';
@@ -210,6 +211,60 @@ test('k16 m03: полкодержатели левой стойки 64,5/64,5 п
   assert.deepEqual(m.kitchen?.pinSide,{left:[64.5,64.5]});
   const err=validate(m),c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='полкодержатель')!;
   assert.deepEqual([row.ref,row.studio,row.maxPosDelta],[8,8,0]);
+  assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported}));
+  assert.equal(c.holes?.matched,c.holes?.ref);
+});
+
+// m_PINS: перфорация Базиса — ряды полкодержателей без полки (kitchen.pinRows), k26 m02/m03: −100, −50, 50, 100 от низа полки
+const wallRows=()=>{const m=kitchenWall(initialModule(),584);m.height=960;m.kitchen!.hangers=false;m.sections[0].shelves=[0.33,0.66];m.kitchen!.pinRows=[-100,-50,50,100];return m;};
+
+test('pinRows: у каждой съёмной полки ряды по 4 держателя на −100/−50/50/100 от её низа, места по глубине — как у полки; совпавшие и вне корпуса — нет',()=>{
+  const m=wallRows(),ps=parts(m);
+  assert.deepEqual(validate(m),[]);
+  const sh=ps.filter(p=>p.role==='shelf'&&/:shelf:\d+$/.test(p.id));
+  assert.equal(sh.length,2);
+  const rows=ps.filter(p=>/^shp:.*:r\d+:\d$/.test(p.id));
+  assert.equal(rows.length,32,'2 полки × 4 ряда × 4');
+  const s0=sh[0],yb=s0.position[1]-s0.size[1]/2;
+  const r0=ps.filter(p=>p.id.startsWith(`shp:${s0.id}:r0:`));
+  assert.ok(r0.every(p=>Math.round((p.position[1]+3-yb)*10)/10===-100));
+  const own=ps.filter(p=>new RegExp(`^shp:${s0.id}:[0-3]$`).test(p.id)).map(p=>p.position[2]).sort();
+  assert.deepEqual(r0.map(p=>p.position[2]).sort(),own,'по глубине — как у полки');
+  assert.equal(fastenerCounts(m).shelfHolders,40,'смета: 8 у полок + 32 в рядах');
+  assert.equal(holes(m,ps).filter(h=>/^shp:.*:r\d+:\d$/.test(h.src)).length,32);
+  const near=wallRows();near.kitchen!.pinRows=[-50,50,320];
+  assert.ok(parts(near).filter(p=>/^shp:.*:r2:\d$/.test(p.id)).length<8,'ряд на месте другой полки/за крышей — не ставится');
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.pinRows,[-100,-50,50,100]);
+  const bad=wallRows();bad.kitchen!.pinRows=[10];
+  assert.ok(validate(bad).some(e=>/Ряды полкодержателей/.test(e)));
+  assert.ok(!parts(initialModule()).some(p=>/^shp:.*:r\d+:\d$/.test(p.id)),'шкаф студии — без рядов');
+});
+
+test('pinRowsOf: ряды Базиса ровно по правилу у каждой полки — смещения; иначе undefined',()=>{
+  const hz=(y:number,i:number)=>({i,name:'Горизонтальная',mat:'',thick:16,kind:'ldsp',box:[16,y,0,568,y+16,330],axis:'y'});
+  const pin=(x:number,y:number,z:number)=>({i:0,name:'Полкодержатель',category:'полкодержатель',pos:[x,y,z]});
+  const lvl=(y:number)=>[pin(16,y,79),pin(16,y,271),pin(568,y,79),pin(568,y,271)];
+  const ref=(pins:ReturnType<typeof pin>[])=>({key:'m',name:'',archetype:'wall',size:[584,960,346],panels:[hz(0,0),hz(314,1),hz(628,2),hz(944,3)],hardware:pins} as unknown as RefModule);
+  const all=[314,628].flatMap(s=>[s,s-100,s-50,s+50,s+100].flatMap(lvl));
+  assert.deepEqual(pinRowsOf(ref(all)),[-100,-50,50,100]);
+  assert.equal(pinRowsOf(ref([314,628,214,264].flatMap(lvl))),undefined,'ряды только у одной полки — правила нет');
+  assert.equal(pinRowsOf(ref([314,628].flatMap(lvl))),undefined,'без рядов — поля нет');
+});
+
+test('wallJointZ: дно короче спереди — передний крепёж по правилу от лица боковин; от кромки дна (k26 m02: 53/53) — свои отступы',()=>{
+  const b=(x0:number,x1:number,z1:number)=>({b:{x0,y0:0,z0:0,x1,y1:16,z1}});
+  const hw=(zs:number[])=>zs.flatMap(z=>[{name:'Конфирмат',category:'конфирмат',pos:[0,8,z]},{name:'Конфирмат',category:'конфирмат',pos:[584,8,z]}]);
+  const L=b(0,16,330),R=b(568,584,330),bottom=b(16,568,310);
+  assert.deepEqual(wallJointZ(hw([53,257]) as never,[['bottom',bottom as never]],L as never,R as never,53,{bottom:20}),{'bottom:left':[53,53],'bottom:right':[53,53]});
+  assert.deepEqual(wallJointZ(hw([53,277]) as never,[['bottom',bottom as never]],L as never,R as never,53,{bottom:20}),{},'от лица боковин — правило студии');
+});
+
+test('k26 m02: перфорация полкодержателей и крепёж дна от его кромок по проекту — PASS',{skip:!has('k26')},()=>{
+  const ref=load('k26','m02'),{module:m,unsupported}=moduleFromEtalon(ref);
+  assert.deepEqual(m.kitchen?.pinRows,[-100,-50,50,100]);
+  assert.deepEqual(m.kitchen?.jointZ?.['bottom:left'],[53,53]);
+  const err=validate(m),c=compareModule(ref,m),row=c.hardware.find(h=>h.category==='полкодержатель')!;
+  assert.deepEqual([row.ref,row.studio,row.maxPosDelta],[40,40,0]);
   assert.equal(honestPass(c,err,unsupported),true,JSON.stringify({err,unsupported}));
   assert.equal(c.holes?.matched,c.holes?.ref);
 });

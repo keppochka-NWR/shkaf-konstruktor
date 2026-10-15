@@ -1412,6 +1412,12 @@ function hardwareParts(m: Module, out: Part[]) {
   const fixed = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   // кухня Базиса: съёмная полка без полкодержателей в проекте (kitchen.bareShelves) — студия их не добавляет
   const bareSh = new Set((m.kitchen?.bareShelves ?? []).map((j) => `${m.sections[0].id}:shelf:${j}`));
+  // пакет 3 (m_PINS): перфорация Базиса — ряды полкодержателей без полки на kitchen.pinRows мм от низа полки (k26 m02/m03: −100, −50, 50, 100);
+  // ряд, совпавший с полкой или другим рядом, и ряд вне корпуса (между дном и крышей) — не ставим
+  const pinRows = m.kitchen?.pinRows ?? [], usedRows = new Set<number>();
+  const btm = out.find((p) => p.id === "bottom"), tpp = out.find((p) => p.id === "top");
+  const rowLo = btm ? btm.position[1] + btm.size[1] / 2 : 0, rowHi = tpp ? tpp.position[1] - tpp.size[1] / 2 : m.height;
+  if (pinRows.length) for (const p of out) if (p.role === "shelf" || p.id === "bottom" || p.id === "top") usedRows.add(Math.round(p.position[1] - p.size[1] / 2));
   for (const sh of out.filter((p) => p.role === "shelf" && (p.material === "board" || p.material === "glass") && /:shelf:\d+$/.test(p.id) && !fixed.has(p.id) && !bareSh.has(p.id) && !p.taperZ)) {
     const [x, y, z] = sh.position, [w, , dd] = sh.size;
     const pi = m.shelfPinInset ?? 40, sg = sh.material === "glass" ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap; // держатель — на грани стойки
@@ -1421,6 +1427,14 @@ function hardwareParts(m: Module, out: Part[]) {
       out.push({ ...metal(`shp:${sh.id}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, y - sh.size[1] / 2 - 3, pz], "fastener", sh.sectionId),
         // модель Базиса: X — из стойки к полке (−7..8), Y — вниз под полку; левая стойка — поворот 180° вокруг X, правая — вокруг Z
         model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, y - sh.size[1] / 2, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
+    for (const [r, o] of pinRows.entries()) {
+      const yb = y - sh.size[1] / 2 + o;
+      if (usedRows.has(Math.round(yb)) || yb - 6 < rowLo + 10 || yb > rowHi - 10) continue;
+      usedRows.add(Math.round(yb));
+      [[x - w / 2 + 4, z - dd / 2 + (sL?.[0] ?? pi)], [x + w / 2 - 4, z - dd / 2 + (sR?.[0] ?? pi)], [x - w / 2 + 4, z + dd / 2 - (sL?.[1] ?? pf)], [x + w / 2 - 4, z + dd / 2 - (sR?.[1] ?? pf)]].forEach(([px, pz], k) =>
+        out.push({ ...metal(`shp:${sh.id}:r${r}:${k}`, sh.material === "glass" ? "Полкодержатель для стеклянных полок MV05" : "Полкодержатель", [12, 6, 6], [px, yb - 3, pz], "fastener", sh.sectionId),
+          model: { file: "hardware/bazis/4b95caf1da2f.glb", length: "y", native: true, origin: [px < x ? x - w / 2 - sg : x + w / 2 + sg, yb, pz], quat: px < x ? [0, 1, 0, 0] : [0, 0, 0, 1] } }));
+    }
   }
   // кухня: фасад техники без петель (section.hingeless) — помечаем и не ставим петли
   if (m.kitchen) for (const door of out.filter((p) => p.role === "door" && p.id.includes(":door:"))) {
@@ -1616,7 +1630,7 @@ export function fastenerCounts(m: Module) {
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   const rafix = m.kitchen ? rafixCount(ps) : 0; // рафиксы — только у кухонь Базиса (kitchenRafix.ts)
   for (const j of m.kitchen?.bareShelves ?? []) fixedIds.add(`${m.sections[0].id}:shelf:${j}`); // полка без крепежа в Базисе — без полкодержателей
-  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
+  return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length + ps.filter((p) => /^shp:.*:r\d+:\d+$/.test(p.id)).length /* перфорация kitchen.pinRows */, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
 export function maxHeightOf(m: Module): number {

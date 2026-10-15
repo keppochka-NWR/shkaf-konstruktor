@@ -74,7 +74,10 @@ test('навесные: крепёж стыков по Базису (jointZ), п
   assert.equal(m9.kitchen?.bottomFront,24.5);
   const g=m9.grooves?.find(x=>x.end);assert.ok(g,'паз в переднем торце дна');assert.equal(g!.end,'+');assert.deepEqual(g!.across,[7.8,10.3]);assert.equal(g!.depth,10);
   const {module:m10}=moduleFromEtalon(load('k10','m10'));
-  assert.deepEqual(m10.kitchen?.jointZ?.['bottom:left'],[53,28.5],'дно короче спереди, крепёж как у полного дна');
+  // пакет 3: «как у полного дна» (передний от лица боковин) — правило студии для bottomFront, своё поле стыку не нужно (k26 m02: от кромки дна — поле есть)
+  assert.equal(m10.kitchen?.jointZ?.['bottom:left'],undefined,'дно короче спереди, крепёж как у полного дна — по правилу');
+  const b10=parts(m10).find(p=>p.id==='bottom')!,zb=(id:string)=>parts(m10).find(p=>p.id===id)!.model!.origin![2]-(b10.position[2]-b10.size[2]/2);
+  assert.deepEqual(['fast:bottom:left:0','fast:bottom:left:1'].map(id=>Math.round(zb(id)*10)/10).sort((a,b)=>a-b),[53,Math.round((b10.size[2]-28.5)*10)/10],'53 от задней кромки дна, 28,5 от передней');
 });
 test('навесной k04 m05: нижняя задняя планка на дне — нижняя стяжка, без ошибки «одно место»',{skip:!existsSync(`${ETALON}/k04.json`)},()=>{
   const {module:m}=moduleFromEtalon(load('k04','m05'));

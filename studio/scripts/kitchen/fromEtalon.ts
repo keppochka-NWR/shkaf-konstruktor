@@ -1016,7 +1016,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
   if ((role === "wall" || role === "antresol") && m.confirmatInset !== undefined) {
     // жёсткие полки (k05 m10/m11: полка над сушкой на конфирматах 53/52 при общем 63) — тоже свои отступы
     const fixedJ = (m.sections[0].fixed ?? []).map((j) => [`${m.sections[0].id}:shelf:${j}`, sh[j]] as [string, (typeof sh)[number] | undefined]);
-    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right, m.confirmatInset);
+    const jz = wallJointZ(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right, m.confirmatInset, { bottom: m.kitchen.bottomFront ?? 0 });
     if (Object.keys(jz).length) m.kitchen.jointZ = jz;
     // жёсткая полка без крепежа в проекте (k21 m05: полка над сушкой на 724 — в Базисе ни конфирматов, ни эксцентриков) — студия его не добавляет
     const jn = wallJointNone(ref.hardware, [["bottom", bottom], ["top", topPanel], ...fixedJ], left, right);

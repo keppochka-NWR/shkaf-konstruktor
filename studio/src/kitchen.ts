@@ -106,6 +106,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Пакет 3 (m_PINS): полкодержатели стойки на своих местах — [от заднего, от переднего торца полки], мм, если у левой и правой
    *  по-разному (k16 m03: левая 64,5/64,5, правая — общее правило shelfPinInset/shelfPinInsetFront). Нет стороны — общее правило. */
   pinSide?: { left?: [number, number]; right?: [number, number] };
+  /** Пакет 3 (m_PINS): перфорация Базиса — ряды полкодержателей без полки, мм от низа каждой съёмной полки (по базе k26 m02/m03/m04:
+   *  −100, −50, 50, 100); места по глубине — как у полки. */
+  pinRows?: number[];
   underEcc?: { back: number; front: number;
     /** пакет 3: ещё эксцентрики без шканта — мм от задней кромки дна, по сторонам (по базе 8 у обеих: k27 m04/m05, k28 m08; у левой: k28 m12) */
     extra?: { left?: number[]; right?: number[] } };
@@ -799,9 +802,10 @@ export function kitchenErrors(m: Module): string[] {
     if (k.plinth && (!Number.isFinite(k.plinth.height) || k.plinth.height < 50 || k.plinth.height > (m.feet?.height ?? 200))) e.push("Цоколь кухни: высота 50 мм — до высоты опор.");
     e.push(...hoodBoxErrors(m), ...sideStripErrors(m));
     // пакет 3: эксцентрики стяжки на ребре в боковины (rails[].eccY) — бочонок Ø15 целиком в высоте стяжки (8 мм от её кромок)
+    if ((k.pinRows ?? []).some((v) => !Number.isFinite(v) || Math.abs(v) < 32 || Math.abs(v) > 500)) e.push("Ряды полкодержателей: от 32 до 500 мм от полки.");
     if (Object.values(k.pinSide ?? {}).some((v) => !v || v.some((x) => !Number.isFinite(x) || x < 10) || v[0] + v[1] > m.depth - 30)) e.push("Полкодержатели стойки: от 10 мм до торцов полки.");
     if (Object.values(k.underEcc?.extra ?? {}).some((vs) => (vs ?? []).some((v) => !Number.isFinite(v) || v < 7.5 || v > m.depth - 7.5))) e.push("Эксцентрики дна у задней кромки: бочонок Ø15 в пределах глубины дна.");
-    if ((m.rails ?? []).some((r) => r && r.eccY &&(r.lay === "flat" || r.eccY.some((v) => !Number.isFinite(v) || v < 8 || v > r.height - 8)))) e.push("Эксцентрики стяжки: только у стяжки на ребре, 8 мм от её кромок.");
+    if ((m.rails ?? []).some((r) => r && r.eccY && (r.lay === "flat" || r.eccY.some((v) => !Number.isFinite(v) || v < 8 || v > r.height - 8)))) e.push("Эксцентрики стяжки: только у стяжки на ребре, 8 мм от её кромок.");
     // опоры — в пределах дна: ряды от задней/передней кромки, боковой отступ и позиции по ширине (аудит 11.10: опоры за дном проходили молча)
     if (k.legs) {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
@@ -889,6 +893,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.blindFronts) ? { blindFronts: k.blindFronts.filter((b) => b && num(b.y1) > num(b.y0)).map((b) => ({ y0: num(b.y0), y1: num(b.y1) })) } : {}),
     ...(k.golaTies && typeof k.golaTies === "object" ? { golaTies: { ...(k.golaTies.left === 1 || k.golaTies.left === -1 ? { left: k.golaTies.left } : {}), ...(k.golaTies.right === 1 || k.golaTies.right === -1 ? { right: k.golaTies.right } : {}), ...(num(k.golaTies.depth) > 0 ? { depth: num(k.golaTies.depth) } : {}) } } : {}),
     ...(Array.isArray(k.backClearY) && k.backClearY.length === 2 && k.backClearY.every(fin) ? { backClearY: [num(k.backClearY[0]), num(k.backClearY[1])] as [number, number] } : {}),
+    ...(Array.isArray(k.pinRows) && k.pinRows.some(fin) ? { pinRows: k.pinRows.filter(fin).map(num) } : {}),
     ...(k.pinSide && typeof k.pinSide === "object" ? (() => { // пакет 3: полкодержатели стороны [задний, передний]
       const two = (v: unknown) => Array.isArray(v) && v.length === 2 && v.every(fin) ? [num(v[0]), num(v[1])] as [number, number] : undefined;
       const l = two(k.pinSide!.left), r = two(k.pinSide!.right);
