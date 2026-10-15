@@ -21,7 +21,7 @@ import { wallCornerRaw } from "./wallCorner";
 import { wallJointZ, wallJointNone, endGroove, wallShelfEdges, wallEndEdges, wallFixedShelfEdges, bottomUnderDowelOffset, lowFrontConf } from "./wallJoints";
 import { normalizeRefHardware, confirmatName } from "./refHardware";
 /** Узлы комплекта газлифта GL104 в проектах Базиса (k01 m11–m13). */
-const GL_NAMES = /^(Шток для GL\s*104|Газ патрон|Кронштейн на боковину|Кронштейн на фасад)\s*$/;
+export const GL_NAMES = /^(Шток для GL\s*104|Газ патрон|Кронштейн на боковину|Кронштейн на фасад)\s*$/;
 import { handlePlace } from "./recognize-handle";
 import { recognizeNails } from "./recognize-nails";
 import { railUnder } from "./recognize-wallrail";

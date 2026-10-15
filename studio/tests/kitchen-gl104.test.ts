@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {validate,parts,parseModule} from '../src/model';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
-import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
+import {moduleFromEtalon,GL_NAMES} from '../scripts/kitchen/fromEtalon';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
 import {GL104} from '../src/kitchenLift';
@@ -30,6 +30,14 @@ test('GL104: k01 m11–m13 распознаны функцией студии и
     assert.deepEqual(partCollisions(ps,r.module).filter(c=>c.a.startsWith('lift:')||c.b.startsWith('lift:')),[],key);
     assert.equal(ps.find(p=>p.role==='door')!.name.includes('GL104'),true);
   }
+});
+
+// одно определение узлов комплекта (fromEtalon GL_NAMES) — его же берёт buildKitchen (markBazis), второго литерала нет
+test('GL104: GL_NAMES — ровно 4 узла комплекта Базиса k01 m11, прочие имена не узлы',{skip:!has('k01')},()=>{
+  const names=[...new Set(load('k01','m11').hardware.map(h=>h.name).filter(n=>GL_NAMES.test(n)))].sort();
+  assert.deepEqual(names.map(n=>n.trim()).sort(),['Газ патрон','Кронштейн на боковину','Кронштейн на фасад','Шток для GL 104']);
+  for(const n of ['Газлифт PD-G-N02','Кронштейн','Шток для GL 105','Кронштейн на фасад 2'])assert.equal(GL_NAMES.test(n),false,n);
+  assert.equal(readFileSync(new URL('../scripts/kitchen/buildKitchen.ts',import.meta.url),'utf8').includes('Шток для GL'),false,'второго литерала нет');
 });
 
 test('GL104: точки от низа боковины, внутренней грани и тыльной плоскости фасада; поле читается; низкий фасад — ошибка',{skip:!has('k01')},()=>{
