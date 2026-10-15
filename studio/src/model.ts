@@ -1,7 +1,7 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
-import { kitchenLiftParts, kitchenLiftErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
+import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
 import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
@@ -1752,7 +1752,7 @@ export function validate(m: Module): string[] {
   if(m.kitchen && !m.feet && plinth(m)>0 && m.height-plinth(m)-2*RULES.panel<=0)errors.push("Кухня: низ корпуса поднят выше крыши — внутри корпуса не остаётся места.");
   // кухня: паз под ХДФ бывает утоплен вглубь корпуса (Базис k20 m05 — 119 мм от задней кромки) — предел по глубине корпуса (n3-antresol)
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}}}));
+  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
@@ -1953,6 +1953,7 @@ export function validate(m: Module): string[] {
   }
   // фасады «Вернисаж»: габарит по таблице размеров паспорта PDF (глухой / витрина / решётка / ящик). Меньше минимума ящика при
   // примечании паспорта «Ящик < Min размера изготавливается без фрезеровки» — не ошибка: фасад без фрезеровки (предупреждение в выборе).
+  errors.push(...kitchenLiftRowErrors(m,geometry,innerBottom(m)));
   if(m.vernissage)for(const p of geometry)if(p.vernissage)errors.push(...vernissageSizeCheck(m.vernissage.milling,m.vernissage.open,p.size[0],p.size[1]).errors.map(e=>'Фасад Вернисаж '+e+'. Выберите другую фрезеровку или измените размер.'));
   return [...new Set(errors)];
 }

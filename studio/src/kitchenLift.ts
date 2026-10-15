@@ -78,21 +78,40 @@ function liftSet(m: Module, out: Part[], door: Part, L: Part, R: Part, top: numb
 /** Низ комплекта от верха фасада: фиксатор на боковину (254,5 ниже верха + половина сетки 14,5) — самая низкая деталь (шток ниже верха на 266,86). */
 export const LIFT_DROP = LIFT.sideDown + Math.max(-MESH.side.lo[1], LIFT.rodDown - MESH.rod.lo[1], 5 + 1.5);
 /** Геометрия корпуса для проверки газлифта (из model.ts, чтобы не тянуть цикл импорта). */
-export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number };
-/** Ошибки поля kitchenLift (validate): только кухня, один накладной подъёмный фасад в одну створку, и газлифт не входит в дно. */
+export type LiftGeometry = { facadeTop: number; innerBottom: number; leaves: (s: Module["sections"][number]) => number; rows?: (s: Module["sections"][number]) => number };
+/** Ошибки поля kitchenLift (validate): только кухня, в каждом ряду один накладной подъёмный фасад в одну створку (F_LIFT_MULTI: рядов
+ *  может быть несколько, k07 m08), и газлифт верхнего ряда не входит в дно (нижние ряды — kitchenLiftRowErrors по деталям). */
 export function kitchenLiftErrors(m: Module, g?: LiftGeometry): string[] {
   if (!m.kitchenLift) return [];
   const e: string[] = [];
   if (!m.kitchen) e.push("Газлифт задаётся только кухонному модулю.");
   if (!(m.kitchenLift.system in LIFT_SYSTEMS)) e.push("Неизвестная система газлифта.");
-  const tops = m.doors ? m.sections.reduce((n, s) => n + (s.doorHinges ?? []).slice(0, g ? g.leaves(s) : 4).filter((h) => h === "top").length, 0) : 0;
+  // подъёмные фасады по рядам (индекс створки k = ряд·2 + колонка, как в parts()); ряды всех секций на одной высоте — один ряд
+  const perRow: number[] = [];
+  if (m.doors) for (const s of m.sections) {
+    const leaves = g ? g.leaves(s) : 4, rows = g?.rows ? g.rows(s) : 1;
+    for (let r = 0; r < rows; r++) perRow[r] = (perRow[r] ?? 0) + (s.doorHinges ?? []).slice(rows === 1 ? 0 : r * 2, rows === 1 ? leaves : r * 2 + Math.min(leaves, 2)).filter((h) => h === "top").length;
+  }
+  const tops = perRow.reduce((a, n) => a + (n ?? 0), 0);
   if (!tops) e.push("Газлифт нужен фасаду с петлями по верху (подъёмному).");
-  else if (tops > 1) e.push("Газлифт PD-G-N02 по Базису ставится на один подъёмный фасад в одну створку (комплект на каждую боковину).");
+  else if (perRow.some((n) => n > 1)) e.push("Газлифт PD-G-N02 по Базису ставится в каждом ряду на один подъёмный фасад в одну створку (комплект на каждую боковину); два подъёмных фасада рядом в одном ряду — не по Базису.");
   if (m.doorMount === "inset") e.push("Газлифт PD-G-N02 по Базису — только для накладного подъёмного фасада (у вкладного петли на крыше не ставятся).");
   if (g && g.facadeTop - LIFT_DROP < g.innerBottom - 1e-6) {
     const minH = Math.ceil(m.height + g.innerBottom - (g.facadeTop - LIFT_DROP));
     e.push(`Газлифт PD-G-N02: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха фасада и входит в дно — высота корпуса от ${minH} мм.`);
   }
+  return e;
+}
+/** Газлифт каждого ряда не входит в дно (F_LIFT_MULTI): верх ряда — по фиксатору на фасад построенного комплекта (верх фасада или середина
+ *  зазора до ряда над ним, см. kitchenLiftParts), тот же предел LIFT_DROP, что у верхнего ряда в kitchenLiftErrors. */
+export function kitchenLiftRowErrors(m: Module, ps: Part[], innerBottom: number): string[] {
+  if (!m.kitchen || !m.kitchenLift) return [];
+  const tops = ps.filter((p) => /^lift:left:(r\d+:)?face$/.test(p.id) && p.model?.origin).map((p) => p.model!.origin![1] + LIFT.faceDown).sort((a, b) => a - b);
+  const e: string[] = [];
+  tops.forEach((top, i) => {
+    const lack = innerBottom - (top - LIFT_DROP);
+    if (lack > 1e-6) e.push(`Газлифт PD-G-N02, ${i + 1}-й ряд фасадов снизу: фиксатор на боковину стоит на ${LIFT.sideDown} мм ниже верха ряда и входит в дно — поднимите верх этого ряда на ${Math.ceil(lack)} мм.`);
+  });
   return e;
 }
 /** После смены открывания: газлифт без подъёмного фасада снимается (иначе правку нельзя сохранить). */

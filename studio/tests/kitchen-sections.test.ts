@@ -115,6 +115,32 @@ test('F_LIFT_MULTI (k07 m08): два ряда подъёмных фасадов 
   const w=structuredClone(r.module);w.width+=100;assert.deepEqual(validate(w),[]);assert.equal(parts(w).filter(p=>p.id.startsWith('lift:')&&p.id.endsWith(':block')).length,4);
 });
 
+// газлифт нижнего ряда не входит в дно: тот же предел LIFT_DROP, что у верхнего ряда, по верху ряда (середине зазора) — граница
+// рядов меняется полем «Высота нижнего ряда фасадов» (doorSplit)
+function wallLift2(){
+  const w=kitchenWall(initialModule(),800);w.height=920;w.depth=300;w.doors=true;w.kitchenLift={system:'pd-g-n02'};
+  w.sections=[{...w.sections[0],shelves:[],shelfDepth:250,doorLeaves:1,doorSplit:460,doorHinges:['top','top','top','top']}];return w;
+}
+test('F_LIFT_MULTI: газлифт нижнего ряда входит в дно — ошибка с запасом до дна, а не тихое пересечение',()=>{
+  assert.deepEqual(validate(wallLift2()),[]);
+  for(const [ds,lack] of [[300,0],[280,4],[270,14],[250,34],[230,54]] as const){
+    const m=wallLift2();m.sections[0].doorSplit=ds;const e=validate(m);
+    if(!lack)assert.deepEqual(e,[],String(ds));
+    else{assert.equal(e.length,1,ds+' '+e.join('; '));assert.match(e[0],new RegExp(`1-й ряд фасадов снизу.*входит в дно.*на ${lack} мм`),String(ds));}
+    // низ комплекта нижнего ряда по деталям: при ошибке — ниже грани дна (16), без ошибки — выше
+    const lo=Math.min(...parts(m).filter(p=>p.id.startsWith('lift:')).map(p=>p.position[1]-p.size[1]/2));
+    assert.equal(lo<16,lack>0,ds+' низ комплекта '+lo);
+  }
+});
+test('F_LIFT_MULTI: два подъёмных фасада рядом в одном ряду — ошибка про ряд; два ряда по одному — без ошибки',()=>{
+  const m=wallLift2();m.sections[0].doorLeaves=2;
+  assert.ok(validate(m).some(e=>/в каждом ряду на один подъёмный фасад/.test(e)),validate(m).join('; '));
+});
+test('F_LIFT_MULTI (k07 m08): граница рядов 270/250/230 — газлифт нижнего ряда в дне или ниже корпуса, validate это видит',{skip:!has('k07')},()=>{
+  const r=moduleFromEtalon(load('k07','m08'));
+  for(const ds of [270,250,230]){const m=structuredClone(r.module);m.sections[0].doorSplit=ds;assert.ok(validate(m).some(e=>/1-й ряд фасадов снизу.*входит в дно/.test(e)),String(ds));}
+});
+
 test('F_LIFT_MULTI: один подъёмный фасад — те же id и места газлифта, что раньше (k10 m03)',{skip:!has('k10')},()=>{
   const r=moduleFromEtalon(load('k10','m03'));
   const ids=parts(r.module).filter(p=>p.id.startsWith('lift:')).map(p=>p.id);
