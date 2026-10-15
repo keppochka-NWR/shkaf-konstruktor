@@ -5,7 +5,7 @@ import {validate,parts,initialModule,facadeTop,section,parseModule} from '../src
 import {kitchenWall,mirrorKitchen} from '../src/kitchen';
 import {holes} from '../src/drilling';
 import {partCollisions} from '../src/collisions';
-import {compareModule,type RefModule} from '../scripts/kitchen/compare';
+import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 
 // Пакет 5 развития калькулятора: секции, составные корпуса, сетка фасадов (backlog F_STACKED, F_PARTITION, F_ROWS…).
@@ -98,4 +98,31 @@ test('F_PARTITION (k31 m11): перегородка — вторая секци�
 test('F_PARTITION: перегородка до жёсткой полки (k03 m12) и пенал с фасадами не по секциям (k14 m01) — честно не распознаются',{skip:!has('k03')||!has('k14')},()=>{
   assert.equal(moduleFromEtalon(load('k03','m12')).module.sections.length,1);
   const r=moduleFromEtalon(load('k14','m01'));assert.equal(r.module.sections.length,1);assert.ok(r.unsupported.some(u=>/сетка фасадов/.test(u)));
+});
+
+// F_LIFT_MULTI: навесной в два ряда подъёмных фасадов (k07 m08/m11 «вм 3»/«ВМ 6», 800×920): каждый ряд на петлях по своей горизонтали
+// (жёсткая полка, крыша), газлифт PD-G-N02 — комплект на каждую боковину у каждого ряда; привязка нижнего ряда — середина зазора до верхнего
+test('F_LIFT_MULTI (k07 m08): два ряда подъёмных фасадов с газлифтами — PASS, 16 деталей газлифта и 20 саморезов как в Базисе',{skip:!has('k07')},()=>{
+  const ref=load('k07','m08'),r=moduleFromEtalon(ref),c=compareModule(ref,r.module);
+  assert.deepEqual(r.module.kitchenLift,{system:'pd-g-n02'});assert.deepEqual(r.module.sections[0].doorHinges,['top','top','top','top']);
+  assert.equal(honestPass(c,validate(r.module),r.unsupported),true,JSON.stringify(r.unsupported));
+  const lifts=parts(r.module).filter(p=>p.id.startsWith('lift:'));
+  assert.equal(lifts.filter(p=>p.id.endsWith(':block')).length,4,'газблок: 2 ряда × 2 боковины');
+  assert.equal(lifts.filter(p=>/:r1:/.test(p.id)).length,lifts.length/2,'второй ряд — свои id (lift:<сторона>:r1:…)');
+  const blocks=lifts.filter(p=>p.id.endsWith(':block')&&p.id.startsWith('lift:left:')).map(p=>p.model!.origin![1]).sort((a,b)=>a-b);
+  assert.deepEqual(blocks,[369.5,828],'нижний ряд — от середины зазора (460 − 90,5), верхний — от верха фасада (918,5 − 90,5)');
+  // ширина ±100 — комплекты остаются у своих рядов, без ошибок
+  const w=structuredClone(r.module);w.width+=100;assert.deepEqual(validate(w),[]);assert.equal(parts(w).filter(p=>p.id.startsWith('lift:')&&p.id.endsWith(':block')).length,4);
+});
+
+test('F_LIFT_MULTI: один подъёмный фасад — те же id и места газлифта, что раньше (k10 m03)',{skip:!has('k10')},()=>{
+  const r=moduleFromEtalon(load('k10','m03'));
+  const ids=parts(r.module).filter(p=>p.id.startsWith('lift:')).map(p=>p.id);
+  assert.ok(ids.length>0&&ids.every(id=>!/:r\d+:/.test(id)),ids.join(','));
+});
+
+test('F_LIFT_MULTI (k07 m11): петли нижнего ряда в 114,5 от кромок при 100 у верхнего — своих мест по рядам нет, честно FAIL',{skip:!has('k07')},()=>{
+  const ref=load('k07','m11'),r=moduleFromEtalon(ref),c=compareModule(ref,r.module);
+  assert.equal(honestPass(c,validate(r.module),r.unsupported),false);
+  assert.equal(c.hardware.find(h=>h.category==='газлифт')!.maxPosDelta,0,'газлифты обоих рядов на месте');
 });

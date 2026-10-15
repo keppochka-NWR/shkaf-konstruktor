@@ -879,7 +879,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     // антресоль в два ряда подъёмных фасадов (k13 m02: все петли — на нижних плоскостях горизонталей) — тот же разрез фасадов по высоте,
     // что у пенала; два ряда распашных у антресоли (k27 m12) — по-прежнему «не поддержано»
     const liftQ = (h: { quat?: number[] }) => !!h.quat && Math.abs(h.quat[0]) < 0.1 && Math.abs(h.quat[2]) < 0.1 && Math.abs(Math.abs(h.quat[1]) - Math.SQRT1_2) < 0.05;
-    const liftRows = role === "antresol" && hw("петля").length > 0 && hw("петля").every(liftQ);
+    const liftRows = (role === "antresol" || role === "wall") && hw("петля").length > 0 && hw("петля").every(liftQ); // навесной k07 m08/m11 — пакет 5
     const tallRows = (role === "tall" || wallSwing || liftRows) && rowYs.length === 2 && !m.kdrawers;
     const upOver = tallRows && upRow.length ? r1(Math.max(...upRow.map((q) => q.b.y1)) - top) : 0;
     const rowsOk = tallRows && upOver <= 20 && lowRow.length === upRow.length && lowRow.length <= 2 && rowsGap > -0.5;
@@ -948,10 +948,13 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       const xs = hw("петля").map((h) => r1(h.pos[0] - f0.b.x0)).sort((a, c) => a - c), dw = r1(f0.b.x1 - f0.b.x0);
       const hx = liftHingeX(xs, dw, r1(f0.b.y1 - f0.b.y0));
       if (hx) { m.sections[0].hingeX = hx; m.sections[0].hingeXFor = dw; notes.push(`петли подъёмного фасада не по правилу 100 мм от кромок: ${xs.join(", ")} — как в проекте`); }
-    } else if (split && role === "antresol" && hw("петля").length && hw("петля").every(topHinge)) {
-      // антресоль в два ряда подъёмных фасадов (k13 m02): каждый ряд — на петлях по своей горизонтали (полка, крыша)
+    } else if (split && (role === "antresol" || role === "wall") && hw("петля").length && hw("петля").every(topHinge)) {
+      // антресоль в два ряда подъёмных фасадов (k13 m02): каждый ряд — на петлях по своей горизонтали (полка, крыша);
+      // пакет 5 (F_LIFT_MULTI): навесной так же (k07 m08/m11), газлифт PD-G-N02 — комплект на каждую боковину у каждого ряда
       m.sections[0].doorHinges = Array.from({ length: 4 }, () => "top" as const);
-      if (hw("газлифт").length) unsupported.push(`газлифт у двух рядов подъёмных фасадов — пока не поддержано`);
+      const blocks = hw("газлифт").filter((h) => /PD-G-N02 Газблок/.test(h.name)).length;
+      if (hw("газлифт").length && (hw("газлифт").some((h) => !/PD-G-N02/.test(h.name)) || perRow !== 1 || blocks !== 4)) unsupported.push(`газлифт у двух рядов подъёмных фасадов не по комплекту на боковину у каждого ряда — пока не поддержано`);
+      else if (blocks) { m.kitchenLift = { system: "pd-g-n02" }; notes.push("два ряда подъёмных фасадов, газлифт PD-G-N02 у каждого ряда — как в Базисе"); }
     } else if (perRow === 1) {
       const hinges = hw("петля"), onLeft = hinges.filter((h) => h.pos[0] < W / 2).length, onRight = hinges.length - onLeft;
       m.sections[0].hingeSide = onRight > onLeft ? "right" : "left";
