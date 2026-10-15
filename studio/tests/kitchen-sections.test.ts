@@ -71,6 +71,10 @@ test('F_PARTITION: крепёж концов по проекту — эксце�
   const barrel=onDv.filter(h=>h.d===15);assert.deepEqual(barrel.map(h=>h.at).sort((a,b)=>a[2]-b[2]),[[516,50,74],[516,50,266]],'D15 в левой пласти в 34 над дном, 54 от кромок');
   assert.ok(barrel.every(h=>h.dir[0]===1&&h.depth===12));
   assert.equal(onDv.filter(h=>h.d===8&&h.depth===34).length,2,'шток D8×34 в нижний торец');
+  // тот же стык, что «боковина на дне» (eccJoint в drilling.ts): шток по оси перегородки (8 от пласти) вверх, D5 вниз в дно из той же точки
+  const pin=hs.filter(h=>h.src.startsWith('ecc:kdiv-bottom-left:')&&h.src.endsWith(':pin')).sort((a,b)=>a.at[2]-b.at[2]);
+  assert.deepEqual(pin.map(h=>[h.at,h.dir]),[[[524,16,74],[0,1,0]],[[524,16,266],[0,1,0]]]);
+  assert.deepEqual(hs.filter(h=>h.src.startsWith('ecc:kdiv-bottom-left:')&&h.src.endsWith(':side')).map(h=>[h.part,h.dir,h.d,h.depth]),[['bottom',[0,-1,0],5,12],['bottom',[0,-1,0],5,12]]);
   assert.deepEqual(onDv.filter(h=>h.d===8&&h.depth===22).map(h=>h.at[2]).sort((a,b)=>a-b),[106,234],'шканты на 32 ближе к середине');
   assert.deepEqual(onDv.filter(h=>h.d===8&&h.depth===22).map(h=>h.at[1]),[16,16],'шканты сверлятся из плоскости стыка с дном');
   assert.deepEqual(pid(m,/^dowel:kdiv-bottom:/).map(p=>p.anchor![1]),[0,0],'точка шканта — нижняя пласть дна, как у Базиса и dowel:under');
