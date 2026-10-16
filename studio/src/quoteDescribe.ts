@@ -8,6 +8,7 @@ import { worktopLabel } from "./kitchen";
 import { aluProfile, aluColor, aluInsert } from "./alu";
 import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
 import { plural } from "./ru";
+import { rawKitchen } from "./rawModule";
 
 export type ModuleDescription = { kind: string; size: string; materials: string[]; filling: string[] };
 
@@ -99,7 +100,7 @@ export function describeModule(m: Module): ModuleDescription {
     const app = m.kitchen.appliance && APPLIANCE[m.kitchen.appliance];
     if (app) kind += " " + app;
     if (m.kitchen.premialPullout) filling.push("выдвижная бутылочница");
-  } else if (m.raw) kind = "Модуль по проекту";
+  } else if (m.raw) kind = m.raw.row ? "Столешница и панели" : rawKitchen(m.raw) ? "Кухонный модуль" : "Шкаф";
   else if (m.corner) kind = "Угловой шкаф";
   return { kind, size, materials, filling };
 }

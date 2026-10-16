@@ -8,7 +8,7 @@ import {kitchenProject} from '../src/kitchenProject';
 import {createKupeModule} from '../src/ModulePalette';
 import {DEFAULT_KUPE} from '../src/kupe';
 import {describeModule,drawerCount} from '../src/quoteDescribe';
-import {quoteHTML,quoteBreakdown,clientSpecificationHTML,uniqueWarnings,orderNumber,nestingHTML,labelsHTML} from '../src/exports';
+import {quoteHTML,quoteBreakdown,clientSpecificationHTML,uniqueWarnings,orderNumber,nestingHTML,labelsHTML,specificationHTML} from '../src/exports';
 import {drawingLevels,drawingsHTML} from '../src/drawings';
 import {estimate} from '../src/pricing';
 import {plural,count,DETAILS} from '../src/ru';
@@ -116,6 +116,14 @@ test('чертежи: целые миллиметры, секции с 1, эле
   }
   const html=drawingsHTML(p);
   assert.ok(!/\d\.\d<\/td>/.test(html),'нет дробных мм в таблицах чертежей');
+});
+
+test('ведомость: двери купе и столешница описаны по типу, не как корпус ЛДСП16 с секциями',()=>{
+  const m=createKupeModule(1800,2400,initialModule());m.kupe={...DEFAULT_KUPE,doors:2,system:'Стандарт (Аристо)',color:'Серебро матовое',fills:['Зеркало Серебро 4мм']};
+  const p=newProject(m),html=specificationHTML(p),section=html.slice(html.indexOf('<section class="spec-module">'));
+  assert.ok(section.includes('Двери купе')&&section.includes('Профиль: Стандарт (Аристо)'));
+  assert.ok(!section.includes('ЛДСП16')&&!section.includes('Секция 1'));
+  const k=kitchenProject(),top=specificationHTML(k);assert.ok(top.includes('Столешница: постформинг'));
 });
 
 test('документы производства: склонение «деталь», понятное имя раскроя; предупреждения без дублей',()=>{
