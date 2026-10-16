@@ -31,7 +31,9 @@ import {KitchenPanel} from './KitchenPanel';
 import {isKitchenProject} from './kitchenProject';
 import {FillingComposer,addFillingBatch,addFittedDrawers} from './FillingComposer';
 import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,type Stage} from './stages';
-import {ChevronRight} from 'lucide-react';
+import {ChevronRight,TriangleAlert} from 'lucide-react';
+import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from './clientLabels';
+import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
@@ -272,6 +274,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const mountingComposition=useMemo(()=>mountingCompositionBounds(project),[project]);
   const composition=useMemo(()=>compositionBounds(project),[project]);
   const placementWarnings=useMemo(()=>roomWarnings(project),[project]);
+  const check=useMemo(()=>buildCheck(project,placed.id),[project,placed.id]);
   const [moduleSearch,setModuleSearch]=useState('');
   const moduleList=useRef<HTMLDivElement>(null);
   const moduleWords=moduleSearch.toLocaleLowerCase('ru-RU').trim().split(/\s+/).filter(Boolean);
@@ -759,6 +762,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     catalog.find((c) => c.n === name)?.tex || undefined;
   return (
     <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')+(kitchenMode?' kitchen-mode':'')+(compactTop?' compact-top':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
+      <ManagerMode.Provider value={advanced}>
       <header className="header">
         <EditorBrand kitchen={kitchenMode}/>
         {!presentation&&<button className="top-toggle" aria-label={compactTop?"Заказ и инструменты":"Свернуть верхнюю панель"} aria-expanded={!compactTop} onClick={toggleTop} title="Свернуть или раскрыть управление заказом и комнатами">{compactTop?<PanelTopOpen size={18}/>:<PanelTopClose size={18}/>}<span>{compactTop?'Заказ и инструменты':'Свернуть верхнюю панель'}</span></button>}
@@ -779,7 +783,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>
         {!presentation && <div className="history" title="История изменений проекта. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z">
           <button title="Шаг назад · Ctrl+Z" aria-label="Отменить" disabled={managedHistory?managedHistory.undoCount===0:cursor===0} onClick={undo}><Undo2 size={16} /><span className="history-label">Назад</span></button>
-          <span className="history-step" aria-live="polite">{managedHistory?`${managedHistory.undoCount+1}/${managedHistory.undoCount+managedHistory.redoCount+1}`:`${cursor+1}/${history.length}`}</span>
+          {/* счётчик шагов «2/2» клиенту не нужен (аудит магазина): остаются «Назад» и «Вперёд» */}
           <button title="Шаг вперёд · Ctrl+Shift+Z" aria-label="Повторить" disabled={managedHistory?managedHistory.redoCount===0:cursor===history.length-1} onClick={redo}><span className="history-label">Вперёд</span><Redo2 size={16} /></button>
         </div>}
         <div className="header-actions">
@@ -934,7 +938,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
+          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=newModuleName(source.name);if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1426,7 +1430,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     style={{ backgroundImage: `url("${texture(m.decor)}")` }}
                   />
                   <span>
-                    <b>{m.decor}</b>
+                    <b title={decorTitle(m.decor)}>{decorLabel(m.decor)}</b>
                     <small>Lamarty · 16 мм</small>
                   </span>
                   <ChevronDown size={16} />
@@ -1673,7 +1677,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 <SettingsSection title="Подсветка">                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. Стоимость подсветки входит в итог проекта.</p>
 </SettingsSection>
-<SettingsSection title="Фасад"><button className="outline full" onClick={()=>{try{commitProject(applyFacadeStyle(project,placed.id));}catch(e){setError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов — всем редактируемым корпусам. Размеры и индивидуальные ручки сохраняются. Импорт Базиса, столешницы, столы и двери купе пропускаются.</p>
+<SettingsSection title="Фасад"><button className="outline full" onClick={()=>{try{commitProject(applyFacadeStyle(project,placed.id));}catch(e){setError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов — всем редактируемым корпусам. Размеры и индивидуальные ручки сохраняются. {advanced?"Импорт Базиса, столешницы":"Столешницы"}, столы и двери купе пропускаются.</p>
                 <div className="toggle-row">
                   <span>
                     <b>Распашные фасады</b>
@@ -1691,7 +1695,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 </div>
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {m.doors && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль</option></select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">{FACADE_KIND_LABEL.ldsp} 16 мм</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
                 )}
                 {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 
@@ -1709,7 +1713,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                       setModal("materials");
                     }}
                   >
-                    Материал фасадов: {m.facadeDecor} <ChevronDown size={13} />
+                    Материал фасадов: {decorLabel(m.facadeDecor)} <ChevronDown size={13} />
                   </button>
                 )}
                 {m.doors && (
@@ -1875,11 +1879,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               {!m.casework&&<SettingsSection title="Состав секции"><OpeningLayoutEditor module={m} sid={s.id} edit={modify}/></SettingsSection>}
             </SettingsTree>
           )}
-          <div className="property-footer">
-            <CheckCircle2 size={18} />
+          <div className={"property-footer"+(check.ok?"":" warn")}>
+            {check.ok?<CheckCircle2 size={18} />:<TriangleAlert size={18} />}
             <div>
-              <strong>Габариты проверены</strong>
-              <span>Детали помещаются в лист</span>
+              <strong>{check.title}</strong>
+              <span>{check.detail}</span>
             </div>
           </div>
         </>}
@@ -1968,6 +1972,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                           setModal(null);
                           setSearch("");
                         }}
+                        title={decorTitle(c.n)}
                       >
                         <span
                           style={{
@@ -1978,7 +1983,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                               c.n === "Графит" ? "#565956" : "#e6e2d9",
                           }}
                         />
-                        {c.n}
+                        {decorLabel(c.n)}
                         <small className="decor-meta">{c.tier.toLowerCase()}</small>
                         {materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n) && <Check size={15} />}
                       </button>
@@ -2080,6 +2085,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
         </div>
       )}
+      </ManagerMode.Provider>
     </div>
   );
 }

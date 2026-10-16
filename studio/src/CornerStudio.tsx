@@ -3,6 +3,7 @@ import {Scene,type View} from './Scene';
 import {parseProject,type Project} from './project';
 import {parts} from './model';
 import {catalog} from './catalog';
+import {decorLabel,decorTitle} from './clientLabels';
 import {CORNER_DEFAULT,CORNER_NOTES,CORNER_STORAGE,cornerProject,parseCorner,parametersFromCornerProject,type CornerParameters} from './cornerWardrobe';
 import {cutting,cutCSV,cuttingHTML,sheetSVG,mm} from './cornerCutting';
 import './corner-studio.css';
@@ -30,7 +31,7 @@ export default function CornerStudio({initialProject}:{initialProject?:Project})
   {error&&<div className="corner-error" role="alert">{error}<button onClick={()=>setError('')}>Закрыть</button></div>}
   <div className="corner-layout"><aside className="corner-panel"><h2>Конструкция</h2><p className="corner-muted">Размеры в миллиметрах. Нажмите Enter или выйдите из поля.</p>
    {fields.map(([key,label,min,max])=><label key={key}>{label}<input aria-label={label} key={key+String(p[key])} type="number" min={min} max={max} step="1" defaultValue={Number(p[key])} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}} onBlur={e=>{if(Number(e.target.value)!==p[key]){change(key,Number(e.target.value));e.target.value=String(p[key]);}}}/></label>)}
-   <h2>Материалы и ящики</h2><label>Корпус и полки<select value={p.decor} onChange={e=>change('decor',e.target.value)}>{catalog.map(d=><option key={d.n}>{d.n}</option>)}</select></label><label>Фасады<select value={p.facadeDecor} onChange={e=>change('facadeDecor',e.target.value)}>{catalog.map(d=><option key={d.n}>{d.n}</option>)}</select></label>
+   <h2>Материалы и ящики</h2><label>Корпус и полки<select value={p.decor} onChange={e=>change('decor',e.target.value)}>{catalog.map(d=><option key={d.n} value={d.n} title={decorTitle(d.n)}>{decorLabel(d.n)}</option>)}</select></label><label>Фасады<select value={p.facadeDecor} onChange={e=>change('facadeDecor',e.target.value)}>{catalog.map(d=><option key={d.n} value={d.n} title={decorTitle(d.n)}>{decorLabel(d.n)}</option>)}</select></label>
    <label>Задние стенки<select value={p.back} onChange={e=>change('back',e.target.value)}><option value="hdf">ХДФ 3 мм · накладные</option><option value="none">Без задних стенок</option></select></label>
    <label>Направляющие<select value={p.slide} onChange={e=>change('slide',e.target.value)}><option value="ball">GTV · шариковые · зазор 13 мм</option><option value="gtv0fpo">GTV 0FPO · скрытые · ЛДСП 16</option></select></label><label>Длина направляющих<select value={p.slideLength} onChange={e=>change('slideLength',Number(e.target.value))}>{[250,300,350,400].map(n=><option key={n} value={n}>{n} мм</option>)}</select></label><p className="corner-muted">Дно всех шести ящиков — ЛДСП 16 мм. Смена направляющих меняет детали коробов.</p><button className="corner-reset" onClick={()=>commit(CORNER_DEFAULT)}>Вернуть исходный эскиз</button>
   </aside><main className="corner-main"><nav className="corner-tabs" aria-label="Разделы проекта">{([['model','3D-модель'],['cuts','Раскрой листов'],['parts','Деталировка']] as const).map(([k,label])=><button key={k} aria-pressed={tab===k} onClick={()=>setTab(k)}>{label}</button>)}<div className="corner-totals">{boards.length} ЛДСП + {hdf.length} ХДФ <small>{cut.pieces.length} деталей</small></div></nav>

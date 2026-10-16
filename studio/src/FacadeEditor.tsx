@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import {vernissageSizes} from './model';
 import type {Project} from './project';
 import {catalog} from './catalog';
+import {FACADE_KIND_LABEL,decorLabel,decorTitle} from './clientLabels';
 import {ALU_PROFILES,ALU_INSERTS,aluProfile} from './alu';
 import {VernissagePicker} from './VernissagePicker';
 import {applyFacadeAppearance,changeFacadeKind,facadeKind,type FacadeKind} from './facadeAppearance';
@@ -22,11 +23,11 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
   <p><b>{source.name}</b></p>
   <p className="field-note">Оформление всех дверей и фасадов ящиков этого корпуса. Отдельный рисунок для одной створки здесь не задаётся. В сцене — предварительный просмотр. Изменения сохранятся после «Применить».</p>
   <label className="hardware-field">Основа фасадов<select aria-label="Основа фасадов" value={kind} onChange={e=>{setDraft(changeFacadeKind(draft,e.target.value as FacadeKind));setError('');}}>
-   <option value="ldsp">ЛДСП</option><option value="vernissage">МДФ Вернисаж — плёнка или краска, фрезеровки</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="external">Другой заказной материал — цена уточняется</option>
+   <option value="ldsp">{FACADE_KIND_LABEL.ldsp}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="external">{FACADE_KIND_LABEL.external}</option>
   </select></label>
   {draft.vernissage&&<VernissagePicker value={draft.vernissage} sizes={vernissageSizes(draft)} onChange={v=>{setDraft({...draft,vernissage:v,facadeT:v.thickness});setError('');}}/>}
   {kind==='ldsp'&&<label className="hardware-field">Декор ЛДСП<select aria-label="Декор фасадов ЛДСП" value={draft.facadeDecor} onChange={e=>setDraft({...draft,facadeDecor:e.target.value,drawerFacadeDecor:undefined})}>
-   {!catalog.some(c=>c.n===draft.facadeDecor)&&<option value={draft.facadeDecor}>{draft.facadeDecor}</option>}{catalog.map(c=><option key={c.n} value={c.n}>{c.n}</option>)}
+   {!catalog.some(c=>c.n===draft.facadeDecor)&&<option value={draft.facadeDecor}>{decorLabel(draft.facadeDecor)}</option>}{catalog.map(c=><option key={c.n} value={c.n} title={decorTitle(c.n)}>{decorLabel(c.n)}</option>)}
   </select></label>}
   {draft.alu&&<>
    <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={draft.alu.profile} onChange={e=>{const p=aluProfile(e.target.value)!;setDraft({...draft,alu:{...draft.alu!,profile:p.id,color:p.colors.some(c=>c.id===draft.alu!.color)?draft.alu!.color:p.colors[0].id}});}}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
