@@ -20,13 +20,16 @@ test('palette: entered worktop thickness is used in model and survives reload',a
 test('documents: each tab previews and downloads, archive contains a coherent project',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/');await add(page,'Стеллаж');await page.getByRole('button',{name:'Выдать документы',exact:true}).click();
  const panel=page.locator('.output-panel');
- for(const [tab,button] of [['Карты листов и деталировка','Деталировка CSV'],['Расстановка','Скачать план / PDF'],['Ведомость','Скачать ведомость / PDF'],['Бирки деталей','Скачать бирки / PDF'],['Стоимость','Скачать итоговую стоимость']]){
+ // производственные документы выдаются с номером заказа (аудит магазина п.9)
+ await panel.locator('.output-tabs').getByRole('button',{name:'Карты листов и деталировка',exact:true}).click();await expect(page.getByRole('button',{name:'Скачать комплект ZIP',exact:true})).toBeDisabled();
+ await page.getByLabel('Номер заказа').fill('9990001');await page.getByLabel('Номер заказа').press('Enter');
+ for(const [tab,button] of [['Карты листов и деталировка','Деталировка CSV'],['Расстановка','Скачать план (HTML)'],['Спецификация','Скачать HTML'],['Ведомость','Скачать ведомость (HTML для печати)'],['Бирки деталей','Скачать бирки (HTML для печати)'],['Стоимость','Скачать итоговую стоимость']]){
   await panel.locator('.output-tabs').getByRole('button',{name:tab,exact:true}).click();const result=await download(page,button);expect(result.bytes.toString()).not.toContain('NaN');
  }
  await panel.locator('.output-tabs').getByRole('button',{name:'Чертежи модулей',exact:true}).click();await expect(panel.locator('svg').first()).toBeVisible();
  await panel.getByRole('button',{name:'Коммерческое предложение',exact:true}).click();await page.getByLabel('Клиент для КП').fill('Проверка 10001');await page.getByLabel('Клиент для КП').press('Enter');await page.getByRole('button',{name:'Подставить текущую смету',exact:true}).click();
- await page.getByRole('button',{name:'Предпросмотр КП',exact:true}).click();await expect(page.frameLocator('iframe[title="Предпросмотр коммерческого предложения"]').getByText('Проверка 10001',{exact:false}).first()).toBeVisible();const quote=await download(page,'Скачать КП / PDF');expect(quote.bytes.toString()).toContain('Проверка 10001');
- const zip=await download(page,'Скачать комплект ZIP');expect(zip.bytes.subarray(0,2).toString()).toBe('PK');expect(errors).toEqual([]);
+ await page.getByRole('button',{name:'Предпросмотр КП',exact:true}).click();await expect(page.frameLocator('iframe[title="Предпросмотр коммерческого предложения"]').getByText('Проверка 10001',{exact:false}).first()).toBeVisible();const quote=await download(page,'Скачать КП (HTML)');expect(quote.bytes.toString()).toContain('Проверка 10001');expect(quote.bytes.toString()).not.toContain('введена менеджером');
+ await panel.locator('.output-tabs').getByRole('button',{name:'Ведомость',exact:true}).click();const zip=await download(page,'Скачать комплект ZIP');expect(zip.bytes.subarray(0,2).toString()).toBe('PK');expect(errors).toEqual([]);
 });
 test('client: copy project keeps room and furniture and changes remain independent; whole folder downloads',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:'Клиент',exact:true}).click();await page.getByLabel('Имя клиента или номер заказа').fill('10001');await page.getByLabel('Имя клиента или номер заказа').press('Enter');await page.getByRole('button',{name:'10001',exact:true}).click();

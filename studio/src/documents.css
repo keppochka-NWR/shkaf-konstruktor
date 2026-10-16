@@ -1,0 +1,17 @@
+/* Окно документов: группы «Для клиента» / «Для производства», номер заказа, продавец в шапке КП (аудит магазина 15.10, Б3/п.9). */
+.output-groups { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-bottom: 14px; }
+.output-group { padding: 10px 12px 2px; border: 1px solid #dce5e8; border-radius: 10px; background: #fbfcfd; }
+.output-group-title { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: #5b707b; text-transform: uppercase; letter-spacing: .05em; }
+.output-group .output-tabs { margin-bottom: 8px; gap: 6px; }
+.output-group .output-tabs button { padding: 9px 11px; }
+.review-package .order-number { margin: 0; min-width: 180px; }
+.review-package .order-number input { width: 100%; }
+.seller-fields { margin: 12px 0; padding: 10px 12px; border: 1px solid #dce5e8; border-radius: 10px; }
+.seller-fields summary { cursor: pointer; font-weight: 600; }
+.seller-fields textarea { width: 100%; }
+.sales-split { margin: 4px 0 10px; color: #3b4f59; }
+@media (max-width: 760px) {
+  .output-groups { grid-template-columns: 1fr; }
+  .review-package { flex-wrap: wrap; }
+  .output-actions { flex-wrap: wrap; }
+}
