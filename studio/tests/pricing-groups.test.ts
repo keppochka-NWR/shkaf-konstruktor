@@ -113,9 +113,9 @@ test('конфирмат с именем Базиса — один ключ conf
 
 test('округление до 100 ₽ один раз по итогу: части — до рубля, фурнитура 44 ₽ не обнуляется',()=>{
   const e=estimate(newProject());
-  assert.equal(e.byMarkup!%100,0);
+  assert.equal((e.byMarkup!-e.retailExtras)%100,0);
   assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware))<100);
-  assert.equal(e.byMarkup,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100);
+  assert.equal(e.byMarkup!-e.retailExtras,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100);
   // кухня студии: маленькая фурнитура (шурупы, шканты) даёт ненулевую часть «фурнитура»
   const k=estimate(kitchenProject());
   assert.ok(k.split.hardwareCost>0&&k.split.hardware>0,'фурнитура не обнуляется округлением');

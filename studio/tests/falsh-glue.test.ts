@@ -25,7 +25,7 @@ test('составной фальш: «Шкаф в прихожую» — пет
   assert.deepEqual(partCollisions(ps,m),[],'фальш × петля и фасад ящика × петля ушли');
   // смета: склейка как работа; в прайсе строки нет — 0 ₽ с пометкой для менеджера, смета остаётся полной
   const e=estimate(newProject(m)),line=e.lines.find(l=>l.id==='falsh-glue');
-  assert.ok(line,'строка склейки в смете');assert.equal(line!.quantity,1);assert.equal(line!.unitPrice,0);assert.match(line!.source,/уточнить менеджеру/);
+  assert.ok(line,'строка склейки в смете');assert.ok(line!.quantity>0);assert.equal(line!.unit,'м²');assert.equal(line!.unitPrice,1000);assert.equal(line!.retail,true);assert.match(line!.source,/1000 ₽\/м²/);
   assert.ok(!e.missing.length&&e.byMarkup!==null,'цена клиенту не пропала');
 });
 
