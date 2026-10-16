@@ -18,12 +18,23 @@ test('шаблон «Добавить первый шкаф»: без перес
  // переживает сохранение и смену высоты
  const back=parseModule(JSON.parse(JSON.stringify(a.module)));assert.deepEqual(partCollisions(parts(back),back),[]);
  for(const h of [1800,2200,2400]){const m=firstWardrobe();m.height=h;assert.deepEqual(partCollisions(parts(m),m),[],`высота ${h}`);}
- // старый шаблон (петля по правилу 100 мм, сдвинуть некуда): по решению Макса 16.10 фальш склеивается в 32 мм
- // с разрывом 100 мм у петли — пересечений нет, проверка внизу согласована с панелью
- const old=structuredClone(p);delete old.modules[0].module.sections[0].hingeY;delete old.modules[0].module.sections[0].hingeYFor;
- assert.equal(collisionWarnings(old).length,0);
- assert.ok(parts(old.modules[0].module).some(d=>/склейка 32 мм/.test(d.name)),'составной фальш 32 мм');
- assert.equal(buildCheck(old,a.id).ok,true);
+});
+
+// Решение Макса 16.10.2026: «Петля снизу обязательно должна быть, её максимум — 200 мм от края фасада». Шаблон не поднимает
+// петли над ящиками: нижняя — по правилу (100 мм), фальш у неё склеен в 32 мм с разрывом 100 мм, ящики сужены — 0 пересечений.
+test('шаблон «Добавить первый шкаф»: нижняя петля ≤ 200 мм от низа двери, фальш 32 мм с разрывом, с «зазором 30 мм» тоже 0 пересечений',()=>{
+ for(const h of [1800,2000,2200,2400])for(const grip of [false,true]){
+  const m=firstWardrobe();m.height=h;if(grip)m.sections[0].drawerGrip=true;
+  assert.equal(m.sections[0].hingeY,undefined,'высоты петель шаблона — по правилу, не вручную');
+  const ps=parts(m),door=ps.find(d=>d.role==='door'&&d.id.includes(':door:'))!,b=door.position[1]-door.size[1]/2,t=door.position[1]+door.size[1]/2;
+  const ys=ps.filter(d=>d.id.includes(':hingecup:')).map(d=>d.position[1]).sort((x,y)=>x-y);
+  assert.ok(ys[0]-b<=200&&ys[0]-b>=40,`${h}: нижняя петля ${ys[0]-b} от низа двери`);
+  assert.ok(t-ys.at(-1)!<=200,`${h}: верхняя петля ${t-ys.at(-1)!} от верха двери`);
+  assert.ok(ps.some(d=>/склейка 32 мм/.test(d.name)),`${h}: составной фальш 32 мм`);
+  assert.deepEqual(partCollisions(ps,m),[],`${h}${grip?' зазор 30':''}: 0 пересечений`);
+  assert.deepEqual(validate(m),[]);
+ }
+ const p=newProject();assert.equal(collisionWarnings(p).length,0);assert.equal(buildCheck(p,p.modules[0].id).ok,true);
 });
 
 test('проверка «Габариты» внизу панели показывает пересечения, как панель справа',()=>{

@@ -86,7 +86,7 @@ test('upper module inherits cabinet finishes and fits available height without c
 });
 
 test('section clear removes all filling settings and removal expands only the adjacent opening',()=>{
- const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.pantograph=true;s.rodAt=.87;const cleared=clearSection(p,a.id,s.id).modules[0].module.sections[0];/* высоты петель шаблона первого шкафа — настройка фасада, не наполнения: очистка их не трогает */assert.deepEqual(cleared,{id:s.id,weight:s.weight,shelves:[],drawers:0,rod:false,hingeY:s.hingeY,hingeYFor:s.hingeYFor});assert.equal(s.drawers,2);
+ const p=newProject(),a=p.modules[0],s=a.module.sections[0];s.pantograph=true;s.rodAt=.87;const cleared=clearSection(p,a.id,s.id).modules[0].module.sections[0];/* шаблон первого шкафа — петли по правилу (решение 16.10.2026), ручных высот нет */assert.deepEqual(cleared,{id:s.id,weight:s.weight,shelves:[],drawers:0,rod:false});assert.equal(s.drawers,2);
  a.module.width=900;a.module.sections=[section(),section(),section()];const bb=boxes(a.module);
  for(const i of [0,1,2]){const n=removeSection(p,a.id,a.module.sections[i].id),nb=boxes(n.modules[0].module),recipient=i===0?1:i-1;for(const b of nb){const j=bb.findIndex(v=>v.id===b.id);assert.ok(Math.abs(b.width-(bb[j].width+(j===recipient?bb[i].width+16:0)))<.001);}assert.deepEqual(projectErrors(n),[]);}
  assert.equal(a.module.sections.length,3);assert.throws(()=>removeSection(newProject(),'missing','missing'));

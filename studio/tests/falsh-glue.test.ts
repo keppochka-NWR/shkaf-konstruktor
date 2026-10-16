@@ -43,14 +43,16 @@ test('составной фальш: две петли в зоне четырё�
   assert.deepEqual(falshPieces(100,700,[120,640]),[[170,590]],'кусок короче 30 мм не делаем');
 });
 
-test('обычный фальш без изменений: петли над ящиками (высоты шаблона) — фальш 16, склейки нет, смета без строки склейки',()=>{
+test('ручная нижняя петля над ящиками (480 мм) поджимается к 200 мм от низа фасада — фальш склеен, 0 пересечений; без петли в зоне ящиков — фальш 16',()=>{
   const m=initialModule(),s=m.sections[0];
   m.sections[0]={...s,hingeY:[480,830,1180,1530,1868],hingeYFor:1968};
-  assert.deepEqual(falshGlue(m),{});
-  assert.deepEqual(fillerSides(m,m.sections[0]),{left:RULES.drawerFiller,right:0});
-  const f=fillers(m);assert.equal(f.length,1);assert.equal(f[0].id,s.id+':filler:left');assert.equal(f[0].name,'Фальш-панель левая');assert.equal(f[0].size[0],16);
-  assert.deepEqual(partCollisions(parts(m),m),[]);
-  assert.ok(!estimate(newProject(m)).lines.some(l=>l.id==='falsh-glue'));
+  const ps=parts(m),door=ps.find(p=>p.role==='door'&&p.id.includes(':door:'))!,bot=door.position[1]-door.size[1]/2;
+  const low=Math.min(...ps.filter(p=>p.id.includes(':hingecup:')).map(p=>p.position[1]));
+  assert.ok(low-bot<=200,'петля не дальше 200 мм от низа фасада (решение Макса 16.10)');
+  assert.ok(falshGlue(m)[s.id+':left']?.length,'петля в зоне ящиков — склейка 32 с разрывом');
+  assert.deepEqual(partCollisions(ps,m),[]);
   // без дверей фальшей нет вовсе
   const open=initialModule();open.doors=false;assert.deepEqual(falshGlue(open),{});
+  assert.deepEqual(fillerSides(open,open.sections[0]),{left:0,right:0});
+  void RULES;void estimate;void newProject;
 });

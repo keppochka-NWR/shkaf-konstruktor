@@ -45,7 +45,8 @@ export const RULES = {
   drawerStep: 40,
   drawerSideGap: 13,
   drawerFrontGap: 3,
-  drawerGrip: 30, // «Зазор между ящиками 30 мм»: короб ниже на 30, фасад выше короба не менее чем на 30 (решение Макса 16.10.2026)
+  drawerGrip: 30, // «Зазор между ящиками 30 мм»: между фасадами ящиков зазор 30, короб ниже верха своего фасада не менее чем на 30 (решение Макса 16.10.2026)
+  hingeEdgeMax: 200, // крайние петли распашного фасада (нижняя обязательно) не дальше 200 мм от своего края фасада (решение Макса 16.10.2026)
   rodDiameter: 25,
   rodMountScrews: 6, // Штанга 25мм.fr3d: два фланца, по три самореза 3,5×16.
   rodTopOffset: 70,
@@ -594,11 +595,19 @@ export const grooveInsetMax=(m:Pick<Module,'kitchen'|'depth'>)=>m.kitchen?m.dept
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
 /** «Зазор между ящиками 30 мм» действует на ящик ЛДСП с фасадом (не сетка, не выкатная полка, не внутренний ящик). */
 export function drawerGripOn(m:Module,s:Section,c:DrawerConfig){return !!s.drawerGrip&&!m.raw&&!c.mesh&&!c.noFacade&&!c.tray;}
-/** Высота боковины короба: по настройке ящика, при «Зазоре 30 мм» — на 30 ниже и не выше «верх фасада − 30» (фасады те же: шаг ящика не меняется). */
+/** Фасад ящика по высоте от низа шага ящика: [низ, верх]. Обычно — шаг минус зазор фасадов; при «Зазоре 30 мм» (уточнение Макса
+ *  16.10.2026) над каждым фасадом — 30 мм до следующего фасада или полки над ящиками: низ фасада тот же, фасад ниже, шаг тот же. */
+export function drawerFaceSpan(m:Module,s:Section,c:DrawerConfig):[number,number]{
+ const gap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:fb(m)),pitch=drawerPitch(c,gap),lo=c.facadeH?gap/2:0;
+ let fh=c.facadeH??(pitch-gap);
+ if(drawerGripOn(m,s,c))fh=Math.min(fh,pitch-RULES.drawerGrip-lo);
+ return [lo,lo+fh];
+}
+/** Высота боковины короба: по настройке ящика, при «Зазоре 30 мм» — не менее чем на 30 ниже и верх короба не выше «верх своего фасада − 30»
+ *  (хват сверху за фасад); низ короба и направляющие — по правилу системы. */
 export function drawerBoxHeight(m:Module,s:Section,c:DrawerConfig){
  if(!drawerGripOn(m,s,c))return c.height;
- const gap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:fb(m)),face=c.facadeH??(drawerPitch(c,gap)-gap);
- return Math.min(c.height-RULES.drawerGrip,face+(c.facadeH?gap/2:0)-RULES.drawerStep/2-RULES.drawerGrip);
+ return Math.min(c.height-RULES.drawerGrip,drawerFaceSpan(m,s,c)[1]-RULES.drawerStep/2-RULES.drawerGrip);
 }
 export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+(c.tray?10:RULES.drawerStep);return c.facadeH?Math.max(box,c.facadeH+gap):box;}
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
@@ -1050,15 +1059,17 @@ export function parts(m: Module): Part[] {
       // перекрывает стойки как распашной фасад, зазор 2, нижний фасад опускается на цоколь до 30 мм от пола.
       // Фасад: по умолчанию на шаг ящика минус зазор; при заданной высоте фасада — она (короб может быть ниже, экономия плиты).
       const frontGap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:fb(m)),pitch=drawerPitch(cfg,frontGap),pitchBottom=b.bottom+drawerOffsets(s)[j];
-      let fh=cfg.facadeH??(pitch-frontGap),fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+fh/2+(cfg.facadeH?frontGap/2:0);
+      const span=drawerFaceSpan(m,s,cfg); // при «Зазоре 30 мм» фасад ниже: 30 мм до соседнего фасада / полки над ящиками
+      let fh=span[1]-span[0],fw=b.width-filler-2*RULES.drawerFrontGap,fx=b.x+f.left+(b.width-filler)/2,fy=pitchBottom+(span[0]+span[1])/2;
+      void pitch;
       if(cfg.noFacade){ // внутренний ящик: только короб и направляющие
         for (const side of [0, 1])
           add(s.id + ":drawer:" + j + ":slide:" + side, "Направляющая · " + slideLabel(cfg), [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length], [hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6), hidden ? y + 6 : y + bh / 2, z + boxD - cfg.length / 2], cfg.length, 20, 12, "drawer", s.id, "metal");
         continue;
       }
       if(!drawersBehindDoors(m,s)&&s.drawerMount!=='inset'){
-        const span=facadeSpan(m,i,b);fw=span.right-span.left;fx=(span.left+span.right)/2;
-        fh=cfg.facadeH??(pitch-frontGap);fy=pitchBottom+fh/2+(cfg.facadeH?frontGap/2:0);
+        const sp=facadeSpan(m,i,b);fw=sp.right-sp.left;fx=(sp.left+sp.right)/2;
+        fh=span[1]-span[0];fy=pitchBottom+(span[0]+span[1])/2;
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
         if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
       }
@@ -1623,12 +1634,24 @@ function hardwareParts(m: Module, out: Part[]) {
       const off = Math.min(100, Math.max(40, dh / 4)), n = Math.max(1, Math.min(new Set(src[0].map((y) => Math.round(y))).size, Math.floor((dh - 2 * off) / 53) + 1));
       hys = n === 1 ? [dh / 2] : Array.from({ length: n }, (_, k) => off + (dh - 2 * off) * k / (n - 1));
     }
+    // Решение Макса 16.10.2026: крайние петли (нижняя обязательно) — не дальше 200 мм от своего края фасада; поиск свободной высоты
+    // у крайней петли — только в [минимум правила, 200] от края, ручная высота шкафа поджимается в эти пределы. Кухня: высоты
+    // проекта Базиса дальше 200 не трогаем (как в Базисе), но поиск сдвига от них за 200 не уводит.
+    const lastN = hys.length - 1, bot = cy - dh / 2, topE = cy + dh / 2, E = RULES.hingeEdgeMax;
     hys.forEach((hy, n) => {
-      const ideal = cy - dh / 2 + hy;
+      let ideal = cy - dh / 2 + hy, rlo = lo, rhi = hi;
+      const edge = hys.length >= 2 && (n === 0 || n === lastN);
+      if (edge) {
+        const keep = !!m.kitchen && !!src && (n === 0 ? ideal > bot + E + 0.5 : ideal < topE - E - 0.5);
+        if (!keep) {
+          if (n === 0) rhi = Math.min(hi, Math.max(lo, bot + E)); else rlo = Math.max(lo, Math.min(hi, topE - E));
+          ideal = Math.min(Math.max(ideal, rlo), rhi);
+        }
+      }
       let pair = hingeAt(ideal, n);
       for (const s of hingeShifts(m.hingeFit && !m.kitchen ? Math.ceil(dh) : 200)) {
         const y = ideal + s;
-        if (y < lo || y > hi) continue;
+        if (y < rlo || y > rhi) continue;
         const cand = hingeAt(y, n);
         if (!blocked(cand)) { pair = cand; break; }
       }
@@ -1701,6 +1724,26 @@ export function scaleHingeY(ys: number[], was: number, now: number): number[] {
   if (Math.abs(was - now) < 0.5 || ys.length < 2) return ys.map((y) => Math.min(Math.max(y, 40), now - 40));
   const a = ys[0], b = was - ys[ys.length - 1], top = now - b;
   return ys.map((y, k) => k === 0 ? a : k === ys.length - 1 ? top : a + (y - a) * (top - a) / Math.max(1, ys[ys.length - 1] - a));
+}
+/** Решение Макса 16.10.2026 (в): крайнюю петлю распашного фасада (нижнюю или верхнюю) нельзя поставить не дальше 200 мм от края
+ *  без пересечения с жёсткой горизонталью (полкой, дном, крышей, полкой над ящиками) — понятная ошибка проверки, а не тихий перенос.
+ *  Фальш и ящики петлю не держат: для них фальш 32 мм с разрывом у петли (falshGlue). Кухни и модули «как есть» — без проверки. */
+export function hingeEdgeErrors(m:Module,ps:Part[]=parts(m)):string[]{
+  if(m.kitchen||m.raw||m.kupe||m.corner)return [];
+  const out:string[]=[],hard=ps.filter(p=>p.material==='board'&&(p.role==='shelf'||p.role==='body')&&p.size[1]<=40&&p.size[0]>60&&p.size[2]>60&&!p.rotY&&!p.rotZ);
+  const byDoor=new Map<string,Part[]>();
+  for(const h of ps)if(h.role==='hinge'&&/:(hingecup|hingeplate):\d+:\d+$/.test(h.id)){const k=h.id.replace(/:(hingecup|hingeplate):/,':door:').replace(/:\d+$/,'');(byDoor.get(k)??byDoor.set(k,[]).get(k)!).push(h);}
+  for(const [doorId,hs] of byDoor){
+    const door=ps.find(p=>p.id===doorId);if(!door)continue;
+    const idx=hs.map(h=>Number(h.id.split(':').at(-1))),last=Math.max(...idx);
+    for(const n of [0,last]){
+      const hit=hs.filter(h=>Number(h.id.split(':').at(-1))===n).map(h=>hard.find(o=>{const d=partPenetration(h,o);return d>0.1&&!allowedContact(h,o,d,m);})).find(Boolean);
+      if(!hit)continue;
+      const si=m.sections.findIndex(s=>s.id===door.sectionId);
+      out.push(`Секция ${si+1}: ${n===0?'нижнюю':'верхнюю'} петлю двери не поставить в пределах ${RULES.hingeEdgeMax} мм от ${n===0?'низа':'верха'} фасада — мешает «${hit.name}». Сдвиньте полку или измените высоту фасада.`);
+    }
+  }
+  return [...new Set(out)];
 }
 /** Минимальный зазор от петли до чужих деталей при подборе высоты, мм. */
 const HINGE_CLEAR = 5;
@@ -1982,6 +2025,7 @@ export function validate(m: Module): string[] {
   });
   if (errors.length) return [...new Set(errors)];
   const geometry=parts(m);
+  errors.push(...hingeEdgeErrors(m,geometry));
   for(const section of m.sections.filter(s=>s.pantograph)){
     const b=boxes(m).find(b=>b.id===section.id)!;
     const mechanism=geometry.filter(p=>p.id.startsWith(section.id+':pantograph:'));

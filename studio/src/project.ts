@@ -23,10 +23,10 @@ export type CuttingEngine='classic'|'guillotine';
 /** kind 'kitchen' — проект вкладки «Кухня» (кухонная палитра и панель модуля); без поля — обычный проект мебели.
  *  source 'bazis' — кухня импортирована из Базиса (scripts/kitchen/import.ts): состав и расстановка как в Базисе. */
 export type Project={version:3;kind?:'kitchen';source?:'bazis';dimensions?:PlanDimension[];measurement?:{number:string;date:string;notes:string;niche?:Niche};room:Room;modules:PlacedModule[];cloud?:{id:string;revision:number;owner:string;name?:string};calculation?:{markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;cuttingEngine?:CuttingEngine};offer?:{customer:string;price:string;notes:string}};
-/** Шаблон «Добавить первый шкаф» («Шкаф в прихожую»): ящики за дверью у фальш-панели, поэтому нижняя петля — над ящиками.
- *  По правилу петля стояла в 100 мм от низа фасада и пересекала фальш-панель (16 мм) и фасад ящика (4,7 мм) — аудит магазина Б5.
- *  Высоты петель от низа фасада 1968 мм (при другой высоте фасада пересчитываются, как ручные высоты); правила шкафов не меняются. */
-export function firstWardrobe(){const m=initialModule();m.sections[0]={...m.sections[0],hingeY:[480,830,1180,1530,1868],hingeYFor:1968};return m;}
+/** Шаблон «Добавить первый шкаф» («Шкаф в прихожую»): петли по общему правилу (решение Макса 16.10.2026) — нижняя петля
+ *  обязательно и не дальше 200 мм от низа фасада, над ящиками петли не поднимаются. Пересечение нижней петли с фальш-панелью
+ *  и ящиком (аудит магазина Б5) решает составной фальш 32 мм с разрывом 100 мм у петли (falshGlue): ящики сужаются на 16 мм. */
+export function firstWardrobe(){return initialModule();}
 export function newProject(module=firstWardrobe()):Project{return {version:3,room:{width:4000,depth:3000,height:2700,openings:[]},modules:[{id:id(),x:50,y:0,z:30,module}]};}
 export function localToRoom(a:PlacedModule,u:number,v:number){return transform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,u,v);}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const p=inverseTransform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,x,z);return p;}
