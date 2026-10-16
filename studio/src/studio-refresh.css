@@ -195,3 +195,5 @@
 .module-palette .module-sizes { grid-template-columns:1fr; }
 .module-palette .module-sizes label { grid-template-columns:minmax(0,1fr) 84px; align-items:center; }
 .module-palette .module-sizes input { width:84px; }
+/* разбивка стоимости и позиции после финального расчёта конструктором (решения 16.10.2026) */
+.estimate-panel table.estimate-split{width:auto;min-width:280px;margin:12px 0 0 auto;font-size:13px}.estimate-panel table.estimate-split td{padding:6px 10px}.estimate-panel table.estimate-split td:last-child{text-align:right}.estimate-panel table.estimate-split tr:last-child td{font-weight:700;border-top:2px solid #23404c}.estimate-pending{margin:8px 0 0;text-align:right;color:#5d6b75;font-size:12px}.estimate-panel tr.price-pending td:first-child small{color:#5d6b75}

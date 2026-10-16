@@ -11,6 +11,9 @@
 .dock-price { margin-left: auto; display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 8px; color: #24343c; font-size: 13px; white-space: nowrap; }
 .dock-price:hover { background: #eef3f6; }
 .dock-price b { font-size: 16px; color: #2449d6; }
+.dock-pending { color: #6a7d87; font-size: 12px; }
+.dock-sum.kupe { border-top-color: #7a6a9a; }
+.dock-cost-split.has-kupe { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dock-split { color: #6a7d87; font-size: 12px; }
 .dock-sums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.3fr); gap: 10px; align-items: start; }
 .dock-breakdown { display: grid; gap: 8px; }

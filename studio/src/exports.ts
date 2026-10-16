@@ -15,6 +15,7 @@ import {guillotinePack,type GuillotineCut,type GuillotineResult,type Offcut} fro
 import {describeModule} from './quoteDescribe';
 import {hasSeller,type SellerInfo} from './sellerInfo';
 import {count,DETAILS} from './ru';
+import {pendingTotalLabel} from './pendingPrices';
 /** Деталь без направления текстуры: ЛХДФ или однотонный декор без картинки в каталоге — на карте можно класть поперёк. */
 export function grainFree(d:Pick<Detail,'material'|'decor'>){return d.material==='hdf'||!catalog.find(c=>c.n===d.decor)?.tex;}
 export type Detail = Part & { moduleName: string; moduleId: string; code: string };
@@ -292,19 +293,26 @@ export function nestingHTML(p: Project) {
   );
 }
 /** Часть сметы, нужная КП для разбивки цены (estimate() из pricing.ts; передаётся снаружи, чтобы не было цикла импортов). */
-export type QuoteCost = { retail: number | null; model: "markup" | "sheet"; split: { material: number; hardware: number } };
-/** Разбивка цены КП «материалы / фурнитура» (решение Макса 06.10.2026): только когда цена КП = расчётной цене модели
- *  «себестоимость × коэффициент». Округление итога до 100 ₽ относится к материалам: материалы = итог − фурнитура.
+export type QuoteCost = { retail: number | null; model: "markup" | "sheet"; split: { material: number; hardware: number; kupe?: number }; pending?: readonly unknown[] };
+export type QuoteSplit = { material: number; hardware: number; kupe: number };
+/** Разбивка цены КП «материалы / фурнитура / двери купе» (решения Макса 06.10 и 16.10.2026): только когда цена КП = расчётной цене модели
+ *  «себестоимость × коэффициент». Округление итога до 100 ₽ относится к материалам: материалы = итог − фурнитура − двери купе,
+ *  поэтому сумма граф = итогу. Двери купе (розница калькулятора купе) — своей графой, не в материалах и не в фурнитуре.
  *  Цена изменена вручную (скидка) или модель «цена за лист» (фурнитура внутри листа) — разбивки нет, печатается только итог. */
-export function quoteBreakdown(price: string, cost?: QuoteCost | null): { material: number; hardware: number } | null {
+export function quoteBreakdown(price: string, cost?: QuoteCost | null): QuoteSplit | null {
   const n = Number(price);
   if (!cost || cost.model !== "markup" || cost.retail === null || !price.trim() || !Number.isFinite(n) || n !== cost.retail) return null;
-  const hardware = Math.max(0, Math.min(cost.split.hardware, cost.retail));
-  // одна из частей нулевая (двери купе: по калькулятору купе всё — «материалы») — разбивка без смысла, только итог
-  if (hardware === 0 || hardware === cost.retail) return null;
-  return { material: cost.retail - hardware, hardware };
+  const kupe = Math.max(0, Math.min(cost.split.kupe ?? 0, cost.retail));
+  const hardware = Math.max(0, Math.min(cost.split.hardware, cost.retail - kupe));
+  const material = cost.retail - hardware - kupe;
+  // меньше двух ненулевых граф — разбивка без смысла, только итог
+  if ([material, hardware, kupe].filter((v) => v > 0).length < 2) return null;
+  return { material, hardware, kupe };
 }
-/** Таблица модулей для клиента: описание по типу модуля (quoteDescribe.ts), без нулевых позиций и служебных слов. */
+/** Графы разбивки для вывода (КП, панель, CSV): «Двери купе» — только если они есть в проекте. */
+export function splitRows(s: QuoteSplit): [string, number][] {
+  return [["Материалы", s.material], ["Фурнитура", s.hardware], ...(s.kupe ? [["Двери купе", s.kupe] as [string, number]] : [])];
+}/** Таблица модулей для клиента: описание по типу модуля (quoteDescribe.ts), без нулевых позиций и служебных слов. */
 export function clientModulesTable(p: Project) {
   return `<table><thead><tr><th>№</th><th>Изделие</th><th>Размеры, мм</th><th>Материалы</th><th>Наполнение</th></tr></thead><tbody>${p.modules.map((a, i) => {
     const d = describeModule(a.module);
@@ -326,11 +334,13 @@ export function quoteHTML(
   const n = Number(price), priced = price.trim() !== "" && Number.isFinite(n) && n >= 0, rub = (v: number) => v.toLocaleString("ru-RU") + " ₽";
   const split = priced ? quoteBreakdown(price, opts.cost) : null;
   const sum = !priced ? `<p class="sum">Стоимость: после согласования</p>` : split
-    ? `<table class="split"><tbody><tr><td>Материалы</td><td>${rub(split.material)}</td></tr><tr><td>Фурнитура</td><td>${rub(split.hardware)}</td></tr><tr><td>Итого</td><td>${rub(n)}</td></tr></tbody></table>`
+    ? `<table class="split"><tbody>${splitRows(split).map(([k, v]) => `<tr><td>${k}</td><td>${rub(v)}</td></tr>`).join("")}<tr><td>Итого</td><td>${rub(n)}</td></tr></tbody></table>`
     : `<p class="sum">Стоимость: ${rub(n)}</p>`;
+  // позиции кухни без счёта (pendingPrices.ts): итог — по известным позициям, рядом явная строка с их числом
+  const pendingNote = priced && opts.cost?.pending?.length && Number(price) === opts.cost.retail ? `<p class="note">${pendingTotalLabel(opts.cost.pending.length)}</p>` : "";
   return htmlDocument(
     "Коммерческое предложение",
-    `${clientStyle}${sellerBlock(opts.seller)}<h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p>${image ? `<img src="${image}" style="width:100%;max-height:420px;object-fit:contain" alt="Вид проекта"/>` : ""}${clientModulesTable(p)}${sum}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small>`,
+    `${clientStyle}${sellerBlock(opts.seller)}<h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p>${image ? `<img src="${image}" style="width:100%;max-height:420px;object-fit:contain" alt="Вид проекта"/>` : ""}${clientModulesTable(p)}${sum}${pendingNote}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small>`,
   );
 }
 /** Спецификация для клиента: те же изделия и материалы, что в КП, без цены, координат и производственных данных. */

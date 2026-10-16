@@ -2,7 +2,7 @@ import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
 import {worktopLabel} from './kitchen';
 import {edgeLength} from './edges';
-import {nest,nestPlan,cuttingEngine,type Sheet} from './exports';
+import {nest,nestPlan,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
 import {isBazisModule,type Project} from './project';
 import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
@@ -16,9 +16,12 @@ import {MODERN} from './kitchenDrawers';
 import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES} from './facadesVernissage';
 import {PUBLIC_BUILD} from './buildMode';
 import {clientView} from './clientPrices';
+import {pendingPrice,pendingTotalLabel} from './pendingPrices';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number};
+/** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
+export const MARKUP_DEFAULT=2.2;
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
 /** Решение Макса 10.10.2026: фасады «Вернисаж» — покупное изделие, цена клиенту = закупка по прайсу Вернисажа × 1,6. Свой коэффициент
  *  вместо общего (2,2) в обеих моделях цены: «себестоимость × коэффициент» и «цена за лист» (сверху листов). Строки Вернисажа — фасады
@@ -26,7 +29,8 @@ export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (моде
  *  В проекте можно поменять (calculation.vernissageMarkup). */
 export const VERNISSAGE_MARKUP_DEFAULT=1.6;
 export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
-export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean};
+/** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
+export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean};
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
 // Явные цены по ходовым декорам — прайс Победы (совпадает с прайсом Lamarty «Спец» 01.01.2026).
@@ -35,6 +39,15 @@ const sheets:Record<string,number>={'Белый':2150,'Тэффи':2440,'Бел�
 // Три колонки = группы тиснений: базовые (L,R,A,F,K,O,T,P,V) / D,N,G,US / N*,D*,U.
 // В каталоге тиснение видно только у декоров с суффиксом «D*»; для остальных берётся базовая колонка.
 const tierPrice:Record<Tier,[number,number,number]>={'КЛАССИКА':[2690,2980,3330],'ПРЕМИУМ':[2900,3440,3780],'ЛЮКС':[3160,3840,4060]};
+/** Решение Макса 16.10.2026: наполнение купе ЛДСП — не единая цена 1800 ₽/м², а лист декора по прайсу Lamarty (decorPrice, как у каркасов)
+ *  в пересчёте на м² листа 2750×1830, × коэффициент сметы (2,2). Строки купе розничные — цена клиенту за м² считается здесь. */
+export const LDSP_SHEET_M2=2.75*1.83;
+export function kupeLdspPerM2(decor:string,markup:number):{price:number|null;source:string}{
+  const d=decorPrice(decor);
+  if(d.price===null)return {price:null,source:d.source};
+  return {price:Math.round(d.price/LDSP_SHEET_M2*markup),source:d.source+' · лист '+d.price+' ₽ / '+String(Math.round(LDSP_SHEET_M2*100)/100).replace('.',',')+' м² × '+String(markup).replace('.',',')};
+}
+export const isKupeLine=(id:string)=>id.startsWith('kupe-');
 export const HDF_SHEET=1060; // ХДФ Kronospan 2800×2070×3, Древиз.
 export type DecorPrice={price:number|null;source:string};
 export function decorPrice(name:string):DecorPrice{
@@ -165,7 +178,7 @@ export function byNames(total:number,names:Record<string,number>):Record<string,
   return {[es.sort((a,b)=>b[1]-a[1])[0][0]]:total};
 }
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
-  const lines:PriceLine[]=[];const settings=p.calculation||{markup:2.2,overrides:{}};
+  const lines:PriceLine[]=[];const settings=p.calculation||{markup:MARKUP_DEFAULT,overrides:{}};
   // retail=true: розничная позиция прайса цеха, добавляется к цене ПОСЛЕ коэффициента и не входит в себестоимость.
   function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string,retail=false){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}lines.push({id,label,quantity,unit,unitPrice:settings.overrides[id]??unitPrice,source:settings.overrides[id]===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
   for(const sheet of plan){
@@ -219,7 +232,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('premial-allegro:'+art,'Бутылочница Premial АЛЛЕГРО '+art,1,'компл',null,'Официальный каталог Premial; закупочная цена не задана. Крепёж и направляющие входят в комплект.');
     }
     // Двери-купе: строки по формуле калькулятора купе, розничные; корпусных деталей и крепежа у объекта нет.
-    if(a.module.kupe){for(const l of kupeLines(a.module))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
+    if(a.module.kupe){for(const l of kupeLines(a.module,n=>kupeLdspPerM2(n,settings.markup)))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
     // Столешница (kitchen.ts): за погонный метр по материалу и толщине, вырезы под мойку и варку — отдельно. Цен поставщика пока нет.
     for(const c of a.module.worktop?.cutouts??[])if(c.fixture==='210245')add('premial-sink:210245','Мойка Premial PRODIGY 6045, графит, 210245 (слив в комплекте)',1,'компл',null,'Артикул подтверждён allpremial.ru; закупочную цену уточнить');
     if(a.module.worktop){const w=a.module.worktop;add('worktop:'+w.material+':'+w.thickness,'Столешница '+worktopLabel(w)+' '+w.thickness+' мм',a.module.width/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');for(const c of w.cutouts)add('worktop-cut:'+c.kind,c.kind==='sink'?'Вырез под мойку':'Вырез под варочную панель',1,'шт',null,'Цена работы не найдена');continue;}
@@ -434,7 +447,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const kitchenOnly=p.modules.length>0&&p.modules.every(a=>a.module.kitchen||rawKitchen(a.module.raw)||a.module.worktop);
   add('work','Работа цеха',kitchenOnly?plan.filter(s=>s.material!=='hdf').length:plan.length,'лист',2500,(kitchenOnly?'База расчёта: 2 500 ₽ за лист ЛДСП (лист ХДФ без работы)':'База расчёта шкафа')+(bazisProject?' (работа цеха, не из Базиса)':''));
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
-  const missing=lines.filter(l=>l.unitPrice===null),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
+  const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model=settings.model??'markup';
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
@@ -449,11 +463,13 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const materialOwn=Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)==='material'&&!isVernissageLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   for(const l of lines)if(!l.retail&&isVernissageLine(l.id))l.source+=`; клиенту: закупка × ${String(vernissageMarkup).replace('.',',')} (коэффициент Вернисажа)`;
   // Розничные позиции (двери-купе по прайсу калькулятора купе, подсветка) идут в свою группу без коэффициента.
-  const retailOf=(g:LineGroup)=>Math.round(lines.filter(l=>l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  // Двери купе — своя графа разбивки (решение Макса 16.10.2026), не «материалы» и не «фурнитура».
+  const retailOf=(g:LineGroup)=>Math.round(lines.filter(l=>l.retail&&!isKupeLine(l.id)&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  const kupe=Math.round(lines.filter(l=>l.retail&&isKupeLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   // Части клиенту — до рубля; округление до 100 ₽ — один раз по итогу (аудит 11.10.2026: округление по частям обнуляло
   // фурнитуру 44 ₽ шаблона tpl-base-drawers). Итог = (материалы + фурнитура) × коэффициент, к сотне, + Вернисаж (своя сотня) + розница.
-  const split={materialCost,hardwareCost,material:Math.round(materialOwn*settings.markup)+vernissageClient+retailOf('material'),hardware:Math.round(hardwareCost*settings.markup)+retailOf('hardware')};
-  const byMarkupKnown=Math.round((materialOwn+hardwareCost)*settings.markup/100)*100+vernissageClient+retailOf('material')+retailOf('hardware');
+  const split={materialCost,hardwareCost,material:Math.round(materialOwn*settings.markup)+vernissageClient+retailOf('material'),hardware:Math.round(hardwareCost*settings.markup)+retailOf('hardware'),kupe};
+  const byMarkupKnown=Math.round((materialOwn+hardwareCost)*settings.markup/100)*100+vernissageClient+retailOf('material')+retailOf('hardware')+kupe;
   const byMarkup=missing.length?null:byMarkupKnown;
   // смета не завершена: деталь не поместилась в лист (гильотина — unplaced:, сырая деталь Базиса больше листа — unplaced-raw:) —
   // расчётной цены нет, пока технолог не решит (сращивание / отдельная плита)
@@ -469,7 +485,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
    *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
    *  выбор движка для цены — ярус B. */
-  const result={lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,retail:unplacedLines?null:model==='sheet'?bySheet:byMarkup};
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,retail:unplacedLines?null:model==='sheet'?bySheet:byMarkup};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }
@@ -481,11 +497,15 @@ export function engineNote(e:Pick<ReturnType<typeof estimate>,'engine'>):string{
 
 export function estimateCSV(p:Project,result=estimate(p)){
  const rows:(string|number)[][]=[['Проект',p.offer?.customer||'Проект мебели','','','','',''],['Позиция','Количество','Единица','Цена, ₽','Сумма, ₽','Источник','Статус']];
- for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.unitPrice===null?'Уточнить цену':'Учтено']);
+ for(const l of result.lines)rows.push([l.label,l.quantity,l.unit,l.unitPrice??'',l.unitPrice===null?'':Math.round(l.quantity*l.unitPrice),l.source,l.pending?'После финального расчёта конструктором':l.unitPrice===null?'Уточнить цену':'Учтено']);
  const vk=String(result.vernissageMarkup).replace('.',',');
  // публичная сборка: строки уже клиентские (clientPrices.ts) — без себестоимости, коэффициентов и сравнения моделей
  if(PUBLIC_BUILD)rows.push(['Итого по позициям','','','',result.knownCost,'',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой'+(result.vernissageOnTop?'; сверху фасады Вернисаж (закупка × '+vk+') '+result.vernissageOnTop+' ₽':''),result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'',result.byMarkup===null?'Не менее '+result.byMarkupKnown+' ₽ без '+result.missing.length+' позиций без цены':'',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ // разбивка «Материалы / Фурнитура / Двери купе / Итого» (сумма граф = итогу) и позиции после финального расчёта конструктором (решения 16.10.2026)
+ const split=result.retail===null?null:quoteBreakdown(String(result.retail),result);
+ if(split)rows.push(...splitRows(split).map(([k,v])=>['Разбивка: '+k,'','','',v,'',''] as (string|number)[]),['Разбивка: Итого','','','',result.retail!,'','']);
+ if(result.pending.length)rows.push([pendingTotalLabel(result.pending.length),'','','','','','В итог не входят']);
  const cell=(v:string|number)=>{let text=typeof v==='number'?String(v).replace('.',','):v;if(typeof v==='string'&&/^\s*[=+@-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
  return '﻿'+rows.map(row=>row.map(cell).join(';')).join('\r\n');
 }

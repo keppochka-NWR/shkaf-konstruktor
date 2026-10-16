@@ -1,3 +1,4 @@
+import {pendingTotalLabel} from './pendingPrices';
 import {type Project,projectErrors} from './project';
 import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder,uniqueWarnings} from './exports';
 import {drawingsHTML} from './drawings';
@@ -31,6 +32,7 @@ export function reviewFiles(project:Project,created=new Date()):Record<string,st
     '',
     'НЕЗАПОЛНЕННЫЕ ЦЕНЫ: '+cost.missing.length,
     ...(cost.missing.length?cost.missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit):['Все позиции текущей расчётной модели имеют цену. Полный крепёж, доставка и монтаж ещё не включены.']),
+    ...(cost.pending.length?['',pendingTotalLabel(cost.pending.length).toUpperCase()+' (в итог не входят)',...cost.pending.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit)]:[]),
     '',
     p.cloud?'Последняя связанная серверная версия: '+p.cloud.revision+'. Локальные правки могут быть новее этой версии.':'Проект не связан с серверным сохранением.',
     'Создание архива не сохраняет проект на сервере. Для серверной записи используйте кабинет.'

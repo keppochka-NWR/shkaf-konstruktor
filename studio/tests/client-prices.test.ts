@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {estimate} from '../src/pricing';
 import {clientView,clientLine,CLIENT_SOURCE,CLIENT_SOURCE_MISSING,CLIENT_SOURCE_IN_SHEET,SHEETS_LINE_ID} from '../src/clientPrices';
 import {PUBLIC_BUILD} from '../src/buildMode';
+import {PENDING_CLIENT} from '../src/pendingPrices';
 import {newProject,parseProject,type Project} from '../src/project';
 import {initialModule} from '../src/model';
 import {createKitchenRow,createKupeWardrobe} from '../src/ModulePalette';
@@ -17,7 +18,7 @@ const typical:Record<string,Project>={
   sheetModel:{...newProject(),calculation:{markup:2.2,overrides:{},model:'sheet'}},
   kupeExample:parseProject(JSON.parse(readFileSync(new URL('../examples/kupe-wardrobe.project.json',import.meta.url),'utf8'))),
 };
-const totals=(e:ReturnType<typeof estimate>)=>({retail:e.retail,byMarkup:e.byMarkup,byMarkupKnown:e.byMarkupKnown,bySheet:e.model==='sheet'?e.bySheet:null,material:e.split.material,hardware:e.split.hardware,vernissage:e.vernissageOnTop,missing:e.missing.length,model:e.model});
+const totals=(e:ReturnType<typeof estimate>)=>({retail:e.retail,byMarkup:e.byMarkup,byMarkupKnown:e.byMarkupKnown,bySheet:e.model==='sheet'?e.bySheet:null,material:e.split.material,hardware:e.split.hardware,kupe:e.split.kupe,pending:e.pending.length,vernissage:e.vernissageOnTop,missing:e.missing.length,model:e.model});
 
 test('tests run in manager mode (no __PUBLIC_BUILD__ outside vite build)',()=>{assert.equal(PUBLIC_BUILD,false);});
 
@@ -34,7 +35,7 @@ for(const [name,p] of Object.entries(typical))test(`client view keeps the client
     if(sheet&&!m.retail&&!vern&&!lemana){assert.equal(l.unitPrice,null,l.id);assert.ok(l.source===CLIENT_SOURCE_IN_SHEET||l.source===CLIENT_SOURCE_MISSING,l.source);continue;}
     const k=m.retail?1:vern?manager.vernissageMarkup:sheet?1:manager.markup;
     assert.equal(l.unitPrice,m.unitPrice===null?null:Math.round(m.unitPrice*k*100)/100,l.id);
-    assert.ok(l.source===CLIENT_SOURCE||l.source===CLIENT_SOURCE_MISSING,l.source);
+    assert.ok(l.source===CLIENT_SOURCE||l.source===CLIENT_SOURCE_MISSING||(m.pending&&l.source===PENDING_CLIENT),l.source);
   }
   assert.equal(client.markup,1);
   if(sheet){
