@@ -5,18 +5,21 @@
  *  с такими словами правятся в исходниках (условия Вернисажа, заголовки, CSV), пустая строка — только для источников данных.
  *  Цены в строках сметы публичной сборки — клиентские (src/clientPrices.ts). Страж publish.ps1 проверяет готовую сборку
  *  теми же словами (SENSITIVE_WORDS/NAMES ↔ publish.ps1 Step 4b) и числовыми ценами в коде (PRICE_LITERALS).
- *  ВАЖНО: закупочные ЧИСЛА (price:445, markup:2.2, 23e3) этот плагин не убирает — смета считается в браузере от базы;
- *  пока они есть, страж 4b не пускает публикацию (см. studio/docs/ДОСКА.md, магазин п.1). */
+ *  Закупочные ЧИСЛА (price:445, markup:2.2, 23e3) запекает в розницу scripts/bake-prices.ts (плагин той же сборки, решение 16.10.2026);
+ *  страж 4b проверяет и слова, и числа (scripts/price-guard.ts). */
 import {parseAst} from 'rolldown/parseAst';
 
 /** Слова, которых не должно быть в публичной сборке (без учёта регистра — слова; с учётом — аббревиатуры поставщиков). */
 export const SENSITIVE_WORDS = /закуп|себестоим|наценк|решени[ея] макса/i;
-export const SENSITIVE_NAMES = /(?<![А-Яа-яЁё])(СФЗ|ФАМ|АТБ|МВМ|МДМ)(?![А-Яа-яЁё])|Побед[аыеу]|Мега-Трейд|Древиз/;
+export const SENSITIVE_NAMES = /(?<![А-Яа-яЁё])(СФЗ|ФАМ|ФАС|АТБ|МВМ|МДМ)(?![А-Яа-яЁё])|Побед[аыеу]|Мега-?[Тт]рейд|Мегатрейд|Древиз/;
 export const isSensitive = (s: string) => SENSITIVE_WORDS.test(s) || SENSITIVE_NAMES.test(s);
 export const NEUTRAL = '';
-/** Числовые цены в собранном JS (ключи объектов минификатор не переименовывает): закупка `price:445`, коэффициент `markup:2.2`,
- *  цена листа `??23e3`. Тот же шаблон — в publish.ps1 Step 4b ($guardNumbers). */
-export const PRICE_LITERALS = /(?<![\w$])(price|unitPrice|markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b/g;
+/** Коэффициенты в собранном JS (ключи объектов минификатор не переименовывает): markup:2.2, vernissageMarkup:1.6, цена листа
+ *  sheetPrice??23e3 — после запекания (scripts/bake-prices.ts) их там быть не должно (0 и 1 — нейтральные). Цены строк (price:979)
+ *  в публичной сборке — розница; закупочные значения ищет scripts/price-guard.ts по множеству исходных таблиц с ключом поля.
+ *  Тот же шаблон — в publish.ps1 Step 4b ($guardNumbers).
+ */
+export const PRICE_LITERALS = /(?<![\w$])(markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b/g;
 
 type Node = { type: string; start: number; end: number; [k: string]: unknown };
 type Edit = { start: number; end: number; text: string; was: string };

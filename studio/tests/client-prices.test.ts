@@ -72,11 +72,12 @@ test('public build sanitizer: strings with purchase words or supplier names beco
   assert.equal(NEUTRAL,'');
 });
 
-test('price guard pattern: purchase numbers and the default markup in minified JS are caught, plain numbers are not',()=>{
+// после запекания (16.10.2026) цены строк в сборке — розница; шаблон ловит коэффициенты, закупочные значения — scripts/price-guard.ts (tests/bake-prices.test.ts)
+test('price guard pattern: coefficients and the default sheet price in minified JS are caught, plain numbers and retail prices are not',()=>{
   const hits=(s:string)=>[...s.matchAll(PRICE_LITERALS)].length;
-  assert.equal(hits(`250:{price:445,source:""},cap:{price:.7},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),4);
+  assert.equal(hits(`250:{price:979,source:""},cap:{price:1.54},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),2);
   assert.equal(hits(`{lengths:[250,300],width:600,priceDate:"2026-08-10",unitPrice:null,markup:t.markup,markup:1,vernissageMarkup:1,sheetPrice:0,lightRetailPerM:3e3}`),0);
-  assert.equal(hits(`{markup:1.6},{price:10},{price:1e3}`),3);
+  assert.equal(hits(`{markup:1.6},{vernissageMarkup:1.6},{price:10},{price:1e3}`),2);
 });
 
 test('sheet model client line: inside the sheet price, Lemana and Vernissage on top',()=>{

@@ -178,7 +178,8 @@ export function byNames(total:number,names:Record<string,number>):Record<string,
   return {[es.sort((a,b)=>b[1]-a[1])[0][0]]:total};
 }
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
-  const lines:PriceLine[]=[];const settings=p.calculation||{markup:MARKUP_DEFAULT,overrides:{}};
+  // публичная сборка: цены таблиц уже запечены в розницу (scripts/bake-prices.ts) — коэффициенты 1; ручные цены проекта (закупка) не применяются
+  const lines:PriceLine[]=[];const settings0=p.calculation||{markup:MARKUP_DEFAULT,overrides:{}},settings=PUBLIC_BUILD?{...settings0,markup:1,vernissageMarkup:1,overrides:{}}:settings0;
   // retail=true: розничная позиция прайса цеха, добавляется к цене ПОСЛЕ коэффициента и не входит в себестоимость.
   function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string,retail=false){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}lines.push({id,label,quantity,unit,unitPrice:settings.overrides[id]??unitPrice,source:settings.overrides[id]===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
   for(const sheet of plan){
@@ -450,7 +451,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model=settings.model??'markup';
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model:'markup'|'sheet'=settings.model==='sheet'&&sheetPrice>0?'sheet':'markup';
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
