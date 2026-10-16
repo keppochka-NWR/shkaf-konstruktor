@@ -1,5 +1,8 @@
-import { useContext, useMemo } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ManagerMode, millingOptionLabel, millingVisible } from "./clientLabels";
+import { MILL_STYLES, MILLING_TILES, tierGroups, tileOf, type MillStyle } from "./vernissageCatalog";
+import { VERNISSAGE_MARKUP_DEFAULT } from "./pricing";
+import "./vernissage-picker.css";
 import { previewSvg } from "./vernissageGeometry";
 import { ADILET_FILMS, PET_DECORS, VERNISSAGE_FILMS, VERNISSAGE_MILLINGS, VERNISSAGE_NOTES, VERNISSAGE_SERIES, PROVISIONAL, SERIES_LABEL, coversOf, filmCatsOf, fmtRu, normalizeVernissage, openings, priceDateRu, seriesOf, thicknessesOf, vernissageFacadePrice, vernissageLayout, vernissageMilling, vernissageSizeCheck, vernissageTexture, type VernissageFacade, type VernissageCover } from "./facadesVernissage";
 import type { VLimit, VSeriesId } from "./vernissageData";
@@ -31,10 +34,12 @@ export function VernissagePicker({ value, onChange, sample, sizes }: { value: Ve
   // клиенту: короткие имена фрезеровок, без «паспорт/условно» и неопознанных рисунков; менеджер («Все настройки») видит всё
   const manager = useContext(ManagerMode);
   return <div className="vernissage-picker">
+    {!manager ? <MillingTiles selected={m.id} misfit={misfit} onPick={(id) => set({ milling: id })} /> : <>
     <label className="hardware-field">Серия<select aria-label="Серия Вернисаж" value={s.id} onChange={(e) => { const first = VERNISSAGE_MILLINGS.find((x) => x.series === e.target.value)!; set({ milling: first.id, open: undefined }); }}>
       {VERNISSAGE_SERIES.map((x) => <option key={x.id} value={x.id}>{SERIES_LABEL[x.id as VSeriesId]}</option>)}</select></label>
     {!pet && <label className="hardware-field">{handle ? "Модель ручки" : "Фрезеровка"}<select aria-label="Фрезеровка Вернисаж" value={m.id} onChange={(e) => set({ milling: e.target.value })}>
       {VERNISSAGE_MILLINGS.filter((x) => x.series === s.id && millingVisible(x, x.id === m.id, manager)).map((x) => <option key={x.id} value={x.id}>{millingOptionLabel(x, { handle, misfit: misfit.has(x.id), manager })}</option>)}</select></label>}
+    </>}
     <div style={{ display: "flex", gap: 8, alignItems: "flex-end", margin: "6px 0" }}>
       {previews.map((p) => <figure key={p.label} style={{ margin: 0, textAlign: "center", fontSize: 11 }}><span dangerouslySetInnerHTML={{ __html: p.svg }} /><figcaption>{p.label}</figcaption></figure>)}
     </div>
@@ -65,5 +70,55 @@ export function VernissagePicker({ value, onChange, sample, sizes }: { value: Ve
       {m.pp.series && m.pp.series !== SERIES_LABEL[m.series] ? <><br />В паспорте серия «{m.pp.series}», в прайсе — «{SERIES_LABEL[m.series]}»: цена по прайсу.</> : null}</div>
       : !handle && !pet && <p className="field-note">Паспорта PDF у №{m.id} нет{m.pdfNote ? ` (${m.pdfNote})` : ""} — рисунок «{m.shapeNote}» по фото каталога, размеры условные: рамка {PROVISIONAL.frame} мм, паз {PROVISIONAL.groove.w}×{PROVISIONAL.groove.d} мм; ограничений размеров нет.</p>}
     {manager && <p className="field-note">{handle ? `Интегрированная ручка ${m.id}: только МДФ 19 мм, фасады прямые.` : pet ? "ПЭТ: гладкая плита 18 мм." : ""} {tex ? `В 3D — текстура плёнки «${tex.name}» с сайта Вернисажа (образец ${tex.tileMm} мм, масштаб приблизительный).` : value.cover.startsWith("enamel") || value.cover === "none" ? "В 3D — цвет эмали/МДФ." : value.film && V_FILM_COLORS[value.film] ? "Однотонная — в 3D цвет образца с сайта Вернисажа." : "Образца этой плёнки на сайте нет — в 3D цвет приблизительный, по названию."}</p>}
+  </div>;
+}
+
+const rub = (x: number) => x.toLocaleString("ru-RU");
+const tileNo = (id: string, series: string) => series === "pet" ? "" : series === "handle" ? id : `№${id}`;
+
+/** Выбор рисунка для клиента (решение 16.10, вариант А): сразу все рисунки плитками с фото, группы по цене (дешёвые сверху),
+ *  стиль — фильтр-чипы. Выбор применяется сразу (3D и превью обновляются). Без фото — наша схема с пометкой «схема». */
+function MillingTiles({ selected, misfit, onPick }: { selected: string; misfit: Set<string>; onPick: (id: string) => void }) {
+  const [style, setStyle] = useState<MillStyle | "all">("all");
+  const groups = useMemo(() => tierGroups(VERNISSAGE_MARKUP_DEFAULT), []);
+  const schemes = useMemo(() => Object.fromEntries(MILLING_TILES.filter((t) => !t.photo).map((t) => [t.id, previewSvg(vernissageLayout(normalizeVernissage({ milling: t.id, cover: "film", film: "Моно белый", thickness: 19 }), 450, 716), 160)])), []);
+  const cur = tileOf(selected);
+  const box = useRef<HTMLDivElement>(null);
+  // выбранная плитка — в зоне видимости списка (без прокрутки всей страницы)
+  useEffect(() => {
+    const b = box.current, el = b?.querySelector<HTMLElement>('[aria-checked="true"]');
+    if (b && el) b.scrollTop = Math.max(0, el.offsetTop - 36); // 36 — под липким заголовком группы
+  }, [style]);
+  const count = (st: MillStyle | "all") => MILLING_TILES.filter((t) => st === "all" || t.style === st).length;
+  return <div className="vmill">
+    <div className="vmill-current" aria-live="polite">
+      <span>Рисунок</span><b>{cur?.name ?? `№${selected}`}</b>{cur && tileNo(cur.id, cur.milling.series) ? <small>{tileNo(cur.id, cur.milling.series)}</small> : null}
+    </div>
+    {!cur && <p className="field-note">Этого рисунка нет среди плиток — менеджер покажет его в каталоге фабрики.</p>}
+    <div className="vmill-chips" role="group" aria-label="Стиль рисунка">
+      {(["all", ...MILL_STYLES.map((x) => x.id)] as const).map((st) => <button key={st} type="button" aria-pressed={style === st} onClick={() => setStyle(st)}>
+        {st === "all" ? "Все" : MILL_STYLES.find((x) => x.id === st)!.label}<span>{count(st)}</span></button>)}
+    </div>
+    <div className="vmill-box" ref={box} role="radiogroup" aria-label="Фрезеровка Вернисаж">
+      {groups.map((g) => {
+        const tiles = g.tiles.filter((t) => style === "all" || t.style === style);
+        if (!tiles.length) return null;
+        return <section key={g.id} className="vmill-group" aria-label={`${g.label} — от ${rub(g.from)} ₽ за м²`}>
+          <h4>{g.label}<span>от {rub(g.from)} ₽/м²</span></h4>
+          <p>{g.hint}</p>
+          <div className="vmill-grid">{tiles.map((t) => {
+            const no = tileNo(t.id, t.milling.series), bad = misfit.has(t.id);
+            return <button key={t.id} type="button" role="radio" aria-checked={t.id === selected} aria-label={`${t.name}${no ? ", " + no : ""}`} className={"vmill-tile" + (bad ? " is-misfit" : "")} onClick={() => onPick(t.id)}>
+              <span className="vmill-pic">{t.photo
+                ? <img src={import.meta.env.BASE_URL + t.photo} alt="" loading="lazy" decoding="async" />
+                : <><span className="vmill-scheme" dangerouslySetInnerHTML={{ __html: schemes[t.id] }} /><em className="vmill-badge">схема</em></>}</span>
+              <b>{t.name}</b>
+              <small>{[no, t.glass ? "бывает со стеклом" : "", bad ? "не по размеру фасадов" : ""].filter(Boolean).join(" · ")}</small>
+            </button>;
+          })}</div>
+        </section>;
+      })}
+    </div>
+    <p className="field-note">Фото — из каталога фабрики, цвет на фото — пример: плёнка или эмаль выбираются ниже. Цена за м² — ориентир в плёнке, МДФ 19 мм; точная — в расчёте проекта.</p>
   </div>;
 }
