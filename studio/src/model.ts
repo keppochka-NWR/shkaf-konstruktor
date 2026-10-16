@@ -1,6 +1,6 @@
 import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
-import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
+import { kitchenDrawerParts, kitchenDrawerErrors, kdrawerGripErrors, gripKDrawers, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
 import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { facadeSideToFloor, droppedSide, finishFacadeSides } from './kitchenFacadeSides';
@@ -1872,7 +1872,7 @@ export function validate(m: Module): string[] {
   if(m.kitchen && !m.feet && plinth(m)>0 && m.height-plinth(m)-2*RULES.panel<=0)errors.push("Кухня: низ корпуса поднят выше крыши — внутри корпуса не остаётся места.");
   // кухня: паз под ХДФ бывает утоплен вглубь корпуса (Базис k20 m05 — 119 мм от задней кромки) — предел по глубине корпуса (n3-antresol)
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
-  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
+  errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...(m.kdrawerGrip&&!m.raw?[...kdrawerGripErrors(m),...kitchenDrawerErrors({...m,kdrawers:gripKDrawers(m)}).map(e=>"«Зазор 30 мм»: "+e)]:[]),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)

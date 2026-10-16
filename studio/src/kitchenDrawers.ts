@@ -1294,19 +1294,49 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
  *  СТАРТ и Indigo (металлические боковины своего ряда) и внутренние ящики — без изменений. Применяется при построении деталей,
  *  присадки и сметы, поэтому переживает пересборку ящиков (refitKDrawers) при смене размеров. */
 export function gripKDrawers(m: Module): KDrawer[] {
-  const ks = m.kdrawers ?? [];
-  if (!m.kdrawerGrip || m.raw) return ks;
+  return gripTransform(m).ks;
+}
+/** Минимальная высота боковины короба ЛДСП при «Зазоре 30 мм» (дно 16 + подъём дна + задняя стенка под конфирмат). */
+export const GRIP_BOX_MIN_H = 60;
+/** Ящики, которым «Зазор 30 мм» невозможен: короб/царгу нельзя опустить под верх фасада на 30 (ревью Codex R3, 16.10.2026). */
+export function kdrawerGripErrors(m: Module): string[] {
+  return gripTransform(m).problems;
+}
+function gripTransform(m: Module): { ks: KDrawer[]; problems: string[] } {
+  const ks = m.kdrawers ?? [], problems: string[] = [];
+  if (!m.kdrawerGrip || m.raw) return { ks, problems };
   // уточнение Макса 16.10.2026: между фасадами ящиков виден зазор 30 мм — фасад ниже, его низ на месте, верх на 30 ниже низа
   // следующего фасада (глухого тоже); верхний — на 30 ниже верха колонки фасадов (верх фасада + отступ faceGap)
   const fronts = [...ks.filter((k) => !isInner(k)).map((k) => k.y0), ...(m.kitchen?.blindFronts ?? []).map((b) => b.y0)];
-  return ks.map((k0) => {
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const out = ks.map((k0, i) => {
     if (isInner(k0)) return k0;
     const next = fronts.filter((y) => y >= k0.y1 - 1).sort((a, b) => a - b)[0], limit = next ?? k0.y1 + (m.faceGap ?? 1.5);
-    const k = { ...k0, y1: Math.round(Math.min(k0.y1, limit - 30) * 10) / 10 } as KDrawer;
-    if (isBox(k)) { const h = Math.round(Math.min(k.box.h - 30, k.y1 - 30 - k.box.y) * 10) / 10; return h >= 60 ? ({ ...k, box: { ...k.box, h } } as KDrawer) : k; }
-    if (isAxis(k)) { const lim = Math.min(axisTop(k) - 30, k.y1 - 30); return [...AXIS_HEIGHTS].reverse().map((hh) => withAxisH(m, k, hh)).find((c) => axisTop(c) <= lim + 0.01 && axisAvailable(c)) ?? k; }
-    return k;
+    const k = { ...k0, y1: r1(Math.min(k0.y1, limit - 30)) } as KDrawer;
+    // верх короба: не выше «верх нового фасада − 30» и не менее чем на 30 ниже прежнего (решение Макса 16.10.2026)
+    const lim = Math.min(axisTop(k0) - 30, k.y1 - 30);
+    let res: KDrawer | null = null;
+    if (isBox(k)) {
+      const h = r1(Math.min(k.box.h - 30, lim - k.box.y));
+      if (h >= GRIP_BOX_MIN_H) {
+        const box = { ...k.box, h };
+        // присадка задней стенки и шурупов фасада — по правилу для новой высоты, если старые точки не входят
+        const backH = h - (box.bottomUp ?? (k.system === "versalite-h45" ? VERSALITE.bottomUp : FIRMAX.bottomUp)) - FIRMAX.t;
+        if (box.conf?.some((c) => c < 8 || c > backH - 8)) delete box.conf;
+        if (Array.isArray(box.faceScrews) && box.faceScrews.some(([, sy]) => !(sy > 0 && sy < backH))) box.faceScrews = true;
+        // Versalite: ось направляющей — середина боковины, переносится вместе с боковиной (ревью R3)
+        res = (k.system === "versalite-h45" ? { ...k, box, runnerY: r1(box.y + h / 2) } : { ...k, box }) as KDrawer;
+      }
+    } else if (isAxis(k)) {
+      res = [...AXIS_HEIGHTS].reverse().map((hh) => withAxisH(m, k, hh)).find((c) => axisTop(c) <= lim + 0.01 && axisAvailable(c)) ?? null;
+    } else res = k0; // СТАРТ, Indigo — без изменений (kdrawerGripAvailable их не предлагает)
+    if (!res) {
+      problems.push(`Ящик ${i + 1}: «Зазор между ящиками 30 мм» невозможен — ${isAxis(k) ? "нет царги Axis PRO с верхом на 30 мм ниже верха фасада" : "боковины короба стали бы ниже " + GRIP_BOX_MIN_H + " мм"}. Уменьшите число ящиков, увеличьте фасад или выключите «Зазор 30 мм».`);
+      return k0;
+    }
+    return res;
   });
+  return { ks: out, problems };
 }
 /** Система ящиков модуля поддерживает «Зазор 30 мм» (короб ЛДСП или Axis PRO), без модулей из Базиса «как есть». */
 export function kdrawerGripAvailable(m: Module): boolean {
