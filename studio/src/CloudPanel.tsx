@@ -5,6 +5,7 @@ import {parseProject,type Project} from './project';
 import {LIBRARY_KEY,inspectStoredLibrary,parseLibraryFile,writeStoredLibrary} from './moduleLibraryFile';
 import {studioApi as api,type StudioUser as User} from './studioApi';
 import {AccountSettings} from './AccountSettings';
+import {withPriceStamp} from './pricing';
 type Revision={revision:number;name:string;updated:number};
 type Entry={id:string;name:string;email:string;ownerName?:string;revision:number;updated:number;archived:number};
 export function CloudPanel({project,update}:{project:Project;update:(p:Project)=>boolean}){
@@ -42,7 +43,7 @@ export function CloudPanel({project,update}:{project:Project;update:(p:Project)=
     p.cloud={id:item.id,revision:r.revision,owner:r.email,name:r.name};
     if(!mounted.current)return;
     const filename=(r.name.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').trim()||'Проект')+'.project.json';
-    saveFile(filename,JSON.stringify(p,null,2),'application/json');
+    saveFile(filename,JSON.stringify(withPriceStamp(p),null,2),'application/json');
     setMessage('Файл серверной версии '+r.revision+' передан браузеру для скачивания. Рабочий проект не изменён.');
   }
   const [libraryInfo,setLibraryInfo]=useState('');

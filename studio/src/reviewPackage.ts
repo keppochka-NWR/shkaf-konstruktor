@@ -3,7 +3,7 @@ import {type Project,projectErrors} from './project';
 import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder,uniqueWarnings} from './exports';
 import {drawingsHTML} from './drawings';
 import {placementHTML} from './placementPlan';
-import {estimate,estimateCSV} from './pricing';
+import {estimate,estimateCSV,withPriceStamp} from './pricing';
 import {roomWarnings} from './roomWarnings';
 import {salesCSV} from './SalesSummary';
 import {PUBLIC_BUILD} from './buildMode';
@@ -39,7 +39,7 @@ export function reviewFiles(project:Project,created=new Date()):Record<string,st
   ].join('\r\n');
   return {
     '00-Прочитайте.txt':'\ufeff'+note,
-    '01-Проект.project.json':JSON.stringify(p,null,2),
+    '01-Проект.project.json':JSON.stringify(withPriceStamp(p),null,2),
     '02-Ведомость.html':specificationHTML(p),
     '03-План расстановки.html':placementHTML(p),
     '04-Размерные виды.html':drawingsHTML(p),

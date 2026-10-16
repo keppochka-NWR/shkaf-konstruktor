@@ -22,6 +22,9 @@ type Rule = {
   decls?: string[];
   /** числовой аргумент вызова функции: имя → индекс аргумента цены */
   calls?: Record<string, number>;
+  /** как calls, но исходная розница остаётся следующим аргументом (ревью R5: розница Лемана для модели «цена за лист» — без коэффициента;
+   *  это публичная цена гипермаркета, не закупка цеха): lemana(…, 98) → lemana(…, 215.6, 98) */
+  shelfCalls?: Record<string, number>;
   /** числа с этими значениями внутри функции (оценочные формулы) */
   fnLits?: Record<string, number[]>;
   /** число, умноженное на идентификатор (steps*50 — шаг цены), внутри функции */
@@ -31,8 +34,8 @@ export const BAKE_RULES: Rule[] = [
   { file: 'pricing.ts', coef: 'markup', props: ['price'], decls: ['sheets', 'tierPrice', 'HDF_SHEET', 'PULLOUT_PRICE'], calls: { add: 4 },
     fnLits: { slidePrice: [1040, 1729, 1100, 60] }, fnMulIdent: { slidePrice: ['steps'] } },
   { file: 'hardware.ts', coef: 'markup', props: ['price'] },
-  { file: 'handles.ts', coef: 'markup', calls: { workshop: 3, lemana: 3 } },
-  { file: 'mesh.ts', coef: 'markup', calls: { item: 6 } },
+  { file: 'handles.ts', coef: 'markup', calls: { workshop: 3 }, shelfCalls: { lemana: 3 } },
+  { file: 'mesh.ts', coef: 'markup', shelfCalls: { item: 6 } },
   { file: 'alu.ts', coef: 'markup', props: ['perM', 'perM2', 'sealPerM', 'cornersPerFacade', 'hingeHole', 'hingeHoleNarrow', 'handleHole', 'mirrorFilmPerM2'] },
   { file: 'model.ts', coef: 'markup', props: ['glassTopTemper', 'glassTopPolishPerM'] },
   { file: 'vernissageData.ts', coef: 'vernissage', subtreeProps: ['prices'], props: ['patinaPerM2', 'hingeBoringPerPc', 'enamelMatteLacquerPerM2'] },
@@ -109,6 +112,9 @@ export function bakeEdits(code: string, file: string, coefs: Coefs): BakeEdit[] 
     if (node.type === 'CallExpression') {
       const callee = node.callee as Node, args = node.arguments as Node[];
       for (const r of rules) { const i = callee.type === 'Identifier' ? r.calls?.[callee.name as string] : undefined; if (i !== undefined && args[i]) bake(args[i], coefs[r.coef], callee.name + '()'); }
+      for (const r of rules) { const i = callee.type === 'Identifier' ? r.shelfCalls?.[callee.name as string] : undefined; const a = i === undefined ? undefined : args[i];
+        if (a && isNum(a) && (a.value as number) !== 0 && !args[i! + 1] && !edits.has(a.start)) { const was = a.value as number, now = was * coefs[r.coef];
+          edits.set(a.start, { start: a.start, end: a.end, text: fmt(now) + ', ' + fmt(was), was, now: Math.round(now * 100) / 100, key: callee.name + '()' }); } }
     }
     if (inFn) for (const r of rules) {
       const lits = r.fnLits?.[inFn]; if (lits && isNum(node) && lits.includes(node.value as number)) bake(node, coefs[r.coef], inFn);

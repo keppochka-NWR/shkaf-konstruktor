@@ -101,7 +101,7 @@ import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
-import { decorPrice } from "./pricing";
+import { decorPrice, withPriceStamp } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
 import { ALU_PROFILES, ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
@@ -759,9 +759,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       beforePresentation.current=null;setPresentation(false);setFit(f=>f+1);
     }
   }
-  async function localBackup(){try{const response=await fetch('/__local-project-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Backup-Token':document.querySelector<HTMLMetaElement>('meta[name=local-backup-token]')?.content??''},body:JSON.stringify({project,image:capture.current?.()})});const result=await response.json();if(!response.ok)throw Error(result.error);setSaved('Резервная копия: '+result.path);}catch(e){setError('Не удалось сохранить резервную копию: '+String(e));}}
+  async function localBackup(){try{const response=await fetch('/__local-project-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Backup-Token':document.querySelector<HTMLMetaElement>('meta[name=local-backup-token]')?.content??''},body:JSON.stringify({project:withPriceStamp(project),image:capture.current?.()})});const result=await response.json();if(!response.ok)throw Error(result.error);setSaved('Резервная копия: '+result.path);}catch(e){setError('Не удалось сохранить резервную копию: '+String(e));}}
   function download() {
-    const blob = new Blob([JSON.stringify(project, null, 2)], {
+    const blob = new Blob([JSON.stringify(withPriceStamp(project), null, 2)], {
         type: "application/json",
       }),
       url = URL.createObjectURL(blob),

@@ -293,7 +293,7 @@ export function nestingHTML(p: Project) {
   );
 }
 /** Часть сметы, нужная КП для разбивки цены (estimate() из pricing.ts; передаётся снаружи, чтобы не было цикла импортов). */
-export type QuoteCost = { retail: number | null; model: "markup" | "sheet"; split: { material: number; hardware: number; kupe?: number }; pending?: readonly unknown[] };
+export type QuoteCost = { retail: number | null; model: "markup" | "sheet"; split: { material: number; hardware: number; kupe?: number }; pending?: readonly unknown[]; notice?: string | null };
 export type QuoteSplit = { material: number; hardware: number; kupe: number };
 /** Разбивка цены КП «материалы / фурнитура / двери купе» (решения Макса 06.10 и 16.10.2026): только когда цена КП = расчётной цене модели
  *  «себестоимость × коэффициент». Округление итога до 100 ₽ относится к материалам: материалы = итог − фурнитура − двери купе,
@@ -323,6 +323,8 @@ const clientStyle = `<style>.seller{display:flex;justify-content:space-between;g
 function sellerBlock(seller?: SellerInfo) {
   return hasSeller(seller) ? `<header class="seller"><b>${esc(seller!.name.trim())}</b><p>${esc(seller!.contacts.trim())}</p></header>` : "";
 }
+/** Цена КП включает позиции после финального расчёта — отметка менеджера (offer.pendingIncluded). */
+export const PENDING_INCLUDED_NOTE = "Цена включает позиции после финального расчёта конструктором (цена согласована менеджером)";
 export function quoteHTML(
   p: Project,
   customer: string,
@@ -337,10 +339,15 @@ export function quoteHTML(
     ? `<table class="split"><tbody>${splitRows(split).map(([k, v]) => `<tr><td>${k}</td><td>${rub(v)}</td></tr>`).join("")}<tr><td>Итого</td><td>${rub(n)}</td></tr></tbody></table>`
     : `<p class="sum">Стоимость: ${rub(n)}</p>`;
   // позиции кухни без счёта (pendingPrices.ts): итог — по известным позициям, рядом явная строка с их числом
-  const pendingNote = priced && opts.cost?.pending?.length && Number(price) === opts.cost.retail ? `<p class="note">${pendingTotalLabel(opts.cost.pending.length)}</p>` : "";
+  // — по статусу комплектации (ревью R6), не по равенству цены КП итогу: скидка или округление цены её не убирают.
+  // Закрыть позиции ручной ценой — только явной отметкой менеджера (offer.pendingIncluded).
+  const pendingN = opts.cost?.pending?.length ?? 0;
+  const pendingNote = !pendingN ? "" : p.offer?.pendingIncluded ? `<p class="note">${esc(PENDING_INCLUDED_NOTE)}</p>` : `<p class="note">${pendingTotalLabel(pendingN)}</p>`;
+  // публичная сборка: расчёт менеджера, который она не может повторить (ревью R1/R2) — явная строка
+  const noticeNote = opts.cost?.notice ? `<p class="note">${esc(opts.cost.notice)}</p>` : "";
   return htmlDocument(
     "Коммерческое предложение",
-    `${clientStyle}${sellerBlock(opts.seller)}<h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p>${image ? `<img src="${image}" style="width:100%;max-height:420px;object-fit:contain" alt="Вид проекта"/>` : ""}${clientModulesTable(p)}${sum}${pendingNote}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small>`,
+    `${clientStyle}${sellerBlock(opts.seller)}<h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p>${image ? `<img src="${image}" style="width:100%;max-height:420px;object-fit:contain" alt="Вид проекта"/>` : ""}${clientModulesTable(p)}${sum}${pendingNote}${noticeNote}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small>`,
   );
 }
 /** Спецификация для клиента: те же изделия и материалы, что в КП, без цены, координат и производственных данных. */

@@ -19,7 +19,9 @@ import {clientView} from './clientPrices';
 import {pendingPrice,pendingTotalLabel} from './pendingPrices';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
-export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number};
+export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
+  /** штамп менеджерской версии (withPriceStamp): базовые коэффициенты, с которыми запечена публичная сборка */
+  baseMarkup?:number;baseVernissageMarkup?:number};
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
 export const MARKUP_DEFAULT=2.2;
 export const SHEET_PRICE_DEFAULT=23000; // экономика цеха (модель 08.2026): цена клиенту за лист ЛДСП с фурнитурой и работой
@@ -32,7 +34,39 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
 export const FALSH_GLUE_RETAIL_M2 = 1000;
-export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean};
+export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
+  /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
+  shelf?:number};
+/** позиции Лемана по выбору клиента (ручки, сетки): в «цене за лист» — сверху листов по рознице Лемана */
+export const isLemanaLine=(id:string)=>id.startsWith('mesh:')||id.startsWith('handle:lm');
+/** R1 (ревью Codex 16.10.2026): расчёт сделан менеджером, а публичная сборка не может его повторить */
+export const MANAGER_CALC_NOTICE='Расчёт сделан менеджером — откройте в менеджерской версии';
+/** R2: модель «цена за лист» без сохранённой в проекте цены листа */
+export const SHEET_PRICE_NOTICE='Цена листа не сохранена в проекте — укажите цену листа или откройте расчёт в менеджерской версии';
+/** Коэффициент проекта сохранён до штампа базы (менеджерская версия до 16.10.2026) — проверить его публичная сборка не может */
+export const MARKUP_UNVERIFIED_NOTICE='Цена посчитана по коэффициенту салона; если менеджер менял коэффициент в этом проекте, точная цена — в менеджерской версии';
+/** Публичная сборка (ревью Codex R1): таблицы запечены × базовый коэффициент (MARKUP_DEFAULT при сборке), коэффициенты таблиц — 1.
+ *  Данные проекта (не JS) хранят коэффициент сметы и ручные цены менеджера в закупке. Менеджерская версия при сохранении ставит
+ *  штамп базы (withPriceStamp: baseMarkup, baseVernissageMarkup, sheetPrice). Отсюда:
+ *  — коэффициент таблиц = markup / baseMarkup (нестандартный коэффициент проекта не теряется), без штампа — 1;
+ *  — ручная цена в запечённых единицах = ручная цена × (baseMarkup ?? markup): итог тот же, что у менеджера;
+ *  — пересчитать нельзя (нет коэффициента, ручная цена Вернисажа без его коэффициента) — blocked: итога нет, MANAGER_CALC_NOTICE. */
+export function publicSettings(s:PriceSettings):{settings:PriceSettings;ov:number|null;ovVernissage:number|null;blocked:boolean;notice:string|null}{
+  const fin=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v)&&v>0;
+  const pm=s.markup,base=s.baseMarkup,vm=s.vernissageMarkup,vb=s.baseVernissageMarkup;
+  const markup=fin(base)&&fin(pm)?pm/base:1,vernissageMarkup=fin(vb)&&fin(vm)?vm/vb:1;
+  const ov=fin(base)?base:fin(pm)?pm:null,ovVernissage=fin(vb)?vb:fin(vm)?vm:null;
+  const hasOverrides=!!s.overrides&&Object.keys(s.overrides).length>0;
+  // проект из менеджерской версии без штампа: коэффициент не 1 (у проектов публичной сборки он запечён в 1) — проверить нельзя
+  const notice=!fin(base)&&fin(pm)&&pm!==1?MARKUP_UNVERIFIED_NOTICE:null;
+  return {settings:{...s,markup,vernissageMarkup,overrides:s.overrides??{}},ov,ovVernissage,blocked:hasOverrides&&ov===null,notice};
+}
+/** Менеджерская версия: штамп базы публичной сборки в данных проекта при сохранении (файл, облако, комплект на проверку). */
+export function withPriceStamp<P extends {calculation?:PriceSettings}>(p:P):P{
+  if(PUBLIC_BUILD||!p.calculation)return p;
+  const c=p.calculation;
+  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...(c.model==='sheet'&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
+}
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
 // Явные цены по ходовым декорам — прайс Победы (совпадает с прайсом Lamarty «Спец» 01.01.2026).
@@ -180,10 +214,19 @@ export function byNames(total:number,names:Record<string,number>):Record<string,
   return {[es.sort((a,b)=>b[1]-a[1])[0][0]]:total};
 }
 export function estimate(p:Project,plan:Sheet[]=nest(p)){
-  // публичная сборка: цены таблиц уже запечены в розницу (scripts/bake-prices.ts) — коэффициенты 1; ручные цены проекта (закупка) не применяются
-  const lines:PriceLine[]=[];const settings0=p.calculation||{markup:MARKUP_DEFAULT,overrides:{}},settings=PUBLIC_BUILD?{...settings0,markup:1,vernissageMarkup:1,overrides:{}}:settings0;
+  // публичная сборка: цены таблиц уже запечены в розницу (scripts/bake-prices.ts) — коэффициенты таблиц 1; ручные цены и коэффициенты
+  // проекта пересчитываются по данным проекта (publicSettings, ревью Codex R1), а не отбрасываются
+  const lines:PriceLine[]=[];const settings0=p.calculation||{markup:MARKUP_DEFAULT,overrides:{}},pub=PUBLIC_BUILD?publicSettings(settings0):null,settings=pub?pub.settings:settings0;
+  let blocked=pub?.blocked??false;
+  // R5: розница Лемана (ручки, сетки) — для модели «цена за лист», где они идут сверху листов без коэффициента
+  const shelf=new Map<string,number>();
   // retail=true: розничная позиция прайса цеха, добавляется к цене ПОСЛЕ коэффициента и не входит в себестоимость.
-  function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string,retail=false){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}lines.push({id,label,quantity,unit,unitPrice:settings.overrides[id]??unitPrice,source:settings.overrides[id]===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
+  function add(id:string,label:string,quantity:number,unit:string,unitPrice:number|null,source:string,retail=false){if(!quantity)return;const existing=lines.find(l=>l.id===id);if(existing){existing.quantity+=quantity;return;}
+    const ov=settings.overrides[id];let price=ov===undefined?unitPrice:ov;
+    if(ov!==undefined){if(isLemanaLine(id))shelf.set(id,ov);
+      // ручная цена менеджера — в закупке: в публичной сборке строка считается в запечённых единицах (ручная цена × базовый коэффициент проекта)
+      if(pub&&!retail){const k=isVernissageLine(id)?pub.ovVernissage:pub.ov;if(k===null){blocked=true;price=null;}else price=Math.round(ov*k*100)/100;}}
+    lines.push({id,label,quantity,unit,unitPrice:price,source:ov===undefined?source:'Цена в этом проекте',...(retail?{retail:true}:{})});}
   for(const sheet of plan){
     if(sheet.material==='hdf'){add('sheet:hdf','ЛХДФ 3 мм',1,'лист',HDF_SHEET,'Древиз: ХДФ Kronospan 2800×2070');continue;}
     // толщина листа — из раскроя (у кухонь Базиса бывает 19 мм); строка 16 мм как раньше
@@ -418,7 +461,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручка Базиса на фасаде кухни (kitchen.handle.name, n4-wall) — строкой Базиса по ручкам сцены; в bazisItems её нет (markBazis)
       const kh=a.module.kitchen?.handle;
       if(d.role==='handle'&&kh?.name&&d.name==='Ручка фасада · '+kh.name)add('bazis:ручка:'+kh.name,kh.name,1,'шт',null,BZ);
-      else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);}
+      else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
       // навес кухни — с заглушкой ABS, как в Базисе (34 кухни: у параметрических модулей навесов 34, заглушек 34)
       if(d.id.startsWith('kitchen-hanger:')){add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS',1,'шт',null,'Как в проектах Базиса: заглушка на каждый навес; цена не найдена');}
@@ -442,7 +485,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(s.pullouts)add('pullout:'+pulloutLength(a.module),'Выдвижной тремпель GTV '+pulloutLength(a.module)+' мм',s.pullouts,'шт',PULLOUT_PRICE,'Цена Макса 07.10.2026: 500 ₽ за тремпель');
       for(let j=0;j<s.drawers;j++){
         const c=drawerConfig(a.module,s,j);
-        if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');continue;}
+        if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');if(item&&!shelf.has('mesh:'+c.mesh))shelf.set('mesh:'+c.mesh,item.shelf??item.price);continue;}
         const sys=slideSystem(c),q=slidePrice(c),isDefault=sys.id==='ball-soft'||sys.id==='hidden-dtc-push';
         add('slide:'+c.slide+':'+c.length+(isDefault?'':':'+sys.id),q.label,1,'компл',q.price,q.source);
       }
@@ -457,7 +500,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model:'markup'|'sheet'=settings.model==='sheet'&&sheetPrice>0?'sheet':'markup';
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
+  // R2: «цена за лист» без цены листа (публичная сборка: цены по умолчанию нет) — модель не меняется молча; итога нет, пока цену листа не укажут
+  const needSheetPrice=model==='sheet'&&!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
@@ -483,7 +528,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const unplacedLines=lines.filter(l=>l.id.startsWith('unplaced:')||l.id.startsWith('unplaced-raw:')).length;
   const engine=cuttingEngine(p);
   // Модель цеха: цена за лист ЛДСП включает фурнитуру, кромку и работу; сверху — розница (подсветка) и позиции Лемана по выбору клиента.
-  const lemana=Math.round(lines.filter(l=>!l.retail&&(l.id.startsWith('mesh:')||l.id.startsWith('handle:lm'))).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  // R5: розница Лемана как есть (shelf), не запечённая × коэффициент цена строки; у менеджера shelf = цене строки
+  for(const l of lines){const s=shelf.get(l.id);if(s!==undefined&&s!==l.unitPrice&&l.unitPrice!==null)l.shelf=s;}
+  const lemana=Math.round(lines.filter(l=>!l.retail&&isLemanaLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice===null?0:l.shelf??l.unitPrice),0));
   // Фасады «Вернисаж» (и присадка под петли на них) — покупное изделие стороннего производителя: в раскрой ЛДСП не идут, значит в цену листа
   // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × коэффициент Вернисажа (1,6), как и в
   // «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы.
@@ -492,7 +539,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
    *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
    *  выбор движка для цены — ярус B. */
-  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,retail:unplacedLines?null:model==='sheet'?bySheet:byMarkup};
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }

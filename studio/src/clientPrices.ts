@@ -21,7 +21,9 @@ export function clientLine(l:PriceLine,markup:number,vernissageMarkup:number,mod
   const vern=l.id.startsWith('vernissage');
   if(model==='sheet'&&!l.retail&&!vern&&!isLemana(l.id))return {...l,unitPrice:null,source:l.unitPrice===null?CLIENT_SOURCE_MISSING:CLIENT_SOURCE_IN_SHEET,retail:true};
   const k=l.retail?1:vern?vernissageMarkup:model==='sheet'?1:markup;
-  return {...l,unitPrice:l.unitPrice===null?null:Math.round(l.unitPrice*k*100)/100,source:l.unitPrice===null?CLIENT_SOURCE_MISSING:CLIENT_SOURCE,retail:true};
+  // «цена за лист»: Леман — по рознице как есть (shelf, ревью R5), не по запечённой × коэффициент цене строки
+  const {shelf,...rest}=l,base=model==='sheet'&&isLemana(l.id)&&shelf!==undefined?shelf:l.unitPrice;
+  return {...rest,unitPrice:base===null?null:Math.round(base*k*100)/100,source:l.unitPrice===null?CLIENT_SOURCE_MISSING:CLIENT_SOURCE,retail:true};
 }
 export function clientView<T extends EstimateLike>(e:T):T{
   const lines=e.lines.map(l=>clientLine(l,e.markup,e.vernissageMarkup,e.model));

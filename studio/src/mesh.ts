@@ -2,8 +2,8 @@
 // артикулы настоящие, цены розничные. reqW/reqD — требуемые внутренние ширина и глубина секции по габариту
 // изделия (технички производителей уточняются), h — высота изделия. Ставится вместо ящика ЛДСП, свои направляющие
 // в комплекте; фасада и ручки нет; за распашными дверями нужны фальши как для ящиков.
-export type MeshItem = { id: string; art: string; label: string; kind: "basket" | "trousers" | "shoes"; reqW: number; reqD: number; h: number; price: number };
-const item = (art: string, label: string, kind: MeshItem["kind"], reqW: number, reqD: number, h: number, price: number): MeshItem => ({ id: "lm" + art, art, label, kind, reqW, reqD, h, price });
+export type MeshItem = { id: string; art: string; label: string; kind: "basket" | "trousers" | "shoes"; reqW: number; reqD: number; h: number; price: number; /** розница Лемана как есть (R5: модель «цена за лист»); в публичной сборке price запечён × коэффициент, shelf — исходная розница */ shelf?: number };
+const item = (art: string, label: string, kind: MeshItem["kind"], reqW: number, reqD: number, h: number, price: number, shelf: number = price): MeshItem => ({ id: "lm" + art, art, label, kind, reqW, reqD, h, price, shelf });
 export const MESH: MeshItem[] = [
   item("85127628", "Корзина Титан-GS 430 · h185", "basket", 440, 560, 185, 711),
   item("85127629", "Корзина Титан-GS 430 · h85", "basket", 440, 560, 85, 688),
