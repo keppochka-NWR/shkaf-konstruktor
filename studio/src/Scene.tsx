@@ -1,6 +1,7 @@
 import {dishwasherServiceModel} from './dishwasherServices';
 import {applianceModel} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
+import {hiddenWalls,roomEdges,edgeVisible,readCutaway,type CutawayWall} from './roomCutaway';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
 import {worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
@@ -118,6 +119,8 @@ type Props = {
   roomDimensions?:boolean;
   gapDimensions?:boolean;
   presentation?:boolean;
+  /** «Ближние стены: скрыть» — стена между камерой и комнатой прячется целиком (по умолчанию — настройка зрителя, ВКЛ). */
+  cutaway?:boolean;
   drawerPreview?:{sid:string;index:number};
 };
 export function Scene(p: Props) {
@@ -125,7 +128,7 @@ export function Scene(p: Props) {
     current = useRef(p);
   current.current = p;
   const [error, setError] = useState("");
-  const api = useRef<{ rebuild: () => void; fit: () => void } | null>(null);
+  const api = useRef<{ rebuild: () => void; fit: () => void; refresh: () => void } | null>(null);
   useEffect(() => {
     const target = host.current!;
     let disposed = false;
@@ -240,13 +243,24 @@ export function Scene(p: Props) {
       });
       scene.remove(group);
     }
-    const labels: { element: HTMLButtonElement; position: THREE.Vector3 }[] =
+    const labels: { element: HTMLButtonElement; position: THREE.Vector3; wall?: CutawayWall }[] =
       [];
+    // Ближние стены: что принадлежит какой стене; видимость меняется по камере без пересборки сцены.
+    const cutawayParts:{obj:THREE.Object3D;walls:CutawayWall[]}[]=[];
+    let cutawayRoom:{x0:number;z0:number;width:number;depth:number}|undefined,cutawayHidden=new Set<CutawayWall>(),cutawayKey='';
+    function applyCutaway(){
+      const r=cutawayRoom,on=current.current.cutaway??readCutaway();
+      const hidden=r?hiddenWalls(r,{x:camera.position.x-r.x0,z:camera.position.z-r.z0},on):new Set<CutawayWall>();
+      const key=[...hidden].join(',');if(key===cutawayKey)return;
+      cutawayKey=key;cutawayHidden=hidden;
+      for(const p of cutawayParts)p.obj.visible=edgeVisible(p.walls,hidden);
+    }
     function label(
       text: string,
       pos: THREE.Vector3,
       action?: () => void,
       small = false,
+      wall?: CutawayWall,
     ) {
       const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
       pos.applyAxisAngle(new THREE.Vector3(0,1,0),(active.rotation??0)*Math.PI/180);
@@ -265,15 +279,15 @@ export function Scene(p: Props) {
       button.addEventListener("click", () => action?.());
       button.disabled = !action;
       target.appendChild(button);
-      labels.push({ element: button, position: pos });
+      labels.push({ element: button, position: pos, wall });
     }
 
     /** Подпись в координатах комнаты (без поворота активного корпуса). */
-    function roomLabel(text:string,pos:THREE.Vector3,action?:()=>void,small=false){
+    function roomLabel(text:string,pos:THREE.Vector3,action?:()=>void,small=false,wall?:CutawayWall){
       const button=document.createElement("button");button.type="button";button.className="model-dimension room-dimension"+(small?" gap-dimension":"");button.textContent=text;
       button.setAttribute("aria-label","Размер помещения: "+text);button.title=action?"Нажмите, чтобы изменить размер":text;
       button.addEventListener("pointerdown",e=>e.stopPropagation());button.addEventListener("click",()=>action?.());button.disabled=!action;
-      target.appendChild(button);labels.push({element:button,position:pos});
+      target.appendChild(button);labels.push({element:button,position:pos,wall});
     }
     function line(points: THREE.Vector3[]) {
       const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
@@ -294,6 +308,7 @@ export function Scene(p: Props) {
       scene.background=state.presentation?new THREE.Color(0xf1f0eb):null;
       for (const l of labels) l.element.remove();
       labels.length = 0;
+      cutawayParts.length=0;cutawayRoom=undefined;cutawayKey='\u0000';
       moduleGroups.clear();
       generation++;pendingTextures=0;
       const gen = generation;
@@ -580,23 +595,17 @@ export function Scene(p: Props) {
         const r = state.room,
           x0 = -moduleCenter(focus).x,
           z0 = -moduleCenter(focus).z;
-        const geo = new THREE.BoxGeometry(r.width, r.height, r.depth);
-        const outline = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geo),
-          new THREE.LineBasicMaterial({
-            color: 0x8dabb4,
-            transparent: true,
-            opacity: 0.5,
-          }),
-        );
-        geo.dispose();
-        outline.position.set(x0 + r.width / 2, r.height / 2, z0 + r.depth / 2);
-        modelGroup.add(outline);
+        // Контур комнаты — 12 рёбер, у каждого свои стены: при «Ближние стены: скрыть» ребро пропадает вместе со стеной.
+        cutawayRoom={x0,z0,width:r.width,depth:r.depth};
+        for(const e of roomEdges(r.width,r.height,r.depth)){
+          const edge=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x0+e.a[0],e.a[1],z0+e.a[2]),new THREE.Vector3(x0+e.b[0],e.b[1],z0+e.b[2])]),new THREE.LineBasicMaterial({color:0x8dabb4,transparent:true,opacity:0.5}));
+          modelGroup.add(edge);cutawayParts.push({obj:edge,walls:e.walls});
+        }
         let environmentOpeningId:string|undefined;
         function wallBox(wall:string,u:number,y:number,w:number,h:number,depth:number,color:number,opacity:number){
           const horizontal=wall==='back'||wall==='front';
           const mesh=new THREE.Mesh(new THREE.BoxGeometry(horizontal?w:depth,h,horizontal?depth:w),new THREE.MeshStandardMaterial({color,transparent:opacity<1,opacity,depthWrite:opacity===1}));
-          mesh.position.set(horizontal?x0+u:x0+(wall==='left'?-depth/2:r.width+depth/2),y,horizontal?z0+(wall==='back'?-depth/2:r.depth+depth/2):z0+u);mesh.receiveShadow=true;if(environmentOpeningId)mesh.userData.openingId=environmentOpeningId;modelGroup.add(mesh);return mesh;
+          mesh.position.set(horizontal?x0+u:x0+(wall==='left'?-depth/2:r.width+depth/2),y,horizontal?z0+(wall==='back'?-depth/2:r.depth+depth/2):z0+u);mesh.receiveShadow=true;if(environmentOpeningId)mesh.userData.openingId=environmentOpeningId;modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[wall as CutawayWall]});return mesh;
         }
         for(const panel of wallPanels(r)){
           if(!r.survey?.surfaces[panel.wall]){wallBox(panel.wall,panel.u,panel.y,panel.width,panel.height,80,0xd5d5cc,panel.wall==='front'||panel.wall==='right'?0.06:0.25);continue;}
@@ -608,7 +617,7 @@ export function Scene(p: Props) {
             for(const n of [0,1,2,0,2,3]){const p=points[n];vertices.push(x0+p.x,p.y,z0+p.z);}
           }
           const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.computeVertexNormals();
-          const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb5c9c1,transparent:true,opacity:panel.wall==='front'||panel.wall==='right'?.08:.35,side:THREE.DoubleSide,depthWrite:false}));modelGroup.add(mesh);
+          const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb5c9c1,transparent:true,opacity:panel.wall==='front'||panel.wall==='right'?.08:.35,side:THREE.DoubleSide,depthWrite:false}));modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[panel.wall]});
         }
         for(const side of ['floor','ceiling'] as const)if(r.survey?.surfaces[side]){
           const grid=r.survey.surfaces[side]!,vertices:number[]=[];
@@ -649,8 +658,10 @@ export function Scene(p: Props) {
           if(f.round&&f.horizontal)mesh.rotation.z=horizontal?Math.PI/2:0,mesh.rotation.x=horizontal?0:Math.PI/2;
           if(f.round&&!f.horizontal&&!horizontal)mesh.rotation.y=0;
           mesh.userData.fixtureId=f.id;mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);
+          // Предмет в комнате (батарея, розетка) остаётся виден; утопленный в стену (ниша, штроба) скрывается вместе со стеной.
+          if(recess)cutawayParts.push({obj:mesh,walls:[f.wall as CutawayWall]});
           const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.selectedFixture===f.id?0x087f94:0x6f6a60,transparent:true,opacity:state.selectedFixture===f.id?1:.45}));mesh.add(edge);
-          if(!state.presentation)label(fixtureLabel(f,fi),new THREE.Vector3(cx,f.fromFloor+f.height+40,cz),()=>current.current.onFixtureSelect?.(f.id),true);
+          if(!state.presentation)label(fixtureLabel(f,fi),new THREE.Vector3(cx,f.fromFloor+f.height+40,cz),()=>current.current.onFixtureSelect?.(f.id),true,recess?f.wall as CutawayWall:undefined);
         }
         // Размеры помещения и выбранного проёма/объекта прямо в 3D: клик по числу — правка (как у корпуса).
         if(!state.presentation&&state.onRoomDimension&&state.roomDimensions!==false){
@@ -662,10 +673,12 @@ export function Scene(p: Props) {
           // Подписи не накрывают объект: ширина — над ним, «от угла / до угла» — по бокам на его высоте, «от пола» — под ним.
           const chain=(kind:'opening'|'fixture',id:string,wall:string,offset:number,width:number,y:number,top:number,extra?:[string,number,string])=>{
             const len=wall==='back'||wall==='front'?r.width:r.depth,rest=len-offset-width;
-            roomLabel(`${Math.round(offset)} от угла`,wallPoint(wall,offset/2,y),()=>dim(kind,id,'offset',offset),true);
-            roomLabel(`${Math.round(width)} мм`,wallPoint(wall,offset+width/2,top+90,40),()=>dim(kind,id,'width',width));
-            roomLabel(`${Math.round(rest)} до угла`,wallPoint(wall,offset+width+rest/2,y),()=>dim(kind,id,'end',rest),true);
-            if(extra)roomLabel(extra[0],wallPoint(wall,offset+width/2,extra[1],40),()=>dim(kind,id,extra[2],extra[1]),true);
+            // Подписи проёма скрываются со своей стеной; объекта в комнате (батарея, розетка) — остаются, как и он сам.
+            const own=kind==='opening'||(kind==='fixture'&&(r.fixtures||[]).some(f=>f.id===id&&FIXTURES[f.type].recess))?wall as CutawayWall:undefined;
+            roomLabel(`${Math.round(offset)} от угла`,wallPoint(wall,offset/2,y),()=>dim(kind,id,'offset',offset),true,own);
+            roomLabel(`${Math.round(width)} мм`,wallPoint(wall,offset+width/2,top+90,40),()=>dim(kind,id,'width',width),false,own);
+            roomLabel(`${Math.round(rest)} до угла`,wallPoint(wall,offset+width+rest/2,y),()=>dim(kind,id,'end',rest),true,own);
+            if(extra)roomLabel(extra[0],wallPoint(wall,offset+width/2,extra[1],40),()=>dim(kind,id,extra[2],extra[1]),true,own);
           };
           const o=(r.openings||[]).find(o=>o.id===state.selectedOpening);
           if(o)chain('opening',o.id,o.wall,o.offset,o.width,o.sill+o.height/2,o.sill+o.height,o.type==='window'?[`${o.sill} от пола`,o.sill/2,'sill']:[`высота ${o.height}`,o.sill+o.height/2-120,'height']);
@@ -941,7 +954,7 @@ export function Scene(p: Props) {
     renderer.domElement.addEventListener("webglcontextlost", loss);
     rebuild();
     fit();
-    api.current = { rebuild, fit };
+    api.current = { rebuild, fit, refresh: () => { needsRender = true; } };
     current.current.captureReady(() => {
       if(pendingTextures>0)throw Error("Материалы ещё загружаются. Подождите несколько секунд и повторите сохранение изображения.");
       const size=renderer.getSize(new THREE.Vector2()),ratio=renderer.getPixelRatio(),background=scene.background,gridVisible=grid.visible;
@@ -961,7 +974,7 @@ export function Scene(p: Props) {
       if (disposed) return;
       controls.update();
       if(needsRender){
-      needsRender=false;renderer.render(scene, camera);
+      needsRender=false;applyCutaway();renderer.render(scene, camera);
       // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
       // вверх/вниз на её высоту, а если места нет — прячем до следующего поворота камеры (аудит вёрстки 06.10.2026).
       const rect=target.getBoundingClientRect();
@@ -974,7 +987,7 @@ export function Scene(p: Props) {
         const x = ((v.x + 1) / 2) * target.clientWidth, y0 = ((-v.y + 1) / 2) * target.clientHeight;
         l.element.style.left = x + "px";
         l.element.style.visibility = "";
-        if (!(v.z < 1 && v.z > -1 && Math.abs(v.x)<1 && Math.abs(v.y)<1)) { l.element.style.display = "none"; continue; }
+        if ((l.wall&&cutawayHidden.has(l.wall)) || !(v.z < 1 && v.z > -1 && Math.abs(v.x)<1 && Math.abs(v.y)<1)) { l.element.style.display = "none"; continue; }
         l.element.style.display = "";
         const w = l.element.offsetWidth + 4, h = l.element.offsetHeight + 4;
         const hits = (y:number) => placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < (p.h + h) / 2);
@@ -1040,6 +1053,8 @@ export function Scene(p: Props) {
       p.drawerPreview?.index,
     ],
   );
+  // Переключатель «Ближние стены» — только видимость, без пересборки сцены.
+  useEffect(() => api.current?.refresh(), [p.cutaway]);
   useEffect(
     () => api.current?.fit(),
     [
