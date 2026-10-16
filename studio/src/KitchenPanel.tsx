@@ -1,4 +1,5 @@
 import {SettingsTree} from './SettingsTree';
+import {MANAGER_PRICING} from './buildMode';
 import {applyFacadeStyle} from './applyFacadeStyle';
 import {OVEN} from './ovenDimensions';
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
@@ -288,7 +289,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
       {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
       <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
-        {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{HINGE_BRANDS[b].label} · {HINGE_BRANDS[b].note} · {HINGE_BRANDS[b].soft.price} ₽/шт</option>)}</select></label>
+        {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{HINGE_BRANDS[b].label} · {HINGE_BRANDS[b].note}{MANAGER_PRICING?' · '+HINGE_BRANDS[b].soft.price+' ₽/шт':''}</option>)}</select></label>
       {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.doorHinges?.[0] ?? s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { const side=e.target.value as "left"|"right"|"top"; n.sections[sIdx].doorHinges=[side]; if(side!=="top"){n.sections[sIdx].hingeSide=side;delete n.kitchenLift;} })}><option value="left">Слева</option><option value="right">Справа</option><option value="top">Сверху (подъёмный)</option></select></label>}
       {/* фактические высоты (ручные пересчитаны под текущую высоту фасада) — их показываем и от них считаем правки */}
       <div className="kitchen-chips" role="group" aria-label="Высоты петель">

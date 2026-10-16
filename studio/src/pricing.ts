@@ -14,6 +14,8 @@ import {kupeLines} from './kupe';
 import {guideKits,guideKitLine,versaliteKit,modernKit,firmaxKit,shareKits,axisSpecs} from './guideKits';
 import {MODERN} from './kitchenDrawers';
 import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES} from './facadesVernissage';
+import {PUBLIC_BUILD} from './buildMode';
+import {clientView} from './clientPrices';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number};
@@ -467,7 +469,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
    *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
    *  выбор движка для цены — ярус B. */
-  return {lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,retail:unplacedLines?null:model==='sheet'?bySheet:byMarkup};
+  const result={lines,missing,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,retail:unplacedLines?null:model==='sheet'?bySheet:byMarkup};
+  // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
+  return PUBLIC_BUILD?clientView(result):result;
 }
 /** Строка-сведение о движке раскроя для итога сметы и CSV. */
 export function engineNote(e:Pick<ReturnType<typeof estimate>,'engine'>):string{
