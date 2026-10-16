@@ -21,7 +21,19 @@ import {
   labelOrder,
   labelsHTML,
   specificationHTML,
+  clientSpecificationHTML,
+  quoteBreakdown,
+  orderNumber,
 } from "./exports";
+import {printDocument} from './printDocument';
+import './documents.css';
+import {loadSeller,saveSeller,hasSeller,type SellerInfo} from './sellerInfo';
+import {count,DETAILS,SHEETS} from './ru';
+const PRINT_BUTTON='<button onclick="window.print()">Печать / Сохранить PDF</button>';
+/** Вкладки производственных документов: для них нужен номер заказа. */
+const PRODUCTION_TABS:OutputTab[]=['sheets','specification','drawings','labels'];
+/** Режимы раскроя понятными словами (аудит магазина: «гильотина как в Базисе (пропил 4,4)»). */
+export const CUT_MODES={classic:'Предварительная укладка',guillotine:'Под форматную пилу: сквозные резы, пропил 4,4 мм'} as const;
 export function OutputPanel({
   project,
   initialTab = "sheets",
@@ -52,41 +64,55 @@ export function OutputPanel({
   const [quoteImage,setQuoteImage]=useState<string|null>(null);
   const calculated=useMemo(()=>tab==='quote'?estimate(project,sheets):null,[tab,project,sheets]);
   const q = project.offer || { customer: "", price: "", notes: "" };
-  const quotePreview=useMemo(()=>tab==='quote'&&quoteImage!==null?quoteHTML(project,q.customer,q.price,q.notes,quoteImage||undefined):'',[tab,project,quoteImage,q.customer,q.price,q.notes]);
+  const [seller,setSeller]=useState<SellerInfo>(loadSeller);
+  // раскрыто, пока продавец не задан; дальше — как оставил менеджер (не схлопывается при вводе)
+  const [sellerOpen]=useState(()=>!hasSeller(seller));
+  function changeSeller(s:SellerInfo){if(s.name===seller.name&&s.contacts===seller.contacts)return;setSeller(s);saveSeller(s);}
+  const quotePreview=useMemo(()=>tab==='quote'&&quoteImage!==null?quoteHTML(project,q.customer,q.price,q.notes,quoteImage||undefined,{seller,cost:calculated}):'',[tab,project,quoteImage,q.customer,q.price,q.notes,seller,calculated]);
+  const clientSpec=useMemo(()=>tab==='client-spec'?clientSpecificationHTML(project,q.customer,seller):'',[tab,project,q.customer,seller]);
+  const order=orderNumber(project),production=PRODUCTION_TABS.includes(tab);
+  // Номер заказа для производства: печатается на бирках, картах и в имени комплекта; без него выдача производству закрыта.
+  function setOrder(v:string){const m=project.measurement||{number:'',date:'',notes:''};return update({...project,measurement:{...m,number:v.trim()}});}
+  const orderGate=!order&&<p className="essential-note" role="status">Укажите номер заказа — он печатается на бирках и в имени комплекта технологу.</p>;
   return (
     <div className="output-panel">
-      <div className="review-package">
-        <div><b>Комплект документов</b><p className="field-note">Один ZIP: чертежи, карты, бирки и итоговая стоимость из одной версии.</p></div>
-        <button className="outline" disabled={packing} onClick={async()=>{setPacking(true);setPackageMessage('');setPackageError('');try{await downloadReviewArchive(project,true);setPackageMessage('Комплект передан браузеру для скачивания. Внутри — памятка и замечания. Серверное сохранение выполняется отдельно в кабинете.');}catch(e){setPackageError(e instanceof Error?e.message:'Не удалось сформировать комплект. Попробуйте ещё раз.');}finally{setPacking(false);}}}>{packing?'Готовим комплект…':'Скачать комплект ZIP'}</button>
+      <div className="output-groups">
+        <div className="output-group" role="group" aria-label="Документы для клиента"><span className="output-group-title">Для клиента</span>
+          <div className="output-tabs">
+            <button aria-pressed={tab === "quote"} onClick={() => setTab("quote")}>Коммерческое предложение</button>
+            <button aria-pressed={tab === "client-spec"} onClick={()=>setTab("client-spec")}>Спецификация</button>
+            <button aria-pressed={tab === "placement"} onClick={()=>setTab("placement")}>Расстановка</button>
+            <button aria-pressed={tab === 'estimate'} onClick={()=>setTab('estimate')}>Стоимость</button>
+          </div>
+        </div>
+        <div className="output-group" role="group" aria-label="Документы для производства"><span className="output-group-title">Для производства</span>
+          <div className="output-tabs">
+            <button aria-pressed={tab === "sheets"} onClick={() => setTab("sheets")}>Карты листов и деталировка</button>
+            <button aria-pressed={tab === "specification"} onClick={()=>setTab("specification")}>Ведомость</button>
+            <button aria-pressed={tab === "drawings"} onClick={()=>setTab("drawings")}>Чертежи модулей</button>
+            <button aria-pressed={tab === 'labels'} onClick={()=>setTab('labels')}>Бирки деталей</button>
+          </div>
+        </div>
       </div>
+      {production&&<div className="review-package">
+        <label className="hardware-field order-number">Номер заказа<input aria-label="Номер заказа" key={'order:'+order} defaultValue={order} maxLength={40} placeholder="Например: 7212718" onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}} onBlur={e=>{if(e.target.value.trim()!==order&&!setOrder(e.target.value))e.target.value=order;}}/></label>
+        <div><b>Комплект технологу</b><p className="field-note">Один ZIP: чертежи, карты, бирки и итоговая стоимость из одной версии.</p></div>
+        <button className="outline" disabled={packing||!order} onClick={async()=>{setPacking(true);setPackageMessage('');setPackageError('');try{await downloadReviewArchive(project,true);setPackageMessage('Комплект передан браузеру для скачивания. Внутри — памятка и замечания. Серверное сохранение выполняется отдельно в кабинете.');}catch(e){setPackageError(e instanceof Error?e.message:'Не удалось сформировать комплект. Попробуйте ещё раз.');}finally{setPacking(false);}}}>{packing?'Готовим комплект…':'Скачать комплект ZIP'}</button>
+      </div>}
+      {production&&orderGate}
       {packageMessage&&<p role="status" className="field-note">{packageMessage}</p>}{packageError&&<p role="alert" className="cloud-error">{packageError}</p>}
-      <div className="output-tabs">
-        <button
-          aria-pressed={tab === "sheets"}
-          onClick={() => setTab("sheets")}
-        >
-          Карты листов и деталировка
-        </button>
-        <button aria-pressed={tab === "quote"} onClick={() => setTab("quote")}>
-          Коммерческое предложение
-        </button>
-        <button aria-pressed={tab === "placement"} onClick={()=>setTab("placement")}>Расстановка</button>
-        <button aria-pressed={tab === "specification"} onClick={()=>setTab("specification")}>Ведомость</button>
-        <button aria-pressed={tab === "drawings"} onClick={()=>setTab("drawings")}>Чертежи модулей</button>
-        <button aria-pressed={tab === 'labels'} onClick={()=>setTab('labels')}>Бирки деталей</button>
-        <button aria-pressed={tab === 'estimate'} onClick={()=>setTab('estimate')}>Стоимость</button>
-      </div>
-      {tab === "sheets" ? (
+      {tab === "client-spec" ? <><div className="output-actions"><button className="primary" onClick={()=>{if(!printDocument(clientSpec,'Спецификация'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}}>Сохранить в PDF</button><button className="outline" onClick={()=>saveFile('Спецификация.html',clientSpec)}>Скачать HTML</button><p className="field-note">Состав изделий для клиента — без цен и производственных данных. «Сохранить в PDF» открывает печать: выберите «Сохранить как PDF».</p></div>{imageError&&<p role="alert" className="cloud-error">{imageError}</p>}<iframe title="Предпросмотр спецификации" className="specification-preview" sandbox="" srcDoc={clientSpec.replace(PRINT_BUTTON,'')}/></> : tab === "sheets" ? (
         <>
           <div className="output-actions">
             <button className="outline" onClick={()=>setTab("specification")}>Ведомость комплектации</button>
             <button
               className="primary"
+              disabled={!order}
               onClick={() =>
                 saveFile("Карты листов.html", nestingHTML(project))
               }
             >
-              Скачать карты / PDF
+              Скачать карты (HTML для печати)
             </button>
             <button
               className="outline"
@@ -101,9 +127,9 @@ export function OutputPanel({
               Деталировка CSV
             </button>
           </div>
-          <label className="hardware-field">Раскрой<select aria-label="Движок раскроя" value={engineFlag} onChange={ev=>setEngine(ev.target.value as 'classic'|'guillotine')}><option value="classic">как сейчас</option><option value="guillotine">гильотина как в Базисе (пропил 4,4)</option></select></label>
+          <label className="hardware-field">Раскрой<select aria-label="Движок раскроя" value={engineFlag} onChange={ev=>setEngine(ev.target.value as 'classic'|'guillotine')}><option value="classic">{CUT_MODES.classic}</option><option value="guillotine">{CUT_MODES.guillotine}</option></select></label>
           <p>
-            {all.length} деталей · {sheets.length} листов · Lamarty{" "}
+            {count(all.length,DETAILS)} · {count(sheets.length,SHEETS)} · Lamarty{" "}
             <b>2750 × 1830 мм</b>
           </p>
           {plan.engine==='guillotine'?<p className="field-note">{guillotineNote()} Смета и цена считаются по этим картам.</p>:<p className="field-note">
@@ -143,7 +169,7 @@ export function OutputPanel({
                     <span dangerouslySetInnerHTML={{ __html: sheetSVG(s,highlight) }} />
                   </button>
                   <p>
-                    {s.items.length} деталей · заполнение{" "}
+                    {count(s.items.length,DETAILS)} · заполнение{" "}
                     {Math.round(
                       (s.items.reduce((n, p) => n + p.w * p.h, 0) /
                         (s.width * s.height)) *
@@ -180,7 +206,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план / PDF</button><p className="field-note">Вид сверху и таблица отступов для согласования.</p></div><iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость / PDF</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки / PDF</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{labelOrder(project)}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <SalesSummary project={project}/> : (
+      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>{if(!printDocument(placement,'План расстановки'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}}>Сохранить в PDF</button><button className="outline" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план (HTML)</button><p className="field-note">Вид сверху и таблица отступов для согласования. «Сохранить в PDF» открывает печать: выберите «Сохранить как PDF».</p></div>{imageError&&<p role="alert" className="cloud-error">{imageError}</p>}<iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость (HTML для печати)</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" disabled={!order} onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки (HTML для печати)</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{order?labelOrder(project):'№ заказа — укажите выше'}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <SalesSummary project={project}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение
@@ -226,15 +252,30 @@ export function OutputPanel({
               onBlur={e=>{if(e.target.value!==q.notes&&!update({...project,offer:{...q,notes:e.target.value}}))e.target.value=q.notes;}}
             />
           </label>
+          <details className="seller-fields" open={sellerOpen}>
+            <summary>Продавец в шапке КП{hasSeller(seller)?': '+(seller.name.trim()||'контакты заданы'):' — не задан'}</summary>
+            <label className="hardware-field">Продавец (салон, ИП или компания)<input aria-label="Продавец для КП" defaultValue={seller.name} maxLength={160} onBlur={e=>changeSeller({...seller,name:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>
+            <label className="hardware-field">Контакты продавца<textarea aria-label="Контакты продавца для КП" defaultValue={seller.contacts} maxLength={600} rows={2} onBlur={e=>changeSeller({...seller,contacts:e.target.value})}/></label>
+            <p className="field-note">Хранится только на этом устройстве и подставляется во все КП. Пустые поля — шапка продавца не печатается.</p>
+          </details>
+          {q.price.trim()&&!quoteBreakdown(q.price,calculated)&&<p className="field-note">{calculated?.model==='sheet'?'Модель «цена за лист»: фурнитура входит в цену листа — в КП печатается только итог.':calculated?.retail!=null&&Number(q.price)===calculated.retail?'Одна из частей цены нулевая — в КП печатается только итог.':'Цена КП отличается от расчётной — разбивка «материалы / фурнитура» не печатается, только итог.'}</p>}
           <div className="output-actions"><button className="outline" onClick={()=>{setImageError('');if(quoteImage!==null){setQuoteImage(null);return;}try{setQuoteImage(capture()||'');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить изображение.');}}}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
-          <button
-            className="primary"
-            onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture()));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
-          >
-            Скачать КП / PDF
-          </button>
+          <div className="output-actions">
+            <button
+              className="primary"
+              onClick={() => {setImageError('');try{if(!printDocument(quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated}),'Коммерческое предложение'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
+            >
+              Сохранить КП в PDF
+            </button>
+            <button
+              className="outline"
+              onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated}));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
+            >
+              Скачать КП (HTML)
+            </button>
+          </div>
           <p className="field-note">
-            Откройте скачанный документ и нажмите «Печать / Сохранить PDF».
+            «Сохранить КП в PDF» открывает печать браузера: выберите принтер «Сохранить как PDF». Вёрстка — лист A4.
           </p>
           {imageError&&<p role="alert" className="cloud-error">{imageError}</p>}
           {quoteImage!==null&&<iframe title="Предпросмотр коммерческого предложения" className="specification-preview" sandbox="" srcDoc={quotePreview.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>}

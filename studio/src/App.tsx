@@ -1901,7 +1901,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           >
             <div className="modal-head">
               <div>
-                <span className="eyebrow">МОДУЛЬ</span>
+                <span className="eyebrow">{modal === "parts" || modal === "handles" ? "МОДУЛЬ" : "ПРОЕКТ"}</span>
                 <h2 id="modal-title">
                   {modal === "room-setup" ? "Шаг 1 · Параметры помещения" : modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"

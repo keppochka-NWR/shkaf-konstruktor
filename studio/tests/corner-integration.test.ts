@@ -89,5 +89,5 @@ test('corner drawings retain shaped shelves, filling elevations and the five-sid
  assert.equal(planContour[1].split(' ').length,5);
  assert.equal(plan.match(/<g data-module="[^"]+"><polygon points="([^"]+)"/)![1].split(' ').length,5);
  const shelf=drawingLevels(m).find(d=>d.id===m.sections[0].id+':shelf:0')!;
- const part=parts(m).find(d=>d.id===shelf.id)!;assert.equal(shelf.bottom,Math.round((part.position[1]-8)*10)/10);
+ const part=parts(m).find(d=>d.id===shelf.id)!;assert.equal(shelf.bottom,Math.round(part.position[1]-8)); // чертежи — в целых мм (аудит магазина 15.10)
 });

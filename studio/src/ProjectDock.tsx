@@ -11,11 +11,12 @@ import { hardwareChoice, setAllEdges, setAllFastening, setAllHandles, setAllHing
 
 /** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
 
-import { details, nest } from "./exports";
+import { details, nest, quoteBreakdown } from "./exports";
+import { count, DETAILS, SHEETS } from "./ru";
 import "./project-dock.css";
 
 export type DockTab = "project" | "estimate" | "hardware" | "details" | "docs";
-export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement";
+export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement" | "client-spec";
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "project", label: "Проект", icon: Box },
@@ -66,11 +67,14 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
   }
 
   const total = e?.retail ?? null;
+  // Материалы и фурнитура отдельно (решение 06.10): та же разбивка, что печатается в КП при цене по смете.
+  const split = e && total !== null ? quoteBreakdown(String(total), e) : null;
   const choice = useMemo(() => hardwareChoice(project), [project]);
 
   const panel = tab === "project" ? null : tab === "estimate" ? (
     <div className="dock-body dock-estimate">
       <div className="dock-sum total"><span>Итоговая стоимость</span><b>{!e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':'Предварительно, без доставки и монтажа'}</small></div>
+      {split && <div className="dock-cost-split" aria-label="Разбивка стоимости"><div className="dock-sum material"><span>Материалы</span><b>{rub(split.material)}</b></div><div className="dock-sum hardware"><span>Фурнитура</span><b>{rub(split.hardware)}</b></div></div>}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setTab('hardware')}>Поменять фурнитуру</button></div>
     </div>
   ) : tab === "hardware" ? (
@@ -112,14 +116,17 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
     </div>
   ) : tab === "details" ? (
     <div className="dock-body dock-details">
-      <p>{fresh ? <><b>{fresh.parts}</b> деталей · <b>{fresh.ldsp}</b> листов ЛДСП{fresh.hdf ? <> · <b>{fresh.hdf}</b> ЛХДФ</> : null}</> : "Считаем…"}</p>
+      <p>{fresh ? <>{count(fresh.parts, DETAILS)} · {count(fresh.ldsp, SHEETS)} ЛДСП{fresh.hdf ? <> · {count(fresh.hdf, SHEETS)} ЛХДФ</> : null}</> : "Считаем…"}</p>
       <div className="dock-actions"><button className="outline" onClick={openParts}>Список деталей</button><button className="outline" onClick={() => openOutput("sheets")}>Карты листов</button></div>
     </div>
   ) : (
     <div className="dock-body dock-docs">
       <div className="dock-actions">
+        <span className="dock-group">Клиенту</span>
         <button className="outline" onClick={() => openOutput("quote")}>Коммерческое предложение</button>
+        <button className="outline" onClick={() => openOutput("client-spec")}>Спецификация</button>
         <button className="outline" onClick={() => openOutput("placement")}>Расстановка</button>
+        <span className="dock-group">Производству</span>
         <button className="outline" onClick={() => openOutput("specification")}>Ведомость</button>
         <button className="outline" onClick={() => openOutput("drawings")}>Чертежи</button>
         <button className="outline" onClick={() => openOutput("labels")}>Бирки</button>
