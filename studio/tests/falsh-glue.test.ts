@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parts,initialModule,falshGlue,falshPieces,fillerSides,FALSH_GLUE_GAP,RULES} from '../src/model';
+import {parts,initialModule,falshGlue,falshPieces,falshZones,fillerSides,FALSH_GLUE_GAP,RULES} from '../src/model';
 import {partCollisions} from '../src/collisions';
 import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
@@ -14,8 +14,9 @@ test('составной фальш: «Шкаф в прихожую» — пет
   const g=falshGlue(m);
   assert.deepEqual(g,{[s.id+':left']:[130]},'петля на высоте 130 от пола не сдвигается из зоны ящиков');
   assert.deepEqual(fillerSides(m,s),{left:32,right:0});
-  const f=fillers(m);
-  assert.deepEqual(f.map(p=>p.id.split(':filler:')[1]),['left:a:0','left:b:0'],'две плиты; ниже петли места нет (разрыв 80–180 от пола, дно проёма 96)');
+  const all=fillers(m),f=all.filter(p=>!/:r\d+$/.test(p.id));
+  // ревью Codex R4: разрыв — только в зоне петли спереди, за петлёй вставка до задней кромки (держит направляющую нижнего ящика)
+  assert.deepEqual(all.map(p=>p.id.split(':filler:')[1]),['left:a:0','left:a:r0','left:b:0','left:b:r0'],'две плиты; ниже петли полной глубины места нет (разрыв 80–180 от пола, дно проёма 96) — там вставка за петлёй');
   for(const p of f){assert.equal(p.thickness,16);assert.equal(p.size[0],16);assert.equal(p.length,276);assert.equal(p.position[1]-p.size[1]/2,180,'кусок начинается над разрывом 130+50');}
   assert.deepEqual(f.map(p=>p.position[0]),[24,40],'плита у боковины и плита к ящикам — вплотную, 32 мм');
   assert.match(f[0].name,/склейка 32 мм, плита у боковины/);
@@ -35,7 +36,8 @@ test('составной фальш: две петли в зоне четырё�
   assert.ok(ys&&ys.length>=1,'петли в зоне ящиков');
   const f=fillers(m),a=f.filter(p=>p.id.includes(':left:a:')),b=f.filter(p=>p.id.includes(':left:b:'));
   assert.equal(a.length,b.length);assert.deepEqual(a.map(p=>p.size[1]),b.map(p=>p.size[1]),'обе плиты склейки — одинаковые куски');
-  for(const y of ys!)for(const p of f){const lo=p.position[1]-p.size[1]/2,hi=p.position[1]+p.size[1]/2;assert.ok(hi<=y-FALSH_GLUE_GAP/2+0.01||lo>=y+FALSH_GLUE_GAP/2-0.01,`кусок ${p.id} не заходит в разрыв у петли ${y}`);}
+  for(const p of f.filter(p=>/:r\d+$/.test(p.id)))assert.ok(p.position[2]+p.size[2]/2<=falshZones(m)[s.id+':left'][0].z+0.01,'вставка — за зоной петли');
+  for(const y of ys!)for(const p of f.filter(p=>!/:r\d+$/.test(p.id))){const lo=p.position[1]-p.size[1]/2,hi=p.position[1]+p.size[1]/2;assert.ok(hi<=y-FALSH_GLUE_GAP/2+0.01||lo>=y+FALSH_GLUE_GAP/2-0.01,`кусок ${p.id} не заходит в разрыв у петли ${y}`);}
   assert.deepEqual(partCollisions(parts(m),m),[]);
   // разрыв посередине: два куска выше и ниже петли
   assert.deepEqual(falshPieces(100,700,[400]),[[100,350],[450,700]]);

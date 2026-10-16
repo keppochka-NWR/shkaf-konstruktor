@@ -412,7 +412,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(lifts)add('kitchen-lift:'+a.module.kitchenLift!.system,(a.module.kitchenLift!.system==='gl104'?'Газлифт GL104 с фиксацией положения — комплект на боковину (шток, газ патрон, кронштейны на боковину и фасад)':'Газлифт PD-G-N02 — комплект на боковину (шток, газблок, 2 фиксатора, саморезы)'),lifts,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
     // составной фальш у петли (решение Макса 16.10.2026): склейка двух плит 16 в 32 — работа, клиенту 1000 ₽ за м² площади фальша
     // (решение 16.10). Розничная позиция: идёт после коэффициента; цена — именованной константой, чтобы сборка её не запекала ×2,2.
-    const glueM2=allParts.filter(p=>/:filler:(left|right):a:\d+$/.test(p.id)).reduce((s,p)=>s+p.length*p.width/1e6,0);
+    const glueM2=allParts.filter(p=>/:filler:(left|right):a:r?\d+$/.test(p.id)).reduce((s,p)=>s+p.length*p.width/1e6,0);
     if(glueM2)add('falsh-glue','Склейка фальш-панели: 2 плиты 16 в 32 мм (работа, клей)',Math.round(glueM2*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026)',true);
     for(const d of allParts){
       if(d.material==='board'){
