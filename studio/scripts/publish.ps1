@@ -11,8 +11,14 @@
 #      web/studio/models must contain every file of studio/public/models (untracked GLB are copied by vite only if present)
 #   4. privacy scan of web/ (py -I scripts/privacy-scan.py ../web --exclude local-projects --strict) -> exit 0 required;
 #      --strict = all three token sources must exist (corpus index.json, public/local-projects, corpus privacy-tokens.txt)
+#   4b. price guard: published files (web/ without legacy 2D pages) must not contain purchase words
+#      (zakup / sebestoim / nacenk / "reshenie Maksa") or supplier names (SFZ, FAM, ATB, MVM, MDM, Pobeda, Mega-Treid, Dreviz);
+#      a match stops the publication. The studio build is public by default (client prices only, see studio/src/buildMode.ts
+#      and studio/scripts/public-build.ts); STUDIO_MANAGER=1 builds are for local use and are refused here.
 #   5. web/studio/version.json = { commit, srcCommit, builtAt }
-#   6. robocopy web -> $Pages /MIR /XD local-projects .git /XF .git (protect .git as directory AND worktree file)
+#   6. robocopy web -> $Pages /MIR /XD local-projects .git /XF .git (protect .git as directory AND worktree file);
+#      legacy 2D editor (web/editor.html, web/assets/) is not published: old copies are removed from Pages and
+#      editor.html becomes a redirect to studio/ (files stay in the repo)
 #   7. git add -A; git commit "Publish studio from <commit>"; git push origin HEAD:gh-pages   (skipped with -DryRun)
 #
 # -DryRun never commits, never pushes and never changes the Pages folder (robocopy /L).
@@ -123,6 +129,47 @@ if ($LocalProjects -ne '') { $scanArgs += @('--names-dir', $LocalProjects) }
 py -I (Join-Path $PSScriptRoot 'privacy-scan.py') @scanArgs
 if (-not $?) { Fail "privacy-scan found client names in web/ (or a token source is missing)" }
 
+# ---------------------------------------------------------------- 4b. price guard
+Step "4b" "price guard: no purchase prices, markup words or supplier names in published files"
+if ($env:STUDIO_MANAGER -eq '1') { Fail "STUDIO_MANAGER=1 is a local manager build; unset it before publishing" }
+# legacy 2D editor pages: kept in the repo, never published (paths relative to web/)
+$legacyFiles = @('editor.html')
+$legacyDirs = @('assets')
+# Cyrillic patterns as \u escapes to keep this file ASCII:
+#   words (any case): zakup | sebestoim | nacenk | reshenie/reshenia Maksa
+#   supplier names (exact case): SFZ | FAM | ATB | MVM | MDM (not inside a word) | Pobed[a,y,e,u] | Mega-Treid | Dreviz
+$guardWords = New-Object System.Text.RegularExpressions.Regex('(?i)(\u0437\u0430\u043A\u0443\u043F|\u0441\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C|\u043D\u0430\u0446\u0435\u043D\u043A|\u0440\u0435\u0448\u0435\u043D\u0438[\u0435\u044F] \u043C\u0430\u043A\u0441\u0430)')
+$guardNames = New-Object System.Text.RegularExpressions.Regex('(?<![\u0400-\u04FF])(\u0421\u0424\u0417|\u0424\u0410\u041C|\u0410\u0422\u0411|\u041C\u0412\u041C|\u041C\u0414\u041C)(?![\u0400-\u04FF])|\u041F\u043E\u0431\u0435\u0434[\u0430\u044B\u0435\u0443]|\u041C\u0435\u0433\u0430-\u0422\u0440\u0435\u0439\u0434|\u0414\u0440\u0435\u0432\u0438\u0437')
+$textExt = @('.js', '.mjs', '.cjs', '.html', '.htm', '.css', '.json', '.txt', '.md', '.svg', '.map', '.csv', '.xml')
+$guardHits = @()
+$guardCount = 0
+foreach ($f in (Get-ChildItem $web -Recurse -File)) {
+  $rel = $f.FullName.Substring($web.Length).TrimStart('\')
+  $top = $rel.Split('\')[0]
+  if ($legacyFiles -contains $rel -or $legacyDirs -contains $top) { continue }
+  if ($rel -match '(^|\\)(local-projects|\.git)(\\|$)') { continue }
+  if ($textExt -notcontains $f.Extension.ToLower()) { continue }
+  $guardCount++
+  $text = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+  foreach ($rx in @($guardWords, $guardNames)) {
+    foreach ($m in $rx.Matches($text)) {
+      $a = [Math]::Max(0, $m.Index - 40)
+      $len = [Math]::Min($text.Length - $a, $m.Length + 80)
+      $guardHits += ($rel + ' @' + $m.Index + ': ' + ($text.Substring($a, $len) -replace '\s+', ' '))
+    }
+  }
+}
+Write-Host ("  scanned " + $guardCount + " text file(s), legacy excluded: " + (($legacyFiles + $legacyDirs) -join ', '))
+if ($guardHits.Count -gt 0) {
+  $utf8g = New-Object System.Text.UTF8Encoding($false)
+  $guardReport = Join-Path $studio 'test-results\price-guard.txt'
+  New-Item -ItemType Directory -Force (Split-Path $guardReport) | Out-Null
+  [System.IO.File]::WriteAllText($guardReport, ($guardHits -join "`n") + "`n", $utf8g)
+  Write-Host ("  " + $guardHits.Count + " match(es), first ones written to " + $guardReport)
+  Fail "price guard: purchase words or supplier names found in files to publish"
+}
+Write-Host "  price guard: 0 matches"
+
 # ---------------------------------------------------------------- 5. version.json
 Step 5 "web/studio/version.json"
 $builtAt = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
@@ -140,11 +187,25 @@ $pagesRoot = (git -C $pagesDir rev-parse --show-toplevel 2>$null | Out-String).T
 if (-not $? -or $pagesRoot -eq '' -or [System.IO.Path]::GetFullPath($pagesRoot) -ne $pagesDir) { Fail "Pages destination is not the root of a valid Git checkout" }
 # GitHub Pages must serve the Vite assets directly, including underscore-prefixed files.
 if (-not (Test-Path (Join-Path $web '.nojekyll'))) { [System.IO.File]::WriteAllText((Join-Path $web '.nojekyll'), '') }
-$rcArgs = @($web, $pagesDir, '/MIR', '/XD', 'local-projects', '.git', '/XF', '.git', '/NFL', '/NDL', '/NJH', '/R:2', '/W:2')
+$xd = @('local-projects', '.git') + @($legacyDirs | ForEach-Object { Join-Path $web $_ })
+$xf = @('.git') + @($legacyFiles | ForEach-Object { Join-Path $web $_ })
+$rcArgs = @($web, $pagesDir, '/MIR', '/XD') + $xd + @('/XF') + $xf + @('/NFL', '/NDL', '/NJH', '/R:2', '/W:2')
 if ($DryRun) { $rcArgs += '/L' }
 & robocopy @rcArgs
 $rc = $LASTEXITCODE
 if ($rc -ge 8) { Fail ("robocopy exit code " + $rc) }
+# legacy 2D pages: robocopy does not purge excluded paths, so remove old copies from Pages and leave a redirect to studio/
+$redirect = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=studio/"><title>Redirect</title><script>location.replace("studio/"+location.search+location.hash)</script></head><body><a href="studio/">studio/</a></body></html>'
+foreach ($d in $legacyDirs) {
+  $p = Join-Path $pagesDir $d
+  if (Test-Path $p) {
+    if ($DryRun) { Write-Host ("  would remove legacy folder from Pages: " + $d) } else { Remove-Item -Recurse -Force $p; if (-not $?) { Fail ("cannot remove legacy " + $p) } ; Write-Host ("  removed legacy folder: " + $d) }
+  }
+}
+foreach ($f in $legacyFiles) {
+  if (-not ($f -like '*.html')) { continue }
+  if ($DryRun) { Write-Host ("  would write redirect " + $f + " -> studio/") } else { [System.IO.File]::WriteAllText((Join-Path $pagesDir $f), $redirect + "`n", (New-Object System.Text.UTF8Encoding($false))); Write-Host ("  " + $f + " -> redirect to studio/") }
+}
 git -C $pagesDir rev-parse --git-dir > $null
 if (-not $?) { Fail "Pages Git metadata check failed after synchronization" }
 Write-Host ("  robocopy exit code " + $rc + " (0 = nothing to do, 1-7 = copied/extra/mismatch, >= 8 = error)")
