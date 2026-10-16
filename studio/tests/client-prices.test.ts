@@ -74,7 +74,8 @@ test('public build sanitizer: strings with purchase words or supplier names beco
 test('price guard pattern: purchase numbers and the default markup in minified JS are caught, plain numbers are not',()=>{
   const hits=(s:string)=>[...s.matchAll(PRICE_LITERALS)].length;
   assert.equal(hits(`250:{price:445,source:""},cap:{price:.7},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),4);
-  assert.equal(hits(`{lengths:[250,300],width:600,priceDate:"2026-08-10",unitPrice:null,markup:t.markup}`),0);
+  assert.equal(hits(`{lengths:[250,300],width:600,priceDate:"2026-08-10",unitPrice:null,markup:t.markup,markup:1,vernissageMarkup:1,sheetPrice:0,lightRetailPerM:3e3}`),0);
+  assert.equal(hits(`{markup:1.6},{price:10},{price:1e3}`),3);
 });
 
 test('sheet model client line: inside the sheet price, Lemana and Vernissage on top',()=>{

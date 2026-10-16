@@ -16,7 +16,7 @@ export const isSensitive = (s: string) => SENSITIVE_WORDS.test(s) || SENSITIVE_N
 export const NEUTRAL = '';
 /** Числовые цены в собранном JS (ключи объектов минификатор не переименовывает): закупка `price:445`, коэффициент `markup:2.2`,
  *  цена листа `??23e3`. Тот же шаблон — в publish.ps1 Step 4b ($guardNumbers). */
-export const PRICE_LITERALS = /(?<![\w$])(price|unitPrice|markup|sheetPrice|vernissageMarkup|lightRetailPerM)\s*:\s*-?\.?\d|\?\?\s*(23e3|23000)\b/g;
+export const PRICE_LITERALS = /(?<![\w$])(price|unitPrice|markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b/g;
 
 type Node = { type: string; start: number; end: number; [k: string]: unknown };
 type Edit = { start: number; end: number; text: string; was: string };

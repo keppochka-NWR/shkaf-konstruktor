@@ -13,6 +13,7 @@
 #      --strict = all three token sources must exist (corpus index.json, public/local-projects, corpus privacy-tokens.txt)
 #   4b. price guard: published files (web/ without legacy 2D pages) must not contain purchase words
 #      (zakup / sebestoim / nacenk / "reshenie Maksa") or supplier names (SFZ, FAM, ATB, MVM, MDM, Pobeda, Mega-Treid, Dreviz);
+#      or purchase price literals in JS (price:<n>, markup:<n>, sheetPrice ?? 23e3 - same as PRICE_LITERALS in public-build.ts);
 #      a match stops the publication. The studio build is public by default (client prices only, see studio/src/buildMode.ts
 #      and studio/scripts/public-build.ts); STUDIO_MANAGER=1 builds are for local use and are refused here.
 #   5. web/studio/version.json = { commit, srcCommit, builtAt }
@@ -140,6 +141,10 @@ $legacyDirs = @('assets')
 #   supplier names (exact case): SFZ | FAM | ATB | MVM | MDM (not inside a word) | Pobed[a,y,e,u] | Mega-Treid | Dreviz
 $guardWords = New-Object System.Text.RegularExpressions.Regex('(?i)(\u0437\u0430\u043A\u0443\u043F|\u0441\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C|\u043D\u0430\u0446\u0435\u043D\u043A|\u0440\u0435\u0448\u0435\u043D\u0438[\u0435\u044F] \u043C\u0430\u043A\u0441\u0430)')
 $guardNames = New-Object System.Text.RegularExpressions.Regex('(?<![\u0400-\u04FF])(\u0421\u0424\u0417|\u0424\u0410\u041C|\u0410\u0422\u0411|\u041C\u0412\u041C|\u041C\u0414\u041C)(?![\u0400-\u04FF])|\u041F\u043E\u0431\u0435\u0434[\u0430\u044B\u0435\u0443]|\u041C\u0435\u0433\u0430-\u0422\u0440\u0435\u0439\u0434|\u0414\u0440\u0435\u0432\u0438\u0437')
+# purchase NUMBERS in built JS (object keys survive minification): price:445, markup:2.2, sheetPrice ?? 23e3.
+# Same pattern as PRICE_LITERALS in studio/scripts/public-build.ts. Words alone are not enough: the client price is
+# computed in the browser from the purchase base, so these numbers are the purchase prices themselves.
+$guardNumbers = New-Object System.Text.RegularExpressions.Regex('(?<![\w$])(price|unitPrice|markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b')
 $textExt = @('.js', '.mjs', '.cjs', '.html', '.htm', '.css', '.json', '.txt', '.md', '.svg', '.map', '.csv', '.xml')
 $guardHits = @()
 $guardCount = 0
@@ -151,7 +156,9 @@ foreach ($f in (Get-ChildItem $web -Recurse -File)) {
   if ($textExt -notcontains $f.Extension.ToLower()) { continue }
   $guardCount++
   $text = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
-  foreach ($rx in @($guardWords, $guardNames)) {
+  $rxs = @($guardWords, $guardNames)
+  if (@('.js', '.mjs', '.cjs', '.html', '.htm') -contains $f.Extension.ToLower()) { $rxs += $guardNumbers }
+  foreach ($rx in $rxs) {
     foreach ($m in $rx.Matches($text)) {
       $a = [Math]::Max(0, $m.Index - 40)
       $len = [Math]::Min($text.Length - $a, $m.Length + 80)
@@ -166,7 +173,7 @@ if ($guardHits.Count -gt 0) {
   New-Item -ItemType Directory -Force (Split-Path $guardReport) | Out-Null
   [System.IO.File]::WriteAllText($guardReport, ($guardHits -join "`n") + "`n", $utf8g)
   Write-Host ("  " + $guardHits.Count + " match(es), first ones written to " + $guardReport)
-  Fail "price guard: purchase words or supplier names found in files to publish"
+  Fail "price guard: purchase words, supplier names or purchase price literals found in files to publish"
 }
 Write-Host "  price guard: 0 matches"
 
