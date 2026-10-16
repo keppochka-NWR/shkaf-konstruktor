@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
 import {estimate} from "./pricing";
+import { missingPriceLabel } from "./clientLabels";
 import { HANDLES, handleById } from "./handles";
 import { HINGE_BRANDS, SLIDE_SYSTEMS, type HingeBrand } from "./hardware";
 import { EDGE_CHOICES, type EdgeThickness } from "./model";
@@ -134,7 +135,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
         <div className="dock-tabs">{TABS.map((t) => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}><t.icon size={15} />{t.label}</button>)}</div>
         <button className="room-warning-link" hidden={!warnings} onClick={onWarnings} title="Проверить расстановку"><span className="dock-warn-long">Проверить расстановку</span><span className="dock-warn-short">Расстановка</span> · {warnings}</button>
         <button className="dock-price" onClick={() => setTab("estimate")} aria-label="Открыть стоимость">
-          {!e ? "Считаем…" : <><b>{total === null ? `Нет цены: ${e.missing.length}` : rub(total)}</b></>}
+          {!e ? "Считаем…" : <><b>{total === null ? missingPriceLabel(e.missing.length) : rub(total)}</b></>}
         </button>
       </nav>
     </div>

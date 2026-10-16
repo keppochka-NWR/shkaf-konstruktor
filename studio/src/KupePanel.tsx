@@ -1,6 +1,7 @@
 import {SettingsSection} from './SettingsSection';
 // Панель «Двери купе»: всё на одном экране, сверху вниз как в калькуляторе купе — проём, двери, профиль, наполнение, секции, опции.
-import React, { useMemo } from "react";
+import React, { useContext, useMemo } from "react";
+import { ManagerMode, decorLabel, decorTitle, kupeProfileCaption } from "./clientLabels";
 import type { Module } from "./model";
 import { KUPE_SYSTEMS, KUPE_FILLS, KUPE_SECTIONS, KUPE_SOFT_CLOSE } from "./kupeData";
 import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, kupeProfileExact, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, KUPE_PROFILE_WIDTH, type KupeSpec } from "./kupe";
@@ -11,6 +12,7 @@ const rub = (n: number) => Math.round(n).toLocaleString("ru-RU") + " ₽";
 
 export function KupePanel({ m, modify, openDoors, setOpenDoors }: { m: Module; modify: (update: (draft: Module) => void) => boolean; openDoors: boolean; setOpenDoors: (v: boolean) => void }) {
   const k = m.kupe!, sys = kupeSystem(k), col = kupeColor(k);
+  const manager = useContext(ManagerMode);
   const set = (patch: Partial<KupeSpec>) => modify((n) => { n.kupe = { ...n.kupe!, ...patch }; });
   const lines = useMemo(() => kupeLines(m), [m]);
   const total = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
@@ -18,7 +20,7 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors }: { m: Module; m
   const dw = Math.round(m.width / k.doors), allSame = k.fills.length <= 1 || k.fills.every((f) => f === k.fills[0]);
   const fillSelect = (value: string, onChange: (v: string) => void, label: string) => (
     <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-      {groups.map((g) => <optgroup key={g} label={g}>{KUPE_FILLS.filter((f) => f.g === g).map((f) => <option key={f.n} value={f.n}>{f.n}</option>)}</optgroup>)}
+      {groups.map((g) => <optgroup key={g} label={g}>{KUPE_FILLS.filter((f) => f.g === g).map((f) => <option key={f.n} value={f.n} title={decorTitle(f.n)}>{decorLabel(f.n)}</option>)}</optgroup>)}
     </select>
   );
   return (
@@ -39,7 +41,7 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors }: { m: Module; m
       </select></label>
       <figure className="kupe-profile-preview">
         <img src={import.meta.env.BASE_URL + KUPE_PROFILE_PREVIEW[kupeProfileStyle(sys)]} alt={"Профиль-ручка " + sys.profile} loading="lazy" />
-        <figcaption>Профиль-ручка · {sys.profile} · {KUPE_PROFILE_WIDTH[kupeProfileStyle(sys)] || sys.dims.frameSide} мм<small>{kupeProfileExact(sys) ? "Сечение по заводскому чертежу Aristo" : "Показан профилем SLIM LINE: в каталоге Aristo 2026 этого профиля нет"}</small></figcaption>
+        <figcaption>{kupeProfileCaption(sys.profile, KUPE_PROFILE_WIDTH[kupeProfileStyle(sys)] || sys.dims.frameSide, manager)}{manager && <small>{kupeProfileExact(sys) ? "Сечение по заводскому чертежу Aristo" : "Показан профилем SLIM LINE: в каталоге Aristo 2026 этого профиля нет"}</small>}</figcaption>
       </figure>
       <div className="kupe-field"><span>Цвет профиля · {col.name}</span>
         <div className="kupe-swatches" role="group" aria-label="Цвет профиля купе">{sys.colors.map((c) => <button key={c.name} type="button" title={c.name} aria-label={c.name} aria-pressed={c.name === k.color} style={{ background: `linear-gradient(135deg, ${c.grad})` }} onClick={() => set({ color: c.name })} />)}</div>

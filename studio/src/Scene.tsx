@@ -57,6 +57,7 @@ import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule}
 import {wallPanels} from './roomGeometry';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
+import {gapLabelX,openingSizeLabel} from './clientLabels';
 export type View = "iso" | "front" | "side" | "top";
 type Props = {
   hiddenModuleIds?:string[];
@@ -739,14 +740,15 @@ export function Scene(p: Props) {
           (!m.doors||state.openDoors||state.transparent) &&
           !state.exploded
         ) {
+          // проёмы крайней секции подписываем снаружи корпуса (не поверх полок и соседних подписей), средней — по центру секции
+          const gx = gapLabelX(b, m.width, RULES.panel);
           shelfGaps(m, b.id).forEach((g, i) => {
-            const gx = b.x + b.width / 2 - m.width / 2;
             line([
               new THREE.Vector3(gx, g.bottom+fy, z - 85),
               new THREE.Vector3(gx, g.top+fy, z - 85),
             ]);
             label(
-              String(g.height),
+              openingSizeLabel(g.height),
               new THREE.Vector3(gx, (g.top + g.bottom) / 2+(focus.y??0), z - 75),
               () => current.current.onGap(i),
               true,
