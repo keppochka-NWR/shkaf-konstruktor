@@ -23,3 +23,17 @@ export function setDoorHinge(module:Module,doorId:string,side:'left'|'right'|'to
  }
  Object.assign(original,module);if(!module.kitchenLift)delete original.kitchenLift;
 }
+
+/** Одностворчатые распашные фасады корпуса (одна створка в своём ряду секции). Двустворчатые пары не трогаем. */
+export function singleLeafDoors(module:Module){
+ const doors=parts(module).filter(p=>p.role==='door'&&/:door:\d+$/.test(p.id)&&(p.hinge==='left'||p.hinge==='right'));
+ return doors.filter(d=>!doors.some(o=>o!==d&&o.sectionId===d.sectionId&&Math.abs(o.position[1]-d.position[1])<1));
+}
+
+/** Перевесить все одностворчатые фасады корпуса на одну сторону (меню корпуса «Фасады → Открывание»). */
+export function setModuleHingeSide(module:Module,side:'left'|'right'):number{
+ const doors=singleLeafDoors(module);
+ if(!doors.length)throw Error('У корпуса нет одностворчатых распашных фасадов. Отдельный фасад — правой кнопкой по нему.');
+ for(const d of doors)setDoorHinge(module,d.id,side);
+ return doors.length;
+}
