@@ -1,5 +1,6 @@
 import {FacadeEditor} from './FacadeEditor';
-import {Eye,EyeOff,PanelTopClose,PanelTopOpen} from 'lucide-react';
+import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
+import {readCutaway,saveCutaway} from './roomCutaway';
 import './editor-visibility.css';
 import {repairHinges} from './hingeRepair';
 import {savePng} from './savePng';
@@ -317,6 +318,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [transparent, setTransparent] = useState(false);
   const [clearFacades, setClearFacades] = useState(false);
   const [hideFacades,setHideFacades]=useState(false);
+  const [cutaway,setCutawayState]=useState(readCutaway);const toggleCutaway=()=>setCutawayState(v=>{saveCutaway(!v);return !v;});
   const [hiddenModules,setHiddenModules]=useState<string[]>([]);
   const hiddenIds=hiddenModules.filter(id=>project.modules.some(a=>a.id===id));
   const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});
@@ -1123,6 +1125,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
             presentation={presentation||editingFacades}
+            cutaway={cutaway}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
@@ -1195,7 +1198,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             roomDimensions={!presentation&&dimensions&&(advanced||stage==='room'||stage==='fixtures')}
             gapDimensions={gapDimensions}
           />}
-          {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button><button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
+          {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button>{showRoom&&<button aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={16}/>{cutaway?'Ближние стены: показать':'Ближние стены: скрыть'}</button>}<button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
             <span>КОРПУС / ЛДСП 16</span>
             <b>
@@ -1247,6 +1250,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             >
               <Box size={19} />
             </button>
+            {showRoom&&<button aria-label="Ближние стены: скрыть" title={cutaway?'Ближние стены: показать (сейчас скрыты — стена между камерой и комнатой не видна)':'Ближние стены: скрыть (сейчас видны все стены)'} aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={19}/></button>}
             <button aria-label="Приблизить выбранный корпус" title="Приблизить выбранный корпус" aria-pressed={focusActive} onClick={()=>{setFocusActive(v=>!v);setFit(f=>f+1);}}><Search size={19}/></button>
             <button
               aria-label="Вписать модель"
