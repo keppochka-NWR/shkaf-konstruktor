@@ -13,18 +13,17 @@ const systems = ctx.PROFILE_SYSTEMS.filter((s) => s.system !== "Свои цен�
   ...(s.hardwarePerDoor ? { hardwarePerDoor: s.hardwarePerDoor, hardwareLabel: s.hardwareLabel } : {}),
   colors: s.colors.map((c) => ({ name: c.name, grad: c.frameGrad, ruchka: c.ruchka, verh: c.verh, niz: c.niz, razd: c.razd, top: c.napravl_top, bot: c.napravl_bot })),
 }));
-const fills = ctx.FILLINGS.map((f) => ({ g: f.g, n: f.n, p: f.p, mat: f.mat }));
-const ldspPrice = ctx.LAMARTY_LDSP[0]?.p ?? 1800;
+// ЛДСП Lamarty — без цены за м² (решение Макса 16.10.2026: цена листа — по прайсу Lamarty в смете студии, pricing.ts kupeLdspPerM2)
+const fills = ctx.FILLINGS.map((f) => (String(f.g).startsWith("ЛДСП") ? { g: f.g, n: f.n, mat: f.mat } : { g: f.g, n: f.n, p: f.p, mat: f.mat }));
 const out = `// СГЕНЕРИРОВАНО scripts/import-kupe.cjs из калькулятора дверей-купе (Calc\\kupe\\data). Не править вручную.
 // Профили ${ctx.PROFILES_VERSION}, наполнения ${ctx.FILLINGS_VERSION}, Lamarty ${ctx.LAMARTY_VERSION}. Цены — розничные, как в калькуляторе купе.
 export const KUPE_VERSION = ${JSON.stringify({ profiles: ctx.PROFILES_VERSION, fillings: ctx.FILLINGS_VERSION, lamarty: ctx.LAMARTY_VERSION })};
 export type KupeColor = { name: string; grad: string; ruchka: number; verh: number; niz: number; razd: number; top: number; bot: number };
 export type KupeSystem = { system: string; family: string; profile: string; dims: { frameSide: number; frameTop: number; frameBot: number; divider: number; trackTop: number; trackBot: number }; limits: { Hmin: number; Hmax: number; doorL_min: number; doorL_max: number }; kind: "slide" | "hang"; hardwarePerDoor?: number; hardwareLabel?: string; colors: KupeColor[] };
-export type KupeFill = { g: string; n: string; p: number; mat: string };
+/** p — розничная цена за м²; у ЛДСП Lamarty её нет: цена — по прайсу листа Lamarty в смете (pricing.ts kupeLdspPerM2). */
+export type KupeFill = { g: string; n: string; p?: number; mat: string };
 export const KUPE_SYSTEMS: KupeSystem[] = ${JSON.stringify(systems)};
 export const KUPE_FILLS: KupeFill[] = ${JSON.stringify(fills)};
-/** ЛДСП Lamarty как наполнение купе: одна цена за м² для всех декоров (как в калькуляторе купе). */
-export const KUPE_LDSP_PRICE = ${ldspPrice};
 export const KUPE_SECTIONS: { label: string; h: number; v: number; rowRatios: number[]; colRatios: number[] }[] = ${JSON.stringify(ctx.SECTION_OPTS)};
 export const KUPE_SOFT_CLOSE = ${ctx.SOFT_CLOSE_PRICE};
 export const KUPE_COMPLEX_WORK = ${ctx.COMPLEX_WORK_PRICE};
@@ -35,4 +34,4 @@ export const KUPE_FILM_SAFETY = ${JSON.stringify(ctx.FILM_SAFETY)};
 export const KUPE_PROFILE_MULT = 3;
 `;
 fs.writeFileSync(path.join(__dirname, "../src/kupeData.ts"), out, "utf8");
-console.log("kupeData.ts:", systems.length, "систем,", fills.length, "наполнений, ЛДСП", ldspPrice, "₽/м²");
+console.log("kupeData.ts:", systems.length, "систем,", fills.length, "наполнений");

@@ -138,13 +138,15 @@ $legacyFiles = @('editor.html')
 $legacyDirs = @('assets')
 # Cyrillic patterns as \u escapes to keep this file ASCII:
 #   words (any case): zakup | sebestoim | nacenk | reshenie/reshenia Maksa
-#   supplier names (exact case): SFZ | FAM | ATB | MVM | MDM (not inside a word) | Pobed[a,y,e,u] | Mega-Treid | Dreviz
+#   supplier names (exact case): SFZ | FAM | FAS | ATB | MVM | MDM (not inside a word) | Pobed[a,y,e,u] | Mega-Treid/Megatreid | Dreviz
 $guardWords = New-Object System.Text.RegularExpressions.Regex('(?i)(\u0437\u0430\u043A\u0443\u043F|\u0441\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C|\u043D\u0430\u0446\u0435\u043D\u043A|\u0440\u0435\u0448\u0435\u043D\u0438[\u0435\u044F] \u043C\u0430\u043A\u0441\u0430)')
-$guardNames = New-Object System.Text.RegularExpressions.Regex('(?<![\u0400-\u04FF])(\u0421\u0424\u0417|\u0424\u0410\u041C|\u0410\u0422\u0411|\u041C\u0412\u041C|\u041C\u0414\u041C)(?![\u0400-\u04FF])|\u041F\u043E\u0431\u0435\u0434[\u0430\u044B\u0435\u0443]|\u041C\u0435\u0433\u0430-\u0422\u0440\u0435\u0439\u0434|\u0414\u0440\u0435\u0432\u0438\u0437')
-# purchase NUMBERS in built JS (object keys survive minification): price:445, markup:2.2, sheetPrice ?? 23e3.
+$guardNames = New-Object System.Text.RegularExpressions.Regex('(?<![\u0400-\u04FF])(\u0421\u0424\u0417|\u0424\u0410\u041C|\u0424\u0410\u0421|\u0410\u0422\u0411|\u041C\u0412\u041C|\u041C\u0414\u041C)(?![\u0400-\u04FF])|\u041F\u043E\u0431\u0435\u0434[\u0430\u044B\u0435\u0443]|\u041C\u0435\u0433\u0430-?[\u0422\u0442]\u0440\u0435\u0439\u0434|\u041C\u0435\u0433\u0430\u0442\u0440\u0435\u0439\u0434|\u0414\u0440\u0435\u0432\u0438\u0437')
+# coefficients in built JS (object keys survive minification): markup:2.2, vernissageMarkup:1.6, sheetPrice ?? 23e3.
+# Line prices (price:979) are retail after baking (scripts/bake-prices.ts); purchase VALUES are checked below by
+# scripts/price-guard.ts against the set of source purchase values with the price field as context.
 # Same pattern as PRICE_LITERALS in studio/scripts/public-build.ts. Words alone are not enough: the client price is
 # computed in the browser from the purchase base, so these numbers are the purchase prices themselves.
-$guardNumbers = New-Object System.Text.RegularExpressions.Regex('(?<![\w$])(price|unitPrice|markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b')
+$guardNumbers = New-Object System.Text.RegularExpressions.Regex('(?<![\w$])(markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b')
 $textExt = @('.js', '.mjs', '.cjs', '.html', '.htm', '.css', '.json', '.txt', '.md', '.svg', '.map', '.csv', '.xml')
 $guardHits = @()
 $guardCount = 0
@@ -176,6 +178,12 @@ if ($guardHits.Count -gt 0) {
   Fail "price guard: purchase words, supplier names or purchase price literals found in files to publish"
 }
 Write-Host "  price guard: 0 matches"
+# purchase values of the source tables (bake-prices.ts purchaseValues) must not occur in the built JS with their price key
+Push-Location $studio
+npx tsx scripts/price-guard.ts $webStudio
+$pgOk = $?
+Pop-Location
+if (-not $pgOk) { Fail "price guard: purchase values of the source price tables found in the built JS (scripts/price-guard.ts)" }
 
 # ---------------------------------------------------------------- 5. version.json
 Step 5 "web/studio/version.json"

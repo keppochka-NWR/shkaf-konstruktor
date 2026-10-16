@@ -5,6 +5,7 @@ import { ManagerMode, decorLabel, decorTitle, kupeProfileCaption } from "./clien
 import type { Module } from "./model";
 import { KUPE_SYSTEMS, KUPE_FILLS, KUPE_SECTIONS, KUPE_SOFT_CLOSE } from "./kupeData";
 import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, kupeProfileExact, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, KUPE_PROFILE_WIDTH, type KupeSpec } from "./kupe";
+import { kupeLdspPerM2, MARKUP_DEFAULT } from "./pricing";
 import "./kupe-panel.css";
 
 const groups = [...new Set(KUPE_FILLS.map((f) => f.g))];
@@ -14,8 +15,9 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors }: { m: Module; m
   const k = m.kupe!, sys = kupeSystem(k), col = kupeColor(k);
   const manager = useContext(ManagerMode);
   const set = (patch: Partial<KupeSpec>) => modify((n) => { n.kupe = { ...n.kupe!, ...patch }; });
-  const lines = useMemo(() => kupeLines(m), [m]);
-  const total = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  // ЛДСП Lamarty — по прайсу листа × коэффициент сметы по умолчанию (в смете проекта — коэффициент проекта)
+  const lines = useMemo(() => kupeLines(m, (n) => kupeLdspPerM2(n, MARKUP_DEFAULT)), [m]);
+  const total = lines.reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0);
   const errors = useMemo(() => kupeErrors(m), [m]);
   const dw = Math.round(m.width / k.doors), allSame = k.fills.length <= 1 || k.fills.every((f) => f === k.fills[0]);
   const fillSelect = (value: string, onChange: (v: string) => void, label: string) => (

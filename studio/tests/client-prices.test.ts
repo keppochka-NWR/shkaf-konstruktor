@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {estimate} from '../src/pricing';
 import {clientView,clientLine,CLIENT_SOURCE,CLIENT_SOURCE_MISSING,CLIENT_SOURCE_IN_SHEET,SHEETS_LINE_ID} from '../src/clientPrices';
 import {PUBLIC_BUILD} from '../src/buildMode';
+import {PENDING_CLIENT} from '../src/pendingPrices';
 import {newProject,parseProject,type Project} from '../src/project';
 import {initialModule} from '../src/model';
 import {createKitchenRow,createKupeWardrobe} from '../src/ModulePalette';
@@ -17,7 +18,7 @@ const typical:Record<string,Project>={
   sheetModel:{...newProject(),calculation:{markup:2.2,overrides:{},model:'sheet'}},
   kupeExample:parseProject(JSON.parse(readFileSync(new URL('../examples/kupe-wardrobe.project.json',import.meta.url),'utf8'))),
 };
-const totals=(e:ReturnType<typeof estimate>)=>({retail:e.retail,byMarkup:e.byMarkup,byMarkupKnown:e.byMarkupKnown,bySheet:e.model==='sheet'?e.bySheet:null,material:e.split.material,hardware:e.split.hardware,vernissage:e.vernissageOnTop,missing:e.missing.length,model:e.model});
+const totals=(e:ReturnType<typeof estimate>)=>({retail:e.retail,byMarkup:e.byMarkup,byMarkupKnown:e.byMarkupKnown,bySheet:e.model==='sheet'?e.bySheet:null,material:e.split.material,hardware:e.split.hardware,kupe:e.split.kupe,pending:e.pending.length,vernissage:e.vernissageOnTop,missing:e.missing.length,model:e.model});
 
 test('tests run in manager mode (no __PUBLIC_BUILD__ outside vite build)',()=>{assert.equal(PUBLIC_BUILD,false);});
 
@@ -34,7 +35,7 @@ for(const [name,p] of Object.entries(typical))test(`client view keeps the client
     if(sheet&&!m.retail&&!vern&&!lemana){assert.equal(l.unitPrice,null,l.id);assert.ok(l.source===CLIENT_SOURCE_IN_SHEET||l.source===CLIENT_SOURCE_MISSING,l.source);continue;}
     const k=m.retail?1:vern?manager.vernissageMarkup:sheet?1:manager.markup;
     assert.equal(l.unitPrice,m.unitPrice===null?null:Math.round(m.unitPrice*k*100)/100,l.id);
-    assert.ok(l.source===CLIENT_SOURCE||l.source===CLIENT_SOURCE_MISSING,l.source);
+    assert.ok(l.source===CLIENT_SOURCE||l.source===CLIENT_SOURCE_MISSING||(m.pending&&l.source===PENDING_CLIENT),l.source);
   }
   assert.equal(client.markup,1);
   if(sheet){
@@ -71,11 +72,12 @@ test('public build sanitizer: strings with purchase words or supplier names beco
   assert.equal(NEUTRAL,'');
 });
 
-test('price guard pattern: purchase numbers and the default markup in minified JS are caught, plain numbers are not',()=>{
+// после запекания (16.10.2026) цены строк в сборке — розница; шаблон ловит коэффициенты, закупочные значения — scripts/price-guard.ts (tests/bake-prices.test.ts)
+test('price guard pattern: coefficients and the default sheet price in minified JS are caught, plain numbers and retail prices are not',()=>{
   const hits=(s:string)=>[...s.matchAll(PRICE_LITERALS)].length;
-  assert.equal(hits(`250:{price:445,source:""},cap:{price:.7},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),4);
+  assert.equal(hits(`250:{price:979,source:""},cap:{price:1.54},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),2);
   assert.equal(hits(`{lengths:[250,300],width:600,priceDate:"2026-08-10",unitPrice:null,markup:t.markup,markup:1,vernissageMarkup:1,sheetPrice:0,lightRetailPerM:3e3}`),0);
-  assert.equal(hits(`{markup:1.6},{price:10},{price:1e3}`),3);
+  assert.equal(hits(`{markup:1.6},{vernissageMarkup:1.6},{price:10},{price:1e3}`),2);
 });
 
 test('sheet model client line: inside the sheet price, Lemana and Vernissage on top',()=>{

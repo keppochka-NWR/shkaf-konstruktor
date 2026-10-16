@@ -1,0 +1,85 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {estimate,estimateCSV,decorPrice,kupeLdspPerM2,LDSP_SHEET_M2,MARKUP_DEFAULT} from '../src/pricing';
+import {clientView} from '../src/clientPrices';
+import {PENDING_CLIENT,pendingPrice,pendingTotalLabel} from '../src/pendingPrices';
+import {quoteBreakdown,quoteHTML,splitRows} from '../src/exports';
+import {salesCSV} from '../src/SalesSummary';
+import {KUPE_FILLS} from '../src/kupeData';
+import {kupeLines} from '../src/kupe';
+import {newProject,type Project} from '../src/project';
+import {initialModule} from '../src/model';
+import {createKitchenRow,createKupeWardrobe} from '../src/ModulePalette';
+
+// Решения Макса 16.10.2026 (studio/docs/РЕШЕНИЯ.md): позиции кухни без счёта, Lamarty вместо 1800, двери купе отдельной графой.
+const kitchen=():Project=>({...newProject(),room:{...newProject().room,width:3600},modules:createKitchenRow(3000,initialModule())});
+const kupe=():Project=>({...newProject(),modules:createKupeWardrobe(2400,2400,600,initialModule())});
+
+test('кухня 3 м: позиции без счёта — «после финального расчёта конструктором», итог по известным позициям',()=>{
+  const e=estimate(kitchen());
+  assert.deepEqual(e.pending.map(l=>l.id).sort(),['axis-pro:120:500:white','axis-pro:200:500:white','kitchen-clip','kitchen-hanger','kitchen-hanger-cap','kitchen-leg','worktop:postforming:38']);
+  assert.equal(e.missing.length,0,'не «нет цены»');
+  assert.equal(e.retail,e.byMarkupKnown,'итог = сумма известных позиций');
+  assert.ok(e.pending.every(l=>l.unitPrice===null&&!e.missing.includes(l)));
+  // поставщик и ориентир — менеджеру в источнике строки; в итог ориентир не входит
+  const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
+  assert.match(src('kitchen-leg'),/^ФАМ/);assert.match(src('kitchen-clip'),/^ФАМ/);
+  assert.match(src('axis-pro:200:500:white'),/^Мегатрейд.*~7 000 ₽ за комплект/);
+  assert.match(src('kitchen-hanger'),/^ФАС.*~120 ₽/);assert.match(src('kitchen-hanger-cap'),/^ФАС/);
+  assert.match(src('worktop:postforming:38'),/^Премиал \(предварительно\)/);
+  // клиенту: та же цена, нейтральная подпись, без поставщика и ориентира
+  const c=clientView(e),text=JSON.stringify(c.lines);
+  assert.equal(c.retail,e.retail);assert.equal(c.pending.length,7);assert.equal(c.missing.length,0);
+  assert.ok(c.pending.every(l=>l.source===PENDING_CLIENT&&l.unitPrice===null));
+  for(const w of ['ФАМ','ФАС','Мегатрейд','7 000','~120','ориентир'])assert.ok(!text.includes(w),w);
+  // КП, CSV, итог для клиента: явная строка с числом позиций
+  const label=pendingTotalLabel(7);assert.equal(label,'Позиции после финального расчёта конструктором: 7');
+  assert.ok(quoteHTML(kitchen(),'Клиент',String(e.retail),'',undefined,{cost:e}).includes(label));
+  assert.ok(estimateCSV(kitchen(),e).includes(label));
+  assert.ok(salesCSV(kitchen()).includes('Позиции после финального расчёта конструктором;7'));
+});
+
+test('ручная цена снимает пометку «после расчёта», остальные строки без счёта остаются «нет цены»',()=>{
+  const p=kitchen();p.calculation={markup:2.2,overrides:{'kitchen-leg':50}};
+  const e=estimate(p);
+  assert.ok(!e.pending.some(l=>l.id==='kitchen-leg'));assert.equal(e.lines.find(l=>l.id==='kitchen-leg')!.unitPrice,50);
+  assert.equal(pendingPrice('gola-L'),null,'Gola и прочее без цены — по-прежнему «уточнить»');
+  assert.equal(pendingPrice('worktop-cut:sink'),null,'вырез под мойку — не столешница');
+});
+
+test('наполнение купе ЛДСП: цены 1800 ₽/м² нет, цена — лист Lamarty по прайсу ÷ площадь листа × 2,2',()=>{
+  const ldsp=KUPE_FILLS.filter(f=>f.g.startsWith('ЛДСП'));
+  assert.ok(ldsp.length>100);assert.ok(ldsp.every(f=>f.p===undefined),'у ЛДСП нет единой цены за м²');
+  assert.ok(!/"p":1800\b/.test(readFileSync(new URL('../src/kupeData.ts',import.meta.url),'utf8')));
+  assert.ok(!/1800/.test(readFileSync(new URL('../scripts/import-kupe.cjs',import.meta.url),'utf8')),'генератор не возвращает 1800');
+  assert.equal(MARKUP_DEFAULT,2.2);
+  for(const f of ldsp){const d=decorPrice(f.n),q=kupeLdspPerM2(f.n,2.2);assert.ok(d.price!==null,f.n);assert.equal(q.price,Math.round(d.price!/LDSP_SHEET_M2*2.2),f.n);}
+  // в смете купе: ЛДСП «Белый» = 2150 / 5,0325 × 2,2 ≈ 940 ₽/м² (было 1800)
+  const p=kupe(),k=p.modules.find(a=>a.module.kupe)!.module;k.kupe={...k.kupe!,fills:['Белый']};
+  const line=estimate(p).lines.find(l=>l.id==='kupe-fill:Белый')!;
+  assert.equal(line.unitPrice,Math.round(2150/(2.75*1.83)*2.2));assert.equal(line.retail,true);
+  assert.match(line.source,/Lamarty|Победа/);
+  // коэффициент проекта применяется и к наполнению купе
+  p.calculation={markup:3,overrides:{}};assert.equal(estimate(p).lines.find(l=>l.id==='kupe-fill:Белый')!.unitPrice,Math.round(2150/(2.75*1.83)*3));
+  // без функции цены (панель до сметы) — ЛДСП без цены, а не 1800
+  assert.equal(kupeLines(k).find(l=>l.id==='kupe-fill:Белый')!.unitPrice,null);
+});
+
+test('двери купе — своя графа: Материалы / Фурнитура / Двери купе, сумма граф = итогу (КП, CSV, итог)',()=>{
+  const p=kupe(),e=estimate(p);
+  const kupeSum=Math.round(e.lines.filter(l=>l.id.startsWith('kupe-')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  assert.equal(e.split.kupe,kupeSum);assert.ok(kupeSum>0);
+  const s=quoteBreakdown(String(e.retail),e)!;
+  assert.equal(s.material+s.hardware+s.kupe,e.retail);assert.equal(s.kupe,e.split.kupe);
+  assert.deepEqual(splitRows(s).map(r=>r[0]),['Материалы','Фурнитура','Двери купе']);
+  const html=quoteHTML(p,'Клиент',String(e.retail),'',undefined,{cost:e});
+  assert.ok(html.includes('<td>Двери купе</td>'));assert.ok(html.includes('<td>Итого</td>'));
+  const csv=estimateCSV(p,e);assert.ok(csv.includes('"Разбивка: Двери купе"'));assert.ok(csv.includes('"Разбивка: Итого"'));
+  assert.ok(salesCSV(p).includes('Двери купе;'+s.kupe));
+  // клиентский вид — те же графы
+  const c=clientView(e);assert.deepEqual(quoteBreakdown(String(c.retail),c),s);
+  // без купе графы «Двери купе» нет
+  const sw=estimate(newProject()),ss=quoteBreakdown(String(sw.retail),sw)!;
+  assert.equal(ss.kupe,0);assert.deepEqual(splitRows(ss).map(r=>r[0]),['Материалы','Фурнитура']);assert.equal(ss.material+ss.hardware,sw.retail);
+});

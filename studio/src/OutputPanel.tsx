@@ -3,6 +3,7 @@ import {estimate} from './pricing';
 import {placementHTML} from './placementPlan';
 import {DrawingsPanel} from './DrawingsPanel';
 import {SalesSummary} from './SalesSummary';
+import {pendingTotalLabel} from './pendingPrices';
 import { useState, useMemo } from "react";
 import { type Project } from "./project";
 import type { OutputTab } from "./ProjectDock";
@@ -214,7 +215,7 @@ export function OutputPanel({
             без неё выводится «после согласования».
           </p>
           <div className="quote-price-check">
-            {calculated?.retail==null?<p>Смета ещё не завершена: незаполненных цен — {calculated?.missing.length??0}. Указанную вручную цену КП нужно проверить.</p>:<><p>По текущей смете: <b>{calculated.retail.toLocaleString('ru-RU')} ₽</b>.</p>{q.price.trim()&&Number(q.price)!==calculated.retail&&<p>Цена КП отличается от сметы. Проверьте её после изменения мебели; согласованную скидку можно оставить.</p>}<button className="outline" onClick={()=>update({...project,offer:{...q,price:String(calculated.retail)}})}>Подставить текущую смету</button></>}
+            {calculated?.retail==null?<p>Смета ещё не завершена: незаполненных цен — {calculated?.missing.length??0}. Указанную вручную цену КП нужно проверить.</p>:<><p>По текущей смете: <b>{calculated.retail.toLocaleString('ru-RU')} ₽</b>.{calculated.pending.length>0&&<> {pendingTotalLabel(calculated.pending.length)} — в КП печатается отдельной строкой.</>}</p>{q.price.trim()&&Number(q.price)!==calculated.retail&&<p>Цена КП отличается от сметы. Проверьте её после изменения мебели; согласованную скидку можно оставить.</p>}<button className="outline" onClick={()=>update({...project,offer:{...q,price:String(calculated.retail)}})}>Подставить текущую смету</button></>}
             <button className="text-action" onClick={()=>setTab('estimate')}>Открыть стоимость</button>
           </div>
           <label className="hardware-field">
@@ -258,7 +259,7 @@ export function OutputPanel({
             <label className="hardware-field">Контакты продавца<textarea aria-label="Контакты продавца для КП" defaultValue={seller.contacts} maxLength={600} rows={2} onBlur={e=>changeSeller({...seller,contacts:e.target.value})}/></label>
             <p className="field-note">Хранится только на этом устройстве и подставляется во все КП. Пустые поля — шапка продавца не печатается.</p>
           </details>
-          {q.price.trim()&&!quoteBreakdown(q.price,calculated)&&<p className="field-note">{calculated?.model==='sheet'?'Модель «цена за лист»: фурнитура входит в цену листа — в КП печатается только итог.':calculated?.retail!=null&&Number(q.price)===calculated.retail?'Одна из частей цены нулевая — в КП печатается только итог.':'Цена КП отличается от расчётной — разбивка «материалы / фурнитура» не печатается, только итог.'}</p>}
+          {q.price.trim()&&!quoteBreakdown(q.price,calculated)&&<p className="field-note">{calculated?.model==='sheet'?'Модель «цена за лист»: фурнитура входит в цену листа — в КП печатается только итог.':calculated?.retail!=null&&Number(q.price)===calculated.retail?'Одна из частей цены нулевая — в КП печатается только итог.':'Цена КП отличается от расчётной — разбивка «материалы / фурнитура / двери купе» не печатается, только итог.'}</p>}
           <div className="output-actions"><button className="outline" onClick={()=>{setImageError('');if(quoteImage!==null){setQuoteImage(null);return;}try{setQuoteImage(capture()||'');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить изображение.');}}}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
           <div className="output-actions">
             <button

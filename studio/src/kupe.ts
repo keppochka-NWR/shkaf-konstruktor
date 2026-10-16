@@ -67,15 +67,16 @@ export function kupeErrors(m: Module): string[] {
   return e;
 }
 
-export type KupeLine = { id: string; label: string; quantity: number; unit: string; unitPrice: number; source: string };
-/** Строки сметы по формуле калькулятора купе. Все — розничные. */
-export function kupeLines(m: Module): KupeLine[] {
+export type KupeLine = { id: string; label: string; quantity: number; unit: string; unitPrice: number | null; source: string };
+/** Строки сметы по формуле калькулятора купе. Все — розничные. Наполнение ЛДСП Lamarty — по прайсу листа (ldsp: цена клиенту за м²,
+ *  pricing.ts kupeLdspPerM2, решение Макса 16.10.2026); без ldsp (панель купе до сметы) — без цены. */
+export function kupeLines(m: Module, ldsp?: (decor: string) => { price: number | null; source: string }): KupeLine[] {
   const k = m.kupe!, s = kupeSystem(k), c = kupeColor(k), W = m.width, H = m.height, N = k.doors, dw = W / N, sec = kupeSections(k);
   const src = "Калькулятор купе: профили " + KUPE_VERSION.profiles + ", наполнения " + KUPE_VERSION.fillings;
   const P = (v: number) => v * KUPE_PROFILE_MULT, out: KupeLine[] = [], area = dw / 1000 * (H / 1000);
   const fillArea = new Map<string, number>();
   for (let i = 0; i < N; i++) { const f = kupeDoorFill(k, i); fillArea.set(f.n, (fillArea.get(f.n) ?? 0) + area); }
-  for (const [n, a] of fillArea) { const f = kupeFill(n); out.push({ id: "kupe-fill:" + n, label: "Купе · наполнение " + n, quantity: a, unit: "м²", unitPrice: f.p, source: src }); }
+  for (const [n, a] of fillArea) { const f = kupeFill(n), l = isLdspFill(f) ? ldsp?.(n) ?? { price: null, source: "Прайс Lamarty: цена листа считается в смете" } : null; out.push({ id: "kupe-fill:" + n, label: "Купе · наполнение " + n, quantity: a, unit: "м²", unitPrice: l ? l.price : f.p ?? null, source: l ? l.source : src }); }
   const prof = (id: string, label: string, len: number, price: number) => { if (len > 0) out.push({ id: "kupe-profile:" + id + ":" + s.system + ":" + c.name, label: "Купе · " + label + " · " + s.system + " · " + c.name, quantity: len / 1000, unit: "м", unitPrice: P(price), source: src + " (закупка × 3)" }); };
   prof("ruchka", "профиль-ручка", 2 * H * N, c.ruchka);
   prof("verh", "рамка верхняя", dw * N, c.verh);
