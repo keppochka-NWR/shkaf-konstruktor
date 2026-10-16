@@ -1921,7 +1921,6 @@ export function validate(m: Module): string[] {
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...(m.kdrawerGrip&&!m.raw?[...kdrawerGripErrors(m),...kitchenDrawerErrors({...m,kdrawers:gripKDrawers(m)}).map(e=>"«Зазор 30 мм»: "+e)]:[]),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
-  if(!errors.length)errors.push(...falshSupportErrors(m));
   if (errors.length) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
     return [...errors, "Допустимо от 1 до 4 секций."];
@@ -2126,6 +2125,8 @@ export function validate(m: Module): string[] {
   // примечании паспорта «Ящик < Min размера изготавливается без фрезеровки» — не ошибка: фасад без фрезеровки (предупреждение в выборе).
   errors.push(...kitchenLiftRowErrors(m,geometry,innerBottom(m)));
   if(m.vernissage)for(const p of geometry)if(p.vernissage)errors.push(...vernissageSizeCheck(m.vernissage.milling,m.vernissage.open,p.size[0],p.size[1]).errors.map(e=>'Фасад Вернисаж '+e+'. Выберите другую фрезеровку или измените размер.'));
+  // ревью R4: направляющие ящиков на составном фальше опираются на его плиту (после остальных проверок — геометрия собрана)
+  if(!errors.length)errors.push(...falshSupportErrors(m));
   return [...new Set(errors)];
 }
 /** Габариты фасадов «Вернисаж» модуля (ширина, высота) — для проверки по паспорту в выборе фрезеровки. */

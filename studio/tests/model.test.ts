@@ -91,12 +91,13 @@ test("doors are bounded and add fillers only for drawer zones", () => {
   // нижняя петля (100 мм от низа фасада) в зоне ящиков и не сдвигается — фальш составной (решение Макса 16.10.2026):
   // 2 плиты 16 склейкой, разрыв 100 мм у петли → по куску 276 = 360 − (180 − 96) над разрывом
   const fillers = parts(m).filter((p) => p.name.startsWith("Фальш-панель"));
-  assert.equal(fillers.length, 2);
-  assert.deepEqual(fillers.map((p) => p.size[1]), [276, 276]);
+  // ревью Codex R4: за петлёй — вставка склейки (84 = 180 − 96) до зоны петли спереди, в обеих плитах
+  assert.equal(fillers.length, 4);
+  assert.deepEqual(fillers.map((p) => p.size[1]), [276, 84, 276, 84]);
   m.width=900;
   assert.deepEqual(validate(m), []);
   assert.equal(parts(m).filter(p=>p.role==="door").length,2);
-  assert.equal(parts(m).filter(p=>p.name.startsWith("Фальш-панель")).length,4);
+  assert.equal(parts(m).filter(p=>p.name.startsWith("Фальш-панель")).length,8,"2 стороны × 2 плиты × (кусок + вставка за петлёй, R4)");
   // ручная нижняя петля над ящиками (480) поджимается к 200 мм от низа фасада (решение Макса 16.10.2026) — снова в зоне
   // ящиков, фальш составной с разрывом у петли
   const up = initialModule();

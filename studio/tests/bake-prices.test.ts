@@ -88,8 +88,8 @@ const kitchen3m=()=>({...newProject(),modules:createKitchenRow(3000,initialModul
 test('R1: ручная цена проекта (лист 10 000) в публичной сборке — тот же итог, что у менеджера (83 000 + склейка), не 50 800',()=>{
   const p=newProject();p.calculation={markup:2.2,overrides:{'sheet:Дуб Вотан':10000}};
   const m=estimate(p),pub=baked.estimate(p);
-  // 83 000 у Codex (5bd8335) + 159 ₽ склейки составного фальша (1000 ₽/м², 3dd13b2) = 83 159
-  assert.equal(m.retail,83159);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
+  // 83 000 у Codex (5bd8335) + склейка составного фальша 1000 ₽/м² (3dd13b2) и вставки за петлёй (R4) = 83 303
+  assert.equal(m.retail,83303);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
 });
 test('R1: кухня с 7 ручными ценами 1000 — итог как в менеджерской, позиции не pending',()=>{
   const p=kitchen3m(),e=estimate(p);assert.equal(e.pending.length,7);
@@ -112,18 +112,18 @@ test('R1: нестандартный коэффициент проекта не 
 });
 test('R2: «цена за лист» без цены листа — модель не переключается, итог 69 000 не подменяется; штамп менеджера сохраняет цену листа',()=>{
   const p=newProject();p.calculation={markup:2.2,model:'sheet',overrides:{}};
-  const m=estimate(p);assert.equal(m.model,'sheet');assert.equal(m.retail,69159,'69 000 у Codex + 159 ₽ склейки фальша');
+  const m=estimate(p);assert.equal(m.model,'sheet');assert.equal(m.retail,69203,'69 000 у Codex + 203 ₽ склейки фальша (0,203 м² со вставками R4)');
   const pub=baked.estimate(p);
   assert.equal(pub.model,'sheet','модель не меняется молча');assert.equal(pub.retail,null,'нового меньшего итога нет');
   assert.equal(pub.needSheetPrice,true);assert.equal(pub.notice,baked.SHEET_PRICE_NOTICE);
   const saved=parseProject(JSON.parse(JSON.stringify(withPriceStamp(p))));
   assert.equal(saved.calculation!.sheetPrice,23000);
-  const pubSaved=baked.estimate(saved);assert.equal(pubSaved.model,'sheet');assert.equal(pubSaved.retail,69159);
+  const pubSaved=baked.estimate(saved);assert.equal(pubSaved.model,'sheet');assert.equal(pubSaved.retail,69203);
 });
 test('R5: «цена за лист» с ручками Лемана — розница как есть (98 ₽), итог 69 294 и в публичной сборке',()=>{
   const p=newProject();p.calculation={markup:2.2,model:'sheet',sheetPrice:23000,overrides:{}};p.modules[0].module.handleId='lm86728212';
   const m=clientView(estimate(p)),pub=baked.estimate(p);
-  assert.equal(m.retail,69453,'69 294 у Codex + 159 ₽ склейки фальша');assert.equal(pub.retail,m.retail);
+  assert.equal(m.retail,69497,'69 294 у Codex + 203 ₽ склейки фальша');assert.equal(pub.retail,m.retail);
   const h=pub.lines.find(l=>l.id==='handle:lm86728212')!;assert.equal(h.unitPrice,98);assert.equal(h.quantity,3);
   // модель наценки — та же ручка × коэффициент (215,60), как у менеджера
   const pk=newProject();pk.modules[0].module.handleId='lm86728212';
