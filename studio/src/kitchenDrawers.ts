@@ -1296,8 +1296,13 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
 export function gripKDrawers(m: Module): KDrawer[] {
   const ks = m.kdrawers ?? [];
   if (!m.kdrawerGrip || m.raw) return ks;
-  return ks.map((k) => {
-    if (isInner(k)) return k;
+  // уточнение Макса 16.10.2026: между фасадами ящиков виден зазор 30 мм — фасад ниже, его низ на месте, верх на 30 ниже низа
+  // следующего фасада (глухого тоже); верхний — на 30 ниже верха колонки фасадов (верх фасада + отступ faceGap)
+  const fronts = [...ks.filter((k) => !isInner(k)).map((k) => k.y0), ...(m.kitchen?.blindFronts ?? []).map((b) => b.y0)];
+  return ks.map((k0) => {
+    if (isInner(k0)) return k0;
+    const next = fronts.filter((y) => y >= k0.y1 - 1).sort((a, b) => a - b)[0], limit = next ?? k0.y1 + (m.faceGap ?? 1.5);
+    const k = { ...k0, y1: Math.round(Math.min(k0.y1, limit - 30) * 10) / 10 } as KDrawer;
     if (isBox(k)) { const h = Math.round(Math.min(k.box.h - 30, k.y1 - 30 - k.box.y) * 10) / 10; return h >= 60 ? ({ ...k, box: { ...k.box, h } } as KDrawer) : k; }
     if (isAxis(k)) { const lim = Math.min(axisTop(k) - 30, k.y1 - 30); return [...AXIS_HEIGHTS].reverse().map((hh) => withAxisH(m, k, hh)).find((c) => axisTop(c) <= lim + 0.01 && axisAvailable(c)) ?? k; }
     return k;
