@@ -15,7 +15,7 @@ import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProper
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -1644,7 +1644,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                           />
                           <label className="hardware-field"><span><input type="checkbox" aria-label="Ящик без фасада" checked={!!c.noFacade} onChange={e=>update({noFacade:e.target.checked?true:undefined,handle:undefined})}/> Внутренний ящик без фасада</span></label>
                           {c.noFacade?<p className="field-note">Только короб и направляющие: ящик за распашными дверями или в открытом каркасе. Фасад, ручка и зазоры не считаются.</p>:<>
-                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={c.tray?40:60} max={800} onChange={v=>update({facadeH:v})}/>
+                          <NumberField label="Высота фасада ящика" value={drawerGripOn(m,s,c)?drawerFaceSpan(m,s,c)[1]-drawerFaceSpan(m,s,c)[0]:c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={c.tray?40:60} max={800} onChange={v=>update({facadeH:v})}/>
                           {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}</>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
                           {c.slide==='gtv0fpo'&&<p className="field-note">Геометрия ящика под скрытые направляющие — по карте GTV 0FPO. Артикул бренда согласовать перед производством.</p>}
