@@ -45,6 +45,7 @@ export const RULES = {
   drawerStep: 40,
   drawerSideGap: 13,
   drawerFrontGap: 3,
+  drawerGrip: 30, // «Зазор между ящиками 30 мм»: короб ниже на 30, фасад выше короба не менее чем на 30 (решение Макса 16.10.2026)
   rodDiameter: 25,
   rodMountScrews: 6, // Штанга 25мм.fr3d: два фланца, по три самореза 3,5×16.
   rodTopOffset: 70,
@@ -156,6 +157,8 @@ export type Section = {
   hingeless?: number[];
   /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
   externalDrawers?: boolean;
+  /** Ящики секции без ручки, «Зазор между ящиками 30 мм» (решение Макса 16.10.2026): короб ниже на 30, фасады те же — хват сверху за фасад. */
+  drawerGrip?: boolean;
   drawerGap?: number;
   shelves: number[];
   drawers: number;
@@ -252,6 +255,8 @@ export type Module = {
   confirmatInset?: number;
   /** Ручки не заложены (Gola, ручки заказчика, без ручек) — как в кухнях Базиса без ручек в спецификации. */
   noHandles?: boolean;
+  /** Кухонные ящики студии (kdrawers): «Зазор между ящиками 30 мм» — без ручек, короб ниже на 30 (gripKDrawers, решение Макса 16.10.2026). */
+  kdrawerGrip?: boolean;
   /** Толщина стеклянных полок (по умолчанию 6; кухни Базиса — 4, полкодержатели MV05). */
   glassT?: number;
   /** Зазор стеклянной полки до стойки с каждой стороны (по умолчанию как у ЛДСП — 1; Базис — 1,5). */
@@ -541,7 +546,7 @@ export function deskModule(base?:Module):Module{
     feet:undefined,slope:undefined,skew:undefined,alu:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** В корпусе есть ручки (распашные фасады всегда с ручкой; ящики — если не push-to-open). */
-export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)));}
+export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
 export function facadeBottom(m:Module){
   if(m.feet){
@@ -587,6 +592,14 @@ export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1+(m
 /** Верхний предел «Паз от задней кромки»: шкафы — 30 мм, кухня из Базиса — до depth−32 (k20 m05: 119). Одна точка для validate и поля KitchenPanel (A5). */
 export const grooveInsetMax=(m:Pick<Module,'kitchen'|'depth'>)=>m.kitchen?m.depth-32:30;
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
+/** «Зазор между ящиками 30 мм» действует на ящик ЛДСП с фасадом (не сетка, не выкатная полка, не внутренний ящик). */
+export function drawerGripOn(m:Module,s:Section,c:DrawerConfig){return !!s.drawerGrip&&!m.raw&&!c.mesh&&!c.noFacade&&!c.tray;}
+/** Высота боковины короба: по настройке ящика, при «Зазоре 30 мм» — на 30 ниже и не выше «верх фасада − 30» (фасады те же: шаг ящика не меняется). */
+export function drawerBoxHeight(m:Module,s:Section,c:DrawerConfig){
+ if(!drawerGripOn(m,s,c))return c.height;
+ const gap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:fb(m)),face=c.facadeH??(drawerPitch(c,gap)-gap);
+ return Math.min(c.height-RULES.drawerGrip,face+(c.facadeH?gap/2:0)-RULES.drawerStep/2-RULES.drawerGrip);
+}
 export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+(c.tray?10:RULES.drawerStep);return c.facadeH?Math.max(box,c.facadeH+gap):box;}
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
@@ -967,7 +980,7 @@ export function parts(m: Module): Part[] {
       const sideGap = hidden ? 5 : RULES.drawerSideGap,
         boxW = b.width - filler - 2 * sideGap;
       const boxD = cfg.length - (hidden ? 10 : 0),
-        bh = cfg.height;
+        bh = drawerBoxHeight(m, s, cfg), grip = drawerGripOn(m, s, cfg);
       const bx = b.x + f.left + sideGap,
         y = b.bottom + (cfg.tray?2:RULES.drawerStep/2) + drawerOffsets(s)[j],
         z = d - (drawersBehindDoors(m,s) ? 44 : 20) - boxD;
@@ -1052,7 +1065,7 @@ export function parts(m: Module): Part[] {
       const dft=drawersBehindDoors(m,s)?t:m.facadeT??t;
       add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад',[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id);
       out.at(-1)!.decor=m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
-      if(drawerHasHandle(cfg)&&!m.noHandles){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
+      if(drawerHasHandle(cfg)&&!m.noHandles&&!grip){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -1834,6 +1847,8 @@ export function validate(m: Module): string[] {
     if(s.rodClearance!==undefined&&(!Number.isFinite(s.rodClearance)||s.rodClearance<300||s.rodClearance>1500))errors.push(prefix+'просвет под штангой: 300–1500 мм.');
     if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
+    if(s.drawerGrip!==undefined&&typeof s.drawerGrip!=='boolean')errors.push(prefix+'неверный зазор между ящиками.');
+    if(s.drawerGrip)for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j);if(drawerGripOn(m,s,c)&&drawerBoxHeight(m,s,c)<60)errors.push(prefix+'ящик '+(j+1)+': при зазоре 30 мм короб ниже 60 мм — увеличьте ящик.');}
     // кухня: фасады от 200 мм (антресоль Базиса k13 m02 в два ряда по 342; n3-antresol); шкафы — doorMinH
     const splitMin=m.kitchen?200:RULES.doorMinH;
     if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
@@ -2164,7 +2179,7 @@ export function parseModule(input: unknown): Module {
     ...(x.shelfPinInset===undefined?{}:{shelfPinInset:Number(x.shelfPinInset)}),
     ...(x.shelfPinInsetFront===undefined?{}:{shelfPinInsetFront:Number(x.shelfPinInsetFront)}),
     ...(x.confirmatInset===undefined?{}:{confirmatInset:Number(x.confirmatInset)}),
-    ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),
+    ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),...(x.kdrawerGrip===true?{kdrawerGrip:true}:{}),
     ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
@@ -2225,7 +2240,7 @@ export function parseModule(input: unknown): Module {
       ...(Array.isArray(s.hingeYMidFor)?{hingeYMidFor:s.hingeYMidFor.map(Number)}:{}),
       ...(Array.isArray(s.hingeless)?{hingeless:s.hingeless.map(Number)}:{}),
       ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
-      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),
+      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),...(s.drawerGrip===true?{drawerGrip:true}:{}),
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
       shelves: [...s.shelves],

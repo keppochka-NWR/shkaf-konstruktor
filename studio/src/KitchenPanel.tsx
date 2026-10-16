@@ -18,7 +18,7 @@ import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions, rawCheck, bazisAirHardware, BAZIS_AIR, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
 import { rawHangerSeats, RAW_HANGER_DROP } from "./rawModule";
-import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
+import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews, gripKDrawers, kdrawerGripAvailable } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
 import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
@@ -310,8 +310,10 @@ function CabinetPanel(props: KitchenPanelProps) {
       <div className="kitchen-field"><span>Количество ящиков</span>
         <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => { const same = m.kdrawers!.length === c, why = relayoutProblem(m, c); /* текущее число — пересобрать с теми же долями фасадов (царги и длины заново) */
           return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? layoutKitchenDrawers(n, c) : layoutKitchenDrawers(n, c); })}>{c}</button>; })}</div></div>
+      {kdrawerGripAvailable(m) && project.source !== "bazis" && <Check label="Зазор между ящиками 30 мм (без ручек)" checked={!!m.kdrawerGrip} change={(v) => modify((n) => { if (v) n.kdrawerGrip = true; else delete n.kdrawerGrip; })} />}
+      {m.kdrawerGrip && <p className="field-note" data-testid="kdrawer-grip-note">Ручек на фасадах ящиков нет; короб каждого ящика ниже не менее чем на 30 мм, фасады те же — хват сверху за фасад.</p>}
       {[...m.kdrawers].map((d, i) => ({ d, i })).reverse().map(({ d, i }) => <div key={i} className="kitchen-rail">
-        <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(d)} · направляющая на {d.runnerY} от пола модуля</p>
+        <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(gripKDrawers(m)[i] ?? d)} · направляющая на {d.runnerY} от пола модуля</p>
         {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={kdrawerFacadeMax(m, i)} step={0.5} change={(v) => modify((n) => { n.kdrawers = n.gola ? resizeKitchenDrawerFront(n,i,v) : setKDrawerFacade(n, i, v); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
         {d.system === "axis-pro" && <div className="kitchen-chips" role="group" aria-label={`Царга ящика ${i + 1}`}>{AXIS_HEIGHTS.map((h) => { const k2 = withAxisH(m, d, h), fit = axisFits(m, k2), ok = fit && axisAvailable(k2) && k2.len <= axisMaxLen(m); /* длина подбирается под глубину и царгу */
           return <button key={h} type="button" aria-pressed={d.h === h} disabled={d.h !== h && !ok} title={!fit ? "Не входит: короб ближе 21,5 мм к верху фасада или 5 мм к царгам корпуса" : !ok ? `Нет модели Axis PRO H-${h} под глубину корпуса ${m.depth}` : undefined} onClick={() => modify((n) => { const o = n.kdrawers![i]; if (o.system !== "axis-pro") return; n.kdrawers![i] = withAxisH(n, o, h); })}>H-{h}</button>; })}</div>}
