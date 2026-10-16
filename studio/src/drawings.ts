@@ -2,10 +2,13 @@ import {parts,boxes,type Module,type Part} from './model';
 import {cornerDrawingSVG} from './cornerDrawing';
 import {projectErrors,type Project} from './project';
 const esc=(s:unknown)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-const mm=(v:number)=>Math.round(v*10)/10;
-export function drawingLevels(m:Module){return parts(m).filter(d=>d.role==='shelf'||d.role==='rod'||d.id.endsWith(':facade')).map((d,index)=>{
-  const section=m.sections.findIndex(s=>s.id===d.sectionId),base=boxes(m)[section]?.bottom??0;
-  return {mark:index+1,id:d.id,name:d.name,section:section+1,bottom:mm(d.position[1]-d.size[1]/2),top:mm(d.position[1]+d.size[1]/2),center:mm(d.position[1]),fromOpening:mm(d.position[1]-base)};
+/** Чертежи — в целых миллиметрах (аудит магазина: «1642.5» на чертеже клиенту). Точные доли — в ведомости и деталировке. */
+const mm=(v:number)=>Math.round(v);
+/** Отметки высот; section — номер секции с 1, null — элемент вне секций (кухонный модуль Базиса, общий фасад): в таблице «—»,
+ *  отсчёт «от дна проёма» — от низа корпуса. */
+export function drawingLevels(m:Module){const all=boxes(m);return parts(m).filter(d=>d.role==='shelf'||d.role==='rod'||d.id.endsWith(':facade')).map((d,index)=>{
+  const i=m.sections.findIndex(s=>s.id===d.sectionId),base=all[i]?.bottom??0;
+  return {mark:index+1,id:d.id,name:d.name,section:i>=0?i+1:null,bottom:mm(d.position[1]-d.size[1]/2),top:mm(d.position[1]+d.size[1]/2),center:mm(d.position[1]),fromOpening:mm(d.position[1]-base)};
 });}
 export function moduleDrawingSVG(m:Module){
   if(m.corner)return cornerDrawingSVG(m);
@@ -31,5 +34,5 @@ export function moduleDrawingSVG(m:Module){
   ${txt(30,595,'0 — низ корпуса. Габариты корпуса без выступающих фасадов и ручек.','start')}
   ${txt(30,616,'Номера элементов соответствуют таблице высот. Размеры в мм; масштаб при печати произвольный.','start')}</svg>`;
 }
-export function drawingTable(m:Module){return `<table><thead><tr><th>№</th><th>Элемент</th><th>Секция</th><th>Низ от 0</th><th>Верх от 0</th><th>Ось от 0</th><th>Ось от дна проёма</th></tr></thead><tbody>${drawingLevels(m).map(d=>`<tr><td>${d.mark}</td><td>${esc(d.name)}</td><td>${d.section}</td><td>${d.bottom}</td><td>${d.top}</td><td>${d.center}</td><td>${d.fromOpening}</td></tr>`).join('')}</tbody></table>`;}
+export function drawingTable(m:Module){return `<table><thead><tr><th>№</th><th>Элемент</th><th>Секция</th><th>Низ от 0</th><th>Верх от 0</th><th>Ось от 0</th><th>Ось от дна проёма</th></tr></thead><tbody>${drawingLevels(m).map(d=>`<tr><td>${d.mark}</td><td>${esc(d.name)}</td><td>${d.section??'—'}</td><td>${d.bottom}</td><td>${d.top}</td><td>${d.center}</td><td>${d.fromOpening}</td></tr>`).join('')}</tbody></table>`;}
 export function drawingsHTML(p:Project){const errors=projectErrors(p);if(errors.length)throw Error(errors[0]);return `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Размерные виды модулей</title><style>body{font:13px Arial;color:#23323c;margin:24px auto;max-width:1050px;padding:20px}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}th,td{border:1px solid #bbc8cf;padding:7px;text-align:left}thead{display:table-header-group}tr{break-inside:avoid}h1{font-size:22px}h2{font-size:19px}section{break-before:page}section:first-of-type{break-before:auto}.note{color:#5c6c77;line-height:1.5}@page{size:A4;margin:12mm}@media print{body{margin:0;padding:0;max-width:none;font-size:11px}svg{display:block;width:100%;height:auto;max-height:140mm}h1{font-size:20px;margin:0 0 8px}h2{font-size:16px;margin:8px 0;break-after:avoid}p{margin:7px 0}table{font-size:10px;margin-top:7px}th,td{padding:4px}thead{display:table-header-group}}</style><h1>Размерные виды модулей · для согласования</h1><p class="note">Это схема конструкции, без присадки и управляющих программ. Перед производством технолог проверяет соединения, кромление, зазоры и монтаж. Замер: ${esc(p.measurement?.number||'—')}.</p>${p.modules.map((a,i)=>`<section><h2>${i+1}. ${esc(a.module.name)} · ${a.module.width} × ${a.module.height} × ${a.module.depth}</h2><p>${esc(a.module.decor)} · положение X ${a.x}, Z ${a.z}, от пола ${a.y??0} мм; поворот ${a.rotation??0}°.</p>${moduleDrawingSVG(a.module)}${drawingTable(a.module)}</section>`).join('')}</html>`;}

@@ -1,0 +1,105 @@
+// Описание модуля для клиентских документов (КП, спецификация для клиента) — по ТИПУ модуля (аудит магазина 15.10.2026, Б3):
+// шкаф — корпус и наполнение; двери купе — профиль и наполнение по полотнам; столешница — материал и толщина; кухонный модуль —
+// тип, ящики фактическим числом, фасады фактическим материалом (Вернисаж — серия, фрезеровка, покрытие; алюминий — профиль, вставка).
+// Нулевые позиции («пантографов: 0») не печатаются. Внутренних слов (раскрой, Базис, прайс, закупка) здесь нет.
+import { parts, type Module } from "./model";
+import { kupeSystem, kupeColor, kupeDoorFill, kupeSections } from "./kupe";
+import { worktopLabel } from "./kitchen";
+import { aluProfile, aluColor, aluInsert } from "./alu";
+import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
+import { plural } from "./ru";
+
+export type ModuleDescription = { kind: string; size: string; materials: string[]; filling: string[] };
+
+const KITCHEN_ROLE: Record<string, string> = { base: "Кухонный нижний модуль", wall: "Кухонный навесной модуль", tall: "Кухонный пенал", antresol: "Кухонная антресоль" };
+const APPLIANCE: Record<string, string> = { sink: "под мойку", oven: "под духовой шкаф", microwave: "под СВЧ", dishwasher: "под посудомоечную машину", hob: "под варочную панель", hood: "под вытяжку", fridge: "под холодильник" };
+
+/** Покрытие фасада Вернисаж словами для клиента. */
+function vernissageCover(v: VernissageFacade): string {
+  switch (v.cover) {
+    case "film": return "плёнка ПВХ" + (v.film ? " «" + v.film + "»" : "");
+    case "adilet": return "плёнка Адилет" + (v.film ? " «" + v.film + "»" : "");
+    case "pet": return "ПЭТ" + (v.film ? " «" + v.film + "»" : "");
+    case "enamel-matte": return "эмаль матовая" + (v.enamelColor ? " " + v.enamelColor : "");
+    case "enamel-gloss": return "эмаль глянцевая" + (v.enamelColor ? " " + v.enamelColor : "");
+    default: return "без покрытия";
+  }
+}
+/** Фасады Вернисаж: серия, фрезеровка, покрытие, толщина — без цен и служебных пометок. */
+export function vernissageClientLabel(v: VernissageFacade): string {
+  const s = seriesOf(v.milling), m = vernissageMilling(v.milling);
+  const open = v.open === "glass" ? ", под стекло" : v.open === "grille" ? ", с решёткой" : "";
+  const milling = s.id === "pet" ? "" : `, фрезеровка №${m?.id ?? v.milling}${open}`;
+  return `МДФ «Вернисаж», серия «${s.name}»${milling}, ${vernissageCover(v)}, ${v.thickness} мм`;
+}
+/** Фасады в алюминиевой рамке: профиль, цвет профиля, вставка. */
+export function aluClientLabel(m: Module): string {
+  const a = m.alu!, p = aluProfile(a.profile), c = aluColor(a.profile, a.color), i = aluInsert(a.insert);
+  return `алюминиевая рамка ${p?.label ?? a.profile}, цвет ${c?.label ?? a.color}, вставка ${i?.label ?? a.insert}`;
+}
+/** Материал распашных фасадов модуля — фактический (Вернисаж, алюминий, ЛДСП/МДФ по декору). */
+export function facadeMaterialLabel(m: Module): string {
+  if (m.vernissage) return vernissageClientLabel(m.vernissage);
+  if (m.alu) return aluClientLabel(m);
+  return m.facadeMaterial === "external" ? m.facadeDecor : "ЛДСП " + m.facadeDecor;
+}
+/** Материал фасадов ящиков: Вернисаж — тот же, что у дверей; алюминий — только распашные, ящики остаются ЛДСП. */
+function drawerFacadeLabel(m: Module): string {
+  if (m.vernissage) return vernissageClientLabel(m.vernissage);
+  const d = m.drawerFacadeDecor ?? m.facadeDecor;
+  return m.facadeMaterial === "external" ? d : "ЛДСП " + d;
+}
+/** Фактическое число ящиков: секции студии + ящики кухни (kdrawers) + ящики модуля Базиса (raw.counts). */
+export function drawerCount(m: Module): number {
+  return m.sections.reduce((n, s) => n + (s.drawers || 0), 0) + (m.kdrawers?.length ?? 0) + (m.raw?.counts?.drawers ?? 0);
+}
+/** Есть ли у модуля распашные фасады фактически (детали-двери в модели). */
+function hasDoorParts(m: Module) { return parts(m).some((d) => d.role === "door"); }
+
+function kupeDescription(m: Module): ModuleDescription {
+  const k = m.kupe!, s = kupeSystem(k), c = kupeColor(k), sec = kupeSections(k);
+  const fills = Array.from({ length: k.doors }, (_, i) => kupeDoorFill(k, i).n);
+  const same = fills.every((f) => f === fills[0]);
+  const materials = [`Профиль: ${s.system}, цвет ${c.name}`];
+  if (same) materials.push(`Наполнение: ${fills[0]} — ${k.doors === 1 ? "полотно" : "все " + k.doors + " " + plural(k.doors, ["полотно", "полотна", "полотен"])}`);
+  else fills.forEach((f, i) => materials.push(`Полотно ${i + 1}: ${f}`));
+  const filling = [`${k.doors} ${plural(k.doors, ["полотно", "полотна", "полотен"])}`, `раскладка: ${sec.label}`];
+  if (k.softClose) filling.push("доводчики");
+  return { kind: "Двери купе", size: `${m.width} × ${m.height} (проём)`, materials, filling };
+}
+function worktopDescription(m: Module): ModuleDescription {
+  const w = m.worktop!, sinks = w.cutouts.filter((c) => c.kind === "sink").length, hobs = w.cutouts.length - sinks;
+  const filling: string[] = [];
+  if (sinks) filling.push(`вырез под мойку${sinks > 1 ? " — " + sinks : ""}`);
+  if (hobs) filling.push(`вырез под варочную панель${hobs > 1 ? " — " + hobs : ""}`);
+  return { kind: "Столешница", size: `${m.width} × ${m.depth} × ${w.thickness}`, materials: [`Столешница: ${worktopLabel(w)}, ${w.thickness} мм`], filling };
+}
+
+/** Описание модуля для клиента по его типу. */
+export function describeModule(m: Module): ModuleDescription {
+  if (m.kupe) return kupeDescription(m);
+  if (m.worktop) return worktopDescription(m);
+  const size = `${m.width} × ${m.height} × ${m.depth}`;
+  const drawers = drawerCount(m), all = parts(m), doors = m.raw ? hasDoorParts(m) : m.doors && all.some((d) => d.role === "door");
+  const shelves = all.filter((d) => d.role === "shelf").length, rods = m.sections.filter((s) => s.rod).length;
+  const pantographs = m.sections.filter((s) => s.pantograph).length, pullouts = m.sections.reduce((n, s) => n + (s.pullouts || 0), 0);
+  const materials = [`Корпус: ЛДСП ${m.decor}`];
+  if (doors) materials.push(`Фасады: ${facadeMaterialLabel(m)}`);
+  if (drawers && !(m.vernissage && doors)) materials.push(`Фасады ящиков: ${drawerFacadeLabel(m)}`);
+  const filling: string[] = [];
+  if (shelves) filling.push(`${shelves} ${plural(shelves, ["полка", "полки", "полок"])}`);
+  if (drawers) filling.push(`${drawers} ${plural(drawers, ["ящик", "ящика", "ящиков"])}`);
+  if (rods) filling.push(`${rods} ${plural(rods, ["штанга", "штанги", "штанг"])}`);
+  if (pantographs) filling.push(`${pantographs} ${plural(pantographs, ["пантограф", "пантографа", "пантографов"])}`);
+  if (pullouts) filling.push(`${pullouts} ${plural(pullouts, ["выдвижной тремпель", "выдвижных тремпеля", "выдвижных тремпелей"])}`);
+  if (m.standLight) filling.push("подсветка в стойках");
+  let kind = "Шкаф";
+  if (m.kitchen) {
+    kind = KITCHEN_ROLE[m.kitchen.role] ?? "Кухонный модуль";
+    const app = m.kitchen.appliance && APPLIANCE[m.kitchen.appliance];
+    if (app) kind += " " + app;
+    if (m.kitchen.premialPullout) filling.push("выдвижная бутылочница");
+  } else if (m.raw) kind = "Модуль по проекту";
+  else if (m.corner) kind = "Угловой шкаф";
+  return { kind, size, materials, filling };
+}

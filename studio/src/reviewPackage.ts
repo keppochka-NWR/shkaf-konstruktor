@@ -1,5 +1,5 @@
 import {type Project,projectErrors} from './project';
-import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder} from './exports';
+import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder,uniqueWarnings} from './exports';
 import {drawingsHTML} from './drawings';
 import {placementHTML} from './placementPlan';
 import {estimate,estimateCSV} from './pricing';
@@ -10,7 +10,7 @@ import {salesCSV} from './SalesSummary';
 export function reviewFiles(project:Project,created=new Date()):Record<string,string>{
   const p=structuredClone(project),errors=projectErrors(p);
   if(errors.length)throw new Error(errors[0]);
-  const sheets=nest(p),cost=estimate(p,sheets),warnings=roomWarnings(p);
+  const sheets=nest(p),cost=estimate(p,sheets),warnings=uniqueWarnings(roomWarnings(p));
   const note=[
     'КОМПЛЕКТ ДЛЯ ПРОВЕРКИ ТЕХНОЛОГОМ',
     labelOrder(p),
@@ -23,7 +23,7 @@ export function reviewFiles(project:Project,created=new Date()):Record<string,st
     '',
     'ПЕРЕД ПРОИЗВОДСТВОМ',
     'Технолог должен проверить соединения, крепёж, кромление, зазоры, направление текстуры и замер. Присадка и управляющие программы не включены. Раскрой предварительный, минимальное число листов не гарантируется; поле и промежутки 10 мм. Размеры деталей габаритные, припуски станка не включены.',
-    'Печатный масштаб и разбиение документов на страницы требуют проверки. Бирки: 90 × 50 мм, по 10 на A4, масштаб 100%, без колонтитулов браузера.',
+    'Печатный масштаб и разбиение документов на страницы требуют проверки. Бирки: 120 × 75 мм, одна деталь на этикетку, масштаб 100%, без колонтитулов браузера.',
     '',
     'ЗАМЕЧАНИЯ ПО РАССТАНОВКЕ: '+warnings.length,
     ...(warnings.length?warnings.map(w=>'• '+w.message):['Автоматических замечаний нет. Это не заменяет проверку технологом.']),
@@ -51,7 +51,7 @@ export function managerReviewFiles(project:Project,created=new Date()):Record<st
   delete files['01-Проект.project.json'];delete files['08-Смета.csv'];
   files['00-Прочитайте.txt']='\ufeffДокументы проекта · '+created.toLocaleString('ru-RU')+'\r\nЧертежи, деталировка, карты и бирки одной версии. Итоговая стоимость без доставки и монтажа. Для продолжения редактирования сохраните проект отдельно в редакторе. Перед производством технолог должен проверить замер, соединения, зазоры и присадку. Бирки 120 × 75 мм; масштаб печати 100%.\r\n';
   files['08-Стоимость.csv']=salesCSV(project);
-  const warnings=roomWarnings(project),missing=estimate(project).missing;
+  const warnings=uniqueWarnings(roomWarnings(project)),missing=estimate(project).missing;
   files['00-Прочитайте.txt']+='\r\nЗамечания по расстановке: '+warnings.length+'\r\n'+warnings.map(w=>'• '+w.message).join('\r\n')+'\r\nСтоимость требует уточнения: '+missing.length+' позиций\r\n'+missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit).join('\r\n');
   return files;
 }
