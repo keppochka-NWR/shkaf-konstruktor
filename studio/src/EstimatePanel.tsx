@@ -2,10 +2,17 @@ import {useMemo,useState} from 'react';
 import type {Project} from './project';
 import {estimate,estimateCSV,engineNote} from './pricing';
 import {saveFile} from './exports';
+import {PUBLIC_BUILD} from './buildMode';
+import {CLIENT_SOURCE_IN_SHEET} from './clientPrices';
 export function EstimatePanel({project,update}:{project:Project;update:(p:Project)=>boolean}){
   const [missingOnly,setMissingOnly]=useState(false);
   const e=useMemo(()=>estimate(project),[project]),settings=project.calculation||{markup:2.2,overrides:{}};const rub=(n:number)=>n.toLocaleString('ru-RU')+' ₽';
   const lines=missingOnly?e.missing:e.lines;
+  // публичная сборка: клиентские цены без себестоимости, коэффициентов и ручных правок (buildMode.ts)
+  if(PUBLIC_BUILD)return <div className="estimate-panel"><h2>Смета проекта</h2><p className="field-note">Предварительный расчёт. Доставка и монтаж не включены.</p>
+    <table><thead><tr><th>Позиция</th><th>Кол-во</th><th>Цена, ₽</th><th>Сумма</th></tr></thead><tbody>{e.lines.map(l=>{const inSheet=l.source===CLIENT_SOURCE_IN_SHEET;return <tr key={l.id} className={l.unitPrice===null&&!inSheet?'price-missing':undefined}><td>{l.label}{l.unitPrice===null&&<small>{l.source}</small>}</td><td>{l.quantity} {l.unit}</td><td>{l.unitPrice===null?(inSheet?'входит':'—'):rub(l.unitPrice)}</td><td>{l.unitPrice===null?(inSheet?'входит':'—'):rub(Math.round(l.quantity*l.unitPrice))}</td></tr>;})}</tbody></table>
+    <div className="estimate-total"><strong>{e.retail===null?'Стоимость уточнит менеджер':'Стоимость '+rub(e.retail)}</strong></div>
+  </div>;
   function resetPrice(id:string){const overrides={...settings.overrides};delete overrides[id];update({...project,calculation:{...settings,overrides}});}
   return <div className="estimate-panel"><h2>Смета проекта</h2><p className="field-note">Листы берутся из карт раскроя. Закупка, кромка, фурнитура и работа умножаются на коэффициент (фасады Вернисаж — на свой). Доставка, монтаж и неописанный крепёж в расчёт не включены.</p>
     <label className="hardware-field">Модель цены<select aria-label="Модель цены" value={e.model} onChange={ev=>update({...project,calculation:{...settings,model:ev.target.value as 'markup'|'sheet'}})}><option value="markup">Себестоимость × коэффициент</option><option value="sheet">Цена за лист ЛДСП (фурнитура включена)</option></select></label>

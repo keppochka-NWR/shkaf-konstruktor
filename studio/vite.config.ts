@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import {mkdir,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {publicStringsPlugin} from './scripts/public-build';
 const backupToken=randomUUID();
 const localBackup={name:'local-project-backup',apply:'serve' as const,transformIndexHtml(){return [{tag:'meta',attrs:{name:'local-backup-token',content:backupToken},injectTo:'head' as const}];},configureServer(server:any){server.middlewares.use('/__local-project-backup',async(req:any,res:any)=>{
  if(req.method!=='POST'||req.headers['x-local-backup-token']!==backupToken){res.statusCode=403;res.end(JSON.stringify({error:'Обновите страницу перед резервным сохранением'}));return;}
@@ -13,9 +14,16 @@ const localBackup={name:'local-project-backup',apply:'serve' as const,transformI
  }catch(e){res.statusCode=400;res.end(JSON.stringify({error:String(e)}));}
  });}};
 
-export default defineConfig({
-  plugins: [react(),localBackup],
+// Публичная сборка (по умолчанию для `vite build`): только клиентские цены, без слов закупки и поставщиков в JS
+// (src/buildMode.ts, scripts/public-build.ts). Менеджерская локальная сборка: STUDIO_MANAGER=1 — не публиковать.
+const managerBuild=process.env.STUDIO_MANAGER==='1';
+const publicLog:string[]=[];
+const publicLogPlugin={name:'public-build-log',apply:'build' as const,async closeBundle(){if(managerBuild)return;await mkdir(resolve('test-results'),{recursive:true});await writeFile(resolve('test-results/public-build.txt'),publicLog.join('\n')+'\n');}};
+
+export default defineConfig(({command})=>({
+  define: { __PUBLIC_BUILD__: JSON.stringify(command==='build'&&!managerBuild) },
+  plugins: [react(),localBackup,...(command==='build'&&!managerBuild?[publicStringsPlugin(publicLog),publicLogPlugin]:[])],
   base: "./",
   build: { outDir: "../web/studio", emptyOutDir: true },
   server: { port: 5173, proxy: {'/api': {target:'http://127.0.0.1:8115'}} },
-});
+}));

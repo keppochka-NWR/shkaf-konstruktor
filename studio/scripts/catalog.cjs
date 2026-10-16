@@ -11,10 +11,15 @@ const src = fs.readFileSync(
 const data = vm
   .runInNewContext(src + "; LAMARTY;")
   .map((c) => ({ n: c.n, cat: c.cat, tier: c.tier, tex: c.tex ? "../" + c.tex : "" }));
-fs.writeFileSync(
-  new URL("../src/catalog.ts", `file://${__filename.replaceAll("\\", "/")}`),
+const catalogUrl = new URL("../src/catalog.ts", `file://${__filename.replaceAll("\\", "/")}`);
+const catalogText =
   "export type Tier='КЛАССИКА'|'ПРЕМИУМ'|'ЛЮКС';\nexport type Decor={n:string;cat:string;tier:Tier;tex:string};\nexport const catalog:Decor[]=" +
-    JSON.stringify(data, null, 2) +
-    ";\n",
-);
+  JSON.stringify(data, null, 2) +
+  ";\n";
+// окончания строк — как у файла на диске (Windows autocrlf: CRLF), иначе каждый прогон сборки «меняет» catalog.ts
+// и publish.ps1 со второго раза падает на шаге 1 (uncommitted changes); при том же содержании файл не переписываем
+let catalogOld = "";
+try { catalogOld = fs.readFileSync(catalogUrl, "utf8"); } catch {}
+const catalogOut = catalogOld.includes("\r\n") ? catalogText.replace(/\n/g, "\r\n") : catalogText;
+if (catalogOut !== catalogOld) fs.writeFileSync(catalogUrl, catalogOut);
 console.log(`Catalog: ${data.length} decors with price tiers`);
