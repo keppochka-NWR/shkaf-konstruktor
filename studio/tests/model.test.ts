@@ -88,13 +88,21 @@ test("doors are bounded and add fillers only for drawer zones", () => {
   m.doors = true;
   assert.deepEqual(validate(m), []);
   assert.equal(parts(m).filter((p) => p.role === "door").length, 1);
+  // нижняя петля (100 мм от низа фасада) в зоне ящиков и не сдвигается — фальш составной (решение Макса 16.10.2026):
+  // 2 плиты 16 склейкой, разрыв 100 мм у петли → по куску 276 = 360 − (180 − 96) над разрывом
   const fillers = parts(m).filter((p) => p.name.startsWith("Фальш-панель"));
-  assert.equal(fillers.length, 1);
-  assert.equal(fillers[0].size[1], 360);
+  assert.equal(fillers.length, 2);
+  assert.deepEqual(fillers.map((p) => p.size[1]), [276, 276]);
   m.width=900;
   assert.deepEqual(validate(m), []);
   assert.equal(parts(m).filter(p=>p.role==="door").length,2);
-  assert.equal(parts(m).filter(p=>p.name.startsWith("Фальш-панель")).length,2);
+  assert.equal(parts(m).filter(p=>p.name.startsWith("Фальш-панель")).length,4);
+  // петли над ящиками — обычный фальш 16 на всю зону ящиков
+  const up = initialModule();
+  up.sections[0] = { ...up.sections[0], hingeY: [480, 830, 1180, 1530, 1868], hingeYFor: 1968 };
+  const plain = parts(up).filter((p) => p.name.startsWith("Фальш-панель"));
+  assert.equal(plain.length, 1);
+  assert.equal(plain[0].size[1], 360);
 });
 
 test('splitting subtracts the new panel only from the selected opening',()=>{const m=initialModule();m.width=900;m.sections=[{...section(),weight:2,shelves:[.5]},{...section(),weight:1}];const before=boxes(m),n=splitSection(m,m.sections[0].id),after=boxes(n);assert.deepEqual(validate(n),[]);assert.ok(Math.abs(after[0].width-(before[0].width-16)/2)<.001);assert.equal(after[0].width,after[1].width);assert.ok(Math.abs(after[2].width-before[1].width)<.001);assert.deepEqual(n.sections[0].shelves,[.5]);assert.deepEqual(n.sections[1].shelves,[]);assert.equal(m.sections.length,2);});

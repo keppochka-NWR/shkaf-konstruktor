@@ -595,10 +595,45 @@ export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeave
 export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers;}
 /** Рядов распашных фасадов секции: 1, с разрезом 2, у кухни — плюс средние ряды doorRows. */
 export function doorRowCount(m:Module,s:Section){return s.doorSplit===undefined?1:2+(m.kitchen?s.doorRows?.length??0:0);}
-export function fillerSides(m:Module,s:Section){
+function fillerSidesBase(m:Module,s:Section){
  if(!drawersBehindDoors(m,s)||!s.drawers)return {left:0,right:0};
  const count=doorCount(m,s),hinges=Array.from({length:doorRowCount(m,s)},(_,row)=>Array.from({length:count},(_,col)=>s.doorHinges?.[row*2+col]??(count===2?(col===0?'left':'right'):(s.hingeSide??m.hingeSide??'left')))).flat();
  return {left:hinges.includes('left')?RULES.drawerFiller:0,right:hinges.includes('right')?RULES.drawerFiller:0};
+}
+/** Толщина фальшей секции по сторонам: 16, а составной фальш (склейка, falshGlue) — 32; ящики сужаются на склейку. */
+export function fillerSides(m:Module,s:Section){
+ const f=fillerSidesBase(m,s);if(glueOff||(!f.left&&!f.right))return f;
+ const g=falshGlue(m);
+ return {left:f.left&&g[s.id+':left']?RULES.drawerFiller*2:f.left,right:f.right&&g[s.id+':right']?RULES.drawerFiller*2:f.right};
+}
+/** Решение Макса 16.10.2026: фальш у ящиков за дверью пересекает петлю, а петлю не сдвинуть (поиск высоты в hardwareParts
+ *  не нашёл свободного места в пределах фасада) — фальш делается из 2 плит 16, склеенных в 32 мм, с разрывом 100 мм
+ *  на участке каждой такой петли (по центру петли по высоте). 32 мм — чтобы короб и фасад ящика прошли плечо петли
+ *  (23,7 мм от стойки у накладной, 26 у вкладной), разрыв — через обе плиты: плечо петли длиннее одной плиты 16.
+ *  Возвращает «секция:сторона» → высоты центров петель (от пола), у которых нужен разрыв. Шкафы без пересечения — {}. */
+let glueOff=false;
+const glueMemo=new Map<string,Record<string,number[]>>();
+export const FALSH_GLUE_GAP=100;
+export function falshGlue(m:Module):Record<string,number[]>{
+ if(glueOff||m.kitchen||m.raw||m.kupe||m.corner||m.casework||m.worktop||m.desk)return {};
+ if(!m.sections.some(s=>{const f=fillerSidesBase(m,s);return f.left||f.right;}))return {};
+ const key=JSON.stringify(m),hit=glueMemo.get(key);if(hit)return hit;
+ let ps:Part[];glueOff=true;try{ps=parts(m);}finally{glueOff=false;}
+ const out:Record<string,number[]>={};
+ const hinges=ps.filter(p=>p.role==='hinge'&&/:(hingecup|hingeplate):/.test(p.id));
+ for(const f of ps.filter(p=>p.sectionId&&/:filler:(left|right)$/.test(p.id)))for(const h of hinges){
+  const depth=partPenetration(h,f);if(depth<=0.1||allowedContact(h,f,depth,m))continue;
+  const k=f.sectionId+':'+f.id.split(':filler:')[1],y=Math.round(h.position[1]*10)/10;
+  if(!(out[k]??=[]).some(v=>Math.abs(v-y)<1))out[k].push(y);
+ }
+ for(const k in out)out[k].sort((a,b)=>a-b);
+ if(glueMemo.size>200)glueMemo.clear();glueMemo.set(key,out);return out;
+}
+/** Куски составного фальша по высоте: [низ, верх] между разрывами 100 мм у петель; кусок короче 30 мм не делаем (уходит в разрыв). */
+export function falshPieces(y0:number,y1:number,hingeYs:number[]):[number,number][]{
+ const half=FALSH_GLUE_GAP/2,res:[number,number][]=[];let from=y0;
+ for(const y of hingeYs){const a=Math.max(y0,y-half),b=Math.min(y1,y+half);if(a-from>=30)res.push([from,a]);from=Math.max(from,b);}
+ if(y1-from>=30)res.push([from,y1]);return res;
 }
 /** Длина выдвижного тремпеля: самый длинный из ряда GTV 250–500, который помещается в глубину секции с зазором 20 спереди и сзади. */
 export function pulloutLength(m:Module){const free=shelfMaxDepth(m)-40;return [500,450,400,350,300,250].find(l=>l<=free)??0;}
@@ -915,7 +950,15 @@ export function parts(m: Module): Part[] {
       if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, b.x, b.x + b.width, rear, RULES.shelfDepthMinus);
     });
     const f=fillerSides(m,s),filler=f.left+f.right;
-    for(const side of ['left','right'] as const)if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
+    const glue=glueOff?{}:falshGlue(m);
+    for(const side of ['left','right'] as const)if(f[side]&&glue[s.id+':'+side]){
+      // составной фальш (решение Макса 16.10): 2 плиты 16 склейкой в 32, разрыв 100 мм у каждой петли — через обе плиты
+      const H=drawerStackHeight(s),pieces=falshPieces(b.bottom,b.bottom+H,glue[s.id+':'+side]),sideName=side==='left'?'левая':'правая';
+      for(const layer of [0,1])pieces.forEach(([y0,y1],k)=>{
+        const x=side==='left'?b.x+t/2+layer*t:b.x+b.width-t/2-layer*t;
+        add(`${s.id}:filler:${side}:${layer?'b':'a'}:${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}${pieces.length>1?`, кусок ${k+1} из ${pieces.length}`:''}`,[t,y1-y0,sd],[x,(y0+y1)/2,rear+sd/2],y1-y0,sd,t,'body',s.id);
+      });
+    }else if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
     if(s.drawers>0&&!(m.sectionLayout&&b.top<innerTop(m))&&!s.drawerConfigs?.every(c=>c.tray)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,RULES.shelfDepthMinus);}
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {

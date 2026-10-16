@@ -14,7 +14,7 @@ import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProper
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -1531,6 +1531,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 )}
 </SettingsSection>
 <SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)} min={2} max={10} onChange={v=>modifySection(a=>a.drawerGap=v)}/>}
+                {s.drawers>0&&(falshGlue(m)[s.id+':left']||falshGlue(m)[s.id+':right'])&&<p className="field-note" data-testid="falsh-glue-note">Фальш 32 мм: склейка, разрыв у петель — петля в зоне ящиков не сдвигается, фальш из двух плит 16 с разрывом 100 мм у петли.</p>}
 
                 <Counter
                   label="Ящики"

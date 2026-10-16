@@ -100,7 +100,7 @@ export const DOWEL={price:0.7,source:'ФАМ: шкант 8×30 бук'};
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы, покупные материалы (фасады МДФ, цоколь из фасадного,
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|falsh-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
@@ -349,6 +349,11 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // газлифт подъёмного фасада кухни (Базис: PD-G-N02 — шток, газблок, фиксаторы на фасад и боковину; комплект на боковину), без цены
     const lifts=a.module.kitchenLift?allParts.filter(p=>p.id.startsWith('lift:')&&/:(gl-)?block$/.test(p.id)).length:0;
     if(lifts)add('kitchen-lift:'+a.module.kitchenLift!.system,(a.module.kitchenLift!.system==='gl104'?'Газлифт GL104 с фиксацией положения — комплект на боковину (шток, газ патрон, кронштейны на боковину и фасад)':'Газлифт PD-G-N02 — комплект на боковину (шток, газблок, 2 фиксатора, саморезы)'),lifts,'компл',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
+    // составной фальш у петли (решение Макса 16.10.2026): склейка двух плит 16 в 32 — работа. Строки склейки в прайсе нет:
+    // позиция видна в смете с 0 ₽ и пометкой для менеджера (цену можно вписать вручную — overrides['falsh-glue']); null не ставим,
+    // чтобы шкаф по умолчанию («Шкаф в прихожую») не терял цену клиенту из-за одной работы — решение за Максом (итог ветки)
+    const glued=allParts.filter(p=>/:filler:(left|right):a:\d+$/.test(p.id)).length;
+    if(glued)add('falsh-glue','Склейка фальш-панели: 2 плиты 16 в 32 мм (работа, клей) — пар',glued,'шт',0,'Склейки нет в прайсе цеха: работа не оценена (0 ₽) — уточнить менеджеру');
     for(const d of allParts){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха

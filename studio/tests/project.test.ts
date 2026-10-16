@@ -97,7 +97,7 @@ test("individual GTV 0FPO profile changes inner width, side length and bottom ma
     side = pp.find((p) => p.id === s.id + ":drawer:0:left")!,
     bottom = pp.find((p) => p.id === s.id + ":drawer:0:bottom")!;
   assert.equal(side.length, 490);
-  assert.equal(bottom.size[0], b.width - 16 - 42);
+  assert.equal(bottom.size[0], b.width - 32 - 42); // фальш составной 32 мм: нижняя петля в зоне ящиков (решение Макса 16.10.2026)
   assert.equal(bottom.material, "board");
   assert.equal(bottom.thickness, 16);
   assert.equal(
