@@ -300,6 +300,8 @@ export function quoteBreakdown(price: string, cost?: QuoteCost | null): { materi
   const n = Number(price);
   if (!cost || cost.model !== "markup" || cost.retail === null || !price.trim() || !Number.isFinite(n) || n !== cost.retail) return null;
   const hardware = Math.max(0, Math.min(cost.split.hardware, cost.retail));
+  // одна из частей нулевая (двери купе: по калькулятору купе всё — «материалы») — разбивка без смысла, только итог
+  if (hardware === 0 || hardware === cost.retail) return null;
   return { material: cost.retail - hardware, hardware };
 }
 /** Таблица модулей для клиента: описание по типу модуля (quoteDescribe.ts), без нулевых позиций и служебных слов. */
