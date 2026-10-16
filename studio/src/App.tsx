@@ -5,7 +5,7 @@ import {repairHinges} from './hingeRepair';
 import {savePng} from './savePng';
 import {SettingsTree,revealSettings} from './SettingsTree';
 import {SettingsSection} from './SettingsSection';
-import {setDoorHinge} from './facadeEditing';
+import {setDoorHinge,setModuleHingeSide,singleLeafDoors} from './facadeEditing';
 import {applyFacadeStyle} from './applyFacadeStyle';
 import {WorkspacePanels} from './WorkspacePanels';
 import {layoutKitchenDrawers} from './kitchenEditing';
@@ -548,7 +548,16 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const next=structuredClone(a.module);
     try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
   }
+  /** Правый клик по любой детали — меню всего модуля (решение Макса 16.10); действия с самой деталью — одним пунктом внутри. */
   function radialMenu(c:NonNullable<typeof ctxMenu>):{title:string;subtitle:string;items:RadialItem[]}{
+    const out:{ring?:RadialItem[]}={},r=partRadial(c,out),m0=project.modules.find(x=>x.id===c.mid)!.module;
+    if(m0.kupe||!out.ring)return r;
+    const dims=` ×  × `;
+    if(!c.pid||r.title===m0.name)return {title:m0.name,subtitle:dims,items:out.ring};
+    const own=r.items.flatMap(i=>i.id==='facade'?(i.children??[]):[i]).filter(i=>i.id!=='body'&&i.id!=='hide-module');
+    return {title:m0.name,subtitle:dims+' · '+r.title,items:[...out.ring,{id:'this-part',label:r.title==='Фасад'?'Этот фасад':r.title,icon:MousePointerClick,hint:'Действия только с выбранной деталью',children:own}]};
+  }
+  function partRadial(c:NonNullable<typeof ctxMenu>,out:{ring?:RadialItem[]}):{title:string;subtitle:string;items:RadialItem[]}{
     const a=project.modules.find(x=>x.id===c.mid)!,mod=a.module,sidx=Math.max(0,mod.sections.findIndex(s=>s.id===c.sid)),sec=mod.sections[sidx];
     const pid=c.pid??'',y=c.localY??mod.height/2;
     const select=()=>{selectModule(a.id);chooseSection(c.sid);};
@@ -557,7 +566,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
       {id:'open-handle',label:'С ручками',icon:Hand,active:mod.doorOpen!=='push',hint:'Ручка и петли с доводчиком',run:()=>modifyAt(a.id,n=>{delete n.doorOpen;})},
-      {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})}]};
+      {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})},
+      ...(()=>{const single=mod.doors&&!mod.raw?singleLeafDoors(mod):[];return single.length?(['left','right'] as const).map(side=>({id:'hinge-all-'+side,label:side==='left'?'Петли слева':'Петли справа',icon:DoorOpen,active:single.every(d=>d.hinge===side),hint:'Все одностворчатые фасады корпуса. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{setModuleHingeSide(n,side);})})):[];})()]};
     const editFacade:RadialItem={id:'edit-facade',label:'Редактировать фасад',icon:SlidersHorizontal,hint:'Материал, плёнка, краска и фрезеровка фасадов корпуса',disabled:!!mod.raw||!!mod.bazis||!!mod.kupe,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setModal('facade-editor');}};
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const bodyRing:RadialItem[]=[hideItem,
@@ -566,7 +576,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         editFacade,{id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
-        {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
+        {id:'facades-remove',label:'Удалить',icon:Trash,danger:true,disabled:!mod.doors||!!mod.raw||!!mod.kupe,hint:'Снять все распашные фасады корпуса. Вернуть — «Добавить» или Ctrl+Z. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{n.doors=false;})},
+        {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,disabled:!mod.doors,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на все фасады корпуса',disabled:!hasHandles(mod),run:()=>{setActive(a.id);setHandleFace('');setModal('handles');}},
         hinges,opening]},
@@ -575,6 +586,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:()=>{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}},
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
+    out.ring=bodyRing;
     const facades:RadialItem={...bodyRing.find(item=>item.id==='facades')!,label:'Фасад'};
     const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades')};
     const facadeMenu=(items:RadialItem[]):RadialItem[]=>[
@@ -626,7 +638,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       ]};
       return {title:'Фасад',subtitle:mod.name,items:facadeMenu([editFacade,{id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого фасада',disabled:mod.doorOpen==='push',run:()=>{setActive(a.id);setHandleFace(doorId);setModal('handles');}},
         hinges,doorOpening,{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
-        {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
+        {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
         {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}])};
     }

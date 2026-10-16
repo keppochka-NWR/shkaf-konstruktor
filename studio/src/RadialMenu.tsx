@@ -19,7 +19,9 @@ export type RadialItem = {
   run?: () => void;
 };
 
-const RADIUS = 104, SIZE = 64;
+// Компактное кольцо (просьба Макса 16.10: меню закрывало весь шкаф): меньше радиус и кнопки, полупрозрачная подложка,
+// и меню открывается со сдвигом вбок от точки клика — выбранная деталь остаётся видна, точка клика отмечена.
+const RADIUS = 76, SIZE = 48;
 
 export function RadialMenu({ x, y, title, subtitle, items, onClose }: { x: number; y: number; title: string; subtitle?: string; items: RadialItem[]; onClose: () => void }) {
   const [path, setPath] = useState<RadialItem[]>([]);
@@ -27,11 +29,15 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose }: { x: numbe
   // «Опасный» пункт (удалить) всегда строго внизу кольца, в одном и том же месте — подальше от частых действий сверху.
   const raw = path.length ? path[path.length - 1].children ?? [] : items;
   const ring = (() => { const danger = raw.filter((i) => i.danger), rest = raw.filter((i) => !i.danger); if (!danger.length || raw.length < 3) return raw; const out = [...rest]; out.splice(Math.floor(raw.length / 2), 0, ...danger); return out; })();
+  // Радиус растёт с числом пунктов, чтобы кнопки не налезали (10 пунктов меню модуля).
+  const R = Math.max(RADIUS, Math.ceil((ring.length * (SIZE + 8)) / (2 * Math.PI))), SHIFT = R + SIZE / 2 + 18;
   const ref = useRef<HTMLDivElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   // Меню целиком в окне: центр не ближе радиуса + подпись к краю.
-  const margin = RADIUS + SIZE / 2 + 30;
-  const cx = Math.min(Math.max(x, margin), window.innerWidth - margin), cy = Math.min(Math.max(y, margin), window.innerHeight - margin);
+  const margin = R + SIZE / 2 + 30;
+  // Сдвиг вправо от клика, у правого края — влево.
+  const sx = x + SHIFT + margin <= window.innerWidth ? x + SHIFT : x - SHIFT;
+  const cx = Math.min(Math.max(sx, margin), window.innerWidth - margin), cy = Math.min(Math.max(y, margin), window.innerHeight - margin);
   const back = () => { setHover(null); if (path.length) setPath(path.slice(0, -1)); else onClose(); };
   // Фокус на само меню, а не на первый пункт: в центре остаётся название выбранного, стрелки начинают обход с первого пункта.
   useLayoutEffect(() => { ref.current?.focus(); }, [path]);
@@ -58,16 +64,17 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose }: { x: numbe
   const shown = hover !== null ? ring[hover] : null;
   return (
     <div className="radial-menu" ref={ref} role="menu" tabIndex={-1} aria-label={"Действия: " + title} style={{ left: cx, top: cy }} onContextMenu={(e) => { e.preventDefault(); back(); }}>
-      <svg className="radial-ring" width={2 * RADIUS + SIZE} height={2 * RADIUS + SIZE} aria-hidden="true"><circle cx={RADIUS + SIZE / 2} cy={RADIUS + SIZE / 2} r={RADIUS} /></svg>
+      <span className="radial-anchor" aria-hidden="true" style={{ left: x - cx, top: y - cy }} />
+      <svg className="radial-ring" style={{ left: -(R + SIZE / 2), top: -(R + SIZE / 2) }} width={2 * R + SIZE} height={2 * R + SIZE} aria-hidden="true"><circle cx={R + SIZE / 2} cy={R + SIZE / 2} r={R} /></svg>
       {ring.map((item, i) => {
-        const a = -Math.PI / 2 + (2 * Math.PI * i) / ring.length, px = Math.cos(a) * RADIUS, py = Math.sin(a) * RADIUS;
+        const a = -Math.PI / 2 + (2 * Math.PI * i) / ring.length, px = Math.cos(a) * R, py = Math.sin(a) * R;
         const Icon = item.icon;
         return (
           <button key={item.id} ref={(b) => { buttons.current[i] = b; }} type="button" role="menuitem" className={"radial-item" + (item.danger ? " danger" : "") + (item.active ? " active" : "")}
             style={{ transform: `translate(${px}px, ${py}px)`, animationDelay: i * 18 + "ms" }} disabled={item.disabled} aria-haspopup={item.children ? "menu" : undefined}
             aria-label={item.label + (item.hint ? ". " + item.hint : "")} onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} onMouseLeave={() => setHover(null)} onClick={() => choose(item)}>
-            <Icon size={22} />
-            <span className={"radial-label" + (py > 30 ? " below" : py < -30 ? " above" : px < 0 ? " left" : " right")}>{item.label}{item.children ? " ›" : ""}</span>
+            <Icon size={18} />
+            <span className={"radial-label" + (py > 24 ? " below" : py < -24 ? " above" : px < 0 ? " left" : " right")}>{item.label}{item.children ? " ›" : ""}</span>
           </button>
         );
       })}
