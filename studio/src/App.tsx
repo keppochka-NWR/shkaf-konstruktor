@@ -1996,7 +1996,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   {(["workshop","lemana"] as const).map(vendor=>{
                     const items=HANDLES.filter(h=>h.vendor===vendor&&(h.label+' '+h.len+' '+(h.art??'')).toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.len-b.len||a.price-b.price);
                     if(!items.length)return null;
-                    return <div key={vendor}><h3>{vendor==='workshop'?'Закупка цеха':'Лемана Про · выбор клиента, розница'}</h3>{items.map(h=>{
+                    return <div key={vendor}><h3>{vendor==='workshop'?'Ручки цеха':'Лемана Про · выбор клиента, розница'}</h3>{items.map(h=>{
                       const current=(handleFace?(facadeHandleId(m,handleFace)??DEFAULT_HANDLE):((handleTarget==='drawers'?m.drawerHandleId??m.handleId:m.handleId)??DEFAULT_HANDLE))===h.id;
                       return <button key={h.id} className="handle-item" aria-pressed={current} onClick={()=>{
                         if(materialScope==='group'&&!liveGroupIds.length){setError('Сначала отметьте корпуса в группе.');return;}
