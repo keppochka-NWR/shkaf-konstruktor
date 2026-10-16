@@ -45,6 +45,7 @@ export const RULES = {
   drawerStep: 40,
   drawerSideGap: 13,
   drawerFrontGap: 3,
+  drawerGrip: 30, // «Зазор между ящиками 30 мм»: короб ниже на 30, фасад выше короба не менее чем на 30 (решение Макса 16.10.2026)
   rodDiameter: 25,
   rodMountScrews: 6, // Штанга 25мм.fr3d: два фланца, по три самореза 3,5×16.
   rodTopOffset: 70,
@@ -156,6 +157,8 @@ export type Section = {
   hingeless?: number[];
   /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
   externalDrawers?: boolean;
+  /** Ящики секции без ручки, «Зазор между ящиками 30 мм» (решение Макса 16.10.2026): короб ниже на 30, фасады те же — хват сверху за фасад. */
+  drawerGrip?: boolean;
   drawerGap?: number;
   shelves: number[];
   drawers: number;
@@ -252,6 +255,8 @@ export type Module = {
   confirmatInset?: number;
   /** Ручки не заложены (Gola, ручки заказчика, без ручек) — как в кухнях Базиса без ручек в спецификации. */
   noHandles?: boolean;
+  /** Кухонные ящики студии (kdrawers): «Зазор между ящиками 30 мм» — без ручек, короб ниже на 30 (gripKDrawers, решение Макса 16.10.2026). */
+  kdrawerGrip?: boolean;
   /** Толщина стеклянных полок (по умолчанию 6; кухни Базиса — 4, полкодержатели MV05). */
   glassT?: number;
   /** Зазор стеклянной полки до стойки с каждой стороны (по умолчанию как у ЛДСП — 1; Базис — 1,5). */
@@ -541,7 +546,7 @@ export function deskModule(base?:Module):Module{
     feet:undefined,slope:undefined,skew:undefined,alu:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** В корпусе есть ручки (распашные фасады всегда с ручкой; ящики — если не push-to-open). */
-export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)));}
+export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
 export function facadeBottom(m:Module){
   if(m.feet){
@@ -587,6 +592,14 @@ export function rearClear(m:Module){return m.backType==='board'?RULES.panel+1+(m
 /** Верхний предел «Паз от задней кромки»: шкафы — 30 мм, кухня из Базиса — до depth−32 (k20 m05: 119). Одна точка для validate и поля KitchenPanel (A5). */
 export const grooveInsetMax=(m:Pick<Module,'kitchen'|'depth'>)=>m.kitchen?m.depth-32:30;
 /** Шаг ящика по высоте: короб + просвет 40, но не меньше фасада с зазором. */
+/** «Зазор между ящиками 30 мм» действует на ящик ЛДСП с фасадом (не сетка, не выкатная полка, не внутренний ящик). */
+export function drawerGripOn(m:Module,s:Section,c:DrawerConfig){return !!s.drawerGrip&&!m.raw&&!c.mesh&&!c.noFacade&&!c.tray;}
+/** Высота боковины короба: по настройке ящика, при «Зазоре 30 мм» — на 30 ниже и не выше «верх фасада − 30» (фасады те же: шаг ящика не меняется). */
+export function drawerBoxHeight(m:Module,s:Section,c:DrawerConfig){
+ if(!drawerGripOn(m,s,c))return c.height;
+ const gap=s.drawerGap??(drawersBehindDoors(m,s)?RULES.drawerFrontGap:fb(m)),face=c.facadeH??(drawerPitch(c,gap)-gap);
+ return Math.min(c.height-RULES.drawerGrip,face+(c.facadeH?gap/2:0)-RULES.drawerStep/2-RULES.drawerGrip);
+}
 export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap:number=RULES.drawerFrontGap){const box=(c.height??RULES.drawerH)+(c.tray?10:RULES.drawerStep);return c.facadeH?Math.max(box,c.facadeH+gap):box;}
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
@@ -595,10 +608,45 @@ export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeave
 export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers;}
 /** Рядов распашных фасадов секции: 1, с разрезом 2, у кухни — плюс средние ряды doorRows. */
 export function doorRowCount(m:Module,s:Section){return s.doorSplit===undefined?1:2+(m.kitchen?s.doorRows?.length??0:0);}
-export function fillerSides(m:Module,s:Section){
+function fillerSidesBase(m:Module,s:Section){
  if(!drawersBehindDoors(m,s)||!s.drawers)return {left:0,right:0};
  const count=doorCount(m,s),hinges=Array.from({length:doorRowCount(m,s)},(_,row)=>Array.from({length:count},(_,col)=>s.doorHinges?.[row*2+col]??(count===2?(col===0?'left':'right'):(s.hingeSide??m.hingeSide??'left')))).flat();
  return {left:hinges.includes('left')?RULES.drawerFiller:0,right:hinges.includes('right')?RULES.drawerFiller:0};
+}
+/** Толщина фальшей секции по сторонам: 16, а составной фальш (склейка, falshGlue) — 32; ящики сужаются на склейку. */
+export function fillerSides(m:Module,s:Section){
+ const f=fillerSidesBase(m,s);if(glueOff||(!f.left&&!f.right))return f;
+ const g=falshGlue(m);
+ return {left:f.left&&g[s.id+':left']?RULES.drawerFiller*2:f.left,right:f.right&&g[s.id+':right']?RULES.drawerFiller*2:f.right};
+}
+/** Решение Макса 16.10.2026: фальш у ящиков за дверью пересекает петлю, а петлю не сдвинуть (поиск высоты в hardwareParts
+ *  не нашёл свободного места в пределах фасада) — фальш делается из 2 плит 16, склеенных в 32 мм, с разрывом 100 мм
+ *  на участке каждой такой петли (по центру петли по высоте). 32 мм — чтобы короб и фасад ящика прошли плечо петли
+ *  (23,7 мм от стойки у накладной, 26 у вкладной), разрыв — через обе плиты: плечо петли длиннее одной плиты 16.
+ *  Возвращает «секция:сторона» → высоты центров петель (от пола), у которых нужен разрыв. Шкафы без пересечения — {}. */
+let glueOff=false;
+const glueMemo=new Map<string,Record<string,number[]>>();
+export const FALSH_GLUE_GAP=100;
+export function falshGlue(m:Module):Record<string,number[]>{
+ if(glueOff||m.kitchen||m.raw||m.kupe||m.corner||m.casework||m.worktop||m.desk)return {};
+ if(!m.sections.some(s=>{const f=fillerSidesBase(m,s);return f.left||f.right;}))return {};
+ const key=JSON.stringify(m),hit=glueMemo.get(key);if(hit)return hit;
+ let ps:Part[];glueOff=true;try{ps=parts(m);}finally{glueOff=false;}
+ const out:Record<string,number[]>={};
+ const hinges=ps.filter(p=>p.role==='hinge'&&/:(hingecup|hingeplate):/.test(p.id));
+ for(const f of ps.filter(p=>p.sectionId&&/:filler:(left|right)$/.test(p.id)))for(const h of hinges){
+  const depth=partPenetration(h,f);if(depth<=0.1||allowedContact(h,f,depth,m))continue;
+  const k=f.sectionId+':'+f.id.split(':filler:')[1],y=Math.round(h.position[1]*10)/10;
+  if(!(out[k]??=[]).some(v=>Math.abs(v-y)<1))out[k].push(y);
+ }
+ for(const k in out)out[k].sort((a,b)=>a-b);
+ if(glueMemo.size>200)glueMemo.clear();glueMemo.set(key,out);return out;
+}
+/** Куски составного фальша по высоте: [низ, верх] между разрывами 100 мм у петель; кусок короче 30 мм не делаем (уходит в разрыв). */
+export function falshPieces(y0:number,y1:number,hingeYs:number[]):[number,number][]{
+ const half=FALSH_GLUE_GAP/2,res:[number,number][]=[];let from=y0;
+ for(const y of hingeYs){const a=Math.max(y0,y-half),b=Math.min(y1,y+half);if(a-from>=30)res.push([from,a]);from=Math.max(from,b);}
+ if(y1-from>=30)res.push([from,y1]);return res;
 }
 /** Длина выдвижного тремпеля: самый длинный из ряда GTV 250–500, который помещается в глубину секции с зазором 20 спереди и сзади. */
 export function pulloutLength(m:Module){const free=shelfMaxDepth(m)-40;return [500,450,400,350,300,250].find(l=>l<=free)??0;}
@@ -915,7 +963,15 @@ export function parts(m: Module): Part[] {
       if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, b.x, b.x + b.width, rear, RULES.shelfDepthMinus);
     });
     const f=fillerSides(m,s),filler=f.left+f.right;
-    for(const side of ['left','right'] as const)if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
+    const glue=glueOff?{}:falshGlue(m);
+    for(const side of ['left','right'] as const)if(f[side]&&glue[s.id+':'+side]){
+      // составной фальш (решение Макса 16.10): 2 плиты 16 склейкой в 32, разрыв 100 мм у каждой петли — через обе плиты
+      const H=drawerStackHeight(s),pieces=falshPieces(b.bottom,b.bottom+H,glue[s.id+':'+side]),sideName=side==='left'?'левая':'правая';
+      for(const layer of [0,1])pieces.forEach(([y0,y1],k)=>{
+        const x=side==='left'?b.x+t/2+layer*t:b.x+b.width-t/2-layer*t;
+        add(`${s.id}:filler:${side}:${layer?'b':'a'}:${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}${pieces.length>1?`, кусок ${k+1} из ${pieces.length}`:''}`,[t,y1-y0,sd],[x,(y0+y1)/2,rear+sd/2],y1-y0,sd,t,'body',s.id);
+      });
+    }else if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
     if(s.drawers>0&&!(m.sectionLayout&&b.top<innerTop(m))&&!s.drawerConfigs?.every(c=>c.tray)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,RULES.shelfDepthMinus);}
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
@@ -924,7 +980,7 @@ export function parts(m: Module): Part[] {
       const sideGap = hidden ? 5 : RULES.drawerSideGap,
         boxW = b.width - filler - 2 * sideGap;
       const boxD = cfg.length - (hidden ? 10 : 0),
-        bh = cfg.height;
+        bh = drawerBoxHeight(m, s, cfg), grip = drawerGripOn(m, s, cfg);
       const bx = b.x + f.left + sideGap,
         y = b.bottom + (cfg.tray?2:RULES.drawerStep/2) + drawerOffsets(s)[j],
         z = d - (drawersBehindDoors(m,s) ? 44 : 20) - boxD;
@@ -1009,7 +1065,7 @@ export function parts(m: Module): Part[] {
       const dft=drawersBehindDoors(m,s)?t:m.facadeT??t;
       add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад',[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id);
       out.at(-1)!.decor=m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
-      if(drawerHasHandle(cfg)&&!m.noHandles){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
+      if(drawerHasHandle(cfg)&&!m.noHandles&&!grip){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -1791,6 +1847,8 @@ export function validate(m: Module): string[] {
     if(s.rodClearance!==undefined&&(!Number.isFinite(s.rodClearance)||s.rodClearance<300||s.rodClearance>1500))errors.push(prefix+'просвет под штангой: 300–1500 мм.');
     if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
+    if(s.drawerGrip!==undefined&&typeof s.drawerGrip!=='boolean')errors.push(prefix+'неверный зазор между ящиками.');
+    if(s.drawerGrip)for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j);if(drawerGripOn(m,s,c)&&drawerBoxHeight(m,s,c)<60)errors.push(prefix+'ящик '+(j+1)+': при зазоре 30 мм короб ниже 60 мм — увеличьте ящик.');}
     // кухня: фасады от 200 мм (антресоль Базиса k13 m02 в два ряда по 342; n3-antresol); шкафы — doorMinH
     const splitMin=m.kitchen?200:RULES.doorMinH;
     if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
@@ -2121,7 +2179,7 @@ export function parseModule(input: unknown): Module {
     ...(x.shelfPinInset===undefined?{}:{shelfPinInset:Number(x.shelfPinInset)}),
     ...(x.shelfPinInsetFront===undefined?{}:{shelfPinInsetFront:Number(x.shelfPinInsetFront)}),
     ...(x.confirmatInset===undefined?{}:{confirmatInset:Number(x.confirmatInset)}),
-    ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),
+    ...(x.noHandles===undefined?{}:{noHandles:x.noHandles===true}),...(x.kdrawerGrip===true?{kdrawerGrip:true}:{}),
     ...(x.glassT===undefined?{}:{glassT:Number(x.glassT)}),
     ...(x.glassGap===undefined?{}:{glassGap:Number(x.glassGap)}),
     ...(x.raw===undefined?{}:(()=>{const r=parseRaw(x.raw);return r?{raw:r}:{};})()),
@@ -2182,7 +2240,7 @@ export function parseModule(input: unknown): Module {
       ...(Array.isArray(s.hingeYMidFor)?{hingeYMidFor:s.hingeYMidFor.map(Number)}:{}),
       ...(Array.isArray(s.hingeless)?{hingeless:s.hingeless.map(Number)}:{}),
       ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
-      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),
+      ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),...(s.drawerGrip===true?{drawerGrip:true}:{}),
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
       shelves: [...s.shelves],

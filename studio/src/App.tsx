@@ -15,7 +15,7 @@ import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProper
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -1551,6 +1551,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 )}
 </SettingsSection>
 <SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)} min={2} max={10} onChange={v=>modifySection(a=>a.drawerGap=v)}/>}
+                {s.drawers>0&&(falshGlue(m)[s.id+':left']||falshGlue(m)[s.id+':right'])&&<p className="field-note" role="note" data-testid="falsh-glue-note">Фальш 32 мм: склейка, разрыв у петель — петля в зоне ящиков не сдвигается, фальш из двух плит 16 с разрывом 100 мм у петли.</p>}
 
                 <Counter
                   label="Ящики"
@@ -1632,7 +1633,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                               ))}
                             </select>
                           </label>
-                          <label className="hardware-field">Ручка ящика<select aria-label="Ручка ящика" value={c.handle===undefined?'auto':c.handle?'yes':'no'} onChange={e=>update({handle:e.target.value==='auto'?undefined:e.target.value==='yes'})}><option value="auto">{slideMotion(c)==='push'?'Без ручки · нажать на фасад':'С ручкой'}</option><option value="yes">Всегда с ручкой</option><option value="no">Без ручки</option></select></label>
+                          <label className="hardware-field">Ручка ящика<select aria-label="Ручка ящика" value={s.drawerGrip&&!c.tray?'grip':c.handle===undefined?'auto':c.handle?'yes':'no'} onChange={e=>{const v=e.target.value;if(v==='grip')modifySection(a=>{a.drawerGrip=true;});else modifySection((a,n)=>{delete a.drawerGrip;a.drawerConfigs=editDrawerConfig(n,a,j,{handle:v==='auto'?undefined:v==='yes'});});}}><option value="auto">{slideMotion(c)==='push'?'Без ручки · нажать на фасад':'С ручкой'}</option><option value="yes">Всегда с ручкой</option><option value="no">Без ручки</option><option value="grip">Зазор между ящиками 30 мм</option></select></label>{s.drawerGrip&&<p className="field-note" role="note" data-testid="drawer-grip-note">Для всех ящиков секции: ручки нет, короб ниже на {RULES.drawerGrip} мм, фасады те же — хват сверху за фасад.</p>}
                           <NumberField label="Ящик от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>
                           <NumberField
                             label="Высота боковины ящика"
