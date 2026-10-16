@@ -31,7 +31,8 @@ import {KitchenPanel} from './KitchenPanel';
 import {isKitchenProject} from './kitchenProject';
 import {FillingComposer,addFillingBatch,addFittedDrawers} from './FillingComposer';
 import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,type Stage} from './stages';
-import {ChevronRight} from 'lucide-react';
+import {ChevronRight,TriangleAlert} from 'lucide-react';
+import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
@@ -272,6 +273,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const mountingComposition=useMemo(()=>mountingCompositionBounds(project),[project]);
   const composition=useMemo(()=>compositionBounds(project),[project]);
   const placementWarnings=useMemo(()=>roomWarnings(project),[project]);
+  const check=useMemo(()=>buildCheck(project,placed.id),[project,placed.id]);
   const [moduleSearch,setModuleSearch]=useState('');
   const moduleList=useRef<HTMLDivElement>(null);
   const moduleWords=moduleSearch.toLocaleLowerCase('ru-RU').trim().split(/\s+/).filter(Boolean);
@@ -1875,11 +1877,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               {!m.casework&&<SettingsSection title="Состав секции"><OpeningLayoutEditor module={m} sid={s.id} edit={modify}/></SettingsSection>}
             </SettingsTree>
           )}
-          <div className="property-footer">
-            <CheckCircle2 size={18} />
+          <div className={"property-footer"+(check.ok?"":" warn")}>
+            {check.ok?<CheckCircle2 size={18} />:<TriangleAlert size={18} />}
             <div>
-              <strong>Габариты проверены</strong>
-              <span>Детали помещаются в лист</span>
+              <strong>{check.title}</strong>
+              <span>{check.detail}</span>
             </div>
           </div>
         </>}

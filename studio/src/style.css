@@ -975,6 +975,8 @@ input {
   margin-top: auto;
   color: #598879;
 }
+.property-footer.warn { color: #a4471d; }
+.property-footer.warn span { color: #a4471d; }
 .property-footer strong {
   display: block;
   font-size: 10px;
