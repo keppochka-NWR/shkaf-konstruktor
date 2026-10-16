@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ManagerMode, millingOptionLabel, millingVisible } from "./clientLabels";
 import { MILL_STYLES, MILLING_TILES, tierGroups, tileOf, type MillStyle } from "./vernissageCatalog";
 import { VERNISSAGE_MARKUP_DEFAULT } from "./pricing";
@@ -77,48 +78,70 @@ const rub = (x: number) => x.toLocaleString("ru-RU");
 const tileNo = (id: string, series: string) => series === "pet" ? "" : series === "handle" ? id : `№${id}`;
 
 /** Выбор рисунка для клиента (решение 16.10, вариант А): сразу все рисунки плитками с фото, группы по цене (дешёвые сверху),
- *  стиль — фильтр-чипы. Выбор применяется сразу (3D и превью обновляются). Без фото — наша схема с пометкой «схема». */
+ *  стиль — фильтр-чипы. Выбор применяется сразу (3D и превью обновляются). Без фото — наша схема с пометкой «схема».
+ *  «Крупно» — те же плитки во весь экран, чтобы показать клиенту (выбор тоже сразу; закрыть — «Готово» или Esc). */
 function MillingTiles({ selected, misfit, onPick }: { selected: string; misfit: Set<string>; onPick: (id: string) => void }) {
   const [style, setStyle] = useState<MillStyle | "all">("all");
+  const [wide, setWide] = useState(false);
   const groups = useMemo(() => tierGroups(VERNISSAGE_MARKUP_DEFAULT), []);
   const schemes = useMemo(() => Object.fromEntries(MILLING_TILES.filter((t) => !t.photo).map((t) => [t.id, previewSvg(vernissageLayout(normalizeVernissage({ milling: t.id, cover: "film", film: "Моно белый", thickness: 19 }), 450, 716), 160)])), []);
   const cur = tileOf(selected);
-  const box = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null), wideBox = useRef<HTMLDivElement>(null);
   // выбранная плитка — в зоне видимости списка (без прокрутки всей страницы)
   useEffect(() => {
-    const b = box.current, el = b?.querySelector<HTMLElement>('[aria-checked="true"]');
-    if (b && el) b.scrollTop = Math.max(0, el.offsetTop - 36); // 36 — под липким заголовком группы
-  }, [style]);
+    for (const b of [box.current, wideBox.current]) {
+      const el = b?.querySelector<HTMLElement>('[aria-checked="true"]');
+      if (b && el) b.scrollTop = Math.max(0, el.offsetTop - 36); // 36 — под липким заголовком группы
+    }
+  }, [style, wide]);
+  useEffect(() => {
+    if (!wide) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setWide(false); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [wide]);
   const count = (st: MillStyle | "all") => MILLING_TILES.filter((t) => st === "all" || t.style === st).length;
+  const chips = <div className="vmill-chips" role="group" aria-label="Стиль рисунка">
+    {(["all", ...MILL_STYLES.map((x) => x.id)] as const).map((st) => <button key={st} type="button" aria-pressed={style === st} onClick={() => setStyle(st)}>
+      {st === "all" ? "Все" : MILL_STYLES.find((x) => x.id === st)!.label}<span>{count(st)}</span></button>)}
+  </div>;
+  const list = (ref: typeof box, label: string) => <div className="vmill-box" ref={ref} role="radiogroup" aria-label={label}>
+    {groups.map((g) => {
+      const tiles = g.tiles.filter((t) => style === "all" || t.style === style);
+      if (!tiles.length) return null;
+      return <section key={g.id} className="vmill-group" aria-label={`${g.label} — от ${rub(g.from)} ₽ за м²`}>
+        <h4>{g.label}<span>от {rub(g.from)} ₽/м²</span></h4>
+        <p>{g.hint}</p>
+        <div className="vmill-grid">{tiles.map((t) => {
+          const no = tileNo(t.id, t.milling.series), bad = misfit.has(t.id);
+          return <button key={t.id} type="button" role="radio" aria-checked={t.id === selected} aria-label={`${t.name}${no ? ", " + no : ""}`} className={"vmill-tile" + (bad ? " is-misfit" : "")} onClick={() => onPick(t.id)}>
+            <span className="vmill-pic">{t.photo
+              ? <img src={import.meta.env.BASE_URL + t.photo} alt="" loading="lazy" decoding="async" />
+              : <><span className="vmill-scheme" dangerouslySetInnerHTML={{ __html: schemes[t.id] }} /><em className="vmill-badge">схема</em></>}</span>
+            <b>{t.name}</b>
+            <small>{[no, t.glass ? "бывает со стеклом" : "", bad ? "не по размеру фасадов" : ""].filter(Boolean).join(" · ")}</small>
+          </button>;
+        })}</div>
+      </section>;
+    })}
+  </div>;
+  const current = <div className="vmill-current" aria-live="polite">
+    <span>Рисунок</span><b>{cur?.name ?? `№${selected}`}</b>{cur && tileNo(cur.id, cur.milling.series) ? <small>{tileNo(cur.id, cur.milling.series)}</small> : null}
+  </div>;
+  const note = <p className="field-note">Фото — из каталога фабрики, цвет на фото — пример: плёнка или эмаль выбираются ниже. Цена за м² — ориентир в плёнке, МДФ 19 мм; точная — в расчёте проекта.</p>;
   return <div className="vmill">
-    <div className="vmill-current" aria-live="polite">
-      <span>Рисунок</span><b>{cur?.name ?? `№${selected}`}</b>{cur && tileNo(cur.id, cur.milling.series) ? <small>{tileNo(cur.id, cur.milling.series)}</small> : null}
-    </div>
+    <div className="vmill-head">{current}<button type="button" className="vmill-wide-btn" onClick={() => setWide(true)}>Крупно</button></div>
     {!cur && <p className="field-note">Этого рисунка нет среди плиток — менеджер покажет его в каталоге фабрики.</p>}
-    <div className="vmill-chips" role="group" aria-label="Стиль рисунка">
-      {(["all", ...MILL_STYLES.map((x) => x.id)] as const).map((st) => <button key={st} type="button" aria-pressed={style === st} onClick={() => setStyle(st)}>
-        {st === "all" ? "Все" : MILL_STYLES.find((x) => x.id === st)!.label}<span>{count(st)}</span></button>)}
-    </div>
-    <div className="vmill-box" ref={box} role="radiogroup" aria-label="Фрезеровка Вернисаж">
-      {groups.map((g) => {
-        const tiles = g.tiles.filter((t) => style === "all" || t.style === style);
-        if (!tiles.length) return null;
-        return <section key={g.id} className="vmill-group" aria-label={`${g.label} — от ${rub(g.from)} ₽ за м²`}>
-          <h4>{g.label}<span>от {rub(g.from)} ₽/м²</span></h4>
-          <p>{g.hint}</p>
-          <div className="vmill-grid">{tiles.map((t) => {
-            const no = tileNo(t.id, t.milling.series), bad = misfit.has(t.id);
-            return <button key={t.id} type="button" role="radio" aria-checked={t.id === selected} aria-label={`${t.name}${no ? ", " + no : ""}`} className={"vmill-tile" + (bad ? " is-misfit" : "")} onClick={() => onPick(t.id)}>
-              <span className="vmill-pic">{t.photo
-                ? <img src={import.meta.env.BASE_URL + t.photo} alt="" loading="lazy" decoding="async" />
-                : <><span className="vmill-scheme" dangerouslySetInnerHTML={{ __html: schemes[t.id] }} /><em className="vmill-badge">схема</em></>}</span>
-              <b>{t.name}</b>
-              <small>{[no, t.glass ? "бывает со стеклом" : "", bad ? "не по размеру фасадов" : ""].filter(Boolean).join(" · ")}</small>
-            </button>;
-          })}</div>
-        </section>;
-      })}
-    </div>
-    <p className="field-note">Фото — из каталога фабрики, цвет на фото — пример: плёнка или эмаль выбираются ниже. Цена за м² — ориентир в плёнке, МДФ 19 мм; точная — в расчёте проекта.</p>
+    {chips}
+    {list(box, "Фрезеровка Вернисаж")}
+    {note}
+    {wide && createPortal(<div className="vmill-overlay" role="dialog" aria-modal="true" aria-label="Рисунки фасадов крупно">
+      <div className="vmill vmill--wide">
+        <div className="vmill-head"><h3>Рисунки фасадов</h3>{current}<button type="button" className="vmill-done" onClick={() => setWide(false)}>Готово</button></div>
+        {chips}
+        {list(wideBox, "Фрезеровка Вернисаж, крупно")}
+        {note}
+      </div>
+    </div>, document.body)}
   </div>;
 }
