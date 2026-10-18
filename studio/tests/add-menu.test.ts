@@ -82,7 +82,7 @@ test('кухни (и кухни Базиса), сырой модуль, купе
 test('угловой корпус и предел секций: недоступное в панели недоступно и в меню',()=>{
   const m=wardrobe();m.sections=Array.from({length:RULES.maxSections},()=>section());
   assert.equal(find(addMenuItem(m,m.sections[0].id,spy(m).ops).children,'add-split').disabled,true);
-  const c={...wardrobe(),corner:{level:'lower'} as Module['corner']},ci=addMenuItem(c,c.sections[0].id,spy(c).ops);
+  const c={...wardrobe(),corner:{level:'lower'} as unknown as Module['corner']},ci=addMenuItem(c,c.sections[0].id,spy(c).ops);
   for(const k of ['add-pantograph','mesh','add-split','pullouts','add-shelf-glass'])assert.equal(find(ci.children,k).disabled,true,k);
   assert.ok(!find(ci.children,'add-shelf').disabled);
 });
