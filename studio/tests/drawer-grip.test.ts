@@ -6,7 +6,7 @@ import {estimate} from '../src/pricing';
 import {newProject} from '../src/project';
 import {kitchenBase} from '../src/kitchen';
 import {layoutKitchenDrawers,setKitchenDrawerCount} from '../src/kitchenEditing';
-import {gripKDrawers,kdrawerGripAvailable,axisTop} from '../src/kitchenDrawers';
+import {setKitchenGola} from '../src/kitchenEditing';
 
 // Решение Макса 16.10.2026: «Зазор между ящиками 30 мм» в выборе ручки ящика — ручки нет, короб ниже на 30 мм,
 // фасад выше короба не менее чем на 30 мм (хват сверху за фасад); для всех ящиков секции.
@@ -54,28 +54,27 @@ test('зазор 30 мм: короб ниже 60 мм — ошибка пров�
   const plain=initialModule();assert.deepEqual(parts(plain),parts(parseModule(JSON.parse(JSON.stringify(plain)))));
 });
 
-test('кухонные ящики студии: «зазор 30 мм» — фасады те же, короб ЛДСП −30, Axis PRO на царгу ниже ≥30, ручек нет, 0 пересечений',()=>{
+// Решение Макса 18.10.2026: на кухне «Зазора между ящиками 30 мм» нет — без ручек на кухне профиль Gola; зазор 30 мм только у шкафов.
+test('кухня: зазора 30 мм нет — старый проект с kdrawerGrip открывается без ошибки, поле теряется, ящики как без зазора',()=>{
   for(const sys of ['axis-pro','firmax-ldsp','versalite-h45'] as const){
     const m=kitchenBase(initialModule(),600);m.height=850;setKitchenDrawerCount(m,3);m.kdrawers=layoutKitchenDrawers(m,3,undefined,sys);
     m.kitchen!.handle={dy:31.5,from:'top',horizontal:true,name:'Ручка 128'} as any;
-    assert.ok(kdrawerGripAvailable(m));
-    const g=structuredClone(m);g.kdrawerGrip=true;
-    assert.deepEqual(validate(g),[]);
-    const a=parts(m),b=parts(g);
-    const fa=pick(a,/^kd:\d+:facade$/).sort((x,y)=>lo(x)-lo(y)),fb=pick(b,/^kd:\d+:facade$/).sort((x,y)=>lo(x)-lo(y));
-    assert.deepEqual(fb.map(lo),fa.map(lo),sys+': низ фасадов на месте');
-    for(let i=1;i<fb.length;i++)assert.ok(Math.abs(lo(fb[i])-hi(fb[i-1])-30)<0.11,`${sys}: между фасадами ${i} и ${i+1} зазор 30 (${lo(fb[i])-hi(fb[i-1])})`);
-    assert.ok(Math.abs(hi(fa.at(-1)!)+(g.faceGap??1.5)-30-hi(fb.at(-1)!))<0.11,sys+': над верхним фасадом 30 мм до верха колонки');
-    const ks=gripKDrawers(g);
-    m.kdrawers!.forEach((k,i)=>{const top0=axisTop(k),top1=axisTop(ks[i]);assert.ok(top0-top1>=30-0.01,`${sys} ящик ${i+1}: короб ниже на ${top0-top1}`);assert.ok(ks[i].y1-top1>=30-0.01,'верх короба ниже верха своего фасада не менее чем на 30');assert.equal(ks[i].y0,k.y0);});
-    assert.ok(pick(a,/:drawer:handle$/).length>0,'без зазора ручки есть');
-    assert.equal(pick(b,/:drawer:handle$/).length,0,sys+': ручек нет');
-    assert.deepEqual(partCollisions(b,g),[],sys);
-    // смета: без ручек; у Axis PRO — комплект с новой царгой
-    const eb=estimate(newProject(g));assert.ok(!eb.lines.some(l=>/Ручка 128/.test(l.label)));
-    if(sys==='axis-pro')assert.ok(eb.lines.some(l=>l.id.startsWith('axis-pro:168:'))&&!eb.lines.some(l=>l.id.startsWith('axis-pro:200:')));
-    assert.equal(parseModule(JSON.parse(JSON.stringify(g))).kdrawerGrip,true);
+    const old=parseModule({...JSON.parse(JSON.stringify(m)),kdrawerGrip:true});
+    assert.equal('kdrawerGrip' in old,false,sys+': поле kdrawerGrip не сохраняется');
+    assert.deepEqual(validate(old),[]);
+    assert.deepEqual(parts(old),parts(m),sys+': детали те же, что без зазора');
+    assert.ok(pick(parts(old),/:drawer:handle$/).length>0,sys+': ручки на фасадах ящиков на месте');
   }
-  // модуль «как есть» из Базиса — не применяется
-  const raw=kitchenBase(initialModule(),600);setKitchenDrawerCount(raw,2);(raw as any).raw={};assert.equal(kdrawerGripAvailable(raw),false);
+});
+test('кухня: без ручек — профиль Gola на ящиках Firmax / Axis PRO / Versalite строится без пересечений',()=>{
+  for(const sys of ['axis-pro','firmax-ldsp','versalite-h45'] as const)for(const n of [1,2,3]){
+    const m=kitchenBase(initialModule(),600);m.height=850;setKitchenDrawerCount(m,n);m.kdrawers=layoutKitchenDrawers(m,n,undefined,sys);
+    setKitchenGola(m,true);
+    assert.equal(m.kdrawers![0].system,sys,'система ящиков та же');
+    assert.deepEqual(validate(m),[],`${sys} ×${n}`);
+    const ps=parts(m);
+    assert.deepEqual(partCollisions(ps,m),[],`${sys} ×${n}: 0 пересечений`);
+    assert.equal(pick(ps,/handle/).length,0,`${sys} ×${n}: ручек нет`);
+    assert.ok(ps.some(p=>/gola/i.test(p.id)),`${sys} ×${n}: профиль Gola в деталях`);
+  }
 });

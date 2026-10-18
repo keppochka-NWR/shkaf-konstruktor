@@ -818,7 +818,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     out.push({ id: `kd-blind:${i}:facade`, name: `Фасад глухой ${i + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (b.y0 + b.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
       role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
   }
-  gripKDrawers(m).forEach((k, j) => {
+  (m.kdrawers ?? []).forEach((k, j) => {
     const id = `kd:${j}`;
     const sideIn = (s: 0 | 1) => (s ? xr : x0), dir = (s: 0 | 1) => (s ? -1 : 1);
     // фасад ящика (фасадный материал или ЛДСП — как у дверей модуля)
@@ -830,7 +830,7 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
       // dy от верха/низа фасада; по базе 6 модулей с ручками на фасадах ящиков, по одному правилу с дверями — k09 m03/m05: 31,5 от верха;
       // k07 — свои 15/19/21 и сдвиг ±4, правила нет — не ставим). Только горизонтальная; ручки не заложены (noHandles) — без ручки
       const kh = m.kitchen?.handle;
-      if (kh?.horizontal && kh.name && !m.noHandles && !m.kdrawerGrip) {
+      if (kh?.horizontal && kh.name && !m.noHandles) {
         const hx = m.width / 2, hy = kh.from === "top" ? k.y1 - kh.dy : k.y0 + kh.dy, fz = F + faceAir + facadeT, [L, W, D] = kh.size ?? [128, 10, 25];
         // id с «:drawer:» — как у ручек ящиков студии: сцена и проверки длины ручки ищут фасад по этому маркеру
         out.push({ id: `${id}:drawer:handle`, name: "Ручка фасада · " + kh.name, size: [L, W, D], position: [hx, hy, fz + (kh.size ? D / 2 : 13)], length: L, width: D, thickness: W, role: "handle", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], anchor: [hx, hy, fz],
@@ -1044,7 +1044,7 @@ function screw(id: string, at: [number, number, number]): Part {
 /** Присадка ящиков Axis PRO (по FurnList.Holes Базиса). */
 export function kitchenDrawerHoles(m: Module, ps: Part[], push: (src: string, at: [number, number, number], dir: [number, number, number], d: number, depth: number, probe?: number) => void) {
   if (!m.kdrawers?.length) return;
-  gripKDrawers(m).forEach((k, j) => {
+  m.kdrawers.forEach((k, j) => {
     const id = `kd:${j}`;
     if (isIndigo(k)) {
       // Indigo (FurnList.Holes Базиса): направляющая — 12 × D6,5×2 в боковину корпуса; «3x3» — D3×3 в боковину, заднюю стенку, фасад
@@ -1286,59 +1286,4 @@ export function parseKDrawers(x: unknown): KDrawer[] | undefined {
     ...(k.inner ? { inner: true as const } : {}), ...(k.front ? { front: Number(k.front) } : {}), ...(k.logo ? { logo: true as const } : {}),
     ...(k.edge?.bottom === true ? { edge: { bottom: true as const } } : Array.isArray(k.edge?.bottom) ? { edge: { bottom: k.edge!.bottom.filter((s): s is AxisEdgeSide => ["+x", "-x", "+z", "-z"].includes(s)) } } : {}) };
   });
-}
-
-/** «Зазор между ящиками 30 мм» у кухонных ящиков студии (решение Макса 16.10.2026; m.kdrawerGrip): ручек на фасадах ящиков нет,
- *  фасады те же, короб ниже не менее чем на 30 и его верх не выше «верх фасада − 30». Короб ЛДСП (Firmax, Versalite, MODERN SLIDE) —
- *  боковины на 30 ниже; Axis PRO — самая высокая царга, что ниже прежней не менее чем на 30 (царги — ряд 86/120/168/200).
- *  СТАРТ и Indigo (металлические боковины своего ряда) и внутренние ящики — без изменений. Применяется при построении деталей,
- *  присадки и сметы, поэтому переживает пересборку ящиков (refitKDrawers) при смене размеров. */
-export function gripKDrawers(m: Module): KDrawer[] {
-  return gripTransform(m).ks;
-}
-/** Минимальная высота боковины короба ЛДСП при «Зазоре 30 мм» (дно 16 + подъём дна + задняя стенка под конфирмат). */
-export const GRIP_BOX_MIN_H = 60;
-/** Ящики, которым «Зазор 30 мм» невозможен: короб/царгу нельзя опустить под верх фасада на 30 (ревью Codex R3, 16.10.2026). */
-export function kdrawerGripErrors(m: Module): string[] {
-  return gripTransform(m).problems;
-}
-function gripTransform(m: Module): { ks: KDrawer[]; problems: string[] } {
-  const ks = m.kdrawers ?? [], problems: string[] = [];
-  if (!m.kdrawerGrip || m.raw) return { ks, problems };
-  // уточнение Макса 16.10.2026: между фасадами ящиков виден зазор 30 мм — фасад ниже, его низ на месте, верх на 30 ниже низа
-  // следующего фасада (глухого тоже); верхний — на 30 ниже верха колонки фасадов (верх фасада + отступ faceGap)
-  const fronts = [...ks.filter((k) => !isInner(k)).map((k) => k.y0), ...(m.kitchen?.blindFronts ?? []).map((b) => b.y0)];
-  const r1 = (v: number) => Math.round(v * 10) / 10;
-  const out = ks.map((k0, i) => {
-    if (isInner(k0)) return k0;
-    const next = fronts.filter((y) => y >= k0.y1 - 1).sort((a, b) => a - b)[0], limit = next ?? k0.y1 + (m.faceGap ?? 1.5);
-    const k = { ...k0, y1: r1(Math.min(k0.y1, limit - 30)) } as KDrawer;
-    // верх короба: не выше «верх нового фасада − 30» и не менее чем на 30 ниже прежнего (решение Макса 16.10.2026)
-    const lim = Math.min(axisTop(k0) - 30, k.y1 - 30);
-    let res: KDrawer | null = null;
-    if (isBox(k)) {
-      const h = r1(Math.min(k.box.h - 30, lim - k.box.y));
-      if (h >= GRIP_BOX_MIN_H) {
-        const box = { ...k.box, h };
-        // присадка задней стенки и шурупов фасада — по правилу для новой высоты, если старые точки не входят
-        const backH = h - (box.bottomUp ?? (k.system === "versalite-h45" ? VERSALITE.bottomUp : FIRMAX.bottomUp)) - FIRMAX.t;
-        if (box.conf?.some((c) => c < 8 || c > backH - 8)) delete box.conf;
-        if (Array.isArray(box.faceScrews) && box.faceScrews.some(([, sy]) => !(sy > 0 && sy < backH))) box.faceScrews = true;
-        // Versalite: ось направляющей — середина боковины, переносится вместе с боковиной (ревью R3)
-        res = (k.system === "versalite-h45" ? { ...k, box, runnerY: r1(box.y + h / 2) } : { ...k, box }) as KDrawer;
-      }
-    } else if (isAxis(k)) {
-      res = [...AXIS_HEIGHTS].reverse().map((hh) => withAxisH(m, k, hh)).find((c) => axisTop(c) <= lim + 0.01 && axisAvailable(c)) ?? null;
-    } else res = k0; // СТАРТ, Indigo — без изменений (kdrawerGripAvailable их не предлагает)
-    if (!res) {
-      problems.push(`Ящик ${i + 1}: «Зазор между ящиками 30 мм» невозможен — ${isAxis(k) ? "нет царги Axis PRO с верхом на 30 мм ниже верха фасада" : "боковины короба стали бы ниже " + GRIP_BOX_MIN_H + " мм"}. Уменьшите число ящиков, увеличьте фасад или выключите «Зазор 30 мм».`);
-      return k0;
-    }
-    return res;
-  });
-  return { ks: out, problems };
-}
-/** Система ящиков модуля поддерживает «Зазор 30 мм» (короб ЛДСП или Axis PRO), без модулей из Базиса «как есть». */
-export function kdrawerGripAvailable(m: Module): boolean {
-  return !m.raw && !!m.kdrawers?.length && m.kdrawers.every((k) => isInner(k) || isBox(k) || isAxis(k));
 }
