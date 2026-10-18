@@ -314,8 +314,8 @@ function CabinetPanel(props: KitchenPanelProps) {
         <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => { const same = m.kdrawers!.length === c, why = relayoutProblem(m, c); /* текущее число — пересобрать с теми же долями фасадов (царги и длины заново) */
           return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? layoutKitchenDrawers(n, c) : layoutKitchenDrawers(n, c); })}>{c}</button>; })}</div></div>
       {/* решение Макса 18.10.2026: на кухне вместо «Зазора 30 мм» — профиль Gola; тот же флажок, что в «Тип открывания» (setKitchenGola), те же условия */}
-      {role === "base" && k.appliance !== "oven" && <div data-testid="kdrawer-gola"><Check label="Профиль Gola" checked={!!m.gola} change={(v) => modify((n) => setKitchenGola(n, v))} />
-        <p className="field-note">Без ручек на кухне — профиль Gola.</p></div>}
+      {role === "base" && k.appliance !== "oven" && <div data-testid="kdrawer-gola"><Check label="Без ручек на кухне — профиль Gola" checked={!!m.gola} change={(v) => modify((n) => setKitchenGola(n, v))} />
+        <p className="field-note">Тот же профиль Gola, что в «Тип открывания»: ручек на фасадах нет, между ящиками C-профили.</p></div>}
       {[...m.kdrawers].map((d, i) => ({ d, i })).reverse().map(({ d, i }) => <div key={i} className="kitchen-rail">
         <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(d)} · направляющая на {d.runnerY} от пола модуля</p>
         {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={kdrawerFacadeMax(m, i)} step={0.5} change={(v) => modify((n) => { n.kdrawers = n.gola ? resizeKitchenDrawerFront(n,i,v) : setKDrawerFacade(n, i, v); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
