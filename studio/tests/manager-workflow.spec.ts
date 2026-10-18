@@ -23,6 +23,7 @@ test('documents: each tab previews and downloads, archive contains a coherent pr
  const panel=page.locator('.output-panel');
  // производственные документы выдаются с номером заказа (аудит магазина п.9)
  await panel.locator('.output-tabs').getByRole('button',{name:'Карты листов и деталировка',exact:true}).click();await expect(page.getByRole('button',{name:'Скачать комплект ZIP',exact:true})).toBeDisabled();
+ for(const b of ['Деталировка CSV','Скачать карты (HTML для печати)'])await expect(page.getByRole('button',{name:b,exact:true})).toBeDisabled();
  await page.getByLabel('Номер заказа').fill('9990001');await page.getByLabel('Номер заказа').press('Enter');
  for(const [tab,button] of [['Карты листов и деталировка','Деталировка CSV'],['Расстановка','Скачать план (HTML)'],['Спецификация','Скачать HTML'],['Ведомость','Скачать ведомость (HTML для печати)'],['Бирки деталей','Скачать бирки (HTML для печати)'],['Стоимость','Скачать итоговую стоимость']]){
   await panel.locator('.output-tabs').getByRole('button',{name:tab,exact:true}).click();const result=await download(page,button);expect(result.bytes.toString()).not.toContain('NaN');

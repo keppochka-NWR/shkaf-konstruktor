@@ -16,6 +16,7 @@ import {
   nestingHTML,
   quoteHTML,
   saveFile,
+  saveProductionFile,
   sheetSVG,
   labelDetails,
   labelEdges, EDGE_LEGEND,
@@ -74,7 +75,7 @@ export function OutputPanel({
   const order=orderNumber(project),production=PRODUCTION_TABS.includes(tab);
   // Номер заказа для производства: печатается на бирках, картах и в имени комплекта; без него выдача производству закрыта.
   function setOrder(v:string){const m=project.measurement||{number:'',date:'',notes:''};return update({...project,measurement:{...m,number:v.trim()}});}
-  const orderGate=!order&&<p className="essential-note" role="status">Укажите номер заказа — он печатается на бирках и в имени комплекта технологу.</p>;
+  const orderGate=!order&&<p className="essential-note" role="status">Укажите номер заказа — он печатается на бирках и в имени комплекта технологу. Без номера карты, деталировка CSV, ведомость, чертежи, бирки и ZIP не выгружаются.</p>;
   return (
     <div className="output-panel">
       <div className="output-groups">
@@ -110,17 +111,19 @@ export function OutputPanel({
               className="primary"
               disabled={!order}
               onClick={() =>
-                saveFile("Карты листов.html", nestingHTML(project))
+                saveProductionFile(project,"Карты листов.html",()=>nestingHTML(project))
               }
             >
               Скачать карты (HTML для печати)
             </button>
             <button
               className="outline"
+              disabled={!order}
               onClick={() =>
-                saveFile(
+                saveProductionFile(
+                  project,
                   "Деталировка.csv",
-                  detailCSV(project),
+                  ()=>detailCSV(project),
                   "text/csv;charset=utf-8",
                 )
               }
@@ -207,7 +210,7 @@ export function OutputPanel({
             )}
           </div>
         </>
-      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>{if(!printDocument(placement,'План расстановки'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}}>Сохранить в PDF</button><button className="outline" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план (HTML)</button><p className="field-note">Вид сверху и таблица отступов для согласования. «Сохранить в PDF» открывает печать: выберите «Сохранить как PDF».</p></div>{imageError&&<p role="alert" className="cloud-error">{imageError}</p>}<iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" onClick={()=>saveFile('Ведомость проекта.html',specification)}>Скачать ведомость (HTML для печати)</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" disabled={!order} onClick={()=>saveFile('Бирки деталей.html',labelDocument)}>Скачать бирки (HTML для печати)</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{order?labelOrder(project):'№ заказа — укажите выше'}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <SalesSummary project={project}/> : (
+      ) : tab === "placement" ? <><div className="output-actions"><button className="primary" onClick={()=>{if(!printDocument(placement,'План расстановки'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}}>Сохранить в PDF</button><button className="outline" onClick={()=>saveFile('План расстановки.html',placement)}>Скачать план (HTML)</button><p className="field-note">Вид сверху и таблица отступов для согласования. «Сохранить в PDF» открывает печать: выберите «Сохранить как PDF».</p></div>{imageError&&<p role="alert" className="cloud-error">{imageError}</p>}<iframe title="Предпросмотр расстановки" className="specification-preview" sandbox="" srcDoc={placement.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "specification" ? <><div className="output-actions"><button className="primary" disabled={!order} onClick={()=>saveProductionFile(project,'Ведомость проекта.html',()=>specification)}>Скачать ведомость (HTML для печати)</button><p className="field-note">Проверьте комплект и замечания перед передачей технологу. Печать доступна в скачанном документе.</p></div><iframe title="Предпросмотр ведомости" className="specification-preview" sandbox="" srcDoc={specification.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/></> : tab === "drawings" ? <DrawingsPanel project={project} order={order}/> : tab === "labels" ? <><p className="field-note">Бирки по шаблону цеха «Birka Лёха»: 120 × 75 мм, одна деталь на этикетку для Xprinter XP-365B. Поля: № заказа, материал, модуль, поз., № детали, пазование, торец, длина × ширина; кромка по четырём сторонам линией (тонкая до 0,8, толстая 2). Коды совпадают с деталировкой и картами текущего проекта.</p><button className="primary" disabled={!order} onClick={()=>saveProductionFile(project,'Бирки деталей.html',()=>labelDocument)}>Скачать бирки (HTML для печати)</button><button className="outline" onClick={()=>setLabelPreview(v=>!v)}>{labelPreview?'Вернуться к карточкам':'Предпросмотр макета бирок'}</button>{labelPreview?<iframe title="Предпросмотр макета бирок" className="specification-preview" sandbox="" srcDoc={labelDocument.replace('<button onclick="window.print()">Печать / Сохранить PDF</button>','')}/>:<div className="label-grid">{labelDetails(project).map(d=><article className="label-card" key={d.code}><div><b>{d.code}</b><span>{d.sheet?'Лист '+d.sheet:'Вне карт'}</span></div><small>{order?labelOrder(project):'№ заказа — укажите выше'}</small><strong>{d.name}</strong><small>{d.moduleName}</small><p>{d.material==='hdf'?'ЛХДФ':d.decor} · {d.thickness} мм</p><h3>{d.length} × {d.width} мм</h3><small>{labelEdges(d)}</small><small>{EDGE_LEGEND}</small><small>↑ Длина вдоль текстуры · для проверки</small></article>)}</div>}</> : tab === "estimate" ? <SalesSummary project={project}/> : (
         <>
           <p className="field-note">
             КП содержит текущий вид проекта, размеры, материалы и наполнение

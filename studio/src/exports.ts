@@ -358,6 +358,13 @@ export function clientSpecificationHTML(p: Project, customer: string, seller?: S
 /** Номер заказа для производственных документов (бирки, карты, комплект технологу): номер замера проекта; пусто — его нужно
  *  спросить при выдаче. В клиентских документах (КП, спецификация) номер заказа и «Заказ не указан» не печатаются. */
 export function orderNumber(p:Project){return p.measurement?.number?.trim()??'';}
+/** T3 (18.10.2026): производственные выгрузки — карты, деталировка CSV, ведомость, чертежи, бирки, комплект ZIP — одинаково требуют номер заказа. */
+export const ORDER_REQUIRED='Укажите номер заказа — без него производственные документы не выгружаются.';
+/** Сохраняет производственный документ только при заданном номере заказа; без номера файл не формируется (false). */
+export function saveProductionFile(p:Project,name:string,text:()=>string,type?:string):boolean{
+  if(!orderNumber(p))return false;
+  saveFile(name,text(),type);return true;
+}
 export function labelOrder(p:Project){const number=p.measurement?.number.trim();return number?'Замер '+number:p.offer?.customer.trim()||p.cloud?.name?.trim()||'Заказ не указан';}
 export const EDGE_LEGEND='1–2: торцы по ширине · 3–4: по длине';
 export function labelEdges(d:Pick<Detail,'edge'>){return 'Кромка 1–4: '+d.edge.map(v=>v===0?'—':String(v).replace('.',',')).join(' / ')+' мм';}

@@ -1,6 +1,6 @@
 import {pendingTotalLabel} from './pendingPrices';
 import {type Project,projectErrors} from './project';
-import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder,uniqueWarnings} from './exports';
+import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder,uniqueWarnings,orderNumber,ORDER_REQUIRED} from './exports';
 import {drawingsHTML} from './drawings';
 import {placementHTML} from './placementPlan';
 import {estimate,estimateCSV,withPriceStamp} from './pricing';
@@ -69,6 +69,7 @@ export function reviewArchiveName(project:Project){
   return (name||'Проект')+' — комплект технологу.zip';
 }
 export async function downloadReviewArchive(project:Project,manager=false){
+  if(!orderNumber(project))throw Error(ORDER_REQUIRED);
   const snapshot=structuredClone(project),data=await reviewArchive(snapshot,manager);
   const url=URL.createObjectURL(new Blob([new Uint8Array(data).buffer],{type:'application/zip'})),link=document.createElement('a');
   link.href=url;link.download=reviewArchiveName(snapshot);link.click();
