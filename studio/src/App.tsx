@@ -42,7 +42,7 @@ import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useRef, useMemo, useId } from "react";
 import {historyShortcut,editsText} from './historyShortcuts';
 import {editDrawerConfig} from './drawerEditing';
-import { Lightbulb,
+import {
   Box,
   Undo2,
   Redo2,
@@ -110,6 +110,7 @@ import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
+import {addMenuItem} from './addMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
 import {
@@ -119,7 +120,7 @@ import {
   appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers,
   type Project,
 } from "./project";
-import {fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 function NumberField({
   label,
   value,
@@ -402,13 +403,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   /** Сырой модуль из Базиса (m.raw): наполнение не настраивается — пресеты, композер и перетаскивание выходят без записи в историю (A5). */
   const RAW_FILLING_MESSAGE='Модуль перенесён из Базиса как есть — наполнение здесь не настраивается. Правится в Базисе (переимпорт).';
-  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string){
+  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string,glass?:boolean){
     if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;
     const target=project.modules.find(a=>a.id===mid)?.module;
     if(target?.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
     if(target?.raw){setError(RAW_FILLING_MESSAGE);return false;}
     setMeshFit(null);
-    try{const next=insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
+    try{const next=glass&&kind==='shelf'?insertGlassShelf(project,mid,sid,y):insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
     catch(e){
       let message=e instanceof Error?e.message:'Не удалось добавить элемент.';
       if(kind==='mesh'){try{const fitted=fitMeshItem(project,mid,sid,meshId??DEFAULT_MESH,y);const width=fitted.modules.find(a=>a.id===mid)!.module.width;setMeshFit({mid,sid,meshId:meshId??DEFAULT_MESH,y,width});}catch(fitError){message+=' '+(fitError as Error).message;}}
@@ -564,7 +565,6 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const pid=c.pid??'',y=c.localY??mod.height/2;
     const select=()=>{selectModule(a.id);chooseSection(c.sid);};
     const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{n[key]=v;}));}});
-    const fill=(kind:FillKind,label:string,icon:RadialItem['icon'],hint:string):RadialItem=>({id:'add-'+kind,label,icon,hint,run:()=>{select();dropFilling(kind,a.id,c.sid,y);}});
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
       {id:'open-handle',label:'С ручками',icon:Hand,active:mod.doorOpen!=='push',hint:'Ручка и петли с доводчиком',run:()=>modifyAt(a.id,n=>{delete n.doorOpen;})},
@@ -574,7 +574,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
-      {id:'fill',label:'Добавить',icon:Plus,...(mod.kitchen?{hint:'Кухонные ящики, полки и Gola — в панели справа',run:()=>{setActive(a.id);goStage('filling');}}:{hint:'Наполнение секции',children:[fill('shelf','Полку',Rows3,'Встанет на высоте клика'),fill('drawer','Ящик',Archive,'Ящик в эту секцию'),fill('rod','Штангу',Shirt,'Штанга для одежды'),{id:'add-light',label:mod.standLight?'Убрать подсветку':'Подсветку',icon:Lightbulb,active:!!mod.standLight,disabled:!!mod.desk||!!mod.raw||!!mod.kupe||!!mod.worktop,hint:mod.standLight?'Снять LED-подсветку в стойках':'LED-профиль в стойках на всю высоту проёма, цена входит в итог',run:()=>modifyAt(a.id,n=>{if(n.standLight)delete n.standLight;else n.standLight=true;})}]})},
+      addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,y,o?.meshId,o?.glass);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         editFacade,{id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
