@@ -5,6 +5,7 @@ import {OVEN} from './ovenDimensions';
 // внутренняя грань боковины (x), высота направляющей (y), передняя кромка корпуса (z). Сверено по 23 модулям с Axis PRO
 // (k04–k30, 40 ящиков): смещения одинаковые у всех, разброс 0.
 import type { Module, Part } from "./model";
+import { ALU_EXTRAS, aluLabel } from "./alu";
 import { qrot, type Quat } from "./quat";
 
 export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc" | "indigo" | "modern-slide";
@@ -800,6 +801,8 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
   if (!m.kdrawers?.length || !L || !R) return;
   const x0 = L.position[0] + L.size[0] / 2, xr = R.position[0] - R.size[0] / 2, F = Math.min(L.position[2] + L.size[2] / 2, R.position[2] + R.size[2] / 2);
   const t = 16;
+  // фасады ящиков в алюминиевой рамке (aluDrawers): толщина рамки, задняя плоскость фасада на месте — короб и крепёж не сдвигаются
+  const alu = !!(m.alu && m.aluDrawers), fT = alu ? ALU_EXTRAS.frameDepth : facadeT, fMat: Part["material"] = alu ? "alu" : "board", fDecor = alu ? aluLabel(m.alu!) : m.drawerFacadeDecor ?? m.facadeDecor, fEdge: Part["edge"] = alu ? [0, 0, 0, 0] : [2, 2, 2, 2];
   const metal = (id: string, name: string, mesh: string, origin: [number, number, number], q: Quat): Part => {
     const g = aabb(origin, q, BBOX[mesh] ?? [-5, -5, -5, 5, 5, 5]);
     return { id, name, size: g.size, position: g.position, length: Math.max(...g.size), width: [...g.size].sort((a, b) => b - a)[1], thickness: Math.min(...g.size), role: "drawer", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0],
@@ -815,8 +818,8 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
   // как фасад ящика: та же ширина, толщина, вынос и декор; ни короба, ни крепежа (в Базисе их нет)
   for (const [i, b] of (m.kitchen?.blindFronts ?? []).entries()) {
     const fw = m.width - 2 * faceGap, fh = b.y1 - b.y0;
-    out.push({ id: `kd-blind:${i}:facade`, name: `Фасад глухой ${i + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (b.y0 + b.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
-      role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+    out.push({ id: `kd-blind:${i}:facade`, name: `Фасад глухой ${i + 1}`, size: [fw, fh, fT], position: [m.width / 2, (b.y0 + b.y1) / 2, F + faceAir + fT / 2], length: fh, width: fw, thickness: fT,
+      role: "drawer", material: fMat, decor: fDecor, grain: "length", grainAxis: 1, edge: fEdge });
   }
   (m.kdrawers ?? []).forEach((k, j) => {
     const id = `kd:${j}`;
@@ -824,14 +827,14 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
     // фасад ящика (фасадный материал или ЛДСП — как у дверей модуля)
     const fw = m.width - 2 * faceGap, fh = k.y1 - k.y0;
     if (!((isStart(k) || isAxis(k)) && k.inner)) {
-      out.push({ id: `${id}:facade`, name: `Фасад ящика ${j + 1}`, size: [fw, fh, facadeT], position: [m.width / 2, (k.y0 + k.y1) / 2, F + faceAir + facadeT / 2], length: fh, width: fw, thickness: facadeT,
-        role: "drawer", material: "board", decor: m.drawerFacadeDecor ?? m.facadeDecor, grain: "length", grainAxis: 1, edge: [2, 2, 2, 2] });
+      out.push({ id: `${id}:facade`, name: `Фасад ящика ${j + 1}`, size: [fw, fh, fT], position: [m.width / 2, (k.y0 + k.y1) / 2, F + faceAir + fT / 2], length: fh, width: fw, thickness: fT,
+        role: "drawer", material: fMat, decor: fDecor, grain: "length", grainAxis: 1, edge: fEdge });
       // пакет 3 (m_HANDLE): ручка Базиса на фасаде ящика — то же место, что у дверей модуля (kitchen.handle: горизонтально по центру,
       // dy от верха/низа фасада; по базе 6 модулей с ручками на фасадах ящиков, по одному правилу с дверями — k09 m03/m05: 31,5 от верха;
       // k07 — свои 15/19/21 и сдвиг ±4, правила нет — не ставим). Только горизонтальная; ручки не заложены (noHandles) — без ручки
       const kh = m.kitchen?.handle;
       if (kh?.horizontal && kh.name && !m.noHandles) {
-        const hx = m.width / 2, hy = kh.from === "top" ? k.y1 - kh.dy : k.y0 + kh.dy, fz = F + faceAir + facadeT, [L, W, D] = kh.size ?? [128, 10, 25];
+        const hx = m.width / 2, hy = kh.from === "top" ? k.y1 - kh.dy : k.y0 + kh.dy, fz = F + faceAir + fT, [L, W, D] = kh.size ?? [128, 10, 25];
         // id с «:drawer:» — как у ручек ящиков студии: сцена и проверки длины ручки ищут фасад по этому маркеру
         out.push({ id: `${id}:drawer:handle`, name: "Ручка фасада · " + kh.name, size: [L, W, D], position: [hx, hy, fz + (kh.size ? D / 2 : 13)], length: L, width: D, thickness: W, role: "handle", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], anchor: [hx, hy, fz],
           ...(kh.mesh && kh.quat ? { model: { file: `hardware/bazis/${kh.mesh}.glb`, length: "x", native: true, origin: [hx, hy, fz], quat: kh.quat } } : {}) });

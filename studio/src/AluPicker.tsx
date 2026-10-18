@@ -6,6 +6,12 @@ export function aluFillOptions() {
   return ALU_FILL_GROUPS.map((g) => <optgroup key={g} label={g}>{ALU_FILLS.filter((f) => f.group === g).map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}</optgroup>);
 }
 
+/** Фасады ящиков тоже в рамке (aluDrawers): та же рамка, что у распашных; без галочки ящики — ЛДСП. */
+export function AluDrawersCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  const label = "Фасады ящиков — тоже в алюминиевой рамке";
+  return <label className="hardware-field"><span><input type="checkbox" aria-label={label} checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}</span></label>;
+}
+
 export function AluPicker({ value, onChange }: { value: AluFacade; onChange: (v: AluFacade) => void }) {
   const p = aluProfile(value.profile) ?? ALU_PROFILES[0];
   return <>

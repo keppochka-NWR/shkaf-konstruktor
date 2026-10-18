@@ -9,7 +9,8 @@ import {estimate} from '../src/pricing';
 import {partCollisions} from '../src/collisions';
 import {kitchenProject} from '../src/kitchenProject';
 import {applyFacadeStyle} from '../src/applyFacadeStyle';
-import {facadeMaterialLabel} from '../src/quoteDescribe';
+import {facadeMaterialLabel,describeModule} from '../src/quoteDescribe';
+import {setKitchenDrawerCount} from '../src/kitchenEditing';
 
 // Эталон — калькулятор фасадов ALU (calc-platform js/fasad-alu.js calcOneFasad, ветка calc-ready-1018): посчитан его же кодом
 // (calcOneFasad, петли GTV стандарт, открывание влево). Цена фасада без петель = профиль + наполнение + уплотнитель.
@@ -76,4 +77,29 @@ test('модули из Базиса и сырые модули рамку не 
   first.module.alu={...DEFAULT_ALU};
   p=applyFacadeStyle(p,first.id);
   assert.equal(p.modules.find(a=>a.id===other.id)!.module.alu,undefined);
+});
+
+test('фасады ящиков в рамке (aluDrawers): шкаф и кухня — рамка 20, без пересечений, в смете и КП; без галочки ящики ЛДСП',()=>{
+  const p=newProject(),m=p.modules[0].module;
+  m.sections[0].drawers=2;m.sections[0].externalDrawers=true;delete m.sections[0].drawerConfigs; // ящики снаружи, под дверью
+  m.alu={...DEFAULT_ALU};
+  const plain=parts(m).filter(d=>d.id.endsWith(':facade')&&d.id.includes(':drawer:'));
+  assert.ok(plain.length&&plain.every(d=>d.material==='board'),'без галочки — ЛДСП');
+  m.aluDrawers=true;
+  const ps=parts(m),fr=ps.filter(d=>d.id.endsWith(':facade')&&d.id.includes(':drawer:'));
+  assert.ok(fr.every(d=>d.material==='alu'&&d.size[2]===20&&d.edge.every(e=>e===0)));
+  for(const d of fr){const b=plain.find(x=>x.id===d.id)!;assert.equal(d.position[2]-d.size[2]/2,b.position[2]-b.size[2]/2,'задняя плоскость фасада на месте');}
+  assert.deepEqual(validate(m),[]);assert.deepEqual(partCollisions(ps,m),[]);
+  const e=estimate(p),area=[...fr,...ps.filter(d=>d.role==='door'&&d.material==='alu')].reduce((s,d)=>s+d.length*d.width/1e6,0);
+  assert.ok(Math.abs(e.lines.find(l=>l.id==='alu-insert:'+DEFAULT_ALU.insert)!.quantity-area)<0.01,'наполнение — по площади дверей и фасадов ящиков');
+  assert.ok(describeModule(m).materials.some(x=>/^Фасады ящиков: алюминиевая рамка, профиль/.test(x)));
+  let k=kitchenProject();
+  const base=k.modules.find(a=>a.module.kitchen?.role==='base'&&!a.module.kitchen.appliance&&parts(a.module).some(d=>d.role==='door'))!;
+  setKitchenDrawerCount(base.module,3);base.module.alu={...DEFAULT_ALU};base.module.aluDrawers=true;
+  const kp=parts(base.module),kf=kp.filter(d=>d.id.startsWith('kd:')&&d.id.endsWith(':facade'));
+  assert.ok(kf.length===3&&kf.every(d=>d.material==='alu'&&d.size[2]===20),'кухонные ящики — рамка');
+  assert.deepEqual(validate(base.module),[]);assert.deepEqual(partCollisions(kp,base.module),[],'кухня: пересечений нет');
+  k=applyFacadeStyle(k,base.id);
+  assert.ok(k.modules.filter(a=>a.module.alu).every(a=>a.module.aluDrawers),'применить ко всем — вместе с ящиками');
+  assert.deepEqual(projectErrors(applyAutoFillers(k)),[]);
 });

@@ -446,7 +446,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
-      if(d.role==='door'&&d.material==='alu'&&a.module.alu){
+      if((d.role==='door'||d.id.endsWith(':facade'))&&d.material==='alu'&&a.module.alu){ // распашные и фасады ящиков в рамке (aluDrawers)
         // Калькулятор фасадов ALU (источник истины по цене, 18.10.2026): профиль по периметру, наполнение по площади фасада,
         // уплотнитель по периметру — цены клиента (розничные позиции, после коэффициента, как Вернисаж — без раскроя ЛДСП).
         const al=a.module.alu,prof=aluProfile(al.profile),col=aluColor(al.profile,al.color),ins=aluFill(al.insert);

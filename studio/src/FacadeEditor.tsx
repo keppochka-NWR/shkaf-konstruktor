@@ -4,7 +4,7 @@ import type {Project} from './project';
 import {catalog} from './catalog';
 import {FACADE_KIND_LABEL,decorLabel,decorTitle} from './clientLabels';
 import {ALU_PROFILES,aluProfile} from './alu';
-import {aluFillOptions} from './AluPicker';
+import {aluFillOptions,AluDrawersCheck} from './AluPicker';
 import {VernissagePicker} from './VernissagePicker';
 import {applyFacadeAppearance,changeFacadeKind,facadeKind,type FacadeKind} from './facadeAppearance';
 
@@ -34,6 +34,7 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
    <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={draft.alu.profile} onChange={e=>{const p=aluProfile(e.target.value)!;setDraft({...draft,alu:{...draft.alu!,profile:p.id,color:p.colors.some(c=>c.id===draft.alu!.color)?draft.alu!.color:p.colors[0].id}});}}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
    <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={draft.alu.color} onChange={e=>setDraft({...draft,alu:{...draft.alu!,color:e.target.value}})}>{aluProfile(draft.alu.profile)!.colors.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
    <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={draft.alu.insert} onChange={e=>setDraft({...draft,alu:{...draft.alu!,insert:e.target.value}})}>{aluFillOptions()}</select></label>
+   <AluDrawersCheck checked={!!draft.aluDrawers} onChange={v=>{const n={...draft};if(v)n.aluDrawers=true;else delete n.aluDrawers;setDraft(n);}}/>
   </>}
   {kind==='external'&&<p className="field-note">Для другого поставщика требуется отдельная цена. Выберите Вернисаж, чтобы задать плёнку или краску и фрезеровку из каталога с прайсом.</p>}
   <label className="hardware-field">Область применения<select aria-label="Область применения фасадов" value={scope} onChange={e=>setScope(e.target.value as typeof scope)}><option value="module">Фасады корпуса: {source.name}</option><option value="group" disabled={!selectedIds.length}>Выделенные модули ({selectedIds.length})</option><option value="all">Фасады всех редактируемых модулей</option></select></label>

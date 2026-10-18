@@ -44,9 +44,10 @@ export function facadeMaterialLabel(m: Module): string {
   if (m.alu) return aluClientLabel(m);
   return m.facadeMaterial === "external" ? m.facadeDecor : "ЛДСП " + m.facadeDecor;
 }
-/** Материал фасадов ящиков: Вернисаж — тот же, что у дверей; алюминий — только распашные, ящики остаются ЛДСП. */
+/** Материал фасадов ящиков: Вернисаж — тот же, что у дверей; алюминий — если включены фасады ящиков в рамке (aluDrawers), иначе ЛДСП. */
 function drawerFacadeLabel(m: Module): string {
   if (m.vernissage) return vernissageClientLabel(m.vernissage);
+  if (m.alu && m.aluDrawers) return aluClientLabel(m);
   const d = m.drawerFacadeDecor ?? m.facadeDecor;
   return m.facadeMaterial === "external" ? d : "ЛДСП " + d;
 }

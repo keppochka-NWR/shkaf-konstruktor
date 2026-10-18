@@ -215,6 +215,8 @@ export type Module = {
   wallFiller?: Partial<Record<"left" | "right", WallFiller>>;
   /** Распашные фасады в алюминиевой рамке (alu.ts): профиль, цвет, вставка. Без поля — ЛДСП 16. Фасады ящиков остаются ЛДСП. */
   alu?: AluFacade;
+  /** Фасады ящиков тоже в алюминиевой рамке (тот же профиль, цвет и наполнение, что у распашных). Без поля — ящики ЛДСП. */
+  aluDrawers?: true;
   /** Крыша из стекла вместо ЛДСП: id вставки из alu.ts (стекло, сатин, лакобель, зеркало), закалённое 4 мм с полировкой. */
   topGlass?: string;
   /** Основание на ножках вместо цоколя (заказы цеха: ножки M6×18 или регулируемые 1033 h=100): боковины стоят на ножках. */
@@ -542,7 +544,7 @@ export function deskModule(base?:Module):Module{
   const m=base?structuredClone(base):initialModule();
   return {...m,name:'Стол',height:750,depth:Math.max(500,Math.min(m.depth,700)),doors:false,plinthHeight:0,bottomType:'none',backType:'none',topType:'panel',
     sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
-    feet:undefined,slope:undefined,skew:undefined,alu:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
+    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** В корпусе есть ручки (распашные фасады всегда с ручкой; ящики — если не push-to-open). */
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
@@ -1118,10 +1120,12 @@ export function parts(m: Module): Part[] {
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
         if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
       }
-      const dft=drawersBehindDoors(m,s)?t:m.facadeT??t;
-      add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад',[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id);
-      out.at(-1)!.decor=m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=[2,2,2,2];
-      if(drawerHasHandle(cfg)&&!m.noHandles&&!grip){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28],hl,10,18,'handle',s.id,'metal');}
+      // фасад ящика в алюминиевой рамке (aluDrawers): толщина рамки, задняя плоскость там же, где у ЛДСП — короб и крепёж не сдвигаются
+      const aluFront=!!(m.alu&&m.aluDrawers&&!drawersBehindDoors(m,s)&&s.drawerMount!=='inset'); // вкладной ящик — ЛДСП: рамка ушла бы в короб
+      const dft=drawersBehindDoors(m,s)?t:aluFront?ALU_EXTRAS.frameDepth:m.facadeT??t;
+      add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад'+(aluFront?' в алюминиевой рамке':''),[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id,aluFront?'alu':'board');
+      out.at(-1)!.decor=aluFront?aluLabel(m.alu!):m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=aluFront?[0,0,0,0]:[2,2,2,2];
+      if(drawerHasHandle(cfg)&&!m.noHandles&&!grip){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28+(aluFront?dft-t:0)],hl,10,18,'handle',s.id,'metal');}
       for (const side of [0, 1])
         add(
           s.id + ":drawer:" + j + ":slide:" + side,
@@ -2253,6 +2257,7 @@ export function parseModule(input: unknown): Module {
     ...(x.cornerFiller===undefined?{}:{cornerFiller:x.cornerFiller as Module["cornerFiller"]}),
     ...(x.cornerKind===undefined?{}:{cornerKind:x.cornerKind as Module["cornerKind"]}),
     ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
+    ...(x.alu!==undefined&&x.aluDrawers===true?{aluDrawers:true as const}:{}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
