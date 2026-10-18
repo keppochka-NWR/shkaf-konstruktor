@@ -11,6 +11,8 @@ import {kupeLines} from '../src/kupe';
 import {newProject,type Project} from '../src/project';
 import {initialModule} from '../src/model';
 import {createKitchenRow,createKupeWardrobe} from '../src/ModulePalette';
+import {layoutKitchenDrawers,setKitchenGola} from '../src/kitchenEditing';
+import {installSink} from '../src/installSink';
 
 // Решения Макса 16.10.2026 (studio/docs/РЕШЕНИЯ.md): позиции кухни без счёта, Lamarty вместо 1800, двери купе отдельной графой.
 const kitchen=():Project=>({...newProject(),room:{...newProject().room,width:3600},modules:createKitchenRow(3000,initialModule())});
@@ -44,8 +46,27 @@ test('ручная цена снимает пометку «после расч�
   const p=kitchen();p.calculation={markup:2.2,overrides:{'kitchen-leg':50}};
   const e=estimate(p);
   assert.ok(!e.pending.some(l=>l.id==='kitchen-leg'));assert.equal(e.lines.find(l=>l.id==='kitchen-leg')!.unitPrice,50);
-  assert.equal(pendingPrice('gola-L'),null,'Gola и прочее без цены — по-прежнему «уточнить»');
-  assert.equal(pendingPrice('worktop-cut:sink'),null,'вырез под мойку — не столешница');
+  assert.equal(pendingPrice('worktop-cut:hob'),null,'вырез под варочную — по-прежнему «уточнить»');
+  assert.equal(pendingPrice('gola-X'),null,'только профили Gola L и C');
+});
+
+test('T2 18.10: кухня 2400 + Axis PRO + Gola + мойка Premial — Gola, вырез и мойка «после финального расчёта», missing 0',()=>{
+  const p:Project={...newProject(),room:{...newProject().room,width:3000},modules:createKitchenRow(2400,initialModule())};
+  for(const a of p.modules){const m=a.module;if(m.kitchen?.role!=='base')continue;
+    if(m.kdrawers?.length)m.kdrawers=layoutKitchenDrawers(m,m.kdrawers.length,undefined,'axis-pro');
+    setKitchenGola(m,true);}
+  const sink=p.modules.find(a=>a.module.kitchen?.appliance==='sink')!;assert.ok(sink,'в ряду 2400 есть тумба под мойку');
+  const q=installSink(p,sink.id),e=estimate(q),ids=e.pending.map(l=>l.id);
+  assert.deepEqual(e.missing.map(l=>l.id),[],'нет строк «нет цены»');
+  for(const id of ['gola-L','gola-C','worktop-cut:sink','premial-sink:210245'])assert.ok(ids.includes(id),id);
+  assert.ok(e.lines.some(l=>l.id.startsWith('axis-pro:')&&l.pending),'Axis PRO — тоже после расчёта');
+  assert.ok((e.retail??0)>0);assert.equal(e.retail,e.byMarkupKnown,'итог = известные позиции');
+  const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
+  assert.match(src('gola-L'),/Поставщик не указан — уточнить/);assert.match(src('premial-sink:210245'),/^Premial/);assert.match(src('worktop-cut:sink'),/^Премиал/);
+  // клиенту — нейтральная подпись без поставщиков, число позиций в итоговой строке
+  const c=clientView(e);assert.equal(c.missing.length,0);assert.equal(c.pending.length,e.pending.length);
+  assert.ok(c.pending.every(l=>l.source===PENDING_CLIENT));
+  assert.ok(estimateCSV(q,e).includes(pendingTotalLabel(e.pending.length)));
 });
 
 test('наполнение купе ЛДСП: цены 1800 ₽/м² нет, цена — лист Lamarty по прайсу ÷ площадь листа × 2,2',()=>{
