@@ -105,6 +105,7 @@ import { decorPrice, withPriceStamp } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
 import { ALU_PROFILES, ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { aluFillOptions } from "./AluPicker";
 import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
 import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
@@ -1719,8 +1720,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {m.doors && m.alu && (<>
                   <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
                   <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={m.alu.color} onChange={e=>modify(n=>{n.alu={...n.alu!,color:e.target.value};})}>{aluProfile(m.alu.profile)!.colors.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-                  <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={m.alu.insert} onChange={e=>modify(n=>{n.alu={...n.alu!,insert:e.target.value};})}>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>{i.label}</option>)}</select></label>
-                  <p className="field-note">Считается по бланку цеха: профиль по периметру, вставка по площади, уплотнитель, уголки, отверстия под петли и ручку. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
+                  <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={m.alu.insert} onChange={e=>modify(n=>{n.alu={...n.alu!,insert:e.target.value};})}>{aluFillOptions()}</select></label>
+                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
                 </>)}
                 {m.doors && !m.alu && (
                   <button

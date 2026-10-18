@@ -18,7 +18,7 @@ import {cornerParts,cornerErrors,cornerBoxes,cornerDrawer,normalizeCorner,type C
 import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
 import { handleById, handleKind, HANDLES, HANDLE_MARGIN } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
-import { aluProfile, aluColor, aluInsert, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
+import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
 import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
 import { V_MILLINGS } from "./vernissageData";
 /** Поворот модели конфирмата Базиса по оси ввинчивания (X модели — ось винта, головка при x = 0); общий для parts() и kitchen.ts (короб вытяжки). */
@@ -1865,7 +1865,7 @@ export function validate(m: Module): string[] {
   if(m.drawerHandleId!==undefined&&!HANDLES.some(h=>h.id===m.drawerHandleId))errors.push('Выберите ручку ящиков из каталога.');
   if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
   if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
-  if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluInsert(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
+  if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluFill(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
   if(m.feet!==undefined&&(!Number.isFinite(m.feet.height)||m.feet.height<RULES.feetMin||m.feet.height>RULES.feetMax))errors.push(`Ножки: высота от ${RULES.feetMin} до ${RULES.feetMax} мм.`);
   if(m.bottomType!==undefined&&!['panel','none'].includes(m.bottomType))errors.push('Неверный тип дна.');

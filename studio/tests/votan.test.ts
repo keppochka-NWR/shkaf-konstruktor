@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {parts,parseModule,validate} from '../src/model';
 import {VOTAN_DEFAULT,parseVotan,votanProject} from '../src/votan';
-import {aluInsert} from '../src/alu';
+import {aluFill} from '../src/alu';
 test('order parameters survive roundtrip; malformed numeric input fails',()=>{
   assert.deepEqual(parseVotan(JSON.parse(JSON.stringify(VOTAN_DEFAULT))),VOTAN_DEFAULT);
   assert.throws(()=>parseVotan({...VOTAN_DEFAULT,pantsWidth:NaN}));
@@ -36,10 +36,11 @@ test('650 is between mounting faces; no drawer under trousers; upper is unpartit
   assert.equal(ps.filter(q=>q.id.includes(':drawer:')).length,0);
   for(const a of p.modules.filter(a=>a.id.endsWith('-top'))){assert.equal(parts(a.module).filter(q=>q.id.includes('divider')||q.role==='shelf').length,0);}
 });
-test('lights are horizontal in lower roofs; no support feet; unknown glass prices remain null',()=>{
+test('lights are horizontal in lower roofs; no support feet; glass prices from the ALU calculator',()=>{
   const p=votanProject(VOTAN_DEFAULT);
   const lights=p.modules.flatMap(a=>parts(a.module).filter(q=>q.role==='light').map(q=>({a,q})));
   assert.equal(lights.length,3);for(const {a,q} of lights){assert.ok(!a.id.endsWith('-top'));assert.equal(q.position[1],a.module.height-18);assert.ok(q.size[0]>q.size[2]);}
   assert.ok(p.modules.every(a=>!a.module.feet&&a.module.plinthHeight===0));
-  assert.equal(aluInsert('moru-bronze')!.perM2,null);assert.equal(aluInsert('satin-bronze')!.perM2,null);
+  // стёкла ТЗ Вотан — по калькулятору фасадов ALU: Мору бронза / графит, стекло сатин бронзовый
+  assert.equal(aluFill('moru-bronze')!.perM2,15625);assert.equal(aluFill('satin-bronze')!.perM2,7910);
 });

@@ -5,7 +5,7 @@
 import { parts, type Module } from "./model";
 import { kupeSystem, kupeColor, kupeDoorFill, kupeSections } from "./kupe";
 import { worktopLabel } from "./kitchen";
-import { aluProfile, aluColor, aluInsert } from "./alu";
+import { aluProfile, aluColor, aluFill } from "./alu";
 import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
 import { plural } from "./ru";
 import { rawKitchen } from "./rawModule";
@@ -35,8 +35,8 @@ export function vernissageClientLabel(v: VernissageFacade): string {
 }
 /** Фасады в алюминиевой рамке: профиль, цвет профиля, вставка. */
 export function aluClientLabel(m: Module): string {
-  const a = m.alu!, p = aluProfile(a.profile), c = aluColor(a.profile, a.color), i = aluInsert(a.insert);
-  return `алюминиевая рамка ${p?.label ?? a.profile}, цвет ${c?.label ?? a.color}, вставка ${i?.label ?? a.insert}`;
+  const a = m.alu!, p = aluProfile(a.profile), c = aluColor(a.profile, a.color), i = aluFill(a.insert);
+  return `алюминиевая рамка, профиль ${p?.label ?? a.profile}, цвет ${c?.label ?? a.color}, вставка ${i?.label ?? a.insert}`;
 }
 /** Материал распашных фасадов модуля — фактический (Вернисаж, алюминий, ЛДСП/МДФ по декору). */
 export function facadeMaterialLabel(m: Module): string {

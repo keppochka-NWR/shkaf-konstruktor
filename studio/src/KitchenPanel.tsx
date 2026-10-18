@@ -25,6 +25,9 @@ import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
 import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
 import { VernissagePicker } from "./VernissagePicker";
+import { AluPicker } from "./AluPicker";
+import { DEFAULT_ALU, ALU_EXTRAS } from "./alu";
+import { facadeKind, type FacadeKind } from "./facadeAppearance";
 import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
 import "./kitchen.css";
 
@@ -270,8 +273,9 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Check label="Распашные фасады" checked={m.doors} change={(v) => modify((n) => { n.doors = v; })} />
       {m.doors && <div className="kitchen-field"><span>Створки{m.sections.length > 1 ? ` · секция ${sIdx + 1}` : ""}</span>
         <div className="kitchen-chips" role="group" aria-label="Число створок">{([undefined, 1, 2] as const).map((v) => <button key={String(v)} type="button" aria-pressed={s.doorLeaves === v} onClick={() => modify((n) => { if (v) n.sections[sIdx].doorLeaves = v; else delete n.sections[sIdx].doorLeaves; })}>{v ?? "Авто"}</button>)}</div></div>}
-      <label className="hardware-field">Материал фасадов<select aria-label="Материал кухонных фасадов" value={m.vernissage ? "vernissage" : m.facadeMaterial ?? "ldsp"} onChange={(e) => modify((n) => { const v = e.target.value; if (v === "vernissage") { delete n.facadeMaterial; n.vernissage = { ...DEFAULT_VERNISSAGE }; n.facadeT = DEFAULT_VERNISSAGE.thickness; return; } delete n.vernissage; if (v === "external") n.facadeMaterial = "external"; else delete n.facadeMaterial; })}>
-        <option value="ldsp">{FACADE_KIND_LABEL.ldsp}</option><option value="external">{FACADE_KIND_LABEL.external}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
+      <label className="hardware-field">Материал фасадов<select aria-label="Материал кухонных фасадов" value={facadeKind(m)} onChange={(e) => modify((n) => { const v = e.target.value as FacadeKind, wasVernissage = !!n.vernissage; delete n.vernissage; delete n.alu; delete n.facadeMaterial; if (v === "vernissage") { n.vernissage = { ...DEFAULT_VERNISSAGE }; n.facadeT = DEFAULT_VERNISSAGE.thickness; return; } if (v === "alu") { n.alu = { ...DEFAULT_ALU }; if (wasVernissage) delete n.facadeT; } if (v === "external") n.facadeMaterial = "external"; })}>
+        <option value="ldsp">{FACADE_KIND_LABEL.ldsp}</option><option value="external">{FACADE_KIND_LABEL.external}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option>{(!m.bazis || m.alu) && <option value="alu">{FACADE_KIND_LABEL.alu}</option>}</select></label>
+      {m.alu && <><AluPicker value={m.alu} onChange={(v) => modify((n) => { n.alu = v; })} /><p className="field-note">Рамка {ALU_EXTRAS.frameDepth} мм; цена — по калькулятору фасадов ALU (профиль, наполнение, уплотнитель), петли — строками фурнитуры. Фасады ящиков остаются ЛДСП.</p></>}
       {m.vernissage && <VernissagePicker value={m.vernissage} sample={door ? [Math.round(door.size[0]), Math.round(door.size[1])] : undefined} sizes={vernissageSizes(m)} onChange={(v) => modify((n) => { n.vernissage = v; n.facadeT = v.thickness; })} />}
       {/* у фасадов Вернисажа толщина задаётся выбором МДФ (цена и 3D от одного значения) — отдельного поля нет */}
       {m.doors&&role==='tall'&&<><Check label="Разделить фасад по высоте" checked={s.doorSplit!==undefined} change={v=>modify(n=>{if(v)n.sections[sIdx].doorSplit=Math.round((m.height-(m.feet?.height??0))/2);else delete n.sections[sIdx].doorSplit;})}/>{s.doorSplit!==undefined&&<Num label="Высота нижней части фасада" value={s.doorSplit} min={200} max={m.height-(m.feet?.height??0)-200} step={.5} change={v=>modify(n=>{n.sections[sIdx].doorSplit=v;})}/>}</>}
