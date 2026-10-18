@@ -15,7 +15,7 @@ import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProper
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -104,7 +104,8 @@ import { catalog } from "./catalog";
 import { decorPrice, withPriceStamp } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
-import { ALU_PROFILES, ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { AluPicker, AluDrawersCheck } from "./AluPicker";
 import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
 import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
@@ -1712,15 +1713,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 </div>
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {m.doors && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">{FACADE_KIND_LABEL.ldsp} 16 мм</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;delete n.aluDrawers;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;delete n.aluDrawers;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">{FACADE_KIND_LABEL.ldsp} 16 мм</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
                 )}
                 {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 
                 {m.doors && m.alu && (<>
-                  <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
-                  <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={m.alu.color} onChange={e=>modify(n=>{n.alu={...n.alu!,color:e.target.value};})}>{aluProfile(m.alu.profile)!.colors.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-                  <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={m.alu.insert} onChange={e=>modify(n=>{n.alu={...n.alu!,insert:e.target.value};})}>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>{i.label}</option>)}</select></label>
-                  <p className="field-note">Считается по бланку цеха: профиль по периметру, вставка по площади, уплотнитель, уголки, отверстия под петли и ручку. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
+                  <AluPicker value={m.alu} onChange={v=>modify(n=>{n.alu=v;})}/>{aluDrawersAvailable(m)&&<AluDrawersCheck checked={!!m.aluDrawers} onChange={v=>modify(n=>{if(v)n.aluDrawers=true;else delete n.aluDrawers;})}/>}
+                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
                 </>)}
                 {m.doors && !m.alu && (
                   <button

@@ -36,7 +36,7 @@ export const BAKE_RULES: Rule[] = [
   { file: 'hardware.ts', coef: 'markup', props: ['price'] },
   { file: 'handles.ts', coef: 'markup', calls: { workshop: 3 }, shelfCalls: { lemana: 3 } },
   { file: 'mesh.ts', coef: 'markup', shelfCalls: { item: 6 } },
-  { file: 'alu.ts', coef: 'markup', props: ['perM', 'perM2', 'sealPerM', 'cornersPerFacade', 'hingeHole', 'hingeHoleNarrow', 'handleHole', 'mirrorFilmPerM2'] },
+  { file: 'alu.ts', coef: 'markup', props: ['perM2'] }, // стекло крыши (закупка АТБ); рамка — цены клиента из aluData.ts, не запекаются
   { file: 'model.ts', coef: 'markup', props: ['glassTopTemper', 'glassTopPolishPerM'] },
   { file: 'vernissageData.ts', coef: 'vernissage', subtreeProps: ['prices'], props: ['patinaPerM2', 'hingeBoringPerPc', 'enamelMatteLacquerPerM2'] },
   { file: 'kupeData.ts', coef: 'kupeProfile', props: ['ruchka', 'verh', 'niz', 'razd', 'top', 'bot'] },

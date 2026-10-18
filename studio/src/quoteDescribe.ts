@@ -2,10 +2,10 @@
 // шкаф — корпус и наполнение; двери купе — профиль и наполнение по полотнам; столешница — материал и толщина; кухонный модуль —
 // тип, ящики фактическим числом, фасады фактическим материалом (Вернисаж — серия, фрезеровка, покрытие; алюминий — профиль, вставка).
 // Нулевые позиции («пантографов: 0») не печатаются. Внутренних слов (раскрой, Базис, прайс, закупка) здесь нет.
-import { parts, type Module } from "./model";
+import { parts, isDrawerFront, type Module, type Part } from "./model";
 import { kupeSystem, kupeColor, kupeDoorFill, kupeSections } from "./kupe";
 import { worktopLabel } from "./kitchen";
-import { aluProfile, aluColor, aluInsert } from "./alu";
+import { aluProfile, aluColor, aluFill } from "./alu";
 import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
 import { plural } from "./ru";
 import { rawKitchen } from "./rawModule";
@@ -35,8 +35,8 @@ export function vernissageClientLabel(v: VernissageFacade): string {
 }
 /** Фасады в алюминиевой рамке: профиль, цвет профиля, вставка. */
 export function aluClientLabel(m: Module): string {
-  const a = m.alu!, p = aluProfile(a.profile), c = aluColor(a.profile, a.color), i = aluInsert(a.insert);
-  return `алюминиевая рамка ${p?.label ?? a.profile}, цвет ${c?.label ?? a.color}, вставка ${i?.label ?? a.insert}`;
+  const a = m.alu!, p = aluProfile(a.profile), c = aluColor(a.profile, a.color), i = aluFill(a.insert);
+  return `алюминиевая рамка, профиль ${p?.label ?? a.profile}, цвет ${c?.label ?? a.color}, вставка ${i?.label ?? a.insert}`;
 }
 /** Материал распашных фасадов модуля — фактический (Вернисаж, алюминий, ЛДСП/МДФ по декору). */
 export function facadeMaterialLabel(m: Module): string {
@@ -44,11 +44,14 @@ export function facadeMaterialLabel(m: Module): string {
   if (m.alu) return aluClientLabel(m);
   return m.facadeMaterial === "external" ? m.facadeDecor : "ЛДСП " + m.facadeDecor;
 }
-/** Материал фасадов ящиков: Вернисаж — тот же, что у дверей; алюминий — только распашные, ящики остаются ЛДСП. */
-function drawerFacadeLabel(m: Module): string {
+/** Материал фасадов ящиков: Вернисаж — тот же, что у дверей; алюминий — по фактическим деталям (фасад ящика material 'alu'):
+ *  вкладные ящики и ящики за дверью рамку не получают и остаются ЛДСП, даже при aluDrawers. */
+function drawerFacadeLabel(m: Module, all: Part[]): string {
   if (m.vernissage) return vernissageClientLabel(m.vernissage);
-  const d = m.drawerFacadeDecor ?? m.facadeDecor;
-  return m.facadeMaterial === "external" ? d : "ЛДСП " + d;
+  const d = m.drawerFacadeDecor ?? m.facadeDecor, plain = m.facadeMaterial === "external" ? d : "ЛДСП " + d;
+  const fronts = all.filter(isDrawerFront), alu = fronts.filter((p) => p.material === "alu").length;
+  if (!m.alu || !alu) return plain;
+  return alu === fronts.length ? aluClientLabel(m) : `${aluClientLabel(m)}; вкладные и за дверью — ${plain}`;
 }
 /** Фактическое число ящиков: секции студии + ящики кухни (kdrawers) + ящики модуля Базиса (raw.counts). */
 export function drawerCount(m: Module): number {
@@ -86,7 +89,7 @@ export function describeModule(m: Module): ModuleDescription {
   const pantographs = m.sections.filter((s) => s.pantograph).length, pullouts = m.sections.reduce((n, s) => n + (s.pullouts || 0), 0);
   const materials = [`Корпус: ЛДСП ${m.decor}`];
   if (doors) materials.push(`Фасады: ${facadeMaterialLabel(m)}`);
-  if (drawers && !(m.vernissage && doors)) materials.push(`Фасады ящиков: ${drawerFacadeLabel(m)}`);
+  if (drawers && !(m.vernissage && doors)) materials.push(`Фасады ящиков: ${drawerFacadeLabel(m, all)}`);
   const filling: string[] = [];
   if (shelves) filling.push(`${shelves} ${plural(shelves, ["полка", "полки", "полок"])}`);
   if (drawers) filling.push(`${drawers} ${plural(drawers, ["ящик", "ящика", "ящиков"])}`);

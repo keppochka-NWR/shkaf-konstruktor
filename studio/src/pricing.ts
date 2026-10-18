@@ -8,7 +8,7 @@ import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
 import {meshById} from './mesh';
-import {aluProfile,aluColor,aluInsert,ALU_EXTRAS} from './alu';
+import {aluProfile,aluColor,aluInsert,aluFill,ALU_SOURCE,ALU_GASKET_PER_M} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
 import {guideKits,guideKitLine,versaliteKit,modernKit,firmaxKit,shareKits,axisSpecs} from './guideKits';
@@ -446,17 +446,14 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
-      if(d.role==='door'&&d.material==='alu'&&a.module.alu){
-        // Бланк цеха «Расчет алюм.фасад рам»: профиль по периметру, вставка по площади фасада, уплотнитель, уголки, отверстия.
-        const al=a.module.alu,prof=aluProfile(al.profile),col=aluColor(al.profile,al.color),ins=aluInsert(al.insert);
+      if((d.role==='door'||d.id.endsWith(':facade'))&&d.material==='alu'&&a.module.alu){ // распашные и фасады ящиков в рамке (aluDrawers)
+        // Калькулятор фасадов ALU (источник истины по цене, 18.10.2026): профиль по периметру, наполнение по площади фасада,
+        // уплотнитель по периметру — цены клиента (розничные позиции, после коэффициента, как Вернисаж — без раскроя ЛДСП).
+        const al=a.module.alu,prof=aluProfile(al.profile),col=aluColor(al.profile,al.color),ins=aluFill(al.insert);
         const perimeter=2*(d.length+d.width)/1000,area=d.length*d.width/1e6;
-        add('alu-profile:'+al.profile+':'+al.color,'Профиль '+(prof?.label??al.profile)+' · '+(col?.label??al.color),perimeter,'м',col?.perM??null,col?.source??'Цена профиля не найдена');
-        add('alu-insert:'+al.insert,'Вставка · '+(ins?.label??al.insert),area,'м²',ins?.perM2??null,ins?.source??'Цена вставки не найдена');
-        if(ins?.mirror)add('alu-film','Армирующая плёнка на зеркало',area,'м²',ALU_EXTRAS.mirrorFilmPerM2,'АТБ, прайс 01.01.2026');
-        add('alu-seal','Уплотнитель вставки',perimeter,'м',ALU_EXTRAS.sealPerM,ALU_EXTRAS.source);
-        add('alu-corners','Соединительная фурнитура рамки',1,'фасад',ALU_EXTRAS.cornersPerFacade,ALU_EXTRAS.source);
-        if(d.hinge!=='top')add('alu-hinge-hole'+(prof?.narrow?'-narrow':''),'Отверстие под петлю'+(prof?.narrow?' в узком профиле':''),hingeCount(d.length,d.width),'шт',prof?.narrow?ALU_EXTRAS.hingeHoleNarrow:ALU_EXTRAS.hingeHole,ALU_EXTRAS.source);
-        add('alu-handle-hole','Отверстие под ручку (стекло 8 мм под втулку)',1,'шт',ALU_EXTRAS.handleHole,ALU_EXTRAS.source);
+        add('alu-profile:'+al.profile+':'+al.color,'Профиль рамки '+(prof?.label??al.profile)+' · '+(col?.label??al.color),perimeter,'м',prof?.perM??null,prof?ALU_SOURCE+': профиль, цена клиента за пог. м периметра':'Профиль не найден в калькуляторе фасадов ALU',true);
+        add('alu-insert:'+al.insert,'Наполнение рамки · '+(ins?.label??al.insert),area,'м²',ins?.perM2??null,ins?ALU_SOURCE+': '+ins.group+', цена клиента за м² площади фасада':'Наполнение не найдено в калькуляторе фасадов ALU',true);
+        add('alu-seal','Уплотнитель рамки',perimeter,'м',ALU_GASKET_PER_M,ALU_SOURCE+': уплотнитель по периметру фасада',true);
       }
       // ручка Базиса на фасаде кухни (kitchen.handle.name, n4-wall) — строкой Базиса по ручкам сцены; в bazisItems её нет (markBazis)
       const kh=a.module.kitchen?.handle;
