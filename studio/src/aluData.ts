@@ -1,6 +1,8 @@
 // СГЕНЕРИРОВАНО scripts/import-alu.cjs из калькулятора фасадов ALU (calc-platform: data/fasad-alu-data.js, data/fillings.js). Не править вручную.
 // Фасады ALU 2026.03.25, наполнения 2025.09.16. Все цены — цены клиента, как в калькуляторе (calcOneFasad).
 export const ALU_CALC_VERSION = {"fasad":"2026.03.25","fillings":"2025.09.16"};
+/** Состояние источника при импорте: коммит калькулятора и незакоммиченные файлы (пусто — данные воспроизводятся из коммита). */
+export const ALU_CALC_SOURCE: { commit: string | null; branch: string | null; dirty: string[] } = {"commit":"62dc254","branch":"calc-ready-1018","dirty":["calc-platform/data/fasad-alu-data.js"]};
 /** Профиль рамки: perM — цена клиента за пог. м периметра (в калькуляторе: прайс × наценка профиля). */
 export const ALU_CALC_PROFILES: { id: string; name: string; perM: number }[] = [{"id":"F1-09","name":"F1-09 (Стандарт)","perM":1794},{"id":"F1-17","name":"F1-17 (Слим)","perM":1569},{"id":"F1-19","name":"F1-19 (Премиум)","perM":3342}];
 /** Наполнения групп калькулятора (Стекло, Зеркала, Лакобель, Узорчатые (склад), Узорчатые (заказные)): p — цена клиента за м² площади фасада. */

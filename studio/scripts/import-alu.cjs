@@ -1,13 +1,29 @@
 // Импорт калькулятора фасадов ALU (calc-platform: data/fasad-alu-data.js + data/fillings.js) в студию:
-//   node scripts/import-alu.cjs [путь к calc-platform]
+//   node scripts/import-alu.cjs [путь к calc-platform] [--allow-dirty]
+// Источник должен быть закоммичен: если data/fillings.js или data/fasad-alu-data.js изменены и не закоммичены (git status),
+// импорт отказывается — иначе «один источник» не воспроизводится из истории калькулятора. --allow-dirty — осознанный импорт
+// незакоммиченной правки: коммит и список грязных файлов пишутся в aluData.ts (ALU_CALC_SOURCE), чтобы это было видно.
 // Один источник цен рамочных алюминиевых фасадов: профили (₽/м), наполнения групп FASAD_FILL_GROUPS (₽/м²), уплотнитель (₽/м).
 // В студию попадают только ЦЕНЫ КЛИЕНТА (как считает калькулятор): профиль = прайс × FASAD_PROF_MARKUP, наполнение — розница
 // FILLINGS, уплотнитель — FASAD_GASKET. Закупочные цены профилей в файл не пишутся. Результат — src/aluData.ts (коммитится).
-const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
-const root = process.argv[2] || "C:/Users/My PC/Desktop/Claude Project/calc-ready/calc-platform";
+const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm"), { execFileSync } = require("node:child_process");
+const args = process.argv.slice(2), allowDirty = args.includes("--allow-dirty");
+const root = args.find((a) => !a.startsWith("--")) || "C:/Users/My PC/Desktop/Claude Project/calc-ready/calc-platform";
+const SRC = ["data/fillings.js", "data/fasad-alu-data.js"];
+const gitRaw = (...a) => execFileSync("git", ["-C", root, ...a], { encoding: "utf8" }), git = (...a) => gitRaw(...a).trim();
+let source;
+try {
+  const dirty = gitRaw("status", "--porcelain", "--", ...SRC).split(/\r?\n/).filter(Boolean).map((l) => l.slice(3));
+  source = { commit: git("rev-parse", "--short", "HEAD"), branch: git("rev-parse", "--abbrev-ref", "HEAD"), dirty };
+} catch { source = { commit: null, branch: null, dirty: ["(источник не в git)"] }; }
+if (source.dirty.length && !allowDirty) {
+  console.error("Источник калькулятора не закоммичен:", source.dirty.join(", "), "(" + root + ", коммит " + source.commit + ").");
+  console.error("Закоммитьте правку в калькуляторе или запустите с --allow-dirty (состояние попадёт в aluData.ts).");
+  process.exit(1);
+}
 const ctx = {};
 vm.createContext(ctx);
-for (const f of ["data/fillings.js", "data/fasad-alu-data.js"]) {
+for (const f of SRC) {
   const code = fs.readFileSync(path.join(root, f), "utf8").replace(/^\uFEFF/, "").replace(/^const (\w+)/gm, "globalThis.$1");
   vm.runInContext(code, ctx, { filename: f });
 }
@@ -18,6 +34,8 @@ const fills = ctx.FILLINGS.filter((f) => ctx.FASAD_FILL_GROUPS.includes(f.g)).ma
 const out = `// СГЕНЕРИРОВАНО scripts/import-alu.cjs из калькулятора фасадов ALU (calc-platform: data/fasad-alu-data.js, data/fillings.js). Не править вручную.
 // Фасады ALU ${ctx.FASAD_ALU_VERSION}, наполнения ${ctx.FILLINGS_VERSION}. Все цены — цены клиента, как в калькуляторе (calcOneFasad).
 export const ALU_CALC_VERSION = ${JSON.stringify({ fasad: ctx.FASAD_ALU_VERSION, fillings: ctx.FILLINGS_VERSION })};
+/** Состояние источника при импорте: коммит калькулятора и незакоммиченные файлы (пусто — данные воспроизводятся из коммита). */
+export const ALU_CALC_SOURCE: { commit: string | null; branch: string | null; dirty: string[] } = ${JSON.stringify(source)};
 /** Профиль рамки: perM — цена клиента за пог. м периметра (в калькуляторе: прайс × наценка профиля). */
 export const ALU_CALC_PROFILES: { id: string; name: string; perM: number }[] = ${JSON.stringify(profiles)};
 /** Наполнения групп калькулятора (${ctx.FASAD_FILL_GROUPS.join(", ")}): p — цена клиента за м² площади фасада. */
@@ -28,4 +46,4 @@ export const ALU_CALC_GASKET_PER_M = ${ctx.FASAD_GASKET};
 export const ALU_CALC_HINGE_SPLIT_H = 1200;
 `;
 fs.writeFileSync(path.join(__dirname, "../src/aluData.ts"), out, "utf8");
-console.log("aluData.ts:", profiles.length, "профилей,", fills.length, "наполнений");
+console.log("aluData.ts:", profiles.length, "профилей,", fills.length, "наполнений; источник", source.commit, source.dirty.length ? "НЕ ЗАКОММИЧЕН: " + source.dirty.join(", ") : "чистый");

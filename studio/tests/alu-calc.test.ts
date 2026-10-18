@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {aluFacadePrice,aluFill,ALU_FILLS,ALU_PROFILES,ALU_GASKET_PER_M,DEFAULT_ALU} from '../src/alu';
-import {ALU_CALC_FILLS,ALU_CALC_PROFILES} from '../src/aluData';
+import {ALU_CALC_FILLS,ALU_CALC_PROFILES,ALU_CALC_SOURCE} from '../src/aluData';
+import {hingeCount} from '../src/hardware';
 import {ALU_CASES} from '../scripts/alu-compare';
 import {parts,validate,isDrawerFront,aluDrawerFronts,aluDrawersAvailable,drawersBehindDoors,type Module} from '../src/model';
 import {newProject,projectErrors,applyAutoFillers} from '../src/project';
@@ -22,12 +23,18 @@ test('5 эталонных случаев: цена фасада студии = 
     // в калькуляторе цена с петлями GTV стандарт 2/3 шт × 440 ₽; итог калькулятора — до рубля
     assert.equal(Math.round(c.calcNoHinge+c.calcHinges*440),c.calc);
   }
+  // петли — НЕ как в калькуляторе (правило цеха hingeCount и строка фурнитуры студии): полная цена с петлями расходится намеренно
+  assert.deepEqual(ALU_CASES.map(c=>hingeCount(c.h,c.w)),[2,4,6,3,3]);
+  assert.deepEqual(ALU_CASES.map(c=>c.calcHinges),[2,3,3,2,2]);
 });
 
 test('данные рамки — из калькулятора: все профили и наполнения (включая узорчатые), цвет на цену не влияет',()=>{
   assert.deepEqual(ALU_PROFILES.map(p=>p.id),ALU_CALC_PROFILES.map(p=>p.id));
   assert.equal(ALU_FILLS.length,ALU_CALC_FILLS.length);
   assert.ok(ALU_FILLS.some(f=>f.group==='Узорчатые (склад)')&&ALU_FILLS.some(f=>f.group==='Узорчатые (заказные)'),'узорчатые стёкла калькулятора');
+  // узорчатые группы — незакоммиченная правка FASAD_FILL_GROUPS калькулятора: импорт обязан это записать (ждёт решения Макса)
+  assert.ok(ALU_CALC_SOURCE.commit,'коммит калькулятора записан');
+  assert.ok(ALU_CALC_SOURCE.dirty.includes('calc-platform/data/fasad-alu-data.js'),'источник помечен как незакоммиченный — после коммита правки в калькуляторе переимпортировать и снять эту проверку');
   assert.equal(new Set(ALU_FILLS.map(f=>f.id)).size,ALU_FILLS.length,'id наполнений уникальны');
   for(const id of ['mirror-silver','glass-clear','satin','moru-bronze','satin-bronze'])assert.ok(aluFill(id),'прежний id '+id+' читается');
   const a=aluFacadePrice({profile:'F1-17',color:'silver',insert:'satin'},400,700),b=aluFacadePrice({profile:'F1-17',color:'black',insert:'satin'},400,700);
