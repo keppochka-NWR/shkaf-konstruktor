@@ -22,10 +22,11 @@ const leaves=(i:RadialItem):RadialItem[]=>i.children?i.children.flatMap(leaves):
 
 test('«Добавить» корпуса: две группы, у каждого пункта подсказка, всё — то, что студия уже строит',()=>{
   const m=wardrobe(),s=spy(m),item=addMenuItem(m,m.sections[0].id,s.ops);
-  assert.deepEqual(item.children!.map(c=>c.label),['Наполнение','Улучшения']);
+  assert.deepEqual(item.children!.map(c=>c.label),['В секцию','Улучшения']);
   for(const c of item.children!)assert.ok(c.children!.length<=8,'в кольце не больше восьми пунктов: '+c.label);
-  for(const l of leaves(item))assert.ok(l.hint&&l.hint.length>8,'подсказка у «'+l.label+'»');
-  assert.deepEqual(find(item.children,'fill-items').children!.map(c=>c.id),['add-shelf','add-shelf-glass','add-drawer','add-rod','add-pantograph','mesh','pullouts','add-split']);
+  for(const l of [...leaves(item),...item.children!])assert.ok(l.hint&&l.hint.length>8&&l.hint.length<=60,'короткая подсказка (влезает в центр кольца) у «'+l.label+'»: '+l.hint);
+  assert.deepEqual(find(item.children,'fill-items').children!.map(c=>c.id),['add-shelf','add-split','mesh','add-drawer','hangers','add-shelf-glass']);
+  assert.deepEqual(find(item.children,'hangers').children!.map(c=>c.id),['add-rod','add-pantograph','pullouts']);
   assert.deepEqual(find(item.children,'fill-upgrades').children!.map(c=>c.id),['add-light','add-push','add-hidden-fastening']);
 });
 
@@ -56,7 +57,7 @@ test('выдвижной тремпель и снятие пантографа �
   find(addMenuItem(s.mod,sid,s.ops).children,'pullouts-2').run!();assert.equal(s.mod.sections[1].pullouts,2);assert.equal(s.mod.sections[0].pullouts,undefined);
   find(addMenuItem(s.mod,sid,s.ops).children,'pullouts-0').run!();assert.equal('pullouts' in s.mod.sections[1],false);
   const pm=wardrobe();pm.sections[0].pantograph=true;const ps=spy(pm),it=find(addMenuItem(pm,pm.sections[0].id,ps.ops).children,'add-pantograph');
-  assert.equal(it.label,'Убрать пантограф');it.run!();assert.equal(ps.mod.sections[0].pantograph,false);assert.equal(ps.mod.sections[0].rod,false);
+  assert.ok(it.active);assert.match(it.hint!,/снять/);it.run!();assert.equal(ps.mod.sections[0].pantograph,false);assert.equal(ps.mod.sections[0].rod,false);
 });
 
 test('стеклянная полка: вставка как у панели + отметка стекла; новая полка ниже не переносит стекло',()=>{
