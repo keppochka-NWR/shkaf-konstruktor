@@ -12,6 +12,7 @@ import {kitchenProject} from '../src/kitchenProject';
 import {applyFacadeStyle} from '../src/applyFacadeStyle';
 import {facadeMaterialLabel,describeModule} from '../src/quoteDescribe';
 import {setKitchenDrawerCount} from '../src/kitchenEditing';
+import {changeFacadeKind} from '../src/facadeAppearance';
 
 // Эталон — калькулятор фасадов ALU (calc-platform js/fasad-alu.js calcOneFasad, ветка calc-ready-1018): посчитан его же кодом
 // (calcOneFasad, петли GTV стандарт, открывание влево). Цена фасада без петель = профиль + наполнение + уплотнитель.
@@ -130,4 +131,12 @@ test('aluDrawers без накладных наружных ящиков: вкл
   assert.equal(aluDrawersAvailable(m),true,'накладные наружные — галочка есть');
   m.aluDrawers=true;
   assert.match(drawerLine(m),/^Фасады ящиков: алюминиевая рамка/);
+});
+
+test('changeFacadeKind: кухня (keepThickness) сохраняет свою толщину, толщина Вернисажа сбрасывается; шкаф — как раньше',()=>{
+  const m=newProject().modules[0].module;m.facadeT=18;
+  const a=changeFacadeKind(m,'alu',{keepThickness:true});assert.equal(a.facadeT,18);assert.ok(a.alu);
+  const v=changeFacadeKind(a,'vernissage',{keepThickness:true});assert.ok(v.vernissage&&!v.alu&&!v.aluDrawers);
+  const back=changeFacadeKind(v,'ldsp',{keepThickness:true});assert.equal(back.facadeT,undefined,'толщина МДФ Вернисажа не остаётся у ЛДСП');
+  assert.equal(changeFacadeKind(m,'alu').facadeT,undefined,'без keepThickness — сброс, как у редактора фасадов');
 });
