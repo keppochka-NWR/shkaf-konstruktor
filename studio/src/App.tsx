@@ -31,7 +31,7 @@ import {KitchenPalette} from './KitchenPalette';
 import {KitchenPanel} from './KitchenPanel';
 import {isKitchenProject} from './kitchenProject';
 import {FillingComposer,addFillingBatch,addFittedDrawers} from './FillingComposer';
-import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,type Stage} from './stages';
+import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,restoredStage,storedStage,type Stage} from './stages';
 import {ChevronRight,TriangleAlert} from 'lucide-react';
 import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from './clientLabels';
 import {buildCheck} from './buildCheck';
@@ -333,7 +333,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const beforePresentation=useRef<{view:View;roomPlan:boolean;openDoors:boolean;showRoom:boolean}|null>(null);
   const [outputTab,setOutputTab] = useState<OutputTab>("sheets");
   // Пошаговый режим: этап определяет, какие панели видны и куда ведёт «Дальше». Сохраняется в браузере.
-  const [stage,setStageState]=useState<Stage>('room');
+  const [stage,setStageState]=useState<Stage>(()=>restoredStage(startup.model.modules.length>0,storedStage()));
   const [advanced,setAdvanced]=useState(()=>{try{return localStorage.getItem(STAGE_KEY+'-advanced')==='1';}catch{return false;}});
   useEffect(()=>{try{localStorage.setItem(STAGE_KEY,stage);localStorage.setItem(STAGE_KEY+'-advanced',advanced?'1':'0');}catch{/* без хранилища этап не запоминается */}},[stage,advanced]);
   const [renderImage,setRenderImage]=useState("");

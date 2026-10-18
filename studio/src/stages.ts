@@ -17,3 +17,12 @@ export const stageHint=(s:Stage,rawSelected?:boolean)=>(rawSelected&&normalizeSt
 export const nextStage=(s:Stage)=>STAGES[Math.min(STAGES.length-1,stageIndex(s)+1)].id;
 export const prevStage=(s:Stage)=>STAGES[Math.max(0,stageIndex(s)-1)].id;
 export const STAGE_KEY = "studio-stage";
+/** Этап при открытии редактора (T1, 18.10.2026): пустой проект и первый вход — «Помещение» (решение Макса 14.10);
+ *  проект с мебелью — сохранённый этап (после F5 и после первого шкафа из пустой комнаты). */
+export function restoredStage(hasFurniture:boolean,stored?:string|null):Stage{
+ if(!hasFurniture)return 'room';
+ const s=stored as Stage|null|undefined;
+ return s&&STAGES.some(x=>x.id===normalizeStage(s))?normalizeStage(s):'room';
+}
+export function storedStage():string|null{try{return localStorage.getItem(STAGE_KEY);}catch{return null;}}
+export function rememberStage(s:Stage){try{localStorage.setItem(STAGE_KEY,normalizeStage(s));}catch{/* без хранилища этап не запоминается */}}
