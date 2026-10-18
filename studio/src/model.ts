@@ -546,6 +546,13 @@ export function deskModule(base?:Module):Module{
     sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
     feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
+/** Деталь — фасад ящика (ящики студии, ящики и глухие фасады кухни). */
+export const isDrawerFront=(p:Part)=>p.role==='drawer'&&p.id.endsWith(':facade');
+/** Фасады ящиков, которые фактически в алюминиевой рамке (вкладные и за дверью остаются ЛДСП — см. parts()). */
+export function aluDrawerFronts(m:Module):Part[]{return m.alu&&m.aluDrawers?parts(m).filter(p=>isDrawerFront(p)&&p.material==='alu'):[];}
+/** Галочка «Фасады ящиков — тоже в рамке» имеет смысл: у модуля с рамкой есть хоть один фасад ящика, который рамка заменит.
+ *  Одно условие для всех панелей (шкаф, редактор фасадов, кухня) — по тем же деталям, что строит parts(). */
+export function aluDrawersAvailable(m:Module):boolean{return !!m.alu&&aluDrawerFronts({...m,aluDrawers:true}).length>0;}
 /** В корпусе есть ручки (распашные фасады всегда с ручкой; ящики — если не push-to-open). */
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */

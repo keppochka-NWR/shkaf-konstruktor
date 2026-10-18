@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {aluFacadePrice,aluFill,ALU_FILLS,ALU_PROFILES,ALU_GASKET_PER_M,DEFAULT_ALU} from '../src/alu';
 import {ALU_CALC_FILLS,ALU_CALC_PROFILES} from '../src/aluData';
 import {ALU_CASES} from '../scripts/alu-compare';
-import {parts,validate} from '../src/model';
+import {parts,validate,isDrawerFront,aluDrawerFronts,aluDrawersAvailable,drawersBehindDoors,type Module} from '../src/model';
 import {newProject,projectErrors,applyAutoFillers} from '../src/project';
 import {estimate} from '../src/pricing';
 import {partCollisions} from '../src/collisions';
@@ -102,4 +102,25 @@ test('фасады ящиков в рамке (aluDrawers): шкаф и кухн
   k=applyFacadeStyle(k,base.id);
   assert.ok(k.modules.filter(a=>a.module.alu).every(a=>a.module.aluDrawers),'применить ко всем — вместе с ящиками');
   assert.deepEqual(projectErrors(applyAutoFillers(k)),[]);
+});
+test('aluDrawers без накладных наружных ящиков: вкладные и за дверью остаются ЛДСП — в деталях, в КП и без галочки',()=>{
+  const drawerLine=(m:Module)=>describeModule(m).materials.find(x=>x.startsWith('Фасады ящиков:'))!;
+  const fronts=(m:Module)=>parts(m).filter(isDrawerFront);
+  for(const setup of ['behind','inset'] as const){
+    const p=newProject(),m=p.modules[0].module;
+    m.sections[0].drawers=2;delete m.sections[0].drawerConfigs;
+    if(setup==='behind'){delete m.sections[0].externalDrawers;assert.ok(drawersBehindDoors(m,m.sections[0]));}
+    else{m.sections[0].externalDrawers=true;m.sections[0].drawerMount='inset';}
+    m.alu={...DEFAULT_ALU};m.aluDrawers=true; // как после «Применить ко всем» с другого модуля
+    assert.ok(fronts(m).length&&fronts(m).every(d=>d.material==='board'),setup+': фасады ящиков — ЛДСП');
+    assert.deepEqual(aluDrawerFronts(m),[]);
+    assert.equal(aluDrawersAvailable(m),false,setup+': галочку не показываем');
+    assert.match(drawerLine(m),/^Фасады ящиков: ЛДСП /,setup+': КП не пишет рамку');
+    assert.ok(!/алюминиевая рамка/.test(drawerLine(m)));
+  }
+  const p=newProject(),m=p.modules[0].module;
+  m.sections[0].drawers=2;m.sections[0].externalDrawers=true;delete m.sections[0].drawerConfigs;m.alu={...DEFAULT_ALU};
+  assert.equal(aluDrawersAvailable(m),true,'накладные наружные — галочка есть');
+  m.aluDrawers=true;
+  assert.match(drawerLine(m),/^Фасады ящиков: алюминиевая рамка/);
 });

@@ -4,10 +4,13 @@ import {DEFAULT_VERNISSAGE} from './facadesVernissage';
 import {DEFAULT_ALU} from './alu';
 export type FacadeKind='ldsp'|'vernissage'|'alu'|'external';
 export const facadeKind=(m:Module):FacadeKind=>m.vernissage?'vernissage':m.alu?'alu':m.facadeMaterial==='external'?'external':'ldsp';
-export function changeFacadeKind(m:Module,kind:FacadeKind):Module {
+/** Смена основы фасадов. keepThickness (кухня: своё поле «Толщина фасада») — толщина модуля сохраняется,
+ *  сбрасывается только толщина МДФ Вернисажа при уходе с него. */
+export function changeFacadeKind(m:Module,kind:FacadeKind,{keepThickness=false}:{keepThickness?:boolean}={}):Module {
  const n=structuredClone(m);
  if(kind===facadeKind(n))return n;
- delete n.vernissage;delete n.alu;delete n.aluDrawers;delete n.facadeMaterial;delete n.facadeT;
+ if(!keepThickness||n.vernissage)delete n.facadeT;
+ delete n.vernissage;delete n.alu;delete n.aluDrawers;delete n.facadeMaterial;
  if(kind==='vernissage'){n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}
  if(kind==='alu')n.alu={...DEFAULT_ALU};
  if(kind==='external')n.facadeMaterial='external';
