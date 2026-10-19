@@ -85,7 +85,7 @@ export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem
     { id: "q-light-stand", label: m.standLight ? "Убрать в стойках" : "В стойках", icon: Lightbulb, active: !!m.standLight, hint: "LED-профиль в стойках на всю высоту",
       run: () => ops.modify((n) => { if (n.standLight) delete n.standLight; else n.standLight = true; }) },
     { id: "q-light-shelves", label: s.shelfLight ? "Убрать в полках" : "В полках", icon: Lightbulb, active: !!s.shelfLight, disabled: !s.shelves.length && !s.shelfLight,
-      hint: s.shelves.length ? "LED-профиль в передней кромке полок секции" : "В секции нет полок",
+      hint: s.shelves.length ? "LED-профиль в передней кромке полок секции; цену уточнит конструктор" : "В секции нет полок",
       run: () => ops.modify((n) => { const x = n.sections.find((q) => q.id === s.id)!; if (x.shelfLight) delete x.shelfLight; else x.shelfLight = true; }) },
   ] };
 }
