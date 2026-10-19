@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {initialModule,validate,parts,parseModule} from '../src/model';
-import {KITCHEN,kitchenWorktop,setWorktopMaterial,worktopLabel,WORKTOP_CHOICES} from '../src/kitchen';
+import {KITCHEN,kitchenWorktop,kitchenWall,setWorktopMaterial,worktopLabel,WORKTOP_CHOICES} from '../src/kitchen';
+import {placeKitchenModule} from '../src/kitchenProject';
 import {worktopMaterialItem} from '../src/addMenu';
 import {newProject,parseProject,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
@@ -87,6 +88,39 @@ test('смета: компакт/акрил/кварц — м² и обрабо�
     assert.match(main.source,/^Поставщик не указан — уточнить: столешница/);assert.match(edge.source,/обработка торца/);
     const text=JSON.stringify(e.lines);assert.ok(text.includes(c.label)&&text.includes(c.t+' мм'),c.id+' подпись материала и толщины');
     const cv=clientView(e);assert.ok(cv.pending.every(l=>l.source===PENDING_CLIENT));assert.ok(!JSON.stringify(cv.lines).includes('Поставщик'));
+  }
+});
+
+test('смета кухни из двух кусков: м² суммируются, подпись без габарита одной детали (прямая 4800, Г 3000 + 1200)',()=>{
+  // прямая 4800: createKitchenRow делит столешницу длиннее 4100 на два куска по 2400
+  const p:Project={...newProject(),room:{...newProject().room,width:5400},modules:createKitchenRow(4800,initialModule())};
+  const tops=p.modules.filter(a=>a.module.worktop);assert.equal(tops.length,2);
+  for(const t of tops)setWorktopMaterial(t.module,'quartz',20);
+  let l=estimate(p).lines.find(x=>x.id==='worktop:quartz:20')!;
+  assert.equal(l.quantity,2.88);assert.equal(l.label,'Столешница кварц 20 мм');assert.ok(!/×/.test(l.label),l.label);
+  const cv=clientView(estimate(p));assert.ok(cv.pending.filter(x=>x.label.startsWith('Столешница')).every(x=>!/×/.test(x.label)),'клиент — без габарита');
+  // куски разной длины, как у Г-образной 3000 + 1200 (для сметы важны только размеры кусков)
+  const a=kitchenWorktop(initialModule(),3000),b=kitchenWorktop(initialModule(),1200);setWorktopMaterial(a,'compact');setWorktopMaterial(b,'compact');
+  const g:Project={...newProject(),room:{...newProject().room,width:4600},modules:[{id:'a',x:100,y:KITCHEN.baseHeight,z:0,rotation:0,module:a},{id:'b',x:3200,y:KITCHEN.baseHeight,z:0,rotation:0,module:b}]};
+  l=estimate(g).lines.find(x=>x.id==='worktop:compact:12')!;
+  assert.equal(l.quantity,2.52);assert.equal(l.label,'Столешница компакт-плита 12 мм');
+  assert.equal(estimate(g).lines.find(x=>x.id==='worktop:edge:compact:12')!.quantity,4.2);
+});
+
+test('с компакта на старый материал — его обычная толщина: ЛДСП 16+16 → 32, камень и постформинг → 38',()=>{
+  const m=kitchenWorktop(initialModule(),2400);
+  setWorktopMaterial(m,'compact');setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,32);assert.equal(m.height,32);
+  setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,32,'ЛДСП → ЛДСП без изменений');
+  setWorktopMaterial(m,'acrylic');setWorktopMaterial(m,'stone');assert.equal(m.worktop!.thickness,KITCHEN.worktopThickness);
+  m.worktop={...m.worktop!,material:'postforming',thickness:28};m.height=28;setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,28,'старое поведение между старыми материалами');
+});
+
+test('первый навесной ставится от фактической толщины столешницы: зазор 600 у компакта и кварца',()=>{
+  for(const c of CASES){
+    const r=row(),p={...r,modules:r.modules.filter(a=>a.module.kitchen?.role!=='wall')};
+    setWorktopMaterial(p.modules.find(a=>a.module.worktop)!.module,c.material,c.t);
+    const w=placeKitchenModule(p,kitchenWall(initialModule(),600)),wa=w.project.modules.find(x=>x.id===w.id)!;
+    assert.equal(wa.y,KITCHEN.baseHeight+c.t+KITCHEN.wallGap,c.id);
   }
 });
 

@@ -333,7 +333,9 @@ export const WORKTOP_THICKNESS: Partial<Record<WorktopMaterial, number[]>> = { c
 /** Сменить материал: толщина — по материалу (акрил сохраняет выбранную подклейку), высота модуля = толщина. */
 export function setWorktopMaterial(m: Module, material: WorktopMaterial, thickness?: number) {
   const fixed = WORKTOP_THICKNESS[material], cur = m.worktop!.thickness;
-  const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : material === "postforming" && worktopSolid(m.worktop!) ? KITCHEN.worktopThickness : cur);
+  // с компакта/акрила/кварца на старый материал — его обычная толщина (ЛДСП 16+16 = 32, постформинг и камень 38), а не 12/20/40:
+  // иначе «Компакт 12» → «ЛДСП 16+16» давал деталь ЛДСП 12 мм в раскрое (ревью 19.10)
+  const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : worktopSolid(m.worktop!) ? (material === "ldsp" ? 32 : KITCHEN.worktopThickness) : cur);
   m.worktop = { ...m.worktop!, material, thickness: t };
   m.height = t;
 }
@@ -1032,7 +1034,9 @@ export function worktopLines(m: Module): { id: string; label: string; quantity: 
   const w = m.worktop!, key = w.material + ":" + w.thickness, name = "Столешница " + worktopLabel(w) + " " + w.thickness + " мм";
   if (!worktopSolid(w)) return [{ id: "worktop:" + key, label: name, quantity: m.width / 1000, unit: "пог.м", source: "Закупочная цена столешницы не найдена — нужен прайс поставщика" }];
   return [
-    { id: "worktop:" + key, label: name + " (" + m.width + " × " + m.depth + ")", quantity: Math.round(m.width * m.depth / 1e4) / 100, unit: "м²", source: "Закупочная цена не найдена — нужен прайс поставщика за м²" },
+    // без габарита одной детали: pricing.add() суммирует строки по id, а подпись берёт первой — у кухни из двух кусков
+    // «(2400 × 600) — 2,88 м²» не сходилось бы с площадью (ревью 19.10). Площадь — в количестве.
+    { id: "worktop:" + key, label: name, quantity: Math.round(m.width * m.depth / 1e4) / 100, unit: "м²", source: "Закупочная цена не найдена — нужен прайс поставщика за м²" },
     { id: "worktop:edge:" + key, label: "Обработка лицевого торца: " + worktopLabel(w) + " " + w.thickness + " мм", quantity: m.width / 1000, unit: "пог.м", source: "Цена обработки торца не найдена — нужен прайс поставщика" },
   ];
 }
@@ -1051,7 +1055,8 @@ export function kitchenErrors(m: Module): string[] {
     if (!["postforming", "ldsp", "stone", "compact", "acrylic", "quartz"].includes(w.material)) e.push("Столешница: материал из списка.");
     if (!Number.isFinite(w.thickness) || w.thickness < 12 || w.thickness > 60) e.push("Столешница: толщина 12–60 мм.");
     const fixed = WORKTOP_THICKNESS[w.material];
-    if (fixed && !fixed.includes(w.thickness)) e.push(`Столешница ${worktopLabel({ ...w, thickness: fixed[0] })}: толщина ${fixed.join(" или ")} мм.`);    if (m.width < 200 || m.width > 4100) e.push("Столешница: длина 200–4100 мм (длиннее — со стыком).");
+    if (fixed && !fixed.includes(w.thickness)) e.push(`Столешница ${worktopLabel({ ...w, thickness: fixed[0] })}: толщина ${fixed.join(" или ")} мм.`);
+    if (m.width < 200 || m.width > 4100) e.push("Столешница: длина 200–4100 мм (длиннее — со стыком).");
     e.push(...worktopCutErrors(m));
   }
   if (m.kitchen) {
