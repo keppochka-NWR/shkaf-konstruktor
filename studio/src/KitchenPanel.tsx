@@ -1,4 +1,5 @@
 import {SettingsTree} from './SettingsTree';
+import {MANAGER_PRICING} from './buildMode';
 import {applyFacadeStyle} from './applyFacadeStyle';
 import {OVEN} from './ovenDimensions';
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
@@ -10,9 +11,10 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 // Панель кухонного модуля справа (вкладка «Кухня», трек И, 09.10.2026): корпус, опоры и цоколь, фасады, петли, полки, навесы,
 // столешница; для сырого модуля из Базиса — только сведения. Каждое изменение идёт через modify/commit студии (validate + projectErrors),
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, type WorktopSpec } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -21,8 +23,10 @@ import { rawHangerSeats, RAW_HANGER_DROP } from "./rawModule";
 import { type KDrawerSystem, refitKDrawers, relayoutKDrawers, relayoutProblem, withAxisH, axisMaxLen, kdrawerFacadeMax, setKDrawerFacade, axisLabel, axisFits, axisAvailable, AXIS_HEIGHTS, firmaxSetScrews } from "./kitchenDrawers";
 import { catalog } from "./catalog";
 import type { PlacedModule, Project, Room } from "./project";
-import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
 import { VernissagePicker } from "./VernissagePicker";
+import { AluPicker, AluDrawersCheck } from "./AluPicker";
+import { ALU_EXTRAS } from "./alu";
+import { facadeKind, changeFacadeKind, type FacadeKind } from "./facadeAppearance";
 import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
 import "./kitchen.css";
 
@@ -117,6 +121,7 @@ function Hardware({ list, m, showInside }: { list: Part[]; m: Module; showInside
 
 function CabinetPanel(props: KitchenPanelProps) {
   const { m, placed, project, modify, commit, material, handles, stage } = props;
+  const manager = useContext(ManagerMode);
   const k = m.kitchen!, role = k.role, legged = (role === "base" || role === "tall") && !!m.feet, hanging = role === "wall" || role === "antresol";
   const list = useMemo(() => parts(m), [m]);
   const [si, setSi] = useState(0), sIdx = Math.min(si, m.sections.length - 1), s = m.sections[sIdx];
@@ -136,6 +141,8 @@ function CabinetPanel(props: KitchenPanelProps) {
     if (n.kdrawers) n.kdrawers = refitKDrawers(n); // нижняя царга поднимает пол под ящиками
   });
   const doors = list.filter((p) => p.role === "door" && p.sectionId === s.id), door = doors[0];
+  // рамка на дверях, а часть фасадов ящиков ЛДСП (без галочки aluDrawers): для них остаётся поле толщины ЛДСП
+  const ldspFronts = !!m.alu && list.some((p) => isDrawerFront(p) && p.material !== "alu");
   const hingeCount = list.filter((p) => p.id.includes(":hingecup:")).length;
   const auto = door ? hingePositions(door.size[1], door.size[0], true) : [];
   const legCount = list.filter((p) => p.id.startsWith("leg:")).length, clipCount = list.filter((p) => p.id.startsWith("kitchen-clip:")).length, plinthPart = list.find((p) => p.id === "kitchen-plinth");
@@ -247,7 +254,7 @@ function CabinetPanel(props: KitchenPanelProps) {
     {role === "base" && <Group icon={<Rows3 size={15}/>} title="Ящики и бутылочницы" open={stage === 'filling' || stage === 'facades'}>
       {!k.appliance && <label className="hardware-field">Бутылочница Premial<select aria-label="Бутылочница Premial" value={k.premialPullout?.article ?? ''} onChange={e => modify(n => { if (e.target.value) n.kitchen!.premialPullout = { article: e.target.value }; else delete n.kitchen!.premialPullout; })}>
         <option value="">Без бутылочницы</option>
-        {ALLEGRO.map(item => { const issues = allegroErrors({ ...m, kitchen: { ...k, premialPullout: { article: item.article } } }); return <option key={item.article} value={item.article} disabled={!!issues.length}>{`АЛЛЕГРО ${item.base} · ${item.side === 'left' ? 'левая' : 'правая'} · ${item.article}${issues.length ? ' — не подходит' : ''}`}</option>; })}
+        {ALLEGRO.map(item => { const issues = allegroErrors({ ...m, kitchen: { ...k, premialPullout: { article: item.article } } }); return allegroVisible(!!issues.length, k.premialPullout?.article === item.article, manager) && <option key={item.article} value={item.article} disabled={!!issues.length}>{allegroLabel(item, !!issues.length, manager)}</option>; })}
       </select></label>}
       {!k.appliance && !k.premialPullout && <p className="field-note">АЛЛЕГРО: тумба 150 или 200 мм, одна секция без полок и ящиков. Свободная глубина от 457 мм, высота от 548 мм с запасом.</p>}
       {k.premialPullout && <p className="field-note">Два яруса, крепление к фасаду без петель. Габариты 95/145×540×457 мм и артикулы — по официальной схеме. Геометрия прутка, креплений и запас по высоте 8 мм — оценка; показана закрытая установка, ход выдвижения ещё не моделируется. <a href={ALLEGRO_SOURCE} target="_blank" rel="noreferrer">Чертёж и артикулы Premial</a></p>}
@@ -263,17 +270,19 @@ function CabinetPanel(props: KitchenPanelProps) {
       {!m.noHandles&&<button className="text-action" onClick={handles}>Выбрать ручки кухни</button>}
     </Group>}
 
-    {<Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}><button className="outline full" onClick={()=>{try{commit(applyFacadeStyle(project,placed.id));}catch(e){setInstallationError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов редактируемых корпусов. Импорт Базиса, столешницы и техника без фасада не меняются.</p>
+    {<Group icon={<Layers size={15} />} title="Фасады" open={stage === "facades"}><button className="outline full" onClick={()=>{try{commit(applyFacadeStyle(project,placed.id));}catch(e){setInstallationError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов редактируемых корпусов. {manager ? "Импорт Базиса, столешницы" : "Столешницы"} и техника без фасада не меняются.</p>
       <Check label="Распашные фасады" checked={m.doors} change={(v) => modify((n) => { n.doors = v; })} />
       {m.doors && <div className="kitchen-field"><span>Створки{m.sections.length > 1 ? ` · секция ${sIdx + 1}` : ""}</span>
         <div className="kitchen-chips" role="group" aria-label="Число створок">{([undefined, 1, 2] as const).map((v) => <button key={String(v)} type="button" aria-pressed={s.doorLeaves === v} onClick={() => modify((n) => { if (v) n.sections[sIdx].doorLeaves = v; else delete n.sections[sIdx].doorLeaves; })}>{v ?? "Авто"}</button>)}</div></div>}
-      <label className="hardware-field">Материал фасадов<select aria-label="Материал кухонных фасадов" value={m.vernissage ? "vernissage" : m.facadeMaterial ?? "ldsp"} onChange={(e) => modify((n) => { const v = e.target.value; if (v === "vernissage") { delete n.facadeMaterial; n.vernissage = { ...DEFAULT_VERNISSAGE }; n.facadeT = DEFAULT_VERNISSAGE.thickness; return; } delete n.vernissage; if (v === "external") n.facadeMaterial = "external"; else delete n.facadeMaterial; })}>
-        <option value="ldsp">ЛДСП — в раскрое цеха</option><option value="external">Фасадный материал (МДФ, эмаль, плёнка) — сторонний участок</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль (прайс)</option></select></label>
+      <label className="hardware-field">Материал фасадов<select aria-label="Материал кухонных фасадов" value={facadeKind(m)} onChange={(e) => modify((n) => { const k = changeFacadeKind(n, e.target.value as FacadeKind, { keepThickness: true }); for (const key of Object.keys(n) as (keyof Module)[]) delete n[key]; Object.assign(n, k); })}>
+        <option value="ldsp">{FACADE_KIND_LABEL.ldsp}</option><option value="external">{FACADE_KIND_LABEL.external}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option>{(!m.bazis || m.alu) && <option value="alu">{FACADE_KIND_LABEL.alu}</option>}</select></label>
+      {m.alu && <><AluPicker value={m.alu} onChange={(v) => modify((n) => { n.alu = v; })} />{aluDrawersAvailable(m) && <AluDrawersCheck checked={!!m.aluDrawers} onChange={(v) => modify((n) => { if (v) n.aluDrawers = true; else delete n.aluDrawers; })} />}<p className="field-note">Рамка {ALU_EXTRAS.frameDepth} мм; цена — по калькулятору фасадов ALU (профиль, наполнение, уплотнитель), петли — строками фурнитуры. {ldspFronts ? "Фасады ящиков — ЛДСП." : list.some(isDrawerFront) ? "Фасады ящиков — в той же рамке." : ""}</p></>}
       {m.vernissage && <VernissagePicker value={m.vernissage} sample={door ? [Math.round(door.size[0]), Math.round(door.size[1])] : undefined} sizes={vernissageSizes(m)} onChange={(v) => modify((n) => { n.vernissage = v; n.facadeT = v.thickness; })} />}
       {/* у фасадов Вернисажа толщина задаётся выбором МДФ (цена и 3D от одного значения) — отдельного поля нет */}
       {m.doors&&role==='tall'&&<><Check label="Разделить фасад по высоте" checked={s.doorSplit!==undefined} change={v=>modify(n=>{if(v)n.sections[sIdx].doorSplit=Math.round((m.height-(m.feet?.height??0))/2);else delete n.sections[sIdx].doorSplit;})}/>{s.doorSplit!==undefined&&<Num label="Высота нижней части фасада" value={s.doorSplit} min={200} max={m.height-(m.feet?.height??0)-200} step={.5} change={v=>modify(n=>{n.sections[sIdx].doorSplit=v;})}/>}</>}
       {m.vernissage ? <p className="field-note">Толщина фасада — по выбору МДФ Вернисаж: {m.vernissage.thickness} мм.</p>
-        : <Num label="Толщина фасада" value={m.facadeT ?? RULES.panel} min={3} max={40} change={(v) => modify((n) => { if (v === RULES.panel) delete n.facadeT; else n.facadeT = v; })} note="ЛДСП 16, МДФ 18–19, рамка со стеклом — по профилю" />}
+        : m.alu && !ldspFronts ? null /* рамка: толщина по профилю ({ALU_EXTRAS.frameDepth} мм, см. выше) — поле ЛДСП не показываем */
+        : <Num label={m.alu ? "Толщина фасадов ящиков (ЛДСП)" : "Толщина фасада"} value={m.facadeT ?? RULES.panel} min={3} max={40} change={(v) => modify((n) => { if (v === RULES.panel) delete n.facadeT; else n.facadeT = v; })} note="ЛДСП 16, МДФ 18–19, рамка со стеклом — по профилю" />}
       <Num label="Отступ от кромок корпуса" value={m.faceGap ?? RULES.faceGap} min={0} max={5} step={0.5} change={(v) => modify((n) => { n.faceGap = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} note={`Базис цеха: ${KITCHEN.faceGap} → фасад W−3 × H−3`} />
       <Num label="Зазор между фасадами" value={m.faceGapBetween ?? KITCHEN.faceGapBetween} min={0} max={10} step={0.5} change={(v) => modify((n) => { n.faceGapBetween = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n); })} />
       <Num label="Воздух до корпуса" value={m.faceAir ?? 2} min={0} max={10} step={0.5} change={(v) => modify((n) => { n.faceAir = v; })} note="Кухни Базиса — 0 (фасад вплотную)" />
@@ -288,7 +297,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       {/* флаг модуля из Базиса: действует и на двери, добавленные потом в студии, — поэтому виден и снимается здесь */}
       {k.hinges === false && <p className="field-note">Как в проекте Базиса: фасады без петель — петель нет ни в 3D, ни в присадке, ни в смете. Добавили или заменили дверь — <button className="text-action" onClick={() => modify((n) => { delete n.kitchen!.hinges; })}>Поставить петли</button></p>}
       <label className="hardware-field">Бренд петель<select aria-label="Бренд петель кухонного модуля" value={m.hingeBrand ?? "gtv"} onChange={(e) => modify((n) => { const v = e.target.value as HingeBrand; if (v === "gtv") delete n.hingeBrand; else n.hingeBrand = v; })}>
-        {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{HINGE_BRANDS[b].label} · {HINGE_BRANDS[b].note} · {HINGE_BRANDS[b].soft.price} ₽/шт</option>)}</select></label>
+        {(Object.keys(HINGE_BRANDS) as HingeBrand[]).map((b) => <option key={b} value={b}>{hingeBrandLabel(HINGE_BRANDS[b])}{MANAGER_PRICING?' · '+HINGE_BRANDS[b].soft.price+' ₽/шт':''}</option>)}</select></label>
       {door && doors.filter((d) => Math.abs(d.position[1] - door.position[1]) < 1).length === 1 && <label className="hardware-field">Петли одиночной створки<select aria-label="Сторона петель кухонного модуля" value={s.doorHinges?.[0] ?? s.hingeSide ?? m.hingeSide ?? "left"} onChange={(e) => modify((n) => { const side=e.target.value as "left"|"right"|"top"; n.sections[sIdx].doorHinges=[side]; if(side!=="top"){n.sections[sIdx].hingeSide=side;delete n.kitchenLift;} })}><option value="left">Слева</option><option value="right">Справа</option><option value="top">Сверху (подъёмный)</option></select></label>}
       {/* фактические высоты (ручные пересчитаны под текущую высоту фасада) — их показываем и от них считаем правки */}
       <div className="kitchen-chips" role="group" aria-label="Высоты петель">
@@ -310,6 +319,9 @@ function CabinetPanel(props: KitchenPanelProps) {
       <div className="kitchen-field"><span>Количество ящиков</span>
         <div className="kitchen-chips" role="group" aria-label="Количество ящиков">{[1, 2, 3, 4].map((c) => { const same = m.kdrawers!.length === c, why = relayoutProblem(m, c); /* текущее число — пересобрать с теми же долями фасадов (царги и длины заново) */
           return <button key={c} type="button" aria-pressed={same} disabled={!same && !!why} title={why ?? (same ? "Пересобрать ящики: царги и длины заново под корпус, доли фасадов те же" : undefined)} onClick={() => modify((n) => { n.kdrawers = same ? layoutKitchenDrawers(n, c) : layoutKitchenDrawers(n, c); })}>{c}</button>; })}</div></div>
+      {/* решение Макса 18.10.2026: на кухне вместо «Зазора 30 мм» — профиль Gola; тот же флажок, что в «Тип открывания» (setKitchenGola), те же условия */}
+      {role === "base" && k.appliance !== "oven" && <div data-testid="kdrawer-gola"><Check label="Без ручек на кухне — профиль Gola" checked={!!m.gola} change={(v) => modify((n) => setKitchenGola(n, v))} />
+        <p className="field-note">Тот же профиль Gola, что в «Тип открывания»: ручек на фасадах нет, между ящиками C-профили.</p></div>}
       {[...m.kdrawers].map((d, i) => ({ d, i })).reverse().map(({ d, i }) => <div key={i} className="kitchen-rail">
         <p className="field-note"><b>Ящик {i + 1}{i === 0 ? " (нижний)" : ""}</b>: фасад {Math.round((d.y1 - d.y0) * 10) / 10} мм · {axisLabel(d)} · направляющая на {d.runnerY} от пола модуля</p>
         {i < m.kdrawers!.length - 1 && <Num label={`Фасад ящика ${i + 1}`} value={Math.round((d.y1 - d.y0) * 10) / 10} min={100} max={kdrawerFacadeMax(m, i)} step={0.5} change={(v) => modify((n) => { n.kdrawers = n.gola ? resizeKitchenDrawerFront(n,i,v) : setKDrawerFacade(n, i, v); })} note={i === 0 ? "Верхний ящик забирает остаток высоты" : undefined} />}
@@ -374,7 +386,7 @@ function WorktopPanel(props: KitchenPanelProps) {
     <div className="property-section kitchen-head"><span className="eyebrow">Столешница</span><h2>{m.name}</h2><p>{m.width} × {m.depth} мм · {worktopLabel(w)} {w.thickness} мм</p></div>
     <Group icon={<RectangleHorizontal size={15} />} title="Столешница" open={stage !== "filling"}>
       <label className="hardware-field">Материал<select aria-label="Материал столешницы" value={w.material} onChange={(e) => setW({ material: e.target.value as WorktopSpec["material"] })}>
-        <option value="postforming">Постформинг (СКИФ)</option><option value="ldsp">ЛДСП 16+16 — в раскрое цеха</option><option value="stone">Искусственный камень</option></select></label>
+        <option value="postforming">Постформинг (СКИФ)</option><option value="ldsp">ЛДСП 16+16</option><option value="stone">Искусственный камень</option></select></label>
       <Num label="Длина" value={m.width} min={200} max={4100} change={(v) => modify((n) => { n.width = v; })} note="Длиннее 4100 — двумя частями со стыком" />
       <Num label="Глубина от стены" value={m.depth} min={400} max={1200} change={(v) => modify((n) => { n.depth = v; })} note={`Регламент ${KITCHEN.worktopDepth}`} />
       <Num label="Толщина" value={w.thickness} min={12} max={60} change={(v) => modify((n) => { n.worktop = { ...n.worktop!, thickness: v }; n.height = v; })} note="СКИФ 26, 28, 38, 40" />

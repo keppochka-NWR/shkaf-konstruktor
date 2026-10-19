@@ -1,5 +1,5 @@
 import {refitKDrawers} from './kitchenDrawers';
-import {useState,type ReactNode} from 'react';
+import {useEffect,useState,type ReactNode} from 'react';
 import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal} from 'lucide-react';
 import {initialModule,section,deskModule,distribute,validate,id,type Module} from './model';
 import {createCornerModule} from './cornerWardrobe';
@@ -65,9 +65,19 @@ export function createModule(kind:ModuleKind,width:number,height:number,depth:nu
   return m;
 }
 const categories=[{id:'wardrobe',label:'Шкафы распашные',kinds:['empty','shelves','wardrobe','drawers','corner','desk']},{id:'kitchen',label:'Кухонные модули',kinds:['kitchen-row','kitchen-base','kitchen-wall','worktop']},{id:'kupe',label:'Шкафы-купе',kinds:['kupe-wardrobe','kupe']}] as const;
+const PALETTE_KEY='studio-palette';
+type PaletteChoice={category:string;kind:ModuleKind;width:number;height:number;depth:number};
+/** Сохранённый выбор палитры этой вкладки; несогласованная запись (категория без такого вида) отбрасывается. */
+function readPalette():PaletteChoice|null{
+  try{const v=JSON.parse(sessionStorage.getItem(PALETTE_KEY)||'null') as PaletteChoice|null;const c=categories.find(x=>x.id===v?.category);
+    return v&&c&&(c.kinds as readonly string[]).includes(v.kind)&&[v.width,v.height,v.depth].every(Number.isFinite)?v:null;}catch{return null;}
+}
 export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source:Module;onAdd:(module:Module)=>boolean;onAddGroup:(group:PlacedModule[])=>boolean;kitchenTemplates?:ReactNode}) {
-  const [kind,setKind]=useState<ModuleKind>('empty'),[width,setWidth]=useState(600),[height,setHeight]=useState(2000),[depth,setDepth]=useState(550),[error,setError]=useState('');
-  const [category,setCategory]=useState<string>('wardrobe');
+  // T1 (18.10): выбор палитры живёт дольше экземпляра — после первого шкафа редактор пересоздаётся, а категория и размеры остаются.
+  const [saved]=useState(readPalette);
+  const [kind,setKind]=useState<ModuleKind>(saved?.kind??'empty'),[width,setWidth]=useState(saved?.width??600),[height,setHeight]=useState(saved?.height??2000),[depth,setDepth]=useState(saved?.depth??550),[error,setError]=useState('');
+  const [category,setCategory]=useState<string>(saved?.category??'wardrobe');
+  useEffect(()=>{try{sessionStorage.setItem(PALETTE_KEY,JSON.stringify({category,kind,width,height,depth}));}catch{/* без хранилища выбор не запоминается */}},[category,kind,width,height,depth]);
   const pick=(next:ModuleKind)=>{setKind(next);const sz=SIZES[next]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);setError('');};
   const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'

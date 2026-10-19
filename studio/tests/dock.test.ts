@@ -16,7 +16,7 @@ test('estimate splits retail into materials and hardware that sum to the markup 
   const e=estimate(newProject());
   assert.ok(e.split.material>0&&e.split.hardware>0);
   // округление до 100 ₽ — один раз по итогу (аудит 11.10.2026); части клиенту — до рубля
-  assert.equal(e.byMarkup,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100);
+  assert.equal(e.byMarkup!-e.retailExtras,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100); // розничные строки (склейка фальша 1000 ₽/м²) — после коэффициента
   assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware))<100);
   assert.ok(Math.abs(e.split.materialCost+e.split.hardwareCost-e.knownCost)<=1,'parts are rounded separately');
   assert.equal(lineGroup('sheet:Белый'),'material');assert.equal(lineGroup('edge2'),'material');assert.equal(lineGroup('work'),'material');

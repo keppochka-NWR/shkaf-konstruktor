@@ -97,7 +97,7 @@ test("individual GTV 0FPO profile changes inner width, side length and bottom ma
     side = pp.find((p) => p.id === s.id + ":drawer:0:left")!,
     bottom = pp.find((p) => p.id === s.id + ":drawer:0:bottom")!;
   assert.equal(side.length, 490);
-  assert.equal(bottom.size[0], b.width - 16 - 42);
+  assert.equal(bottom.size[0], b.width - 32 - 42); // фальш составной 32 мм: нижняя петля в зоне ящиков (решение Макса 16.10.2026)
   assert.equal(bottom.material, "board");
   assert.equal(bottom.thickness, 16);
   assert.equal(
@@ -254,7 +254,8 @@ test('drawer front material is independent from doors and follows file roundtrip
 
 test('customer quote lists actual protective shelves and drawer front material',()=>{
   const p=newProject();p.modules[0].module.drawerFacadeDecor='Графит';const html=quoteHTML(p,'Клиент','100000','');
-  assert.ok(html.includes('Фасады ящиков: Графит'));assert.ok(html.includes('Двери: Белый'));assert.ok(html.includes('Полок: 2 (включая полки над ящиками)'));assert.ok(html.includes('пантографов: 0'));
+  // аудит магазина 15.10: описание по типу модуля, фактический материал, без нулевых позиций («пантографов: 0»)
+  assert.ok(html.includes('Фасады ящиков: ЛДСП Графит'));assert.ok(html.includes('Фасады: ЛДСП Белый'));assert.ok(html.includes('2 полки'));assert.ok(!html.includes('пантограф'));
 });
 
 test('server project title stays distinct from the first module name in files',()=>{
@@ -302,7 +303,7 @@ test('review drawings use actual part elevations and escape user labels',()=>{
  const levels=drawingLevels(m),actual=parts(m);
  assert.ok(levels.some(l=>l.name.includes('Обязательная')));
  assert.ok(levels.some(l=>l.name.includes('фасад')));
- for(const level of levels){const d=actual.find(d=>d.id===level.id)!;assert.equal(level.bottom,Math.round((d.position[1]-d.size[1]/2)*10)/10);assert.equal(level.top,Math.round((d.position[1]+d.size[1]/2)*10)/10);}
+ for(const level of levels){const d=actual.find(d=>d.id===level.id)!;assert.equal(level.bottom,Math.round(d.position[1]-d.size[1]/2));assert.equal(level.top,Math.round(d.position[1]+d.size[1]/2));assert.ok(Number.isInteger(level.center)&&Number.isInteger(level.fromOpening));assert.ok(level.section===null||level.section>=1);}
  const svg=moduleDrawingSVG(m),html=drawingsHTML(p);
  assert.ok(!svg.includes('NaN'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('без присадки'));
 });

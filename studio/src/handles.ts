@@ -8,6 +8,8 @@ export type Handle = {
   source: string;
   vendor: "workshop" | "lemana";
   art?: string;
+  /** розница Лемана как есть (ревью R5: модель «цена за лист» берёт её без коэффициента); в публичной сборке price запечён × коэффициент */
+  shelf?: number;
 };
 /** Семейство формы ручки для 3D-модели (Blender → GLB в public/models/handles). */
 export type HandleKind = "bracket" | "rail" | "knob" | "profile";
@@ -35,7 +37,7 @@ export function handleModelFile(h: Pick<Handle, "label" | "len">): string {
   return k === "knob" ? "knob.glb" : `${k}_${h.len}.glb`;
 }
 const workshop = (id: string, label: string, len: number, price: number, source: string): Handle => ({ id, label, len, price, source, vendor: "workshop" });
-const lemana = (art: string, label: string, len: number, price: number): Handle => ({ id: "lm" + art, art, label, len, price, source: "Лемана Про, розница 01.09.2026, арт. " + art, vendor: "lemana" });
+const lemana = (art: string, label: string, len: number, price: number, shelf: number = price): Handle => ({ id: "lm" + art, art, label, len, price, shelf, source: "Лемана Про, розница 01.09.2026, арт. " + art, vendor: "lemana" });
 export const HANDLES: Handle[] = [
   workshop("uz819-128", "UZ 819 · 128 · чёрный мат", 128, 100, "Счета ФАМ, 2026"),
   workshop("fp527-160", "Торцевая FP527 · 160 · чёрный мат", 160, 95, "Счета ФАМ, 2026"),

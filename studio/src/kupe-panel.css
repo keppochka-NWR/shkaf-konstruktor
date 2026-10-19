@@ -12,11 +12,11 @@
 .kupe-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .kupe-swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #cfd8e3; }
 .kupe-swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px #2449d6; }
-.kupe-sections { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.kupe-sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; } /* плитки не уже слова: на 1366 подписи рвались по буквам (аудит магазина) */
 .kupe-sections button { display: grid; justify-items: center; gap: 3px; padding: 6px 2px; border-radius: 8px; border: 1px solid #cfd8e3; background: #fff; min-width: 0; }
 .kupe-sections button[aria-pressed="true"] { border-color: #2449d6; background: #eef3ff; }
 .kupe-sections svg { width: 20px; height: 34px; fill: none; stroke: #4d6370; stroke-width: 1.2; }
-.kupe-sections span { font-size: 9.5px; line-height: 1.15; color: #4d6370; text-align: center; overflow-wrap: anywhere; }
+.kupe-sections span { font-size: 9.5px; line-height: 1.15; color: #4d6370; text-align: center; overflow-wrap: normal; word-break: normal; }
 .kupe-check span { display: flex; gap: 8px; align-items: center; font-weight: 500; }
 .kupe-lines table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .kupe-lines td { padding: 5px 2px; border-bottom: 1px solid #edf1f3; vertical-align: top; }

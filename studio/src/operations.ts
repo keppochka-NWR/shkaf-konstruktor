@@ -48,9 +48,11 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module,s=m.sections.find(s=>s.id===sid)!;
     if(kind==='shelf'){
       if(s.shelves.length>=RULES.maxShelves)break;
-      const fixedHeights=new Set((s.fixed??[]).map(j=>s.shelves[j]));
+      const fixedHeights=new Set((s.fixed??[]).map(j=>s.shelves[j])),glassHeights=new Set((s.glassShelves??[]).map(j=>s.shelves[j]));
       s.shelves.push(y/(b.top-b.bottom));s.shelves.sort((a,b)=>a-b);
       if(s.fixed)s.fixed=s.shelves.flatMap((f,j)=>fixedHeights.has(f)?[j]:[]);
+      // стеклянные полки — по высоте, как жёсткие: новая полка ниже не переносит «стекло» на соседнюю
+      if(s.glassShelves)s.glassShelves=s.shelves.flatMap((f,j)=>glassHeights.has(f)?[j]:[]);
     }
     else if(kind==='drawer'){
       if(s.drawers>=RULES.maxDrawers)break;
@@ -63,6 +65,15 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     if(drawer?.mesh&&/Лемана|нужен проём|нужна глубина|фиксирована/.test(errs[0]))throw Error(errs[0]);
   }
   throw Error(kind==='pantograph'?'Пантографу нужен внутренний проём от 545 мм и место по высоте.':'Здесь недостаточно свободного места. Переместите наполнение или увеличьте корпус.');
+}
+/** Стеклянная полка из меню «Добавить»: та же вставка полки, что у панели, и та же отметка, что галочка «Стекло 6 мм вместо ЛДСП». */
+export function insertGlassShelf(p:Project,mid:string,sid:string,worldY:number):Project{
+  const n=insertItem(p,'shelf',mid,sid,worldY),pid=insertedPartId(p,n,mid,sid,'shelf');
+  if(!pid)throw Error('Не удалось добавить полку.');
+  const j=Number(pid.split(':shelf:')[1]),s=n.modules.find(a=>a.id===mid)!.module.sections.find(x=>x.id===sid)!;
+  s.glassShelves=[...new Set([...(s.glassShelves??[]),j])].sort((a,z)=>a-z);
+  const errs=projectErrors(n);if(errs.length)throw Error(errs[0]);
+  return n;
 }
 export function insertedPartId(before:Project,after:Project,mid:string,sid:string,kind:FillKind):string|undefined{
   const previous=before.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);

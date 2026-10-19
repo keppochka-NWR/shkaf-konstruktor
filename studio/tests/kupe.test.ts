@@ -10,7 +10,7 @@ import {newProject,projectErrors,appendModuleGroup,parseProject,bounds} from '..
 import {estimate,lineGroup} from '../src/pricing';
 import {details} from '../src/exports';
 
-const sum=(m:ReturnType<typeof createKupeModule>)=>Math.round(kupeLines(m).reduce((s,l)=>s+l.quantity*l.unitPrice,0));
+const sum=(m:ReturnType<typeof createKupeModule>)=>Math.round(kupeLines(m).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
 
 test('kupe price equals the published sliding door calculator control case',()=>{
   // Калькулятор купе v2.10, 28.09.2026: 1200×2000, 2 двери, Стандарт / Серебро матовое, Зеркало Серебро 4мм → 24 269 ₽; с доводчиками 35 469 ₽.
@@ -82,7 +82,7 @@ test('sliding wardrobe group: bodies without swing doors plus kupe in front, val
   const e=estimate(r.project);
   const kupe=e.lines.filter(l=>l.id.startsWith('kupe-'));assert.ok(kupe.length>=6);assert.ok(kupe.every(l=>l.retail));
   assert.ok(kupe.filter(l=>l.id.startsWith('kupe-fill')).every(l=>lineGroup(l.id)==='material'));
-  assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware))<100,'округление до 100 ₽ — один раз по итогу (A3, 11.10.2026)');
+  assert.ok(e.split.kupe>0,'двери купе — своя графа разбивки (16.10.2026)');assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware+e.split.kupe))<100,'округление до 100 ₽ — один раз по итогу (A3, 11.10.2026)');
   const kupeRetail=Math.round(kupe.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   assert.ok(e.retail!>=kupeRetail);
   assert.equal(parseProject(JSON.parse(JSON.stringify(r.project))).modules.find(a=>a.module.kupe)!.module.kupe!.system,'Стандарт (Аристо)');

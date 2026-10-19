@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
 import {estimate} from "./pricing";
+import { missingPriceLabel } from "./clientLabels";
 import { HANDLES, handleById } from "./handles";
 import { HINGE_BRANDS, SLIDE_SYSTEMS, type HingeBrand } from "./hardware";
 import { EDGE_CHOICES, type EdgeThickness } from "./model";
@@ -11,11 +12,13 @@ import { hardwareChoice, setAllEdges, setAllFastening, setAllHandles, setAllHing
 
 /** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
 
-import { details, nest } from "./exports";
+import { details, nest, quoteBreakdown, splitRows } from "./exports";
+import { pendingTotalLabel } from "./pendingPrices";
+import { count, DETAILS, SHEETS } from "./ru";
 import "./project-dock.css";
 
 export type DockTab = "project" | "estimate" | "hardware" | "details" | "docs";
-export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement";
+export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement" | "client-spec";
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "project", label: "Проект", icon: Box },
@@ -66,11 +69,14 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
   }
 
   const total = e?.retail ?? null;
+  // Материалы и фурнитура отдельно (решение 06.10): та же разбивка, что печатается в КП при цене по смете.
+  const split = e && total !== null ? quoteBreakdown(String(total), e) : null;
   const choice = useMemo(() => hardwareChoice(project), [project]);
 
   const panel = tab === "project" ? null : tab === "estimate" ? (
     <div className="dock-body dock-estimate">
-      <div className="dock-sum total"><span>Итоговая стоимость</span><b>{!e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':'Предварительно, без доставки и монтажа'}</small></div>
+      <div className="dock-sum total"><span>Итоговая стоимость</span><b>{!e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
+      {split && <div className={"dock-cost-split" + (split.kupe ? " has-kupe" : "")} aria-label="Разбивка стоимости">{splitRows(split).map(([k, v], i) => <div key={k} className={"dock-sum " + ["material", "hardware", "kupe"][i]}><span>{k}</span><b>{rub(v)}</b></div>)}</div>}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setTab('hardware')}>Поменять фурнитуру</button></div>
     </div>
   ) : tab === "hardware" ? (
@@ -112,14 +118,17 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
     </div>
   ) : tab === "details" ? (
     <div className="dock-body dock-details">
-      <p>{fresh ? <><b>{fresh.parts}</b> деталей · <b>{fresh.ldsp}</b> листов ЛДСП{fresh.hdf ? <> · <b>{fresh.hdf}</b> ЛХДФ</> : null}</> : "Считаем…"}</p>
+      <p>{fresh ? <>{count(fresh.parts, DETAILS)} · {count(fresh.ldsp, SHEETS)} ЛДСП{fresh.hdf ? <> · {count(fresh.hdf, SHEETS)} ЛХДФ</> : null}</> : "Считаем…"}</p>
       <div className="dock-actions"><button className="outline" onClick={openParts}>Список деталей</button><button className="outline" onClick={() => openOutput("sheets")}>Карты листов</button></div>
     </div>
   ) : (
     <div className="dock-body dock-docs">
       <div className="dock-actions">
+        <span className="dock-group">Клиенту</span>
         <button className="outline" onClick={() => openOutput("quote")}>Коммерческое предложение</button>
+        <button className="outline" onClick={() => openOutput("client-spec")}>Спецификация</button>
         <button className="outline" onClick={() => openOutput("placement")}>Расстановка</button>
+        <span className="dock-group">Производству</span>
         <button className="outline" onClick={() => openOutput("specification")}>Ведомость</button>
         <button className="outline" onClick={() => openOutput("drawings")}>Чертежи</button>
         <button className="outline" onClick={() => openOutput("labels")}>Бирки</button>
@@ -134,7 +143,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
         <div className="dock-tabs">{TABS.map((t) => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}><t.icon size={15} />{t.label}</button>)}</div>
         <button className="room-warning-link" hidden={!warnings} onClick={onWarnings} title="Проверить расстановку"><span className="dock-warn-long">Проверить расстановку</span><span className="dock-warn-short">Расстановка</span> · {warnings}</button>
         <button className="dock-price" onClick={() => setTab("estimate")} aria-label="Открыть стоимость">
-          {!e ? "Считаем…" : <><b>{total === null ? `Нет цены: ${e.missing.length}` : rub(total)}</b></>}
+          {!e ? "Считаем…" : <><b>{total === null ? missingPriceLabel(e.missing.length) : rub(total)}</b>{total !== null && e.pending.length > 0 && <small className="dock-pending" title={pendingTotalLabel(e.pending.length)}><span className="dock-warn-long">{pendingTotalLabel(e.pending.length)}</span><span className="dock-warn-short">+{e.pending.length} после расчёта</span></small>}</>}
         </button>
       </nav>
     </div>

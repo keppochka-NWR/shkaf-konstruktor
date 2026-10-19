@@ -1,11 +1,12 @@
 import {FacadeEditor} from './FacadeEditor';
-import {Eye,EyeOff,PanelTopClose,PanelTopOpen} from 'lucide-react';
+import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
+import {readCutaway,saveCutaway} from './roomCutaway';
 import './editor-visibility.css';
 import {repairHinges} from './hingeRepair';
 import {savePng} from './savePng';
 import {SettingsTree,revealSettings} from './SettingsTree';
 import {SettingsSection} from './SettingsSection';
-import {setDoorHinge} from './facadeEditing';
+import {setDoorHinge,setModuleHingeSide,singleLeafDoors} from './facadeEditing';
 import {applyFacadeStyle} from './applyFacadeStyle';
 import {WorkspacePanels} from './WorkspacePanels';
 import {layoutKitchenDrawers} from './kitchenEditing';
@@ -14,7 +15,7 @@ import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProper
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes} from './model';
+import {facadeHandleId,setFacadeHandle,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -30,8 +31,10 @@ import {KitchenPalette} from './KitchenPalette';
 import {KitchenPanel} from './KitchenPanel';
 import {isKitchenProject} from './kitchenProject';
 import {FillingComposer,addFillingBatch,addFittedDrawers} from './FillingComposer';
-import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,type Stage} from './stages';
-import {ChevronRight} from 'lucide-react';
+import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,restoredStage,storedStage,type Stage} from './stages';
+import {ChevronRight,TriangleAlert} from 'lucide-react';
+import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from './clientLabels';
+import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
@@ -98,15 +101,17 @@ import { RoomEditor } from './RoomEditor';
 import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
-import { decorPrice } from "./pricing";
+import { decorPrice, withPriceStamp } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
-import { ALU_PROFILES, ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { AluPicker, AluDrawersCheck } from "./AluPicker";
 import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
 import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
+import {addMenuItem} from './addMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
 import {
@@ -116,7 +121,7 @@ import {
   appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers,
   type Project,
 } from "./project";
-import {fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 function NumberField({
   label,
   value,
@@ -272,6 +277,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const mountingComposition=useMemo(()=>mountingCompositionBounds(project),[project]);
   const composition=useMemo(()=>compositionBounds(project),[project]);
   const placementWarnings=useMemo(()=>roomWarnings(project),[project]);
+  const check=useMemo(()=>buildCheck(project,placed.id),[project,placed.id]);
   const [moduleSearch,setModuleSearch]=useState('');
   const moduleList=useRef<HTMLDivElement>(null);
   const moduleWords=moduleSearch.toLocaleLowerCase('ru-RU').trim().split(/\s+/).filter(Boolean);
@@ -314,6 +320,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [transparent, setTransparent] = useState(false);
   const [clearFacades, setClearFacades] = useState(false);
   const [hideFacades,setHideFacades]=useState(false);
+  const [cutaway,setCutawayState]=useState(readCutaway);const toggleCutaway=()=>setCutawayState(v=>{saveCutaway(!v);return !v;});
   const [hiddenModules,setHiddenModules]=useState<string[]>([]);
   const hiddenIds=hiddenModules.filter(id=>project.modules.some(a=>a.id===id));
   const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});
@@ -328,7 +335,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const beforePresentation=useRef<{view:View;roomPlan:boolean;openDoors:boolean;showRoom:boolean}|null>(null);
   const [outputTab,setOutputTab] = useState<OutputTab>("sheets");
   // Пошаговый режим: этап определяет, какие панели видны и куда ведёт «Дальше». Сохраняется в браузере.
-  const [stage,setStageState]=useState<Stage>('room');
+  const [stage,setStageState]=useState<Stage>(()=>restoredStage(startup.model.modules.length>0,storedStage()));
   const [advanced,setAdvanced]=useState(()=>{try{return localStorage.getItem(STAGE_KEY+'-advanced')==='1';}catch{return false;}});
   useEffect(()=>{try{localStorage.setItem(STAGE_KEY,stage);localStorage.setItem(STAGE_KEY+'-advanced',advanced?'1':'0');}catch{/* без хранилища этап не запоминается */}},[stage,advanced]);
   const [renderImage,setRenderImage]=useState("");
@@ -397,13 +404,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   /** Сырой модуль из Базиса (m.raw): наполнение не настраивается — пресеты, композер и перетаскивание выходят без записи в историю (A5). */
   const RAW_FILLING_MESSAGE='Модуль перенесён из Базиса как есть — наполнение здесь не настраивается. Правится в Базисе (переимпорт).';
-  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string){
+  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string,glass?:boolean){
     if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;
     const target=project.modules.find(a=>a.id===mid)?.module;
     if(target?.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
     if(target?.raw){setError(RAW_FILLING_MESSAGE);return false;}
     setMeshFit(null);
-    try{const next=insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
+    try{const next=glass&&kind==='shelf'?insertGlassShelf(project,mid,sid,y):insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
     catch(e){
       let message=e instanceof Error?e.message:'Не удалось добавить элемент.';
       if(kind==='mesh'){try{const fitted=fitMeshItem(project,mid,sid,meshId??DEFAULT_MESH,y);const width=fitted.modules.find(a=>a.id===mid)!.module.width;setMeshFit({mid,sid,meshId:meshId??DEFAULT_MESH,y,width});}catch(fitError){message+=' '+(fitError as Error).message;}}
@@ -545,25 +552,35 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const next=structuredClone(a.module);
     try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
   }
+  /** Правый клик по любой детали — меню всего модуля (решение Макса 16.10); действия с самой деталью — одним пунктом внутри. */
   function radialMenu(c:NonNullable<typeof ctxMenu>):{title:string;subtitle:string;items:RadialItem[]}{
+    const out:{ring?:RadialItem[]}={},r=partRadial(c,out),m0=project.modules.find(x=>x.id===c.mid)!.module;
+    if(m0.kupe||!out.ring)return r;
+    const dims=` ×  × `;
+    if(!c.pid||r.title===m0.name)return {title:m0.name,subtitle:dims,items:out.ring};
+    const own=r.items.flatMap(i=>i.id==='facade'?(i.children??[]):[i]).filter(i=>i.id!=='body'&&i.id!=='hide-module');
+    return {title:m0.name,subtitle:dims+' · '+r.title,items:[...out.ring,{id:'this-part',label:r.title==='Фасад'?'Этот фасад':r.title,icon:MousePointerClick,hint:'Действия только с выбранной деталью',children:own}]};
+  }
+  function partRadial(c:NonNullable<typeof ctxMenu>,out:{ring?:RadialItem[]}):{title:string;subtitle:string;items:RadialItem[]}{
     const a=project.modules.find(x=>x.id===c.mid)!,mod=a.module,sidx=Math.max(0,mod.sections.findIndex(s=>s.id===c.sid)),sec=mod.sections[sidx];
     const pid=c.pid??'',y=c.localY??mod.height/2;
     const select=()=>{selectModule(a.id);chooseSection(c.sid);};
     const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{n[key]=v;}));}});
-    const fill=(kind:FillKind,label:string,icon:RadialItem['icon'],hint:string):RadialItem=>({id:'add-'+kind,label,icon,hint,run:()=>{select();dropFilling(kind,a.id,c.sid,y);}});
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
       {id:'open-handle',label:'С ручками',icon:Hand,active:mod.doorOpen!=='push',hint:'Ручка и петли с доводчиком',run:()=>modifyAt(a.id,n=>{delete n.doorOpen;})},
-      {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})}]};
+      {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})},
+      ...(()=>{const single=mod.doors&&!mod.raw?singleLeafDoors(mod):[];return single.length?(['left','right'] as const).map(side=>({id:'hinge-all-'+side,label:side==='left'?'Петли слева':'Петли справа',icon:DoorOpen,active:single.every(d=>d.hinge===side),hint:'Все одностворчатые фасады корпуса. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{setModuleHingeSide(n,side);})})):[];})()]};
     const editFacade:RadialItem={id:'edit-facade',label:'Редактировать фасад',icon:SlidersHorizontal,hint:'Материал, плёнка, краска и фрезеровка фасадов корпуса',disabled:!!mod.raw||!!mod.bazis||!!mod.kupe,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setModal('facade-editor');}};
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
-      {id:'fill',label:'Добавить',icon:Plus,...(mod.kitchen?{hint:'Кухонные ящики, полки и Gola — в панели справа',run:()=>{setActive(a.id);goStage('filling');}}:{hint:'Наполнение секции',children:[fill('shelf','Полку',Rows3,'Встанет на высоте клика'),fill('drawer','Ящик',Archive,'Ящик в эту секцию'),fill('rod','Штангу',Shirt,'Штанга для одежды')]})},
+      addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,y,o?.meshId,o?.glass);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         editFacade,{id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
-        {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
+        {id:'facades-remove',label:'Удалить',icon:Trash,danger:true,disabled:!mod.doors||!!mod.raw||!!mod.kupe,hint:'Снять все распашные фасады корпуса. Вернуть — «Добавить» или Ctrl+Z. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{n.doors=false;})},
+        {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,disabled:!mod.doors,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на все фасады корпуса',disabled:!hasHandles(mod),run:()=>{setActive(a.id);setHandleFace('');setModal('handles');}},
         hinges,opening]},
@@ -572,6 +589,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:()=>{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}},
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
+    out.ring=bodyRing;
     const facades:RadialItem={...bodyRing.find(item=>item.id==='facades')!,label:'Фасад'};
     const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades')};
     const facadeMenu=(items:RadialItem[]):RadialItem[]=>[
@@ -623,7 +641,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       ]};
       return {title:'Фасад',subtitle:mod.name,items:facadeMenu([editFacade,{id:'door-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого фасада',disabled:mod.doorOpen==='push',run:()=>{setActive(a.id);setHandleFace(doorId);setModal('handles');}},
         hinges,doorOpening,{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
-        {id:'doors-toggle',label:openDoors?'Закрыть':'Открыть',icon:openDoors?DoorClosed:DoorOpen,hint:'Показать, что внутри',run:()=>setOpenDoors(o=>!o)},
+        {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
         {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}])};
     }
@@ -742,9 +760,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       beforePresentation.current=null;setPresentation(false);setFit(f=>f+1);
     }
   }
-  async function localBackup(){try{const response=await fetch('/__local-project-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Backup-Token':document.querySelector<HTMLMetaElement>('meta[name=local-backup-token]')?.content??''},body:JSON.stringify({project,image:capture.current?.()})});const result=await response.json();if(!response.ok)throw Error(result.error);setSaved('Резервная копия: '+result.path);}catch(e){setError('Не удалось сохранить резервную копию: '+String(e));}}
+  async function localBackup(){try{const response=await fetch('/__local-project-backup',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Backup-Token':document.querySelector<HTMLMetaElement>('meta[name=local-backup-token]')?.content??''},body:JSON.stringify({project:withPriceStamp(project),image:capture.current?.()})});const result=await response.json();if(!response.ok)throw Error(result.error);setSaved('Резервная копия: '+result.path);}catch(e){setError('Не удалось сохранить резервную копию: '+String(e));}}
   function download() {
-    const blob = new Blob([JSON.stringify(project, null, 2)], {
+    const blob = new Blob([JSON.stringify(withPriceStamp(project), null, 2)], {
         type: "application/json",
       }),
       url = URL.createObjectURL(blob),
@@ -759,6 +777,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     catalog.find((c) => c.n === name)?.tex || undefined;
   return (
     <div className={'app'+(presentation?' presentation':'')+(advanced?' advanced':'')+(kitchenMode?' kitchen-mode':'')+(compactTop?' compact-top':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
+      <ManagerMode.Provider value={advanced}>
       <header className="header">
         <EditorBrand kitchen={kitchenMode}/>
         {!presentation&&<button className="top-toggle" aria-label={compactTop?"Заказ и инструменты":"Свернуть верхнюю панель"} aria-expanded={!compactTop} onClick={toggleTop} title="Свернуть или раскрыть управление заказом и комнатами">{compactTop?<PanelTopOpen size={18}/>:<PanelTopClose size={18}/>}<span>{compactTop?'Заказ и инструменты':'Свернуть верхнюю панель'}</span></button>}
@@ -779,7 +798,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>
         {!presentation && <div className="history" title="История изменений проекта. Отмена — Ctrl+Z, повтор — Ctrl+Shift+Z">
           <button title="Шаг назад · Ctrl+Z" aria-label="Отменить" disabled={managedHistory?managedHistory.undoCount===0:cursor===0} onClick={undo}><Undo2 size={16} /><span className="history-label">Назад</span></button>
-          <span className="history-step" aria-live="polite">{managedHistory?`${managedHistory.undoCount+1}/${managedHistory.undoCount+managedHistory.redoCount+1}`:`${cursor+1}/${history.length}`}</span>
+          {/* счётчик шагов «2/2» клиенту не нужен (аудит магазина): остаются «Назад» и «Вперёд» */}
           <button title="Шаг вперёд · Ctrl+Shift+Z" aria-label="Повторить" disabled={managedHistory?managedHistory.redoCount===0:cursor===history.length-1} onClick={redo}><span className="history-label">Вперёд</span><Redo2 size={16} /></button>
         </div>}
         <div className="header-actions">
@@ -934,7 +953,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name+" "+next.modules.length;if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
+          <div data-stages="bodies"><ModulePalette source={m} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=newModuleName(source.name);if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1107,6 +1126,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
             presentation={presentation||editingFacades}
+            cutaway={cutaway}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
@@ -1179,7 +1199,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             roomDimensions={!presentation&&dimensions&&(advanced||stage==='room'||stage==='fixtures')}
             gapDimensions={gapDimensions}
           />}
-          {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button><button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
+          {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button>{showRoom&&<button aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={16}/>{cutaway?'Ближние стены: показать':'Ближние стены: скрыть'}</button>}<button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
             <span>КОРПУС / ЛДСП 16</span>
             <b>
@@ -1231,6 +1251,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             >
               <Box size={19} />
             </button>
+            {showRoom&&<button aria-label="Ближние стены: скрыть" title={cutaway?'Ближние стены: показать (сейчас скрыты — стена между камерой и комнатой не видна)':'Ближние стены: скрыть (сейчас видны все стены)'} aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={19}/></button>}
             <button aria-label="Приблизить выбранный корпус" title="Приблизить выбранный корпус" aria-pressed={focusActive} onClick={()=>{setFocusActive(v=>!v);setFit(f=>f+1);}}><Search size={19}/></button>
             <button
               aria-label="Вписать модель"
@@ -1426,7 +1447,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     style={{ backgroundImage: `url("${texture(m.decor)}")` }}
                   />
                   <span>
-                    <b>{m.decor}</b>
+                    <b title={decorTitle(m.decor)}>{decorLabel(m.decor)}</b>
                     <small>Lamarty · 16 мм</small>
                   </span>
                   <ChevronDown size={16} />
@@ -1531,6 +1552,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 )}
 </SettingsSection>
 <SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)} min={2} max={10} onChange={v=>modifySection(a=>a.drawerGap=v)}/>}
+                {s.drawers>0&&(falshGlue(m)[s.id+':left']||falshGlue(m)[s.id+':right'])&&<p className="field-note" role="note" data-testid="falsh-glue-note">Фальш 32 мм: склейка, разрыв у петель — петля в зоне ящиков не сдвигается, фальш из двух плит 16 с разрывом 100 мм у петли.</p>}
 
                 <Counter
                   label="Ящики"
@@ -1612,7 +1634,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                               ))}
                             </select>
                           </label>
-                          <label className="hardware-field">Ручка ящика<select aria-label="Ручка ящика" value={c.handle===undefined?'auto':c.handle?'yes':'no'} onChange={e=>update({handle:e.target.value==='auto'?undefined:e.target.value==='yes'})}><option value="auto">{slideMotion(c)==='push'?'Без ручки · нажать на фасад':'С ручкой'}</option><option value="yes">Всегда с ручкой</option><option value="no">Без ручки</option></select></label>
+                          <label className="hardware-field">Ручка ящика<select aria-label="Ручка ящика" value={s.drawerGrip&&!c.tray?'grip':c.handle===undefined?'auto':c.handle?'yes':'no'} onChange={e=>{const v=e.target.value;if(v==='grip')modifySection(a=>{a.drawerGrip=true;});else modifySection((a,n)=>{delete a.drawerGrip;a.drawerConfigs=editDrawerConfig(n,a,j,{handle:v==='auto'?undefined:v==='yes'});});}}><option value="auto">{slideMotion(c)==='push'?'Без ручки · нажать на фасад':'С ручкой'}</option><option value="yes">Всегда с ручкой</option><option value="no">Без ручки</option><option value="grip">Зазор между ящиками 30 мм</option></select></label>{s.drawerGrip&&<p className="field-note" role="note" data-testid="drawer-grip-note">Для всех ящиков секции: ручки нет, между фасадами ящиков зазор {RULES.drawerGrip} мм (фасады ниже), короб ниже верха своего фасада не менее чем на {RULES.drawerGrip} мм — хват сверху за фасад.</p>}
                           <NumberField label="Ящик от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>
                           <NumberField
                             label="Высота боковины ящика"
@@ -1623,7 +1645,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                           />
                           <label className="hardware-field"><span><input type="checkbox" aria-label="Ящик без фасада" checked={!!c.noFacade} onChange={e=>update({noFacade:e.target.checked?true:undefined,handle:undefined})}/> Внутренний ящик без фасада</span></label>
                           {c.noFacade?<p className="field-note">Только короб и направляющие: ящик за распашными дверями или в открытом каркасе. Фасад, ручка и зазоры не считаются.</p>:<>
-                          <NumberField label="Высота фасада ящика" value={c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={c.tray?40:60} max={800} onChange={v=>update({facadeH:v})}/>
+                          <NumberField label="Высота фасада ящика" value={drawerGripOn(m,s,c)?drawerFaceSpan(m,s,c)[1]-drawerFaceSpan(m,s,c)[0]:c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={c.tray?40:60} max={800} onChange={v=>update({facadeH:v})}/>
                           {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}</>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
                           {c.slide==='gtv0fpo'&&<p className="field-note">Геометрия ящика под скрытые направляющие — по карте GTV 0FPO. Артикул бренда согласовать перед производством.</p>}
@@ -1673,7 +1695,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 <SettingsSection title="Подсветка">                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. Стоимость подсветки входит в итог проекта.</p>
 </SettingsSection>
-<SettingsSection title="Фасад"><button className="outline full" onClick={()=>{try{commitProject(applyFacadeStyle(project,placed.id));}catch(e){setError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов — всем редактируемым корпусам. Размеры и индивидуальные ручки сохраняются. Импорт Базиса, столешницы, столы и двери купе пропускаются.</p>
+<SettingsSection title="Фасад"><button className="outline full" onClick={()=>{try{commitProject(applyFacadeStyle(project,placed.id));}catch(e){setError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов — всем редактируемым корпусам. Размеры и индивидуальные ручки сохраняются. {advanced?"Импорт Базиса, столешницы":"Столешницы"}, столы и двери купе пропускаются.</p>
                 <div className="toggle-row">
                   <span>
                     <b>Распашные фасады</b>
@@ -1691,15 +1713,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 </div>
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {m.doors && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">ЛДСП 16 мм</option><option value="alu">Алюминиевая рамка со вставкой</option><option value="vernissage">МДФ «Вернисаж» — фрезеровка, плёнка, эмаль</option></select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;delete n.aluDrawers;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;delete n.aluDrawers;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">{FACADE_KIND_LABEL.ldsp} 16 мм</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
                 )}
                 {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 
                 {m.doors && m.alu && (<>
-                  <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={m.alu.profile} onChange={e=>modify(n=>{const p=aluProfile(e.target.value)!;n.alu={...n.alu!,profile:p.id,color:p.colors.some(c=>c.id===n.alu!.color)?n.alu!.color:p.colors[0].id};})}>{ALU_PROFILES.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
-                  <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={m.alu.color} onChange={e=>modify(n=>{n.alu={...n.alu!,color:e.target.value};})}>{aluProfile(m.alu.profile)!.colors.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-                  <label className="hardware-field">Вставка<select aria-label="Вставка рамки" value={m.alu.insert} onChange={e=>modify(n=>{n.alu={...n.alu!,insert:e.target.value};})}>{ALU_INSERTS.map(i=><option key={i.id} value={i.id}>{i.label}</option>)}</select></label>
-                  <p className="field-note">Считается по бланку цеха: профиль по периметру, вставка по площади, уплотнитель, уголки, отверстия под петли и ручку. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
+                  <AluPicker value={m.alu} onChange={v=>modify(n=>{n.alu=v;})}/>{aluDrawersAvailable(m)&&<AluDrawersCheck checked={!!m.aluDrawers} onChange={v=>modify(n=>{if(v)n.aluDrawers=true;else delete n.aluDrawers;})}/>}
+                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
                 </>)}
                 {m.doors && !m.alu && (
                   <button
@@ -1709,7 +1729,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                       setModal("materials");
                     }}
                   >
-                    Материал фасадов: {m.facadeDecor} <ChevronDown size={13} />
+                    Материал фасадов: {decorLabel(m.facadeDecor)} <ChevronDown size={13} />
                   </button>
                 )}
                 {m.doors && (
@@ -1875,11 +1895,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               {!m.casework&&<SettingsSection title="Состав секции"><OpeningLayoutEditor module={m} sid={s.id} edit={modify}/></SettingsSection>}
             </SettingsTree>
           )}
-          <div className="property-footer">
-            <CheckCircle2 size={18} />
+          <div className={"property-footer"+(check.ok?"":" warn")}>
+            {check.ok?<CheckCircle2 size={18} />:<TriangleAlert size={18} />}
             <div>
-              <strong>Габариты проверены</strong>
-              <span>Детали помещаются в лист</span>
+              <strong>{check.title}</strong>
+              <span>{check.detail}</span>
             </div>
           </div>
         </>}
@@ -1901,7 +1921,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           >
             <div className="modal-head">
               <div>
-                <span className="eyebrow">МОДУЛЬ</span>
+                <span className="eyebrow">{modal === "parts" || modal === "handles" ? "МОДУЛЬ" : "ПРОЕКТ"}</span>
                 <h2 id="modal-title">
                   {modal === "room-setup" ? "Шаг 1 · Параметры помещения" : modal === "new" ? "Новый проект" : modal === "library" ? "Моя библиотека модулей" : modal === "render" ? "Изображение проекта" : modal === "cloud" ? "Кабинет проектов" : modal === "output"
                     ? "Документы проекта"
@@ -1968,6 +1988,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                           setModal(null);
                           setSearch("");
                         }}
+                        title={decorTitle(c.n)}
                       >
                         <span
                           style={{
@@ -1978,7 +1999,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                               c.n === "Графит" ? "#565956" : "#e6e2d9",
                           }}
                         />
-                        {c.n}
+                        {decorLabel(c.n)}
                         <small className="decor-meta">{c.tier.toLowerCase()}</small>
                         {materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n) && <Check size={15} />}
                       </button>
@@ -1996,7 +2017,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   {(["workshop","lemana"] as const).map(vendor=>{
                     const items=HANDLES.filter(h=>h.vendor===vendor&&(h.label+' '+h.len+' '+(h.art??'')).toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.len-b.len||a.price-b.price);
                     if(!items.length)return null;
-                    return <div key={vendor}><h3>{vendor==='workshop'?'Закупка цеха':'Лемана Про · выбор клиента, розница'}</h3>{items.map(h=>{
+                    return <div key={vendor}><h3>{vendor==='workshop'?'Ручки цеха':'Лемана Про · выбор клиента, розница'}</h3>{items.map(h=>{
                       const current=(handleFace?(facadeHandleId(m,handleFace)??DEFAULT_HANDLE):((handleTarget==='drawers'?m.drawerHandleId??m.handleId:m.handleId)??DEFAULT_HANDLE))===h.id;
                       return <button key={h.id} className="handle-item" aria-pressed={current} onClick={()=>{
                         if(materialScope==='group'&&!liveGroupIds.length){setError('Сначала отметьте корпуса в группе.');return;}
@@ -2080,6 +2101,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
         </div>
       )}
+      </ManagerMode.Provider>
     </div>
   );
 }

@@ -1,16 +1,18 @@
+import {pendingTotalLabel} from './pendingPrices';
 import {type Project,projectErrors} from './project';
-import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder} from './exports';
+import {details,nest,detailCSV,nestingHTML,labelsHTML,specificationHTML,labelOrder,uniqueWarnings,orderNumber,ORDER_REQUIRED} from './exports';
 import {drawingsHTML} from './drawings';
 import {placementHTML} from './placementPlan';
-import {estimate,estimateCSV} from './pricing';
+import {estimate,estimateCSV,withPriceStamp} from './pricing';
 import {roomWarnings} from './roomWarnings';
 import {salesCSV} from './SalesSummary';
+import {PUBLIC_BUILD} from './buildMode';
 
 /** A single immutable snapshot is shared by all documents in the archive. */
 export function reviewFiles(project:Project,created=new Date()):Record<string,string>{
   const p=structuredClone(project),errors=projectErrors(p);
   if(errors.length)throw new Error(errors[0]);
-  const sheets=nest(p),cost=estimate(p,sheets),warnings=roomWarnings(p);
+  const sheets=nest(p),cost=estimate(p,sheets),warnings=uniqueWarnings(roomWarnings(p));
   const note=[
     'КОМПЛЕКТ ДЛЯ ПРОВЕРКИ ТЕХНОЛОГОМ',
     labelOrder(p),
@@ -19,24 +21,25 @@ export function reviewFiles(project:Project,created=new Date()):Record<string,st
     '',
     'Все файлы сформированы из одного состояния проекта. После изменения конструкции сформируйте новый комплект целиком: коды деталей и номера листов могут измениться.',
     'Откройте 01-Проект.project.json в редакторе, чтобы продолжить работу. HTML-документы открываются в браузере; для PDF используйте печать браузера. CSV — UTF-8 с BOM, разделитель точка с запятой.',
-    'Это внутренний комплект: он содержит закупочную смету и исходный проект. Для клиента используйте отдельное коммерческое предложение.',
+    PUBLIC_BUILD?'Смета — по клиентским ценам, без доставки и монтажа. Окончательную стоимость подтвердит менеджер салона.':'Это внутренний комплект: он содержит закупочную смету и исходный проект. Для клиента используйте отдельное коммерческое предложение.',
     '',
     'ПЕРЕД ПРОИЗВОДСТВОМ',
     'Технолог должен проверить соединения, крепёж, кромление, зазоры, направление текстуры и замер. Присадка и управляющие программы не включены. Раскрой предварительный, минимальное число листов не гарантируется; поле и промежутки 10 мм. Размеры деталей габаритные, припуски станка не включены.',
-    'Печатный масштаб и разбиение документов на страницы требуют проверки. Бирки: 90 × 50 мм, по 10 на A4, масштаб 100%, без колонтитулов браузера.',
+    'Печатный масштаб и разбиение документов на страницы требуют проверки. Бирки: 120 × 75 мм, одна деталь на этикетку, масштаб 100%, без колонтитулов браузера.',
     '',
     'ЗАМЕЧАНИЯ ПО РАССТАНОВКЕ: '+warnings.length,
     ...(warnings.length?warnings.map(w=>'• '+w.message):['Автоматических замечаний нет. Это не заменяет проверку технологом.']),
     '',
     'НЕЗАПОЛНЕННЫЕ ЦЕНЫ: '+cost.missing.length,
     ...(cost.missing.length?cost.missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit):['Все позиции текущей расчётной модели имеют цену. Полный крепёж, доставка и монтаж ещё не включены.']),
+    ...(cost.pending.length?['',pendingTotalLabel(cost.pending.length).toUpperCase()+' (в итог не входят)',...cost.pending.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit)]:[]),
     '',
     p.cloud?'Последняя связанная серверная версия: '+p.cloud.revision+'. Локальные правки могут быть новее этой версии.':'Проект не связан с серверным сохранением.',
     'Создание архива не сохраняет проект на сервере. Для серверной записи используйте кабинет.'
   ].join('\r\n');
   return {
     '00-Прочитайте.txt':'\ufeff'+note,
-    '01-Проект.project.json':JSON.stringify(p,null,2),
+    '01-Проект.project.json':JSON.stringify(withPriceStamp(p),null,2),
     '02-Ведомость.html':specificationHTML(p),
     '03-План расстановки.html':placementHTML(p),
     '04-Размерные виды.html':drawingsHTML(p),
@@ -51,7 +54,7 @@ export function managerReviewFiles(project:Project,created=new Date()):Record<st
   delete files['01-Проект.project.json'];delete files['08-Смета.csv'];
   files['00-Прочитайте.txt']='\ufeffДокументы проекта · '+created.toLocaleString('ru-RU')+'\r\nЧертежи, деталировка, карты и бирки одной версии. Итоговая стоимость без доставки и монтажа. Для продолжения редактирования сохраните проект отдельно в редакторе. Перед производством технолог должен проверить замер, соединения, зазоры и присадку. Бирки 120 × 75 мм; масштаб печати 100%.\r\n';
   files['08-Стоимость.csv']=salesCSV(project);
-  const warnings=roomWarnings(project),missing=estimate(project).missing;
+  const warnings=uniqueWarnings(roomWarnings(project)),missing=estimate(project).missing;
   files['00-Прочитайте.txt']+='\r\nЗамечания по расстановке: '+warnings.length+'\r\n'+warnings.map(w=>'• '+w.message).join('\r\n')+'\r\nСтоимость требует уточнения: '+missing.length+' позиций\r\n'+missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit).join('\r\n');
   return files;
 }
@@ -66,6 +69,7 @@ export function reviewArchiveName(project:Project){
   return (name||'Проект')+' — комплект технологу.zip';
 }
 export async function downloadReviewArchive(project:Project,manager=false){
+  if(!orderNumber(project))throw Error(ORDER_REQUIRED);
   const snapshot=structuredClone(project),data=await reviewArchive(snapshot,manager);
   const url=URL.createObjectURL(new Blob([new Uint8Array(data).buffer],{type:'application/zip'})),link=document.createElement('a');
   link.href=url;link.download=reviewArchiveName(snapshot);link.click();

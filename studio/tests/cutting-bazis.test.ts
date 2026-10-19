@@ -130,7 +130,7 @@ test('флаг раскроя: по умолчанию карты и смета 
     assert.equal(e.ldspSheets,plan.sheets.filter(s=>s.material!=='hdf').length);
     assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.sheets.length);
     console.log(`${count} шкаф(ов): классика ${classic.length} листов, гильотина ${plan.sheets.length}`);
-    assert.ok(nestingHTML(q).includes('гильотина как в Базисе'));
+    assert.ok(nestingHTML(q).includes('под форматную пилу'));
   }
 });
 

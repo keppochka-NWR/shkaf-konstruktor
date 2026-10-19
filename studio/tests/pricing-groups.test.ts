@@ -113,16 +113,16 @@ test('конфирмат с именем Базиса — один ключ conf
 
 test('округление до 100 ₽ один раз по итогу: части — до рубля, фурнитура 44 ₽ не обнуляется',()=>{
   const e=estimate(newProject());
-  assert.equal(e.byMarkup!%100,0);
+  assert.equal((e.byMarkup!-e.retailExtras)%100,0);
   assert.ok(Math.abs(e.byMarkup!-(e.split.material+e.split.hardware))<100);
-  assert.equal(e.byMarkup,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100);
+  assert.equal(e.byMarkup!-e.retailExtras,Math.round((e.split.materialCost+e.split.hardwareCost)*e.markup/100)*100);
   // кухня студии: маленькая фурнитура (шурупы, шканты) даёт ненулевую часть «фурнитура»
   const k=estimate(kitchenProject());
   assert.ok(k.split.hardwareCost>0&&k.split.hardware>0,'фурнитура не обнуляется округлением');
   assert.equal(k.split.hardware,Math.round(k.split.hardwareCost*k.markup));
-  // byMarkupKnown — та же формула при строках без цены
-  assert.equal(k.byMarkup,null);assert.equal(k.byMarkupKnown%100,0);assert.ok(k.byMarkupKnown>0);
-  assert.match(estimateCSV(kitchenProject(),k),/Не менее \d+ ₽ без \d+ позиций без цены/);
+  // решение 16.10.2026: позиции кухни без счёта — «после финального расчёта конструктором», итог — по известным позициям
+  assert.equal(k.missing.length,0);assert.ok(k.pending.length>0);assert.equal(k.byMarkup,k.byMarkupKnown);assert.equal(k.byMarkupKnown%100,0);assert.ok(k.byMarkupKnown>0);
+  assert.match(estimateCSV(kitchenProject(),k),/Позиции после финального расчёта конструктором: \d+/);
 });
 
 test('строка-сведение «движок раскроя» в итоге сметы и CSV',()=>{

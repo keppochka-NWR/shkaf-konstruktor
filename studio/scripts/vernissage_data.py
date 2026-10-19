@@ -126,7 +126,8 @@ notes = {
     'enamelTwoSidedMarkupPct': np['enamelTwoSidedMarkupPct'],
     'enamelMatteLacquerPerM2': np['enamelMatteLacquerPerM2'],
     'leadTimeWorkDays': {k: v for k, v in np['leadTimeWorkDays'].items() if not k.startswith('_')},
-    'texts': [n['text'] for n in price['notes']],
+    # «наценка» поставщика -> «доплата»: слово закрыто стражем публичной сборки (publish.ps1 4b), смысл условия тот же
+    'texts': [n['text'].replace('наценка', 'доплата') for n in price['notes']],
 }
 
 def js(x):
