@@ -27,9 +27,10 @@ export function sectionAtX(m: Module, localX: number): string {
 /**
  * Цель запасного меню: null — клик вне рамки корпуса (меню не открываем).
  * local — точка клика в координатах корпуса (пересечение луча с плоскостью фасада), null — луч параллелен плоскости.
+ * fromLabel — правый клик по плашке размера выбранного корпуса (плашка — часть корпуса, хоть и вне рамки): меню открываем.
  */
-export function missMenuTarget(m: Module, rect: ScreenRect | null, click: { x: number; y: number }, local: { x: number; y: number } | null): { sid: string; localY: number } | null {
-  if (!insideRect(rect, click.x, click.y) || !m.sections.length) return null;
+export function missMenuTarget(m: Module, rect: ScreenRect | null, click: { x: number; y: number }, local: { x: number; y: number } | null, fromLabel = false): { sid: string; localY: number } | null {
+  if ((!fromLabel && !insideRect(rect, click.x, click.y)) || !m.sections.length) return null;
   if (!local) return { sid: m.sections[0].id, localY: m.height / 2 };
   return { sid: sectionAtX(m, local.x), localY: Math.min(m.height, Math.max(0, local.y)) };
 }

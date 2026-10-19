@@ -77,6 +77,7 @@ test('п.2 критика: промах мимо детали — меню то�
   assert.equal(missMenuTarget(m,rect,{x:520,y:300},{x:1100,y:1200}),null,'правее корпуса — ничего');
   assert.equal(missMenuTarget(m,rect,{x:300,y:20},{x:500,y:2500}),null,'выше корпуса — ничего');
   assert.equal(missMenuTarget(m,null,{x:300,y:300},{x:500,y:1000}),null,'корпус за камерой — ничего');
+  assert.ok(missMenuTarget(m,rect,{x:300,y:690},{x:500,y:-80},true),'плашка размера под корпусом (вне рамки) — меню корпуса, как в находке 1');
   const [s1,s2]=boxes(m);
   const right=missMenuTarget(m,rect,{x:400,y:300},{x:s2.x+s2.width/2,y:1700})!;
   assert.equal(right.sid,m.sections[1].id,'клик над правой секцией — правая секция, не sections[0]');assert.equal(right.localY,1700,'высота клика, а не height/2');

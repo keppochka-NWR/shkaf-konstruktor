@@ -297,7 +297,8 @@ export function Scene(p: Props) {
     function passThrough(el:HTMLElement){
       const canvas=()=>renderer.domElement;
       el.addEventListener("pointerdown",e=>{if(e.button===0)return;e.preventDefault();canvas().dispatchEvent(new PointerEvent("pointerdown",e));},true);
-      el.addEventListener("contextmenu",e=>{e.preventDefault();e.stopPropagation();canvas().dispatchEvent(new MouseEvent("contextmenu",e));});
+      // fromLabel: плашка размера относится к выбранному корпусу — меню корпуса и вне его экранной рамки (п.2 критика 20.10 не трогает плашки).
+      el.addEventListener("contextmenu",e=>{e.preventDefault();e.stopPropagation();canvas().dispatchEvent(Object.assign(new MouseEvent("contextmenu",e),{fromLabel:true}));});
       el.addEventListener("wheel",e=>{e.preventDefault();e.stopPropagation();canvas().dispatchEvent(new WheelEvent("wheel",e));},{passive:false});
     }
     function line(points: THREE.Vector3[]) {
@@ -939,7 +940,7 @@ export function Scene(p: Props) {
     let rightDown:{x:number;y:number}|null=null;
     function rightPointer(e:PointerEvent){if(e.button===2)rightDown={x:e.clientX,y:e.clientY};}
     /** Промах мимо деталей: рамка корпуса на экране (8 углов габарита) и точка клика на плоскости фасада в координатах корпуса. */
-    function missTarget(a:PlacedModule,clientX:number,clientY:number){
+    function missTarget(a:PlacedModule,clientX:number,clientY:number,fromLabel=false){
       const s=current.current,focus=s.arrangement.find(x=>x.id===s.activeId)??a,center=moduleCenter(focus),m=a.module,y0=a.y??0;
       const r=renderer.domElement.getBoundingClientRect();
       const world=(u:number,v:number,y:number)=>{const p=localToRoom(a,u,v);return new THREE.Vector3(p.x-center.x,y,p.z-center.z);};
@@ -948,7 +949,7 @@ export function Scene(p: Props) {
       const plane=new THREE.Plane().setFromCoplanarPoints(world(0,m.depth,y0),world(m.width,m.depth,y0),world(0,m.depth,y0+1000)),hitPoint=new THREE.Vector3();
       const p=ray.ray.intersectPlane(plane,hitPoint);
       const local=p?{x:roomToLocal(a,p.x+center.x,p.z+center.z).x,y:p.y-y0}:null;
-      return missMenuTarget(m,screenRect(corners),{x:clientX,y:clientY},local);
+      return missMenuTarget(m,screenRect(corners),{x:clientX,y:clientY},local,fromLabel);
     }
     function contextMenu(e:MouseEvent){
       e.preventDefault();if(current.current.presentation)return;
@@ -960,7 +961,7 @@ export function Scene(p: Props) {
       const hit=hitAt(e.clientX,e.clientY,true);
       // Промах мимо деталей (щель, край, пустой проём) — меню выбранного корпуса, а не тишина (ручной тест 19.10, находки 10–11).
       // Замечание критика 20.10 (п.2): только внутри экранной рамки выбранного корпуса; секция и высота — по точке клика.
-      if(!hit){const s=current.current,act=s.arrangement.find(x=>x.id===s.activeId);if(!act||s.hideFurniture)return;const t=missTarget(act,e.clientX,e.clientY);if(t)s.onContextMenu?.(act.id,t.sid,e.clientX,e.clientY,{localY:t.localY});return;}
+      if(!hit){const s=current.current,act=s.arrangement.find(x=>x.id===s.activeId);if(!act||s.hideFurniture)return;const t=missTarget(act,e.clientX,e.clientY,!!(e as MouseEvent&{fromLabel?:boolean}).fromLabel);if(t)s.onContextMenu?.(act.id,t.sid,e.clientX,e.clientY,{localY:t.localY});return;}
       const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId);if(!a)return;
       current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY,{pid:hit.object.userData.partId as string|undefined,role:hit.object.userData.role as string|undefined,localY:hit.point.y-(a.y??0)});
     }
