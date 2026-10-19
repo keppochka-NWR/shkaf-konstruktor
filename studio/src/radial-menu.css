@@ -27,3 +27,12 @@
 @media (prefers-reduced-motion: reduce) { .radial-item, .radial-center { animation: none; } }
 /* Точка клика: меню открыто со сдвигом, точка показывает, к какой детали оно относится. */
 .radial-anchor { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #2449d6; box-shadow: 0 0 0 3px #ffffffd9, 0 1px 4px #1b2a4455; pointer-events: none; }
+
+/* Жёлтая полоса выбранной детали — поверх сцены, без сдвига экрана (ручной тест 19.10: полоса сдвигала всё вниз на ~70 px,
+   следующий клик менеджера промахивался). Внизу по центру, над строкой подсказок сцены. */
+div.selection-action-bar { position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 40; max-width: calc(100vw - 32px);
+  flex-wrap: nowrap; border: 1px solid #e3d5b4; border-radius: 12px; box-shadow: 0 8px 24px #1b2a4429; padding: 6px 10px; }
+div.selection-action-bar .selection-context { min-width: 0; margin-right: 6px; }
+@media (max-width: 650px) { div.selection-action-bar { flex-wrap: wrap; bottom: 52px; } }
+/* Плашка размера без действия не ловит мышь вовсе: клики и колесо идут в сцену. */
+.model-dimension:disabled { pointer-events: none; }

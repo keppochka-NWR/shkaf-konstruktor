@@ -473,7 +473,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // паз Базиса (groove:*) — обработка детали, не подсветка: в 3D тёмной полосой, в смете его нет (кухня: самой подсветки в проекте
       // Базиса нет — строку не добавляем). Ленты подсветки в спецификациях Базиса нет.
       // Настоящая подсветка (опция «Подсветка в стойках», в т.ч. в кухне студии) — считается как раньше.
-      if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
+      // Подсветка в полках (19.10.2026): цены в прайсе цеха нет — строка без цены, сумму даёт конструктор после финального расчёта.
+      if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf','Подсветка в полках',d.length/1000,'пог.м',null,'Цены нет в прайсе цеха — после финального расчёта конструктором');
+      else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
     for(const s of a.module.sections){

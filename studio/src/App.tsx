@@ -112,6 +112,8 @@ import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS,
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem} from './addMenu';
+import {quickItems,quickMenuApplies,upperItem,menuDropY,type QuickMenuOps} from './quickMenu';
+import {composeContextMenu} from './contextMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
 import {
@@ -397,20 +399,21 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function moveBody(mid:string,pos:{x:number;y:number;z:number}){return commitProject(movedBodies(mid,pos));}
   function snapBodies(mid:string,pos:{x:number;y:number;z:number}){return moveAll?snapComposition(project,mid,pos):liveGroupIds.includes(mid)?snapComposition(project,mid,pos,35,liveGroupIds):snapPlacement(project,mid,pos);}
   function moveFilling(mid:string,sid:string,pid:string,delta:number){return commitProject(movePart(project,mid,sid,pid,delta));}
-  function selectInserted(next:Project,mid:string,sid:string,kind:FillKind){
+  function selectInserted(next:Project,mid:string,sid:string,kind:FillKind,keepMode=false){
     const pid=insertedPartId(project,next,mid,sid,kind);
-    setActive(mid);chooseSection(sid);setMode('fill');setOpenDoors(true);
+    // из кругового меню режим не переключаем (ручной тест 19.10: в «Наполнении» менеджер терял меню)
+    setActive(mid);chooseSection(sid);if(!keepMode)setMode('fill');setOpenDoors(true);
     if(pid){setSelectedPart({mid,sid,pid});if(kind==='drawer'||kind==='mesh')setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));}
   }
   /** Сырой модуль из Базиса (m.raw): наполнение не настраивается — пресеты, композер и перетаскивание выходят без записи в историю (A5). */
   const RAW_FILLING_MESSAGE='Модуль перенесён из Базиса как есть — наполнение здесь не настраивается. Правится в Базисе (переимпорт).';
-  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string,glass?:boolean){
+  function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string,glass?:boolean,keepMode=false){
     if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;
     const target=project.modules.find(a=>a.id===mid)?.module;
     if(target?.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
     if(target?.raw){setError(RAW_FILLING_MESSAGE);return false;}
     setMeshFit(null);
-    try{const next=glass&&kind==='shelf'?insertGlassShelf(project,mid,sid,y):insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind);return true;}}
+    try{const next=glass&&kind==='shelf'?insertGlassShelf(project,mid,sid,y):insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind,keepMode);return true;}}
     catch(e){
       let message=e instanceof Error?e.message:'Не удалось добавить элемент.';
       if(kind==='mesh'){try{const fitted=fitMeshItem(project,mid,sid,meshId??DEFAULT_MESH,y);const width=fitted.modules.find(a=>a.id===mid)!.module.width;setMeshFit({mid,sid,meshId:meshId??DEFAULT_MESH,y,width});}catch(fitError){message+=' '+(fitError as Error).message;}}
@@ -553,13 +556,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
   }
   /** Правый клик по любой детали — меню всего модуля (решение Макса 16.10); действия с самой деталью — одним пунктом внутри. */
+  // Уточнение 19.10 (ручной тест): по детали — сначала действия детали + «Корпус ›»; по корпусу — меню модуля (src/contextMenu.ts).
   function radialMenu(c:NonNullable<typeof ctxMenu>):{title:string;subtitle:string;items:RadialItem[]}{
     const out:{ring?:RadialItem[]}={},r=partRadial(c,out),m0=project.modules.find(x=>x.id===c.mid)!.module;
-    if(m0.kupe||!out.ring)return r;
-    const dims=` ×  × `;
-    if(!c.pid||r.title===m0.name)return {title:m0.name,subtitle:dims,items:out.ring};
-    const own=r.items.flatMap(i=>i.id==='facade'?(i.children??[]):[i]).filter(i=>i.id!=='body'&&i.id!=='hide-module');
-    return {title:m0.name,subtitle:dims+' · '+r.title,items:[...out.ring,{id:'this-part',label:r.title==='Фасад'?'Этот фасад':r.title,icon:MousePointerClick,hint:'Действия только с выбранной деталью',children:own}]};
+    return composeContextMenu(m0,r,m0.kupe?null:out.ring??null,!!c.pid);
   }
   function partRadial(c:NonNullable<typeof ctxMenu>,out:{ring?:RadialItem[]}):{title:string;subtitle:string;items:RadialItem[]}{
     const a=project.modules.find(x=>x.id===c.mid)!,mod=a.module,sidx=Math.max(0,mod.sections.findIndex(s=>s.id===c.sid)),sec=mod.sections[sidx];
@@ -573,9 +573,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       ...(()=>{const single=mod.doors&&!mod.raw?singleLeafDoors(mod):[];return single.length?(['left','right'] as const).map(side=>({id:'hinge-all-'+side,label:side==='left'?'Петли слева':'Петли справа',icon:DoorOpen,active:single.every(d=>d.hinge===side),hint:'Все одностворчатые фасады корпуса. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{setModuleHingeSide(n,side);})})):[];})()]};
     const editFacade:RadialItem={id:'edit-facade',label:'Редактировать фасад',icon:SlidersHorizontal,hint:'Материал, плёнка, краска и фрезеровка фасадов корпуса',disabled:!!mod.raw||!!mod.bazis||!!mod.kupe,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setModal('facade-editor');}};
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
+    const above=project.modules.find(x=>x.id!==a.id&&Math.abs((x.y??0)-((a.y??0)+mod.height))<2&&Math.abs(x.x-a.x)<2&&Math.abs(x.z-a.z)<2);
+    const quickOps:QuickMenuOps={modify:u=>{modifyAt(a.id,u);},addUpper:()=>{try{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}},
+      removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
-      addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,y,o?.meshId,o?.glass);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
+      addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
+      ...quickItems(mod,c.sid,quickOps),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         editFacade,{id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
@@ -586,7 +590,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         hinges,opening]},
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
       {id:'rotate',label:'Повернуть',icon:RotateCw,hint:'На 90° по часовой',run:()=>{if(commitProject(rotateModule(project,a.id,(((a.rotation??0)+90)%360) as 0|90|180|270)))setFit(f=>f+1);}},
-      {id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:()=>{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}},
+      quickMenuApplies(mod)?upperItem(quickOps):{id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:quickOps.addUpper},
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
     out.ring=bodyRing;

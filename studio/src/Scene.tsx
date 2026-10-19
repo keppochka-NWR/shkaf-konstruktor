@@ -277,6 +277,7 @@ export function Scene(p: Props) {
         ? "Нажмите, чтобы изменить размер"
         : "Размер в свету";
       button.addEventListener("pointerdown", (e) => e.stopPropagation());
+      passThrough(button);
       button.addEventListener("click", () => action?.());
       button.disabled = !action;
       target.appendChild(button);
@@ -287,8 +288,16 @@ export function Scene(p: Props) {
     function roomLabel(text:string,pos:THREE.Vector3,action?:()=>void,small=false,wall?:CutawayWall){
       const button=document.createElement("button");button.type="button";button.className="model-dimension room-dimension"+(small?" gap-dimension":"");button.textContent=text;
       button.setAttribute("aria-label","Размер помещения: "+text);button.title=action?"Нажмите, чтобы изменить размер":text;
-      button.addEventListener("pointerdown",e=>e.stopPropagation());button.addEventListener("click",()=>action?.());button.disabled=!action;
+      button.addEventListener("pointerdown",e=>e.stopPropagation());passThrough(button);button.addEventListener("click",()=>action?.());button.disabled=!action;
       target.appendChild(button);labels.push({element:button,position:pos,wall});
+    }
+    /** Плашка размера ловит только левый клик (правка размера). Правая/средняя кнопка и колесо уходят в сцену:
+     *  меню правой кнопки, панорама и масштаб работают и над плашкой (ручной тест 19.10, находки 1 и 4). */
+    function passThrough(el:HTMLElement){
+      const canvas=()=>renderer.domElement;
+      el.addEventListener("pointerdown",e=>{if(e.button===0)return;e.preventDefault();canvas().dispatchEvent(new PointerEvent("pointerdown",e));},true);
+      el.addEventListener("contextmenu",e=>{e.preventDefault();e.stopPropagation();canvas().dispatchEvent(new MouseEvent("contextmenu",e));});
+      el.addEventListener("wheel",e=>{e.preventDefault();e.stopPropagation();canvas().dispatchEvent(new WheelEvent("wheel",e));},{passive:false});
     }
     function line(points: THREE.Vector3[]) {
       const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
@@ -935,7 +944,9 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);
       const env=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.openingId||h.object.userData.fixtureId||h.object.userData.obstacleId||h.object.userData.moduleId));
       if(env){const d=env.object.userData;if(d.openingId){current.current.onEnvironmentContext?.('opening',d.openingId);return;}if(d.fixtureId){current.current.onEnvironmentContext?.('fixture',d.fixtureId);return;}if(d.obstacleId){current.current.onEnvironmentContext?.('obstacle',d.obstacleId);return;}}
-      const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;
+      const hit=hitAt(e.clientX,e.clientY,true);
+      // Промах мимо деталей (щель, край, пустой проём) — меню выбранного корпуса, а не тишина (ручной тест 19.10, находки 10–11).
+      if(!hit){const s=current.current,act=s.arrangement.find(x=>x.id===s.activeId);if(act&&!s.hideFurniture&&act.module.sections[0])s.onContextMenu?.(act.id,act.module.sections[0].id,e.clientX,e.clientY);return;}
       const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId);if(!a)return;
       current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY,{pid:hit.object.userData.partId as string|undefined,role:hit.object.userData.role as string|undefined,localY:hit.point.y-(a.y??0)});
     }
