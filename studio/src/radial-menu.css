@@ -33,6 +33,9 @@
 div.selection-action-bar { position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 40; max-width: calc(100vw - 32px);
   flex-wrap: nowrap; border: 1px solid #e3d5b4; border-radius: 12px; box-shadow: 0 8px 24px #1b2a4429; padding: 6px 10px; }
 div.selection-action-bar .selection-context { min-width: 0; margin-right: 6px; }
+/* Замечание критика 20.10 (п.4): полоса не глотает правый клик и колесо по модели под ней — фон насквозь, мышь ловят только кнопки. */
+div.selection-action-bar { pointer-events: none; }
+div.selection-action-bar button, div.selection-action-bar select, div.selection-action-bar input { pointer-events: auto; }
 @media (max-width: 650px) { div.selection-action-bar { flex-wrap: wrap; bottom: 52px; } }
 /* Плашка размера без действия не ловит мышь вовсе: клики и колесо идут в сцену. */
 .model-dimension:disabled { pointer-events: none; }
