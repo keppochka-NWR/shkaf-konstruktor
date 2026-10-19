@@ -2,9 +2,10 @@
 // отличают нас от серийной мебели»). Только то, что студия уже строит и считает: те же операции, что кнопки панели «Наполнение»
 // (dropFilling / modifySection), без новой фурнитуры и цен. У каждого пункта — короткая подсказка «чем лучше серийной».
 // Пунктов больше семи — поэтому две группы: «В секцию ›» (наполнение; «Наполнение» не влезало в центр кольца — перенос «Наполнени/е») и «Улучшения ›».
-import { Archive, ArrowDownToLine, Columns2, Footprints, Lightbulb, Lock, MousePointerClick, PanelTop, Plus, Rows3, Shirt, ShoppingBasket, Sparkles } from "lucide-react";
+import { Archive, ArrowDownToLine, Columns2, Footprints, Layers, Lightbulb, Lock, MousePointerClick, PanelTop, Plus, Rows3, Shirt, ShoppingBasket, Sparkles } from "lucide-react";
 import type { RadialItem } from "./RadialMenu";
 import { RULES, type Module } from "./model";
+import { WORKTOP_CHOICES, setWorktopMaterial, worktopLabel } from "./kitchen";
 import type { FillKind } from "./operations";
 import { MESH, MESH_KIND_LABEL, type MeshItem } from "./mesh";
 
@@ -22,6 +23,15 @@ export type AddMenuOps = {
 const MESH_ICON: Record<MeshItem["kind"], RadialItem["icon"]> = { basket: ShoppingBasket, trousers: Shirt, shoes: Footprints };
 // Шесть пунктов «Наполнения» по кольцу: 0 Полку, 1 Перегородку, 2 Сетку, 3 Ящик, 4 Вешалки, 5 Стекло — длинные подписи не соседствуют.
 const RAW_HINT = "Модуль из Базиса как есть — наполнение правится в Базисе";
+
+/** Столешница (задача Макса 19.10.2026): вместо неактивного «Добавить» — «Материал столешницы ›»: компакт 12, акрил 12, кварц 20,
+ *  ЛДСП постформинг 38, акрил 40 с подклейкой. Толщина и высота модуля — по материалу (setWorktopMaterial), вырезы сохраняются. */
+export function worktopMaterialItem(mod: Module, modify: AddMenuOps["modify"]): RadialItem {
+  const w = mod.worktop!;
+  return { id: "worktop-material", label: "Материал столешницы", icon: Layers, hint: `Сейчас: ${worktopLabel(w)} ${w.thickness} мм`, children: WORKTOP_CHOICES.map((c) => ({
+    id: "worktop-" + c.id, label: c.label, icon: Layers, active: w.material === c.material && w.thickness === c.thickness, hint: c.hint,
+    run: () => modify((n) => setWorktopMaterial(n, c.material, c.thickness)) })) };
+}
 
 export function addMenuItem(mod: Module, sid: string, ops: AddMenuOps): RadialItem {
   const base = { id: "fill", label: "Добавить", icon: Plus };

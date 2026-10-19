@@ -111,7 +111,7 @@ import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
-import {addMenuItem} from './addMenu';
+import {addMenuItem,worktopMaterialItem} from './addMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
 import {
@@ -575,7 +575,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
-      addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,y,o?.meshId,o?.glass);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
+      mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,y,o?.meshId,o?.glass);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         editFacade,{id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
