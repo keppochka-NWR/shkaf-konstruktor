@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ё Конструктор. Соберите шкаф и получите спецификацию</title>
-<meta name="description" content="2D-конструктор распашных шкафов и гардеробных: модули, наполнение, фасады с петлями, автоматические фальши и живая спецификация деталей.">
+<title>Ё Конструктор. Шкаф, купе или кухня в 3D</title>
+<meta name="description" content="3D-конструктор мебели: шкафы-купе, распашные шкафы и кухни по размерам вашего помещения. Цена пересчитывается при каждом изменении.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,27 +13,29 @@
         --accent-deep:#17423a;--accent-soft:#e4eeea;--brass:#a87c3f;--card:#fbf9f4}
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:"Manrope",system-ui,sans-serif;background:var(--bg);color:var(--ink);
-       font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+       font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   h1,h2,h3{font-family:"Cormorant Garamond",serif;font-weight:500;line-height:1.15}
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-  header{height:70px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
-  header .wrap{display:flex;align-items:center;justify-content:space-between;width:100%}
-  .logo{font-family:"Cormorant Garamond",serif;font-size:24px;text-decoration:none;color:var(--ink)}
+  @media(max-width:600px){.wrap{padding:0 16px}}
+  header{min-height:70px;display:flex;align-items:center;border-bottom:1px solid var(--line)}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+  .logo{font-family:"Cormorant Garamond",serif;font-size:24px;text-decoration:none;color:var(--ink);white-space:nowrap}
   .logo b{color:var(--accent);font-weight:500}
   .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:16px;
        padding:14px 28px;border-radius:999px;text-decoration:none;border:none;cursor:pointer;
        background:var(--accent);color:#fff;transition:background .2s}
   .btn:hover{background:var(--accent-deep)}
   .btn.sm{padding:10px 20px;font-size:14.5px}
-  .hero{padding:80px 0 60px;display:grid;gap:40px}
+  .hero{padding:72px 0 56px;display:grid;gap:40px}
+  @media(max-width:600px){.hero{padding:40px 0 36px;gap:28px}}
   @media(min-width:960px){.hero{grid-template-columns:1fr 1fr;align-items:center}}
-  .hero h1{font-size:clamp(36px,4.6vw,58px);max-width:16ch;margin-bottom:18px}
+  .hero h1{font-size:clamp(34px,4.6vw,58px);max-width:16ch;margin-bottom:18px}
   .hero h1 em{font-style:italic;color:var(--brass)}
   .hero p{color:var(--muted);max-width:48ch;margin-bottom:28px}
   .shot{border:1px solid var(--line);border-radius:18px;background:var(--card);
         box-shadow:0 24px 60px rgba(30,26,20,.12);overflow:hidden}
-  .shot svg{display:block;width:100%}
-  .feats{padding:60px 0 90px;display:grid;gap:22px}
+  .shot svg{display:block;width:100%;height:auto}
+  .feats{padding:40px 0 90px;display:grid;gap:22px}
   @media(min-width:840px){.feats{grid-template-columns:repeat(3,1fr)}}
   .feat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
   .feat b{display:block;font-size:16px;margin-bottom:6px}
@@ -45,40 +47,57 @@
 
 <header>
   <div class="wrap">
-    <a class="logo" href="index.html">Ё <b>Конструктор</b></a>
-    <a class="btn sm" href="editor.html">Открыть редактор</a>
+    <a class="logo" href="./">Ё <b>Конструктор</b></a>
+    <a class="btn sm" href="studio/">Открыть конструктор</a>
   </div>
 </header>
 
 <section class="hero wrap">
   <div>
-    <h1>Шкаф собирается <em>как тетрис</em></h1>
-    <p>Задайте помещение и глубину, дальше раскидывайте модули и наполнение мышью. Петли, фальши и тех. зазоры конструктор проставит сам по стандартам производства, спецификация деталей собирается на лету.</p>
-    <a class="btn" href="editor.html">Собрать шкаф</a>
+    <h1>Мебель собирается <em>как конструктор</em></h1>
+    <p>Задайте размеры помещения, расставьте шкафы, купе или кухонные модули и посмотрите проект в 3D. Петли, зазоры и крепёж конструктор проставит сам по правилам производства, а цена пересчитывается при каждом изменении.</p>
+    <a class="btn" href="studio/">Собрать проект</a>
   </div>
-  <div class="shot"><svg id="landingDemo"></svg></div>
+  <div class="shot" aria-hidden="true">
+    <svg viewBox="0 0 480 340" xmlns="http://www.w3.org/2000/svg">
+      <rect width="480" height="340" fill="#fbf9f4"/>
+      <path d="M40 300 L440 300" stroke="#ddd6c8" stroke-width="2"/>
+      <g stroke="#6d675c" stroke-width="2" fill="#e9e1d2">
+        <rect x="70" y="40" width="340" height="250" rx="3"/>
+      </g>
+      <g stroke="#a87c3f" stroke-width="1.5" fill="#efe7d8">
+        <rect x="78" y="48" width="106" height="228"/>
+        <rect x="187" y="48" width="106" height="228"/>
+        <rect x="296" y="48" width="106" height="228"/>
+      </g>
+      <g stroke="#235b4e" stroke-width="2" fill="none">
+        <path d="M110 110 h44 M110 120 h44"/>
+        <rect x="200" y="200" width="80" height="30" rx="2"/>
+        <rect x="200" y="236" width="80" height="30" rx="2"/>
+        <path d="M232 215 h16 M232 251 h16"/>
+        <path d="M310 90 h78 M349 90 v24"/>
+      </g>
+      <g fill="#235b4e"><circle cx="178" cy="80" r="3"/><circle cx="178" cy="244" r="3"/><circle cx="302" cy="80" r="3"/><circle cx="302" cy="244" r="3"/></g>
+      <rect x="70" y="276" width="340" height="14" fill="#d8cfbd"/>
+      <g font-family="Manrope,system-ui,sans-serif" font-size="13" fill="#6d675c" text-anchor="middle">
+        <text x="240" y="28">2400 мм</text>
+        <text x="240" y="324">цена пересчитывается сразу</text>
+      </g>
+    </svg>
+  </div>
 </section>
 
 <section class="feats wrap">
-  <div class="feat"><b>Правила цеха внутри</b><p>Цоколь, вкладные царги, кромка 2 и 0,4 мм, петли GTV по стандарту: до 1200 мм две, выше три. Конструктор не даст собрать то, что цех не сделает.</p></div>
-  <div class="feat"><b>Фальши сами</b><p>Поставили выкатной ящик за распашной фасад: фальш по стороне петель добавится автоматически и попадёт в деталировку.</p></div>
-  <div class="feat"><b>Спецификация на лету</b><p>Каждая деталь с размерами и кромкой, фурнитура с закупочными ценами. Дальше из этой таблицы вырастут карты раскроя и смета.</p></div>
-  <div class="feat"><b>133 декора Lamarty</b><p>Живые текстуры из каталога СФЗ: корпус и каждый фасад можно перекрасить кликом.</p></div>
-  <div class="feat"><b>Проверка фурнитуры</b><p>Сетчатые корзины и брючницы ставятся только туда, где им хватает места. Не хватает: конструктор предложит расширить модуль до технички.</p></div>
-  <div class="feat"><b>Купе следующим</b><p>Корпус общий, купе - это другая фасадная система. Расчёт дверей возьмём из готового калькулятора.</p></div>
+  <div class="feat"><b>Правила цеха внутри</b><p>Цоколь, кромка, петли и технические зазоры — по стандартам производства. Конструктор не даст собрать то, что цех не сделает.</p></div>
+  <div class="feat"><b>Купе и распашные шкафы</b><p>Двери-купе с профилем и заполнением, распашные фасады на петлях, ящики, штанги и полки — в одном проекте.</p></div>
+  <div class="feat"><b>Кухни</b><p>Нижние и навесные модули, столешница и фасады. Меняете ширину модуля — соседи подстраиваются.</p></div>
+  <div class="feat"><b>Цена сразу</b><p>Материалы и фурнитура считаются отдельно: смените петли или ящики — стоимость изменится сразу.</p></div>
+  <div class="feat"><b>Декоры и фасады</b><p>Живые текстуры ЛДСП Lamarty и фасады МДФ: корпус и каждый фасад можно перекрасить кликом.</p></div>
+  <div class="feat"><b>Проект сохраняется</b><p>Проект остаётся в браузере. Покажите его менеджеру салона — он проверит размеры и подготовит предложение.</p></div>
 </section>
 
 <footer>
-  <div class="wrap">Ё Конструктор · рабочая версия для менеджеров производства · 2026</div>
+  <div class="wrap">Ё Конструктор · 2026</div>
 </footer>
-
-<script src="assets/constants.js?v=9"></script>
-<script src="assets/catalog-lamarty.js?v=9"></script>
-<script src="assets/hardware.js?v=9"></script>
-<script src="assets/lemana.js?v=9"></script>
-<script src="assets/model.js?v=9"></script>
-<script src="assets/rules.js?v=9"></script>
-<script src="assets/render.js?v=9"></script>
-<script src="assets/landing-demo.js?v=9"></script>
 </body>
 </html>
