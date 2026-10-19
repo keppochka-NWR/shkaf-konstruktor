@@ -408,7 +408,7 @@ function WorktopPanel(props: KitchenPanelProps) {
         </div>)}
         <div className="kitchen-chips"><button type="button" onClick={() => addCut("sink")}>+ под мойку</button><button type="button" onClick={() => addCut("hob")}>+ под варочную</button></div>
       </div>
-      <p className="field-note">Столешница — отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете — за погонный метр, вырезы — отдельными работами.</p>
+      <p className="field-note">Столешница — отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете — {WORKTOP_THICKNESS[w.material] ? "за м² и обработка лицевого торца за погонный метр" : "за погонный метр"}, вырезы — отдельными работами.</p>
     </Group>
     <Position {...props} open={stage === "bodies"} />
   </div>;
