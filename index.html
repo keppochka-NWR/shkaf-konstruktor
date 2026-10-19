@@ -39,6 +39,14 @@
   .shot{border:1px solid var(--line);border-radius:18px;background:var(--card);
         box-shadow:0 24px 60px rgba(30,26,20,.12);overflow:hidden}
   .shot svg{display:block;width:100%;height:auto}
+  .pick{padding:8px 0 40px;display:grid;gap:22px}
+  @media(min-width:840px){.pick{grid-template-columns:1fr 1fr}}
+  .pick a{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:0 12px 32px rgba(30,26,20,.08);transition:transform .15s,box-shadow .15s}
+  .pick a:hover,.pick a:focus-visible{transform:translateY(-2px);box-shadow:0 18px 44px rgba(30,26,20,.14)}
+  .pick small{display:block;color:var(--brass);font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+  .pick b{display:block;font-size:22px;margin-bottom:8px}
+  .pick p{color:var(--muted);font-size:15px;line-height:1.55;margin-bottom:16px}
+  .pick span{font-weight:600;color:var(--brass)}
   .feats{padding:40px 0 90px;display:grid;gap:22px}
   @media(min-width:840px){.feats{grid-template-columns:repeat(3,1fr)}}
   .feat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px}
@@ -95,6 +103,11 @@
       </g>
     </svg>
   </div>
+</section>
+
+<section class="pick wrap" aria-label="Выберите инструмент">
+  <a href="studio/"><small>3D-проектировщик</small><b>Ё Конструктор</b><p>Шкафы, купе и кухни в комнате клиента: наполнение, фасады, цена сразу, КП и документы в цех.</p><span>Открыть конструктор →</span></a>
+  <a href="calc/"><small>Быстрый расчёт</small><b>Калькулятор дверей-купе</b><p>Проём, число дверей, профиль и наполнение по секциям — цена и коммерческое предложение за минуту.</p><span>Рассчитать двери →</span></a>
 </section>
 
 <section class="feats wrap">
