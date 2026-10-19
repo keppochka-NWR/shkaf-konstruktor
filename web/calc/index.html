@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Калькуляторы</title>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER WITH TABS
+     ============================================================ -->
+<header class="hdr">
+  <div class="hdr-top">
+    <a class="logo" href="#">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="4" width="11" height="20" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        <rect x="15" y="4" width="11" height="20" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        <line x1="2" y1="14" x2="13" y2="14" stroke="currentColor" stroke-width="1.4"/>
+        <circle cx="11" cy="14" r="1.4" fill="currentColor"/>
+        <circle cx="17" cy="14" r="1.4" fill="currentColor"/>
+      </svg>
+      <div>
+        <div class="logo-name">Калькуляторы</div>
+        <div class="logo-tag">Расчёт изделий</div>
+      </div>
+    </a>
+    <div class="hdr-actions">
+      <a href="../" title="Ё Конструктор — 3D-студия" style="align-self:center;font-weight:600;font-size:13px;color:inherit;opacity:.8;text-decoration:none;white-space:nowrap">← Конструктор</a>
+      <button class="btn-icon" data-theme-toggle aria-label="Переключить тему">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="nav-tabs" id="navTabs">
+    <a class="nav-tab active" href="#kupe" data-tab="kupe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/></svg>
+      Двери-купе
+    </a>
+    <a class="nav-tab" href="#fasad-alu" data-tab="fasad-alu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+      Фасады ALU
+    </a>
+    <a class="nav-tab" href="#fasad-paint" data-tab="fasad-paint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16"/></svg>
+      Крашеные МДФ
+    </a>
+    <a class="nav-tab" href="#podves" data-tab="podves">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="4" x2="22" y2="4"/><line x1="6" y1="4" x2="6" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/><rect x="4" y="6" width="16" height="14" rx="1" stroke-dasharray="3 2"/></svg>
+      Подвесная система
+      <span class="tab-badge">Скоро</span>
+    </a>
+    <a class="nav-tab" href="#furnitura" data-tab="furnitura">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Фурнитура
+      <span class="tab-badge">Скоро</span>
+    </a>
+  </nav>
+</header>
+
+<!-- ============================================================
+     MODULE: ДВЕРИ-КУПЕ — 3-column редизайн (Phase 5)
+     ============================================================ -->
+<div class="module-page active" id="page-kupe">
+
+  <!-- Top bar: бредкрамб, версия, действия -->
+  <div class="kupe-topbar">
+    <div class="kupe-bc">
+      <span class="kupe-bc-muted">Калькуляторы</span>
+      <span class="kupe-bc-sep">/</span>
+      <span class="kupe-bc-current">Двери-купе</span>
+      <span class="kupe-bc-version" id="kupeVersion">v 2.5 — 2026.05.05</span>
+    </div>
+    <div class="kupe-topbar-actions">
+      <button class="kupe-btn-out" onclick="kupeOpenDraftsList()" title="Открыть сохранённый">Открыть</button>
+      <button class="kupe-btn-out" onclick="kupeSaveDraft()" title="Сохранить проект на этом компьютере">Сохранить</button>
+      <button class="kupe-btn-fill" onclick="openKP()" title="Сформировать КП">Экспорт КП</button>
+    </div>
+  </div>
+
+  <!-- 3-колонная сетка -->
+  <div class="kupe-3col">
+
+    <!-- LEFT: 01 — ПАРАМЕТРЫ -->
+    <aside class="kupe-col kupe-col-left" id="panelForm">
+      <div class="kupe-col-head">01 — ПАРАМЕТРЫ</div>
+
+      <div id="kupeForm" class="kupe-form-list">
+
+        <!-- Размеры проёма -->
+        <div class="kupe-sec">
+          <div class="kupe-sec-lbl">Размеры проёма, мм</div>
+          <div class="kupe-row-2">
+            <input class="kupe-inp" id="width" type="number" value="1200" min="400" max="4000" placeholder="Ширина">
+            <input class="kupe-inp" id="height" type="number" value="2000" min="600" max="3000" placeholder="Высота">
+          </div>
+        </div>
+
+        <!-- Количество дверей — chips -->
+        <div class="kupe-sec">
+          <div class="kupe-sec-lbl">Количество дверей</div>
+          <div class="kupe-chips" id="doorCountChips">
+            <button class="kupe-chip" data-val="1">1</button>
+            <button class="kupe-chip kupe-chip-active" data-val="2">2</button>
+            <button class="kupe-chip" data-val="3">3</button>
+            <button class="kupe-chip" data-val="4">4</button>
+            <button class="kupe-chip" data-val="5">5</button>
+            <button class="kupe-chip" data-val="6">6</button>
+            <button class="kupe-chip" data-val="7">7</button>
+          </div>
+          <select id="doorCount" style="display:none" onchange="onDoorCountChange()">
+            <option value="1">1</option><option value="2" selected>2</option>
+            <option value="3">3</option><option value="4">4</option>
+            <option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option>
+          </select>
+        </div>
+
+        <!-- Одиночная перегородка — только при N=2 -->
+        <div id="singlePartRow" style="display:none">
+          <div class="tog-row partition-row">
+            <div>
+              <div class="tog-lbl" style="display:flex;align-items:center;gap:6px;color:var(--color-primary)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="18" rx="1.5"/><rect x="13" y="3" width="8" height="18" rx="1.5" opacity=".35" stroke-dasharray="3 2"/></svg>
+                Одиночная перегородка
+              </div>
+              <div class="tog-desc">Оплачивается 1 дверь</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="singlePartition"><span class="t-slider"></span></label>
+          </div>
+        </div>
+
+        <!-- Профиль -->
+        <div class="kupe-sec">
+          <div class="kupe-sec-lbl">Профиль</div>
+          <select class="kupe-sel" id="profileSystem" onchange="onProfileSystemChange()"></select>
+          <select class="kupe-sel" id="profileColor" onchange="onProfileColorChange()" style="margin-top:8px"></select>
+          <input type="hidden" id="profMarkup" value="0">
+        </div>
+
+        <!-- Заполнение секций — карточный вид -->
+        <div class="kupe-sec">
+          <div class="kupe-sec-lbl">Заполнение секций</div>
+          <div class="kupe-fills-list" id="kupeFillsList">
+            <div class="kupe-hint">Нажмите на секцию в превью чтобы выбрать материал</div>
+          </div>
+        </div>
+
+        <!-- Сетка секций (preset выбор) -->
+        <div class="kupe-sec">
+          <div class="kupe-sec-lbl">Сетка секций</div>
+          <div class="sect-grid" id="sectionsGrid"></div>
+          <div id="dividersBlock" style="display:none;flex-direction:column;gap:var(--sp3);margin-top:8px"></div>
+        </div>
+
+        <!-- Фурнитура -->
+        <div class="kupe-sec">
+          <div class="kupe-sec-lbl">Фурнитура и работа</div>
+          <div class="tog-row">
+            <div>
+              <div class="tog-lbl">Доводчик</div>
+              <div class="tog-desc">+7 000 ₽ за дверь</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="softClose"><span class="t-slider"></span></label>
+          </div>
+          <div class="tog-row" id="complexRow" style="display:none;margin-top:6px">
+            <div>
+              <div class="tog-lbl">Сложная сборка <span class="badge badge-w" style="margin-left:5px">Авто</span></div>
+              <div class="tog-desc" id="complexDesc">+6 000 ₽ за дверь (более 4 вставок)</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="complexWork" disabled checked><span class="t-slider"></span></label>
+          </div>
+        </div>
+
+        <input type="hidden" id="fillMarkup" value="0">
+
+      </div><!-- /kupeForm -->
+
+      <!-- SECTION EDITOR — слайд при клике на секцию -->
+      <div id="sectionEditor" style="display:none;flex-direction:column;gap:var(--sp4)">
+        <div class="card">
+          <div class="card-head" style="display:flex;align-items:center;gap:var(--sp3);padding:var(--sp3) var(--sp4)">
+            <button class="btn-icon" onclick="closeSectionEditor()" title="Назад">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div class="card-title" id="sectionEditorTitle">Дверь 1</div>
+          </div>
+          <div class="card-body" style="padding-top:0;max-height:440px;overflow-y:auto">
+            <div id="sectionMaterialList"></div>
+          </div>
+        </div>
+        <div class="card" id="filmCard">
+          <div class="card-body">
+            <div class="tog-row" id="filmRow">
+              <div>
+                <div class="tog-lbl">Защитная плёнка</div>
+                <div class="tog-desc" id="filmDesc">Армировочная · 240 ₽/м²</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="filmToggle"><span class="t-slider"></span></label>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="display:flex;gap:var(--sp2);flex-direction:column">
+            <button class="btn-secondary" onclick="applyToAllSections()">Применить ко всем секциям двери</button>
+            <button class="btn-secondary" onclick="applyToAllDoors()">Все двери — как эта</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER: визуализация -->
+    <main class="kupe-col kupe-col-center" id="kupeVizCol">
+      <div class="kupe-viz-stage" id="kupeVizStage">
+        <!-- Empty state -->
+        <div class="kupe-empty" id="emptyState">
+          <svg width="52" height="52" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="4" width="11" height="20" rx="1.5"/><rect x="15" y="4" width="11" height="20" rx="1.5"/><line x1="2" y1="14" x2="13" y2="14"/></svg>
+          <h3>Введите параметры</h3>
+          <p>Заполните размеры и нажмите «Рассчитать»</p>
+        </div>
+        <!-- Hidden until calculated, contains vizRoom + project badge -->
+        <div class="kupe-viz-area" id="kupeVizArea" style="display:none">
+          <div class="viz-room" id="vizRoom"></div>
+          <div class="kupe-proj-badge" id="kupeProjBadge">
+            <div class="kupe-proj-num">ПРОЕКТ № <span id="kupeProjNum">—</span></div>
+            <div class="kupe-proj-meta" id="kupeProjMeta">— × — мм · — ДВЕРЕЙ</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT: 02 — РАСЧЁТ -->
+    <aside class="kupe-col kupe-col-right" id="resultPanel">
+      <div class="kupe-col-head">02 — РАСЧЁТ</div>
+
+      <!-- До расчёта -->
+      <div id="kupeResultEmpty">
+        <div class="kupe-hero-lbl">ИТОГО</div>
+        <div class="kupe-hero-price" style="opacity:.3">— ₽</div>
+        <div class="kupe-hint" style="margin-bottom:16px">Введите параметры и нажмите «Рассчитать»</div>
+        <button class="kupe-btn-calc" onclick="calculate()">Рассчитать стоимость</button>
+        <button class="kupe-btn-link" onclick="resetForm()">Сбросить параметры</button>
+      </div>
+
+      <!-- После расчёта (показывается renderResults) -->
+      <div id="resultContent" style="display:none;flex-direction:column;gap:var(--sp4)"></div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- ============================================================
+     MODULE: ФАСАДЫ ALU (заглушка)
+     ============================================================ -->
+<div class="module-page" id="page-fasad-alu">
+  <div class="app-body" style="display:block;padding:20px 24px;max-width:1400px;margin:0 auto;">
+
+    <!-- Заголовок -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+      <h2 style="margin:0;font-size:1.2rem;font-weight:700;color:var(--color-text)">Фасады в алюминиевой рамке</h2>
+    </div>
+
+    <!-- Параметры заказа -->
+    <div class="card" style="padding:16px 20px;margin-bottom:16px;">
+      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-primary);margin-bottom:12px;">Параметры заказа</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;">
+        <div class="field">
+          <label class="lbl">Система профиля</label>
+          <select class="inp" id="fasadProfileSel" onchange="fasadSetProfile(this.value)"></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Наполнение по умолчанию</label>
+          <select class="inp" id="fasadDefaultFillSel" onchange="fasadSetDefaultFill(+this.value)" style="max-width:220px;"></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Тип монтажа</label>
+          <select class="inp" id="fasadDefaultMountSel" onchange="fasadSetDefaultMount(this.value)">
+            <option value="nakl">Накладной</option>
+            <option value="polunakl">Полунакладной</option>
+            <option value="vkladnoy">Вкладной</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl">Открывание</label>
+          <select class="inp" id="fasadDefaultOpenDirSel" onchange="fasadSetDefaultOpenDir(this.value)">
+            <option value="left">Левое</option>
+            <option value="right">Правое</option>
+            <option value="up">Вверх</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="lbl">Петли по умолчанию</label>
+          <select class="inp" id="fasadDefaultHingeSel" onchange="fasadSetDefaultHinge(this.value)"></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Список фасадов -->
+    <div class="card" style="padding:16px 20px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-primary);">Список фасадов</div>
+        <button onclick="addFasadRow()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius-md);font-size:.82rem;font-weight:600;cursor:pointer;transition:opacity .15s;" onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">+ Добавить</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--color-border);">
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">#</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Ш, мм</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">В, мм</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Кол.</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Монтаж</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Открывание</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Наполнение</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Петли</th>
+              <th style="text-align:right;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Петель</th>
+              <th style="text-align:right;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Цена/шт, ₽</th>
+              <th style="text-align:right;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Итого, ₽</th>
+              <th style="padding:4px;"></th>
+            </tr>
+          </thead>
+          <tbody id="fasadTbody"></tbody>
+        </table>
+        <div id="fasadEmpty" style="text-align:center;padding:36px 0;color:var(--color-text-muted);font-size:.9rem;">
+          Нажмите «+ Добавить» чтобы внести первый фасад
+        </div>
+      </div>
+    </div>
+
+    <!-- Итоги -->
+    <div class="card" id="fasadSummaryCard" style="padding:16px 20px;margin-bottom:16px;display:none;">
+      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-primary);margin-bottom:14px;">Итоговая стоимость</div>
+      <div id="fasadSummary" style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:18px;"></div>
+      <div class="kp-client-row" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+        <div class="field"><label class="lbl" for="aluKpClient">Клиент / организация</label><input class="inp" id="aluKpClient" type="text" placeholder="ФИО или название организации" style="min-width:220px"></div>
+        <div class="field"><label class="lbl" for="aluKpPhone">Телефон</label><input class="inp" id="aluKpPhone" type="tel" placeholder="+7 (___) ___-__-__"></div>
+        <div class="field"><label class="lbl" for="aluKpManager">Менеджер</label><input class="inp" id="aluKpManager" type="text" placeholder="Имя менеджера"></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button onclick="openFasadKP()" style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius-md);font-size:.88rem;font-weight:600;cursor:pointer;transition:opacity .15s;" onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Сформировать КП
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE: КРАШЕНЫЕ МДФ-ФАСАДЫ -->
+<div class="module-page" id="page-fasad-paint">
+  <div class="app-body" style="display:block;padding:20px 24px;max-width:1400px;margin:0 auto;">
+
+    <!-- Заголовок -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16"/></svg>
+      <h2 style="margin:0;font-size:1.2rem;font-weight:700;color:var(--color-text)">Крашеные МДФ-фасады</h2>
+    </div>
+
+    <!-- Глобальные параметры -->
+    <div class="card" style="padding:16px 20px;margin-bottom:16px;">
+      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-primary);margin-bottom:12px;">Параметры по умолчанию</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;">
+        <div class="field">
+          <label class="lbl">Цвет (RAL)</label>
+          <select class="inp" id="mdfDefaultColorSel" onchange="mdfSetDefaultColor(this.value)" style="min-width:220px;"></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Покрытие</label>
+          <select class="inp" id="mdfDefaultFinishSel" onchange="mdfSetDefaultFinish(this.value)"></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Фрезеровка</label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <select class="inp" id="mdfDefaultMillingSel" onchange="mdfSetDefaultMilling(this.value)" style="min-width:160px;"></select>
+            <div id="mdfDefaultMillingPreview" style="width:60px;height:40px;flex-shrink:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="lbl">Толщина МДФ, мм</label>
+          <select class="inp" id="mdfDefaultThicknessSel" onchange="mdfSetDefaultThickness(+this.value)"></select>
+        </div>
+        <div class="field">
+          <label class="lbl">Петли по умолчанию</label>
+          <select class="inp" id="mdfDefaultHingeSel" onchange="mdfSetDefaultHinge(this.value)"></select>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:.78rem;color:var(--color-text-muted);">
+        Базовая стоимость покраски: <strong style="color:var(--color-text)">10 000 ₽/м²</strong> (матовое, цвет не влияет на цену)
+      </div>
+    </div>
+
+    <!-- Список фасадов -->
+    <div class="card" style="padding:16px 20px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-primary);">Список фасадов</div>
+        <button onclick="addMdfRow()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius-md);font-size:.82rem;font-weight:600;cursor:pointer;transition:opacity .15s;" onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">+ Добавить</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--color-border);">
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">#</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Ш, мм</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">В, мм</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Кол.</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Цвет (RAL)</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Покрытие</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Фрезеровка</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Петли</th>
+              <th style="text-align:left;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Сторона</th>
+              <th style="text-align:right;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Площадь, м²</th>
+              <th style="text-align:right;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Цена/шт, ₽</th>
+              <th style="text-align:right;padding:6px 8px;font-weight:600;color:var(--color-text-muted);white-space:nowrap;">Итого, ₽</th>
+              <th style="padding:4px;"></th>
+            </tr>
+          </thead>
+          <tbody id="mdfTbody"></tbody>
+        </table>
+        <div id="mdfEmpty" style="text-align:center;padding:36px 0;color:var(--color-text-muted);font-size:.9rem;">
+          Нажмите «+ Добавить» чтобы внести первый фасад
+        </div>
+      </div>
+    </div>
+
+    <!-- Итоги -->
+    <div class="card" id="mdfSummaryCard" style="padding:16px 20px;margin-bottom:16px;display:none;">
+      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--color-primary);margin-bottom:14px;">Итоговая стоимость</div>
+      <div id="mdfSummary" style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:18px;"></div>
+      <div class="kp-client-row" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+        <div class="field"><label class="lbl" for="mdfKpClient">Клиент / организация</label><input class="inp" id="mdfKpClient" type="text" placeholder="ФИО или название организации" style="min-width:220px"></div>
+        <div class="field"><label class="lbl" for="mdfKpPhone">Телефон</label><input class="inp" id="mdfKpPhone" type="tel" placeholder="+7 (___) ___-__-__"></div>
+        <div class="field"><label class="lbl" for="mdfKpManager">Менеджер</label><input class="inp" id="mdfKpManager" type="text" placeholder="Имя менеджера"></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button onclick="openMdfKP()" style="display:inline-flex;align-items:center;gap:8px;padding:9px 20px;background:var(--color-primary);color:#fff;border:none;border-radius:var(--radius-md);font-size:.88rem;font-weight:600;cursor:pointer;transition:opacity .15s;" onmouseenter="this.style.opacity='.85'" onmouseleave="this.style.opacity='1'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Сформировать КП
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODULE: ПОДВЕСНАЯ СИСТЕМА (заглушка) -->
+<div class="module-page" id="page-podves">
+  <div class="placeholder-page">
+    <div class="placeholder-icon">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="4" x2="22" y2="4"/><line x1="6" y1="4" x2="6" y2="20"/><line x1="18" y1="4" x2="18" y2="20"/><rect x="4" y="6" width="16" height="14" rx="1" stroke-dasharray="3 2"/></svg>
+    </div>
+    <h2>Подвесная система</h2>
+    <p>Калькулятор подвесных раздвижных систем для межкомнатных перегородок и дверей.</p>
+    <div class="placeholder-features">
+      <span class="placeholder-chip">Типы систем</span>
+      <span class="placeholder-chip">Наполнение</span>
+      <span class="placeholder-chip">Направляющие</span>
+      <span class="placeholder-chip">Монтаж</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODULE: ФУРНИТУРА (заглушка) -->
+<div class="module-page" id="page-furnitura">
+  <div class="placeholder-page">
+    <div class="placeholder-icon">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+    </div>
+    <h2>Каталог фурнитуры</h2>
+    <p>Справочный каталог используемой фурнитуры: ручки, петли, доводчики, подъёмные механизмы и комплектующие.</p>
+    <div class="placeholder-features">
+      <span class="placeholder-chip">Поиск по артикулу</span>
+      <span class="placeholder-chip">Фильтры</span>
+      <span class="placeholder-chip">Цены</span>
+      <span class="placeholder-chip">Наличие</span>
+    </div>
+  </div>
+</div>
+
+<!-- KP document modal (shared) -->
+<!-- Редактор петель МДФ — модальное окно (drag-n-drop) -->
+<div id="mdfHingeEditor" class="mdf-hinge-modal">
+  <div class="mdf-hinge-modal-backdrop" onclick="closeMdfHingeEditor()"></div>
+  <div class="mdf-hinge-modal-panel">
+    <div class="mdf-hinge-modal-bar">
+      <span id="mdfHingeEditorTitle" style="font-weight:600;font-size:.95rem;color:#333">Редактор петель</span>
+      <button onclick="closeMdfHingeEditor()" style="height:32px;padding:0 14px;background:transparent;border:1px solid #ccc;border-radius:.4rem;font-size:.82rem;color:#555;cursor:pointer;">✕ Закрыть</button>
+    </div>
+    <div class="mdf-hinge-modal-body">
+      <div id="mdfHingePreview" style="display:flex;justify-content:center;align-items:center;background:#fafafa;border-radius:.5rem;padding:16px;min-height:300px;"></div>
+      <div class="mdf-hinge-controls">
+        <button onclick="mdfHingeAdd()" id="mdfHingeAddBtn" class="mdf-hinge-btn">+ Добавить петлю</button>
+        <button onclick="mdfHingeReset()" class="mdf-hinge-btn">↺ Авто-расстановка</button>
+        <span id="mdfHingeCount" style="margin-left:auto;color:var(--color-text-muted);font-size:.82rem;align-self:center;"></span>
+      </div>
+      <div style="font-size:.74rem;color:var(--color-text-muted);margin-top:10px;line-height:1.45;">
+        Перетягивайте петли мышкой по вертикали. Минимум — 2 петли, максимум — 5.
+        Минимальный отступ от края и между петлями — 30 мм.
+        Для удаления нажмите на крестик рядом с петлёй (доступно при 3 и более).
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="kpDocument">
+  <div class="kp-modal-bar">
+    <span style="font-weight:600;font-size:.9rem;color:#333">Коммерческое предложение — предпросмотр</span>
+    <div class="kp-modal-actions">
+      <button class="kp-btn-print" onclick="window.print()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Печать / PDF
+      </button>
+      <button class="kp-btn-close" onclick="closeKP()">✕ Закрыть</button>
+    </div>
+  </div>
+  <div class="kp-page" id="kpPageContent"></div>
+</div>
+
+<!-- 1. Данные -->
+<script src="data/fillings.js?v=20260505"></script>
+<script src="data/profiles.js?v=20260505"></script>
+<script src="data/fasad-alu-data.js?v=20260505"></script>
+<script src="data/fasad-mdf-data.js?v=20260505"></script>
+<script src="data/ral-k7.js?v=20260505"></script>
+
+<!-- 2. Утилиты и store -->
+<script src="js/utils.js?v=20260505"></script>
+<script src="js/store.js?v=20260505"></script>
+
+<!-- 3. Router (требует store) -->
+<script src="js/router.js?v=20260505"></script>
+
+<!-- 4. Shared layers -->
+<script src="js/shared-kp.js?v=20260505"></script>
+
+<!-- 5. Модули -->
+<script src="js/fasad-alu.js?v=20260505"></script>
+<script src="js/fasad-mdf.js?v=20260505"></script>
+
+<!-- ============================================================
+     KUPE MODULE SCRIPT — injected into page-kupe
+     ============================================================ -->
+<script src="js/kupe.js?v=20260505"></script>
+</body>
+</html>

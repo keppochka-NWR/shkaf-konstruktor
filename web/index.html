@@ -26,6 +26,10 @@
        background:var(--accent);color:#fff;transition:background .2s}
   .btn:hover{background:var(--accent-deep)}
   .btn.sm{padding:10px 20px;font-size:14.5px}
+  .btn.ghost{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
+  .btn.ghost:hover{background:var(--accent-soft)}
+  .hdr-btns,.hero-btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  @media(max-width:600px){.hdr-btns .btn.ghost{display:none}}
   .hero{padding:72px 0 56px;display:grid;gap:40px}
   @media(max-width:600px){.hero{padding:40px 0 36px;gap:28px}}
   @media(min-width:960px){.hero{grid-template-columns:1fr 1fr;align-items:center}}
@@ -48,7 +52,10 @@
 <header>
   <div class="wrap">
     <a class="logo" href="./">Ё <b>Конструктор</b></a>
-    <a class="btn sm" href="studio/">Открыть конструктор</a>
+    <div class="hdr-btns">
+      <a class="btn sm ghost" href="calc/">Калькулятор дверей-купе</a>
+      <a class="btn sm" href="studio/">Открыть конструктор</a>
+    </div>
   </div>
 </header>
 
@@ -56,7 +63,10 @@
   <div>
     <h1>Мебель собирается <em>как конструктор</em></h1>
     <p>Задайте размеры помещения, расставьте шкафы, купе или кухонные модули и посмотрите проект в 3D. Петли, зазоры и крепёж конструктор проставит сам по правилам производства, а цена пересчитывается при каждом изменении.</p>
-    <a class="btn" href="studio/">Собрать проект</a>
+    <div class="hero-btns">
+      <a class="btn" href="studio/">Собрать проект</a>
+      <a class="btn ghost" href="calc/">Калькулятор дверей-купе</a>
+    </div>
   </div>
   <div class="shot" aria-hidden="true">
     <svg viewBox="0 0 480 340" xmlns="http://www.w3.org/2000/svg">
