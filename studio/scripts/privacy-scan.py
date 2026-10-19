@@ -150,7 +150,8 @@ def names_dir_components(path):
     out = []
     for name in os.listdir(path):
         base = os.path.splitext(name)[0]
-        if base.startswith("kitchen"):
+        # служебные проекты: кухни базы, импорт шкафов, тестовые и демо-расчёты (имена без клиентов) — не источник фамилий
+        if base.startswith(("kitchen", "wardrobe-", "test-", "garderob-", "demo-")):
             continue
         out.append(base)
     return out
