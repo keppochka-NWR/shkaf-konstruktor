@@ -507,9 +507,9 @@ function buildMdfSVG(row) {
 
   // 6. Размеры W/H + размеры петельных отступов
   // W — снизу
-  var dimYbot = offY + rH + 22;
-  lines += dimLineH(offX, dimYbot, offX+rW, dimYbot, W+'',
-    Math.round(offX + rW/2), dimYbot+11);
+  var dimYBottom = offY + rH + 22;
+  lines += dimLineH(offX, dimYBottom, offX+rW, dimYBottom, W+'',
+    Math.round(offX + rW/2), dimYBottom+11);
 
   // H — на стороне без петель
   var hingesOnLeft = (row.hingeSide || 'left') === 'left';
@@ -855,9 +855,9 @@ function renderMdfHingeEditor() {
   }
 
   // Размер W снизу
-  var dimYbot = 30 + rH + 18;
-  lines += dimLineH(pad, dimYbot, pad+rW, dimYbot, W+'',
-    pad + Math.round(rW/2), dimYbot+11);
+  var dimYBottom = 30 + rH + 18;
+  lines += dimLineH(pad, dimYBottom, pad+rW, dimYBottom, W+'',
+    pad + Math.round(rW/2), dimYBottom+11);
 
   // Размер H — на стороне без петель (далеко)
   var farX = hingesOnLeft ? (pad + rW + 50) : (pad - 50);

@@ -90,8 +90,10 @@ def write(p, t):
 
 
 def copy_tree(src, out):
-    if os.path.isdir(out):
-        shutil.rmtree(out)
+    if os.path.isdir(out):  # чистим содержимое, саму папку не удаляем (её может держать локальный сервер)
+        for e in os.listdir(out):
+            q = os.path.join(out, e)
+            shutil.rmtree(q) if os.path.isdir(q) else os.remove(q)
     for dp, dn, fn in os.walk(src):
         dn[:] = [d for d in dn if d not in SKIP_DIRS]
         rel = os.path.relpath(dp, src)
@@ -174,6 +176,11 @@ def bake(src, out):
     t = read(p)
     t = strip_coef(t, "MDF_HINGE_MARKUP")
     write(p, t)
+
+    # ---- переименование локальной переменной, которую privacy-scan путает с фамилией (транслит)
+    for name in ("fasad-alu.js", "fasad-mdf.js"):
+        p = os.path.join(out, "js", name)
+        write(p, re.sub(r"\bdimYbot\b", "dimYBottom", read(p)))
 
     # ---- ссылка назад на студию в шапке
     p = os.path.join(out, "index.html")

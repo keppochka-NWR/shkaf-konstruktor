@@ -348,8 +348,8 @@ function buildFasadSVG(row, c) {
   //    — 100/межосевое/100: на стороне ПЕТЕЛЬ (ближняя ладдер, 18px)
 
   // Ширина W
-  var dimYbot = offY + rH + 22;
-  lines += dimLineH(offX, dimYbot, offX+rW, dimYbot, W+'', cx, dimYbot+11);
+  var dimYBottom = offY + rH + 22;
+  lines += dimLineH(offX, dimYBottom, offX+rW, dimYBottom, W+'', cx, dimYBottom+11);
 
   if (!isUp) {
     // Высота H — на ПРОТИВОПОЛОЖНОЙ стороне от петель (далеко)
