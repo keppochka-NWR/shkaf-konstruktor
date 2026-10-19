@@ -6,7 +6,9 @@ import {initialModule,section,id,boxes,parts,RULES,type Module} from '../src/mod
 import {newProject,type Project} from '../src/project';
 import {insertItem} from '../src/operations';
 import {estimate} from '../src/pricing';
-import {composeContextMenu,confirmDelete,moduleDims,labelSide} from '../src/contextMenu';
+import {composeContextMenu,confirmDelete,moduleDims,labelSide,placeMenu,menuArea} from '../src/contextMenu';
+import {missMenuTarget,screenRect,sectionAtX} from '../src/missMenu';
+import {readFileSync} from 'node:fs';
 import {quickItems,applySectionTemplate,menuDropY,lightItem,upperItem,backItem,baseItem,SHELF_STEP,type QuickMenuOps} from '../src/quickMenu';
 import type {RadialItem} from '../src/RadialMenu';
 
@@ -41,7 +43,83 @@ test('удаление корпуса — только через «Да, уда
   let removed=0;const item=confirmDelete({id:'delete',label:'Удалить',icon:Trash,danger:true,run:()=>{removed++;}});
   item.children![1].run!();assert.equal(removed,0);item.children![0].run!();assert.equal(removed,1);
   const m=wardrobe(),full=ring(13),r=composeContextMenu(m,{title:m.name,subtitle:'',items:[]},full,false);
-  assert.equal(r.items,full);
+  assert.deepEqual(r.items.map(i=>i.id),full.map(i=>i.id),'клик по корпусу — меню модуля, порядок тот же');
+});
+
+test('п.1 критика: в ЛЮБОМ меню корпуса (клик по корпусу, промах, «Корпус ›», двери купе) — «Удалить корпус» только через «Да, удалить / Отмена»',()=>{
+  const m=wardrobe();
+  const check=(items:RadialItem[],label:string)=>{
+    const del=items.find(i=>i.id==='delete')!;assert.ok(del,'есть кнопка удаления');
+    assert.equal(del.label,label);assert.equal(del.danger,true);assert.equal(del.run,undefined,'сразу не удаляет');
+    assert.deepEqual(del.children!.map(i=>i.label),['Да, удалить','Отмена']);
+    return del;
+  };
+  let removed=0;const full=ring(13).map(i=>i.id==='delete'?{...i,run:()=>{removed++;}}:i);
+  // клик по корпусу (не по детали) и промах мимо детали (clickedPart=false, pid нет)
+  const byBody=composeContextMenu(m,{title:m.name,subtitle:'',items:[]},full,false);
+  const d=check(byBody.items,'Удалить корпус');d.children![1].run!();assert.equal(removed,0,'«Отмена» не удаляет');d.children![0].run!();assert.equal(removed,1,'«Да, удалить» удаляет');
+  // клик по детали → «Корпус ›»
+  const byPart=composeContextMenu(m,{title:'Полка 1',subtitle:'',items:[{id:'remove',label:'Удалить',icon:Trash,danger:true,run:()=>{}}]},full,true);
+  check(byPart.items.find(i=>i.id==='body')!.children!,'Удалить корпус');
+  // двери купе — своё кольцо, то же подтверждение
+  const kupe={...wardrobe(),kupe:{doors:2,fills:['x']}} as unknown as Module;
+  const k=composeContextMenu(kupe,{title:'Двери купе',subtitle:'1500 × 2500 · 2 дв.',items:ring(5)},null,false);
+  check(k.items,'Удалить двери купе');
+  // единственный корпус: кнопка неактивна, но подписана «Удалить корпус»
+  const one=composeContextMenu(m,{title:m.name,subtitle:'',items:[]},ring(3).map(i=>i.id==='delete'?{...i,disabled:true}:i),false);
+  assert.equal(one.items.find(i=>i.id==='delete')!.label,'Удалить корпус');
+});
+
+test('п.2 критика: промах мимо детали — меню только внутри экранной рамки корпуса; секция и высота — по точке клика',()=>{
+  const m=wardrobe();// две секции по ~484 мм
+  const rect=screenRect([{x:100,y:50},{x:500,y:50},{x:100,y:650},{x:500,y:650},null]);
+  assert.deepEqual(rect,{left:100,right:500,top:50,bottom:650});
+  assert.equal(missMenuTarget(m,rect,{x:520,y:300},{x:1100,y:1200}),null,'правее корпуса — ничего');
+  assert.equal(missMenuTarget(m,rect,{x:300,y:20},{x:500,y:2500}),null,'выше корпуса — ничего');
+  assert.equal(missMenuTarget(m,null,{x:300,y:300},{x:500,y:1000}),null,'корпус за камерой — ничего');
+  const [s1,s2]=boxes(m);
+  const right=missMenuTarget(m,rect,{x:400,y:300},{x:s2.x+s2.width/2,y:1700})!;
+  assert.equal(right.sid,m.sections[1].id,'клик над правой секцией — правая секция, не sections[0]');assert.equal(right.localY,1700,'высота клика, а не height/2');
+  assert.equal(sectionAtX(m,s1.x+s1.width/2),m.sections[0].id);
+  assert.equal(sectionAtX(m,(s1.x+s1.width+s2.x)/2-1),m.sections[0].id,'щель у стойки ближе к левой секции — левая');
+  assert.equal(sectionAtX(m,-10),m.sections[0].id,'левая боковина — ближайшая левая секция');
+  assert.equal(sectionAtX(m,m.width+10),m.sections[1].id,'правая боковина — ближайшая правая секция');
+  assert.equal(missMenuTarget(m,rect,{x:300,y:300},{x:100,y:-50})!.localY,0,'высота в пределах корпуса');
+});
+
+test('п.3 критика: подсветка в полках — позиция «после финального расчёта конструктором», проект НЕ уходит в «Цена уточняется»',()=>{
+  const m=wardrobe();m.sections[0].shelves=[0.3,0.6];m.sections[0].shelfLight=true;
+  const base=structuredClone(m);delete base.sections[0].shelfLight;
+  const e=estimate(project(m)),e0=estimate(project(base));
+  const row=e.lines.find(i=>i.id==='light-shelf')!;
+  assert.equal(row.pending,true,'строка — позиция финального расчёта');
+  assert.ok(!e.missing.some(i=>i.id==='light-shelf'),'не в «нет цены»');
+  assert.equal(e.missing.length,e0.missing.length,'подсветка не добавляет «Цена уточняется»');
+  assert.ok(e.pending.some(i=>i.id==='light-shelf'));
+  assert.equal(e.knownCost,e0.knownCost,'итог считается по известным позициям');
+  const hint=lightItem(m,m.sections[0].id,spy(m).ops).children![1].hint!;assert.match(hint,/цену уточнит конструктор/);
+});
+
+test('п.4 критика: жёлтая полоса — фон насквозь (pointer-events: none), мышь ловят только кнопки',()=>{
+  const css=readFileSync(new URL('../src/radial-menu.css',import.meta.url),'utf8');
+  assert.match(css,/div\.selection-action-bar\s*\{\s*pointer-events:\s*none;?\s*\}/);
+  assert.match(css,/div\.selection-action-bar button[^{]*\{\s*pointer-events:\s*auto/);
+});
+
+test('п.5 критика (находка 6): меню не перекрывает правую панель инструментов сцены — сдвиг туда, где есть место',()=>{
+  const canvas={left:300,top:60,right:1366,bottom:720},tools={left:1316,top:200,right:1358,bottom:520};
+  const area=menuArea({width:1366,height:768},canvas,tools);
+  assert.equal(area.right,1310,'правый край области — левее панели');
+  assert.deepEqual(menuArea({width:1366,height:768},canvas,{left:310,top:200,right:350,bottom:500}).right,1366,'панель слева — правый край не трогаем');
+  const R=116,SIZE=48,extent=R+SIZE/2+110;
+  for(const x of [400,700,1000,1150,1250,1300]){
+    const {cx,cy}=placeMenu(x,400,R,SIZE,area);
+    assert.ok(cx+extent<=area.right+0.01,`клик x=${x}: меню (с подписями) не заходит на панель: ${cx+extent} > ${area.right}`);
+    assert.ok(cx-extent>=area.left-0.01,`клик x=${x}: и не уходит за левый край сцены`);
+    assert.ok(cy-(R+SIZE/2)>=area.top&&cy+(R+SIZE/2)<=area.bottom);
+  }
+  assert.ok(placeMenu(1250,400,R,SIZE,area).cx<1250,'у правой панели — меню слева от клика');
+  assert.ok(placeMenu(400,400,R,SIZE,area).cx>400,'есть место справа — меню справа от клика');
 });
 
 test('фасад: действия фасада сразу на первом кольце + «Корпус ›»; двери купе — своё кольцо с размерами',()=>{

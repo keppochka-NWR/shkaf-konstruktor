@@ -113,7 +113,7 @@ import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem} from './addMenu';
 import {quickItems,quickMenuApplies,upperItem,menuDropY,type QuickMenuOps} from './quickMenu';
-import {composeContextMenu} from './contextMenu';
+import {composeContextMenu,menuArea} from './contextMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
 import {
@@ -1226,7 +1226,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             </div>
           )}
-          {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items} onClose={()=>setCtxMenu(null)}/>;})()}
+          {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);
+            /* находка 6: меню в области сцены и левее правой панели инструментов */
+            const tools=document.querySelector('.scene-tools'),canvas=tools?.parentElement?.querySelector('canvas')??document.querySelector('canvas'),visible=(el:Element|null|undefined)=>{const b=el?.getBoundingClientRect();return b&&b.width>0?b:null;};
+            const area=menuArea({width:window.innerWidth,height:window.innerHeight},visible(canvas),visible(tools));
+            return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items} area={area} onClose={()=>setCtxMenu(null)}/>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
               aria-label="Прозрачный корпус"
