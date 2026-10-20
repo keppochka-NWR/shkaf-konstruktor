@@ -10,7 +10,7 @@ import {facadeGeometry} from './vernissageGeometry';
 import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
-import {procModel,faceAt,fastenerAxis,fastenerGeometry,hingeFallbackModel} from './hardwareModels';
+import {procModel,faceAt,fastenerAxis,fastenerGeometry,hingeFallbackModel,nativePlacement} from './hardwareModels';
 // Цвета профиля рамочного фасада для сцены.
 const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
@@ -25,15 +25,21 @@ const gltfLoader = new GLTFLoader();
 const handleModels = new Map<string, Promise<THREE.Group>>();
 // Сбой загрузки (сеть, локальный сервер демо, обрыв при пересборке сцены) не кэшируется: раньше отклонённый промис оставался в кэше
 // до перезагрузки страницы, и все петли/конфирматы проекта рисовались заглушками — серые коробки и штыри над крышей (баг Макса 20.10).
-// Теперь — три попытки с паузой, отказ убирается из кэша (следующая пересборка сцены пробует снова) и пишется в консоль с адресом.
+// Теперь — попытки с растущей паузой, отказ убирается из кэша (следующая пересборка сцены пробует снова) и пишется в консоль с адресом.
+// Паузы 0,5–1–2–4 с (≈7,5 с всего), а не 3×0,5: пересборка демо (vite build, emptyOutDir) держит папку models пустой дольше 1,5 с —
+// вкладка, открытая во время пересборки, рисовала крепёж заглушками и декоры без текстур (снимок Макса 20.10, «что-то выпирает»).
+const RETRY_DELAYS = [500, 1000, 2000, 4000];
+function withRetry<T>(load: (ok: (v: T) => void, fail: (e: unknown) => void) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const attempt = (k: number) => load(resolve, (e) => k < RETRY_DELAYS.length ? setTimeout(() => attempt(k + 1), RETRY_DELAYS[k]) : reject(e));
+    attempt(0);
+  });
+}
 function loadHandleModel(file: string) {
   let p = handleModels.get(file);
   if (!p) {
     const url = `${import.meta.env.BASE_URL}models/${file.includes("/") ? file : "handles/" + file}`;
-    const q: Promise<THREE.Group> = new Promise<THREE.Group>((resolve, reject) => {
-      const attempt = (left: number) => gltfLoader.load(url, (g) => resolve(g.scene), undefined, (e) => left > 1 ? setTimeout(() => attempt(left - 1), 500) : reject(e));
-      attempt(3);
-    });
+    const q: Promise<THREE.Group> = withRetry<THREE.Group>((ok, fail) => gltfLoader.load(url, (g) => ok(g.scene), undefined, fail));
     q.catch((e) => { if (handleModels.get(file) === q) handleModels.delete(file); console.warn("Модель не загрузилась:", url, e); });
     handleModels.set(file, p = q);
   }
@@ -238,14 +244,37 @@ export function Scene(p: Props) {
     const textureLoads=new Map<string,Promise<THREE.Texture>>(),loadedTextures=new Set<THREE.Texture>();
     function cachedTexture(url:string){
       let result=textureLoads.get(url);
-      if(!result){result=new Promise<THREE.Texture>((resolve,reject)=>loader.load(url,map=>{map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(disposed)map.dispose();else loadedTextures.add(map);resolve(map);},undefined,reject));textureLoads.set(url,result);}
+      // сбой (пересборка демо, сеть) — те же попытки, что у сеток, и отказ не остаётся в кэше: раньше декоры до перезагрузки страницы
+      // рисовались плоским цветом (снимок Макса 20.10)
+      if(!result){const q=withRetry<THREE.Texture>((ok,fail)=>loader.load(url,map=>{map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(disposed)map.dispose();else loadedTextures.add(map);ok(map);},undefined,fail));q.catch(()=>{if(textureLoads.get(url)===q)textureLoads.delete(url);});textureLoads.set(url,result=q);}
       return result;
     }
     let generation = 0,pendingTextures=0;
     // Для снимков проверки: скрипт ждёт, пока догрузятся текстуры и модели фурнитуры (window.__pending() === 0).
     (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;
     // Для сценариев мышью (scripts/stretch-scenario.ts): только чтение — положение и ширина корпусов на сцене.
-    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width}));    function disposeGroup(group: THREE.Group) {
+    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width}));
+    // Для сценария scripts/fastener-render-check.ts (только чтение): коробки ОТРИСОВАННОЙ фурнитуры (сетки GLB, запасные модели,
+    // процедурные модели, видимые заглушки) по каждому модулю — в мм модуля, и коробка корпуса (плиты без фасадов, столешницы, цоколя).
+    (window as unknown as {__hardwareBoxes?:()=>unknown[]}).__hardwareBoxes=()=>current.current.arrangement.flatMap(a=>{
+      const g=moduleGroups.get(a.id);if(!g)return [];
+      g.updateMatrixWorld(true);
+      const inv=g.matrixWorld.clone().invert(),boxes=new Map<string,{box:THREE.Box3;src:Set<string>}>();
+      g.traverse(o=>{
+        if(!(o instanceof THREE.Mesh)||!o.userData.partId||(o.userData.role!=='fastener'&&o.userData.role!=='hinge'))return;
+        let model=false;for(let p=o.parent;p&&p!==g;p=p.parent){if(!p.visible)return;if(p instanceof THREE.Mesh)model=true;}
+        const mats=(Array.isArray(o.material)?o.material:[o.material]) as THREE.Material[];
+        if(!o.visible||mats.every(q=>q.transparent&&q.opacity===0))return;
+        if(!o.geometry.boundingBox)o.geometry.computeBoundingBox();
+        const b=o.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv,o.matrixWorld)),k=String(o.userData.partId),prev=boxes.get(k);
+        if(prev){prev.box.union(b);prev.src.add(model?'model':'stub');}else boxes.set(k,{box:b,src:new Set([model?'model':'stub'])});
+      });
+      const ps=parts(a.module),byId=new Map(ps.map(p=>[p.id,p]));
+      const boards=ps.filter(p=>(p.material==='board'||p.material==='hdf')&&p.role!=='door'&&!p.rotY&&!p.rotZ&&!p.external&&!/worktop|plinth/i.test(p.id));
+      const carcass=boards.length?{lo:[0,1,2].map(i=>Math.min(...boards.map(p=>p.position[i]-p.size[i]/2))),hi:[0,1,2].map(i=>Math.max(...boards.map(p=>p.position[i]+p.size[i]/2)))}:null;
+      return [{id:a.id,kind:a.module.raw?'raw':a.module.kitchen?'kitchen':'studio',carcass,items:[...boxes].map(([pid,v])=>{const p=byId.get(pid);return {pid,role:p?.role,name:p?.name,file:p?.model?.file,native:!!p?.model?.native,src:[...v.src],lo:v.box.min.toArray(),hi:v.box.max.toArray()};})}];
+    });
+    function disposeGroup(group: THREE.Group) {
       group.traverse((o) => {
         if (
           o instanceof THREE.Mesh ||
@@ -495,13 +524,10 @@ export function Scene(p: Props) {
             const g = generation, model = part.model; pendingTextures++;
             // сетка (или запасная модель) — в начале координат узла Базиса (origin) с его поворотом (quat)
             const place = (inst: THREE.Object3D) => {
-              const holder = new THREE.Group();
-              if (model.mirror) inst.scale.x = -1;
+              const holder = new THREE.Group(), at = nativePlacement(model, part.position);
+              if (at.mirror) inst.scale.x = -1;
               holder.add(inst);
-              const [w, x, y, z] = model.quat ?? [1, 0, 0, 0];
-              holder.quaternion.set(x, y, z, w);
-              const o = model.origin ?? part.position;
-              holder.position.set(o[0] - part.position[0], o[1] - part.position[1], o[2] - part.position[2]);
+              holder.quaternion.copy(at.quaternion); holder.position.copy(at.offset);
               mesh.add(holder); needsRender = true;
             };
             loadHandleModel(model.file).then((src) => {
