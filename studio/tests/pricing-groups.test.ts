@@ -83,10 +83,10 @@ test('сырой шкаф из корпуса Базиса без счётчик
   assert.ok(!estimate(newProject()).lines.some(l=>l.id==='bazis-hardware:raw'));
 });
 
-test('wardrobe-012: «по коэффициенту» — честно нет, с объяснением (было 51 500 из трёх строк)',{skip:!has('wardrobe-012')},()=>{
+test('wardrobe-012: «по коэффициенту» — честно нет, с объяснением (было 51 500 из трёх строк; с 20.10 работа цеха 3500 ₽/лист — 62 500)',{skip:!has('wardrobe-012')},()=>{
   const e=estimate(load('wardrobe-012'));
   assert.equal(e.byMarkup,null);assert.ok(e.lines.some(l=>l.id==='bazis-hardware:raw'&&l.unitPrice===null));
-  assert.ok(e.byMarkupKnown>=51500-100&&e.byMarkupKnown<=51500+100,'нижняя оценка — прежняя цена листов и работы: '+e.byMarkupKnown);
+  assert.ok(e.byMarkupKnown>=62500-100&&e.byMarkupKnown<=62500+100,'нижняя оценка — цена листов и работы: '+e.byMarkupKnown);
 });
 
 test('деталь больше листа у сырого модуля: смета не завершена (retail=null), строка в «Материалах»',()=>{
