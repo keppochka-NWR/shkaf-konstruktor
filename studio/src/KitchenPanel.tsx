@@ -14,7 +14,7 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 import { useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
-import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, type Module, type Part } from "./model";
+import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, handleDoors, doorHandlePos, setModuleHandlePos, isUpperModule, handlePosIssue, HANDLE_POS_LABEL, type HandlePos, type Module, type Part } from "./model";
 import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, type WorktopSpec, type WorktopMaterial } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
@@ -291,6 +291,12 @@ function CabinetPanel(props: KitchenPanelProps) {
     <Group icon={<Wrench size={15}/>} title="Ручки">
       <Check label="Ручки на фасадах" checked={!m.noHandles} change={(v) => modify((n) => { if (v) delete n.noHandles; else n.noHandles = true; })} />
       {!m.noHandles ? <button className="text-action" onClick={handles}>Ручка: {handleById(m.handleId).label}</button> : <p className="field-note">Без ручек: Gola, ручки заказчика или push — в смете ручек нет.</p>}
+      {!m.noHandles && m.doors && (() => { // расположение ручек распашных фасадов модуля (запрос Макса 20.10); отдельный фасад — правой кнопкой «Ручка ›»
+        const ids = handleDoors(m); if (!ids.length) return null;
+        const cur = ids.map((id) => doorHandlePos(m, m.sections.find((x) => x.id === id.split(":")[0])!, Number(id.split(":door:")[1]))), same = cur.every((c) => c === cur[0]) ? cur[0] : "";
+        const order: HandlePos[] = isUpperModule(m) ? ["bottomCenter", "bottomCorner", "topCenter", "topCorner", "rule"] : ["topCorner", "topCenter", "bottomCorner", "bottomCenter", "rule"];
+        return <label className="hardware-field" data-testid="handle-pos-module">Расположение ручек<select aria-label="Расположение ручек модуля" value={same} onChange={(e) => modify((n) => { setModuleHandlePos(n, e.target.value as HandlePos); })}>{!same && <option value="">разное по фасадам</option>}{order.map((pos) => { const bad = ids.every((id) => !!handlePosIssue(m, id, pos)); return <option key={pos} value={pos} disabled={bad}>{HANDLE_POS_LABEL[pos]}{bad ? " — не помещается" : ""}</option>; })}</select></label>;
+      })()}
     </Group>
 
     {m.doors && !k.premialPullout && <Group icon={<Link2 size={15} />} title="Петли" open={stage === "facades"} note={k.hinges === false ? "нет, как в Базисе" : hingeCount + " шт."}>
