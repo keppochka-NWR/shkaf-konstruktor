@@ -124,6 +124,9 @@ type Props = {
   /** «Ближние стены: скрыть» — стена между камерой и комнатой прячется целиком (по умолчанию — настройка зрителя, ВКЛ). */
   cutaway?:boolean;
   drawerPreview?:{sid:string;index:number};
+  /** Режим «Подсветка» (20.10.2026): левый клик по детали корпуса не выбирает и не тянет её, а переключает подсветку (onLightPick). */
+  lightMode?:boolean;
+  onLightPick?:(mid:string,pid:string)=>void;
 };
 export function Scene(p: Props) {
   const host = useRef<HTMLDivElement>(null),
@@ -874,6 +877,7 @@ export function Scene(p: Props) {
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.presentation)return;
       if((e.ctrlKey||e.metaKey)&&current.current.onToggleModule){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();current.current.onToggleModule(picked.object.userData.moduleId);}return;}
+      if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();current.current.onLightPick(picked.object.userData.moduleId,picked.object.userData.partId);}return;}
       if(current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
@@ -1006,7 +1010,7 @@ export function Scene(p: Props) {
       // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
       // вверх/вниз на её высоту, а если места нет — прячем до следующего поворота камеры (аудит вёрстки 06.10.2026).
       const rect=target.getBoundingClientRect();
-      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip')??[])
+      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar')??[])
         .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2,w:r.width+12,h:r.height+12};});
       const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
       const ordered = [...labels].sort((a,b)=>Number(a.element.classList.contains('gap-dimension'))-Number(b.element.classList.contains('gap-dimension')));
@@ -1095,7 +1099,7 @@ export function Scene(p: Props) {
   );
   useEffect(()=>{const action=p.presentation||p.mode==='orbit'?'Перетаскивание — поворот вида':p.mode==='fill'?'Перетаскивайте полки и ящики по высоте, перегородки по ширине':p.moveAll?'Перетаскивание корпуса перемещает всю композицию':'Перетаскивайте корпуса для расстановки';host.current?.querySelector('canvas')?.setAttribute('aria-label','3D-модель мебели. '+action+'. Колесо — масштаб, зажатое колесо — вращение камеры.');},[p.mode,p.moveAll,p.presentation]);
   return (
-    <div className="scene" ref={host} data-testid="scene">
+    <div className={p.lightMode?"scene light-picking":"scene"} ref={host} data-testid="scene">
       {error && (
         <div className="scene-error" role="alert">
           {error}

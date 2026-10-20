@@ -127,10 +127,10 @@ try {
   if (await item(/^Корпус/).count()) { await item(/^Корпус/).click(); await page.waitForTimeout(250); }
   await item(/^Подсветка/).click(); await page.waitForTimeout(250);
   await shot("8-light");
-  const inShelves = item(/^В полках/);
+  const inShelves = item(/^Все полки секции/); // 20.10: подсветка по деталям — бывший пункт «В полках»
   const enabled = await inShelves.isEnabled();
   if (enabled) { await inShelves.click(); await page.waitForTimeout(900); }
-  check("«Подсветка › В полках» доступна после шаблона «Штанга + полка»", enabled);
+  check("«Подсветка › Все полки секции» доступна после шаблона «Штанга + полка»", enabled);
   await shot("9-after-light");
   const price1 = (await page.locator(".dock-price").innerText().catch(() => "")).replace(/\s+/g, " ");
   check("цена пересчитана после шаблона", price0 !== "" && price1 !== "", price0 + " → " + price1);
