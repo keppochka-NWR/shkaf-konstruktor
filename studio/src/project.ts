@@ -232,7 +232,7 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   // Место ищем по корпусам с автофальшами (как их поставит сохранение): первый шкаф у стены ещё без планки торцом
   // (добавлен из пустой комнаты) получит её при следующем сохранении и сдвинется на 21 мм — новый не должен встать в этот вылет.
   // Ложное «пересекается» на втором «Добавить в комнату» (критик 20.10, было и на night-release).
-  const f=applyAutoFillers(p),filledAnchor=anchor&&(f.modules.find(x=>x.id===anchor.id)??anchor);anchor=filledAnchor;p={...p,modules:f.modules};
+  const f=applyAutoFillers(p),anchorId=anchor?.id;if(anchor)anchor=f.modules.find(x=>x.id===anchorId)??anchor;p={...p,modules:f.modules};
   const supports=p.modules.filter(a=>a.module.kitchen?.role==='base');
   const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?1500:0);
   if(source.worktop&&!supports.length)throw Error('Сначала добавьте нижние кухонные корпуса: столешница устанавливается над ними.');

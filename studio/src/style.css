@@ -118,7 +118,9 @@
 .gap-menu-title { padding: 4px 8px 6px; color: #5d6b70; font-size: 12px; border-bottom: 1px solid #eef1f2; margin-bottom: 2px; }
 .stretching .row-gap { visibility: hidden !important; }
 .gap-menu button { display: flex; justify-content: flex-start; text-align: left; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: #1f2d33; font: inherit; cursor: pointer; }
-.gap-menu button:hover, .gap-menu button:focus-visible { background: #eef3ff; color: #1f3a8f; }
+.gap-menu button:hover:not(:disabled), .gap-menu button:focus-visible { background: #eef3ff; color: #1f3a8f; }
+.gap-menu button:disabled { color: #9aa5a9; cursor: not-allowed; }
+.gap-menu button small { margin-left: 4px; font-size: 11px; color: #a0681c; }
 .dimension-editor {
   position: fixed;
   inset: 0;
@@ -804,6 +806,17 @@ input {
   margin-left: auto;
   padding: 0;
 }
+/* Критик 20.10 (m1): плашка ошибки в левом нижнем углу сцены, не под панелью инструментов справа (там пряталась «×»),
+   фон пропускает мышь (ручки и корпуса под ней работают), кнопки ловят клик; скрывается сама через 6 с (App.tsx). */
+.error-banner {
+  right: auto;
+  bottom: 40px;
+  max-width: min(520px, calc(100% - 150px));
+  z-index: 8;
+  pointer-events: none;
+}
+.error-banner button { pointer-events: auto; cursor: pointer; padding: 4px; border-radius: 5px; }
+.error-banner button:hover { background: #f3e2c6; }
 .properties {
   border-left: 1px solid var(--line);
   display: flex;

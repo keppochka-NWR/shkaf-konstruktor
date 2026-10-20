@@ -23,7 +23,7 @@ test("ряд Макса: правый модуль пары перед зазо�
   assert.deepEqual([get(p, "e").x, get(p, "e").module.width], [3500, 600], "следующий за зазором на месте");
   assert.equal(gaps(p, "d").right.gap, 200);
   // места мало — понятная ошибка с подсказкой, ничего не меняется
-  assert.throws(() => resizeInRow(maxRow(), "d", 1000), /упирается в «Угловой»: справа свободно 300 мм, а нужно 400\. Можно «Дотянуть до «Угловой»» \(\+300 мм\)/);
+  assert.throws(() => resizeInRow(maxRow(), "d", 1000), /«Шкаф 4»: справа свободно 300 мм до «Угловой», а нужно 400\. Можно дотянуть до него \(\+300 мм\)/);
   // левый модуль пары (сосед справа вплотную) — как раньше: меняется правый сосед
   const q = resizeInRow(maxRow(), "c", 700);
   assert.deepEqual([get(q, "d").x, get(q, "d").module.width], [2700, 500]);
@@ -121,6 +121,21 @@ test("повороты 0/90/180/270: зазор по оси ширины, «До
     assert.deepEqual([st.width, st.gap], [750, 150], `поворот ${rot}: растяжение`);
     assert.deepEqual(projectErrors(applyAutoFillers(st.project!)), [], `поворот ${rot}: растяжение без ошибок`);
   }
+});
+
+test("m3: «Задать зазор» меняет ширину (край со стороны зазора), «Вплотную» не отрывает от соседа; m9 — причина у неактивных", async () => {
+  const { setGap, flushBlock } = await import("../src/rowResize");
+  const p = setGap(maxRow(), "d", "right", 50);
+  assert.deepEqual([get(p, "d").x, get(p, "d").module.width, gaps(p, "d").right.gap], [2600, 850, 50], "правый край на зазор 50, левый на месте");
+  const q = setGap(maxRow(), "e", "left", 100);
+  assert.deepEqual([get(q, "e").x, get(q, "e").module.width], [3300, 800], "у «Углового» двигается левый край, правый на месте");
+  assert.equal(get(setGap(maxRow(), "d", "right", 400), "d").module.width, 500, "больший зазор — уже");
+  // «Шкаф 4» вплотную к «Шкаф 3» слева — «Вплотную вправо» оторвёт от него
+  assert.equal(flushBlock(maxRow(), "d", "right"), "оторвёт от «Шкаф 3»");
+  assert.throws(() => flush(maxRow(), "d", "right"), /оторвёт от «Шкаф 3»/);
+  assert.equal(flushBlock(maxRow(), "e", "left"), undefined, "«Угловой» справа свободен — можно");
+  assert.equal(flushBlock(maxRow(), "b", "right"), "вплотную с обеих сторон");
+  assert.equal(flushBlock(maxRow(), "d", "left"), "зазора нет");
 });
 
 test("B2: два «Добавить в комнату» подряд из пустой комнаты — второй вплотную справа, без ложного пересечения", async () => {

@@ -21,7 +21,7 @@ import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import {resizeOpening} from './sectionLayout';
-import {placeInRow,gaps,fillGap,flush,planStretch,type GapSide} from './rowResize';
+import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,type GapSide} from './rowResize';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
 import {StageBar} from './StageBar';
@@ -520,19 +520,26 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   // Зазоры в ряду, «Дотянуть», «Вплотную», «Задать зазор…», растяжение мышью (запрос Макса 20.10.2026, РЕШЕНИЯ.md «Ширина в ряду»).
   const [gapMenu,setGapMenu]=useState<{side:'left'|'right';x:number;y:number}|null>(null);
-  const rowGaps=useMemo(()=>{try{return gaps(project,placed.id);}catch{return null;}},[project,placed.id]);
+  // плашка «Изменение не применено» скрывается сама через 6 с (критик 20.10, m1); с кнопкой «Подогнать…» и ошибкой открытия — нет
+  useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
+  // столешница, объекты ряда, Базис, угловой, купе — без плашек зазоров и ручек (их ширина краем не меняется)
+  const rowGaps=useMemo(()=>{try{return widthLock(placed.module)?null:gaps(project,placed.id);}catch{return null;}},[project,placed.id,placed.module]);
   useEffect(()=>{setGapMenu(null);},[project,placed.id]);
   useEffect(()=>{if(!gapMenu)return;const esc=(e:KeyboardEvent)=>{if(e.key==='Escape')setGapMenu(null);};window.addEventListener('keydown',esc);return()=>window.removeEventListener('keydown',esc);},[gapMenu]);
   function rowEdit(make:()=>Project){try{return commitProject(make());}catch(e){setError((e as Error).message);return false;}}
   const sideWord=(side:'left'|'right')=>side==='right'?'справа':'слева';
-  function askGap(mid:string,side:'left'|'right',g:GapSide){editDimension(`Зазор ${sideWord(side)} до ${g.to}, мм`,g.gap,v=>rowEdit(()=>flush(project,mid,side,v)));}
-  /** Пункты «Размеры ›»: дотянуть край до соседа/стены и придвинуть вплотную (неактивны, если зазора нет). */
+  // «Задать зазор…» меняет ширину: край со стороны зазора, противоположный на месте (критик 20.10, m3); «мм» добавляет само окно
+  function askGap(mid:string,side:'left'|'right',g:GapSide){editDimension(`Зазор ${sideWord(side)} до ${g.to}`,g.gap,v=>rowEdit(()=>setGap(project,mid,side,v)));}
+  /** Пункты «Размеры ›»: дотянуть край до соседа/стены и придвинуть вплотную; неактивные — с причиной в подсказке. */
   function rowGapItems(mid:string):RadialItem[]{
+    const a=project.modules.find(x=>x.id===mid);if(!a)return [];
     let g:ReturnType<typeof gaps>;try{g=gaps(project,mid);}catch{return [];}
-    const fill=(side:'left'|'right'):RadialItem=>({id:'fill-'+side,label:`Дотянуть ${side==='right'?'вправо':'влево'}`+(g[side].gap?` (+${g[side].gap})`:''),icon:side==='right'?ArrowRightToLine:ArrowLeftToLine,disabled:!g[side].gap,
-      hint:g[side].gap?`До ${g[side].to}: ширина ${g[side].fillWidth} мм, ${side==='right'?'левый':'правый'} край на месте`:`${side==='right'?'Справа':'Слева'} вплотную — зазора нет`,run:()=>{rowEdit(()=>fillGap(project,mid,side));}});
-    const push=(side:'left'|'right'):RadialItem=>({id:'flush-'+side,label:`Вплотную ${side==='right'?'вправо':'влево'}`,icon:side==='right'?ChevronsRight:ChevronsLeft,disabled:!g[side].gap,
-      hint:g[side].gap?`Сдвинуть на ${g[side].gap} мм до ${g[side].to}, ширина та же`:`${side==='right'?'Справа':'Слева'} вплотную — зазора нет`,run:()=>{rowEdit(()=>flush(project,mid,side));}});
+    const lock=widthLock(a.module),both=!g.left.gap&&!g.right.gap,Side=(side:'left'|'right')=>side==='right'?'Справа':'Слева';
+    const why=(side:'left'|'right')=>lock?lock[0].toUpperCase()+lock.slice(1):both?'Вплотную с обеих сторон — зазора нет':!g[side].gap?`${Side(side)} вплотную — зазора нет`:undefined;
+    const fill=(side:'left'|'right'):RadialItem=>{const no=why(side);return {id:'fill-'+side,label:`Дотянуть ${side==='right'?'вправо':'влево'}`+(!no?` (+${g[side].gap})`:''),icon:side==='right'?ArrowRightToLine:ArrowLeftToLine,disabled:!!no,
+      hint:no??`До ${g[side].to}: ширина ${g[side].fillWidth} мм, ${side==='right'?'левый':'правый'} край на месте`,run:()=>{rowEdit(()=>fillGap(project,mid,side));}};};
+    const push=(side:'left'|'right'):RadialItem=>{const block=flushBlock(project,mid,side),no=why(side)??(block?`Нельзя: ${block}. Закрыть зазор — «Дотянуть»`:undefined);return {id:'flush-'+side,label:`Вплотную ${side==='right'?'вправо':'влево'}`,icon:side==='right'?ChevronsRight:ChevronsLeft,disabled:!!no,
+      hint:no??`Сдвинуть на ${g[side].gap} мм до ${g[side].to}, ширина та же`,run:()=>{rowEdit(()=>flush(project,mid,side));}};};
     return [fill('right'),fill('left'),push('right'),push('left')];
   }
   useEffect(()=>{setMaterialScope("active");},[modal]);
@@ -1245,7 +1252,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             gapDimensions={gapDimensions}
             rowGaps={rowGaps}
             onGapClick={(side,x,y)=>setGapMenu({side,x,y})}
-            stretchable={!(m.raw||m.corner||m.kupe||m.worktop)}
+            stretchable={!widthLock(m)}
             stretchPlan={(mid,side,raw,snap)=>{try{return planStretch(project,mid,side,raw,snap);}catch(e){return {problem:(e as Error).message};}}}
             onStretch={(mid,side,raw,snap)=>{try{const plan=planStretch(project,mid,side,raw,snap);if(plan.problem){setError(plan.problem);return false;}return plan.project?commitProject(plan.project):false;}catch(e){setError((e as Error).message);return false;}}}
           />}
@@ -1282,7 +1289,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div className="gap-menu" role="menu" aria-label={`Зазор ${where} ${g.gap} мм до ${g.to}`} style={{left:Math.max(8,Math.min(gapMenu.x-20,window.innerWidth-236)),top:Math.max(8,Math.min(gapMenu.y+14,window.innerHeight-160))}} onPointerDown={e=>e.stopPropagation()}>
                 <div className="gap-menu-title">{where[0].toUpperCase()+where.slice(1)} {g.gap} мм до {g.to}</div>
                 <button role="menuitem" autoFocus onClick={()=>{close();rowEdit(()=>fillGap(project,placed.id,side));}}>Дотянуть (+{g.gap} мм)</button>
-                <button role="menuitem" onClick={()=>{close();rowEdit(()=>flush(project,placed.id,side));}}>Придвинуть вплотную</button>
+                {(()=>{const block=flushBlock(project,placed.id,side);return <button role="menuitem" disabled={!!block} title={block?`Нельзя: ${block}. Закрыть зазор — «Дотянуть»`:`Сдвинуть на ${g.gap} мм, ширина та же`} onClick={()=>{close();rowEdit(()=>flush(project,placed.id,side));}}>Придвинуть вплотную{block&&<small> — {block}</small>}</button>;})()}
                 <button role="menuitem" onClick={()=>{close();askGap(placed.id,side,g);}}>Задать зазор…</button>
               </div></div>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>

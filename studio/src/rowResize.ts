@@ -185,11 +185,7 @@ export function resizeInRow(p: Project, placedId: string, width: number): Projec
     // Внешний край ряда: в свободное место до ближайшего препятствия (модуль любого уровня, объект замера, стена);
     // столешница сверху и цоколь ряда не должны повиснуть или торчать.
     const g = freeSpace(p, a)[side];
-    if (delta > 0 && g.gap < delta - 0.1) {
-      const where = side === "right" ? "справа" : "слева";
-      const hint = g.gap >= 1 ? ` Можно «Дотянуть до ${g.to}» (+${g.gap} мм) — по плашке зазора или правой кнопкой › Размеры.` : "";
-      throw Error(`${quote(a.module)} упирается в ${g.what === "стена" ? "стену" : g.what}: ${where} свободно ${g.gap} мм, а нужно ${delta}.${hint}`);
-    }
+    if (delta > 0 && g.gap < delta - 0.1) throw Error(noRoom(a, side, g, delta));
     rowObjectsCheck(p, a, ctx, side, delta);
   }
   return { ...p, modules: p.modules.map((x) => next.get(x.id) ?? x) };
@@ -218,6 +214,11 @@ function neighborResized(a: PlacedModule, n: PlacedModule, side: Side, delta: nu
  *  до препятствия; moveTo — положение модуля (x, z), если придвинуть его вплотную (ширина та же). */
 export type GapSide = { gap: number; what: string; to: string; id?: string; fillWidth: number; moveTo: { x: number; z: number } };
 const genitive = (what: string) => (what === "стена" ? "стены" : what.startsWith("объект замера") ? what.replace("объект замера", "объекта замера") : what);
+/** «Шкаф 4»: справа свободно 147 мм до «Угловой шкаф», а нужно 200. Можно дотянуть до него (+147 мм). — без кавычек в кавычках. */
+function noRoom(a: PlacedModule, side: Side, g: GapSide, need: number) {
+  const hint = g.gap >= 1 ? ` Можно дотянуть до ${g.what === "стена" ? "неё" : "него"} (+${g.gap} мм) — по плашке зазора или правой кнопкой › Размеры.` : "";
+  return `${quote(a.module)}: ${side === "right" ? "справа" : "слева"} свободно ${g.gap} мм до ${g.to}, а нужно ${r1(need)}.${hint}`;
+}
 
 /** Ближайшее препятствие с каждой стороны: модуль любого уровня (перекрытый по высоте и поперёк ряда), объект замера, стена. */
 function freeSpace(p: Project, a: PlacedModule): Record<Side, GapSide> {
@@ -258,6 +259,24 @@ function ownLocked(m: Module): string | undefined {
   if (rowObject(m)) return "столешница и объекты ряда Базиса меняются в своих свойствах";
   return locked(m);
 }
+/** Почему у модуля нет зазоров, «Дотянуть/Вплотную» и ручек растяжения (столешница, объект ряда, Базис, угловой, купе) — или undefined. */
+export const widthLock = (m: Module) => ownLocked(m);
+/** Почему «Вплотную» к стороне side нельзя: модуль вплотную к соседу с другой стороны — сдвиг оторвёт его (или undefined). */
+export function flushBlock(p: Project, id: string, side: Side): string | undefined {
+  const a = p.modules.find((x) => x.id === id);
+  if (!a) return "модуль не найден";
+  const g = freeSpace(p, a), o = g[side === "right" ? "left" : "right"];
+  if (!g[side].gap) return g.left.gap || g.right.gap ? "зазора нет" : "вплотную с обеих сторон";
+  return !o.gap && o.id ? `оторвёт от ${o.what}` : undefined;
+}
+/** «Задать зазор…»: край со стороны side двигается так, чтобы зазор стал gap мм; противоположный край на месте (меняется ширина). */
+export function setGap(p: Project, id: string, side: Side, gap: number): Project {
+  const a = p.modules.find((x) => x.id === id);
+  if (!a) throw Error("Модуль не найден.");
+  if (!Number.isFinite(gap) || gap < 0) throw Error("Зазор: введите число не меньше 0.");
+  const d = r1(freeSpace(p, a)[side].gap - gap);
+  return Math.abs(d) < 0.05 ? p : moveFreeEdge(p, a, side, d);
+}
 /** Ширина самого модуля w допустима: пределы, ниша техники, новая ошибка проверки модуля. */
 function checkOwnWidth(a: PlacedModule, w: number) {
   const m = a.module, min = minWidth(m), max = maxWidth(m);
@@ -289,7 +308,7 @@ function moveFreeEdge(p: Project, a: PlacedModule, side: Side, d: number): Proje
   checkOwnWidth(a, w);
   if (d > 0.05) {
     const g = freeSpace(p, a)[side];
-    if (g.gap < d - 0.1) throw Error(`${quote(a.module)} упирается в ${g.what === "стена" ? "стену" : g.what}: ${side === "right" ? "справа" : "слева"} свободно ${g.gap} мм, а нужно ${r1(d)}.`);
+    if (g.gap < d - 0.1) throw Error(noRoom(a, side, g, d));
   }
   rowObjectsCheck(p, a, rowContext(p, a), side, d);
   return settle(p, replace(p, [setWidthKeeping(a, w, keep)]), a.id, keep);
@@ -319,6 +338,8 @@ export function flush(p: Project, id: string, side: Side, gap = 0): Project {
   if (!Number.isFinite(gap) || gap < 0) throw Error("Зазор: введите число не меньше 0.");
   const g = freeSpace(p, a), other: Side = side === "right" ? "left" : "right", shift = r1(g[side].gap - gap);
   if (Math.abs(shift) < 0.05) return p;
+  // вплотную к соседу с другой стороны — сдвиг оторвёт модуль от него
+  if (shift > 0 && !g[other].gap && g[other].id) throw Error(`${quote(a.module)}: придвинуть ${side === "right" ? "вправо" : "влево"} нельзя — оторвёт от ${g[other].what}. Чтобы закрыть зазор, «Дотянуть» (меняется ширина).`);
   // отодвинуть дальше, чем свободно с другой стороны, нельзя
   if (shift < 0 && -shift > g[other].gap + 0.1) throw Error(`${quote(a.module)}: чтобы зазор ${side === "right" ? "справа" : "слева"} стал ${gap} мм, модуль надо сдвинуть на ${-shift} мм, а ${other === "right" ? "справа" : "слева"} свободно только ${g[other].gap} мм (до ${g[other].to}).`);
   const o = localToRoom(a, 0, 0), t = localToRoom(a, side === "right" ? shift : -shift, 0);

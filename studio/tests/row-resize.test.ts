@@ -194,7 +194,7 @@ test("объект замера (колонна, короб) — как стен
   const p = resizeInRow(withColumn([at("a", 1400, mod("У колонны")), at("b", 2000, mod("Сосед"))]), "a", 700);
   assert.deepEqual([get(p, "a").x, get(p, "a").module.width, get(p, "b").x, get(p, "b").module.width], [1400, 700, 2100, 500]);
   // одиночный слева от колонны в 50 мм: растёт вправо не дальше колонны
-  assert.throws(() => resizeInRow(withColumn([at("s", 450, mod("Один"))]), "s", 700), /упирается в объект замера «Колонна»: справа свободно 50 мм/);
+  assert.throws(() => resizeInRow(withColumn([at("s", 450, mod("Один"))]), "s", 700), /«Один»: справа свободно 50 мм до объекта замера «Колонна», а нужно 100\. Можно дотянуть до него \(\+50 мм\)/);
   const fits = resizeInRow(withColumn([at("s", 450, mod("Один"))]), "s", 650);
   assert.deepEqual([get(fits, "s").x, get(fits, "s").module.width], [450, 650]);
   // колонна на другой высоте (балка под потолком) нижнему модулю не мешает
