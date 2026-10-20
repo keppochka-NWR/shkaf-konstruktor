@@ -42,9 +42,9 @@ test('наполнение зовёт dropFilling панели: полка, ст
 
 test('подсветка, push и скрытый крепёж переключаются туда и обратно (как галочки панели)',()=>{
   const m=wardrobe(),s=spy(m);
-  find(addMenuItem(s.mod,m.sections[0].id,s.ops).children,'add-light').run!();assert.equal(s.mod.standLight,true);
+  find(addMenuItem(s.mod,m.sections[0].id,s.ops).children,'add-light').run!();assert.ok(s.mod.sections.every(x=>x.standLights?.join()==='left,right'),'все стойки всех секций (подсветка по деталям, 20.10)');
   const on=addMenuItem(s.mod,m.sections[0].id,s.ops);assert.equal(find(on.children,'add-light').label,'Убрать подсветку');assert.ok(find(on.children,'add-light').active);
-  find(on.children,'add-light').run!();assert.equal('standLight' in s.mod,false,'повторно — поле снято, как у галочки «Подсветка в стойках»');
+  find(on.children,'add-light').run!();assert.ok(s.mod.sections.every(x=>!('standLights' in x))&&!('standLight' in s.mod),'повторно — подсветка стоек снята, как у галочки «Подсветка в стойках»');
   find(addMenuItem(s.mod,m.sections[0].id,s.ops).children,'add-push').run!();assert.equal(s.mod.doorOpen,'push');
   find(addMenuItem(s.mod,m.sections[0].id,s.ops).children,'add-push').run!();assert.equal('doorOpen' in s.mod,false);
   find(addMenuItem(s.mod,m.sections[0].id,s.ops).children,'add-hidden-fastening').run!();assert.equal(s.mod.fastening,'eccentric');

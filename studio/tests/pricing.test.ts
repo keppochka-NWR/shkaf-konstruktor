@@ -52,7 +52,9 @@ test('stand lighting adds LED strips per stand face and a retail line on top of 
   assert.equal(line.retail,true);assert.equal(line.unitPrice,3000);assert.ok(Math.abs(line.quantity-strips.length*h/1000)<0.01);
   assert.equal(e.knownCost,base.knownCost);
   assert.equal(e.retail,base.retail!+Math.round(line.quantity*3000));
-  assert.deepEqual(parseProject(p).modules[0].module.standLight,true);
+  // 20.10.2026: подсветка по деталям — старый флаг при загрузке переводится в обе стойки каждой секции (та же смета)
+  const loaded=parseProject(p).modules[0].module;assert.equal(loaded.standLight,undefined);assert.ok(loaded.sections.every(s=>s.standLights?.join()==='left,right'));
+  assert.equal(estimate({...p,modules:[{...p.modules[0],module:loaded}]}).retail,e.retail);
 });
 
 test('паз кухни из Базиса (торцевой, Gola, под подсветку) — не строка сметы «Подсветка»: в Базисе только паз, ленты нет',()=>{

@@ -113,6 +113,7 @@ import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem,worktopMaterialItem} from './addMenu';
 import {quickItems,quickMenuApplies,upperItem,menuDropY,doorQuickItems,type QuickMenuOps} from './quickMenu';
+import {allStandsLit,lightSummary,lightTargets,setAllStands,toggleGroup} from './lights';
 import {composeContextMenu,menuArea} from './contextMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
@@ -545,6 +546,20 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Круговое меню по правой кнопке (06.10.2026): набор действий зависит от того, что под курсором — корпус, полка, ящик или дверь.
   const [ctxMenu,setCtxMenu]=useState<{mid:string;sid:string;x:number;y:number;pid?:string;role?:string;localY?:number}|null>(null);
   function ctxAction(run:()=>void){setCtxMenu(null);try{run();}catch(e){setError((e as Error).message);}}
+  // Режим «Подсветка» (запрос Макса 20.10.2026): id корпуса, у которого клик по детали ставит/снимает её подсветку; Esc или «Готово» — выход.
+  const [lightMode,setLightMode]=useState<string|null>(null);
+  const [lightNote,setLightNote]=useState('');
+  // Esc при открытом круговом меню закрывает только меню, режим остаётся
+  useEffect(()=>{if(!lightMode||ctxMenu)return;const esc=(e:KeyboardEvent)=>{if(e.key==='Escape'){setLightMode(null);setLightNote('');}};window.addEventListener('keydown',esc);return()=>window.removeEventListener('keydown',esc);},[lightMode,ctxMenu]);
+  useEffect(()=>{if(lightMode&&!project.modules.some(x=>x.id===lightMode))setLightMode(null);},[project,lightMode]);
+  function pickLight(mid:string,pid:string){
+    const a=project.modules.find(x=>x.id===mid);if(!a)return;
+    if(!quickMenuApplies(a.module)){setLightNote('У этого корпуса подсветка по деталям не ставится');return;}
+    const keys=lightTargets(a.module,pid);
+    if(!keys.length){setLightNote('В эту деталь подсветка не ставится — кликните стойку, полку, перегородку или крышу');return;}
+    if(mid!==lightMode){selectModule(mid);setLightMode(mid);}
+    if(modifyAt(mid,n=>{toggleGroup(n,keys);}))setLightNote('');
+  }
   // Одноразовая подсказка про круговое меню: исчезает после первого правого клика или по кнопке «Понятно».
   const [rmbTip,setRmbTip]=useState(()=>{try{return !localStorage.getItem('studio-tip-rmb');}catch{return false;}});
   function hideRmbTip(){setRmbTip(false);try{localStorage.setItem('studio-tip-rmb','1');}catch{/* без хранилища — просто скрываем */}}
@@ -575,7 +590,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const above=project.modules.find(x=>x.id!==a.id&&Math.abs((x.y??0)-((a.y??0)+mod.height))<2&&Math.abs(x.x-a.x)<2&&Math.abs(x.z-a.z)<2);
     const quickOps:QuickMenuOps={modify:u=>{modifyAt(a.id,u);},addUpper:()=>{try{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}},
-      removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined};
+      removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined,
+      lightMode:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightNote('');setLightMode(a.id);}:undefined};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
       mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
@@ -1163,7 +1179,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onModuleSelect={selectModule}
             transparent={presentation?false:transparent}
             clearFacades={presentation?false:clearFacades}
-            hideFacades={!presentation&&hideFacades}
+            hideFacades={!presentation&&(hideFacades||!!lightMode)}
+            lightMode={!!lightMode&&!presentation}
+            onLightPick={pickLight}
             hideFurniture={!advanced&&stage==='fixtures'}
             onDimension={(key) =>
               editDimension(
@@ -1323,6 +1341,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             ))}
           </div>
+          {lightMode&&!presentation&&(()=>{const lm=project.modules.find(x=>x.id===lightMode)?.module;if(!lm)return null;const s=lightSummary(lm),f=(v:number)=>v.toLocaleString('ru-RU',{maximumFractionDigits:2});
+            return <div className="light-mode-bar" role="status" aria-label="Режим подсветки"><span><b>Подсветка</b>: кликайте детали, чтобы добавить/убрать подсветку, Esc — выйти<small>Стойки: {s.vertical.count} шт., {f(s.vertical.meters)} пог. м · Полки и крыша: {s.horizontal.count} шт., {f(s.horizontal.meters)} пог. м</small>{lightNote&&<small className="warn">{lightNote}</small>}</span><button onClick={()=>{setLightMode(null);setLightNote('');}}>Готово</button></div>;})()}
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
@@ -1509,7 +1529,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
-                  onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId));else{modifySection(a=>a.shelves=a.shelves.slice(0,c));setSelectedPart(null);}}}
+                  onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId));else{modifySection(a=>{a.shelves=a.shelves.slice(0,c);if(a.shelfLights){a.shelfLights=a.shelfLights.filter(j=>j<c);if(!a.shelfLights.length)delete a.shelfLights;}});setSelectedPart(null);}}}
                 />
                 {s.shelves.length > 0 && (
                   <>
@@ -1706,7 +1726,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {!m.feet&&<label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{plinth(m)===0&&<option value={0}>Без цоколя · антресоль</option>}{[60,80,100,120,150].map(v=><option key={v} value={v}>{v} мм</option>)}</select></label>}
                 {m.feet&&<label className="hardware-field">Ножки<select aria-label="Высота ножек" value={m.feet.height} onChange={e=>modify(n=>{n.feet={height:Number(e.target.value)};})}><option value={18}>M6×18 под боковинами · 18 мм</option><option value={100}>Регулируемые 1033 · 100 мм</option><option value={120}>Регулируемые · 120 мм</option></select></label>}
 </SettingsSection>
-<SettingsSection title="Подсветка">                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={!!m.standLight} onChange={e=>modify(n=>{if(e.target.checked)n.standLight=true;else delete n.standLight;})}/> Подсветка врезная в стойках</span></label>
+<SettingsSection title="Подсветка">                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={allStandsLit(m)} onChange={e=>modify(n=>setAllStands(n,e.target.checked))}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. Стоимость подсветки входит в итог проекта.</p>
 </SettingsSection>
 <SettingsSection title="Фасад"><button className="outline full" onClick={()=>{try{commitProject(applyFacadeStyle(project,placed.id));}catch(e){setError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов — всем редактируемым корпусам. Размеры и индивидуальные ручки сохраняются. {advanced?"Импорт Базиса, столешницы":"Столешницы"}, столы и двери купе пропускаются.</p>

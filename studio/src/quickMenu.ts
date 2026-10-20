@@ -3,9 +3,10 @@
 // Только те же правки модели, что делает панель справа (select «Задняя стенка», «Основание», «Подсветка», «Очистить наполнение»,
 // шаблоны наполнения) — без своих механизмов. Кухни, сырые модули Базиса, двери-купе, столы и угловые шкафы — без этих пунктов:
 // у кухонь правила Базиса, у остальных своё устройство.
-import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash } from "lucide-react";
+import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash } from "lucide-react";
 import type { RadialItem } from "./RadialMenu";
 import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, type Module, type Section } from "./model";
+import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
 
 export type QuickMenuOps = {
   /** Правка этого корпуса (modifyAt) — как селекты и галочки панели. */
@@ -14,6 +15,8 @@ export type QuickMenuOps = {
   addUpper: () => void;
   /** Убрать антресоль над корпусом; undefined — антресоли нет. */
   removeUpper?: () => void;
+  /** «Подсветка › Режим выбора деталей…»: включить режим кликов по деталям этого корпуса; undefined — режима нет. */
+  lightMode?: () => void;
 };
 
 /** Есть ли у модуля быстрые пункты (шкафы и стеллажи студии). */
@@ -42,7 +45,7 @@ export function applySectionTemplate(n: Module, sid: string, kind: SectionTempla
   if (!s) throw Error("Выберите секцию.");
   // «Очистить наполнение» панели (clearSection): полки, ящики, штанга, пантограф, отметки полок
   s.shelves = []; s.drawers = 0; s.rod = false;
-  delete s.pantograph; delete s.rodAt; delete s.drawerConfigs; delete s.glassShelves; delete s.fixed; delete s.pullouts; delete s.shelfLight;
+  delete s.pantograph; delete s.rodAt; delete s.drawerConfigs; delete s.glassShelves; delete s.fixed; delete s.pullouts; delete s.shelfLight; delete s.shelfLights;
   if (kind === "shelves3" || kind === "shelves5") s.shelves = distribute(n, s, kind === "shelves3" ? 3 : 5);
   if (kind === "rod-shelf") { s.rod = true; s.shelves = distribute(n, s, 1); }
   if (kind === "drawers-rod") { s.drawers = 2; s.rod = true; s.shelves = distribute(n, s, 1); }
@@ -82,14 +85,26 @@ export function upperItem(ops: QuickMenuOps): RadialItem {
 /** Цена подсветки клиенту в подсказке пункта (решение Макса 20.10.2026): «4 000 ₽ за пог. м». */
 const rubPerM = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽ за пог. м";
 
+/** Подсветка по деталям (запрос Макса 20.10.2026): стойки секции по выбору, все полки секции, режим кликов по деталям, снять всё. */
 export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
-  const s = m.sections.find((x) => x.id === sid) ?? m.sections[0];
-  return { id: "q-light", label: "Подсветка", icon: Lightbulb, active: !!m.standLight || m.sections.some((x) => x.shelfLight), hint: "В стойках или в полках секции", children: [
-    { id: "q-light-stand", label: m.standLight ? "Убрать в стойках" : "В стойках", icon: Lightbulb, active: !!m.standLight, hint: "LED-профиль в стойках на всю высоту; " + rubPerM(RULES.lightRetailPerM),
-      run: () => ops.modify((n) => { if (n.standLight) delete n.standLight; else n.standLight = true; }) },
-    { id: "q-light-shelves", label: s.shelfLight ? "Убрать в полках" : "В полках", icon: Lightbulb, active: !!s.shelfLight, disabled: !s.shelves.length && !s.shelfLight,
-      hint: s.shelves.length ? "LED-профиль в передней кромке полок секции; " + rubPerM(RULES.shelfLightRetailPerM) : "В секции нет полок",
-      run: () => ops.modify((n) => { const x = n.sections.find((q) => q.id === s.id)!; if (x.shelfLight) delete x.shelfLight; else x.shelfLight = true; }) },
+  const s = m.sections.find((x) => x.id === sid) ?? m.sections[0], idx = m.sections.indexOf(s) + 1;
+  const left = hasStand(m, s.id, "left"), right = hasStand(m, s.id, "right");
+  const shelvesLit = s.shelves.length > 0 && s.shelves.every((_, j) => hasShelf(m, s.id, j));
+  const stand = (which: "left" | "right" | "both", label: string, on: boolean): RadialItem => ({
+    id: "q-light-" + which, label, icon: Lightbulb, active: on,
+    hint: (on ? "Убрать: " : "") + (which === "both" ? "обе стойки" : which === "left" ? "левая стойка" : "правая стойка") + ` секции ${idx}, LED на всю высоту; ` + rubPerM(RULES.lightRetailPerM),
+    run: () => ops.modify((n) => setStands(n, s.id, which, !on)) });
+  return { id: "q-light", label: "Подсветка", icon: Lightbulb, active: anyLight(m), hint: "Стойки, полки или любые детали кликом", children: [
+    stand("left", "Левая стойка", left),
+    stand("right", "Правая стойка", right),
+    stand("both", "Обе стойки", left && right),
+    { id: "q-light-shelves", label: "Все полки секции", icon: Lightbulb, active: shelvesLit, disabled: !s.shelves.length,
+      hint: s.shelves.length ? (shelvesLit ? "Убрать подсветку полок секции " + idx : "LED в передней кромке полок секции " + idx) + "; " + rubPerM(RULES.shelfLightRetailPerM) : "В секции нет полок",
+      run: () => ops.modify((n) => setSectionShelves(n, s.id, !shelvesLit)) },
+    { id: "q-light-mode", label: "Режим выбора деталей…", icon: MousePointerClick, disabled: !ops.lightMode, hint: "Кликайте стойки, полки, перегородки и крышу — подсветка ставится и снимается сразу",
+      run: ops.lightMode },
+    { id: "q-light-clear", label: "Убрать всю подсветку", icon: Trash, danger: true, disabled: !anyLight(m), hint: "Снять подсветку со всех деталей корпуса. Вернуть — Ctrl+Z",
+      run: () => ops.modify((n) => clearLights(n)) },
   ] };
 }
 

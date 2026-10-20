@@ -77,7 +77,7 @@ await item("Корзина").click(); await ring("Корзина", "04-korzina")
 await page.keyboard.press("Escape"); await page.keyboard.press("Escape"); await page.keyboard.press("Escape"); await page.keyboard.press("Escape");
 if (await path("Добавить", "Улучшения")) { await ring("Улучшения"); await item("Подсветку").hover(); await page.waitForTimeout(200); await page.screenshot({ path: `${out}/05-uluchsheniya-hint.png` }); await item("Подсветку").click(); await page.waitForTimeout(900); }
 let p = await saved(), before = await price();
-if (p.modules?.[0]?.module.standLight === true) ok("подсветка включилась (standLight), цена: " + before); else fail("подсветка не включилась");
+if (p.modules?.[0]?.module.sections.every((s) => s.standLights?.length === 2)) ok("подсветка включилась (все стойки, standLights), цена: " + before); else fail("подсветка не включилась");
 if (await path("Добавить", "Улучшения")) { await ring("Улучшения после включения", "06-ubrat-podsvetku"); await item("Убрать подсветку").click(); await page.waitForTimeout(900); }
 await page.waitForTimeout(600); const after = await price();
 if (await path("Добавить", "Улучшения")) { const back = await item("Подсветку").count(); await page.keyboard.press("Escape"); await page.keyboard.press("Escape"); await page.keyboard.press("Escape");

@@ -42,6 +42,14 @@
 .rmb-tip b { color: #9fb6ff; }
 .app:has(.dock-panel) .rmb-tip { display: none; }
 .rmb-tip button { color: #fff; background: #ffffff22; border-radius: 6px; padding: 4px 9px; font-size: 12px; white-space: nowrap; }
+/* Режим «Подсветка» (20.10.2026): полоса с подсказкой, итогом подсветки и кнопкой «Готово»; курсор-перекрестие над 3D */
+.light-mode-bar { position: absolute; left: 50%; top: 118px; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: 12px; padding: 6px 8px 6px 12px; width: max-content; max-width: min(720px, calc(100% - 40px));
+  background: #2b2410; color: #fff; border: 1px solid #ffd27a; border-radius: 10px; font-size: 12.5px; line-height: 1.3; box-shadow: 0 8px 22px #1b2a4440; }
+.light-mode-bar b { color: #ffd27a; }
+.light-mode-bar small { display: block; color: #e9dcb8; font-size: 11.5px; margin-top: 1px; white-space: nowrap; }
+.light-mode-bar small.warn { color: #ffb4a8; }
+.light-mode-bar button { color: #2b2410; background: #ffd27a; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 650; white-space: nowrap; flex: none; }
+.light-picking canvas { cursor: crosshair; }
 
 /* 5. Телефон: кнопки истории без подписей; 3D-область не налезает на левую панель. */
 @media (max-width: 600px) { .history-label { display: none; } }
