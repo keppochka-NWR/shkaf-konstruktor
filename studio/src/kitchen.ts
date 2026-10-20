@@ -333,9 +333,9 @@ export const WORKTOP_THICKNESS: Partial<Record<WorktopMaterial, number[]>> = { c
 /** Сменить материал: толщина — по материалу (акрил сохраняет выбранную подклейку), высота модуля = толщина. */
 export function setWorktopMaterial(m: Module, material: WorktopMaterial, thickness?: number) {
   const fixed = WORKTOP_THICKNESS[material], cur = m.worktop!.thickness;
-  // с компакта/акрила/кварца на старый материал — его обычная толщина (ЛДСП 16+16 = 32, постформинг и камень 38), а не 12/20/40:
-  // иначе «Компакт 12» → «ЛДСП 16+16» давал деталь ЛДСП 12 мм в раскрое (ревью 19.10)
-  const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : worktopSolid(m.worktop!) ? (material === "ldsp" ? 32 : KITCHEN.worktopThickness) : cur);
+  // с компакта/акрила/кварца на старый материал (ЛДСП, постформинг, камень) — 38 мм (KITCHEN.worktopThickness), а не 12/20/40:
+  // иначе «Компакт 12» → «ЛДСП» давал деталь ЛДСП 12 мм в раскрое (ревью 19.10); ЛДСП тоже 38, не 32 (баг Макса по демо 20.10)
+  const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : worktopSolid(m.worktop!) ? KITCHEN.worktopThickness : cur);
   m.worktop = { ...m.worktop!, material, thickness: t };
   m.height = t;
 }

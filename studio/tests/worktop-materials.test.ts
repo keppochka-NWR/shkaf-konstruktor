@@ -107,10 +107,14 @@ test('смета кухни из двух кусков: м² суммируют�
   assert.equal(estimate(g).lines.find(x=>x.id==='worktop:edge:compact:12')!.quantity,4.2);
 });
 
-test('с компакта на старый материал — его обычная толщина: ЛДСП 16+16 → 32, камень и постформинг → 38',()=>{
+test('с компакта/акрила/кварца на ЛДСП, камень и постформинг — 38 мм (баг Макса 20.10: было 32)',()=>{
   const m=kitchenWorktop(initialModule(),2400);
-  setWorktopMaterial(m,'compact');setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,32);assert.equal(m.height,32);
-  setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,32,'ЛДСП → ЛДСП без изменений');
+  setWorktopMaterial(m,'compact');setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,38);assert.equal(m.height,38);
+  setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,38,'ЛДСП → ЛДСП без изменений');
+  for(const [mat,t] of [['compact',12],['acrylic',12],['acrylic',40],['quartz',20]] as const){
+    setWorktopMaterial(m,mat,t);assert.equal(m.worktop!.thickness,t);
+    setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,38,`${mat} ${t} → ЛДСП`);assert.equal(m.height,38);
+  }
   setWorktopMaterial(m,'acrylic');setWorktopMaterial(m,'stone');assert.equal(m.worktop!.thickness,KITCHEN.worktopThickness);
   m.worktop={...m.worktop!,material:'postforming',thickness:28};m.height=28;setWorktopMaterial(m,'ldsp');assert.equal(m.worktop!.thickness,28,'старое поведение между старыми материалами');
 });
