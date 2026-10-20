@@ -15,7 +15,7 @@ import { useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
 import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, type Module, type Part } from "./model";
-import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, type WorktopSpec } from "./kitchen";
+import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, type WorktopSpec, type WorktopMaterial } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions, rawCheck, bazisAirHardware, BAZIS_AIR, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
@@ -385,11 +385,13 @@ function WorktopPanel(props: KitchenPanelProps) {
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Столешница</span><h2>{m.name}</h2><p>{m.width} × {m.depth} мм · {worktopLabel(w)} {w.thickness} мм</p></div>
     <Group icon={<RectangleHorizontal size={15} />} title="Столешница" open={stage !== "filling"}>
-      <label className="hardware-field">Материал<select aria-label="Материал столешницы" value={w.material} onChange={(e) => setW({ material: e.target.value as WorktopSpec["material"] })}>
-        <option value="postforming">Постформинг (СКИФ)</option><option value="ldsp">ЛДСП 16+16</option><option value="stone">Искусственный камень</option></select></label>
+      <label className="hardware-field">Материал<select aria-label="Материал столешницы" value={WORKTOP_CHOICES.find((c) => c.material === w.material && c.thickness === w.thickness)?.id ?? w.material} onChange={(e) => { const c = WORKTOP_CHOICES.find((x) => x.id === e.target.value); modify((n) => setWorktopMaterial(n, c ? c.material : e.target.value as WorktopMaterial, c?.thickness)); }}>
+        {WORKTOP_CHOICES.map((c) => <option key={c.id} value={c.id}>{c.label} мм · {worktopLabel({ ...w, material: c.material, thickness: c.thickness })}</option>)}
+        {w.material === "postforming" && w.thickness !== KITCHEN.worktopThickness && <option value="postforming">Постформинг (СКИФ) {w.thickness} мм</option>}<option value="ldsp">ЛДСП 16+16</option><option value="stone">Искусственный камень</option></select></label>
       <Num label="Длина" value={m.width} min={200} max={4100} change={(v) => modify((n) => { n.width = v; })} note="Длиннее 4100 — двумя частями со стыком" />
       <Num label="Глубина от стены" value={m.depth} min={400} max={1200} change={(v) => modify((n) => { n.depth = v; })} note={`Регламент ${KITCHEN.worktopDepth}`} />
-      <Num label="Толщина" value={w.thickness} min={12} max={60} change={(v) => modify((n) => { n.worktop = { ...n.worktop!, thickness: v }; n.height = v; })} note="СКИФ 26, 28, 38, 40" />
+      {WORKTOP_THICKNESS[w.material] ? <>{w.material === "acrylic" && <Check label="С подклейкой до 40 мм" checked={w.thickness === 40} change={(v) => modify((n) => setWorktopMaterial(n, "acrylic", v ? 40 : 12))} />}<p className="field-note">Толщина по материалу: {w.thickness} мм. Торец без кромки ЛДСП — обработка торца отдельной строкой сметы.</p></>
+        : <Num label="Толщина" value={w.thickness} min={12} max={60} change={(v) => modify((n) => { n.worktop = { ...n.worktop!, thickness: v }; n.height = v; })} note="СКИФ 26, 28, 38, 40" />}
       <Num label="Свес над фасадом" value={w.overhang} min={0} max={60} change={(v) => setW({ overhang: v })} note={`Базис: 21–${KITCHEN.worktopOverhang}`} />
       <Colors m={m} material={material} />
       <div className="kitchen-cuts">
@@ -406,7 +408,7 @@ function WorktopPanel(props: KitchenPanelProps) {
         </div>)}
         <div className="kitchen-chips"><button type="button" onClick={() => addCut("sink")}>+ под мойку</button><button type="button" onClick={() => addCut("hob")}>+ под варочную</button></div>
       </div>
-      <p className="field-note">Столешница — отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете — за погонный метр, вырезы — отдельными работами.</p>
+      <p className="field-note">Столешница — отдельное изделие: в раскрой ЛДСП не идёт (кроме ЛДСП 16+16), в смете — {WORKTOP_THICKNESS[w.material] ? "за м² и обработка лицевого торца за погонный метр" : "за погонный метр"}, вырезы — отдельными работами.</p>
     </Group>
     <Position {...props} open={stage === "bodies"} />
   </div>;

@@ -313,7 +313,32 @@ export function kitchenJointPoints(m: Module, depth = m.depth, joint?: number, b
 /** Правило кухни без своего счёта из Базиса: глубже KITCHEN.deepBottom (600) — 3 точки, иначе 2. */
 export const jointPointsRule = (depth: number): 2 | 3 => (depth > KITCHEN.deepBottom ? 3 : 2);
 export type WorktopCutout = { kind: "sink" | "hob"; x: number; z?: number; width: number; depth: number; fixture?: string; drainDrop?: number; tap?:boolean; plumbing?:boolean };
-export type WorktopSpec = { material: "postforming" | "ldsp" | "stone"; thickness: number; overhang: number; cutouts: WorktopCutout[] };
+/** Материал столешницы. Старые: postforming (СКИФ, толщина вводится), ldsp (16+16), stone (искусственный камень).
+ *  Задача Макса 19.10.2026 — толщина следует из материала: compact — компакт-плита 12; acrylic — акрил 12 в один слой или 40 с подклейкой;
+ *  quartz — кварц 20; ЛДСП постформинг 38 — прежний postforming. */
+export type WorktopMaterial = "postforming" | "ldsp" | "stone" | "compact" | "acrylic" | "quartz";
+export type WorktopSpec = { material: WorktopMaterial; thickness: number; overhang: number; cutouts: WorktopCutout[] };
+/** Выбор столешницы в панели и в меню правой кнопки: материал + толщина одним пунктом (у акрила толщина = подклейка). */
+export const WORKTOP_CHOICES: readonly { id: string; label: string; material: WorktopMaterial; thickness: number; hint: string }[] = [
+  { id: "compact-12", label: "Компакт 12", material: "compact", thickness: 12, hint: "Компакт-плита HPL 12 мм: торец без кромки, шлифованный" },
+  { id: "acrylic-12", label: "Акрил 12", material: "acrylic", thickness: 12, hint: "Акриловый камень 12 мм в один слой, без подклейки" },
+  { id: "quartz-20", label: "Кварц 20", material: "quartz", thickness: 20, hint: "Кварцевый агломерат 20 мм, торец полированный" },
+  { id: "postforming-38", label: "ЛДСП 38", material: "postforming", thickness: 38, hint: "ЛДСП постформинг 38 мм (СКИФ) — как сейчас" },
+  { id: "acrylic-40", label: "Акрил 40", material: "acrylic", thickness: 40, hint: "Акриловый камень 12 мм с подклейкой до 40 мм" },
+];
+/** Камень и компакт: толщина задана материалом, кромки ЛДСП нет — торец обрабатывается (строка сметы «обработка торца»). */
+export const worktopSolid = (w: WorktopSpec) => w.material === "compact" || w.material === "acrylic" || w.material === "quartz";
+/** Допустимые толщины материала с фиксированной толщиной; у старых материалов — не ограничено (поле «Толщина» 12–60). */
+export const WORKTOP_THICKNESS: Partial<Record<WorktopMaterial, number[]>> = { compact: [12], acrylic: [12, 40], quartz: [20] };
+/** Сменить материал: толщина — по материалу (акрил сохраняет выбранную подклейку), высота модуля = толщина. */
+export function setWorktopMaterial(m: Module, material: WorktopMaterial, thickness?: number) {
+  const fixed = WORKTOP_THICKNESS[material], cur = m.worktop!.thickness;
+  // с компакта/акрила/кварца на старый материал — его обычная толщина (ЛДСП 16+16 = 32, постформинг и камень 38), а не 12/20/40:
+  // иначе «Компакт 12» → «ЛДСП 16+16» давал деталь ЛДСП 12 мм в раскрое (ревью 19.10)
+  const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : worktopSolid(m.worktop!) ? (material === "ldsp" ? 32 : KITCHEN.worktopThickness) : cur);
+  m.worktop = { ...m.worktop!, material, thickness: t };
+  m.height = t;
+}
 
 /** Регламенты кухни по проектам Базиса цеха, мм. */
 export const KITCHEN = {
@@ -992,13 +1017,29 @@ function golaTieParts(m: Module, out: Part[]): Part[] {
 /** Столешница — отдельный объект над нижними корпусами: в раскрой ЛДСП не идёт (кроме ЛДСП 32), цена за погонный метр. */
 export function worktopParts(m: Module): Part[] {
   const w = m.worktop!, T = w.thickness, out: Part[] = [];
-  out.push({ id: "worktop", name: `Столешница ${worktopLabel(w)} ${T} мм`, size: [m.width, T, m.depth], position: [m.width / 2, T / 2, m.depth / 2], length: m.width, width: m.depth, thickness: T, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 2, 0], external: w.material !== "ldsp" });
+  // компакт/кварц/акрил — без кромки ЛДСП (торец обрабатывается — строка сметы), постформинг и ЛДСП — как было
+  out.push({ id: "worktop", name: `Столешница ${worktopLabel(w)} ${T} мм`, size: [m.width, T, m.depth], position: [m.width / 2, T / 2, m.depth / 2], length: m.width, width: m.depth, thickness: T, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: worktopSolid(w) ? [0, 0, 0, 0] : [0, 0, 2, 0], external: w.material !== "ldsp" });
   if(w.cutouts.length) out[0].planHoles=w.cutouts.map(c=>({x:c.x,z:c.z??(m.depth-c.depth)/2,width:c.width,depth:c.depth}));
   for(const c of w.cutouts)if(c.tap){const cx=c.x+c.width/2,cz=(c.z??(m.depth-c.depth)/2)+c.depth/2;(out[0].planHoles??=[]).push({x:cx-17.5,z:cz-230,width:35,depth:35});}
   for (const [i,c] of w.cutouts.entries()) out.push(...sinkParts(m,c,i));
   return out;
 }
-export function worktopLabel(w: WorktopSpec) { return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень" }[w.material]; }
+export function worktopLabel(w: WorktopSpec) {
+  if (w.material === "acrylic") return w.thickness >= 40 ? "акрил с подклейкой" : "акрил в один слой";
+  return { postforming: "постформинг", ldsp: "ЛДСП 16+16", stone: "искусственный камень", compact: "компакт-плита", quartz: "кварц" }[w.material];
+}
+/** Строки сметы столешницы (pricing.ts). Старые материалы — как было: за погонный метр. Компакт/акрил/кварц — за м² и обработка
+ *  лицевого торца за п.м; цен нет — позиции финального расчёта конструктором (pendingPrices). */
+export function worktopLines(m: Module): { id: string; label: string; quantity: number; unit: string; source: string }[] {
+  const w = m.worktop!, key = w.material + ":" + w.thickness, name = "Столешница " + worktopLabel(w) + " " + w.thickness + " мм";
+  if (!worktopSolid(w)) return [{ id: "worktop:" + key, label: name, quantity: m.width / 1000, unit: "пог.м", source: "Закупочная цена столешницы не найдена — нужен прайс поставщика" }];
+  return [
+    // без габарита одной детали: pricing.add() суммирует строки по id, а подпись берёт первой — у кухни из двух кусков
+    // «(2400 × 600) — 2,88 м²» не сходилось бы с площадью (ревью 19.10). Площадь — в количестве.
+    { id: "worktop:" + key, label: name, quantity: Math.round(m.width * m.depth / 1e4) / 100, unit: "м²", source: "Закупочная цена не найдена — нужен прайс поставщика за м²" },
+    { id: "worktop:edge:" + key, label: "Обработка лицевого торца: " + worktopLabel(w) + " " + w.thickness + " мм", quantity: m.width / 1000, unit: "пог.м", source: "Цена обработки торца не найдена — нужен прайс поставщика" },
+  ];
+}
 
 /** F_WIDE_FACADE: свес фасада за боковину (kitchen.faceOver) — фасад на корпусе, свес меньше половины ширины корпуса. По 34 эталонам
  *  свес за боковину: k19 m03 — 12,5 при 670, k22 m04 — 18 при 1200 (фасады на корпусе); k27 m17 «ПМ» — 448 при 150: дверь ПММ на тумбе,
@@ -1011,8 +1052,10 @@ export function kitchenErrors(m: Module): string[] {
   const e: string[] = [...allegroErrors(m),...ovenErrors(m)];
   if (m.worktop) {
     const w = m.worktop;
-    if (!["postforming", "ldsp", "stone"].includes(w.material)) e.push("Столешница: материал из списка.");
+    if (!["postforming", "ldsp", "stone", "compact", "acrylic", "quartz"].includes(w.material)) e.push("Столешница: материал из списка.");
     if (!Number.isFinite(w.thickness) || w.thickness < 12 || w.thickness > 60) e.push("Столешница: толщина 12–60 мм.");
+    const fixed = WORKTOP_THICKNESS[w.material];
+    if (fixed && !fixed.includes(w.thickness)) e.push(`Столешница ${worktopLabel({ ...w, thickness: fixed[0] })}: толщина ${fixed.join(" или ")} мм.`);
     if (m.width < 200 || m.width > 4100) e.push("Столешница: длина 200–4100 мм (длиннее — со стыком).");
     e.push(...worktopCutErrors(m));
   }
