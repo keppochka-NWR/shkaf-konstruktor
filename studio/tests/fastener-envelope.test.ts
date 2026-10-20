@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import * as THREE from 'three';
-import {parts,initialModule,type Module,type Part} from '../src/model';
+import {parts,initialModule,CONFIRMAT_QUATS,type Module,type Part} from '../src/model';
 import {parseProject} from '../src/project';
 import {createModule,type ModuleKind} from '../src/ModulePalette';
 import {kitchenBase,kitchenWall} from '../src/kitchen';
 import {kitchenProject,kitchenTall} from '../src/kitchenProject';
-import {fastenerGeometry,hingeFallbackModel,procModel,faceAt} from '../src/hardwareModels';
+import {fastenerGeometry,hingeFallbackModel,procModel,faceAt,nativePlacement} from '../src/hardwareModels';
 
 // Баг Макса по демо 20.10.2026: «крепёж торчит над шкафом» — штыри над крышей, дном и полками. Причина: у крепежа с сеткой Базиса
 // (model.native) меш не поворачивается, и заглушка-цилиндр стояла по Y всегда; когда сетка не грузилась, горизонтальный конфирмат
@@ -94,6 +94,40 @@ test('крепёж студии (сетка Базиса / процедурна�
   }
   assert.ok(n>300,'крепежа в наборе: '+n);
   assert.deepEqual(bad.slice(0,20),[],bad.length+' выходов за корпус');
+});
+
+// Сетка GLB — той же матрицей, что и сцена (nativePlacement из hardwareModels.ts; Scene.tsx ставит holder по ней), а не своей формулой теста.
+const glbAt=(p:Part)=>{const g=glbBox(p.model!.file);if(!g)return null;const at=nativePlacement(p.model!,p.position),mx=new THREE.Matrix4().makeTranslation(...p.position).multiply(at.matrix);
+  return new THREE.Box3().setFromPoints([0,1,2,3,4,5,6,7].map(k=>new THREE.Vector3(k&1?g.hi[0]:g.lo[0],k&2?g.hi[1]:g.lo[1],k&4?g.hi[2]:g.lo[2]).applyMatrix4(mx)));};
+
+test('ориентация сетки конфирмата: стержень 50 мм от головки внутрь по оси ввинчивания (+x, −x, +y, −y, −z), не над плитой',()=>{
+  const head:V3=[100,200,300];
+  for(const [axis,dir] of [['+x',[1,0,0]],['-x',[-1,0,0]],['+y',[0,1,0]],['-y',[0,-1,0]],['-z',[0,0,-1]]] as const){
+    const p={position:[head[0]+dir[0]*25,head[1]+dir[1]*25,head[2]+dir[2]*25],model:{file:'hardware/bazis/f660d89fba1a.glb',length:'y',native:true,origin:head,quat:CONFIRMAT_QUATS[axis]}} as unknown as Part;
+    const b=glbAt(p)!;const i=dir.findIndex(v=>v!==0),s=dir[i];
+    // по оси — от головки (0) до 50 в сторону ввинчивания; поперёк — радиус 5
+    assert.ok(Math.abs((s>0?b.min:b.max).getComponent(i)-head[i])<0.01&&Math.abs((s>0?b.max:b.min).getComponent(i)-(head[i]+s*50))<0.01,`${axis}: ${b.min.toArray()}…${b.max.toArray()}`);
+    for(const j of [0,1,2])if(j!==i)assert.ok(b.max.getComponent(j)-head[j]<=5.01&&head[j]-b.min.getComponent(j)<=5.01,`${axis} поперёк ${j}`);
+  }
+});
+
+test('сетки крепежа Базиса (матрица сцены) внутри корпуса: шкафы, кухни и проекты local-projects, включая сырые из Базиса',()=>{
+  const all=new Map(sets);
+  if(existsSync(LP))for(const f of readdirSync(LP).filter(f=>f.endsWith('.json')&&!/^(kitchens|wardrobes)\.json$/.test(f)&&!/^kitchen-k\d+\.json$/.test(f))){try{parseProject(JSON.parse(readFileSync(join(LP,f),'utf8'))).modules.forEach((a,i)=>all.set(`${f.replace(/[a-z]{3,}(?=\.json)/,'x')}#${i}`,a.module));}catch{/* битый файл */}}
+  const bad:string[]=[];let n=0;
+  for(const [k,m] of all){
+    const ps=parts(m),boards=ps.filter(p=>(p.material==='board'||p.material==='hdf')&&p.role!=='door'&&!p.rotY&&!p.rotZ&&!p.external&&!/worktop|plinth/i.test(p.id));
+    if(!boards.length)continue;
+    const lo=[0,1,2].map(i=>Math.min(...boards.map(p=>p.position[i]-p.size[i]/2))),hi=[0,1,2].map(i=>Math.max(...boards.map(p=>p.position[i]+p.size[i]/2)));
+    for(const p of ps){
+      // сырой модуль Базиса: корпусной крепёж (конфирмат, полкодержатель, эксцентрик, шкант); направляющие, фланцы, кронштейны — как в Базисе
+      if(p.role!=='fastener'||!p.model?.native||outside(p)||(p.id.startsWith('raw:')&&!/Конфирмат|Евровинт|Полкодерж|Эксцентрик|Шкант|Стяжк/i.test(p.name)))continue;
+      const b=glbAt(p);if(!b)continue;n++;
+      for(let i=0;i<3;i++){const d=Math.max(lo[i]-b.min.getComponent(i),b.max.getComponent(i)-hi[i]);if(d>0.5)bad.push(`${k} ${p.id} «${p.name}» ${p.model.file.split('/').pop()} ось ${'xyz'[i]}: +${d.toFixed(1)} мм`);}
+    }
+  }
+  assert.ok(n>1000,'сеток крепежа в наборе: '+n);
+  assert.deepEqual(bad.slice(0,20),[],bad.length+' сеток за корпусом');
 });
 
 test('запасная модель петли (сетка не загрузилась) — в габарите сетки Базиса, не коробка',()=>{

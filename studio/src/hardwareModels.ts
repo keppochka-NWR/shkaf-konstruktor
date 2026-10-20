@@ -233,6 +233,14 @@ export function fastenerGeometry(size: [number, number, number], seg = 20): THRE
   if (f.axis === 0) g.rotateZ(Math.PI / 2); else if (f.axis === 2) g.rotateX(Math.PI / 2);
   return g;
 }
+/** Где и как сцена ставит сетку Базиса (model.native) внутри меша детали: начало координат сетки — в origin узла Базиса (или в центре
+ *  детали), поворот quat [w, x, y, z], mirror — зеркало по X сетки. Смещение — от центра детали (меш стоит в её центре, сам не повёрнут).
+ *  Одна функция для Scene.tsx и проверки tests/fastener-envelope.test.ts: тест считает габарит GLB той же матрицей, что и сцена. */
+export function nativePlacement(model: { origin?: [number, number, number]; quat?: [number, number, number, number]; mirror?: boolean }, partPosition: [number, number, number]) {
+  const [w, x, y, z] = model.quat ?? [1, 0, 0, 0], o = model.origin ?? partPosition;
+  const offset = new THREE.Vector3(o[0] - partPosition[0], o[1] - partPosition[1], o[2] - partPosition[2]), quaternion = new THREE.Quaternion(x, y, z, w);
+  return { offset, quaternion, mirror: !!model.mirror, matrix: new THREE.Matrix4().compose(offset, quaternion, new THREE.Vector3(1, 1, 1)).multiply(new THREE.Matrix4().makeScale(model.mirror ? -1 : 1, 1, 1)) };
+}
 /** Запасная модель петли, если сетка Базиса не загрузилась (сеть/кэш): в системе координат той же сетки (origin/quat детали),
  *  а не серая коробка габарита. Чашка ECHC (39d9d9c26d8c: фланец ±31,5 × −17,25..21, толщина 3 по Z) — чашка Ø35 и фланец;
  *  плечо с планкой (d7e1d3957ebe: X −12..70 от фасада вглубь, Y 0..23,7 от стойки, Z ±26,5) — планка на стойке и плечо к чашке. */
