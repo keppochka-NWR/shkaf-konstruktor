@@ -10,8 +10,12 @@ export type Handle = {
   art?: string;
   /** розница Лемана как есть (ревью R5: модель «цена за лист» берёт её без коэффициента); в публичной сборке price запечён × коэффициент */
   shelf?: number;
+  /** Габариты по паспорту, мм (если известны): общая длина, вынос от фасада, сечение. Без них — типовые по форме (handleSpec). */
+  total?: number;
+  projection?: number;
+  section?: number;
 };
-/** Семейство формы ручки для 3D-модели (Blender → GLB в public/models/handles). */
+/** Семейство формы ручки (место на фасаде: profile — на свободном краю). 3D-модель — handleShape/handleModels.ts. */
 export type HandleKind = "bracket" | "rail" | "knob" | "profile";
 export function handleKind(h: Pick<Handle, "label">): HandleKind {
   const l = h.label.toLocaleLowerCase("ru-RU");
@@ -20,22 +24,60 @@ export function handleKind(h: Pick<Handle, "label">): HandleKind {
   if (l.includes("торцев") || l.includes("профил") || l.includes("hexa l-")) return "profile";
   return "bracket";
 }
-/** Цвет металла по подписи ручки (для сцены). */
-export function handleColour(h: Pick<Handle, "label">): number {
+/** Форма процедурной 3D-модели (handleModels.ts): торцевая отдельно от накладного профиля. */
+export type HandleShape = "bracket" | "rail" | "knob" | "profile" | "edge";
+export type HandleFinish = "chrome" | "satin" | "aluminium" | "black" | "graphite" | "gold" | "bronze" | "wood" | "white";
+/** Покрытие → металлический PBR (MeshStandardMaterial). Дерево и белая эмаль — не металл. */
+export const HANDLE_FINISHES: Record<HandleFinish, { label: string; color: number; metalness: number; roughness: number }> = {
+  chrome: { label: "хром", color: 0xeef0f2, metalness: 1, roughness: 0.12 },
+  satin: { label: "сатин (матовый никель/хром)", color: 0xc5c9cd, metalness: 1, roughness: 0.38 },
+  aluminium: { label: "алюминий", color: 0xc0c4c8, metalness: 0.9, roughness: 0.42 },
+  black: { label: "чёрный матовый", color: 0x1d1e20, metalness: 0.55, roughness: 0.52 },
+  graphite: { label: "графит", color: 0x45484c, metalness: 0.85, roughness: 0.42 },
+  gold: { label: "золото", color: 0xd7b46a, metalness: 1, roughness: 0.3 },
+  bronze: { label: "бронза", color: 0x7c5a3a, metalness: 1, roughness: 0.45 },
+  wood: { label: "дерево", color: 0x9a6b3c, metalness: 0, roughness: 0.75 },
+  white: { label: "белая эмаль", color: 0xf3f3f1, metalness: 0.05, roughness: 0.45 },
+};
+export function handleFinish(h: Pick<Handle, "label">): HandleFinish {
   const l = h.label.toLocaleLowerCase("ru-RU");
-  if (l.includes("золот")) return 0xc9a44a;
-  if (l.includes("бронз")) return 0x6b4a2e;
-  if (l.includes("дерев")) return 0x9a6b3c;
-  if (l.includes("чёрн") || l.includes("черн") || l.includes("графит")) return 0x25272a;
-  if (l.includes("алюмин")) return 0xb9bcc0;
-  if (l.includes("никел") || l.includes("хром") || l.includes("серебр") || l.includes("сталь")) return 0xc8ccd0;
-  return 0x8d949a;
+  if (l.includes("дерев")) return "wood";
+  if (l.includes("бел")) return "white";
+  if (l.includes("золот")) return "gold";
+  if (l.includes("бронз")) return "bronze";
+  if (l.includes("графит")) return "graphite";
+  if (l.includes("чёрн") || l.includes("черн")) return "black";
+  if (l.includes("мат") && (l.includes("никел") || l.includes("хром"))) return "satin";
+  if (l.includes("алюмин")) return "aluminium";
+  if (l.includes("хром") || l.includes("никел") || l.includes("серебр") || l.includes("сталь")) return "chrome";
+  return "satin";
 }
-/** Файл модели для ручки: скобы/рейлинги/профили — по межосевому, кнопка одна. */
-export function handleModelFile(h: Pick<Handle, "label" | "len">): string {
-  const k = handleKind(h);
-  return k === "knob" ? "knob.glb" : `${k}_${h.len}.glb`;
+/**
+ * Размеры модели ручки, мм. Межосевое (cc) — из каталога; общая длина, вынос и сечение у поставщиков в каталоге не записаны,
+ * поэтому берутся консервативно по типу (estimated: true) — типовые значения скоб/рейлингов/профилей.
+ */
+export type HandleSpec = { shape: HandleShape; cc: number; total: number; projection: number; section: number; width: number; facets?: number; finish: HandleFinish; estimated: boolean };
+export function handleShape(h: Pick<Handle, "label">): HandleShape {
+  const l = h.label.toLocaleLowerCase("ru-RU"), k = handleKind(h);
+  if (k === "profile") return l.includes("торцев") || l.includes("hexa l-") ? "edge" : "profile";
+  return k;
 }
+export function handleSpec(h: Pick<Handle, "label" | "len"> & Partial<Pick<Handle, "total" | "projection" | "section">>): HandleSpec {
+  const shape = handleShape(h), cc = h.len, finish = handleFinish(h), l = h.label.toLocaleLowerCase("ru-RU");
+  const d = shape === "rail" ? { total: cc + 2 * Math.min(40, Math.max(20, Math.round(cc * 0.12))), projection: 35, section: 12, width: 12 }
+    : shape === "knob" ? { total: 30, projection: 28, section: 10, width: 30 }
+    : shape === "profile" ? { total: cc + 32, projection: 22, section: 2, width: 30 }
+    : shape === "edge" ? { total: l.includes("hexa l-") ? cc : cc + 32, projection: 18, section: 2, width: 20 }
+    : { total: cc + 14, projection: 28, section: 10, width: 10 };
+  return {
+    shape, cc, finish,
+    total: h.total ?? d.total, projection: h.projection ?? d.projection, section: h.section ?? d.section, width: d.width,
+    ...(l.includes("hexa") && shape === "bracket" ? { facets: 6 } : {}),
+    estimated: h.total === undefined || h.projection === undefined || h.section === undefined,
+  };
+}
+/** Длинная ручка (рейлинг/профиль 1200 и длиннее 1000 мм): ставится от пола — задаётся высота её низа. */
+export const LONG_HANDLE = 1000;
 const workshop = (id: string, label: string, len: number, price: number, source: string): Handle => ({ id, label, len, price, source, vendor: "workshop" });
 const lemana = (art: string, label: string, len: number, price: number, shelf: number = price): Handle => ({ id: "lm" + art, art, label, len, price, shelf, source: "Лемана Про, розница 01.09.2026, арт. " + art, vendor: "lemana" });
 export const HANDLES: Handle[] = [

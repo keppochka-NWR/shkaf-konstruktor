@@ -17,7 +17,9 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { handleById, handleColour, handleModelFile } from "./handles";
+import { handleById } from "./handles";
+import { handleModel } from "./handleModels";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 // Модели ручек (Blender → GLB, scripts/blender_handles.py): кэш по файлу, экземпляры делят геометрию.
 const gltfLoader = new GLTFLoader();
 const handleModels = new Map<string, Promise<THREE.Group>>();
@@ -152,6 +154,9 @@ export function Scene(p: Props) {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setClearColor(0xeaf0f2, 0);
+    // Отражения для металла ручек (хром, сатин, золото): процедурная «комната» three.js, только в материалах ручек — остальная сцена без изменений.
+    let handleEnv: THREE.Texture | null = null;
+    try { const pmrem = new THREE.PMREMGenerator(renderer), room = new RoomEnvironment(); handleEnv = pmrem.fromScene(room, 0.04).texture; room.dispose(); pmrem.dispose(); } catch { handleEnv = null; }
     renderer.domElement.setAttribute(
       "aria-label",
       "3D-модель шкафа. Перетаскивание — поворот, колесо — масштаб.",
@@ -480,22 +485,18 @@ export function Scene(p: Props) {
               .catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
           }
           if (isHandle&&!part.simpleHandle&&!part.model?.native) { // ручка Базиса (сетка библиотеки) — выше, своей моделью
-            // Ручка: невидимый бокс для выбора + модель из Blender. Модель: X вдоль, Y вверх по фасаду, выступ в −Z → разворот на 180°.
+            // Ручка: невидимый бокс для выбора + процедурная модель (handleModels.ts): X вдоль, +Y к центру фасада, Z наружу от лица.
             const handle = handleById(facadeHandleId(m,part.id)), vertical = part.size[1] > part.size[0];
+            const face = byId.get(part.id.includes(':drawer:') ? part.id.replace(/:handle$/, ':facade') : part.id.replace(':handle:', ':door:'));
+            const dx = face ? face.position[0] - part.position[0] : 0, dy = face ? face.position[1] - part.position[1] : 0;
             const holder = new THREE.Group();
-            holder.rotation.z = vertical ? Math.PI / 2 : 0;
-            holder.position.z = -part.size[2] / 2; // к плоскости фасада
-            mesh.add(holder);
-            const g = generation;
-            pendingTextures++;
-            loadHandleModel(handleModelFile(handle)).then((src) => {
-              if (disposed || g !== generation) return;
-              const model = src.clone(true);
-              model.rotation.y = Math.PI; model.scale.setScalar(1000);
-              const hm = new THREE.MeshStandardMaterial({ color: handleColour(handle), metalness: 0.85, roughness: 0.32 });
-              model.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; if (o instanceof THREE.Mesh) { o.material = hm; o.castShadow = true; } });
-              holder.add(model); needsRender = true;
-            }).catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
+            holder.rotation.z = vertical ? (dx > 0.5 ? -Math.PI / 2 : Math.PI / 2) : (dy < -0.5 ? Math.PI : 0);
+            holder.position.z = face && !face.rotY === !part.rotY ? face.position[2] + face.size[2] / 2 - part.position[2] : -part.size[2] / 2; // к лицу фасада
+            try {
+              const model = handleModel(handle, handleEnv, face?.size[2] ?? 16);
+              model.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; });
+              holder.add(model); mesh.add(holder);
+            } catch { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; }
           }
           if (proc) {
             proc.traverse((o) => { o.userData = { ...o.userData, partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active }; });
@@ -1057,6 +1058,7 @@ export function Scene(p: Props) {
       window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);renderer.domElement.removeEventListener('pointerdown',rightPointer,true);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
       sun.shadow.dispose();
       for(const texture of loadedTextures)texture.dispose();loadedTextures.clear();textureLoads.clear();
+      handleEnv?.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       api.current = null;
