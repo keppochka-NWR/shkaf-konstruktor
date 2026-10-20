@@ -169,6 +169,8 @@ export type Section = {
   /** Выдвижные тремпели (GTV, крепление к полке/крыше, выдвигаются вперёд): количество в ряд по ширине секции, 1–3. */
   pullouts?: number;
   rodAt?: number;
+  /** Подсветка в полках (запрос Макса 19.10.2026): LED-профиль в передней кромке снизу каждой полки секции. Цены в прайсе цеха нет — строка сметы без цены. */
+  shelfLight?: boolean;
   /** Индексы жёстких полок (на конфирматах/эксцентриках, в точную ширину проёма); остальные съёмные на полкодержателях. */
   fixed?: number[];
   /** Глубина обычных полок секции, мм. Полка над ящиками сохраняет конструктивную глубину. */
@@ -1021,6 +1023,9 @@ export function parts(m: Module): Part[] {
         glass?'glass':'board',
       );
       if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, b.x, b.x + b.width, rear, RULES.shelfDepthMinus);
+      // Подсветка в полках: LED-профиль снизу у передней кромки полки (отступ 20 мм), по длине полки минус 20 с краёв. Только при флаге секции.
+      if(s.shelfLight){const len=b.width-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth;
+        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,RULES.lightProfileT,RULES.lightProfileW],[b.x+b.width/2,b.bottom+f*h-st/2-RULES.lightProfileT/2,front-20-RULES.lightProfileW/2],len,RULES.lightProfileW,RULES.lightProfileT,'light',s.id,'metal');}
     });
     const f=fillerSides(m,s),filler=f.left+f.right;
     const glue=glueOff?{}:falshZones(m);
@@ -2357,6 +2362,7 @@ export function parseModule(input: unknown): Module {
       ...(s.pantograph===undefined?{}:{pantograph:s.pantograph}),
     ...(s.pullouts===undefined?{}:{pullouts:s.pullouts}),
       ...(s.rodAt===undefined?{}:{rodAt:s.rodAt}),
+      ...(s.shelfLight===true?{shelfLight:true}:{}),
       ...(s.fixed===undefined?{}:{fixed:Array.isArray(s.fixed)?[...s.fixed]:s.fixed}),
       ...(s.drawerConfigs === undefined
         ? {}

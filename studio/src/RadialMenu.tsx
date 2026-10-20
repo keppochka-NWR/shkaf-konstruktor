@@ -4,6 +4,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import { X, ChevronLeft } from "lucide-react";
 import "./radial-menu.css";
+import { labelSide, placeMenu, type MenuArea } from "./contextMenu";
 
 export type RadialItem = {
   id: string;
@@ -23,21 +24,19 @@ export type RadialItem = {
 // и меню открывается со сдвигом вбок от точки клика — выбранная деталь остаётся видна, точка клика отмечена.
 const RADIUS = 76, SIZE = 48;
 
-export function RadialMenu({ x, y, title, subtitle, items, onClose }: { x: number; y: number; title: string; subtitle?: string; items: RadialItem[]; onClose: () => void }) {
+export function RadialMenu({ x, y, title, subtitle, items, onClose, area }: { x: number; y: number; title: string; subtitle?: string; items: RadialItem[]; onClose: () => void; area?: MenuArea }) {
   const [path, setPath] = useState<RadialItem[]>([]);
   const [hover, setHover] = useState<number | null>(null);
   // «Опасный» пункт (удалить) всегда строго внизу кольца, в одном и том же месте — подальше от частых действий сверху.
   const raw = path.length ? path[path.length - 1].children ?? [] : items;
   const ring = (() => { const danger = raw.filter((i) => i.danger), rest = raw.filter((i) => !i.danger); if (!danger.length || raw.length < 3) return raw; const out = [...rest]; out.splice(Math.floor(raw.length / 2), 0, ...danger); return out; })();
   // Радиус растёт с числом пунктов, чтобы кнопки не налезали (10 пунктов меню модуля).
-  const R = Math.max(RADIUS, Math.ceil((ring.length * (SIZE + 8)) / (2 * Math.PI))), SHIFT = R + SIZE / 2 + 18;
+  const R = Math.max(RADIUS, Math.ceil((ring.length * (SIZE + 8)) / (2 * Math.PI)));
   const ref = useRef<HTMLDivElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-  // Меню целиком в окне: центр не ближе радиуса + подпись к краю.
-  const margin = R + SIZE / 2 + 30;
-  // Сдвиг вправо от клика, у правого края — влево.
-  const sx = x + SHIFT + margin <= window.innerWidth ? x + SHIFT : x - SHIFT;
-  const cx = Math.min(Math.max(sx, margin), window.innerWidth - margin), cy = Math.min(Math.max(y, margin), window.innerHeight - margin);
+  // Меню целиком в области: центр не ближе радиуса + подпись к краю; по горизонтали — ещё место под боковые подписи (до ~110 px).
+  // Сдвиг вправо от клика, у правого края — влево; area — сцена без правой панели инструментов (placeMenu, находка 6).
+  const { cx, cy } = placeMenu(x, y, R, SIZE, area ?? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight });
   const back = () => { setHover(null); if (path.length) setPath(path.slice(0, -1)); else onClose(); };
   // Фокус на само меню, а не на первый пункт: в центре остаётся название выбранного, стрелки начинают обход с первого пункта.
   useLayoutEffect(() => { ref.current?.focus(); }, [path]);
@@ -74,7 +73,7 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose }: { x: numbe
             style={{ transform: `translate(${px}px, ${py}px)`, animationDelay: i * 18 + "ms" }} disabled={item.disabled} aria-haspopup={item.children ? "menu" : undefined}
             aria-label={item.label + (item.hint ? ". " + item.hint : "")} onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} onMouseLeave={() => setHover(null)} onClick={() => choose(item)}>
             <Icon size={18} />
-            <span className={"radial-label" + (py > 24 ? " below" : py < -24 ? " above" : px < 0 ? " left" : " right")}>{item.label}{item.children ? " ›" : ""}</span>
+            <span className={"radial-label" + labelSide(px, py, R)}>{item.label}{item.children ? " ›" : ""}</span>
           </button>
         );
       })}
