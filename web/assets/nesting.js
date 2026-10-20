@@ -97,7 +97,7 @@ function cuttingPlan(project) {
   for (const key in groups) {
     const g = groups[key];
     const nest = nestParts(g.parts, g.sheetW, g.sheetH, CONST.sheet.kerf);
-    out.push({ label: g.label, sheetW: g.sheetW, sheetH: g.sheetH, price: g.price,
+    out.push({ key: g.key, label: g.label, sheetW: g.sheetW, sheetH: g.sheetH, price: g.price,
                parts: g.parts.length, result: nest });
   }
   return out;

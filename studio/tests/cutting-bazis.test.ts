@@ -128,7 +128,10 @@ test('флаг раскроя: по умолчанию карты и смета 
     }
     const e=estimate(q);
     assert.equal(e.ldspSheets,plan.sheets.filter(s=>s.material!=='hdf').length);
-    assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.sheets.length);
+    // работа цеха (20.10.2026): лист ЛДСП — строка work, лист ЛХДФ — своя строка work-hdf; вместе — все листы раскроя
+    const hdfSheets=plan.sheets.filter(s=>s.material==='hdf').length;
+    assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.sheets.length-hdfSheets);
+    assert.equal(e.lines.find(l=>l.id==='work-hdf')?.quantity??0,hdfSheets);
     console.log(`${count} шкаф(ов): классика ${classic.length} листов, гильотина ${plan.sheets.length}`);
     assert.ok(nestingHTML(q).includes('под форматную пилу'));
   }

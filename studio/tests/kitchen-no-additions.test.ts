@@ -49,15 +49,17 @@ test('сырой модуль кухни Базиса: в смете нет «М
 const hdfBack=():RawSpec['panels'][number]=>({name:'Задняя стенка',kind:'hdf',box:[0,0,0,600,720,3]});
 const rawWardrobe=():Module=>({...rawBody(),name:'Шкаф Базиса',raw:{panels:[...rawBody().raw!.panels,hdfBack()],hardware:[],source:'bazis-corpus'}});
 
-test('сырой шкаф Базиса (wardrobe-NNN): «Мелочёвка корпуса» и работа цеха за все листы, включая ХДФ, — как было',()=>{
+test('сырой шкаф Базиса (wardrobe-NNN): «Мелочёвка корпуса» и работа цеха за все листы — ЛДСП и ЛХДФ отдельными строками',()=>{
   const m=rawWardrobe();assert.ok(!rawKitchen(m.raw));
-  const p=project(m),plan=nest(p),e=estimate(p,plan);
+  const p=project(m),plan=nest(p),e=estimate(p,plan),hdf=plan.filter(s=>s.material==='hdf').length;
   assert.equal(e.lines.find(l=>l.id==='kit')?.quantity,1,'норматив шкафа на корпус остаётся');
-  assert.ok(plan.some(s=>s.material==='hdf'),'в раскрое есть лист ХДФ');
-  assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.length,'работа — за все листы, как у шкафов');
+  assert.ok(hdf>0,'в раскрое есть лист ХДФ');
+  assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.length-hdf,'работа ЛДСП — за листы ЛДСП');
+  assert.equal(e.lines.find(l=>l.id==='work-hdf')!.quantity,hdf,'работа ЛХДФ — своей строкой, как у шкафов');
   // тот же набор деталей в сыром модуле кухни: ХДФ работой не считается
-  const k={...rawBody(),raw:{...rawBody().raw!,panels:[...rawBody().raw!.panels,hdfBack()]}},kp=project(k),kplan=nest(kp);
-  assert.equal(estimate(kp,kplan).lines.find(l=>l.id==='work')!.quantity,kplan.filter(s=>s.material!=='hdf').length);
+  const k={...rawBody(),raw:{...rawBody().raw!,panels:[...rawBody().raw!.panels,hdfBack()]}},kp=project(k),kplan=nest(kp),ke=estimate(kp,kplan);
+  assert.equal(ke.lines.find(l=>l.id==='work')!.quantity,kplan.filter(s=>s.material!=='hdf').length);
+  assert.equal(ke.lines.find(l=>l.id==='work-hdf'),undefined);
 });
 
 test('сырой шкаф Базиса — не «кухня из Базиса»: фальши по регламенту шкафов',()=>{
@@ -124,12 +126,15 @@ test('кухня из Базиса (k19 «А 3»): откидной фасад �
   assert.ok(ids(w).includes('lift-mechanism'));
 });
 
-test('кухня: «Работа цеха» — за листы ЛДСП, лист ХДФ работой не считается; шкаф — как было',()=>{
+test('кухня: «Работа цеха» — за листы ЛДСП, лист ХДФ работой не считается; шкаф — ЛДСП и ЛХДФ своими строками',()=>{
   const k=project(kitchenBase(initialModule(),600),kitchenWall(initialModule(),600)),plan=nest(k),e=estimate(k,plan);
   assert.ok(plan.some(s=>s.material==='hdf'),'в раскрое есть лист ХДФ');
   assert.equal(e.lines.find(l=>l.id==='work')!.quantity,plan.filter(s=>s.material!=='hdf').length);
-  const w=newProject(),wp=nest(w);
-  assert.equal(estimate(w,wp).lines.find(l=>l.id==='work')!.quantity,wp.length,'шкаф: правило не менялось');
+  assert.equal(e.lines.find(l=>l.id==='work')!.unitPrice,3500,'кухня: работа за лист ЛДСП — 3 500, как у шкафов');
+  assert.equal(e.lines.find(l=>l.id==='work-hdf'),undefined,'кухня: лист ЛХДФ без работы (до решения Макса)');
+  const w=newProject(),wp=nest(w),we=estimate(w,wp),hdf=wp.filter(s=>s.material==='hdf').length;
+  assert.equal(we.lines.find(l=>l.id==='work')!.quantity,wp.length-hdf);
+  assert.equal(we.lines.find(l=>l.id==='work-hdf')!.quantity,hdf,'шкаф: работа за лист ЛХДФ своей строкой');
 });
 
 test('кухня из Базиса: автофальши и сдвиги студии не добавляются; кухня студии и шкафы — по регламенту цеха',()=>{

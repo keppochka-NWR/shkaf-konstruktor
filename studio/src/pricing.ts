@@ -85,6 +85,10 @@ export function kupeLdspPerM2(decor:string,markup:number):{price:number|null;sou
 }
 export const isKupeLine=(id:string)=>id.startsWith('kupe-');
 export const HDF_SHEET=1060; // ХДФ Kronospan 2800×2070×3, Древиз.
+/** Работа цеха за лист раскроя (решение Макса 20.10.2026, было 2 500 за любой лист): лист ЛДСП (плиты) — 3 500 ₽, лист ЛХДФ — 2 000 ₽.
+ *  Это себестоимость (как лист ЛХДФ HDF_SHEET 1 060 ₽): клиенту — × коэффициент сметы. Публичная сборка запекает обе константы (bake-prices). */
+export const SHOP_WORK_LDSP_SHEET=3500;
+export const SHOP_WORK_HDF_SHEET=2000;
 export type DecorPrice={price:number|null;source:string};
 export function decorPrice(name:string):DecorPrice{
   if(sheets[name]!==undefined)return {price:sheets[name],source:'База закупки СФЗ / Победа'};
@@ -151,7 +155,7 @@ export const DOWEL={price:0.7,source:'ФАМ: шкант 8×30 бук'};
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы, покупные материалы (фасады МДФ, цоколь из фасадного,
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|falsh-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
@@ -494,10 +498,14 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     }
   }
   add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('edge05','Кромка 0,5 мм (как в проекте Базиса)',edge05,'м',15,'Цена как у кромки 0,4 — уточнить по счёту');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха'+(bazisProject?' (работа цеха, не из Базиса)':''));
-  // Работа цеха — за лист ЛДСП. У кухни (все объекты — кухонные модули, сырые модули кухни Базиса, столешницы) лист ХДФ работой
-  // не считается; у шкафов, в т.ч. сырых шкафов из корпуса Базиса, — как было (решение не менять правила шкафов).
+  // Работа цеха (решение Макса 20.10.2026): лист ЛДСП — SHOP_WORK_LDSP_SHEET, лист ЛХДФ — SHOP_WORK_HDF_SHEET отдельной строкой
+  // «Работа цеха: ЛХДФ» (шкафы, в т.ч. сырые шкафы из корпуса Базиса). У кухни (все объекты — кухонные модули, сырые модули кухни
+  // Базиса, столешницы) лист ЛХДФ работой не считается, как до 20.10 (вопрос Максу открыт). Обе строки — себестоимость × коэффициент.
   const kitchenOnly=p.modules.length>0&&p.modules.every(a=>a.module.kitchen||rawKitchen(a.module.raw)||a.module.worktop);
-  add('work','Работа цеха',kitchenOnly?plan.filter(s=>s.material!=='hdf').length:plan.length,'лист',2500,(kitchenOnly?'База расчёта: 2 500 ₽ за лист ЛДСП (лист ХДФ без работы)':'База расчёта шкафа')+(bazisProject?' (работа цеха, не из Базиса)':''));
+  const rub=(n:number)=>String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' '),notBazis=bazisProject?' (работа цеха, не из Базиса)':'';
+  const hdfSheets=plan.filter(s=>s.material==='hdf').length;
+  add('work','Работа цеха: ЛДСП',plan.length-hdfSheets,'лист',SHOP_WORK_LDSP_SHEET,'Цех: '+rub(SHOP_WORK_LDSP_SHEET)+' ₽ за лист ЛДСП'+(kitchenOnly&&hdfSheets?' (у кухни лист ЛХДФ без работы)':'')+notBazis);
+  if(!kitchenOnly)add('work-hdf','Работа цеха: ЛХДФ',hdfSheets,'лист',SHOP_WORK_HDF_SHEET,'Цех: '+rub(SHOP_WORK_HDF_SHEET)+' ₽ за лист ЛХДФ (сам лист — строкой «ЛХДФ 3 мм»)'+notBazis);
   for(const l of lines)l.quantity=Math.round(l.quantity*1000)/1000;
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));

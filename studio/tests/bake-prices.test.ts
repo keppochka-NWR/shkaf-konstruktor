@@ -86,6 +86,20 @@ test('запекание: подсветка в крыше (Вотан) — 4000
   assert.equal(pub.byMarkupKnown!-baked.estimate(off).byMarkupKnown!,mgr.byMarkupKnown!-estimate(off).byMarkupKnown!);
   assert.equal(mgr.byMarkupKnown!-estimate(off).byMarkupKnown!,Math.round(a.quantity*4000));
 });
+// Решение Макса 20.10.2026: работа цеха 3 500 за лист ЛДСП, 2 000 за лист ЛХДФ — себестоимость; публичная сборка запекает × 2,2
+test('запекание: работа цеха — константы ЛДСП 3 500 → 7 700, ЛХДФ 2 000 → 4 400, итог шкафа и кухни тот же, что у менеджера',()=>{
+  const bakedPricing=readFileSync(join(out,'pricing.ts'),'utf8');
+  assert.match(bakedPricing,/export const SHOP_WORK_LDSP_SHEET=7700;/);assert.match(bakedPricing,/export const SHOP_WORK_HDF_SHEET=4400;/);
+  assert.match(bakedPricing,/export const HDF_SHEET=2332;/);
+  for(const p of [swing1200(),typical.kitchen()]){
+    const cv=clientView(estimate(p)),pub=baked.estimate(p);
+    assert.equal(pub.retail,cv.retail);
+    for(const id of ['work','work-hdf','sheet:hdf'])assert.equal(pub.lines.find(l=>l.id===id)?.unitPrice,cv.lines.find(l=>l.id===id)?.unitPrice,id);
+  }
+  assert.equal(baked.estimate(swing1200()).lines.find(l=>l.id==='work-hdf')!.unitPrice,4400);
+  assert.equal(baked.estimate(swing1200()).lines.find(l=>l.id==='work')!.unitPrice,7700);
+  assert.equal(baked.estimate(typical.kitchen()).lines.find(l=>l.id==='work-hdf'),undefined,'кухня: работы за ЛХДФ нет и в публичной сборке');
+});
 for(const [n,make] of Object.entries(typical))test(`запекание: типовой заказ «${n}» — итог тот же до рубля, строки — розница`,()=>{compare(n,make(),true);});
 test('запекание: примеры examples/ — итог в пределах округления',()=>{
   for(const f of examples){const p=parseProject(JSON.parse(readFileSync(join(studio,'examples',f),'utf8')));compare(f,p,false);}
@@ -122,13 +136,15 @@ test('R1: ручная цена проекта (лист 10 000) в публич
   const p=newProject();p.calculation={markup:2.2,overrides:{'sheet:Дуб Вотан':10000}};
   const m=estimate(p),pub=baked.estimate(p);
   // 83 000 у Codex (5bd8335) + склейка составного фальша 1000 ₽/м² (3dd13b2) и вставки за петлёй (R4) = 83 303
-  assert.equal(m.retail,83303);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
+  // + работа цеха 20.10.2026 (3 листа ЛДСП × 1 000 + 1 лист ЛХДФ × (2 000 − 2 500)) × 2,2 = +5 500
+  assert.equal(m.retail,88803);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
 });
 test('R1: кухня с 7 ручными ценами 1000 — итог как в менеджерской, позиции не pending',()=>{
   const p=kitchen3m(),e=estimate(p);assert.equal(e.pending.length,7);
   p.calculation={markup:2.2,overrides:Object.fromEntries(e.pending.map(l=>[l.id,1000]))};
   const m=estimate(p),pub=baked.estimate(p);
-  assert.equal(m.retail,215600);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
+  // + работа цеха 20.10.2026: 6 листов ЛДСП × (3 500 − 2 500) × 2,2 = +13 200; ЛХДФ у кухни без работы
+  assert.equal(m.retail,228800);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
 });
 test('R1: нестандартный коэффициент проекта не теряется: со штампом менеджера — итог менеджера, без штампа — явное предупреждение',()=>{
   const p=newProject();p.calculation={markup:2.5,overrides:{}};

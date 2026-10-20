@@ -1006,8 +1006,10 @@
       " м (0,4)</td><td style='text-align:right'>" + fmtRub(pr.edgeCost) + "</td></tr>";
     html += "<tr><td>Фурнитура</td><td style='text-align:right'>" + fmtRub(pr.hwCost) + "</td></tr>";
     if (pr.feeCost) html += "<tr><td>Мелкие детали (+300 ₽/шт)</td><td style='text-align:right'>" + fmtRub(pr.feeCost) + "</td></tr>";
-    html += "<tr><td>Работа цеха (" + pr.sheetsCount + " л. × " + CONST.pricing.workPerSheet +
-      ")</td><td style='text-align:right'>" + fmtRub(pr.workCost) + "</td></tr>";
+    html += "<tr><td>Работа цеха: ЛДСП (" + pr.sheetsCount + " л. × " + CONST.pricing.workPerSheet +
+      ")</td><td style='text-align:right'>" + fmtRub(pr.workLdspCost) + "</td></tr>";
+    if (pr.hdfSheetsCount) html += "<tr><td>Работа цеха: ЛХДФ (" + pr.hdfSheetsCount + " л. × " + CONST.pricing.workPerHdfSheet +
+      ")</td><td style='text-align:right'>" + fmtRub(pr.workHdfCost) + "</td></tr>";
     html += "<tr><td style='font-weight:700'>Итого себестоимость</td><td style='text-align:right;font-weight:700'>" +
       fmtRub(pr.cost) + "</td></tr>";
     if (pr.lightCost) {
