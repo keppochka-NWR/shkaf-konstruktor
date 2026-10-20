@@ -476,6 +476,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // Решение Макса 20.10.2026: подсветка в горизонтах (полках) — 4000 ₽/пог.м, в вертикалях (стойках) — 3000 ₽/пог.м, клиенту,
       // розница поверх коэффициента. Длина — сумма LED-профилей полок. Цена — именованной константой (сборка не запекает ×2,2).
       if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf','Подсветка в полках',d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м, поверх коэффициента (решение Макса 20.10.2026)',true);
+      // Подсветка в крыше нижнего модуля (casework, заказ Вотан, id «…:light:roof») — тоже горизонталь: 4000 ₽/пог.м, своей строкой.
+      else if(d.role==='light'&&d.id.endsWith(':light:roof'))add('light-roof','Подсветка в крыше',d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
       else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');

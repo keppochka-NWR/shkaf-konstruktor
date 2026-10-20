@@ -8,6 +8,7 @@ import {clientView} from '../src/clientPrices';
 import {newProject,parseProject,type Project} from '../src/project';
 import {initialModule} from '../src/model';
 import {createKitchenRow,createKupeWardrobe} from '../src/ModulePalette';
+import {VOTAN_DEFAULT,votanProject} from '../src/votan';
 import {bakeEdits,applyBake,readCoefs,purchaseValues,BAKE_RULES} from '../scripts/bake-prices';
 import {PRICE_LITERALS} from '../scripts/public-build';
 import {findPurchaseNumbers} from '../scripts/price-guard';
@@ -66,7 +67,7 @@ test('запекание: подсветка в полках (4000 ₽/пог.м
   assert.ok(Math.abs(pub.split.hardware-mgr.split.hardware)<=2,'фурнитура ±2 ₽ округления, как у типовых заказов');assert.equal(pub.pending.length,mgr.pending.length);
   // прирост от подсветки — ровно длина × цена и у менеджера, и в публичной сборке (та же группа разбивки «фурнитура», что у стоек)
   const p0=newProject(),m0=p0.modules[0].module;m0.sections[0].shelves=[0.25,0.5,0.75];
-  const light=Math.round(mgr.lines.find(l=>l.id==='light-shelf')!.quantity*4000)+Math.round(mgr.lines.find(l=>l.id==='light-stand')!.quantity*3000);
+  const light=Math.round(mgr.lines.find(l=>l.id==='light-shelf')!.quantity*4000+mgr.lines.find(l=>l.id==='light-stand')!.quantity*3000); // retailOf округляет группу один раз
   assert.equal(mgr.retail!-estimate(p0).retail!,light);assert.equal(pub.retail!-baked.estimate(p0).retail!,light);
   assert.equal(mgr.split.hardware-estimate(p0).split.hardware,light);assert.equal(pub.split.hardware-baked.estimate(p0).split.hardware,light);
   // в запечённом исходнике цена — та же именованная константа (её нет в BAKE_RULES model.ts), литералов 4000/3000 в add() нет
@@ -74,6 +75,16 @@ test('запекание: подсветка в полках (4000 ₽/пог.м
   assert.match(bakedModel,/lightRetailPerM: 3000,/);assert.match(bakedModel,/shelfLightRetailPerM: 4000,/);
   assert.match(bakedPricing,/add\('light-shelf','Подсветка в полках',d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
   assert.match(bakedPricing,/add\('light-stand','Подсветка врезная в стойках',d\.length\/1000,'пог\.м',RULES\.lightRetailPerM,/);
+  assert.match(bakedPricing,/add\('light-roof','Подсветка в крыше',d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
+});
+// Подсветка в крыше нижнего модуля (Вотан) — горизонталь: 4000 ₽/пог.м и в публичной сборке, не ×2,2 и не по цене стоек
+test('запекание: подсветка в крыше (Вотан) — 4000 ₽/пог.м в публичной сборке, прирост итога тот же, что у менеджера',()=>{
+  const on=votanProject({...VOTAN_DEFAULT,light:true}),off=votanProject({...VOTAN_DEFAULT,light:false});
+  const mgr=estimate(on),pub=baked.estimate(on),a=mgr.lines.find(l=>l.id==='light-roof')!,b=pub.lines.find(l=>l.id==='light-roof')!;
+  assert.ok(a&&b);assert.equal(a.unitPrice,4000);assert.equal(b.unitPrice,4000,'публичная: не запечено ×2,2');assert.equal(b.quantity,a.quantity);
+  assert.ok(!pub.lines.some(l=>l.id==='light-stand'),'крыша — не «в стойках»');
+  assert.equal(pub.byMarkupKnown!-baked.estimate(off).byMarkupKnown!,mgr.byMarkupKnown!-estimate(off).byMarkupKnown!);
+  assert.equal(mgr.byMarkupKnown!-estimate(off).byMarkupKnown!,Math.round(a.quantity*4000));
 });
 for(const [n,make] of Object.entries(typical))test(`запекание: типовой заказ «${n}» — итог тот же до рубля, строки — розница`,()=>{compare(n,make(),true);});
 test('запекание: примеры examples/ — итог в пределах округления',()=>{

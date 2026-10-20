@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parts,parseModule,validate} from '../src/model';
+import {parts,parseModule,validate,initialModule,RULES} from '../src/model';
+import {estimate,lineGroup} from '../src/pricing';
 import {VOTAN_DEFAULT,parseVotan,votanProject} from '../src/votan';
 import {aluFill} from '../src/alu';
 test('order parameters survive roundtrip; malformed numeric input fails',()=>{
@@ -35,6 +36,31 @@ test('650 is between mounting faces; no drawer under trousers; upper is unpartit
   assert.equal(right.position[0]-right.size[0]/2-stand.position[0]-stand.size[0]/2,650);
   assert.equal(ps.filter(q=>q.id.includes(':drawer:')).length,0);
   for(const a of p.modules.filter(a=>a.id.endsWith('-top'))){assert.equal(parts(a.module).filter(q=>q.id.includes('divider')||q.role==='shelf').length,0);}
+});
+// Решение Макса 20.10.2026: «в горизонтах 4000 ₽, в вертикалях 3000 ₽» — подсветка в крыше горизонтальная → 4000 ₽/пог.м
+test('подсветка в крышах Вотан — строка «Подсветка в крыше» 4000 ₽/пог.м, розница, не «в стойках» по 3000',()=>{
+  const on=votanProject({...VOTAN_DEFAULT,light:true}),off=votanProject({...VOTAN_DEFAULT,light:false});
+  const len=on.modules.flatMap(a=>parts(a.module).filter(q=>q.role==='light'&&q.id.endsWith(':light:roof'))).reduce((s,q)=>s+q.length,0)/1000;
+  assert.ok(len>0);
+  const e=estimate(on),row=e.lines.find(l=>l.id==='light-roof')!;
+  assert.ok(row,'строка подсветки в крыше есть');assert.equal(row.label,'Подсветка в крыше');
+  assert.equal(row.unitPrice,RULES.shelfLightRetailPerM);assert.equal(row.unitPrice,4000);assert.equal(row.retail,true);
+  assert.ok(Math.abs(row.quantity-len)<0.001,`длина ${row.quantity} = сумма профилей ${len}`);
+  assert.ok(!e.lines.some(l=>l.id==='light-stand'),'не считается как подсветка в стойках');
+  assert.equal(lineGroup('light-roof'),'hardware');
+  const e0=estimate(off);
+  assert.equal(e.byMarkupKnown!-e0.byMarkupKnown!,Math.round(len*4000),'итог растёт ровно на длину × 4000 (поверх коэффициента)');
+  assert.equal(e.split.hardware-e0.split.hardware,Math.round(len*4000));
+  assert.equal(e.split.material,e0.split.material);
+});
+// Страховка правила: по цене стоек (light-stand, 3000) идут только вертикальные профили — горизонтальные (ширина > высоты) все по 4000
+test('подсветка по цене стоек — только вертикальные профили (Вотан, шкаф со стойками и полками)',()=>{
+  const w=initialModule();w.standLight=true;w.sections[0].shelves=[0.3,0.6];w.sections[0].shelfLight=true;
+  const mods=[...votanProject({...VOTAN_DEFAULT,light:true}).modules.map(a=>a.module),w];
+  for(const m of mods)for(const q of parts(m).filter(q=>q.role==='light'&&!q.id.startsWith('groove:'))){
+    const horizontal=q.size[0]>q.size[1]||q.size[2]>q.size[1],toStand=!q.id.includes(':shelf-light:')&&!q.id.endsWith(':light:roof');
+    assert.equal(toStand,!horizontal,`${q.id} (${q.size.join('×')}): ${horizontal?'горизонталь — 4000':'вертикаль — 3000'}`);
+  }
 });
 test('lights are horizontal in lower roofs; no support feet; glass prices from the ALU calculator',()=>{
   const p=votanProject(VOTAN_DEFAULT);

@@ -122,8 +122,10 @@ test('подсветка в стойках: длина × 3000 ₽ (RULES.lightR
   assert.equal(es.retail,e0.retail!+Math.round(stand.quantity*3000));
   const both=structuredClone(st);both.sections[0].shelfLight=true;
   const eb=estimate(project(both)),shelf=eb.lines.find(l=>l.id==='light-shelf')!;
-  assert.equal(eb.retail,e0.retail!+Math.round(stand.quantity*3000)+Math.round(shelf.quantity*4000));
-  assert.equal(eb.split.hardware,e0.split.hardware+Math.round(stand.quantity*3000)+Math.round(shelf.quantity*4000));
+  // retailOf округляет сумму розничных строк группы один раз — так и сравниваем (не сумму двух округлений)
+  const lightBoth=Math.round(stand.quantity*3000+shelf.quantity*4000);
+  assert.equal(eb.retail,e0.retail!+lightBoth);
+  assert.equal(eb.split.hardware,e0.split.hardware+lightBoth);
   assert.match(lightItem(st,st.sections[0].id,spy(st).ops).children![0].hint!,/3 000 ₽ за пог\. м/);
 });
 
