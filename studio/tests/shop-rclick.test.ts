@@ -108,7 +108,7 @@ test('подсветка в полках: N полок ширины W → сум
   assert.equal(e.pending.length,e0.pending.length);
   assert.equal(pendingPrice('light-shelf'),null,'в pendingPrices подсветки в полках больше нет');
   assert.equal(lineGroup('light-shelf'),lineGroup('light-stand'),'разбивка: подсветки — одна группа');
-  const hint=lightItem(m,m.sections[0].id,spy(m).ops).children![1].hint!;assert.match(hint,/4 000 ₽ за пог\. м/);assert.doesNotMatch(hint,/уточнит/);
+  const hint=lightItem(m,m.sections[0].id,spy(m).ops).children!.find(c=>c.id==='q-light-shelves')!.hint!;assert.match(hint,/4 000 ₽ за пог\. м/);assert.doesNotMatch(hint,/уточнит/);
 });
 
 test('подсветка в стойках: длина × 3000 ₽ (RULES.lightRetailPerM), в полках и стойках вместе — сумма обеих',()=>{
@@ -204,8 +204,8 @@ test('антресоль: добавить / убрать; кухни и сыр�
 test('подсветка в полках: флаг секции, LED-профиль под передней кромкой каждой полки, смета 4000 ₽/пог.м (решение 20.10)',()=>{
   const m=wardrobe();m.sections[0].shelves=[0.3,0.6];
   const before=parts(m).length,s=spy(m);
-  lightItem(s.mod,m.sections[0].id,s.ops).children![1].run!();
-  const n=s.mod;assert.equal(n.sections[0].shelfLight,true);assert.equal(n.sections[1].shelfLight,undefined);
+  lightItem(s.mod,m.sections[0].id,s.ops).children!.find(c=>c.id==='q-light-shelves')!.run!();
+  const n=s.mod;assert.deepEqual(n.sections[0].shelfLights,[0,1]);assert.equal(n.sections[1].shelfLights,undefined);
   const lights=parts(n).filter(p=>p.id.includes(':shelf-light:'));assert.equal(lights.length,2);assert.equal(parts(n).length,before+2);
   const shelf=parts(n).find(p=>p.id===m.sections[0].id+':shelf:0')!,led=lights[0];
   assert.ok(led.position[1]<shelf.position[1]-shelf.size[1]/2+0.01,'под полкой');
@@ -216,7 +216,7 @@ test('подсветка в полках: флаг секции, LED-профи�
   assert.ok(!estimate(project(n)).lines.some(i=>i.id==='light-stand'),'не считается как подсветка в стойках');
   // без флага — шкаф без изменений
   assert.ok(!parts(m).some(p=>p.id.includes('shelf-light')));
-  lightItem(n,m.sections[0].id,s.ops).children![1].run!();assert.equal(s.mod.sections[0].shelfLight,undefined);
+  lightItem(n,m.sections[0].id,s.ops).children!.find(c=>c.id==='q-light-shelves')!.run!();assert.equal(s.mod.sections[0].shelfLights,undefined);
 });
 
 test('штанга из меню — под ближайшей полкой сверху (70 мм, RULES.rodTopOffset), полка — на высоте клика по шагу 32',()=>{

@@ -5,6 +5,7 @@
 import { Archive, ArrowDownToLine, Columns2, Footprints, Lightbulb, Lock, MousePointerClick, PanelTop, Plus, Rows3, Shirt, ShoppingBasket, Sparkles } from "lucide-react";
 import type { RadialItem } from "./RadialMenu";
 import { RULES, type Module } from "./model";
+import { allStandsLit, setAllStands } from "./lights";
 import type { FillKind } from "./operations";
 import { MESH, MESH_KIND_LABEL, type MeshItem } from "./mesh";
 
@@ -56,7 +57,7 @@ export function addMenuItem(mod: Module, sid: string, ops: AddMenuOps): RadialIt
     fill("shelf", "Стекло", PanelTop, "Стеклянная полка 6 мм — витрина; цену уточнит менеджер", { glass: true, disabled: corner }),
   ];
   const upgrades: RadialItem[] = [
-    { id: "add-light", label: mod.standLight ? "Убрать подсветку" : "Подсветку", icon: Lightbulb, active: !!mod.standLight, hint: mod.standLight ? "Снять LED-подсветку в стойках" : "LED в стойках на всю высоту — у серийки света нет", run: () => ops.modify((n) => { if (n.standLight) delete n.standLight; else n.standLight = true; }) },
+    { id: "add-light", label: allStandsLit(mod) ? "Убрать подсветку" : "Подсветку", icon: Lightbulb, active: allStandsLit(mod), hint: allStandsLit(mod) ? "Снять LED-подсветку в стойках" : "LED в стойках на всю высоту — у серийки света нет", run: () => ops.modify((n) => setAllStands(n, !allStandsLit(n))) },
     { id: "add-push", label: mod.doorOpen === "push" ? "С ручками" : "Открывание нажатием", icon: MousePointerClick, active: mod.doorOpen === "push", disabled: !mod.doors, hint: mod.doorOpen === "push" ? "Вернуть ручки на распашные фасады" : "Push-to-open: фасады без ручек, открываются касанием", run: () => ops.modify((n) => { if (n.doorOpen === "push") delete n.doorOpen; else n.doorOpen = "push"; }) },
     { id: "add-hidden-fastening", label: mod.fastening === "eccentric" ? "Евровинты" : "Скрытый крепёж", icon: Lock, active: mod.fastening === "eccentric", hint: mod.fastening === "eccentric" ? "Вернуть видимый крепёж — конфирматы" : "Эксцентрики вместо евровинтов: снаружи нет шляпок", run: () => ops.modify((n) => { if (n.fastening === "eccentric") delete n.fastening; else n.fastening = "eccentric"; }) },
   ];

@@ -175,6 +175,13 @@ export type Section = {
   /** Подсветка в полках (запрос Макса 19.10.2026): LED-профиль в передней кромке снизу каждой полки секции. Цена — RULES.shelfLightRetailPerM
    *  (4000 ₽/пог.м клиенту, решение Макса 20.10.2026), розничная строка сметы light-shelf поверх коэффициента. */
   shelfLight?: boolean;
+  /** Подсветка по деталям (запрос Макса 20.10.2026, src/lights.ts): вертикальный LED-профиль у левой/правой стойки секции
+   *  (боковина или перегородка, грань в эту секцию), 3000 ₽/пог.м. Старые standLight/shelfLight переводятся сюда при разборе. */
+  standLights?: ("left" | "right")[];
+  /** Подсвеченные полки секции — номера полок, как fixed/glassShelves (удаление полки уносит её подсветку, номера сдвигаются). 4000 ₽/пог.м. */
+  shelfLights?: number[];
+  /** LED-профиль под крышей (или под общей горизонталью) над секцией — горизонталь, 4000 ₽/пог.м. */
+  topLight?: true;
   /** Индексы жёстких полок (на конфирматах/эксцентриках, в точную ширину проёма); остальные съёмные на полкодержателях. */
   fixed?: number[];
   /** Глубина обычных полок секции, мм. Полка над ящиками сохраняет конструктивную глубину. */
@@ -996,8 +1003,9 @@ export function parts(m: Module): Part[] {
         s.id,
       );
     }
-    if (m.standLight)
-      for (const side of ["left", "right"] as const)
+    // Подсветка по деталям (20.10.2026): старый флаг standLight = обе стойки каждой секции; новый — своя сторона секции.
+    for (const side of ["left", "right"] as const)
+      if (m.standLight || s.standLights?.includes(side))
         add(
           `${s.id}:light:${side}`,
           "Подсветка LED в стойке",
@@ -1028,9 +1036,13 @@ export function parts(m: Module): Part[] {
       );
       if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, b.x, b.x + b.width, rear, RULES.shelfDepthMinus);
       // Подсветка в полках: LED-профиль снизу у передней кромки полки (отступ 20 мм), по длине полки минус 20 с краёв. Только при флаге секции.
-      if(s.shelfLight){const len=b.width-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth;
+      if(s.shelfLight||s.shelfLights?.includes(j)){const len=b.width-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth;
         add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,RULES.lightProfileT,RULES.lightProfileW],[b.x+b.width/2,b.bottom+f*h-st/2-RULES.lightProfileT/2,front-20-RULES.lightProfileW/2],len,RULES.lightProfileW,RULES.lightProfileT,'light',s.id,'metal');}
     });
+    // Подсветка под крышей секции (20.10.2026): горизонталь как у полки — по ширине проёма минус 20 с краёв, 20 мм от переда крыши.
+    // id «…:light:roof» — та же строка сметы «Подсветка в крыше» (4000 ₽/пог.м), что у Вотан.
+    if(s.topLight){const len=b.width-40;
+      add(`${s.id}:light:roof`,'Подсветка LED под крышей',[len,RULES.lightProfileT,RULES.lightProfileW],[b.x+b.width/2,b.top-RULES.lightProfileT/2,d-20-RULES.lightProfileW/2],len,RULES.lightProfileW,RULES.lightProfileT,'light',s.id,'metal');}
     const f=fillerSides(m,s),filler=f.left+f.right;
     const glue=glueOff?{}:falshZones(m);
     for(const side of ['left','right'] as const)if(f[side]&&glue[s.id+':'+side]){
@@ -1881,6 +1893,7 @@ export function validate(m: Module): string[] {
   if (m.backType!==undefined && !["nailed","groove","board","none"].includes(m.backType)) errors.push("Выберите допустимый тип задней стенки.");
   if(m.hingeSide!==undefined&&!['left','right'].includes(m.hingeSide))errors.push('Выберите сторону петель.');
   if(m.standLight!==undefined&&typeof m.standLight!=='boolean')errors.push('Неверный параметр подсветки.');
+  for(const s of m.sections)if((s.standLights!==undefined&&(!Array.isArray(s.standLights)||s.standLights.some(x=>x!=='left'&&x!=='right')))||(s.shelfLights!==undefined&&(!Array.isArray(s.shelfLights)||s.shelfLights.some(j=>!Number.isInteger(j)||j<0)))||(s.topLight!==undefined&&s.topLight!==true)){errors.push('Неверный параметр подсветки.');break;}
   if(m.handleId!==undefined&&!HANDLES.some(h=>h.id===m.handleId))errors.push('Выберите ручку из каталога.');
   if(m.drawerHandleId!==undefined&&!HANDLES.some(h=>h.id===m.drawerHandleId))errors.push('Выберите ручку ящиков из каталога.');
   if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
@@ -2204,7 +2217,7 @@ export function setShelfGap(
   const b = boxes(m).find((b) => b.id === sid)!,
     s = m.sections.find((s) => s.id === sid)!;
   const order=s.shelves.map((value,i)=>({value,i})).sort((a,b)=>a.value-b.value);
-  for(const key of ['fixed','glassShelves'] as const)if(s[key])s[key]=order.flatMap((entry,j)=>s[key]!.includes(entry.i)?[j]:[]);
+  for(const key of ['fixed','glassShelves','shelfLights'] as const)if(s[key])s[key]=order.flatMap((entry,j)=>s[key]!.includes(entry.i)?[j]:[]);
   s.shelves=order.map(entry=>entry.value);
   const gaps = shelfGaps(m, sid);
   if (!s.shelves.length || !gaps[index]) return;
@@ -2367,6 +2380,9 @@ export function parseModule(input: unknown): Module {
     ...(s.pullouts===undefined?{}:{pullouts:s.pullouts}),
       ...(s.rodAt===undefined?{}:{rodAt:s.rodAt}),
       ...(s.shelfLight===true?{shelfLight:true}:{}),
+      ...(Array.isArray(s.standLights)?{standLights:(['left','right'] as const).filter(x=>(s.standLights as unknown[]).includes(x))}:{}),
+      ...(Array.isArray(s.shelfLights)?{shelfLights:[...new Set((s.shelfLights as unknown[]).map(Number))].filter(j=>Number.isInteger(j)&&j>=0&&j<s.shelves.length).sort((a,z)=>a-z)}:{}),
+      ...(s.topLight===true?{topLight:true as const}:{}),
       ...(s.fixed===undefined?{}:{fixed:Array.isArray(s.fixed)?[...s.fixed]:s.fixed}),
       ...(s.drawerConfigs === undefined
         ? {}
@@ -2389,8 +2405,25 @@ export function parseModule(input: unknown): Module {
     })),
   };
   if(m.corner)normalizeCorner(m);
+  migrateLights(m);
   const errors = validate(m);
   if (errors.length) throw new Error(errors[0]);
+  return m;
+}
+/** Миграция подсветки (20.10.2026): standLight (все стойки) → обе стойки каждой секции, shelfLight секции → все её полки поштучно.
+ *  Тот же набор LED-профилей и та же смета; после миграции старых полей нет. Пустые списки снимаются. Меняет модуль на месте. */
+export function migrateLights(m: Module): Module {
+  for (const s of m.sections) {
+    if (m.standLight) s.standLights = ["left", "right"];
+    if (s.shelfLight) s.shelfLights = s.shelves.map((_, j) => j);
+    delete s.shelfLight;
+    if (s.standLights) s.standLights = (["left", "right"] as const).filter((x) => s.standLights!.includes(x));
+    if (s.shelfLights) s.shelfLights = [...new Set(s.shelfLights)].filter((j) => j < s.shelves.length).sort((a, z) => a - z);
+    if (!s.standLights?.length) delete s.standLights;
+    if (!s.shelfLights?.length) delete s.shelfLights;
+    if (!s.topLight) delete s.topLight;
+  }
+  delete m.standLight;
   return m;
 }
 
