@@ -218,6 +218,38 @@ export function flangeModel(size: [number, number, number], baseAt: -1 | 1): THR
   return g;
 }
 
+/** Цилиндр-заглушка крепежа без модели: ось — по длинной стороне (винт, ножка), у диска — по короткой; радиус — по поперечным размерам.
+ *  (Раньше ось всегда X: вертикальная ножка или конфирмат рисовались «шайбой».) */
+export function fastenerAxis(size: [number, number, number]) {
+  const order = [0, 1, 2].sort((a, b) => size[b] - size[a]), disk = Math.abs(size[order[0]] - size[order[1]]) <= 1 && size[order[2]] < size[order[0]] * 0.6;
+  const axis = disk ? order[2] : order[0], rest = [0, 1, 2].filter((i) => i !== axis).map((i) => size[i]);
+  return { axis, r: Math.min(...rest) / 2, h: size[axis] };
+}
+/** Габарит-заглушка крепежа, уже повёрнутая по оси крепежа (поворот — в геометрии, не в меше). У крепежа с сеткой Базиса
+ *  (model.native) меш не поворачивается — сетка дочерняя и легла бы криво; поэтому раньше цилиндр стоял по Y всегда, и если сетка
+ *  не загрузилась, горизонтальный конфирмат 50 мм в крыше/дне/полке торчал штырём на 17 мм над плитой (баг Макса по демо 20.10). */
+export function fastenerGeometry(size: [number, number, number], seg = 20): THREE.BufferGeometry {
+  const f = fastenerAxis(size), g = new THREE.CylinderGeometry(f.r, f.r, f.h, seg);
+  if (f.axis === 0) g.rotateZ(Math.PI / 2); else if (f.axis === 2) g.rotateX(Math.PI / 2);
+  return g;
+}
+/** Запасная модель петли, если сетка Базиса не загрузилась (сеть/кэш): в системе координат той же сетки (origin/quat детали),
+ *  а не серая коробка габарита. Чашка ECHC (39d9d9c26d8c: фланец ±31,5 × −17,25..21, толщина 3 по Z) — чашка Ø35 и фланец;
+ *  плечо с планкой (d7e1d3957ebe: X −12..70 от фасада вглубь, Y 0..23,7 от стойки, Z ±26,5) — планка на стойке и плечо к чашке. */
+export function hingeFallbackModel(file: string): THREE.Group | undefined {
+  const g = new THREE.Group(), steel = zinc(), dark = plastic(0x5a5f64);
+  const box = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, mat: THREE.Material) => { const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), mat); b.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); g.add(b); };
+  if (file.endsWith("39d9d9c26d8c.glb")) {
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(17.25, 17.25, 3, 32), steel); cup.rotation.x = Math.PI / 2; cup.position.set(0, 0, 1.5); g.add(cup);
+    box(-31.5, 31.5, -6, 6, 0, 1.5, steel);
+  } else if (file.endsWith("d7e1d3957ebe.glb")) {
+    box(34, 70, 0, 3, -26.5, 26.5, dark); // планка на стойке
+    box(-12, 66, 3, 17, -8, 8, steel); // плечо
+  } else return undefined;
+  g.traverse((o) => { if (o instanceof THREE.Mesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
 export function procModel(p: P & { look?: Part["look"] }, ctx: { open?:boolean; left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
   if(p.id==='layout-oven')return ovenModel(ctx.open);
@@ -240,8 +272,10 @@ export function procModel(p: P & { look?: Part["look"] }, ctx: { open?:boolean; 
     : k === "rod-round" || k === "rod-oval" ? rodModel(p.size, k === "rod-oval")
     : k === "slide-ball" || k === "slide-hidden" ? slideModel(k === "slide-ball" ? "ball" : "hidden", p.size, ctx.left === false ? 1 : -1)
     // бочонок в горизонтали (ecc:<полка/дно/крыша>:…) сверлится с пласти — ось по Y, хотя габарит детали студии [13,15,15] лежит осью по X
-    // (model.ts: [eccBarrelH, D, D]; габарит не трогаем — регрессия деталей); в боковине (ecc:under, ecc:bottom-under) — ось X, как габарит
-    : k === "ecc-cam" ? eccCamModel(p.size, /:(under|bottom-under):/.test(p.id) ? undefined : 1)
+    // (model.ts: [eccBarrelH, D, D]; габарит не трогаем — регрессия деталей); в боковине (ecc:under, ecc:bottom-under) — ось X, как габарит;
+    // в царге под дном (ecc:rail-under, k31: габарит [15,15,13] в вертикальной царге 16) — ось по короткой стороне (Z), а не Y:
+    // по Y бочонок Ø15 выходил на 1 мм за заднюю плоскость корпуса (проверка tests/fastener-envelope.test.ts, 20.10)
+    : k === "ecc-cam" ? eccCamModel(p.size, /:(under|bottom-under|rail-under):/.test(p.id) ? undefined : 1)
     : k === "ecc-pin" ? eccPinModel(p.size, ctx.headSign ?? 1)
     : k === "latch" ? latchModel(p.size)
     : k === "flange" ? flangeModel(p.size, ctx.left === false ? 1 : -1)

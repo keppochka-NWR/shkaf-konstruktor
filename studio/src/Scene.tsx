@@ -10,7 +10,7 @@ import {facadeGeometry} from './vernissageGeometry';
 import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
-import {procModel,faceAt} from './hardwareModels';
+import {procModel,faceAt,fastenerAxis,fastenerGeometry,hingeFallbackModel} from './hardwareModels';
 // Цвета профиля рамочного фасада для сцены.
 const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
@@ -21,20 +21,21 @@ import { handleById, handleColour, handleModelFile } from "./handles";
 // Модели ручек (Blender → GLB, scripts/blender_handles.py): кэш по файлу, экземпляры делят геометрию.
 const gltfLoader = new GLTFLoader();
 const handleModels = new Map<string, Promise<THREE.Group>>();
+// Сбой загрузки (сеть, локальный сервер демо, обрыв при пересборке сцены) не кэшируется: раньше отклонённый промис оставался в кэше
+// до перезагрузки страницы, и все петли/конфирматы проекта рисовались заглушками — серые коробки и штыри над крышей (баг Макса 20.10).
+// Теперь — три попытки с паузой, отказ убирается из кэша (следующая пересборка сцены пробует снова) и пишется в консоль с адресом.
 function loadHandleModel(file: string) {
   let p = handleModels.get(file);
   if (!p) {
-    p = new Promise<THREE.Group>((resolve, reject) => gltfLoader.load(`${import.meta.env.BASE_URL}models/${file.includes("/") ? file : "handles/" + file}`, (g) => resolve(g.scene), undefined, reject));
-    handleModels.set(file, p);
+    const url = `${import.meta.env.BASE_URL}models/${file.includes("/") ? file : "handles/" + file}`;
+    const q: Promise<THREE.Group> = new Promise<THREE.Group>((resolve, reject) => {
+      const attempt = (left: number) => gltfLoader.load(url, (g) => resolve(g.scene), undefined, (e) => left > 1 ? setTimeout(() => attempt(left - 1), 500) : reject(e));
+      attempt(3);
+    });
+    q.catch((e) => { if (handleModels.get(file) === q) handleModels.delete(file); console.warn("Модель не загрузилась:", url, e); });
+    handleModels.set(file, p = q);
   }
   return p;
-}
-/** Цилиндр-заглушка крепежа без модели: ось — по длинной стороне (винт, ножка), у диска — по короткой; радиус — по поперечным размерам.
- *  (Раньше ось всегда X: вертикальная ножка или конфирмат рисовались «шайбой».) */
-function fastenerAxis(size: [number, number, number]) {
-  const order = [0, 1, 2].sort((a, b) => size[b] - size[a]), disk = Math.abs(size[order[0]] - size[order[1]]) <= 1 && size[order[2]] < size[order[0]] * 0.6;
-  const axis = disk ? order[2] : order[0], rest = [0, 1, 2].filter((i) => i !== axis).map((i) => size[i]);
-  return { axis, r: Math.min(...rest) / 2, h: size[axis] };
 }
 /** Профиль из Blender (метровая заготовка: x — поперёк, y — длина, z — глубина) вписывается в габарит детали:
  *  длина тянется, сечение остаётся; mirror — зеркально по поперечной оси; length 'x' — профиль лежит горизонтально. */
@@ -226,8 +227,7 @@ export function Scene(p: Props) {
     }
     let generation = 0,pendingTextures=0;
     // Для снимков проверки: скрипт ждёт, пока догрузятся текстуры и модели фурнитуры (window.__pending() === 0).
-    (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;
-    function disposeGroup(group: THREE.Group) {
+    (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;    function disposeGroup(group: THREE.Group) {
       group.traverse((o) => {
         if (
           o instanceof THREE.Mesh ||
@@ -408,6 +408,8 @@ export function Scene(p: Props) {
           const roundAlongZ = !proc && part.role === "hinge" && !part.model && (part.id.includes(":hingecup:") || part.id.includes(":latch:"));
           const geometry = proc ? new THREE.BoxGeometry(...part.size) : roundAlongZ
             ? new THREE.CylinderGeometry(part.size[0] / 2, part.size[0] / 2, part.size[2], 28)
+            // у крепежа с сеткой Базиса меш не поворачивается (сетка — дочерняя) — заглушка повёрнута в самой геометрии
+            : part.role === "fastener" && part.model?.native ? fastenerGeometry(part.size)
             : part.role === "fastener"
               ? (() => { const f = fastenerAxis(part.size); return new THREE.CylinderGeometry(f.r, f.r, f.h, 20); })()
               : (part.role === "rod" || part.role === "flange")
@@ -449,18 +451,29 @@ export function Scene(p: Props) {
           } else if (part.model?.native) {
             // Фурнитура из Базиса (TriData → GLB в мм): начало координат модели — в origin, поворот quat, свои материалы, без растяжения.
             const g = generation, model = part.model; pendingTextures++;
-            loadHandleModel(model.file).then((src) => {
-              if (disposed || g !== generation) return;
-              const inst = src.clone(true), holder = new THREE.Group();
+            // сетка (или запасная модель) — в начале координат узла Базиса (origin) с его поворотом (quat)
+            const place = (inst: THREE.Object3D) => {
+              const holder = new THREE.Group();
               if (model.mirror) inst.scale.x = -1;
               holder.add(inst);
               const [w, x, y, z] = model.quat ?? [1, 0, 0, 0];
               holder.quaternion.set(x, y, z, w);
               const o = model.origin ?? part.position;
               holder.position.set(o[0] - part.position[0], o[1] - part.position[1], o[2] - part.position[2]);
-              inst.traverse((c) => { c.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; if (c instanceof THREE.Mesh) { c.castShadow = true; c.receiveShadow = true; if (model.mirror) { c.material = (c.material as THREE.Material).clone(); (c.material as THREE.Material).side = THREE.DoubleSide; } } });
               mesh.add(holder); needsRender = true;
-            }).catch(() => { mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true; }).finally(() => { if (g === generation) pendingTextures--; });
+            };
+            loadHandleModel(model.file).then((src) => {
+              if (disposed || g !== generation) return;
+              const inst = src.clone(true);
+              inst.traverse((c) => { c.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; if (c instanceof THREE.Mesh) { c.castShadow = true; c.receiveShadow = true; if (model.mirror) { c.material = (c.material as THREE.Material).clone(); (c.material as THREE.Material).side = THREE.DoubleSide; } } });
+              place(inst);
+            }).catch(() => {
+              if (disposed || g !== generation) return;
+              // сетка не загрузилась: петля — запасной моделью (чашка, плечо, планка), а не серой коробкой; крепёж — заглушкой по своей оси
+              const fb = part.role === "hinge" ? hingeFallbackModel(model.file) : undefined;
+              if (fb) { fb.traverse((c) => { c.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active }; }); place(fb); return; }
+              mat.opacity = 1; mat.transparent = false; mat.depthWrite = true; needsRender = true;
+            }).finally(() => { if (g === generation) pendingTextures--; });
           } else if (part.model && profileMaterial) {
             const g = generation, pm = profileMaterial; pendingTextures++;
             loadHandleModel(part.model.file).then((src) => { if (disposed || g !== generation) return; const fitted = fitProfile(src, part, pm); fitted.traverse((o) => { o.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active, sharedGeometry: true }; }); mesh.add(fitted); needsRender = true; })
