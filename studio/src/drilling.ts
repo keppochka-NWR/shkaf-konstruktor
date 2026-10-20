@@ -50,8 +50,9 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     const hh = p.role === "handle" && p.anchor ? m.kitchen?.handle : undefined;
     if (hh?.holes) {
       // ручка кухни Базиса (k07 «рейлинг 160»): 2 × D5×18 насквозь через фасад с лица, по оси ручки ± межосевое/2
-      const [x, y, z] = p.anchor!, g = hh.holes.gap / 2;
-      for (const s of [-1, 1]) push(`${p.id}:${s}`, hh.horizontal ? [x + s * g, y, z] : [x, y + s * g, z], [0, 0, -1], hh.holes.d, hh.holes.depth);
+      // ориентация — по самой ручке (у ручки, переставленной «снизу по центру»/«в угол», она может отличаться от проекта Базиса)
+      const [x, y, z] = p.anchor!, g = hh.holes.gap / 2, horizontal = p.size[0] > p.size[1];
+      for (const s of [-1, 1]) push(`${p.id}:${s}`, horizontal ? [x + s * g, y, z] : [x, y + s * g, z], [0, 0, -1], hh.holes.d, hh.holes.depth);
       continue;
     }
     if (p.id.startsWith("ecc:rail-under:") && p.anchor) {
