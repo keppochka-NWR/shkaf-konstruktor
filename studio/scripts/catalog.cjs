@@ -7,10 +7,12 @@ const src = fs.readFileSync(
   ),
   "utf8",
 );
+// tex — путь от страницы студии: текстуры лежат в studio/public/tex (копия web/assets/tex), в сборке web/studio/tex —
+// не «../assets/tex» от корня сайта: на Pages старого web/assets нет, текстуры давали 404 (критик 20.10, m10).
 // tier — ценовая группа прайса Lamarty 01.01.2026 (КЛАССИКА / ПРЕМИУМ / ЛЮКС); цена листа считается в pricing.ts.
 const data = vm
   .runInNewContext(src + "; LAMARTY;")
-  .map((c) => ({ n: c.n, cat: c.cat, tier: c.tier, tex: c.tex ? "../" + c.tex : "" }));
+  .map((c) => ({ n: c.n, cat: c.cat, tier: c.tier, tex: c.tex ? c.tex.replace(/^assets\//, "") : "" }));
 const catalogUrl = new URL("../src/catalog.ts", `file://${__filename.replaceAll("\\", "/")}`);
 const catalogText =
   "export type Tier='КЛАССИКА'|'ПРЕМИУМ'|'ЛЮКС';\nexport type Decor={n:string;cat:string;tier:Tier;tex:string};\nexport const catalog:Decor[]=" +

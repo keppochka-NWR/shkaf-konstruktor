@@ -25,6 +25,8 @@ const browser = await chromium.launch({ channel: "chrome", headless: true, args:
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
 const errors: string[] = [];
 page.on("pageerror", (e) => errors.push(e.message));
+const tex404: string[] = [];
+page.on("response", (r) => { if (r.status() >= 400 && /\/tex\//.test(r.url())) tex404.push(r.status() + " " + decodeURIComponent(r.url())); });
 const results: [string, boolean, string][] = [];
 const check = (name: string, ok: boolean, info = "") => { results.push([name, ok, info]); console.log((ok ? "OK   " : "FAIL ") + name + (info ? " — " + info : "")); };
 const shot = (n: string) => page.screenshot({ path: `${out}/stretch-${n}.png` });
@@ -130,6 +132,78 @@ try {
   const R3 = (await center(".stretch-handle[data-side=right]"))!;
   const liveAlt = await drag(R3, R3.x + 47 * pxmm, true);
   check("Alt: без привязки (плашка «Без привязки»)", /Без привязки/.test(liveAlt), liveAlt);
+
+  // m3: «Задать зазор…» меняет ширину (правый край), левый на месте; «Придвинуть вплотную» неактивно — оторвёт от «Шкаф 3»
+  const m3a = await row(page);
+  await page.locator(".row-gap[data-side=right]").first().click();
+  const flushBtn = page.getByRole("menuitem", { name: /Придвинуть вплотную/ });
+  check("m3: «Придвинуть вплотную» неактивно — оторвёт от «Шкаф 3»", (await flushBtn.isDisabled()) && /оторвёт от «Шкаф 3»/.test(await flushBtn.innerText()), (await flushBtn.innerText()).replace(/\s+/g, " "));
+  await page.getByRole("menuitem", { name: /Задать зазор/ }).click(); await page.waitForTimeout(300);
+  const dlg = (await page.locator(".dimension-editor").innerText().catch(() => "")).replace(/\s+/g, " ");
+  check("m4: окно «Задать зазор» без двойного «мм»", !/мм, мм/.test(dlg) && /Зазор справа до «Угловой», мм/.test(dlg), dlg.slice(0, 80));
+  await shot("09-gap-dialog");
+  const inp = page.locator(".dimension-editor input").first(); await inp.fill("50"); await inp.press("Enter");
+  const m3 = await settled((r) => r.d?.w !== m3a.d?.w);
+  check("m3: зазор 50 — ширина меняется, левый край на месте", m3.d?.x === 3100 && m3.d?.w === 850 && m3.e?.x === 4000 && (await plaque("right")) === "← 50 мм →", fmt(m3));
+  await shot("10-gap-50");
+
+  // ── B1 и m8: 3D «Двигать корпуса», зазор 147 и 20 мм — плашка видна (elementFromPoint), не под ручкой и не под размерами
+  const gapProject = (g: number) => { const p = project(); p.modules.find((a) => a.id === "e")!.x = 3700 + g; return p; };
+  const open = async (p: Project) => {
+    // сначала уйти со страницы студии (при уходе она сохраняет свой проект), потом подложить новый — тот же адрес сайта
+    await page.goto(new URL("../", url).href); await page.evaluate((raw) => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem("module-studio-v3", raw); localStorage.setItem("studio-stage", "bodies"); localStorage.setItem("studio-dock", "project"); localStorage.setItem("studio-tip-rmb", "1"); }, JSON.stringify(p));
+    await page.goto(url); await page.waitForSelector("canvas"); await page.waitForTimeout(2000);
+    await page.getByRole("button", { name: "Двигать корпуса", exact: true }).click(); await page.waitForTimeout(500);
+  };
+  for (const g of [147, 20]) {
+    await open(gapProject(g));
+    // строкой: tsx (esbuild keepNames) оборачивает именованные функции в __name, которого нет на странице
+    const vis = (await page.evaluate(`(() => {
+      const el = document.querySelector(".row-gap[data-side=right]"), hs = [...document.querySelectorAll(".stretch-handle")];
+      if (!el) return { ok: false, info: "плашки нет" };
+      const r = el.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      const cross = function (a, b) { return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom; };
+      const handles = hs.filter(function (h) { return h.style.display !== "none"; }).map(function (h) { return h.getBoundingClientRect(); });
+      const dims = [...document.querySelectorAll(".model-dimension:not(.row-gap)")].filter(function (d) { return d.style.display !== "none" && d.style.visibility !== "hidden"; }).map(function (d) { return d.getBoundingClientRect(); });
+      return { ok: !!(hit && hit.closest(".row-gap")) && getComputedStyle(el).visibility !== "hidden" && !handles.some(function (h) { return cross(h, r); }) && !dims.some(function (d) { return cross(d, r); }),
+        info: "«" + el.innerText + "» в " + Math.round(r.left + r.width / 2) + "," + Math.round(r.top + r.height / 2) + "; ручек " + handles.length + "; elementFromPoint → " + (hit ? hit.className : "") };
+    })()`)) as { ok: boolean; info: string };
+
+    check(`B1: 3D «Двигать корпуса», зазор ${g} — плашка видна, не под ручкой и размерами`, vis.ok, vis.info);
+    await shot(`11-3d-gap-${g}`);
+  }
+  // m7: «Сбоку» — ось ширины вдоль взгляда, ручки в одной точке → скрыты
+  await page.getByRole("button", { name: "Сбоку", exact: true }).click(); await page.waitForTimeout(800);
+  const sideHandles = await page.locator(".stretch-handle").evaluateAll((els) => els.filter((e) => (e as HTMLElement).style.display !== "none").length);
+  check("m7: «Сбоку» — ручки скрыты (ось ширины вдоль взгляда)", sideHandles === 0, `видно ручек: ${sideHandles}`);
+  await shot("11-side-no-handles");
+  // m8: тяга 50 px в 3D — мм по видимому масштабу оси (без усиления); на ближнем 3D-ракурсе ≤ ~150 мм
+  for (const [name, cam] of [["3D по умолчанию", null], ["3D ближе", [[4300, 1700, 2900], [3400, 1000, 0]]]] as const) {
+    await open(gapProject(700)); // зазор шире 50 px на любом из ракурсов — сдвиг не упирается в соседа
+    if (cam) { await page.evaluate((c) => (window as unknown as { __camera: (p: number[], l: number[]) => void }).__camera(c[0] as number[], c[1] as number[]), cam); await page.waitForTimeout(600); }
+    const hl = (await center(".stretch-handle[data-side=left]"))!, hr = (await center(".stretch-handle[data-side=right]"))!;
+    const k = Math.hypot(hr.x - hl.x, hr.y - hl.y) / 600, ux = (hr.x - hl.x) / Math.hypot(hr.x - hl.x, hr.y - hl.y), uy = (hr.y - hl.y) / Math.hypot(hr.x - hl.x, hr.y - hl.y);
+    await page.mouse.move(hr.x, hr.y); await page.mouse.down(); await page.keyboard.down("Alt");
+    for (let i = 1; i <= 10; i++) { await page.mouse.move(hr.x + ux * 5 * i, hr.y + uy * 5 * i); await page.waitForTimeout(20); }
+    const live = (await page.locator(".drag-badge").innerText().catch(() => "")).trim();
+    const badgeBox = await page.locator(".drag-badge").boundingBox();
+    await shot(`12-m8-${cam ? "near" : "default"}`);
+    await page.keyboard.press("Escape"); await page.keyboard.up("Alt"); await page.mouse.up(); await page.waitForTimeout(300);
+    const mm = Number(/ширина (\d+(?:\.\d+)?) мм/.exec(live)?.[1] ?? NaN) - 600, expect = 50 / k;
+    check(`m8: ${name} — 50 px ≈ ${Math.round(expect)} мм по масштабу (${k.toFixed(3)} px/мм)`, Math.abs(mm - expect) <= Math.max(10, expect * 0.15) && (!cam || mm <= 160), `сдвиг ${mm} мм · «${live}»`);
+    check(`m6: ${name} — живая плашка у курсора`, !!badgeBox && Math.abs(badgeBox.x + badgeBox.width / 2 - (hr.x + ux * 50)) < 60 && badgeBox.y < hr.y, JSON.stringify(badgeBox));
+  }
+  // B2: свежая комната → «Пустой шкаф» → «Добавить в комнату» два раза подряд — без «пересекается»
+  await page.evaluate(() => localStorage.clear()); await page.goto(url + "?fresh=1"); await page.waitForTimeout(2000);
+  for (let i = 0; i < 2; i++) {
+    await page.locator("button", { hasText: "Пустой шкаф" }).first().click();
+    await page.getByRole("button", { name: "Добавить в комнату" }).first().click(); await page.waitForTimeout(1500);
+  }
+  const two = await row(page), banner = (await page.locator(".error-banner").innerText().catch(() => "")).replace(/\s+/g, " ");
+  const xs = Object.values(two).map((v) => v.x).sort((a, b) => a - b);
+  check("B2: два «Добавить в комнату» подряд — два шкафа, без ошибки", Object.keys(two).length === 2 && !/пересекается/.test(banner), `x: ${xs.join(", ")}; плашка: «${banner}»`);
+  await shot("13-fresh-two");
+  check("m10: текстуры декоров без 404", !tex404.length, tex404.slice(0, 4).join(" | "));
   console.log("ошибки страницы: " + (errors.length ? errors.join("; ") : "нет"));
   const bad = results.filter((r) => !r[1]);
   console.log(`ИТОГ: ${results.length - bad.length}/${results.length}`);
