@@ -203,6 +203,31 @@ try {
   const xs = Object.values(two).map((v) => v.x).sort((a, b) => a - b);
   check("B2: два «Добавить в комнату» подряд — два шкафа, без ошибки", Object.keys(two).length === 2 && !/пересекается/.test(banner), `x: ${xs.join(", ")}; плашка: «${banner}»`);
   await shot("13-fresh-two");
+  // m1 + m5: ошибка ширины — текст без кавычек в кавычках, плашка в углу (не на ручках), «×» нажимается, сама скрывается через 6 с
+  await open(gapProject(147));
+  const widthErr = async () => {
+    await page.locator(cat + " > summary").click().catch(() => {});
+    await page.evaluate((sel) => { for (let c: HTMLElement | null = document.querySelector(sel); c; c = c.parentElement) if (c instanceof HTMLDetailsElement) c.open = true; }, cat + ' input[aria-label="Ширина"]');
+    const f = page.locator(cat + ' input[aria-label="Ширина"]').first(); await f.fill("900"); await f.press("Enter"); await page.waitForTimeout(400);
+  };
+  await widthErr();
+  const ban = page.locator(".error-banner");
+  const banText = (await ban.innerText().catch(() => "")).replace(/\s+/g, " ");
+  check("m5: «справа свободно 147 мм до «Угловой», а нужно 300. Можно дотянуть до него (+147 мм)»", /справа свободно 147 мм до «Угловой», а нужно 300\. Можно дотянуть до него \(\+147 мм\)/.test(banText), banText);
+  const geo = (await page.evaluate(`(() => {
+    const b = document.querySelector(".error-banner"), x = b && b.querySelector('button[aria-label="Закрыть сообщение"]');
+    if (!b || !x) return { ok: false, info: "нет плашки или «×»" };
+    const r = b.getBoundingClientRect(), xr = x.getBoundingClientRect(), hit = document.elementFromPoint(xr.left + xr.width / 2, xr.top + xr.height / 2);
+    const hs = [...document.querySelectorAll(".stretch-handle")].filter(function (h) { return h.style.display !== "none"; }).map(function (h) { return h.getBoundingClientRect(); });
+    const cross = hs.some(function (h) { return h.left < r.right && r.left < h.right && h.top < r.bottom && r.top < h.bottom; });
+    return { ok: !!(hit && hit.closest('button[aria-label="Закрыть сообщение"]')) && !cross && getComputedStyle(b).pointerEvents === "none", info: "плашка " + Math.round(r.left) + "," + Math.round(r.top) + " " + Math.round(r.width) + "×" + Math.round(r.height) + "; «×» → " + (hit ? hit.tagName : "") + "; на ручках: " + cross };
+  })()`)) as { ok: boolean; info: string };
+  check("m1: плашка ошибки в углу, не на ручках, фон пропускает мышь, «×» нажимается", geo.ok, geo.info);
+  await shot("14-error-banner");
+  await page.locator('.error-banner button[aria-label="Закрыть сообщение"]').click();
+  check("m1: «×» закрывает", (await ban.count()) === 0);
+  await widthErr(); await page.waitForTimeout(6600);
+  check("m1: сама скрывается через 6 с", (await ban.count()) === 0);
   check("m10: текстуры декоров без 404", !tex404.length, tex404.slice(0, 4).join(" | "));
   console.log("ошибки страницы: " + (errors.length ? errors.join("; ") : "нет"));
   const bad = results.filter((r) => !r[1]);
