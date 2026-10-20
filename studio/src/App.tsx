@@ -21,7 +21,7 @@ import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import {resizeOpening} from './sectionLayout';
-import {placeInRow} from './rowResize';
+import {placeInRow,gaps,fillGap,flush,planStretch,type GapSide} from './rowResize';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
 import {StageBar} from './StageBar';
@@ -115,7 +115,7 @@ import {addMenuItem,worktopMaterialItem} from './addMenu';
 import {quickItems,quickMenuApplies,upperItem,menuDropY,doorQuickItems,type QuickMenuOps} from './quickMenu';
 import {allStandsLit,lightSummary,lightTargets,setAllStands,toggleGroup} from './lights';
 import {composeContextMenu,menuArea} from './contextMenu';
-import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal } from "lucide-react";
+import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal, ArrowRightToLine, ArrowLeftToLine, ChevronsRight, ChevronsLeft } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
 import {
   newProject,
@@ -518,6 +518,23 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     try{p=placeInRow(project,placed.id,next);}catch(e){setError((e as Error).message);return false;}
     return commitProject(p);
   }
+  // Зазоры в ряду, «Дотянуть», «Вплотную», «Задать зазор…», растяжение мышью (запрос Макса 20.10.2026, РЕШЕНИЯ.md «Ширина в ряду»).
+  const [gapMenu,setGapMenu]=useState<{side:'left'|'right';x:number;y:number}|null>(null);
+  const rowGaps=useMemo(()=>{try{return gaps(project,placed.id);}catch{return null;}},[project,placed.id]);
+  useEffect(()=>{setGapMenu(null);},[project,placed.id]);
+  useEffect(()=>{if(!gapMenu)return;const esc=(e:KeyboardEvent)=>{if(e.key==='Escape')setGapMenu(null);};window.addEventListener('keydown',esc);return()=>window.removeEventListener('keydown',esc);},[gapMenu]);
+  function rowEdit(make:()=>Project){try{return commitProject(make());}catch(e){setError((e as Error).message);return false;}}
+  const sideWord=(side:'left'|'right')=>side==='right'?'справа':'слева';
+  function askGap(mid:string,side:'left'|'right',g:GapSide){editDimension(`Зазор ${sideWord(side)} до ${g.to}, мм`,g.gap,v=>rowEdit(()=>flush(project,mid,side,v)));}
+  /** Пункты «Размеры ›»: дотянуть край до соседа/стены и придвинуть вплотную (неактивны, если зазора нет). */
+  function rowGapItems(mid:string):RadialItem[]{
+    let g:ReturnType<typeof gaps>;try{g=gaps(project,mid);}catch{return [];}
+    const fill=(side:'left'|'right'):RadialItem=>({id:'fill-'+side,label:`Дотянуть ${side==='right'?'вправо':'влево'}`+(g[side].gap?` (+${g[side].gap})`:''),icon:side==='right'?ArrowRightToLine:ArrowLeftToLine,disabled:!g[side].gap,
+      hint:g[side].gap?`До ${g[side].to}: ширина ${g[side].fillWidth} мм, ${side==='right'?'левый':'правый'} край на месте`:`${side==='right'?'Справа':'Слева'} вплотную — зазора нет`,run:()=>{rowEdit(()=>fillGap(project,mid,side));}});
+    const push=(side:'left'|'right'):RadialItem=>({id:'flush-'+side,label:`Вплотную ${side==='right'?'вправо':'влево'}`,icon:side==='right'?ChevronsRight:ChevronsLeft,disabled:!g[side].gap,
+      hint:g[side].gap?`Сдвинуть на ${g[side].gap} мм до ${g[side].to}, ширина та же`:`${side==='right'?'Справа':'Слева'} вплотную — зазора нет`,run:()=>{rowEdit(()=>flush(project,mid,side));}});
+    return [fill('right'),fill('left'),push('right'),push('left')];
+  }
   useEffect(()=>{setMaterialScope("active");},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{return commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);return false;}
@@ -593,7 +610,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined,
       lightMode:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightNote('');setLightMode(a.id);}:undefined};
     const bodyRing:RadialItem[]=[hideItem,
-      {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина')]},
+      {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id)]},
       mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
       ...quickItems(mod,c.sid,quickOps),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
@@ -1226,6 +1243,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             dimensions={presentation?false:dimensions&&!((stage==='room'||stage==='fixtures')&&!advanced)}
             roomDimensions={!presentation&&dimensions&&(advanced||stage==='room'||stage==='fixtures')}
             gapDimensions={gapDimensions}
+            rowGaps={rowGaps}
+            onGapClick={(side,x,y)=>setGapMenu({side,x,y})}
+            stretchable={!(m.raw||m.corner||m.kupe||m.worktop)}
+            stretchPlan={(mid,side,raw,snap)=>{try{return planStretch(project,mid,side,raw,snap);}catch(e){return {problem:(e as Error).message};}}}
+            onStretch={(mid,side,raw,snap)=>{try{const plan=planStretch(project,mid,side,raw,snap);if(plan.problem){setError(plan.problem);return false;}return plan.project?commitProject(plan.project):false;}catch(e){setError((e as Error).message);return false;}}}
           />}
           {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button>{showRoom&&<button aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={16}/>{cutaway?'Ближние стены: показать':'Ближние стены: скрыть'}</button>}<button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
@@ -1255,6 +1277,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             const tools=document.querySelector('.scene-tools'),canvas=tools?.parentElement?.querySelector('canvas')??document.querySelector('canvas'),visible=(el:Element|null|undefined)=>{const b=el?.getBoundingClientRect();return b&&b.width>0?b:null;};
             const area=menuArea({width:window.innerWidth,height:window.innerHeight},visible(canvas),visible(tools));
             return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items} area={area} onClose={()=>setCtxMenu(null)}/>;})()}
+          {gapMenu&&rowGaps&&rowGaps[gapMenu.side].gap>0&&(()=>{const side=gapMenu.side,g=rowGaps[side],close=()=>setGapMenu(null),where=sideWord(side);
+            return <div className="gap-menu-backdrop" onPointerDown={close} onContextMenu={e=>{e.preventDefault();close();}}>
+              <div className="gap-menu" role="menu" aria-label={`Зазор ${where} ${g.gap} мм до ${g.to}`} style={{left:Math.max(8,Math.min(gapMenu.x-20,window.innerWidth-236)),top:Math.max(8,Math.min(gapMenu.y+14,window.innerHeight-160))}} onPointerDown={e=>e.stopPropagation()}>
+                <div className="gap-menu-title">{where[0].toUpperCase()+where.slice(1)} {g.gap} мм до {g.to}</div>
+                <button role="menuitem" autoFocus onClick={()=>{close();rowEdit(()=>fillGap(project,placed.id,side));}}>Дотянуть (+{g.gap} мм)</button>
+                <button role="menuitem" onClick={()=>{close();rowEdit(()=>flush(project,placed.id,side));}}>Придвинуть вплотную</button>
+                <button role="menuitem" onClick={()=>{close();askGap(placed.id,side,g);}}>Задать зазор…</button>
+              </div></div>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
               aria-label="Прозрачный корпус"

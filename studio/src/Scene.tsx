@@ -57,7 +57,8 @@ function fitProfile(src: THREE.Group, part: { size: [number, number, number]; mo
 }
 import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type Module } from "./model";
 import { catalog } from "./catalog";
-import {localToRoom,roomToLocal,moduleCenter,bounds,type Room,type PlacedModule} from "./project";
+import {localToRoom,roomToLocal,moduleCenter,bounds,sideExtension,type Room,type PlacedModule} from "./project";
+import type {GapSide,StretchPlan} from './rowResize';
 import {wallPanels} from './roomGeometry';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
@@ -130,6 +131,13 @@ type Props = {
   /** Режим «Подсветка» (20.10.2026): левый клик по детали корпуса не выбирает и не тянет её, а переключает подсветку (onLightPick). */
   lightMode?:boolean;
   onLightPick?:(mid:string,pid:string)=>void;
+  /** Зазоры выбранного модуля по оси ширины (запрос Макса 20.10.2026): плашки слева и справа в режимах «Двигать корпуса» и «Выбрать». */
+  rowGaps?:{left:GapSide;right:GapSide}|null;
+  onGapClick?:(side:'left'|'right',x:number,y:number)=>void;
+  /** Ручки растяжения «↔» на боках выбранного модуля в режиме «Двигать корпуса». */
+  stretchable?:boolean;
+  stretchPlan?:(mid:string,side:'left'|'right',raw:number,snap:boolean)=>Partial<StretchPlan>;
+  onStretch?:(mid:string,side:'left'|'right',raw:number,snap:boolean)=>boolean;
 };
 export function Scene(p: Props) {
   const host = useRef<HTMLDivElement>(null),
@@ -235,7 +243,9 @@ export function Scene(p: Props) {
     }
     let generation = 0,pendingTextures=0;
     // Для снимков проверки: скрипт ждёт, пока догрузятся текстуры и модели фурнитуры (window.__pending() === 0).
-    (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;    function disposeGroup(group: THREE.Group) {
+    (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;
+    // Для сценариев мышью (scripts/stretch-scenario.ts): только чтение — положение и ширина корпусов на сцене.
+    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width}));    function disposeGroup(group: THREE.Group) {
       group.traverse((o) => {
         if (
           o instanceof THREE.Mesh ||
@@ -253,7 +263,8 @@ export function Scene(p: Props) {
       });
       scene.remove(group);
     }
-    const labels: { element: HTMLButtonElement; position: THREE.Vector3; wall?: CutawayWall }[] =
+    // fixed — ручка растяжения: стоит точно на боку корпуса, другие плашки обходят её, а не она их.
+    const labels: { element: HTMLButtonElement; position: THREE.Vector3; wall?: CutawayWall; fixed?: boolean }[] =
       [];
     // Ближние стены: что принадлежит какой стене; видимость меняется по камере без пересборки сцены.
     const cutawayParts:{obj:THREE.Object3D;walls:CutawayWall[]}[]=[];
@@ -318,6 +329,29 @@ export function Scene(p: Props) {
           new THREE.LineBasicMaterial({ color: 0x71919d, depthTest: false }),
         ),
       );
+    }
+    /** Линия в координатах сцены (комната минус центр выбранного корпуса), без поворота активного корпуса. */
+    function roomLine(points:THREE.Vector3[]){
+      const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xc9831a,depthTest:false,transparent:true}));
+      l.renderOrder=50;l.userData.rowGap=true;modelGroup.add(l);
+    }
+    /** Плашка зазора до соседа/стены (запрос Макса 20.10.2026): клик — меню «Дотянуть / Придвинуть вплотную / Задать зазор…». */
+    function gapPlaque(side:'left'|'right',g:GapSide,pos:THREE.Vector3){
+      const b=document.createElement('button');b.type='button';b.className='model-dimension gap-dimension row-gap';b.dataset.side=side;
+      b.textContent='← '+g.gap+' мм →';b.title='до '+g.to+'. Нажмите: дотянуть, придвинуть вплотную или задать зазор';
+      b.setAttribute('aria-label',`Зазор ${side==='right'?'справа':'слева'} ${g.gap} мм до ${g.to}`);
+      b.addEventListener('pointerdown',e=>e.stopPropagation());passThrough(b);
+      b.addEventListener('click',e=>current.current.onGapClick?.(side,e.clientX,e.clientY));
+      target.appendChild(b);labels.push({element:b,position:pos});
+    }
+    /** Ручка растяжения «↔» на боку выбранного корпуса (режим «Двигать корпуса»). */
+    function stretchHandle(side:'left'|'right',pos:THREE.Vector3){
+      const b=document.createElement('button');b.type='button';b.className='stretch-handle';b.dataset.side=side;b.textContent='↔';
+      b.title=(side==='right'?'Правый':'Левый')+' край: тяните, чтобы изменить ширину. Вплотную к соседу — двигается стык. Alt — без привязки';
+      b.setAttribute('aria-label','Растянуть '+(side==='right'?'правый':'левый')+' край');
+      passThrough(b);
+      b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startStretch(side,e);});
+      target.appendChild(b);labels.push({element:b,position:pos,fixed:true});
     }
     let sceneOrigin: {x:number;z:number}|undefined;
     function rebuild() {
@@ -797,6 +831,21 @@ export function Scene(p: Props) {
           });
         }
       }
+      // Зазоры до соседа/стены и ручки растяжения у выбранного модуля (запрос Макса 20.10.2026): середина высоты, у фасада.
+      if(!state.presentation&&!state.exploded&&!state.hideFurniture&&!state.hiddenModuleIds?.includes(focus.id)&&(state.mode==='move'||state.mode==='select')){
+        const fm=focus.module,center=moduleCenter(focus),fy=(focus.y??0)+fm.height/2,front=fm.depth+40;
+        const at=(u:number,v:number,y:number)=>{const q=localToRoom(focus,u,v);return new THREE.Vector3(q.x-center.x,y,q.z-center.z);};
+        for(const side of ['left','right'] as const){
+          const g=state.dimensions?state.rowGaps?.[side]:undefined;
+          if(g&&g.gap>0){
+            const u0=side==='right'?fm.width+sideExtension(fm,'right'):-sideExtension(fm,'left'),u1=side==='right'?u0+g.gap:u0-g.gap;
+            roomLine([at(u0,front,fy),at(u1,front,fy)]);
+            for(const u of [u0,u1])roomLine([at(u,front,fy-40),at(u,front,fy+40)]);
+            gapPlaque(side,g,at((u0+u1)/2,front+10,fy));
+          }
+          if(state.mode==='move'&&state.stretchable&&state.onStretch&&!state.lightMode)stretchHandle(side,at(side==='right'?fm.width:0,fm.depth+25,fy));
+        }
+      }
     }
     function fit() {
       fitting=true;needsRender=true;
@@ -951,9 +1000,52 @@ export function Scene(p: Props) {
       }else{if(d.kind==='part')current.current.onPartSelect(d.sid,d.pid,d.mid);else if(d.mid!==current.current.activeId)current.current.onModuleSelect(d.mid);else current.current.onPartSelect(d.sid,d.pid,d.mid);}
       resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
     }
+    // Растяжение мышью за ручку «↔» (запрос Макса 20.10.2026): корпус (и сосед при стыке) масштабируется по ширине на экране,
+    // живая плашка «ширина … · зазор …»; отпустил — одно изменение проекта (одна отмена Ctrl+Z). Камера при тяге не вращается.
+    type Stretch={mid:string;side:'left'|'right';plane:THREE.Plane;anchor:THREE.Vector3;axis:THREE.Vector3;start:[number,number];raw:number;snap:boolean;moved:boolean;touched:string[];handle?:{label:typeof labels[number];base:THREE.Vector3}};
+    let stretch:Stretch|null=null;
+    function startStretch(side:'left'|'right',e:PointerEvent){
+      const s=current.current,a=s.arrangement.find(x=>x.id===s.activeId);if(!a||drag)return;
+      const center=moduleCenter(a),o=localToRoom(a,0,0),u1=localToRoom(a,1,0),f=localToRoom(a,0,1),fp=localToRoom(a,side==='right'?a.module.width:0,a.module.depth);
+      const axis=new THREE.Vector3(u1.x-o.x,0,u1.z-o.z).normalize(),facing=new THREE.Vector3(f.x-o.x,0,f.z-o.z).normalize();
+      const point=new THREE.Vector3(fp.x-center.x,(a.y??0)+a.module.height/2,fp.z-center.z),look=camera.getWorldDirection(new THREE.Vector3());
+      // плоскость фасада; если смотрим вдоль неё (вид сверху) — горизонтальная плоскость на середине высоты
+      const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(Math.abs(look.dot(facing))>.25?facing:new THREE.Vector3(0,1,0),point);
+      cast(e.clientX,e.clientY);const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
+      const hl=labels.find(l=>l.element.classList.contains('stretch-handle')&&l.element.dataset.side===side);
+      stretch={mid:a.id,side,plane,anchor,axis,start:[e.clientX,e.clientY],raw:0,snap:true,moved:false,touched:[],handle:hl?{label:hl,base:hl.position.clone()}:undefined};
+      controls.enabled=false;target.classList.add('stretching');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=false; // зазор во время тяги — в живой плашке
+      window.addEventListener('pointermove',stretchMove);window.addEventListener('pointerup',stretchUp);window.addEventListener('pointercancel',endStretch);
+    }
+    function previewStretch(st:Stretch,plan:Partial<StretchPlan>){
+      for(const id of st.touched){const g=moduleGroups.get(id);if(g){g.scale.x=1;g.position.copy(g.userData.base);}}st.touched=[];
+      const s=current.current,a=s.arrangement.find(x=>x.id===st.mid),g=moduleGroups.get(st.mid);if(!a||!g||plan.width===undefined)return;
+      g.scale.x=plan.width/a.module.width;if(st.side==='left')g.position.addScaledVector(st.axis,a.module.width-plan.width);st.touched.push(a.id);
+      if(st.handle)st.handle.label.position.copy(st.handle.base).addScaledVector(st.axis,(st.side==='right'?1:-1)*(plan.width-a.module.width)); // ручка едет за краем
+      const nb=plan.mode==='joint'?plan.neighbor:undefined,n=nb&&s.arrangement.find(x=>x.id===nb.id),ng=n&&moduleGroups.get(n.id);
+      if(nb&&n&&ng){ng.scale.x=nb.width/n.module.width;if(st.side==='right')ng.position.addScaledVector(st.axis,n.module.width-nb.width);st.touched.push(n.id);}
+    }
+    function stretchMove(e:PointerEvent){
+      const st=stretch;if(!st)return;
+      if(!st.moved&&Math.hypot(e.clientX-st.start[0],e.clientY-st.start[1])<3)return;
+      st.moved=true;cast(e.clientX,e.clientY);const pt=new THREE.Vector3();if(!ray.ray.intersectPlane(st.plane,pt))return;
+      const du=pt.sub(st.anchor).dot(st.axis);st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=!e.altKey;
+      const plan=current.current.stretchPlan?.(st.mid,st.side,st.raw,st.snap)??{};
+      previewStretch(st,plan);needsRender=true;
+      badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
+      badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+`ширина ${plan.width} мм · зазор ${plan.gap??0}`+(plan.mode==='joint'&&plan.neighbor?` · сосед «${plan.neighbor.name}» ${plan.neighbor.width} мм`:'');
+    }
+    function endStretch(){
+      window.removeEventListener('pointermove',stretchMove);window.removeEventListener('pointerup',stretchUp);window.removeEventListener('pointercancel',endStretch);
+      const st=stretch;stretch=null;if(!st)return;
+      for(const id of st.touched){const g=moduleGroups.get(id);if(g){g.scale.x=1;g.position.copy(g.userData.base);}}
+      if(st.handle)st.handle.label.position.copy(st.handle.base);target.classList.remove('stretching');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=true;
+      badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;needsRender=true;
+    }
+    function stretchUp(){const st=stretch;endStretch();if(st?.moved)current.current.onStretch?.(st.mid,st.side,st.raw,st.snap);}
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
-    function key(e:KeyboardEvent){if(e.key==='Escape')resetDrag();}
+    function key(e:KeyboardEvent){if(e.key==='Escape'){resetDrag();endStretch();}}
     // Правая кнопка: короткий клик — круговое меню; протяжка — движение камеры (меню не открываем).
     let rightDown:{x:number;y:number}|null=null;
     function rightPointer(e:PointerEvent){if(e.button===2)rightDown={x:e.clientX,y:e.clientY};}
@@ -1027,7 +1119,8 @@ export function Scene(p: Props) {
       const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar')??[])
         .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2,w:r.width+12,h:r.height+12};});
       const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
-      const ordered = [...labels].sort((a,b)=>Number(a.element.classList.contains('gap-dimension'))-Number(b.element.classList.contains('gap-dimension')));
+      const rank=(l:typeof labels[number])=>l.fixed?-1:Number(l.element.classList.contains('gap-dimension'));
+      const ordered = [...labels].sort((a,b)=>rank(a)-rank(b));
       for (const l of ordered) {
         const v = l.position.clone().project(camera);
         const x = ((v.x + 1) / 2) * target.clientWidth, y0 = ((-v.y + 1) / 2) * target.clientHeight;
@@ -1036,6 +1129,7 @@ export function Scene(p: Props) {
         if ((l.wall&&cutawayHidden.has(l.wall)) || !(v.z < 1 && v.z > -1 && Math.abs(v.x)<1 && Math.abs(v.y)<1)) { l.element.style.display = "none"; continue; }
         l.element.style.display = "";
         const w = l.element.offsetWidth + 4, h = l.element.offsetHeight + 4;
+        if (l.fixed) { l.element.style.top = y0 + "px"; placed.push({ x, y: y0, w, h }); continue; }
         const hits = (y:number) => placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < (p.h + h) / 2);
         const y = [y0, y0 - h, y0 + h, y0 - 2 * h, y0 + 2 * h].find(c => x-w/2>=4 && x+w/2<=target.clientWidth-4 && c-h/2>=4 && c+h/2<=target.clientHeight-4 && !hits(c));
         if (y === undefined) { l.element.style.top = y0 + "px"; l.element.style.visibility = "hidden"; continue; }
@@ -1048,6 +1142,7 @@ export function Scene(p: Props) {
     animate();
     return () => {
       saveCamera();controls.removeEventListener('end',saveCamera);
+      endStretch();
       disposed = true;
       current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
@@ -1095,6 +1190,8 @@ export function Scene(p: Props) {
       p.dimensions,
       p.roomDimensions,
       p.gapDimensions,
+      p.rowGaps,
+      p.stretchable,
       p.presentation,
       p.drawerPreview?.sid,
       p.drawerPreview?.index,

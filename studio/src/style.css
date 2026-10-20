@@ -82,6 +82,43 @@
   color: #147489;
   background: #f0fafce8;
 }
+/* Зазор до соседа/стены у выбранного модуля и ручки растяжения (запрос Макса 20.10.2026) */
+.model-dimension.row-gap { cursor: pointer; border-color: #e0a33a; color: #7a4a06; background: #fff8ebf0; font-size: 12px; }
+.model-dimension.row-gap:hover { background: #ffefcf; outline-color: #c9831a; }
+.stretch-handle {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #325bee;
+  color: #fff;
+  font: 700 16px/1 "Golos Text", Arial;
+  box-shadow: 0 2px 8px #1b2f8a55;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.stretch-handle:hover, .stretch-handle:focus-visible { background: #1f3fc4; outline: 2px solid #325bee; outline-offset: 2px; }
+.gap-menu-backdrop { position: fixed; inset: 0; z-index: 90; }
+.gap-menu {
+  position: fixed;
+  min-width: 220px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid #d6dde0;
+  border-radius: 8px;
+  background: #ffffffee;
+  box-shadow: 0 8px 24px #1c2d3533;
+  font: 500 13px "Golos Text", Arial;
+}
+.gap-menu-title { padding: 4px 8px 6px; color: #5d6b70; font-size: 12px; border-bottom: 1px solid #eef1f2; margin-bottom: 2px; }
+.stretching .row-gap { visibility: hidden !important; }
+.gap-menu button { display: flex; justify-content: flex-start; text-align: left; padding: 7px 8px; border: 0; border-radius: 5px; background: transparent; color: #1f2d33; font: inherit; cursor: pointer; }
+.gap-menu button:hover, .gap-menu button:focus-visible { background: #eef3ff; color: #1f3a8f; }
 .dimension-editor {
   position: fixed;
   inset: 0;

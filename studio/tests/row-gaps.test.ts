@@ -123,6 +123,17 @@ test("повороты 0/90/180/270: зазор по оси ширины, «До
   }
 });
 
+test("интерфейс: плашки зазора пропускают правый клик и колесо, ручки растяжения ew-resize, пункты «Размеры ›»", async () => {
+  const { readFileSync } = await import("node:fs");
+  const scene = readFileSync(new URL("../src/Scene.tsx", import.meta.url), "utf8"), app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+  assert.match(scene, /function gapPlaque[\s\S]{0,600}passThrough\(b\)/, "плашка зазора — passThrough (fromLabel, колесо)");
+  assert.match(scene, /function stretchHandle[\s\S]{0,600}passThrough\(b\)/);
+  assert.match(css, /\.stretch-handle \{[\s\S]*?cursor: ew-resize/);
+  assert.match(app, /size\('depth','Глубина'\),\.\.\.rowGapItems\(a\.id\)/);
+  assert.match(app, /Дотянуть \(\+\{g\.gap\} мм\)[\s\S]*Придвинуть вплотную[\s\S]*Задать зазор…/);
+});
+
 test("кухня: справа свободно, но там кончается столешница — как раньше растёт влево за счёт левого соседа", () => {
   const base = (id: string, x: number) => at(id, x, mod("Н" + id, 600, { height: 800 }));
   const top = at("t", 500, mod("Столешница", 1200, { height: 38, worktop: { material: "postforming", thickness: 38 } as unknown as Module["worktop"] }), { y: 800 });
