@@ -50,7 +50,8 @@ test('round-trip: все модули клиентских проектов loca
 test('легаси: старый JSON (noFasteners/confDepth/eccBelow/endsX/screw/kitchen.bazis) → новые поля, parts()/holes() как до правки',()=>{
   const fx=JSON.parse(readFileSync('tests/fixtures/legacy-spec.json','utf8')) as {legacy:Record<string,unknown>[];expected:{parts:string[];holes:string[]}[]};
   const r1=(v:number)=>Math.round(v*10)/10;
-  const digest=(m:Module)=>{const ps=parts(m);return {
+  // эталон снят до расположения ручек (20.10): у кухонь новое умолчание ручки (угол напротив петли) — сверяем при «по правилу»
+  const digest=(m0:Module)=>{const m=structuredClone(m0);for(const s of m.sections)s.handlePos=[...Array(4)].map((_,i)=>s.handlePos?.[i]??'rule');const ps=parts(m);return {
     parts:ps.map(p=>[p.id,p.name.replace(/×/g,'х'),p.size.map(r1),p.position.map(r1),p.edge??null,p.anchor?p.anchor.map(r1):null].map(String).join('|')).sort(),
     holes:holes(m,ps).map(h=>[h.src,h.part,h.d,r1(h.depth),h.at.map(r1),h.dir.map(r1)].map(String).join('|')).sort()};};
   assert.equal(fx.legacy.length,6);

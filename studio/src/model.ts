@@ -554,12 +554,12 @@ export const HANDLE_POS_LABEL:Record<HandlePos,string>={rule:'По правил�
 export function isUpperModule(m:Pick<Module,'kitchen'>){const r=m.kitchen?.role;return r==='wall'||r==='antresol';}
 /** Умолчание модуля (дополнение Макса 20.10): навесные кухонные — в углу напротив нижней петли, нижние кухонные — напротив верхней;
  * шкафы, пеналы и кухни с ручкой из проекта Базиса (kitchen.handle) — по правилу, как раньше. */
-export function defaultHandlePos(m:Pick<Module,'kitchen'>):HandlePos{
-  if(!m.kitchen||m.kitchen.handle)return 'rule';
+export function defaultHandlePos(m:Pick<Module,'kitchen'>&Partial<Pick<Module,'bazis'>>):HandlePos{
+  if(!m.kitchen||m.kitchen.handle||m.bazis)return 'rule'; // модуль из проекта Базиса — как в проекте, пока не выбрали вручную
   return isUpperModule(m)?'bottomCorner':m.kitchen.role==='base'?'topCorner':'rule';
 }
 /** Расположение ручки створки k секции s (явное или умолчание модуля). */
-export function doorHandlePos(m:Pick<Module,'kitchen'>,s:Pick<Section,'handlePos'>,k:number):HandlePos{return s.handlePos?.[k]??defaultHandlePos(m);}
+export function doorHandlePos(m:Pick<Module,'kitchen'>&Partial<Pick<Module,'bazis'>>,s:Pick<Section,'handlePos'>,k:number):HandlePos{return s.handlePos?.[k]??defaultHandlePos(m);}
 /** Место ручки на фасаде x0..x1 × y0..y1 с петлями hinge при расположении pos; undefined — по правилу.
  * Откидной/подъёмный фасад — ручка всегда горизонтальная: «снизу…» — у нижнего края, «сверху…» — у верхнего. */
 export function handlePlace(pos:HandlePos,hinge:string|undefined,x0:number,x1:number,y0:number,y1:number,h:Pick<Handle,'label'|'len'>):{x:number;y:number;horizontal:boolean}|undefined{
