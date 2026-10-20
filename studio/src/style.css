@@ -83,7 +83,7 @@
   background: #f0fafce8;
 }
 /* Зазор до соседа/стены у выбранного модуля и ручки растяжения (запрос Макса 20.10.2026) */
-.model-dimension.row-gap { cursor: pointer; border-color: #e0a33a; color: #7a4a06; background: #fff8ebf0; font-size: 12px; }
+.model-dimension.row-gap { z-index: 5; cursor: pointer; border-color: #e0a33a; color: #7a4a06; background: #fff8ebf0; font-size: 12px; }
 .model-dimension.row-gap:hover { background: #ffefcf; outline-color: #c9831a; }
 .stretch-handle {
   position: absolute;

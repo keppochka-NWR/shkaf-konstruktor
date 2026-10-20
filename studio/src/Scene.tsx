@@ -798,6 +798,7 @@ export function Scene(p: Props) {
         label(`${m.width} мм`, new THREE.Vector3(0, (focus.y??0)-110, z), () =>
           current.current.onDimension("width"),
         );
+        labels[labels.length-1].element.dataset.dim="width"; // обновляется во время растяжения
         line([new THREE.Vector3(x, fy, z), new THREE.Vector3(x, m.height+fy, z)]);
         label(
           m.height + " мм",
@@ -1001,51 +1002,72 @@ export function Scene(p: Props) {
       resetDrag();if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
     }
     // Растяжение мышью за ручку «↔» (запрос Макса 20.10.2026): корпус (и сосед при стыке) масштабируется по ширине на экране,
-    // живая плашка «ширина … · зазор …»; отпустил — одно изменение проекта (одна отмена Ctrl+Z). Камера при тяге не вращается.
-    type Stretch={mid:string;side:'left'|'right';plane:THREE.Plane;anchor:THREE.Vector3;axis:THREE.Vector3;start:[number,number];raw:number;snap:boolean;moved:boolean;touched:string[];handle?:{label:typeof labels[number];base:THREE.Vector3}};
+    // живая плашка «ширина … · зазор …» у курсора, плашка ширины под модулем обновляется; отпустил — одно изменение проекта
+    // (одна отмена Ctrl+Z). Камера при тяге не вращается.
+    // Сдвиг курсора переводится в мм по экранной проекции оси ширины (px на мм у края модуля), без усиления: на «Спереди» 1 px = мм
+    // по масштабу, в 3D — по видимой длине оси (критик 20.10, m8: раньше плоскость фасада под косым углом давала 10 px ≈ 250 мм).
+    type Stretch={mid:string;side:'left'|'right';axis:THREE.Vector3;screen:{x:number;y:number;k:number};start:[number,number];raw:number;snap:boolean;moved:boolean;touched:string[];
+      handle?:{label:typeof labels[number];base:THREE.Vector3};width?:{label:typeof labels[number];base:THREE.Vector3;text:string}};
     let stretch:Stretch|null=null;
+    /** Экранная проекция точки сцены, px относительно холста. */
+    function toScreen(v:THREE.Vector3){const q=v.clone().project(camera);return {x:(q.x+1)/2*target.clientWidth,y:(1-q.y)/2*target.clientHeight,z:q.z};}
+    /** Ось ширины модуля на экране у его края: единичное направление и px на 1 мм (0 — ось почти вдоль взгляда). */
+    function screenAxis(a:PlacedModule,side:'left'|'right'){
+      const center=moduleCenter(current.current.arrangement.find(x=>x.id===current.current.activeId)??a),o=localToRoom(a,0,0),u1=localToRoom(a,1,0);
+      const axis=new THREE.Vector3(u1.x-o.x,0,u1.z-o.z).normalize(),fp=localToRoom(a,side==='right'?a.module.width:0,a.module.depth);
+      const p0=new THREE.Vector3(fp.x-center.x,(a.y??0)+a.module.height/2,fp.z-center.z),s0=toScreen(p0),s1=toScreen(p0.clone().addScaledVector(axis,100));
+      const dx=(s1.x-s0.x)/100,dy=(s1.y-s0.y)/100,k=Math.hypot(dx,dy);
+      return {axis,screen:{x:k?dx/k:0,y:k?dy/k:0,k}};
+    }
     function startStretch(side:'left'|'right',e:PointerEvent){
       const s=current.current,a=s.arrangement.find(x=>x.id===s.activeId);if(!a||drag)return;
-      const center=moduleCenter(a),o=localToRoom(a,0,0),u1=localToRoom(a,1,0),f=localToRoom(a,0,1),fp=localToRoom(a,side==='right'?a.module.width:0,a.module.depth);
-      const axis=new THREE.Vector3(u1.x-o.x,0,u1.z-o.z).normalize(),facing=new THREE.Vector3(f.x-o.x,0,f.z-o.z).normalize();
-      const point=new THREE.Vector3(fp.x-center.x,(a.y??0)+a.module.height/2,fp.z-center.z),look=camera.getWorldDirection(new THREE.Vector3());
-      // плоскость фасада; если смотрим вдоль неё (вид сверху) — горизонтальная плоскость на середине высоты
-      const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(Math.abs(look.dot(facing))>.25?facing:new THREE.Vector3(0,1,0),point);
-      cast(e.clientX,e.clientY);const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
-      const hl=labels.find(l=>l.element.classList.contains('stretch-handle')&&l.element.dataset.side===side);
-      stretch={mid:a.id,side,plane,anchor,axis,start:[e.clientX,e.clientY],raw:0,snap:true,moved:false,touched:[],handle:hl?{label:hl,base:hl.position.clone()}:undefined};
+      const {axis,screen}=screenAxis(a,side);if(screen.k<.02)return; // ось ширины вдоль взгляда — тянуть нечем (ручки тогда скрыты)
+      const hl=labels.find(l=>l.element.classList.contains('stretch-handle')&&l.element.dataset.side===side),wl=labels.find(l=>l.element.dataset.dim==='width');
+      stretch={mid:a.id,side,axis,screen,start:[e.clientX,e.clientY],raw:0,snap:true,moved:false,touched:[],handle:hl?{label:hl,base:hl.position.clone()}:undefined,
+        width:wl?{label:wl,base:wl.position.clone(),text:wl.element.textContent??''}:undefined};
       controls.enabled=false;target.classList.add('stretching');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=false; // зазор во время тяги — в живой плашке
       window.addEventListener('pointermove',stretchMove);window.addEventListener('pointerup',stretchUp);window.addEventListener('pointercancel',endStretch);
     }
     function previewStretch(st:Stretch,plan:Partial<StretchPlan>){
       for(const id of st.touched){const g=moduleGroups.get(id);if(g){g.scale.x=1;g.position.copy(g.userData.base);}}st.touched=[];
       const s=current.current,a=s.arrangement.find(x=>x.id===st.mid),g=moduleGroups.get(st.mid);if(!a||!g||plan.width===undefined)return;
-      g.scale.x=plan.width/a.module.width;if(st.side==='left')g.position.addScaledVector(st.axis,a.module.width-plan.width);st.touched.push(a.id);
-      if(st.handle)st.handle.label.position.copy(st.handle.base).addScaledVector(st.axis,(st.side==='right'?1:-1)*(plan.width-a.module.width)); // ручка едет за краем
+      const dw=plan.width-a.module.width,out=st.side==='right'?1:-1;
+      g.scale.x=plan.width/a.module.width;if(st.side==='left')g.position.addScaledVector(st.axis,-dw);st.touched.push(a.id);
+      if(st.handle)st.handle.label.position.copy(st.handle.base).addScaledVector(st.axis,out*dw); // ручка едет за краем
+      if(st.width){st.width.label.position.copy(st.width.base).addScaledVector(st.axis,out*dw/2);st.width.label.element.textContent=plan.width+' мм';} // плашка ширины под модулем
       const nb=plan.mode==='joint'?plan.neighbor:undefined,n=nb&&s.arrangement.find(x=>x.id===nb.id),ng=n&&moduleGroups.get(n.id);
       if(nb&&n&&ng){ng.scale.x=nb.width/n.module.width;if(st.side==='right')ng.position.addScaledVector(st.axis,n.module.width-nb.width);st.touched.push(n.id);}
     }
     function stretchMove(e:PointerEvent){
       const st=stretch;if(!st)return;
       if(!st.moved&&Math.hypot(e.clientX-st.start[0],e.clientY-st.start[1])<3)return;
-      st.moved=true;cast(e.clientX,e.clientY);const pt=new THREE.Vector3();if(!ray.ray.intersectPlane(st.plane,pt))return;
-      const du=pt.sub(st.anchor).dot(st.axis);st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=!e.altKey;
+      st.moved=true;
+      const du=((e.clientX-st.start[0])*st.screen.x+(e.clientY-st.start[1])*st.screen.y)/st.screen.k;
+      st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=!e.altKey;
       const plan=current.current.stretchPlan?.(st.mid,st.side,st.raw,st.snap)??{};
       previewStretch(st,plan);needsRender=true;
       badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
       badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+`ширина ${plan.width} мм · зазор ${plan.gap??0}`+(plan.mode==='joint'&&plan.neighbor?` · сосед «${plan.neighbor.name}» ${plan.neighbor.width} мм`:'');
+      // живая плашка — у курсора (над ним), а не внизу сцены (критик 20.10, m6)
+      const r=target.getBoundingClientRect();
+      Object.assign(badge.style,{left:Math.max(8,Math.min(e.clientX-r.left,target.clientWidth-8))+'px',top:Math.max(40,e.clientY-r.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
     }
     function endStretch(){
       window.removeEventListener('pointermove',stretchMove);window.removeEventListener('pointerup',stretchUp);window.removeEventListener('pointercancel',endStretch);
       const st=stretch;stretch=null;if(!st)return;
       for(const id of st.touched){const g=moduleGroups.get(id);if(g){g.scale.x=1;g.position.copy(g.userData.base);}}
-      if(st.handle)st.handle.label.position.copy(st.handle.base);target.classList.remove('stretching');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=true;
-      badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;needsRender=true;
+      if(st.handle)st.handle.label.position.copy(st.handle.base);
+      if(st.width){st.width.label.position.copy(st.width.base);st.width.label.element.textContent=st.width.text;}
+      target.classList.remove('stretching');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=true;
+      badge.hidden=true;badge.classList.remove('invalid');badge.style.cssText='';controls.enabled=true;needsRender=true;
     }
     function stretchUp(){const st=stretch;endStretch();if(st?.moved)current.current.onStretch?.(st.mid,st.side,st.raw,st.snap);}
+    // Alt во время тяги (корпуса или края) не уводит фокус в меню браузера Chrome на Windows (критик 20.10, m11)
+    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch))e.preventDefault();}
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
-    function key(e:KeyboardEvent){if(e.key==='Escape'){resetDrag();endStretch();}}
+    function key(e:KeyboardEvent){if(e.key==='Escape'){resetDrag();endStretch();}altGuard(e);}
+    window.addEventListener('keyup',altGuard);
     // Правая кнопка: короткий клик — круговое меню; протяжка — движение камеры (меню не открываем).
     let rightDown:{x:number;y:number}|null=null;
     function rightPointer(e:PointerEvent){if(e.button===2)rightDown={x:e.clientX,y:e.clientY};}
@@ -1119,8 +1141,13 @@ export function Scene(p: Props) {
       const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar')??[])
         .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2,w:r.width+12,h:r.height+12};});
       const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
-      const rank=(l:typeof labels[number])=>l.fixed?-1:Number(l.element.classList.contains('gap-dimension'));
+      // Порядок: ручки растяжения (стоят на боку), плашки зазора (сразу над ручкой), размеры, проёмы.
+      const rowGap=(l:typeof labels[number])=>l.element.classList.contains('row-gap');
+      const rank=(l:typeof labels[number])=>l.fixed?-2:rowGap(l)?-1:Number(l.element.classList.contains('gap-dimension'));
       const ordered = [...labels].sort((a,b)=>rank(a)-rank(b));
+      // Ручки прячем, если на экране они ближе 48 px друг к другу (узкий модуль издалека, ось ширины вдоль взгляда) — критик 20.10, m7.
+      const handles=labels.filter(l=>l.fixed);let hideHandles=false,handleRow:number|undefined;
+      if(handles.length===2&&!stretch){const [p,q]=handles.map(l=>l.position.clone().project(camera));hideHandles=Math.hypot((p.x-q.x)/2*target.clientWidth,(p.y-q.y)/2*target.clientHeight)<48;}
       for (const l of ordered) {
         const v = l.position.clone().project(camera);
         const x = ((v.x + 1) / 2) * target.clientWidth, y0 = ((-v.y + 1) / 2) * target.clientHeight;
@@ -1129,9 +1156,15 @@ export function Scene(p: Props) {
         if ((l.wall&&cutawayHidden.has(l.wall)) || !(v.z < 1 && v.z > -1 && Math.abs(v.x)<1 && Math.abs(v.y)<1)) { l.element.style.display = "none"; continue; }
         l.element.style.display = "";
         const w = l.element.offsetWidth + 4, h = l.element.offsetHeight + 4;
-        if (l.fixed) { l.element.style.top = y0 + "px"; placed.push({ x, y: y0, w, h }); continue; }
+        if (l.fixed) { if (hideHandles) { l.element.style.display = "none"; continue; } l.element.style.top = y0 + "px"; placed.push({ x, y: y0, w, h }); handleRow = y0; continue; }
         const hits = (y:number) => placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < (p.h + h) / 2);
-        const y = [y0, y0 - h, y0 + h, y0 - 2 * h, y0 + 2 * h].find(c => x-w/2>=4 && x+w/2<=target.clientWidth-4 && c-h/2>=4 && c+h/2<=target.clientHeight-4 && !hits(c));
+        const inside = (c:number) => x-w/2>=4 && x+w/2<=target.clientWidth-4 && c-h/2>=4 && c+h/2<=target.clientHeight-4;
+        // плашка зазора — над ручкой, не под ней (узкий зазор 20–150 мм: центр зазора у самой ручки) — критик 20.10, B1
+        const off = rowGap(l) && handleRow !== undefined ? 21 + h / 2 : 0;
+        const cands = off ? [y0 - off, y0 + off, y0 - off - h, y0 + off + h, y0 - off - 2 * h, y0 + off + 2 * h, y0 - off - 3 * h] : [y0, y0 - h, y0 + h, y0 - 2 * h, y0 + 2 * h];
+        let y = cands.find(c => inside(c) && !hits(c));
+        // зазор не прячем, пока видна ручка: если всё занято — над ручкой поверх (z-index выше размеров)
+        if (y === undefined && rowGap(l)) y = cands.find(inside) ?? y0 - off;
         if (y === undefined) { l.element.style.top = y0 + "px"; l.element.style.visibility = "hidden"; continue; }
         l.element.style.top = y + "px";
         placed.push({ x, y, w, h });
@@ -1142,7 +1175,7 @@ export function Scene(p: Props) {
     animate();
     return () => {
       saveCamera();controls.removeEventListener('end',saveCamera);
-      endStretch();
+      endStretch();window.removeEventListener('keyup',altGuard);
       disposed = true;
       current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
