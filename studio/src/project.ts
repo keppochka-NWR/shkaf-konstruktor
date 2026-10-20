@@ -229,6 +229,10 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
 }
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
   const n=structuredClone(p),module=structuredClone(source);rekeySections(module,id);module.name=`Модуль ${p.modules.length+1}`;
+  // Место ищем по корпусам с автофальшами (как их поставит сохранение): первый шкаф у стены ещё без планки торцом
+  // (добавлен из пустой комнаты) получит её при следующем сохранении и сдвинется на 21 мм — новый не должен встать в этот вылет.
+  // Ложное «пересекается» на втором «Добавить в комнату» (критик 20.10, было и на night-release).
+  const f=applyAutoFillers(p),filledAnchor=anchor&&(f.modules.find(x=>x.id===anchor.id)??anchor);anchor=filledAnchor;p={...p,modules:f.modules};
   const supports=p.modules.filter(a=>a.module.kitchen?.role==='base');
   const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?1500:0);
   if(source.worktop&&!supports.length)throw Error('Сначала добавьте нижние кухонные корпуса: столешница устанавливается над ними.');
@@ -287,7 +291,8 @@ export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=fa
  const errors=projectErrors(p,true);if(errors.length)throw Error(errors[0]);
  const sourceErrors=projectErrors({version:3,room:{width:20000,depth:20000,height:20000},modules:selected});if(sourceErrors.length)throw Error(sourceErrors[0]);
  const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();if(copyNames)copy.module.name=(copy.module.name.slice(0,72)+' · копия').slice(0,80);rekeySections(copy.module,id);return copy;});
- const group=mountingCompositionBounds({...p,modules:selected}),occupied=[...p.modules.map(bounds),...(p.room.obstacles||[]).map(obstacleBounds)];
+ // занятое место — по корпусам с автофальшами (см. appendModule)
+ const group=mountingCompositionBounds({...p,modules:selected}),occupied=[...applyAutoFillers(p).modules.map(bounds),...(p.room.obstacles||[]).map(obstacleBounds)];
  const sideGap=RULES.panel+RULES.wallFillerEdgeGap;
  const xs=[group.x+group.w,sideGap,p.room.width-group.w-sideGap,0,...occupied.flatMap(b=>[b.x+b.w,b.x-group.w,b.x]),p.room.width-group.w];
  const zs=[copyNames?group.z:30,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-group.d,b.z]),p.room.depth-group.d];

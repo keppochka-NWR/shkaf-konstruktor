@@ -123,6 +123,20 @@ test("повороты 0/90/180/270: зазор по оси ширины, «До
   }
 });
 
+test("B2: два «Добавить в комнату» подряд из пустой комнаты — второй вплотную справа, без ложного пересечения", async () => {
+  const { appendModule, newProject } = await import("../src/project");
+  const { createModule } = await import("../src/ModulePalette");
+  const m = createModule("empty", 600, 2000, 550, initialModule());
+  // первый — как из пустой комнаты: без автофальши у стены (раньше её ставило только следующее сохранение)
+  const first = appendModule({ ...newProject(), modules: [] }, m);
+  let p = applyAutoFillers(appendModule(first, m));
+  assert.deepEqual(projectErrors(p), [], "второй без «пересекается»");
+  assert.equal(gaps(p, p.modules[1].id).left.gap, 0, "второй вплотную к первому");
+  for (let i = 0; i < 3; i++) p = applyAutoFillers(appendModule(p, m));
+  assert.deepEqual(projectErrors(p), [], "пятый тоже");
+  assert.equal(p.modules.length, 5);
+});
+
 test("интерфейс: плашки зазора пропускают правый клик и колесо, ручки растяжения ew-resize, пункты «Размеры ›»", async () => {
   const { readFileSync } = await import("node:fs");
   const scene = readFileSync(new URL("../src/Scene.tsx", import.meta.url), "utf8"), app = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
