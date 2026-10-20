@@ -57,7 +57,9 @@ test('explicit hinge repair removes drawer/divider collisions, round trips, leav
  const {repairHinges}=await import('../src/hingeRepair');const {parts,parseModule}=await import('../src/model');const {partCollisions,hingeCollisions}=await import('../src/collisions');
  const m=createModule('shelves',1200,2400,600,initialModule());m.doors=true;
  m.sections=[{id:'left',weight:576,shelves:[.45673,.59353,.7299,.8667],drawers:2,rod:false,drawerConfigs:[{slide:'ball',height:140,length:500,y:0,facadeH:300},{slide:'ball',height:140,length:500,y:303}]},{id:'right',weight:576,shelves:[.83],drawers:0,rod:true,rodAt:.7867}];
- const before=JSON.stringify(m);assert.ok(hingeCollisions(partCollisions(parts(m),m)).length);const next=repairHinges(m);assert.equal(JSON.stringify(m),before);assert.deepEqual(hingeCollisions(partCollisions(parts(next),next)),[]);
+ // 20.10.2026 (claude/shop-collide): чашка двери на перегородке теперь всегда в теле своего фасада (21,5 от кромки) —
+ // у этого шкафа пересечений петель нет и без кнопки; кнопка по-прежнему не меняет исходный модуль и ничего не ломает.
+ const before=JSON.stringify(m);assert.deepEqual(hingeCollisions(partCollisions(parts(m),m)),[]);const next=repairHinges(m);assert.equal(JSON.stringify(m),before);assert.deepEqual(hingeCollisions(partCollisions(parts(next),next)),[]);
  const reopened=parseModule(JSON.parse(JSON.stringify(next)));assert.equal(reopened.hingeFit,true);assert.deepEqual(hingeCollisions(partCollisions(parts(reopened),reopened)),[]);
  assert.throws(()=>repairHinges(kitchenTemplate('base-doors',600,initialModule())),/прямых/);
 });

@@ -209,7 +209,9 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
       if (p.falsePanelHinge) { const c = ps.find((q) => q.id === cupId)?.model?.origin; if (c) push(cupId, [c[0], y, back], [0, 0, 1], 35, 13); continue; }
       // кухня Базиса без наколок под планку (kitchen.plateHoles: false — 89 из 261 модулей с петлями) — только чашка
       if (m.kitchen?.plateHoles !== false) for (const dy of [16, -16]) push(p.id, [sx, y + dy, back - 37], [-inward, 0, 0], 3, 3);
-      push(cupId, [sx + inward * 7.5, y, back], [0, 0, 1], 35, 13);
+      // чашка — в точке чашки (model.ts): 7,5 от стойки, у двери на средней перегородке и после «Подобрать положение петель» — дальше
+      const cx = ps.find((q) => q.id === cupId)?.model?.origin?.[0], c75 = sx + inward * 7.5;
+      push(cupId, [cx !== undefined && Math.abs(cx - c75) > 0.01 ? cx : c75, y, back], [0, 0, 1], 35, 13);
     }
   }
   kitchenDrawerHoles(m, ps, push);

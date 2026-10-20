@@ -1693,7 +1693,12 @@ function hardwareParts(m: Module, out: Part[]) {
         // петли — как в моделях Базиса. Чашка — по преобразованию из моделей: поворот Ry 90°, сдвиг 4,5 по Y.
         const qb: Quat = dir > 0 ? [0.5, 0.5, 0.5, -0.5] : [0.5, -0.5, 0.5, 0.5], o: [number, number, number] = [sideX, y, back];
         // Центр чашки — в 7,5 мм от внутренней плоскости стойки (присадка «Петля накладная» в проектах Базиса цеха).
-        const co = qrot(qb, [0, ffHinge ? 22 : m.hingeFit && !m.kitchen ? Math.max(7.5, dir * (edgeX - sideX) + 22.5) : 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
+        // Шкаф студии: чашка Ø35 — в теле своего фасада, не ближе к его кромке, чем у двери на боковине (t − fe + 7,5 = 21,5 при 16/2).
+        // Дверь на средней перегородке накрывает только половину стойки (7 мм): 7,5 от стойки — это 14,5 от кромки, отверстие Ø35
+        // выходило бы за кромку на 3 мм и в соседнюю створку на 1 мм (ложное «Фасад × чашка» на новом шкафу с перегородкой, 20.10.2026).
+        // Тогда чашка уходит от стойки на те же 21,5 от кромки; на боковине (накладка t − fe) — по-прежнему 7,5. Кухня — как в Базисе.
+        const fit = dir * (edgeX - sideX) + t - fe(m) + 7.5;
+        const co = qrot(qb, [0, ffHinge ? 22 : m.hingeFit && !m.kitchen ? Math.max(7.5, dir * (edgeX - sideX) + 22.5) : !m.kitchen && fit > 7.51 ? fit : 7.5, 0]), cupO: [number, number, number] = [o[0] + co[0], o[1] + co[1], o[2] + co[2]];
         const cup: Part = { ...metal(cupId, (ffHinge ? "Петля под фальшпанель" : "Петля " + brand) + " · чашка Ø35", [35, 35, 12.5], [cupO[0], y, back + 6.25], "hinge", door.sectionId),
           model: { file: "hardware/bazis/39d9d9c26d8c.glb", length: "y", native: true, origin: cupO, quat: qmul(qb, [Math.SQRT1_2, 0, Math.SQRT1_2, 0]) },
           collide: [{ size: [35, 35, 12.5], position: [cupO[0], y, back + 6.25] }], ...(ffHinge ? { falsePanelHinge: true as const } : {}) };
