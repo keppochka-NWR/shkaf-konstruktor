@@ -53,6 +53,28 @@ function compare(name:string,p:Project,exactTotal:boolean){
   return {manager:manager.retail??manager.byMarkupKnown,pub:pub.retail??pub.byMarkupKnown};
 }
 
+// Решение Макса 20.10.2026: подсветка в полках 4000 ₽/пог.м, в стойках 3000 ₽/пог.м — розница; запечённая копия её не умножает ×2,2
+test('запекание: подсветка в полках (4000 ₽/пог.м) и в стойках (3000 ₽/пог.м) — в публичной сборке те же суммы, не × коэффициент',()=>{
+  const p=newProject(),m=p.modules[0].module;m.sections[0].shelves=[0.25,0.5,0.75];m.sections[0].shelfLight=true;m.standLight=true;
+  const mgr=estimate(p),cv=clientView(mgr),pub=baked.estimate(p);
+  for(const [id,price] of [['light-shelf',4000],['light-stand',3000]] as const){
+    const a=mgr.lines.find(l=>l.id===id)!,b=pub.lines.find(l=>l.id===id)!;
+    assert.ok(a&&b,id);assert.equal(a.unitPrice,price,id+' менеджер');assert.equal(b.unitPrice,price,id+' публичная: не запечено ×2,2');
+    assert.equal(b.quantity,a.quantity);assert.ok(!b.pending,id+' не «после финального расчёта»');
+  }
+  assert.equal(pub.retail,cv.retail);assert.equal(pub.retail,mgr.retail);assert.ok(pub.retail!==null,'итог есть, не «уточняется»');
+  assert.ok(Math.abs(pub.split.hardware-mgr.split.hardware)<=2,'фурнитура ±2 ₽ округления, как у типовых заказов');assert.equal(pub.pending.length,mgr.pending.length);
+  // прирост от подсветки — ровно длина × цена и у менеджера, и в публичной сборке (та же группа разбивки «фурнитура», что у стоек)
+  const p0=newProject(),m0=p0.modules[0].module;m0.sections[0].shelves=[0.25,0.5,0.75];
+  const light=Math.round(mgr.lines.find(l=>l.id==='light-shelf')!.quantity*4000)+Math.round(mgr.lines.find(l=>l.id==='light-stand')!.quantity*3000);
+  assert.equal(mgr.retail!-estimate(p0).retail!,light);assert.equal(pub.retail!-baked.estimate(p0).retail!,light);
+  assert.equal(mgr.split.hardware-estimate(p0).split.hardware,light);assert.equal(pub.split.hardware-baked.estimate(p0).split.hardware,light);
+  // в запечённом исходнике цена — та же именованная константа (её нет в BAKE_RULES model.ts), литералов 4000/3000 в add() нет
+  const bakedModel=readFileSync(join(out,'model.ts'),'utf8'),bakedPricing=readFileSync(join(out,'pricing.ts'),'utf8');
+  assert.match(bakedModel,/lightRetailPerM: 3000,/);assert.match(bakedModel,/shelfLightRetailPerM: 4000,/);
+  assert.match(bakedPricing,/add\('light-shelf','Подсветка в полках',d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
+  assert.match(bakedPricing,/add\('light-stand','Подсветка врезная в стойках',d\.length\/1000,'пог\.м',RULES\.lightRetailPerM,/);
+});
 for(const [n,make] of Object.entries(typical))test(`запекание: типовой заказ «${n}» — итог тот же до рубля, строки — розница`,()=>{compare(n,make(),true);});
 test('запекание: примеры examples/ — итог в пределах округления',()=>{
   for(const f of examples){const p=parseProject(JSON.parse(readFileSync(join(studio,'examples',f),'utf8')));compare(f,p,false);}

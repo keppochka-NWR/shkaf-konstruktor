@@ -79,13 +79,16 @@ export function upperItem(ops: QuickMenuOps): RadialItem {
   ] };
 }
 
+/** Цена подсветки клиенту в подсказке пункта (решение Макса 20.10.2026): «4 000 ₽ за пог. м». */
+const rubPerM = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽ за пог. м";
+
 export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
   const s = m.sections.find((x) => x.id === sid) ?? m.sections[0];
   return { id: "q-light", label: "Подсветка", icon: Lightbulb, active: !!m.standLight || m.sections.some((x) => x.shelfLight), hint: "В стойках или в полках секции", children: [
-    { id: "q-light-stand", label: m.standLight ? "Убрать в стойках" : "В стойках", icon: Lightbulb, active: !!m.standLight, hint: "LED-профиль в стойках на всю высоту",
+    { id: "q-light-stand", label: m.standLight ? "Убрать в стойках" : "В стойках", icon: Lightbulb, active: !!m.standLight, hint: "LED-профиль в стойках на всю высоту; " + rubPerM(RULES.lightRetailPerM),
       run: () => ops.modify((n) => { if (n.standLight) delete n.standLight; else n.standLight = true; }) },
     { id: "q-light-shelves", label: s.shelfLight ? "Убрать в полках" : "В полках", icon: Lightbulb, active: !!s.shelfLight, disabled: !s.shelves.length && !s.shelfLight,
-      hint: s.shelves.length ? "LED-профиль в передней кромке полок секции; цену уточнит конструктор" : "В секции нет полок",
+      hint: s.shelves.length ? "LED-профиль в передней кромке полок секции; " + rubPerM(RULES.shelfLightRetailPerM) : "В секции нет полок",
       run: () => ops.modify((n) => { const x = n.sections.find((q) => q.id === s.id)!; if (x.shelfLight) delete x.shelfLight; else x.shelfLight = true; }) },
   ] };
 }

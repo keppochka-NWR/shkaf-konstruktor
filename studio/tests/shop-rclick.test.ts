@@ -5,7 +5,8 @@ import {Trash,Box} from 'lucide-react';
 import {initialModule,section,id,boxes,parts,RULES,type Module} from '../src/model';
 import {newProject,type Project} from '../src/project';
 import {insertItem} from '../src/operations';
-import {estimate} from '../src/pricing';
+import {estimate,lineGroup} from '../src/pricing';
+import {pendingPrice} from '../src/pendingPrices';
 import {composeContextMenu,confirmDelete,moduleDims,labelSide,placeMenu,menuArea} from '../src/contextMenu';
 import {missMenuTarget,screenRect,sectionAtX} from '../src/missMenu';
 import {readFileSync} from 'node:fs';
@@ -88,17 +89,42 @@ test('п.2 критика: промах мимо детали — меню то�
   assert.equal(missMenuTarget(m,rect,{x:300,y:300},{x:100,y:-50})!.localY,0,'высота в пределах корпуса');
 });
 
-test('п.3 критика: подсветка в полках — позиция «после финального расчёта конструктором», проект НЕ уходит в «Цена уточняется»',()=>{
-  const m=wardrobe();m.sections[0].shelves=[0.3,0.6];m.sections[0].shelfLight=true;
+// Решение Макса 20.10.2026: «Подсветки в горизонтах должны считаться 4000 ₽, в вертикалях 3000 ₽» — за пог.м, клиенту, поверх коэффициента
+test('подсветка в полках: N полок ширины W → сумма = длина × 4000 ₽ (розница поверх коэффициента), итог проекта не «уточняется»',()=>{
+  const m=wardrobe();m.sections[0].shelves=[0.2,0.4,0.6];m.sections[0].shelfLight=true;
   const base=structuredClone(m);delete base.sections[0].shelfLight;
+  const W=boxes(m).find(b=>b.id===m.sections[0].id)!.width,N=3,len=N*(W-40)/1000;
+  assert.equal(RULES.shelfLightRetailPerM,4000);
   const e=estimate(project(m)),e0=estimate(project(base));
   const row=e.lines.find(i=>i.id==='light-shelf')!;
-  assert.equal(row.pending,true,'строка — позиция финального расчёта');
-  assert.ok(!e.missing.some(i=>i.id==='light-shelf'),'не в «нет цены»');
-  assert.equal(e.missing.length,e0.missing.length,'подсветка не добавляет «Цена уточняется»');
-  assert.ok(e.pending.some(i=>i.id==='light-shelf'));
-  assert.equal(e.knownCost,e0.knownCost,'итог считается по известным позициям');
-  const hint=lightItem(m,m.sections[0].id,spy(m).ops).children![1].hint!;assert.match(hint,/цену уточнит конструктор/);
+  assert.equal(row.unitPrice,4000);assert.equal(row.retail,true,'розница — без коэффициента');assert.ok(!row.pending,'не «после финального расчёта»');
+  assert.ok(Math.abs(row.quantity-len)<0.001,`длина ${row.quantity} = ${N} × (${W} − 40) / 1000`);
+  assert.equal(e.knownCost,e0.knownCost,'себестоимость (под коэффициент) не меняется');
+  assert.equal(e.retail,e0.retail!+Math.round(row.quantity*4000),'итог = прежний + длина × 4000');
+  assert.equal(e.split.hardware,e0.split.hardware+Math.round(row.quantity*4000),'в той же группе разбивки, что подсветка стоек');
+  assert.equal(e.split.material,e0.split.material);
+  assert.ok(e.retail!==null,'итог есть');assert.equal(e.missing.length,e0.missing.length,'подсветка не добавляет «Цена уточняется»');
+  assert.ok(!e.missing.some(i=>i.id==='light-shelf')&&!e.pending.some(i=>i.id==='light-shelf'));
+  assert.equal(e.pending.length,e0.pending.length);
+  assert.equal(pendingPrice('light-shelf'),null,'в pendingPrices подсветки в полках больше нет');
+  assert.equal(lineGroup('light-shelf'),lineGroup('light-stand'),'разбивка: подсветки — одна группа');
+  const hint=lightItem(m,m.sections[0].id,spy(m).ops).children![1].hint!;assert.match(hint,/4 000 ₽ за пог\. м/);assert.doesNotMatch(hint,/уточнит/);
+});
+
+test('подсветка в стойках: длина × 3000 ₽ (RULES.lightRetailPerM), в полках и стойках вместе — сумма обеих',()=>{
+  const m=wardrobe();m.sections[0].shelves=[0.3,0.6];
+  const e0=estimate(project(m));
+  const st=structuredClone(m);st.standLight=true;
+  const strips=parts(st).filter(p=>p.role==='light'&&!p.id.includes(':shelf-light:')),standLen=strips.reduce((s,p)=>s+p.length,0)/1000;
+  assert.equal(RULES.lightRetailPerM,3000);assert.ok(strips.length>0);
+  const es=estimate(project(st)),stand=es.lines.find(l=>l.id==='light-stand')!;
+  assert.equal(stand.unitPrice,3000);assert.equal(stand.retail,true);assert.ok(Math.abs(stand.quantity-standLen)<0.001);
+  assert.equal(es.retail,e0.retail!+Math.round(stand.quantity*3000));
+  const both=structuredClone(st);both.sections[0].shelfLight=true;
+  const eb=estimate(project(both)),shelf=eb.lines.find(l=>l.id==='light-shelf')!;
+  assert.equal(eb.retail,e0.retail!+Math.round(stand.quantity*3000)+Math.round(shelf.quantity*4000));
+  assert.equal(eb.split.hardware,e0.split.hardware+Math.round(stand.quantity*3000)+Math.round(shelf.quantity*4000));
+  assert.match(lightItem(st,st.sections[0].id,spy(st).ops).children![0].hint!,/3 000 ₽ за пог\. м/);
 });
 
 test('п.4 критика: жёлтая полоса — фон насквозь (pointer-events: none), мышь ловят только кнопки',()=>{
@@ -173,7 +199,7 @@ test('антресоль: добавить / убрать; кухни и сыр�
   assert.deepEqual(quickItems(wardrobe(),wardrobe().sections[0].id,s.ops).map(i=>i.id),['q-section','q-back','q-base','q-light']);
 });
 
-test('подсветка в полках: флаг секции, LED-профиль под передней кромкой каждой полки, смета без цены «после финального расчёта конструктором»',()=>{
+test('подсветка в полках: флаг секции, LED-профиль под передней кромкой каждой полки, смета 4000 ₽/пог.м (решение 20.10)',()=>{
   const m=wardrobe();m.sections[0].shelves=[0.3,0.6];
   const before=parts(m).length,s=spy(m);
   lightItem(s.mod,m.sections[0].id,s.ops).children![1].run!();
@@ -183,8 +209,8 @@ test('подсветка в полках: флаг секции, LED-профи�
   assert.ok(led.position[1]<shelf.position[1]-shelf.size[1]/2+0.01,'под полкой');
   assert.ok(led.position[2]+led.size[2]/2<=shelf.position[2]+shelf.size[2]/2,'не выступает за кромку');
   const row=estimate(project(n)).lines.find(i=>i.id==='light-shelf')!;
-  assert.ok(row,'строка сметы');assert.equal(row.label,'Подсветка в полках');assert.equal(row.unit,'пог.м');assert.equal(row.unitPrice,null);
-  assert.match(row.source,/после финального расчёта конструктором/);
+  assert.ok(row,'строка сметы');assert.equal(row.label,'Подсветка в полках');assert.equal(row.unit,'пог.м');assert.equal(row.unitPrice,RULES.shelfLightRetailPerM);
+  assert.match(row.source,/4000 ₽\/пог\.м, поверх коэффициента/);
   assert.ok(!estimate(project(n)).lines.some(i=>i.id==='light-stand'),'не считается как подсветка в стойках');
   // без флага — шкаф без изменений
   assert.ok(!parts(m).some(p=>p.id.includes('shelf-light')));
