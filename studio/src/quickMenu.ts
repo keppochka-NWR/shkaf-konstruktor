@@ -3,9 +3,9 @@
 // Только те же правки модели, что делает панель справа (select «Задняя стенка», «Основание», «Подсветка», «Очистить наполнение»,
 // шаблоны наполнения) — без своих механизмов. Кухни, сырые модули Базиса, двери-купе, столы и угловые шкафы — без этих пунктов:
 // у кухонь правила Базиса, у остальных своё устройство.
-import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, PanelBottom, Rows3, Shirt, Archive, Square, Trash } from "lucide-react";
+import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash } from "lucide-react";
 import type { RadialItem } from "./RadialMenu";
-import { boxes, distribute, plinth, RULES, type Module, type Section } from "./model";
+import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, type Module, type Section } from "./model";
 
 export type QuickMenuOps = {
   /** Правка этого корпуса (modifyAt) — как селекты и галочки панели. */
@@ -90,10 +90,64 @@ export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem
   ] };
 }
 
+/** Высота нижнего ряда при включении «Разделить фасады по высоте» — та же формула, что галочка панели (половина высоты фасадов секции). */
+export function defaultDoorSplit(m: Module, s: Section) {
+  return Math.round((facadeTop(m) - (s.externalDrawers && s.drawers ? drawerCapTop(m, s) + (s.doorGap ?? RULES.faceGap) : facadeBottom(m))) / 2);
+}
+
+/** Ф3b (Покрытие.md, «деление двери по высоте» — 72 изделия): вкл/выкл деления фасадов секции, как галочка панели. */
+export function doorSplitItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
+  const s = m.sections.find((x) => x.id === sid) ?? m.sections[0];
+  const on = s.doorSplit !== undefined;
+  return { id: "q-door-split", label: on ? "Не делить дверь" : "Разделить по высоте", icon: Rows2, active: on, disabled: !m.doors,
+    hint: !m.doors ? "У корпуса нет распашных фасадов" : on ? `Сейчас нижний ряд ${s.doorSplit} мм. Снять деление — одна дверь на секцию` : "Два фасада друг над другом; высота нижнего ряда — половина, число — в панели",
+    run: () => ops.modify((n) => { const a = n.sections.find((x) => x.id === s.id)!; if (a.doorSplit !== undefined) delete a.doorSplit; else a.doorSplit = defaultDoorSplit(n, a); delete a.removedDoors; }) };
+}
+
+/**
+ * Ф3b (петли вкладные — 32 изделия, полунакладные — 20): монтаж фасадов, как select «Монтаж фасадов» панели.
+ * В модели монтаж задаётся на весь корпус (doorMount), не на одну дверь; полунакладного монтажа в модели нет — пункт неактивен.
+ */
+export function doorMountItem(m: Module, ops: QuickMenuOps): RadialItem {
+  const cur = m.doorMount ?? "overlay";
+  return { id: "q-door-mount", label: "Тип петли", icon: Link2, disabled: !m.doors, hint: (m.doors ? "Монтаж фасадов всего корпуса. Сейчас: " + (cur === "inset" ? "вкладные" : "накладные") : "У корпуса нет распашных фасадов"), children: [
+    { id: "q-mount-overlay", label: "Накладная", icon: Link2, active: cur === "overlay", hint: "Фасад закрывает торцы боковин — как по умолчанию", run: () => ops.modify((n) => { delete n.doorMount; }) },
+    { id: "q-mount-half", label: "Полунакладная", icon: Link2, disabled: true, hint: "Нет в студии: полунакладной монтаж пока не задаётся (общая стойка двух дверей)" },
+    { id: "q-mount-inset", label: "Вкладная", icon: Link2, active: cur === "inset", hint: "Фасад внутри проёма корпуса, петли вкладные", run: () => ops.modify((n) => { n.doorMount = "inset"; }) },
+  ] };
+}
+
+/** Ф3b (фальшпанели/доборы/планки — 33 изделия): те же поля панели — боковые фальшпанели до потолка, планка под крышей, ширина фальша к стене. */
+export function fillersItem(m: Module, ops: QuickMenuOps): RadialItem {
+  const sideItem = (side: "left" | "right"): RadialItem => {
+    const sp = m.sidePanels?.[side], name = side === "left" ? "слева" : "справа";
+    return { id: "q-side-" + side, label: (sp ? "Убрать фальшпанель " : "Фальшпанель ") + name, icon: PanelLeft, active: !!sp,
+      hint: sp ? `Сейчас ${sp.height} × ${sp.depth} мм. Размеры — в панели` : "Боковая фальшпанель до потолка: высота от 2400, глубина корпуса + 18",
+      run: () => ops.modify((n) => { const next = { ...n.sidePanels }; if (next[side]) delete next[side]; else next[side] = { height: Math.max(n.height, 2400), depth: n.depth + 18 }; if (Object.keys(next).length) n.sidePanels = next; else delete n.sidePanels; }) };
+  };
+  const strip: RadialItem = { id: "q-top-strip", label: "Планка под крышей", icon: ArrowUpToLine, active: !!m.topStrip, hint: m.topStrip ? `Сейчас ${m.topStrip} мм, в цвет фасадов` : "Нет", children: [0, 40, 60, 80, 100, 120].map((v) => ({
+    id: "q-top-strip-" + v, label: v ? `${v} мм` : "Нет", icon: ArrowUpToLine, active: (m.topStrip ?? 0) === v, hint: v ? `Планка ${v} мм в цвет фасадов` : "Без планки под крышей",
+    run: () => ops.modify((n) => { if (v) n.topStrip = v; else delete n.topStrip; }) })) };
+  const wall = (["left", "right"] as const).filter((side) => m.wallFiller?.[side]).map((side): RadialItem => {
+    const w = m.wallFiller![side]!;
+    return { id: "q-wall-" + side, label: `К стене ${side === "left" ? "слева" : "справа"}`, icon: PanelLeft, active: true, hint: `Фальш торцом к стене, ширина ${w.width} мм`, children: [RULES.wallFillerMin, 80, 100, 120, RULES.wallFillerMax].map((v) => ({
+      id: `q-wall-${side}-${v}`, label: `${v} мм`, icon: PanelLeft, active: w.width === v, hint: `Планка ${v} мм торцом`,
+      run: () => ops.modify((n) => { n.wallFiller = { ...n.wallFiller, [side]: { kind: "edge", width: v } }; }) })) };
+  });
+  return { id: "q-fillers", label: "Фальши", icon: PanelLeft, active: !!(m.sidePanels || m.topStrip || m.wallFiller),
+    hint: "Фальшпанели, планка под крышей" + (m.wallFiller ? ", фальш к стене" : ". Фальш к стене добавляется сам, когда корпус у стены"), children: [sideItem("left"), sideItem("right"), strip, ...wall] };
+}
+
+/** Пункты для меню фасада/двери (тот же модуль): деление по высоте и тип петли. */
+export function doorQuickItems(m: Module, sid: string, ops: QuickMenuOps): RadialItem[] {
+  if (!quickMenuApplies(m) || !m.doors) return [];
+  return [doorSplitItem(m, sid, ops), doorMountItem(m, ops)];
+}
+
 /** Быстрые пункты меню корпуса по порядку кольца. */
 export function quickItems(m: Module, sid: string, ops: QuickMenuOps): RadialItem[] {
   if (!quickMenuApplies(m)) return [];
-  return [sectionFillItem(m, sid, ops), backItem(m, ops), baseItem(m, ops), lightItem(m, sid, ops)];
+  return [sectionFillItem(m, sid, ops), backItem(m, ops), baseItem(m, ops), fillersItem(m, ops), lightItem(m, sid, ops)];
 }
 
 /** Шаг полкодержателя: полка из меню встаёт на высоту клика, привязанную к шагу 32 мм от дна секции. */

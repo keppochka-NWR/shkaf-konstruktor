@@ -170,7 +170,7 @@ test('антресоль: добавить / убрать; кухни и сыр�
   let removed=false;const u=upperItem({...s.ops,removeUpper:()=>{removed=true;}});assert.ok(u.children![0].disabled);u.children![1].run!();assert.ok(removed);
   assert.equal(quickItems({...wardrobe(),kitchen:{role:'base'}} as unknown as Module,'x',s.ops).length,0,'кухни — только правила Базиса');
   assert.equal(quickItems({...wardrobe(),raw:true} as unknown as Module,'x',s.ops).length,0);
-  assert.deepEqual(quickItems(wardrobe(),wardrobe().sections[0].id,s.ops).map(i=>i.id),['q-section','q-back','q-base','q-light']);
+  assert.deepEqual(quickItems(wardrobe(),wardrobe().sections[0].id,s.ops).map(i=>i.id),['q-section','q-back','q-base','q-fillers','q-light']);
 });
 
 test('подсветка в полках: флаг секции, LED-профиль под передней кромкой каждой полки, смета без цены «после финального расчёта конструктором»',()=>{
