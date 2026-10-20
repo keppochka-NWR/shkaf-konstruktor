@@ -113,7 +113,9 @@ export function placeKitchenModule(p: Project, m: Module): { project: Project; i
   const bases = p.modules.filter((a) => role(a) === "base" || role(a) === "tall"), walls = p.modules.filter((a) => role(a) === "wall");
   const antresols = p.modules.filter((a) => role(a) === "antresol"), floor = p.modules.filter((a) => (a.y ?? 0) < 1 && !a.module.worktop);
   const baseTop = top(p.modules.filter((a) => role(a) === "base")) ?? KITCHEN.baseHeight;
-  const wallY = walls[0]?.y ?? baseTop + KITCHEN.worktopThickness + KITCHEN.wallGap;
+  // первый навесной — от фактической толщины столешницы проекта (компакт 12, кварц 20, …), зазор по регламенту; дальше — в ряд
+  const worktopT = p.modules.find((a) => a.module.worktop)?.module.worktop?.thickness ?? KITCHEN.worktopThickness;
+  const wallY = walls[0]?.y ?? baseTop + worktopT + KITCHEN.wallGap;
   let y = 0, row: PlacedModule[] = floor;
   if (r === "wall") { y = wallY; row = walls; }
   if (r === "antresol") {

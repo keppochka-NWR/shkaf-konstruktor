@@ -1,6 +1,6 @@
 import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
-import {worktopLabel} from './kitchen';
+import {worktopLines} from './kitchen';
 import {edgeLength} from './edges';
 import {nest,nestPlan,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
 import {isBazisModule,type Project} from './project';
@@ -285,7 +285,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     if(a.module.kupe){for(const l of kupeLines(a.module,n=>kupeLdspPerM2(n,settings.markup)))add(l.id,l.label,l.quantity,l.unit,l.unitPrice,l.source,true);continue;}
     // Столешница (kitchen.ts): за погонный метр по материалу и толщине, вырезы под мойку и варку — отдельно. Цен поставщика пока нет.
     for(const c of a.module.worktop?.cutouts??[])if(c.fixture==='210245')add('premial-sink:210245','Мойка Premial PRODIGY 6045, графит, 210245 (слив в комплекте)',1,'компл',null,'Артикул подтверждён allpremial.ru; закупочную цену уточнить');
-    if(a.module.worktop){const w=a.module.worktop;add('worktop:'+w.material+':'+w.thickness,'Столешница '+worktopLabel(w)+' '+w.thickness+' мм',a.module.width/1000,'пог.м',null,'Закупочная цена столешницы не найдена — нужен прайс поставщика');for(const c of w.cutouts)add('worktop-cut:'+c.kind,c.kind==='sink'?'Вырез под мойку':'Вырез под варочную панель',1,'шт',null,'Цена работы не найдена');continue;}
+    if(a.module.worktop){const w=a.module.worktop;for(const l of worktopLines(a.module))add(l.id,l.label,l.quantity,l.unit,null,l.source);for(const c of w.cutouts)add('worktop-cut:'+c.kind,c.kind==='sink'?'Вырез под мойку':'Вырез под варочную панель',1,'шт',null,'Цена работы не найдена');continue;}
     // Сырой модуль (импорт Базиса): фурнитура — по счётчикам Базиса (raw.counts), а не по правилам студии (без фантомных петель
     // на фасадах ящиков и планках); фасадный материал — фасады поставщика (м²); столешница — пог.м; кромка — по длинам Базиса.
     if(a.module.raw){
