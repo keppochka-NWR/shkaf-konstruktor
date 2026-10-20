@@ -16,7 +16,7 @@ export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value:
 import {caseworkParts,caseworkErrors,type Casework} from './casework';
 import {cornerParts,cornerErrors,cornerBoxes,cornerDrawer,normalizeCorner,type CornerSpec} from './cornerWardrobe';
 import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
-import { handleById, handleKind, HANDLES, HANDLE_MARGIN } from "./handles";
+import { handleById, handleKind, HANDLES, HANDLE_MARGIN, LONG_HANDLE } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, ALU_EXTRAS, type AluFacade } from "./alu";
 import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
@@ -118,6 +118,9 @@ export const RULES = {
   doorMaxLow: 640, // ширина фасада до 640 при высоте до 920 (Перечень для производства), выше — 600
   doorLowH: 920,
   doorMinH: 360, // минимальная высота распашного фасада
+  longHandleFloor: 100, // длинная ручка (≥1000, напр. 1200) ставится от пола: низ ручки на 100 мм от пола, но не ниже низа двери + handleEdge (предположение, вопрос Максу 20.10)
+  handleEdge: 50, // ручка, сдвинутая по высоте от пола, не ближе 50 мм к краю двери (не помещается — прижимается к краю с этим отступом)
+  handleFloorStd: 1000, // предлагаемая высота центра обычной ручки от пола в поле «Высота ручки от пола» (без поля — по центру фасада, как раньше)
   straightenerH: 1900, // фасад выше 1900 и шире 500 — рекомендуется выпрямитель
   straightenerW: 500,
 } as const;
@@ -129,6 +132,8 @@ export type Section = {
   weight: number;
   doorLeaves?: 1 | 2;
   doorHandles?: (string | null)[];
+  /** Высота ручки распашного фасада от пола (от низа корпуса), мм, по створкам k: обычная ручка — её центр, длинная (≥1000) — её низ. null/нет поля — по правилу (центр фасада; длинная — RULES.longHandleFloor). */
+  handleFloor?: (number | null)[];
   doorLifts?: ("adagio"|"sempre"|null)[];
   doorHinges?: ("left"|"right"|"top"|"bottom"|null)[];
   /** Высоты петель от низа фасада, мм (как в проекте Базиса); без поля — по правилу (100 мм от краёв). */
@@ -497,6 +502,32 @@ export function setFacadeHandle(m:Module,pid:string,handleId:string){
  const s=m.sections.find(s=>s.id===pid.split(':')[0]);if(!s)throw Error('Секция фасада не найдена.');
  if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].handleId=handleId;}
  else{const k=Number(pid.split(':door:')[1]);s.doorHandles=Array.from({length:4},(_,i)=>s.doorHandles?.[i]??null);s.doorHandles[k]=handleId;}
+}
+/** Ручка распашной двери ставится от пола (запрос Макса 20.10): высота центра ручки длиной hl на фасаде y0..y1 (мм от низа корпуса).
+ * Обычная ручка без поля — по центру фасада, как раньше; с полем handleFloor — центр на этой высоте.
+ * Длинная (≥ LONG_HANDLE) — низом от пола: поле или RULES.longHandleFloor. Не помещается — прижимается к краю двери с отступом handleEdge. */
+export function doorHandleCenter(s:Pick<Section,'handleFloor'>,k:number,y0:number,y1:number,hl:number):number{
+  const set=s.handleFloor?.[k],long=hl>=LONG_HANDLE,e=RULES.handleEdge;
+  if((set===undefined||set===null)&&!long)return y0+(y1-y0)/2;
+  if(hl+2*e>y1-y0)return y0+(y1-y0)/2;
+  const c=long?(set??RULES.longHandleFloor)+hl/2:set!;
+  return Math.min(y1-e-hl/2,Math.max(y0+e+hl/2,c));
+}
+/** Номер створки по id двери или ручки (`s1:door:0`, `s1:handle:0`). */
+function leafIndex(pid:string){return Number(pid.split(/:door:|:handle:/)[1]);}
+/** Задать высоту ручки от пола (от низа корпуса) у створки; null — вернуть правило. */
+export function setDoorHandleFloor(m:Module,pid:string,v:number|null){
+  const s=m.sections.find(s=>s.id===pid.split(':')[0]);if(!s||!/:door:|:handle:/.test(pid))throw Error('Фасад с ручкой не найден.');
+  const k=leafIndex(pid),arr=Array.from({length:Math.max(4,k+1,s.handleFloor?.length??0)},(_,i)=>s.handleFloor?.[i]??null);arr[k]=v===null?null:Math.round(v);
+  if(arr.some(x=>x!==null))s.handleFloor=arr;else delete s.handleFloor;
+}
+/** Для панели и меню фасада: высота ручки створки от низа корпуса (центр; у длинной — низ) и допустимые пределы; undefined — ручки нет или она не вертикальная. */
+export function doorHandleFloorInfo(m:Module,doorId:string):{value:number;long:boolean;set:boolean;min:number;max:number}|undefined{
+  const hid=doorId.replace(':door:',':handle:'),list=parts(m),h=list.find(p=>p.id===hid),d=list.find(p=>p.id===doorId);
+  if(!h||!d||d.hinge==='top'||d.hinge==='bottom'||h.size[1]<=h.size[0])return undefined;
+  const hl=handleById(facadeHandleId(m,hid)).len,long=hl>=LONG_HANDLE,y0=d.position[1]-d.size[1]/2,y1=d.position[1]+d.size[1]/2,e=RULES.handleEdge;
+  const s=m.sections.find(x=>x.id===doorId.split(':')[0]),k=leafIndex(doorId);
+  return {value:Math.round(long?h.position[1]-hl/2:h.position[1]),long,set:typeof s?.handleFloor?.[k]==='number',min:Math.round(long?y0+e:y0+e+hl/2),max:Math.round(long?y1-e-hl:y1-e-hl/2)};
 }
 export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
 /** Кухня без опор и без цоколя в модуле (kitchen.plinth.off): дно поднято над низом боковин, цокольной детали нет (как в проекте Базиса). */
@@ -1236,14 +1267,14 @@ export function parts(m: Module): Part[] {
         const hl=handleById(s.doorHandles?.[k]??m.handleId).len;
         const hp=m.skew?frontPoint(m,cx,t+2+13,(hinge==='top'||hinge==='bottom')?0:(hinge==='left'?1:-1)*(dw/2-40)):undefined;
         const kh=!hp&&((hinge!=='top'&&hinge!=='bottom')||m.kitchen?.handle?.horizontal)?m.kitchen?.handle:undefined; // место ручки по проекту Базиса (только кухня)
-        if(kh){const hx=kh.horizontal?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),hy=kh.from==='top'?y1-kh.dy:y0+kh.dy;
+        if(kh){const hx=kh.horizontal?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),setH=!kh.horizontal&&typeof s.handleFloor?.[k]==='number',hy=setH?doorHandleCenter(s,k,y0,y1,hl):kh.from==='top'?y1-kh.dy:y0+kh.dy; // кухня: место по проекту Базиса, пока высоту от пола не задали вручную
           // ручка Базиса (имя, сетка, поворот и габарит сетки — kitchen.handle, n4-wall), пока ручку фасада не сменили вручную
           const bz=kh.name&&s.doorHandles?.[k]===undefined?kh:undefined,[L,W,D]=bz?.size??[hl,10,25];
           add(s.id+':handle:'+k,'Ручка фасада · '+(bz?bz.name:handleById(s.doorHandles?.[k]??m.handleId).label),kh.horizontal?[L,W,D]:[W,L,D],[hx,hy,dz+ft/2+(bz?.size?D/2:13)],L,D,W,'handle',s.id,'metal');
           out.at(-1)!.anchor=[hx,hy,dz+ft/2];
           if(bz?.mesh&&bz.quat)out.at(-1)!.model={file:`hardware/bazis/${bz.mesh}.glb`,length:'x',native:true,origin:[hx,hy,dz+ft/2],quat:bz.quat};
           continue;}
-        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(s.doorHandles?.[k]??m.handleId).label,(hinge==='top'||hinge==='bottom')?[hl,10,25]:[10,hl,25],[hp?hp.x:(hinge==='top'||hinge==='bottom')?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),hinge==='top'?y0+40:hinge==='bottom'?y1-40:y0+Math.min(hL,hR)/2,hp?hp.z:dz+ft/2+13],hl,25,10,'handle',s.id,'metal');
+        add(s.id+':handle:'+k,'Ручка фасада · '+handleById(s.doorHandles?.[k]??m.handleId).label,(hinge==='top'||hinge==='bottom')?[hl,10,25]:[10,hl,25],[hp?hp.x:(hinge==='top'||hinge==='bottom')?cx:cx+(hinge==='left'?1:-1)*(dw/2-40),hinge==='top'?y0+40:hinge==='bottom'?y1-40:doorHandleCenter(s,k,y0,y0+Math.min(hL,hR),hl),hp?hp.z:dz+ft/2+13],hl,25,10,'handle',s.id,'metal');
         if(hp)out.at(-1)!.rotY=hp.rotY;
       }
       }
@@ -1954,6 +1985,7 @@ export function validate(m: Module): string[] {
     if(s.glassShelves!==undefined&&(!Array.isArray(s.glassShelves)||s.glassShelves.some(j=>!Number.isInteger(j)||j<0||j>=s.shelves.length)))errors.push(prefix+'неверные номера стеклянных полок.');
     if(s.rodClearance!==undefined&&(!Number.isFinite(s.rodClearance)||s.rodClearance<300||s.rodClearance>1500))errors.push(prefix+'просвет под штангой: 300–1500 мм.');
     if(s.doorHandles!==undefined&&(!Array.isArray(s.doorHandles)||s.doorHandles.length>4||s.doorHandles.some(h=>h!==null&&!HANDLES.some(a=>a.id===h))))errors.push(prefix+'неверная ручка створки.');
+    if(s.handleFloor!==undefined&&(!Array.isArray(s.handleFloor)||s.handleFloor.length>8||s.handleFloor.some(v=>v!==null&&(typeof v!=='number'||!Number.isFinite(v)||v<0||v>5000))))errors.push(prefix+'неверная высота ручки от пола.');
     if(s.externalDrawers!==undefined&&typeof s.externalDrawers!=='boolean')errors.push(prefix+'неверное расположение ящиков.');
     if(s.drawerGrip!==undefined&&typeof s.drawerGrip!=='boolean')errors.push(prefix+'неверный зазор между ящиками.');
     if(s.drawerGrip)for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j);if(drawerGripOn(m,s,c)&&drawerBoxHeight(m,s,c)<60)errors.push(prefix+'ящик '+(j+1)+': при зазоре 30 мм короб ниже 60 мм — увеличьте ящик.');}
@@ -2343,6 +2375,7 @@ export function parseModule(input: unknown): Module {
       ...(s.hingeX===undefined?{}:{hingeX:Array.isArray(s.hingeX)?s.hingeX.map(Number).filter(Number.isFinite):[]}),
       ...(s.hingeXFor===undefined?{}:{hingeXFor:Number(s.hingeXFor)}),
       ...(s.doorHandles===undefined?{}:{doorHandles:Array.isArray(s.doorHandles)?[...s.doorHandles]:s.doorHandles}),
+      ...(s.handleFloor===undefined?{}:{handleFloor:Array.isArray(s.handleFloor)?s.handleFloor.map((v:unknown)=>v===null||v===undefined?null:Number(v)):s.handleFloor}),
       ...(s.doorLeaves===undefined?{}:{doorLeaves:s.doorLeaves}),
       ...(s.hingeSide===undefined?{}:{hingeSide:s.hingeSide}),
       ...(s.doorSplit===undefined?{}:{doorSplit:s.doorSplit}),
