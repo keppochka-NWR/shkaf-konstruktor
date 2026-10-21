@@ -181,7 +181,12 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   faceFiller?: { side: "left" | "right"; width: number; strip?: number; /** планка по высоте фальша, а не фасадов (k28 m17) */ stripFull?: true;
     /** конфирматы через фальш, если они есть в проекте (k01 m03): bottom — в передний торец дна, x от края модуля со стороны фальша;
      *  side — в передний торец боковины, y от низа фальша. Нет поля — фальш без крепежа (k25 m02, k28 m17 — как в Базисе) */
-    conf?: { bottom?: number[]; side?: number[] };
+    conf?: { bottom?: number[]; side?: number[];
+      /** фальш из фасада (прямой глухой угол k02 m01): стяжка с соседним модулем, вставшим торцом к фальшу — конфирмат с тыла фальша
+       *  наружу, [x от края модуля со стороны фальша, y от низа дна]; у Базиса оба отверстия (D8 и D5) записаны на самом фальше */
+      back?: [number, number][] };
+    /** D5 конфирматов фальша, если не как у корпуса (k02 m01: 33 при 35) */
+    confDepth?: number;
     /** фальш из фасадного материала по высоте ряда дверей в плоскости фасадов (навесные/антресоли/пеналы: k06 m11, k22 m08; F_FILLER_FLAT, пакет 2);
      *  inset — отступ фальша от края модуля (k22 m08: 2), без поля — от края; дверь у фальша — через faceGap, как у мойки */
     facadeMat?: true; inset?: number };
@@ -1192,7 +1197,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
     ...(k.plateHoles === false ? { plateHoles: false } : {}),
-    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}) } } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
+    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}), ...(Array.isArray(k.faceFiller.conf.back) ? { back: (k.faceFiller.conf.back as unknown[]).filter((q): q is [number, number] => Array.isArray(q) && q.length === 2 && q.every(fin)).map((q) => [num(q[0]), num(q[1])] as [number, number]) } : {}) } } : {}), ...(fin(k.faceFiller.confDepth) && num(k.faceFiller.confDepth) > 0 ? { confDepth: num(k.faceFiller.confDepth) } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
     ...parseSideStrip(k.sideStrip),
     ...parseDivider(k.divider),
     ...(k.faceTop !== undefined ? { faceTop: num(k.faceTop) } : {}),

@@ -22,7 +22,7 @@ import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, ALU_EXTRAS, type Al
 import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
 import { V_MILLINGS } from "./vernissageData";
 /** Поворот модели конфирмата Базиса по оси ввинчивания (X модели — ось винта, головка при x = 0); общий для parts() и kitchen.ts (короб вытяжки). */
-export const CONFIRMAT_QUATS: Record<"+x" | "-x" | "+y" | "-y" | "-z", [number, number, number, number]> = { "+x": [1, 0, 0, 0], "-x": [0, 0, 1, 0], "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2], "-y": [Math.SQRT1_2, 0, 0, -Math.SQRT1_2], "-z": [Math.SQRT1_2, 0, Math.SQRT1_2, 0] };
+export const CONFIRMAT_QUATS: Record<"+x" | "-x" | "+y" | "-y" | "-z" | "+z", [number, number, number, number]> = { "+x": [1, 0, 0, 0], "-x": [0, 0, 1, 0], "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2], "-y": [Math.SQRT1_2, 0, 0, -Math.SQRT1_2], "-z": [Math.SQRT1_2, 0, Math.SQRT1_2, 0], "+z": [Math.SQRT1_2, 0, -Math.SQRT1_2, 0] };
 export const RULES = {
   panel: 16,
   back: 3,
@@ -1377,7 +1377,7 @@ export function parts(m: Module): Part[] {
   // (X — ось винта, головка при x = 0). Габарит детали — стержень 7×50 от головки.
   // «-z» — с лица внутрь корпуса: только фальш угловой мойки Базиса (kitchen.faceFiller.conf, k01 m03)
   const CONF_Q = CONFIRMAT_QUATS;
-  const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y" | "-z", sid?: string) => {
+  const confirmat = (key: string, head: [number, number, number], axis: "+x" | "-x" | "+y" | "-y" | "-z" | "+z", sid?: string) => {
     const L = RULES.confirmatL, D = RULES.confirmatD, s = axis.startsWith("-") ? -1 : 1, vertical = axis.endsWith("y"), deep = axis.endsWith("z");
     const c: [number, number, number] = deep ? [head[0], head[1], head[2] + s * L / 2] : vertical ? [head[0], head[1] + s * L / 2, head[2]] : [head[0] + s * L / 2, head[1], head[2]];
     add(key, m.kitchen?.confirmatName ?? "Конфирмат 7×50", deep ? [D, D, L] : vertical ? [D, L, D] : [L, D, D], c, L, D, D, "fastener", sid, "metal"); // кухня Базиса — имя крепежа по проекту (k33/k34: «Евровинт 6х50»)
@@ -1631,6 +1631,14 @@ export function parts(m: Module): Part[] {
     const ft=m.facadeT??t,y0=facadeBottom(m),y1=facadeTop(m),L=ffl.side==='left',ins=ffl.inset??0,x=L?ins+ffl.width/2:m.width-ins-ffl.width/2;
     add('face-filler:fp:facade','Фальшпанель из фасада',[ffl.width,y1-y0,ft],[x,(y0+y1)/2,d+ft/2+(m.faceAir??2)],y1-y0,ffl.width,ft,'body');
     out.at(-1)!.decor=m.facadeDecor;
+    // крепёж фальша из фасада — только если он есть в проекте (conf, прямой глухой угол k02 m01): с лица фальша в передний торец дна
+    // и боковины со стороны фальша; с тыла фальша наружу — стяжка с соседним модулем (back)
+    if(ffl.conf&&fastenersMode(m.kitchen)===true){
+      const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,sx=L?t/2:m.width-t/2,zf=d+(m.faceAir??2)+ft,zb=d+(m.faceAir??2),ex=(v:number)=>L?v:m.width-v;
+      for(const [k,v] of (ffl.conf.bottom??[]).entries())confirmat(`fast:face-filler:bottom:${k}`,[ex(v),yb+(bot?.size[1]??t)/2,zf],'-z');
+      for(const [k,y] of (ffl.conf.side??[]).entries())confirmat(`fast:face-filler:side:${k}`,[sx,yb+y,zf],'-z');
+      for(const [k,[v,y]] of (ffl.conf.back??[]).entries())confirmat(`fast:face-filler:back:${k}`,[ex(v),yb+y,zb],'+z');
+    }
   } else if(ffl){
     const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,L=ffl.side==='left';
     add('face-filler:panel:facade','Фальшпанель мойки',[ffl.width,m.height-yb,t],[L?ffl.width/2:m.width-ffl.width/2,(yb+m.height)/2,d+t/2],m.height-yb,ffl.width,t,'body');

@@ -18,7 +18,7 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
  *  «Петля под фальшпанель» у своей кромки. Г-образный фальш (планки поперёк в плоскости фасадов: k05 m05, k19 m01) — не этот случай.
  *  Возвращает ширины и панели фальша (их не считаем фасадами). */
 export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sideZ1: number, bottomY0: number, top: number):
-  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; conf?: { bottom?: number[]; side?: number[] }; facadeMat?: true; inset?: number; panels: Pb[] } | undefined {
+  { side: "left" | "right"; width: number; strip?: number; stripFull?: true; conf?: { bottom?: number[]; side?: number[]; back?: [number, number][] }; confDepth?: number; facadeMat?: true; inset?: number; panels: Pb[] } | undefined {
   const ffh = falsePanelHinges(ref);
   if (!ffh.length) return undefined;
   const front = P.filter(({ p, b }) => p.kind !== "hdf" && b.z0 >= sideZ1 - 1);
@@ -28,7 +28,7 @@ export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sid
   const full = ({ b }: Pb) => Math.abs(b.y0 - bottomY0) < 1 && Math.abs(b.y1 - top) < 1;
   const L = front.filter((f) => isBody(f) && full(f) && Math.abs(f.b.x0 - left.b.x0) < 0.6);
   const R = front.filter((f) => isBody(f) && full(f) && Math.abs(f.b.x1 - right.b.x1) < 0.6);
-  if (L.length + R.length !== 1) return faceFillerFacade(ref, front, left, right, isBody);
+  if (L.length + R.length !== 1) return faceFillerFacade(ref, front, left, right, isBody, bottomY0);
   const side = L.length ? "left" : "right", fp = (L[0] ?? R[0]);
   // планка из фасада вплотную к фальшу (k25 m02: 59 мм, фасадный материал 19)
   const strip = front.find((f) => f !== fp && !isBody(f) && f.b.x1 - f.b.x0 < 200 && (side === "left" ? Math.abs(f.b.x0 - fp.b.x1) < 0.6 : Math.abs(f.b.x1 - fp.b.x0) < 0.6));
@@ -49,11 +49,14 @@ export function faceFillerFlat(ref: RefModule, P: Pb[], left: Pb, right: Pb, sid
  *  (k06 m11, k22 m08, k19 m02, k31 m11, k15 m10) панель фасадного материала (или ЛДСП корпуса по высоте ряда дверей) у края модуля
  *  в плоскости фасадов, той же высоты, что двери ряда; дверь у фальша — на «Петля под фальшпанель» у своей кромки (зазор до фальша
  *  1,5–3 мм, как между фасадами). Отступ фальша от края модуля — inset (k06 m11: 0, k22 m08: 2 = faceGap). */
-function faceFillerFacade(ref: RefModule, front: Pb[], left: Pb, right: Pb, isBody: (f: Pb) => boolean) {
+function faceFillerFacade(ref: RefModule, front: Pb[], left: Pb, right: Pb, isBody: (f: Pb) => boolean, bottomY0?: number) {
   const ffh = falsePanelHinges(ref), hx = ffh[0].pos[0];
   if (!ffh.every((h) => Math.abs(h.pos[0] - hx) < 0.6)) return undefined;
+  // дверь, на которой висят петли под фальшпанель (host петли Базиса), — не фальш: у прямого глухого угла (k02 m01) дверь слева
+  // с петлями на своей правой кромке, и прежняя проверка принимала её за фальш левой стороны и бросала поиск
+  const hosts = new Set(ffh.map((h) => h.host).filter((v): v is number => typeof v === "number"));
   for (const side of ["left", "right"] as const) {
-    const fp = front.find((f) => (side === "left" ? Math.abs(f.b.x0 - left.b.x0) <= 5 && Math.abs(hx - f.b.x1) <= 5 && hx > f.b.x1 - 0.5 : Math.abs(f.b.x1 - right.b.x1) <= 5 && Math.abs(hx - f.b.x0) <= 5 && hx < f.b.x0 + 0.5));
+    const fp = front.find((f) => !hosts.has(f.p.i) && (side === "left" ? Math.abs(f.b.x0 - left.b.x0) <= 5 && Math.abs(hx - f.b.x1) <= 5 && hx > f.b.x1 - 0.5 : Math.abs(f.b.x1 - right.b.x1) <= 5 && Math.abs(hx - f.b.x0) <= 5 && hx < f.b.x0 + 0.5));
     if (!fp) continue;
     const doors = front.filter((f) => f !== fp);
     const near = doors.find((f) => Math.abs((side === "left" ? f.b.x0 : f.b.x1) - hx) < 0.6);
@@ -61,9 +64,35 @@ function faceFillerFacade(ref: RefModule, front: Pb[], left: Pb, right: Pb, isBo
     if (!near || doors.some(isBody) || doors.some((f) => Math.abs(f.b.y0 - near.b.y0) > 0.6 || Math.abs(f.b.y1 - near.b.y1) > 0.6)) return undefined;
     if (Math.abs(fp.b.y0 - near.b.y0) > 0.6 || Math.abs(fp.b.y1 - near.b.y1) > 0.6) return undefined;
     const inset = r1(side === "left" ? fp.b.x0 - left.b.x0 : right.b.x1 - fp.b.x1);
-    return { side, width: r1(fp.b.x1 - fp.b.x0), facadeMat: true as const, ...(inset ? { inset } : {}), panels: [fp] };
+    const fc = bottomY0 === undefined ? undefined : facadeFillerConf(ref, fp, side === "left" ? left : right, side, bottomY0);
+    // fc === null — на фальше крепёж, которого правило не знает: не угадываем, фальш без крепежа (как было до k02 m01)
+    return { side, width: r1(fp.b.x1 - fp.b.x0), facadeMat: true as const, ...(inset ? { inset } : {}), ...(fc ? { conf: fc.conf, ...(fc.depth ? { confDepth: fc.depth } : {}) } : {}), panels: [fp] };
   }
   return undefined;
+}
+
+/** Крепёж фальша из фасадного материала (прямой глухой угол k02 m01): с лица фальша — в передний торец дна (bottom: x от края модуля
+ *  со стороны фальша) и боковины со стороны фальша (side: y от низа дна); с тыла фальша наружу — стяжка с соседним модулем, который
+ *  встаёт торцом к фальшу (back: [x от края, y от низа дна]; у Базиса оба отверстия записаны на самом фальше). depth — D5 этих
+ *  конфирматов, если она не 35. Нет конфирматов — undefined; есть, но не по правилу — null. */
+export function facadeFillerConf(ref: RefModule, fp: Pb, sidePanel: Pb, side: "left" | "right", bottomY0: number, t = 16):
+  { conf: { bottom?: number[]; side?: number[]; back?: [number, number][] }; depth?: number } | null | undefined {
+  const all = ref.hardware.map((h, i) => ({ h, i })).filter(({ h }) => (h.category === "конфирмат" || /^Евровинт/.test(h.name)) && h.host === fp.p.i);
+  if (!all.length) return undefined;
+  const sx = (sidePanel.b.x0 + sidePanel.b.x1) / 2, edge = side === "left" ? sidePanel.b.x0 : sidePanel.b.x1;
+  const bottom: number[] = [], sd: number[] = [], back: [number, number][] = [];
+  for (const { h } of all) {
+    const fromEdge = r1(Math.abs(h.pos[0] - edge)), y = r1(h.pos[1] - bottomY0);
+    if (Math.abs(h.pos[2] - fp.b.z1) < 0.6) {
+      if (Math.abs(h.pos[0] - sx) < 0.6 && h.pos[1] > bottomY0 + t) sd.push(y);
+      else if (Math.abs(h.pos[1] - (bottomY0 + t / 2)) < 0.6) bottom.push(fromEdge);
+      else return null;
+    } else if (Math.abs(h.pos[2] - fp.b.z0) < 0.6) back.push([fromEdge, y]);
+    else return null;
+  }
+  const srcs = new Set(all.map(({ i }) => i)), d5 = (ref.holes ?? []).filter((h) => h.d === 5 && typeof h.src === "number" && srcs.has(h.src)).map((h) => r1(h.depth));
+  const depth = d5.length && d5.every((v) => v === d5[0]) && d5[0] !== 35 ? d5[0] : undefined;
+  return { conf: { ...(bottom.length ? { bottom: bottom.sort((a, c) => a - c) } : {}), ...(sd.length ? { side: sd.sort((a, c) => a - c) } : {}), ...(back.length ? { back: back.sort((a, c) => a[0] - c[0] || a[1] - c[1]) } : {}) }, ...(depth ? { depth } : {}) };
 }
 
 /** Конфирматы через фальш (головка на лицевой пласти фальша): в передний торец дна (по середине толщины дна) и в передний торец

@@ -930,7 +930,7 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
       m.sections[0].doorRows = multi.rows;
       notes.push(`фасады в ${rowYs.length} ряда: средние ${multi.rows.join(", ")}${multi.niche !== undefined ? `, ниша ${multi.niche}` : ""}`);
     } else if ((role === "base" || ffFlat?.facadeMat) && ffFlat && rows.size === 1) {
-      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}), ...(ffFlat.conf ? { conf: ffFlat.conf } : {}), ...(ffFlat.facadeMat ? { facadeMat: true as const } : {}), ...(ffFlat.inset ? { inset: ffFlat.inset } : {}) };
+      m.kitchen.faceFiller = { side: ffFlat.side, width: ffFlat.width, ...(ffFlat.strip ? { strip: ffFlat.strip } : {}), ...(ffFlat.stripFull ? { stripFull: true } : {}), ...(ffFlat.conf ? { conf: ffFlat.conf } : {}), ...(ffFlat.confDepth ? { confDepth: ffFlat.confDepth } : {}), ...(ffFlat.facadeMat ? { facadeMat: true as const } : {}), ...(ffFlat.inset ? { inset: ffFlat.inset } : {}) };
       // зазор фасадов — от дальнего края модуля (у фальша свой отступ)
       m.faceGap = ffFlat.side === "left" ? r1(right.b.x1 - Math.max(...fronts.map((q) => q.b.x1))) : r1(Math.min(...fronts.map((q) => q.b.x0)) - left.b.x0);
       notes.push(ffFlat.facadeMat ? `фальшпанель углового стыка из фасада ${ffFlat.width} ${ffFlat.side === "left" ? "слева" : "справа"}${ffFlat.inset ? ` (от края ${ffFlat.inset})` : ""}, дверь у фальша на петлях под фальшпанель — как в Базисе`
@@ -1206,7 +1206,10 @@ export function moduleFromEtalon(ref0: RefModule, look: { decor: string; facadeD
     const mode = (xs: number[]) => { const c = new Map<number, number>(); for (const x of xs) c.set(x, (c.get(x) ?? 0) + 1); return [...c].sort((a, b) => b[1] - a[1])[0]?.[0]; };
     const srcCat = (h: { src?: number | null }) => (h.src === null || h.src === undefined ? undefined : ref.hardware[h.src]?.category);
     const hs = ref.holes ?? [];
-    const conf = mode(hs.filter((h) => h.d === 5 && srcCat(h) === "конфирмат" && body.has(h.panel)).map((h) => r1(h.depth)));
+    // конфирматы фальша из фасада (kitchen.faceFiller.confDepth, k02 m01: 33 при 35 у корпуса) — своя глубина, в общую не входят
+    const ffHost = new Set(m.kitchen.faceFiller?.facadeMat && m.kitchen.faceFiller.conf ? (ffFlat?.panels ?? []).map((x) => x.p.i) : []);
+    const ownFf = (h: { src?: number | null }) => typeof h.src === "number" && ffHost.has(ref.hardware[h.src]?.host as number);
+    const conf = mode(hs.filter((h) => h.d === 5 && srcCat(h) === "конфирмат" && body.has(h.panel) && !ownFf(h)).map((h) => r1(h.depth)));
     const pin = mode(hs.filter((h) => h.d === 5 && srcCat(h) === "полкодержатель").map((h) => r1(h.depth)));
     const drill: NonNullable<NonNullable<Module["kitchen"]>["drill"]> = {};
     if (conf !== undefined && Math.abs(t - 16) < 0.1 && conf !== 35) drill.confirmat = conf;
