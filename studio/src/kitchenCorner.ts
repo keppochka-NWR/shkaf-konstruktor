@@ -21,6 +21,8 @@ export type KitchenCornerOptions = {
   inset?: number;
   /** крепёж фальша по шаблону Базиса: в дно и боковину; join — ещё стяжка с соседним модулем, вставшим торцом к фальшу */
   conf?: boolean; join?: boolean;
+  /** стойка-упор за фальшем (k27 m09); по умолчанию — у модулей шире 900, как в эталонах */
+  stop?: boolean;
   /** высоты петель от низа двери, если не по правилу студии (как в проекте Базиса) */
   hingeY?: number[];
 };
@@ -52,8 +54,12 @@ export function kitchenBaseCorner(base: Module, o: KitchenCornerOptions): Module
   const fw = Math.round((o.width - door - inset) * 10) / 10, body = m.height - (m.feet?.height ?? 0);
   const conf = o.conf ?? true, join = o.join ?? true;
   m.kitchen!.faceFiller = { side, width: fw, facadeMat: true, ...(inset ? { inset } : {}), ...(conf ? { conf: cornerFillerConf(fw, inset, body, join), confDepth: 33 } : {}) };
-  // царга-распорка сзади — опущена на 300 от верха (шаблон «НКПМ»: 362…462 при корпусе 100…762), конфирматы в 34 и 66 от её низа
-  m.rails = [{ place: "front-top", height: 60 }, { place: "rear-top", height: 100, atTop: 300, confY: [34, 66] }];
+  const wide = o.width > 900, stop = o.stop ?? wide;
+  // до 900 (шаблон «НКПМ», k02 m01): царга на ребре спереди и царга-распорка сзади, опущенная на 300 от верха (362…462 при корпусе
+  // 100…762), конфирматы в 34 и 66 от её низа. Шире (k27 m09 «НМУ»): две царги лёжа, как у нижних, и стойка-упор за фальшем
+  m.rails = wide ? [{ place: "front-top", height: KITCHEN.railWidth, lay: "flat" }, { place: "rear-top", height: KITCHEN.railWidth, lay: "flat" }]
+    : [{ place: "front-top", height: 60 }, { place: "rear-top", height: 100, atTop: 300, confY: [34, 66] }];
+  if (stop) m.kitchen!.cornerStop = { x: 71.5, depth: 101.5 };
   m.sections = [{ ...m.sections[0], shelves: [], drawers: 0, rod: false, shelfDepth: m.depth - 2.5, doorLeaves: 1, hingeSide: side, ...(o.hingeY ? { hingeY: o.hingeY, hingeYFor: body - 2 * gap } : {}) }];
   return m;
 }

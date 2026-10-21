@@ -5,6 +5,7 @@ import {initialModule,parts,validate,parseModule,type Module} from '../src/model
 import {kitchenBaseCorner,cornerOf,reshapeCorner,cornerDoorDefault} from '../src/kitchenCorner';
 import {kitchenTemplate,kitchenItemOf,placeKitchenModule,kitchenProject} from '../src/kitchenProject';
 import {pendingPrice} from '../src/pendingPrices';
+import {describeModule} from '../src/quoteDescribe';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {partCollisions} from '../src/collisions';
@@ -68,6 +69,39 @@ test('генератор: сторона, ширина двери по умол�
     assert.deepEqual(partCollisions(parts(x),x).map(c=>c.a+' × '+c.b),[]);
     const back=parseModule(JSON.parse(JSON.stringify(x)));
     assert.deepEqual(back.kitchen?.faceFiller,x.kitchen?.faceFiller,'faceFiller переживает сохранение');
+  }
+});
+
+test('стойка-упор (k27 m09): у углового шире 900 по умолчанию — за фальшем, от дна до передней царги; совпадает с панелью Базиса; крепёж и пересечения',()=>{
+  const m=kitchenBaseCorner(initialModule(),{width:1090,height:870,depth:537,side:'right',door:578,inset:0});
+  m.faceGap=2;m.edgeScheme={t:0.5};m.rails=[{place:'front-top',height:80,lay:'flat',setback:24.5},{place:'rear-top',height:80,lay:'flat'}];m.kitchen!.plinth={height:95,off:true}; // цоколь — у ряда, как в Базисе
+  assert.deepEqual(validate(m),[]);
+  const ps=parts(m),st=ps.find(p=>p.id==='kitchen-stop')!;
+  assert.ok(st,'стойка есть');
+  const c=compareModule(ref('k27-m09'),m),pair=c.pairs.find(p=>p.studio.id==='kitchen-stop');
+  assert.ok(pair&&pair.delta<=0.5,'стойка = «Вертикальная» Базиса 649,5…665,5 × 116…854 × 435,5…537: '+JSON.stringify(pair));
+  assert.ok(!c.edges?.bad.some(b=>b.startsWith('Вертикальная:')&&/Базис 0.5 \/ студия/.test(b)),'кромка стойки по кругу, как в Базисе: '+JSON.stringify(c.edges?.bad));
+  const hs=holes(m).filter(h=>h.src.startsWith('fast:kitchen-stop:'));
+  assert.equal(hs.length,4,'D8 через дно и царгу + D5 в торцы стойки');
+  assert.deepEqual(partCollisions(ps,m).map(x=>x.a+' × '+x.b),[]);
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).kitchen?.cornerStop,{x:71.5,depth:101.5});
+  assert.equal(kitchenBaseCorner(initialModule(),{width:800}).kitchen?.cornerStop,undefined,'до 900 — без стойки (k02 m01)');
+  const narrow=kitchenBaseCorner(initialModule(),{width:800,stop:true});
+  assert.deepEqual(partCollisions(parts(narrow),narrow).map(x=>x.a+' × '+x.b),[],'стойка под царгой на ребре — до её низа');
+});
+
+test('ручка двери углового — по умолчанию кухни: в углу напротив верхней петли (у кромки открывания, сверху); КП — «нижний угловой»',()=>{
+  for(const side of ['right','left'] as const){
+    const m=kitchenBaseCorner(initialModule(),{width:800,side}),ps=parts(m);
+    const door=ps.find(p=>p.role==='door')!,h=ps.find(p=>p.role==='handle')!;
+    assert.ok(h,'ручка есть');
+    const away=side==='right'?h.position[0]<door.position[0]:h.position[0]>door.position[0];
+    assert.ok(away,`петли ${side} (у фальша) — ручка у противоположной кромки`);
+    assert.ok(h.position[1]>door.position[1]+door.size[1]/4,'ручка в верхней части двери');
+    assert.ok(h.size[1]>h.size[0],'вертикально');
+    const d=describeModule(m);
+    assert.equal(d.kind,'Кухонный нижний угловой модуль');
+    assert.ok(d.filling.some(f=>f.includes(side==='left'?'слева':'справа')&&f.includes('фальшпанель')));
   }
 });
 

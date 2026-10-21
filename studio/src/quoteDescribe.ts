@@ -107,6 +107,9 @@ export function describeModule(m: Module): ModuleDescription {
     const app = m.kitchen.appliance && APPLIANCE[m.kitchen.appliance];
     if (app) kind += " " + app;
     if (m.kitchen.premialPullout) filling.push("выдвижная бутылочница");
+    // нижний угловой (kitchenCorner.ts): для клиента — что это угловой и где глухая часть, без служебных подробностей
+    const ff = m.kitchen.faceFiller;
+    if (ff?.facadeMat && m.kitchen.role === "base") { kind = "Кухонный нижний угловой модуль"; filling.push(`глухая часть ${ff.side === "left" ? "слева" : "справа"}: фальшпанель ${Math.round(ff.width)} мм из материала фасадов`); }
   } else if (m.raw) kind = m.raw.row ? "Столешница и панели" : rawKitchen(m.raw) ? "Кухонный модуль" : "Шкаф";
   else if (m.corner) kind = "Угловой шкаф";
   return { kind, size, materials, filling };

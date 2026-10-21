@@ -262,6 +262,9 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  на короткой боковине и дне, а в длинной — в пазу: заходит в неё на groove.into (k28: паз 6 − зазор 2 = 4, k03: 8 − 1 = 7).
    *  Правило «от кромки»: back — от задней кромки длинной боковины, ширина/высота меняются как у обычного корпуса. */
   sideRecess?: { side: "left" | "right"; back: number; groove?: { into: number } };
+  /** Стойка-упор нижнего углового (kitchenCorner.ts, эталон k27 m09): x — от кромки фальша у двери в глухую часть до пласти стойки,
+   *  depth — от лица корпуса вглубь, мм. Высота — от дна до передней царги. */
+  cornerStop?: { x: number; depth: number };
   /** Перегородка секций кухни Базиса (F_PARTITION, пакет 5): глубина и крепёж концов по проекту — kitchenDivider.ts. */
   divider?: KitchenDivider };
 
@@ -730,6 +733,31 @@ export function backBoardParts(m: Module, out: Part[]) {
   if (r.top) rafixZs(r.top, x0, x1).forEach((x, k) => put(`rafix:back:top:${k}`, [x, y1 + g.top, z0 + (r.topShift ?? 0)], "y", -1, [0.5, -0.5, 0.5, -0.5], z0 + (r.topShift ?? 0)));
 }
 
+/** Стойка-упор нижнего углового (kitchen.cornerStop, эталон k27 m09 «НМУ»: ЛДСП 16 за фальшем в 71,5 от его кромки у двери, от дна до
+ *  передней царги, от лица корпуса вглубь на 101,5). Конфирматы — снизу через дно и сверху через переднюю царгу, по оси стойки, если
+ *  царга над стойкой; без передней царги — только снизу. Только у углового с фальшем (kitchen.faceFiller). */
+export function cornerStopParts(m: Module, out: Part[]) {
+  const cs = m.kitchen?.cornerStop, ff = m.kitchen?.faceFiller, bot = out.find((p) => p.id === "bottom");
+  if (!cs || !ff || !bot) return;
+  const t = 16, ins = ff.inset ?? 0, d = m.depth, yb = bot.position[1] + bot.size[1] / 2;
+  const x0 = ff.side === "right" ? m.width - ins - ff.width + cs.x : ins + ff.width - cs.x - t;
+  // передняя царга лёжа над стойкой (на ребре — стойка до её низа, конфирмата сверху нет: головке некуда встать)
+  const over = out.find((p) => p.id === "rail:front-top" && p.position[0] - p.size[0] / 2 <= x0 && p.position[0] + p.size[0] / 2 >= x0 + t);
+  const rail = over && Math.abs(over.size[1] - t) < 0.01 ? over : undefined;
+  const yt = over ? over.position[1] - over.size[1] / 2 : m.height;
+  const ec = m.edgeScheme?.t ?? 1;
+  out.push({ id: "kitchen-stop", name: "Стойка-упор углового", size: [t, yt - yb, cs.depth], position: [x0 + t / 2, (yb + yt) / 2, d - cs.depth / 2], length: yt - yb, width: cs.depth, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 1, edge: [ec, ec, ec, ec] });
+  if (fastenersMode(m.kitchen) !== true) return;
+  const L = RULES.confirmatL, D = RULES.confirmatD, x = x0 + t / 2;
+  const conf = (id: string, head: [number, number, number], axis: "+y" | "-y") => {
+    const s = axis === "+y" ? 1 : -1;
+    out.push({ id, name: m.kitchen?.confirmatName ?? "Конфирмат 7×50", size: [D, L, D], position: [head[0], head[1] + s * L / 2, head[2]], length: L, width: D, thickness: D, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0],
+      model: { file: "hardware/bazis/f660d89fba1a.glb", length: "y", native: true, origin: head, quat: CONFIRMAT_QUATS[axis] } });
+  };
+  conf("fast:kitchen-stop:bottom", [x, yb - bot.size[1], d - cs.depth / 2], "+y");
+  if (rail) conf("fast:kitchen-stop:top", [x, rail.position[1] + rail.size[1] / 2, rail.position[2]], "-y");
+}
+
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
   out.push(...ovenParts(m));
@@ -737,6 +765,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
   backBoardParts(m, out);
   raiseFrontParts(m, out);
   kitchenStrip(m, out);
+  cornerStopParts(m, out);
   const t = 16;
   const metal = (id: string, name: string, size: Part["size"], position: Part["position"], model?: Part["model"]): Part =>
     ({ id, name, size, position, length: Math.max(...size), width: [...size].sort((a, b) => b - a)[1], thickness: Math.min(...size), role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], ...(model ? { model } : {}) });
@@ -839,6 +868,8 @@ export function kitchenEdges(m: Module, out: Part[]) {
     if (p.material !== "board" || p.role === "door" || p.id.endsWith(":facade")) continue;
     // кухня Базиса с кромкой по кругу (k11, k32): все четыре торца каждой детали корпуса
     if (m.edgeScheme?.all) { setEdges(p, edgeDirs(p), t); continue; }
+    // стойка-упор углового (kitchen.cornerStop) — по кругу, как «Вертикальная» k27 m09
+    if (p.id === "kitchen-stop") { setEdges(p, edgeDirs(p), t); continue; }
     // задние торцы кромятся, только если задник в пазу (у набивного ХДФ они закрыты)
     const rear = m.backType === "groove" || m.backType === "none" || m.edgeScheme?.rear ? ["-z"] : [];
     // у навесных задние торцы кромятся при пазе; у нижних без задника (мойка) — тоже открыты и кромятся;
@@ -1197,6 +1228,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
     ...(k.plateHoles === false ? { plateHoles: false } : {}),
+    ...(k.cornerStop && fin(k.cornerStop.x) && fin(k.cornerStop.depth) && num(k.cornerStop.depth) > 0 ? { cornerStop: { x: num(k.cornerStop.x), depth: num(k.cornerStop.depth) } } : {}),
     ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}), ...(Array.isArray(k.faceFiller.conf.back) ? { back: (k.faceFiller.conf.back as unknown[]).filter((q): q is [number, number] => Array.isArray(q) && q.length === 2 && q.every(fin)).map((q) => [num(q[0]), num(q[1])] as [number, number]) } : {}) } } : {}), ...(fin(k.faceFiller.confDepth) && num(k.faceFiller.confDepth) > 0 ? { confDepth: num(k.faceFiller.confDepth) } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
     ...parseSideStrip(k.sideStrip),
     ...parseDivider(k.divider),
