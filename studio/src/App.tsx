@@ -1260,9 +1260,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             dimensions={presentation?false:dimensions&&!((stage==='room'||stage==='fixtures')&&!advanced)}
             roomDimensions={!presentation&&dimensions&&(advanced||stage==='room'||stage==='fixtures')}
             gapDimensions={gapDimensions}
-            rowGaps={rowGaps}
+            rowGaps={lightMode?null:rowGaps}
             onGapClick={(side,x,y)=>setGapMenu({side,x,y})}
-            stretchable={!widthLock(m)}
+            stretchable={!widthLock(m)&&!lightMode}
             stretchPlan={(mid,side,raw,snap)=>{try{return planStretch(project,mid,side,raw,snap);}catch(e){return {problem:(e as Error).message};}}}
             onStretch={(mid,side,raw,snap)=>{try{const plan=planStretch(project,mid,side,raw,snap);if(plan.problem){setError(plan.problem);return false;}return plan.project?commitProject(plan.project):false;}catch(e){setError((e as Error).message);return false;}}}
           />}
