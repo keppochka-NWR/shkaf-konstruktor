@@ -2,7 +2,7 @@ import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
-import { kitchenExtraParts, kitchenErrors, sideRecessParts, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, kitchenErrors, sideRecessParts, applyFaceContours, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { facadeSideToFloor, droppedSide, finishFacadeSides } from './kitchenFacadeSides';
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
@@ -1628,14 +1628,15 @@ export function parts(m: Module): Part[] {
   if(ffl&&ffl.facadeMat){
     // плоская фальшпанель углового стыка из фасадного материала (навесные/антресоли, k06 m11, k22 m08): по высоте ряда дверей,
     // в плоскости фасадов, от края модуля через inset; дверь у фальша — через faceGap (faceFillerEdge)
-    const ft=m.facadeT??t,y0=facadeBottom(m),y1=facadeTop(m),L=ffl.side==='left',ins=ffl.inset??0,x=L?ins+ffl.width/2:m.width-ins-ffl.width/2;
+    // down — фальш от низа дна, а не от низа фасадов (нижний угловой k27 m09: 100 при дверях от 102)
+    const bt0=out.find(p=>p.id==='bottom'),ft=m.facadeT??t,y0=ffl.down&&bt0?bt0.position[1]-bt0.size[1]/2:facadeBottom(m),y1=facadeTop(m),L=ffl.side==='left',ins=ffl.inset??0,x=L?ins+ffl.width/2:m.width-ins-ffl.width/2;
     add('face-filler:fp:facade','Фальшпанель из фасада',[ffl.width,y1-y0,ft],[x,(y0+y1)/2,d+ft/2+(m.faceAir??2)],y1-y0,ffl.width,ft,'body');
     out.at(-1)!.decor=m.facadeDecor;
     // крепёж фальша из фасада — только если он есть в проекте (conf, прямой глухой угол k02 m01): с лица фальша в передний торец дна
     // и боковины со стороны фальша; с тыла фальша наружу — стяжка с соседним модулем (back)
     if(ffl.conf&&fastenersMode(m.kitchen)===true){
-      // высоты: от низа дна, отрицательные — от верха корпуса (пакет 0: крепёж идёт за высотой модуля)
-      const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,sx=L?t/2:m.width-t/2,zf=d+(m.faceAir??2)+ft,zb=d+(m.faceAir??2),ex=(v:number)=>L?v:m.width-v,ey=(v:number)=>v<0?m.height+v:yb+v;
+      // высоты: от низа дна, отрицательные — от верха корпуса (пакет 0: крепёж идёт за высотой модуля); confHead — головка утоплена в фальш (k27 m09: D8×16 при фальше 18)
+      const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,sx=L?t/2:m.width-t/2,zf=d+(m.faceAir??2)+(ffl.confHead??ft),zb=d+(m.faceAir??2),ex=(v:number)=>L?v:m.width-v,ey=(v:number)=>v<0?m.height+v:yb+v;
       for(const [k,v] of (ffl.conf.bottom??[]).entries())confirmat(`fast:face-filler:bottom:${k}`,[ex(v),yb+(bot?.size[1]??t)/2,zf],'-z');
       for(const [k,y] of (ffl.conf.side??[]).entries())confirmat(`fast:face-filler:side:${k}`,[sx,ey(y),zf],'-z');
       for(const [k,[v,y]] of (ffl.conf.back??[]).entries())confirmat(`fast:face-filler:back:${k}`,[ex(v),ey(y),zb],'+z');
@@ -1703,6 +1704,7 @@ export function parts(m: Module): Part[] {
   for(const [id,c] of Object.entries(m.kitchen?.planContours??{})){const p=out.find(q=>q.id===id);if(!p||c.length<4||p.size[1]>=Math.min(p.size[0],p.size[2]))continue;
     const xs=c.map(q=>q[0]),zs=c.map(q=>q[1]);if(Math.abs(Math.min(...xs))>0.6||Math.abs(Math.min(...zs))>0.6||Math.abs(Math.max(...xs)-p.size[0])>0.6||Math.abs(Math.max(...zs)-p.size[2])>0.6)continue;
     p.planContour=c.map(q=>[q[0],q[1]] as [number,number]);delete p.taperZ;}
+  applyFaceContours(m,out); // фигурные вертикальные детали кухни Базиса (kitchen.faceContours, нижний угловой k27 m09)
   // кухня Базиса: ХДФ в пазу только от жёсткой полки до верха (kitchen.backFromShelf, пенал под холодильник k25 m10) — ниже ниша без задника
   if(m.kitchen?.backFromShelf!==undefined&&m.backType==='groove'){const bk=out.find(p=>p.id==='back'),sh=out.find(p=>p.id===`${m.sections[0].id}:shelf:${m.kitchen!.backFromShelf}`);
     if(bk&&sh&&m.sections[0].fixed?.includes(m.kitchen.backFromShelf)){const y0=sh.position[1]-sh.size[1]/2+(m.grooveClear??0),y1=bk.position[1]+bk.size[1]/2;

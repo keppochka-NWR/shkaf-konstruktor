@@ -193,6 +193,8 @@ function studioCut(p: Part): number | "gola" {
   if (p.golaCuts?.length) return "gola";
   if (p.rearNotch) return Math.round(p.rearNotch.height * p.rearNotch.depth);
   if (p.planContour && p.planContour.length >= 4) { const { area, box } = polyArea(p.planContour); return Math.round(box - area); }
+  // фигурная вертикальная деталь (kitchen.faceContours — нижний угловой k27 m09; Part.faceContour сырого импорта)
+  if (p.faceContour && p.faceContour.length >= 4) { const { area, box } = polyArea(p.faceContour); return Math.round(box - area); }
   return 0;
 }
 

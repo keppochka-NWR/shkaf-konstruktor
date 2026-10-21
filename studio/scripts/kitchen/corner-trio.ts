@@ -5,7 +5,7 @@
 import { chromium } from "playwright";
 import { mkdirSync, readFileSync } from "node:fs";
 import { initialModule, parts, type Module } from "../../src/model";
-import { kitchenBaseCorner } from "../../src/kitchenCorner";
+import { k02Corner, k27Corner } from "./cornerEtalons";
 import { compareModule, honestPass, type RefModule } from "./compare";
 
 const [out] = process.argv.slice(2);
@@ -54,15 +54,7 @@ async function trio(name: string, r: RefModule, m: Module, page: import("playwri
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const page = await browser.newPage();
 try {
-  // k02 m01 — как в tests/kitchen-corner.test.ts (материалы кухни k02, опоры шаблона, цоколь ряда)
-  const a = kitchenBaseCorner(initialModule(), { width: 800, height: 762, depth: 460, side: "right", door: 400, hingeY: [100, 548] });
-  Object.assign(a, { facadeMaterial: "external", facadeT: 18, facadeEdge: 1, edgeScheme: { t: 0.5 }, confirmatInset: 54, noHandles: true });
-  a.kitchen!.legs = { back: 70, front: 89, pts: [[65, 371], [70, 70]], ptsR: [[75, 371], [70, 70]] }; a.kitchen!.plinth = { height: 95, off: true };
-  await trio("k02-m01", ref("k02-m01"), a, page);
-  // k27 m09 — тем же генератором с размерами эталона (дверь 578, фальш до края, зазор 2): чего не хватает до Базиса — видно на наложении
-  const b = kitchenBaseCorner(initialModule(), { width: 1090, height: 870, depth: 537, side: "right", door: 578, inset: 0, hingeY: [100, 588] });
-  Object.assign(b, { facadeMaterial: "external", facadeT: 18, facadeEdge: 1, edgeScheme: { t: 0.5 }, faceGap: 2, faceGapBetween: 4, noHandles: true, rails: [{ place: "front-top", height: 80, lay: "flat", setback: 24.5 }, { place: "rear-top", height: 80, lay: "flat" }] });
-  b.kitchen!.faceTop = 30;
-  b.kitchen!.plinth = { height: 95, off: true };
-  await trio("k27-m09", ref("k27-m09"), b, page);
+  // те же модули, что в tests/kitchen-corner.test.ts (scripts/kitchen/cornerEtalons.ts)
+  await trio("k02-m01", ref("k02-m01"), k02Corner(), page);
+  await trio("k27-m09", ref("k27-m09"), k27Corner(), page);
 } finally { await browser.close(); }

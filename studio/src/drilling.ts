@@ -90,19 +90,21 @@ export function holes(m: Module, ps: Part[] = parts(m)): Hole[] {
     if (p.id.startsWith("fast:") && p.model?.origin && p.model.quat) {
       const h = p.model.origin, a = qrot(p.model.quat, [1, 0, 0]).map((v) => Math.round(v)) as [number, number, number];
       const first = host(h, a), t1 = first ? Math.min(...ps.find((q) => q.id === first)!.size) : 16;
-      push(p.id, h, a, 8, t1);
+      // фальш углового с утопленной головкой (kitchen.faceFiller.confHead, k27 m09): D8 и начало D5 — на глубину confHead, а не на толщину фальша
+      const ffh = p.id.startsWith("fast:face-filler:") ? m.kitchen?.faceFiller?.confHead : undefined, tH = ffh ?? t1;
+      push(p.id, h, a, 8, tH);
       // короб ящика Firmax в Базисе — D5×37 (k31 — D5×42 по проекту: box.confDepth);
       // кухня Базиса со своей глубиной по проекту (kitchen.drill.confirmat: n3-wall; n3-antresol k11 — 37, k31 — 42; бывший confDepth — parse-алиас);
       // евровинт 6×50 (шаблоны «Т_» k33/k34) — D5×36 (n3-sink)
       // царга со своей глубиной по проекту (rails[].confDepth, k31 m16: 35 при 42 у корпуса) — главнее глубины модуля
       const rd = m.kitchen && p.id.startsWith("fast:rail:") ? railsOf(m).find((q) => q.place === p.id.split(":")[2])?.confDepth : undefined;
       // конфирмат в торец доборной планки (kitchen.sideStrip.confDepth, k28 m18: 42 при 35 у корпуса) — своя глубина по проекту
-      const sd = p.id.startsWith("fast:side-strip:") ? m.kitchen?.sideStrip?.confDepth : p.id.startsWith("fast:face-filler:") ? m.kitchen?.faceFiller?.confDepth : p.id.startsWith("fast:hood:") ? m.kitchen?.hoodBox?.confDepth : p.id.startsWith("fast:raise-front:") ? m.kitchen?.raise?.conf?.depth : undefined; // стенки короба, панель под дном — по проекту (k22 m10)
+      const sd = p.id.startsWith("fast:side-strip:") ? m.kitchen?.sideStrip?.confDepth : p.id.startsWith("fast:face-filler:") ? m.kitchen?.faceFiller?.confDepth : p.id.startsWith("fast:kitchen-stop:") ? m.kitchen?.cornerStop?.confDepth : p.id.startsWith("fast:hood:") ? m.kitchen?.hoodBox?.confDepth : p.id.startsWith("fast:raise-front:") ? m.kitchen?.raise?.conf?.depth : undefined; // стенки короба, панель под дном — по проекту (k22 m10)
       const d5 = p.id.startsWith("fast:kd:") ? kdConfDepth(m, p.id) : sd ?? rd ?? m.kitchen?.drill?.confirmat ?? (p.name.startsWith("Евровинт 6") ? 36 : t1 === 16 ? 35 : 40);
       // стяжка с соседним корпусом (kitchen.outConf): D5 — в соседа; у Базиса оно записано на наружной грани своей боковины навстречу
       // стяжка фальша с соседним модулем (kitchen.faceFiller.conf.back, k02 m01): так же — D5 у Базиса на лицевой пласти самого фальша навстречу
       if (p.id.startsWith("fast:out:") || p.id.startsWith("fast:face-filler:back:")) push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], [-a[0], -a[1], -a[2]], 5, d5);
-      else push(p.id, [h[0] + a[0] * t1, h[1] + a[1] * t1, h[2] + a[2] * t1], a, 5, d5);
+      else push(p.id, [h[0] + a[0] * tH, h[1] + a[1] * tH, h[2] + a[2] * tH], a, 5, d5);
     } else if (p.id.startsWith("shp:") && p.model?.origin && p.model.quat) {
       const o = p.model.origin, into = qrot(p.model.quat, [1, 0, 0])[0] > 0 ? -1 : 1; // полкодержатель смотрит из стойки к полке
       // центр отверстия: под металлическим — 2,5 мм ниже пласти полки, под стеклянным MV05 — 5 мм

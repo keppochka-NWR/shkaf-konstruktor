@@ -6,6 +6,7 @@ import {kitchenBaseCorner,cornerOf,reshapeCorner,cornerDoorDefault} from '../src
 import {kitchenTemplate,kitchenItemOf,placeKitchenModule,kitchenProject} from '../src/kitchenProject';
 import {pendingPrice} from '../src/pendingPrices';
 import {describeModule} from '../src/quoteDescribe';
+import {k02Corner,k27Corner} from '../scripts/kitchen/cornerEtalons';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {partCollisions} from '../src/collisions';
@@ -17,15 +18,25 @@ import {estimate} from '../src/pricing';
 const ref=(name:string)=>JSON.parse(readFileSync(new URL(`./fixtures/kitchen-ref/${name}.json`,import.meta.url),'utf8')) as RefModule;
 const why=(c:ReturnType<typeof compareModule>)=>JSON.stringify({missing:c.missing.map(x=>x.name),extra:c.extra.map(x=>x.name),bad:c.pairs.filter(p=>p.delta>0.5).map(p=>p.ref.name+' '+p.delta),hw:c.hardware.filter(h=>h.ref!==h.studio||(h.maxPosDelta??0)>2||h.note),holes:c.holes&&{m:c.holes.missing.slice(0,4),x:c.holes.extra.slice(0,4)},edges:c.edges?.bad.slice(0,3),contours:c.contours});
 
-/** Материалы кухни k02 (фасад — плита 18 стороннего материала, кромка фасада 1, корпус 0,5, конфирматы в 54 от кромок) — источник для генератора,
- *  как декоры палитры; опоры шаблона «НКПМ» и цоколь ряда (в модуле цоколя нет) — так стоят в проекте Базиса. */
-function k02Corner(): Module {
-  const m=kitchenBaseCorner(initialModule(),{width:800,height:762,depth:460,side:'right',door:400,hingeY:[100,548]});
-  Object.assign(m,{facadeMaterial:'external',facadeT:18,facadeEdge:1,edgeScheme:{t:0.5},confirmatInset:54,noHandles:true});
-  m.kitchen!.legs={back:70,front:89,pts:[[65,371],[70,70]],ptsR:[[75,371],[70,70]]};
-  m.kitchen!.plinth={height:95,off:true};
-  return m;
-}
+test('нижний угловой k27 m09 (НМУ 1090×870×537): генератор студии = эталон Базиса — PASS, пересечений нет, переживает сохранение',()=>{
+  const m=k27Corner(),err=validate(m),c=compareModule(ref('k27-m09'),m);
+  assert.deepEqual(err,[]);
+  assert.ok(honestPass(c,err,[]),why(c));
+  assert.equal(c.holes?.matched,56);
+  assert.deepEqual(partCollisions(parts(m),m).map(x=>x.a+' × '+x.b),[]);
+  const ps=parts(m);
+  assert.ok(ps.find(p=>p.id==='left')?.faceContour,'вырез боковины — в 3D контуром');
+  assert.ok(ps.find(p=>p.id==='face-filler:fp:facade')?.faceContour,'вырез фальша — в 3D контуром');
+  assert.ok(ps.find(p=>p.id==='bottom')?.planContour,'дно — с вырезом за мелкой боковиной');
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.ok(honestPass(compareModule(ref('k27-m09'),back),validate(back),[]),'после сохранения — тот же PASS');
+  // смена ширины: фальш тот же (512, контур остаётся), растёт дверь; контур дна по габариту не совпал — прямоугольник; модуль собирается
+  const w={...m,width:1190},pw=parts(w);
+  assert.deepEqual(validate(w),[]);
+  assert.ok(pw.find(p=>p.id==='face-filler:fp:facade')?.faceContour);
+  assert.equal(pw.find(p=>p.id==='bottom')?.planContour,undefined);
+  assert.deepEqual(partCollisions(pw,w).map(x=>x.a+' × '+x.b),[]);
+});
 
 test('нижний угловой k02 m01 (НКПМ 800×762×460): генератор студии = эталон Базиса — PASS, пересечений нет',()=>{
   const m=k02Corner(),err=validate(m),c=compareModule(ref('k02-m01'),m);

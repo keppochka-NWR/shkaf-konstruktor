@@ -185,8 +185,12 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
       /** фальш из фасада (прямой глухой угол k02 m01): стяжка с соседним модулем, вставшим торцом к фальшу — конфирмат с тыла фальша
        *  наружу, [x от края модуля со стороны фальша, y от низа дна]; у Базиса оба отверстия (D8 и D5) записаны на самом фальше */
       back?: [number, number][] };
-    /** D5 конфирматов фальша, если не как у корпуса (k02 m01: 33 при 35) */
+    /** D5 конфирматов фальша, если не как у корпуса (k02 m01: 33 при 35; k27 m09: 42) */
     confDepth?: number;
+    /** D8 под головку в фальше, если не на всю его толщину (k27 m09: 16 при фальше 18) */
+    confHead?: number;
+    /** фальш из фасада от низа дна, а не от низа фасадов (k27 m09) */
+    down?: true;
     /** фальш из фасадного материала по высоте ряда дверей в плоскости фасадов (навесные/антресоли/пеналы: k06 m11, k22 m08; F_FILLER_FLAT, пакет 2);
      *  inset — отступ фальша от края модуля (k22 m08: 2), без поля — от края; дверь у фальша — через faceGap, как у мойки */
     facadeMat?: true; inset?: number };
@@ -219,6 +223,10 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** Фигурный контур Базиса в плане у горизонтальной детали (id детали → точки [x, z] от её заднего левого угла): вырез под вентиляцию
    *  в дне пенала (k23 m15/m16). Ставится, только если габарит контура совпадает с деталью; после смены размера — прямоугольник. */
   planContours?: Record<string, [number, number][]>;
+  /** Фигурный контур вертикальной детали в её плоскости (id → точки от угла габарита: (x, y) у тонкой по Z, (y, z) у тонкой по X) и кромка
+   *  по его отрезкам (faceContourEdges) — нижний угловой k27 m09 (applyFaceContours). */
+  faceContours?: Record<string, [number, number][]>;
+  faceContourEdges?: Record<string, number[]>;
   /** Кромка фигурной детали по отрезкам её контура (id → толщина на каждом отрезке planContours[id], 0 — без кромки), как в проекте
    *  Базиса. По базе (17 горизонталей с П-вырезом под воздуховод в 13 навесных): стенки и дно выреза кромлены в 8 (k04, k05, k10, k18,
    *  k28, k30, k31 — своей толщиной: k10 0,5 при корпусе 0,4), не кромлены в 9 (k06, k15, k22, k25, k27, k24); наружные торцы у боковин —
@@ -261,10 +269,12 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
    *  кромки — корпус глубиной depth − back, сдвинутый к лицу (k28 m16: левая короче на 203, k03 m03: правая на 54). ХДФ набивной
    *  на короткой боковине и дне, а в длинной — в пазу: заходит в неё на groove.into (k28: паз 6 − зазор 2 = 4, k03: 8 − 1 = 7).
    *  Правило «от кромки»: back — от задней кромки длинной боковины, ширина/высота меняются как у обычного корпуса. */
-  sideRecess?: { side: "left" | "right"; back: number; groove?: { into: number } };
+  sideRecess?: { side: "left" | "right"; back: number; groove?: { into: number };
+    /** дно во всю глубину модуля (нижний угловой k27 m09), вырез за мелкой боковиной — planContours.bottom */
+    bottomFull?: true };
   /** Стойка-упор нижнего углового (kitchenCorner.ts, эталон k27 m09): x — от кромки фальша у двери в глухую часть до пласти стойки,
    *  depth — от лица корпуса вглубь, мм. Высота — от дна до передней царги. */
-  cornerStop?: { x: number; depth: number };
+  cornerStop?: { x: number; depth: number; /** D5 конфирматов в торцы стойки, если не как у корпуса (k27 m09: 42) */ confDepth?: number };
   /** Перегородка секций кухни Базиса (F_PARTITION, пакет 5): глубина и крепёж концов по проекту — kitchenDivider.ts. */
   divider?: KitchenDivider };
 
@@ -279,7 +289,11 @@ export function sideRecessParts(m: Module, build: (inner: Module) => Part[]): Pa
     if (p.anchor) p.anchor = [p.anchor[0], p.anchor[1], p.anchor[2] + rec];
     if (p.model?.origin) p.model = { ...p.model, origin: [p.model.origin[0], p.model.origin[1], p.model.origin[2] + rec] };
     if (p.collide) p.collide = p.collide.map((c) => ({ ...c, position: [c.position[0], c.position[1], c.position[2] + rec] }));
-    if (p.id === full) { p.size = [p.size[0], p.size[1], p.size[2] + rec]; p.position = [p.position[0], p.position[1], p.position[2] - rec / 2]; p.width += rec; }
+    // bottomFull — дно во всю глубину модуля, как длинная боковина (нижний угловой k27 m09: за мелкой боковиной — вырез по planContours.bottom)
+    if (p.id === full || (p.id === "bottom" && sr.bottomFull)) {
+      const z0 = p.size[2]; p.size = [p.size[0], p.size[1], z0 + rec]; p.position = [p.position[0], p.position[1], p.position[2] - rec / 2];
+      if (Math.abs(p.width - z0) < 0.01) p.width += rec; else if (Math.abs(p.length - z0) < 0.01) p.length += rec;
+    }
     else if (p.id === "back" && p.material === "hdf" && sr.groove) {
       // кромка ХДФ у длинной боковины — в её пазу: от внутренней пласти боковины на groove.into (правило «от кромки»), другая — как построена
       const t = RULES.panel, x0 = p.position[0] - p.size[0] / 2, x1 = p.position[0] + p.size[0] / 2;
@@ -287,6 +301,21 @@ export function sideRecessParts(m: Module, build: (inner: Module) => Part[]): Pa
       p.size = [b - a, p.size[1], p.size[2]]; p.position = [(a + b) / 2, p.position[1], p.position[2]]; p.width = b - a;
     }
   }
+  if (sr.bottomFull) {
+    // дно во всю глубину: стык с длинной боковиной — тоже во всю глубину, задний конфирмат — от её задней кромки (правило «от кромки»)
+    const zMid = rec + (m.depth - rec) / 2;
+    for (const p of out) if (p.id.startsWith(`fast:bottom:${full}:`) && p.model?.origin && p.model.origin[2] < zMid) {
+      p.position = [p.position[0], p.position[1], p.position[2] - rec];
+      p.model = { ...p.model, origin: [p.model.origin[0], p.model.origin[1], p.model.origin[2] - rec] };
+    }
+    // контур дна в плане (kitchen.planContours.bottom) — по габариту уже полного дна
+    const c = m.kitchen?.planContours?.bottom, bot = out.find((p) => p.id === "bottom");
+    if (c && bot && c.length >= 4) {
+      const xs = c.map((q) => q[0]), zs = c.map((q) => q[1]);
+      if (Math.abs(Math.min(...xs)) <= 0.6 && Math.abs(Math.min(...zs)) <= 0.6 && Math.abs(Math.max(...xs) - bot.size[0]) <= 0.6 && Math.abs(Math.max(...zs) - bot.size[2]) <= 0.6) bot.planContour = c.map((q) => [q[0], q[1]] as [number, number]);
+    }
+  }
+  applyFaceContours(m, out); // контур длинной боковины — по её полной глубине
   return out;
 }
 /** Ошибки боковин разной глубины: укорочение от 20 мм и не глубже depth − 150, заход ХДФ в паз 0–8. */
@@ -957,6 +986,37 @@ export function contourEdgeLens(m: Module, out: Part[]) {
   }
 }
 
+/** Фигурные вертикальные детали кухни Базиса (kitchen.faceContours: id → контур в плоскости детали от угла габарита — (x, y) у тонкой по Z,
+ *  (y, z) у тонкой по X, как Part.faceContour сырого импорта): нижний угловой k27 m09 — вырез 48 × 24,5 R2 в боковине спереди сверху и вырез
+ *  467 × 88 в фальше. Ставится, только если габарит контура совпадает с деталью (после смены размера — прямоугольник). faceContourEdges —
+ *  толщина кромки на каждом отрезке контура, как в проекте Базиса: кромка детали по направлениям и длины кромки (edgeLen) — отсюда. */
+export function applyFaceContours(m: Module, out: Part[]) {
+  const fcs = m.kitchen?.faceContours; if (!fcs) return;
+  for (const [id, c] of Object.entries(fcs)) {
+    const p = out.find((q) => q.id === id); if (!p || c.length < 4) continue;
+    const thinX = p.size[0] <= p.size[2] && p.size[0] < p.size[1], thinZ = !thinX && p.size[2] < p.size[1] && p.size[2] < p.size[0];
+    if (!thinX && !thinZ) continue;
+    const [ua, va] = thinX ? [1, 2] : [0, 1], us = c.map((q) => q[0]), vs = c.map((q) => q[1]);
+    if (Math.abs(Math.min(...us)) > 0.6 || Math.abs(Math.min(...vs)) > 0.6 || Math.abs(Math.max(...us) - p.size[ua]) > 0.6 || Math.abs(Math.max(...vs) - p.size[va]) > 0.6) continue;
+    p.faceContour = c.map((q) => [q[0], q[1]] as [number, number]);
+    const te = m.kitchen?.faceContourEdges?.[id];
+    if (!te || te.length !== c.length) continue;
+    const AX = ["x", "y", "z"], byDir: Record<string, Record<number, number>> = {};
+    contourSegments(p.faceContour).forEach((s, k) => {
+      const th = te[k]; if (!s.dir || !(th > 0) || s.len <= 0) return;
+      const d = s.dir[0] + AX[s.dir[1] === "x" ? ua : va];
+      (byDir[d] ??= {})[th] = (byDir[d][th] ?? 0) + s.len;
+    });
+    const edgeLen: Record<string, number> = {};
+    p.edge = edgeDirs(p).map((d) => {
+      const m2 = byDir[d]; if (!m2) return 0;
+      edgeLen[d] = Math.round(Object.values(m2).reduce((s, v) => s + v, 0) * 10) / 10;
+      return Number(Object.entries(m2).sort((a, b) => b[1] - a[1])[0][0]);
+    }) as Part["edge"];
+    p.edgeLen = edgeLen;
+  }
+}
+
 /** Вырез в заднем верхнем углу боковин навесного/антресоли (Базис k32: 100×20). Раскрой — по габариту; кромка по контуру
  *  (отрезки выреза кромятся, сумма по сторонам равна стороне — как у Базиса 310 + 20 = 330); пересечения — по телу без выреза. */
 export function rearNotches(m: Module, out: Part[]) {
@@ -1126,7 +1186,9 @@ export function kitchenErrors(m: Module): string[] {
       const l = k.legs, inDepth = (v: number | undefined) => v === undefined || (Number.isFinite(v) && v >= 0 && v <= m.depth);
       if (!inDepth(l.back) || !inDepth(l.front) || (l.side !== undefined && !(Number.isFinite(l.side) && l.side >= 0 && l.side <= m.width))) e.push("Опоры: отступы рядов от кромок в пределах дна.");
       if ([...(l.xs ?? []), ...(l.xr ?? [])].some((x) => !Number.isFinite(x) || x < 0 || x > m.width)) e.push("Опоры: позиции по ширине в пределах дна.");
-      if ([...(l.pts ?? []), ...(l.ptsR ?? [])].some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z) || x < 0 || x > m.width || z < 0 || z > m.depth)) e.push("Опоры: точки в пределах дна.");
+      // при дне во всю глубину за мелкой боковиной (sideRecess.bottomFull, k27 m09) точки считаются от её задней кромки — и за ней, до −back
+      const zMin = k.sideRecess?.bottomFull ? -k.sideRecess.back : 0;
+      if ([...(l.pts ?? []), ...(l.ptsR ?? [])].some(([x, z]) => !Number.isFinite(x) || !Number.isFinite(z) || x < 0 || x > m.width || z < zMin || z > m.depth)) e.push("Опоры: точки в пределах дна.");
     }
   }
   // глубина столешницы — в диапазоне поля UI (KitchenPanel 400–1200); у модулей без столешницы глубина проверяется правилами корпуса
@@ -1228,8 +1290,10 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(h && fin(h.dy) ? { handle: { dy: num(h.dy), from: h.from === "top" ? ("top" as const) : ("bottom" as const), horizontal: !!h.horizontal, ...(h.holes && [h.holes.d, h.holes.depth, h.holes.gap].every((v) => num(v) > 0) ? { holes: { d: num(h.holes.d), depth: num(h.holes.depth), gap: num(h.holes.gap) } } : {}), ...(typeof h.name === "string" && h.name.trim() ? { name: h.name.trim().slice(0, 120) } : {}), ...(typeof h.mesh === "string" && MESH.test(h.mesh) ? { mesh: h.mesh } : {}), ...(Array.isArray(h.quat) && h.quat.length === 4 && h.quat.every(fin) ? { quat: v4(h.quat) } : {}), ...(Array.isArray(h.size) && h.size.length === 3 && h.size.every((v) => num(v) > 0) ? { size: v3(h.size) } : {}) } } : {}),
     ...(fasteners === undefined ? {} : { fasteners }),
     ...(k.plateHoles === false ? { plateHoles: false } : {}),
-    ...(k.cornerStop && fin(k.cornerStop.x) && fin(k.cornerStop.depth) && num(k.cornerStop.depth) > 0 ? { cornerStop: { x: num(k.cornerStop.x), depth: num(k.cornerStop.depth) } } : {}),
-    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}), ...(Array.isArray(k.faceFiller.conf.back) ? { back: (k.faceFiller.conf.back as unknown[]).filter((q): q is [number, number] => Array.isArray(q) && q.length === 2 && q.every(fin)).map((q) => [num(q[0]), num(q[1])] as [number, number]) } : {}) } } : {}), ...(fin(k.faceFiller.confDepth) && num(k.faceFiller.confDepth) > 0 ? { confDepth: num(k.faceFiller.confDepth) } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
+    ...(k.faceContours && typeof k.faceContours === "object" ? { faceContours: Object.fromEntries(Object.entries(k.faceContours as Record<string, unknown>).filter(([, v]) => Array.isArray(v) && v.length >= 4 && v.every((q) => Array.isArray(q) && q.length === 2 && q.every(fin))).map(([id, v]) => [id, (v as number[][]).map((q) => [num(q[0]), num(q[1])] as [number, number])])) } : {}),
+    ...(k.faceContourEdges && typeof k.faceContourEdges === "object" ? { faceContourEdges: Object.fromEntries(Object.entries(k.faceContourEdges as Record<string, unknown>).filter(([, v]) => Array.isArray(v) && v.every(fin)).map(([id, v]) => [id, (v as number[]).map(num)])) } : {}),
+    ...(k.cornerStop && fin(k.cornerStop.x) && fin(k.cornerStop.depth) && num(k.cornerStop.depth) > 0 ? { cornerStop: { x: num(k.cornerStop.x), depth: num(k.cornerStop.depth), ...(fin(k.cornerStop.confDepth) && num(k.cornerStop.confDepth) > 0 ? { confDepth: num(k.cornerStop.confDepth) } : {}) } } : {}),
+    ...(k.faceFiller && (k.faceFiller.side === "left" || k.faceFiller.side === "right") && fin(k.faceFiller.width) ? { faceFiller: { side: k.faceFiller.side, width: num(k.faceFiller.width), ...(k.faceFiller.strip ? { strip: num(k.faceFiller.strip) } : {}), ...(k.faceFiller.stripFull ? { stripFull: true as const } : {}), ...(k.faceFiller.conf ? { conf: { ...(Array.isArray(k.faceFiller.conf.bottom) ? { bottom: dirs(k.faceFiller.conf.bottom) } : {}), ...(Array.isArray(k.faceFiller.conf.side) ? { side: dirs(k.faceFiller.conf.side) } : {}), ...(Array.isArray(k.faceFiller.conf.back) ? { back: (k.faceFiller.conf.back as unknown[]).filter((q): q is [number, number] => Array.isArray(q) && q.length === 2 && q.every(fin)).map((q) => [num(q[0]), num(q[1])] as [number, number]) } : {}) } } : {}), ...(fin(k.faceFiller.confDepth) && num(k.faceFiller.confDepth) > 0 ? { confDepth: num(k.faceFiller.confDepth) } : {}), ...(fin(k.faceFiller.confHead) && num(k.faceFiller.confHead) > 0 ? { confHead: num(k.faceFiller.confHead) } : {}), ...(k.faceFiller.down ? { down: true as const } : {}), ...(k.faceFiller.facadeMat ? { facadeMat: true as const } : {}), ...(fin(k.faceFiller.inset) && num(k.faceFiller.inset) ? { inset: num(k.faceFiller.inset) } : {}) } } : {}),
     ...parseSideStrip(k.sideStrip),
     ...parseDivider(k.divider),
     ...(k.faceTop !== undefined ? { faceTop: num(k.faceTop) } : {}),
@@ -1262,7 +1326,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.bareShelves) && k.bareShelves.length ? { bareShelves: k.bareShelves.map(Number).filter(Number.isInteger) } : {}),
     ...(Array.isArray(k.dupParts) && k.dupParts.length ? { dupParts: k.dupParts.map(String) } : {}),
     ...(Number.isInteger(k.backFromShelf) && k.backFromShelf! >= 0 ? { backFromShelf: k.backFromShelf } : {}),
-    ...(k.sideRecess && (k.sideRecess.side === "left" || k.sideRecess.side === "right") && fin(k.sideRecess.back) ? { sideRecess: { side: k.sideRecess.side, back: num(k.sideRecess.back), ...(k.sideRecess.groove && fin(k.sideRecess.groove.into) ? { groove: { into: num(k.sideRecess.groove.into) } } : {}) } } : {}),
+    ...(k.sideRecess && (k.sideRecess.side === "left" || k.sideRecess.side === "right") && fin(k.sideRecess.back) ? { sideRecess: { side: k.sideRecess.side, back: num(k.sideRecess.back), ...(k.sideRecess.groove && fin(k.sideRecess.groove.into) ? { groove: { into: num(k.sideRecess.groove.into) } } : {}), ...(k.sideRecess.bottomFull ? { bottomFull: true as const } : {}) } } : {}),
     ...(k.backBoard && typeof k.backBoard === "object" && fin(k.backBoard.inset) ? { backBoard: { inset: num(k.backBoard.inset),
       ...(k.backBoard.gap && typeof k.backBoard.gap === "object" ? { gap: { side: num(k.backBoard.gap.side), bottom: num(k.backBoard.gap.bottom), top: num(k.backBoard.gap.top) } } : {}),
       ...(k.backBoard.rafix && typeof k.backBoard.rafix === "object" ? { rafix: (() => { const rr = k.backBoard!.rafix!, gr = deps.parseGridRecord({ bottom: rr.side, top: rr.bottom, "shelf:0": rr.top }) ?? {};
