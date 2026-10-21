@@ -5,6 +5,7 @@ import {configureOven} from './kitchenOven';
 // (автофальши + projectErrors), так что проверки и ошибки — те же, что во всей студии.
 import { initialModule, section, distribute, validate, id, RULES, type Module } from "./model";
 import { KITCHEN, kitchenBase, kitchenWall, kitchenWorktop } from "./kitchen";
+import { kitchenBaseCorner, type CornerSide } from "./kitchenCorner";
 import { createKitchenRow } from "./ModulePalette";
 import { maxModules, applyAutoFillers, projectErrors, bounds, overlap, appendModule, type Project, type PlacedModule } from "./project";
 import {refitKDrawers} from './kitchenDrawers';
@@ -22,11 +23,12 @@ export const KITCHEN_ANTRESOL_HEIGHT = 400;
 /** Кухонный режим студии — только по явной пометке проекта: кухонный модуль, добавленный в проект шкафа, палитру не подменяет. */
 export function isKitchenProject(p: Project) { return p.kind === "kitchen"; }
 
-export type KitchenItem = "base-doors" | "base-drawers" | "sink" | "oven" | "bottle" | "wall" | "wall-open" | "antresol" | "tall";
+export type KitchenItem = "base-doors" | "base-drawers" | "base-corner" | "sink" | "oven" | "bottle" | "wall" | "wall-open" | "antresol" | "tall";
 /** Подписи и ширины кухонной палитры (ширины — частые модули в проектах Базиса цеха). */
 export const KITCHEN_ITEMS: Record<KitchenItem, { label: string; widths: number[]; group: "base" | "wall" | "tall" }> = {
   "base-doors": { label: "Нижний распашной", widths: [300, 400, 450, 600, 800], group: "base" },
   "base-drawers": { label: "Нижний с ящиками", widths: [400, 450, 600, 800], group: "base" },
+  "base-corner": { label: "Нижний угловой", widths: [800, 900, 1000, 1090], group: "base" },
   sink: { label: "Под мойку", widths: [600, 800], group: "base" },
   oven: { label: "Под духовку", widths: [600], group: "base" },
   bottle: { label: "Бутылочница", widths: [150, 200], group: "base" },
@@ -51,12 +53,14 @@ export function kitchenTall(base: Module, width: number): Module {
 }
 
 /** Модуль кухонной палитры: регламенты Базиса из kitchen.ts, декоры — от выбранного корпуса. */
-export function kitchenTemplate(kind: KitchenItem, width: number, source: Pick<Module, "decor" | "facadeDecor">): Module {
+/** corner — сторона глухой части углового (палитра: «Глухая часть слева/справа»). */
+export function kitchenTemplate(kind: KitchenItem, width: number, source: Pick<Module, "decor" | "facadeDecor">, corner?: { side?: CornerSide }): Module {
   const base = initialModule();
   let m: Module;
   if (kind === "base-doors") m = kitchenBase(base, width, "doors");
   else if (kind === "base-drawers") m = kitchenBase(base, width, "drawers");
   else if (kind === "sink") m = kitchenBase(base, width, "sink");
+  else if (kind === "base-corner") m = kitchenBaseCorner(base, { width, side: corner?.side });
   else if (kind === "oven") {m = kitchenBase(base, width, "oven");configureOven(m);}
   else if (kind === "bottle") { m = kitchenBase(base, width, "doors"); m.name = "Бутылочница"; m.sections = [{ ...m.sections[0], shelves: [] }]; if (width === 150 || width === 200) m.kitchen!.premialPullout = { article: width === 150 ? '060500' : '060502' }; }
   else if (kind === "wall") m = kitchenWall(base, width);
@@ -262,6 +266,7 @@ export function kitchenItemOf(m: Module): KitchenItem | undefined {
   if (k.role === "tall") return "tall";
   if (k.role === "antresol") return "antresol";
   if (k.role === "wall") return m.doors ? "wall" : "wall-open";
+  if (k.faceFiller?.facadeMat && k.role === "base") return "base-corner";
   if (k.appliance === "sink") return "sink";
   if (k.appliance === "oven") return "oven";
   if (m.kdrawers?.length || m.sections.some((s) => s.drawers > 0)) return "base-drawers";

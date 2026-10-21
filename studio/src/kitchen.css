@@ -72,3 +72,7 @@
 .kitchen-note p { margin: 0; font-size: 11px; line-height: 1.55; color: #4c5a66; }
 .kitchen-note svg { flex-shrink: 0; margin-top: 2px; color: #b4561f; }
 .kitchen-note.raw { background: #fdf6ef; }
+
+/* нижний угловой в палитре: вариант и сторона глухой части (shop-kcorner) */
+.kp-corner{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 4px}
+.kp-corner select{font-size:12px;max-width:100%;padding:2px 4px}

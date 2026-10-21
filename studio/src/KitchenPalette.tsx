@@ -2,7 +2,8 @@
 // модуль встаёт в свой ряд (нижние на пол, навесные на высоту ряда, антресоль над навесными), прямая кухня по длине стены,
 // «Кухни из базы» (локальный индекс, на Pages его нет) и общая палитра шкафов — свёрнутой.
 import { useEffect, useState, type ReactNode } from "react";
-import { PanelBottom, Archive, Droplets, Flame, Wine, PanelTopOpen, Rows3, ArrowUpToLine, RectangleVertical, RectangleHorizontal, CookingPot, Library, ArrowLeft, Sofa } from "lucide-react";
+import { PanelBottom, Archive, Droplets, Flame, Wine, PanelTopOpen, Rows3, ArrowUpToLine, RectangleVertical, RectangleHorizontal, CookingPot, Library, ArrowLeft, Sofa, Columns2 } from "lucide-react";
+import type { CornerSide } from "./kitchenCorner";
 import type { Module } from "./model";
 import type { Project } from "./project";
 import { KITCHEN } from "./kitchen";
@@ -10,7 +11,7 @@ import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule
 import { WardrobeBase } from "./WardrobeBase";
 import "./kitchen.css";
 
-const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical };
+const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical };
 const GROUPS: { id: "base" | "wall" | "tall"; title: string; note: string }[] = [
   { id: "base", title: "Нижние", note: `на опорах ${KITCHEN.legs}, корпус ${KITCHEN.baseBody}, глубина ${KITCHEN.baseDepth}` },
   { id: "wall", title: "Верхние", note: `${KITCHEN.wallHeight} × ${KITCHEN.wallDepth}, на навесах, ${KITCHEN.wallGap} над столешницей` },
@@ -45,13 +46,24 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, chil
   const run = (f: () => { project: Project; ids: string[] }, fit = false) => {
     try { const r = f(); if (commit(r.project)) onAdded(r.ids, fit); } catch (e) { onError((e as Error).message); }
   };
-  const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source)); return { project: r.project, ids: [r.id] }; });
+  const [cornerSide, setCornerSide] = useState<CornerSide>("right");
+  const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source, kind === "base-corner" ? { side: cornerSide } : undefined)); return { project: r.project, ids: [r.id] }; });
   return <details className="module-palette kitchen-palette" open>
     <summary>Кухонные модули</summary>
     {GROUPS.map((g) => <div key={g.id} className="kp-group">
       <h3>{g.title}<small>{g.note}</small></h3>
       {(Object.keys(KITCHEN_ITEMS) as KitchenItem[]).filter((k) => KITCHEN_ITEMS[k].group === g.id).map((k) => { const Icon = ICONS[k]; return <div key={k} className="kp-item">
         <span className="kp-label"><Icon size={18} />{KITCHEN_ITEMS[k].label}</span>
+        {k === "base-corner" && <span className="kp-corner">
+          <select aria-label="Вариант углового" value="straight" onChange={() => undefined} title="Вариант нижнего углового">
+            <option value="straight">прямой, с фальшпанелью</option>
+            <option value="l90" disabled>Г-образный 90° — в работе</option>
+          </select>
+          <select aria-label="Глухая часть углового" value={cornerSide} onChange={(e) => setCornerSide(e.target.value as CornerSide)} title="С какой стороны глухая часть (фальш); дверь — с другой">
+            <option value="right">глухая часть справа</option>
+            <option value="left">глухая часть слева</option>
+          </select>
+        </span>}
         <span className="kp-widths">{KITCHEN_ITEMS[k].widths.map((w) => <button key={w} type="button" title={`Добавить: ${KITCHEN_ITEMS[k].label.toLowerCase()} ${w} мм`} aria-label={`${KITCHEN_ITEMS[k].label} ${w}`} onClick={() => add(k, w)}>{w}</button>)}</span>
       </div>; })}
       {g.id === "tall" && <div className="kp-item">

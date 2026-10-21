@@ -72,7 +72,7 @@ function faceFillerFacade(ref: RefModule, front: Pb[], left: Pb, right: Pb, isBo
 }
 
 /** Крепёж фальша из фасадного материала (прямой глухой угол k02 m01): с лица фальша — в передний торец дна (bottom: x от края модуля
- *  со стороны фальша) и боковины со стороны фальша (side: y от низа дна); с тыла фальша наружу — стяжка с соседним модулем, который
+ *  со стороны фальша) и боковины со стороны фальша (side: y от низа дна, выше середины — от верха со знаком минус); с тыла фальша наружу — стяжка с соседним модулем, который
  *  встаёт торцом к фальшу (back: [x от края, y от низа дна]; у Базиса оба отверстия записаны на самом фальше). depth — D5 этих
  *  конфирматов, если она не 35. Нет конфирматов — undefined; есть, но не по правилу — null. */
 export function facadeFillerConf(ref: RefModule, fp: Pb, sidePanel: Pb, side: "left" | "right", bottomY0: number, t = 16):
@@ -82,7 +82,8 @@ export function facadeFillerConf(ref: RefModule, fp: Pb, sidePanel: Pb, side: "l
   const sx = (sidePanel.b.x0 + sidePanel.b.x1) / 2, edge = side === "left" ? sidePanel.b.x0 : sidePanel.b.x1;
   const bottom: number[] = [], sd: number[] = [], back: [number, number][] = [];
   for (const { h } of all) {
-    const fromEdge = r1(Math.abs(h.pos[0] - edge)), y = r1(h.pos[1] - bottomY0);
+    // пакет 0: выше середины корпуса — от верха (отрицательное: y = верх + v), чтобы крепёж шёл за высотой модуля
+    const fromEdge = r1(Math.abs(h.pos[0] - edge)), top = sidePanel.b.y1, y = h.pos[1] > (bottomY0 + top) / 2 ? r1(h.pos[1] - top) : r1(h.pos[1] - bottomY0);
     if (Math.abs(h.pos[2] - fp.b.z1) < 0.6) {
       if (Math.abs(h.pos[0] - sx) < 0.6 && h.pos[1] > bottomY0 + t) sd.push(y);
       else if (Math.abs(h.pos[1] - (bottomY0 + t / 2)) < 0.6) bottom.push(fromEdge);

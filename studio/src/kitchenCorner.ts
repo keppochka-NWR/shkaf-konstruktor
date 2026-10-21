@@ -31,11 +31,12 @@ export function cornerDoorDefault(width: number): number { return width <= 900 ?
 /** Отступы крепежа фальша по шаблону «НКПМ» (k02 m01), от кромок фальша и низа дна — переживают смену ширины и высоты. */
 export function cornerFillerConf(fw: number, inset: number, body: number, join: boolean): NonNullable<NonNullable<NonNullable<Module["kitchen"]>["faceFiller"]>["conf"]> {
   const r1 = (v: number) => Math.round(v * 10) / 10;
-  const side = [82.5, r1((82.5 + body - 67.5) / 2), r1(body - 67.5)];
+  // высоты от низа дна; отрицательные — от верха корпуса (model.ts), выше середины крепёж идёт за высотой модуля
+  const mid = r1((82.5 + body - 67.5) / 2), side = mid > body / 2 ? [82.5, r1(mid - body), -67.5] : [82.5, mid, -67.5];
   return {
     bottom: [r1(inset + 55), r1(inset + fw - 55.5)],
     side,
-    ...(join ? { back: [43, 281, r1(body - 43)].flatMap((y) => [[r1(inset + 117), y], [r1(inset + fw - 58), y]] as [number, number][]).sort((a, b) => a[0] - b[0] || a[1] - b[1]) } : {}),
+    ...(join ? { back: [43, 281, -43].flatMap((y) => [[r1(inset + 117), y], [r1(inset + fw - 58), y]] as [number, number][]).sort((a, b) => a[0] - b[0] || a[1] - b[1]) } : {}),
   };
 }
 

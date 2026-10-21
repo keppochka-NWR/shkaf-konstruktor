@@ -1634,10 +1634,11 @@ export function parts(m: Module): Part[] {
     // крепёж фальша из фасада — только если он есть в проекте (conf, прямой глухой угол k02 m01): с лица фальша в передний торец дна
     // и боковины со стороны фальша; с тыла фальша наружу — стяжка с соседним модулем (back)
     if(ffl.conf&&fastenersMode(m.kitchen)===true){
-      const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,sx=L?t/2:m.width-t/2,zf=d+(m.faceAir??2)+ft,zb=d+(m.faceAir??2),ex=(v:number)=>L?v:m.width-v;
+      // высоты: от низа дна, отрицательные — от верха корпуса (пакет 0: крепёж идёт за высотой модуля)
+      const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,sx=L?t/2:m.width-t/2,zf=d+(m.faceAir??2)+ft,zb=d+(m.faceAir??2),ex=(v:number)=>L?v:m.width-v,ey=(v:number)=>v<0?m.height+v:yb+v;
       for(const [k,v] of (ffl.conf.bottom??[]).entries())confirmat(`fast:face-filler:bottom:${k}`,[ex(v),yb+(bot?.size[1]??t)/2,zf],'-z');
-      for(const [k,y] of (ffl.conf.side??[]).entries())confirmat(`fast:face-filler:side:${k}`,[sx,yb+y,zf],'-z');
-      for(const [k,[v,y]] of (ffl.conf.back??[]).entries())confirmat(`fast:face-filler:back:${k}`,[ex(v),yb+y,zb],'+z');
+      for(const [k,y] of (ffl.conf.side??[]).entries())confirmat(`fast:face-filler:side:${k}`,[sx,ey(y),zf],'-z');
+      for(const [k,[v,y]] of (ffl.conf.back??[]).entries())confirmat(`fast:face-filler:back:${k}`,[ex(v),ey(y),zb],'+z');
     }
   } else if(ffl){
     const bot=out.find(p=>p.id==='bottom'),yb=bot?bot.position[1]-bot.size[1]/2:0,L=ffl.side==='left';

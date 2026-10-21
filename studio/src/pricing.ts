@@ -446,6 +446,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
         else if(nm?.hinges&&!push)bzHinges+=n; // тип петли — по Базису (после цикла)
+        // нижний угловой студии (kitchenCorner.ts): дверь у фальша на «Петля под фальшпанель» — другое изделие, цены в прайсах нет:
+        // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
+        else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);

@@ -3,7 +3,8 @@
 // Только те же правки модели, что делает панель справа (select «Задняя стенка», «Основание», «Подсветка», «Очистить наполнение»,
 // шаблоны наполнения) — без своих механизмов. Кухни, сырые модули Базиса, двери-купе, столы и угловые шкафы — без этих пунктов:
 // у кухонь правила Базиса, у остальных своё устройство.
-import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash } from "lucide-react";
+import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash, PanelRight, Ruler, Columns2 } from "lucide-react";
+import { cornerOf, reshapeCorner, type CornerSide } from "./kitchenCorner";
 import type { RadialItem } from "./RadialMenu";
 import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, type Module, type Section } from "./model";
 import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
@@ -17,7 +18,20 @@ export type QuickMenuOps = {
   removeUpper?: () => void;
   /** «Подсветка › Режим выбора деталей…»: включить режим кликов по деталям этого корпуса; undefined — режима нет. */
   lightMode?: () => void;
+  /** Ввод числа (окно размера App.editDimension): подпись, текущее значение, применить. */
+  ask?: (label: string, value: number, update: (v: number) => (n: Module) => void) => void;
 };
+
+/** Нижний угловой кухни (kitchenCorner.ts): «Угловой ›» — сторона глухой части, ширина двери и фальша (перестройка тем же генератором). */
+export function cornerItems(m: Module, ops: QuickMenuOps): RadialItem[] {
+  const c = cornerOf(m);
+  if (!c || m.raw || m.bazis) return [];
+  const side = (s: CornerSide): RadialItem => ({ id: "corner-side-" + s, label: s === "left" ? "Глухая часть слева" : "Глухая часть справа", icon: s === "left" ? PanelLeft : PanelRight, active: c.side === s,
+    hint: "Фальш из фасадного материала с этой стороны, дверь — с другой; петли под фальшпанель переезжают к кромке двери", run: () => ops.modify((n) => Object.assign(n, reshapeCorner(n, { side: s }))) });
+  const size = (key: "door" | "filler", label: string): RadialItem => ({ id: "corner-" + key, label: label + "…", icon: Ruler, hint: `Сейчас ${c[key]} мм. Ширина модуля ${m.width} — вторая часть пересчитается`, disabled: !ops.ask,
+    run: () => ops.ask?.(label + ", мм", c[key], (v) => (n) => { Object.assign(n, reshapeCorner(n, key === "door" ? { door: v } : { filler: v })); }) });
+  return [{ id: "corner", label: "Угловой", icon: Columns2, hint: `Глухая часть ${c.side === "left" ? "слева" : "справа"}: дверь ${c.door}, фальш ${c.filler}`, children: [side("left"), side("right"), size("door", "Ширина двери"), size("filler", "Ширина фальша")] }];
+}
 
 /** Есть ли у модуля быстрые пункты (шкафы и стеллажи студии). */
 export function quickMenuApplies(m: Module) {
