@@ -85,7 +85,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight, shelfMaxDepth,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, hasDrawerCap, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule, deskGeometry, hasHandles,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, hasDrawerCap, drawersToRoof, drawersFillRoof, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule, deskGeometry, hasHandles,
   EDGE_CHOICES,
   type EdgeThickness,
   type Module,
@@ -530,7 +530,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [gapMenu,setGapMenu]=useState<{side:'left'|'right';x:number;y:number}|null>(null);
   // плашка «Изменение не применено» скрывается сама через 6 с (критик 20.10, m1); с кнопкой «Подогнать…» и ошибкой открытия — нет
   // список ошибок с «Показать» (п.4 волны 22.10) висит дольше — 20 с, чтобы успеть прочитать и нажать
-  const errorDetails=errorList.length&&errorList[0].text===error?errorList:[];
+  const errorDetails=error&&errorList.some(d=>d.text===error)?errorList:[];
   useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),errorDetails.length?20000:6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
   /** «Показать» у ошибки: выбрать корпус, секцию и деталь, приблизить. */
   function showError(d:ErrorDetail){
@@ -619,6 +619,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     return modifyAt(mid,n=>{
       const sec=n.sections.find(x=>x.id===sid);if(!sec)return;
       if(v==='auto')delete sec.drawerCap;else sec.drawerCap=v==='on';
+      // «нет» в секции из одних ящиков (комод): ящики снова поровну до крыши, если так они до неё достают; «авто» ящики не двигает
+      if(v==='off'&&!sec.shelves.length&&!sec.rod&&!sec.pantograph&&!sec.drawerConfigs?.some(c=>c.mesh||c.tray)){try{const cfg=drawersToRoof(n,sec);if(drawersFillRoof(n,{...sec,drawerConfigs:cfg}))sec.drawerConfigs=cfg;}catch{/* не помещаются — ящики как были */}}
       if(!hasDrawerCap(n,sec))return;
       const b=boxes(n).find(x=>x.id===sid)!,h=b.top-b.bottom,ceiling=Math.min(b.top-RULES.shelfMinClear,...sec.shelves.map(f=>b.bottom+f*h-RULES.panel/2-RULES.shelfMinClear));
       if(drawerCapTop(n,sec)>ceiling)sec.drawerConfigs=distributeDrawers(n,sec,ceiling);
@@ -1327,10 +1329,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <strong>{saved==="Не сохранено"?"Текущий вариант не сохранён":"Изменение не применено"}{errorDetails.length>1?` · ошибок: ${errorDetails.length}`:''}</strong>
                 {errorDetails.length?<ol className="error-list" aria-label="Что мешает применить изменение">
                   {errorDetails.slice(0,5).map((d,i)=><li key={i} data-text={d.text}>
-                    {errorPlace(d)&&<span className="error-place">{errorPlace(d)}</span>}
-                    <p>{d.problem}</p>
+                    <p>{errorPlace(d)&&<b className="error-place">{errorPlace(d)}: </b>}{d.problem}{d.moduleId&&project.modules.some(a=>a.id===d.moduleId)&&<button className="error-show" aria-label={'Показать: '+errorPlace(d)} onClick={()=>showError(d)}><Search size={12}/> Показать</button>}</p>
                     {d.action&&<p className="error-fix"><b>Что сделать:</b> {d.action}</p>}
-                    {d.moduleId&&project.modules.some(a=>a.id===d.moduleId)&&<button className="error-show" aria-label={'Показать: '+errorPlace(d)} onClick={()=>showError(d)}><Search size={13}/> Показать</button>}
                   </li>)}
                   {errorDetails.length>5&&<li className="error-more">…и ещё {errorDetails.length-5}. Исправьте эти — проверка покажет остальные.</li>}
                 </ol>:<p>{error}</p>}

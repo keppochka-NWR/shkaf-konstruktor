@@ -52,9 +52,11 @@ function partFor(a:PlacedModule,rest:string,sectionId?:string):Part|undefined{
   if(low)return ps.find(p=>p.role==='door'&&p.length<Number(low[1])&&(!sectionId||p.sectionId===sectionId));
   return undefined;
 }
+/** Порядок в плашке: сначала ошибки самого корпуса (секции, детали), затем выход за стены, пересечения — последними (обычно следствие). */
+function rank(text:string){return /пересекается с/.test(text)?2:/за границы помещения/.test(text)?1:0;}
 /** Разбор ошибок проверки проекта p (того варианта, который не применился). */
 export function explainErrors(p:Project,errors:string[]):ErrorDetail[]{
-  return errors.map(text=>{
+  return errors.map((text,i)=>({text,i})).sort((x,y)=>rank(x.text)-rank(y.text)||x.i-y.i).map(({text})=>{
     const d:ErrorDetail={text,problem:text,action:''};
     let a:PlacedModule|undefined,rest=text;
     const clash=text.match(/^«(.+)» пересекается с «(.+)»/);
