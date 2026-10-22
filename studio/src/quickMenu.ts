@@ -3,7 +3,7 @@
 // Только те же правки модели, что делает панель справа (select «Задняя стенка», «Основание», «Подсветка», «Очистить наполнение»,
 // шаблоны наполнения) — без своих механизмов. Кухни, сырые модули Базиса, двери-купе, столы и угловые шкафы — без этих пунктов:
 // у кухонь правила Базиса, у остальных своё устройство.
-import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash, PanelRight, Ruler, Columns2 } from "lucide-react";
+import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash, PanelRight, Ruler, Columns2, SlidersHorizontal } from "lucide-react";
 import { cornerOf, reshapeCorner, type CornerSide } from "./kitchenCorner";
 import type { RadialItem } from "./RadialMenu";
 import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, type Module, type Section } from "./model";
@@ -18,6 +18,8 @@ export type QuickMenuOps = {
   removeUpper?: () => void;
   /** «Подсветка › Режим выбора деталей…»: включить режим кликов по деталям этого корпуса; undefined — режима нет. */
   lightMode?: () => void;
+  /** «Подсветка › Настроить…» (задача 14): окно со списком подсвеченных деталей, тоном и типом; undefined — окна нет. */
+  lightPanel?: () => void;
   /** Ввод числа (окно размера App.editDimension): подпись, текущее значение, применить. */
   ask?: (label: string, value: number, update: (v: number) => (n: Module) => void) => void;
 };
@@ -117,6 +119,8 @@ export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem
       run: () => ops.modify((n) => setSectionShelves(n, s.id, !shelvesLit)) },
     { id: "q-light-mode", label: "Режим выбора деталей…", icon: MousePointerClick, disabled: !ops.lightMode, hint: "Кликайте стойки, полки, перегородки и крышу — подсветка ставится и снимается сразу",
       run: ops.lightMode },
+    { id: "q-light-setup", label: "Настроить…", icon: SlidersHorizontal, disabled: !ops.lightPanel, hint: "Список подсвеченных деталей с длинами, тон (тёплый / нейтральный / холодный) и тип (врезной, накладной, лента)",
+      run: ops.lightPanel },
     { id: "q-light-clear", label: "Убрать всю подсветку", icon: Trash, danger: true, disabled: !anyLight(m), hint: "Снять подсветку со всех деталей корпуса. Вернуть — Ctrl+Z",
       run: () => ops.modify((n) => clearLights(n)) },
   ] };

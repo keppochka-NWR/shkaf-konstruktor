@@ -64,7 +64,20 @@ export const RULES = {
   // Подсветка в стойках: врезной LED-профиль (LR39 15×6, Мега-Трейд) — условная геометрия для сцены и метража.
   lightProfileW: 15,
   lightProfileT: 3,
-  lightFrontOffset: 60,
+  // Задача 20 (22.10.2026), предложение Макса — ждёт подтверждения: вертикальный LED в стойке — передняя кромка профиля в 100 мм от переда
+  // стойки (единообразно, с петлями и без). Было: центр в 60 (52,5–67,5 от переда) — через планку петли (накладная: 0–70 от переда,
+  // вкладная: 16–94, при фасаде 19 мм — до 97) и через передний ряд полкодержателей (≈57 от переда при полке короче корпуса на 20).
+  // Теперь профиль 100–115 от переда: за зоной планки, полкодержатели переднего ряда — до ~60. Проверка: tests/w-light.test.ts (collisions.ts).
+  lightFrontOffset: 100,
+  // Там же (вопрос Максу): в секции с ящиками вертикальный LED — от верха полки над ящиками (в зоне ящиков на стойках направляющие —
+  // профиль шёл сквозь них, а свет за ящиками не виден). Метраж и цена таких секций меньше на зону ящиков. false — как было (на всю высоту).
+  lightSkipDrawers: true,
+  // Тип подсветки (задача 14): условная геометрия для сцены. Врезной — как было (видимая часть 3 мм), накладной профиль 16×7 на грани,
+  // лента без профиля 10×1. Длина и цена у всех одинаковые (решение 20.10: цена по ориентации; цены по типам — вопрос Максу).
+  lightSurfaceW: 16,
+  lightSurfaceT: 7,
+  lightTapeW: 10,
+  lightTapeT: 1,
   // Решение Макса 20.10.2026: «Подсветки в горизонтах должны считаться 4000 ₽, в вертикалях 3000 ₽» — клиенту за пог.м, розница цеха
   // поверх коэффициента. Именованные константы (не литералы в add()): публичная сборка их не запекает ×2,2 (scripts/bake-prices.ts).
   lightRetailPerM: 3000, // вертикали: прайс цеха «Подсветка врезная в стойках полного свечения», розница за пог.м
@@ -191,6 +204,9 @@ export type Section = {
   shelfLights?: number[];
   /** LED-профиль под крышей (или под общей горизонталью) над секцией — горизонталь, 4000 ₽/пог.м. */
   topLight?: true;
+  /** Тон и тип подсветки отдельной детали (задача 14, 22.10.2026, src/lights.ts), если не как у модуля: место 'left' | 'right' | 'top' | 'shelf:N'.
+   *  Живёт, пока место подсвечено; номера полок сдвигаются вместе с shelfLights. На цену не влияет (решение 20.10 — цена по ориентации). */
+  lightSpec?: Record<string, LightSpec>;
   /** Индексы жёстких полок (на конфирматах/эксцентриках, в точную ширину проёма); остальные съёмные на полкодержателях. */
   fixed?: number[];
   /** Глубина обычных полок секции, мм. Полка над ящиками сохраняет конструктивную глубину. */
@@ -199,6 +215,12 @@ export type Section = {
    *  секции (k23 m14: жёсткая полка на всю глубину корпуса 577 при съёмных 575 с отступом 1). */
   shelfAt?: Record<number, { rear: number; depth: number }>;
 };
+/** Подсветка (задача 14, 22.10.2026): тон, К, и тип установки. Цены по типам пока одинаковые (решение 20.10 — по ориентации). */
+export type LightTone = 3000 | 4000 | 6000;
+export type LightType = "inset" | "surface" | "tape";
+export type LightSpec = { tone?: LightTone; type?: LightType };
+export const LIGHT_TONES: LightTone[] = [3000, 4000, 6000];
+export const LIGHT_TYPES: LightType[] = ["inset", "surface", "tape"];
 export type Module = {
   sectionLayout?: SectionLayout;
   raisedSides?: boolean;
@@ -223,6 +245,10 @@ export type Module = {
   plinthHeight?: number;
   /** Подсветка врезная в стойках полного свечения: LED-профиль на внутренних гранях боковин и перегородок, на всю высоту проёма. Розница 3000 ₽/пог.м поверх коэффициента (прайс цеха). */
   standLight?: boolean;
+  /** Тон подсветки модуля, К (задача 14, 22.10.2026): 3000 тёплый, 4000 нейтральный, 6000 холодный. Нет — не выбран (в 3D как 4000, в смете/КП без описания). */
+  lightTone?: LightTone;
+  /** Тип подсветки модуля: врезной профиль (как было), накладной профиль, лента без профиля. Нет — не выбран (геометрия врезного, смета без описания). */
+  lightType?: LightType;
   /** Ручка распашных фасадов и ящиков — id из каталога handles.ts; по умолчанию UZ 819 128. */
   handleId?: string;
   /** Отдельная ручка ящиков. Отсутствие сохраняет прежнюю общую настройку. */
@@ -657,7 +683,7 @@ export function deskModule(base?:Module):Module{
   const m=base?structuredClone(base):initialModule();
   return {...m,name:'Стол',height:750,depth:Math.max(500,Math.min(m.depth,700)),doors:false,plinthHeight:0,bottomType:'none',backType:'none',topType:'panel',
     sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
-    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
+    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** Деталь — фасад ящика (ящики студии, ящики и глухие фасады кухни). */
 export const isDrawerFront=(p:Part)=>p.role==='drawer'&&p.id.endsWith(':facade');
@@ -1104,20 +1130,25 @@ export function parts(m: Module): Part[] {
       );
     }
     // Подсветка по деталям (20.10.2026): старый флаг standLight = обе стойки каждой секции; новый — своя сторона секции.
+    // Задача 20 (22.10): профиль за зоной планки петли — передняя кромка в RULES.lightFrontOffset (100) от переда; в секции с ящиками —
+    // над ящиками (над обязательной полкой): в зоне ящиков на стойках направляющие, профиль шёл сквозь них. Тип — сечение (ledSize).
+    const ledFrom = s.drawers > 0 && RULES.lightSkipDrawers ? drawerStackHeight(s) + (!(m.sectionLayout && b.top < innerTop(m)) && !s.drawerConfigs?.every((c) => c.tray) ? t : 0) : 0, lh = h - ledFrom;
     for (const side of ["left", "right"] as const)
-      if (m.standLight || s.standLights?.includes(side))
+      if ((m.standLight || s.standLights?.includes(side)) && lh > 0) {
+        const [lw, lt] = ledSize(m, s, side);
         add(
           `${s.id}:light:${side}`,
           "Подсветка LED в стойке",
-          [RULES.lightProfileT, h, RULES.lightProfileW],
-          [side === "left" ? b.x + RULES.lightProfileT / 2 : b.x + b.width - RULES.lightProfileT / 2, b.bottom + h / 2, d - RULES.lightFrontOffset],
-          h,
-          RULES.lightProfileW,
-          RULES.lightProfileT,
+          [lt, lh, lw],
+          [side === "left" ? b.x + lt / 2 : b.x + b.width - lt / 2, b.bottom + ledFrom + lh / 2, d - RULES.lightFrontOffset - lw / 2],
+          lh,
+          lw,
+          lt,
           "light",
           s.id,
           "metal",
         );
+      }
     s.shelves.forEach((f, j) => {
       const own=m.kitchen?s.shelfAt?.[j]:undefined; // своя глубина полки из Базиса — только у кухни
       const shelfDepth=own?.depth??s.shelfDepth??sd;
@@ -1136,13 +1167,13 @@ export function parts(m: Module): Part[] {
       );
       if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, b.x, b.x + b.width, rear, RULES.shelfDepthMinus);
       // Подсветка в полках: LED-профиль снизу у передней кромки полки (отступ 20 мм), по длине полки минус 20 с краёв. Только при флаге секции.
-      if(s.shelfLight||s.shelfLights?.includes(j)){const len=b.width-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth;
-        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,RULES.lightProfileT,RULES.lightProfileW],[b.x+b.width/2,b.bottom+f*h-st/2-RULES.lightProfileT/2,front-20-RULES.lightProfileW/2],len,RULES.lightProfileW,RULES.lightProfileT,'light',s.id,'metal');}
+      if(s.shelfLight||s.shelfLights?.includes(j)){const len=b.width-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth,[lw,lt]=ledSize(m,s,'shelf:'+j);
+        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,lt,lw],[b.x+b.width/2,b.bottom+f*h-st/2-lt/2,front-20-lw/2],len,lw,lt,'light',s.id,'metal');}
     });
     // Подсветка под крышей секции (20.10.2026): горизонталь как у полки — по ширине проёма минус 20 с краёв, 20 мм от переда крыши.
     // id «…:light:roof» — та же строка сметы «Подсветка в крыше» (4000 ₽/пог.м), что у Вотан.
-    if(s.topLight){const len=b.width-40;
-      add(`${s.id}:light:roof`,'Подсветка LED под крышей',[len,RULES.lightProfileT,RULES.lightProfileW],[b.x+b.width/2,b.top-RULES.lightProfileT/2,d-20-RULES.lightProfileW/2],len,RULES.lightProfileW,RULES.lightProfileT,'light',s.id,'metal');}
+    if(s.topLight){const len=b.width-40,[lw,lt]=ledSize(m,s,'top');
+      add(`${s.id}:light:roof`,'Подсветка LED под крышей',[len,lt,lw],[b.x+b.width/2,b.top-lt/2,d-20-lw/2],len,lw,lt,'light',s.id,'metal');}
     const f=fillerSides(m,s),filler=f.left+f.right;
     const glue=glueOff?{}:falshZones(m);
     for(const side of ['left','right'] as const)if(f[side]&&glue[s.id+':'+side]){
@@ -2021,7 +2052,7 @@ export function validate(m: Module): string[] {
   }
   if (m.backType!==undefined && !["nailed","groove","board","none"].includes(m.backType)) errors.push("Выберите допустимый тип задней стенки.");
   if(m.hingeSide!==undefined&&!['left','right'].includes(m.hingeSide))errors.push('Выберите сторону петель.');
-  if(m.standLight!==undefined&&typeof m.standLight!=='boolean')errors.push('Неверный параметр подсветки.');
+  if((m.standLight!==undefined&&typeof m.standLight!=='boolean')||(m.lightTone!==undefined&&!LIGHT_TONES.includes(m.lightTone))||(m.lightType!==undefined&&!LIGHT_TYPES.includes(m.lightType)))errors.push('Неверный параметр подсветки.');
   for(const s of m.sections)if((s.standLights!==undefined&&(!Array.isArray(s.standLights)||s.standLights.some(x=>x!=='left'&&x!=='right')))||(s.shelfLights!==undefined&&(!Array.isArray(s.shelfLights)||s.shelfLights.some(j=>!Number.isInteger(j)||j<0)))||(s.topLight!==undefined&&s.topLight!==true)){errors.push('Неверный параметр подсветки.');break;}
   if(m.handleId!==undefined&&!HANDLES.some(h=>h.id===m.handleId))errors.push('Выберите ручку из каталога.');
   if(m.drawerHandleId!==undefined&&!HANDLES.some(h=>h.id===m.drawerHandleId))errors.push('Выберите ручку ящиков из каталога.');
@@ -2349,6 +2380,8 @@ export function setShelfGap(
     s = m.sections.find((s) => s.id === sid)!;
   const order=s.shelves.map((value,i)=>({value,i})).sort((a,b)=>a.value-b.value);
   for(const key of ['fixed','glassShelves','shelfLights'] as const)if(s[key])s[key]=order.flatMap((entry,j)=>s[key]!.includes(entry.i)?[j]:[]);
+  // тон/тип подсветки полки (задача 14) — за своей полкой, как shelfLights
+  if(s.lightSpec)s.lightSpec=Object.fromEntries(Object.entries(s.lightSpec).flatMap(([k,v])=>{const sh=/^shelf:(\d+)$/.exec(k);if(!sh)return [[k,v]];const j=order.findIndex(e=>e.i===Number(sh[1]));return j<0?[]:[['shelf:'+j,v]];}));
   s.shelves=order.map(entry=>entry.value);
   const gaps = shelfGaps(m, sid);
   if (!s.shelves.length || !gaps[index]) return;
@@ -2539,12 +2572,51 @@ export function parseModule(input: unknown): Module {
   };
   if(m.corner)normalizeCorner(m);
   migrateLights(m);
+  parseLightSpec(x, m);
   const errors = validate(m);
   if (errors.length) throw new Error(errors[0]);
   return m;
 }
 /** Миграция подсветки (20.10.2026): standLight (все стойки) → обе стойки каждой секции, shelfLight секции → все её полки поштучно.
  *  Тот же набор LED-профилей и та же смета; после миграции старых полей нет. Пустые списки снимаются. Меняет модуль на месте. */
+/** Тон и тип подсветки места секции (slot: 'left' | 'right' | 'top' | 'shelf:N'): своё у детали, иначе модуля, иначе по умолчанию
+ *  (4000 К, врезной). explicit — выбрано менеджером (у детали или у модуля): только тогда описание идёт в смету и КП — старые проекты
+ *  без выбора считаются и описываются как раньше (задача 14, 22.10.2026). */
+export function lightSpecAt(m: Module, s: Section, slot: string): { tone: LightTone; type: LightType; explicit: boolean } {
+  const own = s.lightSpec?.[slot];
+  const tone = own?.tone ?? m.lightTone, type = own?.type ?? m.lightType;
+  return { tone: tone ?? 4000, type: type ?? "inset", explicit: tone !== undefined || type !== undefined };
+}
+/** Сечение LED-детали по типу: [ширина, толщина], мм. */
+export function ledSize(m: Module, s: Section, slot: string): [number, number] {
+  const type = lightSpecAt(m, s, slot).type;
+  return type === "surface" ? [RULES.lightSurfaceW, RULES.lightSurfaceT] : type === "tape" ? [RULES.lightTapeW, RULES.lightTapeT] : [RULES.lightProfileW, RULES.lightProfileT];
+}
+const lightSpecOk = (v: unknown): LightSpec | undefined => {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>, out: LightSpec = {};
+  if (LIGHT_TONES.includes(Number(o.tone) as LightTone)) out.tone = Number(o.tone) as LightTone;
+  if (LIGHT_TYPES.includes(o.type as LightType)) out.type = o.type as LightType;
+  return out.tone !== undefined || out.type !== undefined ? out : undefined;
+};
+/** Разбор тона/типа из файла: мусор отсекается, места без подсветки и несуществующие полки — тоже. */
+function parseLightSpec(x: Record<string, unknown>, m: Module) {
+  const mt = lightSpecOk({ tone: x.lightTone, type: x.lightType });
+  if (mt?.tone !== undefined) m.lightTone = mt.tone;
+  if (mt?.type !== undefined) m.lightType = mt.type;
+  const src = Array.isArray(x.sections) ? (x.sections as Record<string, unknown>[]) : [];
+  m.sections.forEach((s, i) => {
+    const raw = src[i]?.lightSpec;
+    if (!raw || typeof raw !== "object") return;
+    const out: Record<string, LightSpec> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const sh = /^shelf:(\d+)$/.exec(k), lit = k === "left" || k === "right" ? !!s.standLights?.includes(k) : k === "top" ? !!s.topLight : !!sh && !!s.shelfLights?.includes(Number(sh[1]));
+      const spec = lightSpecOk(v);
+      if (lit && spec) out[k] = spec;
+    }
+    if (Object.keys(out).length) s.lightSpec = out;
+  });
+}
 export function migrateLights(m: Module): Module {
   for (const s of m.sections) {
     if (m.standLight) s.standLights = ["left", "right"];

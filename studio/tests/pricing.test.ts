@@ -47,9 +47,11 @@ test('stand lighting adds LED strips per stand face and a retail line on top of 
   m.standLight=true;
   const strips=parts(m).filter(x=>x.role==='light');
   assert.equal(strips.length,2*m.sections.length);
-  const h=m.height-(m.plinthHeight??80)-2*16;assert.ok(strips.every(s=>Math.abs(s.length-h)<0.01&&s.material==='metal'));
+  // 22.10 (задача 20): в секции с ящиками LED — над полкой над ящиками (в зоне ящиков на стойках направляющие; RULES.lightSkipDrawers)
+  const h=m.height-(m.plinthHeight??80)-2*16,hs=m.sections.map(s=>s.drawers>0?h-drawerCapTop(m,s)+(m.plinthHeight??80)+16:h);
+  assert.ok(m.sections.every((s,i)=>strips.filter(x=>x.sectionId===s.id).every(x=>Math.abs(x.length-hs[i])<0.01&&x.material==='metal')),JSON.stringify(strips.map(x=>[x.sectionId,x.length]))+' '+hs);
   const e=estimate(p),line=e.lines.find(l=>l.id==='light-stand')!;
-  assert.equal(line.retail,true);assert.equal(line.unitPrice,3000);assert.ok(Math.abs(line.quantity-strips.length*h/1000)<0.01);
+  assert.equal(line.retail,true);assert.equal(line.unitPrice,3000);assert.ok(Math.abs(line.quantity-2*hs.reduce((a,v)=>a+v,0)/1000)<0.01);
   assert.equal(e.knownCost,base.knownCost);
   assert.equal(e.retail,base.retail!+Math.round(line.quantity*3000));
   // 20.10.2026: подсветка по деталям — старый флаг при загрузке переводится в обе стойки каждой секции (та же смета)

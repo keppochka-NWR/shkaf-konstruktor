@@ -3,6 +3,7 @@ import {createCornerUpper} from './cornerWardrobe';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
+import {remapShelfSpec} from './lights';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
 import {mirrorKitchen} from './kitchen';
@@ -12,7 +13,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
-  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);}
+  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
@@ -49,7 +50,10 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     if(kind==='shelf'){
       if(s.shelves.length>=RULES.maxShelves)break;
       const fixedHeights=new Set((s.fixed??[]).map(j=>s.shelves[j])),glassHeights=new Set((s.glassShelves??[]).map(j=>s.shelves[j])),litHeights=new Set((s.shelfLights??[]).map(j=>s.shelves[j]));
+      const oldShelves=[...s.shelves];
       s.shelves.push(y/(b.top-b.bottom));s.shelves.sort((a,b)=>a-b);
+      // тон/тип подсветки полки (задача 14) — по высоте, как shelfLights
+      remapShelfSpec(s,k=>{const j=s.shelves.indexOf(oldShelves[k]);return j<0?undefined:j;});
       if(s.fixed)s.fixed=s.shelves.flatMap((f,j)=>fixedHeights.has(f)?[j]:[]);
       // стеклянные полки — по высоте, как жёсткие: новая полка ниже не переносит «стекло» на соседнюю
       if(s.glassShelves)s.glassShelves=s.shelves.flatMap((f,j)=>glassHeights.has(f)?[j]:[]);

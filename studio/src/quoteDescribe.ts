@@ -99,8 +99,10 @@ export function describeModule(m: Module): ModuleDescription {
   if (pullouts) filling.push(`${pullouts} ${plural(pullouts, ["выдвижной тремпель", "выдвижных тремпеля", "выдвижных тремпелей"])}`);
   // подсветка по деталям (20.10.2026): вертикали и горизонтали отдельно — штуки и длина LED-профиля, как в смете
   const led = lightSummary(m), meters = (v: number) => v.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " пог. м";
-  if (led.vertical.count) filling.push(`подсветка в стойках: ${led.vertical.count} шт., ${meters(led.vertical.meters)}`);
-  if (led.horizontal.count) filling.push(`подсветка ${led.horizontal.where}: ${led.horizontal.count} шт., ${meters(led.horizontal.meters)}`);
+  // тип и тон (задача 14, 22.10.2026) — в скобках, только если выбраны менеджером (старые КП — как раньше)
+  const spec = (s: string) => (s ? ` (${s})` : "");
+  if (led.vertical.count) filling.push(`подсветка в стойках: ${led.vertical.count} шт., ${meters(led.vertical.meters)}${spec(led.vertical.spec)}`);
+  if (led.horizontal.count) filling.push(`подсветка ${led.horizontal.where}: ${led.horizontal.count} шт., ${meters(led.horizontal.meters)}${spec(led.horizontal.spec)}`);
   let kind = "Шкаф";
   if (m.kitchen) {
     kind = KITCHEN_ROLE[m.kitchen.role] ?? "Кухонный модуль";

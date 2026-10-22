@@ -11,10 +11,50 @@ import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} fro
 import {meshById} from './mesh';
 import {meshModel} from './meshModels';
 import {procModel,faceAt,fastenerAxis,fastenerGeometry,hingeFallbackModel,nativePlacement} from './hardwareModels';
+import {ledLook,TONE_INFO} from './lights';
 // Цвета профиля рамочного фасада для сцены.
 const ALU_COLOURS:Record<string,number>={silver:0xc9ccd1,white:0xf2f2f2,black:0x2b2b2b,gold:0xc9a86a,champagne:0xd8c7a3,cognac:0x8a5a2b};
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import type { Module as LedModule, Part as LedPart } from "./model";
+// Свет подсветки на деталях (задача 14, 22.10.2026) — без источников света (они дорожают с каждым LED и пересобирают шейдеры):
+// полупрозрачная аддитивная «засветка» с градиентом цвета тона — на грани стойки вокруг вертикального LED и на поверхности под
+// горизонтальным (полка ниже или дно секции), ярче у LED. Плоскости не выбираются кликом (raycast пустой) и не дают тени.
+let glowMaps: { mid: THREE.Texture; down: THREE.Texture } | null = null;
+function glowTextures() {
+  if (glowMaps) return glowMaps;
+  const make = (vertical: boolean) => {
+    const c = document.createElement("canvas"); c.width = vertical ? 4 : 128; c.height = vertical ? 128 : 4;
+    const g = c.getContext("2d")!, grad = vertical ? g.createLinearGradient(0, 128, 0, 0) : g.createLinearGradient(0, 0, 128, 0);
+    if (vertical) { grad.addColorStop(0, "rgba(255,255,255,1)"); grad.addColorStop(0.3, "rgba(255,255,255,0.45)"); grad.addColorStop(1, "rgba(255,255,255,0)"); }
+    else { grad.addColorStop(0, "rgba(255,255,255,0)"); grad.addColorStop(0.5, "rgba(255,255,255,1)"); grad.addColorStop(1, "rgba(255,255,255,0)"); }
+    g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  };
+  glowMaps = { mid: make(false), down: make(true) };
+  return glowMaps;
+}
+function ledGlow(mesh: THREE.Mesh, p: LedPart, m: LedModule, all: LedPart[]) {
+  if (typeof document === "undefined") return;
+  const tone = TONE_INFO[ledLook(m, p.id).tone], maps = glowTextures();
+  const mat = (map: THREE.Texture, opacity: number) => new THREE.MeshBasicMaterial({ color: tone.glow, map, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+  const add = (geo: THREE.PlaneGeometry, material: THREE.Material, pos: [number, number, number], rot: [number, number, number]) => {
+    const g = new THREE.Mesh(geo, material); g.position.set(...pos); g.rotation.set(...rot); g.raycast = () => {}; g.renderOrder = 2; g.userData = { glow: true }; mesh.add(g);
+  };
+  const stand = /:light:(left|right)$/.exec(p.id);
+  if (stand) {
+    const left = stand[1] === "left", front = Math.max(20, m.depth - p.position[2]), w = 2 * Math.min(170, front);
+    add(new THREE.PlaneGeometry(w, p.size[1]), mat(maps.mid, 0.5), [(left ? -1 : 1) * (p.size[0] / 2 - 0.6), 0, 0], [0, left ? Math.PI / 2 : -Math.PI / 2, 0]);
+    return;
+  }
+  // горизонталь (полка, крыша): светит вниз — на ближайшую горизонталь под ней в пределах LED по X
+  const y0 = p.position[1] - p.size[1] / 2, x = p.position[0];
+  const below = all.filter((q) => q !== p && q.material !== "metal" && (q.role === "shelf" || q.role === "body") && q.size[1] <= 40 && q.size[0] > 100 && q.size[2] > 100 && !q.rotY && !q.rotZ
+    && Math.abs(q.position[0] - x) < q.size[0] / 2 && q.position[1] + q.size[1] / 2 < y0 - 1).sort((a, z) => (z.position[1] + z.size[1] / 2) - (a.position[1] + a.size[1] / 2))[0];
+  if (!below) return;
+  const top = below.position[1] + below.size[1] / 2, zFront = below.position[2] + below.size[2] / 2, depth = below.size[2] * 0.9, len = Math.min(p.size[0], below.size[0]);
+  add(new THREE.PlaneGeometry(len, depth), mat(maps.down, 0.55), [0, top + 0.6 - p.position[1], zFront - depth / 2 - p.position[2]], [-Math.PI / 2, 0, 0]);
+}
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { handleById } from "./handles";
@@ -136,7 +176,8 @@ type Props = {
   drawerPreview?:{sid:string;index:number};
   /** Режим «Подсветка» (20.10.2026): левый клик по детали корпуса не выбирает и не тянет её, а переключает подсветку (onLightPick). */
   lightMode?:boolean;
-  onLightPick?:(mid:string,pid:string)=>void;
+  /** alts — остальные детали этого корпуса под курсором по лучу (задача 14: «вертикаль» пропускает полку перед стойкой). */
+  onLightPick?:(mid:string,pid:string,alts?:string[])=>void;
   /** Зазоры выбранного модуля по оси ширины (запрос Макса 20.10.2026): плашки слева и справа в режимах «Двигать корпуса» и «Выбрать». */
   rowGaps?:{left:GapSide;right:GapSide}|null;
   onGapClick?:(side:'left'|'right',x:number,y:number)=>void;
@@ -440,7 +481,8 @@ export function Scene(p: Props) {
             roughness: isMetal ? 0.24 : 0.73,
             metalness: isMetal ? 0.8 : 0,
             /* паз Базиса (groove:*) — обработка детали, не светильник: тёмная полоса без свечения */
-            ...(part.role === "light" && !part.id.startsWith("groove:") ? { color: 0xfff1c9, emissive: 0xffd27a, emissiveIntensity: 1.4, metalness: 0, roughness: 0.4 } : {}),
+            /* тон подсветки (задача 14): цвет и свечение LED по тону детали/модуля (3000 / 4000 / 6000 К) */
+            ...(part.role === "light" && !part.id.startsWith("groove:") ? (() => { const tn = TONE_INFO[ledLook(m, part.id).tone]; return { color: tn.led, emissive: tn.emissive, emissiveIntensity: 1.4, metalness: 0, roughness: 0.4 }; })() : {}),
           });
           const texture = catalog.find(
             (c) => c.n === part.decor,
@@ -629,6 +671,7 @@ export function Scene(p: Props) {
             active,
             role: part.role,
           };
+          if (part.role === "light" && !part.id.startsWith("groove:")) { mesh.castShadow = false; ledGlow(mesh, part, m, mParts); }
           if (state.exploded && active) {
             mesh.position.x = (mesh.position.x-m.width/2)*1.3+m.width/2;
             mesh.position.y =
@@ -967,7 +1010,7 @@ export function Scene(p: Props) {
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.presentation)return;
       if((e.ctrlKey||e.metaKey)&&current.current.onToggleModule){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();current.current.onToggleModule(picked.object.userData.moduleId);}return;}
-      if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();current.current.onLightPick(picked.object.userData.moduleId,picked.object.userData.partId);}return;}
+      if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();const mid=picked.object.userData.moduleId,alts=[...new Set(ray.intersectObjects(modelGroup.children,true).filter(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId===mid&&h.object.userData.partId).map(h=>h.object.userData.partId as string))].filter(x=>x!==picked.object.userData.partId);current.current.onLightPick(mid,picked.object.userData.partId,alts);}return;}
       if(current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
