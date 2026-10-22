@@ -104,7 +104,7 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
           <p className="hw-hint">{g.hint}</p>
           {active === "handles" && <label className="hw-search"><Search size={16}/><input placeholder="Найти ручку: 128, чёрный, золото…" aria-label="Найти ручку в окне фурнитуры" value={search} onChange={(e) => setSearch(e.target.value)}/></label>}
           {active === "handles" && choice.handles.length > 1 && <p className="hw-hint">Сейчас разные ручки: {choice.handles.map((h) => handleById(h).label).join(", ")}.</p>}
-          <div className="hw-cards">{shown.map((o) => <button key={o.id} className="hw-card" aria-pressed={o.current} aria-label={o.title} onClick={() => !o.current && apply(o)}>
+          <div className="hw-cards">{shown.map((o) => <button key={o.id} className="hw-card" aria-pressed={o.current} aria-label={o.title} onClick={() => { if (o.current) return; if (delta[(scope ?? "all") + "|" + active + "|" + o.id] === "err") { setNote(o.title + ": не подходит к выбранным изделиям (например, ручка длиннее фасада)."); return; } apply(o); }}>
             <span className="hw-icon">{o.icon}</span>
             <span className="hw-text"><b>{o.title}</b><span className="hw-props">{o.props.map((p) => <span key={p}>{p}</span>)}</span>{price(o)}</span>
             {o.current && <Check className="hw-check" size={18}/>}

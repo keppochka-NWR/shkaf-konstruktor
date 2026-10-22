@@ -109,6 +109,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
 
   return (
     <div className="project-dock">
+      {hwOpen && createPortal(<HardwareWindow project={project} commit={commit} onClose={() => setHwOpen(false)}/>, document.body)}
       {panel && <section className="dock-panel" aria-label={TABS.find((t) => t.id === tab)!.label}>{panel}</section>}
       <nav className="dock-bar" aria-label="Навигация по проекту">
         <div className="dock-tabs">{TABS.map((t) => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}><t.icon size={15} />{t.label}</button>)}</div>

@@ -82,7 +82,7 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
     plain("Цена по коэффициенту", e.byMarkup === null ? str("не менее " + e.byMarkupKnown.toLocaleString("ru-RU") + " ₽", XS.subLabel) : num(e.byMarkup, XS.subMoney), e.model === "markup" ? "выбрана" : "для сравнения");
     plain(`Цена за лист: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽`, num(e.bySheet, XS.subMoney), e.model === "sheet" ? "выбрана" : "для сравнения");
   } else plain("Итого по позициям", sumCells(buy, e.knownCost));
-  total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : "предварительно, без доставки и монтажа");
+  total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (!manager && e.retail !== e.knownCost && Math.abs(e.retail - e.knownCost) < 100 ? "итог округлён до 100 ₽; " : "") + "предварительно, без доставки и монтажа");
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);
   if (split) { rows.push([]); for (const [k, v] of splitRows(split)) plain("Разбивка: " + k, num(v, XS.subMoney)); }
   rows.push([]);
