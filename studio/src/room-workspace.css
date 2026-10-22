@@ -9,7 +9,7 @@
 
 
 
-.environment-properties-trigger{position:fixed;right:25px;bottom:70px;z-index:80;padding:12px;background:#e4f1eb;border:1px solid #54776b;border-radius:8px}
+.environment-properties-trigger{position:fixed;left:50%;right:auto;transform:translateX(-50%);bottom:84px;z-index:80;/* K9: над сценой, не поверх правой панели */padding:12px;background:#e4f1eb;border:1px solid #54776b;border-radius:8px}
 
 .room-tools>summary{position:sticky;top:0;z-index:2;background:#f4f6f9;border-bottom:1px solid #d6e1e6;padding:9px 5px}
 

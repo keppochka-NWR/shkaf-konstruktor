@@ -10,6 +10,7 @@ import { KITCHEN, wallFloorY } from "./kitchen";
 import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule, placeKitchenRow, placeWorktop, defaultWallY, type KitchenItem } from "./kitchenProject";
 import { WardrobeBase } from "./WardrobeBase";
 import { PUBLIC_BUILD } from "./buildMode";
+import { offWallNote } from "./freeSpot";
 import "./kitchen.css";
 
 const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical, "tall-oven": Microwave, "tall-fridge": Refrigerator };
@@ -41,13 +42,15 @@ function useKitchenIndex() {
 }
 
 /** onError — общее сообщение студии «Изменение не применено» (видно при любой прокрутке палитры); commit — commitProject App. */
-export function KitchenPalette({ project, source, commit, onAdded, onError, children }: { project: Project; source: Module; commit: (p: Project) => boolean; onAdded: (ids: string[], fit: boolean) => void; onError: (message: string) => void; children?: ReactNode }) {
+export function KitchenPalette({ project, source, commit, onAdded, onError, onNote, children }: { project: Project; source: Module; commit: (p: Project) => boolean; onAdded: (ids: string[], fit: boolean) => void; onError: (message: string) => void;
+  /** K2 (критик 22.10): модуль встал не у стены (ряд занят) — предупреждение «Нет места у стены…» (freeSpot.ts) */
+  onNote?: (note: string | null) => void; children?: ReactNode }) {
   const wall = Math.max(600, Math.min(6000, project.room.width - 2 * KITCHEN_WALL_OFFSET));
   const [length, setLength] = useState(wall);
   const bases = useKitchenIndex();
   const opened = new URLSearchParams(location.search).get("project");
   const run = (f: () => { project: Project; ids: string[] }, fit = false) => {
-    try { const r = f(); if (commit(r.project)) onAdded(r.ids, fit); } catch (e) { onError((e as Error).message); }
+    try { const r = f(); if (commit(r.project)) { onAdded(r.ids, fit); onNote?.(offWallNote(r.project, r.ids)); } } catch (e) { onError((e as Error).message); }
   };
   const [cornerSide, setCornerSide] = useState<CornerSide>("right");
   // низ навесных от пола (п. 6, 22.10): по умолчанию — ряд навесных или регламент от верха нижних (1458); заданное число — для новых навесных
