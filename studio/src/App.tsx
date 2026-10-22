@@ -468,7 +468,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   useEffect(()=>{goStage(stage);},[]);
   useEffect(()=>{if((stage==='room'||stage==='fixtures')&&tab!=='room'&&!advanced)setTab('room');},[stage,tab,advanced]);
   const materialRecipients=project.modules.filter(a=>materialScope==='all'||(materialScope==='group'?liveGroupIds.includes(a.id):a.id===placed.id));
-  const capture = useRef<(() => string) | undefined>(undefined);
+  const capture = useRef<((opts?: {frame?: boolean}) => string) | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null),
     touched = useRef(false);
   const selectedId = m.sections.some((s) => s.id === selected)
@@ -2102,7 +2102,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <OutputPanel
                   initialTab={outputTab}
                 project={project}
-                capture={() => capture.current?.()}
+                capture={(opts) => capture.current?.(opts)}
                 inspect={(mid,pid)=>{const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}}
 
                 update={commitProject}

@@ -48,7 +48,7 @@ export function OutputPanel({
   project: Project;
   inspect: (moduleId:string,partId:string)=>void;
   initialTab?: OutputTab;
-  capture: () => string | undefined;
+  capture: (opts?: {frame?: boolean}) => string | undefined;
   update: (p: Project) => boolean;
 }) {
   const [packing,setPacking]=useState(false),[packageMessage,setPackageMessage]=useState(''),[packageError,setPackageError]=useState('');
@@ -270,17 +270,17 @@ export function OutputPanel({
             <p className="field-note">Хранится только на этом устройстве и подставляется во все КП. Пустые поля — шапка продавца не печатается.</p>
           </details>
           {q.price.trim()&&!quoteBreakdown(q.price,calculated)&&<p className="field-note">{calculated?.model==='sheet'?'Модель «цена за лист»: фурнитура входит в цену листа — в КП печатается только итог.':calculated?.retail!=null&&Number(q.price)===calculated.retail?'Одна из частей цены нулевая — в КП печатается только итог.':'Цена КП отличается от расчётной — разбивка «материалы / фурнитура / двери купе» не печатается, только итог.'}</p>}
-          <div className="output-actions"><button className="outline" onClick={()=>{setImageError('');if(quoteImage!==null){setQuoteImage(null);return;}try{setQuoteImage(capture()||'');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить изображение.');}}}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
+          <div className="output-actions"><button className="outline" onClick={()=>{setImageError('');if(quoteImage!==null){setQuoteImage(null);return;}try{setQuoteImage(capture({frame:true})||'');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить изображение.');}}}>{quoteImage===null?'Предпросмотр КП':'Скрыть предпросмотр КП'}</button></div>
           <div className="output-actions">
             <button
               className="primary"
-              onClick={() => {setImageError('');try{if(!printDocument(quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated,items,swatches}),'Коммерческое предложение'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
+              onClick={() => {setImageError('');try{if(!printDocument(quoteHTML(project,q.customer,q.price,q.notes,capture({frame:true}),{seller,cost:calculated,items,swatches}),'Коммерческое предложение'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
             >
               Сохранить КП в PDF
             </button>
             <button
               className="outline"
-              onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated,items,swatches}));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
+              onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture({frame:true}),{seller,cost:calculated,items,swatches}));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
             >
               Скачать КП (HTML)
             </button>

@@ -116,7 +116,7 @@ type Props = {
   hiddenModuleIds?:string[];
   viewKey?:string;
   isoDirection?: [number, number];
-  captureReady: (fn: (() => string) | undefined) => void;
+  captureReady: (fn: ((opts?: {frame?: boolean}) => string) | undefined) => void;
   module: Module;
   mode:'move'|'fill'|'orbit'|'select';
   hideFacades?:boolean;
@@ -1188,17 +1188,31 @@ export function Scene(p: Props) {
     rebuild();
     fit();
     api.current = { rebuild, fit, refresh: () => { needsRender = true; } };
-    current.current.captureReady(() => {
+    current.current.captureReady((opts) => {
       if(pendingTextures>0)throw Error("Материалы ещё загружаются. Подождите несколько секунд и повторите сохранение изображения.");
       const size=renderer.getSize(new THREE.Vector2()),ratio=renderer.getPixelRatio(),background=scene.background,gridVisible=grid.visible;
       const guides:THREE.Object3D[]=[];modelGroup.traverse(o=>{if(o.userData.captureGuide||o.parent===modelGroup&&(o instanceof THREE.Line||o instanceof THREE.LineSegments))guides.push(o);});const visibility=guides.map(o=>o.visible);
       const aspect=size.x/size.y,width=aspect>=1?2560:Math.round(2560*aspect),height=aspect>=1?Math.round(2560/aspect):2560;
+      // КП (opts.frame): мебель во весь кадр, а не вся комната — тот же ракурс, камера ближе; после снимка камера на месте
+      const saved={position:camera.position.clone(),target:controls.target.clone(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null};
       try{
         guides.forEach(o=>o.visible=false);grid.visible=false;scene.background=new THREE.Color(0xf1f0eb);
+        if(opts?.frame){
+          modelGroup.updateWorldMatrix(true,true);const box=new THREE.Box3();
+          modelGroup.traverseVisible(o=>{if(o instanceof THREE.Mesh&&!o.userData.captureGuide)box.expandByObject(o,false);});
+          if(!box.isEmpty()){
+            const center=box.getCenter(new THREE.Vector3()),dims=box.getSize(new THREE.Vector3()).addScalar(200);
+            const dir=camera.position.clone().sub(controls.target).normalize();
+            if(camera===orthographic){const h=frameHeight({x:dims.x,y:dims.y,z:dims.z},dir,aspect,1.05);orthographic.left=-h*aspect/2;orthographic.right=h*aspect/2;orthographic.top=h/2;orthographic.bottom=-h/2;orthographic.zoom=1;camera.position.copy(center).addScaledVector(dir,Math.max(dims.x,dims.y,dims.z)*2);}
+            else{const dist=frameDistance({x:dims.x,y:dims.y,z:dims.z},dir,aspect,perspective.fov,1.05);camera.position.copy(center).addScaledVector(dir,dist);}
+            camera.lookAt(center);camera.updateProjectionMatrix();
+          }
+        }
         renderer.setPixelRatio(1);renderer.setSize(width,height,false);renderer.render(scene,camera);
         return renderer.domElement.toDataURL('image/png');
       }finally{
         guides.forEach((o,i)=>o.visible=visibility[i]);grid.visible=gridVisible;scene.background=background;
+        if(opts?.frame){camera.position.copy(saved.position);camera.zoom=saved.zoom;if(saved.frustum){[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=saved.frustum;}controls.target.copy(saved.target);camera.lookAt(saved.target);camera.updateProjectionMatrix();controls.update();}
         renderer.setPixelRatio(ratio);renderer.setSize(size.x,size.y,false);renderer.render(scene,camera);
       }
     });
