@@ -61,7 +61,8 @@ for (const view of VIEWS) {
     await page.screenshot({ path: `${out}/${tag}-${v}-B2-cost-open.png` });
     // прокрутка левой панели: кнопку видно, если долистать
     const lib = page.locator("aside.library").first();
-    await lib.hover(); await page.mouse.wheel(0, 2000); await page.waitForTimeout(400);
+    const need = await page.evaluate(() => { const b = document.querySelector(".module-palette > button.primary.full")!.getBoundingClientRect(), l = document.querySelector("aside.library")!.getBoundingClientRect(); return Math.max(0, Math.ceil(b.bottom - l.bottom + 12)); });
+    await lib.hover(); if (need) await page.mouse.wheel(0, need); await page.waitForTimeout(500);
     const vis = await page.evaluate(() => { const b = document.querySelector(".module-palette > button.primary.full")!.getBoundingClientRect(), l = document.querySelector("aside.library")!.getBoundingClientRect(); return b.top >= l.top - 1 && b.bottom <= l.bottom + 1; });
     check(`B2 ${v}: после прокрутки левой панели «Добавить в комнату» видна целиком`, vis);
     await pal.screenshot({ path: `${out}/${tag}-${v}-B2-palette-cost-scrolled.png` }).catch(() => {});
@@ -85,9 +86,13 @@ for (const view of VIEWS) {
       const items = [...document.querySelectorAll(".radial-item")].map((e) => e.getBoundingClientRect().toJSON());
       const bars = [".interaction-bar", ".view-header"].map((s) => document.querySelector(s)?.getBoundingClientRect().toJSON()).filter(Boolean);
       // m2: что под центром подписи — сама подпись/меню, а не ручка или плашка размера
-      const covered = labels.filter((l) => { const x = (l.r.left + l.r.right) / 2, y = (l.r.top + l.r.bottom) / 2, el = document.elementFromPoint(x, y); return !el?.closest(".radial-menu"); }).map((l) => l.t);
+      // подпись с pointer-events:none — по ней elementFromPoint не попадает; проверяем, что под подписью ручки и плашки не ловят мышь,
+      // а слой меню (портал в body, z-index) выше слоя сцены
+      const grabbers = [...document.querySelectorAll(".stretch-handle, .model-dimension")].filter((e) => getComputedStyle(e).pointerEvents !== "none");
+      const covered = labels.filter((l) => grabbers.some((g) => { const r = g.getBoundingClientRect(); return r.left < l.r.right && l.r.left < r.right && r.top < l.r.bottom && l.r.top < r.bottom; })).map((l) => l.t);
+      const z = Number(getComputedStyle(document.querySelector(".radial-menu")!).zIndex) || 0;
       const portal = document.querySelector(".radial-menu")?.parentElement === document.body;
-      return { labels, items, bars, covered, portal };
+      return { labels, items, bars, covered, portal: portal && z >= 60 };
     });
     let ll = 0, lb = 0, worstLL = 0;
     for (let i = 0; i < m.labels.length; i++) for (let j = 0; j < m.labels.length; j++) {
@@ -102,7 +107,9 @@ for (const view of VIEWS) {
     await page.keyboard.press("Escape"); await page.keyboard.press("Escape"); await page.waitForTimeout(300);
     // u2: плашка зазора → два явных пункта
     await page.getByRole("button", { name: "3D", exact: true }).click().catch(() => {}); await page.waitForTimeout(600);
-    const gap = page.locator("button.model-dimension.row-gap").first();
+    if (await page.locator(".dock-panel").count()) { await dock(page, "Проект").click().catch(() => {}); await page.waitForTimeout(600); } // нижняя панель закрыта — плашки зазоров не под ней
+    await page.locator(".module-item").first().click().catch(() => {}); await page.waitForTimeout(800);
+    const gap =page.locator("button.model-dimension.row-gap").first();
     if (await gap.count()) {
       await gap.click({ timeout: 2000 }).catch(() => {}); await page.waitForTimeout(400);
       const items = await page.locator(".gap-menu [role=menuitem]").allTextContents();
