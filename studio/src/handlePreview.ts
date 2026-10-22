@@ -38,7 +38,8 @@ function render(h: Handle): string | null {
   // профили — у верхней кромки фасада (как на ящике): +Y модели (к центру фасада) смотрит вниз
   if (edgeLike) model.rotation.z = Math.PI;
   scene.add(model);
-  const plateMat = new THREE.MeshStandardMaterial({ color: 0xfaf6ee, roughness: 0.85, metalness: 0 });
+  // фасад — ровный светлый фон без тонмаппинга (под освещением ACES он серел), ручка — PBR с окружением, как в сцене
+  const plateMat = new THREE.MeshBasicMaterial({ color: 0xf1ede4, toneMapped: false });
   const span = spec.total + 2000, plateH = 2000;
   const plate = new THREE.Mesh(new THREE.BoxGeometry(span, plateH, 16), plateMat);
   plate.position.set(0, edgeLike ? 2 - plateH / 2 : 0, -8);
