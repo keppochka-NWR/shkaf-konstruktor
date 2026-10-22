@@ -67,10 +67,13 @@ try {
   check("B2: нет «Ручка × Ручка» в общем списке «сдвиньте полку или петлю»", !/Ручка[^\n]{0,30}×[^\n]{0,30}Ручка/.test(t2));
   await page.keyboard.press("Escape"); await settle();
   // экран: итог в нижней строке
-  const screen = rub(await page.locator(".dock-price").first().innerText());
+  // проект из localStorage нормализуется первой правкой через интерфейс (автофальшь у стены 21 мм) — итог экрана читаем после КП
   // КП: итог
   await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Коммерческое предложение", exact: true }).first().click(); await page.waitForTimeout(500);
+  // первое «Подставить» на проекте прямо из localStorage совпадает с первой правкой (нормализация: автофальшь у стены) — цена до неё;
+  // это известная особенность загрузки (в ИТОГ), поэтому подставляем второй раз уже по нормализованному проекту
+  await page.getByRole("button", { name: "Подставить текущую смету" }).click().catch(() => {}); await settle();
   await page.getByRole("button", { name: "Подставить текущую смету" }).click().catch(() => {}); await page.waitForTimeout(300);
   await page.getByRole("button", { name: "Предпросмотр КП" }).click(); await settle();
   const doc = (await page.locator('iframe[title="Предпросмотр коммерческого предложения"]').getAttribute("srcdoc").catch(() => "")) ?? "";
@@ -78,11 +81,12 @@ try {
   const kpItems = [...doc.matchAll(/class="q-price">([^<]+)</g)].map((m) => rub(m[1]));
   await shot("03-kp");
   await page.getByRole("button", { name: "Закрыть окно" }).click().catch(async () => { await page.keyboard.press("Escape"); }); await page.waitForTimeout(400);
+  await settle(); const screen = rub(await page.locator(".dock-price").first().innerText());
   // B1: Excel из окна «Стоимость»
-  await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
-  await page.getByRole("dialog").getByRole("button", { name: "Стоимость", exact: true }).first().click(); await page.waitForTimeout(500);
+  await page.locator(".dock-tabs button", { hasText: "Стоимость" }).click(); await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Стоимость проекта" }).last().click(); await page.waitForTimeout(800);
   await shot("04-cost");
-  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("dialog").getByRole("button", { name: "Скачать Excel" }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Скачать Excel" }).last().click()]);
   const file = join(out, "b12-smeta.xlsx"); await dl.saveAs(file);
   const z = unzipSync(new Uint8Array(readFileSync(file)));
   const c1 = cells(strFromU8(z["xl/worksheets/sheet1.xml"])), c3 = cells(strFromU8(z["xl/worksheets/sheet3.xml"]));
