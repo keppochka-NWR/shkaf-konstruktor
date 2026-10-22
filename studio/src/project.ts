@@ -39,12 +39,12 @@ export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
  if(c){const w=a.module.width,d=c.sideDepth,rear=a.module.backType==='none'?0:3,front=a.module.doors?26:0;return [[-rear,-rear],[w,-rear],[w,d+front],[d+front,w],[-rear,w]].map(([u,v])=>localToRoom(a,u,v));}
  const m=a.module,rear=m.kupe||m.kitchen?.sideRecess?0:!m.backType||m.backType==='nailed'?3:0;
  const faces=!m.kupe&&((m.doors&&m.doorMount!=='inset')||m.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(m.doors&&!s.externalDrawers))||!!m.desk);
- const front=m.openJunction?m.depth:Math.max(m.depth+(faces?18:0),m.cornerFiller&&!cornerStrip(m)?m.depth+RULES.cornerFillerExtra:0);
+ const front=m.openJunction?m.depth:Math.max(m.depth+(faces?18:0),m.cornerFiller&&!cornerStrip(m)?m.depth+RULES.cornerFillerExtra:0,m.depth+(m.kupeZone??0)/* шкаф-купе: боковины и крыша над зоной дверей */);
  return [[-sideExtension(m,'left'),-rear],[m.width+sideExtension(m,'right'),-rear],[m.width+sideExtension(m,'right'),front],[-sideExtension(m,'left'),front]].map(([u,v])=>localToRoom(a,u,v));
 }
 export function bounds(a:PlacedModule){
  if(a.module.corner){const points=moduleFootprint(a),xs=points.map(p=>p.x),zs=points.map(p=>p.z);return {x:Math.min(...xs),z:Math.min(...zs),y:a.y??0,w:Math.max(...xs)-Math.min(...xs),d:Math.max(...zs)-Math.min(...zs),h:a.module.height};}
- const rear=a.module.kupe||a.module.kitchen?.sideRecess?0:!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;/* вкладные фасады (двери и ящики) внутри корпуса — спереди не выступают */const faces=!a.module.kupe&&((a.module.doors&&a.module.doorMount!=='inset')||a.module.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(a.module.doors&&!s.externalDrawers))||!!a.module.desk);const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+(faces?18:0),cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0);const points=[[-sideExtension(a.module,'left'),-rear],[a.module.width+sideExtension(a.module,'right'),-rear],[a.module.width+sideExtension(a.module,'right'),front],[-sideExtension(a.module,'left'),front]].map(([u,v])=>localToRoom(a,u,v));return {...polygonBounds(points),y:a.y??0,h:a.module.height};}
+ const rear=a.module.kupe||a.module.kitchen?.sideRecess?0:!a.module.backType||a.module.backType==='nailed'?3:0;const cf=a.module.cornerFiller;/* вкладные фасады (двери и ящики) внутри корпуса — спереди не выступают */const faces=!a.module.kupe&&((a.module.doors&&a.module.doorMount!=='inset')||a.module.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'&&!(a.module.doors&&!s.externalDrawers))||!!a.module.desk);const front=a.module.openJunction?a.module.depth:Math.max(a.module.depth+(faces?18:0),cf&&!cornerStrip(a.module)?a.module.depth+RULES.cornerFillerExtra:0,a.module.depth+(a.module.kupeZone??0));const points=[[-sideExtension(a.module,'left'),-rear],[a.module.width+sideExtension(a.module,'right'),-rear],[a.module.width+sideExtension(a.module,'right'),front],[-sideExtension(a.module,'left'),front]].map(([u,v])=>localToRoom(a,u,v));return {...polygonBounds(points),y:a.y??0,h:a.module.height};}
 /** Габарит корпуса без фальшей — для поиска стыков и стен. */
 function bodyBounds(a:PlacedModule){return bounds({...a,module:{...a.module,cornerFiller:undefined,wallFiller:undefined}});}
 /**
@@ -132,6 +132,9 @@ function moduleSolids(a:PlacedModule):Solid[]{
  const m=a.module,y=a.y??0;
  const box=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number):Solid=>({polygon:[[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([u,v])=>localToRoom(a,u,v)),y:y+y0,h:y1-y0});
  if(m.openJunction||m.raw?.source==='garderyob-free-panel')return parts(m).filter(q=>q.role!=='fastener').map(q=>box(q.position[0]-q.size[0]/2,q.position[0]+q.size[0]/2,q.position[2]-q.size[2]/2,q.position[2]+q.size[2]/2,q.position[1]-q.size[1]/2,q.position[1]+q.size[1]/2));
+ // шкаф-купе с дверями внутри: корпус + боковины и крыша над зоной дверей; сама зона (между боковинами под крышей) свободна для дверей купе
+ if(m.kupeZone&&!m.desk){const t=RULES.panel,d=m.depth,f=d+m.kupeZone,rear=!m.backType||m.backType==='nailed'?3:0;
+  return [box(0,m.width,-rear,d,0,m.height),box(0,t,d,f,0,m.height),box(m.width-t,m.width,d,f,0,m.height),box(t,m.width-t,d,f,m.height-t,m.height)];}
  if(!m.desk)return [{polygon:moduleFootprint(a),y,h:m.height}];
  const g=deskGeometry(m),T=RULES.deskTop,t=RULES.panel,out=[box(0,m.width,0,m.depth,m.height-T,m.height)];
  if(g.hasL)out.push(box(g.x0,g.x0+t,0,g.baseDepth,0,m.height-T));

@@ -56,10 +56,10 @@ const PROFILE_SYSTEMS = [
     // Slim — вертикальный 12мм
     dims: { frameSide:12, frameTop:40, frameBot:40, divider:20, trackTop:40, trackBot:12 },
     colors: [
-      { name:'Серебро матовое',    frameGrad:'#d0d0d0,#ebebeb,#a8a8a8', ruchka:1167, verh:1110, niz:2199, razd:1227, napravl_top:2553, napravl_bot:1203 },
-      { name:'Чёрный матовый',     frameGrad:'#1a1a1a,#303030,#0e0e0e', ruchka:1332, verh:1263, niz:2502, razd:1386, napravl_top:2886, napravl_bot:1356 },
+      { name:'Серебро матовое',    frameGrad:'#d8d8d8,#f4f4f4,#b0b0b0', ruchka:1167, verh:1110, niz:2199, razd:1227, napravl_top:2553, napravl_bot:1203 },
+      { name:'Чёрный матовый',     frameGrad:'#1a1a1a,#383838,#0e0e0e', ruchka:1332, verh:1263, niz:2502, razd:1386, napravl_top:2886, napravl_bot:1356 },
       { name:'Белый глянец',       frameGrad:'#f0f0f0,#ffffff,#d8d8d8', ruchka:1332, verh:1386, niz:2502, razd:1386, napravl_top:2886, napravl_bot:1356 },
-      { name:'Шампань матовая',    frameGrad:'#d0c49c,#e4d8b0,#b4a880', ruchka:1179, verh:1239, niz:2220, razd:1239, napravl_top:2658, napravl_bot:1251 },
+      { name:'Шампань матовая',    frameGrad:'#d4c8a0,#ece0bc,#b8ac88', ruchka:1179, verh:1239, niz:2220, razd:1239, napravl_top:2658, napravl_bot:1251 },
       { name:'Золото кракелюр',    frameGrad:'#c0a030,#dcc048,#9a8020', ruchka:1458, verh:1386, niz:2739, razd:1518, napravl_top:3153, napravl_bot:1473 },
     ],
   },
@@ -68,8 +68,8 @@ const PROFILE_SYSTEMS = [
     // Slim Fine — вертикальный 12мм
     dims: { frameSide:12, frameTop:40, frameBot:40, divider:20, trackTop:40, trackBot:12 },
     colors: [
-      { name:'Серебро матовое',    frameGrad:'#d0d0d0,#ebebeb,#a8a8a8', ruchka:1128, verh:1071, niz:2124, razd:1185, napravl_top:2553, napravl_bot:1203 },
-      { name:'Чёрный матовый',     frameGrad:'#1a1a1a,#303030,#0e0e0e', ruchka:1287, verh:1221, niz:2418, razd:1338, napravl_top:2886, napravl_bot:1356 },
+      { name:'Серебро матовое',    frameGrad:'#d8d8d8,#f4f4f4,#b0b0b0', ruchka:1128, verh:1071, niz:2124, razd:1185, napravl_top:2553, napravl_bot:1203 },
+      { name:'Чёрный матовый',     frameGrad:'#1a1a1a,#383838,#0e0e0e', ruchka:1287, verh:1221, niz:2418, razd:1338, napravl_top:2886, napravl_bot:1356 },
       { name:'Белый глянец',       frameGrad:'#f0f0f0,#ffffff,#d8d8d8', ruchka:1287, verh:1341, niz:2418, razd:1338, napravl_top:2886, napravl_bot:1356 },
     ],
   },
@@ -78,10 +78,10 @@ const PROFILE_SYSTEMS = [
     // ЭКО — вертикальный 30мм
     dims: { frameSide:30, frameTop:40, frameBot:40, divider:20, trackTop:40, trackBot:12 },
     colors: [
-      { name:'Серебро матовое',    frameGrad:'#c8c8c8,#e0e0e0,#a0a0a0', ruchka:1017, verh:690, niz:1293, razd:657, napravl_top:1653, napravl_bot:762 },
-      { name:'Белый глянец',       frameGrad:'#eeeeee,#ffffff,#d4d4d4', ruchka:1071, verh:729, niz:1356, razd:693, napravl_top:1740, napravl_bot:801 },
-      { name:'Шампань матовая',    frameGrad:'#ccc0a0,#ddd4b4,#aaa088', ruchka:1068, verh:732, niz:1365, razd:687, napravl_top:1737, napravl_bot:795 },
-      { name:'Золото матовое',     frameGrad:'#c0a030,#d8b848,#9a8020', ruchka:1110, verh:756, niz:1407, razd:711, napravl_top:1803, napravl_bot:831 },
+      { name:'Серебро матовое',    frameGrad:'#d8d8d8,#f4f4f4,#b0b0b0', ruchka:1017, verh:690, niz:1293, razd:657, napravl_top:1653, napravl_bot:762 },
+      { name:'Белый глянец',       frameGrad:'#f0f0f0,#ffffff,#d8d8d8', ruchka:1071, verh:729, niz:1356, razd:693, napravl_top:1740, napravl_bot:801 },
+      { name:'Шампань матовая',    frameGrad:'#d4c8a0,#ece0bc,#b8ac88', ruchka:1068, verh:732, niz:1365, razd:687, napravl_top:1737, napravl_bot:795 },
+      { name:'Золото матовое',     frameGrad:'#c8a838,#e8c850,#a88820', ruchka:1110, verh:756, niz:1407, razd:711, napravl_top:1803, napravl_bot:831 },
       { name:'Бронза матовая',     frameGrad:'#906040,#b08058,#704830', ruchka:1068, verh:732, niz:1365, razd:687, napravl_top:1737, napravl_bot:795 },
     ],
   },
@@ -90,7 +90,7 @@ const PROFILE_SYSTEMS = [
     // GRACE — вертикальный 12мм
     dims: { frameSide:12, frameTop:40, frameBot:40, divider:20, trackTop:40, trackBot:12 },
     colors: [
-      { name:'Чёрный матовый',     frameGrad:'#111111,#2a2a2a,#080808', ruchka:2328, verh:4083, niz:3267, razd:2424, napravl_top:6390, napravl_bot:1473 },
+      { name:'Чёрный матовый',     frameGrad:'#1a1a1a,#383838,#0e0e0e', ruchka:2328, verh:4083, niz:3267, razd:2424, napravl_top:6390, napravl_bot:1473 },
     ],
   },
   {
