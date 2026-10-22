@@ -160,7 +160,7 @@ test("интерфейс: плашки зазора пропускают пра�
   assert.match(scene, /function stretchHandle[\s\S]{0,600}passThrough\(b\)/);
   assert.match(css, /\.stretch-handle \{[\s\S]*?cursor: ew-resize/);
   assert.match(app, /size\('depth','Глубина'\),\.\.\.rowGapItems\(a\.id\)/);
-  assert.match(app, /Дотянуть \(\+\{g\.gap\} мм\)[\s\S]*Придвинуть вплотную[\s\S]*Задать зазор…/);
+  assert.match(app, /Дотянуть \(\+\{fillAdd\(g\)\} мм\)[\s\S]*Придвинуть вплотную[\s\S]*Задать зазор…/);
 });
 
 test("кухня: справа свободно, но там кончается столешница — как раньше растёт влево за счёт левого соседа", () => {

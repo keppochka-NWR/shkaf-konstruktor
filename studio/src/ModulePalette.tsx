@@ -1,5 +1,5 @@
 import {refitKDrawers} from './kitchenDrawers';
-import {useEffect,useMemo,useState,type ReactNode} from 'react';
+import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal} from 'lucide-react';
 import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,RULES,type Module} from './model';
 import {withDoorCount,doorCountOptions,autoDoorCount} from './paletteDoors';
@@ -7,6 +7,7 @@ import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths} from './kitchen';
 import type {PlacedModule} from './project';
+import {rowShortageText,type RowShortage} from './rowFit';
 export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-base'|'kitchen-wall'|'worktop';
 const choices=[{id:'empty',label:'Пустой шкаф',icon:Box},{id:'shelves',label:'Стеллаж',icon:Rows3},{id:'wardrobe',label:'Для одежды',icon:Shirt},{id:'drawers',label:'Комод',icon:Archive},{id:'corner',label:'Угловой шкаф',icon:Box},{id:'desk',label:'Стол',icon:PanelTop},{id:'kupe-wardrobe',label:'Шкаф-купе',icon:Columns2},{id:'kitchen-row',label:'Кухня прямая',icon:CookingPot},{id:'kitchen-base',label:'Нижний кухонный',icon:PanelBottom},{id:'kitchen-wall',label:'Навесной кухонный',icon:PanelTopOpen},{id:'worktop',label:'Столешница',icon:RectangleHorizontal},{id:'kupe',label:'Двери купе',icon:SquareSplitHorizontal}] as const;
 const SIZES:Partial<Record<ModuleKind,[number,number,number]>>={'kitchen-row':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-base':[600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-wall':[600,KITCHEN.wallHeight,KITCHEN.wallDepth],worktop:[2400,KITCHEN.worktopThickness,KITCHEN.worktopDepth],corner:[1050,2000,450],desk:[1200,750,600],drawers:[600,850,550],kupe:[1600,2400,KUPE_DEPTH],'kupe-wardrobe':[1800,2400,600]};
@@ -88,7 +89,9 @@ function readPalette():PaletteChoice|null{
   try{const v=JSON.parse(sessionStorage.getItem(PALETTE_KEY)||'null') as PaletteChoice|null;const c=categories.find(x=>x.id===v?.category);
     return v&&c&&(c.kinds as readonly string[]).includes(v.kind)&&[v.width,v.height,v.depth].every(Number.isFinite)?v:null;}catch{return null;}
 }
-export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source:Module;onAdd:(module:Module)=>boolean;onAddGroup:(group:PlacedModule[])=>boolean;kitchenTemplates?:ReactNode}) {
+export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{source:Module;onAdd:(module:Module)=>boolean;onAddGroup:(group:PlacedModule[])=>boolean;kitchenTemplates?:ReactNode;
+  /** Нехватка места в ряду у стены (rowFit.ts, m1 критика 22.10): вместо молчаливой расстановки перед шкафами — варианты. */
+  fit?:(module:Module)=>RowShortage|null}) {
   // T1 (18.10): выбор палитры живёт дольше экземпляра — после первого шкафа редактор пересоздаётся, а категория и размеры остаются.
   const [saved]=useState(readPalette);
   const [kind,setKind]=useState<ModuleKind>(saved?.kind??'empty'),[width,setWidth]=useState(saved?.width??600),[height,setHeight]=useState(saved?.height??2000),[depth,setDepth]=useState(saved?.depth??550),[error,setError]=useState('');
@@ -106,6 +109,14 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source
   },[kind,kupeKind,width,height,depth,source]);
   const doorValue=doors!=='auto'&&doorChoice?.options.includes(doors)?doors:'auto';
   const doorArg=doorValue==='auto'?(kupeKind?doorChoice?.auto:undefined):doorValue;
+  // m1 (критик 22.10): шкаф не встаёт в ряд у стены — сообщение с вариантами; смена вида/размеров убирает предложение
+  const [offer,setOffer]=useState<{module:Module;s:RowShortage}|null>(null);
+  useEffect(()=>{if(offer){setOffer(null);setError('');}},[kind,width,height,depth,doorValue]); // eslint-disable-line react-hooks/exhaustive-deps
+  // кнопка «Добавить в комнату» прилипает к низу панели (m11) — варианты прокручиваем к середине, чтобы она их не закрывала
+  const offerRef=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(offer)offerRef.current?.scrollIntoView?.({block:'center'});},[offer]);
+  const narrowed=(w:number,off:boolean):Module=>{let m:Module;try{m=createModule(kind,w,height,depth,source,doorArg);}catch{m=createModule(kind,w,height,depth,source);}return off?{...m,autoFillersOff:true}:m;};
+  const take=(make:()=>Module)=>{try{const ok=onAdd(make());if(ok){setOffer(null);setError('');}}catch(e){setOffer(null);setError((e as Error).message);}};
   const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'
     :kind==='kupe-wardrobe'&&kupeMount==='inside'?'Боковины до пола и крыша на всю глубину; двери купе между боковинами под крышей, нижняя направляющая на полу. Дно, цоколь и секции — за дверями, 100 мм глубины занимают направляющие.'
@@ -126,7 +137,14 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source
     {kind==='kupe-wardrobe'&&<label className="hardware-field">Установка дверей<select aria-label="Установка дверей купе" value={kupeMount} onChange={e=>setKupeMount(e.target.value==='inside'?'inside':'free')}><option value="inside">внутри шкафа</option><option value="free">отдельно (ниша или перед корпусами)</option></select></label>}
     <small>{note}</small>
     {error&&<p role="alert">{error}</p>}
-    <button className="primary full" onClick={()=>{try{const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):kind==='kitchen-row'?onAddGroup(createKitchenRow(width,source,height,depth)):onAdd(createModule(kind,width,height,depth,source,doorArg));if(ok)setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
+    {offer&&<div className="palette-row-fit" role="group" aria-label="Шкаф не встаёт в ряд" ref={offerRef}>
+      {offer.s.withFiller!==null&&<button type="button" className="outline" onClick={()=>take(()=>narrowed(offer.s.withFiller!,false))}>Сузить до {offer.s.withFiller} мм{offer.s.filler?' (с фальшем)':''}</button>}
+      {offer.s.withoutFiller!==null&&<button type="button" className="outline" onClick={()=>take(()=>narrowed(offer.s.withoutFiller!,true))}>{offer.s.withoutFiller} мм без фальша у стены</button>}
+      <button type="button" className="text-action" onClick={()=>take(()=>offer.module)}>Поставить отдельно (перед шкафами)</button>
+    </div>}
+    <button className="primary full" onClick={()=>{try{if(kind==='kupe-wardrobe'||kind==='kitchen-row'){const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):onAddGroup(createKitchenRow(width,source,height,depth));if(ok)setError('');return;}
+      const m=createModule(kind,width,height,depth,source,doorArg),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
+      setOffer(null);if(onAdd(m))setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
     {category==='kitchen'&&kitchenTemplates&&<details className="catalog-presets"><summary>Готовые кухонные модули</summary>{kitchenTemplates}</details>}
   </details>;
 }

@@ -185,7 +185,9 @@ export function resizeInRow(p: Project, placedId: string, width: number): Projec
     // Внешний край ряда: в свободное место до ближайшего препятствия (модуль любого уровня, объект замера, стена);
     // столешница сверху и цоколь ряда не должны повиснуть или торчать.
     const g = freeSpace(p, a)[side];
-    if (delta > 0 && g.gap < delta - 0.1) throw Error(noRoom(a, side, g, delta));
+    if (delta > 0 && g.gap < delta - 0.1) throw Error(noRoom(a, side, gaps(p, a.id)[side], delta));
+    // до стены: часть зазора займёт автофальшь — иначе корпус сдвинется в соседа («пересекается»), m2 критика 22.10
+    if (delta > 0 && g.what === "стена") { const f = gaps(p, a.id)[side]; if (fillAdd(f) < delta - 0.1) throw Error(noRoom(a, side, f, delta)); }
     rowObjectsCheck(p, a, ctx, side, delta);
   }
   return { ...p, modules: p.modules.map((x) => next.get(x.id) ?? x) };
@@ -212,12 +214,13 @@ function neighborResized(a: PlacedModule, n: PlacedModule, side: Side, delta: nu
 /** Зазор с одной стороны модуля по оси его ширины. gap — мм до препятствия (0 — вплотную); what — 'стена', '«Имя модуля»'
  *  или 'объект замера «…»'; to — то же после «до» («стены», «объекта замера …»); fillWidth — ширина, если дотянуть край
  *  до препятствия; moveTo — положение модуля (x, z), если придвинуть его вплотную (ширина та же). */
-export type GapSide = { gap: number; what: string; to: string; id?: string; fillWidth: number; moveTo: { x: number; z: number } };
+export type GapSide = { gap: number; what: string; to: string; id?: string; fillWidth: number; moveTo: { x: number; z: number }; filler?: number };
 const genitive = (what: string) => (what === "стена" ? "стены" : what.startsWith("объект замера") ? what.replace("объект замера", "объекта замера") : what);
 /** «Шкаф 4»: справа свободно 147 мм до «Угловой шкаф», а нужно 200. Можно дотянуть до него (+147 мм). — без кавычек в кавычках. */
 function noRoom(a: PlacedModule, side: Side, g: GapSide, need: number) {
-  const hint = g.gap >= 1 ? ` Можно дотянуть до ${g.what === "стена" ? "неё" : "него"} (+${g.gap} мм) — по плашке зазора или правой кнопкой › Размеры.` : "";
-  return `${quote(a.module)}: ${side === "right" ? "справа" : "слева"} свободно ${g.gap} мм до ${g.to}, а нужно ${r1(need)}.${hint}`;
+  const add = r1(g.gap - (g.filler ?? 0));
+  const hint = add >= 1 ? ` Можно дотянуть до ${g.what === "стена" ? "неё" : "него"} (+${add} мм${g.filler ? "; " + g.filler + " мм — фальш у стены" : ""}) — по плашке зазора или правой кнопкой › Размеры.` : "";
+  return `${quote(a.module)}: ${side === "right" ? "справа" : "слева"} свободно ${g.gap} мм до ${g.to}${g.filler ? ` (${g.filler} мм из них — фальш у стены)` : ""}, а нужно ${r1(need)}.${hint}`;
 }
 
 /** Ближайшее препятствие с каждой стороны: модуль любого уровня (перекрытый по высоте и поперёк ряда), объект замера, стена. */
@@ -247,12 +250,29 @@ function freeSpace(p: Project, a: PlacedModule): Record<Side, GapSide> {
   return { left: one("left"), right: one("right") };
 }
 
-/** Зазоры слева и справа от модуля по оси его ширины (любой поворот): до соседа любого уровня, объекта замера или стены. */
+/** Зазоры слева и справа от модуля по оси его ширины (любой поворот): до соседа любого уровня, объекта замера или стены.
+ *  До стены: если край дойдёт до стены, у боковины встанет автофальшь (16 + 5 мм) — filler, а fillWidth — фактическая ширина
+ *  после «Дотянуть» (критик релиза 22.10, m2: «Дотянуть (+79)» добавляло 58 — 21 мм оставалось под фальш). */
 export function gaps(p: Project, id: string): Record<Side, GapSide> {
   const a = p.modules.find((x) => x.id === id);
   if (!a) throw Error("Модуль не найден.");
-  return freeSpace(p, a);
+  const g = freeSpace(p, a);
+  if (ownLocked(a.module)) return g;
+  for (const side of ["left", "right"] as const) {
+    const s = g[side];
+    if (s.what !== "стена" || s.gap < 0.5) continue;
+    const keep: Side = side === "right" ? "left" : "right";
+    try {
+      const w = settle(p, replace(p, [setWidthKeeping(a, r1(a.module.width + s.gap), keep)]), a.id, keep).modules.find((x) => x.id === id)!.module.width;
+      const filler = r1(a.module.width + s.gap - w);
+      if (filler >= 0.5 && filler < s.gap) g[side] = { ...s, filler, fillWidth: w };
+    } catch { /* ширина вне пределов — подскажет сама «Дотянуть» */ }
+  }
+  return g;
 }
+/** Сколько реально прибавит «Дотянуть» (мм) и подпись про фальш у стены: «+58 мм; 21 мм — фальш у стены». */
+export const fillAdd = (g: GapSide) => r1(g.gap - (g.filler ?? 0));
+export const fillerNote = (g: GapSide) => (g.filler ? `${g.filler} мм — фальш у стены` : "");
 
 /** Почему ширину самого модуля нельзя менять краем (или undefined). */
 function ownLocked(m: Module): string | undefined {
@@ -308,7 +328,7 @@ function moveFreeEdge(p: Project, a: PlacedModule, side: Side, d: number): Proje
   checkOwnWidth(a, w);
   if (d > 0.05) {
     const g = freeSpace(p, a)[side];
-    if (g.gap < d - 0.1) throw Error(noRoom(a, side, g, d));
+    if (g.gap < d - 0.1) throw Error(noRoom(a, side, gaps(p, a.id)[side], d));
   }
   rowObjectsCheck(p, a, rowContext(p, a), side, d);
   return settle(p, replace(p, [setWidthKeeping(a, w, keep)]), a.id, keep);
@@ -350,7 +370,7 @@ export function flush(p: Project, id: string, side: Side, gap = 0): Project {
  *  или к краю модуля любого уровня в той же линии в пределах 30 мм (Alt — без привязки). Свободный край — меняется только
  *  модуль (не заходит в соседа); край вплотную к соседу ряда — двигается стык (модуль и сосед вместе, с пределами соседа).
  *  project — результат (если можно), problem — почему нельзя. */
-export type StretchPlan = { mode: "free" | "joint"; width: number; delta: number; gap: number; neighbor?: { id: string; name: string; width: number }; project?: Project; problem?: string };
+export type StretchPlan = { mode: "free" | "joint"; width: number; delta: number; gap: number; neighbor?: { id: string; name: string; width: number }; project?: Project; problem?: string; filler?: number };
 export const STRETCH_SNAP = 30;
 export function planStretch(p: Project, id: string, side: Side, raw: number, snap = true): StretchPlan {
   const a = p.modules.find((x) => x.id === id);
@@ -382,6 +402,9 @@ export function planStretch(p: Project, id: string, side: Side, raw: number, sna
   if (Math.abs(d) < 0.05) return plan;
   try { plan.project = joint ? moveJoint(p, a, n!, side, d) : moveFreeEdge(p, a, side, d); }
   catch (err) { plan.problem = (err as Error).message; }
+  // край у стены: автофальшь забирает 16 + 5 мм — показываем фактическую ширину (m2 критика 22.10)
+  const w = plan.project?.modules.find((x) => x.id === id)?.module.width;
+  if (w !== undefined && !joint && plan.width - w >= 0.5) { plan.filler = r1(plan.width - w); plan.width = w; plan.delta = r1(w - W); }
   return plan;
 }
 

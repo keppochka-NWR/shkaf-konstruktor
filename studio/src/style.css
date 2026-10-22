@@ -1706,3 +1706,7 @@ th {
 .move-group{margin:8px 0;padding:10px;border:1px solid #dce5de;border-radius:8px}.move-group summary{cursor:pointer;font-weight:600;font-size:12px}.move-group-list{max-height:190px;overflow:auto}.move-group-list label{display:flex;align-items:flex-start;gap:7px;font-size:12px;padding:7px 0;line-height:1.4}.move-group-list input{margin-top:2px;flex-shrink:0}.move-group .field-note{font-size:11px}
 
 .move-group>.text-action{display:block;width:100%;text-align:left;margin-top:6px}
+
+/* m1 критика 22.10: шкаф не встаёт в ряд у стены — варианты под сообщением палитры */
+.palette-row-fit{display:flex;flex-direction:column;gap:6px;margin:6px 0 8px}.palette-row-fit button{width:100%;font-size:12px}.palette-row-fit .text-action{text-align:left}
+.dock-sheets{margin:6px 0 0;font-size:12px;color:#536066}.dock-sheets b{color:#1d2a30}.dock-sheets small{display:block;margin-top:3px;color:#8a5a00}
