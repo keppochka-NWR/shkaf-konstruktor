@@ -2,7 +2,7 @@
 // направляющие, ручки, кромка, крепёж — то, что меняет hardwareSwap), у варианта — схема-иконка, понятное название, ключевые свойства
 // и розничная разница «+N ₽ к заказу» (итог сметы после замены минус текущий; закупки здесь нет), текущий выбор отмечен.
 // Применить — ко всему проекту или к одному модулю (scopedSwap). Образец — окно ручек App.tsx (поиск, цены).
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Check, Search, X } from "lucide-react";
 import type { Project } from "./project";
 import { estimate } from "./pricing";
@@ -84,7 +84,13 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
     const d = after === null || base === null ? null : after - base;
     setNote(o.what + (d === null ? ": заменено." : d === 0 ? ": цена не изменилась." : `: цена ${d > 0 ? "выросла на " + rub(d) : "снизилась на " + rub(d)}.`));
   }
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  // Esc закрывает окно (критик релиза 22.10). Было: слушатель с [onClose] — Esc сначала ловил App (снять выделение), React
+  // перерисовывал док в микрозадаче между слушателями, эффект снимал наш слушатель и ставил новый, а новый на это нажатие уже
+  // не срабатывал — окно оставалось. Теперь один слушатель на всё время окна, на погружении: закрывает окно раньше App
+  // (preventDefault — App выделение не трогает).
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); close.current(); } }; window.addEventListener("keydown", k, true); return () => window.removeEventListener("keydown", k, true); }, []);
   const g = groups.find((x) => x.id === active)!;
   const price = (o: Option) => {
     const d = delta[(scope ?? "all") + "|" + active + "|" + o.id];
