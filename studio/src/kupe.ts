@@ -17,8 +17,14 @@ export type KupeSpec = {
   fills: string[];
   /** Раскладка секций полотна — индекс KUPE_SECTIONS. */
   sections?: number;
+  /** Наполнение по секциям (как редактор секции калькулятора купе): sectionFills[дверь][секция], секция = ряд × колонок + колонка.
+   *  Пусто/нет записи — наполнение двери (fills). При смене раскладки секций сбрасывается. */
+  sectionFills?: (string | null)[][];
   softClose?: boolean;
   film?: boolean;
+  /** Установка дверей: «inside» — внутри шкафа-купе (между боковинами, под крышей, нижняя направляющая на полу; корпус — модуль
+   *  с kupeZone); без поля — отдельно (ниша или перед корпусами). На геометрию и цену дверей не влияет — это проём W×H. */
+  mount?: "inside";
 };
 export const KUPE_DEPTH = 100;
 export const LDSP_SHEET = { long: 2750, short: 1830 };
@@ -29,6 +35,27 @@ export function kupeColor(k: KupeSpec) { const s = kupeSystem(k); return s.color
 export function kupeFill(name: string | undefined): KupeFill { return KUPE_FILLS.find((f) => f.n === name) ?? KUPE_FILLS[0]; }
 export function kupeDoorFill(k: KupeSpec, i: number) { return kupeFill(k.fills[i] ?? k.fills[0]); }
 export function kupeSections(k: KupeSpec) { return KUPE_SECTIONS[k.sections ?? 0] ?? KUPE_SECTIONS[0]; }
+/** Число секций полотна по раскладке. */
+export function kupeSectionCount(k: KupeSpec) { const s = kupeSections(k); return s.rowRatios.length * s.colRatios.length; }
+/** Наполнение секции si двери i: своё (sectionFills) или наполнение двери. */
+export function kupeSectionFill(k: KupeSpec, i: number, si: number): KupeFill {
+  const own = k.sectionFills?.[i]?.[si];
+  return own ? kupeFill(own) : kupeDoorFill(k, i);
+}
+/** Новое наполнение секции (null — вернуть наполнение двери); пустые хвосты убираются, чтобы «как у двери» не хранилось. */
+export function withSectionFill(k: KupeSpec, i: number, si: number, fill: string | null): KupeSpec {
+  const n = kupeSectionCount(k), all = Array.from({ length: k.doors }, (_, d) => Array.from({ length: n }, (_, s) => k.sectionFills?.[d]?.[s] ?? null));
+  all[i][si] = fill && fill !== kupeDoorFill(k, i).n ? fill : null;
+  const sectionFills = all.map((row) => row.some(Boolean) ? row : []);
+  const { sectionFills: _old, ...rest } = k;
+  return sectionFills.some((r) => r.length) ? { ...rest, sectionFills } : rest;
+}
+/** Ширина полотна с нахлёстом: соседние полотна (два ряда) перекрываются на ширину профиля-ручки по заводскому сечению Aristo,
+ *  поэтому полотно = (проём + (N − 1) × ручка) / N. Тот же расчёт — в калькуляторе купе (web/calc/js/kupe-door.js, сверка в тесте). */
+export function kupeLeafWidth(W: number, N: number, s: KupeSystem) {
+  const ov = N > 1 ? kupeHandle(s).w : 0;
+  return { width: (W + (N - 1) * ov) / N, overlap: ov };
+}
 export function isLdspFill(f: KupeFill) { return f.g.startsWith("ЛДСП"); }
 /** Плёнка по типу наполнения — как getAutoFilm() калькулятора купе. */
 export function kupeFilm(f: KupeFill) {
@@ -37,10 +64,10 @@ export function kupeFilm(f: KupeFill) {
   if (f.g === "Стекло" || f.g.startsWith("Узорчатые")) return KUPE_FILM_SAFETY;
   return KUPE_FILM_ARMOR;
 }
-/** Видимая ширина полотна: полотна перекрываются на ширину вертикального профиля. */
+/** Реальная ширина полотна: полотна перекрываются на ширину профиля-ручки (как в 3D, kupeParts). */
 export function kupeLeaf(m: Module) {
-  const k = m.kupe!, s = kupeSystem(k), ov = Math.max(20, s.dims.frameSide), n = k.doors;
-  return { width: (m.width + (n - 1) * ov) / n, overlap: ov };
+  const k = m.kupe!;
+  return kupeLeafWidth(m.width, k.doors, kupeSystem(k));
 }
 
 export function kupeErrors(m: Module): string[] {
@@ -50,16 +77,19 @@ export function kupeErrors(m: Module): string[] {
   if (!s.colors.some((c) => c.name === k.color)) e.push("Двери купе: выберите цвет профиля из списка.");
   if (!Array.isArray(k.fills) || !k.fills.length || k.fills.some((f) => !KUPE_FILLS.some((x) => x.n === f))) e.push("Двери купе: выберите наполнение из каталога.");
   if (k.sections !== undefined && !KUPE_SECTIONS[k.sections]) e.push("Двери купе: неизвестная раскладка секций.");
+  if (k.sectionFills !== undefined && (!Array.isArray(k.sectionFills) || k.sectionFills.some((r) => !Array.isArray(r) || r.length > kupeSectionCount(k) || r.some((f) => f !== null && !KUPE_FILLS.some((x) => x.n === f))))) e.push("Двери купе: наполнение секций — из каталога, по числу секций полотна.");
   if (!(m.width >= 400 && m.width <= 6000)) e.push("Двери купе: ширина проёма 400–6000 мм.");
   if (!(m.height >= 600 && m.height <= 3000)) e.push("Двери купе: высота проёма 600–3000 мм.");
-  const dw = Math.round(m.width / k.doors);
+  // пределы системы — по реальной ширине полотна с нахлёстом (kupeLeaf), как её изготовят
+  const dw = Math.round(kupeLeaf(m).width);
   if (m.height < s.limits.Hmin || m.height > s.limits.Hmax) e.push(`Двери купе: высота ${m.height} мм вне пределов системы «${s.system}» (${s.limits.Hmin}–${s.limits.Hmax}).`);
   if (dw < s.limits.doorL_min || dw > s.limits.doorL_max) e.push(`Двери купе: ширина полотна ${dw} мм вне пределов системы «${s.system}» (${s.limits.doorL_min}–${s.limits.doorL_max}). Измените число дверей.`);
   // Вставка ЛДСП должна выкраиваться из листа 2750×1830 (вертикальная укладка, как по умолчанию в калькуляторе купе).
   const sec = kupeSections(k), d = s.dims, innerW = m.width / k.doors - 2 * d.frameSide, innerH = m.height - d.frameTop - d.frameBot;
   const cw = innerW - (sec.colRatios.length - 1) * d.divider, ch = innerH - (sec.rowRatios.length - 1) * d.divider;
   const sumR = sec.rowRatios.reduce((a, b) => a + b, 0), sumC = sec.colRatios.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < k.doors; i++) if (isLdspFill(kupeDoorFill(k, i))) for (const r of sec.rowRatios) for (const c of sec.colRatios) {
+  for (let i = 0; i < k.doors; i++) for (const [ri, r] of sec.rowRatios.entries()) for (const [ci, c] of sec.colRatios.entries()) {
+    if (!isLdspFill(kupeSectionFill(k, i, ri * sec.colRatios.length + ci))) continue;
     const w = Math.round(c / sumC * cw), h = Math.round(r / sumR * ch);
     if (w > LDSP_SHEET.short || h > LDSP_SHEET.long) { e.push(`Двери купе: вставка ЛДСП ${w}×${h} мм больше листа 1830×2750. Разделите полотно на секции.`); return e; }
   }
@@ -75,7 +105,12 @@ export function kupeLines(m: Module, ldsp?: (decor: string) => { price: number |
   const src = "Калькулятор купе: профили " + KUPE_VERSION.profiles + ", наполнения " + KUPE_VERSION.fillings;
   const P = (v: number) => v * KUPE_PROFILE_MULT, out: KupeLine[] = [], area = dw / 1000 * (H / 1000);
   const fillArea = new Map<string, number>();
-  for (let i = 0; i < N; i++) { const f = kupeDoorFill(k, i); fillArea.set(f.n, (fillArea.get(f.n) ?? 0) + area); }
+  // площадь секции — доля площади двери по раскладке, как sectionBreakdown2D в calculate() калькулятора купе
+  const sumR = sec.rowRatios.reduce((a, b) => a + b, 0), sumC = sec.colRatios.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < N; i++) sec.rowRatios.forEach((r, ri) => sec.colRatios.forEach((c, ci) => {
+    const f = kupeSectionFill(k, i, ri * sec.colRatios.length + ci);
+    fillArea.set(f.n, (fillArea.get(f.n) ?? 0) + area * (r / sumR) * (c / sumC));
+  }));
   for (const [n, a] of fillArea) { const f = kupeFill(n), l = isLdspFill(f) ? ldsp?.(n) ?? { price: null, source: "Прайс Lamarty: цена листа считается в смете" } : null; out.push({ id: "kupe-fill:" + n, label: "Купе · наполнение " + n, quantity: a, unit: "м²", unitPrice: l ? l.price : f.p ?? null, source: l ? l.source : src }); }
   const prof = (id: string, label: string, len: number, price: number) => { if (len > 0) out.push({ id: "kupe-profile:" + id + ":" + s.system + ":" + c.name, label: "Купе · " + label + " · " + s.system + " · " + c.name, quantity: len / 1000, unit: "м", unitPrice: P(price), source: src + " (закупка × 3)" }); };
   prof("ruchka", "профиль-ручка", 2 * H * N, c.ruchka);
@@ -192,12 +227,12 @@ export function kupeParts(m: Module): Part[] {
   else out.push(part("kupe:track:top", "Направляющая верхняя", [W, tt.h, tt.d], [W / 2, H - tt.h / 2, D / 2], { role: "body", model: model(tt.file, "x", true) }));
   if (s.kind !== "hang" && d.trackBot > 0 && tb) out.push(part("kupe:track:bottom", "Направляющая нижняя", [W, tb.h, tb.d], [W / 2, tb.h / 2, D / 2 + rows.trackBotShift], { role: "body", model: model(tb.file, "x", true) }));
   // Полотна в 3D — по чертежу: нахлёст равен ширине ручки, чтобы ручки соседних дверей совпадали. Цена считается отдельно (kupeLeaf).
-  const hw = h.w, n = k.doors, overlap = hw, lw = (W + (n - 1) * overlap) / n;
+  const hw = h.w, n = k.doors, { width: lw, overlap } = kupeLeafWidth(W, n, s);
   const bottom = fam.gapBottom ?? (s.kind === "hang" ? 10 : GAP.bottom), top = H - (fam.gapTop ?? GAP.top), lh = top - bottom;
   const ft = fam.frameTop.h, fb = fam.frameBot.h, dv = /twelve/i.test(s.profile) ? { file: "divider_twelve", h: 12, d: 12.8 } : fam.divider;
   const sumR = sec.rowRatios.reduce((a, b) => a + b, 0), sumC = sec.colRatios.reduce((a, b) => a + b, 0);
   for (let i = 0; i < n; i++) {
-    const row = i % 2, zs = D / 2 + panels[row], z = zs - h.slot, x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0, f = kupeDoorFill(k, i);
+    const row = i % 2, zs = D / 2 + panels[row], z = zs - h.slot, x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0;
     const leaf = { openShift: shift, sectionId: undefined };
     out.push(part(`kupe:${i}:side:l`, "Профиль-ручка", [hw, lh, h.d], [x0 + hw / 2, bottom + lh / 2, z], { ...leaf, model: model(h.file, "y") }));
     out.push(part(`kupe:${i}:side:r`, "Профиль-ручка", [hw, lh, h.d], [x0 + lw - hw / 2, bottom + lh / 2, z], { ...leaf, model: model(h.file, "y", true) }));
@@ -212,7 +247,7 @@ export function kupeParts(m: Module): Part[] {
       const rh = r / sumR * ch; let x = x0 + hw;
       const fTop = ri === 0 ? ins : 0, fBot = ri === last ? ins : 0, fh = rh + fTop + fBot, fy = y - rh / 2 + (fTop - fBot) / 2;
       sec.colRatios.forEach((c, ci) => {
-        const cwi = c / sumC * cw, ldsp = isLdspFill(f);
+        const cwi = c / sumC * cw, f = kupeSectionFill(k, i, ri * sec.colRatios.length + ci), ldsp = isLdspFill(f);
         out.push(part(`kupe:${i}:fill:${ri}:${ci}`, "Наполнение · " + f.n, [cwi, fh, ldsp ? fam.panel ?? 8 : 5], [x + cwi / 2, fy, zs], { material: ldsp ? "board" : "glass", decor: f.n, look: ldsp ? undefined : kupeFillLook(f) }));
         x += cwi;
         if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [dv.h, rh, dv.d], [x + dv.h / 2, y - rh / 2, zs], { ...leaf, model: model(dv.file, "y") })); x += dv.h; }

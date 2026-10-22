@@ -729,9 +729,12 @@ function calculate() {
   const profileName = PROFILE_SYSTEMS[sysIdx].system + ' · ' + profileColor.name;
   const frameGrad = profileColor.frameGrad || '#c0c0c0,#e0e0e0,#a0a0a0';
   const dims = PROFILE_SYSTEMS[sysIdx].dims;
+  // Ширина полотна с нахлёстом на ручку (js/kupe-door.js) — для размеров дверей; цена по-прежнему от W / N
+  const door = kupeDoorWidth(W, N, kupeSystemProfile(PROFILE_SYSTEMS[sysIdx]));
+  const doorW = Math.round(door.width), doorOverlap = Math.round(door.overlap);
 
   renderResults({
-    W, H, N, bd, isSinglePartition,
+    W, H, N, bd, isSinglePartition, doorW, doorOverlap,
     fills: uniqueFills, fill, sectionBreakdown, sectionBreakdown2D, fillPriceAdj, areaM2, filCost,
     doorFills: doorFills.map(a => a.slice()),
     profRows, profTotal,
@@ -803,6 +806,20 @@ function renderResults(d) {
         d.N + ' ' + pluralDoors(d.N) + ' · ' + d.W + '×' + d.H + ' мм · ' +
         (d.fills.length === 1 ? d.fills[0].n : d.fills.length + ' ' + pluralMaterials(d.fills.length)) +
         (isPartition ? ' · одиночная перегородка' : '') +
+      '</div>' +
+    '</div>' +
+
+    // — Ширина каждой двери (полотно с нахлёстом на ручку, js/kupe-door.js)
+    '<div id="kupeDoorSizes">' +
+      '<div class="kupe-sec-lbl" style="margin-bottom:6px">Ширина дверей' + (d.N > 1 ? ' · нахлёст ' + d.doorOverlap + ' мм' : '') + '</div>' +
+      '<div class="kupe-spec-list">' +
+        Array.from({ length: d.N }, (_, i) =>
+          '<div class="kupe-spec-row">' +
+            '<span class="kupe-spec-name">Дверь ' + (i + 1) + '</span>' +
+            '<span class="kupe-spec-qty"></span>' +
+            '<span class="kupe-spec-price kupe-door-w">' + fmt(d.doorW) + ' мм</span>' +
+          '</div>'
+        ).join('') +
       '</div>' +
     '</div>' +
 
@@ -1303,7 +1320,9 @@ function renderRoom(containerId, W, H, N, bd, isSinglePartition, fills, frameGra
     'font-size:10px;color:rgba(0,0,0,.28);font-variant-numeric:tabular-nums;' +
     'font-family:var(--font);letter-spacing:.02em;'
   );
-  dim.textContent = W + ' × ' + H + ' мм · ' + N + ' ' + (N === 1 ? 'дверь' : N < 5 ? 'двери' : 'дверей');
+  const _sys = PROFILE_SYSTEMS[num('profileSystem', 0)];
+  const _dw = typeof kupeDoorWidth === 'function' && _sys ? Math.round(kupeDoorWidth(W, N, kupeSystemProfile(_sys)).width) : 0;
+  dim.textContent = W + ' × ' + H + ' мм · ' + N + ' ' + (N === 1 ? 'дверь' : N < 5 ? 'двери' : 'дверей') + (_dw ? ' по ' + fmt(_dw) + ' мм' : '');
   room.appendChild(dim);
 }
 
@@ -1586,6 +1605,9 @@ function buildKPHTML(t, client, phone, manager) {
         '<tr><td>Ширина проёма</td><td>' + d.W + ' мм</td></tr>' +
         '<tr><td>Высота проёма</td><td>' + d.H + ' мм</td></tr>' +
         '<tr><td>Количество полотен</td><td>' + d.N + ' шт</td></tr>' +
+        (d.doorW ? Array.from({ length: d.N }, (_, i) =>
+          '<tr><td>Ширина двери ' + (i + 1) + '</td><td>' + fmt(d.doorW) + ' мм' + (i === 0 && d.N > 1 ? ' (с нахлёстом ' + d.doorOverlap + ' мм на ручку)' : '') + '</td></tr>'
+        ).join('') : '') +
         '<tr><td>Оплачивается полотен</td><td>' + bdDisplay + ' шт' + (d.isSinglePartition ? ' (одиночная перегородка)' : '') + '</td></tr>' +
         '<tr><td>Наполнение</td><td>' + (d.fills.length === 1 ? d.fills[0].n : d.fills.map(f => f.n).join(' + ')) + '</td></tr>' +
         '<tr><td>Профильная система</td><td>' + d.profileName + '</td></tr>' +
@@ -1656,7 +1678,7 @@ ${specsHTML}
     <div style="font-size:8.5pt;color:#999">${kpNum} · ${client}</div>
   </div>
   <div style="font-size:9.5pt;margin-bottom:5mm;color:#555">
-    Проём: <strong>${t.d.W} × ${t.d.H} мм</strong> · Полотен: <strong>${t.d.N} шт</strong> · Наполнение: <strong>${t.d.fills.map(f => f.n).join(' + ')}</strong> · Профиль: <strong>${t.d.profileName}</strong>
+    Проём: <strong>${t.d.W} × ${t.d.H} мм</strong> · Полотен: <strong>${t.d.N} шт</strong>${t.d.doorW ? ` по <strong>${fmt(t.d.doorW)} мм</strong>` : ''} · Наполнение: <strong>${t.d.fills.map(f => f.n).join(' + ')}</strong> · Профиль: <strong>${t.d.profileName}</strong>
   </div>
   <!-- Контейнер для SVG-визуализации (заполняется JS после рендера) -->
   <div id="kpVizRoom" style="width:100%;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;background:#e8e4da;"></div>

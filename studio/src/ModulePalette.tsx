@@ -1,7 +1,7 @@
 import {refitKDrawers} from './kitchenDrawers';
 import {useEffect,useState,type ReactNode} from 'react';
 import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal} from 'lucide-react';
-import {initialModule,section,deskModule,distribute,validate,id,type Module} from './model';
+import {initialModule,section,deskModule,distribute,validate,id,RULES,type Module} from './model';
 import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths} from './kitchen';
@@ -15,9 +15,21 @@ export function createKupeModule(width:number,height:number,source:Module):Modul
   const error=validate(m)[0];if(error)throw Error(error);
   return m;
 }
-/** Шкаф-купе: корпуса без распашных дверей (каждый не шире 1300) и двери купе перед ними на всю ширину. */
-export function createKupeWardrobe(width:number,height:number,depth:number,source:Module):PlacedModule[]{
+/** Шкаф-купе. mount 'free' (как было): корпуса без распашных дверей (каждый не шире 1300) и двери купе перед ними на всю ширину.
+ *  mount 'inside' (менеджеры 22.10): один корпус — боковины до пола и крыша на всю глубину, секции за дверями на глубине depth − 100;
+ *  двери купе между боковинами и под крышей, нижняя направляющая на полу (дно и цоколь — за дверями). */
+export function createKupeWardrobe(width:number,height:number,depth:number,source:Module,mount:'free'|'inside'='free'):PlacedModule[]{
   if(depth<350+KUPE_DEPTH)throw Error(`Глубина шкафа-купе от ${350+KUPE_DEPTH} мм: ${KUPE_DEPTH} мм занимают направляющие.`);
+  if(mount==='inside'){
+    const t=RULES.panel,bodyDepth=depth-KUPE_DEPTH,n=Math.max(1,Math.ceil((width-2*t)/1000));
+    const m:Module={...initialModule(),name:'Корпус шкафа-купе',width,height,depth:bodyDepth,kupeZone:KUPE_DEPTH,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:Array.from({length:n},()=>section())};
+    m.sections.forEach((s,i)=>{if(i%2===0){s.rod=true;s.shelves=distribute(m,s,1);}else s.shelves=distribute(m,s,5);});
+    // задник ХДФ одним листом 2800×2070: у широкого и высокого шкафа (оба размера больше 2050) не выкраивается — без задника, к стене (вопрос Максу)
+    if(Math.min(width,height)>RULES.hdfH-2*RULES.sheetMargin)m.backType='none';
+    const error=validate(m)[0];if(error)throw Error(error);
+    const k=createKupeModule(width-2*t,height-t,source);k.kupe!.mount='inside';
+    return [{id:id(),x:30,y:0,z:30,rotation:0,module:m},{id:id(),x:30+t,y:0,z:30+bodyDepth,rotation:0,module:k}];
+  }
   const n=Math.max(1,Math.ceil(width/1200)),bw=Math.floor(width/n),bodyDepth=depth-KUPE_DEPTH,out:PlacedModule[]=[];
   for(let i=0;i<n;i++){
     const m:Module={...initialModule(),name:'Корпус шкафа-купе',width:i<n-1?bw:width-bw*(n-1),height,depth:bodyDepth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:[section()]};
@@ -77,10 +89,12 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source
   const [saved]=useState(readPalette);
   const [kind,setKind]=useState<ModuleKind>(saved?.kind??'empty'),[width,setWidth]=useState(saved?.width??600),[height,setHeight]=useState(saved?.height??2000),[depth,setDepth]=useState(saved?.depth??550),[error,setError]=useState('');
   const [category,setCategory]=useState<string>(saved?.category??'wardrobe');
+  const [kupeMount,setKupeMount]=useState<'free'|'inside'>('free');
   useEffect(()=>{try{sessionStorage.setItem(PALETTE_KEY,JSON.stringify({category,kind,width,height,depth}));}catch{/* без хранилища выбор не запоминается */}},[category,kind,width,height,depth]);
   const pick=(next:ModuleKind)=>{setKind(next);const sz=SIZES[next]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);setError('');};
   const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'
+    :kind==='kupe-wardrobe'&&kupeMount==='inside'?'Боковины до пола и крыша на всю глубину; двери купе между боковинами под крышей, нижняя направляющая на полу. Дно, цоколь и секции — за дверями, 100 мм глубины занимают направляющие.'
     :kind==='kupe-wardrobe'?'Корпуса без распашных дверей и двери купе на всю ширину. Глубина — общая, 100 мм из неё занимают направляющие.'
     :kind==='kitchen-row'?'Ширина — длина ряда корпусов; у боковых стен нужен запас по 21 мм под фальши. Высота — нижние корпуса с опорами, глубина — нижние корпуса без фасадов. Нижние корпуса на ножках (ящики, мойка, распашные), столешница во всю длину, навесные над ней на регламентный зазор.'
     :kind==='kitchen-base'?'Нижний кухонный: на ножках с цокольной планкой, вместо крыши царги под столешницу.'
@@ -91,9 +105,10 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates}:{source
     <div className="catalog-tabs" role="tablist" aria-label="Категория мебели">{categories.map(c=><button type="button" role="tab" key={c.id} aria-selected={category===c.id} onClick={()=>{setCategory(c.id);pick(c.kinds[0]);}}>{c.label}</button>)}</div>
     <div className="module-kinds">{choices.filter(c=>(categories.find(x=>x.id===category)!.kinds as readonly string[]).includes(c.id)).map(c=><button key={c.id} type="button" aria-pressed={kind===c.id} onClick={()=>pick(c.id)}><c.icon size={23}/><span>{c.label}</span></button>)}</div>
     <div className="module-sizes">{[{label:kind==='corner'?'Сторона угла':kind==='kupe'?'Ширина проёма':'Ширина',value:width,set:setWidth},{label:kind==='kupe'?'Высота проёма':'Высота',value:height,set:setHeight},...(kind==='kupe'?[]:[{label:kind==='corner'?'Глубина боковины':'Глубина',value:depth,set:setDepth}])].map(f=><label key={f.label}>{f.label}<input aria-label={`${f.label} новой мебели`} type="number" value={f.value} onChange={e=>f.set(Number(e.target.value))}/></label>)}</div>
+    {kind==='kupe-wardrobe'&&<label className="hardware-field">Установка дверей<select aria-label="Установка дверей купе" value={kupeMount} onChange={e=>setKupeMount(e.target.value==='inside'?'inside':'free')}><option value="inside">внутри шкафа</option><option value="free">отдельно (ниша или перед корпусами)</option></select></label>}
     <small>{note}</small>
     {error&&<p role="alert">{error}</p>}
-    <button className="primary full" onClick={()=>{try{const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source)):kind==='kitchen-row'?onAddGroup(createKitchenRow(width,source,height,depth)):onAdd(createModule(kind,width,height,depth,source));if(ok)setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
+    <button className="primary full" onClick={()=>{try{const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,kupeMount)):kind==='kitchen-row'?onAddGroup(createKitchenRow(width,source,height,depth)):onAdd(createModule(kind,width,height,depth,source));if(ok)setError('');}catch(e){setError((e as Error).message);}}}>Добавить в комнату</button>
     {category==='kitchen'&&kitchenTemplates&&<details className="catalog-presets"><summary>Готовые кухонные модули</summary>{kitchenTemplates}</details>}
   </details>;
 }

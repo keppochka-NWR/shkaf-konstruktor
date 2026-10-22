@@ -18,6 +18,19 @@
 .kupe-sections svg { width: 20px; height: 34px; fill: none; stroke: #4d6370; stroke-width: 1.2; }
 .kupe-sections span { font-size: 9.5px; line-height: 1.15; color: #4d6370; text-align: center; overflow-wrap: normal; word-break: normal; }
 .kupe-check span { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+/* задание 23: схема дверей с секциями — клик по секции выбирает её полотно */
+.kupe-leaves { display: flex; flex-wrap: wrap; gap: 6px; }
+.kupe-leaf { width: 44px; height: 87px; }
+.kupe-leaf-frame { stroke: #8a97a3; stroke-width: 0.6; }
+.kupe-sect { cursor: pointer; stroke: rgba(29, 43, 58, .25); stroke-width: 0.4; }
+.kupe-sect:hover { stroke: #2449d6; stroke-width: 0.8; }
+.kupe-sect.on { stroke: #2449d6; stroke-width: 1.4; }
+.kupe-sect:focus-visible { outline: none; stroke: #2449d6; stroke-width: 1.4; }
+.kupe-leaf-n { font-size: 4.2px; fill: #4d6370; font-weight: 700; }
+.kupe-sect-editor { display: grid; gap: 6px; padding: 8px; border-radius: 10px; background: #f4f6f9; }
+.kupe-sect-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.kupe-sect-actions button { flex: 1 1 auto; font-size: 12px; }
+.kupe-mount { margin: 0; }
 .kupe-lines table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .kupe-lines td { padding: 5px 2px; border-bottom: 1px solid #edf1f3; vertical-align: top; }
 .kupe-lines td:last-child { width: 86px; text-align: right; font-weight: 600; white-space: nowrap; }
