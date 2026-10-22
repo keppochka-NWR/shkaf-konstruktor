@@ -327,15 +327,16 @@ function moveFreeEdge(p: Project, a: PlacedModule, side: Side, d: number): Proje
   const w = r1(a.module.width + d), keep: Side = side === "right" ? "left" : "right";
   // Проверяем ту ширину, что получится: край у стены — автофальшь забирает 16 + 5 мм (settle). Было: проверка до settle по ширине
   // с фальшем — «Дотянуть (+40; 21 мм — фальш)» отказывало «при ширине 1219: фасад шире 600», хотя станет 1198 (критик релиза 22.10, m2).
-  let next: Project;
-  try { next = settle(p, replace(p, [setWidthKeeping(a, w, keep)]), a.id, keep); }
-  catch (err) { checkOwnWidth(a, w); throw err; }
-  checkOwnWidth(a, next.modules.find((x) => x.id === a.id)?.module.width ?? w);
+  // Порядок отказов прежний (ширина → место → ряд → settle): ошибка settle выдаётся последней, как было.
+  let next: Project | null = null, settleErr: unknown = null;
+  try { next = settle(p, replace(p, [setWidthKeeping(a, w, keep)]), a.id, keep); } catch (err) { settleErr = err; }
+  checkOwnWidth(a, next?.modules.find((x) => x.id === a.id)?.module.width ?? w);
   if (d > 0.05) {
     const g = freeSpace(p, a)[side];
     if (g.gap < d - 0.1) throw Error(noRoom(a, side, gaps(p, a.id)[side], d));
   }
   rowObjectsCheck(p, a, rowContext(p, a), side, d);
+  if (!next) throw settleErr;
   return next;
 }
 /** Стык с соседом вплотную уходит на d мм наружу: модуль шире на d, сосед уже на d (его дальний край на месте). */
