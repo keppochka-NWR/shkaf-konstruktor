@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-import {kupeLines,kupeErrors,kupeParts,kupeLeaf,kupeLeafWidth,kupeSectionFill,withSectionFill,DEFAULT_KUPE} from '../src/kupe';
+import {kupeLines,kupeErrors,kupeParts,kupeLeaf,kupeLeafWidth,kupeSectionFill,withSectionFill,kupeColor,DEFAULT_KUPE} from '../src/kupe';
 import {KUPE_SYSTEMS} from '../src/kupeData';
 import {createKupeModule,createKupeWardrobe} from '../src/ModulePalette';
 import {initialModule,parts,validate,RULES} from '../src/model';
@@ -109,6 +109,19 @@ test('11: шкаф-купе с дверями внутри 2400×2600×600 — �
   const c=calc(),k=back.modules.find(a=>a.module.kupe)!.module;k.kupe={...k.kupe!,doors:3};
   assert.equal(Math.round(kupeLeaf(k).width),Math.round(c.kupeDoorWidth(2368,3,'C (классика)').width));
   assert.equal(Math.round(kupeLeaf(k).width),807);
+});
+
+test('22: все профили — рамки и разделители в пределах глубины ручки (SLIM, NOVA), «Золото кракелюр» — золото, не серая заглушка',()=>{
+  for(const s of KUPE_SYSTEMS){
+    const m=createKupeModule(1600,2400,initialModule());m.kupe={...m.kupe!,system:s.system,color:s.colors[0].name,sections:1};
+    const ps=kupeParts(m),h=ps.find(p=>p.id==='kupe:0:side:l')!,z0=h.position[2]-h.size[2]/2,z1=h.position[2]+h.size[2]/2;
+    for(const p of ps.filter(p=>/^kupe:0:(frame|div-)/.test(p.id)))if(p.size[2]<h.size[2])
+      assert.ok(p.position[2]-p.size[2]/2>=z0-1e-6&&p.position[2]+p.size[2]/2<=z1+1e-6,`${s.system}: ${p.name} выступает из ручки`);
+  }
+  const slim=KUPE_SYSTEMS.find(s=>s.system==='Slim line (Аристо)')!;
+  const m=createKupeModule(1600,2400,initialModule());m.kupe={...m.kupe!,system:slim.system,color:'Золото кракелюр'};
+  assert.equal(kupeColor(m.kupe).grad,'#c0a030,#dcc048,#9a8020');
+  assert.equal(kupeParts(m).find(p=>p.id==='kupe:0:side:l')!.look!.color,0xdcc048);
 });
 
 test('11: «отдельно» — как раньше; корпус с зоной дверей проверяет распашные фасады и предел листа',()=>{

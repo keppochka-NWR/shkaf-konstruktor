@@ -31,7 +31,16 @@ export const LDSP_SHEET = { long: 2750, short: 1830 };
 export const DEFAULT_KUPE: KupeSpec = { doors: 2, system: KUPE_SYSTEMS[0].system, color: KUPE_SYSTEMS[0].colors[0].name, fills: ["Зеркало Серебро 4мм"] };
 
 export function kupeSystem(k: KupeSpec): KupeSystem { return KUPE_SYSTEMS.find((s) => s.system === k.system) ?? KUPE_SYSTEMS[0]; }
-export function kupeColor(k: KupeSpec) { const s = kupeSystem(k); return s.colors.find((c) => c.name === k.color) ?? s.colors[0]; }
+/** Аудит профилей 22.10: в прайсе купе (Calc\kupe\data) у «Золото кракелюр» Slim line стоит серая заглушка калькулятора
+ *  #c0c0c0,#e0e0e0,#a0a0a0 — профиль рисовался серебром. Цвет — как в калькуляторе web/calc (золото). Цена не меняется. */
+const GRAD_FIX: Record<string, string> = { "Золото кракелюр": "#c0a030,#dcc048,#9a8020" };
+const GRAD_PLACEHOLDER = "#c0c0c0,#e0e0e0,#a0a0a0";
+export function kupeColor(k: KupeSpec) {
+  const s = kupeSystem(k), c = s.colors.find((x) => x.name === k.color) ?? s.colors[0];
+  return c.grad.toLowerCase() === GRAD_PLACEHOLDER && GRAD_FIX[c.name] ? { ...c, grad: GRAD_FIX[c.name] } : c;
+}
+/** Градиент цвета профиля для образцов в панели (с той же поправкой, что в 3D). */
+export function kupeGrad(c: { name: string; grad: string }) { return c.grad.toLowerCase() === GRAD_PLACEHOLDER && GRAD_FIX[c.name] ? GRAD_FIX[c.name] : c.grad; }
 export function kupeFill(name: string | undefined): KupeFill { return KUPE_FILLS.find((f) => f.n === name) ?? KUPE_FILLS[0]; }
 export function kupeDoorFill(k: KupeSpec, i: number) { return kupeFill(k.fills[i] ?? k.fills[0]); }
 export function kupeSections(k: KupeSpec) { return KUPE_SECTIONS[k.sections ?? 0] ?? KUPE_SECTIONS[0]; }
@@ -234,11 +243,14 @@ export function kupeParts(m: Module): Part[] {
   for (let i = 0; i < n; i++) {
     const row = i % 2, zs = D / 2 + panels[row], z = zs - h.slot, x0 = i * (lw - overlap), shift = row ? -(lw - overlap) : 0;
     const leaf = { openShift: shift, sectionId: undefined };
+    // Рамки и разделители — в пределах глубины ручки (аудит профилей 22.10: у SLIM рамка 32,2 и у NOVA средняя рамка 34 при ручке 34
+    // с пазом вставки не по центру выступали вперёд на 2,8 и 8 мм). Помещается по центру паза — стоит там, как раньше.
+    const inHandle = (dd: number) => dd >= h.d ? z : Math.min(Math.max(zs, z - h.d / 2 + dd / 2), z + h.d / 2 - dd / 2);
     out.push(part(`kupe:${i}:side:l`, "Профиль-ручка", [hw, lh, h.d], [x0 + hw / 2, bottom + lh / 2, z], { ...leaf, model: model(h.file, "y") }));
     out.push(part(`kupe:${i}:side:r`, "Профиль-ручка", [hw, lh, h.d], [x0 + lw - hw / 2, bottom + lh / 2, z], { ...leaf, model: model(h.file, "y", true) }));
     const iw = lw - 2 * hw;
-    out.push(part(`kupe:${i}:frame:top`, "Рамка верхняя", [iw, ft, fam.frameTop.d], [x0 + lw / 2, top - ft / 2, zs], { ...leaf, model: model(fam.frameTop.file, "x") }));
-    out.push(part(`kupe:${i}:frame:bottom`, "Рамка нижняя", [iw, fb, fam.frameBot.d], [x0 + lw / 2, bottom + fb / 2, zs], { ...leaf, model: model(fam.frameBot.file, "x", true) }));
+    out.push(part(`kupe:${i}:frame:top`, "Рамка верхняя", [iw, ft, fam.frameTop.d], [x0 + lw / 2, top - ft / 2, inHandle(fam.frameTop.d)], { ...leaf, model: model(fam.frameTop.file, "x") }));
+    out.push(part(`kupe:${i}:frame:bottom`, "Рамка нижняя", [iw, fb, fam.frameBot.d], [x0 + lw / 2, bottom + fb / 2, inHandle(fam.frameBot.d)], { ...leaf, model: model(fam.frameBot.file, "x", true) }));
     const ih = lh - ft - fb, cw = iw - (sec.colRatios.length - 1) * dv.h, ch = ih - (sec.rowRatios.length - 1) * dv.h;
     let y = top - ft;
     // по чертежу вставка заходит в паз верхней и нижней рамки на 9 мм
@@ -250,10 +262,10 @@ export function kupeParts(m: Module): Part[] {
         const cwi = c / sumC * cw, f = kupeSectionFill(k, i, ri * sec.colRatios.length + ci), ldsp = isLdspFill(f);
         out.push(part(`kupe:${i}:fill:${ri}:${ci}`, "Наполнение · " + f.n, [cwi, fh, ldsp ? fam.panel ?? 8 : 5], [x + cwi / 2, fy, zs], { material: ldsp ? "board" : "glass", decor: f.n, look: ldsp ? undefined : kupeFillLook(f) }));
         x += cwi;
-        if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [dv.h, rh, dv.d], [x + dv.h / 2, y - rh / 2, zs], { ...leaf, model: model(dv.file, "y") })); x += dv.h; }
+        if (ci < sec.colRatios.length - 1) { out.push(part(`kupe:${i}:div-v:${ri}:${ci}`, "Разделитель", [dv.h, rh, dv.d], [x + dv.h / 2, y - rh / 2, inHandle(dv.d)], { ...leaf, model: model(dv.file, "y") })); x += dv.h; }
       });
       y -= rh;
-      if (ri < sec.rowRatios.length - 1) { out.push(part(`kupe:${i}:div-h:${ri}`, "Разделитель", [iw, dv.h, dv.d], [x0 + lw / 2, y - dv.h / 2, zs], { ...leaf, model: model(dv.file, "x") })); y -= dv.h; }
+      if (ri < sec.rowRatios.length - 1) { out.push(part(`kupe:${i}:div-h:${ri}`, "Разделитель", [iw, dv.h, dv.d], [x0 + lw / 2, y - dv.h / 2, inHandle(dv.d)], { ...leaf, model: model(dv.file, "x") })); y -= dv.h; }
     });
     for (const p of out) if (p.id.startsWith(`kupe:${i}:fill:`)) p.openShift = shift;
   }
