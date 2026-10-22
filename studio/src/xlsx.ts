@@ -20,6 +20,8 @@ export type XSheet = {
   freeze?: number;
   merges?: string[];
   landscape?: boolean;
+  /** высота строки в пунктах (многострочные ячейки: не все программы подбирают высоту сами — строка выглядела пустой) */
+  heights?: (number | undefined)[];
 };
 export const str = (v: string, s: XStyle = XS.cell): XCell => ({ t: "s", v, s });
 export const num = (v: number, s: XStyle = XS.num): XCell => ({ t: "n", v, s });
@@ -46,7 +48,7 @@ export function sheetXML(sh: XSheet): string {
   const dim = `A1:${ref(width - 1, Math.max(0, sh.rows.length - 1))}`;
   const pane = sh.freeze ? `<pane ySplit="${sh.freeze}" topLeftCell="A${sh.freeze + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${sh.freeze + 1}" sqref="A${sh.freeze + 1}"/>` : "";
   const cols = sh.cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
-  const rows = sh.rows.map((r, i) => `<row r="${i + 1}">${r.map((c, j) => cellXML(c, ref(j, i))).join("")}</row>`).join("");
+  const rows = sh.rows.map((r, i) => `<row r="${i + 1}"${sh.heights?.[i] ? ` ht="${sh.heights[i]}" customHeight="1"` : ""}>${r.map((c, j) => cellXML(c, ref(j, i))).join("")}</row>`).join("");
   const merges = sh.merges?.length ? `<mergeCells count="${sh.merges.length}">${sh.merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>` : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="${dim}"/><sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rows}</sheetData>${merges}<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${sh.landscape ? "landscape" : "portrait"}" fitToWidth="1" fitToHeight="0"/></worksheet>`;
 }

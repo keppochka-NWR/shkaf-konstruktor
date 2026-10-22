@@ -39,6 +39,32 @@ function status(l: PriceLine, manager: boolean): string {
   if (l.unitPrice === null) return l.source === CLIENT_SOURCE_IN_SHEET ? "Входит в цену за лист" : "Уточнить цену";
   return manager && l.retail ? "Розница, поверх коэффициента" : "Учтено";
 }
+export const ROUNDING_LABEL = "Округление до итога сметы";
+/** B1: разница между суммой строк клиентской сметы (цены строк с копейками) и итогом (до рубля / до 100 ₽) — по группам Excel так,
+ *  чтобы подытоги групп совпали с графами разбивки (Материалы = «Материалы» + «Работа цеха», Фурнитура, Двери купе); если разбивки нет
+ *  или группы с графами не сходятся (строка купе в фурнитуре и т. п.) — одной строкой total. null — сумма строк уже = итогу. */
+export function roundingPlan(e: Estimate): { byGroup: Partial<Record<XGroup, number>>; total: number; note: string } | null {
+  if (e.retail === null) return null;
+  const live = e.lines.filter((l) => l.unitPrice !== null && !l.pending);
+  const sumG = (ids: XGroup[]) => live.filter((l) => ids.includes(xlsxGroup(l))).reduce((s, l) => s + l.quantity * l.unitPrice!, 0);
+  const has = (ids: XGroup[]) => live.some((l) => ids.includes(xlsxGroup(l)));
+  const all = sumG(["material", "work", "hardware", "kupe"]), clean = (v: number) => Math.round(v * 1e4) / 1e4;
+  if (Math.abs(e.retail - all) < 0.005) return null;
+  const note = e.retail % 100 === 0 ? "итог сметы округлён до 100 ₽" : "копейки в ценах строк и округление итога сметы";
+  const split = quoteBreakdown(String(e.retail), e);
+  if (split) {
+    const dm = clean(split.material - sumG(["material", "work"])), dh = clean(split.hardware - sumG(["hardware"])), dk = clean(split.kupe - sumG(["kupe"]));
+    const okd = (d: number, there: boolean) => (there || Math.abs(d) < 0.005) && Math.abs(d) <= 100;
+    if (okd(dm, has(["material", "work"])) && okd(dh, has(["hardware"])) && okd(dk, has(["kupe"]))) {
+      const byGroup: Partial<Record<XGroup, number>> = {};
+      if (Math.abs(dm) >= 0.005) byGroup[has(["material"]) ? "material" : "work"] = dm;
+      if (Math.abs(dh) >= 0.005) byGroup.hardware = dh;
+      if (Math.abs(dk) >= 0.005) byGroup.kupe = dk;
+      return { byGroup, total: 0, note };
+    }
+  }
+  return { byGroup: {}, total: clean(e.retail - all), note };
+}
 const row = (cells: XCell[], width: number, s: XStyle = XS.cell) => [...cells, ...Array.from({ length: Math.max(0, width - cells.length) }, () => empty(s))];
 
 /** Лист «Смета». manager — менеджерская версия (закупка, коэффициент, источники); иначе только клиентские цены. */
@@ -50,6 +76,10 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
   rows.push([]);
   rows.push(["№", "Позиция", "Кол-во", "Ед.", "Цена, ₽", "Сумма, ₽", ...(manager ? ["Цена", "Статус", "Источник"] : ["Статус"])].map((h) => str(h, XS.header)));
   const buy: string[] = [], retail: string[] = [];
+  // B1 (критик релиза 22.10): в клиентской смете суммы строк сходятся с итогом — разница «копейки цен строк / итог к сотне»
+  // идёт явной строкой «Округление» в группе, подытоги групп = графам разбивки, «Итого по позициям» = «Расчётная цена».
+  const fit = manager ? null : roundingPlan(e);
+  const subOf: Partial<Record<XGroup, string>> = {};
   let n = 0;
   for (const g of XGROUPS) {
     const lines = e.lines.filter((l) => xlsxGroup(l) === g.id);
@@ -61,19 +91,23 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
       rows.push([num(++n, XS.numCenter), str(l.label), num(l.quantity, XS.num), str(l.unit), priced ? num(l.unitPrice!, XS.price) : empty(XS.price), priced ? fml(`C${r + 1}*E${r + 1}`, l.quantity * l.unitPrice!) : empty(XS.money),
         ...(manager ? [str(l.retail ? "розница" : "закупка"), str(status(l, true)), str(l.source)] : [str(status(l, false))])]);
     }
+    const adj = fit?.byGroup[g.id] ?? 0;
+    if (adj) rows.push(row([empty(XS.numCenter), str(ROUNDING_LABEL), empty(XS.num), empty(XS.cell), empty(XS.price), num(adj, XS.price), str(fit!.note)], W));
     const last = rows.length - 1, range = (c: string) => `${c}${first + 1}:${c}${last + 1}`;
     const sumOf = (pred: (l: PriceLine) => boolean) => lines.filter((l) => l.unitPrice !== null && pred(l)).reduce((s, l) => s + l.quantity * l.unitPrice!, 0);
     if (g.id === "pending") { rows.push(row([empty(XS.note), str(pendingTotalLabel(lines.length) + " — в итог не входят", XS.note)], W, XS.text)); continue; }
-    const subtotal = (label: string, f: string, v: number, into: string[]) => { const r = rows.length; rows.push(row([empty(XS.subLabel), str(label, XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), fml(f, v, XS.subMoney)], W, XS.subLabel)); into.push(`F${r + 1}`); };
+    const subtotal = (label: string, f: string, v: number, into: string[]) => { const r = rows.length; rows.push(row([empty(XS.subLabel), str(label, XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), fml(f, v, XS.subMoney)], W, XS.subLabel)); into.push(`F${r + 1}`); subOf[g.id] = `F${r + 1}`; };
     if (manager) {
       if (lines.some((l) => !l.retail)) subtotal(`Итого «${g.label}» · закупка`, `SUMIFS(${range("F")},${range("G")},"закупка")`, sumOf((l) => !l.retail), buy);
       if (lines.some((l) => l.retail)) subtotal(`Итого «${g.label}» · розница`, `SUMIFS(${range("F")},${range("G")},"розница")`, sumOf((l) => !!l.retail), retail);
-    } else subtotal(`Итого «${g.label}»`, `SUM(${range("F")})`, sumOf(() => true), buy);
+    } else subtotal(`Итого «${g.label}»`, `SUM(${range("F")})`, sumOf(() => true) + adj, buy);
   }
   rows.push([]);
   const total = (label: string, cell: XCell, note = "") => { rows.push(row([empty(XS.totalLabel), str(label, XS.totalLabel), empty(XS.totalLabel), empty(XS.totalLabel), empty(XS.totalLabel), cell, ...(note ? [str(note, XS.note)] : [])], W, XS.text)); };
   const plain = (label: string, cell: XCell, note = "") => { rows.push(row([empty(XS.text), str(label, XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), cell, ...(note ? [str(note, XS.note)] : [])], W, XS.text)); };
   const sumCells = (cells: string[], v: number) => fml(cells.length ? cells.join("+") : "0", v, XS.subMoney);
+  // разбивки по группам нет (одна графа, «цена за лист») — округление одной строкой перед «Итого по позициям»
+  if (fit?.total) { const r = rows.length; plain(ROUNDING_LABEL, num(fit.total, XS.price), fit.note); buy.push(`F${r + 1}`); }
   if (manager) {
     plain("Себестоимость (закупка)", sumCells(buy, e.lines.filter((l) => !l.retail && l.unitPrice !== null).reduce((s, l) => s + l.quantity * l.unitPrice!, 0)));
     plain("Коэффициент", num(e.markup, XS.subNum));
@@ -81,10 +115,17 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
     if (retail.length) plain("Розничные позиции поверх коэффициента", sumCells(retail, e.retailExtras));
     plain("Цена по коэффициенту", e.byMarkup === null ? str("не менее " + e.byMarkupKnown.toLocaleString("ru-RU") + " ₽", XS.subLabel) : num(e.byMarkup, XS.subMoney), e.model === "markup" ? "выбрана" : "для сравнения");
     plain(`Цена за лист: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽`, num(e.bySheet, XS.subMoney), e.model === "sheet" ? "выбрана" : "для сравнения");
-  } else plain("Итого по позициям", sumCells(buy, e.knownCost));
-  total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (!manager && e.retail !== e.knownCost && Math.abs(e.retail - e.knownCost) < 100 ? "итог округлён до 100 ₽; " : "") + "предварительно, без доставки и монтажа");
+  } else plain("Итого по позициям", sumCells(buy, fit ? e.retail! : e.knownCost));
+  const rounded = !!fit && e.retail !== null && e.retail % 100 === 0;
+  total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (rounded ? "итог округлён до 100 ₽; " : "") + "предварительно, без доставки и монтажа");
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);
-  if (split) { rows.push([]); for (const [k, v] of splitRows(split)) plain("Разбивка: " + k, num(v, XS.subMoney)); }
+  // клиентская смета: графы разбивки — суммы подытогов групп (формулой), значения = разбивке КП и экрана
+  const splitCell = (k: string, v: number): XCell => {
+    if (manager || fit?.total) return num(v, XS.subMoney);
+    const refs = (k === "Материалы" ? [subOf.material, subOf.work] : k === "Фурнитура" ? [subOf.hardware] : [subOf.kupe]).filter((x): x is string => !!x);
+    return refs.length ? fml(refs.join("+"), v, XS.subMoney) : num(v, XS.subMoney);
+  };
+  if (split) { rows.push([]); for (const [k, v] of splitRows(split)) plain("Разбивка: " + k, splitCell(k, v)); }
   rows.push([]);
   const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", e.missing.length ? "Позиций без цены: " + e.missing.length + "." : "", "Доставка, монтаж и неописанный крепёж не включены.", manager ? engineNote(e) + "." : ""].filter(Boolean);
   for (const t of notes) { rows.push(row([empty(XS.text), str(t, XS.note)], 2, XS.text)); merges.push(`B${rows.length}:${ref(W - 1, rows.length - 1)}`); }
@@ -116,8 +157,15 @@ export function clientSheet(p: Project, e: Estimate, created = new Date()): XShe
   rows.push(row([str(stamp(created) + " · предварительный расчёт", XS.subtitle)], W, XS.text));
   rows.push([]);
   rows.push(["№", "Изделие", "Размеры, мм", "Материалы", "Наполнение", ...(items ? ["Цена, ₽"] : [])].map((h) => str(h, XS.header)));
-  const first = rows.length;
-  p.modules.forEach((a, i) => { const d = describeModule(a.module); rows.push([num(i + 1, XS.numCenter), str(d.kind + (d.kind !== a.module.name ? "\n" + a.module.name : "")), str(d.size), str(d.materials.join("\n")), str(d.filling.length ? d.filling.join("\n") : "—"), ...(items ? [num(items[i], XS.money)] : [])]); });
+  const first = rows.length, heights: (number | undefined)[] = [];
+  // m8 (критик 22.10): строки изделий — как карточки КП; высота строки задана явно (многострочные ячейки без высоты в части программ
+  // показывались одной строкой шапки без содержимого). Ширина колонки «Наполнение» ~30 символов — длинные пункты переносятся.
+  const linesIn = (t: string, w: number) => t.split("\n").reduce((s, x) => s + Math.max(1, Math.ceil(x.length / w)), 0);
+  p.modules.forEach((a, i) => {
+    const d = describeModule(a.module), kind = d.kind + (d.kind !== a.module.name ? "\n" + a.module.name : ""), mats = d.materials.join("\n"), fill = d.filling.length ? d.filling.join("\n") : "—";
+    heights[rows.length] = Math.max(15, 13 * Math.max(linesIn(kind, 28), linesIn(mats, items ? 42 : 44), linesIn(fill, items ? 28 : 32)) + 4);
+    rows.push([num(i + 1, XS.numCenter), str(kind), str(d.size), str(mats), str(fill), ...(items ? [num(items[i], XS.money)] : [])]);
+  });
   const last = rows.length;
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);
   const line = (label: string, cell: XCell, style: XStyle = XS.subLabel) => rows.push(row([empty(XS.text), str(label, style), ...Array.from({ length: W - 3 }, () => empty(style)), cell], W, XS.text));
@@ -128,7 +176,7 @@ export function clientSheet(p: Project, e: Estimate, created = new Date()): XShe
   const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", items ? "Цена изделия — его доля в общей стоимости: листы материала раскраиваются на весь заказ." : "", "Предварительная стоимость без доставки и монтажа. Размеры уточняются после замера."].filter(Boolean);
   for (const t of notes) rows.push([empty(XS.text), str(t, XS.note)]);
   const merges = [`A1:${ref(W - 1, 0)}`, `A2:${ref(W - 1, 1)}`, ...notes.map((_, k) => `B${rows.length - notes.length + k + 1}:${ref(W - 1, rows.length - notes.length + k)}`)];
-  return { name: "Кратко для клиента", rows, merges, freeze: 4, cols: items ? [5, 30, 18, 44, 30, 14] : [5, 30, 18, 46, 34] };
+  return { name: "Кратко для клиента", rows, merges, freeze: 4, heights, cols: items ? [5, 30, 18, 44, 30, 14] : [5, 30, 18, 46, 34] };
 }
 
 /** Все XML-файлы книги сметы (для теста без распаковки). */
