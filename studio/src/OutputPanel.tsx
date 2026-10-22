@@ -7,7 +7,7 @@ import {pendingTotalLabel} from './pendingPrices';
 import { useState, useMemo, useEffect } from "react";
 import {moduleQuote} from './itemPrices';
 import {loadSwatches,type Swatch} from './decorSwatches';
-import { type Project } from "./project";
+import { applyAutoFillers, type Project } from "./project";
 import type { OutputTab } from "./ProjectDock";
 import {
   nestPlan,
@@ -66,7 +66,9 @@ export function OutputPanel({
   const labelDocument=useMemo(()=>tab==='labels'?labelsHTML(project):'',[project,tab]);
   const [imageError,setImageError]=useState('');
   const [quoteImage,setQuoteImage]=useState<string|null>(null);
-  const calculated=useMemo(()=>tab==='quote'?estimate(project,sheets):null,[tab,project,sheets]);
+  // B1 (критик 22.10): «Подставить текущую смету» правит проект через commitProject, а тот ставит автофальши — проект, открытый без правок,
+  // нормализуется этим же кликом; цена КП — по нормализованному проекту, иначе КП ≠ экран после клика (120 441 против 121 041)
+  const calculated=useMemo(()=>{if(tab!=='quote')return null;const norm=applyAutoFillers(project);return norm===project||JSON.stringify(norm.modules)===JSON.stringify(project.modules)?estimate(project,sheets):estimate(norm);},[tab,project,sheets]);
   const q = project.offer || { customer: "", price: "", notes: "" };
   // КП (менеджеры 22.10.2026, п. 9): цена по каждому изделию — доля цены КП (переключатель offer.itemPrices), образцы декоров для материалов
   const itemQuote=useMemo(()=>tab==='quote'&&q.itemPrices!==false&&q.price.trim()&&Number(q.price)>0?moduleQuote(project,Number(q.price)):null,[tab,project,q.price,q.itemPrices]),items=itemQuote?.prices??null,pendingItems=itemQuote?.pending??null;
