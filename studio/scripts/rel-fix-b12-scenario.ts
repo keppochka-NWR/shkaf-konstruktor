@@ -71,10 +71,9 @@ try {
   // КП: итог
   await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Коммерческое предложение", exact: true }).first().click(); await page.waitForTimeout(500);
-  // первое «Подставить» на проекте прямо из localStorage совпадает с первой правкой (нормализация: автофальшь у стены) — цена до неё;
-  // это известная особенность загрузки (в ИТОГ), поэтому подставляем второй раз уже по нормализованному проекту
+  // проект прямо из localStorage нормализуется первой правкой (автофальшь у стены) — «Подставить» и есть эта правка: цена КП
+  // должна быть по нормализованному проекту (было 120 441 при экране 121 041 после клика)
   await page.getByRole("button", { name: "Подставить текущую смету" }).click().catch(() => {}); await settle();
-  await page.getByRole("button", { name: "Подставить текущую смету" }).click().catch(() => {}); await page.waitForTimeout(300);
   await page.getByRole("button", { name: "Предпросмотр КП" }).click(); await settle();
   const doc = (await page.locator('iframe[title="Предпросмотр коммерческого предложения"]').getAttribute("srcdoc").catch(() => "")) ?? "";
   const kpTotal = rub(/<tr><td>Итого<\/td><td>([^<]+)<\/td>/.exec(doc)?.[1] ?? /Стоимость: ([^<]+)</.exec(doc)?.[1] ?? "");
