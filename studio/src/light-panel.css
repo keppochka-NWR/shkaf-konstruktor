@@ -1,0 +1,30 @@
+/* Редактор подсветки (задача 14, 22.10.2026): полоса режима в две строки и окно «Подсветка» */
+.light-mode-bar.light-mode-bar2 { flex-direction: column; align-items: stretch; gap: 6px; max-width: min(760px, calc(100% - 24px)); }
+.light-mode-bar2 .lmb-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.light-mode-bar2 .lmb-tools { justify-content: flex-start; flex-wrap: wrap; gap: 10px; border-top: 1px solid #ffd27a44; padding-top: 6px; }
+.light-mode-bar2 .lmb-group { display: inline-flex; align-items: center; gap: 4px; color: #e9dcb8; font-size: 12px; }
+.light-mode-bar2 button.lmb-chip { background: transparent; color: #f4ead0; border: 1px solid #ffd27a66; padding: 3px 9px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.light-mode-bar2 button.lmb-chip[aria-pressed="true"] { background: #ffd27a; color: #2b2410; border-color: #ffd27a; }
+.light-mode-bar2 button.lmb-list { margin-left: auto; }
+.tone-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px #00000033; flex: none; }
+.light-panel { max-width: 860px; }
+.light-panel .lp-module { display: grid; gap: 10px; margin-bottom: 12px; }
+.light-panel .lp-field > span { display: block; font-size: 12.5px; font-weight: 650; margin-bottom: 4px; }
+.light-panel .lp-field small { display: block; color: #6b6f73; font-size: 11.5px; margin-top: 3px; }
+.light-panel .lp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.light-panel .lp-chips button { border: 1px solid #c9c6bb; border-radius: 7px; padding: 5px 11px; font-size: 13px; background: #fff; display: inline-flex; align-items: center; gap: 6px; }
+.light-panel .lp-chips button[aria-pressed="true"] { background: #2b2410; color: #ffd27a; border-color: #2b2410; }
+.light-panel .lp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.light-panel .lp-table th { text-align: left; font-weight: 600; color: #6b6f73; font-size: 11.5px; border-bottom: 1px solid #e3e0d6; padding: 4px 6px; }
+.light-panel .lp-table td { border-bottom: 1px solid #efede6; padding: 4px 6px; vertical-align: middle; }
+.light-panel .lp-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.light-panel .lp-table select { font-size: 12.5px; max-width: 190px; }
+.light-panel .lp-orient { font-size: 11.5px; border-radius: 5px; padding: 1px 6px; background: #eef1f4; }
+.light-panel .lp-orient.vertical { background: #fff3d6; }
+.light-panel .lp-remove { font-size: 12px; color: #9a2a1a; border: 1px solid #e3b5ab; border-radius: 6px; padding: 3px 9px; background: #fff; }
+.light-panel .lp-empty { color: #6b6f73; font-size: 13px; }
+.light-panel .lp-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; font-size: 12.5px; }
+.light-panel .lp-actions { display: flex; gap: 8px; }
+.light-panel .lp-actions button { border: 1px solid #c9c6bb; border-radius: 7px; padding: 6px 12px; font-size: 13px; background: #fff; }
+.light-panel .lp-actions button.danger { color: #9a2a1a; border-color: #e3b5ab; }
+.light-panel .lp-actions button:disabled { opacity: .45; }

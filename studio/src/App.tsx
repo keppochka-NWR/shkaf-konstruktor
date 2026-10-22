@@ -113,7 +113,8 @@ import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem,worktopMaterialItem} from './addMenu';
 import {quickItems,quickMenuApplies,upperItem,menuDropY,doorQuickItems,cornerItems,type QuickMenuOps} from './quickMenu';
-import {allStandsLit,lightSummary,lightTargets,setAllStands,toggleGroup} from './lights';
+import {allStandsLit,applyToAll,pickTargets,setAllStands,toggleGroup,type LightOrient} from './lights';
+import {LightModeBar,LightPanel} from './LightPanel';
 import {composeContextMenu,menuArea} from './contextMenu';
 import { Palette, DoorClosed, RotateCw, ArrowUpToLine, Trash, GripHorizontal, Lock, LockOpen, ArrowUp, ArrowDown, Hand, MousePointerClick, Link2, Spline, SlidersHorizontal, ArrowRightToLine, ArrowLeftToLine, ChevronsRight, ChevronsLeft } from "lucide-react";
 import { withSlideSystem } from "./hardwareSwap";
@@ -573,14 +574,17 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Режим «Подсветка» (запрос Макса 20.10.2026): id корпуса, у которого клик по детали ставит/снимает её подсветку; Esc или «Готово» — выход.
   const [lightMode,setLightMode]=useState<string|null>(null);
   const [lightNote,setLightNote]=useState('');
+  // задача 14 (22.10): что ставит клик в режиме (вертикаль/горизонталь/обе) и окно «Подсветка» (id корпуса) — src/LightPanel.tsx
+  const [lightOrient,setLightOrient]=useState<LightOrient>('both');
+  const [lightPanel,setLightPanel]=useState<string|null>(null);
   // Esc при открытом круговом меню закрывает только меню, режим остаётся
   useEffect(()=>{if(!lightMode||ctxMenu)return;const esc=(e:KeyboardEvent)=>{if(e.key==='Escape'){setLightMode(null);setLightNote('');}};window.addEventListener('keydown',esc);return()=>window.removeEventListener('keydown',esc);},[lightMode,ctxMenu]);
   useEffect(()=>{if(lightMode&&!project.modules.some(x=>x.id===lightMode))setLightMode(null);},[project,lightMode]);
-  function pickLight(mid:string,pid:string){
+  function pickLight(mid:string,pid:string,alts:string[]=[]){
     const a=project.modules.find(x=>x.id===mid);if(!a)return;
     if(!quickMenuApplies(a.module)){setLightNote('У этого корпуса подсветка по деталям не ставится');return;}
-    const keys=lightTargets(a.module,pid);
-    if(!keys.length){setLightNote('В эту деталь подсветка не ставится — кликните стойку, полку, перегородку или крышу');return;}
+    const keys=pickTargets(a.module,[pid,...alts],lightOrient)?.keys??[];
+    if(!keys.length){setLightNote(lightOrient==='vertical'?'Ставится вертикаль — кликните стойку или перегородку (полки — «Горизонталь»)':lightOrient==='horizontal'?'Ставится горизонталь — кликните полку или крышу (стойки — «Вертикаль»)':'В эту деталь подсветка не ставится — кликните стойку, полку, перегородку или крышу');return;}
     if(mid!==lightMode){selectModule(mid);setLightMode(mid);}
     if(modifyAt(mid,n=>{toggleGroup(n,keys);}))setLightNote('');
   }
@@ -616,6 +620,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const quickOps:QuickMenuOps={modify:u=>{modifyAt(a.id,u);},addUpper:()=>{try{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}},
       removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined,
       lightMode:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightNote('');setLightMode(a.id);}:undefined,
+      lightPanel:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightPanel(a.id);}:undefined,
       ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));}};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id)]},
@@ -1389,8 +1394,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             ))}
           </div>
-          {lightMode&&!presentation&&(()=>{const lm=project.modules.find(x=>x.id===lightMode)?.module;if(!lm)return null;const s=lightSummary(lm),f=(v:number)=>v.toLocaleString('ru-RU',{maximumFractionDigits:2});
-            return <div className="light-mode-bar" role="status" aria-label="Режим подсветки"><span><b>Подсветка</b>: кликайте детали, чтобы добавить/убрать подсветку, Esc — выйти<small>Стойки: {s.vertical.count} шт., {f(s.vertical.meters)} пог. м · Полки и крыша: {s.horizontal.count} шт., {f(s.horizontal.meters)} пог. м</small>{lightNote&&<small className="warn">{lightNote}</small>}</span><button onClick={()=>{setLightMode(null);setLightNote('');}}>Готово</button></div>;})()}
+          {lightMode&&!presentation&&(()=>{const lm=project.modules.find(x=>x.id===lightMode)?.module;if(!lm)return null;
+            return <LightModeBar module={lm} orient={lightOrient} note={lightNote} onOrient={o=>{setLightOrient(o);setLightNote('');}} onTone={t=>modifyAt(lightMode,n=>applyToAll(n,{tone:t}))} onPanel={()=>setLightPanel(lightMode)} onDone={()=>{setLightMode(null);setLightNote('');}}/>;})()}
+          {lightPanel&&(()=>{const lp=project.modules.find(x=>x.id===lightPanel)?.module;if(!lp)return null;
+            return <LightPanel module={lp} onModify={u=>{modifyAt(lightPanel,u);}} onClose={()=>setLightPanel(null)} onMode={lightMode?undefined:()=>{setLightPanel(null);setLightNote('');setLightMode(lightPanel);}}/>;})()}
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
@@ -1776,6 +1783,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 </SettingsSection>
 <SettingsSection title="Подсветка">                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={allStandsLit(m)} onChange={e=>modify(n=>setAllStands(n,e.target.checked))}/> Подсветка врезная в стойках</span></label>
                 <p className="field-note">LED-профиль по внутренним граням боковин и перегородок на всю высоту проёма. Стоимость подсветки входит в итог проекта.</p>
+                {quickMenuApplies(m)&&<button className="outline full" onClick={()=>setLightPanel(placed.id)}>Настроить подсветку…</button>}
 </SettingsSection>
 <SettingsSection title="Фасад"><button className="outline full" onClick={()=>{try{commitProject(applyFacadeStyle(project,placed.id));}catch(e){setError((e as Error).message);}}}>Применить ко всем модулям</button><p className="field-note">Тип и материал фасадов — всем редактируемым корпусам. Размеры и индивидуальные ручки сохраняются. {advanced?"Импорт Базиса, столешницы":"Столешницы"}, столы и двери купе пропускаются.</p>
                 <div className="toggle-row">

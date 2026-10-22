@@ -8,6 +8,7 @@ import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
 import {handleById} from './handles';
 import {meshById} from './mesh';
+import {ledLook,specText} from './lights';
 import {aluProfile,aluColor,aluInsert,aluFill,ALU_SOURCE,ALU_GASKET_PER_M} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
@@ -482,10 +483,13 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // Настоящая подсветка (опция «Подсветка в стойках», в т.ч. в кухне студии) — считается как раньше.
       // Решение Макса 20.10.2026: подсветка в горизонтах (полках) — 4000 ₽/пог.м, в вертикалях (стойках) — 3000 ₽/пог.м, клиенту,
       // розница поверх коэффициента. Длина — сумма LED-профилей полок. Цена — именованной константой (сборка не запекает ×2,2).
-      if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf','Подсветка в полках',d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м, поверх коэффициента (решение Макса 20.10.2026)',true);
+      // Задача 14 (22.10.2026): тип и тон подсветки — описанием строки, только если менеджер их выбрал (у модуля или детали): своя строка
+      // на сочетание, цена та же (по ориентации). Без выбора — прежние строки и названия (старые проекты считаются как раньше).
+      const led=d.role==='light'&&!d.id.startsWith('groove:')?ledLook(a.module,d.id):null,ledId=led?.explicit?':'+led.type+':'+led.tone:'',ledText=led?.explicit?' · '+specText(led):'';
+      if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf'+ledId,'Подсветка в полках'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м, поверх коэффициента (решение Макса 20.10.2026)',true);
       // Подсветка в крыше нижнего модуля (casework, заказ Вотан, id «…:light:roof») — тоже горизонталь: 4000 ₽/пог.м, своей строкой.
-      else if(d.role==='light'&&d.id.endsWith(':light:roof'))add('light-roof','Подсветка в крыше',d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
-      else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand','Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
+      else if(d.role==='light'&&d.id.endsWith(':light:roof'))add('light-roof'+ledId,'Подсветка в крыше'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
+      else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
     for(const s of a.module.sections){

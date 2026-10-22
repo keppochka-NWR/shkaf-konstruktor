@@ -101,15 +101,16 @@ test('сохранение и загрузка: поштучная подсве�
 test('меню «Подсветка ›»: левая/правая/обе стойки секции, все полки секции, режим выбора деталей, убрать всю подсветку',()=>{
   const m=wardrobe(),[a,b]=m.sections.map(s=>s.id),s=spy(m);
   const item=lightItem(s.mod,b,s.ops);
-  assert.deepEqual(item.children!.map(c=>c.label),['Левая стойка','Правая стойка','Обе стойки','Все полки секции','Режим выбора деталей…','Убрать всю подсветку']);
-  assert.ok(item.children![5].disabled,'снимать нечего');assert.match(item.children![0].hint!,/3\s000\s₽\sза\sпог\.\sм/);assert.match(item.children![3].hint!,/4\s000\s₽\sза\sпог\.\sм/);
+  // «Настроить…» (окно подсветки, задача 14 от 22.10) — перед «Убрать всю подсветку»
+  assert.deepEqual(item.children!.map(c=>c.label),['Левая стойка','Правая стойка','Обе стойки','Все полки секции','Режим выбора деталей…','Настроить…','Убрать всю подсветку']);
+  assert.ok(item.children![6].disabled,'снимать нечего');assert.match(item.children![0].hint!,/3\s000\s₽\sза\sпог\.\sм/);assert.match(item.children![3].hint!,/4\s000\s₽\sза\sпог\.\sм/);
   item.children![0].run!();assert.deepEqual(lightKeys(s.mod),[`${b}:stand:left`],'левая стойка секции 2 — перегородка со стороны секции 2');
   lightItem(s.mod,b,s.ops).children![2].run!();assert.deepEqual(lightKeys(s.mod),[`${b}:stand:left`,`${b}:stand:right`]);
   assert.ok(lightItem(s.mod,b,s.ops).children![2].active);
   lightItem(s.mod,b,s.ops).children![2].run!();assert.deepEqual(lightKeys(s.mod),[],'повторно «Обе стойки» — снять обе');
   lightItem(s.mod,a,s.ops).children![3].run!();assert.deepEqual(s.mod.sections[0].shelfLights,[0,1,2]);assert.ok(lightItem(s.mod,a,s.ops).children![3].active);
   lightItem(s.mod,a,s.ops).children![4].run!();assert.equal(s.mode,1,'режим выбора деталей включается');
-  lightItem(s.mod,a,s.ops).children![5].run!();assert.deepEqual(lightKeys(s.mod),[]);
+  lightItem(s.mod,a,s.ops).children![6].run!();assert.deepEqual(lightKeys(s.mod),[]);
   assert.ok(lightItem(s.mod,a,{...s.ops,lightMode:undefined}).children![4].disabled);
   // старый проект с standLight: пункт показывает включённые стойки и снимает одну
   const old=wardrobe();old.standLight=true;const o=spy(old),[oa,ob]=old.sections.map(x=>x.id);
