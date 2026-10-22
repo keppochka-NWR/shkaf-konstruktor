@@ -69,6 +69,9 @@ export const RULES = {
   // вкладная: 16–94, при фасаде 19 мм — до 97) и через передний ряд полкодержателей (≈57 от переда при полке короче корпуса на 20).
   // Теперь профиль 100–115 от переда: за зоной планки, полкодержатели переднего ряда — до ~60. Проверка: tests/w-light.test.ts (collisions.ts).
   lightFrontOffset: 100,
+  // Там же (вопрос Максу): в секции с ящиками вертикальный LED — от верха полки над ящиками (в зоне ящиков на стойках направляющие —
+  // профиль шёл сквозь них, а свет за ящиками не виден). Метраж и цена таких секций меньше на зону ящиков. false — как было (на всю высоту).
+  lightSkipDrawers: true,
   // Тип подсветки (задача 14): условная геометрия для сцены. Врезной — как было (видимая часть 3 мм), накладной профиль 16×7 на грани,
   // лента без профиля 10×1. Длина и цена у всех одинаковые (решение 20.10: цена по ориентации; цены по типам — вопрос Максу).
   lightSurfaceW: 16,
@@ -1129,7 +1132,7 @@ export function parts(m: Module): Part[] {
     // Подсветка по деталям (20.10.2026): старый флаг standLight = обе стойки каждой секции; новый — своя сторона секции.
     // Задача 20 (22.10): профиль за зоной планки петли — передняя кромка в RULES.lightFrontOffset (100) от переда; в секции с ящиками —
     // над ящиками (над обязательной полкой): в зоне ящиков на стойках направляющие, профиль шёл сквозь них. Тип — сечение (ledSize).
-    const ledFrom = s.drawers > 0 ? drawerStackHeight(s) + (!(m.sectionLayout && b.top < innerTop(m)) && !s.drawerConfigs?.every((c) => c.tray) ? t : 0) : 0, lh = h - ledFrom;
+    const ledFrom = s.drawers > 0 && RULES.lightSkipDrawers ? drawerStackHeight(s) + (!(m.sectionLayout && b.top < innerTop(m)) && !s.drawerConfigs?.every((c) => c.tray) ? t : 0) : 0, lh = h - ledFrom;
     for (const side of ["left", "right"] as const)
       if ((m.standLight || s.standLights?.includes(side)) && lh > 0) {
         const [lw, lt] = ledSize(m, s, side);

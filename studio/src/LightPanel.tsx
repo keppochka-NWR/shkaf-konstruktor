@@ -67,7 +67,7 @@ export function LightPanel(p: { module: Module; onModify: (u: (n: Module) => voi
             <option value="">как у модуля ({TONE_INFO[m.lightTone ?? 4000].short})</option>
             {LIGHT_TONES.map((t) => <option key={t} value={t}>{TONE_INFO[t].label}</option>)}</select></td>
           <td><select aria-label={`Тип: секция ${r.section}, ${r.label}`} value={r.ownType ? r.type : ""} onChange={(e) => p.onModify((n) => setDetailSpec(n, r.key, { type: e.target.value ? (e.target.value as LightType) : null }))}>
-            <option value="">как у модуля ({TYPE_INFO[m.lightType ?? "inset"].short})</option>
+            <option value="">как у модуля ({TYPE_INFO[m.lightType ?? "inset"].short.split(" ")[0]})</option>
             {LIGHT_TYPES.map((t) => <option key={t} value={t}>{TYPE_INFO[t].label}</option>)}</select></td>
           <td><button type="button" className="lp-remove" aria-label={`Убрать: секция ${r.section}, ${r.label}`} onClick={() => p.onModify((n) => setLight(n, r.key, false))}>Убрать</button></td>
         </tr>)}</tbody>

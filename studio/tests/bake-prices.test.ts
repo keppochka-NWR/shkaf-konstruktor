@@ -73,9 +73,10 @@ test('запекание: подсветка в полках (4000 ₽/пог.м
   // в запечённом исходнике цена — та же именованная константа (её нет в BAKE_RULES model.ts), литералов 4000/3000 в add() нет
   const bakedModel=readFileSync(join(out,'model.ts'),'utf8'),bakedPricing=readFileSync(join(out,'pricing.ts'),'utf8');
   assert.match(bakedModel,/lightRetailPerM: 3000,/);assert.match(bakedModel,/shelfLightRetailPerM: 4000,/);
-  assert.match(bakedPricing,/add\('light-shelf','Подсветка в полках',d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
-  assert.match(bakedPricing,/add\('light-stand','Подсветка врезная в стойках',d\.length\/1000,'пог\.м',RULES\.lightRetailPerM,/);
-  assert.match(bakedPricing,/add\('light-roof','Подсветка в крыше',d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
+  // 22.10 (задача 14): к id и названию строки добавляется описание выбранных типа/тона (ledId, ledText) — цена та же константа
+  assert.match(bakedPricing,/add\('light-shelf'\+ledId,'Подсветка в полках'\+ledText,d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
+  assert.match(bakedPricing,/add\('light-stand'\+ledId,led\?\.explicit\?'Подсветка в стойках'\+ledText:'Подсветка врезная в стойках',d\.length\/1000,'пог\.м',RULES\.lightRetailPerM,/);
+  assert.match(bakedPricing,/add\('light-roof'\+ledId,'Подсветка в крыше'\+ledText,d\.length\/1000,'пог\.м',RULES\.shelfLightRetailPerM,/);
 });
 // Подсветка в крыше нижнего модуля (Вотан) — горизонталь: 4000 ₽/пог.м и в публичной сборке, не ×2,2 и не по цене стоек
 test('запекание: подсветка в крыше (Вотан) — 4000 ₽/пог.м в публичной сборке, прирост итога тот же, что у менеджера',()=>{
