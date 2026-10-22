@@ -13,7 +13,7 @@ import { createPortal } from "react-dom";
 
 /** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
 
-import { details, nest, quoteBreakdown, splitRows } from "./exports";
+import { details, nest, quoteBreakdown, splitRows, unplacedDetails } from "./exports";
 import { pendingTotalLabel } from "./pendingPrices";
 import { fillerCount, sameDesign, sheetChangeNote } from "./sheetNote";
 import { count, DETAILS, SHEETS } from "./ru";
@@ -33,8 +33,10 @@ const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
 // палитры. При загрузке всегда «Проект» (панель закрыта); выбор вкладки живёт до перезагрузки.
 function loadTab(): DockTab { try { localStorage.removeItem("studio-dock"); } catch { /* браузер без хранилища */ } return "project"; }
 
-export function ProjectDock({ project, commit, openOutput, openParts, warnings, onWarnings, onLayout }: {
+export function ProjectDock({ project, commit, openOutput, openParts, warnings, onWarnings, onLayout, inspect }: {
   project: Project;
+  /** «Показать» у детали, которая не помещается в лист: выбрать корпус и деталь в 3D. */
+  inspect?: (moduleId: string, partId: string) => void;
   /** Панель открылась или закрылась: сцене нужно заново вписать мебель в уменьшенный вид. */
   onLayout?: () => void;
   commit: (p: Project) => boolean;
@@ -51,13 +53,18 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
   useEffect(() => { if (!mounted.current) { mounted.current = true; return; } const t = setTimeout(() => onLayout?.(), 120); return () => clearTimeout(t); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   // Смета считает раскрой: откладываем на 300 мс после правки, чтобы перетаскивание не тормозило.
   // note — почему итог прыгнул целым листом (m3 критика 22.10, sheetNote.ts); держится, пока число листов то же
-  const [calc, setCalc] = useState<{ project: Project; e: ReturnType<typeof estimate>; parts: number; ldsp: number; hdf: number; fillers: number; note: string | null } | null>(null);
+  const [calc, setCalc] = useState<{ project: Project; e: ReturnType<typeof estimate>; parts: number; ldsp: number; hdf: number; fillers: number; note: string | null; unplaced: ReturnType<typeof unplacedDetails> } | null>(null);
+  // БЛОКЕР 1 критика релиза 22.10: ошибка раскроя/сметы — сообщение в панели, а не необработанное исключение таймера
+  const [calcError, setCalcError] = useState<{ project: Project; message: string } | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => {
-      const sheets = nest(project), e = estimate(project, sheets), ldsp = sheets.filter((s) => s.material !== "hdf").length, fillers = fillerCount(project);
+      let sheets: ReturnType<typeof nest>, e: ReturnType<typeof estimate>, unplaced: ReturnType<typeof unplacedDetails>;
+      try { sheets = nest(project); e = estimate(project, sheets); unplaced = unplacedDetails(project); setCalcError(null); }
+      catch (err) { setCalcError({ project, message: err instanceof Error ? err.message : String(err) }); return; }
+      const ldsp = sheets.filter((s) => s.material !== "hdf").length, fillers = fillerCount(project);
       setCalc((c) => {
         const same = !!c && sameDesign(c.project, project), note = same ? sheetChangeNote({ ldsp: c!.ldsp, total: c!.e.retail, fillers: c!.fillers }, { ldsp, total: e.retail, fillers }) : null;
-        return { project, e, parts: details(project).length, ldsp, hdf: sheets.filter((s) => s.material === "hdf").length, fillers, note: note ?? (same && c!.ldsp === ldsp ? c!.note : null) };
+        return { project, e, parts: details(project).length, ldsp, hdf: sheets.filter((s) => s.material === "hdf").length, fillers, note: note ?? (same && c!.ldsp === ldsp ? c!.note : null), unplaced };
       });
     }, 300);
     return () => clearTimeout(timer);
@@ -84,7 +91,9 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
 
   const panel = tab === "project" ? null : tab === "estimate" ? (
     <div className="dock-body dock-estimate">
-      <div className="dock-sum total"><span>Итоговая стоимость</span><b>{!e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
+      {calcError?.project === project && <div className="dock-unplaced" role="alert"><b>Смета не посчитана: {calcError.message}</b></div>}
+      {fresh && fresh.unplaced.length > 0 && <div className="dock-unplaced" role="alert" aria-label="Не помещаются в лист"><b>Смета не завершена — не помещаются в лист ({fresh.unplaced.length}):</b><ul>{fresh.unplaced.slice(0, 6).map((u) => <li key={u.detail.code}>Деталь {u.detail.code} · {u.detail.moduleName} / {u.detail.name} {u.detail.length} × {u.detail.width} — сращивать или заказать отдельно{inspect && <button type="button" className="text-action" aria-label={"Показать деталь " + u.detail.code} onClick={() => inspect(u.detail.moduleId, u.detail.id)}>Показать</button>}</li>)}{fresh.unplaced.length > 6 && <li>…и ещё {fresh.unplaced.length - 6}</li>}</ul></div>}
+      <div className="dock-sum total"><span>Итоговая стоимость</span><b>{calcError?.project === project ? 'Ошибка расчёта' : !e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
       {split && <div className={"dock-cost-split" + (split.kupe ? " has-kupe" : "")} aria-label="Разбивка стоимости">{splitRows(split).map(([k, v], i) => <div key={k} className={"dock-sum " + ["material", "hardware", "kupe"][i]}><span>{k}</span><b>{rub(v)}</b></div>)}</div>}
       {fresh && <p className="dock-sheets" aria-label="Листы раскроя">Листов ЛДСП в раскрое: <b>{fresh.ldsp}</b>{fresh.hdf ? <> · ЛХДФ: <b>{fresh.hdf}</b></> : null}{fresh.note && <small role="status">{fresh.note}</small>}</p>}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setHwOpen(true)}>Поменять фурнитуру</button></div>

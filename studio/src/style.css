@@ -295,7 +295,10 @@ body {
   margin: 0;
 }
 button,
-input {
+input,
+select,
+textarea {
+  /* m5 (критик целостности 22.10): select был Arial 13,33 — системный шрифт браузера; теперь Golos Text, как поля */
   font: inherit;
 }
 button {

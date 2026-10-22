@@ -30,11 +30,46 @@ export function placeMenu(x: number, y: number, r: number, size: number, area: M
   return { cx, cy: clamp(y, top, bottom) };
 }
 
-/** Область для меню: canvas сцены минус правая вертикальная панель инструментов (если она справа), в пределах окна. */
-export function menuArea(win: { width: number; height: number }, canvas?: MenuArea | null, tools?: MenuArea | null): MenuArea {
+/** Область для меню: canvas сцены минус правая вертикальная панель инструментов (если она справа), в пределах окна.
+ *  top — плавающие полосы над сценой (вкладки вида, .interaction-bar): m1 критика целостности 22.10 — на 1280/1366 подписи
+ *  верхних пунктов уходили под верхнюю панель; полоса в верхней половине области поднимает верх области под себя. */
+export function menuArea(win: { width: number; height: number }, canvas?: MenuArea | null, tools?: MenuArea | null, top?: (MenuArea | null | undefined)[]): MenuArea {
   const a = canvas ? { left: Math.max(0, canvas.left), top: Math.max(0, canvas.top), right: Math.min(win.width, canvas.right), bottom: Math.min(win.height, canvas.bottom) } : { left: 0, top: 0, right: win.width, bottom: win.height };
   if (tools && tools.right > tools.left && tools.left > (a.left + a.right) / 2 && tools.left < a.right) a.right = tools.left - 6;
+  for (const b of top ?? []) if (b && b.bottom > b.top && b.right > a.left && b.left < a.right && b.top < (a.top + a.bottom) / 2 && b.bottom > a.top) a.top = Math.max(a.top, b.bottom + 4);
   return a;
+}
+
+/** Подпись пункта: ширина по числу знаков (11 px, полужирный Golos Text ≈ 6,4 px на знак) + поля 12. */
+const labelWidth = (s: string) => Math.ceil(s.length * 6.4) + 12;
+type Box = { l: number; t: number; r: number; b: number };
+/** Прямоугольники кнопок и подписей кольца радиуса r (центр меню — 0,0): та же раскладка, что в RadialMenu. */
+export function ringBoxes(labels: string[], r: number, size: number) {
+  const h = size / 2, out: { button: Box; label: Box }[] = [];
+  labels.forEach((text, i) => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / labels.length, px = Math.cos(a) * r, py = Math.sin(a) * r, w = labelWidth(text), side = labelSide(px, py, r);
+    const label = side === " below" ? { l: px - w / 2, r: px + w / 2, t: py + h + 4, b: py + h + 22 } : side === " above" ? { l: px - w / 2, r: px + w / 2, t: py - h - 22, b: py - h - 4 }
+      : side === " left" ? { l: px - h - 6 - w, r: px - h - 6, t: py - 9, b: py + 9 } : { l: px + h + 6, r: px + h + 6 + w, t: py - 9, b: py + 9 };
+    out.push({ button: { l: px - h, r: px + h, t: py - h, b: py + h }, label });
+  });
+  return out;
+}
+const hit = (a: Box, b: Box, pad = 2) => a.l < b.r + pad && b.l < a.r + pad && a.t < b.b + pad && b.t < a.b + pad;
+/** Наезды подписей: подпись на подпись или подпись на чужую кнопку (m3 критика целостности 22.10). */
+export function ringOverlaps(labels: string[], r: number, size: number) {
+  const boxes = ringBoxes(labels, r, size); let n = 0;
+  for (let i = 0; i < boxes.length; i++) for (let j = 0; j < boxes.length; j++) {
+    if (i === j) continue;
+    if (j > i && hit(boxes[i].label, boxes[j].label)) n++;
+    if (hit(boxes[i].label, boxes[j].button)) n++;
+  }
+  return n;
+}
+/** Радиус кольца: не меньше base и места под кнопки по окружности; при наездах подписей (11 пунктов меню фасада) — больше, до max. */
+export function ringRadius(labels: string[], base: number, size: number, max = 190) {
+  let r = Math.max(base, Math.ceil((labels.length * (size + 8)) / (2 * Math.PI)));
+  while (r < max && ringOverlaps(labels, r, size)) r += 4;
+  return r;
 }
 
 /** Подзаголовок с размерами корпуса: «1500 × 2500 × 704». */

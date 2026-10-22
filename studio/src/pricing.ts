@@ -2,7 +2,7 @@ import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
 import {worktopLines} from './kitchen';
 import {edgeLength} from './edges';
-import {nest,nestPlan,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
+import {nest,unplacedDetails,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
 import {isBazisModule,type Project} from './project';
 import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
@@ -241,8 +241,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     add('sheet:'+sheet.decor+(t16?'':':'+t),(lam?'Lamarty ':'Плита ')+(t16?16:t)+' мм · '+sheet.decor,1,'лист',d.price,t16?d.source:d.source+'; цена как у 16 мм — уточнить для '+t+' мм');
   }
   // Гильотина (флаг cuttingEngine): деталь длиннее рабочего поля листа в карты не попала — смета не завершена,
-  // пока технолог не решит (сращивание / отдельная плита). Старый движок на такой детали падает целиком.
-  const unplaced=cuttingEngine(p)==='guillotine'?nestPlan(p).unplaced:[];
+  // пока технолог не решит (сращивание / отдельная плита). Прежний движок — так же (classicUnplaced; раньше падал целиком, БЛОКЕР 1 критика 22.10).
+  const unplaced=unplacedDetails(p);
   for(const u of unplaced)add('unplaced:'+u.detail.code,`Не помещается в лист: ${u.detail.code} ${u.detail.name} ${u.detail.length} × ${u.detail.width}`,1,'шт',null,u.reason);
   let edge2=0,edge04=0,edge05=0,edge1=0,edge08=0,small=0;
   // Кухня из Базиса (правило Макса): в смету — только то, что есть в Базисе, с его названиями.

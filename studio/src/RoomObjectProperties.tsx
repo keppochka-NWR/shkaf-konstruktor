@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Room, Opening } from "./project";
 import { FIXTURES, type Fixture } from "./fixtures";
 export type EnvironmentSelection = {
@@ -17,6 +17,12 @@ export function RoomObjectProperties({
   onClose: () => void;
 }) {
   const [error, setError] = useState("");
+  // m7 (критик целостности 22.10): окно закрывается по Esc, как остальные окна студии
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector(".radial-menu")) onClose(); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
   const list =
     selection.kind === "opening"
       ? room.openings

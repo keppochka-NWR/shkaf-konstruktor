@@ -72,8 +72,8 @@ export function nestGuillotine(p: Project, gap = 10): Sheet[] {
     const width = d.material === "hdf" ? RULES.hdfH : RULES.sheetH,
       height = d.material === "hdf" ? RULES.hdfW : RULES.sheetW;
     const key = d.material === "hdf" ? "ЛХДФ" : d.decor;
-    if (d.width > width - 20 || d.length > height - 20)
-      throw Error(`Деталь ${d.code} не помещается в лист.`);
+    // больше листа — не исключение: такую деталь смета показывает «не помещается в лист» (classicUnplaced), раскрой остальных идёт
+    if (d.width > width - 20 || d.length > height - 20) continue;
     let best:
       { s: (typeof result)[number]; i: number; score: number } | undefined;
     for (const s of result.filter(
@@ -122,8 +122,25 @@ export const GUILLOTINE_RULES={kerf:4.4,trim:12,minTrim:10,maxStages:5,iteration
   /** аварийный предел на группу в браузере; обычные проекты укладываются в десятки мс и результат детерминирован */ timeLimitMs:1500};
 export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];engine:'classic'|'guillotine'};
 /** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
+/** Прежний движок: влезает ли деталь в рабочее поле листа (поле 10 мм; поперёк — только без направления текстуры). */
+function classicFits(d:Detail){
+  const W=(d.material==='hdf'?RULES.hdfH:RULES.sheetH)-20,H=(d.material==='hdf'?RULES.hdfW:RULES.sheetW)-20;
+  return (d.width<=W&&d.length<=H)||(grainFree(d)&&d.length<=W&&d.width<=H);
+}
+/** Детали больше листа у прежнего движка (БЛОКЕР 1 критика релиза 22.10): раньше раскрой бросал «Деталь не помещается в лист»
+ *  и ронял студию; теперь они — строки «не помещается в лист» сметы и список с «Показать», как у гильотины. */
+export function classicUnplaced(p:Project):NestPlan['unplaced']{
+  const reason='Больше листа — сращивать или заказать отдельно.';
+  if(p.modules.some(a=>a.module.corner)){
+    const byKey=new Map(details(p).map(d=>[d.moduleId+'/'+d.id,d]));
+    return cutting(p).unplaced.flatMap(u=>{const d=byKey.get(u.key);return d?[{detail:d,reason}]:[];});
+  }
+  return details(p).filter(d=>!classicFits(d)).map(detail=>({detail,reason}));
+}
+/** Детали, не попавшие в раскрой, для сметы и панели (оба движка). */
+export function unplacedDetails(p:Project):NestPlan['unplaced']{return cuttingEngine(p)==='guillotine'?nestPlan(p).unplaced:classicUnplaced(p);}
 export function nestPlan(p:Project):NestPlan{
-  if(cuttingEngine(p)==='classic')return {sheets:nest(p),unplaced:[],engine:'classic'};
+  if(cuttingEngine(p)==='classic')return {sheets:nest(p),unplaced:classicUnplaced(p),engine:'classic'};
   const err=projectErrors(p);if(err.length)throw Error(err[0]);
   const groups=new Map<string,Detail[]>();
   for(const d of details(p)){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
@@ -161,21 +178,24 @@ export function nest(p:Project,gap=10):Sheet[]{
     const result=cutting(p),byKey=new Map(details(p).map(d=>[d.moduleId+'/'+d.id,d]));
     return result.sheets.map(s=>({decor:s.decor,material:s.material==='ХДФ'?'hdf':'board',thickness:s.thickness,width:s.width,height:s.height,items:s.items.map(a=>({detail:byKey.get(a.id)!,x:a.x,y:a.y,w:a.w,h:a.h,cutContour:sheetPolygon(a)}))}));
   }
-  const baseline=nestGuillotine(p,gap),all=details(p),groups=new Map<string,Detail[]>();
+  // детали больше листа в карты не попадают (classicUnplaced) — раскрой остальных не падает
+  const baseline=nestGuillotine(p,gap),all=details(p).filter(classicFits),groups=new Map<string,Detail[]>();
   for(const d of all){const key=JSON.stringify([d.material,d.material==='hdf'?'ЛХДФ':d.decor,d.thickness]);groups.set(key,[...(groups.get(key)||[]),d]);}
   const result:Sheet[]=[];
   for(const ds of groups.values()){
     const first=ds[0],decor=first.material==='hdf'?'ЛХДФ':first.decor,width=first.material==='hdf'?RULES.hdfH:RULES.sheetH,height=first.material==='hdf'?RULES.hdfW:RULES.sheetW;
-    let best=baseline.filter(s=>s.material===first.material&&s.decor===decor&&s.thickness===first.thickness);
+    const base=baseline.filter(s=>s.material===first.material&&s.decor===decor&&s.thickness===first.thickness);
+    // базовая гильотина без поворотов могла не взять деталь, которая влезает только поперёк — тогда она не эталон
+    let best:Sheet[]|null=base.reduce((n,s)=>n+s.items.length,0)===ds.length?base:null;
     const byId=new Map(ds.map(d=>[d.code,d]));
     const footprint=(s:Sheet[])=>Math.max(...s.at(-1)!.items.map(p=>p.y+p.h));
     for(const order of ['area','height','width'] as const)for(const fit of ['short','area'] as const){
       const packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width-20,height-20,gap,order,fit);
-      if(packed.length>best.length)continue;
+      if(best&&packed.length>best.length)continue;
       const candidate:Sheet[]=packed.map(items=>({decor,material:first.material,thickness:first.thickness,width,height,items:items.map(a=>({detail:byId.get(a.id)!,x:a.x+10,y:a.y+10,w:a.w,h:a.h}))}));
-      if(candidate.length<best.length||footprint(candidate)<footprint(best))best=candidate;
+      if(!best||candidate.length<best.length||footprint(candidate)<footprint(best))best=candidate;
     }
-    result.push(...best);
+    result.push(...best!);
   }
   return result;
 }
@@ -329,7 +349,7 @@ function sellerBlock(seller?: SellerInfo) {
 /** Цена КП включает позиции после финального расчёта — отметка менеджера (offer.pendingIncluded). */
 export const PENDING_INCLUDED_NOTE = "Цена включает позиции после финального расчёта конструктором (цена согласована менеджером)";
 /** Стили КП (менеджеры 22.10.2026, п. 9): карточки изделий с миниатюрой, образцы материалов, «входит / не входит», печать A4. */
-const quoteStyle = `<style>.q-head p{margin:4px 0 0;color:#637c85}.q-hero{margin:18px 0 8px;border:1px solid #d5dfe3;border-radius:8px;overflow:hidden;background:#f6f4ef}.q-hero img{display:block;width:100%;max-height:520px;object-fit:contain}
+const quoteStyle = `<style>.q-head p{margin:4px 0 0;color:#637c85}.q-hero{margin:18px auto 8px;width:fit-content;max-width:100%;border:1px solid #d5dfe3;border-radius:8px;overflow:hidden;line-height:0}.q-hero img{display:block;max-width:100%;width:auto;height:auto;max-height:520px}
 .q-legend{color:#637c85;font-size:12px;margin:2px 0 10px}.q-item{display:grid;grid-template-columns:150px 1fr;gap:18px;padding:14px 0;border-top:1px solid #d5dfe3;break-inside:avoid}.q-thumb{display:flex;align-items:center;justify-content:center;background:#f6f4ef;border-radius:6px;padding:8px;min-height:120px}.q-thumb svg{width:100%;height:auto;max-height:170px}
 .q-title{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.q-title b{font-size:17px}.q-price{font-size:17px;font-weight:bold;white-space:nowrap}.q-size{color:#23404c;margin:2px 0 6px}.q-body small{color:#637c85}.q-body ul{margin:6px 0 0;padding-left:18px}.q-body li{margin:2px 0}
 .q-mats{list-style:none;padding-left:0!important}.q-mats li{display:flex;align-items:center;gap:8px}.sw{flex:none;display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #b9c6cb;background-size:cover;background-position:center}
@@ -373,9 +393,10 @@ export function quoteHTML(
 ) {
   const n = Number(price), priced = price.trim() !== "" && Number.isFinite(n) && n >= 0, rub = (v: number) => v.toLocaleString("ru-RU") + " ₽";
   const split = priced ? quoteBreakdown(price, opts.cost) : null;
-  const sum = !priced ? `<p class="sum">Стоимость: после согласования</p>` : split
+  // m8 (критик целостности 22.10): под заголовком «Стоимость» — без второго «Стоимость:»
+  const sum = !priced ? `<p class="sum">Цена после согласования</p>` : split
     ? `<table class="split"><tbody>${splitRows(split).map(([k, v]) => `<tr><td>${k}</td><td>${rub(v)}</td></tr>`).join("")}<tr><td>Итого</td><td>${rub(n)}</td></tr></tbody></table>`
-    : `<p class="sum">Стоимость: ${rub(n)}</p>`;
+    : `<p class="sum">${rub(n)}</p>`;
   // цена по каждому изделию (переключатель offer.itemPrices, по умолчанию да): только когда доли сходятся с ценой КП до рубля
   const items = priced && p.offer?.itemPrices !== false && opts.items && opts.items.length === p.modules.length && opts.items.reduce((s, v) => s + v, 0) === n ? opts.items : null;
   const sw = opts.swatches ?? {};

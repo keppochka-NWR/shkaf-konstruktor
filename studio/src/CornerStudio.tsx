@@ -19,7 +19,7 @@ export default function CornerStudio({initialProject}:{initialProject?:Project})
  const file=useRef<HTMLInputElement>(null),capture=useRef<(()=>string)|undefined>(undefined);
  const m=project.modules.find(a=>a.id===active)!.module,selectedPart=parts(m).find(d=>d.id===selected);
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(p));}catch{setError('Автосохранение недоступно. Скачайте проект кнопкой вверху.');}},[p]);
- function commit(next:CornerParameters){try{const q=parseCorner(next);cutting(cornerProject(q));setHistory(h=>[...h.slice(0,cursor+1),q]);setCursor(cursor+1);setError('');setSelected(undefined);}catch(e){setError((e as Error).message);}}
+ function commit(next:CornerParameters){try{const q=parseCorner(next);if(cutting(cornerProject(q)).unplaced.length)throw Error('Деталь не помещается в лист.');setHistory(h=>[...h.slice(0,cursor+1),q]);setCursor(cursor+1);setError('');setSelected(undefined);}catch(e){setError((e as Error).message);}}
  const change=(key:keyof CornerParameters,value:unknown)=>commit({...p,[key]:value});
  const noop=()=>{},no=()=>false,reason=()=> 'Измените параметры углового шкафа слева.';
  const boards=cut.sheets.filter(s=>s.material==='ЛДСП'),hdf=cut.sheets.filter(s=>s.material==='ХДФ');

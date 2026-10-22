@@ -104,9 +104,10 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
   useEffect(()=>{try{sessionStorage.setItem(PALETTE_KEY,JSON.stringify({category,kind,width,height,depth,mount:kupeMount,doors}));}catch{/* без хранилища выбор не запоминается */}},[category,kind,width,height,depth,kupeMount,doors]);
   const kupeKind=kind==='kupe'||kind==='kupe-wardrobe';
   const doorChoice=useMemo(()=>{
-    if(kupeKind){const ok=[1,2,3,4,5,6,7].filter(n=>{try{createKupeModule(width,height,source,n);return true;}catch{return false;}});return {options:ok,auto:ok.includes(DEFAULT_KUPE.doors)?DEFAULT_KUPE.doors:ok[0]??DEFAULT_KUPE.doors};}
+    if(kupeKind){let why='';const ok=[1,2,3,4,5,6,7].filter(n=>{try{createKupeModule(width,height,source,n);return true;}catch(e){why=why||(e as Error).message;return false;}});return {options:ok,auto:ok.includes(DEFAULT_KUPE.doors)?DEFAULT_KUPE.doors:ok[0]??DEFAULT_KUPE.doors,why:ok.length?'':why};}
     if(kind!=='empty'&&kind!=='wardrobe')return null;
-    try{const base=createModule(kind,width,height,depth,source);return {options:doorCountOptions(base),auto:autoDoorCount(base)};}catch{return {options:[],auto:0};}
+    // u3 (замер удобства 22.10): причина — по факту (высота, глубина…), а не всегда «измените ширину»
+    try{const base=createModule(kind,width,height,depth,source);return {options:doorCountOptions(base),auto:autoDoorCount(base),why:''};}catch(e){return {options:[],auto:0,why:(e as Error).message};}
   },[kind,kupeKind,width,height,depth,source]);
   const doorValue=doors!=='auto'&&doorChoice?.options.includes(doors)?doors:'auto';
   const doorArg=doorValue==='auto'?(kupeKind?doorChoice?.auto:undefined):doorValue;
@@ -134,7 +135,7 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
     {doorChoice&&<label className="palette-doors">{kupeKind?'Дверей купе':'Дверей'}<select aria-label={kupeKind?'Дверей купе у новой мебели':'Дверей у новой мебели'} value={String(doorValue)} onChange={e=>setDoors(e.target.value==='auto'?'auto':Number(e.target.value))}>
       <option value="auto">Авто{doorChoice.auto?` · ${doorChoice.auto}`:''}</option>
       {doorChoice.options.map(n=><option key={n} value={n}>{n}{kupeKind?'':` · секций ${Math.ceil(n/2)}`}</option>)}
-    </select>{!doorChoice.options.length&&<small>При этих размерах число дверей не выбирается — измените ширину.</small>}</label>}
+    </select>{!doorChoice.options.length&&<small>{doorChoice.why?`Число дверей не выбирается: ${doorChoice.why}`:'При этой ширине число дверей не выбирается — измените ширину.'}</small>}</label>}
     {kind==='kupe-wardrobe'&&<label className="hardware-field">Установка дверей<select aria-label="Установка дверей купе" value={kupeMount} onChange={e=>setKupeMount(e.target.value==='inside'?'inside':'free')}><option value="inside">внутри шкафа</option><option value="free">отдельно (ниша или перед корпусами)</option></select></label>}
     <small>{note}</small>
     {error&&<p role="alert">{error}</p>}

@@ -223,9 +223,13 @@ export function duplicatePart(p:Project,mid:string,sid:string,pid:string):{proje
  if(!m||!s||!part)throw Error('Выберите полку или ящик для копирования.');
  const b=boxes(m).find(b=>b.id===sid)!;
  if(pid.includes(':drawer:')){
-  const j=Number(pid.split(':drawer:')[1].split(':')[0]),cfg=drawerConfig(m,s,j);
-  const next=insertItem(p,'drawer',mid,sid,b.bottom+drawerOffsets(s)[j]+cfg.height+RULES.drawerStep,cfg);
-  return {project:next,partId:sid+':drawer:'+s.drawers+':facade'};
+  const j=Number(pid.split(':drawer:')[1].split(':')[0]),cfg=drawerConfig(m,s,j),off=drawerOffsets(s);
+  // u1 (замер удобства 22.10): сразу над этим ящиком, иначе над верхним ящиком секции; места нет — понятный отказ, не «молча»
+  const top=Math.max(...Array.from({length:s.drawers},(_,k)=>off[k]+drawerConfig(m,s,k).height));
+  for(const y of [...new Set([off[j]+cfg.height,top])]){
+   try{const next=insertItem(p,'drawer',mid,sid,b.bottom+y+RULES.drawerStep,cfg);return {project:next,partId:sid+':drawer:'+s.drawers+':facade'};}catch{/* следующее место */}
+  }
+  throw Error(`Копия ящика не помещается: в секции нет места ещё под один ящик (фасад ${Math.round(cfg.height)} мм). Освободите место над ящиками, уменьшите ящики или увеличьте корпус.`);
  }
  if(pid.includes(':shelf:')){
   const above=Math.min(b.top,...s.shelves.map(f=>b.bottom+f*(b.top-b.bottom)).filter(y=>y>part.position[1]+.01));

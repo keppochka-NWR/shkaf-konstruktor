@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import {SafeBoundary} from "./SafeBoundary";
 import App from "./App";
 import { ClientWorkspace } from "./ClientWorkspace";
 import { RoomWorkspace } from './RoomWorkspace';
@@ -14,7 +15,7 @@ import "./layout-fixes.css";
 async function start(){
   const query=new URLSearchParams(location.search),slug=query.get('project');
   if(query.get('rooms')==='1'){
-    createRoot(document.getElementById('root')!).render(<React.StrictMode><RoomWorkspace workspaceKey={query.get('workspace')??''}/></React.StrictMode>);
+    createRoot(document.getElementById('root')!).render(<React.StrictMode><SafeBoundary label="Студия"><RoomWorkspace workspaceKey={query.get('workspace')??''}/></SafeBoundary></React.StrictMode>);
     return;
   }
   let initialProject;
@@ -39,8 +40,9 @@ async function start(){
     try{const k=CURRENT_PROJECT+':'+KITCHEN_WORKSPACE,s=localStorage.getItem(k);if(s){const x=JSON.parse(s);if(x&&typeof x==='object'&&!x.kind){x.kind='kitchen';localStorage.setItem(k,JSON.stringify(x));}}}catch{/* битую копию разберёт App: резервная копия и восстановление */}
   }
   const order=query.get('order'),key=slug??(order==='corner'?'corner-workspace':order==='kitchen'?KITCHEN_WORKSPACE:undefined);
-  createRoot(document.getElementById('root')!).render(<React.StrictMode>{order==='votan'?<VotanStudio/>:initialProject||slug?<App initialProject={initialProject} projectKey={key}/>:<ClientWorkspace/>}</React.StrictMode>);
+  createRoot(document.getElementById('root')!).render(<React.StrictMode><SafeBoundary label="Студия">{order==='votan'?<VotanStudio/>:initialProject||slug?<App initialProject={initialProject} projectKey={key}/>:<ClientWorkspace/>}</SafeBoundary></React.StrictMode>);
 }
 start().catch(error=>{document.getElementById('root')!.textContent='Не удалось открыть проект: '+String(error.message);});
 
 import './manager-workflow.css';
+import './integrity-fixes.css';

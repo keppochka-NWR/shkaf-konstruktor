@@ -1,0 +1,32 @@
+/* Критик целостности интерфейса, релиз 22.10.2026 (ветка claude/rel-fix3). Подключается последним. */
+
+/* БЛОКЕР 2: на 1536x864@1.25 с открытой «Стоимостью» прилипшая к низу кнопка «Добавить в комнату» (m11 прошлого раунда)
+   накрывала select «Дверей» на 5 px. Кнопка — в обычном потоке под полями, левая панель прокручивается; поля не перекрываются
+   ни при каком разрешении и состоянии нижней панели. */
+.library .module-palette>.primary{position:static;box-shadow:none;margin-top:8px}
+/* m6: главная кнопка палитры была 10 px (общий .full) — как остальные главные кнопки */
+.module-palette .primary.full{font-size:13px;font-weight:600;min-height:40px;padding:10px 12px}
+.module-palette .palette-doors select{width:100%;min-height:32px}
+
+/* m4: значок предупреждения в подвале свойств сжимался до 4x18 */
+.property-footer>svg{flex-shrink:0}
+
+/* m7: окно параметров объекта комнаты — над сценой левее правой панели (не закрывает поля «Замер помещения») */
+.environment-properties{right:316px;top:150px;max-height:calc(100vh - 230px)}
+@media(max-width:1100px){.environment-properties{right:286px}}
+@media(max-width:850px){.environment-properties{right:16px}}
+
+/* m2: пока открыто круговое меню, ручки растяжения и плашки размеров под ним не ловят мышь (меню — в body поверх всего) */
+body.radial-open .stretch-handle,body.radial-open .model-dimension,body.radial-open .gap-dimension{pointer-events:none}
+body>.radial-menu{z-index:85}
+
+/* БЛОКЕР 1: граница ошибок панели и список «не помещается в лист» в нижней панели */
+.safe-boundary{margin:12px;padding:14px 16px;border:1px solid #e8b4a8;border-radius:8px;background:#fff6f3;color:#5a2a1e;font-size:13px;line-height:1.45}
+.safe-boundary b{display:block;margin-bottom:4px}
+.safe-boundary p{margin:4px 0}
+.safe-boundary .safe-boundary-note{font-size:12px;color:#7a4a3c}
+.safe-boundary button{margin-top:8px}
+.dock-unplaced{grid-column:1/-1;padding:10px 14px;border:1px solid #e6c48f;border-radius:8px;background:#fff8eb;color:#6b4300;font-size:13px;line-height:1.45}
+.dock-unplaced ul{margin:4px 0 0;padding-left:18px}
+.dock-unplaced li button{margin:0 0 0 8px;font-size:12px}
+.unplaced-list li button{margin:0 0 0 8px;font-size:12px}

@@ -2,9 +2,10 @@
 // в центре — что выбрано и подсказка наведённого пункта. Пункт со стрелкой открывает следующее кольцо; центр = «Назад» или «Закрыть».
 // Клавиатура: Esc — назад/закрыть, стрелки — по кругу, Enter — выбрать.
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronLeft } from "lucide-react";
 import "./radial-menu.css";
-import { labelSide, placeMenu, type MenuArea } from "./contextMenu";
+import { labelSide, placeMenu, ringRadius, type MenuArea } from "./contextMenu";
 
 export type RadialItem = {
   id: string;
@@ -31,7 +32,8 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose, area }: { x:
   const raw = path.length ? path[path.length - 1].children ?? [] : items;
   const ring = (() => { const danger = raw.filter((i) => i.danger), rest = raw.filter((i) => !i.danger); if (!danger.length || raw.length < 3) return raw; const out = [...rest]; out.splice(Math.floor(raw.length / 2), 0, ...danger); return out; })();
   // Радиус растёт с числом пунктов, чтобы кнопки не налезали (10 пунктов меню модуля).
-  const R = Math.max(RADIUS, Math.ceil((ring.length * (SIZE + 8)) / (2 * Math.PI)));
+  // m3 критика целостности 22.10: и пока подписи наезжают друг на друга или на соседние кнопки (меню фасада 11 пунктов)
+  const R = ringRadius(ring.map((i) => i.label + (i.children ? " ›" : "")), RADIUS, SIZE);
   const ref = useRef<HTMLDivElement>(null);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   // Меню целиком в области: центр не ближе радиуса + подпись к краю; по горизонтали — ещё место под боковые подписи (до ~110 px).
@@ -40,6 +42,8 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose, area }: { x:
   const back = () => { setHover(null); if (path.length) setPath(path.slice(0, -1)); else onClose(); };
   // Фокус на само меню, а не на первый пункт: в центре остаётся название выбранного, стрелки начинают обход с первого пункта.
   useLayoutEffect(() => { ref.current?.focus(); }, [path]);
+  // m2: пока меню открыто, ручки растяжения и плашки размеров под ним не перехватывают мышь (integrity-fixes.css)
+  useEffect(() => { document.body.classList.add("radial-open"); return () => document.body.classList.remove("radial-open"); }, []);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); back(); }
@@ -58,10 +62,13 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose, area }: { x:
   const choose = (item: RadialItem) => {
     if (item.disabled) return;
     if (item.children?.length) { setHover(null); setPath([...path, item]); return; }
-    item.run?.(); onClose();
+    // u1 (замер удобства 22.10): исключение действия — сообщение в студии (событие studio-error), меню закрывается
+    try { item.run?.(); } catch (e) { window.dispatchEvent(new CustomEvent("studio-error", { detail: e instanceof Error ? e.message : String(e) })); }
+    onClose();
   };
   const shown = hover !== null ? ring[hover] : null;
-  return (
+  // m2: меню — в body (портал), поверх ручек растяжения и плашек размеров сцены, а не в её слое
+  return createPortal(
     <div className="radial-menu" ref={ref} role="menu" tabIndex={-1} aria-label={"Действия: " + title} style={{ left: cx, top: cy }} onContextMenu={(e) => { e.preventDefault(); back(); }}>
       <span className="radial-anchor" aria-hidden="true" style={{ left: x - cx, top: y - cy }} />
       <svg className="radial-ring" style={{ left: -(R + SIZE / 2), top: -(R + SIZE / 2) }} width={2 * R + SIZE} height={2 * R + SIZE} aria-hidden="true"><circle cx={R + SIZE / 2} cy={R + SIZE / 2} r={R} /></svg>
@@ -80,6 +87,7 @@ export function RadialMenu({ x, y, title, subtitle, items, onClose, area }: { x:
       <button type="button" className="radial-center" onClick={back} aria-label={path.length ? "Назад" : "Закрыть меню"}>
         {shown ? <><b>{shown.label}</b>{shown.hint && <small>{shown.hint}</small>}</> : <><b>{path.length ? path[path.length - 1].label : title}</b>{!path.length && subtitle && <small>{subtitle}</small>}<i>{path.length ? <><ChevronLeft size={13} /> назад</> : <><X size={13} /> закрыть</>}</i></>}
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 }

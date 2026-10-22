@@ -42,7 +42,7 @@ import {NewProjectPanel} from './NewProjectPanel';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
-import { useState, useEffect, useRef, useMemo, useId } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
 import {historyShortcut,editsText,viewShortcut} from './historyShortcuts';
 import {editDrawerConfig} from './drawerEditing';
 import {maxEvenShelves,setShelfCount} from './shelfCount';
@@ -102,6 +102,7 @@ import { KupePanel } from "./KupePanel";
 import { kupeLeafWidth, kupeSystem } from "./kupe";
 import { isClientBundle, type ClientBundle } from "./clientIndex";
 import { OutputPanel } from "./OutputPanel";
+import {SafeBoundary} from './SafeBoundary';
 import {RoomWarnings} from './RoomWarningPanel';
 import {roomWarnings} from './roomWarnings';
 import { RoomEditor } from './RoomEditor';
@@ -321,6 +322,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // m4: почему не добавился ящик — показывается под счётчиком «Ящики», пока секция и число ящиков те же
   const [drawerBlock,setDrawerBlock]=useState<{mid:string;sid:string;drawers:number;text:string}|null>(null);
   const propertiesRef=useRef<HTMLElement>(null);
+  // u4 (замер удобства 22.10): после ввода значения панель перерисовывается и прокрутка прыгала — следующий клик мимо поля.
+  // Позиция прокрутки правой панели запоминается и возвращается после правки того же модуля (выбор другого — как раньше).
+  const propScroll=useRef<{top:number;mid:string}>({top:0,mid:''});
+  useEffect(()=>{const el=propertiesRef.current;if(!el)return;const on=()=>{propScroll.current={top:el.scrollTop,mid:placed.id};};el.addEventListener('scroll',on,{passive:true});return()=>el.removeEventListener('scroll',on);},[placed.id]);
+  useLayoutEffect(()=>{const el=propertiesRef.current,s=propScroll.current;if(!el||s.mid!==placed.id)return;if(Math.abs(el.scrollTop-s.top)>1)el.scrollTop=s.top;},[project]); // eslint-disable-line react-hooks/exhaustive-deps
   const [gapDimensions,setGapDimensions]=useState(true);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
   // Explicit selection opens only the relevant controls; initial module settings stay closed.
@@ -556,6 +562,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [placeNote,setPlaceNote]=useState<string|null>(null);
   useEffect(()=>{if(!placeNote)return;const t=setTimeout(()=>setPlaceNote(null),12000);return()=>clearTimeout(t);},[placeNote]);
   useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),errorDetails.length?20000:6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** «Показать в 3D» детали (карты раскроя, «не помещается в лист»): выбрать корпус, секцию и деталь, открыть наполнение. */
+  function inspectPart(mid:string,pid:string){const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}
+  // u1 (замер удобства 22.10): действие кругового меню бросило исключение — сообщение на экране, а не только в консоли
+  useEffect(()=>{const on=(e:Event)=>setError(String((e as CustomEvent).detail||'Действие не выполнено.'));window.addEventListener('studio-error',on);return()=>window.removeEventListener('studio-error',on);},[]);
   /** «Показать» у ошибки: выбрать корпус, секцию и деталь, приблизить. */
   function showError(d:ErrorDetail){
     const a=project.modules.find(x=>x.id===d.moduleId);if(!a)return;
@@ -572,6 +582,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const sideWord=(side:'left'|'right')=>side==='right'?'справа':'слева';
   // «Задать зазор…» меняет ширину: край со стороны зазора, противоположный на месте (критик 20.10, m3); «мм» добавляет само окно
   function askGap(mid:string,side:'left'|'right',g:GapSide){editDimension(`Зазор ${sideWord(side)} до ${g.to}`,g.gap,v=>rowEdit(()=>setGap(project,mid,side,v)));}
+  // u2 (замер удобства 22.10): менеджер ждал сдвига — явный выбор: «сдвинуть модуль» (ширина та же, flush с зазором) или «изменить ширину»
+  function askGapShift(mid:string,side:'left'|'right',g:GapSide){editDimension(`Зазор ${sideWord(side)} до ${g.to} — сдвинуть модуль`,g.gap,v=>rowEdit(()=>flush(project,mid,side,v)));}
   /** Пункты «Размеры ›»: дотянуть край до соседа/стены и придвинуть вплотную; неактивные — с причиной в подсказке. */
   function rowGapItems(mid:string):RadialItem[]{
     const a=project.modules.find(x=>x.id===mid);if(!a)return [];
@@ -582,7 +594,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       hint:no??`До ${g[side].to}: ширина ${g[side].fillWidth} мм, ${side==='right'?'левый':'правый'} край на месте`+(g[side].filler?`; ${fillerNote(g[side])}`:''),run:()=>{rowEdit(()=>fillGap(project,mid,side));}};};
     const push=(side:'left'|'right'):RadialItem=>{const block=flushBlock(project,mid,side),no=why(side)??(block?`Нельзя: ${block}. Закрыть зазор — «Дотянуть»`:undefined);return {id:'flush-'+side,label:`Вплотную ${side==='right'?'вправо':'влево'}`,icon:side==='right'?ChevronsRight:ChevronsLeft,disabled:!!no,
       hint:no??`Сдвинуть на ${g[side].gap} мм до ${g[side].to}, ширина та же`,run:()=>{rowEdit(()=>flush(project,mid,side));}};};
-    return [fill('right'),fill('left'),push('right'),push('left')];
+    const gapItem=(side:'left'|'right',shift:boolean):RadialItem=>({id:'gap-'+(shift?'move-':'width-')+side,label:`Зазор ${sideWord(side)} — ${shift?'сдвинуть':'ширина'}`,icon:shift?(side==='right'?ChevronsRight:ChevronsLeft):(side==='right'?ArrowRightToLine:ArrowLeftToLine),disabled:!shift&&!!lock,
+      hint:!shift&&lock?lock[0].toUpperCase()+lock.slice(1):shift?`Задать зазор ${sideWord(side)} (сейчас ${g[side].gap} мм до ${g[side].to}): модуль сдвигается, ширина та же`:`Задать зазор ${sideWord(side)} (сейчас ${g[side].gap} мм до ${g[side].to}): меняется ширина, ${side==='right'?'левый':'правый'} край на месте`,run:()=>{(shift?askGapShift:askGap)(mid,side,g[side]);}});
+    return [fill('right'),fill('left'),push('right'),push('left'),{id:'gap-set',label:'Задать зазор',icon:Ruler,hint:'Сдвинуть модуль или изменить ширину так, чтобы зазор стал нужным',children:[gapItem('right',true),gapItem('right',false),gapItem('left',true),gapItem('left',false)]}];
   }
   useEffect(()=>{setMaterialScope("active");},[modal]);
   function movePlaced(key: "x" | "y" | "z", value: number) {
@@ -717,7 +731,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       ]};
     }
     const part=(label:string)=>({remove:{id:'remove',label:'Удалить',icon:Trash,danger:true,hint:label+': убрать. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}} as RadialItem,
-      copy:{id:'copy-part',label:'Копия',icon:Copy,hint:'Ещё такой же элемент ниже',run:()=>{const r=duplicatePart(project,a.id,c.sid,pid);commitProject(r.project);}} as RadialItem,
+      copy:{id:'copy-part',label:'Копия',icon:Copy,hint:'Ещё такой же элемент в этой секции (если есть место)',run:()=>{try{const r=duplicatePart(project,a.id,c.sid,pid);commitProject(r.project);}catch(e){setError((e as Error).message);}}} as RadialItem,
       up:{id:'up',label:'Выше',icon:ArrowUp,hint:'Поднять на 32 мм (шаг полкодержателя)',run:()=>moveFilling(a.id,c.sid,pid,32)} as RadialItem,
       down:{id:'down',label:'Ниже',icon:ArrowDown,hint:'Опустить на 32 мм',run:()=>moveFilling(a.id,c.sid,pid,-32)} as RadialItem,
       params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');}} as RadialItem});
@@ -1080,7 +1094,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>
       )}
       <WorkspacePanels>
-        <aside className="library">
+        <aside className="library"><SafeBoundary label="Палитра и модули" resetKey={project}>
           <div className="panel-heading">
             <span className="eyebrow">КОНСТРУКЦИЯ</span>
             <h1>{(kitchenMode||kitchenModule||!!m.worktop)?'Соберите кухню':'Соберите шкаф'}</h1>
@@ -1230,7 +1244,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <HelpCircle size={16} /> Как пользоваться
             </button>
           </div>
-        </aside>
+        </SafeBoundary></aside>
         <section className="viewport" aria-label="Рабочая область">
           <div className="view-header">
             <div className="view-tabs">
@@ -1261,7 +1275,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          {roomPlan?<RoomPlan onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
@@ -1346,7 +1360,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             stretchable={!widthLock(m)&&!lightMode&&!deselected}
             stretchPlan={(mid,side,raw,snap)=>{try{return planStretch(project,mid,side,raw,snap);}catch(e){return {problem:(e as Error).message};}}}
             onStretch={(mid,side,raw,snap)=>{try{const plan=planStretch(project,mid,side,raw,snap);if(plan.problem){setError(plan.problem);return false;}return plan.project?commitProject(plan.project):false;}catch(e){setError((e as Error).message);return false;}}}
-          />}
+          />}</SafeBoundary>
           {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button>{showRoom&&<button aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={16}/>{cutaway?'Ближние стены: показать':'Ближние стены: скрыть'}</button>}<button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
             <span>КОРПУС / ЛДСП 16</span>
@@ -1380,15 +1394,16 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);
             /* находка 6: меню в области сцены и левее правой панели инструментов */
             const tools=document.querySelector('.scene-tools'),canvas=tools?.parentElement?.querySelector('canvas')??document.querySelector('canvas'),visible=(el:Element|null|undefined)=>{const b=el?.getBoundingClientRect();return b&&b.width>0?b:null;};
-            const area=menuArea({width:window.innerWidth,height:window.innerHeight},visible(canvas),visible(tools));
+            const area=menuArea({width:window.innerWidth,height:window.innerHeight},visible(canvas),visible(tools),[visible(document.querySelector('.view-header')),visible(document.querySelector('.interaction-bar'))]); /* m1: верх области — под плавающими полосами вида */
             return <RadialMenu key={ctxMenu.x+":"+ctxMenu.y} x={ctxMenu.x} y={ctxMenu.y} title={r.title} subtitle={r.subtitle} items={r.items} area={area} onClose={()=>setCtxMenu(null)}/>;})()}
           {gapMenu&&rowGaps&&rowGaps[gapMenu.side].gap>0&&(()=>{const side=gapMenu.side,g=rowGaps[side],close=()=>setGapMenu(null),where=sideWord(side);
             return <div className="gap-menu-backdrop" onPointerDown={close} onContextMenu={e=>{e.preventDefault();close();}}>
-              <div className="gap-menu" role="menu" aria-label={`Зазор ${where} ${g.gap} мм до ${g.to}`} style={{left:Math.max(8,Math.min(gapMenu.x-20,window.innerWidth-236)),top:Math.max(8,Math.min(gapMenu.y+14,window.innerHeight-160))}} onPointerDown={e=>e.stopPropagation()}>
+              <div className="gap-menu" role="menu" aria-label={`Зазор ${where} ${g.gap} мм до ${g.to}`} style={{left:Math.max(8,Math.min(gapMenu.x-20,window.innerWidth-296)),top:Math.max(8,Math.min(gapMenu.y+14,window.innerHeight-200))}} onPointerDown={e=>e.stopPropagation()}>
                 <div className="gap-menu-title">{where[0].toUpperCase()+where.slice(1)} {g.gap} мм до {g.to}</div>
                 <button role="menuitem" autoFocus onClick={()=>{close();rowEdit(()=>fillGap(project,placed.id,side));}}>Дотянуть (+{fillAdd(g)} мм){g.filler?<small> — {fillerNote(g)}</small>:null}</button>
                 {(()=>{const block=flushBlock(project,placed.id,side);return <button role="menuitem" disabled={!!block} title={block?`Нельзя: ${block}. Закрыть зазор — «Дотянуть»`:`Сдвинуть на ${g.gap} мм, ширина та же`} onClick={()=>{close();rowEdit(()=>flush(project,placed.id,side));}}>Придвинуть вплотную{block&&<small> — {block}</small>}</button>;})()}
-                <button role="menuitem" onClick={()=>{close();askGap(placed.id,side,g);}}>Задать зазор…</button>
+                <button role="menuitem" title="Модуль сдвигается, ширина та же" onClick={()=>{close();askGapShift(placed.id,side,g);}}>Задать зазор — сдвинуть модуль…</button>
+                <button role="menuitem" title={`Меняется ширина, ${side==='right'?'левый':'правый'} край на месте`} onClick={()=>{close();askGap(placed.id,side,g);}}>Задать зазор — изменить ширину…</button>
               </div></div>;})()}
           <div className="scene-tools" style={{display:roomPlan?"none":undefined}}>
             <button
@@ -1486,7 +1501,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, Q или E — 3D. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, Q — 3D, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
-        <aside className="properties" ref={propertiesRef}>
+        <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}>
           {editingFacades?<section className="facade-panel" role="region" aria-label="Редактор фасадов" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setModal(null);}}}>
             <header><h2>Редактор фасадов</h2><button className="text-action" aria-label="Закрыть редактор фасадов" onClick={()=>setModal(null)}><X size={18}/></button></header>
             <p className="facade-preview-note">Предпросмотр · камера доступна. Чтобы продолжить построение, примените изменения или отмените.</p>
@@ -2097,9 +2112,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             </div>
           </div>
         </>}
-        </aside>
+        </SafeBoundary></aside>
       </WorkspacePanels>
-      {!presentation&&<ProjectDock project={project} commit={commitProject} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/>}
+      {!presentation&&<SafeBoundary label="Нижняя панель" resetKey={project}><ProjectDock project={project} commit={commitProject} inspect={inspectPart} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/></SafeBoundary>}
       {modal && modal!=="facade-editor" && (
         <div
           className="modal-backdrop"
@@ -2144,14 +2159,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <div className="room-setup-actions"><button className="primary" onClick={()=>goStage('fixtures')}>Дальше: окна, двери, коммуникации <ChevronRight size={15}/></button><button className="outline" onClick={()=>{setModal(null);goStage('bodies');}}>Пропустить, сразу к каркасам</button></div>
                 <p className="field-note">Есть Config.xml из скрипта Базиса «Замер помещения»? Его можно загрузить на шаге «Коммуникации» — комната и объекты появятся сами.</p>
               </div> : modal === "new" ? <NewProjectPanel project={project} allowEmpty={!!onEmptyProject} open={next=>{if(commitProject(next)){if(next.modules[0])selectModule(next.modules[0].id);setRoomPlan(false);setView("iso");setMode("move");setModal(null);return true;}return false;}}/> : modal === "library" ? <ModuleLibrary module={m} group={project.modules.filter(a=>liveGroupIds.includes(a.id))} insertGroup={source=>{const result=appendModuleGroup(project,source);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');setModal(null);return true;}return false;}} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><button className="primary render-download" onClick={()=>savePng(renderImage)}>Скачать PNG</button><p className="field-note">PNG, до 2560 пикселей. Файл можно сохранить и отправить клиенту.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
-              <OutputPanel
+              <SafeBoundary label="Документы проекта" resetKey={project}><OutputPanel
                   initialTab={outputTab}
                 project={project}
                 capture={(opts) => capture.current?.(opts)}
-                inspect={(mid,pid)=>{const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}}
+                inspect={inspectPart}
 
                 update={commitProject}
-              />
+              /></SafeBoundary>
             ) : modal === "materials" ? (
               <>
                 <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label><p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p>

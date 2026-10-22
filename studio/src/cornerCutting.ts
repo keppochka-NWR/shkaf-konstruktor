@@ -6,7 +6,10 @@ import {catalog} from './catalog';
 export type Point=[number,number];
 export type CutPiece={key:string;code:string;module:string;part:Part;length:number;width:number;contour?:Point[];area:number;edge04:number;edge2:number;rotate:boolean};
 export type CutSheet={material:string;decor:string;thickness:number;width:number;height:number;items:(Packed&{piece:CutPiece;rotated:boolean})[]};
-export type CutResult={pieces:CutPiece[];sheets:CutSheet[];margin:number;gap:number;netArea:number;blankArea:number;sheetArea:number;edge04:number;edge2:number};
+/** unplaced — заготовки больше рабочего поля листа: в карты не попали, смета их показывает «не помещается в лист» (не исключение). */
+export type CutResult={pieces:CutPiece[];sheets:CutSheet[];unplaced:CutPiece[];margin:number;gap:number;netArea:number;blankArea:number;sheetArea:number;edge04:number;edge2:number};
+/** Влезает ли заготовка w×h в рабочее поле W×H (поворот — только без направления текстуры). */
+export const fitsField=(w:number,h:number,rot:boolean,W:number,H:number)=>(w<=W&&h<=H)||(rot&&h<=W&&w<=H);
 const r=(n:number)=>Math.round(n*1000)/1000;
 export const mm=(n:number)=>String(Math.round(n*10)/10).replace('.',',');
 export const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
@@ -19,12 +22,20 @@ export function inset(poly:Point[],bands:number[]):Point[]{
  const x0=Math.min(...points.map(p=>p[0])),z0=Math.min(...points.map(p=>p[1]));
  return points.map(([x,z])=>[r(x-x0),r(z-z0)]);
 }
+// Кеш: смета зовёт раскрой и список «не помещается в лист» на одном и том же проекте (последние 8 проектов).
+const cutCache=new Map<string,CutResult>();
 export function cutting(project:Project):CutResult{
+ const key=JSON.stringify(project),hit=cutCache.get(key);if(hit)return hit;
+ const r=cuttingRaw(project);cutCache.set(key,r);if(cutCache.size>8)cutCache.delete(cutCache.keys().next().value!);return r;
+}
+function cuttingRaw(project:Project):CutResult{
  const errors=projectErrors(project);if(errors.length)throw Error(errors[0]);
  const margin=10,gap=10,pieces:CutPiece[]=[];
  project.modules.forEach((m,mi)=>{
   let index=0;
-  for(const part of parts(m.module).filter(p=>p.material==='board'||p.material==='hdf')){
+  // external — покупная деталь (столешница кухни и т. п.): из листа не кроится, как в details(); иначе угловой + кухня 3000
+  // клал столешницу 3000 в лист 2750 и раскрой падал «Деталь не помещается в лист» (БЛОКЕР 1 критика релиза 22.10)
+  for(const part of parts(m.module).filter(p=>(p.material==='board'||p.material==='hdf')&&!p.external)){
    index++;const contour=part.planContour?inset(part.planContour,part.contourEdges!):undefined;
    const length=contour?Math.max(...contour.map(p=>p[0])):r(part.length-part.edge[0]-part.edge[1]);
    const width=contour?Math.max(...contour.map(p=>p[1])):r(part.width-part.edge[2]-part.edge[3]);
@@ -37,9 +48,11 @@ export function cutting(project:Project):CutResult{
  });
  const groups=new Map<string,CutPiece[]>();
  for(const p of pieces){const key=[p.part.material,p.part.material==='hdf'?'ХДФ белый':p.part.decor,p.part.thickness].join('|');groups.set(key,[...(groups.get(key)??[]),p]);}
- const sheets:CutSheet[]=[];
- for(const group of groups.values()){
-  const p=group[0],hdf=p.part.material==='hdf',width=hdf?2070:1830,height=hdf?2800:2750;
+ const sheets:CutSheet[]=[],unplaced:CutPiece[]=[];
+ for(const all of groups.values()){
+  const p=all[0],hdf=p.part.material==='hdf',width=hdf?2070:1830,height=hdf?2800:2750;
+  const group=all.filter(q=>{const ok=fitsField(q.width,q.length,q.rotate,width-2*margin,height-2*margin);if(!ok)unplaced.push(q);return ok;});
+  if(!group.length)continue;
   const rects=group.map(p=>({id:p.key,w:p.width,h:p.length,rot:p.rotate}));let best:Packed[][]|undefined;
   // Also test the initial orientation: two 1048 mm backs do not fit side by side,
   // but two 2005 x 1048 backs fit one above another after a permitted rotation.
@@ -51,7 +64,7 @@ export function cutting(project:Project):CutResult{
   }
   for(const bin of best!)sheets.push({material:hdf?'ХДФ':'ЛДСП',decor:hdf?'ХДФ белый':p.part.decor,thickness:p.part.thickness,width,height,items:bin.map(item=>{const piece=group.find(q=>q.key===item.id)!;return {...item,x:item.x+margin,y:item.y+margin,piece,rotated:Math.abs(item.w-piece.width)>.01};})});
  }
- const result={pieces,sheets,margin,gap,netArea:pieces.reduce((s,p)=>s+p.area,0)/1e6,blankArea:pieces.reduce((s,p)=>s+p.length*p.width,0)/1e6,sheetArea:sheets.reduce((s,p)=>s+p.width*p.height,0)/1e6,edge04:pieces.reduce((s,p)=>s+p.edge04,0),edge2:pieces.reduce((s,p)=>s+p.edge2,0)};
+ const result={pieces,sheets,unplaced,margin,gap,netArea:pieces.reduce((s,p)=>s+p.area,0)/1e6,blankArea:pieces.reduce((s,p)=>s+p.length*p.width,0)/1e6,sheetArea:sheets.reduce((s,p)=>s+p.width*p.height,0)/1e6,edge04:pieces.reduce((s,p)=>s+p.edge04,0),edge2:pieces.reduce((s,p)=>s+p.edge2,0)};
  verifyCutting(result);return result;
 }
 export function verifyCutting(result:CutResult){
@@ -62,7 +75,8 @@ export function verifyCutting(result:CutResult){
   if(a.rotated&&!a.piece.rotate)throw Error('Нарушено направление текстуры.');
   for(const b of s.items)if(a!==b&&a.x<b.x+b.w+result.gap-.01&&a.x+a.w+result.gap-.01>b.x&&a.y<b.y+b.h+result.gap-.01&&a.y+a.h+result.gap-.01>b.y)throw Error('Нарушен промежуток между заготовками.');
  }
- if(seen.size!==result.pieces.length||result.pieces.some(p=>!seen.has(p.key)))throw Error('Не все детали размещены.');
+ const out=new Set((result.unplaced??[]).map(p=>p.key));
+ if(seen.size+out.size!==result.pieces.length||result.pieces.some(p=>!seen.has(p.key)&&!out.has(p.key)))throw Error('Не все детали размещены.');
 }
 export function sheetPolygon(item:CutSheet['items'][number]):Point[]{
  const p=item.piece,poly=p.contour??[[0,0],[p.length,0],[p.length,p.width],[0,p.width]];
