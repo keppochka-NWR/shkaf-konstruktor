@@ -13,3 +13,22 @@
 .settings-subsections>.property-section{border:1px solid #e0e6ed;border-radius:6px;margin:5px 0;background:white}
 .settings-category>summary:focus-visible,.catalog-tabs button:focus-visible{outline:2px solid #385dee;outline-offset:-2px}
 .sales-summary{padding:20px}.sales-total{font-size:32px;font-weight:700}
+/* m11 (критик релиза 22.10): на 1366x768 поля палитры (Ширина/Высота/Глубина, Дверей) и «Добавить в комнату» уходили под нижнюю строку.
+   Палитра в левой панели компактнее: категории в ряд, виды в 3 колонки, размеры в строку; кнопка прилипает к низу прокручиваемой панели. */
+.library .module-palette{margin:8px 0;padding:10px}
+.library .module-palette .catalog-tabs{grid-template-columns:minmax(0,1.25fr) minmax(0,1.05fr) minmax(0,.9fr);gap:4px;margin:8px 0}
+.library .module-palette .catalog-tabs [role=tab]{padding:5px 2px;font-size:11px;line-height:1.2;text-align:center;overflow-wrap:normal;hyphens:manual}
+.library .module-palette .module-kinds{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:8px 0}
+.library .module-palette .module-kinds button{min-height:50px;padding:5px 2px;font-size:11px;gap:2px}
+.library .module-palette .module-kinds button svg{width:18px;height:18px}
+.library .module-palette .module-sizes{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;align-items:end}
+.library .module-palette .module-sizes label{grid-template-columns:1fr;gap:2px;font-size:11px}
+.library .module-palette .module-sizes input{width:100%;padding:6px 4px}
+.library .module-palette .palette-doors{margin:4px 0}
+.library .module-palette small{margin:4px 0;line-height:1.35}
+.library .module-palette>.primary{position:sticky;bottom:0;z-index:2;box-shadow:0 -6px 8px -2px #f5f7fa}
+/* m5: панель справа без выделения */
+.nothing-selected .nothing-summary{font-size:12px;line-height:1.5;color:#53616f;margin:10px 0 14px}
+.nothing-selected .text-action{margin-top:8px}
+/* m4: причина, почему не добавить ящик */
+.drawer-limit{color:#8a4b00}

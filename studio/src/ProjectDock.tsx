@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 
 import { details, nest, quoteBreakdown, splitRows } from "./exports";
 import { pendingTotalLabel } from "./pendingPrices";
+import { fillerCount, sameDesign, sheetChangeNote } from "./sheetNote";
 import { count, DETAILS, SHEETS } from "./ru";
 import "./project-dock.css";
 
@@ -28,7 +29,9 @@ const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "details", label: "Детали", icon: Layers },
   { id: "docs", label: "Документы", icon: FileText },
 ];
-function loadTab(): DockTab { try { const t = localStorage.getItem("studio-dock"); return TABS.some((x) => x.id === t) ? (t as DockTab) : "project"; } catch { return "project"; } }
+// m10 (критик релиза 22.10): открытая нижняя панель не восстанавливается после F5 — она закрывала кнопки «Добавить…» кухонной
+// палитры. При загрузке всегда «Проект» (панель закрыта); выбор вкладки живёт до перезагрузки.
+function loadTab(): DockTab { try { localStorage.removeItem("studio-dock"); } catch { /* браузер без хранилища */ } return "project"; }
 
 export function ProjectDock({ project, commit, openOutput, openParts, warnings, onWarnings, onLayout }: {
   project: Project;
@@ -41,17 +44,21 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
   onWarnings: () => void;
 }) {
   const [tab, setTabState] = useState<DockTab>(loadTab);
-  const setTab = (t: DockTab) => { const next = t === tab ? "project" : t; setTabState(next); try { localStorage.setItem("studio-dock", next); } catch { /* браузер без хранилища */ } };
+  const setTab = (t: DockTab) => { const next = t === tab ? "project" : t; setTabState(next); };
   const open = tab !== "project";
   const mounted = useRef(false);
   // Вписать мебель после того, как холст сцены успел поменять размер (ResizeObserver срабатывает кадром позже).
   useEffect(() => { if (!mounted.current) { mounted.current = true; return; } const t = setTimeout(() => onLayout?.(), 120); return () => clearTimeout(t); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   // Смета считает раскрой: откладываем на 300 мс после правки, чтобы перетаскивание не тормозило.
-  const [calc, setCalc] = useState<{ project: Project; e: ReturnType<typeof estimate>; parts: number; ldsp: number; hdf: number } | null>(null);
+  // note — почему итог прыгнул целым листом (m3 критика 22.10, sheetNote.ts); держится, пока число листов то же
+  const [calc, setCalc] = useState<{ project: Project; e: ReturnType<typeof estimate>; parts: number; ldsp: number; hdf: number; fillers: number; note: string | null } | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => {
-      const sheets = nest(project);
-      setCalc({ project, e: estimate(project, sheets), parts: details(project).length, ldsp: sheets.filter((s) => s.material !== "hdf").length, hdf: sheets.filter((s) => s.material === "hdf").length });
+      const sheets = nest(project), e = estimate(project, sheets), ldsp = sheets.filter((s) => s.material !== "hdf").length, fillers = fillerCount(project);
+      setCalc((c) => {
+        const same = !!c && sameDesign(c.project, project), note = same ? sheetChangeNote({ ldsp: c!.ldsp, total: c!.e.retail, fillers: c!.fillers }, { ldsp, total: e.retail, fillers }) : null;
+        return { project, e, parts: details(project).length, ldsp, hdf: sheets.filter((s) => s.material === "hdf").length, fillers, note: note ?? (same && c!.ldsp === ldsp ? c!.note : null) };
+      });
     }, 300);
     return () => clearTimeout(timer);
   }, [project]);
@@ -79,6 +86,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
     <div className="dock-body dock-estimate">
       <div className="dock-sum total"><span>Итоговая стоимость</span><b>{!e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
       {split && <div className={"dock-cost-split" + (split.kupe ? " has-kupe" : "")} aria-label="Разбивка стоимости">{splitRows(split).map(([k, v], i) => <div key={k} className={"dock-sum " + ["material", "hardware", "kupe"][i]}><span>{k}</span><b>{rub(v)}</b></div>)}</div>}
+      {fresh && <p className="dock-sheets" aria-label="Листы раскроя">Листов ЛДСП в раскрое: <b>{fresh.ldsp}</b>{fresh.hdf ? <> · ЛХДФ: <b>{fresh.hdf}</b></> : null}{fresh.note && <small role="status">{fresh.note}</small>}</p>}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setHwOpen(true)}>Поменять фурнитуру</button></div>
     </div>
   ) : tab === "hardware" ? (
