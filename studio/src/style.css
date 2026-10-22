@@ -817,6 +817,16 @@ input {
 }
 .error-banner button { pointer-events: auto; cursor: pointer; padding: 4px; border-radius: 5px; }
 .error-banner button:hover { background: #f3e2c6; }
+/* п.4 волны 22.10: ошибки списком — где, что не так, что сделать, «Показать» */
+.error-list { margin: 6px 0 0; padding: 0 0 0 18px; max-height: min(42vh, 330px); overflow: auto; pointer-events: auto; }
+.error-list li { font-size: 11px; line-height: 1.5; margin: 0 0 8px; }
+.error-list li p { margin: 1px 0 0; }
+.error-list .error-place { display: block; font-weight: 700; color: #5b3d17; }
+.error-list .error-fix { color: #6b4a22; }
+.error-banner .error-show { margin: 4px 0 0; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; border: 1px solid #e0bf8c; background: #fff; padding: 2px 8px; color: #5b3d17; }
+.error-list .error-more { list-style: none; margin-left: -18px; color: #8a6a3d; }
+.palette-doors { display: grid; gap: 4px; font-size: 12px; margin: 6px 0; }
+.palette-doors select { width: 100%; }
 .properties {
   border-left: 1px solid var(--line);
   display: flex;

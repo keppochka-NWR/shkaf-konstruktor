@@ -170,6 +170,9 @@ export type Section = {
   hingeless?: number[];
   /** Наружные ящики снизу, распашные двери только над обязательной полкой. */
   externalDrawers?: boolean;
+  /** Полка над ящиками (п.29 волны 22.10): true — есть, false — нет; без поля — есть, если над блоком ящиков остаётся проём
+   *  (полка + 80 мм), и нет, если ящики доходят до крыши (комод). См. hasDrawerCap. */
+  drawerCap?: boolean;
   /** Ящики секции без ручки, «Зазор между ящиками 30 мм» (решение Макса 16.10.2026): короб ниже на 30, фасады те же — хват сверху за фасад. */
   drawerGrip?: boolean;
   drawerGap?: number;
@@ -1156,7 +1159,7 @@ export function parts(m: Module): Part[] {
         inserts.forEach(([y0,y1,z1],k)=>add(`${s.id}:filler:${side}:${layer?'b':'a'}:r${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}, вставка за петлёй ${k+1}`,[t,y1-y0,z1-rear],[x,(y0+y1)/2,(rear+z1)/2],y1-y0,z1-rear,t,'body',s.id));
       }
     }else if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
-    if(s.drawers>0&&!(m.sectionLayout&&b.top<innerTop(m))&&!s.drawerConfigs?.every(c=>c.tray)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,RULES.shelfDepthMinus);}
+    if(hasDrawerCap(m,s,b)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,RULES.shelfDepthMinus);}
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
       const cfg = drawerConfig(m, s, j),
@@ -1247,6 +1250,9 @@ export function parts(m: Module): Part[] {
         fh=span[1]-span[0];fy=pitchBottom+(span[0]+span[1])/2;
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
         if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
+        // ящики до крыши без полки над ними (комод, п.29): верхний фасад — до верха накладных фасадов, как нижний до цоколя
+        const highest=drawerOffsets(s).every((o,k)=>k===j||o<=drawerOffsets(s)[j]);
+        if(highest&&!hasDrawerCap(m,s,b)&&drawersFillRoof(m,s,b)&&!grip){const bottom=fy-fh/2,roof=facadeTop(m);if(roof>bottom+fh){fh=roof-bottom;fy=(roof+bottom)/2;}}
       }
       // фасад ящика в алюминиевой рамке (aluDrawers): толщина рамки, задняя плоскость там же, где у ЛДСП — короб и крепёж не сдвигаются
       const aluFront=!!(m.alu&&m.aluDrawers&&!drawersBehindDoors(m,s)&&s.drawerMount!=='inset'); // вкладной ящик — ЛДСП: рамка ушла бы в короб
@@ -1953,6 +1959,22 @@ const HINGE_CLEAR = 5;
 function isBoardVertical(p: Part) { return p.material === "board" && p.role === "body" && p.size[0] <= 40 && p.size[1] > 60 && !p.rotY && !p.rotZ; }
 /** Верх полки над ящиками секции от низа корпуса (цоколь + дно + стопка ящиков + полка). */
 export function drawerCapTop(m:Module,s:Section){const b=boxes(m).find(b=>b.id===s.id)!;return b.bottom+drawerStackHeight(s)+RULES.panel;}
+/** Ящики доходят до крыши: над блоком нет места под полку и проём 80 мм (п.29 волны 22.10). */
+export function drawersFillRoof(m:Module,s:Section,b=boxes(m).find(x=>x.id===s.id)!){return s.drawers>0&&drawerStackHeight(s)+RULES.panel+RULES.shelfMinClear>b.top-b.bottom+.001;}
+/** Есть ли полка над ящиками секции: явный выбор s.drawerCap, иначе — есть, если над ящиками остаётся место, и нет, если ящики до крыши.
+ *  Под перегородкой состава секции и над одними выкатными полками — нет, как раньше. */
+export function hasDrawerCap(m:Module,s:Section,b=boxes(m).find(x=>x.id===s.id)!){
+  if(!(s.drawers>0)||(m.sectionLayout&&b.top<innerTop(m))||s.drawerConfigs?.every(c=>c.tray))return false;
+  return s.drawerCap??!drawersFillRoof(m,s,b);
+}
+/** Ящики секции поровну на всю высоту проёма, без полки над ними (комод, п.29): боковина не выше 300 — тогда над ящиками остаётся место и полка встаёт сама. */
+export function drawersToRoof(m:Module,s:Section):DrawerConfig[]{
+  const b=boxes(m).find(b=>b.id===s.id)!,n=s.drawers;
+  if(n<1)throw Error('В секции нет ящиков.');
+  const pitch=Math.min(Math.floor((b.top-b.bottom)/n),300+RULES.drawerStep),box=pitch-RULES.drawerStep;
+  if(box<68)throw Error(`Ящики не помещаются: при ${n} ящиках нужна высота проёма от ${n*(68+RULES.drawerStep)} мм.`);
+  return Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};});
+}
 /**
  * Задать высоту верха полки над ящиками (от низа корпуса): ящики делятся поровну по высоте.
  * Возвращает новые конфигурации; высота короба = шаг − 40, фасады по шагу.
@@ -1967,10 +1989,14 @@ export function distributeDrawers(m:Module,s:Section,capTop:number):DrawerConfig
   return Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};});
 }
 /** Refit only overflowing drawer stacks on a height change; reject infeasible hardware instead of deleting it. */
-export function fitDrawersAfterResize(m:Module){
+export function fitDrawersAfterResize(m:Module,before?:Module){
  for(const section of m.sections){
   if(!section.drawers)continue;
   const b=boxes(m).find(b=>b.id===section.id)!,h=b.top-b.bottom;
+  // ящики были до крыши без полки (комод, п.29 волны 22.10) — после смены высоты снова делятся на всю высоту проёма
+  const was=before?.sections.find(x=>x.id===section.id);
+  if(before&&was&&!section.drawerConfigs?.some(c=>c.mesh||c.tray)&&!hasDrawerCap(before,was)&&drawersFillRoof(before,was)){try{section.drawerConfigs=drawersToRoof(m,section);if(!hasDrawerCap(m,section))continue;}catch{/* не помещаются — как раньше, под полку */}}
+  if(section.drawerCap===false&&drawerStackHeight(section)<=h)continue;
   const ceiling=Math.min(b.top-RULES.shelfMinClear,...section.shelves.map(f=>b.bottom+f*h-RULES.panel/2-RULES.shelfMinClear));
   if(drawerCapTop(m,section)<=ceiling)continue;
   if(section.drawerConfigs?.some(c=>c.mesh))throw Error('Корзины имеют фиксированную высоту. Увеличьте корпус или уберите корзину.');
@@ -2191,7 +2217,10 @@ export function validate(m: Module): string[] {
     const shelfY = s.shelves.map((f) => f * h).sort((a, b) => a - b);
     const drawerTop = drawerStackHeight(s);
     const partitionCap=!!m.sectionLayout&&b.top<innerTop(m),trayOnly=!!s.drawers&&!!s.drawerConfigs?.every(c=>c.tray);
-    if (s.drawers && (partitionCap?drawerTop>h:drawerTop+(trayOnly?0:RULES.panel)>h-RULES.shelfMinClear))
+    // без полки над ящиками (п.29 волны 22.10: явное «нет» или ящики до крыши) — ящикам хватает высоты проёма
+    const noCap=!partitionCap&&!trayOnly&&!hasDrawerCap(m,s,b);
+    if(s.drawerCap!==undefined&&typeof s.drawerCap!=='boolean')errors.push(prefix+'полка над ящиками: есть или нет.');
+    if (s.drawers && (partitionCap||noCap?drawerTop>h:drawerTop+(trayOnly?0:RULES.panel)>h-RULES.shelfMinClear))
       errors.push(
         prefix +
           "ящики не помещаются по высоте. Уберите один ящик или увеличьте высоту.",
@@ -2494,6 +2523,7 @@ export function parseModule(input: unknown): Module {
       ...(Array.isArray(s.hingeYMidFor)?{hingeYMidFor:s.hingeYMidFor.map(Number)}:{}),
       ...(Array.isArray(s.hingeless)?{hingeless:s.hingeless.map(Number)}:{}),
       ...(s.drawerGap===undefined?{}:{drawerGap:s.drawerGap}),
+      ...(s.drawerCap===undefined?{}:{drawerCap:s.drawerCap}),
       ...(s.externalDrawers===undefined?{}:{externalDrawers:s.externalDrawers}),...(s.drawerGrip===true?{drawerGrip:true}:{}),
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
