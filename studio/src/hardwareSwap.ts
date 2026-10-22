@@ -92,6 +92,18 @@ export function setAllHinges(p: Project, brand: HingeBrand): Project {
   return next;
 }
 
+/** Замена в одном модуле (окно «Фурнитура», менеджеры 22.10.2026): та же функция замены, но только для модуля moduleId;
+ *  null — весь проект. Остальные модули не меняются. */
+export function scopedSwap(p: Project, moduleId: string | null, make: (p: Project) => Project): Project {
+  if (!moduleId) return make(p);
+  const one = p.modules.find((a) => a.id === moduleId);
+  if (!one) throw Error("Модуль не найден в проекте.");
+  const next = make({ ...p, modules: [one] }).modules[0];
+  return { ...p, modules: p.modules.map((a) => (a.id === moduleId ? next : a)) };
+}
+/** Часть проекта, к которой применяется замена: весь проект или один модуль (для «что сейчас стоит»). */
+export function scopeProject(p: Project, moduleId: string | null): Project { return moduleId ? { ...p, modules: p.modules.filter((a) => a.id === moduleId) } : p; }
+
 /** Кромка видимых торцов корпуса или фасадов у всех корпусов. */
 export function setAllEdges(p: Project, target: "body" | "facade", value: EdgeThickness): Project {
   const next = clone(p);

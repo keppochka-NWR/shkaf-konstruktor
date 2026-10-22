@@ -5,6 +5,8 @@ import {saveFile,quoteBreakdown,splitRows} from './exports';
 import {pendingTotalLabel} from './pendingPrices';
 import {PUBLIC_BUILD} from './buildMode';
 import {CLIENT_SOURCE_IN_SHEET} from './clientPrices';
+import {estimateXLSX,ESTIMATE_XLSX_NAME} from './estimateXlsx';
+import {saveBinary} from './xlsx';
 export function EstimatePanel({project,update}:{project:Project;update:(p:Project)=>boolean}){
   const [missingOnly,setMissingOnly]=useState(false);
   const e=useMemo(()=>estimate(project),[project]),settings=project.calculation||{markup:2.2,overrides:{}};const rub=(n:number)=>n.toLocaleString('ru-RU')+' ₽';
@@ -33,7 +35,7 @@ export function EstimatePanel({project,update}:{project:Project;update:(p:Projec
     {missingOnly&&!lines.length&&<p className="estimate-ready" role="status">Все цены заполнены. Снимите фильтр, чтобы просмотреть смету целиком.</p>}
     <table><thead><tr><th>Позиция</th><th>Кол-во</th><th>Цена, ₽</th><th>Сумма</th></tr></thead><tbody>{lines.map(l=><tr key={l.id} className={l.pending?'price-pending':l.unitPrice===null?'price-missing':undefined}><td>{l.label}<small>{l.source}</small></td><td>{l.quantity} {l.unit}</td><td><input aria-label={'Цена: '+l.label} key={String(l.unitPrice)} type="number" min={0} placeholder="Уточнить" defaultValue={l.unitPrice??''} onKeyDown={ev=>{if(ev.key==='Enter')ev.currentTarget.blur();}} onBlur={ev=>{if(ev.target.value===''){ev.target.value=String(l.unitPrice??'');return;}const n=Number(ev.target.value);if(n===l.unitPrice)return;if(!update({...project,calculation:{...settings,overrides:{...settings.overrides,[l.id]:n}}}))ev.target.value=String(l.unitPrice??'');}}/>{Object.hasOwn(settings.overrides,l.id)&&<button className="price-reset" aria-label={'Убрать ручную цену: '+l.label} onClick={()=>resetPrice(l.id)}>Вернуть цену базы</button>}</td><td>{l.unitPrice===null?'—':rub(Math.round(l.quantity*l.unitPrice))}</td></tr>)}</tbody></table>
     <p className="field-note">Ручные цены действуют только в этом проекте. «Вернуть цену базы» убирает ручную правку; если исходной цены нет, позиция снова потребует уточнения. Итог всегда включает все позиции, независимо от фильтра.</p>
-    <button className="outline" onClick={()=>saveFile('Смета проекта.csv',estimateCSV(project,e),'text/csv;charset=utf-8')}>Скачать смету CSV</button>
+    <button className="outline" onClick={()=>saveFile('Смета проекта.csv',estimateCSV(project,e),'text/csv;charset=utf-8')}>Скачать смету CSV</button> <button className="outline" onClick={()=>{void estimateXLSX(project,e).then(d=>saveBinary(ESTIMATE_XLSX_NAME,d));}}>Скачать Excel</button>
     <div className="estimate-total"><span>{e.missing.length?'Учтённая себестоимость':'Себестоимость'} <b>{rub(e.knownCost)}</b></span><strong>{e.retail===null?(e.unplaced?'Смета не завершена: не помещается в лист — '+e.unplaced:'Незаполненных цен: '+e.missing.length):'Расчётная цена '+rub(e.retail)}</strong></div>
     {breakdown}
     <p className="field-note">{engineNote(e)}</p>
