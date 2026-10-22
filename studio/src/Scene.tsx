@@ -110,7 +110,8 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
 import {gapLabelX,openingSizeLabel} from './clientLabels';
 import {missMenuTarget,screenRect} from './missMenu';
-export type View = "iso" | "front" | "side" | "top";
+/** side — вид справа (камера с +X), left — вид слева (клавиша A, п.28 волны 22.10). */
+export type View = "iso" | "front" | "side" | "left" | "top";
 type Props = {
   hiddenModuleIds?:string[];
   viewKey?:string;
@@ -946,10 +947,12 @@ export function Scene(p: Props) {
           ? new THREE.Vector3(0, 0, 1)
           : view === "side"
             ? new THREE.Vector3(1, 0, 0.001)
+            : view === "left"
+            ? new THREE.Vector3(-1, 0, 0.001)
             : view === "top"
               ? new THREE.Vector3(0, 1, 0.001)
               : new THREE.Vector3(state.isoDirection?.[0]??(facing.x<-.1?-1:1), state.isoDirection?.75:.55, state.isoDirection?.[1]??(facing.z<-.1?-1.7:1.7)).normalize();
-      if(view==="front"||view==="side")dir.applyAxisAngle(new THREE.Vector3(0,1,0),((focus.rotation??0)+(m.corner?45:0))*Math.PI/180);
+      if(view==="front"||view==="side"||view==="left")dir.applyAxisAngle(new THREE.Vector3(0,1,0),((focus.rotation??0)+(m.corner?45:0))*Math.PI/180);
       const padding=state.presentation?50:state.dimensions?500:180;
       // Fit into the uncovered area, while keeping the canvas full size for orbit/zoom.
       const screenH=Math.max(1,target.clientHeight), top=Math.min(state.presentation?60:112,screenH*.3), bottom=Math.min(state.presentation?75:55,screenH*.18);
@@ -1135,7 +1138,8 @@ export function Scene(p: Props) {
     function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch))e.preventDefault();}
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
-    function key(e:KeyboardEvent){if(e.key==='Escape'){resetDrag();endStretch();}altGuard(e);}
+    // Esc отменяет тягу; событие помечается, чтобы App не снимал выделение тем же нажатием (п.19 волны 22.10)
+    function key(e:KeyboardEvent){if(e.key==='Escape'){if(drag||stretch)e.preventDefault();resetDrag();endStretch();}altGuard(e);}
     window.addEventListener('keyup',altGuard);
     // Правая кнопка: короткий клик — круговое меню; протяжка — движение камеры (меню не открываем).
     let rightDown:{x:number;y:number}|null=null;

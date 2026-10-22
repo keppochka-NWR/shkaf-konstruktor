@@ -154,7 +154,11 @@ test('short body can fit two shorter drawers while keeping cap and source intact
  assert.deepEqual(projectErrors(n),[]);
  assert.equal(n.modules[0].module.sections[0].drawers,2);
  assert.ok(n.modules[0].module.sections[0].drawerConfigs!.every(c=>c.height>=68&&c.height<180));
- assert.ok(parts(n.modules[0].module).some(d=>d.id.endsWith(':drawer-cap')));
+ // п.29 волны 22.10: подогнанные ящики дошли до крыши — по умолчанию полки над ними нет; с явной «Полка над ящиками: есть» — как раньше
+ assert.ok(!parts(n.modules[0].module).some(d=>d.id.endsWith(':drawer-cap')));
+ const capped=structuredClone(p);capped.modules[0].module.sections[0].drawerCap=true;
+ const nc=addFittedDrawers(capped,a.id,sid,2,{height:180,length:450,slide:'ball'});
+ assert.deepEqual(projectErrors(nc),[]);assert.ok(parts(nc.modules[0].module).some(d=>d.id.endsWith(':drawer-cap')));
  assert.equal(JSON.stringify(p),original);
  const tiny=structuredClone(p);tiny.modules[0].module.height=250;
  assert.throws(()=>addFittedDrawers(tiny,a.id,sid,5,{height:180,length:450,slide:'ball'}));

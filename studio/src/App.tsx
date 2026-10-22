@@ -41,8 +41,10 @@ import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useRef, useMemo, useId } from "react";
-import {historyShortcut,editsText} from './historyShortcuts';
+import {historyShortcut,editsText,viewShortcut} from './historyShortcuts';
 import {editDrawerConfig} from './drawerEditing';
+import {maxEvenShelves,setShelfCount} from './shelfCount';
+import {explainErrors,errorPlace,type ErrorDetail} from './errorDetails';
 import {
   Box,
   Undo2,
@@ -84,7 +86,7 @@ import {
   RULES,
   shelfGaps, shelfInsertionHeight, shelfMaxDepth,
   setShelfGap,
-  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule, deskGeometry, hasHandles,
+  drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, hasDrawerCap, drawersToRoof, drawersFillRoof, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule, deskGeometry, hasHandles,
   EDGE_CHOICES,
   type EdgeThickness,
   type Module,
@@ -299,6 +301,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [meshChoice, setMeshChoice] = useState<string>(DEFAULT_MESH);
   const [fillingCopy,setFillingCopy]=useState<SectionFilling|null>(null);
   const [selectedPart,setSelectedPart]=useState<{mid:string;sid:string;pid:string}|null>(null);
+  // Esc снял выделение модуля (п.19 волны 22.10): в сцене нет подсветки секции, плашек зазоров и ручек растяжения; панель справа остаётся
+  const [deselected,setDeselected]=useState(false);
   const propertiesRef=useRef<HTMLElement>(null);
   const [gapDimensions,setGapDimensions]=useState(true);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
@@ -360,6 +364,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setDirectValue(String(value));
   }
   function selectModule(mid: string) {
+    setDeselected(false);
     setHiddenModules(ids=>ids.filter(id=>id!==mid));
     setSelectedOpening(undefined);
     setSelectedObstacle(undefined);
@@ -435,12 +440,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     }
   }
   const [selected, setSelected] = useState(m.sections[0].id),
-    [view, setView] = useState<View>(()=>{try{const v=viewKey?JSON.parse(sessionStorage.getItem('garderyob-camera:'+viewKey)||'null')?.view:null;return ['iso','front','side','top'].includes(v)?v:'iso';}catch{return 'iso';}}),
+    [view, setView] = useState<View>(()=>{try{const v=viewKey?JSON.parse(sessionStorage.getItem('garderyob-camera:'+viewKey)||'null')?.view:null;return ['iso','front','side','left','top'].includes(v)?v:'iso';}catch{return 'iso';}}),
     [fit, setFit] = useState(0),
     [openDoors, setOpenDoors] = useState(true),
     [exploded, setExploded] = useState(false),
     [dimensions, setDimensions] = useState(true),
     [tab, setTab] = useState<"module" | "section" | "room">("module");
+  const [errorList,setErrorList]=useState<ErrorDetail[]>([]);
   const [error, setError] = useState(startup.error),
     [saved, setSaved] = useState("На этом компьютере"),
     [modal, setModal] = useState<
@@ -500,6 +506,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const e = projectErrors(next,!!onEmptyProject);
     if (e.length) {
       setError(e[0]);
+      // п.4 волны 22.10: все ошибки списком — где (корпус, секция, деталь) и что сделать
+      try{setErrorList(explainErrors(next,e));}catch{setErrorList(e.map(text=>({text,problem:text,action:''})));}
       return false;
     }
     if (JSON.stringify(next) === JSON.stringify(project)) {
@@ -523,7 +531,17 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Зазоры в ряду, «Дотянуть», «Вплотную», «Задать зазор…», растяжение мышью (запрос Макса 20.10.2026, РЕШЕНИЯ.md «Ширина в ряду»).
   const [gapMenu,setGapMenu]=useState<{side:'left'|'right';x:number;y:number}|null>(null);
   // плашка «Изменение не применено» скрывается сама через 6 с (критик 20.10, m1); с кнопкой «Подогнать…» и ошибкой открытия — нет
-  useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
+  // список ошибок с «Показать» (п.4 волны 22.10) висит дольше — 20 с, чтобы успеть прочитать и нажать
+  const errorDetails=error&&errorList.some(d=>d.text===error)?errorList:[];
+  useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),errorDetails.length?20000:6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** «Показать» у ошибки: выбрать корпус, секцию и деталь, приблизить. */
+  function showError(d:ErrorDetail){
+    const a=project.modules.find(x=>x.id===d.moduleId);if(!a)return;
+    selectModule(a.id);setRoomPlan(false);setFocusActive(true);setFit(f=>f+1);
+    const sid=d.sectionId&&a.module.sections.some(s=>s.id===d.sectionId)?d.sectionId:undefined;
+    if(sid)chooseSection(sid);
+    if(d.partId&&sid&&parts(a.module).some(p=>p.id===d.partId)){setSelectedPart({mid:a.id,sid,pid:d.partId});setMode('select');if(/:door:|:drawer:/.test(d.partId))setOpenDoors(!d.partId.includes(':door:'));}
+  }
   // столешница, объекты ряда, Базис, угловой, купе — без плашек зазоров и ручек (их ширина краем не меняется)
   const rowGaps=useMemo(()=>{try{return widthLock(placed.module)?null:gaps(project,placed.id);}catch{return null;}},[project,placed.id,placed.module]);
   useEffect(()=>{setGapMenu(null);},[project,placed.id]);
@@ -550,11 +568,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
-    try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}}catch(e){setError((e as Error).message);return false;}
+    try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}}catch(e){setError((e as Error).message);return false;}
     return commit(next);
   }
   function modifySection(update: (draft: Section, next: Module) => void) {
-    modify((next) => {
+    return modify((next) => {
       update(next.sections[idx], next);
       const a = next.sections[idx];
       if (a.drawerConfigs)
@@ -562,6 +580,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     });
   }
   function chooseSection(id: string) {
+    setDeselected(false);
     setDrawerPreview(false);
     setSelectedPart(null);
     setSelected(id);
@@ -597,7 +616,20 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
     const next=structuredClone(a.module);
-    try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
+    try{update(next);if(next.height!==a.module.height&&!next.corner)fitDrawersAfterResize(next,a.module);return commitProject(placeInRow(project,mid,next));}catch(e){setError((e as Error).message);return false;}
+  }
+  /** Полка над ящиками секции (п.29 волны 22.10): auto — есть, если над ящиками есть место; on — есть (ящики, дошедшие до крыши, опускаются
+   *  под полку с проёмом 80 мм, как при уменьшении высоты); off — нет, ящики остаются на месте. */
+  function setDrawerCapAt(mid:string,sid:string,v:'auto'|'on'|'off'){
+    return modifyAt(mid,n=>{
+      const sec=n.sections.find(x=>x.id===sid);if(!sec)return;
+      if(v==='auto')delete sec.drawerCap;else sec.drawerCap=v==='on';
+      // «нет» в секции из одних ящиков (комод): ящики снова поровну до крыши, если так они до неё достают; «авто» ящики не двигает
+      if(v==='off'&&!sec.shelves.length&&!sec.rod&&!sec.pantograph&&!sec.drawerConfigs?.some(c=>c.mesh||c.tray)){try{const cfg=drawersToRoof(n,sec);if(drawersFillRoof(n,{...sec,drawerConfigs:cfg}))sec.drawerConfigs=cfg;}catch{/* не помещаются — ящики как были */}}
+      if(!hasDrawerCap(n,sec))return;
+      const b=boxes(n).find(x=>x.id===sid)!,h=b.top-b.bottom,ceiling=Math.min(b.top-RULES.shelfMinClear,...sec.shelves.map(f=>b.bottom+f*h-RULES.panel/2-RULES.shelfMinClear));
+      if(drawerCapTop(n,sec)>ceiling)sec.drawerConfigs=distributeDrawers(n,sec,ceiling);
+    });
   }
   /** Правый клик по любой детали — меню всего модуля (решение Макса 16.10); действия с самой деталью — одним пунктом внутри. */
   // Уточнение 19.10 (ручной тест): по детали — сначала действия детали + «Корпус ›»; по корпусу — меню модуля (src/contextMenu.ts).
@@ -678,7 +710,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const slides:RadialItem={id:'slides',label:'Направляющие',icon:Spline,hint:'Сейчас: '+cur.label,children:[
         {id:'ball',label:'Шариковые',icon:Spline,hint:'GTV: с доводчиком, без, push',active:cur.slide==='ball',children:SLIDE_SYSTEMS.filter(s=>s.slide==='ball').map(s=>slideItem(s.id))},
         {id:'hidden',label:'Скрытые',icon:Spline,hint:'Unihopper, DTC, Premial',active:cur.slide==='gtv0fpo',children:SLIDE_SYSTEMS.filter(s=>s.slide==='gtv0fpo').map(s=>slideItem(s.id))}]};
-      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},p.up,p.down,p.copy,p.params,p.remove];
+      const capOn=hasDrawerCap(mod,sec),capItem:RadialItem={id:'drawer-cap',label:capOn?'Убрать полку сверху':'Полка над ящиками',icon:Rows3,disabled:!!mod.kitchen||!!mod.corner||!!mod.raw||(!capOn&&!!sec.drawerConfigs?.every(x=>x.tray)),
+        hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
+      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,p.up,p.down,p.copy,p.params,p.remove];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
         [...facadeMenu([editFacade,drawerItems[1]]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle')}]:[...drawerItems,body]};
     }
@@ -737,6 +771,15 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       setError(error instanceof ProjectStorageConflict?error.message:"Хранилище браузера недоступно. Сохраните модуль кнопкой «Скачать».");
     }
   }, [project]);
+  /** Esc по шагам (п.19 волны 22.10): открытое меню/окно → тяга (Scene помечает событие) → режим подсветки → выделение детали → выделение модуля.
+   *  Окна, круговое меню, меню зазора и режим подсветки закрываются своими обработчиками — здесь их только пропускаем. */
+  function escapeStep(e:KeyboardEvent){
+    if(ctxMenu||gapMenu||lightMode)return;
+    if(composer){e.preventDefault();setComposer(null);return;}
+    if(environmentSelection){e.preventDefault();setEnvironmentSelection(null);return;}
+    if(selectedPart||drawerPreview||selectedOpening||selectedObstacle||selectedFixture){e.preventDefault();setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setSelectedOpening(undefined);setSelectedObstacle(undefined);setSelectedFixture(undefined);return;}
+    if(!deselected||liveGroupIds.length){e.preventDefault();setGroupIds([]);setDeselected(true);}
+  }
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented || editsText(e.target)) return;
@@ -749,7 +792,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       if(command){e.preventDefault();command==='undo'?undo():redo();return;}
       if(direct||modal)return;
       if(e.key==='Delete'&&!modal&&canRemove){e.preventDefault();removeSelected();}
-      if (e.key === "Escape") setModal(null);
+      if (e.key === "Escape") {escapeStep(e);return;}
+      // W/A/S/D/Q/E — виды сцены (п.28 волны 22.10); в полях ввода и списках не срабатывают
+      const v=viewShortcut(e);
+      if(v&&!ctxMenu&&!gapMenu){e.preventDefault();setView(v);setRoomPlan(false);setFit(f=>f+1);}
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1034,7 +1080,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 className={"module-item"+(hiddenIds.includes(a.id)?" module-hidden":"")+(liveGroupIds.includes(a.id)?" module-group-selected":"")}
                 onContextMenu={e=>{e.preventDefault();setCtxMenu({mid:a.id,sid:a.module.sections[0]?.id??"",x:e.clientX,y:e.clientY});}}
                 title={a.module.name}
-                aria-pressed={a.id === placed.id}
+                aria-pressed={!deselected&&a.id === placed.id}
                 onClick={e=>{if(e.ctrlKey||e.metaKey){toggleModuleGroup(a.id);return;}selectModule(a.id);}}
               >
                 <Box size={18} />
@@ -1164,15 +1210,16 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <div className="view-tabs">
               {(
                 [
-                  { id: "iso", label: "3D" },
-                  { id: "front", label: "Спереди" },
-                  { id: "side", label: "Сбоку" },
-                  { id: "top", label: "Сверху" },
+                  { id: "iso", label: "3D", title: "Объёмный вид · клавиша Q или E" },
+                  { id: "front", label: "Спереди", title: "Вид спереди · клавиша S" },
+                  { id: "side", label: "Сбоку", title: "Вид справа · клавиша D (слева — A)" },
+                  { id: "top", label: "Сверху", title: "Вид сверху · клавиша W" },
                 ] as const
               ).map((v) => (
                 <button
                   key={v.id}
-                  aria-pressed={!roomPlan&&view === v.id}
+                  title={v.title}
+                  aria-pressed={!roomPlan&&(view === v.id||(v.id==='side'&&view==='left'))}
                   onClick={() => {
                     setView(v.id);
                     setRoomPlan(false);
@@ -1243,6 +1290,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 );
             }}
             onPartSelect={(sid, pid,mid=placed.id) => {
+              setDeselected(false);
               setActive(mid);
               chooseSection(sid);
               setSelectedPart({mid,sid,pid});
@@ -1255,7 +1303,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onContextMenu={(mid,sid,x,y,info)=>{if(mid!==placed.id)selectModule(mid);setCtxMenu({mid,sid,x,y,...info});}}
             onDrawerStack={(sid)=>{const sec=m.sections.find(s=>s.id===sid),bb=boxes(m).find(x=>x.id===sid);if(!sec||!bb)return;editDimension('От дна пенала до верха полки над ящиками',Math.round(drawerCapTop(m,sec)-bb.bottom),v=>{try{const configs=distributeDrawers(m,sec,bb.bottom+v);return modify(n=>{const target=n.sections.find(s=>s.id===sid);if(target)target.drawerConfigs=configs;});}catch(e){setError((e as Error).message);return false;}});}}
             selectedPart={!presentation&&selectedPart?.mid===placed.id?selectedPart.pid:undefined}
-            selected={presentation?'':selectedId}
+            selected={presentation||deselected?'':selectedId}
             onSelect={chooseSection}
             texture={texture(m.decor)}
             facadeTexture={texture(m.facadeDecor)}
@@ -1267,9 +1315,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             dimensions={presentation?false:dimensions&&!((stage==='room'||stage==='fixtures')&&!advanced)}
             roomDimensions={!presentation&&dimensions&&(advanced||stage==='room'||stage==='fixtures')}
             gapDimensions={gapDimensions}
-            rowGaps={lightMode?null:rowGaps}
+            rowGaps={lightMode||deselected?null:rowGaps}
             onGapClick={(side,x,y)=>setGapMenu({side,x,y})}
-            stretchable={!widthLock(m)&&!lightMode}
+            stretchable={!widthLock(m)&&!lightMode&&!deselected}
             stretchPlan={(mid,side,raw,snap)=>{try{return planStretch(project,mid,side,raw,snap);}catch(e){return {problem:(e as Error).message};}}}
             onStretch={(mid,side,raw,snap)=>{try{const plan=planStretch(project,mid,side,raw,snap);if(plan.problem){setError(plan.problem);return false;}return plan.project?commitProject(plan.project):false;}catch(e){setError((e as Error).message);return false;}}}
           />}
@@ -1284,8 +1332,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <div className="error-banner" role="alert">
               <Info size={20} />
               <div>
-                <strong>{saved==="Не сохранено"?"Текущий вариант не сохранён":"Изменение не применено"}</strong>
-                <p>{error}</p>
+                <strong>{saved==="Не сохранено"?"Текущий вариант не сохранён":"Изменение не применено"}{errorDetails.length>1?` · ошибок: ${errorDetails.length}`:''}</strong>
+                {errorDetails.length?<ol className="error-list" aria-label="Что мешает применить изменение">
+                  {errorDetails.slice(0,5).map((d,i)=><li key={i} data-text={d.text}>
+                    <p>{errorPlace(d)&&<b className="error-place">{errorPlace(d)}: </b>}{d.problem}{d.moduleId&&project.modules.some(a=>a.id===d.moduleId)&&<button className="error-show" aria-label={'Показать: '+errorPlace(d)} onClick={()=>showError(d)}><Search size={12}/> Показать</button>}</p>
+                    {d.action&&<p className="error-fix"><b>Что сделать:</b> {d.action}</p>}
+                  </li>)}
+                  {errorDetails.length>5&&<li className="error-more">…и ещё {errorDetails.length-5}. Исправьте эти — проверка покажет остальные.</li>}
+                </ol>:<p>{error}</p>}
                 {meshFit&&<button className="primary" onClick={()=>{try{const next=fitMeshItem(project,meshFit.mid,meshFit.sid,meshFit.meshId,meshFit.y);if(commitProject(next)){selectInserted(next,meshFit.mid,meshFit.sid,'mesh');setMeshFit(null);}}catch(e){setMeshFit(null);setError((e as Error).message);}}}>Подогнать ширину до {meshFit.width} мм и добавить</button>}
               </div>
               <button
@@ -1402,7 +1456,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
-            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
+            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, Q или E — 3D. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, Q — 3D, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}>
@@ -1587,6 +1641,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   max={RULES.maxShelves}
                   onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId));else{modifySection(a=>{a.shelves=a.shelves.slice(0,c);if(a.shelfLights){a.shelfLights=a.shelfLights.filter(j=>j<c);if(!a.shelfLights.length)delete a.shelfLights;}});setSelectedPart(null);}}}
                 />
+                {/* п.17 волны 22.10: число полок вводом — все полки секции встают поровну; предел — сколько помещается с проёмом 80 мм */}
+                {(()=>{const most=maxEvenShelves(m,s);return <NumberField unit="шт." label="Полок в секции" value={s.shelves.length} min={0} max={Math.max(most,s.shelves.length)} onChange={v=>{if(v>most){setError(`В секцию ${idx+1} помещается не больше ${most} полок поровну: между полками, дном, крышей и ящиками нужно не менее ${RULES.shelfMinClear} мм.`);return;}if(modifySection((a,n)=>setShelfCount(n,a,v)))setSelectedPart(null);}}/>;})()}
+                <p className="field-note">Введите число — полки встанут поровну по высоте секции. «+» добавляет полку в самый большой проём, не двигая остальные.</p>
                 {s.shelves.length > 0 && (
                   <>
                     <button
@@ -1664,7 +1721,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         </button>
                       ))}
                     </div>
-                    <div className="floor-height" style={{display:m.sectionLayout||s.drawerConfigs?.every(c=>c.tray)?'none':undefined}}>
+                    {!m.sectionLayout&&!s.drawerConfigs?.every(c=>c.tray)&&<label className="hardware-field">Полка над ящиками<select aria-label="Полка над ящиками" value={s.drawerCap===undefined?'auto':s.drawerCap?'on':'off'} onChange={e=>setDrawerCapAt(placed.id,s.id,e.target.value as 'auto'|'on'|'off')}><option value="auto">Авто · {hasDrawerCap(m,s)?'есть':'нет, ящики до крыши'}</option><option value="on">Есть</option><option value="off">Нет</option></select><small>Авто: полка есть, если над ящиками остаётся место; ящики до крыши (комод) — без полки.</small></label>}
+                    <div className="floor-height" style={{display:m.sectionLayout||s.drawerConfigs?.every(c=>c.tray)||!hasDrawerCap(m,s)?'none':undefined}}>
                       <NumberField label="От дна пенала до верха полки над ящиками" value={Math.round(drawerCapTop(m,s)-b.bottom)} min={RULES.panel+s.drawers*(68+RULES.drawerStep)} max={b.top-b.bottom-RULES.shelfMinClear} onChange={v=>{try{const configs=distributeDrawers(m,s,b.bottom+v);modifySection(a=>{a.drawerConfigs=configs;});}catch(e){setError((e as Error).message);}}}/>
                       <span className="hint" tabIndex={0} role="note" aria-label="Размер от дна: от верхней плоскости дна пенала до верхней плоскости полки над блоком ящиков. Показан линией в 3D. При изменении ящики делятся поровну по высоте." title="Размер от дна: от верхней плоскости дна пенала до верхней плоскости полки над блоком ящиков. Показан линией в 3D. При изменении ящики делятся поровну по высоте.">?</span>
                     </div>
