@@ -5,7 +5,7 @@ import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts} from './model';
-import {partCollisions,rawCheck,bazisAirHardware,RAW_FAR,BAZIS_AIR} from './collisions';
+import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
 import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
@@ -101,6 +101,15 @@ export function bazisHostNotes(project:Project):RoomWarning[]{
     if(r.far.length)out.push({moduleId:a.id,kind:"bazis-host",message:`«${a.module.name}»: фурнитура без детали в модели Базиса (дальше ${RAW_FAR} мм от деталей) — ${list(r.far)}. Не пересечение: в проекте Базиса нет детали, на которой она крепится.`});}
   return out;
 }
+/** Сообщение о торцевых ручках в зазоре между створками (B2): сколько мм зазора и сколько нужно, что сделать. */
+export function edgePullMessage(name:string,pulls:EdgePullGap[]):string{
+  const x=pulls[0],two=x.handles.length>1,wall=x.walls/x.handles.length,more=pulls.length>1?` (пар створок: ${pulls.length})`:"";
+  const what=two?`торцевые ручки на сходящихся кромках соседних створок${more} стоят друг в друге: зазор между створками ${x.gap} мм, а у каждой ручки стенка ${wall} мм за кромкой`
+    :`торцевая ручка у соседней створки${more} упирается в неё: зазор между створками ${x.gap} мм, а стенка ручки ${wall} мм за кромкой`;
+  const fix=x.sameSection?`увеличьте «Зазор между створками» секции до ${x.need} мм${two?" или поставьте на одну из створок обычную (не торцевую) ручку":" или выберите обычную (не торцевую) ручку"}`
+    :`смените сторону петель у ${two?"одной из створок":"створки с ручкой"} — торцевая ручка уйдёт на внешнюю кромку — или выберите обычную (не торцевую) ручку`;
+  return `«${name}»: ${what} — нужен зазор не меньше ${x.need} мм (${two?`${wall} + ${wall}`:wall} + ${LEAF_GAP_MIN} мм). Что сделать: ${fix}.`;
+}
 export function collisionWarnings(project:Project):RoomWarning[]{
   const out:RoomWarning[]=[];
   // Сырой модуль — геометрия Базиса как есть (ХДФ в пазу, чашки петель, опоры в днище, Axis PRO): реестра контактов студии для неё нет,
@@ -112,6 +121,10 @@ export function collisionWarnings(project:Project):RoomWarning[]{
     // «висит в воздухе» у параметрического модуля из Базиса (навесы над корпусом, k26–k28, k31) — не пересечение: сведения
     // «как в проекте Базиса», как у сырого модуля (bazisHostNotes; слияние n4-wardrobes и n4-antresol). Пересечение крепежа с пазом,
     // которое есть в самом проекте Базиса (двойник отверстия, kitchen.grooveHoles), — с подписью (n4-antresol)
-    const c=partCollisions(ps,a.module);if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм${x.bazis?", как в проекте Базиса":""})`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. ${c.every(x=>x.bazis)?"Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе.":"Сдвиньте полку или петлю, измените наполнение."}`});}
+    // торцевые ручки в зазоре между створками (B2, релиз 22.10): понятная причина вместо «сдвиньте полку или петлю»;
+    // пересечения ручка × ручка / ручка × соседняя створка этой пары она и объясняет — в общий список не идут
+    const pulls=edgePullGaps(ps),pullIds=new Set(pulls.flatMap(x=>[...x.doors,...x.handles]));
+    if(pulls.length)out.push({moduleId:a.id,kind:"collision",message:edgePullMessage(a.module.name,pulls)});
+    const c=partCollisions(ps,a.module).filter(x=>!(pullIds.has(x.a)&&pullIds.has(x.b)));if(c.length)out.push({moduleId:a.id,kind:"collision",message:`«${a.module.name}»: пересекаются детали — ${c.slice(0,3).map(x=>`${x.names[0]} × ${x.names[1]} (${x.depth} мм${x.bazis?", как в проекте Базиса":""})`).join("; ")}${c.length>3?` и ещё ${c.length-3}`:""}. ${c.every(x=>x.bazis)?"Так в самом проекте Базиса: отверстие крепежа вскрывает паз — исправляется в Базисе.":"Сдвиньте полку или петлю, измените наполнение."}`});}
   return out;
 }

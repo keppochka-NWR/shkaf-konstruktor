@@ -503,6 +503,8 @@ export type Part = {
   /** Точные коробки фурнитуры для проверки пересечений (координаты модуля) — вместо габарита модели: у петли чашка в теле фасада
    *  и плечо с планкой у стойки, а не общий параллелепипед, задевающий торец стойки. См. collisions.ts. */
   collide?: { size: [number, number, number]; position: [number, number, number] }[];
+  /** Торцевая ручка (профиль на кромке фасада): толщина её стенки за кромкой, мм — занимает зазор между створками (collisions.edgePullGaps). */
+  edgeWall?: number;
   /** Опорная точка фурнитуры как в Базисе (эксцентрик — грань стойки × внутренняя пласть горизонтали), для сверки и присадки. */
   anchor?: [number, number, number];
   /** Поворот фурнитуры как в Базисе [w,x,y,z] у детали без своей модели (рафикс: сетки в Базисе нет) — для сверки, в 3D не участвует. */
@@ -1664,6 +1666,18 @@ export function parts(m: Module): Part[] {
     if(drawer||face.hinge==='top'||face.hinge==='bottom')handle.position[1]=face.position[1]+(drawer||face.hinge==='bottom'?1:-1)*(face.size[1]/2-2);
     else if(handle.size[0]>handle.size[1])handle.position[1]=face.position[1]+(handle.position[1]<face.position[1]?-1:1)*(face.size[1]/2-2); // распашной, ручка снизу/сверху по центру: профиль на нижней/верхней кромке
     else{const off=(face.hinge==='right'?-1:1)*(face.size[0]/2-2),angle=(face.rotY??0)*Math.PI/180;handle.position[0]=face.position[0]+off*Math.cos(angle);handle.position[2]=face.position[2]-off*Math.sin(angle)+face.size[2]/2+3;}
+    // B2 (релиз 22.10): коробки проверки пересечений — по процедурной модели (handleModels.ts), а не общий брусок 10×25 по центру
+    // в 2 мм от кромки (он выходил на 3 мм за кромку: «Фасад × Ручка 1 мм» с соседней створкой, «Ручка × Ручка 4 мм» у пары).
+    // Модель: Y = −2 — кромка, +Y — к центру фасада, Z = 0 — лицо. Торцевая: стенка t за кромкой от тыла фасада до выноса P и губка
+    // над лицом (Y −2…w, Z P−5…P); накладной профиль — на лице от кромки (Y −2…w−2, Z 0…P). Под скосом (rotY) — прежний брусок.
+    if(!face.rotY&&!handle.rotY){
+      const sp=handleSpec(handleById(facadeHandleId(m,handle.id))),vertical=handle.size[1]>handle.size[0],a=vertical?0:1,dir=Math.sign(face.position[a]-handle.position[a])||1;
+      const zb=face.position[2]+face.size[2]/2,ft=face.size[2],P=sp.projection,tw=sp.section,w=sp.width,c=handle.position;
+      const hb=(y0:number,y1:number,z0:number,z1:number)=>{const ac=c[a]+dir*(y0+y1)/2,as=y1-y0;
+        return {size:(vertical?[as,sp.total,z1-z0]:[sp.total,as,z1-z0]) as [number,number,number],position:(vertical?[ac,c[1],zb+(z0+z1)/2]:[c[0],ac,zb+(z0+z1)/2]) as [number,number,number]};};
+      if(sp.shape==='edge'){handle.collide=[hb(-2-tw,-2,-ft,P),hb(-2,w,P-5,P)];handle.edgeWall=tw;}
+      else if(sp.shape==='profile')handle.collide=[hb(-2,w-2,0,P)];
+    }
   }
   // угловая мойка Базиса (kitchen.faceFiller): фальш ЛДСП корпуса у края модуля в плоскости фасадов — от низа дна до верха корпуса,
   // рядом планка из фасадного материала по высоте фасадов (k25 m02: 273 + 59, k01 m03: 500 без планки)

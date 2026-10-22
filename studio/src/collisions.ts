@@ -165,7 +165,8 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
   const kupeSeat=(a:Part,b:Part)=>[[a,b],[b,a]].some(([p,q])=>p.id.startsWith('kupe:track:')&&/^kupe:\d+:/.test(q.id)||/^kupe:\d+:(frame|side|div-[hv]):/.test(p.id)&&/^kupe:\d+:fill:/.test(q.id)&&p.id.split(':')[1]===q.id.split(':')[1]);
   const boxes = ps.map(box);
   // грубый отбор по сферам габаритов, затем SAT по точным коробкам
-  const rad = boxes.map((b) => Math.hypot(...b.h));
+  // точные коробки (collide) могут выходить за габарит детали (торцевая ручка: стенка от тыла фасада) — радиус по ним тоже
+  const rad = boxes.map((b, i) => Math.max(Math.hypot(...b.h), ...(ps[i].collide ?? []).map((c) => Math.hypot(c.position[0] - b.c[0], c.position[1] - b.c[1], c.position[2] - b.c[2]) + Math.hypot(...c.size) / 2)));
   for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
     const A = boxes[i], B = boxes[j];
     if(canonical&&kupeSeat(ps[i],ps[j])&&canonicalPart(ps[i])&&canonicalPart(ps[j]))continue;
@@ -174,6 +175,40 @@ export function partCollisions(ps: Part[], m?: Module, tol = 0.1): Collision[] {
     if (depth <= tol) continue;
     if (allowedContact(ps[i], ps[j], depth, m)) continue;
     out.push({ a: ps[i].id, b: ps[j].id, names: [ps[i].name, ps[j].name], depth: Math.round(depth * 10) / 10, ...(bazisHoleInGroove(ps[i], ps[j], m) ? { bazis: true as const } : {}) });
+  }
+  return out;
+}
+
+/** Наименьший зазор между створками (validate: «зазор створок от 2 до 10 мм»). */
+export const LEAF_GAP_MIN = 2;
+/** Торцевые ручки в зазоре между соседними створками: gap — зазор, walls — сумма стенок ручек за кромками, need = walls + LEAF_GAP_MIN. */
+export type EdgePullGap = { doors: [string, string]; handles: string[]; gap: number; walls: number; need: number; sameSection: boolean };
+/** Торцевые ручки (Part.edgeWall) на кромках соседних распашных створок (B2, релиз 22.10). Стенка профиля стоит за кромкой фасада
+ *  и занимает зазор между створками: две ручки на сходящихся кромках при зазоре 2 мм стоят друг в друге, одна — упирается в соседнюю
+ *  створку. Нужен зазор не меньше суммы стенок + LEAF_GAP_MIN. Створки — в одной плоскости без поворота, соседние по X (или по Y —
+ *  ряды фасадов) и перекрываются по другой оси; ручка — на кромке к зазору и по длине напротив соседней створки. */
+export function edgePullGaps(ps: Part[]): EdgePullGap[] {
+  const doors = ps.filter((p) => p.role === "door" && /:door:\d+$/.test(p.id) && !p.rotY && !p.rotZ);
+  const byId = new Map(ps.map((p) => [p.id, p])), out: EdgePullGap[] = [];
+  for (const A of doors) for (const B of doors) {
+    if (A === B || Math.abs(A.position[2] + A.size[2] / 2 - (B.position[2] + B.size[2] / 2)) > 1) continue;
+    for (const ax of [0, 1]) {
+      const o = 1 - ax, gap = B.position[ax] - B.size[ax] / 2 - (A.position[ax] + A.size[ax] / 2);
+      if (gap < -0.01 || gap > 20) continue;
+      const lo = (p: Part) => p.position[o] - p.size[o] / 2, hi = (p: Part) => p.position[o] + p.size[o] / 2;
+      if (Math.min(hi(A), hi(B)) <= Math.max(lo(A), lo(B))) continue;
+      const pull = (D: Part, other: Part, side: number) => {
+        const h = byId.get(D.id.replace(":door:", ":handle:"));
+        if (!h?.edgeWall || h.rotY) return undefined;
+        const off = h.position[ax] - D.position[ax];
+        if (Math.sign(off) !== side || Math.abs(off) < D.size[ax] / 2 - 10) return undefined;
+        return Math.min(hi(h), hi(other)) > Math.max(lo(h), lo(other)) ? h : undefined;
+      };
+      const hs = [pull(A, B, 1), pull(B, A, -1)].filter((h): h is Part => !!h);
+      if (!hs.length) continue;
+      const walls = hs.reduce((s, h) => s + h.edgeWall!, 0), need = walls + LEAF_GAP_MIN;
+      if (gap < need - 0.01) out.push({ doors: [A.id, B.id], handles: hs.map((h) => h.id), gap: Math.round(gap * 10) / 10, walls, need, sameSection: A.sectionId === B.sectionId });
+    }
   }
   return out;
 }
