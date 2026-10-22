@@ -9,6 +9,7 @@ import type { Project } from "./project";
 import { KITCHEN, wallFloorY } from "./kitchen";
 import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule, placeKitchenRow, placeWorktop, defaultWallY, type KitchenItem } from "./kitchenProject";
 import { WardrobeBase } from "./WardrobeBase";
+import { PUBLIC_BUILD } from "./buildMode";
 import "./kitchen.css";
 
 const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical, "tall-oven": Microwave, "tall-fridge": Refrigerator };
@@ -19,10 +20,12 @@ const GROUPS: { id: "base" | "wall" | "tall"; title: string; note: string }[] = 
 ];
 type BaseEntry = { id: string; title: string };
 
-/** Индекс импортированных кухонь (public/local-projects/kitchens.json — только локально): id и название, без данных клиента. */
+/** Индекс импортированных кухонь (public/local-projects/kitchens.json — только локально): id и название, без данных клиента.
+ *  Публичная сборка индекс не запрашивает (релиз 22.10, m9: на сайте папки нет — был 404 в консоли при открытии кухонь). */
 function useKitchenIndex() {
   const [list, setList] = useState<BaseEntry[] | null>(null);
   useEffect(() => {
+    if (PUBLIC_BUILD) return;
     const ctrl = new AbortController();
     fetch("./local-projects/kitchens.json", { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))

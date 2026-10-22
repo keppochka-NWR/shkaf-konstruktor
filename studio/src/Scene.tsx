@@ -406,10 +406,11 @@ export function Scene(p: Props) {
       const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),new THREE.LineBasicMaterial({color:0xc9831a,depthTest:false,transparent:true}));
       l.renderOrder=50;l.userData.rowGap=true;modelGroup.add(l);
     }
-    /** Плашка зазора до соседа/стены (запрос Макса 20.10.2026): клик — меню «Дотянуть / Придвинуть вплотную / Задать зазор…». */
+    /** Плашка зазора до соседа/стены (запрос Макса 20.10.2026): клик — меню «Дотянуть / Придвинуть вплотную / Задать зазор…».
+     *  До стены часть зазора займёт автофальшь (g.filler) — дотянуть можно только на остаток (m2 критика 22.10). */
     function gapPlaque(side:'left'|'right',g:GapSide,pos:THREE.Vector3){
       const b=document.createElement('button');b.type='button';b.className='model-dimension gap-dimension row-gap';b.dataset.side=side;
-      b.textContent='← '+g.gap+' мм →';b.title='до '+g.to+'. Нажмите: дотянуть, придвинуть вплотную или задать зазор';
+      b.textContent='← '+g.gap+' мм'+(g.filler?` · ${g.filler} фальш`:'')+' →';b.title='до '+g.to+(g.filler?`. Дотянуть: +${g.gap-g.filler} мм, ${g.filler} мм — фальш у стены`:'')+'. Нажмите: дотянуть, придвинуть вплотную или задать зазор';
       b.setAttribute('aria-label',`Зазор ${side==='right'?'справа':'слева'} ${g.gap} мм до ${g.to}`);
       b.addEventListener('pointerdown',e=>e.stopPropagation());passThrough(b);
       b.addEventListener('click',e=>current.current.onGapClick?.(side,e.clientX,e.clientY));
@@ -425,8 +426,12 @@ export function Scene(p: Props) {
       target.appendChild(b);labels.push({element:b,position:pos,fixed:true});
     }
     let sceneOrigin: {x:number;z:number}|undefined;
+    // Снимок для КП (релиз 22.10, m7): что сдвинуто «Открыть фасады»/просмотром ящика — сдвиг (dp) или поворот створки (rot: открыто,
+    // закрыто); изделия сцены (корпуса и техника) — остальное (стены, проёмы, препятствия, размеры) на снимке КП прячется.
+    const openMoves:{obj:THREE.Object3D;dp?:THREE.Vector3;rot?:[THREE.Euler,THREE.Euler]}[]=[];
+    const products=new Set<THREE.Object3D>();
     function rebuild() {
-      needsRender=true;
+      needsRender=true;openMoves.length=0;products.clear();
       const state = current.current,
         m = state.module;
       grid.visible=!state.presentation;
@@ -451,7 +456,7 @@ export function Scene(p: Props) {
       sceneOrigin=nextOrigin;
       for (const placed of state.hideFurniture?[]:state.arrangement) {
         if(state.hiddenModuleIds?.includes(placed.id))continue;
-        const moduleGroup=new THREE.Group();moduleGroups.set(placed.id,moduleGroup);modelGroup.add(moduleGroup);
+        const moduleGroup=new THREE.Group();moduleGroups.set(placed.id,moduleGroup);modelGroup.add(moduleGroup);products.add(moduleGroup);
         const doorPivots=new Map<string,THREE.Group>();
         const m = placed.module,
           active = placed.id === focus.id;
@@ -485,6 +490,8 @@ export function Scene(p: Props) {
             /* тон подсветки (задача 14): цвет и свечение LED по тону детали/модуля (3000 / 4000 / 6000 К) */
             ...(part.role === "light" && !part.id.startsWith("groove:") ? (() => { const tn = TONE_INFO[ledLook(m, part.id).tone]; return { color: tn.led, emissive: tn.emissive, emissiveIntensity: 1.4, metalness: 0, roughness: 0.4 }; })() : {}),
           });
+          // режимы «Прозрачный корпус» / «Стеклянные фасады» — только вид на экране: на снимке КП деталь непрозрачная (m7)
+          if (mat.transparent) mat.userData.seeThrough = mat.opacity;
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
@@ -543,7 +550,7 @@ export function Scene(p: Props) {
           if (part.look) {
             // Вид из прайса купе важнее общих правил стекла: зеркало и лакобель непрозрачны, стекло — с заданной прозрачностью.
             const op = state.clearFacades && part.role === "door" ? Math.min(0.35, part.look.opacity ?? 1) : part.look.opacity ?? 1;
-            mat.color.set(part.look.color); mat.metalness = part.look.metalness ?? 0; mat.roughness = part.look.roughness ?? 0.6;
+            mat.color.set(part.look.color); mat.metalness = part.look.metalness ?? 0; mat.roughness = part.look.roughness ?? 0.6; delete mat.userData.seeThrough;
             mat.transparent = op < 1; mat.opacity = op; mat.depthWrite = op >= 1;
           }
           let profileMaterial: THREE.Material | null = null;
@@ -651,20 +658,22 @@ export function Scene(p: Props) {
           );
           const preview=state.drawerPreview;
           // ящики кухни Axis PRO: «открыть» выдвигает короб с фасадом на 3/4 длины (направляющие остаются)
-          if(active&&state.openDoors&&part.id.startsWith('kd:')&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')&&!part.id.includes(':screw:fx3')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd){const travel=(kd.box?kd.box.len:(kd.len??500))*.9;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}}
+          if(active&&state.openDoors&&part.id.startsWith('kd:')&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')&&!part.id.includes(':screw:fx3')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd){const travel=(kd.box?kd.box.len:(kd.len??500))*.9,dp=new THREE.Vector3(Math.sin(rotY)*travel,0,Math.cos(rotY)*travel);mesh.position.add(dp);openMoves.push({obj:mesh,dp});}}
           if(active&&preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')&&!part.id.includes(':slide:')){
-            const section=m.sections.find(s=>s.id===preview.sid);if(section){const travel=drawerConfig(m,section,preview.index).length*.8;mesh.position.x+=Math.sin(rotY)*travel;mesh.position.z+=Math.cos(rotY)*travel;}
+            const section=m.sections.find(s=>s.id===preview.sid);if(section){const travel=drawerConfig(m,section,preview.index).length*.8,dp=new THREE.Vector3(Math.sin(rotY)*travel,0,Math.cos(rotY)*travel);mesh.position.add(dp);openMoves.push({obj:mesh,dp});}
           }
           // направляющая с процедурной моделью: сама деталь стоит в корпусе, подвижные звенья выезжают вместе с ящиком (на тот же ход)
           if(proc&&part.id.includes(':slide:')&&active){
             let travel=0;
             if(state.openDoors&&part.id.startsWith('kd:')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd)travel=(kd.box?kd.box.len:(kd.len??500))*.9;}
             else if(preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')){const section=m.sections.find(s=>s.id===preview.sid);if(section)travel=drawerConfig(m,section,preview.index).length*.8;}
-            if(travel)proc.traverse(o=>{if(o.userData.slide==='run')o.position.z+=travel;else if(o.userData.slide==='mid')o.position.z+=travel/2;});
+            if(travel)proc.traverse(o=>{const dz=o.userData.slide==='run'?travel:o.userData.slide==='mid'?travel/2:0;if(dz){o.position.z+=dz;openMoves.push({obj:o,dp:new THREE.Vector3(0,0,dz)});}});
           }
           // у фурнитуры из Базиса тень даёт сама сетка; прозрачный габарит-заглушка тени не отбрасывает
           mesh.castShadow = !part.model?.native;
-          mesh.receiveShadow = true;
+          // задняя стенка не принимает тень «солнца»: при открытых створках на ней было резкое светлое пятно-«треугольник»
+          // (свет через проём, края — тени крыши и открытой створки; критик 22.10, A39/A47) — внутри шкаф ровный
+          mesh.receiveShadow = !isBack;
           mesh.userData = {
             sectionId: part.sectionId,
             partId: part.id,
@@ -681,7 +690,7 @@ export function Scene(p: Props) {
           }
           if (part.openShift !== undefined) {
             // Купе: «открыть фасады» — переднее полотно отъезжает за заднее, как в жизни.
-            if (state.openDoors) mesh.position.x += part.openShift;
+            if (state.openDoors) { mesh.position.x += part.openShift; openMoves.push({ obj: mesh, dp: new THREE.Vector3(part.openShift, 0, 0) }); }
             moduleGroup.add(mesh);
           } else if (part.role === "door" && state.openDoors && part.id !== "slope-filler" && !part.hingeless) { // фасад техники без петель (холодильник) висит на её двери — техника не открывается
             // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
@@ -693,6 +702,7 @@ export function Scene(p: Props) {
             mesh.position.set(horizontal?0:sign*part.size[0]/2,horizontal?verticalOffset:0,0);mesh.rotation.y=0;
             pivot.add(mesh);
             pivot.rotation.y=rotY;if(horizontal)pivot.rotation.x=part.hinge==='bottom'?Math.PI/2:-Math.PI/2;else pivot.rotation.y-=Math.PI*.58*sign;pivot.userData.rotY=rotY;
+            openMoves.push({obj:pivot,rot:[pivot.rotation.clone(),new THREE.Euler(0,rotY,0)]});
             doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
             const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));mesh.rotation.y=0;pivot.add(mesh);
@@ -723,7 +733,7 @@ export function Scene(p: Props) {
           box.dispose();guide.position.set(m.width/2,m.height/2,m.depth/2);guide.userData.captureGuide=true;guide.renderOrder=10;moduleGroup.add(guide);
         }
       }
-      for(const o of state.appliances??[]){const appliance=applianceModel(o);/* техника всегда закрыта: «Открыть створки» — только фасады мебели (K3, 22.10) */if(!appliance)continue;appliance.position.set(o.x+o.width/2-moduleCenter(focus).x,o.y+o.height/2,o.z+o.depth/2-moduleCenter(focus).z);modelGroup.add(appliance);if(o.sinkModuleId){const hoses=dishwasherServiceModel(o,state.arrangement);hoses.position.set(-moduleCenter(focus).x,0,-moduleCenter(focus).z);modelGroup.add(hoses);}}
+      for(const o of state.appliances??[]){const appliance=applianceModel(o);/* техника всегда закрыта: «Открыть створки» — только фасады мебели (K3, 22.10) */if(!appliance)continue;appliance.position.set(o.x+o.width/2-moduleCenter(focus).x,o.y+o.height/2,o.z+o.depth/2-moduleCenter(focus).z);modelGroup.add(appliance);products.add(appliance);if(o.sinkModuleId){const hoses=dishwasherServiceModel(o,state.arrangement);hoses.position.set(-moduleCenter(focus).x,0,-moduleCenter(focus).z);modelGroup.add(hoses);products.add(hoses);}}
       if (state.room) {
         const r = state.room,
           x0 = -moduleCenter(focus).x,
@@ -1119,7 +1129,7 @@ export function Scene(p: Props) {
       const plan=current.current.stretchPlan?.(st.mid,st.side,st.raw,st.snap)??{};
       previewStretch(st,plan);needsRender=true;
       badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
-      badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+`ширина ${plan.width} мм · зазор ${plan.gap??0}`+(plan.mode==='joint'&&plan.neighbor?` · сосед «${plan.neighbor.name}» ${plan.neighbor.width} мм`:'');
+      badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+`ширина ${plan.width} мм · зазор ${plan.gap??0}`+(plan.filler?` · ${plan.filler} мм — фальш у стены`:'')+(plan.mode==='joint'&&plan.neighbor?` · сосед «${plan.neighbor.name}» ${plan.neighbor.width} мм`:'');
       // живая плашка — у курсора (над ним), а не внизу сцены (критик 20.10, m6)
       const r=target.getBoundingClientRect();
       Object.assign(badge.style,{left:Math.max(8,Math.min(e.clientX-r.left,target.clientWidth-8))+'px',top:Math.max(40,e.clientY-r.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
@@ -1194,25 +1204,41 @@ export function Scene(p: Props) {
       const guides:THREE.Object3D[]=[];modelGroup.traverse(o=>{if(o.userData.captureGuide||o.parent===modelGroup&&(o instanceof THREE.Line||o instanceof THREE.LineSegments))guides.push(o);});const visibility=guides.map(o=>o.visible);
       const aspect=size.x/size.y,width=aspect>=1?2560:Math.round(2560*aspect),height=aspect>=1?Math.round(2560/aspect):2560;
       // КП (opts.frame): мебель во весь кадр, а не вся комната — тот же ракурс, камера ближе; после снимка камера на месте
-      const saved={position:camera.position.clone(),target:controls.target.clone(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null};
+      const saved={position:camera.position.clone(),quaternion:camera.quaternion.clone(),target:controls.target.clone(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null};
+      // КП (релиз 22.10, m7): изделие как его покупают — створки закрыты, ящики задвинуты, корпус и фасады непрозрачные; на снимке
+      // только изделия (корпуса и техника) — стены-призраки, проёмы, препятствия и размеры помещения не попадают; после снимка всё как было
+      const restore:(()=>void)[]=[];
       try{
         guides.forEach(o=>o.visible=false);grid.visible=false;scene.background=new THREE.Color(0xf1f0eb);
         if(opts?.frame){
+          for(const mv of openMoves){
+            const {obj,dp,rot}=mv;
+            if(dp){obj.position.sub(dp);restore.push(()=>obj.position.add(dp));}
+            if(rot){obj.rotation.copy(rot[1]);restore.push(()=>obj.rotation.copy(rot[0]));}
+          }
+          for(const o of modelGroup.children)if(o.visible&&!products.has(o)){o.visible=false;restore.push(()=>{o.visible=true;});}
+          modelGroup.traverse(o=>{if(!(o instanceof THREE.Mesh))return;for(const q of (Array.isArray(o.material)?o.material:[o.material]) as THREE.Material[]){
+            const st=q.userData.seeThrough;if(typeof st!=='number'||q.opacity!==st||!q.transparent)continue;
+            const depthWrite=q.depthWrite;q.transparent=false;q.opacity=1;q.depthWrite=true;restore.push(()=>{q.transparent=true;q.opacity=st;q.depthWrite=depthWrite;});
+          }});
           modelGroup.updateWorldMatrix(true,true);const box=new THREE.Box3();
-          modelGroup.traverseVisible(o=>{if(o instanceof THREE.Mesh&&!o.userData.captureGuide)box.expandByObject(o,false);});
+          for(const o of products)if(o.visible)o.traverseVisible(c=>{if(c instanceof THREE.Mesh&&!c.userData.captureGuide)box.expandByObject(c,false);});
           if(!box.isEmpty()){
             const center=box.getCenter(new THREE.Vector3()),dims=box.getSize(new THREE.Vector3()).addScalar(200);
             const dir=camera.position.clone().sub(controls.target).normalize();
+            // ракурс как на экране: поворот камеры не меняется (без lookAt — вид сверху не вырождается), камера только сдвигается
+            // вдоль взгляда к центру изделий; ближняя плоскость (5 мм) и дальняя (250 м) с запасом охватывают кадр
             if(camera===orthographic){const h=frameHeight({x:dims.x,y:dims.y,z:dims.z},dir,aspect,1.05);orthographic.left=-h*aspect/2;orthographic.right=h*aspect/2;orthographic.top=h/2;orthographic.bottom=-h/2;orthographic.zoom=1;camera.position.copy(center).addScaledVector(dir,Math.max(dims.x,dims.y,dims.z)*2);}
             else{const dist=frameDistance({x:dims.x,y:dims.y,z:dims.z},dir,aspect,perspective.fov,1.05);camera.position.copy(center).addScaledVector(dir,dist);}
-            camera.lookAt(center);camera.updateProjectionMatrix();
+            camera.quaternion.copy(saved.quaternion);camera.updateProjectionMatrix();
           }
         }
         renderer.setPixelRatio(1);renderer.setSize(width,height,false);renderer.render(scene,camera);
         return renderer.domElement.toDataURL('image/png');
       }finally{
         guides.forEach((o,i)=>o.visible=visibility[i]);grid.visible=gridVisible;scene.background=background;
-        if(opts?.frame){camera.position.copy(saved.position);camera.zoom=saved.zoom;if(saved.frustum){[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=saved.frustum;}controls.target.copy(saved.target);camera.lookAt(saved.target);camera.updateProjectionMatrix();controls.update();}
+        for(const f of restore.reverse())f();
+        if(opts?.frame){camera.position.copy(saved.position);camera.quaternion.copy(saved.quaternion);camera.zoom=saved.zoom;if(saved.frustum){[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=saved.frustum;}controls.target.copy(saved.target);camera.updateProjectionMatrix();controls.update();}
         renderer.setPixelRatio(ratio);renderer.setSize(size.x,size.y,false);renderer.render(scene,camera);
       }
     });

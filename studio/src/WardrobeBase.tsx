@@ -2,6 +2,7 @@
 // (scripts/wardrobe/import.ts). Индекс public/local-projects/wardrobes.json есть только локально — на Pages блок не показывается.
 import { useEffect, useState } from "react";
 import { Library } from "lucide-react";
+import { PUBLIC_BUILD } from "./buildMode";
 
 type Entry = { id: string; title: string; modules: number; panels: number; error?: string };
 
@@ -9,6 +10,7 @@ export function WardrobeBase() {
   const [list, setList] = useState<Entry[] | null>(null);
   const [q, setQ] = useState("");
   useEffect(() => {
+    if (PUBLIC_BUILD) return; // на сайте индекса нет — не запрашиваем (релиз 22.10, m9: 404 в консоли)
     const ctrl = new AbortController();
     fetch("./local-projects/wardrobes.json", { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))
