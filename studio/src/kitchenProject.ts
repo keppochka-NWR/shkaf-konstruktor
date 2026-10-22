@@ -1,10 +1,11 @@
 import { kitchenRowZ, kitchenFaceOffset, kitchenRearClearance } from "./kitchenAlignment";
 import {configureOven} from './kitchenOven';
+import {kitchenTallColumn,configureColumn} from './kitchenTall';
 // Вкладка «Кухня» (трек И, 09.10.2026): кухонный проект, шаблоны кухонной палитры и расстановка модулей по рядам кухни.
 // Только логика, без React: KitchenPalette.tsx и KitchenPanel.tsx вызывают эти функции, App коммитит результат обычным commitProject
 // (автофальши + projectErrors), так что проверки и ошибки — те же, что во всей студии.
 import { initialModule, section, distribute, validate, id, RULES, type Module } from "./model";
-import { KITCHEN, kitchenBase, kitchenWall, kitchenWorktop } from "./kitchen";
+import { KITCHEN, kitchenBase, kitchenWall, kitchenWorktop, wallFloorY } from "./kitchen";
 import { kitchenBaseCorner, type CornerSide } from "./kitchenCorner";
 import { createKitchenRow } from "./ModulePalette";
 import { maxModules, applyAutoFillers, projectErrors, bounds, overlap, appendModule, type Project, type PlacedModule } from "./project";
@@ -23,7 +24,7 @@ export const KITCHEN_ANTRESOL_HEIGHT = 400;
 /** Кухонный режим студии — только по явной пометке проекта: кухонный модуль, добавленный в проект шкафа, палитру не подменяет. */
 export function isKitchenProject(p: Project) { return p.kind === "kitchen"; }
 
-export type KitchenItem = "base-doors" | "base-drawers" | "base-corner" | "sink" | "oven" | "bottle" | "wall" | "wall-open" | "antresol" | "tall";
+export type KitchenItem = "base-doors" | "base-drawers" | "base-corner" | "sink" | "oven" | "bottle" | "wall" | "wall-open" | "antresol" | "tall" | "tall-oven" | "tall-fridge";
 /** Подписи и ширины кухонной палитры (ширины — частые модули в проектах Базиса цеха). */
 export const KITCHEN_ITEMS: Record<KitchenItem, { label: string; widths: number[]; group: "base" | "wall" | "tall" }> = {
   "base-doors": { label: "Нижний распашной", widths: [300, 400, 450, 600, 800], group: "base" },
@@ -36,6 +37,9 @@ export const KITCHEN_ITEMS: Record<KitchenItem, { label: string; widths: number[
   "wall-open": { label: "Навесной с полками", widths: [300, 400, 600, 800], group: "wall" },
   antresol: { label: "Антресоль", widths: [400, 600, 800], group: "wall" },
   tall: { label: "Пенал", widths: [450, 600], group: "tall" },
+  // пеналы под технику (K1/K2 22.10, kitchenTall.ts): ширина 600 — ниша 568 под духовку/СВЧ/холодильник (эталоны Базиса 600×5 из 6 и 7)
+  "tall-oven": { label: "Пенал: духовка + СВЧ", widths: [600], group: "tall" },
+  "tall-fridge": { label: "Пенал под холодильник", widths: [600], group: "tall" },
 };
 
 /** Столешница без наполнения: у шаблона initialModule в секции ящики — из-за них к столешнице липла фальш к стене. */
@@ -66,6 +70,7 @@ export function kitchenTemplate(kind: KitchenItem, width: number, source: Pick<M
   else if (kind === "wall") m = kitchenWall(base, width);
   else if (kind === "wall-open") { m = kitchenWall(base, width); m.name = "Навесной открытый"; m.doors = false; m.sections = [{ ...m.sections[0], shelves: [] }]; m.sections[0].shelves = distribute(m, m.sections[0], 2); }
   else if (kind === "antresol") { m = kitchenWall(base, width); m.name = "Антресоль"; m.height = KITCHEN_ANTRESOL_HEIGHT; m.kitchen = { role: "antresol" }; m.sections = [{ ...m.sections[0], shelves: [] }]; }
+  else if (kind === "tall-oven" || kind === "tall-fridge") m = kitchenTallColumn(base, width, kind === "tall-oven" ? "oven" : "fridge");
   else m = kitchenTall(base, width);
   m = { ...m, name: `${m.name} ${width}`, decor: source.decor, facadeDecor: source.facadeDecor };
   const e = validate(m)[0];
@@ -87,6 +92,15 @@ const role = (a: PlacedModule) => a.module.worktop ? "worktop" : a.module.kitche
 const right = (list: PlacedModule[]) => list.length ? Math.max(...list.map((a) => { const b = bounds(a); return b.x + b.w; })) : undefined;
 const left = (list: PlacedModule[]) => list.length ? Math.min(...list.map((a) => bounds(a).x)) : undefined;
 const top = (list: PlacedModule[]) => list.length ? Math.max(...list.map((a) => (a.y ?? 0) + a.module.height)) : undefined;
+
+/** Низ навесного по умолчанию для проекта: ряд навесных, иначе от верха нижних и толщины столешницы проекта (компакт 12, кварц 20, …) по регламенту. */
+export function defaultWallY(p: Project): number {
+  const walls = p.modules.filter((a) => role(a) === "wall");
+  if (walls.length) return walls[0].y ?? 0;
+  const baseTop = top(p.modules.filter((a) => role(a) === "base")) ?? KITCHEN.baseHeight;
+  const worktopT = p.modules.find((a) => a.module.worktop)?.module.worktop?.thickness ?? KITCHEN.worktopThickness;
+  return wallFloorY(baseTop, worktopT);
+}
 
 /** Ставит модули (один или ряд) на первое свободное место из списка сдвигов по X: сначала дешёвая проверка габаритов, затем полная
  *  (тем же путём, что commitProject). Возвращает проект с добавленными модулями (автофальши поставит commitProject) и id добавленных.
@@ -112,14 +126,12 @@ function placeAt(p: Project, group: PlacedModule[], xs: number[], what: string):
 
 /** Куда ставить новый модуль кухни: нижние и пеналы — в ряд на пол справа от нижних, навесные — в ряд навесных на высоте ряда,
  *  антресоли — над навесными. Сначала — продолжение ряда, затем начало стены (с местом под фальш), затем любые края занятых мест. */
-export function placeKitchenModule(p: Project, m: Module): { project: Project; id: string } {
+export function placeKitchenModule(p: Project, m: Module, opts: { wallY?: number } = {}): { project: Project; id: string } {
   const r = m.kitchen?.role ?? "base";
   const bases = p.modules.filter((a) => role(a) === "base" || role(a) === "tall"), walls = p.modules.filter((a) => role(a) === "wall");
   const antresols = p.modules.filter((a) => role(a) === "antresol"), floor = p.modules.filter((a) => (a.y ?? 0) < 1 && !a.module.worktop);
-  const baseTop = top(p.modules.filter((a) => role(a) === "base")) ?? KITCHEN.baseHeight;
-  // первый навесной — от фактической толщины столешницы проекта (компакт 12, кварц 20, …), зазор по регламенту; дальше — в ряд
-  const worktopT = p.modules.find((a) => a.module.worktop)?.module.worktop?.thickness ?? KITCHEN.worktopThickness;
-  const wallY = walls[0]?.y ?? baseTop + worktopT + KITCHEN.wallGap;
+  // низ навесного от пола: заданный в палитре (п. 6, 22.10), иначе ряд навесных, иначе по регламенту от верха нижних (wallFloorY, 1458)
+  const wallY = opts.wallY ?? defaultWallY(p);
   let y = 0, row: PlacedModule[] = floor;
   if (r === "wall") { y = wallY; row = walls; }
   if (r === "antresol") {
@@ -141,6 +153,18 @@ export function placeKitchenModule(p: Project, m: Module): { project: Project; i
     const added=fallback.modules.at(-1)!;added.module.name=m.name;
     return {project:fallback,id:added.id};
   }
+}
+
+/** Низ навесного от пола (п. 6, 22.10): row — весь ряд навесных (та же высота низа и поворот, что у модуля id); антресоли, стоявшие
+ *  на сдвинутых навесных, едут вместе с ними. Проверки — как у любой правки (commitProject). */
+export function setWallFloor(p: Project, id: string, y: number, row = false): Project {
+  const a = p.modules.find((x) => x.id === id);
+  if (!a || !Number.isFinite(y)) return p;
+  const old = a.y ?? 0, dy = Math.round(y) - old;
+  const moved = row ? p.modules.filter((x) => role(x) === "wall" && (x.rotation ?? 0) === (a.rotation ?? 0) && Math.abs((x.y ?? 0) - old) < 1) : [a];
+  const on = (x: PlacedModule) => role(x) === "antresol" && moved.some((w) => Math.abs((w.y ?? 0) + w.module.height - (x.y ?? 0)) < 1 && x.x < w.x + w.module.width - 1 && x.x + x.module.width > w.x + 1);
+  const ids = new Set([...moved, ...p.modules.filter(on)].map((x) => x.id));
+  return { ...p, modules: p.modules.map((x) => (ids.has(x.id) ? { ...x, y: (x.y ?? 0) + dy } : x)) };
 }
 
 /** Столешница над нижними, ещё не закрытыми столешницей: от левого до правого края ряда нижних (длиннее 4100 — двумя частями). */
@@ -201,6 +225,7 @@ export function setLegHeight(p: Project, ids: string[], height: number): Project
     const ph = k.plinth?.height ?? KITCHEN.plinthHeight, auto = ph === old - (KITCHEN.legs - KITCHEN.plinthHeight);
     const nextPh = auto ? height - (KITCHEN.legs - KITCHEN.plinthHeight) : Math.min(ph, height);
     a.module.kitchen = { ...k, plinth: { ...(k.plinth ?? {}), height: nextPh } };
+    if (a.module.kitchen?.column) configureColumn(a.module); // пенал под технику: ниши в мм от дна — полки и ящик заново
     changed.set(a.id, { oldTop: y + a.module.height - (height - old), newTop: y + a.module.height });
   }
   // столешница: стояла на изменённых нижних — встаёт на самый высокий из них
@@ -238,7 +263,7 @@ export function rebuildKitchen(m: Module, kind: KitchenItem): Module {
   if(m.kitchen?.plinth&&n.kitchen)n.kitchen.plinth={...m.kitchen.plinth};
   n.sections.forEach(s=>{if(s.shelfDepth!==undefined)s.shelfDepth=n.depth-(n.kitchen?.role==='wall'?22:2.5);});
   if(n.kdrawers)n.kdrawers=refitKDrawers(n);
-  if(n.kitchen?.appliance==='oven')configureOven(n);
+  if(n.kitchen?.column)configureColumn(n);else if(n.kitchen?.appliance==='oven')configureOven(n);
   return { ...n, ...(m.drawerFacadeDecor ? { drawerFacadeDecor: m.drawerFacadeDecor } : {}), ...(m.hingeBrand ? { hingeBrand: m.hingeBrand } : {}), ...(m.handleId ? { handleId: m.handleId } : {}), ...(m.noHandles ? { noHandles: true } : {}) };
 }
 /** Ручные высоты петель: ещё петля — посередине самого большого промежутка; убрать — среднюю (крайние остаются у краёв фасада). */
@@ -263,7 +288,7 @@ export function removeHinge(hy: number[], doorHeight: number): number[] {
 export function kitchenItemOf(m: Module): KitchenItem | undefined {
   const k = m.kitchen;
   if (!k) return undefined;
-  if (k.role === "tall") return "tall";
+  if (k.role === "tall") return k.column ? (k.column.kind === "oven" ? "tall-oven" : "tall-fridge") : "tall";
   if (k.role === "antresol") return "antresol";
   if (k.role === "wall") return m.doors ? "wall" : "wall-open";
   if (k.faceFiller?.facadeMat && k.role === "base") return "base-corner";

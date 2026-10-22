@@ -14,6 +14,7 @@ import {EditorBrand} from './EditorBrand';
 import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProperties';
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
+import { configureColumn } from "./kitchenTall";
 import { syncKitchenLift } from "./kitchenLift";
 import {facadeHandleId,setFacadeHandle,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable} from './model';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
@@ -1226,7 +1227,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     ? "Высота"
                     : "Глубина",
                 m[key],
-                (v) => modify((n) => {n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}),
+                (v) => modify((n) => {n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}if(n.kitchen?.column&&key!=='width')configureColumn(n);else if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}),
               )
             }
             onGap={(index) => {

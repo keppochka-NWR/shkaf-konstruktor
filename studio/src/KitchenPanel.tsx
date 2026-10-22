@@ -4,6 +4,7 @@ import {applyFacadeStyle} from './applyFacadeStyle';
 import {OVEN} from './ovenDimensions';
 import {SINK_SOURCE,SINK_ARTICLE} from './premialSink';
 import {configureOven,ovenSupportTop,ovenLayoutWarnings,OVEN_SOURCE} from './kitchenOven';
+import {configureColumn,TALL_COLUMN} from './kitchenTall';
 import {installSink} from './installSink';
 import { alignKitchenRow } from "./kitchenAlignment";
 import { ALLEGRO, ALLEGRO_SOURCE, allegroErrors } from './premialPullout';
@@ -15,7 +16,7 @@ import { useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
 import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, handleDoors, doorHandlePos, setModuleHandlePos, isUpperModule, handlePosIssue, HANDLE_POS_LABEL, type HandlePos, type Module, type Part } from "./model";
-import { KITCHEN, APPLIANCES, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, type WorktopSpec, type WorktopMaterial } from "./kitchen";
+import { KITCHEN, APPLIANCES, wallFloorY, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, type WorktopSpec, type WorktopMaterial } from "./kitchen";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions, rawCheck, bazisAirHardware, BAZIS_AIR, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
@@ -27,7 +28,7 @@ import { VernissagePicker } from "./VernissagePicker";
 import { AluPicker, AluDrawersCheck } from "./AluPicker";
 import { ALU_EXTRAS } from "./alu";
 import { facadeKind, changeFacadeKind, type FacadeKind } from "./facadeAppearance";
-import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
+import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, setWallFloor, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
 import "./kitchen.css";
 
 type Rail = NonNullable<Module["rails"]>[number];
@@ -172,7 +173,17 @@ function CabinetPanel(props: KitchenPanelProps) {
       <p className="field-note">Вырез создаётся на столешнице над тумбой. Если столешницы нет — добавится вместе с мойкой. Повторное нажатие не создаёт копию.</p>
       {installationError&&<p role="status">{installationError}</p>}
     </Group>}
-    {k.appliance==='oven'&&<Group icon={<Wrench size={15}/>} title="Духовка и нижний ящик" open>
+    {k.column&&<Group icon={<Wrench size={15}/>} title={k.column.kind==='oven'?'Духовка и СВЧ в пенале':'Холодильник в пенале'} open>
+      <Check label="Показать технику в 3D" checked={k.column.visible} change={v=>modify(n=>configureColumn(n,{visible:v}))}/>
+      {k.column.kind==='oven'?<>
+        <Num label="Опорная полка духовки от пола" value={k.column.support} min={300} max={1400} step={0.5} change={v=>modify(n=>configureColumn(n,{support:v}))} note="Под ней — ящик на всю ширину; духовка стоит на полке"/>
+        <Num label="Высота ниши духовки" value={k.column.ovenNiche} min={OVEN.tallNiche.heightMin} max={OVEN.tallNiche.heightMax} change={v=>modify(n=>configureColumn(n,{ovenNiche:v}))}/>
+        <label className="hardware-field">Ниша СВЧ<select aria-label="Ниша СВЧ" value={k.column.mwNiche} onChange={e=>modify(n=>configureColumn(n,{mwNiche:Number(e.target.value)}))}><option value={0}>без СВЧ</option><option value={380}>380 — СВЧ 38 см</option><option value={460}>460 — СВЧ или компакт 45 см</option>{![0,380,460].includes(k.column.mwNiche)&&<option value={k.column.mwNiche}>{k.column.mwNiche} — как в проекте</option>}</select></label>
+        <p className="field-note">Ниши без задника и фасадов: дно и крыша короче сзади на {TALL_COLUMN.vent} мм — вентканал за техникой, ХДФ в пазу {TALL_COLUMN.groove} только над СВЧ и за ящиком (как в пеналах Базиса k14, k25). Духовка — Bosch HBF113BR0B, ниша в колонне {OVEN.tallNiche.heightMin}–{OVEN.tallNiche.heightMax} мм.</p>
+      </>:<><Num label="Высота ниши холодильника" value={k.column.niche} min={1770} max={1800} change={v=>modify(n=>configureColumn(n,{niche:v}))}/>
+        <p className="field-note">Нижний фасад крепится к двери холодильника его комплектом (без мебельных петель), над нишей — антресольная дверь. Задник только над нишей, вентканал {TALL_COLUMN.vent} мм за техникой через дно и крышу (k25 m10).</p></>}
+    </Group>}
+    {k.appliance==='oven'&&!k.column&&<Group icon={<Wrench size={15}/>} title="Духовка и нижний ящик" open>
       <Check label="Показать духовку в 3D" checked={!!k.oven?.visible} change={v=>modify(n=>configureOven(n,{visible:v}))}/>
       {ovenLayoutWarnings(m).map(w=><p className="field-note" role="alert" key={w}>{w}</p>)}
       {!!ovenLayoutWarnings(m).length&&<button className="outline full" onClick={()=>modify(n=>configureOven(n))}>Пересобрать нижний ящик</button>}
@@ -189,8 +200,10 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Check label="Менять ширину только этого корпуса" checked={!!m.ownWidthOnly} change={v=>modify(n=>{if(v)n.ownWidthOnly=true;else delete n.ownWidthOnly;})}/>
       <p className="field-note">{m.ownWidthOnly?'Соседи сохраняют размеры. Проверьте зазор после изменения.':'Ширина перераспределяется с соседним корпусом в ряду.'}</p>
       <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} change={(v) => modify((n) => { n.width = v; })} />
-      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
+      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kitchen?.column) configureColumn(n); else if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
+      {role === "wall" && <><Num label="Низ от пола" value={Math.round(placed.y ?? 0)} min={0} max={Math.max(0, project.room.height - m.height)} change={(v) => commit(setWallFloor(project, placed.id, v))} note={`По умолчанию ${wallFloorY()}: верх нижних ${KITCHEN.baseHeight} + столешница ${KITCHEN.worktopThickness} + ${KITCHEN.wallGap}; в кухнях Базиса чаще всего 1458 (1220–1665)`} />
+        <Num label="Низ ряда навесных от пола" value={Math.round(placed.y ?? 0)} min={0} max={Math.max(0, project.room.height - m.height)} change={(v) => commit(setWallFloor(project, placed.id, v, true))} note="Все навесные ряда на этой высоте; антресоли над ними едут вместе" /></>}
       {(role === "base" || role === "tall") && <Check label="Опоры под корпусом" checked={!!m.feet && !k.noLegs} change={v => modify(n => { if (v) { n.feet = { height: 100 }; delete n.kitchen!.noLegs; } else { delete n.feet; n.plinthHeight = 0; n.kitchen!.noLegs = true; n.kitchen!.plinth = { height: n.kitchen!.plinth?.height ?? 95, ...n.kitchen!.plinth, off: true }; } })} />}
       <fieldset className="kitchen-rails"><legend>Боковины из фасадного материала</legend>
         {(['left','right'] as const).map(side=><Check key={side} label={side==='left'?'Левая боковина — материал фасадов':'Правая боковина — материал фасадов'} checked={!!k.facadeSides?.[side]} change={v=>setK({facadeSides:{...k.facadeSides,[side]:v}})}/>)}
@@ -370,7 +383,7 @@ function CabinetPanel(props: KitchenPanelProps) {
       <p className="field-note">Низ модуля от пола: {Math.round(props.placed.y ?? 0)} мм{(() => { const under = project.modules.find((a) => a.module.worktop && a.x < placed.x + m.width && a.x + a.module.width > placed.x); return under ? ` · от столешницы ${Math.round((placed.y ?? 0) - (under.y ?? 0) - under.module.height)} мм (регламент ${KITCHEN.wallGap}, минимум ${KITCHEN.wallGapMin}, над вытяжкой ${KITCHEN.hoodGapMin})` : ""; })()}.</p>
     </Group>}
 
-    {appliance && <div className="property-section kitchen-note"><Info size={14} /><p>{appliance.label}{appliance.niche[0] ? `: ниша ${appliance.niche.join(" × ")} мм по паспорту типовой модели.` : "."} {k.appliance === "sink" ? "Задника нет, передняя царга на ребре — под сифон и трубы." : k.appliance === "oven" ? "Без задника и царг — под вентиляцию и розетку." : ""}</p></div>}
+    {appliance && !k.column && <div className="property-section kitchen-note"><Info size={14} /><p>{appliance.label}{appliance.niche[0] ? `: ниша ${appliance.niche.join(" × ")} мм по паспорту типовой модели.` : "."} {k.appliance === "sink" ? "Задника нет, передняя царга на ребре — под сифон и трубы." : k.appliance === "oven" ? "Без задника и царг — под вентиляцию и розетку." : ""}</p></div>}
 
     <Hardware settingsTitle="Фурнитура модуля" list={list} m={m} showInside={props.showInside} />
     <Position settingsTitle="Положение" {...props} />

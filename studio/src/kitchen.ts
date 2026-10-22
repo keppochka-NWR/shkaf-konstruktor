@@ -8,6 +8,7 @@ import { facadeSideToFloor, facadeSideErrors, type FacadeSides } from './kitchen
 import { OVEN_BASE_NICHE } from './ovenDimensions';
 import { sinkParts, worktopCutErrors } from './premialSink';
 import {ovenErrors,ovenParts,type OvenSpec} from './kitchenOven';
+import {columnErrors,columnParts,type TallColumn} from './kitchenTall';
 import { CONFIRMAT_QUATS, RULES, type GolaCut, type Module, type Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout, type FirmaxBox } from "./kitchenDrawers";
@@ -255,6 +256,11 @@ export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   /** ХДФ в пазу только от жёсткой полки (номер в секции 1) до верха: пенал под холодильник (k25 m10), ниже полки — ниша без задника.
    *  Низ ХДФ — низ полки плюс зазор паза (grooveClear), как в Базисе. Работает вместе с topBack/backTopGap и bottomBack. */
   backFromShelf?: number;
+  /** ХДФ в пазу ещё и снизу — от дна до верха жёсткой полки (номер в секции 1) минус зазор паза: за ящиком под духовкой в пенале
+   *  (k14 m08: 101…478,5 под полкой 463,5…479,5; k25 m11). Вместе с backFromShelf — две части задника, между ними ниши без задника. */
+  backBelowShelf?: number;
+  /** Пенал под технику, шаблон студии (K1/K2 22.10, kitchenTall.ts): духовка + СВЧ в колонну или встраиваемый холодильник — высоты ниш в мм. */
+  column?: TallColumn;
   /** Задняя стенка из ЛДСП (F_BACK_LDSP, пакет 4) — backType "board" у кухни Базиса: вкладная между боковинами, дном и крышей, тыльная
    *  пласть на inset от задней кромки боковин (k01 m08, k18 m16: 100; k18 m17/m18: 150), gap — зазоры до боковин/дна/крыши (k01 m08:
    *  0,5/1/0,5; k18: 0). Крепёж — рафиксы по сетке от кромок задника (правило «от кромки», пакет 0): side — в боковины (rear/front — от
@@ -408,6 +414,10 @@ export const KITCHEN = {
   maxModuleWidth: 1650, // предел ширины кухонного модуля в проверке: самый широкий модуль 34 кухонь Базиса — 1649 (шкафы — RULES.maxW 1300)
   maxHeight: 2900,      // пеналы в Базисе до 2869 (k30 m15), 2850 (k31 m05), 2820 (k27); у шкафов студии лимит RULES.maxH 2500 не меняется
 } as const;
+
+/** Низ навесных от пола по умолчанию: верх нижних (820) + столешница (38) + зазор — 1458. По кухням Базиса цеха (32 с навесными)
+ *  низ ряда навесных 1220…1665, медиана 1462,5, чаще всего ровно 1458 (k01, k05, k06, k10). Запрос Макса 22.10, п. 6. */
+export function wallFloorY(baseTop: number = KITCHEN.baseHeight, worktop: number = KITCHEN.worktopThickness): number { return baseTop + worktop + KITCHEN.wallGap; }
 
 /** Техника: размеры ниши/корпуса по паспортам типовых встраиваемых моделей (ширина × высота × глубина, мм). */
 export const APPLIANCES: Record<ApplianceKind, { label: string; niche: [number, number, number]; widths: number[] }> = {
@@ -790,6 +800,7 @@ export function cornerStopParts(m: Module, out: Part[]) {
 export function kitchenExtraParts(m: Module, out: Part[]) {
   const k = m.kitchen; if (!k) return;
   out.push(...ovenParts(m));
+  out.push(...columnParts(m)); // пенал под технику: духовка, СВЧ, холодильник моделями компоновки (K1/K2)
   hoodBoxParts(m, out);
   backBoardParts(m, out);
   raiseFrontParts(m, out);
@@ -1145,7 +1156,7 @@ export function faceOverOk(over: number, width: number): boolean {
 }
 
 export function kitchenErrors(m: Module): string[] {
-  const e: string[] = [...allegroErrors(m),...ovenErrors(m)];
+  const e: string[] = [...allegroErrors(m),...ovenErrors(m),...columnErrors(m)];
   if (m.worktop) {
     const w = m.worktop;
     if (!["postforming", "ldsp", "stone", "compact", "acrylic", "quartz"].includes(w.material)) e.push("Столешница: материал из списка.");
@@ -1326,6 +1337,8 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(Array.isArray(k.bareShelves) && k.bareShelves.length ? { bareShelves: k.bareShelves.map(Number).filter(Number.isInteger) } : {}),
     ...(Array.isArray(k.dupParts) && k.dupParts.length ? { dupParts: k.dupParts.map(String) } : {}),
     ...(Number.isInteger(k.backFromShelf) && k.backFromShelf! >= 0 ? { backFromShelf: k.backFromShelf } : {}),
+    ...(Number.isInteger(k.backBelowShelf) && k.backBelowShelf! >= 0 ? { backBelowShelf: k.backBelowShelf } : {}),
+    ...(k.column && typeof k.column === "object" ? { column: k.column.kind === "fridge" ? { kind: "fridge" as const, visible: k.column.visible !== false, niche: num(k.column.niche) } : { kind: "oven" as const, visible: k.column.visible !== false, support: num((k.column as { support?: unknown }).support), ovenNiche: num((k.column as { ovenNiche?: unknown }).ovenNiche), mwNiche: num((k.column as { mwNiche?: unknown }).mwNiche) } } : {}),
     ...(k.sideRecess && (k.sideRecess.side === "left" || k.sideRecess.side === "right") && fin(k.sideRecess.back) ? { sideRecess: { side: k.sideRecess.side, back: num(k.sideRecess.back), ...(k.sideRecess.groove && fin(k.sideRecess.groove.into) ? { groove: { into: num(k.sideRecess.groove.into) } } : {}), ...(k.sideRecess.bottomFull ? { bottomFull: true as const } : {}) } } : {}),
     ...(k.backBoard && typeof k.backBoard === "object" && fin(k.backBoard.inset) ? { backBoard: { inset: num(k.backBoard.inset),
       ...(k.backBoard.gap && typeof k.backBoard.gap === "object" ? { gap: { side: num(k.backBoard.gap.side), bottom: num(k.backBoard.gap.bottom), top: num(k.backBoard.gap.top) } } : {}),

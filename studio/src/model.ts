@@ -1706,6 +1706,10 @@ export function parts(m: Module): Part[] {
     p.planContour=c.map(q=>[q[0],q[1]] as [number,number]);delete p.taperZ;}
   applyFaceContours(m,out); // фигурные вертикальные детали кухни Базиса (kitchen.faceContours, нижний угловой k27 m09)
   // кухня Базиса: ХДФ в пазу только от жёсткой полки до верха (kitchen.backFromShelf, пенал под холодильник k25 m10) — ниже ниша без задника
+  // пенал под технику (kitchen.backBelowShelf, k14 m08): вторая часть ХДФ в пазу — от низа задника до верха жёсткой полки минус зазор паза (за ящиком)
+  if(m.kitchen?.backBelowShelf!==undefined&&m.backType==='groove'){const bk=out.find(p=>p.id==='back'),sh=out.find(p=>p.id===`${m.sections[0].id}:shelf:${m.kitchen!.backBelowShelf}`);
+    if(bk&&sh&&m.sections[0].fixed?.includes(m.kitchen.backBelowShelf)){const vent=(m.kitchen.bottomBack??0)>=(m.grooveInset??0)+3,y0=vent?(m.feet?.height??0)+(m.grooveClear??0):bk.position[1]-bk.size[1]/2,/* дно короче сзади (вентканал) — ХДФ за ним до низа дна + зазор (k14 m08: 101) */y1=sh.position[1]+sh.size[1]/2-(m.grooveClear??0);
+      if(y1-y0>=50)out.push({...bk,id:'back:low',size:[bk.size[0],y1-y0,bk.size[2]],position:[bk.position[0],(y0+y1)/2,bk.position[2]],length:y1-y0});}}
   if(m.kitchen?.backFromShelf!==undefined&&m.backType==='groove'){const bk=out.find(p=>p.id==='back'),sh=out.find(p=>p.id===`${m.sections[0].id}:shelf:${m.kitchen!.backFromShelf}`);
     if(bk&&sh&&m.sections[0].fixed?.includes(m.kitchen.backFromShelf)){const y0=sh.position[1]-sh.size[1]/2+(m.grooveClear??0),y1=bk.position[1]+bk.size[1]/2;
       if(y1-y0>=50){bk.size=[bk.size[0],y1-y0,bk.size[2]];bk.position=[bk.position[0],(y0+y1)/2,bk.position[2]];bk.length=y1-y0;}}}

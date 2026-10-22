@@ -2,19 +2,19 @@
 // модуль встаёт в свой ряд (нижние на пол, навесные на высоту ряда, антресоль над навесными), прямая кухня по длине стены,
 // «Кухни из базы» (локальный индекс, на Pages его нет) и общая палитра шкафов — свёрнутой.
 import { useEffect, useState, type ReactNode } from "react";
-import { PanelBottom, Archive, Droplets, Flame, Wine, PanelTopOpen, Rows3, ArrowUpToLine, RectangleVertical, RectangleHorizontal, CookingPot, Library, ArrowLeft, Sofa, Columns2 } from "lucide-react";
+import { PanelBottom, Archive, Droplets, Flame, Wine, PanelTopOpen, Rows3, ArrowUpToLine, RectangleVertical, RectangleHorizontal, CookingPot, Library, ArrowLeft, Sofa, Columns2, Microwave, Refrigerator } from "lucide-react";
 import type { CornerSide } from "./kitchenCorner";
 import type { Module } from "./model";
 import type { Project } from "./project";
-import { KITCHEN } from "./kitchen";
-import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule, placeKitchenRow, placeWorktop, type KitchenItem } from "./kitchenProject";
+import { KITCHEN, wallFloorY } from "./kitchen";
+import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule, placeKitchenRow, placeWorktop, defaultWallY, type KitchenItem } from "./kitchenProject";
 import { WardrobeBase } from "./WardrobeBase";
 import "./kitchen.css";
 
-const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical };
+const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical, "tall-oven": Microwave, "tall-fridge": Refrigerator };
 const GROUPS: { id: "base" | "wall" | "tall"; title: string; note: string }[] = [
   { id: "base", title: "Нижние", note: `на опорах ${KITCHEN.legs}, корпус ${KITCHEN.baseBody}, глубина ${KITCHEN.baseDepth}` },
-  { id: "wall", title: "Верхние", note: `${KITCHEN.wallHeight} × ${KITCHEN.wallDepth}, на навесах, ${KITCHEN.wallGap} над столешницей` },
+  { id: "wall", title: "Верхние", note: `${KITCHEN.wallHeight} × ${KITCHEN.wallDepth}, на навесах, низ ${wallFloorY()} от пола (${KITCHEN.wallGap} над столешницей)` },
   { id: "tall", title: "Пеналы и столешница", note: "пенал — вровень с навесными" },
 ];
 type BaseEntry = { id: string; title: string };
@@ -47,11 +47,14 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, chil
     try { const r = f(); if (commit(r.project)) onAdded(r.ids, fit); } catch (e) { onError((e as Error).message); }
   };
   const [cornerSide, setCornerSide] = useState<CornerSide>("right");
-  const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source, kind === "base-corner" ? { side: cornerSide } : undefined)); return { project: r.project, ids: [r.id] }; });
+  // низ навесных от пола (п. 6, 22.10): по умолчанию — ряд навесных или регламент от верха нижних (1458); заданное число — для новых навесных
+  const [wallFloor, setWallFloor] = useState<number | undefined>(undefined), wallShown = wallFloor ?? Math.round(defaultWallY(project));
+  const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source, kind === "base-corner" ? { side: cornerSide } : undefined), KITCHEN_ITEMS[kind].group === "wall" && kind !== "antresol" ? { wallY: wallFloor } : {}); return { project: r.project, ids: [r.id] }; });
   return <details className="module-palette kitchen-palette" open>
     <summary>Кухонные модули</summary>
     {GROUPS.map((g) => <div key={g.id} className="kp-group">
       <h3>{g.title}<small>{g.note}</small></h3>
+      {g.id === "wall" && <label className="number-field kp-floor"><span>Низ навесных от пола</span><div><input aria-label="Низ навесных от пола" type="number" min={0} max={project.room.height} value={wallShown} onChange={(e) => { const v = Number(e.target.value); setWallFloor(Number.isFinite(v) && e.target.value !== "" ? v : undefined); }} /><small>мм</small></div></label>}
       {(Object.keys(KITCHEN_ITEMS) as KitchenItem[]).filter((k) => KITCHEN_ITEMS[k].group === g.id).map((k) => { const Icon = ICONS[k]; return <div key={k} className="kp-item">
         <span className="kp-label"><Icon size={18} />{KITCHEN_ITEMS[k].label}</span>
         {k === "base-corner" && <span className="kp-corner">

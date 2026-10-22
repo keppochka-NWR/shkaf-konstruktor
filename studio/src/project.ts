@@ -5,6 +5,7 @@ import type {Niche,CeilingType} from './measurement';
 import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
 import {rawKitchen} from './rawModule';
+import {wallFloorY} from './kitchen';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
@@ -234,7 +235,7 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   // Ложное «пересекается» на втором «Добавить в комнату» (критик 20.10, было и на night-release).
   const f=applyAutoFillers(p),anchorId=anchor?.id;if(anchor)anchor=f.modules.find(x=>x.id===anchorId)??anchor;p={...p,modules:f.modules};
   const supports=p.modules.filter(a=>a.module.kitchen?.role==='base');
-  const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?1500:0);
+  const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?(p.modules.find(a=>a.module.kitchen?.role==='wall')?.y??wallFloorY(supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):undefined)):0); /* навесной — в ряд навесных или на низ по умолчанию от пола (п. 6, 22.10) */
   if(source.worktop&&!supports.length)throw Error('Сначала добавьте нижние кухонные корпуса: столешница устанавливается над ними.');
   const a:PlacedModule={id:id(),x:0,y:initialY,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
   const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=source.worktop&&supports.length?Math.min(...supports.map(a=>a.x)):anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),source.kitchen?21:0),preferredZ=anchor?bounds(anchor).z:source.kitchen?kitchenRowZ(p,module,initialY)+base.z:source.worktop&&supports.length?Math.min(...supports.map(a=>a.z-kitchenRowZ({ ...p, modules: [] },a.module,a.y??0))):30;

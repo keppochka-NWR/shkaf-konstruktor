@@ -106,6 +106,10 @@ export function describeModule(m: Module): ModuleDescription {
     kind = KITCHEN_ROLE[m.kitchen.role] ?? "Кухонный модуль";
     const app = m.kitchen.appliance && APPLIANCE[m.kitchen.appliance];
     if (app) kind += " " + app;
+    // пенал под технику (K1/K2): ниши в мм; сама техника — клиента, в КП не входит (как у нижнего под духовку)
+    const col = m.kitchen.column;
+    if (col?.kind === "oven") { if (col.mwNiche > 0) kind += " и СВЧ"; filling.push(`ниша духовки ${col.ovenNiche} мм${col.mwNiche > 0 ? `, ниша СВЧ ${col.mwNiche} мм` : ""}`); }
+    if (col?.kind === "fridge") filling.push(`ниша встраиваемого холодильника ${col.niche} мм, фасад на двери холодильника`);
     if (m.kitchen.premialPullout) filling.push("выдвижная бутылочница");
     // нижний угловой (kitchenCorner.ts): для клиента — что это угловой и где глухая часть, без служебных подробностей
     const ff = m.kitchen.faceFiller;
