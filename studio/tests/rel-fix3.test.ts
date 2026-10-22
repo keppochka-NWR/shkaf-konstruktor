@@ -127,3 +127,20 @@ test('x3: «Столешница над нижними» — на все уча�
   assert.deepEqual(tops,[300,1200]);assert.equal(r.ids.length,2);
   assert.throws(()=>placeWorktop(r.project,look),/Все нижние уже под столешницей/);
 });
+
+test('x1: все шаблоны кухонной палитры (и пенал «духовка + СВЧ» глубиной 581 с Versalite 550, как k10) — итог не null',async()=>{
+  const {kitchenTemplate,placeKitchenModule}=await import('../src/kitchenProject');
+  const {refitKDrawers}=await import('../src/kitchenDrawers');
+  const kinds=["base-doors","base-drawers","base-corner","sink","oven","bottle","wall","wall-open","antresol","tall","tall-oven","tall-fridge"] as const;
+  const look=initialModule();const bad:string[]=[];
+  for(const k of kinds)for(const w of k==='base-corner'?[1000]:[400,600,800])for(const d of [0,581]){
+    let m;try{m=kitchenTemplate(k,w,look);}catch{continue;}
+    if(d&&(k==='tall-oven'||k==='base-drawers'||k==='tall')){m.depth=d;if(m.kdrawers)m.kdrawers=refitKDrawers(m,'depth');}else if(d)continue;
+    let p:Project={...newProject(),modules:[]};p.room={...p.room,width:4000};
+    try{p=placeKitchenModule(p,m).project;}catch{continue;}
+    const e=estimate(p);if(e.retail===null)bad.push(`${k} ${w}${d?' D'+d:''}: `+e.missing.map(l=>l.id).join(','));
+  }
+  assert.deepEqual(bad,[]);
+  const oven=kitchenTemplate('tall-oven',600,look);oven.depth=581;oven.kdrawers=refitKDrawers(oven,'depth');
+  assert.ok(oven.kdrawers?.some(k=>k.system==='versalite-h45'&&(k as {len:number}).len===550),'пенал 581 — ящик Versalite 550');
+});
