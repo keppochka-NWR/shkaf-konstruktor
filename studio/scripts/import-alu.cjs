@@ -45,5 +45,8 @@ export const ALU_CALC_GASKET_PER_M = ${ctx.FASAD_GASKET};
 /** Петли в калькуляторе: до 1200 мм высоты — 2, выше — 3 (фурнитура в студии считается своими строками петель). */
 export const ALU_CALC_HINGE_SPLIT_H = 1200;
 `;
-fs.writeFileSync(path.join(__dirname, "../src/aluData.ts"), out, "utf8");
-console.log("aluData.ts:", profiles.length, "профилей,", fills.length, "наполнений; источник", source.commit, source.dirty.length ? "НЕ ЗАКОММИЧЕН: " + source.dirty.join(", ") : "чистый");
+// Тот же результат — файл не трогаем (рабочая копия git с CRLF иначе показывает «изменён» без изменений в содержимом).
+const target = path.join(__dirname, "../src/aluData.ts"), eol = (s) => s.replace(/\r\n/g, "\n");
+const same = fs.existsSync(target) && eol(fs.readFileSync(target, "utf8")) === out;
+if (!same) fs.writeFileSync(target, out, "utf8");
+console.log(same ? "aluData.ts без изменений:" : "aluData.ts:", profiles.length, "профилей,", fills.length, "наполнений; источник", source.commit, source.dirty.length ? "НЕ ЗАКОММИЧЕН: " + source.dirty.join(", ") : "чистый");

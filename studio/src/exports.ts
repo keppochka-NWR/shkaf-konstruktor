@@ -199,7 +199,7 @@ export function saveFile(
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 /** Пазы детали для деталировки: паз под ЛХДФ (если задник в паз) и пазы под подсветку — тот же текст, что на бирке. */
-function detailGrooves(p: Project, moduleId: string, partId: string) {
+export function detailGrooves(p: Project, moduleId: string, partId: string) {
   const m = p.modules.find((a) => a.id === moduleId)?.module;
   if (!m) return "";
   const back = m.backType === "groove" && ["left", "right", "top", "bottom"].includes(partId) ? `паз ${m.grooveWidth ?? 4}×${m.grooveDepth ?? 8} под ЛХДФ, отступ ${m.grooveInset ?? 16}` : "";
