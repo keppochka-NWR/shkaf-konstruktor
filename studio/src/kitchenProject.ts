@@ -160,11 +160,28 @@ export function placeKitchenModule(p: Project, m: Module, opts: { wallY?: number
 export function setWallFloor(p: Project, id: string, y: number, row = false): Project {
   const a = p.modules.find((x) => x.id === id);
   if (!a || !Number.isFinite(y)) return p;
-  const old = a.y ?? 0, dy = Math.round(y) - old;
-  const moved = row ? p.modules.filter((x) => role(x) === "wall" && (x.rotation ?? 0) === (a.rotation ?? 0) && Math.abs((x.y ?? 0) - old) < 1) : [a];
-  const on = (x: PlacedModule) => role(x) === "antresol" && moved.some((w) => Math.abs((w.y ?? 0) + w.module.height - (x.y ?? 0)) < 1 && x.x < w.x + w.module.width - 1 && x.x + x.module.width > w.x + 1);
-  const ids = new Set([...moved, ...p.modules.filter(on)].map((x) => x.id));
-  return { ...p, modules: p.modules.map((x) => (ids.has(x.id) ? { ...x, y: (x.y ?? 0) + dy } : x)) };
+  // K7 (критик 22.10): ряд — все навесные той же стены (wallRow), каждый встаёт на y; у навесных с разной высотой ряд выравнивается
+  const moved = row ? wallRow(p, id) : [a], to = Math.round(y);
+  const shift = new Map<string, number>(moved.map((w) => [w.id, to - (w.y ?? 0)]));
+  for (const x of p.modules) {
+    if (role(x) !== "antresol" || shift.has(x.id)) continue;
+    const under = moved.find((w) => Math.abs((w.y ?? 0) + w.module.height - (x.y ?? 0)) < 1 && x.x < w.x + w.module.width - 1 && x.x + x.module.width > w.x + 1);
+    if (under) shift.set(x.id, shift.get(under.id)!);
+  }
+  return { ...p, modules: p.modules.map((x) => (shift.has(x.id) ? { ...x, y: (x.y ?? 0) + shift.get(x.id)! } : x)) };
+}
+/** Ряд навесных модуля id (K7): навесные того же поворота у той же стены — отступ от стены (z у поворота 0/180, x у 90/270) ±100 мм.
+ *  Сам модуль — всегда в ряду. Не навесной — пусто. */
+export function wallRow(p: Project, id: string): PlacedModule[] {
+  const a = p.modules.find((x) => x.id === id);
+  if (!a || role(a) !== "wall") return [];
+  const rot = a.rotation ?? 0, side = (x: PlacedModule) => (rot % 180 === 0 ? x.z : x.x);
+  return p.modules.filter((x) => x.id === id || (role(x) === "wall" && (x.rotation ?? 0) === rot && Math.abs(side(x) - side(a)) <= 100));
+}
+/** Низ ряда навесных от пола для панели (K7): y — общий низ ряда или null, если у навесных ряда он разный; values — все разные значения. */
+export function wallRowFloor(p: Project, id: string): { y: number | null; values: number[] } {
+  const values = [...new Set(wallRow(p, id).map((x) => Math.round(x.y ?? 0)))].sort((u, v) => u - v);
+  return { y: values.length === 1 ? values[0] : null, values };
 }
 
 /** Столешница над нижними, ещё не закрытыми столешницей: от левого до правого края ряда нижних (длиннее 4100 — двумя частями). */

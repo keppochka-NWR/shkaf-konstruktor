@@ -28,7 +28,7 @@ import { VernissagePicker } from "./VernissagePicker";
 import { AluPicker, AluDrawersCheck } from "./AluPicker";
 import { ALU_EXTRAS } from "./alu";
 import { facadeKind, changeFacadeKind, type FacadeKind } from "./facadeAppearance";
-import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, setWallFloor, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
+import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, setWallFloor, wallRow, wallRowFloor, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
 import "./kitchen.css";
 
 type Rail = NonNullable<Module["rails"]>[number];
@@ -36,19 +36,23 @@ const fmt = (v: number) => String(Math.round(v * 10) / 10);
 const ROLE: Record<string, string> = { base: "Нижний модуль", wall: "Навесной модуль", tall: "Пенал", antresol: "Антресоль" };
 
 /** Числовое поле как в студии (номер, единица, подсказка диапазона, ошибка); принимает дробные (зазоры 1,5). */
-function Num({ label, value, min, max, step = 1, unit = "мм", change, note }: { label: string; value: number; min: number; max: number; step?: number; unit?: string; change: (v: number) => boolean | void; note?: string }) {
-  const [draft, setDraft] = useState(fmt(value)), [error, setError] = useState("");
-  useEffect(() => { setDraft(fmt(value)); setError(""); }, [value]);
+function Num({ label, value, min, max, step = 1, unit = "мм", change, note, mixed }: { label: string; value: number; min: number; max: number; step?: number; unit?: string; change: (v: number) => boolean | void; note?: string;
+  /** K7: значения у группы разные — поле пустое с этой подсказкой, любое введённое число применяется ко всей группе */
+  mixed?: string }) {
+  const shown = mixed ? "" : fmt(value);
+  const [draft, setDraft] = useState(shown), [error, setError] = useState("");
+  useEffect(() => { setDraft(shown); setError(""); }, [value, mixed]); // eslint-disable-line react-hooks/exhaustive-deps
   const apply = () => {
+    if (mixed && !draft.trim()) { setError(""); return; }
     const n = Number(draft.replace(",", "."));
-    if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}. Изменение не применено.`); setDraft(fmt(value)); return; }
+    if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}. Изменение не применено.`); setDraft(shown); return; }
     setError("");
-    if (Math.abs(n - value) > 1e-9 && change(n) === false) setDraft(fmt(value));
+    if ((mixed || Math.abs(n - value) > 1e-9) && change(n) === false) setDraft(shown);
   };
   return <label className={"number-field" + (error ? " has-error" : "")}>
     <span>{label}</span>
-    <div><input aria-label={label} type="number" inputMode="decimal" min={min} max={max} step={step} value={draft} onChange={(e) => { setDraft(e.target.value); setError(""); }} onBlur={apply}
-      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setDraft(fmt(value)); setError(""); } }} /><small>{unit}</small></div>
+    <div><input aria-label={label} type="number" inputMode="decimal" min={min} max={max} step={step} value={draft} placeholder={mixed} onChange={(e) => { setDraft(e.target.value); setError(""); }} onBlur={apply}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setDraft(shown); setError(""); } }} /><small>{unit}</small></div>
     <span className={error ? "number-feedback" : "number-range"} role={error ? "alert" : undefined}>{error || note || `От ${fmt(min)} до ${fmt(max)} ${unit} · Enter — применить`}</span>
   </label>;
 }
@@ -155,11 +159,13 @@ function CabinetPanel(props: KitchenPanelProps) {
     return { ...a, module: { ...a.module, kitchen: { ...ak, legs: { back: legs.back, front: legs.front, ...(legs.side === undefined ? {} : { side: legs.side }) }, plinth: { ...plinth, height: ph } } } };
   }) });
   const appliance = k.appliance ? APPLIANCES[k.appliance] : undefined;
+  const rowFloor = wallRowFloor(project, placed.id);
 
   // Петли: текущая высота фасада и фактические ручные высоты (scaleHingeY), чтобы панель показывала и сохраняла то, что стоит в 3D
   const dhNow = door ? Math.round(door.size[1] * 10) / 10 : 0;
   const shownY = s.hingeY?.length ? scaleHingeY(s.hingeY, s.hingeYFor ?? dhNow, dhNow).map((y) => Math.round(y * 10) / 10) : [];
-  return <SettingsTree className="kitchen-panel">
+  // K1 (критик 22.10): подсветки у кухонных модулей пока нет — подзаголовок «Наполнения» её не обещает
+  return <SettingsTree className="kitchen-panel" hints={{ "Наполнение": m.kitchen ? "Полки, ящики и бутылочницы" : "Полки и ящики" }}>
     <div className="property-section kitchen-head">
       <span className="eyebrow">{ROLE[role] ?? "Кухонный модуль"}{appliance ? " · " + appliance.label.toLowerCase() : ""}</span>
       <h2>{m.name}</h2>
@@ -203,7 +209,9 @@ function CabinetPanel(props: KitchenPanelProps) {
       <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kitchen?.column) configureColumn(n); else if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
       <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
       {role === "wall" && <><Num label="Низ от пола" value={Math.round(placed.y ?? 0)} min={0} max={Math.max(0, project.room.height - m.height)} change={(v) => commit(setWallFloor(project, placed.id, v))} note={`По умолчанию ${wallFloorY()}: верх нижних ${KITCHEN.baseHeight} + столешница ${KITCHEN.worktopThickness} + ${KITCHEN.wallGap}; в кухнях Базиса чаще всего 1458 (1220–1665)`} />
-        <Num label="Низ ряда навесных от пола" value={Math.round(placed.y ?? 0)} min={0} max={Math.max(0, project.room.height - m.height)} change={(v) => commit(setWallFloor(project, placed.id, v, true))} note="Все навесные ряда на этой высоте; антресоли над ними едут вместе" /></>}
+        {/* K7 (критик 22.10): значение ряда, а не выбранного модуля; разные — «разные: 1450/1458», ввод выравнивает весь ряд */}
+        <Num label="Низ ряда навесных от пола" value={rowFloor.y ?? Math.round(placed.y ?? 0)} mixed={rowFloor.y === null ? "разные" : undefined} min={0} max={Math.max(0, project.room.height - Math.max(...wallRow(project, placed.id).map((x) => x.module.height)))} change={(v) => commit(setWallFloor(project, placed.id, v, true))}
+          note={rowFloor.y === null ? `разные: ${rowFloor.values.join("/")} — введите высоту, весь ряд (${wallRow(project, placed.id).length} шт.) встанет на неё; антресоли над ними едут вместе` : "Все навесные ряда на этой высоте; антресоли над ними едут вместе"} /></>}
       {(role === "base" || role === "tall") && <Check label="Опоры под корпусом" checked={!!m.feet && !k.noLegs} change={v => modify(n => { if (v) { n.feet = { height: 100 }; delete n.kitchen!.noLegs; } else { delete n.feet; n.plinthHeight = 0; n.kitchen!.noLegs = true; n.kitchen!.plinth = { height: n.kitchen!.plinth?.height ?? 95, ...n.kitchen!.plinth, off: true }; } })} />}
       <fieldset className="kitchen-rails"><legend>Боковины из фасадного материала</legend>
         {(['left','right'] as const).map(side=><Check key={side} label={side==='left'?'Левая боковина — материал фасадов':'Правая боковина — материал фасадов'} checked={!!k.facadeSides?.[side]} change={v=>setK({facadeSides:{...k.facadeSides,[side]:v}})}/>)}

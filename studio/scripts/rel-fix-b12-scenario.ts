@@ -80,9 +80,9 @@ try {
   await page.getByRole("button", { name: "Закрыть окно" }).click().catch(async () => { await page.keyboard.press("Escape"); }); await page.waitForTimeout(400);
   // B1: Excel из окна «Стоимость»
   await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
-  await page.getByRole("button", { name: "Стоимость", exact: true }).first().click(); await page.waitForTimeout(500);
+  await page.getByRole("dialog").getByRole("button", { name: "Стоимость", exact: true }).first().click(); await page.waitForTimeout(500);
   await shot("04-cost");
-  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Скачать Excel" }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("dialog").getByRole("button", { name: "Скачать Excel" }).click()]);
   const file = join(out, "b12-smeta.xlsx"); await dl.saveAs(file);
   const z = unzipSync(new Uint8Array(readFileSync(file)));
   const c1 = cells(strFromU8(z["xl/worksheets/sheet1.xml"])), c3 = cells(strFromU8(z["xl/worksheets/sheet3.xml"]));

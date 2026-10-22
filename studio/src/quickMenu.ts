@@ -8,6 +8,7 @@ import { cornerOf, reshapeCorner, type CornerSide } from "./kitchenCorner";
 import type { RadialItem } from "./RadialMenu";
 import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, type Module, type Section } from "./model";
 import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
+import { rawKitchen } from "./rawModule";
 
 export type QuickMenuOps = {
   /** Правка этого корпуса (modifyAt) — как селекты и галочки панели. */
@@ -38,6 +39,12 @@ export function cornerItems(m: Module, ops: QuickMenuOps): RadialItem[] {
 /** Есть ли у модуля быстрые пункты (шкафы и стеллажи студии). */
 export function quickMenuApplies(m: Module) {
   return !m.kitchen && !m.raw && !m.kupe && !m.desk && !m.worktop && !m.corner && !m.casework;
+}
+/** Почему в режиме выбора деталей подсветка не ставится на этот объект (K1, критик 22.10): у кухни — «в следующей версии», не «не ставится». */
+export function lightUnavailable(m: Module): string {
+  if (m.kitchen || m.worktop || rawKitchen(m.raw)) return "Подсветка кухни — в следующей версии. Сейчас подсветка ставится в шкафы и стеллажи.";
+  if (m.kupe) return "Двери купе без подсветки — подсветку ставьте в корпус шкафа за дверями.";
+  return "У этого объекта подсветки по деталям нет — она ставится в шкафы и стеллажи.";
 }
 
 const BACKS: { id: NonNullable<Module["backType"]>; label: string; hint: string }[] = [

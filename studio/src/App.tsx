@@ -24,6 +24,7 @@ import OpeningLayoutEditor from './OpeningLayoutEditor';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
 import {rowShortage} from './rowFit';
+import {offWallNote} from './freeSpot';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomFixtures} from './RoomFixtures';
 import {StageBar} from './StageBar';
@@ -118,7 +119,7 @@ import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS,
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem,worktopMaterialItem} from './addMenu';
-import {quickItems,quickMenuApplies,upperItem,menuDropY,doorQuickItems,cornerItems,type QuickMenuOps} from './quickMenu';
+import {quickItems,quickMenuApplies,lightUnavailable,upperItem,menuDropY,doorQuickItems,cornerItems,type QuickMenuOps} from './quickMenu';
 import {allStandsLit,applyToAll,pickTargets,setAllStands,toggleGroup,type LightOrient} from './lights';
 import {LightModeBar,LightPanel} from './LightPanel';
 import {composeContextMenu,menuArea} from './contextMenu';
@@ -542,6 +543,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // плашка «Изменение не применено» скрывается сама через 6 с (критик 20.10, m1); с кнопкой «Подогнать…» и ошибкой открытия — нет
   // список ошибок с «Показать» (п.4 волны 22.10) висит дольше — 20 с, чтобы успеть прочитать и нажать
   const errorDetails=error&&errorList.some(d=>d.text===error)?errorList:[];
+  // K2 (критик 22.10, раунд 2): модуль встал не у стены (ряд занят) — предупреждение, не ошибка; скрывается само через 12 с
+  const [placeNote,setPlaceNote]=useState<string|null>(null);
+  useEffect(()=>{if(!placeNote)return;const t=setTimeout(()=>setPlaceNote(null),12000);return()=>clearTimeout(t);},[placeNote]);
   useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),errorDetails.length?20000:6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
   /** «Показать» у ошибки: выбрать корпус, секцию и деталь, приблизить. */
   function showError(d:ErrorDetail){
@@ -611,7 +615,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   useEffect(()=>{if(lightMode&&!project.modules.some(x=>x.id===lightMode))setLightMode(null);},[project,lightMode]);
   function pickLight(mid:string,pid:string,alts:string[]=[]){
     const a=project.modules.find(x=>x.id===mid);if(!a)return;
-    if(!quickMenuApplies(a.module)){setLightNote('У этого корпуса подсветка по деталям не ставится');return;}
+    if(!quickMenuApplies(a.module)){setLightNote(lightUnavailable(a.module));return;}
     const keys=pickTargets(a.module,[pid,...alts],lightOrient)?.keys??[];
     if(!keys.length){setLightNote(lightOrient==='vertical'?'Ставится вертикаль — кликните стойку или перегородку (полки — «Горизонталь»)':lightOrient==='horizontal'?'Ставится горизонталь — кликните полку или крышу (стойки — «Вертикаль»)':'В эту деталь подсветка не ставится — кликните стойку, полку, перегородку или крышу');return;}
     if(mid!==lightMode){selectModule(mid);setLightMode(mid);}
@@ -786,6 +790,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     if(ctxMenu||gapMenu||lightMode)return;
     if(composer){e.preventDefault();setComposer(null);return;}
     if(environmentSelection){e.preventDefault();setEnvironmentSelection(null);return;}
+    // K8 (критик 22.10): клик по секции в «Наполнении» выбирает задник — у такой детали нет ни плашки, ни своей подсветки, и первое Esc
+    // «ничего не делало». Невидимое выделение детали снимается вместе с выделением модуля — сразу «Ничего не выбрано», как в других режимах.
+    if(selectedPart&&!canRemove&&!drawerPreview&&!selectedOpening&&!selectedObstacle&&!selectedFixture){e.preventDefault();setSelectedPart(null);setDrawerIndex(null);setGroupIds([]);setDeselected(true);return;}
     if(selectedPart||drawerPreview||selectedOpening||selectedObstacle||selectedFixture){e.preventDefault();setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);setSelectedOpening(undefined);setSelectedObstacle(undefined);setSelectedFixture(undefined);return;}
     if(!deselected||liveGroupIds.length){e.preventDefault();setGroupIds([]);setDeselected(true);}
   }
@@ -945,7 +952,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>
       </header>
       {!presentation&&<div className="editor-order-area" hidden={compactTop}>{clientBar}</div>}
-      {!presentation&&(selectedOpening||selectedFixture||selectedObstacle)&&<button className="environment-properties-trigger" onClick={()=>setEnvironmentSelection(selectedOpening?{kind:'opening',id:selectedOpening}:selectedFixture?{kind:'fixture',id:selectedFixture}:{kind:'obstacle',id:selectedObstacle!})}>Свойства выбранного объекта</button>}
+      {/* K9 (критик 22.10): на этапах «Помещение»/«Объекты» свойства выбранного объекта уже в правой панели — плашку не показываем */}
+      {!presentation&&!environmentSelection&&stage!=='room'&&stage!=='fixtures'&&(selectedOpening||selectedFixture||selectedObstacle)&&<button className="environment-properties-trigger" onClick={()=>setEnvironmentSelection(selectedOpening?{kind:'opening',id:selectedOpening}:selectedFixture?{kind:'fixture',id:selectedFixture}:{kind:'obstacle',id:selectedObstacle!})}>Свойства выбранного объекта</button>}
       {environmentSelection&&!presentation&&<RoomObjectProperties room={project.room} selection={environmentSelection} onChange={room=>commitProject({...project,room})} onClose={()=>setEnvironmentSelection(null)}/>}
       {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone} rawSelected={!!m.raw}/>}
       {!presentation&&stage==='bodies'&&canRemove&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
@@ -1075,7 +1083,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies"><ModulePalette source={m} fit={source=>rowShortage(project,source)} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=newModuleName(source.name);if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
+          <div data-stages="bodies"><ModulePalette source={m} fit={source=>rowShortage(project,source)} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=newModuleName(source.name);if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);setPlaceNote(offWallNote(next,[next.modules.at(-1)!.id]));return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onNote={setPlaceNote} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1359,6 +1367,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             </div>
           )}
+          {placeNote&&!error&&<div className="error-banner place-note" role="status" data-testid="place-note"><Info size={20}/><div><strong>Модуль поставлен не у стены</strong><p>{placeNote}</p></div><button aria-label="Закрыть предупреждение" onClick={()=>setPlaceNote(null)}><X size={17}/></button></div>}
           {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);
             /* находка 6: меню в области сцены и левее правой панели инструментов */
             const tools=document.querySelector('.scene-tools'),canvas=tools?.parentElement?.querySelector('canvas')??document.querySelector('canvas'),visible=(el:Element|null|undefined)=>{const b=el?.getBoundingClientRect();return b&&b.width>0?b:null;};

@@ -14,15 +14,23 @@ function titleOf(node:ReactElement<any>):string|undefined{
  return typeof node.props.settingsTitle==='string'?node.props.settingsTitle:undefined;
 }
 /** Group existing controls without copying model state or changing command handlers. */
-export function SettingsTree({children,className=''}:{children:ReactNode;className?:string}){
- const buckets:ReactNode[][]=groups.map(()=>[]),intro:ReactNode[]=[];
+/** Подзаголовок категории (K1, критик 22.10): «…и подсветка» — только если в «Наполнении» есть раздел «Подсветка» (у кухонных модулей
+ *  подсветки пока нет); hints — свой подзаголовок категории у панели (кухня: полки, ящики и бутылочницы). */
+export function categoryHint(title:string,childTitles:string[],hints:Partial<Record<string,string>>={}):string{
+ const g=groups.find(x=>x.title===title);if(!g)return '';
+ if(hints[title])return hints[title]!;
+ if(title==='Наполнение'&&!childTitles.some(t=>/^Подсветка/.test(t)))return 'Секции, полки, ящики и штанги';
+ return g.hint;
+}
+export function SettingsTree({children,className='',hints}:{children:ReactNode;className?:string;hints?:Partial<Record<string,string>>}){
+ const buckets:ReactNode[][]=groups.map(()=>[]),titles:string[][]=groups.map(()=>[]),intro:ReactNode[]=[];
  for(const child of flatten(children)){
   const title=isValidElement(child)?titleOf(child):undefined;
   if(typeof title!=='string'){intro.push(child);continue;}
-  buckets[groups.findIndex(g=>g.match.test(title))].push(child);
+  const i=groups.findIndex(g=>g.match.test(title));buckets[i].push(child);titles[i].push(title);
  }
  return <div className={'settings-tree '+className}>{intro}{groups.map((group,i)=>buckets[i].length>0&&<details className="settings-category" data-settings-category={group.title} key={group.title}>
-  <summary><strong>{group.title}</strong><small>{group.hint}</small></summary><div className="settings-subsections">{buckets[i]}</div>
+  <summary><strong>{group.title}</strong><small>{categoryHint(group.title,titles[i],hints)}</small></summary><div className="settings-subsections">{buckets[i]}</div>
  </details>)}</div>;
 }
 export function revealSettings(element:HTMLElement|null|undefined){
