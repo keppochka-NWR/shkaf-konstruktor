@@ -1,5 +1,5 @@
 import {dishwasherServiceModel} from './dishwasherServices';
-import {applianceModel} from './applianceGeometry';
+import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
 import {hiddenWalls,roomEdges,edgeVisible,readCutaway,type CutawayWall} from './roomCutaway';
 import {facadeHandleId} from './model';
@@ -471,7 +471,7 @@ export function Scene(p: Props) {
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант, толкатель —
           // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)
-          const proc = procModel(part, { open:state.openDoors, left: part.position[0] < m.width / 2, headSign: (() => {
+          const proc = procModel(part, { left: part.position[0] < m.width / 2, headSign: (() => {
             if (!part.id.startsWith("ecc:") || !part.id.endsWith(":pin")) return undefined;
             const cam = byId.get(part.id.slice(0, -4)), ax = part.size.indexOf(Math.max(...part.size));
             return cam && cam.position[ax] < part.position[ax] ? -1 : 1;
@@ -639,7 +639,7 @@ export function Scene(p: Props) {
             // Купе: «открыть фасады» — переднее полотно отъезжает за заднее, как в жизни.
             if (state.openDoors) mesh.position.x += part.openShift;
             moduleGroup.add(mesh);
-          } else if (part.role === "door" && state.openDoors && part.id !== "slope-filler") {
+          } else if (part.role === "door" && state.openDoors && part.id !== "slope-filler" && !part.hingeless) { // фасад техники без петель (холодильник) висит на её двери — техника не открывается
             // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
@@ -679,7 +679,7 @@ export function Scene(p: Props) {
           box.dispose();guide.position.set(m.width/2,m.height/2,m.depth/2);guide.userData.captureGuide=true;guide.renderOrder=10;moduleGroup.add(guide);
         }
       }
-      for(const o of state.appliances??[]){const appliance=applianceModel(o,state.openDoors);if(!appliance)continue;appliance.position.set(o.x+o.width/2-moduleCenter(focus).x,o.y+o.height/2,o.z+o.depth/2-moduleCenter(focus).z);modelGroup.add(appliance);if(o.sinkModuleId){const hoses=dishwasherServiceModel(o,state.arrangement);hoses.position.set(-moduleCenter(focus).x,0,-moduleCenter(focus).z);modelGroup.add(hoses);}}
+      for(const o of state.appliances??[]){const appliance=applianceModel(o);/* техника всегда закрыта: «Открыть створки» — только фасады мебели (K3, 22.10) */if(!appliance)continue;appliance.position.set(o.x+o.width/2-moduleCenter(focus).x,o.y+o.height/2,o.z+o.depth/2-moduleCenter(focus).z);modelGroup.add(appliance);if(o.sinkModuleId){const hoses=dishwasherServiceModel(o,state.arrangement);hoses.position.set(-moduleCenter(focus).x,0,-moduleCenter(focus).z);modelGroup.add(hoses);}}
       if (state.room) {
         const r = state.room,
           x0 = -moduleCenter(focus).x,
@@ -733,7 +733,7 @@ export function Scene(p: Props) {
           if(o.windowSill){const w=o.windowSill;const mesh=wallBox(o.wall,w.offset+w.width/2,o.sill-w.thick/2,w.width,w.thick,w.overhang+(o.reveal??0),color,.95);const amount=w.overhang;if(o.wall==='back')mesh.position.z+=amount;if(o.wall==='front')mesh.position.z-=amount;if(o.wall==='left')mesh.position.x+=amount;if(o.wall==='right')mesh.position.x-=amount;}
         }
         environmentOpeningId=undefined;
-        for(const o of r.obstacles||[]){if(['fridge','dishwasher','hood','hob'].includes(o.type))continue;const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=o.id;mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===o.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===o.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===o.id;mesh.add(edge);}
+        for(const o of r.obstacles||[]){if(APPLIANCE_MODEL_TYPES.includes(o.type))continue;const mesh=new THREE.Mesh(new THREE.BoxGeometry(o.width,o.height,o.depth),new THREE.MeshStandardMaterial({color:o.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=o.id;mesh.position.set(x0+o.x+o.width/2,o.y+o.height/2,z0+o.z+o.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===o.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===o.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===o.id;mesh.add(edge);}
         // Объекты замера на стенах (розетки, батареи, короба, трубы…): боксы или цилиндры на своей стене.
         for(const [fi,f] of (r.fixtures||[]).entries()){
           const spec=FIXTURES[f.type],box=fixtureBox(r,f);

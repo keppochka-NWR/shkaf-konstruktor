@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {ovenModel} from './ovenGeometry';
+import {microwaveModel,builtInFridgeModel} from './applianceGeometry';
 import {tapModel,servicePipeModel} from './serviceGeometry';
 import type { Part } from "./model";
 import {premialSinkModel,layoutDrainModel} from './premialSinkGeometry';
@@ -259,8 +260,11 @@ export function hingeFallbackModel(file: string): THREE.Group | undefined {
 }
 
 /** Модель детали по её виду; ctx — сторона корпуса (для направляющих) и направление на корпус эксцентрика (для штока). */
-export function procModel(p: P & { look?: Part["look"] }, ctx: { open?:boolean; left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
-  if(p.id==='layout-oven')return ovenModel(ctx.open);
+export function procModel(p: P & { look?: Part["look"] }, ctx: { left?: boolean; headSign?: 1 | -1; face?: { axis: 0 | 1 | 2; dir: 1 | -1 } } = {}): THREE.Group | undefined {
+  // техника всегда закрыта (запрос Макса 22.10, K3): «Открыть створки» распахивает фасады мебели, дверцы духовки/СВЧ не трогает
+  if(p.id==='layout-oven')return ovenModel(false);
+  if(p.id==='layout-microwave')return microwaveModel(p.size);
+  if(p.id==='layout-fridge')return builtInFridgeModel(p.size);
   if(p.id.startsWith('layout-tap:'))return tapModel();
   if(p.id.startsWith('layout-waste:'))return servicePipeModel(p.size,false);
   if(p.id.startsWith('layout-water:'))return servicePipeModel(p.size,true,p.id.endsWith(':1'));
