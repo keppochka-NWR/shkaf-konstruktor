@@ -78,3 +78,40 @@ test('u2: «Задать зазор — сдвинуть модуль» сдви
   const wider=setGap(p,a.id,'right',g.right.gap-100);
   assert.ok(wider.modules[0].module.width>a.module.width);
 });
+
+test('v1: палитра 1288 × 2500 — «авто» не собирается, но двери выбираются (4 · секций 2), как у 1200',async()=>{
+  const {doorCountOptions}=await import('../src/paletteDoors');
+  assert.throws(()=>createModule('empty',1288,2500,550,initialModule()),'одна секция 1288 — створки шире предела');
+  const m=createModule('empty',1288,2500,550,initialModule(),4);
+  assert.equal(m.sections.length,2);assert.ok(doorCountOptions(m).includes(4));
+  assert.ok(doorCountOptions(createModule('empty',1200,2500,550,initialModule())).includes(4));
+});
+
+test('v2: «От левой стены» 40 у корпуса с автофальшью у стены — корпус ровно в 40 мм от стены, не 61',async()=>{
+  const {setWallDistance}=await import('../src/operations');
+  const {applyAutoFillers,bounds}=await import('../src/project');
+  const p=newProject();p.modules[0].x=0;const at=applyAutoFillers(p);
+  assert.ok(at.modules[0].module.wallFiller?.left,'у стены — планка');
+  const r=applyAutoFillers(setWallDistance(at,at.modules[0].id,'x',40)),a=r.modules[0];
+  assert.equal(a.x,40);assert.equal(bounds(a).x,40);
+});
+
+test('v3: полка в нишу над ящиками — число полок по validate; без ниши — 0 (причину даёт панель)',async()=>{
+  const {maxEvenShelves}=await import('../src/shelfCount');
+  const m=createModule('drawers',700,925,550,initialModule()),s=m.sections[0];
+  assert.equal(maxEvenShelves(m,s),0,'ящики до крыши — ниши нет');
+  s.drawers=2;s.drawerConfigs=s.drawerConfigs!.slice(0,2);
+  assert.equal(maxEvenShelves(m,s),1,'ниша над двумя ящиками — одна полка');
+});
+
+test('v5: число полок не сбрасывает проёмы, выставленные вручную; ровные полки — поровну, как раньше',async()=>{
+  const {setShelfCount}=await import('../src/shelfCount');
+  const {distribute,validate}=await import('../src/model');
+  const m=createModule('shelves',600,2000,550,initialModule()),s=m.sections[0];
+  s.shelves=[0.2,0.3,0.6];setShelfCount(m,s,4);
+  assert.deepEqual(s.shelves.filter(f=>[0.2,0.3,0.6].includes(f)),[0.2,0.3,0.6],'ручные полки на месте');
+  assert.equal(s.shelves.length,4);assert.equal(validate(m).length,0);
+  setShelfCount(m,s,2);assert.deepEqual(s.shelves,[0.2,0.3],'лишние сняты сверху');
+  const e=createModule('shelves',600,2000,550,initialModule()),es=e.sections[0];es.shelves=distribute(e,es,3);setShelfCount(e,es,5);
+  assert.deepEqual(es.shelves,distribute(e,es,5));
+});

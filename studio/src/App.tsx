@@ -171,7 +171,7 @@ function NumberField({
     const n = Number(draft);
     if(draft.trim()===''||!Number.isFinite(n)||n<min||n>max){
       setDraft(String(value));
-      setFieldError(`Введите число от ${min} до ${max} ${unit}. Изменение не применено.`);
+      setFieldError(`Введите число от ${min} до ${max} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`);
       return;
     }
     setFieldError('');
@@ -327,6 +327,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const propScroll=useRef<{top:number;mid:string}>({top:0,mid:''});
   useEffect(()=>{const el=propertiesRef.current;if(!el)return;const on=()=>{propScroll.current={top:el.scrollTop,mid:placed.id};};el.addEventListener('scroll',on,{passive:true});return()=>el.removeEventListener('scroll',on);},[placed.id]);
   useLayoutEffect(()=>{const el=propertiesRef.current,s=propScroll.current;if(!el||s.mid!==placed.id)return;if(Math.abs(el.scrollTop-s.top)>1)el.scrollTop=s.top;},[project]); // eslint-disable-line react-hooks/exhaustive-deps
+  // v4 (замер удобства 22.10): поле в фокусе («Проём 4») не прячется под нижнюю панель — правая панель докручивается до него
+  useEffect(()=>{const el=propertiesRef.current;if(!el)return;const on=(e:FocusEvent)=>{const t=e.target as HTMLElement|null;if(!t?.matches?.('input,select,textarea'))return;
+    requestAnimationFrame(()=>{const r=t.getBoundingClientRect(),box=el.getBoundingClientRect(),dock=document.querySelector('.project-dock')?.getBoundingClientRect(),bottom=Math.min(box.bottom,dock&&dock.top>box.top?dock.top:Infinity)-8;
+      if(r.bottom>bottom)el.scrollTop+=r.bottom-bottom;else if(r.top<box.top+8)el.scrollTop-=box.top+8-r.top;propScroll.current={top:el.scrollTop,mid:placed.id};});};
+    el.addEventListener('focusin',on);return()=>el.removeEventListener('focusin',on);},[placed.id]);
   const [gapDimensions,setGapDimensions]=useState(true);
   const selectedDetail=selectedPart?.mid===placed.id?parts(m).find(p=>p.id===selectedPart.pid):undefined;
   // Explicit selection opens only the relevant controls; initial module settings stay closed.
@@ -1693,7 +1698,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId));else{modifySection(a=>{a.shelves=a.shelves.slice(0,c);if(a.shelfLights){a.shelfLights=a.shelfLights.filter(j=>j<c);if(!a.shelfLights.length)delete a.shelfLights;}});setSelectedPart(null);}}}
                 />
                 {/* п.17 волны 22.10: число полок вводом — все полки секции встают поровну; предел — сколько помещается с проёмом 80 мм */}
-                {(()=>{const most=maxEvenShelves(m,s);return <NumberField unit="шт." label="Полок в секции" value={s.shelves.length} min={0} max={Math.max(most,s.shelves.length)} onChange={v=>{if(v>most){setError(`В секцию ${idx+1} помещается не больше ${most} полок поровну: между полками, дном, крышей и ящиками нужно не менее ${RULES.shelfMinClear} мм.`);return;}if(modifySection((a,n)=>setShelfCount(n,a,v)))setSelectedPart(null);}}/>;})()}
+                {(()=>{const most=maxEvenShelves(m,s);return <NumberField unit="шт." label="Полок в секции" value={s.shelves.length} min={0} max={RULES.maxShelves} onChange={v=>{/* v3: причина отказа — здесь, а не «от 0 до 0 шт..» поля */if(v>most){setError(most?`В секцию ${idx+1} помещается не больше ${most} полок поровну: между полками, дном, крышей и ящиками нужно не менее ${RULES.shelfMinClear} мм.`:`В секцию ${idx+1} полка не помещается: ${s.drawers?"над ящиками":"между дном и крышей"} нужно не менее ${2*RULES.shelfMinClear+RULES.panel} мм (по ${RULES.shelfMinClear} мм над и под полкой).`);return;}if(modifySection((a,n)=>setShelfCount(n,a,v)))setSelectedPart(null);}}/>;})()}
                 <p className="field-note">Введите число — полки встанут поровну по высоте секции. «+» добавляет полку в самый большой проём, не двигая остальные.</p>
                 {s.shelves.length > 0 && (
                   <>

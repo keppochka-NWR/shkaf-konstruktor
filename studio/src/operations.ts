@@ -146,6 +146,15 @@ export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:n
  }
    n=applyAutoFillers(n);
    if(Math.abs(bounds(n.modules.find(item=>item.id===mid)!)[axis]-distance)>0.01)throw Error('Этот отступ меняет состав угловых фальшей. Задайте другой отступ или отключите автофальши у выбранного корпуса и настройте стык отдельно.');
+ }else if(axis!=='y'){
+   // v2 (замер удобства 22.10): корпус стоял у стены с автофальшью (габарит с планкой 0, корпус 21); «От левой стены» 40 сдвигал
+   // габарит на 40 — корпус уезжал на 61, планка у стены пропадала, и отступ становился 61. Введённое число — итоговый отступ:
+   // после пересчёта автофальшей габарит модуля должен стоять ровно на distance (одна-две поправки).
+   for(let i=0;i<4;i++){
+     n=applyAutoFillers(n);const current=n.modules.find(item=>item.id===mid)!,correction=distance-bounds(current)[axis];
+     if(Math.abs(correction)<0.01)break;
+     for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[n.modules.find(item=>item.id===mid)!])item[axis]=(item[axis]??0)+correction;
+   }
  }
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;

@@ -11,6 +11,8 @@ import {rowShortageText,type RowShortage} from './rowFit';
 export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-base'|'kitchen-wall'|'worktop';
 const choices=[{id:'empty',label:'Пустой шкаф',icon:Box},{id:'shelves',label:'Стеллаж',icon:Rows3},{id:'wardrobe',label:'Для одежды',icon:Shirt},{id:'drawers',label:'Комод',icon:Archive},{id:'corner',label:'Угловой шкаф',icon:Box},{id:'desk',label:'Стол',icon:PanelTop},{id:'kupe-wardrobe',label:'Шкаф-купе',icon:Columns2},{id:'kitchen-row',label:'Кухня прямая',icon:CookingPot},{id:'kitchen-base',label:'Нижний кухонный',icon:PanelBottom},{id:'kitchen-wall',label:'Навесной кухонный',icon:PanelTopOpen},{id:'worktop',label:'Столешница',icon:RectangleHorizontal},{id:'kupe',label:'Двери купе',icon:SquareSplitHorizontal}] as const;
 const SIZES:Partial<Record<ModuleKind,[number,number,number]>>={'kitchen-row':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-base':[600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-wall':[600,KITCHEN.wallHeight,KITCHEN.wallDepth],worktop:[2400,KITCHEN.worktopThickness,KITCHEN.worktopDepth],corner:[1050,2000,450],desk:[1200,750,600],drawers:[600,850,550],kupe:[1600,2400,KUPE_DEPTH],'kupe-wardrobe':[1800,2400,600]};
+/** Типы распашных шкафов, между которыми габариты палитры переносятся при смене типа (v5). */
+const KEEP_SIZES=['empty','shelves','wardrobe','drawers'] as const;
 /** Двери купе: проём W×H, глубина зоны направляющих 100 мм. */
 export function createKupeModule(width:number,height:number,source:Module,doors?:number):Module{
   const m:Module={...initialModule(),name:'Двери купе',width,height,depth:KUPE_DEPTH,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,plinthHeight:0,sections:[section()],kupe:{...structuredClone(DEFAULT_KUPE),...(doors?{doors}:{})}};
@@ -98,7 +100,10 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
   const [kind,setKind]=useState<ModuleKind>(saved?.kind??'empty'),[width,setWidth]=useState(saved?.width??600),[height,setHeight]=useState(saved?.height??2000),[depth,setDepth]=useState(saved?.depth??550),[error,setError]=useState('');
   const [category,setCategory]=useState<string>(saved?.category??'wardrobe');
   const [kupeMount,setKupeMount]=useState<'free'|'inside'>(saved?.mount==='inside'?'inside':'free');
-  const pick=(next:ModuleKind)=>{setKind(next);const sz=SIZES[next]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);setError('');setDoors('auto');};
+  // v5 (замер удобства 22.10): смена типа шкафа (Пустой → Стеллаж) не сбрасывает введённые габариты, если новый тип их принимает;
+  // у кухни, купе, углового и стола размеры значат другое — там, как раньше, размеры типа
+  const pick=(next:ModuleKind)=>{const same=(KEEP_SIZES as readonly string[]).includes(kind)&&(KEEP_SIZES as readonly string[]).includes(next);let keep=false;if(same&&next!==kind){try{createModule(next,width,height,depth,source);keep=true;}catch{keep=false;}}
+    setKind(next);if(!keep&&next!==kind){const sz=SIZES[next]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);}setError('');setDoors('auto');};
   // п.21 волны 22.10: число дверей до «Добавить в комнату» — распашной шкаф (секции под двери) и двери купе; варианты — только допустимые по размерам
   const [doors,setDoors]=useState<'auto'|number>(typeof saved?.doors==='number'&&Number.isInteger(saved.doors)&&saved.doors>0&&saved.doors<8?saved.doors:'auto');
   useEffect(()=>{try{sessionStorage.setItem(PALETTE_KEY,JSON.stringify({category,kind,width,height,depth,mount:kupeMount,doors}));}catch{/* без хранилища выбор не запоминается */}},[category,kind,width,height,depth,kupeMount,doors]);
@@ -107,10 +112,14 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
     if(kupeKind){let why='';const ok=[1,2,3,4,5,6,7].filter(n=>{try{createKupeModule(width,height,source,n);return true;}catch(e){why=why||(e as Error).message;return false;}});return {options:ok,auto:ok.includes(DEFAULT_KUPE.doors)?DEFAULT_KUPE.doors:ok[0]??DEFAULT_KUPE.doors,why:ok.length?'':why};}
     if(kind!=='empty'&&kind!=='wardrobe')return null;
     // u3 (замер удобства 22.10): причина — по факту (высота, глубина…), а не всегда «измените ширину»
-    try{const base=createModule(kind,width,height,depth,source);return {options:doorCountOptions(base),auto:autoDoorCount(base),why:''};}catch(e){return {options:[],auto:0,why:(e as Error).message};}
+    try{const base=createModule(kind,width,height,depth,source);return {options:doorCountOptions(base),auto:autoDoorCount(base),why:'',autoArg:undefined as number|undefined};}catch(e){
+      // v1 (замер удобства 22.10): 1288 × 2500 — «авто» (одна секция, створки шире 600) не собирается, но 4 двери в 2 секциях можно:
+      // варианты считаем от собранного шкафа с любым допустимым числом дверей; «Авто» тогда — первый допустимый вариант
+      for(let n=2;n<=14;n++){try{const base=createModule(kind,width,height,depth,source,n),options=doorCountOptions(base);if(options.length)return {options,auto:options[0],why:'',autoArg:options[0] as number|undefined};}catch{/* следующее число */}}
+      return {options:[],auto:0,why:(e as Error).message,autoArg:undefined as number|undefined};}
   },[kind,kupeKind,width,height,depth,source]);
   const doorValue=doors!=='auto'&&doorChoice?.options.includes(doors)?doors:'auto';
-  const doorArg=doorValue==='auto'?(kupeKind?doorChoice?.auto:undefined):doorValue;
+  const doorArg=doorValue==='auto'?(kupeKind?doorChoice?.auto:doorChoice&&'autoArg' in doorChoice?doorChoice.autoArg:undefined):doorValue;
   // m1 (критик 22.10): шкаф не встаёт в ряд у стены — сообщение с вариантами; смена вида/размеров убирает предложение
   const [offer,setOffer]=useState<{module:Module;s:RowShortage}|null>(null);
   useEffect(()=>{if(offer){setOffer(null);setError('');}},[kind,width,height,depth,doorValue]); // eslint-disable-line react-hooks/exhaustive-deps

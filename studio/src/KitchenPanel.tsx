@@ -45,7 +45,7 @@ function Num({ label, value, min, max, step = 1, unit = "мм", change, note, mi
   const apply = () => {
     if (mixed && !draft.trim()) { setError(""); return; }
     const n = Number(draft.replace(",", "."));
-    if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}. Изменение не применено.`); setDraft(shown); return; }
+    if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`); setDraft(shown); return; }
     setError("");
     if ((mixed || Math.abs(n - value) > 1e-9) && change(n) === false) setDraft(shown);
   };
