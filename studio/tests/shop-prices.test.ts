@@ -42,11 +42,11 @@ test('кухня 3 м: позиции без счёта — «после фин�
   assert.ok(salesCSV(kitchen()).includes('Позиции после финального расчёта конструктором;7'));
 });
 
-test('ручная цена снимает пометку «после расчёта», остальные строки без счёта остаются «нет цены»',()=>{
+test('ручная цена снимает пометку «после расчёта», вырез под варочную — финальный расчёт (22.10)',()=>{
   const p=kitchen();p.calculation={markup:2.2,overrides:{'kitchen-leg':50}};
   const e=estimate(p);
   assert.ok(!e.pending.some(l=>l.id==='kitchen-leg'));assert.equal(e.lines.find(l=>l.id==='kitchen-leg')!.unitPrice,50);
-  assert.equal(pendingPrice('worktop-cut:hob'),null,'вырез под варочную — по-прежнему «уточнить»');
+  assert.ok(pendingPrice('worktop-cut:hob'),'вырез под варочную — с 22.10 тоже финальный расчёт (аудит сметы), итог не обнуляет');
   assert.equal(pendingPrice('gola-X'),null,'только профили Gola L и C');
 });
 

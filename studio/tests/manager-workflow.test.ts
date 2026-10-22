@@ -260,7 +260,7 @@ test('individual top opening is persisted and never silently prices standard hin
  const s=m.sections[0];s.doorHinges=['top'];assert.deepEqual(validate(m),[]);
  const d=parts(m).find(p=>p.role==='door')!,h=parts(m).find(p=>p.role==='handle')!;
  assert.equal(d.hinge,'top');assert.ok(h.size[0]>h.size[1]);assert.equal(parseModule(m).sections[0].doorHinges![0],'top');
- const quote=estimate(p);assert.ok(quote.missing.some(l=>l.id==='lift-mechanism'));assert.ok(!quote.lines.some(l=>l.id==='hinge'));
+ const quote=estimate(p);assert.ok(quote.pending.some(l=>l.id==='lift-mechanism'),'подъёмник — позицией финального расчёта (аудит 22.10), не молча как петли');assert.ok(!quote.lines.some(l=>l.id==='hinge'));
 });
 
 test('edge handles attach to the free facade edge and mirror to the other edge',()=>{
