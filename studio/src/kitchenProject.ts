@@ -190,25 +190,30 @@ export function placeWorktop(p: Project, source: Pick<Module, "decor">): { proje
   if (!bases.length) throw Error("Столешница ставится на нижние модули. Сначала добавьте нижние.");
   const worktops = p.modules.filter((a) => a.module.worktop);
   const covered = (a: PlacedModule) => worktops.some((w) => (w.rotation ?? 0) === 0 && Math.abs((w.y ?? 0) - (a.y ?? 0) - a.module.height) < 1 && w.z <= a.z + 1 && w.z + w.module.depth >= a.z + kitchenFaceOffset(a.module) - 1 && w.x < a.x + a.module.width - 1 && w.x + w.module.width > a.x + 1);
-  // первый непрерывный участок нижних без столешницы (стык соседей — до 2 мм)
+  // x3 (замер кухонь 22.10): все непрерывные участки нижних без столешницы (стык соседей — до 2 мм), а не только первый —
+  // k13: столешница ложилась на первый модуль 300, остальные нижние оставались без неё
+  const runs: PlacedModule[][] = [];
   let run: PlacedModule[] = [];
   for (const a of bases) {
-    if (covered(a)) { if (run.length) break; continue; }
+    if (covered(a)) { if (run.length) runs.push(run); run = []; continue; }
     const last = run[run.length - 1];
-    if (last && (Math.abs(last.x + last.module.width - a.x) > 2 || Math.abs(last.z + kitchenFaceOffset(last.module) - a.z - kitchenFaceOffset(a.module)) > 2 || Math.abs((last.y ?? 0) + last.module.height - (a.y ?? 0) - a.module.height) > 1)) break;
+    if (last && (Math.abs(last.x + last.module.width - a.x) > 2 || Math.abs(last.z + kitchenFaceOffset(last.module) - a.z - kitchenFaceOffset(a.module)) > 2 || Math.abs((last.y ?? 0) + last.module.height - (a.y ?? 0) - a.module.height) > 1)) { runs.push(run); run = []; }
     run.push(a);
   }
-  if (!run.length) throw Error("Все нижние уже под столешницей. Длина столешницы меняется в панели справа.");
-  const x0 = run[0].x, x1 = run[run.length - 1].x + run[run.length - 1].module.width, length = Math.round(x1 - x0);
-  const y = Math.max(...run.map((a) => (a.y ?? 0) + a.module.height));
-  const rowZ = Math.max(0, Math.min(...run.map(a => a.z - kitchenRearClearance(a.module))));
-  const rowDepth = Math.max(KITCHEN.worktopDepth, ...run.map(a => a.z + kitchenFaceOffset(a.module) + 24 - rowZ));
-  const pieces = length > 4100 ? [Math.round(length / 2), length - Math.round(length / 2)] : [length];
-  let x = x0;
-  const group = pieces.map((w) => { const m = cleanWorktop({ ...kitchenWorktop(initialModule(), w), depth: rowDepth, decor: source.decor, name: `Столешница ${w}` }); const e = validate(m)[0]; if (e) throw Error(e); const a: PlacedModule = { id: id(), x, y, z: rowZ, rotation: 0, module: m }; x += w; return a; });
+  if (run.length) runs.push(run);
+  if (!runs.length) throw Error("Все нижние уже под столешницей. Длина столешницы меняется в панели справа.");
+  const group: PlacedModule[] = [];
+  for (const r of runs) {
+    const x0 = r[0].x, x1 = r[r.length - 1].x + r[r.length - 1].module.width, length = Math.round(x1 - x0);
+    const y = Math.max(...r.map((a) => (a.y ?? 0) + a.module.height));
+    const rowZ = Math.max(0, Math.min(...r.map(a => a.z - kitchenRearClearance(a.module))));
+    const rowDepth = Math.max(KITCHEN.worktopDepth, ...r.map(a => a.z + kitchenFaceOffset(a.module) + 24 - rowZ));
+    const pieces = length > 4100 ? [Math.round(length / 2), length - Math.round(length / 2)] : [length];
+    let x = x0;
+    for (const w of pieces) { const m = cleanWorktop({ ...kitchenWorktop(initialModule(), w), depth: rowDepth, decor: source.decor, name: `Столешница ${w}` }); const e = validate(m)[0]; if (e) throw Error(e); group.push({ id: id(), x, y, z: rowZ, rotation: 0, module: m }); x += w; }
+  }
   return { project: { ...p, modules: [...p.modules, ...group] }, ids: group.map((a) => a.id) };
 }
-
 /** Прямая кухня по длине стены: продолжением справа или в начало стены; replace — вместо всех кухонных модулей (обычные шкафы остаются). */
 export function placeKitchenRow(p: Project, length: number, source: Pick<Module, "decor" | "facadeDecor">, replace = false): { project: Project; ids: string[] } {
   const group = createKitchenRow(length, { ...initialModule(), decor: source.decor, facadeDecor: source.facadeDecor }).map((a) => ({ ...a, module: cleanWorktop(a.module) }));

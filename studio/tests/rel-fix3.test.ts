@@ -115,3 +115,15 @@ test('v5: число полок не сбрасывает проёмы, выст
   const e=createModule('shelves',600,2000,550,initialModule()),es=e.sections[0];es.shelves=distribute(e,es,3);setShelfCount(e,es,5);
   assert.deepEqual(es.shelves,distribute(e,es,5));
 });
+
+test('x3: «Столешница над нижними» — на все участки нижних без столешницы, не только на первый',async()=>{
+  const {kitchenTemplate,placeKitchenModule,placeWorktop}=await import('../src/kitchenProject');
+  let p:Project={...newProject(),modules:[]};p.room={...p.room,width:5000};
+  const look=initialModule();
+  p=placeKitchenModule(p,kitchenTemplate('base-doors',300,look)).project;
+  const first=p.modules[0];
+  p={...p,modules:[...p.modules,...[600,600].map((w,i)=>({...structuredClone(first),id:'b'+i,x:first.x+1000+i*w,module:{...kitchenTemplate('base-doors',w,look)}}))]};
+  const r=placeWorktop(p,look),tops=r.project.modules.filter(a=>a.module.worktop).map(a=>a.module.width).sort((a,b)=>a-b);
+  assert.deepEqual(tops,[300,1200]);assert.equal(r.ids.length,2);
+  assert.throws(()=>placeWorktop(r.project,look),/Все нижние уже под столешницей/);
+});

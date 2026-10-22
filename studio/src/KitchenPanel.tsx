@@ -45,7 +45,10 @@ function Num({ label, value, min, max, step = 1, unit = "мм", change, note, mi
   const apply = () => {
     if (mixed && !draft.trim()) { setError(""); return; }
     const n = Number(draft.replace(",", "."));
-    if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`); setDraft(shown); return; }
+    if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`); setDraft(shown);
+      /* x2 (замер кухонь 22.10): отказ — и в общем сообщении студии (мойка 950, антресоль 200 «молча» не применялись) */
+      if (draft.trim() && Number.isFinite(n)) window.dispatchEvent(new CustomEvent("studio-error", { detail: `«${label}» ${fmt(n)} ${unit}: допустимо от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith(".")?"":"."} Изменение не применено.` }));
+      return; }
     setError("");
     if ((mixed || Math.abs(n - value) > 1e-9) && change(n) === false) setDraft(shown);
   };

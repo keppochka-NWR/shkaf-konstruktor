@@ -172,6 +172,8 @@ function NumberField({
     if(draft.trim()===''||!Number.isFinite(n)||n<min||n>max){
       setDraft(String(value));
       setFieldError(`Введите число от ${min} до ${max} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`);
+      // x2 (замер кухонь 22.10): отказ поля виден и в общем сообщении, а не только мелкой строкой под полем (950 молча оставалось 557)
+      if(draft.trim()!==''&&Number.isFinite(n))window.dispatchEvent(new CustomEvent('studio-error',{detail:`«${label}» ${n} ${unit}: допустимо от ${min} до ${max} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`}));
       return;
     }
     setFieldError('');
@@ -556,6 +558,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // Ширина изменилась — по правилу ряда (rowResize): сосед сужается, у стены — от стены; иначе просто замена модуля.
     let p: Project;
     try{p=placeInRow(project,placed.id,next);}catch(e){setError((e as Error).message);return false;}
+    // x4 (замер кухонь 22.10): корпус под потолком (антресоль из палитры) растёт по высоте вниз — верх остаётся у потолка,
+    // иначе «выходит за границы помещения», пока не задашь «От пола»
+    const top=(placed.y??0)+m.height;
+    if(next.height>m.height&&(placed.y??0)>0&&Math.abs(top-project.room.height)<=2){const y=Math.max(0,Math.round((top-next.height)*10)/10);p={...p,modules:p.modules.map(a=>a.id===placed.id?{...a,y}:a)};}
     return commitProject(p);
   }
   // Зазоры в ряду, «Дотянуть», «Вплотную», «Задать зазор…», растяжение мышью (запрос Макса 20.10.2026, РЕШЕНИЯ.md «Ширина в ряду»).

@@ -210,6 +210,9 @@ export function Scene(p: Props) {
       return;
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    // x5 (замер кухонь 22.10): проверка шейдеров (getProgramInfoLog) синхронно ждёт компиляцию каждой новой программы —
+    // в профиле перерисовки после правки это ~0,5 с на 12 действий; в рабочей сборке не нужна (картинка та же)
+    renderer.debug.checkShaderErrors = import.meta.env.DEV;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setClearColor(0xeaf0f2, 0);
