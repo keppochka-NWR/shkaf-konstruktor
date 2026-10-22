@@ -86,6 +86,7 @@ import {
   distribute,
   section,
   RULES,
+  MAX_SHELVES_REASON, MAX_DRAWERS_REASON,
   shelfGaps, shelfInsertionHeight, shelfMaxDepth,
   setShelfGap,
   drawerConfig, drawerOffsets, drawerStackHeight, drawerPitch, drawerCapTop, distributeDrawers, hasDrawerCap, drawersToRoof, drawersFillRoof, plinth, rearClear, needsWallFiller, cornerStrip, RAIL_PLACES, skewAngle, deskModule, deskGeometry, hasHandles,
@@ -216,14 +217,19 @@ function Counter({
   label,
   value,
   max,
+  maxHint,
   onChange,
 }: {
   label: string;
   value: number;
   max: number;
+  /** Почему «+» неактивен на пределе (подсказка и подпись под счётчиком — тот же текст, что у ПКМ «Добавить»). */
+  maxHint?: string;
   onChange: (n: number) => void;
 }) {
+  const full = value >= max;
   return (
+    <>
     <div className="counter">
       <span>{label}</span>
       <div>
@@ -237,13 +243,16 @@ function Counter({
         <b>{value}</b>
         <button
           aria-label={`Добавить: ${label}`}
-          disabled={value >= max}
+          disabled={full}
+          title={full ? maxHint : undefined}
           onClick={() => onChange(value + 1)}
         >
           <Plus size={14} />
         </button>
       </div>
     </div>
+    {full && maxHint && <p className="field-note counter-max" role="note" data-testid="counter-max">{maxHint}</p>}
+    </>
   );
 }
 export default function App({initialProject,projectKey,clientBar,onProjectChange,onImportBundle,saveManagedProject,externalVersion,viewKey,onEmptyProject,managedHistory}:{initialProject?:Project;projectKey?:string;clientBar?:React.ReactNode;onProjectChange?:(p:Project)=>void;onImportBundle?:(bundle:ClientBundle)=>void;saveManagedProject?:(p:Project)=>boolean;externalVersion?:number;viewKey?:string;onEmptyProject?:(p:Project)=>boolean;managedHistory?:{undo:()=>void;redo:()=>void;undoCount:number;redoCount:number}}={}) {
@@ -1665,6 +1674,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
+                  maxHint={MAX_SHELVES_REASON}
                   onChange={c=>{if(c>s.shelves.length)dropFilling('shelf',placed.id,selectedId,shelfInsertionHeight(m,selectedId));else{modifySection(a=>{a.shelves=a.shelves.slice(0,c);if(a.shelfLights){a.shelfLights=a.shelfLights.filter(j=>j<c);if(!a.shelfLights.length)delete a.shelfLights;}});setSelectedPart(null);}}}
                 />
                 {/* п.17 волны 22.10: число полок вводом — все полки секции встают поровну; предел — сколько помещается с проёмом 80 мм */}
@@ -1731,6 +1741,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   label="Ящики"
                   value={s.drawers}
                   max={RULES.maxDrawers}
+                  maxHint={MAX_DRAWERS_REASON}
                   onChange={c=>{if(c>s.drawers){if(drawerFitsOnTop(project,placed.id,selectedId)&&dropFilling('drawer',placed.id,selectedId,b.bottom+drawerStackHeight(s)))setDrawerBlock(null);else{const why=drawerAddReason(project,placed.id,selectedId);setError(why);setDrawerBlock({mid:placed.id,sid:selectedId,drawers:s.drawers,text:why});}}else{modifySection(a=>a.drawers=c);setSelectedPart(null);setDrawerBlock(null);}}}
                 />
                 {drawerBlock&&drawerBlock.mid===placed.id&&drawerBlock.sid===s.id&&drawerBlock.drawers===s.drawers&&<p className="field-note drawer-limit" role="note" data-testid="drawer-limit">{drawerBlock.text}</p>}

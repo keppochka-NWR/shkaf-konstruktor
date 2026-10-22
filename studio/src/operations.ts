@@ -1,7 +1,7 @@
 import {MEASUREMENT_RULES} from './measurement';
 import {createCornerUpper} from './cornerWardrobe';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
-import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,type Module,type Section} from './model';
+import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
@@ -34,8 +34,8 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   const source=p.modules.find(a=>a.id===mid)?.module;if(!source)throw Error('Перетащите элемент в корпус.');
   const target=source.sections.find(s=>s.id===sid),b=boxes(source).find(b=>b.id===sid);
   if(!target||!b)throw Error('Выберите секцию для наполнения.');
-  if(kind==='shelf'&&target.shelves.length>=RULES.maxShelves)throw Error(`В секции уже ${RULES.maxShelves} полок. Выберите другую секцию или удалите ненужную полку.`);
-  if((kind==='drawer'||kind==='mesh')&&target.drawers>=RULES.maxDrawers)throw Error(`В секции уже ${RULES.maxDrawers} ящиков. Выберите другую секцию или удалите ненужный ящик.`);
+  if(kind==='shelf'&&target.shelves.length>=RULES.maxShelves)throw Error(MAX_SHELVES_REASON);
+  if((kind==='drawer'||kind==='mesh')&&target.drawers>=RULES.maxDrawers)throw Error(MAX_DRAWERS_REASON);
   if(kind==='mesh'){
     const item=meshById(meshId);if(!item)throw Error('Элемент Лемана Про не найден в каталоге.');
     kind='drawer';drawer={slide:'ball',length:250,height:item.h,mesh:item.id};

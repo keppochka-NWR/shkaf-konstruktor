@@ -1,7 +1,7 @@
 // m4 (критик релиза 22.10): «+» у «Ящики» и поле «Ящиков в секции» отказывали без объяснения («Здесь недостаточно свободного
 // места»). Здесь — причина простыми словами: какое правило нарушает новый ящик на своём месте (поверх стопки ящиков), сколько
 // высоты свободно до ближайшей полки или крыши и сколько ящиков секция вмещает сейчас. Та же вставка, что у insertItem.
-import {boxes,drawerConfig,drawerPitch,drawerStackHeight,fillerSides,RULES,type Module,type Section} from './model';
+import {boxes,drawerConfig,drawerPitch,drawerStackHeight,fillerSides,RULES,MAX_DRAWERS_REASON,type Module,type Section} from './model';
 import {projectErrors,type Project} from './project';
 
 const plural=(n:number)=>n%10===1&&n%100!==11?'ящик':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'ящика':'ящиков';
@@ -33,7 +33,7 @@ export function drawerCapacity(p:Project,mid:string,sid:string):number{
 export function drawerAddReason(p:Project,mid:string,sid:string):string{
   const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(x=>x.id===sid),b=m&&boxes(m).find(x=>x.id===sid);
   if(!m||!s||!b)return 'Выберите секцию с ящиками.';
-  if(s.drawers>=RULES.maxDrawers)return `В секции уже ${RULES.maxDrawers} ящиков — это предел для одной секции. Поставьте ящики в соседнюю секцию.`;
+  if(s.drawers>=RULES.maxDrawers)return MAX_DRAWERS_REASON;
   const t=drawerOnTop(p,mid,sid),base=new Set(projectErrors(p)),n=s.drawers+1;
   const stack=drawerStackHeight(s),pitch=drawerPitch(drawerConfig(m,s,s.drawers),s.drawerGap),H=b.top-b.bottom;
   const shelf=s.shelves.map((v,j)=>({y:v*H,j})).filter(x=>x.y>stack).sort((a,z)=>a.y-z.y)[0];
