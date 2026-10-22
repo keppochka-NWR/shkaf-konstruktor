@@ -24,8 +24,29 @@ export function handleKind(h: Pick<Handle, "label">): HandleKind {
   if (l.includes("торцев") || l.includes("профил") || l.includes("hexa l-")) return "profile";
   return "bracket";
 }
-/** Форма процедурной 3D-модели (handleModels.ts): торцевая отдельно от накладного профиля. */
-export type HandleShape = "bracket" | "rail" | "knob" | "profile" | "edge";
+/** Форма процедурной 3D-модели (handleModels.ts): торцевая отдельно от накладного профиля, дуговая (классическая) скоба отдельно от прямой. */
+export type HandleShape = "bracket" | "arch" | "rail" | "knob" | "profile" | "edge";
+export const HANDLE_SHAPE_LABELS: Record<HandleShape, string> = {
+  bracket: "скоба", arch: "скоба дуговая", rail: "рейлинг", knob: "кнопка", profile: "профиль накладной", edge: "профиль торцевой",
+};
+/**
+ * Как распознана форма ручки: keyword — по слову-типу в названии (скоба, рейлинг, профиль, торцевая, кнопка, HEXA L-);
+ * series — по названию серии без слова-типа: у ручки две точки крепления (межосевое), это не рейлинг и не профиль → скоба;
+ * default — не распознана (форма по умолчанию «скоба»). Паспортных чертежей ручек Лемана в репозитории нет — форма выведена из названия.
+ */
+export type HandleFormSource = "keyword" | "series" | "default";
+/** Серии из каталога без слова-типа в названии (Лемана Про и цех): все — ручки-скобы на двух винтах. */
+const BRACKET_SERIES = ["uz 819", "ritiro", "colaptes", "ajax", "rs006", "trodos", "brante", "ницца", "камо", "viverra", "нота", "виви", "jet", "softbrasket", "илим"];
+export function handleFormSource(h: Pick<Handle, "label">): HandleFormSource {
+  const l = h.label.toLocaleLowerCase("ru-RU");
+  if (/рейлинг|кнопка|knob|торцев|профил|hexa|скоба/.test(l)) return "keyword";
+  if (BRACKET_SERIES.some((s) => l.includes(s))) return "series";
+  return "default";
+}
+/** Классическая отделка (старая/античная бронза, серия «Ницца») — дуговая скоба, как у классических ручек этой отделки. */
+function classicBracket(l: string) {
+  return /античн|стар[аоы][яей]? бронз|ницца/.test(l);
+}
 export type HandleFinish = "chrome" | "satin" | "aluminium" | "black" | "graphite" | "gold" | "bronze" | "wood" | "white";
 /** Покрытие → металлический PBR (MeshStandardMaterial). Дерево и белая эмаль — не металл. */
 export const HANDLE_FINISHES: Record<HandleFinish, { label: string; color: number; metalness: number; roughness: number }> = {
@@ -56,11 +77,20 @@ export function handleFinish(h: Pick<Handle, "label">): HandleFinish {
  * Размеры модели ручки, мм. Межосевое (cc) — из каталога; общая длина, вынос и сечение у поставщиков в каталоге не записаны,
  * поэтому берутся консервативно по типу (estimated: true) — типовые значения скоб/рейлингов/профилей.
  */
-export type HandleSpec = { shape: HandleShape; cc: number; total: number; projection: number; section: number; width: number; facets?: number; finish: HandleFinish; estimated: boolean };
+export type HandleSpec = { shape: HandleShape; cc: number; total: number; projection: number; section: number; width: number; facets?: number; finish: HandleFinish;
+  /** двухцветная (в названии «белая/хром», «чёрный/хром»): штанга — finish, ножки — legFinish */
+  legFinish?: HandleFinish; estimated: boolean };
 export function handleShape(h: Pick<Handle, "label">): HandleShape {
   const l = h.label.toLocaleLowerCase("ru-RU"), k = handleKind(h);
   if (k === "profile") return l.includes("торцев") || l.includes("hexa l-") ? "edge" : "profile";
+  if (k === "bracket" && classicBracket(l)) return "arch";
   return k;
+}
+/** Второй цвет двухцветной ручки: «… · белая/хром» → ножки хром. */
+function legFinish(l: string): HandleFinish | undefined {
+  const m = /\/\s*(хром|никель|золот\S*|чёрн\S*|черн\S*)/.exec(l);
+  if (!m) return undefined;
+  return handleFinish({ label: m[1] });
 }
 export function handleSpec(h: Pick<Handle, "label" | "len"> & Partial<Pick<Handle, "total" | "projection" | "section">>): HandleSpec {
   const shape = handleShape(h), cc = h.len, finish = handleFinish(h), l = h.label.toLocaleLowerCase("ru-RU");
@@ -68,11 +98,15 @@ export function handleSpec(h: Pick<Handle, "label" | "len"> & Partial<Pick<Handl
     : shape === "knob" ? { total: 30, projection: 28, section: 10, width: 30 }
     : shape === "profile" ? { total: cc + 32, projection: 22, section: 2, width: 30 }
     : shape === "edge" ? { total: l.includes("hexa l-") ? cc : cc + 32, projection: 18, section: 2, width: 20 }
+    // дуговая: труба Ø10 по дуге от розетки к розетке (розетки Ø14 → общая длина та же, что у прямой скобы: межосевое + 14)
+    : shape === "arch" ? { total: cc + 14, projection: 30, section: 10, width: 14 }
     : { total: cc + 14, projection: 28, section: 10, width: 10 };
+  const lf = shape === "bracket" || shape === "arch" ? legFinish(l) : undefined;
   return {
     shape, cc, finish,
     total: h.total ?? d.total, projection: h.projection ?? d.projection, section: h.section ?? d.section, width: d.width,
     ...(l.includes("hexa") && shape === "bracket" ? { facets: 6 } : {}),
+    ...(lf && lf !== finish ? { legFinish: lf } : {}),
     estimated: h.total === undefined || h.projection === undefined || h.section === undefined,
   };
 }
