@@ -325,13 +325,18 @@ function moveFreeEdge(p: Project, a: PlacedModule, side: Side, d: number): Proje
   const why = ownLocked(a.module);
   if (why) throw Error(`${quote(a.module)}: ${why}.`);
   const w = r1(a.module.width + d), keep: Side = side === "right" ? "left" : "right";
-  checkOwnWidth(a, w);
+  // Проверяем ту ширину, что получится: край у стены — автофальшь забирает 16 + 5 мм (settle). Было: проверка до settle по ширине
+  // с фальшем — «Дотянуть (+40; 21 мм — фальш)» отказывало «при ширине 1219: фасад шире 600», хотя станет 1198 (критик релиза 22.10, m2).
+  let next: Project;
+  try { next = settle(p, replace(p, [setWidthKeeping(a, w, keep)]), a.id, keep); }
+  catch (err) { checkOwnWidth(a, w); throw err; }
+  checkOwnWidth(a, next.modules.find((x) => x.id === a.id)?.module.width ?? w);
   if (d > 0.05) {
     const g = freeSpace(p, a)[side];
     if (g.gap < d - 0.1) throw Error(noRoom(a, side, gaps(p, a.id)[side], d));
   }
   rowObjectsCheck(p, a, rowContext(p, a), side, d);
-  return settle(p, replace(p, [setWidthKeeping(a, w, keep)]), a.id, keep);
+  return next;
 }
 /** Стык с соседом вплотную уходит на d мм наружу: модуль шире на d, сосед уже на d (его дальний край на месте). */
 function moveJoint(p: Project, a: PlacedModule, n: PlacedModule, side: Side, d: number): Project {

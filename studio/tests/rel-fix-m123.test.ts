@@ -64,6 +64,27 @@ test("m2: «Дотянуть (+79)» до стены прибавляет 58 —
   assert.equal(resizeInRow(q, "m2", 1158).modules.find((a) => a.id === "m2")!.module.width, 1158);
 });
 
+test("m2 (критик 22.10, повтор): «Дотянуть» с фальшем у стены проверяет ширину после фальша — 1158 + 40 = 1198, а не 1219", () => {
+  // ниша 2440: второй шкаф 1158 (2 двери), справа 61 мм до стены — встанет 40 мм, 21 мм — фальш
+  const p = { ...niche(), room: { ...niche().room, width: 2440 } };
+  const q = applyAutoFillers({ ...p, modules: [...p.modules, { id: "m2", x: 1221, y: 0, z: 30, module: second(1158) }] });
+  assert.deepEqual(projectErrors(q), []);
+  const g = gaps(q, "m2").right;
+  assert.deepEqual([g.gap, g.filler, g.fillWidth, fillAdd(g)], [61, 21, 1198, 40]);
+  // раньше: «при ширине 1219 мм: фасад шире 600» — проверка шла по ширине вместе с фальшем
+  const f = applyAutoFillers(fillGap(q, "m2", "right"));
+  assert.equal(f.modules.find((a) => a.id === "m2")!.module.width, 1198);
+  assert.equal(gaps(f, "m2").right.gap, 0, "дотянут до стены с фальшем");
+  assert.deepEqual(projectErrors(f), []);
+  // растяжение мышью до стены — та же проверка
+  const st = planStretch(q, "m2", "right", 61);
+  assert.deepEqual([st.problem, st.width, st.filler], [undefined, 1198, 21]);
+  // ширина, которая и после фальша не проходит, — по-прежнему понятный отказ с фактической шириной
+  const r = { ...p, room: { ...p.room, width: 2500 } };
+  const wide = applyAutoFillers({ ...r, modules: [...r.modules, { id: "m2", x: 1221, y: 0, z: 30, module: second(1158) }] });
+  assert.throws(() => fillGap(wide, "m2", "right"), /при ширине 1258 мм/);
+});
+
 test("m3: перенос 1100 от стены в ряд — минус целый лист раскроя (фальш у стены убран), подсказка в «Стоимости»", () => {
   const p = niche();
   const atWall = applyAutoFillers({ ...p, modules: [...p.modules, { id: "m2", x: 21, y: 0, z: 700, module: second(1100) }] });
