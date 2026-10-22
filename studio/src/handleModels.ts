@@ -3,7 +3,7 @@
 // важно для торцевых и профилей у края), Z — наружу от лица фасада (Z = 0 — лицо фасада).
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { HANDLE_FINISHES, handleSpec, type Handle, type HandleSpec } from "./handles";
+import { HANDLE_FINISHES, handleSpec, type Handle, type HandleFinish, type HandleSpec } from "./handles";
 
 /** Цилиндр вдоль Z от z0 до z1 в точке (x, y). */
 function post(r: number, z0: number, z1: number, x: number, y = 0, seg = 20) {
@@ -39,6 +39,14 @@ export function handleGeometries(spec: HandleSpec, facadeT = 16): THREE.BufferGe
     bar.translate(0, 0, zc);
     return [bar, ...[-1, 1].flatMap((k) => [post(legR, 0, zc, (k * cc) / 2), post(s * 0.62, 0, 1.6, (k * cc) / 2, 0, 28)])];
   }
+  if (shape === "arch") {
+    // Дуговая (классическая) скоба: труба Ø s по кубической дуге от розетки к розетке, вершина дуги — на выносе P; розетки Ø (total − cc)
+    const r = s / 2, top = P - r, k = (4 / 3) * top, a = cc / 2;
+    const curve = new THREE.CubicBezierCurve3(new THREE.Vector3(-a, 0, 0), new THREE.Vector3(-a, 0, k), new THREE.Vector3(a, 0, k), new THREE.Vector3(a, 0, 0));
+    const tube = new THREE.TubeGeometry(curve, 48, r, 16, false);
+    const rose = (total - cc) / 2;
+    return [tube, ...[-1, 1].map((k2) => post(rose, 0, 1.8, (k2 * cc) / 2, 0, 28))];
+  }
   if (shape === "bracket") {
     // Скоба: штанга со скруглёнными кромками (у HEXA — шестигранная) на двух ножках, межосевое cc
     const zc = P - s / 2, legR = s * 0.42;
@@ -72,14 +80,17 @@ export function cachedHandleGeometries(h: Handle, facadeT = 16) {
   if (!g) { g = handleGeometries(spec, facadeT); cache.set(key, g); }
   return g;
 }
-export function handleMaterial(h: Handle, envMap?: THREE.Texture | null) {
-  const f = HANDLE_FINISHES[handleSpec(h).finish];
+function finishMaterial(finish: HandleFinish, envMap?: THREE.Texture | null) {
+  const f = HANDLE_FINISHES[finish];
   return new THREE.MeshStandardMaterial({ color: f.color, metalness: f.metalness, roughness: f.roughness, envMap: envMap ?? null, envMapIntensity: 1 });
 }
-/** Модель ручки: группа мешей в мм в системе координат выше. */
+export function handleMaterial(h: Handle, envMap?: THREE.Texture | null) {
+  return finishMaterial(handleSpec(h).finish, envMap);
+}
+/** Модель ручки: группа мешей в мм в системе координат выше. Двухцветная — штанга (первая геометрия) своим покрытием, ножки вторым. */
 export function handleModel(h: Handle, envMap?: THREE.Texture | null, facadeT = 16) {
-  const g = new THREE.Group(), mat = handleMaterial(h, envMap);
-  for (const geo of cachedHandleGeometries(h, facadeT)) { const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; g.add(mesh); }
+  const spec = handleSpec(h), g = new THREE.Group(), mat = handleMaterial(h, envMap), legMat = spec.legFinish ? finishMaterial(spec.legFinish, envMap) : mat;
+  for (const [i, geo] of cachedHandleGeometries(h, facadeT).entries()) { const mesh = new THREE.Mesh(geo, i === 0 ? mat : legMat); mesh.castShadow = true; g.add(mesh); }
   g.userData.spec = handleSpec(h);
   return g;
 }

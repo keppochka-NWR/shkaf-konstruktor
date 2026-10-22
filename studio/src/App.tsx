@@ -105,7 +105,8 @@ import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { decorPrice, withPriceStamp } from "./pricing";
-import { HANDLES, DEFAULT_HANDLE, handleById } from "./handles";
+import { HANDLES, DEFAULT_HANDLE, handleById, handleShape, HANDLE_SHAPE_LABELS } from "./handles";
+import { HandleThumb } from "./HandleThumb";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
 import { ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
 import { AluPicker, AluDrawersCheck } from "./AluPicker";
@@ -2174,7 +2175,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         const applyHandle=(n:Module)=>{if(handleFace){setFacadeHandle(n,handleFace,h.id);return;}if(handleTarget==='drawers'){n.drawerHandleId=h.id;for(const section of n.sections)for(const c of section.drawerConfigs??[])delete c.handleId;}else{for(const section of n.sections)delete section.doorHandles;n.drawerHandleId??=n.handleId??DEFAULT_HANDLE;n.handleId=value;}};
                         const ok=handleFace||materialScope==='active'?modify(applyHandle):commitProject({...project,modules:project.modules.map(a=>{if(materialScope!=='all'&&!liveGroupIds.includes(a.id))return a;const module=structuredClone(a.module);applyHandle(module);return {...a,module};})});
                         if(!ok)return;setMaterialScope('active');setModal(null);setSearch('');
-                      }}><span className="handle-bar" style={{width:Math.min(100,Math.max(14,h.len/12))+'px'}}/><span className="handle-name">{h.label}</span><span className="handle-meta">{h.len} мм{h.art?' · арт. '+h.art:''}</span>{current&&<Check size={15}/>}</button>;
+                      }}><HandleThumb h={h}/><span className="handle-name">{h.label}<small className="handle-form">{HANDLE_SHAPE_LABELS[handleShape(h)]}</small></span><span className="handle-meta">{h.len} мм{h.art?' · арт. '+h.art:''}</span>{current&&<Check size={15}/>}</button>;
                     })}</div>;
                   })}
                 </div>
