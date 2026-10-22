@@ -1,0 +1,42 @@
+/* Окно «Фурнитура» (менеджеры 22.10.2026, п. 15): группы слева, карточки вариантов справа. */
+.hw-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(28, 38, 46, .42); }
+.hw-window { width: min(980px, 100%); max-height: min(720px, calc(100dvh - 32px)); display: flex; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: 0 24px 60px rgba(20, 30, 40, .28); overflow: hidden; color: #24343c; }
+.hw-head { display: flex; justify-content: space-between; gap: 16px; padding: 16px 20px 10px; border-bottom: 1px solid var(--line, #dce1e5); }
+.hw-head h2 { margin: 0; font-size: 20px; }
+.hw-head p { margin: 4px 0 0; color: #6a7d87; font-size: 13px; }
+.hw-close { align-self: start; display: inline-flex; padding: 6px; border-radius: 8px; background: transparent; color: #4d6370; }
+.hw-close:hover { background: #eef3f6; }
+.hw-scope { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; background: #fbfcfd; border-bottom: 1px solid var(--line, #dce1e5); flex-wrap: wrap; }
+.hw-scope label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #4d6370; }
+.hw-scope select { font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line, #dce1e5); background: #fff; max-width: 360px; }
+.hw-total { font-size: 13px; color: #4d6370; }
+.hw-total b { color: #2449d6; font-size: 16px; }
+.hw-main { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 0; flex: 1; }
+.hw-groups { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; border-right: 1px solid var(--line, #dce1e5); overflow-y: auto; }
+.hw-groups button { text-align: left; padding: 9px 12px; border-radius: 8px; font-size: 14px; font-weight: 550; color: #4d6370; background: transparent; }
+.hw-groups button:hover { background: #eef3f6; }
+.hw-groups button[aria-pressed="true"] { background: #2449d6; color: #fff; }
+.hw-list { padding: 12px 18px 16px; overflow-y: auto; min-height: 0; }
+.hw-hint { margin: 0 0 10px; color: #6a7d87; font-size: 13px; }
+.hw-search { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 10px; border: 1px solid var(--line, #dce1e5); border-radius: 8px; color: #6a7d87; }
+.hw-search input { flex: 1; border: 0; outline: 0; font-size: 14px; background: transparent; }
+.hw-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.hw-card { position: relative; display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: start; text-align: left; padding: 12px; border-radius: 12px; border: 1px solid var(--line, #dce1e5); background: #fff; color: inherit; font: inherit; cursor: pointer; }
+.hw-card:hover { border-color: #9fb3ff; box-shadow: 0 2px 10px rgba(36, 73, 214, .08); }
+.hw-card[aria-pressed="true"] { border: 2px solid #2449d6; padding: 11px; background: #f5f7ff; cursor: default; }
+.hw-icon { display: flex; align-items: center; justify-content: center; width: 72px; height: 48px; border-radius: 8px; background: #f4f6f7; }
+.hw-icon svg { width: 64px; height: 40px; }
+.hw-text { display: grid; gap: 4px; min-width: 0; }
+.hw-text b { font-size: 14px; line-height: 1.25; padding-right: 18px; }
+.hw-props { display: flex; flex-wrap: wrap; gap: 4px; }
+.hw-props span { font-size: 11.5px; padding: 2px 7px; border-radius: 999px; background: #eef3f6; color: #4d6370; }
+.hw-price { font-size: 13px; font-weight: 650; }
+.hw-price.up { color: #b4561b; }
+.hw-price.down { color: #2f7d4f; }
+.hw-price.same, .hw-price.wait, .hw-price.na { color: #7a8b94; font-weight: 500; }
+.hw-price.current { color: #2449d6; }
+.hw-check { position: absolute; top: 10px; right: 10px; color: #2449d6; }
+.hw-note { margin: 0; padding: 10px 20px; background: #eef3ff; color: #1f3aa8; font-size: 13px; border-top: 1px solid var(--line, #dce1e5); }
+.dock-hw-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dock-hw-summary span { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #eef3f6; color: #4d6370; }
+@media (max-width: 720px) { .hw-main { grid-template-columns: 1fr; } .hw-groups { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line, #dce1e5); } .hw-groups button { white-space: nowrap; } }
