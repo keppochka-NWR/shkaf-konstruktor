@@ -91,7 +91,7 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors, selectedPid }: {
           <span>{s.label}</span></button>)}</div>
       </div>
 </SettingsSection><SettingsSection title="Комплектация и открывание">
-      <label className="hardware-field kupe-check"><span><input type="checkbox" aria-label="Доводчики купе" checked={!!k.softClose} onChange={(e) => set({ softClose: e.target.checked || undefined })} /> Доводчики <small className="field-note" data-testid="kupe-soft-price">+{KUPE_SOFT_CLOSE.toLocaleString("ru-RU")} ₽ за дверь</small></span></label>
+      <label className="hardware-field kupe-check"><span><input type="checkbox" aria-label="Доводчики купе" checked={!!k.softClose} onChange={(e) => set({ softClose: e.target.checked || undefined })} /> Доводчики <small className="kupe-soft-price" data-testid="kupe-soft-price">+{KUPE_SOFT_CLOSE.toLocaleString("ru-RU")} ₽ за дверь</small></span></label>
       <label className="hardware-field kupe-check"><span><input type="checkbox" aria-label="Плёнка купе" checked={!!k.film} onChange={(e) => set({ film: e.target.checked || undefined })} /> Плёнка на наполнение (армирующая / противоосколочная)</span></label>
       <button type="button" className="outline" onClick={() => setOpenDoors(!openDoors)}>{openDoors ? "Закрыть двери" : "Сдвинуть двери — посмотреть внутрь"}</button>
 

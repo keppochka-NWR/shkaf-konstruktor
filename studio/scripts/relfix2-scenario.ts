@@ -7,7 +7,7 @@ import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, MAX_DRAWERS_REASON } from "../src/model";
 import { appendModule, applyAutoFillers, type Project } from "../src/project";
-import { createModule } from "../src/ModulePalette";
+import { createModule, createKupeModule } from "../src/ModulePalette";
 
 const [url, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -23,6 +23,11 @@ function drawers(): Project {
   const m = initialModule();
   m.sections[0] = { ...m.sections[0], drawers: 5 };
   return { version: 3, room: { width: 3600, depth: 3000, height: 2700, openings: [] }, modules: [{ id: "a", x: 500, y: 0, z: 3, rotation: 0, module: m }] };
+}
+/** (купе) Двери купе 1500×2600, 2 двери, Стандарт, зеркало серебро — случай сверки критика (Q05: 33 547 без доводчиков). */
+function kupe(): Project {
+  const m = createKupeModule(1500, 2600, initialModule());
+  return { version: 3, room: { width: 3600, depth: 3000, height: 2700, openings: [] }, modules: [{ id: "k", x: 500, y: 0, z: 3, rotation: 0, module: m }] };
 }
 
 const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
@@ -110,6 +115,22 @@ try {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(400);
   check("(h) Esc закрывает окно (фокус в «Применить»)", !(await dlg.isVisible().catch(() => false)));
+
+  // (купе) цена у флажка «Доводчики» и итог «под ключ» с доводчиками
+  await load(kupe());
+  const total = async () => (await page.locator(".kupe-total b").first().innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+  const t0 = await total();
+  check("(купе) без доводчиков — 33 547 ₽ (как Q05)", /33 547/.test(t0), t0);
+  await page.locator("summary", { hasText: "Комплектация и открывание" }).first().click();
+  await page.waitForTimeout(300);
+  const hint = (await page.getByTestId("kupe-soft-price").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
+  check("(купе) у «Доводчики» видна цена за дверь", /\+5 600 ₽ за дверь/.test(hint) && (await page.getByTestId("kupe-soft-price").isVisible()), hint);
+  await shot("k-01-soft-hint");
+  await page.getByLabel("Доводчики купе").click();
+  await page.waitForTimeout(500);
+  const t1 = await total();
+  check("(купе) с доводчиками — 44 747 ₽ (33 547 + 2 × 5 600)", /44 747/.test(t1), t1);
+  await shot("k-02-soft-on");
 } catch (e) {
   check("сценарий без исключений", false, (e as Error).message);
   await shot("zz-error").catch(() => {});

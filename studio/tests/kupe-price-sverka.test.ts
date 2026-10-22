@@ -25,5 +25,5 @@ test("купе 1500×2600×2 зеркало: без доводчиков 33 547,
 
 test("купе: у флажка «Доводчики» видна цена за дверь", () => {
   const src = readFileSync(new URL("../src/KupePanel.tsx", import.meta.url), "utf8");
-  assert.match(src, /Доводчики <small className="field-note" data-testid="kupe-soft-price">\+\{KUPE_SOFT_CLOSE\.toLocaleString\("ru-RU"\)\} ₽ за дверь<\/small>/);
+  assert.match(src, /Доводчики <small className="kupe-soft-price" data-testid="kupe-soft-price">\+\{KUPE_SOFT_CLOSE\.toLocaleString\("ru-RU"\)\} ₽ за дверь<\/small>/);
 });

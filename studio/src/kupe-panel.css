@@ -18,6 +18,8 @@
 .kupe-sections svg { width: 20px; height: 34px; fill: none; stroke: #4d6370; stroke-width: 1.2; }
 .kupe-sections span { font-size: 9.5px; line-height: 1.15; color: #4d6370; text-align: center; overflow-wrap: normal; word-break: normal; }
 .kupe-check span { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+/* Цена доводчика у флажка (сверка купе 22.10): видна и в простом режиме — .field-note там скрыт. */
+.kupe-check .kupe-soft-price { font-weight: 400; font-size: 12px; color: var(--muted, #667085); }
 /* задание 23: схема дверей с секциями — клик по секции выбирает её полотно */
 .kupe-leaves { display: flex; flex-wrap: wrap; gap: 6px; }
 .kupe-leaf { width: 44px; height: 87px; }
