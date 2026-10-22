@@ -4,7 +4,9 @@ import {placementHTML} from './placementPlan';
 import {DrawingsPanel} from './DrawingsPanel';
 import {SalesSummary} from './SalesSummary';
 import {pendingTotalLabel} from './pendingPrices';
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import {modulePrices} from './itemPrices';
+import {loadSwatches,type Swatch} from './decorSwatches';
 import { type Project } from "./project";
 import type { OutputTab } from "./ProjectDock";
 import {
@@ -66,11 +68,15 @@ export function OutputPanel({
   const [quoteImage,setQuoteImage]=useState<string|null>(null);
   const calculated=useMemo(()=>tab==='quote'?estimate(project,sheets):null,[tab,project,sheets]);
   const q = project.offer || { customer: "", price: "", notes: "" };
+  // КП (менеджеры 22.10.2026, п. 9): цена по каждому изделию — доля цены КП (переключатель offer.itemPrices), образцы декоров для материалов
+  const items=useMemo(()=>tab==='quote'&&q.itemPrices!==false&&q.price.trim()&&Number(q.price)>0?modulePrices(project,Number(q.price)):null,[tab,project,q.price,q.itemPrices]);
+  const [swatches,setSwatches]=useState<Record<string,Swatch>>({});
+  useEffect(()=>{if(tab!=='quote')return;let live=true;void loadSwatches(project.modules.flatMap(a=>[a.module.decor,a.module.facadeDecor,a.module.drawerFacadeDecor??a.module.facadeDecor])).then(s=>{if(live)setSwatches(s);});return ()=>{live=false;};},[tab,project]);
   const [seller,setSeller]=useState<SellerInfo>(loadSeller);
   // раскрыто, пока продавец не задан; дальше — как оставил менеджер (не схлопывается при вводе)
   const [sellerOpen]=useState(()=>!hasSeller(seller));
   function changeSeller(s:SellerInfo){if(s.name===seller.name&&s.contacts===seller.contacts)return;setSeller(s);saveSeller(s);}
-  const quotePreview=useMemo(()=>tab==='quote'&&quoteImage!==null?quoteHTML(project,q.customer,q.price,q.notes,quoteImage||undefined,{seller,cost:calculated}):'',[tab,project,quoteImage,q.customer,q.price,q.notes,seller,calculated]);
+  const quotePreview=useMemo(()=>tab==='quote'&&quoteImage!==null?quoteHTML(project,q.customer,q.price,q.notes,quoteImage||undefined,{seller,cost:calculated,items,swatches}):'',[tab,project,quoteImage,q.customer,q.price,q.notes,seller,calculated,items,swatches]);
   const clientSpec=useMemo(()=>tab==='client-spec'?clientSpecificationHTML(project,q.customer,seller):'',[tab,project,q.customer,seller]);
   const order=orderNumber(project),production=PRODUCTION_TABS.includes(tab);
   // Номер заказа для производства: печатается на бирках, картах и в имени комплекта; без него выдача производству закрыта.
@@ -256,6 +262,7 @@ export function OutputPanel({
               onBlur={e=>{if(e.target.value!==q.notes&&!update({...project,offer:{...q,notes:e.target.value}}))e.target.value=q.notes;}}
             />
           </label>
+          <label className="hardware-field quote-item-prices"><input type="checkbox" aria-label="Цены по изделиям в КП" checked={q.itemPrices!==false} onChange={ev=>{const {itemPrices:_,...rest}=q;update({...project,offer:ev.target.checked?rest:{...rest,itemPrices:false}});}}/> Цены по изделиям в КП{q.itemPrices!==false&&q.price.trim()&&!items?' — не делятся: у одного из изделий нет цены':''}</label>
           <details className="seller-fields" open={sellerOpen}>
             <summary>Продавец в шапке КП{hasSeller(seller)?': '+(seller.name.trim()||'контакты заданы'):' — не задан'}</summary>
             <label className="hardware-field">Продавец (салон, ИП или компания)<input aria-label="Продавец для КП" defaultValue={seller.name} maxLength={160} onBlur={e=>changeSeller({...seller,name:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>
@@ -267,13 +274,13 @@ export function OutputPanel({
           <div className="output-actions">
             <button
               className="primary"
-              onClick={() => {setImageError('');try{if(!printDocument(quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated}),'Коммерческое предложение'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
+              onClick={() => {setImageError('');try{if(!printDocument(quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated,items,swatches}),'Коммерческое предложение'))setImageError('Браузер не открыл печать. Скачайте HTML и напечатайте его.');}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
             >
               Сохранить КП в PDF
             </button>
             <button
               className="outline"
-              onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated}));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
+              onClick={() => {setImageError('');try{saveFile("Коммерческое предложение.html",quoteHTML(project,q.customer,q.price,q.notes,capture(),{seller,cost:calculated,items,swatches}));}catch(e){setImageError(e instanceof Error?e.message:'Не удалось подготовить КП.');}}}
             >
               Скачать КП (HTML)
             </button>

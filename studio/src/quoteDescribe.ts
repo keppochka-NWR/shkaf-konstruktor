@@ -2,7 +2,9 @@
 // шкаф — корпус и наполнение; двери купе — профиль и наполнение по полотнам; столешница — материал и толщина; кухонный модуль —
 // тип, ящики фактическим числом, фасады фактическим материалом (Вернисаж — серия, фрезеровка, покрытие; алюминий — профиль, вставка).
 // Нулевые позиции («пантографов: 0») не печатаются. Внутренних слов (раскрой, Базис, прайс, закупка) здесь нет.
-import { parts, isDrawerFront, type Module, type Part } from "./model";
+import { parts, isDrawerFront, drawerConfig, facadeHandleId, type Module, type Part } from "./model";
+import { HINGE_BRANDS, SLIDE_MOTIONS, slideSystem } from "./hardware";
+import { handleById, DEFAULT_HANDLE } from "./handles";
 import { kupeSystem, kupeColor, kupeDoorFill, kupeSections } from "./kupe";
 import { worktopLabel } from "./kitchen";
 import { aluProfile, aluColor, aluFill } from "./alu";
@@ -78,6 +80,36 @@ function worktopDescription(m: Module): ModuleDescription {
   if (sinks) filling.push(`вырез под мойку${sinks > 1 ? " — " + sinks : ""}`);
   if (hobs) filling.push(`вырез под варочную панель${hobs > 1 ? " — " + hobs : ""}`);
   return { kind: "Столешница", size: `${m.width} × ${m.depth} × ${w.thickness}`, materials: [`Столешница: ${worktopLabel(w)}, ${w.thickness} мм`], filling };
+}
+
+/** «Что внутри и как открывается» простыми словами для КП (менеджеры 22.10.2026, п. 9): двери и петли, ручки или push-to-open,
+ *  ящики и их направляющие. Только факты модели — без нагрузок и выдвижения, которых нет в каталоге. Купе и столешница — пусто
+ *  (у них всё сказано в describeModule). */
+export function plainFeatures(m: Module): string[] {
+  if (m.kupe || m.worktop) return [];
+  let all: Part[];
+  try { all = parts(m); } catch { return []; }
+  const out: string[] = [];
+  const doors = all.filter((d) => d.role === "door" && d.id !== "slope-filler").length;
+  const push = m.doorOpen === "push", hb = HINGE_BRANDS[m.hingeBrand ?? "gtv"] ?? HINGE_BRANDS.gtv;
+  if (doors && m.kitchen?.hinges !== false) {
+    const lift = all.some((d) => d.role === "door" && d.hinge === "top");
+    out.push(`${doors} ${plural(doors, ["распашная дверь", "распашные двери", "распашных дверей"])}${m.doorMount === "inset" ? " (вкладные — внутри корпуса)" : ""}${lift ? ", есть подъёмная" : ""}`);
+    out.push(push ? `открывание нажатием (push-to-open), без ручек: петли ${hb.label} без пружины и толкатели` : `петли ${hb.label} с доводчиком — двери закрываются плавно и тихо`);
+  }
+  const handles = new Map<string, number>();
+  for (const d of all) if (d.role === "handle") { const h = handleById(facadeHandleId(m, d.id) ?? DEFAULT_HANDLE); handles.set(h.label, (handles.get(h.label) ?? 0) + 1); }
+  if (handles.size) out.push("ручки: " + [...handles].map(([l, n]) => `${l} — ${n} шт.`).join("; "));
+  const systems = new Map<string, number>();
+  for (const s of m.sections) for (let j = 0; j < (s.drawers || 0); j++) {
+    const c = drawerConfig(m, s, j);
+    if (c.mesh) { systems.set("выдвижная сетка", (systems.get("выдвижная сетка") ?? 0) + 1); continue; }
+    const sys = slideSystem(c), kind = sys.slide === "ball" ? "шариковых направляющих" : "скрытых направляющих (под дном ящика, снаружи не видны)";
+    const key = `на ${kind}, ${SLIDE_MOTIONS[sys.motion] === "push-to-open" ? "открывание нажатием" : SLIDE_MOTIONS[sys.motion]}`;
+    systems.set(key, (systems.get(key) ?? 0) + 1);
+  }
+  for (const [k, n] of systems) out.push(k === "выдвижная сетка" ? `${n} ${plural(n, ["выдвижная сетка", "выдвижные сетки", "выдвижных сеток"])}` : `${n} ${plural(n, ["ящик", "ящика", "ящиков"])} ${k}`);
+  return out;
 }
 
 /** Описание модуля для клиента по его типу. */
