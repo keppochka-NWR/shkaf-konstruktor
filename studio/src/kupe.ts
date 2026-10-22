@@ -133,8 +133,13 @@ export function kupeLines(m: Module, ldsp?: (decor: string) => { price: number |
   if (k.softClose) out.push({ id: "kupe-soft", label: "Купе · доводчики", quantity: N, unit: "дв.", unitPrice: KUPE_SOFT_CLOSE, source: src });
   if (sec.rowRatios.length * sec.colRatios.length >= KUPE_COMPLEX_THRESHOLD) out.push({ id: "kupe-work:complex", label: "Купе · сложная сборка (от 4 секций)", quantity: N, unit: "дв.", unitPrice: KUPE_COMPLEX_WORK, source: src });
   if (k.film) for (const [n, a] of fillArea) { const f = kupeFilm(kupeFill(n)); if (f) out.push({ id: "kupe-film:" + f.name, label: "Купе · " + f.name, quantity: a, unit: "м²", unitPrice: f.p, source: src }); }
+  // K5 (критик 22.10): количество — до тысячных, как в смете (estimate округляет количество строк): панель «Двери купе под ключ»
+  // и графа «Двери купе» сметы считают одни и те же числа (было 60 139 против 60 141 ₽: м² 5,645312 в панели, 5,645 в смете)
+  for (const l of out) l.quantity = Math.round(l.quantity * 1000) / 1000;
   return out;
 }
+/** Итог дверей купе «под ключ» — та же сумма, что графа «Двери купе» сметы (одно округление до рубля). */
+export const kupeTotal = (lines: readonly { quantity: number; unitPrice: number | null }[]) => Math.round(lines.reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0));
 
 /** Внешний вид наполнения в 3D по классу материала калькулятора купе. */
 export function kupeFillLook(f: KupeFill): NonNullable<Part["look"]> {

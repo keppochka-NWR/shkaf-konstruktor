@@ -1,4 +1,4 @@
-﻿// «Красивая смета в Excel» (менеджеры 22.10.2026, п. 8): настоящий .xlsx вместо CSV — три листа:
+// «Красивая смета в Excel» (менеджеры 22.10.2026, п. 8): настоящий .xlsx вместо CSV — три листа:
 // «Смета» — позиции по группам (материалы / работа цеха / фурнитура / двери купе / после финального расчёта) с подытогами формулами SUM;
 // «Детали» — деталировка (как «Деталировка CSV», только с номером заказа — правило T3 18.10.2026);
 // «Кратко для клиента» — изделия, цена по изделиям и итог, БЕЗ закупочных цен и коэффициентов.
@@ -10,7 +10,7 @@ import { describeModule } from "./quoteDescribe";
 import { pendingTotalLabel } from "./pendingPrices";
 import { CLIENT_SOURCE_IN_SHEET } from "./clientPrices";
 import { PUBLIC_BUILD } from "./buildMode";
-import { modulePrices } from "./itemPrices";
+import { moduleQuote, PENDING_ITEM_PRICE } from "./itemPrices";
 import type { Project } from "./project";
 import { XS, str, num, fml, empty, ref, workbookFiles, workbookZip, type XCell, type XSheet, type XStyle } from "./xlsx";
 
@@ -151,7 +151,7 @@ export function detailsSheet(p: Project): XSheet {
 
 /** Лист «Кратко для клиента»: изделия простыми словами, цена по изделиям (если включено и считается) и итог. Только розница. */
 export function clientSheet(p: Project, e: Estimate, created = new Date()): XSheet {
-  const items = p.offer?.itemPrices === false ? null : modulePrices(p, e.retail);
+  const iq = p.offer?.itemPrices === false ? null : moduleQuote(p, e.retail), items = iq?.prices ?? null;
   const W = items ? 6 : 5, rows: XCell[][] = [];
   rows.push(row([str("Стоимость проекта · " + title(p), XS.title)], W, XS.text));
   rows.push(row([str(stamp(created) + " · предварительный расчёт", XS.subtitle)], W, XS.text));
@@ -164,7 +164,7 @@ export function clientSheet(p: Project, e: Estimate, created = new Date()): XShe
   p.modules.forEach((a, i) => {
     const d = describeModule(a.module), kind = d.kind + (d.kind !== a.module.name ? "\n" + a.module.name : ""), mats = d.materials.join("\n"), fill = d.filling.length ? d.filling.join("\n") : "—";
     heights[rows.length] = Math.max(15, 13 * Math.max(linesIn(kind, 28), linesIn(mats, items ? 42 : 44), linesIn(fill, items ? 28 : 32)) + 4);
-    rows.push([num(i + 1, XS.numCenter), str(kind), str(d.size), str(mats), str(fill), ...(items ? [num(items[i], XS.money)] : [])]);
+    rows.push([num(i + 1, XS.numCenter), str(kind), str(d.size), str(mats), str(fill), ...(items ? [items[i] === 0 && iq!.pending[i] ? str(PENDING_ITEM_PRICE, XS.note) : num(items[i], XS.money)] : [])]);
   });
   const last = rows.length;
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);

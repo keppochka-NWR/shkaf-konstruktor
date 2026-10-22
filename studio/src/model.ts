@@ -378,6 +378,9 @@ export type Module = {
    *  корпуса на столько вперёд; дно, цоколь, перегородки, полки и задник — на глубине корпуса depth. Двери купе стоят между
    *  боковинами под крышей, нижняя направляющая на полу. Ширина и высота — до листа 2750 (крыша и боковины цельные). */
   kupeZone?: number;
+  /** K6 (критик 22.10): корпус шкафа-купе с дверями купе ОТДЕЛЬНО (перед корпусами) — высота до листа 2750, как у корпуса с дверями
+   *  внутри (kupeZone): шкаф-купе 2600 одинаково принимается при обеих установках дверей; предел дверей — по системе ARISTO (kupeErrors). */
+  kupeBody?: true;
   /** Кухонный корпус (kitchen.ts): нижний на ножках с цокольной планкой, навесной на навесах, пенал; техника в нише. */
   kitchen?: KitchenSpec;
   /** Столешница (kitchen.ts): отдельный объект над нижними корпусами, цена за погонный метр. */
@@ -2068,7 +2071,7 @@ export function fastenerCounts(m: Module) {
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
 export function maxHeightOf(m: Module): number {
-  return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : m.kupeZone ? kupeBodyMax() : RULES.maxH;
+  return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : m.kupeZone || m.kupeBody ? kupeBodyMax() : RULES.maxH;
 }
 /** Корпус шкафа-купе с дверями внутри: боковины и крыша цельные — до длины листа ЛДСП за вычетом отступов раскроя. */
 export function kupeBodyMax(): number { return RULES.sheetW - 2 * RULES.sheetMargin; }
@@ -2557,6 +2560,7 @@ export function parseModule(input: unknown): Module {
     ...(x.worktop===undefined?{}:{worktop:(()=>{const w=x.worktop as WorktopSpec;return {material:String(w.material) as WorktopSpec["material"],thickness:Number(w.thickness),overhang:Number(w.overhang),cutouts:Array.isArray(w.cutouts)?w.cutouts.map(c=>({kind:(c?.kind==="hob"?"hob":"sink") as "sink"|"hob",x:Number(c?.x),width:Number(c?.width),depth:Number(c?.depth),...(c?.z!==undefined?{z:Number(c.z)}:{}),...(c?.fixture?{fixture:String(c.fixture)}:{}),...(c?.drainDrop!==undefined?{drainDrop:Number(c.drainDrop)}:{}),...(c?.tap?{tap:true}:{}),...(c?.plumbing?{plumbing:true}:{})})):[]};})()}),
     ...(x.kupe===undefined?{}:{kupe:(()=>{const k=x.kupe as KupeSpec;return {doors:Number(k.doors),system:String(k.system),color:String(k.color),fills:Array.isArray(k.fills)?k.fills.map(String):[],...(k.sections===undefined?{}:{sections:Number(k.sections)}),...(Array.isArray(k.sectionFills)?{sectionFills:k.sectionFills.map(r=>Array.isArray(r)?r.map(f=>f==null||f===''?null:String(f)):[])}:{}),...(k.softClose?{softClose:true}:{}),...(k.film?{film:true}:{}),...(k.mount==='inside'?{mount:'inside' as const}:{})};})()}),
     ...(x.kupeZone===undefined?{}:{kupeZone:Number(x.kupeZone)}),
+    ...(x.kupeBody===true?{kupeBody:true as const}:{}),
     ...(x.edgeBody===undefined?{}:{edgeBody:Number(x.edgeBody) as EdgeThickness}),
     ...(x.edgeFacade===undefined?{}:{edgeFacade:Number(x.edgeFacade) as EdgeThickness}),
     ...(x.skew===undefined?{}:{skew:{side:(x.skew as {side:'left'|'right'})?.side,depth:Number((x.skew as {depth:number})?.depth)}}),

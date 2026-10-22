@@ -4,7 +4,7 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import { ManagerMode, decorLabel, decorTitle, kupeProfileCaption } from "./clientLabels";
 import type { Module } from "./model";
 import { KUPE_SYSTEMS, KUPE_FILLS, KUPE_SECTIONS, KUPE_SOFT_CLOSE } from "./kupeData";
-import { kupeErrors, kupeLines, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, kupeProfileExact, kupeLeaf, kupeSections, kupeSectionCount, kupeSectionFill, kupeFillLook, isLdspFill, withSectionFill, kupeGrad, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, KUPE_PROFILE_WIDTH, type KupeSpec } from "./kupe";
+import { kupeErrors, kupeLines, kupeTotal, kupeSystem, kupeColor, kupeDoorFill, kupeProfileStyle, kupeProfileExact, kupeLeaf, kupeSections, kupeSectionCount, kupeSectionFill, kupeFillLook, isLdspFill, withSectionFill, kupeGrad, KUPE_DEPTH, KUPE_PROFILE_PREVIEW, KUPE_PROFILE_WIDTH, type KupeSpec } from "./kupe";
 import { kupeLdspPerM2, MARKUP_DEFAULT } from "./pricing";
 import "./kupe-panel.css";
 
@@ -27,7 +27,7 @@ export function KupePanel({ m, modify, openDoors, setOpenDoors, selectedPid }: {
   const leaf = kupeLeaf(m);
   // ЛДСП Lamarty — по прайсу листа × коэффициент сметы по умолчанию (в смете проекта — коэффициент проекта)
   const lines = useMemo(() => kupeLines(m, (n) => kupeLdspPerM2(n, MARKUP_DEFAULT)), [m]);
-  const total = lines.reduce((s, l) => s + l.quantity * (l.unitPrice ?? 0), 0);
+  const total = kupeTotal(lines); // K5: то же округление, что у графы «Двери купе» сметы
   const errors = useMemo(() => kupeErrors(m), [m]);
   const dw = Math.round(leaf.width), allSame = k.fills.length <= 1 || k.fills.every((f) => f === k.fills[0]);
   // смена полотна у всех дверей сбрасывает полотна секций; раскладка секций — тоже (номера секций другие)
