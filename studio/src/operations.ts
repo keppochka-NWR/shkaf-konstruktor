@@ -1,7 +1,7 @@
 import {MEASUREMENT_RULES} from './measurement';
 import {createCornerUpper} from './cornerWardrobe';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
-import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,type Module,type Section} from './model';
+import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,plinth,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,type Module,type Section} from './model';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
@@ -124,6 +124,8 @@ export function mirrorModule(p:Project,mid:string):Project {
  if(!m)throw Error('Выберите корпус для отражения.');
  for(const sec of m.sections){if(sec.doorHinges){const hinges=[...sec.doorHinges];sec.doorHinges=hinges.map((_,k)=>{const h=hinges[doorCount(m,sec)===2?k^1:k];return h==='left'?'right':h==='right'?'left':h??null;});}if(sec.doorLifts&&doorCount(m,sec)===2)sec.doorLifts=Array.from({length:sec.doorLifts.length},(_,k)=>sec.doorLifts?.[k^1]??null);if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=Array.from({length:sec.doorHandles.length},(_,k)=>sec.doorHandles?.[k^1]??null);if(sec.handleFloor&&doorCount(m,sec)===2)sec.handleFloor=Array.from({length:sec.handleFloor.length},(_,k)=>sec.handleFloor?.[k^1]??null);if(sec.handlePos&&doorCount(m,sec)===2)sec.handlePos=Array.from({length:sec.handlePos.length},(_,k)=>sec.handlePos?.[k^1]??null);if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>k^1);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
  if(m.sectionLayout)mirrorOpenings(m);
+ // частичная перегородка — у секции справа от неё: после отражения справа оказывается бывшая левая секция
+ if(m.sections.some(s=>s.divider)){const divs=m.sections.map(s=>s.divider);m.sections.forEach((s,i)=>{const d=divs[i+1];if(d)s.divider=d;else delete s.divider;});}
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  if(m.kitchen)mirrorKitchen(m); // поля кухни со стороной (пакет 0): xs↔xr, topConf↔topConfR, маркер −1 у направляющих и т. д.
@@ -137,6 +139,10 @@ export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:n
  const edge=bounds(a)[axis];
  const delta=distance-edge;
  for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a])item[axis]=(item[axis]??0)+delta;
+ // «От пола» > 0 — шкаф стал навесным (решение Макса 23.10.2026, замер удобства): цоколя у навесных нет — дно внизу корпуса.
+ // Только шкафы и стеллажи студии на цоколе (кухни, купе, столы, угловые, ножки — как были).
+ if(axis==='y')for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a]){const mm=item.module;
+   if((item.y??0)>0&&!mm.feet&&plinth(mm)>0&&!mm.kitchen&&!mm.raw&&!mm.kupe&&!mm.desk&&!mm.worktop&&!mm.corner&&!mm.casework)mm.plinthHeight=0;}
  // Auto fillers change the mounting envelope near walls and perpendicular runs.
  // Keep the manager's distance tied to the final envelope, not the old filler.
  if(a.module.kitchen){for(let i=0;i<8;i++){

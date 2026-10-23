@@ -21,6 +21,8 @@ import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectSt
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
+import PartialDividerPanel from './PartialDividerPanel';
+import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves} from './partialDivider';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
 import {rowShortage} from './rowFit';
@@ -701,7 +703,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined,
       lightMode:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightNote('');setLightMode(a.id);}:undefined,
       lightPanel:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightPanel(a.id);}:undefined,
-      ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));}};
+      ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));},elevated:(a.y??0)>0};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id)]},
       mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
@@ -792,6 +794,23 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
         {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}])};
+    }
+    // Перегородка (решение Макса 23.10.2026): во всю высоту или частичная — «от … до …» мм от пола, от полки / до полки
+    if(/:divider(:under|:over)?$/.test(pid)&&quickMenuApplies(mod)&&!mod.sectionLayout){
+      const dsid=pid.split(':')[0],di=mod.sections.findIndex(s=>s.id===dsid),info=dividerInfo(mod,di),p=part('Перегородка');
+      if(info){
+        const askRange=()=>{select();editDimension('Перегородка от, мм от пола',Math.round(info.partial?info.from:info.bottom+Math.round((info.top-info.bottom)*0.3)),v=>{const from=v;setTimeout(()=>editDimension('Перегородка до, мм от пола',Math.round(info.partial?info.to:info.bottom+Math.round((info.top-info.bottom)*0.75)),w=>{modifyAt(a.id,n=>setPartialDivider(n,dsid,{from,to:w}));return true;}),0);return true;});};
+        const cur=(n:Module,edge:'lo'|'hi')=>{const bs=dividerBounds(n,di),it=dividerInfo(n,di)!;if(!it.partial)return bs.find(x=>x.key===(edge==='lo'?'floor':'roof'))!;const y=edge==='lo'?(it.from===it.bottom?it.from:it.from-8):(it.to===it.top?it.to:it.to+8);return bs.find(x=>Math.abs(x.y-y)<9)??bs.find(x=>x.key===(edge==='lo'?'floor':'roof'))!;};
+        const bs=dividerBounds(mod,di);
+        const pick=(edge:'lo'|'hi'):RadialItem=>({id:'divider-'+(edge==='lo'?'from':'to'),label:edge==='lo'?'От полки':'До полки',icon:edge==='lo'?ArrowDown:ArrowUp,disabled:bs.length<3,hint:bs.length<3?'В секциях у перегородки нет полок — задайте «Частичная…» в мм':edge==='lo'?'Нижняя опора перегородки: дно или полка — она станет сквозной горизонталью':'Верхняя опора перегородки: полка или крыша',
+          children:bs.filter(b=>b.key!==(edge==='lo'?'roof':'floor')).map(b=>({id:'divider-'+edge+'-'+b.key,label:b.label,icon:Rows3,hint:edge==='lo'?'Перегородка от этой горизонтали':'Перегородка до этой горизонтали',
+            run:()=>modifyAt(a.id,n=>{const nb=dividerBounds(n,di),one=nb.find(x=>x.key===b.key)!,other=cur(n,edge==='lo'?'hi':'lo');setDividerByShelves(n,dsid,edge==='lo'?one.bound:other.bound,edge==='lo'?other.bound:one.bound);})}))});
+        return {title:info.partial?`Перегородка ${Math.round(info.from)}–${Math.round(info.to)}`:'Перегородка',subtitle:mod.name,items:[
+          {id:'divider-full',label:'Во всю высоту',icon:Columns2,active:!info.partial,hint:'От дна до крыши, как раньше',run:()=>modifyAt(a.id,n=>setPartialDivider(n,dsid,null))},
+          {id:'divider-partial',label:'Частичная…',icon:Ruler,active:info.partial,hint:'«От» и «до» в мм от пола. Над и под перегородкой полки — во всю ширину двух секций',run:askRange},
+          pick('lo'),pick('hi'),
+          {...p.params,hint:'Перегородки секции — справа, в «Наполнении»'},body]};
+      }
     }
     if(pid.endsWith(':rod')||pid.includes(':flange:')){
       const p=part('Штанга');
@@ -1905,8 +1924,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 </div>
                 {(s.rod||s.pantograph)&&<NumberField label="Высота штанги от дна" selected={selectedPart?.pid===(s.pantograph?s.id+':pantograph:rod':s.id+':rod')} onSelect={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:s.pantograph?s.id+':pantograph:rod':s.id+':rod'});setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}} value={Math.round((parts(m).find(p=>p.id===s.id+':rod'||p.id===s.id+':pantograph:rod')?.position[1]??b.bottom)-b.bottom)} min={100} max={b.top-b.bottom-50} onChange={v=>modifySection(a=>a.rodAt=v/(b.top-b.bottom))}/>}
 </SettingsSection>
-<SettingsSection title="Опоры">                <label className="hardware-field">Основание<select aria-label="Основание корпуса" value={m.feet?'feet':'plinth'} onChange={e=>modify(n=>{if(e.target.value==='feet'){n.feet={height:18};}else{delete n.feet;}})}><option value="plinth">Цоколь</option><option value="feet">Ножки (боковины на ножках)</option></select></label>
-                {!m.feet&&<label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{plinth(m)===0&&<option value={0}>Без цоколя · антресоль</option>}{[60,80,100,120,150].map(v=><option key={v} value={v}>{v} мм</option>)}</select></label>}
+<SettingsSection title="Опоры">                {(placed.y??0)>0&&!m.feet&&quickMenuApplies(m)?<><p className="field-note" data-testid="base-hanging">Навесной корпус (низ на {Math.round(placed.y??0)} мм от пола): цоколя и ножек нет{plinth(m)>0?' — сейчас под ним цоколь '+plinth(m)+' мм.':'.'}</p>{plinth(m)>0&&<button className="outline full" onClick={()=>modify(n=>{delete n.feet;n.plinthHeight=0;})}>Убрать цоколь · дно внизу корпуса</button>}</>:<>
+                <label className="hardware-field">Основание<select aria-label="Основание корпуса" value={m.feet?'feet':plinth(m)===0?'none':'plinth'} onChange={e=>modify(n=>{if(e.target.value==='feet'){n.feet={height:18};}else if(e.target.value==='none'){delete n.feet;n.plinthHeight=0;}else{delete n.feet;if(plinth(n)===0)n.plinthHeight=RULES.plinth;}})}><option value="plinth">Цоколь</option><option value="none">Без цоколя (дно на полу)</option><option value="feet">Ножки (боковины на ножках)</option></select></label>
+                {!m.feet&&plinth(m)>0&&<label className="hardware-field">Цоколь<select aria-label="Высота цоколя" value={plinth(m)} onChange={e=>modify(n=>n.plinthHeight=Number(e.target.value))}>{[60,80,100,120,150].map(v=><option key={v} value={v}>{v} мм</option>)}</select></label>}
+                {!m.feet&&plinth(m)===0&&<p className="field-note">Дно на полу, боковины до пола — без цоколя и опор, как у таких шкафов в Базисе.</p>}</>}
                 {m.feet&&<label className="hardware-field">Ножки<select aria-label="Высота ножек" value={m.feet.height} onChange={e=>modify(n=>{n.feet={height:Number(e.target.value)};})}><option value={18}>M6×18 под боковинами · 18 мм</option><option value={100}>Регулируемые 1033 · 100 мм</option><option value={120}>Регулируемые · 120 мм</option></select></label>}
 </SettingsSection>
 <SettingsSection title="Подсветка">                <label className="hardware-field"><span><input type="checkbox" aria-label="Подсветка в стойках" checked={allStandsLit(m)} onChange={e=>modify(n=>setAllStands(n,e.target.checked))}/> Подсветка врезная в стойках</span></label>
@@ -2013,6 +2034,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   <Columns2 size={16} /> Разделить пополам
                 </button>
               </SettingsSection>
+{quickMenuApplies(m)&&!m.sectionLayout&&m.sections.length>1&&<SettingsSection title="Перегородки секции"><PartialDividerPanel module={m} sectionIndex={idx} edit={modify}/></SettingsSection>}
 <SettingsSection title="Дополнительные параметры секции">
                 <label className="hardware-field"><span><input type="checkbox" aria-label="Вкладные фасады ящиков" checked={s.drawerMount==='inset'} onChange={e=>modifySection(a=>{a.drawerMount=e.target.checked?'inset':undefined;})}/> Фасады ящиков внутри проёма, без растяжения к цоколю</span></label>
                 {s.rod&&<NumberField label="Минимальный просвет под штангой" value={s.rodClearance??900} min={300} max={1500} onChange={v=>modifySection(a=>{a.rodClearance=v;})}/>}
