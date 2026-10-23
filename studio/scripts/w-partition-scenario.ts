@@ -1,4 +1,4 @@
-﻿// Решение Макса 23.10.2026 мышью: npx tsx scripts/w-partition-scenario.ts <url> <outDir>
+// Решение Макса 23.10.2026 мышью: npx tsx scripts/w-partition-scenario.ts <url> <outDir>
 // Шкаф 1200 в две секции с фасадами → «Наполнение › Перегородки секции» → «Частичная», от 720 до 1652 → полки над и под перегородкой
 // (ПКМ › Добавить › В секцию › Полку) — сквозные → снимки спереди без фасадов, 3D, с фасадами → ПКМ по перегородке («Во всю высоту /
 // Частичная…») → ПКМ «Цоколь / ножки › Без цоколя» → снимки → навесной корпус: в «Цоколь / ножки» только «Без цоколя».
@@ -14,7 +14,8 @@ const wardrobe: Module = { ...initialModule(), name: "Шкаф QA", width: 1200,
 wardrobe.sections.forEach((s) => (s.shelves = []));
 const hanging: Module = { ...initialModule(), name: "Навесной QA", width: 600, height: 700, depth: 300, plinthHeight: 80, doors: true, sections: [{ ...section(), shelves: [0.5] }] };
 const proj: Project = newProject({ ...initialModule(), sections: [section()] });
-proj.modules = [{ id: id(), x: 600, y: 0, z: 3, rotation: 0, module: wardrobe }, { id: id(), x: 2300, y: 1500, z: 3, rotation: 0, module: hanging }];
+const tumba: Module = { ...initialModule(), name: "Тумба QA", width: 600, height: 700, depth: 300, plinthHeight: 80, doors: true, sections: [{ ...section(), shelves: [0.5] }] };
+proj.modules = [{ id: id(), x: 600, y: 0, z: 3, rotation: 0, module: wardrobe }, { id: id(), x: 2300, y: 1500, z: 3, rotation: 0, module: hanging }, { id: id(), x: 2300, y: 0, z: 3, rotation: 0, module: tumba }];
 const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
 const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
 const errors: string[] = [];
@@ -163,6 +164,36 @@ try {
   const hl = await labels();
   check("навесной: в «Цоколь / ножки» только «Без цоколя», «Цоколь 80» не предлагается", hl.includes("Без цоколя") && !hl.some((x) => /^Цоколь \d/.test(x)) && !hl.some((x) => /^Ножки/.test(x)), hl.join(" | "));
   await shot("12-hanging-base-menu");
+  await esc();
+  // 6. решение Макса 23.10: «От пола» > 0 — модуль сразу навесной (без цоколя, на навесах, навесы в смете); старый навесной QA — как был
+  const hq0 = await saved("Навесной QA");
+  check("старый корпус над полом (без пометки «навесной») не изменился: цоколь как был, навесов нет", hq0?.plinthHeight === 80 && !hq0?.hanging && !parts(hq0!).some((p) => p.id.startsWith("kitchen-hanger")));
+  await page.getByText("Тумба QA", { exact: false }).first().click().catch(() => {});
+  await page.waitForTimeout(800);
+  const bodyCat = page.locator('details[data-settings-category="Корпус и размещение"]');
+  if (!(await bodyCat.getAttribute("open").catch(() => null))) await bodyCat.locator("summary").first().click();
+  const pos = page.locator('details[data-setting="Положение"]');
+  await pos.locator("summary").first().scrollIntoViewIfNeeded();
+  if (!(await pos.getAttribute("open").catch(() => null))) await pos.locator("summary").first().click();
+  await page.waitForTimeout(300);
+  const floor = pos.getByLabel("От пола").first();
+  await floor.scrollIntoViewIfNeeded(); await floor.click({ clickCount: 3 }); await page.keyboard.type("700"); await page.keyboard.press("Enter"); await page.keyboard.press("Tab"); await page.waitForTimeout(900);
+  const tq = await saved("Тумба QA");
+  check("«От пола» 700 → навесной: без цоколя, два навеса с заглушками", tq?.hanging === true && tq?.plinthHeight === 0 && parts(tq!).filter((p) => /^kitchen-hanger(-cap)?:/.test(p.id)).length === 4);
+  const lbl = (await page.getByTestId("hanging-label").innerText({ timeout: 1500 }).catch(() => "")).trim();
+  check("подпись в панели «Навесной (поднят от пола)»", /Навесной \(поднят от пола\)/.test(lbl), lbl);
+  await page.getByTestId("hanging-label").scrollIntoViewIfNeeded().catch(() => {});
+  await shot("13-hanging-panel");
+  await page.getByRole("button", { name: "3D", exact: true }).click().catch(() => {}); await page.waitForTimeout(1500);
+  await shot("15-hanging-3d");
+  await page.getByRole("button", { name: "Стоимость" }).first().click().catch(() => {}); await page.waitForTimeout(900);
+  const pend = (await page.locator("body").innerText()).match(/после финального расчёта конструктором: (\d+)/)?.[1];
+  await shot("14-hanging-estimate");
+  await page.getByRole("button", { name: "Стоимость проекта" }).first().click().catch(() => {}); await page.waitForTimeout(1200);
+  const dock = await page.locator("body").innerText();
+  check("смета: «Навес мебельный регулируемый» и заглушки (позиции после финального расчёта)", /Навес мебельный регулируемый/.test(dock) && /Заглушка для мебельного навеса/.test(dock), "после расчёта: " + pend);
+  await shot("14b-hanging-estimate-lines");
+
   await esc();
   check("ошибок страницы нет", errors.length === 0, errors.slice(0, 2).join(" | "));
 } finally {
