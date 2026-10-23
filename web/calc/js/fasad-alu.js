@@ -7,7 +7,7 @@
 //   fasadSetDefaultHinge, fasadSetDefaultMount, fasadSetDefaultOpenDir, openFasadKP.
 //
 // Depends on: utils.js, store.js, router.js, shared-kp.js,
-//             data/fillings.js, data/fasad-alu-data.js
+//             data/fasad-fillings.js, data/fasad-alu-data.js
 
 // ── Состояние модуля ──────────────────────────────────────────
 let fasadRows          = [];         // [{w,h,qty,fillIdx,mountType,openDir,hingeId}]
@@ -16,7 +16,7 @@ let fasadDefaultFill   = 0;          // индекс в fasadFills[]
 let fasadDefaultHinge  = 'gtv-std';
 let fasadDefaultMount  = 'nakl';     // 'nakl'|'polunakl'|'vkladnoy'
 let fasadDefaultOpenDir= 'left';     // 'left'|'right'|'up'
-let fasadFills         = [];         // заполняется в initFasadModule() из FILLINGS
+let fasadFills         = [];         // заполняется в initFasadModule() из FASAD_FILLINGS
 
 const MOUNT_LABELS = { nakl:'Накладной', polunakl:'Полунакладной', vkladnoy:'Вкладной' };
 const OPEN_LABELS  = { left:'Левое',     right:'Правое',           up:'Вверх' };
@@ -28,7 +28,7 @@ function fasadHingesForMount(mountType) {
 }
 
 function initFasadModule() {
-  fasadFills = FILLINGS.filter(function(f){ return FASAD_FILL_GROUPS.indexOf(f.g) !== -1; });
+  fasadFills = FASAD_FILLINGS.filter(function(f){ return FASAD_FILL_GROUPS.indexOf(f.g) !== -1; });
 
   var ps = document.getElementById('fasadProfileSel');
   if (ps) ps.innerHTML = FASAD_PROFILES.map(function(p){

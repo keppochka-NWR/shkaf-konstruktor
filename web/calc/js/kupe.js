@@ -4,8 +4,9 @@
 // Public globals (для inline onclick=""): много — calculate, recalculate, updateDisplay,
 //   resetCalc, openKP, и т.д. (нужно постепенно мигрировать в KupeModule namespace).
 //
-// Depends on: utils.js, store.js, router.js, shared-kp.js,
-//             data/fillings.js, data/profiles.js
+// Depends on: utils.js, store.js, router.js, shared-kp.js, kupe-door.js,
+//             data/fillings.js, data/profiles.js, data/lamarty.js, data/profile-sections.js
+// Копия калькулятора купе v2.11 для сайта — studio/scripts/bake-calc-kupe.ts.
 //
 // TODO (post-refactor):
 //   - обернуть все функции в KupeModule = {...}
@@ -51,18 +52,68 @@ function getAutoFilm(fill) {
    ============================================================ */
 let sectH   = 0;
 let sectV   = 0;
-let sectOpt = SECTION_OPTS[0];   // текущий пресет (полный объект)
+let sectOpt = SECTION_OPTS[0];   // глобальный пресет (по умолчанию для всех дверей)
 let doorFills    = [];            // doorFills[doorIdx][sectIdx] = FILLINGS[n]
 let activeSection = null;         // { doorIdx, sectIdx } | null — выделенная секция
 let rowMm        = [];            // высоты секций в мм (sum === H)
 let colMm        = [];            // ширины колонок в мм (sum === dw)
 let _dragDiv     = null;          // состояние drag-разделителя: { doorIdx, divIdx, startY, startRowMm }
 let doorRowMm    = [];            // doorRowMm[doorIdx][] — высоты секций для каждой двери
+let doorTexRot   = [];            // doorTexRot[doorIdx] = true если текстура ЛДСП повёрнута на 90° (горизонтальная укладка)
+let doorSectOpt  = [];            // v1.2: doorSectOpt[doorIdx] = {rowRatios, colRatios, h, v, label} или null/undefined → берём sectOpt
+
+// Размеры листа ЛДСП Lamarty (мм): 2750 — длина по текстуре, 1830 — ширина поперёк текстуры.
+// Из одного листа можно вырезать одну дверь не больше:
+//   - вертикально (по умолчанию): W ≤ 1830, H ≤ 2750
+//   - горизонтально (rotated):     W ≤ 2750, H ≤ 1830
+const LDSP_SHEET_LONG  = 2750;  // длина по текстуре
+const LDSP_SHEET_SHORT = 1830;  // поперёк текстуры
 let activeDoorEdit = 0;           // какая дверь активна (чья линейка в viz, чьи значения в сайдбаре)
 
 // ALU state вынесено в js/fasad-alu.js
 
 // HELPERS ($, num, fmt, pluralDoors, debounce) вынесены в js/utils.js
+
+const OPENING_DIMENSIONS = {
+  width: { label: 'Ширина проёма', min: 400, max: 6000 },
+  height: { label: 'Высота проёма', min: 600, max: 3000 },
+};
+
+function readOpeningDimension(id) {
+  const spec = OPENING_DIMENSIONS[id];
+  const value = parseDimensionSum($(id).value);
+  let error = '';
+  if (!Number.isFinite(value)) error = spec.label + ': введите число или сумму, например 808+880.';
+  else if (value < spec.min || value > spec.max) {
+    error = spec.label + ': допустимо от ' + spec.min + ' до ' + spec.max + ' мм. Получилось: ' + value + ' мм.';
+  }
+  return { value, error };
+}
+
+function setDimensionError(id, message) {
+  $(id).setCustomValidity(message);
+  $(id).setAttribute('aria-invalid', String(!!message));
+  $(id + 'Error').textContent = message;
+}
+
+function validateOpeningDimensions(normalize = false, showErrors = false) {
+  let valid = true;
+  for (const id of Object.keys(OPENING_DIMENSIONS)) {
+    const result = readOpeningDimension(id);
+    if (showErrors) setDimensionError(id, result.error);
+    if (result.error) valid = false;
+    else if (normalize) $(id).value = String(result.value);
+  }
+  return valid;
+}
+
+function commitOpeningDimension(id) {
+  const result = readOpeningDimension(id);
+  setDimensionError(id, result.error);
+  if (result.error) return;
+  $(id).value = String(result.value);
+  updateDisplay();
+}
 
 /* ============================================================
    LIVE UPDATE — автопересчёт при изменении параметров
@@ -70,8 +121,7 @@ let activeDoorEdit = 0;           // какая дверь активна (чь�
 
 // updateDisplay: если результаты уже показаны → пересчёт, иначе → только визуализация
 function updateDisplay() {
-  // Поле размера стёрто (менеджер вводит новое число) — не пересчитываем и не показываем alert
-  if (!num('width') || !num('height')) return;
+  if (!validateOpeningDimensions()) return;
   if (window._lastCalcData) recalculate();
   else rerenderVisualization();
 }
@@ -87,7 +137,9 @@ function recalculate() {
     delivery: ($('kpDelivery') || {}).value    || '0',
     install:  ($('kpInstall')  || {}).checked  || false,
   };
-  calculate();
+  // Live-пересчёт: пропускаем строгую валидацию ЛДСП (alert сбивал бы UX).
+  // Полная валидация остаётся при явном нажатии «Рассчитать стоимость» (calculate без аргументов).
+  calculate({ silent: true });
   // Восстановить поля КП
   if ($('kpClient'))   $('kpClient').value    = kp.client;
   if ($('kpPhone'))    $('kpPhone').value     = kp.phone;
@@ -111,14 +163,29 @@ function recalculate() {
   if (typeof setupDoorCountChips === 'function') setupDoorCountChips();
   if (typeof initKupeVersion === 'function')     initKupeVersion();
   if (typeof updateChipsActive === 'function')   updateChipsActive(2);
+  // v1.2 — bulk-операции
+  if (typeof populateBulkSelectors === 'function') populateBulkSelectors();
   // Живой пересчёт — подписываемся на все изменения параметров
   const debouncedUpdate = debounce(updateDisplay, 350);
-  $('width').addEventListener('input', debouncedUpdate);
-  $('height').addEventListener('input', () => {
-    rowMm = []; // сбросить mm при смене высоты чтобы пересчитались
-    buildDividersBlock();
-    debouncedUpdate();
-  });
+  for (const id of Object.keys(OPENING_DIMENSIONS)) {
+    const input = $(id);
+    input.addEventListener('input', () => {
+      setDimensionError(id, '');
+      if (id === 'height' && !readOpeningDimension(id).error) {
+        rowMm = [];
+        buildDividersBlock();
+      }
+      debouncedUpdate();
+    });
+    input.addEventListener('blur', () => commitOpeningDimension(id));
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitOpeningDimension(id);
+      }
+    });
+  }
+  $('softClosePrice').textContent = '+' + fmt(SOFT_CLOSE_PRICE) + ' ₽ за дверь';
   $('softClose').addEventListener('change', updateDisplay);
   $('singlePartition').addEventListener('change', updateDisplay);
   $('filmToggle').addEventListener('change', updateDisplay);
@@ -131,10 +198,83 @@ function recalculate() {
 function initDoorFills(N, sectCount) {
   doorFills = Array.from({length: N}, (_, di) => {
     const existing = doorFills[di] || [];
-    return Array.from({length: sectCount}, (_, si) =>
+    // v1.2: если у двери индивидуальный sectOpt — её sectCount может отличаться от глобального параметра
+    const dOpt = doorSectOpt[di];
+    const targetCount = dOpt ? (dOpt.rowRatios.length * dOpt.colRatios.length) : sectCount;
+    return Array.from({length: targetCount}, (_, si) =>
       existing[si] || existing[existing.length - 1] || FILLINGS[0]
     );
   });
+}
+
+/* ============================================================
+   PER-DOOR SECTION OPT (v1.2) — helpers
+   ============================================================
+   sectOpt — глобальный пресет (применяется по умолчанию).
+   doorSectOpt[doorIdx] — индивидуальный override (если задан).
+   API:
+     getDoorSectOpt(doorIdx)       → объект (override или общий)
+     getDoorSectCount(doorIdx)     → число секций
+     hasDoorOverride(doorIdx)      → true если включён override
+     hasAnyDoorOverride()          → true если хоть одна дверь имеет override
+     setDoorSectOpt(di, optObj)    → включает override и применяет пресет
+     clearDoorSectOpt(di)          → выключает override (fallback к sectOpt)
+     getAllDoorSectOpts(N)         → массив длины N с актуальными опциями per-door
+*/
+function getDoorSectOpt(doorIdx) {
+  return doorSectOpt[doorIdx] || sectOpt;
+}
+function getDoorSectCount(doorIdx) {
+  const o = getDoorSectOpt(doorIdx);
+  return o.rowRatios.length * o.colRatios.length;
+}
+function hasDoorOverride(doorIdx) {
+  return !!doorSectOpt[doorIdx];
+}
+function hasAnyDoorOverride() {
+  return doorSectOpt.some(o => !!o);
+}
+function setDoorSectOpt(doorIdx, optObj) {
+  doorSectOpt[doorIdx] = {
+    rowRatios: optObj.rowRatios.slice(),
+    colRatios: optObj.colRatios.slice(),
+    h: optObj.h,
+    v: optObj.v,
+    label: optObj.label,
+  };
+  // Сбросить ручные высоты разделителей этой двери — пересчитаются от равномерного
+  if (doorRowMm[doorIdx]) doorRowMm[doorIdx] = null;
+  // Подогнать doorFills под новое количество секций для этой двери
+  const newCount = optObj.rowRatios.length * optObj.colRatios.length;
+  const cur = doorFills[doorIdx] || [];
+  doorFills[doorIdx] = Array.from({length: newCount}, (_, si) => cur[si] || cur[cur.length - 1] || FILLINGS[0]);
+}
+function clearDoorSectOpt(doorIdx) {
+  doorSectOpt[doorIdx] = null;
+  if (doorRowMm[doorIdx]) doorRowMm[doorIdx] = null;
+  // doorFills подгоняется под глобальный sectOpt при последующем initDoorFills()
+  const globalCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
+  const cur = doorFills[doorIdx] || [];
+  doorFills[doorIdx] = Array.from({length: globalCount}, (_, si) => cur[si] || cur[cur.length - 1] || FILLINGS[0]);
+}
+function getAllDoorSectOpts(N) {
+  const arr = [];
+  for (let i = 0; i < N; i++) arr.push(getDoorSectOpt(i));
+  return arr;
+}
+
+/**
+ * commitDoorRatios(doorIdx, newRowMm, H) — после drag/edit разделителя записывает новые ratios.
+ * Если дверь имеет override (doorSectOpt[doorIdx] установлен) — обновляет его.
+ * Иначе обновляет глобальный sectOpt (старая логика, ratios шарятся между не-override дверями).
+ */
+function commitDoorRatios(doorIdx, newRowMm, H) {
+  const ratios = newRowMm.map(v => v / H);
+  if (doorSectOpt[doorIdx]) {
+    doorSectOpt[doorIdx] = Object.assign({}, doorSectOpt[doorIdx], { rowRatios: ratios.slice() });
+  } else {
+    sectOpt = Object.assign({}, sectOpt, { rowRatios: ratios.slice() });
+  }
 }
 
 function initRowMm(H, rows, ratios) {
@@ -154,11 +294,14 @@ function initRowMm(H, rows, ratios) {
 
 function getDoorRowMm(doorIdx, H_val) {
   const H = H_val || num('height', 2000);
-  const rows = sectOpt.rowRatios.length;
+  const dOpt = getDoorSectOpt(doorIdx);
+  const rows = dOpt.rowRatios.length;
   if (doorRowMm[doorIdx] && doorRowMm[doorIdx].length === rows) return doorRowMm[doorIdx];
-  // Инициализировать из глобального rowMm или равномерно
-  initRowMm(H, rows, sectOpt.rowRatios);
-  doorRowMm[doorIdx] = rowMm.slice();
+  // Инициализировать из пропорций пресета этой двери (равномерно или из ratios)
+  const base = dOpt.rowRatios.map(r => Math.round(r * H));
+  const sum = base.reduce((a, b) => a + b, 0);
+  if (rows > 0) base[rows - 1] += H - sum;
+  doorRowMm[doorIdx] = base;
   return doorRowMm[doorIdx];
 }
 
@@ -167,7 +310,9 @@ function buildDividersBlock() {
   if (!block) return;
   block.innerHTML = '';
   const H = num('height', 2000);
-  const rows = sectOpt.rowRatios.length;
+  // v1.2: разделители строятся для активной двери — используем её per-door sectOpt
+  const dOpt = getDoorSectOpt(activeDoorEdit);
+  const rows = dOpt.rowRatios.length;
   if (rows <= 1) { block.style.display = 'none'; return; }
   block.style.display = 'flex';
   const activeRm = getDoorRowMm(activeDoorEdit, H);
@@ -188,7 +333,8 @@ function buildDividersBlock() {
 
 function onDividerChange() {
   const H = num('height', 2000);
-  const rows = sectOpt.rowRatios.length;
+  // v1.2: rows берём per-door (если у активной двери override — её rows, иначе общие)
+  const rows = getDoorSectOpt(activeDoorEdit).rowRatios.length;
   const positions = [];
   for (let i = 0; i < rows - 1; i++) {
     positions.push(+(document.getElementById('divH_' + i).value) || 0);
@@ -197,7 +343,7 @@ function onDividerChange() {
   newRm.push(H - positions[positions.length - 1]);
   rowMm = newRm;
   doorRowMm[activeDoorEdit] = newRm.slice();
-  sectOpt = Object.assign({}, sectOpt, { rowRatios: rowMm.map(v => v / H) });
+  commitDoorRatios(activeDoorEdit, newRm, H);
   updateDisplay(); // разделитель меняет площадь секций → меняет цену
 }
 
@@ -219,8 +365,10 @@ function startDividerDrag(e) {
   activeDoorEdit = doorIdx;
   const startRM = getDoorRowMm(doorIdx, H).slice();
   _dragDiv = { doorIdx, divIdx, startY: e.clientY, startRowMm: startRM };
-  document.addEventListener('mousemove', onDividerDragMove);
-  document.addEventListener('mouseup',   onDividerDragEnd);
+  // v1.4: Pointer Events — работает и мышью, и пальцем на телефоне
+  document.addEventListener('pointermove', onDividerDragMove);
+  document.addEventListener('pointerup',   onDividerDragEnd);
+  document.addEventListener('pointercancel', onDividerDragEnd);
 }
 
 function onDividerDragMove(e) {
@@ -239,17 +387,139 @@ function onDividerDragMove(e) {
   doorRowMm[doorIdx] = newRm;
   rowMm = newRm;
   const H = num('height', 2000);
-  sectOpt = Object.assign({}, sectOpt, { rowRatios: rowMm.map(v => v / H) });
+  commitDoorRatios(doorIdx, newRm, H); // v1.2: per-door
   updateDividerInputs();
-  rerenderVisualization();
+  // Throttle через requestAnimationFrame — на слабых ПК renderRoom медленный.
+  // Без throttle при drag вызывается на каждый mousemove (до 60+ раз/сек).
+  if (!_dragRafPending) {
+    _dragRafPending = true;
+    requestAnimationFrame(() => {
+      _dragRafPending = false;
+      rerenderVisualization();
+    });
+  }
 }
+let _dragRafPending = false;
 
 function onDividerDragEnd() {
   if (!_dragDiv) return;
   _dragDiv = null;
-  document.removeEventListener('mousemove', onDividerDragMove);
-  document.removeEventListener('mouseup',   onDividerDragEnd);
+  document.removeEventListener('pointermove', onDividerDragMove);
+  document.removeEventListener('pointerup',   onDividerDragEnd);
+  document.removeEventListener('pointercancel', onDividerDragEnd);
   updateDisplay();
+}
+
+/* ============================================================
+   v1.4: МОБИЛЬНАЯ НИЖНЯЯ ПАНЕЛЬ (Итого + Рассчитать)
+   ============================================================ */
+function kupeMobileScrollResults() {
+  const rp = $('resultPanel');
+  if (rp) rp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function kupeMobileCalc() {
+  const before = window._lastCalcData;
+  calculate();
+  // Прокручиваем к деталям только если calculate() прошёл валидацию
+  if (window._lastCalcData && window._lastCalcData !== before) kupeMobileScrollResults();
+}
+
+/* ============================================================
+   v1.5: «ЗАКАЗАТЬ ДВЕРЬ» — отправка расчёта клиентом в мессенджер
+   ============================================================ */
+// Контакты для «Заказать дверь» на сайте Конструктора не публикуются (кнопка скрыта).
+const ORDER_PHONE_DISPLAY = '';
+const ORDER_PHONE_TEL = '';
+const ORDER_SITE_URL = '';
+const ORDER_MAX_URL = '';
+const ORDER_TG_URL  = '';
+
+function buildOrderText() {
+  const d = window._lastCalcData;
+  if (!d) return '';
+  const sel = id => {
+    const el = $(id);
+    return el && el.selectedOptions && el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : '';
+  };
+  const lines = [];
+  lines.push('Заявка с калькулятора дверей-купе');
+  if (window._kupeProjectNum) lines.push('Проект № ' + window._kupeProjectNum);
+  lines.push('Проём: ' + d.W + ' × ' + d.H + ' мм, ' + d.N + ' ' + pluralDoors(d.N));
+  const prof = [sel('profileFamily'), sel('profileSystem')].filter(Boolean).join(' ');
+  const col = sel('profileColor');
+  lines.push('Профиль: ' + prof + (col ? ', ' + col : ''));
+  const mats = [];
+  d.fills.forEach(f => { if (f && f.n && mats.indexOf(f.n) === -1) mats.push(f.n); });
+  lines.push('Наполнение: ' + mats.join('; '));
+  if (d.softCloseCost > 0) lines.push('Доводчик: да');
+  if (d.filmCost > 0) lines.push('Защитная плёнка: да');
+  lines.push('ИТОГО: ' + fmt(d.total) + ' ₽');
+  lines.push('Расчёт сделан на ' + ORDER_SITE_URL);
+  return lines.join('\n');
+}
+
+function _orderEsc(e) { if (e.key === 'Escape') closeOrderModal(); }
+
+function openOrderModal() {
+  const m = $('orderModal'); if (!m) return;
+  const t = $('orderText'); if (t) t.textContent = buildOrderText();
+  const ph = $('orderPhoneLink');
+  if (ph) { ph.textContent = ORDER_PHONE_DISPLAY; ph.href = 'tel:' + ORDER_PHONE_TEL; }
+  const cb = $('orderCopyBtn'); if (cb) cb.textContent = 'Скопировать текст';
+  // Кнопки мессенджеров видны только если ссылка задана
+  const mb = $('orderMaxBtn'); if (mb) mb.style.display = ORDER_MAX_URL ? '' : 'none';
+  const tb = $('orderTgBtn');  if (tb) tb.style.display = ORDER_TG_URL  ? '' : 'none';
+  const hint = $('orderHint');
+  if (hint) hint.textContent = (ORDER_MAX_URL || ORDER_TG_URL)
+    ? 'Кнопки мессенджеров откроют чат с нами — расчёт уже скопирован, просто вставьте его в сообщение и отправьте.'
+    : '«Отправить» откроет список приложений — выберите мессенджер и отправьте сообщение на номер выше. На компьютере текст можно просто скопировать.';
+  m.style.display = 'flex';
+  document.addEventListener('keydown', _orderEsc);
+}
+
+// Открыть чат в мессенджере: расчёт заранее кладём в буфер обмена,
+// клиенту остаётся вставить его в открывшийся чат (прямой prefill Max/TG не поддерживают)
+function orderOpenMessenger(kind) {
+  const url = kind === 'max' ? ORDER_MAX_URL : ORDER_TG_URL;
+  if (!url) return;
+  orderCopy();
+  window.open(url, '_blank', 'noopener');
+}
+
+function closeOrderModal() {
+  const m = $('orderModal'); if (m) m.style.display = 'none';
+  document.removeEventListener('keydown', _orderEsc);
+}
+
+function orderShare() {
+  const text = buildOrderText();
+  if (navigator.share) {
+    // Телефон: системная шторка «Поделиться» — клиент выбирает Max/WhatsApp/что угодно
+    navigator.share({ text: text }).catch(function () { /* клиент закрыл шторку — не ошибка */ });
+  } else {
+    orderCopy(); // десктоп без Web Share API — просто копируем текст
+  }
+}
+
+function orderCopy() {
+  const text = buildOrderText();
+  const done = () => { const b = $('orderCopyBtn'); if (b) b.textContent = 'Скопировано ✓'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => _orderFallbackCopy(text, done));
+  } else {
+    _orderFallbackCopy(text, done);
+  }
+}
+
+function _orderFallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) {}
+  document.body.removeChild(ta);
 }
 
 function startRulerEdit(labelDiv) {
@@ -258,7 +528,8 @@ function startRulerEdit(labelDiv) {
   const dIdx  = +labelDiv.dataset.doorIdx;
   const sIdx  = +labelDiv.dataset.sectIdx;
   const curMm = +labelDiv.dataset.mm;
-  const rows  = sectOpt.rowRatios.length;
+  // v1.2: rows берём из per-door опций (важно при override)
+  const rows  = getDoorSectOpt(dIdx).rowRatios.length;
 
   const inp = document.createElement('input');
   inp.type = 'number'; inp.value = curMm; inp.min = 80; inp.step = 10;
@@ -290,7 +561,7 @@ function startRulerEdit(labelDiv) {
     doorRowMm[dIdx] = rm;
     activeDoorEdit  = dIdx;
     rowMm = rm.slice();
-    sectOpt = Object.assign({}, sectOpt, { rowRatios: rowMm.map(v => v / H) });
+    commitDoorRatios(dIdx, rm, H); // v1.2: per-door
     buildDividersBlock();
     updateDisplay();
   }
@@ -305,44 +576,217 @@ function openSectionEditor(doorIdx, sectIdx) {
   activeDoorEdit = doorIdx;
   activeSection = { doorIdx, sectIdx };
   $('panelForm').classList.add('section-edit-mode');
-  const cols = sectOpt.colRatios.length;
-  const rows = sectOpt.rowRatios.length;
+  // v1.2: cols/rows для title — per-door
+  const dOpt = getDoorSectOpt(doorIdx);
+  const cols = dOpt.colRatios.length;
+  const rows = dOpt.rowRatios.length;
   let title = 'Дверь ' + (doorIdx + 1);
   if (rows > 1 || cols > 1) title += ' · Секция ' + (sectIdx + 1);
   $('sectionEditorTitle').textContent = title;
+  // Сбрасываем поиск при каждом открытии редактора
+  const search = $('matSearch');
+  if (search) search.value = '';
   buildSectionMaterialList(doorIdx, sectIdx);
   buildDividersBlock();
+  buildDoorEditTabs();
+  updateDoorSectOptCard();
   updateFilmRow();
+  updateTexRotRow();
   rerenderVisualization();
+  // v1.4: на телефоне редактор секции находится выше превью — прокрутить к нему
+  if (window.matchMedia('(max-width:768px)').matches) {
+    const pf = $('panelForm');
+    if (pf) pf.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+// Фильтр по названию материала. Если query пустой — показать всё (групповые collapse возвращаются к default).
+// Если в группе есть совпадение — авто-развернуть.
+// ВАЖНО: .mat-btn-tex в CSS имеет `display:inline-block !important` — поэтому используем setProperty с приоритетом 'important',
+// чтобы корректно скрывать/показывать textured кнопки Lamarty (иначе фильтр не работает).
+function filterMaterials(query) {
+  const list = $('sectionMaterialList');
+  if (!list) return;
+  const q = (query || '').trim().toLowerCase();
+  const groups = list.querySelectorAll('.mat-group-collapsible');
+  groups.forEach(grpLabel => {
+    const body = grpLabel.nextElementSibling;
+    if (!body) return;
+    const btns = body.querySelectorAll('.mat-btn');
+    let visibleCount = 0;
+    btns.forEach(btn => {
+      const txt = btn.textContent.toLowerCase();
+      const matches = !q || txt.includes(q);
+      // setProperty с 'important' перебивает CSS-правило `.mat-btn-tex { display:inline-block !important }`.
+      if (matches) btn.style.removeProperty('display');
+      else        btn.style.setProperty('display', 'none', 'important');
+      if (matches) visibleCount++;
+    });
+    // Подгруппы (например «— Однотонные»): прячем если пустые
+    body.querySelectorAll('.mat-subgroup-lbl').forEach(sub => {
+      // Подгруппа = label + последующие btn до следующей подгруппы
+      let next = sub.nextElementSibling;
+      let subVisible = 0;
+      while (next && !next.classList.contains('mat-subgroup-lbl')) {
+        if (next.classList.contains('mat-btn') && next.style.display !== 'none') subVisible++;
+        next = next.nextElementSibling;
+      }
+      sub.style.display = subVisible > 0 ? '' : 'none';
+    });
+    // Авто-развернуть группу если есть совпадения, свернуть если нет (при активном поиске)
+    if (q && visibleCount > 0) {
+      body.style.display = 'block';
+      grpLabel.style.display = '';
+      // Обновить индикатор ▾/▸
+      const label = grpLabel.textContent.replace(/^[▸▾]\s*/, '');
+      grpLabel.innerHTML = '▾ ' + label;
+    } else if (q && visibleCount === 0) {
+      grpLabel.style.display = 'none';
+    } else {
+      // Очистка поиска — показать заголовок снова
+      grpLabel.style.display = '';
+    }
+  });
+}
+
+// === Поворот текстуры ЛДСП (per-door) ===
+// Показывает карточку только когда в текущей двери есть материал с tex (ЛДСП Lamarty).
+function updateTexRotRow() {
+  const card = $('texRotCard'); if (!card) return;
+  const di = activeSection ? activeSection.doorIdx : 0;
+  const dSects = doorFills[di] || [];
+  const hasLdsp = dSects.some(s => s && s.tex);
+  card.style.display = hasLdsp ? 'block' : 'none';
+  if (hasLdsp) {
+    $('texRotToggle').checked = !!doorTexRot[di];
+    const rotated = !!doorTexRot[di];
+    $('texRotDesc').textContent = rotated
+      ? 'Длина листа (2750 мм) — по горизонтали. Лимит двери: 2750×1830 мм'
+      : 'Лист 2750×1830 мм · поворот текстуры на 90°';
+  }
+}
+
+function onTexRotToggle() {
+  if (!activeSection) return;
+  const di = activeSection.doorIdx;
+  doorTexRot[di] = $('texRotToggle').checked;
+  updateTexRotRow();
+  rerenderVisualization(); // мгновенно показываем новый поворот текстуры
+  updateDisplay();         // перепроверить лимит листа (может вывести alert)
 }
 
 function closeSectionEditor() {
   activeSection = null;
   $('panelForm').classList.remove('section-edit-mode');
   rerenderVisualization();
+  // v1.4: на телефоне вернуть пользователя к превью дверей
+  if (window.matchMedia('(max-width:768px)').matches) {
+    const vs = $('kupeVizStage');
+    if (vs) vs.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
+
+// Группы со множеством текстур (>20) → свёрнуты по умолчанию, чтобы не грузить 121 jpg разом.
+// v1.3.1: ВСЕ группы свёрнуты по умолчанию (раскрывается только та где находится текущий материал)
+const LARGE_GROUPS_COLLAPSED = null; // null = collapse all
 
 function buildSectionMaterialList(doorIdx, sectIdx) {
   const container = $('sectionMaterialList');
   if (!container) return;
   container.innerHTML = '';
   const current = (doorFills[doorIdx] || [])[sectIdx] || FILLINGS[0];
-  let currentGroup = '';
+
+  // Сгруппируем FILLINGS по g для управления collapse
+  const byGroup = {};
+  const groupOrder = [];
   FILLINGS.forEach((f, fi) => {
-    if (f.g !== currentGroup) {
-      const grp = document.createElement('div');
-      grp.className = 'mat-group-lbl';
-      grp.textContent = f.g;
-      container.appendChild(grp);
-      currentGroup = f.g;
-    }
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'mat-btn' + (f === current ? ' active' : '');
-    btn.onclick = () => setSectionFill(doorIdx, sectIdx, fi);
-    btn.textContent = f.n + ' — ' + fmt(f.p) + ' ₽/м²';
-    container.appendChild(btn);
+    if (!byGroup[f.g]) { byGroup[f.g] = []; groupOrder.push(f.g); }
+    byGroup[f.g].push({ f, fi });
   });
+
+  groupOrder.forEach(groupName => {
+    const items = byGroup[groupName];
+    // v1.3.1: по умолчанию ВСЕ группы свёрнуты (если LARGE_GROUPS_COLLAPSED===null) или только перечисленные
+    const isLargeCollapsed = LARGE_GROUPS_COLLAPSED === null ? true : LARGE_GROUPS_COLLAPSED.has(groupName);
+    // Если в группе есть текущий выбранный — раскрыть её (UX: пользователь видит где он сейчас)
+    const hasActive = items.some(it => it.f === current);
+    const isCollapsed = isLargeCollapsed && !hasActive;
+
+    const grp = document.createElement('div');
+    grp.className = 'mat-group-lbl mat-group-collapsible';
+    grp.innerHTML = (isCollapsed ? '▸ ' : '▾ ') + groupName +
+                    ' <span style="color:#999;font-weight:400;font-size:9.5px">(' + items.length + ')</span>';
+    grp.style.cursor = 'pointer';
+    container.appendChild(grp);
+
+    const groupBody = document.createElement('div');
+    groupBody.className = 'mat-group-body';
+    groupBody.style.display = isCollapsed ? 'none' : 'block';
+    container.appendChild(groupBody);
+
+    grp.onclick = () => {
+      const collapsed = groupBody.style.display === 'none';
+      groupBody.style.display = collapsed ? 'block' : 'none';
+      grp.innerHTML = (collapsed ? '▾ ' : '▸ ') + groupName +
+                      ' <span style="color:#999;font-weight:400;font-size:9.5px">(' + items.length + ')</span>';
+    };
+
+    let currentSubCat = '';
+    items.forEach(({ f, fi }) => {
+      if (f.cat && f.cat !== currentSubCat) {
+        const sub = document.createElement('div');
+        sub.className = 'mat-subgroup-lbl';
+        sub.textContent = '— ' + f.cat + (f.tier ? ' · ' + f.tier : '');
+        groupBody.appendChild(sub);
+        currentSubCat = f.cat;
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mat-btn' + (f === current ? ' active' : '') + (f.tex ? ' mat-btn-tex' : '');
+      btn.onclick = () => setSectionFill(doorIdx, sectIdx, fi);
+      if (f.tex) {
+        // data-src вместо src — реальная загрузка через IntersectionObserver когда thumb попадает в viewport.
+        // Это снижает первичную нагрузку с 121 параллельных запросов до ~10-15 видимых.
+        btn.innerHTML = '<img data-src="' + escapeAttr(f.tex) + '" alt="" class="mat-btn-thumb">' +
+                        '<span class="mat-btn-label">' + escapeHtml(f.n) + '</span>';
+      } else {
+        btn.textContent = f.n + ' — ' + fmt(f.p) + ' ₽/м²';
+      }
+      groupBody.appendChild(btn);
+    });
+  });
+  // Активируем IntersectionObserver для всех <img data-src> в списке
+  setupLazyImages(container);
+}
+
+// Один IntersectionObserver на весь Section Editor — устанавливает src когда thumb виден.
+let _lazyObserver = null;
+function setupLazyImages(container) {
+  if (!('IntersectionObserver' in window)) {
+    // Fallback: грузим всё разом
+    container.querySelectorAll('img[data-src]').forEach(img => {
+      img.src = img.dataset.src; img.removeAttribute('data-src');
+    });
+    return;
+  }
+  if (!_lazyObserver) {
+    _lazyObserver = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const img = e.target;
+          if (img.dataset.src) {
+            img.src = img.dataset.src;
+            img.removeAttribute('data-src');
+          }
+          _lazyObserver.unobserve(img);
+        }
+      });
+    }, { root: null, rootMargin: '200px 0px', threshold: 0.01 });
+  } else {
+    // Сбросить наблюдение предыдущих img
+    _lazyObserver.disconnect();
+  }
+  container.querySelectorAll('img[data-src]').forEach(img => _lazyObserver.observe(img));
 }
 
 function setSectionFill(doorIdx, sectIdx, fillIdx) {
@@ -350,21 +794,24 @@ function setSectionFill(doorIdx, sectIdx, fillIdx) {
   doorFills[doorIdx][sectIdx] = FILLINGS[fillIdx];
   buildSectionMaterialList(doorIdx, sectIdx);
   updateFilmRow();
-  updateDisplay(); // пересчитать цену если результаты уже показаны
+  updateTexRotRow();
+  // Обновляем превью НЕМЕДЛЕННО, даже если последующий calculate упадёт на валидации листа ЛДСП.
+  // Это даёт менеджеру визуальную обратную связь: «вот материал, но дверь слишком большая — поверни или раздели».
+  rerenderVisualization();
+  updateDisplay(); // пересчитать цену если результаты уже показаны (может выйти на alert о листе)
 }
 
 function applyToAllDoors() {
   if (!activeSection) return;
   const fill = (doorFills[activeSection.doorIdx] || [])[activeSection.sectIdx] || FILLINGS[0];
-  // Все двери — как выбранная: та же раскладка наполнения по секциям; у двери с другим числом секций — только эта секция.
-  const src = doorFills[activeSection.doorIdx] || [];
-  doorFills.forEach((df, i) => {
-    if (!df) return;
-    if (df.length === src.length) doorFills[i] = src.slice();
-    else if (activeSection.sectIdx < df.length) df[activeSection.sectIdx] = fill;
-  });
-  buildSectionMaterialList(activeSection.doorIdx, activeSection.sectIdx);
-  updateFilmRow();
+  // Защита от случайного клика — потеря материалов на других дверях необратима.
+  // v1.2: label — per-door (sect count может различаться)
+  const activeCount = getDoorSectCount(activeSection.doorIdx);
+  const sectLabel = activeCount > 1
+    ? 'секции ' + (activeSection.sectIdx + 1)
+    : 'двери';
+  if (!confirm('Применить материал «' + fill.n + '» к ' + sectLabel + ' всех дверей?\nТекущие материалы будут заменены.\nЕсли у других дверей меньше секций — материал применится только к существующим.')) return;
+  doorFills.forEach(df => { if (df && activeSection.sectIdx < df.length) df[activeSection.sectIdx] = fill; });
   updateDisplay();
 }
 
@@ -376,6 +823,337 @@ function applyToAllSections() {
   }
   buildSectionMaterialList(activeSection.doorIdx, activeSection.sectIdx);
   updateDisplay();
+}
+
+/* ============================================================
+   BULK OPERATIONS (v1.2) — массовое редактирование всех дверей
+   ============================================================
+   Все bulk-функции работают НЕ требуя открытого Section Editor.
+   Селекторы заполняются populateBulkSelectors() при init и при смене N.
+*/
+
+function populateBulkSelectors() {
+  const fillSel = $('bulkFillSel');
+  if (fillSel) {
+    fillSel.innerHTML = '';
+    FILLINGS.forEach((f, i) => {
+      const op = document.createElement('option');
+      op.value = i;
+      op.textContent = f.n + (f.p ? '  · ' + fmt(f.p) + ' ₽/м²' : '');
+      fillSel.appendChild(op);
+    });
+  }
+  const fromSel = $('bulkCopyFrom');
+  const toSel = $('bulkCopyTo');
+  if (!fromSel || !toSel) return;
+  const N = num('doorCount', 2);
+  const opts = [];
+  for (let i = 0; i < N; i++) opts.push('<option value="' + i + '">Дверь ' + (i + 1) + '</option>');
+  fromSel.innerHTML = opts.join('');
+  toSel.innerHTML = opts.join('');
+  if (N >= 2) { fromSel.value = '0'; toSel.value = '1'; }
+}
+
+function bulkClearAllFills() {
+  if (!confirm('Сбросить ВСЕ полотна на материал по умолчанию (' + FILLINGS[0].n + ')?\nВся ручная настройка будет потеряна.')) return;
+  const N = num('doorCount', 2);
+  const sectCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
+  doorFills = Array.from({length: N}, () => Array.from({length: sectCount}, () => FILLINGS[0]));
+  if (activeSection) buildSectionMaterialList(activeSection.doorIdx, activeSection.sectIdx);
+  updateDisplay();
+}
+
+function bulkApplyFillToAll() {
+  const fi = parseInt(($('bulkFillSel') || {}).value, 10);
+  if (!Number.isFinite(fi) || !FILLINGS[fi]) { alert('Выберите материал в селекторе'); return; }
+  const fill = FILLINGS[fi];
+  const N = num('doorCount', 2);
+  if (!confirm('Применить материал «' + fill.n + '» ко ВСЕМ секциям ВСЕХ ' + N + ' дверей?\nТекущие материалы будут заменены.')) return;
+  // v1.2: per-door sectCount — у override-дверей может быть больше секций чем у общей сетки
+  initDoorFills(N, sectOpt.rowRatios.length * sectOpt.colRatios.length);
+  for (let di = 0; di < N; di++) {
+    const doorCount = getDoorSectCount(di);
+    if (!doorFills[di] || doorFills[di].length !== doorCount) {
+      doorFills[di] = Array.from({length: doorCount}, () => fill);
+    } else {
+      for (let si = 0; si < doorCount; si++) doorFills[di][si] = fill;
+    }
+  }
+  if (activeSection) buildSectionMaterialList(activeSection.doorIdx, activeSection.sectIdx);
+  updateDisplay();
+}
+
+function bulkCopyDoor() {
+  const from = parseInt(($('bulkCopyFrom') || {}).value, 10);
+  const to   = parseInt(($('bulkCopyTo')   || {}).value, 10);
+  const N = num('doorCount', 2);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < 0 || from >= N || to >= N) {
+    alert('Некорректный выбор дверей'); return;
+  }
+  if (from === to) { alert('Выберите разные двери: откуда копировать и куда'); return; }
+  // Копируем материалы (включая ссылки на FILLINGS — это OK, объекты не мутируются)
+  if (doorFills[from]) {
+    doorFills[to] = doorFills[from].slice();
+  }
+  // Копируем высоты разделителей
+  if (doorRowMm[from] && doorRowMm[from].length) {
+    doorRowMm[to] = doorRowMm[from].slice();
+  }
+  // Поворот текстуры ЛДСП
+  doorTexRot[to] = !!doorTexRot[from];
+  // Per-door sectOpt (если уже поддерживается — Часть 3)
+  if (typeof doorSectOpt !== 'undefined' && doorSectOpt[from]) {
+    doorSectOpt[to] = doorSectOpt[from];
+  }
+  if (activeSection && activeSection.doorIdx === to) {
+    buildSectionMaterialList(to, activeSection.sectIdx);
+    buildDividersBlock();
+    updateTexRotRow();
+  }
+  updateDisplay();
+}
+
+function bulkResetDividers() {
+  if (!confirm('Распределить разделители всех дверей равномерно по высоте? Ручная настройка перетягивания будет сброшена.')) return;
+  doorRowMm = [];
+  rowMm = [];
+  if (activeSection) buildDividersBlock();
+  updateDisplay();
+}
+
+/* ============================================================
+   PROFILE SECTION PREVIEW (v1.2) — модал сечения профиля
+   ============================================================ */
+
+function showProfileSection() {
+  const sysIdx = num('profileSystem', 0);
+  const sys = PROFILE_SYSTEMS[sysIdx];
+  if (!sys) return;
+  const info = (typeof getSectionForSystem === 'function') ? getSectionForSystem(sys) : null;
+  const modal = $('profileSectionModal');
+  const titleEl = $('psecModalTitle');
+  const imgEl   = $('psecModalImg');
+  const phEl    = $('psecModalPlaceholder');
+  const metaEl  = $('psecModalMeta');
+  const descEl  = $('psecModalDesc');
+  if (!modal) return;
+  // Заголовок: предпочитаем title из каталога, иначе human-readable system+цвет
+  const fallbackTitle = (sys.system || sys.profile || 'Профиль');
+  titleEl.textContent = (info && info.title) ? info.title : fallbackTitle;
+  // Мета: ширина рамки + габариты системы (frameSide/Top/Bot) — всегда полезно
+  const dms = sys.dims || {};
+  const metaParts = [];
+  if (info && Number.isFinite(info.width)) metaParts.push('Рамка ' + info.width + ' мм');
+  else if (Number.isFinite(dms.frameSide)) metaParts.push('Рамка ' + dms.frameSide + ' мм');
+  if (Number.isFinite(dms.divider)) metaParts.push('Разделитель ' + dms.divider + ' мм');
+  if (Number.isFinite(dms.trackTop) || Number.isFinite(dms.trackBot)) {
+    metaParts.push('Трек ' + (dms.trackTop || '?') + ' / ' + (dms.trackBot || '?') + ' мм');
+  }
+  if (sys.limits) {
+    metaParts.push('H ' + sys.limits.Hmin + '–' + sys.limits.Hmax + ' мм');
+    metaParts.push('Дверь ' + sys.limits.doorL_min + '–' + sys.limits.doorL_max + ' мм');
+  }
+  metaEl.innerHTML = metaParts.map(p => '<strong>' + escapeHtml(p) + '</strong>').join(' · ');
+  // Картинка vs placeholder
+  if (info && info.img) {
+    imgEl.style.display = '';
+    phEl.style.display = 'none';
+    imgEl.src = info.img;
+    imgEl.alt = info.title || fallbackTitle;
+    imgEl.onerror = () => {
+      // если PNG не загрузился — показать placeholder
+      imgEl.style.display = 'none';
+      phEl.style.display = '';
+    };
+  } else {
+    imgEl.style.display = 'none';
+    phEl.style.display = '';
+    imgEl.removeAttribute('src');
+  }
+  // Описание
+  descEl.textContent = (info && info.description) ? info.description : 'Описание для этой системы пока не заполнено.';
+  modal.style.display = 'flex';
+  // Esc закрывает
+  document.addEventListener('keydown', _psecEscHandler);
+}
+
+function closeProfileSection() {
+  const modal = $('profileSectionModal');
+  if (modal) modal.style.display = 'none';
+  document.removeEventListener('keydown', _psecEscHandler);
+}
+
+function _psecEscHandler(e) {
+  if (e.key === 'Escape') closeProfileSection();
+}
+
+/* ============================================================
+   PER-DOOR SECTION UI (v1.2) — door-tabs + dso-card
+   ============================================================
+   buildDoorEditTabs()   — рисует чипсы 1..N для выбора активной двери
+   updateDoorSectOptCard()— обновляет блок «своя сетка» под текущую дверь
+   onToggleDoorSectIndiv()— тоггл «своя» для активной двери
+   setDoorSectGridPreset(idx)— назначает пресет из SECTION_OPTS активной двери
+   applySectOptToAllDoors()— bulk: сетка активной двери → все двери
+*/
+
+function buildDoorEditTabs() {
+  const cont = $('doorEditTabs');
+  if (!cont) return;
+  const N = num('doorCount', 2);
+  if (N <= 1) { cont.style.display = 'none'; return; }
+  cont.style.display = 'flex';
+  cont.innerHTML = '';
+  for (let i = 0; i < N; i++) {
+    const isActive = (i === activeDoorEdit);
+    const overrideMark = hasDoorOverride(i) ? '<span class="det-badge">★</span>' : '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'door-edit-tab' + (isActive ? ' active' : '');
+    btn.innerHTML = 'Дв.' + (i + 1) + overrideMark;
+    btn.title = hasDoorOverride(i)
+      ? 'Дверь ' + (i + 1) + ' — своя сетка секций'
+      : 'Дверь ' + (i + 1) + ' — общая сетка';
+    btn.onclick = () => switchActiveDoor(i);
+    cont.appendChild(btn);
+  }
+}
+
+function switchActiveDoor(doorIdx) {
+  const N = num('doorCount', 2);
+  if (doorIdx < 0 || doorIdx >= N) return;
+  activeDoorEdit = doorIdx;
+  // Активная секция переключается на 0 новой двери (сектор может быть невалидным при разных sectCount)
+  const cnt = getDoorSectCount(doorIdx);
+  const sectIdx = (activeSection && activeSection.sectIdx < cnt) ? activeSection.sectIdx : 0;
+  activeSection = { doorIdx, sectIdx };
+  // Перестраиваем UI
+  const dOpt = getDoorSectOpt(doorIdx);
+  let title = 'Дверь ' + (doorIdx + 1);
+  if (dOpt.rowRatios.length > 1 || dOpt.colRatios.length > 1) title += ' · Секция ' + (sectIdx + 1);
+  $('sectionEditorTitle').textContent = title;
+  buildDoorEditTabs();
+  buildSectionMaterialList(doorIdx, sectIdx);
+  buildDividersBlock();
+  updateDoorSectOptCard();
+  updateFilmRow();
+  updateTexRotRow();
+  rerenderVisualization();
+}
+
+function updateDoorSectOptCard() {
+  const card = $('doorSectOptCard');
+  if (!card) return;
+  const N = num('doorCount', 2);
+  if (N <= 1) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  $('dsoDoorNum').textContent = 'Дверь ' + (activeDoorEdit + 1);
+  const isOverride = hasDoorOverride(activeDoorEdit);
+  $('doorSectIndiv').checked = isOverride;
+  const curOpt = getDoorSectOpt(activeDoorEdit);
+  $('dsoCurrentLabel').innerHTML = isOverride
+    ? 'Своя сетка: <strong>' + escapeHtml(curOpt.label) + '</strong> (' + (curOpt.rowRatios.length * curOpt.colRatios.length) + ' секц.)'
+    : 'Общая сетка: <strong>' + escapeHtml(sectOpt.label) + '</strong>';
+  const grid = $('doorSectGrid');
+  const applyBtn = $('dsoApplyAll');
+  if (isOverride) {
+    grid.style.display = 'grid';
+    applyBtn.style.display = 'block';
+    grid.innerHTML = '';
+    SECTION_OPTS.forEach((opt, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const sameRows = JSON.stringify(opt.rowRatios) === JSON.stringify(curOpt.rowRatios);
+      const sameCols = JSON.stringify(opt.colRatios) === JSON.stringify(curOpt.colRatios);
+      const isActive = sameRows && sameCols;
+      btn.className = 'sect-btn' + (isActive ? ' active' : '');
+      btn.innerHTML =
+        '<svg width="22" height="15" viewBox="0 0 22 15" fill="none" stroke="currentColor" stroke-width="1.6">' +
+        getSectSvg(opt.rowRatios, opt.colRatios) + '</svg>' +
+        '<span>' + opt.label + '</span>';
+      btn.onclick = () => setDoorSectGridPreset(idx);
+      grid.appendChild(btn);
+    });
+  } else {
+    grid.style.display = 'none';
+    applyBtn.style.display = 'none';
+    grid.innerHTML = '';
+  }
+}
+
+function onToggleDoorSectIndiv() {
+  const enabled = $('doorSectIndiv').checked;
+  if (enabled) {
+    // Включаем override — копируем текущий глобальный sectOpt как стартовую точку
+    setDoorSectOpt(activeDoorEdit, sectOpt);
+  } else {
+    clearDoorSectOpt(activeDoorEdit);
+  }
+  // Перестроить редактор и визуализацию (sectCount мог измениться)
+  if (activeSection) {
+    const cnt = getDoorSectCount(activeDoorEdit);
+    if (activeSection.sectIdx >= cnt) activeSection.sectIdx = 0;
+    buildSectionMaterialList(activeDoorEdit, activeSection.sectIdx);
+  }
+  buildDividersBlock();
+  updateDoorSectOptCard();
+  buildDoorEditTabs();
+  updateComplexRow();
+  updateDisplay();
+}
+
+function setDoorSectGridPreset(optIdx) {
+  const preset = SECTION_OPTS[optIdx];
+  if (!preset) return;
+  setDoorSectOpt(activeDoorEdit, preset);
+  if (activeSection) {
+    const cnt = getDoorSectCount(activeDoorEdit);
+    if (activeSection.sectIdx >= cnt) activeSection.sectIdx = 0;
+    buildSectionMaterialList(activeDoorEdit, activeSection.sectIdx);
+  }
+  buildDividersBlock();
+  updateDoorSectOptCard();
+  buildDoorEditTabs();
+  updateComplexRow();
+  updateDisplay();
+}
+
+function applySectOptToAllDoors() {
+  const N = num('doorCount', 2);
+  if (N <= 1) return;
+  const dOpt = getDoorSectOpt(activeDoorEdit);
+  if (!confirm('Применить сетку «' + dOpt.label + '» ко всем ' + N + ' дверям?\nИндивидуальные настройки сетки на других дверях будут заменены.')) return;
+  for (let i = 0; i < N; i++) setDoorSectOpt(i, dOpt);
+  buildDoorEditTabs();
+  if (activeSection) buildSectionMaterialList(activeSection.doorIdx, activeSection.sectIdx);
+  buildDividersBlock();
+  updateDoorSectOptCard();
+  updateComplexRow();
+  updateDisplay();
+}
+
+/**
+ * updateComplexRow() — пересчитывает видимость и текст «Сложная сборка»
+ * по МАКСИМАЛЬНОМУ количеству секций среди всех дверей.
+ * v1.2: раньше счёт был по глобальному sectOpt; теперь учитываем per-door override.
+ */
+function updateComplexRow() {
+  const cr = $('complexRow');
+  if (!cr) return;
+  const N = num('doorCount', 2);
+  let maxCnt = 0;
+  for (let i = 0; i < N; i++) {
+    const c = getDoorSectCount(i);
+    if (c > maxCnt) maxCnt = c;
+  }
+  if (maxCnt >= COMPLEX_SECTIONS_THRESHOLD) {
+    cr.style.display = 'flex';
+    $('complexWork').checked = true;
+    $('complexDesc').textContent =
+      '+' + fmt(COMPLEX_WORK_PRICE) + ' ₽ за дверь (макс. ' + maxCnt + ' вставок, ≥ ' + COMPLEX_SECTIONS_THRESHOLD + ')';
+  } else {
+    cr.style.display = 'none';
+  }
 }
 
 function updateFilmRow() {
@@ -399,21 +1177,46 @@ function updateFilmRow() {
 function rerenderVisualization() {
   const ld = window._lastCalcData;
   if (!ld || !$('vizRoom')) return;
-  renderRoom('vizRoom', ld.W, ld.H, ld.N, ld.bd, ld.isSinglePartition,
-    doorFills, ld.frameGrad, ld.dims, sectOpt);
+  // v1.2: формируем актуальный массив per-door sect-опций (юзер мог сменить override без полного calculate)
+  const N = num('doorCount', ld.N || 2);
+  renderRoom('vizRoom', ld.W, ld.H, N, ld.bd, ld.isSinglePartition,
+    doorFills, ld.frameGrad, ld.dims, getAllDoorSectOpts(N));
 }
 
+// === Двух-уровневый dropdown профилей: Семейство → Профиль → Цвет ===
+// PROFILE_SYSTEMS[i].family — категория ('Стандарт', 'Эконом', 'SLIM LINE', 'NOVA', 'GRACE', 'Свои')
+// PROFILE_SYSTEMS[i].profile — короткий лейбл для отображения в селекте профиля
+// Реальный индекс sysIdx (в PROFILE_SYSTEMS) хранится в #profileSystem.value — это сохраняет совместимость с drafts.
+
 function populateProfiles() {
+  const FAMILIES = ['Стандарт', 'Эконом', 'SLIM LINE', 'NOVA', 'GRACE', 'Свои'].filter(f => PROFILE_SYSTEMS.some(s => s.family === f));
+  // 1. Семейства
+  const selF = $('profileFamily');
+  selF.innerHTML = '';
+  FAMILIES.forEach(fam => {
+    const op = document.createElement('option');
+    op.value = fam;
+    op.textContent = fam;
+    selF.appendChild(op);
+  });
+  // 2. Профили первого семейства + первый цвет
+  populateProfileSystemsForFamily(FAMILIES[0]);
+}
+
+function populateProfileSystemsForFamily(family) {
   const sel = $('profileSystem');
+  sel.innerHTML = '';
   PROFILE_SYSTEMS.forEach((s, i) => {
-    if (s.system === 'Свои цены') return;   // служебная система с условными ценами — не показываем клиенту
+    if (s.family !== family) return;
     const op = document.createElement('option');
     op.value = i;
-    op.textContent = s.system;
+    op.textContent = s.profile || s.system;
     sel.appendChild(op);
   });
-  // Populate colors for first system
-  populateProfileColors(0);
+  // Подцветить первый профиль семейства
+  if (sel.options.length > 0) {
+    populateProfileColors(parseInt(sel.options[0].value));
+  }
 }
 
 function populateProfileColors(sysIdx) {
@@ -425,6 +1228,12 @@ function populateProfileColors(sysIdx) {
     op.textContent = c.name;
     sel.appendChild(op);
   });
+}
+
+function onProfileFamilyChange() {
+  const fam = $('profileFamily').value;
+  populateProfileSystemsForFamily(fam);
+  updateDisplay(); // новое семейство → новый sysIdx по умолчанию → новые цены
 }
 
 function onProfileSystemChange() {
@@ -443,24 +1252,16 @@ function getCurrentProfile() {
   return PROFILE_SYSTEMS[sysIdx].colors[colIdx];
 }
 
+// v1.3.3: Тёмная тема убрана. Принудительно ставим light независимо от системных настроек.
+// (Раньше initTheme падал на null btn → ломал ВЕСЬ init() — chips количества дверей и материалы не работали.)
 function initTheme() {
-  const btn = document.querySelector('[data-theme-toggle]');
-  const root = document.documentElement;
-  // Всегда стартуем в светлой теме: тёмная в купе доделана не полностью (колонки остаются светлыми)
-  let theme = 'light';
-  root.setAttribute('data-theme', theme);
-  setThemeIcon(btn, theme);
-  btn.addEventListener('click', () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', theme);
-    setThemeIcon(btn, theme);
-  });
+  document.documentElement.setAttribute('data-theme', 'light');
+  // Кнопка [data-theme-toggle] удалена из HTML — addEventListener больше не нужен.
 }
 
 function setThemeIcon(btn, theme) {
-  btn.innerHTML = theme === 'dark'
-    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
-    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  // No-op (тёмная тема убрана; функция оставлена для совместимости со старыми вызовами).
+  if (!btn) return;
 }
 
 /* ============================================================
@@ -510,28 +1311,26 @@ function setSections(optIdx) {
   sectOpt = SECTION_OPTS[optIdx];
   sectH = sectOpt.h;
   sectV = sectOpt.v;
-  document.querySelectorAll('.sect-btn').forEach(b =>
+  document.querySelectorAll('#sectionsGrid .sect-btn').forEach(b =>
     b.classList.toggle('active', +b.dataset.idx === optIdx)
   );
-  // Инициализировать doorFills под новое количество секций
+  // v1.2: переинициализируем doorFills для дверей БЕЗ override (с override — оставляем).
   const newCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
   const N = num('doorCount', 2);
-  initDoorFills(N, newCount);
-  // Сбросить rowMm при смене пресета чтобы пересчитались равномерно
+  for (let i = 0; i < N; i++) {
+    if (hasDoorOverride(i)) continue; // override → не трогаем
+    const cur = doorFills[i] || [];
+    doorFills[i] = Array.from({length: newCount}, (_, si) => cur[si] || cur[cur.length - 1] || FILLINGS[0]);
+  }
+  // Сбросить rowMm — пересчитается при следующем рендере (per-door)
   rowMm = [];
   doorRowMm = [];
-  activeDoorEdit = 0;
+  // Активная дверь не меняется (если уже редактируется конкретная — пусть остаётся)
+  if (activeDoorEdit >= N) activeDoorEdit = 0;
   buildDividersBlock();
-  // Сложная сборка
-  const cr = $('complexRow');
-  if (newCount >= COMPLEX_SECTIONS_THRESHOLD) {
-    cr.style.display = 'flex';
-    $('complexWork').checked = true;
-    $('complexDesc').textContent =
-      '+' + fmt(COMPLEX_WORK_PRICE) + ' ₽ за дверь (' + newCount + ' вставок, ≥ ' + COMPLEX_SECTIONS_THRESHOLD + ')';
-  } else {
-    cr.style.display = 'none';
-  }
+  updateComplexRow();
+  updateDoorSectOptCard();
+  buildDoorEditTabs();
   updateDisplay();
 }
 
@@ -543,6 +1342,22 @@ function onDoorCountChange() {
   // Reinit doorFills для нового количества дверей
   const sectCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
   initDoorFills(n, sectCount);
+  // Закрыть Section Editor если он смотрит на удалённую дверь (doorIdx >= n)
+  if (activeSection && activeSection.doorIdx >= n) {
+    closeSectionEditor();
+  }
+  // Очистить per-door массивы за пределами нового количества дверей
+  if (doorTexRot.length > n) doorTexRot.length = n;
+  if (doorSectOpt.length > n) doorSectOpt.length = n;
+  if (doorRowMm.length > n) doorRowMm.length = n;
+  // v1.2 — обновить bulk-селекторы под новое количество дверей
+  if (typeof populateBulkSelectors === 'function') populateBulkSelectors();
+  // Если editor открыт — обновить door-tabs (могло измениться кол-во чипсов)
+  if (activeSection) {
+    buildDoorEditTabs();
+    updateDoorSectOptCard();
+  }
+  updateComplexRow();
   updateDisplay();
 }
 
@@ -554,33 +1369,124 @@ function onDoorCountChange() {
 
 /* ============================================================
    BUSINESS LOGIC — getAdjustedPrices()
-   Возвращает цены профиля (₽/пог.м.)
+   Цены профиля (₽/пог.м.) — из data/profiles.js
    ============================================================ */
 function getAdjustedPrices() {
   const p = getCurrentProfile();
-  return {
-    ruchka:      p.ruchka,
-    verh:        p.verh,
-    niz:         p.niz,
-    razd:        p.razd,
-    napravl_top: p.napravl_top,
-    napravl_bot: p.napravl_bot,
-  };
+  return { ruchka: p.ruchka, verh: p.verh, niz: p.niz, razd: p.razd, napravl_top: p.napravl_top, napravl_bot: p.napravl_bot };
 }
 
 /* ============================================================
    BUSINESS LOGIC — calculate()
    Формула строго по ТЗ, расширена под napravl_top / napravl_bot
    ============================================================ */
-function calculate() {
+function calculate(opts) {
+  const silent = !!(opts && opts.silent); // true = пропустить строгие алерты (для live-пересчёта)
+  if (!validateOpeningDimensions(!silent, !silent)) return;
   const W = num('width');
   const H = num('height');
   const N = num('doorCount', 2);
-  if (!W || !H || !N) { alert('Укажите размеры проёма'); return; }
+  // v1.3.2: при live-пересчёте (silent) — НЕ показывать alert на частичный ввод (типа W=10 в процессе ввода 1050).
+  // Просто молча выйти из расчёта; полная валидация только при явном «Рассчитать стоимость».
+  if (!W || !H || !N) {
+    if (!silent) alert('Укажите размеры проёма и количество дверей');
+    return;
+  }
+  if (N < 1 || N > 7) {
+    if (!silent) alert('Количество дверей должно быть от 1 до 7. Сейчас: ' + N);
+    return;
+  }
+  if (!Number.isFinite(W) || !Number.isFinite(H) || !Number.isFinite(N)) {
+    if (!silent) alert('Некорректные числовые значения. Проверьте поля ширины/высоты/количества дверей.');
+    return;
+  }
 
   // Партиция: если тоггл включён при N=2 → оплачивается 1 дверь, иначе N
   const isSinglePartition = N === 2 && $('singlePartition').checked;
   const bd = isSinglePartition ? 1 : N;
+
+  // Жёсткая валидация по вставкам ЛДСП (формат листа Lamarty 2750×1830):
+  // КАЖДАЯ вставка с текстурой должна вмещаться в лист в выбранной ориентации (per-door).
+  // Расчёт ведётся по реальным внутренним размерам секций (минус рамка и разделители).
+  // В silent-режиме (живой пересчёт) — пропускаем алерт, валидация работает только при явном «Рассчитать стоимость».
+  // v1.2: каждая дверь может иметь свою сетку секций (doorSectOpt[di]) — валидируем per-door по её ratios.
+  if (!silent) {
+    const doorL = W / N;
+    const ldspViolations = [];
+    // Геометрия профиля выбранной системы (frameSide, frameTop/Bot, divider) в мм
+    const sysCheck = PROFILE_SYSTEMS[num('profileSystem', 0)] || PROFILE_SYSTEMS[0];
+    const dms = sysCheck.dims || { frameSide:30, frameTop:40, frameBot:40, divider:20 };
+    const innerW = doorL - 2 * dms.frameSide;
+    const innerH = H - dms.frameTop - dms.frameBot;
+
+    for (let di = 0; di < bd; di++) {
+      const dOpt = getDoorSectOpt(di);
+      const dRowRatios = dOpt.rowRatios;
+      const dColRatios = dOpt.colRatios;
+      const sumRows = dRowRatios.reduce((s, x) => s + x, 0);
+      const sumCols = dColRatios.reduce((s, x) => s + x, 0);
+      const contentW = innerW - (dColRatios.length - 1) * dms.divider;
+      const contentH = innerH - (dRowRatios.length - 1) * dms.divider;
+      const dSects = doorFills[di] || [];
+      const rotated = !!doorTexRot[di];
+      const maxW = rotated ? LDSP_SHEET_LONG : LDSP_SHEET_SHORT;   // вертик: 1830, горизонт: 2750
+      const maxH = rotated ? LDSP_SHEET_SHORT : LDSP_SHEET_LONG;   // вертик: 2750, горизонт: 1830
+      for (let r = 0; r < dRowRatios.length; r++) {
+        for (let c = 0; c < dColRatios.length; c++) {
+          const si = r * dColRatios.length + c;
+          const f = dSects[si];
+          if (!f || !f.tex) continue;
+          const sW = Math.round((dColRatios[c] / sumCols) * contentW);
+          const sH = Math.round((dRowRatios[r] / sumRows) * contentH);
+          if (sW > maxW || sH > maxH) {
+            const sectLabel = dRowRatios.length * dColRatios.length > 1
+              ? ', секция ' + (si + 1)
+              : '';
+            ldspViolations.push(
+              'Дверь ' + (di + 1) + sectLabel + ': вставка ' + sW + '×' + sH + ' мм — превышает лист ЛДСП ' +
+              maxW + '×' + maxH + ' мм (' + (rotated ? 'горизонтальная' : 'вертикальная') + ' укладка)'
+            );
+          }
+        }
+      }
+    }
+    if (ldspViolations.length > 0) {
+      alert(
+        '❌ ЛДСП Lamarty: вставка превышает формат листа 2750×1830 мм.\n\n• ' +
+        ldspViolations.join('\n• ') +
+        '\n\nЧто можно сделать:\n' +
+        '  — Включить «↻ Горизонтальная укладка» в редакторе секции (поменяет ориентацию)\n' +
+        '  — Разбить дверь на несколько секций (сетка «2 равные», «3 гориз.» и т.д.)\n' +
+        '  — Уменьшить размер двери'
+      );
+      return;
+    }
+  }
+
+  // Per-system валидация (limits из каталога Аристо)
+  const sysIdxValid = num('profileSystem', 0);
+  const sys = PROFILE_SYSTEMS[sysIdxValid];
+  if (sys && sys.limits) {
+    const L = sys.limits;
+    const doorL = Math.round(W / N);
+    const violations = [];
+    if (H < L.Hmin || H > L.Hmax) {
+      violations.push('Высота двери: ' + H + ' мм (допустимо ' + L.Hmin + '–' + L.Hmax + ' мм для системы «' + sys.system + '»)');
+    }
+    if (doorL < L.doorL_min || doorL > L.doorL_max) {
+      violations.push('Ширина одной двери: ' + doorL + ' мм (W/N = ' + W + '/' + N + '; допустимо ' + L.doorL_min + '–' + L.doorL_max + ' мм для системы «' + sys.system + '»)');
+    }
+    if (violations.length > 0) {
+      // Do not interrupt typing or blur with a modal before the door count can
+      // be changed. Explicit Calculate still asks about catalogue exceptions.
+      if (silent) return;
+      const proceed = confirm(
+        '⚠️ Размеры вне каталоговых пределов Аристо:\n\n• ' + violations.join('\n• ') +
+        '\n\nРассчитать всё равно?\n(OK — продолжить, Cancel — изменить параметры)'
+      );
+      if (!proceed) return;
+    }
+  }
 
   const softClose = $('softClose').checked;
   // Сложная сборка: только если complexRow видим (секций на дверь ≥ 4)
@@ -592,39 +1498,65 @@ function calculate() {
   const dw = W / N;
 
   // 1. Площадь и стоимость наполнения — per door × per section
-  const { rowRatios, colRatios } = sectOpt;
-  const sectCount = rowRatios.length * colRatios.length;
+  // v1.2: каждая дверь использует СВОЙ sectOpt (общий или override через doorSectOpt[di]).
+  // sectCount может различаться от двери к двери.
   const totalAreaPerDoor = (dw / 1000) * (H / 1000);
   const areaM2 = totalAreaPerDoor * bd;
-  // Убедиться что doorFills инициализирован
-  initDoorFills(N, sectCount);
+  // Инициализация: doorFills под глобальный sectOpt; per-door override уже подогнан в setDoorSectOpt().
+  initDoorFills(N, sectOpt.rowRatios.length * sectOpt.colRatios.length);
   let filCost = 0;
   // 2D breakdown: sectionBreakdown2D[doorIdx][sectIdx]
   const sectionBreakdown2D = [];
+  // Для агрегации в плоский breakdown будем суммировать по уникальным {row, col, isOverride}
+  // Если у всех дверей одинаковая сетка (нет ни одного override) — плоский breakdown совпадает по
+  // структуре с исторической версией (по индексу секции).
+  const anyOverride = hasAnyDoorOverride();
   for (let di = 0; di < bd; di++) {
+    const dOpt = getDoorSectOpt(di);
+    const dRowRatios = dOpt.rowRatios;
+    const dColRatios = dOpt.colRatios;
     const dFills = doorFills[di] || [FILLINGS[0]];
     sectionBreakdown2D[di] = [];
-    for (let r = 0; r < rowRatios.length; r++) {
-      for (let c = 0; c < colRatios.length; c++) {
-        const si = r * colRatios.length + c;
+    for (let r = 0; r < dRowRatios.length; r++) {
+      for (let c = 0; c < dColRatios.length; c++) {
+        const si = r * dColRatios.length + c;
         const f = dFills[si] || dFills[0] || FILLINGS[0];
-        const sArea = totalAreaPerDoor * rowRatios[r] * colRatios[c];
-        const sPrice = f.p * fillMarkupMult;
+        const sArea = totalAreaPerDoor * dRowRatios[r] * dColRatios[c];
+        // NaN guard: если f.p отсутствует или невалиден — считаем 0, иначе цена пойдёт NaN→NaN в КП.
+        const basePrice = Number.isFinite(f.p) ? f.p : 0;
+        const sPrice = basePrice * fillMarkupMult;
         sectionBreakdown2D[di].push({ fill: f, sArea, fillPriceAdj: sPrice, cost: sArea * sPrice });
         filCost += sArea * sPrice;
       }
     }
   }
-  // Плоский breakdown для отображения (агрегирован по дверям)
+  // Плоский breakdown для отображения справа.
+  // Если все двери одинаковы по сетке — агрегируем по индексу секции (как в v1.1).
+  // Если есть override — показываем агрегацию по дверям: «Дверь 1 · 3 секции · ...».
   const sectionBreakdown = [];
-  for (let si = 0; si < sectCount; si++) {
-    const ref = (sectionBreakdown2D[0] && sectionBreakdown2D[0][si]) || { fill: FILLINGS[0], fillPriceAdj: FILLINGS[0].p * fillMarkupMult };
-    const sArea = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].sArea : 0), 0);
-    const cost  = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].cost  : 0), 0);
-    sectionBreakdown.push({ fill: ref.fill, sArea, fillPriceAdj: ref.fillPriceAdj, cost });
+  if (!anyOverride) {
+    const sectCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
+    for (let si = 0; si < sectCount; si++) {
+      const ref = (sectionBreakdown2D[0] && sectionBreakdown2D[0][si]) || { fill: FILLINGS[0], fillPriceAdj: FILLINGS[0].p * fillMarkupMult };
+      const sArea = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].sArea : 0), 0);
+      const cost  = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].cost  : 0), 0);
+      sectionBreakdown.push({ fill: ref.fill, sArea, fillPriceAdj: ref.fillPriceAdj, cost });
+    }
+  } else {
+    // Per-door агрегация: каждая дверь — отдельная строка
+    sectionBreakdown2D.forEach((dBd, di) => {
+      const dArea = dBd.reduce((s, x) => s + x.sArea, 0);
+      const dCost = dBd.reduce((s, x) => s + x.cost, 0);
+      const refFill = (dBd[0] || {}).fill || FILLINGS[0];
+      const refPrice = (dBd[0] || {}).fillPriceAdj || (refFill.p * fillMarkupMult);
+      sectionBreakdown.push({
+        fill: refFill, sArea: dArea, fillPriceAdj: refPrice, cost: dCost,
+        doorIdx: di, sectCount: dBd.length,
+      });
+    });
   }
   const fill = (doorFills[0] && doorFills[0][0]) || FILLINGS[0];
-  const fillPriceAdj = sectionBreakdown[0].fillPriceAdj;
+  const fillPriceAdj = (sectionBreakdown[0] || { fillPriceAdj: fill.p * fillMarkupMult }).fillPriceAdj;
   // Уникальные материалы для заголовка
   const allFillsFlat = [].concat(...doorFills.slice(0, bd));
   const uniqueFills = allFillsFlat.filter((f, i, arr) => arr.indexOf(f) === i);
@@ -662,45 +1594,79 @@ function calculate() {
     c: (lenNiz / 1000) * p.niz,
   });
 
-  // Горизонтальные разделители
-  if (sectH > 0) {
-    const l = dw * sectH * bd;
+  // Горизонтальные и вертикальные разделители — v1.2: суммируем по дверям
+  // (у каждой двери может быть свой sectOpt.h/v через override).
+  let sumHorizDivLen = 0; // мм
+  let sumVertDivLen  = 0; // мм
+  let sumHorizDivPcs = 0;
+  let sumVertDivPcs  = 0;
+  let maxH_perDoor = 0, maxV_perDoor = 0;
+  for (let di = 0; di < bd; di++) {
+    const dOpt = getDoorSectOpt(di);
+    const dH = dOpt.h || 0; // горизонт. разделителей на дверь
+    const dV = dOpt.v || 0; // вертик. разделителей на дверь
+    sumHorizDivLen += dw * dH;
+    sumVertDivLen  += H * dV;
+    sumHorizDivPcs += dH;
+    sumVertDivPcs  += dV;
+    if (dH > maxH_perDoor) maxH_perDoor = dH;
+    if (dV > maxV_perDoor) maxV_perDoor = dV;
+  }
+  if (sumHorizDivLen > 0) {
+    const sameAcrossDoors = (sumHorizDivPcs === bd * maxH_perDoor);
     profRows.push({
-      n: 'Разд. горизонт. (' + sectH + ' шт/дв.)',
-      note: (sectH * bd).toFixed(2) + ' шт',
-      l,
+      n: 'Разд. горизонт.' + (sameAcrossDoors ? ' (' + maxH_perDoor + ' шт/дв.)' : ' (разные по дверям)'),
+      note: sumHorizDivPcs.toFixed(2) + ' шт',
+      l: sumHorizDivLen,
       pr: p.razd,
-      c: (l / 1000) * p.razd,
+      c: (sumHorizDivLen / 1000) * p.razd,
     });
   }
-
-  // Вертикальные разделители
-  if (sectV > 0) {
-    const l = H * sectV * bd;
+  if (sumVertDivLen > 0) {
+    const sameAcrossDoors = (sumVertDivPcs === bd * maxV_perDoor);
     profRows.push({
-      n: 'Разд. вертикал. (' + sectV + ' шт/дв.)',
-      note: (sectV * bd).toFixed(2) + ' шт',
-      l,
+      n: 'Разд. вертикал.' + (sameAcrossDoors ? ' (' + maxV_perDoor + ' шт/дв.)' : ' (разные по дверям)'),
+      note: sumVertDivPcs.toFixed(2) + ' шт',
+      l: sumVertDivLen,
       pr: p.razd,
-      c: (l / 1000) * p.razd,
+      c: (sumVertDivLen / 1000) * p.razd,
     });
   }
 
   // Направляющие — по ширине ВСЕГО проёма (не зависят от bd)
+  // v1.2: для подвесных систем (systemKind='hang') нижний трек отсутствует
+  // (docs/aristo-reference.md:20: «GRACE — Подвесная, без нижнего трека»)
+  const sysForKind = PROFILE_SYSTEMS[num('profileSystem', 0)] || PROFILE_SYSTEMS[0];
+  const sysKind = sysForKind.systemKind || 'slide';
   profRows.push({
-    n: 'Направляющая верхняя',
+    n: sysKind === 'hang' ? 'Направляющая верхняя (подвесная)' : 'Направляющая верхняя',
     note: 'по проёму',
     l: W,
     pr: p.napravl_top,
     c: (W / 1000) * p.napravl_top,
   });
-  profRows.push({
-    n: 'Направляющая нижняя',
-    note: 'по проёму',
-    l: W,
-    pr: p.napravl_bot,
-    c: (W / 1000) * p.napravl_bot,
-  });
+  if (sysKind !== 'hang') {
+    // Раздвижная — нижний трек считается
+    profRows.push({
+      n: 'Направляющая нижняя',
+      note: 'по проёму',
+      l: W,
+      pr: p.napravl_bot,
+      c: (W / 1000) * p.napravl_bot,
+    });
+  }
+
+  // v1.2: hardwarePerDoor — комплект штучной фурнитуры (ролики, подвесы, стопоры, декор)
+  // для систем где это применимо (GRACE и т.д.). Учитывается per door (× bd).
+  if (sysForKind.hardwarePerDoor && Number.isFinite(sysForKind.hardwarePerDoor)) {
+    profRows.push({
+      n: sysForKind.hardwareLabel || 'Комплект фурнитуры',
+      note: bd.toFixed(2) + ' дв.',
+      l: 0,
+      pr: sysForKind.hardwarePerDoor,
+      c: sysForKind.hardwarePerDoor * bd,
+    });
+  }
 
   const profTotal = profRows.reduce((s, r) => s + r.c, 0);
 
@@ -742,6 +1708,9 @@ function calculate() {
     complexWork, complexCost,
     film, filmOn, filmCost,
     total, profileName, frameGrad, dims, sectOpt,
+    // v1.2: передаём массив per-door sect-опций для визуализации
+    doorSectOptArr: getAllDoorSectOpts(N),
+    hasOverride: hasAnyDoorOverride(),
   });
 }
 
@@ -786,14 +1755,12 @@ function renderResults(d) {
   if (d.softCloseCost > 0) specItems.push({ name:'Доводчик',         qty:bdDisplay+' дв.',         sum:d.softCloseCost });
   if (d.complexCost > 0)   specItems.push({ name:'Сложная сборка',   qty:bdDisplay+' дв.',         sum:d.complexCost });
 
-  // Округляем строки так, чтобы их сумма совпадала с ИТОГО
-  roundParts(specItems.map(it => it.sum), d.total).forEach((v, i) => { specItems[i].sum = v; });
-
-  const specHTML = specItems.map(it =>
+  const specR = roundParts(specItems.map(it => it.sum), d.total);
+  const specHTML = specItems.map((it, i) =>
     '<div class="kupe-spec-row">'+
       '<span class="kupe-spec-name">'+it.name+'</span>'+
       '<span class="kupe-spec-qty">'+it.qty+'</span>'+
-      '<span class="kupe-spec-price">'+fmt(it.sum)+' ₽</span>'+
+      '<span class="kupe-spec-price">'+fmt(specR[i])+' ₽</span>'+
     '</div>'
   ).join('');
 
@@ -804,7 +1771,7 @@ function renderResults(d) {
       '<div class="kupe-hero-price rh-value">' + fmt(d.total) + ' ₽</div>' +
       '<div class="kupe-hero-meta">' +
         d.N + ' ' + pluralDoors(d.N) + ' · ' + d.W + '×' + d.H + ' мм · ' +
-        (d.fills.length === 1 ? d.fills[0].n : d.fills.length + ' ' + pluralMaterials(d.fills.length)) +
+        (d.fills.length === 1 ? d.fills[0].n : d.fills.length + ' материалов') +
         (isPartition ? ' · одиночная перегородка' : '') +
       '</div>' +
     '</div>' +
@@ -846,7 +1813,7 @@ function renderResults(d) {
         // Клиент
         '<div class="field">' +
           '<label class="lbl" for="kpClient">Клиент / организация</label>' +
-          '<input class="kp-client-input" id="kpClient" type="text" placeholder="ФИО или название организации">' +
+          '<input class="kp-client-input" id="kpClient" type="text" placeholder="Иванов Иван Иванович">' +
         '</div>' +
         // Телефон заказчика
         '<div class="field">' +
@@ -856,7 +1823,7 @@ function renderResults(d) {
         // Менеджер
         '<div class="field">' +
           '<label class="lbl" for="kpManager">Менеджер</label>' +
-          '<input class="kp-client-input" id="kpManager" type="text" placeholder="Имя менеджера">' +
+          '<input class="kp-client-input" id="kpManager" type="text" placeholder="Фамилия Имя">' +
         '</div>' +
         // Доставка
         '<div class="kp-row">' +
@@ -873,7 +1840,7 @@ function renderResults(d) {
         '<div class="tog-row" style="background:var(--color-surface-offset)">' +
           '<div>' +
             '<div class="tog-lbl">Включить стоимость установки</div>' +
-            '<div class="tog-desc">13% от стоимости изделия</div>' +
+            '<div class="tog-desc">13% от стоимости изделия, минимум 5 000 ₽</div>' +
           '</div>' +
           '<label class="toggle"><input type="checkbox" id="kpInstall" onchange="updateKPPreview()"><span class="t-slider"></span></label>' +
         '</div>' +
@@ -888,10 +1855,17 @@ function renderResults(d) {
       '</div>' +
     '</div>';
 
-  renderRoom('vizRoom', d.W, d.H, d.N, d.bd, d.isSinglePartition, d.doorFills || [d.fills], d.frameGrad, d.dims, d.sectOpt);
+  // v1.2: передаём per-door sect-опции (массив длины N) вместо одной
+  renderRoom('vizRoom', d.W, d.H, d.N, d.bd, d.isSinglePartition, d.doorFills || [d.fills], d.frameGrad, d.dims, d.doorSectOptArr || d.sectOpt);
 
   // Сохраняем данные расчёта для КП
   window._lastCalcData = d;
+  // v1.4: обновить «Итого» в мобильной нижней панели
+  const mbarTotal = document.getElementById('kupeMobileTotal');
+  if (mbarTotal) mbarTotal.textContent = fmt(d.total) + ' ₽';
+  // v1.3: после расчёта — снять disabled с «Экспорт КП» (критика #1)
+  const exportBtn = document.getElementById('kupeExportKPBtn');
+  if (exportBtn) { exportBtn.removeAttribute('disabled'); exportBtn.removeAttribute('title'); }
   updateKPPreview();
 
   // Phase 5: обновить список заполнений в левой колонне
@@ -906,11 +1880,18 @@ function renderResults(d) {
    Визуализация: комната → направляющие → полотна → тень
    isSinglePartition: bool — вторая дверь не оплачивается (ghost)
    ============================================================ */
-function renderRoom(containerId, W, H, N, bd, isSinglePartition, fills, frameGrad, dims, sectOpt) {
+function renderRoom(containerId, W, H, N, bd, isSinglePartition, fills, frameGrad, dims, sectOptOrArr) {
   const room = $(containerId);
   if (!room) return;
   // Default dims if not provided
   const DM = dims || { frameSide:30, frameTop:40, frameBot:40, divider:20, trackTop:40, trackBot:12 };
+  // v1.2: sectOptOrArr может быть массивом (per-door) или одним объектом (common)
+  const _isOptArr = Array.isArray(sectOptOrArr);
+  const _commonOpt = (_isOptArr ? null : sectOptOrArr) || SECTION_OPTS[0];
+  function sOptForDoor(i) {
+    if (_isOptArr) return sectOptOrArr[i] || sectOptOrArr[sectOptOrArr.length - 1] || _commonOpt;
+    return _commonOpt;
+  }
 
   const FLOOR_H = 64;
   const CORNICE_H = 14;
@@ -1061,6 +2042,8 @@ function renderRoom(containerId, W, H, N, bd, isSinglePartition, fills, frameGra
   );
 
   const isDraggable = containerId === 'vizRoom';
+  // v1.3.5: в КП (страница 2) подписываем каждую секцию названием материала поверх полотна.
+  const showLabels = containerId === 'kpVizRoom';
   for (let i = 0; i < N; i++) {
     const isGhost = isSinglePartition && i === 1;
     const doorOpacity = isGhost ? 0.22 : 1;
@@ -1068,19 +2051,23 @@ function renderRoom(containerId, W, H, N, bd, isSinglePartition, fills, frameGra
     const dFills = Array.isArray(fills[0])
       ? (fills[i] || fills[fills.length - 1] || [FILLINGS[0]])
       : fills;
-    const _rows = (sectOpt || SECTION_OPTS[0]).rowRatios.length;
+    // v1.2: для каждой двери берём её sectOpt (массив per-door или общий fallback)
+    const _baseOpt = sOptForDoor(i);
+    const _rows = _baseOpt.rowRatios.length;
     const _dRM  = (doorRowMm[i] && doorRowMm[i].length === _rows) ? doorRowMm[i] : null;
     const doorSO = _dRM
-      ? Object.assign({}, sectOpt, { rowRatios: _dRM.map(v => v / H) })
-      : (sectOpt || SECTION_OPTS[0]);
-    const door = makeDoor(dW, dH, i, dFills, doorSO, doorOpacity, frameGrad, pxPerMm, DM, isDraggable);
+      ? Object.assign({}, _baseOpt, { rowRatios: _dRM.map(v => v / H) })
+      : _baseOpt;
+    const door = makeDoor(dW, dH, i, dFills, doorSO, doorOpacity, frameGrad, pxPerMm, DM, isDraggable, showLabels);
     if (i > 0) door.style.marginLeft = '-2px';
     dc.appendChild(door);
   }
   room.appendChild(dc);
 
   // — Линейка секций (справа от активной двери)
-  const _sectRows = (sectOpt || SECTION_OPTS[0]).rowRatios.length;
+  // v1.2: используем sectOpt активной двери (может отличаться от соседних)
+  const _activeOpt = sOptForDoor(Math.min(activeDoorEdit, N - 1));
+  const _sectRows = _activeOpt.rowRatios.length;
   if (_sectRows > 1 && containerId === 'vizRoom') {
     const rIdx = Math.min(activeDoorEdit, N - 1);
     const rRm = (doorRowMm[rIdx] && doorRowMm[rIdx].length === _sectRows)
@@ -1326,7 +2313,7 @@ function renderRoom(containerId, W, H, N, bd, isSinglePartition, fills, frameGra
   room.appendChild(dim);
 }
 
-function makeDoor(dW, dH, doorIdx, fills, sOpt, opacity, frameGrad, pxPerMm, dims, draggable) {
+function makeDoor(dW, dH, doorIdx, fills, sOpt, opacity, frameGrad, pxPerMm, dims, draggable, showLabels) {
   const DM = dims || { frameSide:30, frameTop:40, frameBot:40, divider:20 };
   const fg = (frameGrad || '#c0c0c0,#e0e0e0,#a0a0a0').split(',');
   const [fMid, fLight, fDark] = fg;
@@ -1370,6 +2357,20 @@ function makeDoor(dW, dH, doorIdx, fills, sOpt, opacity, frameGrad, pxPerMm, dim
   // Фон разделителей — цвет профиля в зоне gap
   inner.style.background = fMid;
 
+  // Вычисляем pixel-размер каждой ячейки (понадобится для текстуры с поворотом).
+  const colSum = colRatios.reduce((s, x) => s + x, 0);
+  const rowSum = rowRatios.reduce((s, x) => s + x, 0);
+  const innerW = dW - 2 * fSide;
+  const innerH = dH - fTop - fBot;
+  const contentW = innerW - (colRatios.length - 1) * divW;
+  const contentH = innerH - (rowRatios.length - 1) * divW;
+
+  // ЛДСП-параметры: 1 thumbnail jpg = 600×1200мм реального материала (без поворота).
+  const TEX_MM_W = 600, TEX_MM_H = 1200;
+  const bgW = Math.max(20, Math.round(TEX_MM_W * pxPerMm));
+  const bgH = Math.max(40, Math.round(TEX_MM_H * pxPerMm));
+  const isRotated = !!doorTexRot[doorIdx];
+
   for (let r = 0; r < rowRatios.length; r++) {
     for (let c = 0; c < colRatios.length; c++) {
       const si = r * colRatios.length + c;
@@ -1380,9 +2381,46 @@ function makeDoor(dW, dH, doorIdx, fills, sOpt, opacity, frameGrad, pxPerMm, dim
         (isActive ? 'outline:2.5px solid var(--color-primary);outline-offset:-2px;z-index:10;' : '')
       );
       cell.className = sectionFill.mat || 'mat-default';
+      // Пиксельный размер ячейки (нужен и для текстуры, и для подписи в КП)
+      const cellWpx = Math.round((colRatios[c] / colSum) * contentW);
+      const cellHpx = Math.round((rowRatios[r] / rowSum) * contentH);
+      // Текстура: фиксированный масштаб (1 thumbnail = 600×1200мм). Не растягивается под размер секции.
+      // При isRotated — texLayer повёрнут на 90° через CSS transform.
+      if (sectionFill.tex) {
+        const layerW = isRotated ? cellHpx : cellWpx;
+        const layerH = isRotated ? cellWpx : cellHpx;
+        const texLayer = document.createElement('div');
+        texLayer.style.cssText =
+          'position:absolute;left:0;top:0;pointer-events:none;' +
+          'width:' + layerW + 'px;height:' + layerH + 'px;' +
+          'background-size:' + bgW + 'px ' + bgH + 'px;' +
+          'background-repeat:repeat;background-position:0 0;' +
+          'transform-origin:top left;' +
+          (isRotated ? 'transform:translateX(' + cellWpx + 'px) rotate(90deg);' : '');
+        texLayer.style.backgroundImage = 'url("' + encodeURI(sectionFill.tex) + '")';
+        cell.appendChild(texLayer);
+      }
       cell.onclick = (e) => { e.stopPropagation(); openSectionEditor(doorIdx, si); };
       // Лёгкий блик
       cell.appendChild(mkEl('div', 'position:absolute;inset:0;background:linear-gradient(140deg,rgba(255,255,255,.12) 0%,transparent 40%);pointer-events:none;z-index:2;'));
+      // v1.3.5: подпись материала поверх полотна (только в КП). Плашка-подпись по центру
+      // секции на всю ширину: тёмный полупрозрачный фон + белый текст с тенью —
+      // читается над зеркалом, тёмным стеклом, текстурой ЛДСП. Перенос по словам, не по буквам.
+      if (showLabels && sectionFill && sectionFill.n) {
+        const fontPx = Math.max(8, Math.min(12, Math.round(Math.min(cellWpx, cellHpx) / 8)));
+        const band = document.createElement('div');
+        band.style.cssText =
+          'position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);' +
+          'z-index:6;pointer-events:none;text-align:center;' +
+          'background:rgba(22,20,15,.60);color:#fff;' +
+          'padding:4px 4px;' +
+          'font-family:var(--font,sans-serif);font-weight:600;line-height:1.25;' +
+          'font-size:' + fontPx + 'px;' +
+          'text-shadow:0 1px 2px rgba(0,0,0,.55);' +
+          'overflow-wrap:normal;word-break:normal;hyphens:none;';
+        band.textContent = sectionFill.n; // textContent — без XSS
+        cell.appendChild(band);
+      }
       inner.appendChild(cell);
     }
   }
@@ -1403,10 +2441,10 @@ function makeDoor(dW, dH, doorIdx, fills, sOpt, opacity, frameGrad, pxPerMm, dim
         'position:absolute;left:' + (fSide + 1) + 'px;right:' + (fSide + 1) + 'px;' +
         'height:' + handleH + 'px;' +
         'top:' + (gapTop - Math.round((handleH - divW) / 2)) + 'px;' +
-        'z-index:20;cursor:row-resize;';
+        'z-index:20;cursor:row-resize;touch-action:none;';
       handle.dataset.doorIdx = doorIdx;
       handle.dataset.divIdx  = r;
-      handle.addEventListener('mousedown', startDividerDrag);
+      handle.addEventListener('pointerdown', startDividerDrag);
       d.appendChild(handle);
     }
   }
@@ -1438,14 +2476,6 @@ function makeDoor(dW, dH, doorIdx, fills, sOpt, opacity, frameGrad, pxPerMm, dim
   return d;
 }
 
-// «2 материала», «5 материалов»
-function pluralMaterials(n) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return 'материал';
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'материала';
-  return 'материалов';
-}
-
 function mkEl(tag, css) {
   const e = document.createElement(tag);
   e.style.cssText = css;
@@ -1461,7 +2491,9 @@ function getKPTotals() {
   if (!d) return null;
   const delivery = +($('kpDelivery') && $('kpDelivery').value) || 0;
   const installOn = $('kpInstall') && $('kpInstall').checked;
-  const installCost = installOn ? Math.round(d.total * 0.13) : 0;
+  // v1.3.4: установка = 13% от изделия, но не менее 5 000 ₽ (минимальный выезд монтажника).
+  const INSTALL_MIN = 5000;
+  const installCost = installOn ? Math.max(INSTALL_MIN, Math.round(d.total * 0.13)) : 0;
   const grand = d.total + delivery + installCost;
   return { d, delivery, installOn, installCost, grand };
 }
@@ -1480,19 +2512,41 @@ function updateKPPreview() {
   el.innerHTML =
     row('Изделие (наполнение + профиль + фурнитура)', t.d.total) +
     row('Доставка', t.delivery) +
-    (t.installOn ? row('Установка (13%)', t.installCost) : '') +
+    (t.installOn ? row(t.installCost > Math.round(t.d.total * 0.13) ? 'Установка (мин. 5 000 ₽)' : 'Установка (13%)', t.installCost) : '') +
     '<div style="border-top:1px solid var(--color-border);margin:6px 0"></div>' +
     row('ИТОГО по КП', t.grand, true);
 }
 
 function openKP() {
-  // «Экспорт КП» в шапке до расчёта — сначала считаем, иначе кнопка молчит
-  if (!window._lastCalcData) calculate();
   const t = getKPTotals();
   if (!t) return;
-  const client  = ($('kpClient')  && $('kpClient').value.trim())  || 'Не указан';
-  const phone   = ($('kpPhone')   && $('kpPhone').value.trim())   || '—';
-  const manager = ($('kpManager') && $('kpManager').value.trim()) || '—';
+  // v1.3.1: обязательное заполнение клиента/телефона/менеджера перед формированием КП
+  const clientRaw  = ($('kpClient')  && $('kpClient').value.trim())  || '';
+  const phoneRaw   = ($('kpPhone')   && $('kpPhone').value.trim())   || '';
+  const managerRaw = ($('kpManager') && $('kpManager').value.trim()) || '';
+  const missing = [];
+  if (!clientRaw)  missing.push('Клиент / организация');
+  if (!phoneRaw)   missing.push('Телефон заказчика');
+  if (!managerRaw) missing.push('Менеджер');
+  if (missing.length > 0) {
+    alert('Перед формированием КП заполните обязательные поля:\n\n• ' + missing.join('\n• ') + '\n\n(поля находятся в правой колонке под кнопкой «Сформировать КП»)');
+    // Подсвечиваем красным незаполненные поля
+    ['kpClient','kpPhone','kpManager'].forEach(id => {
+      const el = $(id); if (!el) return;
+      if (!el.value.trim()) {
+        el.style.borderColor = '#c84444';
+        el.style.boxShadow = '0 0 0 3px rgba(200,68,68,.15)';
+        el.addEventListener('input', function clr(){ el.style.borderColor=''; el.style.boxShadow=''; el.removeEventListener('input', clr); }, {once:true});
+      }
+    });
+    // Скролл к первому пустому полю
+    const firstEmpty = ['kpClient','kpPhone','kpManager'].map(id=>$(id)).find(el => el && !el.value.trim());
+    if (firstEmpty) { firstEmpty.scrollIntoView({behavior:'smooth', block:'center'}); setTimeout(()=>firstEmpty.focus(), 350); }
+    return;
+  }
+  const client  = clientRaw;
+  const phone   = phoneRaw;
+  const manager = managerRaw;
   $('kpPageContent').innerHTML = buildKPHTML(t, client, phone, manager);
   $('kpDocument').classList.add('kp-open');
   document.body.style.overflow = 'hidden';
@@ -1501,9 +2555,12 @@ function openKP() {
   if (ld) {
     const vizFills = ld.doorFills || [ld.fills || [ld.fill]];
     const vizSect = ld.sectOpt || SECTION_OPTS[0];
+    // 200мс вместо 50: DOM КП-страницы успевает построиться даже на слабом ноуте.
+    // Race guard: если КП успели закрыть до того как сработал setTimeout — #kpVizRoom уже нет в DOM.
     setTimeout(() => {
+      if (!document.getElementById('kpVizRoom')) return;
       renderRoom('kpVizRoom', ld.W, ld.H, ld.N, ld.bd, ld.isSinglePartition, vizFills, ld.frameGrad, ld.dims, vizSect);
-    }, 50);
+    }, 200);
   }
 }
 
@@ -1516,6 +2573,22 @@ function buildKPHTML(t, client, phone, manager) {
   const kpNum = 'КП-' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
   const bdDisplay = String(d.bd);
 
+  // XSS-защита: ВСЕ user-input поля проходят через escapeHtml перед попаданием в innerHTML.
+  // client/phone/manager берутся из <input> формы — могут содержать <script>, <img onerror>, кавычки и т.п.
+  const eClient  = escapeHtml(client);
+  const ePhone   = escapeHtml(phone);
+  const eManager = escapeHtml(manager);
+
+  // Строки профиля — r.n приходит из PROFILE_SYSTEMS (контролируется кодом), но защита не повредит.
+  const profR = roundParts(d.profRows.map(r => r.c), d.profTotal);
+  const profRowsHTML = d.profRows.map((r, i) =>
+    '<tr>' +
+      '<td>' + escapeHtml(r.n) + '</td>' +
+      '<td class="r">' + fmt(r.l) + ' мм</td>' +
+      '<td class="r">' + fmt(r.pr) + '</td>' +
+      '<td class="r">' + fmt(profR[i]) + '</td>' +
+    '</tr>'
+  ).join('');
 
   // Финальные строки КП — наполнение
   const fillingRows = [];
@@ -1530,13 +2603,13 @@ function buildKPHTML(t, client, phone, manager) {
 
   if (allFillsSameKP && d.sectionBreakdown.length === 1) {
     // Всё одно — одна строка
-    fillingRows.push({label:'Наполнение (' + d.fills[0].n + ')', detail: d.areaM2.toFixed(2) + ' м² × ' + fmt(d.sectionBreakdown[0].fillPriceAdj) + ' ₽/м²', val: d.filCost});
+    fillingRows.push({label:'Наполнение (' + escapeHtml(d.fills[0].n) + ')', detail: d.areaM2.toFixed(2) + ' м² × ' + fmt(d.sectionBreakdown[0].fillPriceAdj) + ' ₽/м²', val: d.filCost});
   } else if (diffAcrossDoors && bd2D) {
     // Разные по дверям — показываем по дверям
     bd2D.forEach((dBd, di) => {
       dBd.forEach((s, si) => {
         fillingRows.push({
-          label: 'Дверь ' + (di+1) + (dBd.length > 1 ? ' · Секция ' + (si+1) : '') + ' — ' + s.fill.n,
+          label: 'Дверь ' + (di+1) + (dBd.length > 1 ? ' · Секция ' + (si+1) : '') + ' — ' + escapeHtml(s.fill.n),
           detail: s.sArea.toFixed(2) + ' м² × ' + fmt(s.fillPriceAdj) + ' ₽/м²',
           val: s.cost,
         });
@@ -1545,12 +2618,12 @@ function buildKPHTML(t, client, phone, manager) {
   } else {
     // Одна дверь или разные секции (одинаковые по дверям) — по секциям
     d.sectionBreakdown.forEach((s, i) => {
-      fillingRows.push({label:'Секция ' + (i+1) + ' — ' + s.fill.n, detail: s.sArea.toFixed(2) + ' м² × ' + fmt(s.fillPriceAdj) + ' ₽/м²', val: s.cost});
+      fillingRows.push({label:'Секция ' + (i+1) + ' — ' + escapeHtml(s.fill.n), detail: s.sArea.toFixed(2) + ' м² × ' + fmt(s.fillPriceAdj) + ' ₽/м²', val: s.cost});
     });
   }
   const itemRows = [
     ...fillingRows,
-    {label:'Профиль и направляющие (' + d.profileName + ')', detail: d.profRows.length + ' позиций', val: d.profTotal},
+    {label:'Профиль и направляющие (' + escapeHtml(d.profileName) + ')', detail: d.profRows.length + ' позиций', val: d.profTotal},
   ];
   if (d.filmCost > 0)
     itemRows.push({label: 'Защитная плёнка', detail: d.areaM2.toFixed(2) + ' м²' + (d.sectionBreakdown.length === 1 && d.film ? ' × ' + fmt(d.film.p) + ' ₽/м²' : ' (по секциям)'), val: d.filmCost});
@@ -1559,25 +2632,13 @@ function buildKPHTML(t, client, phone, manager) {
   if (d.complexCost > 0)
     itemRows.push({label:'Сложная сборка', detail: bdDisplay + ' дв. × ' + fmt(COMPLEX_WORK_PRICE) + ' ₽', val: d.complexCost});
 
-  // Округление: строки состава = «Итого изделие», строки профиля = строка «Профиль и направляющие»
-  const profItemIdx = fillingRows.length;
-  roundParts(itemRows.map(r => r.val), d.total).forEach((v, i) => { itemRows[i].val = v; });
-  const profTotalR = itemRows[profItemIdx].val;
-  const profValsR = roundParts(d.profRows.map(r => r.c), profTotalR);
-  const profRowsHTML = d.profRows.map((r, i) =>
-    '<tr>' +
-      '<td>' + r.n + '</td>' +
-      '<td class="r">' + fmt(r.l) + ' мм</td>' +
-      '<td class="r">' + fmt(r.pr) + '</td>' +
-      '<td class="r">' + fmt(profValsR[i]) + '</td>' +
-    '</tr>'
-  ).join('');
-
+  // r.label и r.detail уже содержат escapeHtml для user-controlled частей (s.fill.n, d.profileName).
+  const itemR = roundParts(itemRows.map(r => r.val), d.total);
   const itemRowsHTML = itemRows.map((r, i) =>
     '<tr>' +
       '<td>' + (i+1) + '</td>' +
       '<td>' + r.label + '<br><span style="color:#999;font-size:8.5pt">' + r.detail + '</span></td>' +
-      '<td class="r">' + fmt(r.val) + '</td>' +
+      '<td class="r">' + fmt(itemR[i]) + '</td>' +
     '</tr>'
   ).join('');
 
@@ -1590,14 +2651,14 @@ function buildKPHTML(t, client, phone, manager) {
       ? '<tr><td colspan="2">Доставка</td><td class="r">' + fmt(t.delivery) + ' ₽</td></tr>'
       : '') +
     (t.installOn
-      ? '<tr><td colspan="2">Монтаж и установка (13%)</td><td class="r">' + fmt(t.installCost) + ' ₽</td></tr>'
+      ? '<tr><td colspan="2">Монтаж и установка' + (t.installCost > Math.round(t.d.total * 0.13) ? ' (мин. 5 000 ₽)' : ' (13%)') + '</td><td class="r">' + fmt(t.installCost) + ' ₽</td></tr>'
       : '') +
     '<tr class="kp-grand-row">' +
       '<td colspan="2">ИТОГО К ОПЛАТЕ</td>' +
       '<td class="r">' + fmt(t.grand) + ' ₽</td>' +
     '</tr>';
 
-  // Характеристики
+  // Характеристики — все user-controlled значения экранируем.
   const specsHTML =
     '<table class="kp-table">' +
       '<thead><tr><th>Параметр</th><th>Значение</th></tr></thead>' +
@@ -1609,11 +2670,11 @@ function buildKPHTML(t, client, phone, manager) {
           '<tr><td>Ширина двери ' + (i + 1) + '</td><td>' + fmt(d.doorW) + ' мм' + (i === 0 && d.N > 1 ? ' (с нахлёстом ' + d.doorOverlap + ' мм на ручку)' : '') + '</td></tr>'
         ).join('') : '') +
         '<tr><td>Оплачивается полотен</td><td>' + bdDisplay + ' шт' + (d.isSinglePartition ? ' (одиночная перегородка)' : '') + '</td></tr>' +
-        '<tr><td>Наполнение</td><td>' + (d.fills.length === 1 ? d.fills[0].n : d.fills.map(f => f.n).join(' + ')) + '</td></tr>' +
-        '<tr><td>Профильная система</td><td>' + d.profileName + '</td></tr>' +
+        '<tr><td>Наполнение</td><td>' + (d.fills.length === 1 ? escapeHtml(d.fills[0].n) : 'Смешанное (' + d.fills.length + ' материала)') + '</td></tr>' +
+        '<tr><td>Профильная система</td><td>' + escapeHtml(d.profileName) + '</td></tr>' +
         '<tr><td>Площадь наполнения</td><td>' + d.areaM2.toFixed(2) + ' м²</td></tr>' +
         (d.softCloseCost > 0 ? '<tr><td>Доводчик</td><td>Да</td></tr>' : '') +
-        (d.filmCost > 0 ? '<tr><td>Плёнка</td><td>' + d.film.name + '</td></tr>' : '') +
+        (d.filmCost > 0 ? '<tr><td>Плёнка</td><td>' + escapeHtml(d.film.name) + '</td></tr>' : '') +
       '</tbody>' +
     '</table>';
 
@@ -1625,15 +2686,15 @@ function buildKPHTML(t, client, phone, manager) {
   </div>
   <div style="text-align:right">
     <div style="font-size:18pt;font-weight:700;letter-spacing:-.02em">КП</div>
-    <div style="font-size:8.5pt;color:#999">№ ${kpNum}</div>
-    <div style="font-size:8.5pt;color:#999">Дата: ${dateStr}</div>
+    <div style="font-size:8.5pt;color:#999">№ ${escapeHtml(kpNum)}</div>
+    <div style="font-size:8.5pt;color:#999">Дата: ${escapeHtml(dateStr)}</div>
   </div>
 </div>
 
 <table style="width:100%;border-collapse:collapse;margin-bottom:8mm;font-size:9.5pt">
-  <tr><td style="padding:3px 0;color:#666;width:130px">Клиент:</td><td style="font-weight:600">${client}</td></tr>
-  <tr><td style="padding:3px 0;color:#666">Телефон:</td><td>${phone}</td></tr>
-  <tr><td style="padding:3px 0;color:#666">Менеджер:</td><td>${manager}</td></tr>
+  <tr><td style="padding:3px 0;color:#666;width:130px">Клиент:</td><td style="font-weight:600">${eClient}</td></tr>
+  <tr><td style="padding:3px 0;color:#666">Телефон:</td><td>${ePhone}</td></tr>
+  <tr><td style="padding:3px 0;color:#666">Менеджер:</td><td>${eManager}</td></tr>
 </table>
 
 <div style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#01696f;margin-bottom:3mm;padding-bottom:2mm;border-bottom:1px solid #e0e0e0">Характеристики изделия</div>
@@ -1654,13 +2715,13 @@ ${specsHTML}
 <table class="kp-table">
   <thead><tr><th>Позиция</th><th class="r">Длина</th><th class="r">₽/п.м.</th><th class="r">Сумма, ₽</th></tr></thead>
   <tbody>${profRowsHTML}
-    <tr class="kp-total-row"><td>Итого профиль</td><td></td><td></td><td class="r">${fmt(profTotalR)} ₽</td></tr>
+    <tr class="kp-total-row"><td>Итого профиль</td><td></td><td></td><td class="r">${fmt(d.profTotal)} ₽</td></tr>
   </tbody>
 </table>
 
 <div style="margin-top:10mm;font-size:8.5pt;color:#aaa;border-top:1px solid #eee;padding-top:4mm;line-height:1.6">
   Данное коммерческое предложение действительно в течение 14 дней с даты выставления.<br>
-  Цены указаны с учётом всех комплектующих. Срок изготовления уточняется при заказе.<br>
+  Срок изготовления уточняется при заказе.<br>
   Настоящее КП не является публичной офертой.
 </div>
 
@@ -1675,10 +2736,10 @@ ${specsHTML}
 <div class="kp-page" style="margin-top:0;page-break-before:always;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8mm;padding-bottom:4mm;border-bottom:1.5px solid #01696f">
     <div style="font-size:13pt;font-weight:700;color:#01696f">Визуализация изделия</div>
-    <div style="font-size:8.5pt;color:#999">${kpNum} · ${client}</div>
+    <div style="font-size:8.5pt;color:#999">${escapeHtml(kpNum)} · ${eClient}</div>
   </div>
   <div style="font-size:9.5pt;margin-bottom:5mm;color:#555">
-    Проём: <strong>${t.d.W} × ${t.d.H} мм</strong> · Полотен: <strong>${t.d.N} шт</strong>${t.d.doorW ? ` по <strong>${fmt(t.d.doorW)} мм</strong>` : ''} · Наполнение: <strong>${t.d.fills.map(f => f.n).join(' + ')}</strong> · Профиль: <strong>${t.d.profileName}</strong>
+    Проём: <strong>${t.d.W} × ${t.d.H} мм</strong> · Полотен: <strong>${t.d.N} шт</strong>${t.d.doorW ? ` по <strong>${fmt(t.d.doorW)} мм</strong>` : ''} · Наполнение: <strong>${t.d.fills.length === 1 ? t.d.fills[0].n : t.d.fills.length + ' материалов'}</strong> · Профиль: <strong>${t.d.profileName}</strong>
   </div>
   <!-- Контейнер для SVG-визуализации (заполняется JS после рендера) -->
   <div id="kpVizRoom" style="width:100%;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;background:#e8e4da;"></div>
@@ -1692,9 +2753,12 @@ ${specsHTML}
 function resetForm() {
   $('width').value = 1200;
   $('height').value = 2000;
+  setDimensionError('width', '');
+  setDimensionError('height', '');
   $('doorCount').value = 2;
   $('softClose').checked = false;
   doorFills = [];
+  doorTexRot = [];
   activeSection = null;
   rowMm = [];
   colMm = [];
@@ -1707,6 +2771,9 @@ function resetForm() {
   setSections(0);
   window._lastCalcData = null;
   window._kupeProjectNum = null;
+  // v1.3: при reset — снова disabled на «Экспорт КП»
+  const exportBtn = document.getElementById('kupeExportKPBtn');
+  if (exportBtn) { exportBtn.setAttribute('disabled', ''); exportBtn.title = 'Сначала рассчитайте стоимость'; }
   // Центральная колонка
   if ($('emptyState'))   $('emptyState').style.display = '';
   if ($('kupeVizArea'))  $('kupeVizArea').style.display = 'none';
@@ -1757,7 +2824,7 @@ function initKupeVersion() {
   const fv = (typeof FILLINGS_VERSION !== 'undefined') ? FILLINGS_VERSION : '—';
   const pv = (typeof PROFILES_VERSION !== 'undefined') ? PROFILES_VERSION : '—';
   // Show most recent of versions
-  el.textContent = 'v 2.5 — прайс ' + (fv > pv ? fv : pv);
+  el.textContent = 'v 2.11 — прайс ' + (fv > pv ? fv : pv);
 }
 
 /**
@@ -1788,8 +2855,11 @@ function renderKupeFillsList() {
     const sub = sectCount > 1
       ? '<small style="color:#a8a08f;font-size:.66rem;margin-left:6px">+ '+(sectCount-1)+' секц.</small>'
       : '';
+    const swStyle = f0.tex
+      ? 'background-image:url(&quot;'+encodeURI(f0.tex)+'&quot;);background-size:cover;background-position:center;'
+      : '';
     html += '<div class="kupe-fill-row" onclick="openSectionEditor('+di+',0)">'+
-      '<div class="kupe-fill-swatch '+(f0.mat||'')+'" style="position:relative"></div>'+
+      '<div class="kupe-fill-swatch '+(f0.mat||'')+'" style="position:relative;'+swStyle+'"></div>'+
       '<div class="kupe-fill-name">'+(f0.n||'—')+sub+'</div>'+
       '<div class="kupe-fill-num">№'+(di+1)+'</div>'+
     '</div>';
@@ -1800,6 +2870,20 @@ function renderKupeFillsList() {
 /* --- localStorage save / load --- */
 
 const KUPE_DRAFTS_KEY = 'kupeDrafts_v1';
+
+// Проверяем доступность localStorage один раз при загрузке.
+// В приватном режиме Chrome localStorage существует, но setItem бросает QuotaExceededError.
+let _lsAvailable = false;
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('__ls_test', '1');
+    localStorage.removeItem('__ls_test');
+    _lsAvailable = true;
+  }
+} catch (e) {
+  _lsAvailable = false;
+  console.warn('localStorage недоступен (приватный режим?):', e.message);
+}
 
 function collectKupeState() {
   return {
@@ -1813,12 +2897,22 @@ function collectKupeState() {
     filmToggle:       ($('filmToggle') || {}).checked || false,
     rowMm:            (typeof rowMm !== 'undefined' && rowMm) ? rowMm.slice() : [],
     doorRowMm:        (typeof doorRowMm !== 'undefined' && doorRowMm) ? doorRowMm.slice() : [],
+    doorTexRot:       (typeof doorTexRot !== 'undefined' && doorTexRot) ? doorTexRot.slice() : [],
     sectOpt:          window._lastCalcData ? window._lastCalcData.sectOpt : null,
+    // v1.2: per-door section overrides
+    doorSectOpt:      (typeof doorSectOpt !== 'undefined' && doorSectOpt)
+                      ? doorSectOpt.map(o => o ? {rowRatios:o.rowRatios.slice(), colRatios:o.colRatios.slice(), h:o.h, v:o.v, label:o.label} : null)
+                      : [],
     doorFills:        window._lastCalcData ? window._lastCalcData.doorFills : null,
   };
 }
 
 function kupeSaveDraft() {
+  if (!validateOpeningDimensions(true, true)) return;
+  if (!_lsAvailable) {
+    alert('Сохранение недоступно — браузер не разрешает localStorage (возможно, приватный режим). Откройте обычное окно Chrome.');
+    return;
+  }
   if (!window._lastCalcData) {
     alert('Сначала рассчитайте параметры (нажмите "Рассчитать стоимость")');
     return;
@@ -1861,8 +2955,13 @@ function kupeOpenDraftsList() {
   // Удалить существующий поповер если есть
   document.querySelectorAll('.kupe-drafts-pop').forEach(p => p.remove());
 
+  if (!_lsAvailable) {
+    alert('Сохранённые проекты недоступны — браузер не разрешает localStorage. Откройте обычное окно Chrome.');
+    return;
+  }
+
   let list = [];
-  try { list = JSON.parse(localStorage.getItem(KUPE_DRAFTS_KEY) || '[]'); } catch(e){}
+  try { list = JSON.parse(localStorage.getItem(KUPE_DRAFTS_KEY) || '[]'); } catch(e){ console.warn('drafts parse error:', e.message); }
 
   const pop = document.createElement('div');
   pop.className = 'kupe-drafts-pop';
@@ -1873,15 +2972,24 @@ function kupeOpenDraftsList() {
   if (!list.length) {
     pop.innerHTML = '<div class="kupe-drafts-empty">Нет сохранённых проектов</div>';
   } else {
+    // XSS-защита: НЕ вставляем projectNumber или client.name в inline onclick="" —
+    // используем data-pn атрибут + addEventListener после рендера.
     pop.innerHTML = list.map(d => {
       const k = (d.modules && d.modules.kupe) || {};
       const date = new Date(d.savedAt).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-      const cli = (d.client && d.client.name) ? ' · '+d.client.name : '';
-      return '<div class="kupe-drafts-row" onclick="kupeLoadDraft(\''+d.projectNumber+'\')">'+
-        '<div class="kupe-drafts-row-num">ПРОЕКТ № '+d.projectNumber+'</div>'+
-        '<div class="kupe-drafts-row-meta">'+date+' · '+(k.W||'—')+'×'+(k.H||'—')+' · '+(k.N||'—')+' дв.'+cli+'</div>'+
+      const cli = (d.client && d.client.name) ? ' · ' + escapeHtml(d.client.name) : '';
+      return '<div class="kupe-drafts-row" data-pn="' + escapeAttr(d.projectNumber) + '">' +
+        '<div class="kupe-drafts-row-num">ПРОЕКТ № ' + escapeHtml(d.projectNumber) + '</div>' +
+        '<div class="kupe-drafts-row-meta">' + escapeHtml(date) + ' · ' + (k.W || '—') + '×' + (k.H || '—') + ' · ' + (k.N || '—') + ' дв.' + cli + '</div>' +
       '</div>';
     }).join('');
+    // Подключаем безопасный обработчик после рендера
+    pop.querySelectorAll('.kupe-drafts-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const pn = row.dataset.pn;
+        if (pn) kupeLoadDraft(pn);
+      });
+    });
   }
   document.body.appendChild(pop);
   // Закрываем по клику вне
@@ -1909,26 +3017,43 @@ function kupeLoadDraft(projectNumber) {
     $('doorCount').value = k.N;
     updateChipsActive(k.N);
   }
+  // Двух-уровневое восстановление: family → systemIdx → colorIdx
   if (k.profileSystemIdx != null) {
-    $('profileSystem').value = k.profileSystemIdx;
-    populateProfileColors(k.profileSystemIdx);   // список цветов — от сохранённой системы
+    const sysIdx = parseInt(k.profileSystemIdx);
+    const sys = PROFILE_SYSTEMS[sysIdx];
+    if (sys && sys.family) {
+      $('profileFamily').value = sys.family;
+      populateProfileSystemsForFamily(sys.family);
+    }
+    $('profileSystem').value = sysIdx;
+    populateProfileColors(sysIdx);
   }
   if (k.profileColorIdx != null)  $('profileColor').value  = k.profileColorIdx;
-  // Сетка секций — по названию пресета
-  if (k.sectOpt && k.sectOpt.label) {
-    const si = SECTION_OPTS.findIndex(o => o.label === k.sectOpt.label);
-    if (si >= 0) setSections(si);
-  }
-  // Заполнения секций — сопоставляем по названию материала с текущим каталогом
-  if (Array.isArray(k.doorFills) && k.doorFills.length) {
-    doorFills = k.doorFills.map(df => (df || []).map(f =>
-      FILLINGS.find(x => f && x.n === f.n) || FILLINGS[0]));
-  }
   $('softClose').checked        = !!k.softClose;
   $('singlePartition').checked  = !!k.isSinglePartition;
   if ($('filmToggle')) $('filmToggle').checked = !!k.filmToggle;
-  if (k.rowMm)     rowMm     = k.rowMm.slice();
-  if (k.doorRowMm) doorRowMm = k.doorRowMm.slice();
+  if (k.rowMm)      rowMm      = k.rowMm.slice();
+  if (k.doorRowMm)  doorRowMm  = k.doorRowMm.slice();
+  // doorTexRot — поворот текстуры ЛДСП per-door (если в draft есть, восстанавливаем; иначе пустой)
+  doorTexRot = (k.doorTexRot && Array.isArray(k.doorTexRot)) ? k.doorTexRot.slice() : [];
+
+  // Восстановление индекса пресета сетки секций (sectOpt)
+  if (k.sectOpt && k.sectOpt.rowRatios && k.sectOpt.colRatios) {
+    const idx = SECTION_OPTS.findIndex(o =>
+      JSON.stringify(o.rowRatios) === JSON.stringify(k.sectOpt.rowRatios) &&
+      JSON.stringify(o.colRatios) === JSON.stringify(k.sectOpt.colRatios)
+    );
+    if (idx >= 0) setSections(idx);
+  }
+
+  // v1.2: восстановление per-door overrides (старые drafts не содержат → пустой массив)
+  doorSectOpt = (k.doorSectOpt && Array.isArray(k.doorSectOpt))
+    ? k.doorSectOpt.map(o => o ? {
+        rowRatios: o.rowRatios.slice(),
+        colRatios: o.colRatios.slice(),
+        h: o.h, v: o.v, label: o.label,
+      } : null)
+    : [];
 
   // Клиент
   window._kupeDraftClient = draft.client || null;

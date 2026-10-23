@@ -11,8 +11,8 @@
   --color-divider:#dcd9d5;
   --color-border:#d4d1ca;
   --color-text:#28251d;
-  --color-text-muted:#7a7974;
-  --color-text-faint:#bab9b4;
+  --color-text-muted:#5a5852;   /* было #7a7974 — контраст с #ebe8e2 ~ 6.4:1 (WCAG AA: 4.5:1) */
+  --color-text-faint:#7a7672;   /* было #bab9b4 — контраст ~ 4.0:1 (WCAG AA Large: 3:1) */
   --color-primary:#01696f;
   --color-primary-hover:#0c4e54;
   --color-primary-active:#0f3638;
@@ -74,8 +74,12 @@ button{cursor:pointer;background:none;border:none}
 }
 .hdr-top{
   display:flex;align-items:center;justify-content:space-between;
-  padding:var(--sp3) var(--sp6);
+  padding:6px var(--sp6);
+  min-height:38px;
 }
+.hdr .logo svg{width:22px;height:22px}
+.hdr .logo-name{font-size:.84rem;line-height:1.1}
+.hdr .logo-tag{font-size:.66rem;line-height:1.1;margin-top:1px}
 .logo{display:flex;align-items:center;gap:var(--sp3);text-decoration:none;color:var(--color-text)}
 .logo svg{color:var(--color-primary)}
 .logo-name{font-weight:700;font-size:var(--tx-base)}
@@ -99,7 +103,7 @@ button{cursor:pointer;background:none;border:none}
 .nav-tabs::-webkit-scrollbar{display:none}
 .nav-tab{
   display:flex;align-items:center;gap:var(--sp2);
-  padding:var(--sp3) var(--sp5);
+  padding:6px 14px;
   font-size:var(--tx-xs);
   font-weight:600;
   color:var(--color-text-muted);
@@ -110,7 +114,7 @@ button{cursor:pointer;background:none;border:none}
 }
 .nav-tab:hover{color:var(--color-text)}
 .nav-tab.active{color:var(--color-primary);border-bottom-color:var(--color-primary)}
-.nav-tab svg{width:16px;height:16px;flex-shrink:0}
+.nav-tab svg{width:14px;height:14px;flex-shrink:0}
 .nav-tab .tab-badge{
   display:inline-flex;align-items:center;justify-content:center;
   height:18px;padding:0 6px;border-radius:var(--radius-full);
@@ -364,11 +368,18 @@ button{cursor:pointer;background:none;border:none}
 
 /* KP document modal */
 @media print{
+  @page{size:A4;margin:10mm}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   html,body{background:#fff!important}
-  .hdr,.app-body,.kp-modal-bar,.module-page{display:none!important}
-  #kpDocument{visibility:visible!important;opacity:1!important;position:static!important;width:100%!important;background:#fff!important;overflow:visible!important}
-  .kp-page{margin:0!important;box-shadow:none!important;width:100%!important;page-break-inside:avoid}
+  .hdr,.app-body,.kp-modal-bar,.module-page,.kupe-topbar{display:none!important}
+  #kpDocument{visibility:visible!important;opacity:1!important;position:static!important;width:100%!important;background:#fff!important;overflow:visible!important;display:block!important}
+  .kp-page{margin:0!important;box-shadow:none!important;width:100%!important;padding:10mm 12mm!important;page-break-after:always}
+  .kp-page:last-child{page-break-after:auto}
+  /* Защита от разрывов посередине строк и блоков */
+  .kp-table tr,.kp-table thead,.kp-spec-row,.kp-sign-row{page-break-inside:avoid}
+  .kp-table{page-break-inside:auto}
+  h1,h2,h3,h4{page-break-after:avoid}
+  svg{page-break-inside:avoid}
 }
 #kpDocument{display:none;position:fixed;inset:0;z-index:9999;background:#fff;overflow:auto}
 #kpDocument.kp-open{display:block}
@@ -417,6 +428,29 @@ button{cursor:pointer;background:none;border:none}
   padding:var(--sp3) var(--sp1) var(--sp1);margin-top:var(--sp2);
 }
 .mat-group-lbl:first-child{margin-top:0;padding-top:var(--sp1)}
+.mat-subgroup-lbl{
+  font-size:9.5px;color:var(--color-text-muted);
+  padding:var(--sp1) var(--sp1) var(--sp1) var(--sp3);opacity:.85;
+}
+/* Поиск в Section Editor — sticky сверху списка материалов */
+.kupe-mat-search{
+  position:sticky;top:0;z-index:5;width:100%;
+  padding:8px 10px;margin-bottom:6px;
+  background:var(--color-surface);
+  border:1px solid var(--color-border);border-radius:var(--radius-sm);
+  font-size:var(--tx-xs);color:var(--color-text);
+  transition:border-color var(--trans),box-shadow var(--trans);
+}
+.kupe-mat-search:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 3px rgba(1,105,111,.12)}
+.kupe-mat-search::placeholder{color:var(--color-text-muted)}
+/* Кнопки материалов с текстурой — компактная сетка с превью */
+.mat-btn-tex{
+  display:inline-block!important;width:calc(50% - 4px);margin:2px;vertical-align:top;
+  text-align:center;padding:0!important;overflow:hidden;border:1px solid var(--color-border);
+}
+.mat-btn-tex.active{border:2px solid var(--color-primary);padding:0!important}
+.mat-btn-thumb{display:block;width:100%;height:54px;object-fit:cover;border-bottom:1px solid var(--color-border)}
+.mat-btn-label{display:block;padding:4px 6px;font-size:10.5px;line-height:1.25;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn-secondary{
   width:100%;height:38px;background:var(--color-surface-offset);
   border:1px solid var(--color-border);border-radius:var(--radius-md);
@@ -473,17 +507,18 @@ button{cursor:pointer;background:none;border:none}
 .kupe-col-left{background:#f4f1eb;border-right:1px solid #ddd5c4}
 .kupe-col-right{background:#f4f1eb;border-left:1px solid #ddd5c4}
 .kupe-col-center{padding:30px 24px;justify-content:flex-start;align-items:stretch}
+/* v1.3: усилен контраст заголовков (WCAG AA) — критика #2 */
 .kupe-col-head{
-  font-size:.7rem;font-weight:700;letter-spacing:.16em;
-  color:#9c958a;text-transform:uppercase;
+  font-size:.74rem;font-weight:800;letter-spacing:.14em;
+  color:#28251d;text-transform:uppercase;
   padding-bottom:14px;border-bottom:1px solid #d8cfba;
   margin-bottom:6px;
 }
 .kupe-form-list{display:flex;flex-direction:column;gap:18px}
 .kupe-sec{display:flex;flex-direction:column;gap:7px}
 .kupe-sec-lbl{
-  font-size:.66rem;font-weight:700;letter-spacing:.10em;
-  color:#7a7368;text-transform:uppercase;
+  font-size:.70rem;font-weight:700;letter-spacing:.08em;
+  color:#5a5448;text-transform:uppercase;
   margin-bottom:2px;
 }
 .kupe-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -516,6 +551,175 @@ button{cursor:pointer;background:none;border:none}
 .kupe-chip-active{
   background:#28251d;color:#f7f4ed;border-color:#28251d;
 }
+
+/* v1.3: sticky-низ для Section Editor — критика #3 */
+.sec-actions-sticky{
+  position:sticky;bottom:0;z-index:5;
+  background:rgba(244,241,235,.96);
+  backdrop-filter:blur(4px);
+  border-top:1px solid #ddd5c4;
+  margin-top:auto;
+}
+
+/* v1.3.1: Кнопки «Применить ко всем» — корректный перенос текста (long-word break) */
+.sec-apply-btn{
+  height:auto;min-height:40px;padding:8px 12px;
+  white-space:normal;line-height:1.25;text-align:center;
+  word-spacing:.02em;
+}
+
+/* v1.3.1: Заметная кнопка «Назад к параметрам» вверху Section Editor */
+.sec-back-btn{
+  display:flex;align-items:center;gap:8px;
+  width:100%;padding:9px 14px;
+  background:#28251d;color:#f7f4ed;border:1px solid #28251d;
+  border-radius:.42rem;font-size:.78rem;font-weight:600;
+  cursor:pointer;transition:all .15s;letter-spacing:.02em;
+}
+.sec-back-btn:hover{background:#3a3528;border-color:#3a3528}
+.sec-back-btn svg{flex-shrink:0}
+
+/* v1.3: disabled-стиль для CTA до calculate — критика #1 */
+.kupe-btn-fill:disabled{
+  background:#9c958a;border-color:#9c958a;color:#e8e2d4;
+  cursor:not-allowed;opacity:.7;
+}
+.kupe-btn-fill:disabled:hover{opacity:.7}
+
+/* ============================================================
+   ПРОФИЛЬ — кнопка превью сечения (v1.2)
+   ============================================================ */
+.profile-with-preview{display:flex;align-items:stretch;gap:6px}
+.profile-with-preview .kupe-sel{flex:1;min-width:0}
+.profile-sec-btn{
+  width:36px;height:36px;flex-shrink:0;
+  border:1px solid #d4cdb9;border-radius:.4rem;background:#fff;
+  color:#7a7368;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.profile-sec-btn:hover{border-color:#28251d;color:#28251d;background:#f4f1eb}
+
+/* ============================================================
+   МАССОВЫЕ ОПЕРАЦИИ (bulk panel, v1.2)
+   ============================================================ */
+.bulk-details{margin:0}
+.bulk-details summary{cursor:pointer;list-style:none;user-select:none;display:flex;align-items:center;gap:8px;padding:2px 0}
+.bulk-details summary::-webkit-details-marker{display:none}
+.bulk-details summary::before{
+  content:'';display:inline-block;width:0;height:0;
+  border:4px solid transparent;border-left-color:#7a7368;border-right:0;
+  transition:transform .15s;
+}
+.bulk-details[open] summary::before{transform:rotate(90deg)}
+.bulk-summary{margin-bottom:0!important}
+.bulk-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.bulk-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bulk-row-stack{flex-direction:column;align-items:stretch}
+.bulk-row-stack > *{width:100%}
+.bulk-row-copy{font-size:.74rem;color:#7a7368}
+.bulk-lbl{font-size:.7rem;color:#7a7368;white-space:nowrap;font-weight:600}
+.bulk-arrow{color:#9c958a;font-size:.9rem;font-weight:700}
+.bulk-inline-sel{width:auto!important;height:30px;padding:0 24px 0 8px;font-size:.78rem;flex:1;min-width:54px;background-position:right 6px center}
+.bulk-btn{height:32px;font-size:.74rem}
+.bulk-btn-sm{width:auto!important;padding:0 12px}
+.bulk-btn-danger{color:#a05050;border-color:#e8d4d4}
+.bulk-btn-danger:hover{background:#fbecec;color:#882828;border-color:#a05050}
+
+/* ============================================================
+   МОДАЛ СЕЧЕНИЯ ПРОФИЛЯ (psec, v1.2)
+   ============================================================ */
+.psec-modal{
+  position:fixed;inset:0;z-index:9998;
+  display:none;align-items:center;justify-content:center;
+}
+.psec-modal[style*="display:flex"],
+.psec-modal[style*="display: flex"]{display:flex!important}
+.psec-modal-backdrop{
+  position:absolute;inset:0;background:rgba(28,24,18,.55);
+  backdrop-filter:blur(2px);
+}
+.psec-modal-panel{
+  position:relative;z-index:1;
+  background:#fff;border-radius:.65rem;
+  width:min(92vw, 620px);max-height:94vh;
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 64px rgba(0,0,0,.32);
+  overflow:hidden;
+}
+.psec-modal-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.7rem 1rem;border-bottom:1px solid #e3dccb;background:#f7f4ed;
+}
+.psec-modal-title{font-size:.92rem;font-weight:700;color:#28251d}
+.psec-modal-close{
+  height:28px;width:28px;border-radius:.35rem;
+  background:transparent;border:1px solid transparent;color:#7a7368;
+  cursor:pointer;font-size:1rem;display:inline-flex;align-items:center;justify-content:center;
+  transition:all .12s;
+}
+.psec-modal-close:hover{background:#ebe8e2;color:#28251d;border-color:#d4cdb9}
+.psec-modal-body{
+  padding:1.1rem 1.2rem 1.3rem;display:flex;flex-direction:column;gap:.8rem;
+  overflow-y:auto;
+}
+.psec-modal-img-wrap{
+  background:#f7f4ed;border:1px solid #e3dccb;border-radius:.5rem;
+  min-height:200px;display:flex;align-items:center;justify-content:center;
+  padding:1rem;
+}
+.psec-modal-img{
+  max-width:100%;max-height:min(560px, 62vh);display:block;
+  width:auto;height:auto;
+  image-rendering:-webkit-optimize-contrast;
+}
+.psec-modal-placeholder{
+  text-align:center;color:#9c958a;display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.psec-modal-placeholder p{font-size:.84rem;margin:0;line-height:1.45;max-width:34ch}
+.psec-modal-placeholder-hint{font-size:.72rem!important;color:#b8b1a3}
+/* v1.3: meta усилена (была невидима) — критика #2 */
+.psec-modal-meta{font-size:.80rem;color:#3f3a32;font-variant-numeric:tabular-nums;font-weight:500;line-height:1.55}
+.psec-modal-meta strong{color:#28251d;font-weight:700}
+.psec-modal-desc{font-size:.82rem;line-height:1.55;color:#28251d}
+
+[data-theme="dark"] .psec-modal-panel{background:#1f1d18;color:#e8e4d8}
+[data-theme="dark"] .psec-modal-bar{background:#16140f;border-bottom-color:#33302a}
+[data-theme="dark"] .psec-modal-title{color:#f0ecdf}
+[data-theme="dark"] .psec-modal-img-wrap{background:#16140f;border-color:#33302a}
+[data-theme="dark"] .psec-modal-desc{color:#e8e4d8}
+
+/* ============================================================
+   PER-DOOR SECTION (v1.2) — door-tabs + dso-card
+   ============================================================ */
+.door-edit-tabs{
+  display:flex;flex-wrap:wrap;gap:4px;
+  padding:6px;background:#f0ecdf;border-radius:.4rem;
+}
+.door-edit-tab{
+  flex:1;min-width:54px;height:30px;padding:0 8px;
+  background:#fff;border:1px solid #d4cdb9;border-radius:.3rem;
+  font-size:.7rem;font-weight:600;color:#7a7368;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  transition:all .12s;
+}
+.door-edit-tab:hover{border-color:#28251d;color:#28251d}
+.door-edit-tab.active{background:#28251d;color:#f7f4ed;border-color:#28251d}
+.door-edit-tab .det-badge{
+  display:inline-block;font-size:.6rem;font-weight:700;
+  background:rgba(255,255,255,.18);color:inherit;border-radius:99px;padding:1px 5px;
+  opacity:.85;
+}
+.door-edit-tab:not(.active) .det-badge{background:#f0ecdf;color:#9c958a}
+
+.dso-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dso-title{font-size:.78rem;font-weight:600;color:#28251d}
+.dso-toggle{flex-shrink:0}
+.dso-current{
+  font-size:.72rem;color:#7a7368;font-weight:500;
+  padding:6px 8px;background:#f7f4ed;border-radius:.32rem;
+  border:1px solid #ebe6d6;
+}
+.dso-current strong{color:#28251d;font-weight:700}
 
 /* Список заполнений секций */
 .kupe-fills-list{
@@ -651,20 +855,111 @@ button{cursor:pointer;background:none;border:none}
 .mdf-hinge-remove-btn:hover{transform:scale(1.2)}
 
 /* ============================================================
-   RESPONSIVE
+   v1.5: «ЗАКАЗАТЬ ДВЕРЬ» — CTA для клиентов
    ============================================================ */
+.kupe-btn-order{
+  width:100%;height:44px;background:#01696f;color:#fff;
+  border:none;border-radius:.45rem;
+  font-size:.85rem;font-weight:700;letter-spacing:.02em;
+  cursor:pointer;transition:opacity .15s;margin:2px 0 4px;
+}
+.kupe-btn-order:hover{opacity:.88}
+.order-lead{font-size:.85rem;line-height:1.5;color:#28251d;margin:0}
+.order-phone-row{display:flex;align-items:center;gap:8px;font-size:.8rem;color:#5a5448;flex-wrap:wrap}
+.order-phone{font-size:1.05rem;font-weight:700;color:#01696f;text-decoration:none;white-space:nowrap}
+.order-phone:hover{text-decoration:underline}
+.order-text{
+  background:#f7f4ed;border:1px solid #e3dccb;border-radius:.5rem;
+  padding:10px 12px;font-size:.75rem;line-height:1.5;
+  white-space:pre-wrap;font-family:inherit;margin:0;color:#3f3a32;
+}
+.order-actions{display:flex;flex-direction:column;gap:8px}
+.order-btn{height:42px;width:100%}
+.order-btn-max{
+  background:#4662e0;color:#fff;border:none;border-radius:.42rem;
+  font-size:.82rem;font-weight:700;letter-spacing:.02em;cursor:pointer;transition:opacity .15s;
+}
+.order-btn-max:hover{opacity:.88}
+.order-btn-tg{
+  background:#2aabee;color:#fff;border:none;border-radius:.42rem;
+  font-size:.82rem;font-weight:700;letter-spacing:.02em;cursor:pointer;transition:opacity .15s;
+}
+.order-btn-tg:hover{opacity:.88}
+.order-hint{font-size:.72rem;color:#9c958a;margin:0;line-height:1.45}
+
+/* ============================================================
+   RESPONSIVE — МОБИЛЬНАЯ ВЕРСИЯ (v1.4)
+   ============================================================ */
+/* Нижняя панель «Итого + Рассчитать» — видна только на телефоне */
+.kupe-mobile-bar{display:none}
+
 @media(max-width:768px){
   .app-body{grid-template-columns:1fr}
   .panel-result{display:none}
   .panel-form{padding:var(--sp4)}
   .nav-tabs{padding:0 var(--sp3)}
   .nav-tab{padding:var(--sp3) var(--sp3)}
-  /* Купе: шапка с кнопками не должна раздвигать страницу на телефоне */
-  .kupe-topbar{flex-wrap:wrap;gap:10px;padding:12px 16px}
-  .kupe-bc{flex-wrap:wrap;gap:6px}
-  .kupe-bc-version{margin-left:0}
-  .kupe-topbar-actions{flex-wrap:wrap;width:100%}
-  .kupe-topbar-actions button{flex:1 1 auto}
+  /* Порядок: параметры → превью → расчёт */
+  .kupe-3col{min-height:auto}
+  .kupe-col{padding:14px;max-height:none}
+  .kupe-col-center{order:0;min-height:auto;padding:16px 12px}
+  .kupe-col-left{border-right:none;border-bottom:1px solid #ddd5c4}
+  .kupe-col-right{border-left:none;border-top:1px solid #ddd5c4}
+  .kupe-viz-stage{min-height:300px}
+  /* Якоря прокрутки не прячутся под sticky-шапкой */
+  #panelForm,#kupeVizStage,#resultPanel{scroll-margin-top:70px}
+
+  /* Шапка и топбар компактнее */
+  .hdr-top{padding:5px 12px;min-height:34px}
+  .nav-tabs{padding:0 12px}
+  .kupe-topbar{padding:8px 12px;flex-wrap:wrap;gap:8px}
+  .kupe-bc-version{display:none}
+  .kupe-topbar-actions{width:100%;gap:8px}
+  .kupe-topbar-actions button{flex:1;height:40px;padding:0 4px}
+
+  /* Touch-цели ≥44px; шрифт 16px — мобильный браузер не зумит поля при фокусе */
+  .kupe-inp,.kupe-sel{height:44px;font-size:16px}
+  .kupe-chip{width:44px;height:44px;font-size:1rem}
+  .profile-sec-btn{width:44px;height:44px}
+  .sect-btn{height:56px}
+  .btn-secondary{height:auto;min-height:44px}
+  .door-edit-tab{height:38px}
+  .bulk-btn{height:auto;min-height:40px}
+  .bulk-inline-sel{height:38px}
+  .kupe-mat-search{padding:11px 12px;font-size:16px}
+  .mat-btn{padding:10px 12px}
+  .kupe-fill-row{padding:10px}
+  .sec-back-btn{padding:12px 14px}
+  .kupe-btn-calc{height:46px}
+
+  /* Модалки */
+  .psec-modal-panel{width:96vw;max-height:92vh}
+  .psec-modal-body{padding:.8rem}
+  .kupe-drafts-pop{max-width:calc(100vw - 16px)}
+
+  .kp-modal-bar{padding:.5rem .75rem;flex-wrap:wrap;gap:.5rem}
+
+  /* Нижняя панель */
+  body{padding-bottom:72px}
+  .kupe-mobile-bar{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;
+    align-items:center;gap:10px;
+    background:#28251d;color:#f7f4ed;
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    box-shadow:0 -6px 20px rgba(0,0,0,.18);
+  }
+  .kupe-mbar-total{
+    flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+    background:none;border:none;color:inherit;cursor:pointer;text-align:left;padding:0;
+  }
+  .kupe-mbar-lbl{font-size:.62rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.65}
+  .kupe-mbar-price{font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap}
+  .kupe-mbar-calc{
+    height:44px;padding:0 18px;flex-shrink:0;
+    background:#f7f4ed;color:#28251d;border:none;border-radius:.45rem;
+    font-size:.85rem;font-weight:700;letter-spacing:.02em;cursor:pointer;
+  }
+  .kupe-mbar-calc:active{opacity:.8}
 }
 
 /* КП на телефоне: лист A4 уменьшается под ширину экрана (на печать не влияет) */
@@ -672,3 +967,8 @@ button{cursor:pointer;background:none;border:none}
   #kpDocument .kp-page{zoom:.47;margin:1rem auto}
   .kp-modal-bar{padding:.5rem .75rem}
 }
+
+/* Opening dimension sums: keep errors next to the field. */
+.kupe-inp[aria-invalid=true]{border-color:var(--color-error)}
+.kupe-dimension-error{color:var(--color-error);font-size:.74rem;line-height:1.4}
+.kupe-dimension-error:not(:empty){margin-top:6px}
