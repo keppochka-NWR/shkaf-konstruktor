@@ -12,7 +12,8 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 // Панель кухонного модуля справа (вкладка «Кухня», трек И, 09.10.2026): корпус, опоры и цоколь, фасады, петли, полки, навесы,
 // столешница; для сырого модуля из Базиса — только сведения. Каждое изменение идёт через modify/commit студии (validate + projectErrors),
 // поэтому ошибки, пересчёт сметы и 3D — как у остальных корпусов.
-import { useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { WALL_LABEL, type PlaceTarget, type Wall, type CornerTurn } from "./wallPlacement";
 import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
 import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
 import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, handleDoors, doorHandlePos, setModuleHandlePos, isUpperModule, handlePosIssue, HANDLE_POS_LABEL, type HandlePos, type Module, type Part } from "./model";
@@ -93,6 +94,13 @@ export type KitchenPanelProps = {
   move: (axis: "x" | "y" | "z", v: number) => boolean | void;
   position: { x: number; y: number; z: number; w: number; d: number; h: number }; room: Room;
   rotate: (r: 0 | 90 | 180 | 270) => boolean;
+  /** Положение одним изменением (wallPlacement.placeModuleAt): true — применено; строка — причина, почему нет (soft — без сообщения студии). */
+  place?: (t: PlaceTarget, soft: boolean) => true | string;
+  /** «Поставить к стене» (wallPlacement.placeToWall). */
+  toWall?: (wall: Wall) => void;
+  /** «Продолжить ряд за угол»: куда (cornerTurns) и действие — такой же модуль на соседнюю стену от угла. */
+  turns?: CornerTurn[];
+  aroundCorner?: (turn: CornerTurn) => void;
   material: (target: "decor" | "facadeDecor" | "drawerFacadeDecor") => void;
   handles: () => void;
   showInside: () => void;
@@ -105,12 +113,61 @@ export function KitchenPanel(props: KitchenPanelProps) {
   return <CabinetPanel {...props} />;
 }
 
-/** Положение модуля в комнате — как в общей панели (отступы по монтажному габариту, поворот, удаление). */
-function Position({ placed, project, position, room, move, rotate, commit, modify, open, allowEmpty, stages }: KitchenPanelProps & { open?: boolean; settingsTitle?:string; stages?: string }) {
-  return <Group icon={<Move size={15} />} title="Положение" open={open} stages={stages}>
+/** Поля «Положение» одной группой (задача Макса 23.10.2026, второе крыло Г-кухни): «От пола», «От левой стены», «От задней стены»
+ *  и «Поворот» применяются вместе — проверка пересечений и границ только у итога. Enter, Tab или выбор поворота пробуют применить
+ *  введённое: не проходит промежуточное положение — значения остаются в полях («ещё не применено»), без отказа; отказ — только когда
+ *  фокус уходит из группы или по «Применить». Без place (старый вызов) — поле за полем, как раньше. */
+function PositionFields({ placed, position, room, move, rotate, place }: KitchenPanelProps) {
+  const shown = { y: fmt(position.y), x: fmt(position.x), z: fmt(position.z), r: String(placed.rotation ?? 0) };
+  const stamp = placed.id + "|" + shown.y + "|" + shown.x + "|" + shown.z + "|" + shown.r;
+  const [draft, setDraft] = useState(shown), [pending, setPending] = useState("");
+  useEffect(() => { setDraft(shown); setPending(""); }, [stamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  const box = useRef<HTMLDivElement>(null);
+  const changed = (d: typeof draft) => (["y", "x", "z", "r"] as const).filter((k) => d[k].trim() !== shown[k]);
+  const apply = (soft: boolean, d = draft) => {
+    const keys = changed(d);
+    if (!keys.length) { setPending(""); return; }
+    const t: PlaceTarget = {};
+    for (const k of keys) {
+      const v = Number(d[k].replace(",", "."));
+      if (!d[k].trim() || !Number.isFinite(v) || (k !== "r" && v < 0)) {
+        const msg = `«${{ y: "От пола", x: "От левой стены", z: "От задней стены", r: "Поворот" }[k]}»: введите неотрицательное число в мм`;
+        if (soft) { setPending(msg); return; }
+        window.dispatchEvent(new CustomEvent("studio-error", { detail: msg + ". Изменение не применено." })); setDraft(shown); setPending(""); return;
+      }
+      if (k === "r") t.rotation = v; else t[k] = v;
+    }
+    const r = place!(t, soft);
+    if (r === true) { setPending(""); return; }
+    if (soft) setPending(r); else { setPending(""); setDraft(shown); }
+  };
+  if (!place) return <>
     {(["y", "x", "z"] as const).map((axis) => <Num key={axis} label={{ x: "От левой стены", z: "От задней стены", y: "От пола" }[axis]} value={position[axis]} min={0}
       max={Math.max(0, { x: room.width - position.w, z: room.depth - position.d, y: room.height - position.h }[axis])} change={(v) => move(axis, v)} />)}
     <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={placed.rotation ?? 0} onChange={(e) => rotate(Number(e.target.value) as 0 | 90 | 180 | 270)}>{[0, 90, 180, 270].map((r) => <option key={r} value={r}>{r}°</option>)}</select></label>
+  </>;
+  const dirty = changed(draft).length > 0;
+  return <div className="position-fields" ref={box} onBlur={(e) => { if (!box.current?.contains(e.relatedTarget as Node | null)) apply(false); }}>
+    {(["y", "x", "z"] as const).map((axis) => { const label = { x: "От левой стены", z: "От задней стены", y: "От пола" }[axis];
+      return <label key={axis} className={"number-field" + (draft[axis].trim() !== shown[axis] ? " is-draft" : "")}><span>{label}</span>
+        <div><input aria-label={label} type="number" inputMode="decimal" min={0} step={1} value={draft[axis]} onChange={(e) => { setDraft({ ...draft, [axis]: e.target.value }); }}
+          onBlur={(e) => { if (box.current?.contains(e.relatedTarget as Node | null)) apply(true); }}
+          onKeyDown={(e) => { if (e.key === "Enter") apply(true); if (e.key === "Escape") { setDraft(shown); setPending(""); } }} /><small>мм</small></div>
+        <span className="number-range">{axis === "y" ? `До потолка ${fmt(room.height - position.y - position.h)} мм` : axis === "x" ? `До правой стены ${fmt(room.width - position.x - position.w)} мм` : `До передней стены ${fmt(room.depth - position.z - position.d)} мм`}</span></label>; })}
+    <label className="hardware-field">Поворот<select aria-label="Поворот кухонного модуля" value={draft.r} onChange={(e) => { const d = { ...draft, r: e.target.value }; setDraft(d); apply(true, d); }}>{[0, 90, 180, 270].map((r) => <option key={r} value={String(r)}>{r}°</option>)}</select></label>
+    {pending && <p className="field-note kitchen-warn" role="status">Положение ещё не применено: {pending.replace(/\.$/, "")}. Введите остальные значения — проверяется итоговое положение — и нажмите «Применить».</p>}
+    {dirty && <div className="kp-actions"><button type="button" className="primary" aria-label="Применить положение" onClick={() => apply(false)}>Применить</button><button type="button" className="text-action" onClick={() => { setDraft(shown); setPending(""); }}>Отменить</button></div>}
+  </div>;
+}
+
+/** Положение модуля в комнате — как в общей панели (отступы по монтажному габариту, поворот, удаление). */
+function Position(props: KitchenPanelProps & { open?: boolean; settingsTitle?:string; stages?: string }) {
+  const { placed, project, commit, modify, open, allowEmpty, stages, toWall, turns, aroundCorner } = props;
+  return <Group icon={<Move size={15} />} title="Положение" open={open} stages={stages}>
+    <PositionFields {...props} />
+    {toWall && <div className="kp-towall" role="group" aria-label="Поставить к стене"><span className="field-note">Поставить к стене — фасадом в комнату, вплотную:</span>
+      <div className="kp-actions">{(["back", "left", "right"] as Wall[]).map((w) => <button key={w} type="button" className="outline" aria-label={`Поставить к ${WALL_LABEL[w]} стене`} title={`Повернуть фасадом в комнату и поставить вплотную к ${WALL_LABEL[w]} стене — в ближайшее свободное место`} onClick={() => toWall(w)}>{{ back: "К задней", left: "К левой", right: "К правой", front: "" }[w]}</button>)}</div></div>}
+    {aroundCorner && turns && turns.length > 0 && <div className="kp-actions" role="group" aria-label="Продолжить ряд за угол">{turns.map((t) => <button key={t.wall} type="button" className="outline" aria-label={`Продолжить ряд за угол: ${t.label}`} title="Такой же модуль — на соседнюю стену от угла, сразу за глубиной этого ряда" onClick={() => aroundCorner(t)}>За угол ›<small> {t.label}</small></button>)}</div>}
     {placed.module.kitchen&&<Check label="Автофальши у стен и в углах" checked={!placed.module.autoFillersOff} change={v=>modify(n=>{if(v)delete n.autoFillersOff;else{n.autoFillersOff=true;delete n.wallFiller;delete n.cornerFiller;delete n.cornerKind;}})}/>}
     {placed.module.kitchen && (placed.rotation ?? 0) === 0 && <button className="outline full" onClick={() => commit(alignKitchenRow(project, placed.id))}>Выровнять ряд по фасадам</button>}
     <p className="field-note">Отступы — по монтажному габариту с фальшами и выступом ХДФ. Тяните модуль в сцене — края притягиваются к соседям.</p>

@@ -12,9 +12,11 @@ import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule
 import { WardrobeBase } from "./WardrobeBase";
 import { PUBLIC_BUILD } from "./buildMode";
 import { offWallNote } from "./freeSpot";
+import { placeKitchenCorner, CORNER_CLEARANCE } from "./kitchenCornerRow";
+import { CornerDownRight } from "lucide-react";
 import "./kitchen.css";
 
-const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical, "tall-oven": Microwave, "tall-fridge": Refrigerator };
+const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-corner": Columns2, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical, "tall-oven": Microwave, "tall-fridge": Refrigerator };
 const GROUPS: { id: "base" | "wall" | "tall"; title: string; note: string }[] = [
   { id: "base", title: "Нижние", note: `на опорах ${KITCHEN.legs}, корпус ${KITCHEN.baseBody}, глубина ${KITCHEN.baseDepth}` },
   { id: "wall", title: "Верхние", note: `${KITCHEN.wallHeight} × ${KITCHEN.wallDepth}, на навесах, низ ${wallFloorY()} от пола (${KITCHEN.wallGap} над столешницей)` },
@@ -54,6 +56,10 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
     try { const r = f(); if (commit(r.project)) { onAdded(r.ids, fit); onNote?.(offWallNote(r.project, r.ids)); } } catch (e) { onError((e as Error).message); }
   };
   const [cornerSide, setCornerSide] = useState<CornerSide>("right");
+  // угловая кухня (w-lwing 23.10): длины от угла комнаты и стена второго крыла
+  const [cBack, setCBack] = useState(Math.min(3000, project.room.width)), [cSide, setCSide] = useState(Math.min(2400, project.room.depth)), [cWing, setCWing] = useState<"left" | "right" | "u">("right");
+  const [cLeft, setCLeft] = useState(Math.min(2400, project.room.depth));
+  const cornerOpts = () => (cWing === "u" ? { left: cLeft, back: project.room.width, right: cSide, u: true as const } : { back: cBack, side: cSide, wing: cWing });
   // низ навесных от пола (п. 6, 22.10): по умолчанию — ряд навесных или регламент от верха нижних (1458); заданное число — для новых навесных
   const [wallFloor, setWallFloor] = useState<number | undefined>(undefined), wallShown = wallFloor ?? Math.round(defaultWallY(project));
   // w-formerrors (23.10): ошибки полей палитры — после выхода из поля (или по кнопке), все сразу, у поля, с «Что сделать» и исправлением
@@ -63,7 +69,8 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
   const floorIssue = floorSeen && wallFloor !== undefined && (wallFloor < 0 || wallFloor > floorMax)
     ? { problem: wallFloor < 0 ? `Низ навесных ${wallFloor} < 0 мм` : `Низ навесных ${wallFloor} > ${floorMax} мм`, action: wallFloor < 0 ? "Минимум 0 — от пола." : `Навесной ${KITCHEN.wallHeight} мм при потолке ${project.room.height} встаёт не выше ${floorMax}.`, fix: wallFloor < 0 ? 0 : floorMax } : null;
   const addRow = (replace: boolean) => { const now = paletteIssues({ kind: "kitchen-row", width: length, height: KITCHEN.baseHeight, depth: KITCHEN.baseDepth }, source); if (now.length) { setLenSeen(true); return; } run(() => placeKitchenRow(project, length, source, replace), true); };
-  const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source, kind === "base-corner" ? { side: cornerSide } : undefined), KITCHEN_ITEMS[kind].group === "wall" && kind !== "antresol" ? { wallY: wallFloor } : {}); return { project: r.project, ids: [r.id] }; });
+  // w-lwing (23.10): у навесного углового, как у нижнего, выбирается сторона глухой части
+  const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source, kind === "base-corner" || kind === "wall-corner" ? { side: cornerSide } : undefined), KITCHEN_ITEMS[kind].group === "wall" && kind !== "antresol" ? { wallY: wallFloor } : {}); return { project: r.project, ids: [r.id] }; });
   return <details className="module-palette kitchen-palette" open>
     <summary>Кухонные модули</summary>
     {GROUPS.map((g) => <div key={g.id} className="kp-group">
@@ -72,12 +79,12 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
       {g.id === "wall" && floorIssue && <div className="palette-issues" role="alert" aria-label="Ошибка поля «Низ навесных от пола»"><ol><li><b>{floorIssue.problem}</b><span className="pi-action">Что сделать: {floorIssue.action}</span><span className="pi-fixes"><button type="button" className="outline" onClick={() => setWallFloor(floorIssue.fix)}>Низ {floorIssue.fix}</button></span></li></ol></div>}
       {(Object.keys(KITCHEN_ITEMS) as KitchenItem[]).filter((k) => KITCHEN_ITEMS[k].group === g.id).map((k) => { const Icon = ICONS[k]; return <div key={k} className="kp-item">
         <span className="kp-label"><Icon size={18} />{KITCHEN_ITEMS[k].label}</span>
-        {k === "base-corner" && <span className="kp-corner">
-          <select aria-label="Вариант углового" value="straight" onChange={() => undefined} title="Вариант нижнего углового">
+        {(k === "base-corner" || k === "wall-corner") && <span className="kp-corner">
+          <select aria-label={k === "wall-corner" ? "Вариант навесного углового" : "Вариант углового"} value="straight" onChange={() => undefined} title={k === "wall-corner" ? "Вариант навесного углового" : "Вариант нижнего углового"}>
             <option value="straight">прямой, с фальшпанелью</option>
             <option value="l90" disabled>Г-образный 90° — в работе</option>
           </select>
-          <select aria-label="Глухая часть углового" value={cornerSide} onChange={(e) => setCornerSide(e.target.value as CornerSide)} title="С какой стороны глухая часть (фальш); дверь — с другой">
+          <select aria-label={k === "wall-corner" ? "Глухая часть навесного углового" : "Глухая часть углового"} value={cornerSide} onChange={(e) => setCornerSide(e.target.value as CornerSide)} title="С какой стороны глухая часть (фальш); дверь — с другой">
             <option value="right">глухая часть справа</option>
             <option value="left">глухая часть слева</option>
           </select>
@@ -102,6 +109,18 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
         <button type="button" className="outline" onClick={() => addRow(false)}>Добавить ряд</button>
       </div>
       <small>«Заменить» убирает кухонные модули и ставит ряд от левой стены (место под фальш 16 + 5). Шкафы остаются. Ctrl+Z — вернуть.</small>
+    </div>
+    <div className="kp-group kp-row">
+      <h3><span className="kp-title"><CornerDownRight size={16} />Угловая кухня (Г или П)</span><small>нижний и навесной угловые в углу, крыло от линии фасадов задней стены с угловой планкой, столешница кусками по стенам</small></h3>
+      <label className="hardware-field">Форма<select aria-label="Угловая кухня: форма" value={cWing} onChange={(e) => setCWing(e.target.value === "left" ? "left" : e.target.value === "u" ? "u" : "right")}><option value="right">Г — крыло у правой стены</option><option value="left">Г — крыло у левой стены</option><option value="u">П — левая, задняя и правая стены</option></select></label>
+      {cWing === "u" && <label className="number-field"><span>По левой стене</span><div><input aria-label="Угловая кухня: по левой стене" type="number" min={800} max={6000} value={cLeft} onChange={(e) => setCLeft(Number(e.target.value))} /><small>мм</small></div></label>}
+      <label className="number-field"><span>По задней стене</span><div><input aria-label="Угловая кухня: по задней стене" type="number" min={1000} max={6000} value={cWing === "u" ? project.room.width : cBack} disabled={cWing === "u"} title={cWing === "u" ? "П-образная — во всю ширину комнаты" : undefined} onChange={(e) => setCBack(Number(e.target.value))} /><small>мм</small></div></label>
+      <label className="number-field"><span>{cWing === "u" ? "По правой стене" : "По боковой стене"}</span><div><input aria-label="Угловая кухня: по боковой стене" type="number" min={800} max={6000} value={cSide} onChange={(e) => setCSide(Number(e.target.value))} /><small>мм</small></div></label>
+      <div className="kp-actions">
+        <button type="button" className="primary" onClick={() => run(() => placeKitchenCorner(project, source, cornerOpts(), true), true)}>Заменить кухню на {cWing === "u" ? "П-образную" : "угловую"}</button>
+        <button type="button" className="outline" onClick={() => run(() => placeKitchenCorner(project, source, cornerOpts()), true)}>Добавить в {cWing === "u" ? "углы" : "угол"}</button>
+      </div>
+      <small>Длины — от угла комнаты. Дверь нижнего углового кончается за {CORNER_CLEARANCE} мм до лица угловой планки крыла. Ctrl+Z — вернуть.</small>
     </div>
     {children && <details className="kp-more"><summary><Sofa size={15} />Шкафы и другая мебель</summary>{children}</details>}
     {bases && bases.length > 0 && <details className="kp-more kp-base"><summary><Library size={15} />Кухни из базы · {bases.length}</summary>

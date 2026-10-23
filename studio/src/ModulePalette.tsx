@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
-import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal} from 'lucide-react';
+import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal,CornerDownRight} from 'lucide-react';
+import {createKitchenCornerRow,createKitchenURow} from './kitchenCornerRow';
 import {RULES,type Module} from './model';
 import {doorCountOptions,autoDoorCount} from './paletteDoors';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
@@ -10,11 +11,12 @@ import {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,create
 import {paletteIssues,paletteAutoFix,SPLIT_KINDS,type PaletteField,type PaletteInput,type PalettePatch} from './paletteCheck';
 // сборка мебели палитры живёт в paletteBuild.ts (w-formerrors 23.10) — прежние импорты из ModulePalette работают
 export {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,type ModuleKind} from './paletteBuild';
-const choices=([['empty',Box],['shelves',Rows3],['wardrobe',Shirt],['drawers',Archive],['corner',Box],['desk',PanelTop],['kupe-wardrobe',Columns2],['kitchen-row',CookingPot],['kitchen-base',PanelBottom],['kitchen-wall',PanelTopOpen],['worktop',RectangleHorizontal],['kupe',SquareSplitHorizontal]] as const).map(([id,icon])=>({id,label:KIND_LABEL[id],icon}));
-const SIZES:Partial<Record<ModuleKind,[number,number,number]>>={'kitchen-row':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-base':[600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-wall':[600,KITCHEN.wallHeight,KITCHEN.wallDepth],worktop:[2400,KITCHEN.worktopThickness,KITCHEN.worktopDepth],corner:[1050,2000,450],desk:[1200,750,600],drawers:[600,850,550],kupe:[1600,2400,KUPE_DEPTH],'kupe-wardrobe':[1800,2400,600]};
+// «Кухня угловая (Г)» и «Кухня П-образная» (w-lwing 23.10) — группы в угол комнаты (kitchenCornerRow.ts)
+const choices=([['empty',Box],['shelves',Rows3],['wardrobe',Shirt],['drawers',Archive],['corner',Box],['desk',PanelTop],['kupe-wardrobe',Columns2],['kitchen-row',CookingPot],['kitchen-corner',CornerDownRight],['kitchen-u',Columns2],['kitchen-base',PanelBottom],['kitchen-wall',PanelTopOpen],['worktop',RectangleHorizontal],['kupe',SquareSplitHorizontal]] as const).map(([id,icon])=>({id,label:KIND_LABEL[id],icon}));
+const SIZES:Partial<Record<ModuleKind,[number,number,number]>>={'kitchen-row':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-corner':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-u':[3600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-base':[600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-wall':[600,KITCHEN.wallHeight,KITCHEN.wallDepth],worktop:[2400,KITCHEN.worktopThickness,KITCHEN.worktopDepth],corner:[1050,2000,450],desk:[1200,750,600],drawers:[600,850,550],kupe:[1600,2400,KUPE_DEPTH],'kupe-wardrobe':[1800,2400,600]};
 /** Типы распашных шкафов, между которыми габариты палитры переносятся при смене типа (v5). */
 const KEEP_SIZES=['empty','shelves','wardrobe','drawers'] as const;
-const categories=[{id:'wardrobe',label:'Шкафы распашные',kinds:['empty','shelves','wardrobe','drawers','corner','desk']},{id:'kitchen',label:'Кухонные модули',kinds:['kitchen-row','kitchen-base','kitchen-wall','worktop']},{id:'kupe',label:'Шкафы-купе',kinds:['kupe-wardrobe','kupe']}] as const;
+const categories=[{id:'wardrobe',label:'Шкафы распашные',kinds:['empty','shelves','wardrobe','drawers','corner','desk']},{id:'kitchen',label:'Кухонные модули',kinds:['kitchen-row','kitchen-corner','kitchen-u','kitchen-base','kitchen-wall','worktop']},{id:'kupe',label:'Шкафы-купе',kinds:['kupe-wardrobe','kupe']}] as const;
 const PALETTE_KEY='studio-palette';
 type PaletteChoice={category:string;kind:ModuleKind;width:number;height:number;depth:number;/** K6 (критик 22.10): установка дверей купе и число дверей — тоже переживают пересоздание палитры */mount?:'free'|'inside';doors?:'auto'|number;bodies?:number};
 /** Сохранённый выбор палитры этой вкладки; несогласованная запись (категория без такого вида) отбрасывается. */
@@ -24,7 +26,8 @@ function readPalette():PaletteChoice|null{
 }
 const MAX_BODIES=6;
 const plural=(n:number,one:string,few:string,many:string)=>{const a=n%10,b=n%100;return a===1&&b!==11?one:a>=2&&a<=4&&(b<10||b>=20)?few:many;};
-export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{source:Module;onAdd:(module:Module)=>boolean;onAddGroup:(group:PlacedModule[])=>boolean;kitchenTemplates?:ReactNode;
+export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room}:{source:Module;onAdd:(module:Module)=>boolean;/** keep — группа встаёт на свои координаты (угловая кухня — в угол комнаты), без поиска места */onAddGroup:(group:PlacedModule[],keep?:boolean)=>boolean;kitchenTemplates?:ReactNode;
+  /** комната — для «Кухня угловая (Г)» и «Кухня П-образная»: ряды у задней и боковых стен, длины — в пределах стен (проверка формы) */room?:{width:number;depth:number;height:number};
   /** Нехватка места в ряду у стены (rowFit.ts, m1 критика 22.10): вместо молчаливой расстановки перед шкафами — варианты. */
   fit?:(module:Module)=>RowShortage|null}) {
   // T1 (18.10): выбор палитры живёт дольше экземпляра — после первого шкафа редактор пересоздаётся, а категория и размеры остаются.
@@ -37,10 +40,15 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
   // проверка формы «после выхода из поля»: значения последней проверки, поля, которые уже покидали, и было ли «Добавить»
   const [probe,setProbe]=useState<PaletteInput|null>(null),[seen,setSeen]=useState<ReadonlySet<PaletteField>>(new Set()),[submitted,setSubmitted]=useState(false),[recheck,setRecheck]=useState(0),[fixedNote,setFixedNote]=useState('');
   const resetCheck=()=>{setProbe(null);setSeen(new Set());setSubmitted(false);setFixedNote('');};
+  // «Кухня угловая (Г)» (w-lwing 23.10): длина по боковой стене и у какой стены второе крыло
+  const [cornerSide,setCornerSide]=useState(2400),[cornerWing,setCornerWing]=useState<'left'|'right'>('right');
+  // «Кухня П-образная»: длина по левой стене (по правой — cornerSide), по задней — во всю ширину комнаты
+  const [uLeft,setULeft]=useState(2400);
+  const cornerKitchen=kind==='kitchen-corner'||kind==='kitchen-u';
   // v5 (замер удобства 22.10): смена типа шкафа (Пустой → Стеллаж) не сбрасывает введённые габариты, если новый тип их принимает;
-  // у кухни, купе, углового и стола размеры значат другое — там, как раньше, размеры типа
+  // у кухни, купе, углового и стола размеры значат другое — там, как раньше, размеры типа (П-образная — по задней стене во всю ширину комнаты)
   const pick=(next:ModuleKind)=>{const same=(KEEP_SIZES as readonly string[]).includes(kind)&&(KEEP_SIZES as readonly string[]).includes(next);let keep=false;if(same&&next!==kind){try{createModule(next,Math.max(...bodyWidths(width,bodies)),height,depth,source);keep=true;}catch{keep=false;}}
-    setKind(next);if(!keep&&next!==kind){const sz=SIZES[next]??[600,2000,550];setWidth(sz[0]);setHeight(sz[1]);setDepth(sz[2]);setBodies(1);}setError('');setDoors('auto');if(next!==kind)resetCheck();};
+    setKind(next);if(!keep&&next!==kind){const sz=SIZES[next]??[600,2000,550];setWidth(next==='kitchen-u'&&room?room.width:sz[0]);setHeight(sz[1]);setDepth(sz[2]);setBodies(1);}setError('');setDoors('auto');if(next!==kind)resetCheck();};
   // п.21 волны 22.10: число дверей до «Добавить в комнату» — распашной шкаф (секции под двери) и двери купе; варианты — только допустимые по размерам
   const [doors,setDoors]=useState<'auto'|number>(typeof saved?.doors==='number'&&Number.isInteger(saved.doors)&&saved.doors>0&&saved.doors<8?saved.doors:'auto');
   useEffect(()=>{try{sessionStorage.setItem(PALETTE_KEY,JSON.stringify({category,kind,width,height,depth,mount:kupeMount,doors,bodies}));}catch{/* без хранилища выбор не запоминается */}},[category,kind,width,height,depth,kupeMount,doors,bodies]);
@@ -58,7 +66,7 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
   },[kind,kupeKind,width,height,depth,source,bodyW]);
   const doorValue=doors!=='auto'&&doorChoice?.options.includes(doors)?doors:'auto';
   const doorArg=doorValue==='auto'?(kupeKind?doorChoice?.auto:doorChoice&&'autoArg' in doorChoice?doorChoice.autoArg:undefined):doorValue;
-  const input:PaletteInput={kind,width,height,depth,doors:doorArg,mount:kupeMount,bodies:rowBodies};
+  const input:PaletteInput={kind,width,height,depth,doors:doorArg,mount:kupeMount,bodies:rowBodies,...(cornerKitchen?{side:cornerSide,wing:cornerWing,room,...(kind==='kitchen-u'?{left:uLeft}:{})}:{})};
   // проверка — по значениям на момент выхода из поля (без мигания ошибок при наборе)
   useEffect(()=>{if(recheck)setProbe(input);},[recheck]); // eslint-disable-line react-hooks/exhaustive-deps
   const issues=useMemo(()=>probe?paletteIssues(probe,source):[],[probe,source]);
@@ -66,10 +74,11 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
   const bad=(f:PaletteField)=>shown.some(x=>x.field===f);
   const leave=(f:PaletteField)=>{setSeen(s=>s.has(f)?s:new Set([...s,f]));setRecheck(n=>n+1);};
   const again=()=>{if(probe)setRecheck(n=>n+1);};
-  const applyPatch=(p:PalettePatch)=>{if(p.width!==undefined)setWidth(p.width);if(p.height!==undefined)setHeight(p.height);if(p.depth!==undefined)setDepth(p.depth);if(p.bodies!==undefined)setBodies(p.bodies);if(p.doors!==undefined)setDoors(p.doors);setError('');setRecheck(n=>n+1);};
+  const applyPatch=(p:PalettePatch)=>{if(p.width!==undefined)setWidth(p.width);if(p.height!==undefined)setHeight(p.height);if(p.depth!==undefined)setDepth(p.depth);if(p.bodies!==undefined)setBodies(p.bodies);if(p.doors!==undefined)setDoors(p.doors);if(p.side!==undefined)setCornerSide(p.side);if(p.left!==undefined)setULeft(p.left);setError('');setRecheck(n=>n+1);};
   const autoFix=()=>{const r=paletteAutoFix(input,source),p=r.patch,parts:string[]=[];
     if(p.bodies!==undefined&&p.bodies>1){const ws=bodyWidths(p.width??width,p.bodies);parts.push(`${p.bodies} ${plural(p.bodies,'корпус','корпуса','корпусов')} ${ws[0]===ws[ws.length-1]?'по '+ws[0]:ws.join(' + ')}`);}
-    else if(p.width!==undefined)parts.push('ширина '+p.width);
+    else if(p.width!==undefined)parts.push((cornerKitchen?'по задней стене ':'ширина ')+p.width);
+    if(p.left!==undefined)parts.push('по левой стене '+p.left);if(p.side!==undefined)parts.push((kind==='kitchen-u'?'по правой стене ':'по боковой стене ')+p.side);
     if(p.height!==undefined)parts.push('высота '+p.height);if(p.depth!==undefined)parts.push('глубина '+p.depth);
     if(p.doors!==undefined)parts.push(`${p.doors} ${plural(p.doors,'дверь','двери','дверей')}${kupeKind?'':` · ${Math.ceil(p.doors/2)} ${plural(Math.ceil(p.doors/2),'секция','секции','секций')}`}`);
     applyPatch(p);setSubmitted(r.left.length>0);setFixedNote(parts.length?`Исправлено: ${parts.join(', ')}.${r.left.length?'':' Нажмите «Добавить в комнату».'}`:'');};
@@ -84,6 +93,10 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
   // отказ сборки — все ошибки формы списком у полей (w-formerrors); если разбор ничего не нашёл — прежнее сообщение
   const refuse=(e:unknown)=>{const list=paletteIssues(input,source);if(list.length){setProbe(input);setSubmitted(true);setError('');setFixedNote('');requestAnimationFrame(()=>issuesRef.current?.scrollIntoView?.({block:'center'}));}else setError((e as Error).message);};
   const add=()=>{try{
+      // угловая (Г) и П-образная кухня (w-lwing): группа встаёт на свои координаты — в угол комнаты (keep), без поиска места
+      if(cornerKitchen){if(!room)throw Error(`${kind==='kitchen-u'?'П-образная':'Угловая'} кухня ставится в комнату: откройте проект с помещением.`);
+        const group=kind==='kitchen-u'?createKitchenURow(source,{left:uLeft,back:width,right:cornerSide,room,height,depth}):createKitchenCornerRow(source,{back:width,side:cornerSide,wing:cornerWing,room,height,depth});
+        setOffer(null);if(onAddGroup(group,true)){setError('');resetCheck();}return;}
       if(kind==='kupe-wardrobe'||kind==='kitchen-row'){const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):onAddGroup(createKitchenRow(width,source,height,depth));if(ok){setError('');resetCheck();}return;}
       if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg))){setError('');resetCheck();}return;}
       const m=createModule(kind,width,height,depth,source,doorArg),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
@@ -92,14 +105,17 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'
     :kind==='kupe-wardrobe'&&kupeMount==='inside'?'Боковины до пола и крыша на всю глубину; двери купе между боковинами под крышей, нижняя направляющая на полу. Дно, цоколь и секции — за дверями, 100 мм глубины занимают направляющие.'
     :kind==='kupe-wardrobe'?'Корпуса без распашных дверей и двери купе на всю ширину. Глубина — общая, 100 мм из неё занимают направляющие.'
+    :kind==='kitchen-corner'?'Г-образная кухня в углу комнаты: ряд по задней стене от угла и ряд по боковой стене от задней. В углу — нижний угловой с фальшпанелью (глухая часть в угол) и над ним навесной угловой; второе крыло — от линии фасадов первого, с угловой планкой. Столешница двумя кусками, навесные по обоим крыльям.'
+    :kind==='kitchen-u'?'П-образная кухня: левая, задняя (во всю ширину комнаты) и правая стены. В обоих углах — нижний и навесной угловые, крылья — от линии фасадов задней стены, с угловой планкой. Столешница тремя кусками, навесные по всем стенам.'
     :kind==='kitchen-row'?'Ширина — длина ряда корпусов; у боковых стен нужен запас по 21 мм под фальши. Высота — нижние корпуса с опорами, глубина — нижние корпуса без фасадов. Нижние корпуса на ножках (ящики, мойка, распашные), столешница во всю длину, навесные над ней на регламентный зазор.'
     :kind==='kitchen-base'?'Нижний кухонный: на ножках с цокольной планкой, вместо крыши царги под столешницу.'
     :kind==='kitchen-wall'?'Навесной кухонный: на навесах. Поставьте его на нужную высоту в сцене.'
     :kind==='worktop'?'Столешница — отдельным объектом. Ставьте сверху на нижние корпуса.'
     :rowBodies>1?`Размеры в мм. Создаются ${rowBodies} ${plural(rowBodies,'корпус','корпуса','корпусов')} вплотную в ряд.`
     :'Размеры в мм. Создаётся отдельный корпус.';
-  const fields:{key:'width'|'height'|'depth';label:string;value:number;set:(n:number)=>void}[]=[{key:'width',label:kind==='corner'?'Сторона угла':kind==='kupe'?'Ширина проёма':'Ширина',value:width,set:setWidth},{key:'height',label:kind==='kupe'?'Высота проёма':'Высота',value:height,set:setHeight},...(kind==='kupe'?[]:[{key:'depth' as const,label:kind==='corner'?'Глубина боковины':'Глубина',value:depth,set:setDepth}])];
-  const limitText=(f:PaletteField)=>{const x=shown.find(i=>i.field===f&&i.limit);if(!x?.limit)return '';const v=f==='width'?bodyW:f==='height'?height:depth;return x.limit.max!==undefined&&v>x.limit.max?`до ${x.limit.max}`:x.limit.min!==undefined?`от ${x.limit.min}`:'';};
+  // у угловой (Г) — «По задней стене» и «По боковой стене», у П-образной — ещё «По левой стене», боковая — «По правой стене» (w-lwing)
+  const fields:{key:Exclude<PaletteField,'doors'>;label:string;value:number;set:(n:number)=>void}[]=[...(kind==='kitchen-u'?[{key:'left' as const,label:'По левой стене',value:uLeft,set:setULeft}]:[]),{key:'width',label:kind==='corner'?'Сторона угла':kind==='kupe'?'Ширина проёма':cornerKitchen?'По задней стене':'Ширина',value:width,set:setWidth},...(kind==='kitchen-corner'?[{key:'side' as const,label:'По боковой стене',value:cornerSide,set:setCornerSide}]:kind==='kitchen-u'?[{key:'side' as const,label:'По правой стене',value:cornerSide,set:setCornerSide}]:[]),{key:'height',label:kind==='kupe'?'Высота проёма':'Высота',value:height,set:setHeight},...(kind==='kupe'?[]:[{key:'depth' as const,label:kind==='corner'?'Глубина боковины':'Глубина',value:depth,set:setDepth}])];
+  const limitText=(f:PaletteField)=>{const x=shown.find(i=>i.field===f&&i.limit);if(!x?.limit)return '';const v=f==='width'?bodyW:f==='height'?height:f==='side'?cornerSide:f==='left'?uLeft:depth;return x.limit.max!==undefined&&v>x.limit.max?`до ${x.limit.max}`:x.limit.min!==undefined?`от ${x.limit.min}`:'';};
   return <details className="module-palette" open><summary>Добавить мебель</summary>
     <div className="catalog-tabs" role="tablist" aria-label="Категория мебели">{categories.map(c=><button type="button" role="tab" key={c.id} aria-selected={category===c.id} onClick={()=>{setCategory(c.id);pick(c.kinds[0]);}}>{c.label}</button>)}</div>
     <div className="module-kinds">{choices.filter(c=>(categories.find(x=>x.id===category)!.kinds as readonly string[]).includes(c.id)).map(c=><button key={c.id} type="button" aria-pressed={kind===c.id} onClick={()=>pick(c.id)}><c.icon size={23}/><span>{c.label}</span></button>)}</div>
@@ -111,6 +127,7 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit}:{so
       <option value="auto">Авто{doorChoice.auto?` · ${doorChoice.auto}`:''}</option>
       {doorChoice.options.map(n=><option key={n} value={n}>{n}{kupeKind?'':` · секций ${Math.ceil(n/2)}`}</option>)}
     </select>{!doorChoice.options.length&&!shown.length&&<small>{doorChoice.why?`Число дверей не выбирается: ${doorChoice.why}`:'При этой ширине число дверей не выбирается — измените ширину.'}</small>}</label>}
+    {kind==='kitchen-corner'&&<label className="hardware-field">Второе крыло<select aria-label="Второе крыло угловой кухни" value={cornerWing} onChange={e=>{setCornerWing(e.target.value==='left'?'left':'right');again();}}><option value="right">у правой стены</option><option value="left">у левой стены</option></select></label>}
     {kind==='kupe-wardrobe'&&<label className="hardware-field">Установка дверей<select aria-label="Установка дверей купе" value={kupeMount} onChange={e=>{setKupeMount(e.target.value==='inside'?'inside':'free');again();}}><option value="inside">внутри шкафа</option><option value="free">отдельно (ниша или перед корпусами)</option></select></label>}
     <small>{note}</small>
     {shown.length>0&&<div className="palette-issues" role="alert" aria-label="Ошибки формы" ref={issuesRef}>

@@ -3,7 +3,7 @@
 // по фасаду — одна дверь и фальш из фасадного материала в плоскости фасадов (kitchen.faceFiller.facadeMat); дверь у фальша висит
 // на «Петля под фальшпанель» у своей кромки (model.ts, drilling.ts falsePanelHinge). Эталон — шаблон Базиса «НКПМ» (k02 m01),
 // сверка scripts/kitchen/compare.ts → tests/kitchen-corner.test.ts. Ничего сверх проекта Базиса: крепёж фальша — как в шаблоне.
-import { KITCHEN, kitchenBase } from "./kitchen";
+import { KITCHEN, kitchenBase, kitchenWall } from "./kitchen";
 import type { Module } from "./model";
 
 export type CornerSide = "left" | "right";
@@ -64,9 +64,42 @@ export function kitchenBaseCorner(base: Module, o: KitchenCornerOptions): Module
   return m;
 }
 
+/** Навесной угловой (прямой) — решение Макса 23.10.2026 «навесной угловой прямой точно нужен» (Г- и П-образные кухни). Эталон
+ *  Базиса k25 m18 «ВМУгловой» 1071×930×336: корпус навесного студии (kitchenWall: крыша и дно между боковинами, ХДФ в паз П16-4×8,
+ *  навесы на боковинах, полки), у края со стороны угла — глухая часть: фальш ЛДСП корпуса в плоскости фасадов от низа дна до верха
+ *  крыши (k25: 320 = глубина корпуса — на неё встаёт крыло) и рядом планка из фасадного материала 59 по высоте фасадов; фасады —
+ *  на остальной ширине (шире 600 — две двери), дверь у планки на «Петля под фальшпанель». Крепёж фальша — как в шаблоне: конфирматы
+ *  с лица фальша в торцы дна и крыши (в 72 от края и в 56 от планки) и в торец боковины (81 от низа, середина, 81 от верха).
+ *  Сверка — tests/kitchen-corner.test.ts (k25 m18). Ничего сверх проекта Базиса. */
+export type WallCornerOptions = { width: number; height?: number; depth?: number; side?: CornerSide;
+  /** ширина глухого фальша ЛДСП; по умолчанию — глубина корпуса (на него встаёт навесной второго крыла) */ filler?: number;
+  /** планка из фасада между фальшем и дверью; по умолчанию 59 (k25 m18) */ strip?: number;
+  /** крепёж фальша по шаблону; по умолчанию да */ conf?: boolean };
+export const WALL_CORNER_STRIP = 59;
+export function wallCornerConf(fw: number, height: number): NonNullable<NonNullable<NonNullable<Module["kitchen"]>["faceFiller"]>["conf"]> {
+  const r1 = (v: number) => Math.round(v * 10) / 10, x = [r1(fw - 56), 72].filter((v, i, a) => v > 20 && a.indexOf(v) === i).sort((a, b) => b - a);
+  return { bottom: x, top: x, side: [81, r1(height / 2), r1(height - 81)] };
+}
+export function kitchenWallCorner(base: Module, o: WallCornerOptions): Module {
+  const m = kitchenWall(base, o.width);
+  m.name = "Навесной угловой";
+  if (o.height) m.height = o.height;
+  if (o.depth) m.depth = o.depth;
+  const side = o.side ?? "right", fw = o.filler ?? m.depth, strip = o.strip ?? WALL_CORNER_STRIP, conf = o.conf ?? true;
+  m.kitchen = { ...m.kitchen!, faceFiller: { side, width: fw, strip, ...(conf ? { conf: wallCornerConf(fw, m.height) } : {}) } };
+  const doorPart = o.width - fw - strip;
+  if (doorPart < 250) throw Error(`Навесной угловой ${o.width}: на двери остаётся ${Math.round(doorPart)} мм — нужно от 250. Увеличьте ширину или уменьшите фальш.`);
+  m.sections = [{ ...m.sections[0], shelfDepth: m.depth - 22, doorLeaves: doorPart > 600 ? 2 : 1, hingeSide: side }];
+  return m;
+}
+
 /** Параметры углового модуля из самого модуля (для меню и панели): сторона, ширина двери, ширина фальша. */
-export function cornerOf(m: Module): { side: CornerSide; door: number; filler: number; inset: number } | undefined {
+export function cornerOf(m: Module): { side: CornerSide; door: number; filler: number; inset: number; strip?: number; wall?: true } | undefined {
   const ff = m.kitchen?.faceFiller;
+  if (m.kitchen?.role === "wall" && ff && !ff.facadeMat && ff.strip) {
+    const inset = ff.inset ?? 0;
+    return { side: ff.side, door: Math.round((m.width - ff.width - ff.strip - inset) * 10) / 10, filler: ff.width, inset, strip: ff.strip, wall: true };
+  }
   if (!ff?.facadeMat || m.kitchen?.role !== "base") return undefined;
   const inset = ff.inset ?? 0;
   return { side: ff.side, door: Math.round((m.width - ff.width - inset) * 10) / 10, filler: ff.width, inset };
@@ -76,9 +109,15 @@ export function cornerOf(m: Module): { side: CornerSide; door: number; filler: n
 export function reshapeCorner(m: Module, change: { side?: CornerSide; door?: number; filler?: number }): Module {
   const c = cornerOf(m);
   if (!c) return m;
-  const door = change.filler !== undefined ? m.width - change.filler - c.inset : change.door ?? c.door;
+  const strip = c.strip ?? 0;
+  const door = change.filler !== undefined ? m.width - change.filler - strip - c.inset : change.door ?? c.door;
   const side = change.side ?? c.side, ff = m.kitchen!.faceFiller!;
-  const fw = Math.round((m.width - door - c.inset) * 10) / 10, body = m.height - (m.feet?.height ?? 0);
+  const fw = Math.round((m.width - door - strip - c.inset) * 10) / 10, body = m.height - (m.feet?.height ?? 0);
+  if (c.wall) {
+    if (door < 250 || fw < 50) throw Error(`Навесной угловой: дверь от 250 мм и фальш от 50 мм (ширина ${m.width}, планка ${strip}).`);
+    const faceFiller = { ...ff, side, width: fw, ...(ff.conf ? { conf: wallCornerConf(fw, m.height) } : {}) };
+    return { ...m, kitchen: { ...m.kitchen!, faceFiller }, sections: m.sections.map((s, i) => (i === 0 ? { ...s, hingeSide: side, doorLeaves: door > 600 ? 2 : 1 } : s)) };
+  }
   const join = !!ff.conf?.back?.length;
   const faceFiller = { ...ff, side, width: fw, ...(ff.conf ? { conf: cornerFillerConf(fw, c.inset, body, join) } : {}) };
   return { ...m, kitchen: { ...m.kitchen!, faceFiller }, sections: m.sections.map((s, i) => (i === 0 ? { ...s, hingeSide: side } : s)) };

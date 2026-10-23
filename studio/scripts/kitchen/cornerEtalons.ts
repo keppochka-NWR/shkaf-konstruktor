@@ -2,7 +2,7 @@
 // tests/kitchen-corner.test.ts и scripts/kitchen/corner-trio.ts. Эталоны — tests/fixtures/kitchen-ref/kNN-mNN.json (только числа).
 import { readFileSync } from "node:fs";
 import { initialModule, type Module } from "../../src/model";
-import { kitchenBaseCorner } from "../../src/kitchenCorner";
+import { kitchenBaseCorner, kitchenWallCorner } from "../../src/kitchenCorner";
 import type { RefModule } from "./compare";
 
 export const cornerRef = (name: string) => JSON.parse(readFileSync(new URL(`../../tests/fixtures/kitchen-ref/${name}.json`, import.meta.url), "utf8")) as RefModule;
@@ -34,5 +34,17 @@ export function k27Corner(): Module {
     faceContours: { left: r.panels[6].contour!.map((q) => [q[0] - 116, q[1]]), "face-filler:fp:facade": r.panels[0].contour!.map((q) => [q[0] - 578, q[1] - 100]) },
     faceContourEdges: { left: [0, 0.5, ...Array(18).fill(0), 0.5, 0.5] } });
   m.kitchen!.faceFiller = { ...m.kitchen!.faceFiller!, conf: { bottom: [64, 448], side: [78, 334, -180] }, confDepth: 42, confHead: 16, down: true };
+  return m;
+}
+
+/** k25 m18 («ВМУгловой» 1071×930×336, навесной угловой прямой): генератор kitchenWallCorner — фальш ЛДСП 320 справа, планка 59,
+ *  две двери; материалы кухни k25 (фасад 19, зазоры фасадов 1,5 / 3). */
+export function k25WallCorner(): Module {
+  const m = kitchenWallCorner(initialModule(), { width: 1071, height: 930, depth: 320, side: "right", filler: 320, strip: 59 });
+  Object.assign(m, { facadeT: 19, faceAir: 0, noHandles: true, facadeMaterial: "external", facadeEdge: 0, edgeScheme: { t: 1 }, confirmatInset: 64 });
+  // две полки на высотах проекта (середина 300 и 611 при корпусе 16…914), глубина 297, полкодержатели в 52,5 от кромок полки
+  const box = 914 - 16;
+  m.sections[0] = { ...m.sections[0], shelves: [(300 - 16) / box, (611 - 16) / box], shelfDepth: 297 };
+  m.shelfPinInset = 52.5;
   return m;
 }

@@ -6,7 +6,7 @@ import {kitchenBaseCorner,cornerOf,reshapeCorner,cornerDoorDefault} from '../src
 import {kitchenTemplate,kitchenItemOf,placeKitchenModule,kitchenProject} from '../src/kitchenProject';
 import {pendingPrice} from '../src/pendingPrices';
 import {describeModule} from '../src/quoteDescribe';
-import {k02Corner,k27Corner} from '../scripts/kitchen/cornerEtalons';
+import {k02Corner,k27Corner,k25WallCorner} from '../scripts/kitchen/cornerEtalons';
 import {compareModule,honestPass,type RefModule} from '../scripts/kitchen/compare';
 import {moduleFromEtalon} from '../scripts/kitchen/fromEtalon';
 import {partCollisions} from '../src/collisions';
@@ -131,4 +131,15 @@ test('палитра: «Нижний угловой» — шаблон с фал
   assert.equal(fp.decor,m.facadeDecor);
   const ext={...m,facadeMaterial:'external' as const};
   assert.ok(parts(ext).find(p=>p.id==='face-filler:fp:facade')!.external,'при фасадах стороннего материала фальш — тоже сторонний');
+});
+
+test('навесной угловой k25 m18 (ВМУгловой 1071×930×336): генератор kitchenWallCorner = эталон Базиса — PASS, 54/54 отверстий, пересечений нет',()=>{
+  const m=k25WallCorner(),err=validate(m),c=compareModule(ref('k25-m18'),m);
+  assert.deepEqual(err,[]);
+  assert.ok(honestPass(c,err,[]),why(c));
+  assert.equal(c.holes?.matched,54);assert.equal(c.holes?.ref,54);
+  assert.deepEqual(partCollisions(parts(m),m).filter(x=>!x.bazis),[]);
+  // переживает сохранение
+  const back=parseModule(JSON.parse(JSON.stringify(m)));
+  assert.ok(honestPass(compareModule(ref('k25-m18'),back),validate(back),[]));
 });

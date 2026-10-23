@@ -7,9 +7,10 @@ import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths} from './kitchen';
 import type {PlacedModule} from './project';
-export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-base'|'kitchen-wall'|'worktop';
+// 'kitchen-corner' и 'kitchen-u' (w-lwing 23.10) — группы в угол комнаты, собираются kitchenCornerRow.ts (createKitchenCornerRow/createKitchenURow)
+export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
 /** Названия видов мебели палитры (имя нового модуля). */
-export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',wardrobe:'Для одежды',drawers:'Комод',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
+export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',wardrobe:'Для одежды',drawers:'Комод',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
 /** Куда складывать ошибки вместо исключения на первой (проверка формы — все ошибки сразу). */
 type Sink=string[]|undefined;
 const fail=(sink:Sink,text:string)=>{if(sink)sink.push(text);else throw Error(text);};

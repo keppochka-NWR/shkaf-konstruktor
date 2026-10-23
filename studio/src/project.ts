@@ -71,6 +71,10 @@ export function fromBazis(p:Project):boolean{return p.source==='bazis'||p.module
 export function isBazisModule(p:Pick<Project,'modules'>,a:PlacedModule){const m=a.module;if(m.bazis)return true;if(m.raw)return ['bazis','bazis-kitchen'].includes(String(m.raw.source)); // явный список источников кухни (bazis-corpus — сырой шкаф)
   // старый файл (ни одного признака): кухонный модуль рядом с сырыми модулями Базиса — из Базиса; в новом файле модуль без признака — свой (палитра)
   return !!(m.kitchen&&!p.modules.some(b=>b.module.bazis)&&p.modules.some(b=>rawKitchen(b.module.raw)));}
+/** Кухня, угол впритык (стык под 90°, когда сдвигу на угловую планку не хватает места): 'plank' — наша версия, планка и сдвиг всегда
+ *  (решение Макса 23.10.2026, РЕШЕНИЯ.md: «впритык без планки нежелательно»; проработать позже — долг Макса); 'butt' — как в Базисе
+ *  (k19, k07, k27): стык без планки. Настраиваемое правило; по умолчанию — с планкой. */
+export const KITCHEN_TIGHT_CORNER:{mode:'plank'|'butt'}={mode:'plank'};
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
@@ -102,7 +106,11 @@ export function applyAutoFillers(p:Project):Project{
     }
     const hadCorner=a.module.cornerFiller,hadKind=a.module.cornerKind;
     if(corner){a.module.cornerFiller=corner;a.module.cornerKind=kind;}else{delete a.module.cornerFiller;delete a.module.cornerKind;}
-    if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);break;}}
+    if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);
+      // Кухня, угол впритык (KITCHEN_TIGHT_CORNER, ниже): 'butt' — как в эталонах Базиса k19/k07/k27 (стык без планки, если сдвиг на
+      // планку упёр бы модуль в соседа). По умолчанию 'plank' — наша версия, планка всегда (решение Макса 23.10: впритык нежелательно).
+      if(a.module.kitchen&&KITCHEN_TIGHT_CORNER.mode==='butt'){const s=bounds(a);if(n.modules.some(o=>o!==a&&overlap(s,bounds(o)))){shiftAlongWidth(a,corner==='left'?-t:t);corner=undefined;kind=undefined;delete a.module.cornerFiller;delete a.module.cornerKind;}}
+      break;}}
     // Стены: боковина в пределах wallSnap от стены комнаты.
     const wf:Module['wallFiller']={},before={x:a.x,z:a.z};
     if(needsWallFiller(a.module))for(const side of ['left','right'] as const){
@@ -289,7 +297,15 @@ export function copyModuleGroup(p:Project,ids:readonly string[]):{project:Projec
  return appendModuleGroup(p,selected,true);
 }
 
-export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=false):{project:Project;ids:string[]}{
+export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=false,keepPlace=false):{project:Project;ids:string[]}{
+ // keepPlace (угловая кухня, w-lwing 23.10): группа рассчитана под угол комнаты — только на своих координатах, без поиска места
+ if(keepPlace){
+  if(p.modules.length+selected.length>maxModules(p))throw Error(`После добавления будет больше ${maxModules(p)} корпусов. Уменьшите группу.`);
+  const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();rekeySections(copy.module,id);return copy;});
+  const project=applyAutoFillers({...p,modules:[...p.modules,...copies]}),e=projectErrors(project)[0];
+  if(e)throw Error(`Не встаёт в угол комнаты: ${e} Освободите угол или уменьшите длины рядов.`);
+  return {project,ids:copies.map(a=>a.id)};
+ }
  if(!selected.length)throw Error('В шаблоне нет корпусов.');
  if(p.modules.length+selected.length>maxModules(p))throw Error(`После копирования будет больше ${maxModules(p)} корпусов. Уменьшите группу.`);
  const errors=projectErrors(p,true);if(errors.length)throw Error(errors[0]);
