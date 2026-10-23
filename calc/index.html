@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Калькуляторы</title>
-<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/main.css">
 <link rel="icon" href="data:,">
 </head>
@@ -544,6 +544,8 @@
 <!-- ============================================================
      KUPE MODULE SCRIPT — injected into page-kupe
      ============================================================ -->
-<script src="js/kupe.js?v=20260505"></script>
+<script src="js/kupe-door.js?v=20261022"></script>
+<script src="js/kupe.js?v=20261022"></script>
+<script>/* m9: высоты шапки и строки купе для расчёта высоты колонок (без лишней прокрутки) */(function(){var r=document.documentElement;function upd(){var h=document.querySelector(".hdr"),t=document.querySelector(".module-page.active .kupe-topbar");if(h)r.style.setProperty("--hdr-h",h.offsetHeight+"px");if(t&&t.offsetHeight)r.style.setProperty("--topbar-h",t.offsetHeight+"px");}if(window.ResizeObserver){var o=new ResizeObserver(upd);document.addEventListener("DOMContentLoaded",function(){var h=document.querySelector(".hdr");if(h)o.observe(h);document.querySelectorAll(".kupe-topbar").forEach(function(t){o.observe(t);});upd();});}window.addEventListener("hashchange",function(){setTimeout(upd,0);});})();</script>
 </body>
 </html>
