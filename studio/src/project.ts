@@ -289,7 +289,15 @@ export function copyModuleGroup(p:Project,ids:readonly string[]):{project:Projec
  return appendModuleGroup(p,selected,true);
 }
 
-export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=false):{project:Project;ids:string[]}{
+export function appendModuleGroup(p:Project,selected:PlacedModule[],copyNames=false,keepPlace=false):{project:Project;ids:string[]}{
+ // keepPlace (угловая кухня, w-lwing 23.10): группа рассчитана под угол комнаты — только на своих координатах, без поиска места
+ if(keepPlace){
+  if(p.modules.length+selected.length>maxModules(p))throw Error(`После добавления будет больше ${maxModules(p)} корпусов. Уменьшите группу.`);
+  const copies=selected.map(a=>{const copy=structuredClone(a);copy.id=id();rekeySections(copy.module,id);return copy;});
+  const project=applyAutoFillers({...p,modules:[...p.modules,...copies]}),e=projectErrors(project)[0];
+  if(e)throw Error(`Не встаёт в угол комнаты: ${e} Освободите угол или уменьшите длины рядов.`);
+  return {project,ids:copies.map(a=>a.id)};
+ }
  if(!selected.length)throw Error('В шаблоне нет корпусов.');
  if(p.modules.length+selected.length>maxModules(p))throw Error(`После копирования будет больше ${maxModules(p)} корпусов. Уменьшите группу.`);
  const errors=projectErrors(p,true);if(errors.length)throw Error(errors[0]);

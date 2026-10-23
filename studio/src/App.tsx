@@ -33,6 +33,8 @@ import {KitchenPalette} from './KitchenPalette';
 
 import {KitchenPanel} from './KitchenPanel';
 import {isKitchenProject} from './kitchenProject';
+import {placeModuleAt,placeToWall,cornerTurns,continueAroundCorner,WALL_LABEL,type PlaceTarget,type Wall,type CornerTurn} from './wallPlacement';
+import {CornerDownRight} from 'lucide-react';
 import {FillingComposer,addFillingBatch,addFittedDrawers} from './FillingComposer';
 import {STAGES,STAGE_KEY,stageIndex,nextStage,normalizeStage,restoredStage,storedStage,type Stage} from './stages';
 import {ChevronRight,TriangleAlert} from 'lucide-react';
@@ -613,6 +615,23 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{return commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);return false;}
   }
+  // Положение одним изменением (w-lwing 23.10): X/Y/Z и поворот вместе, проверка — у итога; soft — без сообщения (поля «ещё не применено»).
+  // Общий сдвиг композиции/группы — по осям, как раньше.
+  function placePlaced(t:PlaceTarget,soft:boolean):true|string{
+    try{
+      let next:Project;
+      if(movingTogether){next=project;for(const k of ['y','x','z'] as const){const v=t[k];if(v!==undefined)next=setWallDistance(next,placed.id,k,v,moveAll,liveGroupIds);}if(t.rotation!==undefined&&t.rotation!==(placed.rotation??0))next=rotateModule(next,placed.id,t.rotation);}
+      else next=placeModuleAt(project,placed.id,t);
+      if(soft){const e=projectErrors(applyAutoFillers(next),!!onEmptyProject)[0];if(e)return e;}
+      return commitProject(next)?true:'не применено';
+    }catch(e){const m=(e as Error).message;if(!soft)setError(m);return m;}
+  }
+  /** «Поставить к стене» модуль mid; «Продолжить ряд за угол» — такой же модуль (или перенос выбранного) на соседнюю стену от угла. */
+  function moduleToWall(mid:string,wall:Wall){try{if(commitProject(placeToWall(project,mid,wall))){selectModule(mid);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}}
+  function aroundCorner(mid:string,turn:CornerTurn,move?:string){
+    const a=project.modules.find(x=>x.id===mid);if(!a)return;
+    try{const r=continueAroundCorner(project,turn,move?{id:move}:{module:{...structuredClone(a.module),name:a.module.name.replace(/ · копия$/,'')},y:a.y});if(commitProject(r.project)){selectModule(r.id);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
+  }
   function modify(update: (draft: Module) => void) {
     const next = structuredClone(m);
     try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}}catch(e){setError((e as Error).message);return false;}
@@ -716,6 +735,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
       {id:'rotate',label:'Повернуть',icon:RotateCw,hint:'На 90° по часовой',run:()=>{if(commitProject(rotateModule(project,a.id,(((a.rotation??0)+90)%360) as 0|90|180|270)))setFit(f=>f+1);}},
+      // w-lwing (23.10): постановка второго крыла — к стене одним действием и продолжение ряда за угол
+      ...(mod.worktop?[]:[{id:'to-wall',label:'Поставить к стене',icon:BrickWall,hint:'Фасадом в комнату, вплотную к стене — в ближайшее свободное место',children:(['back','left','right'] as Wall[]).map(w=>({id:'to-wall-'+w,label:`К ${WALL_LABEL[w]}`,icon:BrickWall,active:false,hint:`Повернуть фасадом в комнату и поставить вплотную к ${WALL_LABEL[w]} стене`,run:()=>moduleToWall(a.id,w)}))} as RadialItem]),
+      ...(()=>{const turns=mod.worktop?[]:cornerTurns(project,a.id);if(!turns.length)return [];const other=active!==a.id&&project.modules.some(x=>x.id===active)?project.modules.find(x=>x.id===active):undefined;
+        return [{id:'around-corner',label:'Продолжить ряд за угол',icon:CornerDownRight,hint:'Крайний модуль ряда: следующий — на соседнюю стену от угла, за глубиной этого ряда',children:turns.flatMap(t=>[{id:'corner-copy-'+t.wall,label:`Такой же ${t.label}`,icon:Copy,hint:`Копия «${mod.name}» на ${WALL_LABEL[t.wall]} стене от угла, фасадом в комнату`,run:()=>aroundCorner(a.id,t)},...(other?[{id:'corner-move-'+t.wall,label:`Перенести «${other.module.name}»`,icon:CornerDownRight,hint:`Выбранный модуль — на ${WALL_LABEL[t.wall]} стену от угла`,run:()=>aroundCorner(a.id,t,other.id)}]:[])])} as RadialItem];})(),
       quickMenuApplies(mod)?upperItem(quickOps):{id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:quickOps.addUpper},
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
@@ -1117,7 +1140,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {advanced&&<a className="text-action upper-add" href="?order=votan">Заказ Вотан · две угловые группы</a>}
 
           <div className="stage-note" data-stages="room fixtures"><b>{stage==='room'?'Начните с размеров комнаты':'Что мешает установке мебели?'}</b><p>{stage==='room'?'Введите размеры справа или нажмите на размер в сцене. Затем выберите следующий шаг сверху.':'Добавьте окна, двери и коммуникации справа. Если их нет, переходите к корпусам сверху.'}</p></div>
-          <div data-stages="bodies"><ModulePalette source={m} fit={source=>rowShortage(project,source)} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=newModuleName(source.name);if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);setPlaceNote(offWallNote(next,[next.modules.at(-1)!.id]));return true;}} onAddGroup={group=>{try{const r=appendModuleGroup(project,group);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onNote={setPlaceNote} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
+          <div data-stages="bodies"><ModulePalette source={m} fit={source=>rowShortage(project,source)} onAdd={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=newModuleName(source.name);if(!commitProject(next))return false;selectModule(next.modules.at(-1)!.id);setPlaceNote(offWallNote(next,[next.modules.at(-1)!.id]));return true;}} room={project.room} onAddGroup={(group,keep)=>{try{const r=appendModuleGroup(project,group,false,keep);if(!commitProject(r.project))return false;selectModule(r.ids[r.ids.length-1]);setFit(f=>f+1);return true;}catch(e){setError((e as Error).message);return false;}}} kitchenTemplates={<KitchenPalette project={project} source={m} commit={commitProject} onError={setError} onNote={setPlaceNote} onAdded={(ids,fit)=>{selectModule(ids[ids.length-1]);if(fit)setFit(f=>f+1);}}/>}/></div>
           <div className="project-modules" data-stages="bodies filling facades">
             {advanced&&<button className="primary full" onClick={() => addModule()}>
               <Plus size={17} /> Добавить модуль
@@ -1567,7 +1590,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <button className="outline full" onClick={()=>selectModule(placed.id)}>Настройки «{m.name}»</button>
               <button className="text-action" onClick={()=>setTab('room')}>Замер помещения и проверка расстановки</button>
             </div>
-          ) : m.raw||m.worktop||kitchenModule ? <KitchenPanel allowEmpty={!!onEmptyProject} m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);setOpenDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors} selectedPid={selectedPart?.mid===placed.id?selectedPart.pid:undefined}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : (
+          ) : m.raw||m.worktop||kitchenModule ? <KitchenPanel allowEmpty={!!onEmptyProject} m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} place={placePlaced} toWall={m.worktop?undefined:w=>moduleToWall(placed.id,w)} turns={m.worktop?[]:cornerTurns(project,placed.id)} aroundCorner={t=>aroundCorner(placed.id,t)} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);setOpenDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={setOpenDoors} selectedPid={selectedPart?.mid===placed.id?selectedPart.pid:undefined}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : (
             <SettingsTree className="furniture-settings" key={active}>
               <SettingsSection title="Габариты">
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>

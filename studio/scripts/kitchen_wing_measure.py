@@ -36,7 +36,7 @@ br = pw.chromium.launch(channel="chrome", headless=True, args=["--use-angle=swif
 ctx = br.new_context(viewport={"width": 1366, "height": 768}, accept_downloads=True)
 pg = ctx.new_page()
 pg.on("dialog", lambda d: d.accept())
-pg.goto(f"http://localhost:{PORT}/studio/?fresh=1")
+pg.goto(f"http://127.0.0.1:{PORT}/studio/?fresh=1")
 pg.wait_for_timeout(4000)
 
 STATE_JS = """(()=>{const s=JSON.parse(localStorage.getItem('garderyob-rooms-v1')||'null');if(!s)return [];const r=s.rooms.find(r=>r.id===s.activeRoomId);

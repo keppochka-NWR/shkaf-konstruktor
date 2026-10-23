@@ -11,6 +11,8 @@ import { KITCHEN_ITEMS, KITCHEN_WALL_OFFSET, kitchenTemplate, placeKitchenModule
 import { WardrobeBase } from "./WardrobeBase";
 import { PUBLIC_BUILD } from "./buildMode";
 import { offWallNote } from "./freeSpot";
+import { placeKitchenCorner, CORNER_CLEARANCE } from "./kitchenCornerRow";
+import { CornerDownRight } from "lucide-react";
 import "./kitchen.css";
 
 const ICONS: Record<KitchenItem, typeof PanelBottom> = { "base-doors": PanelBottom, "base-drawers": Archive, "base-corner": Columns2, sink: Droplets, oven: Flame, bottle: Wine, wall: PanelTopOpen, "wall-open": Rows3, antresol: ArrowUpToLine, tall: RectangleVertical, "tall-oven": Microwave, "tall-fridge": Refrigerator };
@@ -53,6 +55,8 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
     try { const r = f(); if (commit(r.project)) { onAdded(r.ids, fit); onNote?.(offWallNote(r.project, r.ids)); } } catch (e) { onError((e as Error).message); }
   };
   const [cornerSide, setCornerSide] = useState<CornerSide>("right");
+  // угловая кухня (w-lwing 23.10): длины от угла комнаты и стена второго крыла
+  const [cBack, setCBack] = useState(Math.min(3000, project.room.width)), [cSide, setCSide] = useState(Math.min(2400, project.room.depth)), [cWing, setCWing] = useState<"left" | "right">("right");
   // низ навесных от пола (п. 6, 22.10): по умолчанию — ряд навесных или регламент от верха нижних (1458); заданное число — для новых навесных
   const [wallFloor, setWallFloor] = useState<number | undefined>(undefined), wallShown = wallFloor ?? Math.round(defaultWallY(project));
   const add = (kind: KitchenItem, width: number) => run(() => { const r = placeKitchenModule(project, kitchenTemplate(kind, width, source, kind === "base-corner" ? { side: cornerSide } : undefined), KITCHEN_ITEMS[kind].group === "wall" && kind !== "antresol" ? { wallY: wallFloor } : {}); return { project: r.project, ids: [r.id] }; });
@@ -88,6 +92,17 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
         <button type="button" className="outline" onClick={() => run(() => placeKitchenRow(project, length, source), true)}>Добавить ряд</button>
       </div>
       <small>«Заменить» убирает кухонные модули и ставит ряд от левой стены (место под фальш 16 + 5). Шкафы остаются. Ctrl+Z — вернуть.</small>
+    </div>
+    <div className="kp-group kp-row">
+      <h3><span className="kp-title"><CornerDownRight size={16} />Угловая кухня (Г)</span><small>нижний угловой в углу, второе крыло от линии фасадов первого, столешница двумя кусками</small></h3>
+      <label className="number-field"><span>По задней стене</span><div><input aria-label="Угловая кухня: по задней стене" type="number" min={1000} max={6000} value={cBack} onChange={(e) => setCBack(Number(e.target.value))} /><small>мм</small></div></label>
+      <label className="number-field"><span>По боковой стене</span><div><input aria-label="Угловая кухня: по боковой стене" type="number" min={800} max={6000} value={cSide} onChange={(e) => setCSide(Number(e.target.value))} /><small>мм</small></div></label>
+      <label className="hardware-field">Второе крыло<select aria-label="Угловая кухня: второе крыло" value={cWing} onChange={(e) => setCWing(e.target.value === "left" ? "left" : "right")}><option value="right">у правой стены</option><option value="left">у левой стены</option></select></label>
+      <div className="kp-actions">
+        <button type="button" className="primary" onClick={() => run(() => placeKitchenCorner(project, source, { back: cBack, side: cSide, wing: cWing }, true), true)}>Заменить кухню на угловую</button>
+        <button type="button" className="outline" onClick={() => run(() => placeKitchenCorner(project, source, { back: cBack, side: cSide, wing: cWing }), true)}>Добавить в угол</button>
+      </div>
+      <small>Длины — от угла комнаты. Дверь углового кончается за {CORNER_CLEARANCE} мм до фасадов второго крыла (как в Базисе). Ctrl+Z — вернуть.</small>
     </div>
     {children && <details className="kp-more"><summary><Sofa size={15} />Шкафы и другая мебель</summary>{children}</details>}
     {bases && bases.length > 0 && <details className="kp-more kp-base"><summary><Library size={15} />Кухни из базы · {bases.length}</summary>
