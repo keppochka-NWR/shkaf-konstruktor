@@ -862,21 +862,27 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
        d.mesh ? { file: `hardware/bazis/${d.mesh}.glb`, length: "y", native: true, origin: o, quat: unitQuat(d.quat) } : undefined)); // без сетки — как в Базисе: только точка
   }
   // пенал на навесах — только если они есть в проекте Базиса (hangers: true, k23 m04, k18 m21; n4-tall)
-  if (((k.role === "wall" || k.role === "antresol") && k.hangers !== false) || (k.role === "tall" && k.hangers === true)) {
-    for (const side of ["left", "right"] as const) {
-      // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
-      // сетка Базиса: −64..+20 к стене, −42..−1 по высоте, 0..23 внутрь корпуса.
-      const dir = side === "left" ? 1 : -1, at = k.hangerAt?.[side], ca = k.hangerAt?.caps?.[side] ?? at;
-      const pt = (a: [number, number, number] | undefined): [number, number, number] => [(side === "left" ? t : m.width - t) + dir * (a?.[2] ?? 0), m.height - (a?.[0] ?? KITCHEN.hangerDown), a?.[1] ?? KITCHEN.hangerBack];
-      const [fx, oy, oz] = pt(at), [cx, cy, cz] = pt(ca);
-      // Оси навеса в модуле: X→−Z (−64..+20 → z 84..0, задний крюк заподлицо с задней кромкой), Y→+Y, Z→+X (правый навес Базиса — Z −23..0, внутрь).
-      const hm = KITCHEN_MODELS[side === "left" ? "hanger-left" : "hanger-right"], cm = KITCHEN_MODELS[side === "left" ? "hanger-cap-left" : "hanger-cap-right"];
-      out.push(metal(`kitchen-hanger:${side}`, `Навес мебельный регулируемый ABS ${side === "left" ? "левый" : "правый"}`, [23, 41, 84], [fx + dir * 11.5, oy - 21.5, oz + 22],
-        hm ? { file: hm.file, length: "y", native: true, origin: [fx, oy, oz], quat: Q_HANGER } : undefined));
-      // Заглушка навеса (комплект с навесом): −65..0 по X, −44..−1 по высоте, 0..26 внутрь.
-      out.push(metal(`kitchen-hanger-cap:${side}`, `Заглушка навеса ABS ${side === "left" ? "левая" : "правая"}`, [26, 43, 65], [cx + dir * 13, cy - 22.5, cz + 32.5],
-        cm ? { file: cm.file, length: "y", native: true, origin: [cx, cy, cz], quat: Q_HANGER } : undefined));
-    }
+  if (((k.role === "wall" || k.role === "antresol") && k.hangers !== false) || (k.role === "tall" && k.hangers === true)) wallHangers(m, out, k.hangerAt);
+}
+/** Навесы ABS регулируемые с заглушками у верха боковин: кухня — по проекту Базиса (hangerAt) или по правилу; шкаф студии, поднятый
+ *  от пола (Module.hanging, решение Макса 23.10.2026), — по тому же правилу, что навесные кухни. Смета — строки «Навес» и «Заглушка» (pricing.ts). */
+export function wallHangers(m: Module, out: Part[], hangerAt?: KitchenSpec["hangerAt"]) {
+  const t = 16;
+  const metal = (id: string, name: string, size: Part["size"], position: Part["position"], model?: Part["model"]): Part =>
+    ({ id, name, size, position, length: Math.max(...size), width: [...size].sort((a, b) => b - a)[1], thickness: Math.min(...size), role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], ...(model ? { model } : {}) });
+  for (const side of ["left", "right"] as const) {
+    // Навес ABS регулируемый: начало координат — 15 мм ниже верха боковины, 20 мм от её задней кромки, на внутренней грани;
+    // сетка Базиса: −64..+20 к стене, −42..−1 по высоте, 0..23 внутрь корпуса.
+    const dir = side === "left" ? 1 : -1, at = hangerAt?.[side], ca = hangerAt?.caps?.[side] ?? at;
+    const pt = (a: [number, number, number] | undefined): [number, number, number] => [(side === "left" ? t : m.width - t) + dir * (a?.[2] ?? 0), m.height - (a?.[0] ?? KITCHEN.hangerDown), a?.[1] ?? KITCHEN.hangerBack];
+    const [fx, oy, oz] = pt(at), [cx, cy, cz] = pt(ca);
+    // Оси навеса в модуле: X→−Z (−64..+20 → z 84..0, задний крюк заподлицо с задней кромкой), Y→+Y, Z→+X (правый навес Базиса — Z −23..0, внутрь).
+    const hm = KITCHEN_MODELS[side === "left" ? "hanger-left" : "hanger-right"], cm = KITCHEN_MODELS[side === "left" ? "hanger-cap-left" : "hanger-cap-right"];
+    out.push(metal(`kitchen-hanger:${side}`, `Навес мебельный регулируемый ABS ${side === "left" ? "левый" : "правый"}`, [23, 41, 84], [fx + dir * 11.5, oy - 21.5, oz + 22],
+      hm ? { file: hm.file, length: "y", native: true, origin: [fx, oy, oz], quat: Q_HANGER } : undefined));
+    // Заглушка навеса (комплект с навесом): −65..0 по X, −44..−1 по высоте, 0..26 внутрь.
+    out.push(metal(`kitchen-hanger-cap:${side}`, `Заглушка навеса ABS ${side === "left" ? "левая" : "правая"}`, [26, 43, 65], [cx + dir * 13, cy - 22.5, cz + 32.5],
+      cm ? { file: cm.file, length: "y", native: true, origin: [cx, cy, cz], quat: Q_HANGER } : undefined));
   }
 }
 

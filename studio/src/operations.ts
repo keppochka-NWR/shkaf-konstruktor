@@ -124,6 +124,8 @@ export function mirrorModule(p:Project,mid:string):Project {
  if(!m)throw Error('Выберите корпус для отражения.');
  for(const sec of m.sections){if(sec.doorHinges){const hinges=[...sec.doorHinges];sec.doorHinges=hinges.map((_,k)=>{const h=hinges[doorCount(m,sec)===2?k^1:k];return h==='left'?'right':h==='right'?'left':h??null;});}if(sec.doorLifts&&doorCount(m,sec)===2)sec.doorLifts=Array.from({length:sec.doorLifts.length},(_,k)=>sec.doorLifts?.[k^1]??null);if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=Array.from({length:sec.doorHandles.length},(_,k)=>sec.doorHandles?.[k^1]??null);if(sec.handleFloor&&doorCount(m,sec)===2)sec.handleFloor=Array.from({length:sec.handleFloor.length},(_,k)=>sec.handleFloor?.[k^1]??null);if(sec.handlePos&&doorCount(m,sec)===2)sec.handlePos=Array.from({length:sec.handlePos.length},(_,k)=>sec.handlePos?.[k^1]??null);if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>k^1);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
  if(m.sectionLayout)mirrorOpenings(m);
+ // частичная перегородка — у секции справа от неё: после отражения справа оказывается бывшая левая секция
+ if(m.sections.some(s=>s.divider)){const divs=m.sections.map(s=>s.divider);m.sections.forEach((s,i)=>{const d=divs[i+1];if(d)s.divider=d;else delete s.divider;});}
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  if(m.kitchen)mirrorKitchen(m); // поля кухни со стороной (пакет 0): xs↔xr, topConf↔topConfR, маркер −1 у направляющих и т. д.
@@ -131,12 +133,24 @@ export function mirrorModule(p:Project,mid:string):Project {
  return n;
 }
 
+/** Корпус стоит на другом корпусе (антресоль на нижнем): низ вплотную к верху соседа (±2 мм), перекрываются в плане. */
+export function restsOnModule(p:Project,a:Project['modules'][number]):boolean{
+ const y=a.y??0,b=bounds(a);
+ return p.modules.some(o=>{if(o.id===a.id)return false;const q=bounds(o);return Math.abs((o.y??0)+o.module.height-y)<2&&q.x<b.x+b.w-1&&b.x<q.x+q.w-1&&q.z<b.z+b.d-1&&b.z<q.z+q.d-1;});
+}
 export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:number,whole=false,ids?:readonly string[]):Project {
  let n=structuredClone(p);const a=n.modules.find(a=>a.id===mid);
  if(!a||!Number.isFinite(distance)||distance<0)throw Error('Укажите неотрицательное расстояние от стены или пола.');
  const edge=bounds(a)[axis];
  const delta=distance-edge;
  for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a])item[axis]=(item[axis]??0)+delta;
+ // «От пола» > 0 (решение Макса 23.10.2026): шкаф сразу становится навесным — без цоколя, на навесах (Module.hanging); опустили на пол —
+ // снова стоит на полу (без цоколя, цоколь выбирается в «Опоры»). Только шкафы и стеллажи студии без ножек; кухни, купе, столы,
+ // угловые — как были. Антресоль на нижнем корпусе (стоит на нём, «Антресоль») навесной не становится.
+ if(axis==='y')for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a]){const mm=item.module;
+   if(mm.feet||mm.kitchen||mm.raw||mm.kupe||mm.desk||mm.worktop||mm.corner||mm.casework)continue;
+   if((item.y??0)>0){if(!restsOnModule(n,item)){mm.hanging=true;mm.plinthHeight=0;}}
+   else if(mm.hanging){delete mm.hanging;mm.plinthHeight=0;}}
  // Auto fillers change the mounting envelope near walls and perpendicular runs.
  // Keep the manager's distance tied to the final envelope, not the old filler.
  if(a.module.kitchen){for(let i=0;i<8;i++){

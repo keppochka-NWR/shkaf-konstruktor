@@ -2,7 +2,7 @@ import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
-import { kitchenExtraParts, kitchenErrors, sideRecessParts, applyFaceContours, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, wallHangers, kitchenErrors, sideRecessParts, applyFaceContours, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { facadeSideToFloor, droppedSide, finishFacadeSides } from './kitchenFacadeSides';
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
@@ -29,7 +29,8 @@ export const RULES = {
   plinth: 80,
   plinthInset: 2, // цоколь шкафа утоплен от переда на 2 мм (правило Макса 06.09.2026); фасады опускаются на цоколь
   facadeFloorGap: 30, // низ распашного фасада и нижнего накладного фасада ящика — 30 мм от пола, регулировка по цоколю
-  shelfDepthMinus: 25,
+  shelfDepthMinus: 25, // кухни и фальши у ящиков; шкафы — innerMinus (решение Макса 23.10.2026)
+  shelfRemovableMinus: 5, // съёмная полка шкафа на 5 мм меньше глубины корпуса (решение Макса 23.10.2026)
   shelfGap: 1,
   minW: 250,
   maxW: 1300, // ТЗ Макса 1200, но заказ 7212718 — шкаф и антресоль 1244; СТП 900 — предупреждение по логистике выше 900
@@ -38,6 +39,7 @@ export const RULES = {
   minD: 200, // заказы цеха: шкафы 240 (заказ 6990041), стеллажи 200 (Дельта КИП)
   maxD: 700,
   minSection: 180,
+  partialDividerMin: 150, // частичная перегородка — не ниже 150 мм (решение Макса 23.10.2026: перегородка между двумя горизонталями)
   maxSections: 4,
   maxShelves: 10,
   maxDrawers: 5,
@@ -218,6 +220,11 @@ export type Section = {
   fixed?: number[];
   /** Глубина обычных полок секции, мм. Полка над ящиками сохраняет конструктивную глубину. */
   shelfDepth?: number;
+  /** Частичная перегородка СЛЕВА от секции (решение Макса 23.10.2026; у первой секции поля нет): торцы перегородки from…to, мм от низа
+   *  модуля (от пола). Перегородка стоит между двумя горизонталями: дном/крышей или сквозной полкой под/над ней (детали
+   *  `${id}:divider:under|over`, на конфирматах в стойки). Выше и ниже перегородки две соседние секции — общий проём: их полки там
+   *  во всю ширину двух секций (сквозные). Без поля — перегородка во всю высоту, как раньше. См. dividerSpan, throughShelf. */
+  divider?: { from: number; to: number };
   /** Кухня Базиса: своя глубина и отступ от задника у отдельных полок (номер полки → rear, depth), если они не как у остальных полок
    *  секции (k23 m14: жёсткая полка на всю глубину корпуса 577 при съёмных 575 с отступом 1). */
   shelfAt?: Record<number, { rear: number; depth: number }>;
@@ -274,6 +281,9 @@ export type Module = {
   aluDrawers?: true;
   /** Крыша из стекла вместо ЛДСП: id вставки из alu.ts (стекло, сатин, лакобель, зеркало), закалённое 4 мм с полировкой. */
   topGlass?: string;
+  /** Навесной шкаф (решение Макса 23.10.2026: подъём «От пола» > 0 у шкафа на цоколе — способ создать навесной): без цоколя и ножек,
+   *  на двух навесах ABS у верха боковин (как навесные кухни; смета — «Навес мебельный регулируемый» + заглушка). Без поля — как было. */
+  hanging?: true;
   /** Основание на ножках вместо цоколя (заказы цеха: ножки M6×18 или регулируемые 1033 h=100): боковины стоят на ножках. */
   feet?: { height: number };
   /** Дно / крыша: 'none' — без панели (открытый каркас на стяжках). По умолчанию панели есть. */
@@ -647,7 +657,7 @@ export function setModuleHandlePos(m:Module,pos:HandlePos|null):{done:number;ski
   if(!done)throw Error(handlePosIssue(m,ids[0],pos!)??'Расположение не подходит фасадам модуля.');
   return {done,skipped};
 }
-export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
+export function plinth(m:Module){return m.feet||m.hanging?0:(m.plinthHeight ?? RULES.plinth);}
 /** Кухня без опор и без цоколя в модуле (kitchen.plinth.off): дно поднято над низом боковин, цокольной детали нет (как в проекте Базиса). */
 export function kitchenNoPlinth(m:Module){return !m.feet&&!!m.kitchen?.plinth?.off;}
 /** Отступ фасадов от кромок корпуса (шкафы — RULES.faceGap 2; кухни Базиса цеха — 1,5). */
@@ -660,6 +670,16 @@ export function jointZs(m:Module,key:string,z0:number,z1:number):number[]|undefi
 export function baseLevel(m:Module){return m.feet?m.feet.height:plinth(m);}
 export function hasBottom(m:Module){return m.bottomType!=='none';}
 export function hasTop(m:Module){return m.topType!=='none';}
+/** Недобор глубины деталей внутри корпуса от задника до переда (решение Макса 23.10.2026): жёсткие полки, полка над ящиками, перегородки
+ *  и опоры частичной перегородки — в размер корпуса, как в Базисе (0; при вкладных фасадах — до фасада: толщина + зазор);
+ *  съёмные полки — на RULES.shelfRemovableMinus (5) меньше. Кухни — как было (RULES.shelfDepthMinus 25, свои поля из проекта Базиса).
+ *  Было −25 у всех: правило первой версии студии (не решение Макса). */
+export function innerMinus(m: Module, kind: "fixed" | "removable"): number {
+  if (m.kitchen) return RULES.shelfDepthMinus;
+  // вкладные фасады или вкладная планка под крышей (top-strip внутри проёма) — детали до них, не насквозь
+  const inset = m.doorMount === "inset" && (m.doors || !!m.topStrip) ? (m.facadeT ?? RULES.panel) + fe(m) : 0;
+  return inset + (kind === "removable" ? RULES.shelfRemovableMinus : 0);
+}
 /** Полки финальных заказов бывают на всю глубину. Вкладная дверь требует места перед полкой. */
 export function shelfMaxDepth(m:Module){return m.depth-rearClear(m)-(m.doors&&m.doorMount==='inset'?RULES.panel+fe(m):0);}
 /** Верхняя плоскость дна (или низ проёма без дна) и нижняя плоскость крыши (или верх боковин без крыши). */
@@ -906,6 +926,27 @@ export function boxes(m: Module): SectionBox[] {
     return b;
   });
 }
+/** Частичная перегородка слева от секции i (Section.divider): торцы from/to и есть ли сквозная полка-опора под (under) / над (over) ней.
+ *  undefined — перегородка во всю высоту (поля нет, первая секция, кухня, составные проёмы, или от дна до крыши). */
+export function dividerSpan(m: Module, i: number, bb?: SectionBox[]): { from: number; to: number; under: boolean; over: boolean } | undefined {
+  const s = m.sections[i], dv = s?.divider;
+  if (!dv || i < 1 || m.kitchen || m.sectionLayout || m.corner || m.casework || m.raw || m.desk) return undefined;
+  const b = (bb ?? boxes(m))[i];
+  if (!b) return undefined;
+  const under = dv.from > b.bottom + 0.5, over = dv.to < b.top - 0.5;
+  return under || over ? { from: under ? dv.from : b.bottom, to: over ? dv.to : b.top, under, over } : undefined;
+}
+/** Полка секции k на высоте y (от низа модуля) вне частичной перегородки соседей — сквозная: во всю ширину двух секций.
+ *  Возвращает её край слева/справа (x0, x1) и номера секций пары; undefined — обычная полка своей секции. */
+export function throughShelf(m: Module, k: number, y: number, bb?: SectionBox[]): { x0: number; x1: number; left: number; right: number } | undefined {
+  if (!m.sections[k]?.divider && !m.sections[k + 1]?.divider) return undefined;
+  bb ??= boxes(m);
+  for (const r of [k, k + 1]) {
+    const sp = dividerSpan(m, r, bb);
+    if (sp && (y < sp.from || y > sp.to)) return { x0: bb[r - 1].x, x1: bb[r].x + bb[r].width, left: r - 1, right: r };
+  }
+  return undefined;
+}
 export function parts(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
   if(m.raw)return rawParts(m);
@@ -1124,28 +1165,38 @@ export function parts(m: Module): Part[] {
     else add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,backCY??(groove||m.raisedSides?(bottom+m.height)/2:kb?(backFrom+kb.bottom+m.height-kb.top)/2:(backFrom+m.height)/2),backZ0+RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
   }
   if(m.sectionLayout)for(const panel of resolveLayout(m).panels){
-    const depth=d-rear-RULES.shelfDepthMinus;
+    const depth=d-rear-innerMinus(m,'fixed');
     add('layout:'+panel.id,panel.axis==='x'?'Перегородка ограниченной высоты':'Общая разделительная полка',[panel.width,panel.height,depth],[panel.x+panel.width/2,panel.bottom+panel.height/2,rear+depth/2],panel.axis==='x'?panel.height:panel.width,depth,t,'body');
     out.at(-1)!.grainAxis=panel.axis==='x'?1:0;
   }
-  boxes(m).forEach((b, i) => {
+  const allBoxes = boxes(m);
+  allBoxes.forEach((b, i) => {
     const s = m.sections[i],
       h = b.top - b.bottom,
-      sd = d - rear - RULES.shelfDepthMinus;
+      sd = d - rear - RULES.shelfDepthMinus, // фальши у ящиков — как было
+      // решение Макса 23.10.2026: жёсткие полки, полка над ящиками, перегородки и опоры — в размер корпуса, съёмные полки — на 5 мм меньше
+      sdF = d - rear - innerMinus(m, "fixed"), sdR = d - rear - innerMinus(m, "removable");
     if (i > 0 && !m.sectionLayout) {
       const kz = kitchenDividerZ(m); // кухня Базиса (пакет 5): глубина перегородки по проекту — от задней кромки боковин до лица
-      const dd = kz ? kz[1] - kz[0] : depthAt(m, b.x - t / 2) - rear - RULES.shelfDepthMinus, dz0 = kz ? kz[0] : rear;
+      const dd = kz ? kz[1] - kz[0] : depthAt(m, b.x - t / 2) - rear - innerMinus(m, "fixed"), dz0 = kz ? kz[0] : rear;
+      // частичная перегородка (решение Макса 23.10.2026): фактическая высота from…to, опоры — сквозные горизонтали под/над ней
+      const sp = dividerSpan(m, i, allBoxes), y0 = sp ? sp.from : b.bottom, dh = sp ? sp.to - sp.from : h;
       add(
         `${s.id}:divider`,
-        "Перегородка",
-        [t, h, dd],
-        [b.x - t / 2, b.bottom + h / 2, dz0 + dd / 2],
-        h,
+        sp ? `Перегородка частичная ${Math.round(sp.from)}–${Math.round(sp.to)}` : "Перегородка",
+        [t, dh, dd],
+        [b.x - t / 2, y0 + dh / 2, dz0 + dd / 2],
+        dh,
         dd,
         t,
         "body",
         s.id,
       );
+      if (sp) {
+        const L = allBoxes[i - 1], x0 = L.x, x1 = b.x + b.width;
+        if (sp.under) add(`${s.id}:divider:under`, "Горизонталь под перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.from - t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
+        if (sp.over) add(`${s.id}:divider:over`, "Горизонталь над перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.to + t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
+      }
     }
     // Подсветка по деталям (20.10.2026): старый флаг standLight = обе стойки каждой секции; новый — своя сторона секции.
     // Задача 20 (22.10): профиль за зоной планки петли — передняя кромка в RULES.lightFrontOffset (100) от переда; в секции с ящиками —
@@ -1169,24 +1220,29 @@ export function parts(m: Module): Part[] {
       }
     s.shelves.forEach((f, j) => {
       const own=m.kitchen?s.shelfAt?.[j]:undefined; // своя глубина полки из Базиса — только у кухни
-      const shelfDepth=own?.depth??s.shelfDepth??sd;
+      const shelfDepth=own?.depth??s.shelfDepth??(s.fixed?.includes(j)?sdF:sdR);
       const glass=s.glassShelves?.includes(j),st=glass?(m.glassT??6):t;
+      // над/под частичной перегородкой — общий проём двух секций: полка сквозная, во всю ширину пары (решение Макса 23.10.2026);
+      // та же полка, заданная в обеих секциях пары (на той же высоте), — одна деталь (левой секции)
+      const tr=throughShelf(m,i,b.bottom+f*h,allBoxes);
+      if(tr&&tr.right===i){const L=m.sections[tr.left],lb=allBoxes[tr.left];if(L.shelves.some(g=>Math.abs(lb.bottom+g*(lb.top-lb.bottom)-(b.bottom+f*h))<1))return;}
+      const sx0=tr?tr.x0:b.x,sw=tr?tr.x1-tr.x0:b.width;
       add(
         `${s.id}:shelf:${j}`,
-        (glass?"Стеклянная полка "+(m.glassT??6)+" мм · обработку уточнить":s.fixed?.includes(j) ? "Полка жёсткая" : "Полка съёмная") + sk,
-        [b.width - (s.fixed?.includes(j) ? 0 : 2 * (glass ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap)), st, shelfDepth],
-        [b.x + b.width / 2, b.bottom + f * h, rear + (own?.rear ?? m.shelfRear ?? 0) + shelfDepth / 2],
-        b.width - (s.fixed?.includes(j) ? 0 : 2 * (glass ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap)),
+        (glass?"Стеклянная полка "+(m.glassT??6)+" мм · обработку уточнить":s.fixed?.includes(j) ? "Полка жёсткая" : "Полка съёмная") + sk + (tr ? " · сквозная" : ""),
+        [sw - (s.fixed?.includes(j) ? 0 : 2 * (glass ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap)), st, shelfDepth],
+        [sx0 + sw / 2, b.bottom + f * h, rear + (own?.rear ?? m.shelfRear ?? 0) + shelfDepth / 2],
+        sw - (s.fixed?.includes(j) ? 0 : 2 * (glass ? m.glassGap ?? RULES.shelfGap : RULES.shelfGap)),
         shelfDepth,
         st,
         "shelf",
         s.id,
         glass?'glass':'board',
       );
-      if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, b.x, b.x + b.width, rear, RULES.shelfDepthMinus);
+      if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, sx0, sx0 + sw, rear, innerMinus(m, s.fixed?.includes(j) ? "fixed" : "removable"));
       // Подсветка в полках: LED-профиль снизу у передней кромки полки (отступ 20 мм), по длине полки минус 20 с краёв. Только при флаге секции.
-      if(s.shelfLight||s.shelfLights?.includes(j)){const len=b.width-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth,[lw,lt]=ledSize(m,s,'shelf:'+j);
-        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,lt,lw],[b.x+b.width/2,b.bottom+f*h-st/2-lt/2,front-20-lw/2],len,lw,lt,'light',s.id,'metal');}
+      if(s.shelfLight||s.shelfLights?.includes(j)){const len=sw-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth,[lw,lt]=ledSize(m,s,'shelf:'+j);
+        add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,lt,lw],[sx0+sw/2,b.bottom+f*h-st/2-lt/2,front-20-lw/2],len,lw,lt,'light',s.id,'metal');}
     });
     // Подсветка под крышей секции (20.10.2026): горизонталь как у полки — по ширине проёма минус 20 с краёв, 20 мм от переда крыши.
     // id «…:light:roof» — та же строка сметы «Подсветка в крыше» (4000 ₽/пог.м), что у Вотан.
@@ -1205,7 +1261,7 @@ export function parts(m: Module): Part[] {
         inserts.forEach(([y0,y1,z1],k)=>add(`${s.id}:filler:${side}:${layer?'b':'a'}:r${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}, вставка за петлёй ${k+1}`,[t,y1-y0,z1-rear],[x,(y0+y1)/2,(rear+z1)/2],y1-y0,z1-rear,t,'body',s.id));
       }
     }else if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
-    if(hasDrawerCap(m,s,b)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,RULES.shelfDepthMinus);}
+    if(hasDrawerCap(m,s,b)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sdF],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sdF/2],b.width,sdF,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,innerMinus(m,'fixed'));}
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
       const cfg = drawerConfig(m, s, j),
@@ -1451,7 +1507,7 @@ export function parts(m: Module): Part[] {
       confirmat(`fast:plinth:top:${k}:1`, [px + pw / 2 - v, yt, pz], "-y");
     }
   }
-  const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id === "raise-plank" || p.id.endsWith(":drawer-cap") || fixedIds.has(p.id)));
+  const horizontals = fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.material === "board" && !p.rotZ && (p.id === "bottom" || p.id === "top" || p.id === "raise-plank" || p.id.endsWith(":drawer-cap") || p.id.endsWith(":divider:under") || p.id.endsWith(":divider:over") || fixedIds.has(p.id)));
   // Точки крепежа стыка по глубине: задняя (k 0), передняя (k 1), средние (k 2…):
   //  — свои отступы стыка из Базиса (kitchen.jointZ «bottom:left», n3-wall);
   //  — своя сетка стыка из Базиса (kitchen.joints, n3-tall): задняя, передняя, средние равным шагом;
@@ -1659,7 +1715,9 @@ export function parts(m: Module): Part[] {
       }
       continue;
     }
-    for (const [edge, y] of [["top", innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
+    // частичная перегородка: стык с горизонталью-опорой над/под ней (сквозная полка), а не с крышей/дном
+    const dsp = dividerSpan(m, m.sections.findIndex((s) => s.id === dv.sectionId), allBoxes);
+    for (const [edge, y] of [["top", dsp?.over ? dsp.to + t / 2 : innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", dsp?.under ? dsp.from - t / 2 : innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
         else confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], edge === "top" ? y + t / 2 : y - t / 2, z], edge === "top" ? "-y" : "+y", dv.sectionId);
@@ -1746,6 +1804,7 @@ export function parts(m: Module): Part[] {
     }
   }
   hardwareParts(m,out);
+  if(m.hanging&&!m.kitchen&&!m.feet)wallHangers(m,out); // навесной шкаф (поднят от пола, решение Макса 23.10.2026) — на навесах, как навесные кухни
   kitchenExtraParts(m,out);
   kitchenDrawerParts(m,out,fe(m),m.facadeT??RULES.panel,m.faceAir??2);
   kitchenEdges(m,out);
@@ -1831,10 +1890,14 @@ function hardwareParts(m: Module, out: Part[]) {
     // (боковина, перегородка, фальш), иначе — по правилу накладного/вкладного фасада.
     const guess = inset ? edgeX - dir * fe(m) : edgeX + dir * (t - fe(m));
     // Стойка уходит за фасад вглубь корпуса (фальш-панель в плоскости фасадов — не стойка).
-    const stand = out.filter((p) => isBoardVertical(p) && p.position[1] - p.size[1] / 2 <= cy && p.position[1] + p.size[1] / 2 >= cy && p.position[2] + p.size[2] / 2 >= back - 30 && p.position[2] - p.size[2] / 2 <= back - 100)
+    // y0…y1 — по высоте, которую стойка должна закрывать (undefined — любая высота): частичная перегородка есть не на всей высоте фасада
+    const standFaces = (y0?: number, y1 = y0) => out.filter((p) => isBoardVertical(p) && (y0 === undefined || (p.position[1] - p.size[1] / 2 <= y0 && p.position[1] + p.size[1] / 2 >= y1!)) && p.position[2] + p.size[2] / 2 >= back - 30 && p.position[2] - p.size[2] / 2 <= back - 100)
       .map((p) => dir > 0 ? p.position[0] + p.size[0] / 2 : p.position[0] - p.size[0] / 2)
       .filter((fx) => dir * (fx - edgeX) >= -fe(m) - 1 && dir * (fx - edgeX) <= 40)
-      .sort((a, b) => Math.abs(a - guess) - Math.abs(b - guess))[0];
+      .sort((a, b) => Math.abs(a - guess) - Math.abs(b - guess));
+    // частичная перегородка (решение Макса 23.10.2026): петля садится только туда, где перегородка есть (планка 53 мм по высоте целиком)
+    const partialStand = !m.kitchen && m.sections.some((s, i) => !!s.divider && !!dividerSpan(m, i));
+    const stand = standFaces(cy)[0] ?? (partialStand ? standFaces()[0] : undefined);
     // угловая мойка Базиса (kitchen.faceFiller): дверь у фальша — на «Петля под фальшпанель»: точка петли — кромка двери, чашка в 22 от неё
     const ffk = m.kitchen?.faceFiller, ffEdge = faceFillerEdge(m) ?? NaN;
     const ffHinge = !inset && !!ffk && (ffk.side === "left" ? dir > 0 : dir < 0) && Math.abs(edgeX - ffEdge) < 1;
@@ -1884,7 +1947,8 @@ function hardwareParts(m: Module, out: Part[]) {
     // Зазор 5 мм до любой детали, кроме разрешённых контактов (своя стойка, свой фасад, своя петля) — не впритык к полке.
     // Зазор — только до «чужих» деталей в зоне петли (полки, царги, крепёж, ящики, другие петли); каркас и свой фасад петля касает по устройству.
     const clearOf = (o: Part) => o.role === "shelf" || o.role === "drawer" || o.role === "hinge" || o.id.startsWith("rail:") || o.id.startsWith("fast:") || o.id.startsWith("shp:") || o.id.startsWith("ecc:") || o.id.startsWith("rafix:");
-    const blocked = (hs: Part[]) => hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); if (allowedContact(h, o, Math.max(depth, 0), m)) return false; return depth > 0.1 || (clearOf(o) && depth > -HINGE_CLEAR); }));
+    const floating = (hs: Part[]) => partialStand && !ffHinge && hs.length > 1 && !standFaces(hs[1].position[1] - 26.5, hs[1].position[1] + 26.5).some((fx) => Math.abs(fx - sideX) < 1);
+    const blocked = (hs: Part[]) => floating(hs) || hs.some((h) => [...obstacles, ...placed].some((o) => { const depth = partPenetration(h, o); if (allowedContact(h, o, Math.max(depth, 0), m)) return false; return depth > 0.1 || (clearOf(o) && depth > -HINGE_CLEAR); }));
     // Петля не должна пересекать ничего (замечание Макса 09.10.2026): идеальная высота (100 мм от краёв фасада), а если там полка,
     // царга, конфирмат, полкодержатель, ящик или соседняя петля — ближайшая свободная высота в пределах фасада.
     const lo = cy - dh / 2 + Math.min(40, dh / 4), hi = cy + dh / 2 - Math.min(40, dh / 4);
@@ -2327,9 +2391,11 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
           `под штангой нужно ${s.rodClearance??RULES.rodMinClear} мм до полки, ящиков или дна. Измените высоту штанги или назначение проёма.`,
       );
   });
+  errors.push(...dividerErrors(m));
   if (errors.length && opts?.all !== true) return [...new Set(errors)];
   const geometry=parts(m);
   errors.push(...hingeEdgeErrors(m,geometry));
+  errors.push(...dividerHingeErrors(m,geometry));
   for(const section of m.sections.filter(s=>s.pantograph)){
     const b=boxes(m).find(b=>b.id===section.id)!;
     const mechanism=geometry.filter(p=>p.id.startsWith(section.id+':pantograph:'));
@@ -2386,6 +2452,72 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(!errors.length)errors.push(...falshSupportErrors(m));
   return [...new Set(errors)];
 }
+/** Частичная перегородка (решение Макса 23.10.2026): границы, минимальная высота, опора на горизонталь (дно/крышу или сквозную полку
+ *  не ближе 80 мм к дну/крыше), полки обеих секций (свои в зоне перегородки и сквозные вне её) не ближе 80 мм друг к другу и к опорам,
+ *  ящики и штанга — только в зоне перегородки (направляющие и фланцы крепятся к ней). */
+export function dividerErrors(m: Module): string[] {
+  const out: string[] = [];
+  if (!m.sections.some((s) => s.divider !== undefined)) return out;
+  const bb = boxes(m), t = RULES.panel, clear = RULES.shelfMinClear;
+  m.sections.forEach((s, i) => {
+    const dv = s.divider;
+    if (dv === undefined) return;
+    const name = `Перегородка между секциями ${i} и ${i + 1}`;
+    if (!dv || typeof dv !== "object" || !Number.isFinite(dv.from) || !Number.isFinite(dv.to) || dv.from >= dv.to) { out.push(`${name || "Перегородка"}: неверные границы «от» и «до».`); return; }
+    if (i < 1) { out.push("У первой секции нет перегородки слева: частичную перегородку задают у секции справа от неё."); return; }
+    if (m.kitchen || m.sectionLayout || m.corner || m.casework || m.raw || m.desk || m.slope || m.skew) { out.push(`${name}: частичная перегородка — только у прямого шкафа или стеллажа (без скоса и составных проёмов).`); return; }
+    const b = bb[i], under = dv.from > b.bottom + 0.5, over = dv.to < b.top - 0.5;
+    if (!under && !over) return;
+    if (dv.from < b.bottom - 0.5 || dv.to > b.top + 0.5) { out.push(`${name}: границы — от ${Math.round(b.bottom)} (дно) до ${Math.round(b.top)} (крыша) мм от пола.`); return; }
+    if (dv.to - dv.from < RULES.partialDividerMin - 0.001) out.push(`${name}: высота перегородки не меньше ${RULES.partialDividerMin} мм.`);
+    if (under && dv.from - t - b.bottom < clear - 0.001) out.push(`${name}: под ней сквозная горизонталь-опора, до дна нужно не меньше ${clear} мм. Поставьте «от дна» или от ${Math.ceil(b.bottom + t + clear)} мм.`);
+    if (over && b.top - dv.to - t < clear - 0.001) out.push(`${name}: над ней сквозная горизонталь-опора, до крыши нужно не меньше ${clear} мм. Поставьте «до крыши» или до ${Math.floor(b.top - t - clear)} мм.`);
+    if (dividerSpan(m, i + 1, bb) || dividerSpan(m, i - 1, bb)) out.push(`${name}: две частичные перегородки у одной секции пока не делаются. Оставьте одну частичной, другую — во всю высоту.`);
+    for (const k of [i - 1, i]) {
+      const sec = m.sections[k], sb = bb[k], h = sb.top - sb.bottom, lbl = `Секция ${k + 1}`;
+      if (sec.drawers > 0) {
+        const top = sb.bottom + drawerStackHeight(sec) + (hasDrawerCap(m, sec, sb) ? t : 0);
+        if (under || top > dv.to + 0.5) out.push(`${lbl}: направляющие ящиков крепятся к перегородке — она должна идти от дна и выше ящиков (до ${Math.ceil(top)} мм от пола).`);
+      }
+      if (sec.rod || sec.pantograph) {
+        const ys = sec.shelves.map((f) => f * h).sort((a, z) => a - z), rodY = sb.bottom + (sec.rodAt === undefined ? (ys[0] ?? h) - RULES.rodTopOffset : sec.rodAt * h);
+        if (rodY < dv.from || rodY > dv.to) out.push(`${lbl}: штанга крепится к перегородке, а она только от ${Math.round(dv.from)} до ${Math.round(dv.to)} мм. Перенесите штангу в зону перегородки.`);
+      }
+      if (m.standLight || sec.standLights?.includes(k === i ? "left" : "right")) out.push(`${lbl}: подсветка в стойке у частичной перегородки пока не ставится — снимите её с этой стойки.`);
+      if (sec.pullouts) out.push(`${lbl}: выдвижной тремпель у частичной перегородки пока не ставится.`);
+    }
+    // полки пары: в зоне перегородки — свои, вне её — сквозные (и партнёра тоже); опоры перегородки — горизонтали
+    for (const k of [i - 1, i]) {
+      const sb = bb[k], h = sb.top - sb.bottom, p = k === i ? i - 1 : i, pb = bb[p], ph = pb.top - pb.bottom;
+      const ys: { y: number; support?: boolean; partner?: boolean }[] = m.sections[k].shelves.map((f) => ({ y: sb.bottom + f * h }));
+      for (const f of m.sections[p].shelves) { const y = pb.bottom + f * ph; if (y < dv.from || y > dv.to) ys.push({ y, partner: true }); }
+      if (under) ys.push({ y: dv.from - t / 2, support: true });
+      if (over) ys.push({ y: dv.to + t / 2, support: true });
+      ys.sort((a, z) => a.y - z.y);
+      for (let j = 1; j < ys.length; j++) {
+        const dy = ys[j].y - ys[j - 1].y, same = dy < 1 && !ys[j].support && !ys[j - 1].support && ys[j].partner !== ys[j - 1].partner;
+        if (!same && dy < t + clear - 0.001) { out.push(`Секция ${k + 1}: между полками, горизонталями перегородки и сквозными полками нужно не менее ${clear} мм. Измените положение полок или границы перегородки.`); break; }
+      }
+    }
+  });
+  return [...new Set(out)];
+}
+/** Петли фасада на частичной перегородке — только там, где она есть (решение Макса 23.10.2026): петля в воздухе — ошибка с подсказкой. */
+export function dividerHingeErrors(m: Module, geometry: Part[] = parts(m)): string[] {
+  const bb = boxes(m), out: string[] = [];
+  m.sections.forEach((s, i) => {
+    const sp = dividerSpan(m, i, bb);
+    if (!sp) return;
+    const x = bb[i].x - RULES.panel / 2;
+    for (const p of geometry.filter((q) => /:hingeplate:/.test(q.id) && Math.abs(q.position[0] - x) < 30)) {
+      const y0 = p.position[1] - p.size[1] / 2, y1 = p.position[1] + p.size[1] / 2;
+      if (y0 >= sp.from - 0.5 && y1 <= sp.to + 0.5) continue;
+      const k = m.sections.findIndex((q) => q.id === p.sectionId) + 1;
+      out.push(`Фасад секции ${k} висит на частичной перегородке (она от ${Math.round(sp.from)} до ${Math.round(sp.to)} мм): петля на высоте ${Math.round(p.position[1])} мм в воздухе. Перевесьте фасад на боковину (правой кнопкой по фасаду › Открывание) или удлините перегородку.`);
+    }
+  });
+  return [...new Set(out)];
+}
 /** Габариты фасадов «Вернисаж» модуля (ширина, высота) — для проверки по паспорту в выборе фрезеровки. */
 export function vernissageSizes(m: Module): [number, number][] {
   if(!m.vernissage)return [];
@@ -2395,6 +2527,15 @@ function dTooSmall(m: Module) {
   return m.depth < 300;
 }
 export function distribute(m: Module, s: Section, count: number): number[] {
+  // секция у частичной перегородки (решение Макса 23.10.2026): полки «в секции» — в зоне перегородки (половина), а не через общий проём
+  const k=m.sections.findIndex(x=>x.id===s.id),bb=k>=0&&m.sections.some(x=>x.divider)?boxes(m):undefined,sp=bb?dividerSpan(m,k,bb)??dividerSpan(m,k+1,bb):undefined;
+  if(sp&&bb){
+    const b=bb[k],H=b.top-b.bottom,lo=sp.from-b.bottom,hi=sp.to-b.bottom,t=RULES.panel;
+    let base=Math.max(lo,s.drawers?drawerStackHeight(s)+t:0);
+    if(s.rod)base=Math.max(base+RULES.rodMinClear+RULES.rodTopOffset,s.rodAt===undefined?0:s.rodAt*H+RULES.rodTopOffset-t/2);
+    const clear=(hi-base-count*t)/(count+1);
+    return Array.from({length:count},(_,i)=>Math.round(base+clear*(i+1)+t*i+t/2)/H);
+  }
   const h=m.height-plinth(m)-2*RULES.panel;
   let base=s.drawers?drawerStackHeight(s)+RULES.panel:0;
   if(s.rod)base=Math.max(base+RULES.rodMinClear+RULES.rodTopOffset,s.rodAt===undefined?0:s.rodAt*h+RULES.rodTopOffset-RULES.panel/2);
@@ -2507,6 +2648,7 @@ export function parseModule(input: unknown): Module {
     ...(x.grooveInset===undefined?{}:{grooveInset:x.grooveInset as number}),
     ...(x.grooveDepth===undefined?{}:{grooveDepth:x.grooveDepth as number}),
     ...(x.plinthHeight===undefined?{}:{plinthHeight:x.plinthHeight as number}),
+    ...(x.hanging===true?{hanging:true as const}:{}),
     ...(x.hingeSide===undefined?{}:{hingeSide:x.hingeSide as Module["hingeSide"]}),
     ...(x.standLight===undefined?{}:{standLight:x.standLight as boolean}),
     ...(x.handleId===undefined?{}:{handleId:x.handleId as string}),
@@ -2606,6 +2748,7 @@ export function parseModule(input: unknown): Module {
       ...(s.glassShelves===undefined?{}:{glassShelves:structuredClone(s.glassShelves)}),
       ...(s.rodClearance===undefined?{}:{rodClearance:s.rodClearance}),
       ...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),
+      ...(s.divider&&typeof s.divider==='object'?{divider:{from:Number((s.divider as {from:unknown}).from),to:Number((s.divider as {to:unknown}).to)}}:{}),
       ...(s.shelfAt&&typeof s.shelfAt==='object'?{shelfAt:Object.fromEntries(Object.entries(s.shelfAt as Record<string,{rear:number;depth:number}>).map(([j,v])=>[j,{rear:Number(v.rear),depth:Number(v.depth)}]))}:{}),
       drawers: s.drawers,
       rod: s.rod,

@@ -128,6 +128,9 @@ type Props = {
   moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
   onMoveDivider:(mid:string,sid:string,delta:number)=>boolean;
   dividerProblem:(mid:string,sid:string,delta:number)=>string|undefined;
+  /** Частичная перегородка (решение Макса 23.10.2026): тянуть её конец — горизонталь-опору под/над ней — по высоте. Без поля — не тянется. */
+  onMoveDividerEnd?:(mid:string,sid:string,edge:'under'|'over',delta:number)=>boolean;
+  dividerEndProblem?:(mid:string,sid:string,edge:'under'|'over',delta:number)=>string|undefined;
   partProblem:(mid:string,sid:string,pid:string,delta:number,target?:{mid:string;sid:string;y:number})=>string|undefined;
   onMovePart:(mid:string,sid:string,pid:string,y:number)=>boolean;
   onDropItem:(kind:string,mid:string,sid:string,y:number)=>boolean;
@@ -1002,7 +1005,7 @@ export function Scene(p: Props) {
     const ray = new THREE.Raycaster(),
       pointer = new THREE.Vector2();
     const badge=document.createElement('div');badge.className='drag-badge';badge.hidden=true;target.appendChild(badge);
-    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
+    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider'|'dividerEnd';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
     let drag:Drag|null=null;
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
@@ -1021,7 +1024,7 @@ export function Scene(p: Props) {
     }
 
     function cast(clientX:number,clientY:number){const r=renderer.domElement.getBoundingClientRect();pointer.set((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);}
-    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(drag?.kind==='part'&&drag.moved&&drag.meshes.includes(h.object))&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)&&!h.object.userData.partId?.endsWith(':divider')));}
+    function hitAt(clientX:number,clientY:number,allowShell=false){cast(clientX,clientY);return ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId&&!(drag?.kind==='part'&&drag.moved&&drag.meshes.includes(h.object))&&!(!allowShell&&current.current.transparent&&['body','door'].includes(h.object.userData.role)&&!/:divider(:under|:over)?$/.test(h.object.userData.partId??'')));}
     function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x,yy=hit.point.y-(a.y??0);return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width&&yy>=b.bottom&&yy<=b.top)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.presentation)return;
@@ -1039,13 +1042,14 @@ export function Scene(p: Props) {
       if(state.mode==='select'){if(a.id!==state.activeId)state.onModuleSelect(a.id);state.onPartSelect(sid,pid,a.id);return;}
       const isPart=state.mode==='fill'&&(!a.module.corner||pid.includes(':shelf:')||pid.includes(':drawer:')||pid.endsWith(':rod'))&&(['shelf','drawer','rod','pantograph','flange'].includes(hit.object.userData.role)||(hit.object.userData.role==='handle'&&pid.includes(':drawer:')))&&!pid.includes(':drawer-cap');
       const isDivider=state.mode==='fill'&&!a.module.corner&&pid.endsWith(':divider');
-      if(state.mode==='fill'&&!isPart&&!isDivider){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
-      const normal=isPart&&a.module.corner?camera.getWorldDirection(new THREE.Vector3()):isPart||isDivider||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
+      const isDividerEnd=state.mode==='fill'&&!a.module.corner&&!!state.onMoveDividerEnd&&/:divider:(under|over)$/.test(pid);
+      if(state.mode==='fill'&&!isPart&&!isDivider&&!isDividerEnd){if(a.id!==state.activeId)state.onModuleSelect(a.id);else state.onPartSelect(sid,pid);return;}
+      const normal=isPart&&a.module.corner?camera.getWorldDirection(new THREE.Vector3()):isPart||isDivider||isDividerEnd||state.view==='front'?new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),(a.rotation??0)*Math.PI/180):new THREE.Vector3(0,1,0);
       const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,hit.point);
       const anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
       const meshes:THREE.Object3D[]=[];const prefix=pid.includes(':pantograph:')?sid+':pantograph:':pid.includes(':drawer:')?pid.split(':drawer:')[0]+':drawer:'+pid.split(':drawer:')[1].split(':')[0]+':':pid;
       moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)||((pid===sid+':rod'||pid.includes(':flange:'))&&(o.userData.partId===sid+':rod'||o.userData.partId?.startsWith(sid+':flange:')))))meshes.push(o);});
-      drag={mid:a.id,sid,pid,kind:isDivider?'divider':isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
+      drag={mid:a.id,sid:isDividerEnd?pid.split(':')[0]:sid,pid,kind:isDivider?'divider':isDividerEnd?'dividerEnd':isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
     }
     function pointerMove(e:PointerEvent){
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
@@ -1061,6 +1065,11 @@ export function Scene(p: Props) {
         for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
         const b=boxes(a.module),i=b.findIndex(b=>b.id===drag!.sid),problem=current.current.dividerProblem(drag.mid,drag.sid,dx);
         badge.classList.toggle('invalid',!!problem);badge.textContent=problem||`Секции: ${Math.round(b[i-1].width+dx)} / ${Math.round(b[i].width-dx)} мм · отпустите для пересчёта`;
+      }else if(drag.kind==='dividerEnd'){
+        // конец частичной перегородки: опора-горизонталь едет по высоте, перегородка удлиняется/укорачивается при отпускании
+        const dy=Math.round(point.y/5)*5,edge=drag.pid.endsWith(':under')?'under':'over';for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;
+        const dv=current.current.arrangement.find(a=>a.id===drag!.mid)?.module.sections.find(s=>s.id===drag!.sid)?.divider,problem=current.current.dividerEndProblem?.(drag.mid,drag.sid,edge,dy);
+        badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(dv?`Перегородка от ${Math.round(dv.from+(edge==='under'?dy:0))} до ${Math.round(dv.to+(edge==='over'?dy:0))} мм · отпустите`:'Перегородка');
       }else{const dy=Math.round(point.y/5)*5;for(const mesh of drag.meshes)mesh.position.y+=dy-drag.delta;drag.delta=dy;
         const hit=hitAt(e.clientX,e.clientY,true),destination=indicateTarget(hit),toMid=hit?.object.userData.moduleId,toSid=hit?sectionFor(hit):undefined;
         const placed=current.current.arrangement.find(a=>a.id===toMid),to=hit&&placed&&toSid?{mid:placed.id,sid:toSid,y:hit.point.y-(placed.y??0)}:undefined;
@@ -1076,6 +1085,7 @@ export function Scene(p: Props) {
       if(d.moved){
         if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);
         else if(d.kind==='divider')current.current.onMoveDivider(d.mid,d.sid,d.delta);
+        else if(d.kind==='dividerEnd')current.current.onMoveDividerEnd?.(d.mid,d.sid,d.pid.endsWith(':under')?'under':'over',d.delta);
         else{
           const hit=hitAt(e.clientX,e.clientY,true),toMid=hit?.object.userData.moduleId,toSid=hit?sectionFor(hit):undefined;
           if(hit&&toMid&&toSid&&(toMid!==d.mid||toSid!==d.sid)){

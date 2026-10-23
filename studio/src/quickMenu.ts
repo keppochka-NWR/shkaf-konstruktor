@@ -23,6 +23,8 @@ export type QuickMenuOps = {
   lightPanel?: () => void;
   /** Ввод числа (окно размера App.editDimension): подпись, текущее значение, применить. */
   ask?: (label: string, value: number, update: (v: number) => (n: Module) => void) => void;
+  /** Корпус навесной — низ выше пола (y > 0): цоколь и ножки в меню не предлагаются, только «Без цоколя». */
+  elevated?: boolean;
 };
 
 /** Нижний угловой кухни (kitchenCorner.ts): «Угловой ›» — сторона глухой части, ширина двери и фальша (перестройка тем же генератором). */
@@ -93,8 +95,12 @@ export function baseItem(m: Module, ops: QuickMenuOps): RadialItem {
   const p = m.feet ? null : plinth(m), feet = m.feet?.height;
   const plinthItem = (h: number): RadialItem => ({ id: "q-plinth-" + h, label: `Цоколь ${h}`, icon: PanelBottom, active: p === h, hint: `Цоколь ${h} мм от пола`, run: () => ops.modify((n) => { delete n.feet; n.plinthHeight = h; }) });
   const feetItem = (h: number, label: string): RadialItem => ({ id: "q-feet-" + h, label, icon: Footprints, active: feet === h, hint: h === 18 ? "Ножки M6×18 под боковинами" : `Регулируемые ножки ${h} мм`, run: () => ops.modify((n) => { n.feet = { height: h }; }) });
-  return { id: "q-base", label: "Цоколь / ножки", icon: PanelBottom, hint: m.feet ? `Сейчас ножки ${feet} мм` : `Сейчас цоколь ${p} мм`, disabled: plinth(m) === 0 && !m.feet, children: [
-    plinthItem(60), plinthItem(80), plinthItem(100), plinthItem(120), feetItem(18, "Ножки 18"), feetItem(100, "Ножки 100"),
+  // «Без цоколя» (решение Макса 23.10.2026): дно на полу, боковины до пола, без цоколя и опор — как у таких шкафов в Базисе
+  const none: RadialItem = { id: "q-plinth-0", label: "Без цоколя", icon: Square, active: p === 0, hint: ops.elevated ? "Навесной корпус: низ корпуса — дно, цоколя и ножек нет" : "Дно на полу, боковины до пола; цоколя и опор нет", run: () => ops.modify((n) => { delete n.feet; n.plinthHeight = 0; }) };
+  // навесной корпус (низ выше пола, замер удобства 22.10): цоколь и ножки не предлагаем
+  if (ops.elevated && !m.feet) return { id: "q-base", label: "Цоколь / ножки", icon: PanelBottom, hint: m.hanging ? "Навесной (поднят от пола): на навесах, цоколя и ножек нет" : p ? `Корпус над полом на цоколе ${p} мм — уберите цоколь` : "Корпус над полом: цоколя и ножек нет", disabled: p === 0, children: [none] };
+  return { id: "q-base", label: "Цоколь / ножки", icon: PanelBottom, hint: m.feet ? `Сейчас ножки ${feet} мм` : p ? `Сейчас цоколь ${p} мм` : "Сейчас без цоколя: дно на полу", children: [
+    none, plinthItem(60), plinthItem(80), plinthItem(100), plinthItem(120), feetItem(18, "Ножки 18"), feetItem(100, "Ножки 100"),
   ] };
 }
 
