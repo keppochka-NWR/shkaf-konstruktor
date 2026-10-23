@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parts, initialModule, section, validate, parseModule, fastenerCounts, plinth, legCount, type Module, type Part } from "../src/model";
-import { setPartialDivider, setDividerByShelves, dividerBounds } from "../src/partialDivider";
+import { parts, initialModule, section, validate, parseModule, fastenerCounts, plinth, legCount, distribute, type Module, type Part } from "../src/model";
+import { setPartialDivider, setDividerByShelves, dividerBounds, moveDividerEnd } from "../src/partialDivider";
+import { newProject } from "../src/project";
+import { mirrorModule, setWallDistance } from "../src/operations";
+import { nest } from "../src/exports";
+import { estimate } from "../src/pricing";
 import { partPenetration, allowedContact } from "../src/collisions";
 import { existsSync, readFileSync } from "node:fs";
 import { compareModule } from "../scripts/kitchen/compare";
@@ -156,6 +160,48 @@ test("сверка с Базисом: частичная перегородка 
   // faces: [x0, y0, z0, x1, y1, z1] — X и Y до 0,1 мм
   for (const p of ours) assert.ok([0, 1, 3, 4].every((k) => p.faces[k] <= 0.11), `${p.studio.name}: ${p.faces.join(" ")}`);
   assert.ok(!c.missing.some((x) => /\|y\|/.test(x.cls)), "все горизонтали Базиса нашлись");
+});
+
+test("«Полок в секции» у частичной перегородки — в её зоне (как у Базиса: 2 полки 1028 и 1344 при 720–1652); тянуть конец перегородки", () => {
+  const m = wardrobe();
+  setPartialDivider(m, m.sections[1].id, { from: 720, to: 1652 });
+  for (const s of m.sections) s.shelves = distribute(m, s, 2);
+  const ys = parts(m).filter((p) => p.role === "shelf").map((p) => Math.round(p.position[1]));
+  assert.deepEqual([...new Set(ys)].sort((a, z) => a - z), [1028, 1344]);
+  assert.deepEqual(validate(m), []);
+  moveDividerEnd(m, m.sections[1].id, "over", 100);
+  assert.deepEqual(m.sections[1].divider, { from: 720, to: 1752 });
+  moveDividerEnd(m, m.sections[1].id, "under", -700); // ниже дна — «от дна»
+  assert.equal(m.sections[1].divider!.from, 96);
+  assert.equal(parts(m).filter((p) => p.id.endsWith(":divider:under")).length, 0, "от дна — опора не нужна, перегородка стоит на дне");
+});
+
+test("отражение корпуса: частичная перегородка остаётся между теми же секциями; смета и раскрой — фактическая длина", () => {
+  const m = wardrobe(), p = newProject(m);
+  const sec = p.modules[0].module.sections;
+  sec[0].weight = 1; sec[1].weight = 2;
+  setPartialDivider(p.modules[0].module, sec[1].id, { from: 720, to: 1652 });
+  const before = parts(p.modules[0].module).find((x) => x.id.endsWith(":divider"))!;
+  const r = mirrorModule(p, p.modules[0].id), mm = r.modules[0].module;
+  assert.deepEqual(mm.sections.map((s) => !!s.divider), [false, true]);
+  const after = parts(mm).find((x) => x.id.endsWith(":divider"))!;
+  assert.equal(Math.round(after.position[0]), Math.round(1200 - before.position[0]));
+  assert.equal(after.length, 932);
+  const items = nest(p).flatMap((s) => s.items.map((i) => i.detail));
+  assert.equal(items.find((d) => d.id.endsWith(":divider"))?.length, 932);
+  assert.equal(items.filter((d) => /:divider:(under|over)$/.test(d.id)).length, 2);
+  const e = estimate(p);
+  assert.ok(Number.isFinite(e.knownCost) && e.knownCost > 0);
+});
+
+test("навесной: «От пола» больше 0 — цоколя нет (дно внизу корпуса); ножки и кухни не трогаем", () => {
+  const p = newProject(wardrobe({ height: 700 }));
+  const r = setWallDistance(p, p.modules[0].id, "y", 1200);
+  assert.equal(plinth(r.modules[0].module), 0);
+  assert.equal(parts(r.modules[0].module).filter((x) => x.id === "plinth").length, 0);
+  assert.equal(plinth(setWallDistance(p, p.modules[0].id, "y", 0).modules[0].module), 80, "на полу — цоколь как был");
+  const f = newProject({ ...wardrobe({ height: 700 }), feet: { height: 100 } });
+  assert.deepEqual(setWallDistance(f, f.modules[0].id, "y", 1200).modules[0].module.feet, { height: 100 });
 });
 
 test("без цоколя: дно на полу, боковины до пола, нет цоколя и опор", () => {

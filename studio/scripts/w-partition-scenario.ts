@@ -112,6 +112,21 @@ try {
   check("ПКМ по перегородке: «Перегородка 720–1652», пункты «Во всю высоту», «Частичная…», «От полки», «До полки»", /720–1652/.test(dv) && ["Во всю высоту", "Частичная…", "От полки", "До полки"].every((x) => dl.includes(x)), dv + " | " + dl.join(" | "));
   await shot("07-divider-menu");
   await esc();
+  // 3б. режим «Наполнение»: тянуть верхний конец перегородки (горизонталь над ней) вверх на ≈100 мм
+  await page.getByRole("button", { name: "Наполнение", exact: true }).click().catch(() => {}); await page.waitForTimeout(400);
+  const gx = L + (R - L) * 0.62; let gy = sy(1660);
+  // горизонталь 16 мм на экране ≈ 2–3 px: точку ищем правым кликом (у опоры — меню перегородки «Перегородка 720–1652»)
+  for (let k = -8; k <= 8; k++) { await page.mouse.click(gx, sy(1660) + k, { button: "right" }); await page.waitForTimeout(120); const tt = await title(); await esc(); if (/^Перегородка/.test(tt)) { gy = sy(1660) + k; break; } }
+  await page.mouse.move(gx, gy); await page.mouse.down(); await page.mouse.move(gx, gy - 5, { steps: 2 }); await page.mouse.move(gx, sy(1760), { steps: 6 }); await page.waitForTimeout(200);
+  const badge = (await page.locator(".drag-badge, .scene-badge").first().innerText({ timeout: 500 }).catch(() => "")).trim();
+  await shot("07b-drag-divider-end");
+  await page.mouse.up(); await page.waitForTimeout(600);
+  m = await saved("Шкаф QA");
+  const to2 = m?.sections[1].divider?.to ?? 0;
+  check("тянуть конец перегородки мышью: верх 1652 → ≈1760", to2 > 1700 && to2 < 1820, `до ${to2}${badge ? " · " + badge : ""}`);
+  await page.keyboard.press("Control+z"); await page.waitForTimeout(600);
+  m = await saved("Шкаф QA");
+  check("Ctrl+Z возвращает 720–1652", m?.sections[1].divider?.to === 1652, String(m?.sections[1].divider?.to));
   // 4. «Без цоколя»: ПКМ по корпусу › Цоколь / ножки › Без цоколя
   let base = false;
   for (let y = sy(300); y > sy(2200) && !base; y -= 40) { await page.mouse.click(lx, y, { button: "right" }); await page.waitForTimeout(250); if (await item("Корпус").count()) { await item("Корпус").click(); await page.waitForTimeout(250); } if (await item("Цоколь / ножки").count()) base = true; else await esc(); }

@@ -22,7 +22,7 @@ import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import PartialDividerPanel from './PartialDividerPanel';
-import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves} from './partialDivider';
+import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd} from './partialDivider';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
 import {rowShortage} from './rowFit';
@@ -1316,6 +1316,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
+            onMoveDividerEnd={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module;moveDividerEnd(t,sid,edge,delta);return commitProject(n);}catch(e){setError((e as Error).message);return false;}}}
+            dividerEndProblem={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module;moveDividerEnd(t,sid,edge,delta);return validate(t)[0];}catch(e){return (e as Error).message;}}}
             dividerProblem={(mid,sid,delta)=>{try{moveDivider(project,mid,sid,delta);return undefined;}catch(e){return (e as Error).message;}}}
             partProblem={(mid,sid,pid,delta,to)=>{try{const next=to&&(to.mid!==mid||to.sid!==sid)?transferPart(project,mid,sid,pid,to.mid,to.sid,to.y):movePart(project,mid,sid,pid,delta);return projectErrors(next)[0];}catch(e){return (e as Error).message;}}}
             onMovePart={moveFilling}

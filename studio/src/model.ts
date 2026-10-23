@@ -2504,6 +2504,15 @@ function dTooSmall(m: Module) {
   return m.depth < 300;
 }
 export function distribute(m: Module, s: Section, count: number): number[] {
+  // секция у частичной перегородки (решение Макса 23.10.2026): полки «в секции» — в зоне перегородки (половина), а не через общий проём
+  const k=m.sections.findIndex(x=>x.id===s.id),bb=k>=0&&m.sections.some(x=>x.divider)?boxes(m):undefined,sp=bb?dividerSpan(m,k,bb)??dividerSpan(m,k+1,bb):undefined;
+  if(sp&&bb){
+    const b=bb[k],H=b.top-b.bottom,lo=sp.from-b.bottom,hi=sp.to-b.bottom,t=RULES.panel;
+    let base=Math.max(lo,s.drawers?drawerStackHeight(s)+t:0);
+    if(s.rod)base=Math.max(base+RULES.rodMinClear+RULES.rodTopOffset,s.rodAt===undefined?0:s.rodAt*H+RULES.rodTopOffset-t/2);
+    const clear=(hi-base-count*t)/(count+1);
+    return Array.from({length:count},(_,i)=>Math.round(base+clear*(i+1)+t*i+t/2)/H);
+  }
   const h=m.height-plinth(m)-2*RULES.panel;
   let base=s.drawers?drawerStackHeight(s)+RULES.panel:0;
   if(s.rod)base=Math.max(base+RULES.rodMinClear+RULES.rodTopOffset,s.rodAt===undefined?0:s.rodAt*h+RULES.rodTopOffset-RULES.panel/2);

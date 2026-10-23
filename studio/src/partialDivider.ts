@@ -51,6 +51,14 @@ export function setPartialDivider(m: Module, sid: string, span: { from: number; 
   }
 }
 
+/** Перетаскивание конца частичной перегородки (горизонтали-опоры под/над ней) по высоте на delta мм; ошибки — как у полей «от/до». */
+export function moveDividerEnd(m: Module, sid: string, edge: "under" | "over", delta: number): void {
+  const s = m.sections.find((x) => x.id === sid);
+  if (!s?.divider) throw Error("Перегородка во всю высоту: сначала сделайте её частичной.");
+  const { from, to } = s.divider;
+  setPartialDivider(m, sid, edge === "under" ? { from: from + delta, to } : { from, to: to + delta });
+}
+
 /** «От полки N до полки M»: границы — горизонтали, на которые опирается перегородка (дно, крыша или полка секции слева/справа).
  *  Выбранные полки становятся опорами перегородки (сквозными горизонталями): из секций они убираются, чтобы не было двух деталей. */
 export function setDividerByShelves(m: Module, sid: string, lower: DividerBound, upper: DividerBound): void {
