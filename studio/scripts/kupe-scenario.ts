@@ -122,6 +122,8 @@ try {
   const s1 = await calc("2400", "2600", "3", "01-2400x2600-3doors");
   check("калькулятор 2400×2600, 3 двери: ширина каждой двери 818 мм", /Дверь 1 818 мм Дверь 2 818 мм Дверь 3 818 мм/.test(s1) && /нахлёст 27 мм/i.test(s1), s1);
   await page.locator("#kupeDoorSizes").screenshot({ path: `${out}/calc-02-door-widths.png` }).catch(() => {});
+  // калькулятор v2.10/2.11 (с 23.10): КП формируется после полей клиента, телефона и менеджера
+  for (const [id, v] of [["#kpClient", "Тестовый клиент"], ["#kpPhone", "+7 900 000-00-00"], ["#kpManager", "Тест Менеджер"]] as const) if (await page.locator(id).count()) { await page.locator(id).click(); await page.keyboard.type(v); }
   await page.getByRole("button", { name: "Сформировать КП" }).click(); await page.waitForTimeout(1200);
   const kp = (await page.locator("#kpPageContent").innerText().catch(() => "")).replace(/\s+/g, " ");
   check("КП (печать): «Ширина двери 1…3 — 818 мм»", /Ширина двери 1 818 мм/.test(kp) && /Ширина двери 3 818 мм/.test(kp), kp.match(/Ширина двери[^Н]*/)?.[0]?.slice(0, 160) ?? "");

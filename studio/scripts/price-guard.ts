@@ -27,10 +27,16 @@ export function findPurchaseNumbers(code: string, values: { key: string; value: 
 function* jsFiles(dir: string): Generator<string> {
   for (const f of readdirSync(dir)) { const p = join(dir, f); if (statSync(p).isDirectory()) yield* jsFiles(p); else if (/\.(m|c)?js$|\.html?$/.test(f)) yield p; }
 }
+/** Калькулятор купе на сайте (web/calc, scripts/bake-calc-kupe.ts): закупочные значения профилей купе студии (kupeData.ts —
+ *  тот же прайс v2.10) не должны стоять в его данных; направляющие там называются napravl_top / napravl_bot. */
+export function calcPurchaseValues(src: string) {
+  return purchaseValues(src).filter((v) => v.file === 'kupeData.ts').flatMap((v) => v.key === 'top' || v.key === 'bot' ? [v, { ...v, key: 'napravl_' + v.key }] : [v]);
+}
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const dir = process.argv[2], src = process.argv[3] ?? fileURLToPath(new URL('../src', import.meta.url));
-  if (!dir) { console.error('usage: price-guard.ts <build dir> [src]'); process.exit(2); }
-  const values = purchaseValues(src), hits: string[] = [];
+  const calcMode = process.argv.includes('--calc'), args = process.argv.slice(2).filter((a) => a !== '--calc');
+  const dir = args[0], src = args[1] ?? fileURLToPath(new URL('../src', import.meta.url));
+  if (!dir) { console.error('usage: price-guard.ts <build dir> [src] [--calc]'); process.exit(2); }
+  const values = calcMode ? calcPurchaseValues(src) : purchaseValues(src), hits: string[] = [];
   let files = 0;
   for (const f of jsFiles(dir)) { if (/[\\/](local-projects|\.git)[\\/]/.test(f)) continue; files++; for (const h of findPurchaseNumbers(readFileSync(f, 'utf8'), values)) hits.push(f.slice(dir.length) + ': ' + h); }
   console.log(`price-guard: ${values.length} purchase values, ${files} file(s), ${hits.length} match(es)`);
