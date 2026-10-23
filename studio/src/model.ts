@@ -2079,7 +2079,9 @@ export function maxHeightOf(m: Module): number {
 }
 /** Корпус шкафа-купе с дверями внутри: боковины и крыша цельные — до длины листа ЛДСП за вычетом отступов раскроя. */
 export function kupeBodyMax(): number { return RULES.sheetW - 2 * RULES.sheetMargin; }
-export function validate(m: Module): string[] {
+/** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
+ *  вызывающий ловит исключения: при недопустимых габаритах дальнейшие проверки могут не собраться. */
+export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.kupe)return kupeErrors(m);
   if(m.raw)return rawErrors(m);
   if(m.worktop)return kitchenErrors(m);
@@ -2171,7 +2173,7 @@ export function validate(m: Module): string[] {
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
-  if (errors.length) return errors;
+  if (errors.length && opts?.all !== true) return errors;
   if (m.sections.length < 1 || m.sections.length > RULES.maxSections)
     return [...errors, "Допустимо от 1 до 4 секций."];
   if (m.sections.some((s) => !Number.isFinite(s.weight) || s.weight <= 0))
@@ -2325,7 +2327,7 @@ export function validate(m: Module): string[] {
           `под штангой нужно ${s.rodClearance??RULES.rodMinClear} мм до полки, ящиков или дна. Измените высоту штанги или назначение проёма.`,
       );
   });
-  if (errors.length) return [...new Set(errors)];
+  if (errors.length && opts?.all !== true) return [...new Set(errors)];
   const geometry=parts(m);
   errors.push(...hingeEdgeErrors(m,geometry));
   for(const section of m.sections.filter(s=>s.pantograph)){

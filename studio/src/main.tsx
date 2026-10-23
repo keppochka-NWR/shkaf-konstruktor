@@ -46,3 +46,4 @@ start().catch(error=>{document.getElementById('root')!.textContent='Не уда�
 
 import './manager-workflow.css';
 import './integrity-fixes.css';
+import './palette-check.css';

@@ -31,7 +31,7 @@ const ACTIONS:[RegExp,string][]=[
 ];
 const GENERIC='Верните прежнее значение или измените его так, чтобы правило выполнялось. Ctrl+Z не нужен: изменение не применено.';
 
-function splitAction(rest:string):{problem:string;action:string}{
+export function splitAction(rest:string):{problem:string;action:string}{
   const cut=rest.search(/\.\s+[А-ЯЁA-Z«]/);
   if(cut>0)return {problem:rest.slice(0,cut+1),action:rest.slice(cut+1).trim()};
   return {problem:rest,action:ACTIONS.find(([re])=>re.test(rest))?.[1]??GENERIC};
