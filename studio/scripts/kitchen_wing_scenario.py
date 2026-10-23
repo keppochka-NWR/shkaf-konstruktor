@@ -11,7 +11,7 @@ os.makedirs(OUT, exist_ok=True)
 cnt = {"left": 0, "right": 0, "inputs": 0, "keys": 0}
 errors = []
 STATE_JS = """(()=>{const s=JSON.parse(localStorage.getItem('garderyob-rooms-v1')||'null');if(!s)return null;const r=s.rooms.find(r=>r.id===s.activeRoomId);
-return {room:r.project.room,modules:r.project.modules.map(m=>({id:m.id,name:m.module.name,x:m.x,y:m.y||0,z:m.z,rot:m.rotation||0,w:m.module.width,h:m.module.height,d:m.module.depth,role:m.module.kitchen?m.module.kitchen.role:null,worktop:!!m.module.worktop,corner:!!(m.module.kitchen&&m.module.kitchen.faceFiller&&m.module.kitchen.faceFiller.facadeMat),off:!!m.module.autoFillersOff}))}})()"""
+return {room:r.project.room,modules:r.project.modules.map(m=>({id:m.id,name:m.module.name,x:m.x,y:m.y||0,z:m.z,rot:m.rotation||0,w:m.module.width,h:m.module.height,d:m.module.depth,role:m.module.kitchen?m.module.kitchen.role:null,worktop:!!m.module.worktop,corner:!!(m.module.kitchen&&m.module.kitchen.faceFiller&&m.module.kitchen.faceFiller.facadeMat),wallCorner:!!(m.module.kitchen&&m.module.kitchen.role==='wall'&&m.module.kitchen.faceFiller&&m.module.kitchen.faceFiller.strip),plank:m.module.cornerKind||null,off:!!m.module.autoFillersOff}))}})()"""
 TOAST_JS = """(()=>{const e=[...document.querySelectorAll('div,section')].find(x=>x.innerText&&x.innerText.startsWith('Изменение не применено')&&x.getBoundingClientRect().width>0&&x.getBoundingClientRect().width<700);return e?e.innerText.replace(/\\n/g,' ').slice(0,260):null})()"""
 
 pw = sync_playwright().start()
@@ -66,7 +66,7 @@ try:
     t = pg.evaluate(TOAST_JS)
     if t: errors.append("угловая кухня: " + t)
     mods = st["modules"] if st else []
-    res["corner_kitchen"] = {"actions": dict(cnt), "modules": len(mods), "worktops": sum(1 for m in mods if m["worktop"]), "corner": sum(1 for m in mods if m["corner"]),
+    res["corner_kitchen"] = {"actions": dict(cnt), "modules": len(mods), "worktops": sum(1 for m in mods if m["worktop"]), "corner": sum(1 for m in mods if m["corner"]), "wall_corner": sum(1 for m in mods if m["wallCorner"]), "planks": sum(1 for m in mods if m["plank"] == "plank"),
                              "wing_bases": sum(1 for m in mods if m["role"] == "base" and m["rot"] != 0), "wing_walls": sum(1 for m in mods if m["role"] == "wall" and m["rot"] != 0), "room": st["room"] if st else None}
     shot("g-kitchen-end.png")
     views("g-kitchen")
@@ -93,6 +93,23 @@ try:
     except Exception as e:
         errors.append("к стене: " + str(e)[:200])
     res["final"] = pg.evaluate(STATE_JS)
+    # 3. «Кухня П-образная»: новая пустая комната 4000 × 3000, левая 2400, задняя — во всю ширину, правая 2000
+    # новый контекст браузера — чистое хранилище (как у тестера на каждую попытку)
+    ctx.close(); ctx = br.new_context(viewport={"width": 1366, "height": 768}); pg = ctx.new_page(); pg.on("dialog", lambda d: d.accept())
+    pg.goto(f"http://127.0.0.1:{PORT}/studio/?fresh=1"); pg.wait_for_timeout(4000)
+    c1 = dict(cnt)
+    click('button:has-text("Кухонные модули")')
+    click('button:has-text("Кухня П-образная")')
+    fill("По левой стене новой мебели", 2400, "Tab")
+    fill("По правой стене новой мебели", 2000, "Tab")
+    click('button:has-text("Добавить в комнату")')
+    pg.wait_for_timeout(1500)
+    t = pg.evaluate(TOAST_JS)
+    if t: errors.append("П-образная: " + t)
+    st = pg.evaluate(STATE_JS); mods = st["modules"] if st else []
+    res["u_kitchen"] = {"actions": {k: cnt[k] - c1[k] for k in cnt}, "modules": len(mods), "worktops": sum(1 for m in mods if m["worktop"]), "corner": sum(1 for m in mods if m["corner"]), "wall_corner": sum(1 for m in mods if m["wallCorner"]), "planks": sum(1 for m in mods if m["plank"] == "plank")}
+    shot("u-kitchen-end.png")
+    views("u-kitchen")
 except Exception as e:
     errors.append("исключение: " + str(e)[:300])
     try: shot("g-kitchen-error.png")
@@ -100,5 +117,5 @@ except Exception as e:
 
 out = {"port": PORT, "counts": cnt, "errors": errors, "result": res}
 json.dump(out, open(os.path.join(OUT, "scenario.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-print(json.dumps({"counts": cnt, "errors": errors, "corner_kitchen": res.get("corner_kitchen"), "to_wall": res.get("to_wall")}, ensure_ascii=False))
+print(json.dumps({"counts": cnt, "errors": errors, "corner_kitchen": res.get("corner_kitchen"), "to_wall": res.get("to_wall"), "u_kitchen": res.get("u_kitchen")}, ensure_ascii=False))
 ctx.close(); br.close(); pw.stop()
