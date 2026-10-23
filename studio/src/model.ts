@@ -914,15 +914,19 @@ export function boxes(m: Module): SectionBox[] {
 }
 /** Частичная перегородка слева от секции i (Section.divider): торцы from/to и есть ли сквозная полка-опора под (under) / над (over) ней.
  *  undefined — перегородка во всю высоту (поля нет, первая секция, кухня, составные проёмы, или от дна до крыши). */
-export function dividerSpan(m: Module, i: number, bb: SectionBox[] = boxes(m)): { from: number; to: number; under: boolean; over: boolean } | undefined {
+export function dividerSpan(m: Module, i: number, bb?: SectionBox[]): { from: number; to: number; under: boolean; over: boolean } | undefined {
   const s = m.sections[i], dv = s?.divider;
-  if (!dv || i < 1 || !bb[i] || m.kitchen || m.sectionLayout || m.corner || m.casework || m.raw || m.desk) return undefined;
-  const b = bb[i], under = dv.from > b.bottom + 0.5, over = dv.to < b.top - 0.5;
+  if (!dv || i < 1 || m.kitchen || m.sectionLayout || m.corner || m.casework || m.raw || m.desk) return undefined;
+  const b = (bb ?? boxes(m))[i];
+  if (!b) return undefined;
+  const under = dv.from > b.bottom + 0.5, over = dv.to < b.top - 0.5;
   return under || over ? { from: under ? dv.from : b.bottom, to: over ? dv.to : b.top, under, over } : undefined;
 }
 /** Полка секции k на высоте y (от низа модуля) вне частичной перегородки соседей — сквозная: во всю ширину двух секций.
  *  Возвращает её край слева/справа (x0, x1) и номера секций пары; undefined — обычная полка своей секции. */
-export function throughShelf(m: Module, k: number, y: number, bb: SectionBox[] = boxes(m)): { x0: number; x1: number; left: number; right: number } | undefined {
+export function throughShelf(m: Module, k: number, y: number, bb?: SectionBox[]): { x0: number; x1: number; left: number; right: number } | undefined {
+  if (!m.sections[k]?.divider && !m.sections[k + 1]?.divider) return undefined;
+  bb ??= boxes(m);
   for (const r of [k, k + 1]) {
     const sp = dividerSpan(m, r, bb);
     if (sp && (y < sp.from || y > sp.to)) return { x0: bb[r - 1].x, x1: bb[r].x + bb[r].width, left: r - 1, right: r };
@@ -1875,7 +1879,7 @@ function hardwareParts(m: Module, out: Part[]) {
       .filter((fx) => dir * (fx - edgeX) >= -fe(m) - 1 && dir * (fx - edgeX) <= 40)
       .sort((a, b) => Math.abs(a - guess) - Math.abs(b - guess));
     // частичная перегородка (решение Макса 23.10.2026): петля садится только туда, где перегородка есть (планка 53 мм по высоте целиком)
-    const partialStand = !m.kitchen && m.sections.some((s, i) => !!dividerSpan(m, i));
+    const partialStand = !m.kitchen && m.sections.some((s, i) => !!s.divider && !!dividerSpan(m, i));
     const stand = standFaces(cy)[0] ?? (partialStand ? standFaces()[0] : undefined);
     // угловая мойка Базиса (kitchen.faceFiller): дверь у фальша — на «Петля под фальшпанель»: точка петли — кромка двери, чашка в 22 от неё
     const ffk = m.kitchen?.faceFiller, ffEdge = faceFillerEdge(m) ?? NaN;
