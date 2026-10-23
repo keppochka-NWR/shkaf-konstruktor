@@ -34,7 +34,10 @@ test('атомарная постановка: поворот 270 и X/Z одн�
   assert.equal(d.right,0);assert.equal(d.z,700);
   assert.deepEqual(projectErrors(n),[]);
   // итог занят — отказ один, по итогу (а не на промежуточном шаге)
-  assert.throws(()=>placeModuleAt(p,'tall',{rotation:270,x:3600-tb.w,z:100}),/пересекается/);
+  assert.throws(()=>placeModuleAt(p,'tall',{rotation:270,x:2500,z:100}),/пересекается/);
+  // угол впритык: пенал вплотную к концу ряда у стены — стык без планки (как в Базисе), а не отказ из-за сдвига на планку
+  const tight=placeModuleAt(p,'tall',{rotation:270,right:0,z:0});
+  assert.deepEqual(projectErrors(tight),[]);
 });
 
 test('атомарная постановка: введённый отступ — итоговый с автофальшью у стены (габарит монтажа)',()=>{

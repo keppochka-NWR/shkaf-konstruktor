@@ -102,7 +102,11 @@ export function applyAutoFillers(p:Project):Project{
     }
     const hadCorner=a.module.cornerFiller,hadKind=a.module.cornerKind;
     if(corner){a.module.cornerFiller=corner;a.module.cornerKind=kind;}else{delete a.module.cornerFiller;delete a.module.cornerKind;}
-    if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);break;}}
+    if(corner&&kind==='plank'&&(hadCorner!==corner||hadKind!=='plank')){const b=bounds(a);for(const other of n.modules)if(other!==a&&overlap(b,bounds(other))){shiftAlongWidth(a,corner==='left'?t:-t);
+      // Кухня, угол впритык (w-lwing 23.10, эталоны Г-кухонь Базиса k19, k07, k27 — стык в углу без планки): сдвиг на планку упёр бы
+      // модуль в соседа по ряду — планку не ставим и не сдвигаем (как «ниша впритык» у стен ниже); было — отказ «пересекается».
+      if(a.module.kitchen){const s=bounds(a);if(n.modules.some(o=>o!==a&&overlap(s,bounds(o)))){shiftAlongWidth(a,corner==='left'?-t:t);corner=undefined;kind=undefined;delete a.module.cornerFiller;delete a.module.cornerKind;}}
+      break;}}
     // Стены: боковина в пределах wallSnap от стены комнаты.
     const wf:Module['wallFiller']={},before={x:a.x,z:a.z};
     if(needsWallFiller(a.module))for(const side of ['left','right'] as const){
