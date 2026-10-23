@@ -1718,6 +1718,9 @@ export function parts(m: Module): Part[] {
       const sx=L?t/2:m.width-t/2,zf=d+t;
       for(const [k,x] of (ffl.conf.bottom??[]).entries())confirmat(`fast:face-filler:bottom:${k}`,[L?x:m.width-x,yb+(bot?.size[1]??t)/2,zf],'-z');
       for(const [k,y] of (ffl.conf.side??[]).entries())confirmat(`fast:face-filler:side:${k}`,[sx,yb+y,zf],'-z');
+      // навесной угловой (k25 m18): ещё в передний торец крыши
+      const top=out.find(p=>p.id==='top');
+      if(top)for(const [k,x] of (ffl.conf.top??[]).entries())confirmat(`fast:face-filler:top:${k}`,[L?x:m.width-x,top.position[1],zf],'-z');
     }
   }
   // доборная планка кухни Базиса (kitchen.sideStrip, F_FILLER_STRIP): планки ЛДСП снаружи боковины от её наружной пласти наружу,

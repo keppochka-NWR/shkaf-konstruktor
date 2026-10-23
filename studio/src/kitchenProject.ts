@@ -6,7 +6,7 @@ import {kitchenTallColumn,configureColumn} from './kitchenTall';
 // (автофальши + projectErrors), так что проверки и ошибки — те же, что во всей студии.
 import { initialModule, section, distribute, validate, id, RULES, type Module } from "./model";
 import { KITCHEN, kitchenBase, kitchenWall, kitchenWorktop, wallFloorY } from "./kitchen";
-import { kitchenBaseCorner, type CornerSide } from "./kitchenCorner";
+import { kitchenBaseCorner, kitchenWallCorner, type CornerSide } from "./kitchenCorner";
 import { createKitchenRow } from "./ModulePalette";
 import { maxModules, applyAutoFillers, projectErrors, bounds, overlap, appendModule, type Project, type PlacedModule } from "./project";
 import {refitKDrawers} from './kitchenDrawers';
@@ -24,7 +24,7 @@ export const KITCHEN_ANTRESOL_HEIGHT = 400;
 /** Кухонный режим студии — только по явной пометке проекта: кухонный модуль, добавленный в проект шкафа, палитру не подменяет. */
 export function isKitchenProject(p: Project) { return p.kind === "kitchen"; }
 
-export type KitchenItem = "base-doors" | "base-drawers" | "base-corner" | "sink" | "oven" | "bottle" | "wall" | "wall-open" | "antresol" | "tall" | "tall-oven" | "tall-fridge";
+export type KitchenItem = "base-doors" | "base-drawers" | "base-corner" | "sink" | "oven" | "bottle" | "wall" | "wall-corner" | "wall-open" | "antresol" | "tall" | "tall-oven" | "tall-fridge";
 /** Подписи и ширины кухонной палитры (ширины — частые модули в проектах Базиса цеха). */
 export const KITCHEN_ITEMS: Record<KitchenItem, { label: string; widths: number[]; group: "base" | "wall" | "tall" }> = {
   "base-doors": { label: "Нижний распашной", widths: [300, 400, 450, 600, 800], group: "base" },
@@ -34,6 +34,8 @@ export const KITCHEN_ITEMS: Record<KitchenItem, { label: string; widths: number[
   oven: { label: "Под духовку", widths: [600], group: "base" },
   bottle: { label: "Бутылочница", widths: [150, 200], group: "base" },
   wall: { label: "Навесной", widths: [300, 400, 450, 600, 800], group: "wall" },
+  // навесной угловой прямой (решение Макса 23.10.2026, kitchenCorner.ts kitchenWallCorner, эталон k25 m18 «ВМУгловой» 1071)
+  "wall-corner": { label: "Навесной угловой", widths: [800, 900, 1000, 1100], group: "wall" },
   "wall-open": { label: "Навесной с полками", widths: [300, 400, 600, 800], group: "wall" },
   antresol: { label: "Антресоль", widths: [400, 600, 800], group: "wall" },
   tall: { label: "Пенал", widths: [450, 600], group: "tall" },
@@ -68,6 +70,7 @@ export function kitchenTemplate(kind: KitchenItem, width: number, source: Pick<M
   else if (kind === "oven") {m = kitchenBase(base, width, "oven");configureOven(m);}
   else if (kind === "bottle") { m = kitchenBase(base, width, "doors"); m.name = "Бутылочница"; m.sections = [{ ...m.sections[0], shelves: [] }]; if (width === 150 || width === 200) m.kitchen!.premialPullout = { article: width === 150 ? '060500' : '060502' }; }
   else if (kind === "wall") m = kitchenWall(base, width);
+  else if (kind === "wall-corner") m = kitchenWallCorner(base, { width, side: corner?.side });
   else if (kind === "wall-open") { m = kitchenWall(base, width); m.name = "Навесной открытый"; m.doors = false; m.sections = [{ ...m.sections[0], shelves: [] }]; m.sections[0].shelves = distribute(m, m.sections[0], 2); }
   else if (kind === "antresol") { m = kitchenWall(base, width); m.name = "Антресоль"; m.height = KITCHEN_ANTRESOL_HEIGHT; m.kitchen = { role: "antresol" }; m.sections = [{ ...m.sections[0], shelves: [] }]; }
   else if (kind === "tall-oven" || kind === "tall-fridge") m = kitchenTallColumn(base, width, kind === "tall-oven" ? "oven" : "fridge");
@@ -312,7 +315,7 @@ export function kitchenItemOf(m: Module): KitchenItem | undefined {
   if (!k) return undefined;
   if (k.role === "tall") return k.column ? (k.column.kind === "oven" ? "tall-oven" : "tall-fridge") : "tall";
   if (k.role === "antresol") return "antresol";
-  if (k.role === "wall") return m.doors ? "wall" : "wall-open";
+  if (k.role === "wall") return k.faceFiller && !k.faceFiller.facadeMat && k.faceFiller.strip ? "wall-corner" : m.doors ? "wall" : "wall-open";
   if (k.faceFiller?.facadeMat && k.role === "base") return "base-corner";
   if (k.appliance === "sink") return "sink";
   if (k.appliance === "oven") return "oven";

@@ -30,7 +30,7 @@ export function cornerItems(m: Module, ops: QuickMenuOps): RadialItem[] {
   const c = cornerOf(m);
   if (!c || m.raw || m.bazis) return [];
   const side = (s: CornerSide): RadialItem => ({ id: "corner-side-" + s, label: s === "left" ? "Глухая часть слева" : "Глухая часть справа", icon: s === "left" ? PanelLeft : PanelRight, active: c.side === s,
-    hint: "Фальш из фасадного материала с этой стороны, дверь — с другой; петли под фальшпанель переезжают к кромке двери", run: () => ops.modify((n) => Object.assign(n, reshapeCorner(n, { side: s }))) });
+    hint: c.wall ? "Фальш ЛДСП и планка из фасада с этой стороны, двери — с другой; петли под фальшпанель переезжают к кромке двери" : "Фальш из фасадного материала с этой стороны, дверь — с другой; петли под фальшпанель переезжают к кромке двери", run: () => ops.modify((n) => Object.assign(n, reshapeCorner(n, { side: s }))) });
   const size = (key: "door" | "filler", label: string): RadialItem => ({ id: "corner-" + key, label: label + "…", icon: Ruler, hint: `Сейчас ${c[key]} мм. Ширина модуля ${m.width} — вторая часть пересчитается`, disabled: !ops.ask,
     run: () => ops.ask?.(label + ", мм", c[key], (v) => (n) => { Object.assign(n, reshapeCorner(n, key === "door" ? { door: v } : { filler: v })); }) });
   return [{ id: "corner", label: "Угловой", icon: Columns2, hint: `Глухая часть ${c.side === "left" ? "слева" : "справа"}: дверь ${c.door}, фальш ${c.filler}`, children: [side("left"), side("right"), size("door", "Ширина двери"), size("filler", "Ширина фальша")] }];
