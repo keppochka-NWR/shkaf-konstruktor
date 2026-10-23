@@ -22,9 +22,9 @@ function DividerRow({ module: m, i, edit }: { module: Module; i: number; edit: (
   const byShelves = (lo: string, hi: string) => edit((n) => { const bs = dividerBounds(n, i), a = bs.find((b) => b.key === lo), z = bs.find((b) => b.key === hi); if (a && z) setDividerByShelves(n, sid, a.bound, z.bound); });
   return <div className="property-section" data-testid={`divider-${i}`} data-stages="filling bodies">
     <h3>{label}</h3>
-    <div className="kupe-chips" role="group" aria-label={label + ": высота"}>
-      <button type="button" aria-pressed={!info.partial} onClick={() => edit((n) => setPartialDivider(n, sid, null))}>Во всю высоту</button>
-      <button type="button" aria-pressed={info.partial} onClick={() => { if (!info.partial) edit((n) => setPartialDivider(n, sid, { from: info.bottom + Math.round((info.top - info.bottom) * 0.3), to: info.bottom + Math.round((info.top - info.bottom) * 0.75) })); }}>Частичная</button>
+    <div className="quick-actions" role="group" aria-label={label + ": высота"}>
+      <button type="button" className={info.partial ? "outline" : "primary"} aria-pressed={!info.partial} onClick={() => edit((n) => setPartialDivider(n, sid, null))}>Во всю высоту</button>
+      <button type="button" className={info.partial ? "primary" : "outline"} aria-pressed={info.partial} onClick={() => { if (!info.partial) edit((n) => setPartialDivider(n, sid, { from: info.bottom + Math.round((info.top - info.bottom) * 0.3), to: info.bottom + Math.round((info.top - info.bottom) * 0.75) })); }}>Частичная</button>
     </div>
     {info.partial && <>
       <div className="partial-divider-range">
