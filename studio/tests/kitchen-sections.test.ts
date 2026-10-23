@@ -70,7 +70,8 @@ test('F_PARTITION: перегородка секций кухни Базиса �
   assert.deepEqual(box(dv[0])[0],[516,532],'после первой секции 500');
   assert.deepEqual(validate(m),[]);
   const w=initialModule();w.sections=[w.sections[0],{...section(),weight:1}];
-  const wd=parts(w).find(p=>p.id.endsWith(':divider'))!;assert.ok(box(wd)[2][1]<w.depth,'шкаф: перегородка короче глубины, как раньше');
+  // шкаф студии: перегородка в размер корпуса (решение Макса 23.10.2026; было на 25 мм мельче), правило Базиса кухни его не трогает
+  const wd=parts(w).find(p=>p.id.endsWith(':divider'))!;assert.deepEqual(box(wd)[2],[0,w.depth],'шкаф: перегородка в размер корпуса');
 });
 
 test('F_PARTITION: крепёж концов по проекту — эксцентрик (бочонок в пласть в 34 от дна, шток в торец, D5 в дно) + шкант; конфирматы через крышу',()=>{

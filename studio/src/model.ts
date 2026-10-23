@@ -2,7 +2,7 @@ import { kupeParts, kupeErrors, type KupeSpec } from "./kupe";
 import { rawParts, rawErrors, parseRaw, parseItems as parseBazisItems, type RawSpec, type BazisNames } from "./rawModule";
 import { kitchenDrawerParts, kitchenDrawerErrors, parseKDrawers, type KDrawer } from "./kitchenDrawers";
 import { kitchenLiftParts, kitchenLiftErrors, kitchenLiftRowErrors, parseKitchenLift, type KitchenLift } from "./kitchenLift";
-import { kitchenExtraParts, kitchenErrors, sideRecessParts, applyFaceContours, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
+import { kitchenExtraParts, wallHangers, kitchenErrors, sideRecessParts, applyFaceContours, worktopParts, kitchenEdges, kitchenJointPoints, kitchenJointGrid, KITCHEN, fastenersMode, parseKitchenSpec, parseEdgeScheme, parseRails, type KitchenSpec, type WorktopSpec } from "./kitchen";
 import { facadeSideToFloor, droppedSide, finishFacadeSides } from './kitchenFacadeSides';
 import { applyAllegroParts } from './premialPullout';
 import { rafixGrid, rafixSide, rafixCount, rafixZs, parseKitchenRafix, parseGridRecord, rafixErrors } from "./kitchenRafix";
@@ -29,7 +29,8 @@ export const RULES = {
   plinth: 80,
   plinthInset: 2, // цоколь шкафа утоплен от переда на 2 мм (правило Макса 06.09.2026); фасады опускаются на цоколь
   facadeFloorGap: 30, // низ распашного фасада и нижнего накладного фасада ящика — 30 мм от пола, регулировка по цоколю
-  shelfDepthMinus: 25,
+  shelfDepthMinus: 25, // кухни и фальши у ящиков; шкафы — innerMinus (решение Макса 23.10.2026)
+  shelfRemovableMinus: 5, // съёмная полка шкафа на 5 мм меньше глубины корпуса (решение Макса 23.10.2026)
   shelfGap: 1,
   minW: 250,
   maxW: 1300, // ТЗ Макса 1200, но заказ 7212718 — шкаф и антресоль 1244; СТП 900 — предупреждение по логистике выше 900
@@ -280,6 +281,9 @@ export type Module = {
   aluDrawers?: true;
   /** Крыша из стекла вместо ЛДСП: id вставки из alu.ts (стекло, сатин, лакобель, зеркало), закалённое 4 мм с полировкой. */
   topGlass?: string;
+  /** Навесной шкаф (решение Макса 23.10.2026: подъём «От пола» > 0 у шкафа на цоколе — способ создать навесной): без цоколя и ножек,
+   *  на двух навесах ABS у верха боковин (как навесные кухни; смета — «Навес мебельный регулируемый» + заглушка). Без поля — как было. */
+  hanging?: true;
   /** Основание на ножках вместо цоколя (заказы цеха: ножки M6×18 или регулируемые 1033 h=100): боковины стоят на ножках. */
   feet?: { height: number };
   /** Дно / крыша: 'none' — без панели (открытый каркас на стяжках). По умолчанию панели есть. */
@@ -653,7 +657,7 @@ export function setModuleHandlePos(m:Module,pos:HandlePos|null):{done:number;ski
   if(!done)throw Error(handlePosIssue(m,ids[0],pos!)??'Расположение не подходит фасадам модуля.');
   return {done,skipped};
 }
-export function plinth(m:Module){return m.feet?0:(m.plinthHeight ?? RULES.plinth);}
+export function plinth(m:Module){return m.feet||m.hanging?0:(m.plinthHeight ?? RULES.plinth);}
 /** Кухня без опор и без цоколя в модуле (kitchen.plinth.off): дно поднято над низом боковин, цокольной детали нет (как в проекте Базиса). */
 export function kitchenNoPlinth(m:Module){return !m.feet&&!!m.kitchen?.plinth?.off;}
 /** Отступ фасадов от кромок корпуса (шкафы — RULES.faceGap 2; кухни Базиса цеха — 1,5). */
@@ -666,6 +670,16 @@ export function jointZs(m:Module,key:string,z0:number,z1:number):number[]|undefi
 export function baseLevel(m:Module){return m.feet?m.feet.height:plinth(m);}
 export function hasBottom(m:Module){return m.bottomType!=='none';}
 export function hasTop(m:Module){return m.topType!=='none';}
+/** Недобор глубины деталей внутри корпуса от задника до переда (решение Макса 23.10.2026): жёсткие полки, полка над ящиками, перегородки
+ *  и опоры частичной перегородки — в размер корпуса, как в Базисе (0; при вкладных фасадах — до фасада: толщина + зазор);
+ *  съёмные полки — на RULES.shelfRemovableMinus (5) меньше. Кухни — как было (RULES.shelfDepthMinus 25, свои поля из проекта Базиса).
+ *  Было −25 у всех: правило первой версии студии (не решение Макса). */
+export function innerMinus(m: Module, kind: "fixed" | "removable"): number {
+  if (m.kitchen) return RULES.shelfDepthMinus;
+  // вкладные фасады или вкладная планка под крышей (top-strip внутри проёма) — детали до них, не насквозь
+  const inset = m.doorMount === "inset" && (m.doors || !!m.topStrip) ? (m.facadeT ?? RULES.panel) + fe(m) : 0;
+  return inset + (kind === "removable" ? RULES.shelfRemovableMinus : 0);
+}
 /** Полки финальных заказов бывают на всю глубину. Вкладная дверь требует места перед полкой. */
 export function shelfMaxDepth(m:Module){return m.depth-rearClear(m)-(m.doors&&m.doorMount==='inset'?RULES.panel+fe(m):0);}
 /** Верхняя плоскость дна (или низ проёма без дна) и нижняя плоскость крыши (или верх боковин без крыши). */
@@ -1151,7 +1165,7 @@ export function parts(m: Module): Part[] {
     else add('back',groove?'Задняя стенка · в паз':'Задняя стенка · набивная',[backW,backH,RULES.back],[m.width/2,backCY??(groove||m.raisedSides?(bottom+m.height)/2:kb?(backFrom+kb.bottom+m.height-kb.top)/2:(backFrom+m.height)/2),backZ0+RULES.back/2],backH,backW,RULES.back,'body',undefined,'hdf');
   }
   if(m.sectionLayout)for(const panel of resolveLayout(m).panels){
-    const depth=d-rear-RULES.shelfDepthMinus;
+    const depth=d-rear-innerMinus(m,'fixed');
     add('layout:'+panel.id,panel.axis==='x'?'Перегородка ограниченной высоты':'Общая разделительная полка',[panel.width,panel.height,depth],[panel.x+panel.width/2,panel.bottom+panel.height/2,rear+depth/2],panel.axis==='x'?panel.height:panel.width,depth,t,'body');
     out.at(-1)!.grainAxis=panel.axis==='x'?1:0;
   }
@@ -1159,10 +1173,12 @@ export function parts(m: Module): Part[] {
   allBoxes.forEach((b, i) => {
     const s = m.sections[i],
       h = b.top - b.bottom,
-      sd = d - rear - RULES.shelfDepthMinus;
+      sd = d - rear - RULES.shelfDepthMinus, // фальши у ящиков — как было
+      // решение Макса 23.10.2026: жёсткие полки, полка над ящиками, перегородки и опоры — в размер корпуса, съёмные полки — на 5 мм меньше
+      sdF = d - rear - innerMinus(m, "fixed"), sdR = d - rear - innerMinus(m, "removable");
     if (i > 0 && !m.sectionLayout) {
       const kz = kitchenDividerZ(m); // кухня Базиса (пакет 5): глубина перегородки по проекту — от задней кромки боковин до лица
-      const dd = kz ? kz[1] - kz[0] : depthAt(m, b.x - t / 2) - rear - RULES.shelfDepthMinus, dz0 = kz ? kz[0] : rear;
+      const dd = kz ? kz[1] - kz[0] : depthAt(m, b.x - t / 2) - rear - innerMinus(m, "fixed"), dz0 = kz ? kz[0] : rear;
       // частичная перегородка (решение Макса 23.10.2026): фактическая высота from…to, опоры — сквозные горизонтали под/над ней
       const sp = dividerSpan(m, i, allBoxes), y0 = sp ? sp.from : b.bottom, dh = sp ? sp.to - sp.from : h;
       add(
@@ -1178,8 +1194,8 @@ export function parts(m: Module): Part[] {
       );
       if (sp) {
         const L = allBoxes[i - 1], x0 = L.x, x1 = b.x + b.width;
-        if (sp.under) add(`${s.id}:divider:under`, "Горизонталь под перегородкой · сквозная", [x1 - x0, t, sd], [(x0 + x1) / 2, sp.from - t / 2, rear + sd / 2], x1 - x0, sd, t, "body", s.id);
-        if (sp.over) add(`${s.id}:divider:over`, "Горизонталь над перегородкой · сквозная", [x1 - x0, t, sd], [(x0 + x1) / 2, sp.to + t / 2, rear + sd / 2], x1 - x0, sd, t, "body", s.id);
+        if (sp.under) add(`${s.id}:divider:under`, "Горизонталь под перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.from - t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
+        if (sp.over) add(`${s.id}:divider:over`, "Горизонталь над перегородкой · сквозная", [x1 - x0, t, sdF], [(x0 + x1) / 2, sp.to + t / 2, rear + sdF / 2], x1 - x0, sdF, t, "body", s.id);
       }
     }
     // Подсветка по деталям (20.10.2026): старый флаг standLight = обе стойки каждой секции; новый — своя сторона секции.
@@ -1204,7 +1220,7 @@ export function parts(m: Module): Part[] {
       }
     s.shelves.forEach((f, j) => {
       const own=m.kitchen?s.shelfAt?.[j]:undefined; // своя глубина полки из Базиса — только у кухни
-      const shelfDepth=own?.depth??s.shelfDepth??sd;
+      const shelfDepth=own?.depth??s.shelfDepth??(s.fixed?.includes(j)?sdF:sdR);
       const glass=s.glassShelves?.includes(j),st=glass?(m.glassT??6):t;
       // над/под частичной перегородкой — общий проём двух секций: полка сквозная, во всю ширину пары (решение Макса 23.10.2026);
       // та же полка, заданная в обеих секциях пары (на той же высоте), — одна деталь (левой секции)
@@ -1223,7 +1239,7 @@ export function parts(m: Module): Part[] {
         s.id,
         glass?'glass':'board',
       );
-      if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, sx0, sx0 + sw, rear, RULES.shelfDepthMinus);
+      if(s.shelfDepth===undefined&&!own)planTaper(out.at(-1)!, sx0, sx0 + sw, rear, innerMinus(m, s.fixed?.includes(j) ? "fixed" : "removable"));
       // Подсветка в полках: LED-профиль снизу у передней кромки полки (отступ 20 мм), по длине полки минус 20 с краёв. Только при флаге секции.
       if(s.shelfLight||s.shelfLights?.includes(j)){const len=sw-40,front=rear+(own?.rear??m.shelfRear??0)+shelfDepth,[lw,lt]=ledSize(m,s,'shelf:'+j);
         add(`${s.id}:shelf-light:${j}`,'Подсветка LED в полке',[len,lt,lw],[sx0+sw/2,b.bottom+f*h-st/2-lt/2,front-20-lw/2],len,lw,lt,'light',s.id,'metal');}
@@ -1245,7 +1261,7 @@ export function parts(m: Module): Part[] {
         inserts.forEach(([y0,y1,z1],k)=>add(`${s.id}:filler:${side}:${layer?'b':'a'}:r${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}, вставка за петлёй ${k+1}`,[t,y1-y0,z1-rear],[x,(y0+y1)/2,(rear+z1)/2],y1-y0,z1-rear,t,'body',s.id));
       }
     }else if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
-    if(hasDrawerCap(m,s,b)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sd],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sd/2],b.width,sd,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,RULES.shelfDepthMinus);}
+    if(hasDrawerCap(m,s,b)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sdF],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sdF/2],b.width,sdF,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,innerMinus(m,'fixed'));}
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
       const cfg = drawerConfig(m, s, j),
@@ -1788,6 +1804,7 @@ export function parts(m: Module): Part[] {
     }
   }
   hardwareParts(m,out);
+  if(m.hanging&&!m.kitchen&&!m.feet)wallHangers(m,out); // навесной шкаф (поднят от пола, решение Макса 23.10.2026) — на навесах, как навесные кухни
   kitchenExtraParts(m,out);
   kitchenDrawerParts(m,out,fe(m),m.facadeT??RULES.panel,m.faceAir??2);
   kitchenEdges(m,out);
@@ -2629,6 +2646,7 @@ export function parseModule(input: unknown): Module {
     ...(x.grooveInset===undefined?{}:{grooveInset:x.grooveInset as number}),
     ...(x.grooveDepth===undefined?{}:{grooveDepth:x.grooveDepth as number}),
     ...(x.plinthHeight===undefined?{}:{plinthHeight:x.plinthHeight as number}),
+    ...(x.hanging===true?{hanging:true as const}:{}),
     ...(x.hingeSide===undefined?{}:{hingeSide:x.hingeSide as Module["hingeSide"]}),
     ...(x.standLight===undefined?{}:{standLight:x.standLight as boolean}),
     ...(x.handleId===undefined?{}:{handleId:x.handleId as string}),

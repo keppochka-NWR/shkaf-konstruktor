@@ -2,7 +2,7 @@
 // Только параметры существующих правил шкафов студии (model.ts): габарит, цоколь/ножки, задник, секции по перегородкам, полки
 // (жёсткие — во всю ширину проёма, съёмные — с зазорами), штанга, ящики (число), распашные фасады, стол. Правила шкафов студии
 // здесь НЕ меняются: чего текущие правила не умеют — в unsupported (это запись в backlog-wardrobes.md, а не правка правил).
-import { initialModule, section, deskModule, RULES, type Module, type Section } from "../../src/model";
+import { initialModule, section, deskModule, rearClear, innerMinus, RULES, type Module, type Section } from "../../src/model";
 import type { RefModule, RefPanel, RefHardware } from "../kitchen/compare";
 import type { PlacedModule } from "../../src/project";
 
@@ -138,10 +138,14 @@ export function wardrobeFromEtalon(ref: WRefModule): WardrobeRecognition {
     s.shelves = sh.map((p) => Math.round((((p.box[1] + p.box[4]) / 2 - inner0) / h) * 1e4) / 1e4);
     const fixed = sh.map((p, j) => (W(p) >= pw(p) - 0.5 ? j : -1)).filter((j) => j >= 0);
     if (fixed.length) s.fixed = fixed;
-    // глубина полок секции — поле shelfDepth (у студии одна на все полки секции, жёсткие и съёмные)
-    const deep = [...new Set(sh.map((p) => r1(D(p))))];
-    if (deep.length === 1) s.shelfDepth = deep[0];
-    else if (deep.length > 1) unsupported.push("W_SHELF_DEPTHS: полки секции разной глубины");
+    // глубина полок: правило студии (решение Макса 23.10.2026) — жёсткие в размер корпуса, съёмные на 5 мм меньше; иначе поле shelfDepth
+    // (одно на все полки секции, жёсткие и съёмные)
+    const full = depth - rearClear(m) - innerMinus(m, "fixed"), byRule = (j: number) => (fixed.includes(j) ? full : full - RULES.shelfRemovableMinus);
+    if (sh.some((p, j) => Math.abs(D(p) - byRule(j)) > 0.5)) {
+      const deep = [...new Set(sh.map((p) => r1(D(p))))];
+      if (deep.length === 1) s.shelfDepth = deep[0];
+      else if (deep.length > 1) unsupported.push("W_SHELF_DEPTHS: полки секции разной глубины");
+    }
     const rods = ref.hardware.filter((hw) => isRod(hw) && hw.pos[0] >= sx0 - 2 && hw.pos[0] <= sx1 + 2);
     if (rods.length) { s.rod = true; s.rodAt = Math.round(((rods[0].pos[1] - inner0) / h) * 1e4) / 1e4; }
     const drw = new Set(drawers.filter(inSec).map((p) => p.grp ?? "")).size;

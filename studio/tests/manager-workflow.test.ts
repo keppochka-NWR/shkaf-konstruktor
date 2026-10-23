@@ -61,7 +61,7 @@ test('shallow shelf depth affects geometry and cutting dimensions but not drawer
   const m=initialModule(),s=m.sections[0];s.shelfDepth=300;
   const geometry=parts(m),shelf=geometry.find(p=>p.id===s.id+':shelf:0')!,cap=geometry.find(p=>p.id===s.id+':drawer-cap')!;
   assert.equal(shelf.size[2],300);assert.equal(shelf.width,300);
-  assert.equal(cap.width,m.depth-rearClear(m)-RULES.shelfDepthMinus);
+  assert.equal(cap.width,m.depth-rearClear(m)); // полка над ящиками — жёсткая, в размер корпуса (решение Макса 23.10.2026)
   assert.equal(parseProject(JSON.parse(JSON.stringify(newProject(m)))).modules[0].module.sections[0].shelfDepth,300);
   assert.deepEqual(validate(m),[]);
   m.depth=250;assert.ok(validate(m).some(e=>e.includes('глубина полок')));

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parts, initialModule, section, validate, parseModule, fastenerCounts, plinth, legCount, distribute, type Module, type Part } from "../src/model";
+import { parts, initialModule, section, validate, parseModule, fastenerCounts, plinth, legCount, distribute, innerMinus, RULES, type Module, type Part } from "../src/model";
 import { setPartialDivider, setDividerByShelves, dividerBounds, moveDividerEnd } from "../src/partialDivider";
 import { newProject } from "../src/project";
-import { mirrorModule, setWallDistance } from "../src/operations";
+import { mirrorModule, setWallDistance, addUpperModule } from "../src/operations";
 import { nest } from "../src/exports";
 import { estimate } from "../src/pricing";
 import { partPenetration, allowedContact } from "../src/collisions";
@@ -159,6 +159,10 @@ test("сверка с Базисом: частичная перегородка 
   assert.equal(ours.length, 7, ours.map((p) => p.studio.name).join(", ")); // перегородка, 2 опоры, 4 полки в половинах
   // faces: [x0, y0, z0, x1, y1, z1] — X и Y до 0,1 мм
   for (const p of ours) assert.ok([0, 1, 3, 4].every((k) => p.faces[k] <= 0.11), `${p.studio.name}: ${p.faces.join(" ")}`);
+  // глубина (решение Макса 23.10.2026): перегородка и опора под ней — во всю глубину, как в Базисе; опора над ней у Базиса 398 (по 1 мм),
+  // съёмные полки у Базиса 398, у студии 395 (правило −5)
+  for (const p of ours.filter((q) => /^Перегородка|под перегородкой/.test(q.studio.name))) assert.ok(p.faces.every((v) => v <= 0.11), `${p.studio.name}: ${p.faces.join(" ")}`);
+  assert.ok(ours.every((p) => p.faces[2] <= 1.01 && p.faces[5] <= 4.01), ours.map((p) => p.studio.name + " " + p.faces.join(" ")).join(" | "));
   assert.ok(!c.missing.some((x) => /\|y\|/.test(x.cls)), "все горизонтали Базиса нашлись");
 });
 
@@ -194,14 +198,67 @@ test("отражение корпуса: частичная перегородк
   assert.ok(Number.isFinite(e.knownCost) && e.knownCost > 0);
 });
 
-test("навесной: «От пола» больше 0 — цоколя нет (дно внизу корпуса); ножки и кухни не трогаем", () => {
-  const p = newProject(wardrobe({ height: 700 }));
-  const r = setWallDistance(p, p.modules[0].id, "y", 1200);
-  assert.equal(plinth(r.modules[0].module), 0);
-  assert.equal(parts(r.modules[0].module).filter((x) => x.id === "plinth").length, 0);
-  assert.equal(plinth(setWallDistance(p, p.modules[0].id, "y", 0).modules[0].module), 80, "на полу — цоколь как был");
+test("навесной (решение Макса 23.10): «От пола» > 0 — сразу навесной: без цоколя, на двух навесах, навесы и заглушки в смете", () => {
+  const p = newProject(wardrobe({ height: 700, doors: true }));
+  const r = setWallDistance(p, p.modules[0].id, "y", 1200), m = r.modules[0].module;
+  assert.equal(m.hanging, true);
+  assert.equal(plinth(m), 0);
+  const ps = parts(m);
+  assert.equal(ps.filter((x) => x.id === "plinth").length, 0);
+  assert.deepEqual(ps.filter((x) => /^kitchen-hanger(-cap)?:/.test(x.id)).map((x) => x.id).sort(), ["kitchen-hanger-cap:left", "kitchen-hanger-cap:right", "kitchen-hanger:left", "kitchen-hanger:right"]);
+  assert.deepEqual(hits(m), []);
+  const lines = estimate(r).lines;
+  assert.equal(lines.find((l) => l.id === "kitchen-hanger")?.quantity, 2);
+  assert.equal(lines.find((l) => l.id === "kitchen-hanger-cap")?.quantity, 2);
+  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).hanging, true);
+  // опустили на пол — снова стоит на полу (без цоколя), навесов нет
+  const down = setWallDistance(r, r.modules[0].id, "y", 0).modules[0].module;
+  assert.equal(down.hanging, undefined);
+  assert.equal(parts(down).filter((x) => x.id.startsWith("kitchen-hanger")).length, 0);
+  // на ножках — не навесной
   const f = newProject({ ...wardrobe({ height: 700 }), feet: { height: 100 } });
-  assert.deepEqual(setWallDistance(f, f.modules[0].id, "y", 1200).modules[0].module.feet, { height: 100 });
+  const fr = setWallDistance(f, f.modules[0].id, "y", 1200).modules[0].module;
+  assert.deepEqual([fr.feet, fr.hanging], [{ height: 100 }, undefined]);
+});
+
+test("существующие навесные и антресоли не меняются: антресоль на нижнем корпусе — не навесная, старый корпус над полом — без навесов", () => {
+  const p = newProject(wardrobe({ height: 1800 }));
+  const up = addUpperModule(p, p.modules[0].id), ant = up.modules[1];
+  assert.equal(ant.module.hanging, undefined);
+  assert.equal(parts(ant.module).filter((x) => x.id.startsWith("kitchen-hanger")).length, 0);
+  // «От пола» антресоли, стоящей на нижнем корпусе, — та же высота: она стоит на корпусе, навесной не становится
+  const same = setWallDistance(up, ant.id, "y", ant.y ?? 0).modules[1].module;
+  assert.equal(same.hanging, undefined);
+  // старый проект: корпус над полом без поля hanging — детали как были (без навесов)
+  const old = wardrobe({ height: 700, plinthHeight: 0 });
+  assert.equal(parts(old).filter((x) => x.id.startsWith("kitchen-hanger")).length, 0);
+});
+
+test("глубина (решение Макса 23.10): съёмные полки — корпус − 5, жёсткие, полка над ящиками, перегородки и опоры — в размер корпуса", () => {
+  const m = wardrobe();
+  const [L, R] = m.sections, at = (y: number) => (y - 96) / 2188;
+  L.shelves = [at(400), at(1200)]; L.fixed = [1]; R.drawers = 2;
+  setPartialDivider(m, R.id, { from: 96, to: 1652 });
+  const ps = parts(m), z = (id: RegExp) => ps.filter((p) => id.test(p.id)).map((p) => [box(p)[2], box(p)[5]]);
+  assert.deepEqual(z(new RegExp(`^${L.id}:shelf:0$`)), [[0, 595]], "съёмная — 600 − 5");
+  assert.deepEqual(z(new RegExp(`^${L.id}:shelf:1$`)), [[0, 600]], "жёсткая — 600");
+  assert.deepEqual(z(/:divider$/), [[0, 600]]);
+  assert.deepEqual(z(/:divider:over$/), [[0, 600]]);
+  assert.deepEqual(z(/:drawer-cap$/), [[0, 600]]);
+  assert.deepEqual(hits(m), []);
+  // ХДФ в паз: от задника (лицевая плоскость паза + 1) до переда
+  const g = wardrobe({ backType: "groove" });
+  g.sections[0].shelves = [0.5];
+  const gs = parts(g).find((p) => p.id.endsWith(":shelf:0"))!, gd = parts(g).find((p) => p.id.endsWith(":divider"))!;
+  assert.deepEqual([box(gd)[2], box(gd)[5], box(gs)[5]], [20, 600, 595]);
+  // вкладные фасады: перегородка и жёсткие — до фасада (16 + зазор 2), съёмные — ещё на 5 меньше
+  const inset = wardrobe({ doors: true, doorMount: "inset" });
+  inset.sections[0].shelves = [0.5];
+  const ip = parts(inset);
+  assert.deepEqual([box(ip.find((p) => p.id.endsWith(":divider"))!)[5], box(ip.find((p) => p.id.endsWith(":shelf:0"))!)[5]], [582, 577]);
+  assert.deepEqual(hits(inset), []);
+  // кухни — как было
+  assert.equal(innerMinus({ ...m, kitchen: { role: "base" } } as Module, "removable"), RULES.shelfDepthMinus);
 });
 
 test("без цоколя: дно на полу, боковины до пола, нет цоколя и опор", () => {

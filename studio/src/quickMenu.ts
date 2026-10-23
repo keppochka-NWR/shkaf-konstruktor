@@ -98,7 +98,7 @@ export function baseItem(m: Module, ops: QuickMenuOps): RadialItem {
   // «Без цоколя» (решение Макса 23.10.2026): дно на полу, боковины до пола, без цоколя и опор — как у таких шкафов в Базисе
   const none: RadialItem = { id: "q-plinth-0", label: "Без цоколя", icon: Square, active: p === 0, hint: ops.elevated ? "Навесной корпус: низ корпуса — дно, цоколя и ножек нет" : "Дно на полу, боковины до пола; цоколя и опор нет", run: () => ops.modify((n) => { delete n.feet; n.plinthHeight = 0; }) };
   // навесной корпус (низ выше пола, замер удобства 22.10): цоколь и ножки не предлагаем
-  if (ops.elevated && !m.feet) return { id: "q-base", label: "Цоколь / ножки", icon: PanelBottom, hint: p ? `Навесной корпус на цоколе ${p} мм — уберите цоколь` : "Навесной корпус: цоколя и ножек нет", disabled: p === 0, children: [none] };
+  if (ops.elevated && !m.feet) return { id: "q-base", label: "Цоколь / ножки", icon: PanelBottom, hint: m.hanging ? "Навесной (поднят от пола): на навесах, цоколя и ножек нет" : p ? `Корпус над полом на цоколе ${p} мм — уберите цоколь` : "Корпус над полом: цоколя и ножек нет", disabled: p === 0, children: [none] };
   return { id: "q-base", label: "Цоколь / ножки", icon: PanelBottom, hint: m.feet ? `Сейчас ножки ${feet} мм` : p ? `Сейчас цоколь ${p} мм` : "Сейчас без цоколя: дно на полу", children: [
     none, plinthItem(60), plinthItem(80), plinthItem(100), plinthItem(120), feetItem(18, "Ножки 18"), feetItem(100, "Ножки 100"),
   ] };
