@@ -252,6 +252,8 @@ function check(purchase: Set<number>, retail: Set<number>): string[] {
 function main() {
   if (!existsSync(join(SRC, "index.html")) || !existsSync(join(SRC, "js", "kupe.js"))) { console.error("нет источника: " + SRC); return 2; }
   if (!existsSync(join(OUT, "index.html"))) { console.error("нет web/calc: " + OUT); return 2; }
+  // ширина полотна с нахлёстом — общий код со студией, живёт только в репозитории (bake-calc.py его стирает)
+  if (!existsSync(join(OUT, "js", "kupe-door.js"))) { console.error("нет web/calc/js/kupe-door.js — восстановить: git checkout -- web/calc/js/kupe-door.js"); return 2; }
   try {
     const kupeSrc = read(join(SRC, "js", "kupe.js"));
     bakeFasad();
