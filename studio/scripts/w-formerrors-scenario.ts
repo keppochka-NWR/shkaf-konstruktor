@@ -101,6 +101,19 @@ if (await panelWidth.count() && await panelWidth.first().isVisible()) {
   await page.locator(".number-field.has-error").first().scrollIntoViewIfNeeded().catch(() => undefined);
   await shot("05-panel-width-2600");
 }
+// кухонная палитра: «Длина стены» 7000 — ошибка у поля после выхода из него, кнопка «Длина 6000»
+const kitchen = { shown: false, fixed: "" };
+try {
+  await page.keyboard.press("Escape");
+  await click(page.getByRole("tab", { name: "Кухонные модули", exact: true }));
+  await openDetails(page.locator("details.catalog-presets > summary"));
+  const len = page.getByLabel("Длина стены кухни", { exact: true });
+  await len.scrollIntoViewIfNeeded(); await len.click({ clickCount: 3 }); await page.keyboard.type("7000"); await page.keyboard.press("Tab"); await page.waitForTimeout(400);
+  const box = page.locator('.palette-issues[aria-label="Ошибки прямой кухни"]');
+  kitchen.shown = (await box.count()) > 0;
+  if (kitchen.shown) { await box.scrollIntoViewIfNeeded(); await shot("06-kitchen-length-7000"); await click(box.getByRole("button", { name: "Длина 6000", exact: true })); await page.waitForTimeout(300); kitchen.fixed = await len.inputValue(); }
+} catch (e) { kitchen.fixed = "сценарий: " + (e as Error).message.slice(0, 80); }
+Object.assign(stats, { kitchen });
 writeFileSync(`${out}/${tag}-stats.json`, JSON.stringify({ ...stats, pageErrors: errors }, null, 2));
 console.log(JSON.stringify({ tag, ...stats, pageErrors: errors.length }, null, 1));
 await browser.close();
