@@ -99,6 +99,12 @@ try {
     check("GRACE: подвесная — без нижней направляющей, с комплектом фурнитуры", /подвесная/.test(g) && !/Направляющая нижняя/.test(g) && /Комплект подвесной фурнитуры GRACE/.test(g), g.slice(0, 220));
     await page.mouse.move(1200, 400); await page.mouse.wheel(0, -4000); // правая колонка — к итогу и спецификации
     await shot("c06-grace-1600x2600");
+    // ── 4. фасады ALU не задеты: свой каталог стёкол (FASAD_FILLINGS, прайс прежний)
+    await page.locator("#navTabs a", { hasText: "Фасады ALU" }).click(); await page.waitForTimeout(800);
+    const alu = await page.locator("#fasadDefaultFillSel option").allTextContents();
+    const aluBase = await page.evaluate("FASAD_FILLINGS.filter(function (f) { return FASAD_FILL_GROUPS.indexOf(f.g) !== -1; }).length");
+    check("вкладка «Фасады ALU»: стёкла из своего каталога", alu.length > 0 && alu.length === aluBase, `вариантов ${alu.length}, в каталоге фасадов ${aluBase}`);
+    await shot("c07-fasad-alu");
   }
   check("без ошибок страницы и окон", errors.length === 0 && dialogs.length === 0, [...errors, ...dialogs].slice(0, 3).join(" | "));
 } catch (e) {
