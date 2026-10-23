@@ -1813,7 +1813,7 @@ function renderResults(d) {
         // Клиент
         '<div class="field">' +
           '<label class="lbl" for="kpClient">Клиент / организация</label>' +
-          '<input class="kp-client-input" id="kpClient" type="text" placeholder="Иванов Иван Иванович">' +
+          '<input class="kp-client-input" id="kpClient" type="text" placeholder="ФИО или организация">' +
         '</div>' +
         // Телефон заказчика
         '<div class="field">' +

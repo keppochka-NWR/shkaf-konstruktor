@@ -183,6 +183,8 @@ function bakeKupeJs(src: string): string {
   t = must(t, "      '<td class=\"r\">' + fmt(r.c) + '</td>' +\n", "      '<td class=\"r\">' + fmt(profR[i]) + '</td>' +\n", "КП профиль: строка");
   t = must(t, "  const itemRowsHTML = itemRows.map((r, i) =>\n", "  const itemR = roundParts(itemRows.map(r => r.val), d.total);\n  const itemRowsHTML = itemRows.map((r, i) =>\n", "КП состав: roundParts");
   t = must(t, "      '<td class=\"r\">' + fmt(r.val) + '</td>' +\n", "      '<td class=\"r\">' + fmt(itemR[i]) + '</td>' +\n", "КП состав: строка");
+  // подсказка поля клиента в КП — без ФИО (privacy-scan публикации сверяет имена с базой клиентов)
+  t = must(t, 'placeholder="Иванов Иван Иванович"', 'placeholder="ФИО или организация"', "подсказка поля клиента");
   // 5. служебный комментарий шапки
   t = t.replace("// Depends on: utils.js, store.js, router.js, shared-kp.js,\n//             data/fillings.js, data/profiles.js\n",
     "// Depends on: utils.js, store.js, router.js, shared-kp.js, kupe-door.js,\n//             data/fillings.js, data/profiles.js, data/lamarty.js, data/profile-sections.js\n// Копия калькулятора купе v2.11 для сайта — studio/scripts/bake-calc-kupe.ts.\n");
