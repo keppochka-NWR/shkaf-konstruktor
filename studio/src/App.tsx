@@ -46,7 +46,8 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "re
 import {historyShortcut,editsText,viewShortcut} from './historyShortcuts';
 import {editDrawerConfig} from './drawerEditing';
 import {maxEvenShelves,setShelfCount} from './shelfCount';
-import {explainErrors,errorPlace,type ErrorDetail} from './errorDetails';
+import {explainErrors,errorPlace,splitAction,type ErrorDetail} from './errorDetails';
+import {fieldReasons} from './paletteCheck';
 import {
   Box,
   Undo2,
@@ -146,8 +147,11 @@ function NumberField({
   onSelect,
   selected,
   unit="мм",
+  reasons,
 }: {
   unit?:string;
+  /** п.3 w-formerrors (23.10): все причины отказа поля — кроме предела, что ещё не выполняется при этом значении (validate all). */
+  reasons?:(n:number)=>{list:string[];moduleId?:string;moduleName?:string};
   onSelect?:()=>void;
   selected?:boolean;
   label: string;
@@ -157,15 +161,15 @@ function NumberField({
   onChange: (n: number) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
-  const [fieldError,setFieldError]=useState('');
+  const [fieldError,setFieldError]=useState(''),[fieldReasons,setFieldReasons]=useState<string[]>([]);
   const hintId=useId();
   const cancelled = useRef(false);
-  useEffect(() => {setDraft(String(value));setFieldError('');}, [value]);
+  useEffect(() => {setDraft(String(value));setFieldError('');setFieldReasons([]);}, [value]);
   const apply = () => {
     if (cancelled.current) {
       cancelled.current = false;
       setDraft(String(value));
-      setFieldError('');
+      setFieldError('');setFieldReasons([]);
       return;
     }
     const n = Number(draft);
@@ -173,10 +177,15 @@ function NumberField({
       setDraft(String(value));
       setFieldError(`Введите число от ${min} до ${max} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`);
       // x2 (замер кухонь 22.10): отказ поля виден и в общем сообщении, а не только мелкой строкой под полем (950 молча оставалось 557)
-      if(draft.trim()!==''&&Number.isFinite(n))window.dispatchEvent(new CustomEvent('studio-error',{detail:`«${label}» ${n} ${unit}: допустимо от ${min} до ${max} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`}));
+      const text=`«${label}» ${n} ${unit}: допустимо от ${min} до ${max} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`;
+      // п.3 w-formerrors: другие причины отказа (не только предел) — списком под полем и в общем сообщении
+      let more:{list:string[];moduleId?:string;moduleName?:string}={list:[]};
+      if(reasons&&draft.trim()!==''&&Number.isFinite(n)){try{more=reasons(n);}catch{more={list:[]};}}
+      setFieldReasons(more.list);
+      if(draft.trim()!==''&&Number.isFinite(n))window.dispatchEvent(new CustomEvent('studio-error',{detail:more.list.length?{text,list:more.list,moduleId:more.moduleId,moduleName:more.moduleName,problem:`«${label}» ${n} ${unit}: ${n>max?`больше ${max}`:`меньше ${min}`}`,action:n>max?`Максимум ${max} ${unit}.`:`Минимум ${min} ${unit}.`}:text}));
       return;
     }
-    setFieldError('');
+    setFieldError('');setFieldReasons([]);
     if (n === value) {
       setDraft(String(value));
       return;
@@ -198,7 +207,7 @@ function NumberField({
           max={max}
           step="1"
           value={draft}
-          onChange={(e) => {setDraft(e.target.value);setFieldError('');}}
+          onChange={(e) => {setDraft(e.target.value);setFieldError('');setFieldReasons([]);}}
           onBlur={apply}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
@@ -213,6 +222,7 @@ function NumberField({
         <small>{unit}</small>
       </div>
       <span id={hintId} className={fieldError?'number-feedback':'number-range'} role={fieldError?'alert':undefined}>{fieldError||`От ${min} до ${max} ${unit} · Enter — применить, Esc — отменить`}</span>
+      {fieldError&&fieldReasons.length>0&&<ul className="number-reasons" aria-label={`Ещё причины: ${label}`}>{fieldReasons.map((r,i)=><li key={i}>{r}</li>)}</ul>}
     </Wrapper>
   );
 }
@@ -576,7 +586,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   /** «Показать в 3D» детали (карты раскроя, «не помещается в лист»): выбрать корпус, секцию и деталь, открыть наполнение. */
   function inspectPart(mid:string,pid:string){const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}
   // u1 (замер удобства 22.10): действие кругового меню бросило исключение — сообщение на экране, а не только в консоли
-  useEffect(()=>{const on=(e:Event)=>setError(String((e as CustomEvent).detail||'Действие не выполнено.'));window.addEventListener('studio-error',on);return()=>window.removeEventListener('studio-error',on);},[]);
+  useEffect(()=>{const on=(e:Event)=>{const d=(e as CustomEvent).detail as unknown;
+      // п.3 w-formerrors (23.10): отказ поля по нескольким причинам — все списком (предел поля первым, затем остальное с «Что сделать»)
+      if(d&&typeof d==='object'&&'text' in d&&Array.isArray((d as {list?:unknown}).list)){const x=d as {text:string;list:string[];moduleId?:string;moduleName?:string;problem?:string;action?:string};
+        const rest=x.list.map(text=>{const sec=text.match(/^Секция (\d+): /),body=sec?text.slice(sec[0].length):text,{problem,action}=splitAction(body);return {text,problem:problem.replace(/^./,c=>c.toUpperCase()),action:/Ctrl\+Z/.test(action)?'Измените значение так, чтобы правило выполнялось.':action,moduleId:x.moduleId,moduleName:x.moduleName,sectionNo:sec?Number(sec[1]):undefined};});
+        setErrorList([{text:x.text,problem:x.problem??x.text,action:x.action??'',moduleId:x.moduleId,moduleName:x.moduleName},...rest]);setError(x.text);return;}
+      setError(String(d||'Действие не выполнено.'));};window.addEventListener('studio-error',on);return()=>window.removeEventListener('studio-error',on);},[]);
   /** «Показать» у ошибки: выбрать корпус, секцию и деталь, приблизить. */
   function showError(d:ErrorDetail){
     const a=project.modules.find(x=>x.id===d.moduleId);if(!a)return;
@@ -1583,6 +1598,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   value={m.width}
                   min={RULES.minW}
                   max={RULES.maxW}
+                  reasons={v=>({list:fieldReasons(m,'width',v),moduleId:placed.id,moduleName:m.name})}
                   onChange={(v) => modify((n) => (n.width = v))}
                 />
                 <NumberField
@@ -1590,6 +1606,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   value={m.height}
                   min={RULES.minH}
                   max={maxHeightOf(m)}
+                  reasons={v=>({list:fieldReasons(m,'height',v),moduleId:placed.id,moduleName:m.name})}
                   onChange={(v) => modify((n) => (n.height = v))}
                 />
                 <NumberField
@@ -1597,6 +1614,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   value={m.depth}
                   min={RULES.minD}
                   max={RULES.maxD}
+                  reasons={v=>({list:fieldReasons(m,'depth',v),moduleId:placed.id,moduleName:m.name})}
                   onChange={(v) => modify((n) => (n.depth = v))}
                 />
                 <p className="field-note">

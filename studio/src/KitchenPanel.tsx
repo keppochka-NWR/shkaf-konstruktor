@@ -29,6 +29,7 @@ import { AluPicker, AluDrawersCheck } from "./AluPicker";
 import { ALU_EXTRAS } from "./alu";
 import { facadeKind, changeFacadeKind, type FacadeKind } from "./facadeAppearance";
 import { KITCHEN_ITEMS, kitchenItemOf, rebuildKitchen, setLegHeight, setWallFloor, wallRow, wallRowFloor, legModules, legsFromBazis, legsByRule, legsBazisNote, addHinge, removeHinge, type KitchenItem } from "./kitchenProject";
+import { fieldReasons } from "./paletteCheck";
 import "./kitchen.css";
 
 type Rail = NonNullable<Module["rails"]>[number];
@@ -36,27 +37,34 @@ const fmt = (v: number) => String(Math.round(v * 10) / 10);
 const ROLE: Record<string, string> = { base: "Нижний модуль", wall: "Навесной модуль", tall: "Пенал", antresol: "Антресоль" };
 
 /** Числовое поле как в студии (номер, единица, подсказка диапазона, ошибка); принимает дробные (зазоры 1,5). */
-function Num({ label, value, min, max, step = 1, unit = "мм", change, note, mixed }: { label: string; value: number; min: number; max: number; step?: number; unit?: string; change: (v: number) => boolean | void; note?: string;
+function Num({ label, value, min, max, step = 1, unit = "мм", change, note, mixed, reasons }: { label: string; value: number; min: number; max: number; step?: number; unit?: string; change: (v: number) => boolean | void; note?: string;
+  /** п.3 w-formerrors (23.10): другие причины отказа поля сверх предела (validate all) — списком под полем и в общем сообщении */
+  reasons?: (n: number) => { list: string[]; moduleId?: string; moduleName?: string };
   /** K7: значения у группы разные — поле пустое с этой подсказкой, любое введённое число применяется ко всей группе */
   mixed?: string }) {
   const shown = mixed ? "" : fmt(value);
-  const [draft, setDraft] = useState(shown), [error, setError] = useState("");
-  useEffect(() => { setDraft(shown); setError(""); }, [value, mixed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [draft, setDraft] = useState(shown), [error, setError] = useState(""), [more, setReasons] = useState<string[]>([]);
+  useEffect(() => { setDraft(shown); setError(""); setReasons([]); }, [value, mixed]); // eslint-disable-line react-hooks/exhaustive-deps
   const apply = () => {
     if (mixed && !draft.trim()) { setError(""); return; }
     const n = Number(draft.replace(",", "."));
     if (!draft.trim() || !Number.isFinite(n) || n < min || n > max) { setError(`Введите число от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith('.')?'':'.'} Изменение не применено.`); setDraft(shown);
       /* x2 (замер кухонь 22.10): отказ — и в общем сообщении студии (мойка 950, антресоль 200 «молча» не применялись) */
-      if (draft.trim() && Number.isFinite(n)) window.dispatchEvent(new CustomEvent("studio-error", { detail: `«${label}» ${fmt(n)} ${unit}: допустимо от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith(".")?"":"."} Изменение не применено.` }));
+      const text = `«${label}» ${fmt(n)} ${unit}: допустимо от ${fmt(min)} до ${fmt(max)} ${unit}${unit.endsWith(".")?"":"."} Изменение не применено.`;
+      let extra: { list: string[]; moduleId?: string; moduleName?: string } = { list: [] };
+      if (reasons && draft.trim() && Number.isFinite(n)) { try { extra = reasons(n); } catch { extra = { list: [] }; } }
+      setReasons(extra.list);
+      if (draft.trim() && Number.isFinite(n)) window.dispatchEvent(new CustomEvent("studio-error", { detail: extra.list.length ? { text, list: extra.list, moduleId: extra.moduleId, moduleName: extra.moduleName, problem: `«${label}» ${fmt(n)} ${unit}: ${n > max ? `больше ${fmt(max)}` : `меньше ${fmt(min)}`}`, action: n > max ? `Максимум ${fmt(max)} ${unit}.` : `Минимум ${fmt(min)} ${unit}.` } : text }));
       return; }
     setError("");
     if ((mixed || Math.abs(n - value) > 1e-9) && change(n) === false) setDraft(shown);
   };
   return <label className={"number-field" + (error ? " has-error" : "")}>
     <span>{label}</span>
-    <div><input aria-label={label} type="number" inputMode="decimal" min={min} max={max} step={step} value={draft} placeholder={mixed} onChange={(e) => { setDraft(e.target.value); setError(""); }} onBlur={apply}
+    <div><input aria-label={label} type="number" inputMode="decimal" min={min} max={max} step={step} value={draft} placeholder={mixed} onChange={(e) => { setDraft(e.target.value); setError(""); setReasons([]); }} onBlur={apply}
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") { setDraft(shown); setError(""); } }} /><small>{unit}</small></div>
     <span className={error ? "number-feedback" : "number-range"} role={error ? "alert" : undefined}>{error || note || `От ${fmt(min)} до ${fmt(max)} ${unit} · Enter — применить`}</span>
+    {error && more.length > 0 && <ul className="number-reasons" aria-label={`Ещё причины: ${label}`}>{more.map((r, i) => <li key={i}>{r}</li>)}</ul>}
   </label>;
 }
 const Check = ({ label, checked, change }: { label: string; checked: boolean; change: (v: boolean) => void }) =>
@@ -208,9 +216,9 @@ function CabinetPanel(props: KitchenPanelProps) {
       {/* предел — как в проверке кухни (KITCHEN.maxModuleWidth 1650: мойка 1480 k28 m17), не 1200 нарезки ряда */}
       <Check label="Менять ширину только этого корпуса" checked={!!m.ownWidthOnly} change={v=>modify(n=>{if(v)n.ownWidthOnly=true;else delete n.ownWidthOnly;})}/>
       <p className="field-note">{m.ownWidthOnly?'Соседи сохраняют размеры. Проверьте зазор после изменения.':'Ширина перераспределяется с соседним корпусом в ряду.'}</p>
-      <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} change={(v) => modify((n) => { n.width = v; })} />
-      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} change={(v) => modify((n) => { n.height = v; if (n.kitchen?.column) configureColumn(n); else if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
-      <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
+      <Num label="Ширина" value={m.width} min={KITCHEN.minWidth} max={KITCHEN.maxModuleWidth} reasons={(v) => ({ list: fieldReasons(m, "width", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.width = v; })} />
+      <Num label={legged ? "Высота с опорами" : "Высота"} value={m.height} min={RULES.minH} max={maxHeightOf(m)} reasons={(v) => ({ list: fieldReasons(m, "height", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.height = v; if (n.kitchen?.column) configureColumn(n); else if (n.kdrawers) n.kdrawers = refitKDrawers(n, "height"); })} note={legged ? `Нижний по регламенту — ${KITCHEN.baseHeight}: корпус ${KITCHEN.baseBody} + опоры ${KITCHEN.legs}` : undefined} />
+      <Num label="Глубина" value={m.depth} min={RULES.minD} max={RULES.maxD} reasons={(v) => ({ list: fieldReasons(m, "depth", v), moduleId: placed.id, moduleName: m.name })} change={(v) => modify((n) => { n.depth = v; if (n.kdrawers) n.kdrawers = refitKDrawers(n, "depth"); })} note={m.backType === "nailed" ? "Боковина; накладной ХДФ добавляет 3 мм" : undefined} />
       {role === "wall" && <><Num label="Низ от пола" value={Math.round(placed.y ?? 0)} min={0} max={Math.max(0, project.room.height - m.height)} change={(v) => commit(setWallFloor(project, placed.id, v))} note={`По умолчанию ${wallFloorY()}: верх нижних ${KITCHEN.baseHeight} + столешница ${KITCHEN.worktopThickness} + ${KITCHEN.wallGap}; в кухнях Базиса чаще всего 1458 (1220–1665)`} />
         {/* K7 (критик 22.10): значение ряда, а не выбранного модуля; разные — «разные: 1450/1458», ввод выравнивает весь ряд */}
         <Num label="Низ ряда навесных от пола" value={rowFloor.y ?? Math.round(placed.y ?? 0)} mixed={rowFloor.y === null ? "разные" : undefined} min={0} max={Math.max(0, project.room.height - Math.max(...wallRow(project, placed.id).map((x) => x.module.height)))} change={(v) => commit(setWallFloor(project, placed.id, v, true))}
