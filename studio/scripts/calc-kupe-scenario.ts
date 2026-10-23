@@ -97,6 +97,7 @@ try {
     const g = (await spec()).join(" | "), gHero = rub(await page.locator("#resultContent .kupe-hero-price").innerText());
     check("GRACE: итог = студия 102 026 ₽", gHero === 102026, gHero.toLocaleString("ru-RU") + " ₽");
     check("GRACE: подвесная — без нижней направляющей, с комплектом фурнитуры", /подвесная/.test(g) && !/Направляющая нижняя/.test(g) && /Комплект подвесной фурнитуры GRACE/.test(g), g.slice(0, 220));
+    await page.mouse.move(1200, 400); await page.mouse.wheel(0, -4000); // правая колонка — к итогу и спецификации
     await shot("c06-grace-1600x2600");
   }
   check("без ошибок страницы и окон", errors.length === 0 && dialogs.length === 0, [...errors, ...dialogs].slice(0, 3).join(" | "));

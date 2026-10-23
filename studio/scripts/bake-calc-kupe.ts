@@ -183,6 +183,9 @@ function bakeKupeJs(src: string): string {
   t = must(t, "      '<td class=\"r\">' + fmt(r.c) + '</td>' +\n", "      '<td class=\"r\">' + fmt(profR[i]) + '</td>' +\n", "КП профиль: строка");
   t = must(t, "  const itemRowsHTML = itemRows.map((r, i) =>\n", "  const itemR = roundParts(itemRows.map(r => r.val), d.total);\n  const itemRowsHTML = itemRows.map((r, i) =>\n", "КП состав: roundParts");
   t = must(t, "      '<td class=\"r\">' + fmt(r.val) + '</td>' +\n", "      '<td class=\"r\">' + fmt(itemR[i]) + '</td>' +\n", "КП состав: строка");
+  // штучная строка (комплект фурнитуры GRACE) — количество дверей, а не «0 мм»
+  t = must(t, "    specItems.push({ name:r.n, qty:fmt(r.l) + ' мм', sum:r.c });\n", "    specItems.push({ name:r.n, qty: r.l ? fmt(r.l) + ' мм' : bdDisplay + ' дв.', sum:r.c });\n", "спецификация: штучная строка");
+  t = must(t, "      '<td class=\"r\">' + fmt(r.l) + ' мм</td>' +\n", "      '<td class=\"r\">' + (r.l ? fmt(r.l) + ' мм' : bdDisplay + ' дв.') + '</td>' +\n", "КП профиль: штучная строка");
   // подсказка поля клиента в КП — без ФИО (privacy-scan публикации сверяет имена с базой клиентов)
   t = must(t, 'placeholder="Иванов Иван Иванович"', 'placeholder="ФИО или организация"', "подсказка поля клиента");
   // 5. служебный комментарий шапки

@@ -1740,7 +1740,7 @@ function renderResults(d) {
   const specItems = [];
   // Profile pieces
   d.profRows.forEach(r => {
-    specItems.push({ name:r.n, qty:fmt(r.l) + ' мм', sum:r.c });
+    specItems.push({ name:r.n, qty: r.l ? fmt(r.l) + ' мм' : bdDisplay + ' дв.', sum:r.c });
   });
   // Fillings
   if (d.sectionBreakdown.length === 1) {
@@ -2584,7 +2584,7 @@ function buildKPHTML(t, client, phone, manager) {
   const profRowsHTML = d.profRows.map((r, i) =>
     '<tr>' +
       '<td>' + escapeHtml(r.n) + '</td>' +
-      '<td class="r">' + fmt(r.l) + ' мм</td>' +
+      '<td class="r">' + (r.l ? fmt(r.l) + ' мм' : bdDisplay + ' дв.') + '</td>' +
       '<td class="r">' + fmt(r.pr) + '</td>' +
       '<td class="r">' + fmt(profR[i]) + '</td>' +
     '</tr>'
