@@ -184,6 +184,15 @@ npx tsx scripts/price-guard.ts $webStudio
 $pgOk = $?
 Pop-Location
 if (-not $pgOk) { Fail "price guard: purchase values of the source price tables found in the built JS (scripts/price-guard.ts)" }
+# web/calc (sliding-door calculator, scripts/bake-calc-kupe.ts): kupe profile purchase values of studio/src/kupeData.ts must not be in its data
+$webCalc = Join-Path $web 'calc'
+if (Test-Path $webCalc) {
+  Push-Location $studio
+  npx tsx scripts/price-guard.ts $webCalc --calc
+  $pgCalcOk = $?
+  Pop-Location
+  if (-not $pgCalcOk) { Fail "price guard: kupe profile purchase values found in web/calc (rerun scripts/bake-calc-kupe.ts)" }
+}
 
 # ---------------------------------------------------------------- 5. version.json
 Step 5 "web/studio/version.json"

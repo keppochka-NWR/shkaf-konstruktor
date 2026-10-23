@@ -27,14 +27,14 @@ const sum=(m:ReturnType<typeof createKupeModule>)=>kupeLines(m).reduce((s,l)=>s+
 test('24: ширина полотна в студии = калькулятор купе для того же проёма — все системы, 1–7 дверей',()=>{
   const c=calc();let checked=0,same=0;
   for(const s of KUPE_SYSTEMS){
-    // в прайсе web/calc (2026.04.29) 6 систем из 17 — их профиль берётся по названию системы; остальные — тем же расчётом по профилю студии
+    // с 23.10 web/calc = калькулятор купе v2.10/2.11 (bake-calc-kupe.ts): все 17 систем студии, профиль — из прайса
     const cs=c.PROFILE_SYSTEMS.find(x=>x.system===s.system);if(cs){same++;assert.equal(c.kupeSystemProfile(cs),s.profile,'профиль системы '+s.system);}
     for(const W of [1200,2368,2400,3600])for(let N=1;N<=7;N++){
       const a=kupeLeafWidth(W,N,s),b=c.kupeDoorWidth(W,N,cs?c.kupeSystemProfile(cs):s.profile);
       assert.ok(Math.abs(a.width-b.width)<1e-9&&Math.abs(a.overlap-b.overlap)<1e-9,`${s.system} ${W}/${N}: студия ${a.width}, калькулятор ${b.width}`);checked++;
     }
   }
-  assert.ok(checked>=17*28);assert.equal(same,6,'общие системы прайсов студии и web/calc');
+  assert.ok(checked>=17*28);assert.equal(same,17,'общие системы прайсов студии и web/calc');assert.equal(c.PROFILE_SYSTEMS.length,KUPE_SYSTEMS.length,'в web/calc нет систем сверх студии');
   // 2400 мм, 3 двери, Стандарт C: (2400 + 2 × 26,51) / 3 = 817,67 → 818 мм (а не W/N = 800)
   const m=createKupeModule(2400,2600,initialModule());m.kupe={...m.kupe!,doors:3};
   assert.equal(Math.round(kupeLeaf(m).width),818);
