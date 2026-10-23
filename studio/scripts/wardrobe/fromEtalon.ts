@@ -108,17 +108,35 @@ export function wardrobeFromEtalon(ref: WRefModule): WardrobeRecognition {
   }
   // секции по перегородкам на всю высоту проёма
   const inner0 = bottom ? bottom.box[4] : by0, inner1 = top ? top.box[1] : height;
-  const full = parts.filter((p) => H(p) >= 0.9 * (inner1 - inner0));
-  if (full.length < parts.length) unsupported.push("W_PART_HEIGHT: перегородка не на всю высоту (sectionLayout)");
-  const edges = [x0 + T, ...full.flatMap((p) => [p.box[0], p.box[3]]), x1 - T];
-  const secs: Section[] = [];
+  // перегородки во всю высоту проёма и частичные (решение Макса 23.10.2026: Section.divider — между двумя горизонталями,
+  // над/под ней полки во всю ширину двух секций; опоры-горизонтали студия строит сама — из полок секций их убираем)
+  const full = parts.filter((p) => H(p) >= 0.9 * (inner1 - inner0)), partial = parts.filter((p) => !full.includes(p));
+  const edges = [x0 + T, ...parts.flatMap((p) => [p.box[0], p.box[3]]), x1 - T];
+  const span = (k: number) => { const p = partial.find((q) => Math.abs(q.box[0] - edges[2 * k - 1]) < 0.6); return p && { from: r1(p.box[1]), to: r1(p.box[4]) }; };
+  const secs: Section[] = [], supports = new Set<WRefPanel>(), through = new Map<WRefPanel, number>();
+  for (let k = 1; k < edges.length / 2; k++) {
+    const sp = span(k);
+    if (!sp) continue;
+    if (span(k - 1) || span(k + 1)) unsupported.push("W_PART_HEIGHT: две частичные перегородки у одной секции");
+    const px0 = edges[2 * k - 2], px1 = edges[2 * k + 1];
+    const pair = ps.filter((p) => p.role === "shelf" && p.kind !== "hdf" && p.box[0] <= px0 + 2 && p.box[0] >= px0 - 2 && p.box[3] >= px1 - 2 && p.box[3] <= px1 + 2);
+    const under = pair.find((p) => Math.abs(p.box[4] - sp.from) < 0.6), over = pair.find((p) => Math.abs(p.box[1] - sp.to) < 0.6);
+    if ((sp.from > inner0 + 0.5 && !under) || (sp.to < inner1 - 0.5 && !over)) unsupported.push("W_PART_SUPPORT: частичная перегородка опирается не на сквозную горизонталь");
+    if (under) supports.add(under);
+    if (over) supports.add(over);
+    for (const p of pair) if (!supports.has(p) && (p.box[4] <= sp.from + 0.5 || p.box[1] >= sp.to - 0.5)) through.set(p, k - 1);
+  }
   for (let i = 0; i < edges.length; i += 2) {
-    const sx0 = edges[i], sx1 = edges[i + 1], sw = sx1 - sx0, h = inner1 - inner0;
+    const sx0 = edges[i], sx1 = edges[i + 1], sw = sx1 - sx0, h = inner1 - inner0, k = i / 2;
     const s: Section = { ...section(), weight: Math.max(1, r1(sw)) };
+    const sp = k > 0 ? span(k) : undefined;
+    if (sp) s.divider = sp;
     const inSec = (p: WRefPanel) => p.box[0] >= sx0 - 2 && p.box[3] <= sx1 + 2;
-    const sh = ps.filter((p) => p.role === "shelf" && inSec(p) && p.kind !== "hdf").sort((a, b) => a.box[1] - b.box[1]);
+    // сквозная полка пары — у левой секции (studio: throughShelf); жёсткая — по ширине пары
+    const pw = (p: WRefPanel) => (through.has(p) ? edges[2 * through.get(p)! + 3] - edges[2 * through.get(p)!] : sw);
+    const sh = ps.filter((p) => p.role === "shelf" && p.kind !== "hdf" && !supports.has(p) && (through.has(p) ? through.get(p) === k : inSec(p))).sort((a, b) => a.box[1] - b.box[1]);
     s.shelves = sh.map((p) => Math.round((((p.box[1] + p.box[4]) / 2 - inner0) / h) * 1e4) / 1e4);
-    const fixed = sh.map((p, j) => (W(p) >= sw - 0.5 ? j : -1)).filter((j) => j >= 0);
+    const fixed = sh.map((p, j) => (W(p) >= pw(p) - 0.5 ? j : -1)).filter((j) => j >= 0);
     if (fixed.length) s.fixed = fixed;
     // глубина полок секции — поле shelfDepth (у студии одна на все полки секции, жёсткие и съёмные)
     const deep = [...new Set(sh.map((p) => r1(D(p))))];

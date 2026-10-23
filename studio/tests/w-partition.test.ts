@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { parts, initialModule, section, validate, parseModule, fastenerCounts, plinth, legCount, type Module, type Part } from "../src/model";
 import { setPartialDivider, setDividerByShelves, dividerBounds } from "../src/partialDivider";
 import { partPenetration, allowedContact } from "../src/collisions";
+import { existsSync, readFileSync } from "node:fs";
+import { compareModule } from "../scripts/kitchen/compare";
+import { wardrobeFromEtalon, type WRefModule } from "../scripts/wardrobe/fromEtalon";
+import { ETALON_W } from "../scripts/wardrobe/batch";
 
 // Решение Макса 23.10.2026 (замер удобства: w172, w218, w061): частичная перегородка и «Без цоколя».
 
@@ -134,6 +138,24 @@ test("частичная перегородка: roundtrip parseModule, суще
   const plain = wardrobe();
   assert.equal(parseModule(JSON.parse(JSON.stringify(plain))).sections[1].divider, undefined);
   assert.equal(parts(plain).filter((p) => /:divider:(under|over)$/.test(p.id)).length, 0);
+});
+
+// Сверка со шкафом Базиса (эталон Кухни/etalon-w, вне git; пропуск, если эталонов на машине нет): стеллаж с перегородкой 720–1652
+// на сквозных полках 704 и 1652, по две полки в половинах. По X и Y детали перегородки совпадают; по глубине — правило шкафов студии
+// (перегородка и полки на 25 мм мельче корпуса, Базис — во всю глубину) — вопрос Максу, не правка этой задачи.
+const W172 = `${ETALON_W}/w172.json`;
+test("сверка с Базисом: частичная перегородка распознаётся (divider), перегородка, опоры и полки — те же по X/Y", { skip: !existsSync(W172) }, () => {
+  const ref = (JSON.parse(readFileSync(W172, "utf8")) as { modules: WRefModule[] }).modules[0];
+  const { module: m, unsupported } = wardrobeFromEtalon(ref);
+  assert.ok(!unsupported.some((u) => /W_PART/.test(u)), unsupported.join("; "));
+  assert.deepEqual(m.sections[1].divider, { from: 720, to: 1652 });
+  assert.deepEqual(validate(m), []);
+  const c = compareModule(ref, m);
+  const ours = c.pairs.filter((p) => /Перегородка|перегородк|Полка/.test(p.studio.name));
+  assert.equal(ours.length, 7, ours.map((p) => p.studio.name).join(", ")); // перегородка, 2 опоры, 4 полки в половинах
+  // faces: [x0, y0, z0, x1, y1, z1] — X и Y до 0,1 мм
+  for (const p of ours) assert.ok([0, 1, 3, 4].every((k) => p.faces[k] <= 0.11), `${p.studio.name}: ${p.faces.join(" ")}`);
+  assert.ok(!c.missing.some((x) => /\|y\|/.test(x.cls)), "все горизонтали Базиса нашлись");
 });
 
 test("без цоколя: дно на полу, боковины до пола, нет цоколя и опор", () => {
