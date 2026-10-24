@@ -151,7 +151,8 @@ test("критик 24.10: две створки у частичной перег
   const two = structuredClone(m);
   two.sections[0].doorLeaves = 2;
   const errs = validate(two).filter((e) => /частичной перегородк/.test(e));
-  assert.ok(errs.length && errs.every((e) => /^Секция 1: две створки/.test(e) && /«Одна створка в секции»/.test(e) && !/Перевесьте/.test(e)), errs.join(" | "));
+  assert.equal(errs.length, 1, errs.join(" | ")); // одна строка на секцию — одна кнопка
+  assert.ok(/^Секция 1: две створки/.test(errs[0]) && /«Одна створка в секции»/.test(errs[0]) && !/Перевесьте/.test(errs[0]), errs[0]);
   assert.equal(oneLeafAtDivider(two, two.sections[0].id), true);
   assert.deepEqual(validate(two), []);
   // широкая секция (одна створка шире предела): створки не меняются, совет — перегородка во всю высоту

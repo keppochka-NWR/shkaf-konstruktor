@@ -2507,7 +2507,7 @@ export function dividerErrors(m: Module): string[] {
 }
 /** Петли фасада на частичной перегородке — только там, где она есть (решение Макса 23.10.2026): петля в воздухе — ошибка с подсказкой. */
 export function dividerHingeErrors(m: Module, geometry: Part[] = parts(m)): string[] {
-  const bb = boxes(m), out: string[] = [];
+  const bb = boxes(m), out: string[] = [], twoLeaf = new Set<string>();
   m.sections.forEach((s, i) => {
     const sp = dividerSpan(m, i, bb);
     if (!sp) return;
@@ -2519,6 +2519,8 @@ export function dividerHingeErrors(m: Module, geometry: Part[] = parts(m)): stri
       const where = `(она от ${Math.round(sp.from)} до ${Math.round(sp.to)} мм): петля на высоте ${Math.round(p.position[1])} мм в воздухе.`;
       // критик релиза 24.10: у двух створок одна всегда висит на перегородке — «перевесить» нельзя, совет — одна створка
       if (sec && sec.doorSplit === undefined && doorCount(m, sec) === 2) {
+        if (twoLeaf.has(sec.id)) continue; // одна строка на секцию (иначе — по строке на каждую петлю в воздухе и по кнопке на каждую)
+        twoLeaf.add(sec.id);
         const b = bb[k - 1], fits = !!b && b.width + RULES.panel <= doorMaxWidth(m);
         out.push(`Секция ${k}: две створки у частичной перегородки — одна из них висит на перегородке ${where} ` + (fits
           ? "В секции у частичной перегородки — одна створка: нажмите «Одна створка в секции» (или «Фасады секции › Створки: Одна створка»), либо сделайте перегородку во всю высоту."
