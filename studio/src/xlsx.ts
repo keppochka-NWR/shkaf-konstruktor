@@ -22,6 +22,8 @@ export type XSheet = {
   landscape?: boolean;
   /** высота строки в пунктах (многострочные ячейки: не все программы подбирают высоту сами — строка выглядела пустой) */
   heights?: (number | undefined)[];
+  /** автофильтр по диапазону («A1:O120») — книга прайсов (scripts/export-prices.ts) */
+  autoFilter?: string;
 };
 export const str = (v: string, s: XStyle = XS.cell): XCell => ({ t: "s", v, s });
 export const num = (v: number, s: XStyle = XS.num): XCell => ({ t: "n", v, s });
@@ -50,7 +52,8 @@ export function sheetXML(sh: XSheet): string {
   const cols = sh.cols.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("");
   const rows = sh.rows.map((r, i) => `<row r="${i + 1}"${sh.heights?.[i] ? ` ht="${sh.heights[i]}" customHeight="1"` : ""}>${r.map((c, j) => cellXML(c, ref(j, i))).join("")}</row>`).join("");
   const merges = sh.merges?.length ? `<mergeCells count="${sh.merges.length}">${sh.merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>` : "";
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="${dim}"/><sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rows}</sheetData>${merges}<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${sh.landscape ? "landscape" : "portrait"}" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  const filter = sh.autoFilter ? `<autoFilter ref="${sh.autoFilter}"/>` : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="${dim}"/><sheetViews><sheetView workbookViewId="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ""}<sheetData>${rows}</sheetData>${filter}${merges}<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${sh.landscape ? "landscape" : "portrait"}" fitToWidth="1" fitToHeight="0"/></worksheet>`;
 }
 const BORDER = `<left style="thin"><color rgb="FFC9D3D6"/></left><right style="thin"><color rgb="FFC9D3D6"/></right><top style="thin"><color rgb="FFC9D3D6"/></top><bottom style="thin"><color rgb="FFC9D3D6"/></bottom><diagonal/>`;
 /** Шрифты: 0 обычный, 1 жирный, 2 заголовок 14, 3 жирный белый (шапка), 4 курсив серый (примечания), 5 жирный 12 (итог), 6 серый 10 (подзаголовок).
@@ -60,16 +63,19 @@ export const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 
 /** Имя листа Excel: до 31 символа, без []:*?/\ . */
 const sheetName = (s: string) => s.replace(/[[\]:*?/\\]/g, " ").slice(0, 31) || "Лист";
-/** Все файлы книги (имя → XML) — отдельно от упаковки, чтобы тест проверял XML без распаковки. */
-export function workbookFiles(sheets: XSheet[], title = ""): Record<string, string> {
+/** Все файлы книги (имя → XML) — отдельно от упаковки, чтобы тест проверял XML без распаковки.
+ *  styles — свой styles.xml (книга прайсов: свои индексы стилей); по умолчанию — стили сметы STYLES_XML. */
+export function workbookFiles(sheets: XSheet[], title = "", styles = STYLES_XML): Record<string, string> {
   const head = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  // автофильтр: скрытое имя _xlnm._FilterDatabase на листе (Excel и LibreOffice так узнают диапазон фильтра)
+  const filters = sheets.map((s, i) => s.autoFilter ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${xml(sheetName(s.name)).replace(/'/g, "''")}'!${s.autoFilter.replace(/([A-Z]+)(\d+)/g, "$$$1$$$2")}</definedName>` : "").join("");
   const files: Record<string, string> = {
     "[Content_Types].xml": head + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`,
     "_rels/.rels": head + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`,
     "docProps/core.xml": head + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xml(title)}</dc:title><dc:creator>Ё Конструктор</dc:creator></cp:coreProperties>`,
-    "xl/workbook.xml": head + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${sheets.map((s, i) => `<sheet name="${xml(sheetName(s.name))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
+    "xl/workbook.xml": head + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${sheets.map((s, i) => `<sheet name="${xml(sheetName(s.name))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>${filters ? `<definedNames>${filters}</definedNames>` : ""}<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
     "xl/_rels/workbook.xml.rels": head + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    "xl/styles.xml": STYLES_XML,
+    "xl/styles.xml": styles,
   };
   sheets.forEach((s, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXML(s); });
   return files;
