@@ -1,7 +1,7 @@
 // Частичная перегородка (решение Макса 23.10.2026): перегородка между секциями не во всю высоту — «от … до …» (мм от пола) или
 // «от полки N до полки M». Модель — Section.divider у секции справа от перегородки (model.ts: dividerSpan, throughShelf, dividerErrors).
 // Здесь — команды панели и меню правой кнопки: задать/снять, по полкам, перевесить фасады с частичной перегородки на боковины.
-import { boxes, doorCount, parts, dividerSpan, RULES, type Module, type Section } from "./model";
+import { boxes, doorCount, doorMaxWidth, parts, dividerSpan, RULES, type Module, type Section } from "./model";
 import { setDoorHinge } from "./facadeEditing";
 
 export type DividerBound = "floor" | "roof" | { section: number; shelf: number };
@@ -32,36 +32,69 @@ function dropShelf(s: Section, j: number) {
 /** Задать частичную перегородку слева от секции sid: from/to — нижний и верхний торцы перегородки, мм от пола; null — во всю высоту.
  *  Ниже дна / выше крыши — «от дна» / «до крыши». Одностворчатые фасады соседних секций, висящие на этой перегородке, перевешиваются
  *  на боковину: на частичной перегородке петлям нет места по всей высоте фасада. */
-export function setPartialDivider(m: Module, sid: string, span: { from: number; to: number } | null): void {
+export function setPartialDivider(m: Module, sid: string, span: { from: number; to: number } | null): string[] {
   const i = m.sections.findIndex((s) => s.id === sid);
   if (i < 1) throw Error("Частичную перегородку задают у секции справа от неё: у первой секции перегородки слева нет.");
   const s = m.sections[i];
-  if (!span) { delete s.divider; return; }
+  if (!span) { delete s.divider; return []; }
   if (!Number.isFinite(span.from) || !Number.isFinite(span.to) || span.to <= span.from) throw Error("Укажите высоту перегородки: «от» меньше «до».");
   const b = boxes(m)[i], r = (v: number) => Math.round(v * 10) / 10;
   const from = span.from <= b.bottom + 0.5 ? b.bottom : r(span.from), to = span.to >= b.top - 0.5 ? b.top : r(span.to);
-  if (from <= b.bottom + 0.5 && to >= b.top - 0.5) { delete s.divider; return; }
+  if (from <= b.bottom + 0.5 && to >= b.top - 0.5) { delete s.divider; return []; }
   s.divider = { from, to };
-  if (!m.doors) return;
+  if (!m.doors) return [];
+  const notes: string[] = [];
   for (const [k, side] of [[i - 1, "right"], [i, "left"]] as const) {
     const sec = m.sections[k];
-    if (doorCount(m, sec) !== 1 || sec.doorSplit !== undefined) continue;
+    if (sec.doorSplit !== undefined) continue;
+    // критик релиза 24.10: две створки у частичной перегородки — одна из них висела бы на ней; если одна створка проходит
+    // по ширине, секция сама переходит на одну створку на боковине (с сообщением), иначе — отказ проверки с выполнимым советом
+    if (doorCount(m, sec) === 2) { if (oneLeafFits(m, k) && oneLeafAtDivider(m, sec.id)) notes.push(`Секция ${k + 1}: одна створка, петли ${side === "left" ? "справа" : "слева"} на боковине — две створки у частичной перегородки не ставятся.`); continue; }
+    if (doorCount(m, sec) !== 1) continue;
     const door = parts(m).find((p) => p.id === `${sec.id}:door:0`);
     if (door?.hinge === side) setDoorHinge(m, door.id, side === "left" ? "right" : "left");
   }
+  return notes;
+}
+
+/** Одна створка секции k не шире предела распашного фасада (иначе одна створка — ошибка «Фасад шире …»). */
+export function oneLeafFits(m: Module, k: number): boolean {
+  const b = boxes(m)[k];
+  return !!b && b.width + RULES.panel <= doorMaxWidth(m);
+}
+
+/** «Одна створка в секции» у частичной перегородки: одна створка, петли на стороне без частичной перегородки (на боковине
+ *  или на перегородке во всю высоту). Возвращает true, если секция у частичной перегородки и створку поставили. */
+export function oneLeafAtDivider(m: Module, sid: string): boolean {
+  const k = m.sections.findIndex((s) => s.id === sid), sec = m.sections[k];
+  if (!sec || !m.doors) return false;
+  const bb = boxes(m), left = !!dividerSpan(m, k, bb), right = !!dividerSpan(m, k + 1, bb);
+  if (!left && !right) return false;
+  sec.doorLeaves = 1;
+  delete sec.removedDoors;
+  if (sec.doorHinges) { sec.doorHinges = sec.doorHinges.map((h, j) => (j % 2 === 0 && (h === "left" || h === "right") ? null : h)); if (!sec.doorHinges.some((h) => h !== null)) delete sec.doorHinges; }
+  if (left && right) return true; // перегородки с обеих сторон — петли проверит validate
+  const door = parts(m).find((p) => p.id === `${sec.id}:door:0`), away = left ? "right" : "left";
+  if (door && door.hinge !== away) setDoorHinge(m, door.id, away);
+  return true;
+}
+
+/** Сообщение о том, что студия сама поменяла створки у частичной перегородки (после применённого изменения). */
+export function announceDividerNotes(notes: string[]): void {
+  if (notes.length && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("studio-note", { detail: { title: "Створки у частичной перегородки", text: notes.join(" ") } }));
 }
 
 /** Перетаскивание конца частичной перегородки (горизонтали-опоры под/над ней) по высоте на delta мм; ошибки — как у полей «от/до». */
-export function moveDividerEnd(m: Module, sid: string, edge: "under" | "over", delta: number): void {
+export function moveDividerEnd(m: Module, sid: string, edge: "under" | "over", delta: number): string[] {
   const s = m.sections.find((x) => x.id === sid);
   if (!s?.divider) throw Error("Перегородка во всю высоту: сначала сделайте её частичной.");
   const { from, to } = s.divider;
-  setPartialDivider(m, sid, edge === "under" ? { from: from + delta, to } : { from, to: to + delta });
+  return setPartialDivider(m, sid, edge === "under" ? { from: from + delta, to } : { from, to: to + delta });
 }
 
 /** «От полки N до полки M»: границы — горизонтали, на которые опирается перегородка (дно, крыша или полка секции слева/справа).
  *  Выбранные полки становятся опорами перегородки (сквозными горизонталями): из секций они убираются, чтобы не было двух деталей. */
-export function setDividerByShelves(m: Module, sid: string, lower: DividerBound, upper: DividerBound): void {
+export function setDividerByShelves(m: Module, sid: string, lower: DividerBound, upper: DividerBound): string[] {
   const i = m.sections.findIndex((s) => s.id === sid);
   if (i < 1) throw Error("Частичную перегородку задают у секции справа от неё: у первой секции перегородки слева нет.");
   const bb = boxes(m), t = RULES.panel;
@@ -84,7 +117,7 @@ export function setDividerByShelves(m: Module, sid: string, lower: DividerBound,
       if (j >= 0) dropShelf(sec, j);
     }
   }
-  setPartialDivider(m, sid, { from, to });
+  return setPartialDivider(m, sid, { from, to });
 }
 
 /** Подписи границ для выбора «от полки / до полки»: дно, полки обеих секций по высоте, крыша. */

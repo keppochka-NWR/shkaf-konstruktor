@@ -2515,8 +2515,17 @@ export function dividerHingeErrors(m: Module, geometry: Part[] = parts(m)): stri
     for (const p of geometry.filter((q) => /:hingeplate:/.test(q.id) && Math.abs(q.position[0] - x) < 30)) {
       const y0 = p.position[1] - p.size[1] / 2, y1 = p.position[1] + p.size[1] / 2;
       if (y0 >= sp.from - 0.5 && y1 <= sp.to + 0.5) continue;
-      const k = m.sections.findIndex((q) => q.id === p.sectionId) + 1;
-      out.push(`Фасад секции ${k} висит на частичной перегородке (она от ${Math.round(sp.from)} до ${Math.round(sp.to)} мм): петля на высоте ${Math.round(p.position[1])} мм в воздухе. Перевесьте фасад на боковину (правой кнопкой по фасаду › Открывание) или удлините перегородку.`);
+      const k = m.sections.findIndex((q) => q.id === p.sectionId) + 1, sec = m.sections[k - 1];
+      const where = `(она от ${Math.round(sp.from)} до ${Math.round(sp.to)} мм): петля на высоте ${Math.round(p.position[1])} мм в воздухе.`;
+      // критик релиза 24.10: у двух створок одна всегда висит на перегородке — «перевесить» нельзя, совет — одна створка
+      if (sec && sec.doorSplit === undefined && doorCount(m, sec) === 2) {
+        const b = bb[k - 1], fits = !!b && b.width + RULES.panel <= doorMaxWidth(m);
+        out.push(`Секция ${k}: две створки у частичной перегородки — одна из них висит на перегородке ${where} ` + (fits
+          ? "В секции у частичной перегородки — одна створка: нажмите «Одна створка в секции» (или «Фасады секции › Створки: Одна створка»), либо сделайте перегородку во всю высоту."
+          : `Одна створка в этой секции шире ${doorMaxWidth(m)} мм: сделайте перегородку во всю высоту или удлините её на всю высоту фасада.`));
+        continue;
+      }
+      out.push(`Фасад секции ${k} висит на частичной перегородке ${where} Перевесьте фасад на боковину (правой кнопкой по фасаду › Открывание) или удлините перегородку.`);
     }
   });
   return [...new Set(out)];

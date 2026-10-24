@@ -22,7 +22,7 @@ import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
 import OpeningLayoutEditor from './OpeningLayoutEditor';
 import PartialDividerPanel from './PartialDividerPanel';
-import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd} from './partialDivider';
+import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd,oneLeafAtDivider,announceDividerNotes} from './partialDivider';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
 import {rowShortage} from './rowFit';
@@ -586,6 +586,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // K2 (критик 22.10, раунд 2): модуль встал не у стены (ряд занят) — предупреждение, не ошибка; скрывается само через 12 с
   const [placeNote,setPlaceNote]=useState<string|null>(null);
   useEffect(()=>{if(!placeNote)return;const t=setTimeout(()=>setPlaceNote(null),12000);return()=>clearTimeout(t);},[placeNote]);
+  // критик релиза 24.10: студия сама поменяла что-то по правилу (две створки у частичной перегородки → одна) — сообщение, не ошибка; 12 с
+  const [notice,setNotice]=useState<{title:string;text:string}|null>(null);
+  useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(null),12000);return()=>clearTimeout(t);},[notice]);
+  useEffect(()=>{const on=(e:Event)=>{const d=(e as CustomEvent).detail as {title?:string;text?:string}|undefined;if(d?.text)setNotice({title:d.title??'Сделано',text:d.text});};window.addEventListener('studio-note',on);return()=>window.removeEventListener('studio-note',on);},[]);
   useEffect(()=>{if(!error||meshFit||error===startup.error)return;const t=setTimeout(()=>setError(''),errorDetails.length?20000:6000);return()=>clearTimeout(t);},[error,meshFit]); // eslint-disable-line react-hooks/exhaustive-deps
   /** «Показать в 3D» детали (карты раскроя, «не помещается в лист»): выбрать корпус, секцию и деталь, открыть наполнение. */
   function inspectPart(mid:string,pid:string){const body=project.modules.find(a=>a.id===mid);if(!body)return;selectModule(mid);const sec=body.module.sections.find(s=>pid.startsWith(s.id+':'));if(sec)chooseSection(sec.id);setSelectedPart({mid,sid:sec?.id||body.module.sections[0].id,pid});if(pid.includes(':drawer:'))setDrawerIndex(Number(pid.split(':drawer:')[1].split(':')[0]));setRoomPlan(false);setView('iso');setMode('fill');setFocusActive(true);setOpenDoors(true);setModal(null);}
@@ -837,14 +841,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     if(/:divider(:under|:over)?$/.test(pid)&&quickMenuApplies(mod)&&!mod.sectionLayout){
       const dsid=pid.split(':')[0],di=mod.sections.findIndex(s=>s.id===dsid),info=dividerInfo(mod,di),p=part('Перегородка');
       if(info){
-        const askRange=()=>{select();editDimension('Перегородка от, мм от пола',Math.round(info.partial?info.from:info.bottom+Math.round((info.top-info.bottom)*0.3)),v=>{const from=v;setTimeout(()=>editDimension('Перегородка до, мм от пола',Math.round(info.partial?info.to:info.bottom+Math.round((info.top-info.bottom)*0.75)),w=>{modifyAt(a.id,n=>setPartialDivider(n,dsid,{from,to:w}));return true;}),0);return true;});};
+        const askRange=()=>{select();editDimension('Перегородка от, мм от пола',Math.round(info.partial?info.from:info.bottom+Math.round((info.top-info.bottom)*0.3)),v=>{const from=v;setTimeout(()=>editDimension('Перегородка до, мм от пола',Math.round(info.partial?info.to:info.bottom+Math.round((info.top-info.bottom)*0.75)),w=>{let notes:string[]=[];if(modifyAt(a.id,n=>{notes=setPartialDivider(n,dsid,{from,to:w});}))announceDividerNotes(notes);return true;}),0);return true;});};
         const cur=(n:Module,edge:'lo'|'hi')=>{const bs=dividerBounds(n,di),it=dividerInfo(n,di)!;if(!it.partial)return bs.find(x=>x.key===(edge==='lo'?'floor':'roof'))!;const y=edge==='lo'?(it.from===it.bottom?it.from:it.from-8):(it.to===it.top?it.to:it.to+8);return bs.find(x=>Math.abs(x.y-y)<9)??bs.find(x=>x.key===(edge==='lo'?'floor':'roof'))!;};
         const bs=dividerBounds(mod,di);
         const pick=(edge:'lo'|'hi'):RadialItem=>({id:'divider-'+(edge==='lo'?'from':'to'),label:edge==='lo'?'От полки':'До полки',icon:edge==='lo'?ArrowDown:ArrowUp,disabled:bs.length<3,hint:bs.length<3?'В секциях у перегородки нет полок — задайте «Частичная…» в мм':edge==='lo'?'Нижняя опора перегородки: дно или полка — она станет сквозной горизонталью':'Верхняя опора перегородки: полка или крыша',
           children:bs.filter(b=>b.key!==(edge==='lo'?'roof':'floor')).map(b=>({id:'divider-'+edge+'-'+b.key,label:b.label,icon:Rows3,hint:edge==='lo'?'Перегородка от этой горизонтали':'Перегородка до этой горизонтали',
-            run:()=>modifyAt(a.id,n=>{const nb=dividerBounds(n,di),one=nb.find(x=>x.key===b.key)!,other=cur(n,edge==='lo'?'hi':'lo');setDividerByShelves(n,dsid,edge==='lo'?one.bound:other.bound,edge==='lo'?other.bound:one.bound);})}))});
+            run:()=>{let notes:string[]=[];if(modifyAt(a.id,n=>{const nb=dividerBounds(n,di),one=nb.find(x=>x.key===b.key)!,other=cur(n,edge==='lo'?'hi':'lo');notes=setDividerByShelves(n,dsid,edge==='lo'?one.bound:other.bound,edge==='lo'?other.bound:one.bound);}))announceDividerNotes(notes);}}))});
         return {title:info.partial?`Перегородка ${Math.round(info.from)}–${Math.round(info.to)}`:'Перегородка',subtitle:mod.name,items:[
-          {id:'divider-full',label:'Во всю высоту',icon:Columns2,active:!info.partial,hint:'От дна до крыши, как раньше',run:()=>modifyAt(a.id,n=>setPartialDivider(n,dsid,null))},
+          {id:'divider-full',label:'Во всю высоту',icon:Columns2,active:!info.partial,hint:'От дна до крыши, как раньше',run:()=>modifyAt(a.id,n=>{setPartialDivider(n,dsid,null);})},
           {id:'divider-partial',label:'Частичная…',icon:Ruler,active:info.partial,hint:'«От» и «до» в мм от пола. Над и под перегородкой полки — во всю ширину двух секций',run:askRange},
           pick('lo'),pick('hi'),
           {...p.params,hint:'Перегородки секции — справа, в «Наполнении»'},body]};
@@ -1354,7 +1358,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
-            onMoveDividerEnd={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module;moveDividerEnd(t,sid,edge,delta);return commitProject(n);}catch(e){setError((e as Error).message);return false;}}}
+            onMoveDividerEnd={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module,notes=moveDividerEnd(t,sid,edge,delta),ok=commitProject(n);if(ok)announceDividerNotes(notes);return ok;}catch(e){setError((e as Error).message);return false;}}}
             dividerEndProblem={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module;moveDividerEnd(t,sid,edge,delta);return validate(t)[0];}catch(e){return (e as Error).message;}}}
             dividerProblem={(mid,sid,delta)=>{try{moveDivider(project,mid,sid,delta);return undefined;}catch(e){return (e as Error).message;}}}
             partProblem={(mid,sid,pid,delta,to)=>{try{const next=to&&(to.mid!==mid||to.sid!==sid)?transferPart(project,mid,sid,pid,to.mid,to.sid,to.y):movePart(project,mid,sid,pid,delta);return projectErrors(next)[0];}catch(e){return (e as Error).message;}}}
@@ -1446,7 +1450,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {errorDetails.length?<ol className="error-list" aria-label="Что мешает применить изменение">
                   {errorDetails.slice(0,5).map((d,i)=><li key={i} data-text={d.text}>
                     <p>{errorPlace(d)&&<b className="error-place">{errorPlace(d)}: </b>}{d.problem}{d.moduleId&&project.modules.some(a=>a.id===d.moduleId)&&<button className="error-show" aria-label={'Показать: '+errorPlace(d)} onClick={()=>showError(d)}><Search size={12}/> Показать</button>}</p>
-                    {d.action&&<p className="error-fix"><b>Что сделать:</b> {d.action}</p>}
+                    {d.action&&<p className="error-fix"><b>Что сделать:</b> {d.action}{d.moduleId&&d.sectionId&&/«Одна створка в секции»/.test(d.action)&&<> <button className="error-show" onClick={()=>{if(modifyAt(d.moduleId!,n=>{if(!oneLeafAtDivider(n,d.sectionId!))throw Error('Секция не у частичной перегородки.');}))setError('');}}>Одна створка в секции</button></>}</p>}
                   </li>)}
                   {errorDetails.length>5&&<li className="error-more">…и ещё {errorDetails.length-5}. Исправьте эти — проверка покажет остальные.</li>}
                 </ol>:<p>{error}</p>}
@@ -1460,6 +1464,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </button>
             </div>
           )}
+          {notice&&!error&&<div className="error-banner place-note" role="status" data-testid="studio-note"><Info size={20}/><div><strong>{notice.title}</strong><p>{notice.text}</p></div><button aria-label="Закрыть сообщение" onClick={()=>setNotice(null)}><X size={17}/></button></div>}
           {placeNote&&!error&&<div className="error-banner place-note" role="status" data-testid="place-note"><Info size={20}/><div><strong>Модуль поставлен не у стены</strong><p>{placeNote}</p></div><button aria-label="Закрыть предупреждение" onClick={()=>setPlaceNote(null)}><X size={17}/></button></div>}
           {ctxMenu&&project.modules.some(x=>x.id===ctxMenu.mid)&&(()=>{const r=radialMenu(ctxMenu);
             /* находка 6: меню в области сцены и левее правой панели инструментов */

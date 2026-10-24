@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parts, initialModule, section, validate, parseModule, fastenerCounts, plinth, legCount, distribute, innerMinus, RULES, type Module, type Part } from "../src/model";
-import { setPartialDivider, setDividerByShelves, dividerBounds, moveDividerEnd } from "../src/partialDivider";
+import { setPartialDivider, setDividerByShelves, dividerBounds, moveDividerEnd, oneLeafAtDivider } from "../src/partialDivider";
 import { newProject } from "../src/project";
 import { mirrorModule, setWallDistance, addUpperModule } from "../src/operations";
 import { nest } from "../src/exports";
@@ -131,6 +131,34 @@ test("фасады: одностворчатая дверь с частично�
   const plates = parts(tall).filter((p) => p.id.startsWith(`${sid}:hingeplate:0`));
   assert.ok(plates.length >= 2 && plates.every((p) => p.position[1] + 26.5 <= 2188.5), plates.map((p) => p.position[1]).join(","));
   assert.deepEqual(validate(tall).filter((e) => /в воздухе/.test(e)), []);
+});
+
+test("критик 24.10: две створки у частичной перегородки — секции сами переходят на одну створку на боковине; отказ — с выполнимым советом", () => {
+  const m = wardrobe({ doors: true });
+  const [L, R] = m.sections;
+  L.doorLeaves = 2; R.doorLeaves = 2;
+  const notes = setPartialDivider(m, R.id, { from: 720, to: 1652 });
+  assert.equal(notes.length, 2, notes.join(" | "));
+  assert.ok(notes.every((n) => /одна створка/.test(n)));
+  assert.deepEqual([L.doorLeaves, R.doorLeaves], [1, 1]);
+  const ps = parts(m);
+  assert.equal(ps.find((p) => p.id === `${L.id}:door:0`)?.hinge, "left");
+  assert.equal(ps.find((p) => p.id === `${R.id}:door:0`)?.hinge, "right");
+  assert.deepEqual(validate(m), []);
+  // повторное изменение границ — без новых сообщений
+  assert.deepEqual(setPartialDivider(m, R.id, { from: 720, to: 2000 }), []);
+  // менеджер выбрал «Две створки» у перегородки — отказ с советом «одна створка» (не «перевесьте фасад»), кнопка его выполняет
+  const two = structuredClone(m);
+  two.sections[0].doorLeaves = 2;
+  const errs = validate(two).filter((e) => /частичной перегородк/.test(e));
+  assert.ok(errs.length && errs.every((e) => /^Секция 1: две створки/.test(e) && /«Одна створка в секции»/.test(e) && !/Перевесьте/.test(e)), errs.join(" | "));
+  assert.equal(oneLeafAtDivider(two, two.sections[0].id), true);
+  assert.deepEqual(validate(two), []);
+  // широкая секция (одна створка шире предела): створки не меняются, совет — перегородка во всю высоту
+  const wide = { ...wardrobe({ doors: true }), width: 1300 }; // секции по 634: авто — две створки, одна шире 600
+  assert.deepEqual(setPartialDivider(wide, wide.sections[1].id, { from: 720, to: 1652 }), []);
+  const we = validate(wide).filter((e) => /частичной перегородк/.test(e));
+  assert.ok(we.length && we.every((e) => /шире \d+ мм: сделайте перегородку во всю высоту/.test(e)), we.join(" | "));
 });
 
 test("частичная перегородка: roundtrip parseModule, существующие шкафы без поля — без изменений", () => {
