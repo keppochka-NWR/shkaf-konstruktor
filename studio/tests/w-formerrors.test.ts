@@ -66,7 +66,7 @@ test('сборка палитры без проверки формы — пре�
 
 test('другие виды: кухня прямая, шкаф-купе, стол, двери купе — ошибки у полей с исправлением',()=>{
   const row=paletteIssues({kind:'kitchen-row',width:7000,height:870,depth:560},source);
-  assert.equal(row[0].field,'width');assert.equal(row[0].problem,'Ширина 7000 > 6000 мм');assert.deepEqual(row[0].auto,{width:6000,bodies:1});
+  assert.equal(row[0].field,'width');assert.equal(row[0].problem,'Длина 7000 > 6000 мм');assert.equal(row[0].fixes[0].label,'Длина 6000');assert.deepEqual(row[0].auto,{width:6000,bodies:1});
   const kupe=paletteIssues({kind:'kupe-wardrobe',width:2400,height:2400,depth:300,mount:'free'},source);
   assert.equal(kupe[0].field,'depth');assert.equal(kupe[0].problem,'Глубина 300 < 450 мм');
   assert.ok(paletteErrors({kind:'kupe-wardrobe',width:2400,height:2400,depth:300,mount:'free'},source).length>=1);

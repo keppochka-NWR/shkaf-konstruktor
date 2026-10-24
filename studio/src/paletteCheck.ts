@@ -81,7 +81,8 @@ function valueOf(inp:PaletteInput,f:'width'|'height'|'depth'){
   const ws=bodyWidths(inp.width,inp.bodies??1);return Math.max(...ws);
 }
 function rangeIssue(inp:PaletteInput,text:string,g:Range):PaletteIssue|null{
-  const f=g.field,v=valueOf(inp,f),label=LABEL[f],bodies=Math.max(1,Math.round(inp.bodies??1));
+  // критик релиза 24.10: прямая кухня — «Длина», как в «Прямая кухня по длине стены» (один предел — одна подпись)
+  const f=g.field,v=valueOf(inp,f),label=f==='width'&&inp.kind==='kitchen-row'?'Длина':LABEL[f],bodies=Math.max(1,Math.round(inp.bodies??1));
   if(g.max!==undefined&&v>g.max){
     const limit={min:g.min,max:g.max};
     if(f==='width'&&SPLIT_KINDS.includes(inp.kind)){
