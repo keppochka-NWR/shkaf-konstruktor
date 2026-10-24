@@ -1492,7 +1492,6 @@ function calculate(opts) {
   // Сложная сборка: только если complexRow видим (секций на дверь ≥ 4)
   const complexRow = $('complexRow');
   const complexWork = complexRow.style.display !== 'none' && $('complexWork').checked;
-  const fillMarkupMult = 1 + (num('fillMarkup') / 100);
   const p = getAdjustedPrices();
 
   const dw = W / N;
@@ -1524,7 +1523,7 @@ function calculate(opts) {
         const sArea = totalAreaPerDoor * dRowRatios[r] * dColRatios[c];
         // NaN guard: если f.p отсутствует или невалиден — считаем 0, иначе цена пойдёт NaN→NaN в КП.
         const basePrice = Number.isFinite(f.p) ? f.p : 0;
-        const sPrice = basePrice * fillMarkupMult;
+        const sPrice = basePrice;
         sectionBreakdown2D[di].push({ fill: f, sArea, fillPriceAdj: sPrice, cost: sArea * sPrice });
         filCost += sArea * sPrice;
       }
@@ -1537,7 +1536,7 @@ function calculate(opts) {
   if (!anyOverride) {
     const sectCount = sectOpt.rowRatios.length * sectOpt.colRatios.length;
     for (let si = 0; si < sectCount; si++) {
-      const ref = (sectionBreakdown2D[0] && sectionBreakdown2D[0][si]) || { fill: FILLINGS[0], fillPriceAdj: FILLINGS[0].p * fillMarkupMult };
+      const ref = (sectionBreakdown2D[0] && sectionBreakdown2D[0][si]) || { fill: FILLINGS[0], fillPriceAdj: FILLINGS[0].p };
       const sArea = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].sArea : 0), 0);
       const cost  = sectionBreakdown2D.reduce((s, dBd) => s + (dBd[si] ? dBd[si].cost  : 0), 0);
       sectionBreakdown.push({ fill: ref.fill, sArea, fillPriceAdj: ref.fillPriceAdj, cost });
@@ -1548,7 +1547,7 @@ function calculate(opts) {
       const dArea = dBd.reduce((s, x) => s + x.sArea, 0);
       const dCost = dBd.reduce((s, x) => s + x.cost, 0);
       const refFill = (dBd[0] || {}).fill || FILLINGS[0];
-      const refPrice = (dBd[0] || {}).fillPriceAdj || (refFill.p * fillMarkupMult);
+      const refPrice = (dBd[0] || {}).fillPriceAdj || refFill.p;
       sectionBreakdown.push({
         fill: refFill, sArea: dArea, fillPriceAdj: refPrice, cost: dCost,
         doorIdx: di, sectCount: dBd.length,
@@ -1556,7 +1555,7 @@ function calculate(opts) {
     });
   }
   const fill = (doorFills[0] && doorFills[0][0]) || FILLINGS[0];
-  const fillPriceAdj = (sectionBreakdown[0] || { fillPriceAdj: fill.p * fillMarkupMult }).fillPriceAdj;
+  const fillPriceAdj = (sectionBreakdown[0] || { fillPriceAdj: fill.p }).fillPriceAdj;
   // Уникальные материалы для заголовка
   const allFillsFlat = [].concat(...doorFills.slice(0, bd));
   const uniqueFills = allFillsFlat.filter((f, i, arr) => arr.indexOf(f) === i);
@@ -2762,7 +2761,6 @@ function resetForm() {
   activeSection = null;
   rowMm = [];
   colMm = [];
-  $('fillMarkup').value = 0;
   $('singlePartition').checked = false;
   // Закрыть редактор секции если открыт
   const pf = $('panelForm');
