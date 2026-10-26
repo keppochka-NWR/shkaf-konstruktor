@@ -644,6 +644,14 @@ export function Scene(p: Props) {
             glass.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active };
             mesh.add(glass);
           }
+          if (part.mirror) {
+            // зеркало 4 мм на лицевой стороне фасада-основы (Module.mirror, заказ 7427796): ребёнок фасада — открывается вместе с ним
+            const mi = aluInsert(part.mirror), mirrorMat = new THREE.MeshStandardMaterial({ color: mi?.id.includes("bronze") ? 0xb8a58c : mi?.id.includes("graphite") ? 0x8d949a : 0xd6dee3, metalness: 0.55, roughness: 0.08 });
+            const glass = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, part.size[0] - 1), Math.max(1, part.size[1] - 1), 4), mirrorMat);
+            glass.position.z = part.size[2] / 2 + 2;
+            glass.userData = { partId: part.id, moduleId: placed.id, role: part.role, sectionId: part.sectionId, active };
+            mesh.add(glass);
+          }
           if(part.edgeColor&&part.material==='board'&&!vern){
             const axis=part.size.indexOf(part.thickness),edgemat=new THREE.MeshStandardMaterial({color:part.edgeColor,roughness:.7});
             mesh.material=Array.from({length:6},(_,face)=>Math.floor(face/2)===axis?mat:edgemat);

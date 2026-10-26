@@ -1,5 +1,5 @@
 import {facadeHandleId} from './model';
-import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
+import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength,HINGE_ANGLE_LABEL} from './model';
 import {worktopLines,isSlabWorktop} from './kitchen';
 import {edgeLength} from './edges';
 import {nest,unplacedDetails,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
@@ -42,6 +42,20 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 export const FALSH_GLUE_RETAIL_M2 = 1000;
 /** Лифт газовый Premial АДАЖИО ПРЕМИУМ, ₽/шт клиенту — цена сайта allpremial.ru 26.10.2026 (решение Макса: по цене сайта, без коэффициента). */
 export const ADAGIO_RETAIL = 347.2;
+/** Армирующая плёнка для зеркала — закупка АТБ, ₽/м² (прайс 01.01.2026, справочник закупочных цен). */
+export const MIRROR_FILM_M2 = 90;
+/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md): цены КЛИЕНТУ — розница поверх коэффициента, общими константами (сборка их не запекает ×2,2):
+ *  Blum TANDEM — 10 000 ₽ за комплект на ящик; петля 110° (Blum) — 800 ₽/шт; петля 155° — 1 700 ₽/шт; ограничитель угла — 50 ₽;
+ *  «петля на 90°» = петля 110° + ограничитель (на каждую петлю створки). */
+export const BLUM_TANDEM_RETAIL = 10000;
+export const HINGE110_RETAIL = 800;
+export const HINGE155_RETAIL = 1700;
+export const HINGE_LIMITER_RETAIL = 50;
+const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, поверх коэффициента)';
+/** Петля с доводчиком бренда: Blum 110° — розница Макса (800 ₽), остальные — закупка из hardware.ts. */
+function softHinge(bk: string, hb: { soft: { price: number; source: string } }): { price: number; source: string; retail: boolean } {
+  return bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
+}
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -121,7 +135,7 @@ const hidden:Record<number,{price:number;source:string}>={
   450:{price:1200,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   500:{price:1250,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'}};
 /** Цена комплекта направляющих по системе и длине. Опора — известные цены; остальное — шаг по длине и множители класса, помечено «оценка». */
-export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string}{
+export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string;/** цена клиенту поверх коэффициента (Blum TANDEM) */retail?:boolean}{
   const sys=slideSystem(c),L=c.length;
   const label=sys.label+' · '+L+' мм';
   if(sys.slide==='ball'){
@@ -130,6 +144,8 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     if(sys.motion==='simple')return {price:Math.round(base.price*0.55/10)*10,source:'Оценка: шариковые без доводчика ≈ 55 % от Versalite с доводчиком; подтвердить счётом ФАМ',label};
     return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
+  // Blum TANDEM (решение Макса 26.10.2026): 10 000 ₽ клиенту за комплект на ящик — розница поверх коэффициента (retail)
+  if(sys.brand==='blum')return {price:BLUM_TANDEM_RETAIL,source:MAX_SRC+': Blum TANDEM — '+BLUM_TANDEM_RETAIL+' ₽ за комплект на ящик',label,retail:true};
   // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
   // 250 мм — шкафы и подвесные ящики глубиной 300 вместе с фасадом (заказ 7437584): та же оценка шагом −50 ₽ от 300 мм
   const range=sys.brand==='premial'?[300,550]:[250,500];
@@ -164,7 +180,7 @@ export const DOWEL={price:0.7,source:'ФАМ: шкант 8×30 бук'};
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы, покупные материалы (фасады МДФ, цоколь из фасадного,
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
@@ -280,8 +296,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
    *  цену накладной не подставляем — строка «уточнить» (n4-kitchens3; раньше шла цена накладной). */
   function addHinges(names:Record<string,number>,bk:string){const hb=HINGE_BRANDS[bk as keyof typeof HINGE_BRANDS]??HINGE_BRANDS.gtv,suffix=bk==='gtv'?'':':'+bk;
     for(const [name,n] of Object.entries(names)){const t=hingeType(name);
-      if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
-      else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',hb.soft.price,hb.soft.source);
+      const sh=softHinge(bk,hb);
+      if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
+      else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',sh.price,sh.source,sh.retail);
       else add('hinge-bazis:'+t+suffix,'Петля '+hb.label+' · '+t+' (тип как в Базисе)',n,'шт',null,'Тип петли — по Базису; закупочной цены этого типа в прайсах нет (есть только накладная '+hb.soft.price+' ₽) — уточнить');}}
   function addShelfHolders(names:Record<string,number>){for(const [name,n] of Object.entries(names))add('shelf-holder:'+name,/^полкодержатель/i.test(name)?name:'Полкодержатель '+name,n,'шт',FASTENERS.shelfHolder.price,'Артикул — как в Базисе; цена — оценка как у Boyard p521, подтвердить');}
   function addLegs(names:Record<string,number>){for(const [name,n] of Object.entries(names)){if(/^опора кухонная регулируемая/i.test(name))add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',n,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else add('kitchen-leg:'+name,name,n,'шт',null,BZ);}}
@@ -324,7 +341,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(r.names?.legs)addLegs(r.names.legs);else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',c.legs??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',c.clips??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-hanger','Навес мебельный регулируемый',c.hangers??0,'шт',null,'Закупочная цена навеса не найдена');
-      if(r.names?.hinges)addHinges(r.names.hinges,bk);else{const hb=HINGE_BRANDS[bk];add('hinge'+(bk==='gtv'?'':':'+bk),hb.soft.label,c.hinges??0,'шт',hb.soft.price,hb.soft.source);}
+      if(r.names?.hinges)addHinges(r.names.hinges,bk);else{const hb=HINGE_BRANDS[bk],sh=softHinge(bk,hb);add('hinge'+(bk==='gtv'?'':':'+bk),hb.soft.label,c.hinges??0,'шт',sh.price,sh.source,sh.retail);}
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       // ящики и направляющие — комплектами по ящикам модуля (guideKits: короба/фасады ящиков, система — по направляющим Базиса);
       // Axis PRO — комплект ящика (в нём пара направляющих). Сырой шкаф (не кухня) — как было: Axis PRO по держателям фасада.
@@ -436,6 +453,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // посадочное место 32 скамьи (Module.seatTop, заказ 7437584): та же склейка двух плит 16, 1000 ₽/м² клиенту
     const seatM2=allParts.filter(p=>p.id==='top:glue').reduce((s,p)=>s+p.length*p.width/1e6,0);
     if(seatM2)add('seat-glue','Склейка посадочного места: 2 плиты 16 в 32 мм (работа, клей)',Math.round(seatM2*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026)',true);
+    // посадочное место 32 и добор 32 (заказ 7427796): та же склейка двух плит 16 в 32 — 1000 ₽/м² клиенту (решение Макса 16.10.2026), по площади детали
+    const glue32=allParts.filter(p=>/:shelf:\d+:glue$|^side-panel:(left|right):glue$/.test(p.id)).reduce((s,p)=>s+p.length*p.width/1e6,0);
+    if(glue32)add('glue32','Склейка 2 плит 16 в 32 мм: посадочное место, добор (работа, клей)',Math.round(glue32*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026, как у фальша 32)',true);
     for(const d of allParts){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха
@@ -470,7 +490,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
-        else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
+        // угол открывания створки (решение Макса 26.10.2026): «петля на 90°» = петля 110° бренда + ограничитель угла на каждую петлю
+        // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница поверх коэффициента.
+        else if(d.hingeAngle===90){const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
+          add('hinge-limiter-90'+suffix,'Ограничитель угла открывания 90° '+hb.label,n,'шт',HINGE_LIMITER_RETAIL,MAX_SRC+': ограничитель угла — '+HINGE_LIMITER_RETAIL+' ₽ (петля на 90° = петля 110° + ограничитель)',true);}
+        else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155° · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',HINGE155_RETAIL,MAX_SRC+': петля 155° — '+HINGE155_RETAIL+' ₽/шт',true);
+        else{const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);}
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.material==='alu'&&a.module.alu){ // распашные и фасады ящиков в рамке (aluDrawers)
@@ -494,6 +519,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.material==='glass'&&d.role==='shelf')add('glass-shelf','Стеклянная полка · обработка и держатели',d.size[0]*d.size[2]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');
       if(d.role==='rod'&&d.id.endsWith(':pipe'))add('pipe25','Труба вертикальная D25 · вешалка в два яруса',d.length/1000,'м',300,'Как штанга D25 (старый калькулятор: 300 ₽/м); закупку подтвердить');
       else if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
+      // зеркало на фасаде (заказ 7427796): зеркало 4 мм по площади фасада на основу ЛДСП (фасад в раскрое), армирующая плёнка, полировка кромки; наклейка — финальный расчёт
+      if(d.role==='door'&&d.mirror){const ins=aluInsert(d.mirror),area=d.size[0]*d.size[1]/1e6,perimeter=2*(d.size[0]+d.size[1])/1000;
+        add('glass-mirror:'+d.mirror,(ins?.label??'Зеркало')+' на фасад (основа — фасад ЛДСП 16)',area,'м²',ins?.perM2??null,ins?.source??'Цена зеркала не найдена');
+        add('glass-mirror-film','Армирующая плёнка для зеркала',area,'м²',MIRROR_FILM_M2,'АТБ, прайс 01.01.2026: армировочная плёнка для зеркала 90 ₽/м²');
+        add('glass-mirror-polish','Полировка кромки зеркала 4 мм',perimeter,'пог.м',RULES.glassTopPolishPerM,'Прайс МВМ стеклообработка 13.01.2026 (как у стеклянной крыши)');
+        add('glass-mirror-glue','Наклейка зеркала на основу (клей, работа)',area,'м²',null,'Как цех клеит зеркало на основу — цена после финального расчёта конструктором');}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){
         const ins=aluInsert(a.module.topGlass),area=d.size[0]*d.size[2]/1e6,perimeter=2*(d.size[0]+d.size[2])/1000;
         add('glass-top:'+a.module.topGlass,'Крыша · '+(ins?.label??'стекло'),area,'м²',ins?.perM2??null,ins?.source??'Цена стекла не найдена');
@@ -522,11 +553,13 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const c=drawerConfig(a.module,s,j);
         if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');if(item&&!shelf.has('mesh:'+c.mesh))shelf.set('mesh:'+c.mesh,item.shelf??item.price);continue;}
         const sys=slideSystem(c),q=slidePrice(c),isDefault=sys.id==='ball-soft'||sys.id==='hidden-dtc-push';
-        add('slide:'+c.slide+':'+c.length+(isDefault?'':':'+sys.id),q.label,1,'компл',q.price,q.source);
+        add('slide:'+c.slide+':'+c.length+(isDefault?'':':'+sys.id),q.label,1,'компл',q.price,q.source,!!q.retail);
       }
     }
   }
   add('edge2','Кромка 2 мм',edge2,'м',45,'База цеха');add('edge1','Кромка 1 мм',edge1,'м',33,'Оценка между 0,8 (27 ₽) и 2 мм (45 ₽) с работой; подтвердить счётом Победы');add('edge08','Кромка 0,8 мм',edge08,'м',27,'Победа: кромка 0,8×19 (Дуб Дарго) 27 ₽/м');add('edge04','Кромка 0,4 мм',edge04,'м',15,'База цеха');add('edge05','Кромка 0,5 мм (как в проекте Базиса)',edge05,'м',15,'Цена как у кромки 0,4 — уточнить по счёту');add('small','Обработка деталей уже 70 мм',small,'шт',300,'Правило цеха'+(bazisProject?' (работа цеха, не из Базиса)':''));
+  // кромка на клей PUR (пожелание клиента, заказ 7427796): надбавки в прайсах нет — позиция финального расчёта по всей кромке проекта
+  if(settings.edgeGlue==='pur')add('edge-pur','Кромка на клей PUR (полиуретан) — надбавка к кромке',edge2+edge1+edge08+edge04+edge05,'м',null,'Надбавки за клей PUR в прайсах нет — цена после финального расчёта конструктором');
   // Работа цеха (решение Макса 20.10.2026): лист ЛДСП — SHOP_WORK_LDSP_SHEET, лист ЛХДФ — SHOP_WORK_HDF_SHEET отдельной строкой
   // «Работа цеха: ЛХДФ» (шкафы, в т.ч. сырые шкафы из корпуса Базиса). У кухни (все объекты — кухонные модули, сырые модули кухни
   // Базиса, столешницы) лист ЛХДФ работой не считается, как до 20.10 (вопрос Максу открыт). Обе строки — себестоимость × коэффициент.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {estimate,slidePrice,HINGE} from '../src/pricing';
+import {estimate,slidePrice,HINGE,HINGE110_RETAIL} from '../src/pricing';
 import {newProject,projectErrors,parseProject} from '../src/project';
 import {parts,section,drawerConfig} from '../src/model';
 import {HINGE_BRANDS,SLIDE_SYSTEMS,slideSystem,hingeCount,hingePositions,drawerHasHandle} from '../src/hardware';
@@ -13,7 +13,8 @@ test('hinge brand changes hinge line, price and keeps GTV ids for old projects',
   const gtv=estimate(p).lines.find(l=>l.id==='hinge')!;assert.equal(gtv.unitPrice,HINGE.price);
   for(const b of ['pulse','blum'] as const){
     const q=setAllHinges(p,b),line=estimate(q).lines.find(l=>l.id==='hinge:'+b)!;
-    assert.equal(line.unitPrice,HINGE_BRANDS[b].soft.price);assert.equal(line.quantity,gtv.quantity);assert.deepEqual(projectErrors(q),[]);
+    // решение Макса 26.10.2026: петля Blum 110° — 800 ₽ клиенту (розница поверх коэффициента), Pulse — закупка из hardware.ts
+    if(b==='blum'){assert.equal(line.unitPrice,HINGE110_RETAIL);assert.equal(line.retail,true);}else assert.equal(line.unitPrice,HINGE_BRANDS[b].soft.price);assert.equal(line.quantity,gtv.quantity);assert.deepEqual(projectErrors(q),[]);
     assert.equal(parseProject(JSON.parse(JSON.stringify(q))).modules[0].module.hingeBrand,b,'brand survives save/open');
   }
   assert.ok(estimate(setAllHinges(p,'blum')).split.hardware>estimate(p).split.hardware);
@@ -22,7 +23,8 @@ test('hinge brand changes hinge line, price and keeps GTV ids for old projects',
 });
 
 test('every slide system has a price at 450 mm, push systems have no handle, old hidden configs stay DTC push',()=>{
-  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(q.price!==null&&q.price>0,s.id);assert.ok(q.source.length>0);}
+  // Blum TANDEM — 10 000 ₽ клиенту за комплект (решение Макса 26.10.2026, розница), остальные — закупка
+  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(q.price!==null&&q.price>0,s.id);assert.equal(!!q.retail,s.brand==='blum',s.id);assert.ok(q.source.length>0);}
   assert.equal(slideSystem({slide:'gtv0fpo'}).id,'hidden-dtc-push');assert.equal(slideSystem({slide:'ball'}).id,'ball-soft');
   assert.equal(drawerHasHandle({slide:'ball',height:140,length:450,operation:'push'}),false);
   assert.equal(drawerHasHandle({slide:'gtv0fpo',height:140,length:450,operation:'soft-close',brand:'premial'}),true);

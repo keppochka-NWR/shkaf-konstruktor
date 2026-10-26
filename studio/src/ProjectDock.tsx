@@ -11,6 +11,8 @@ import { HINGE_BRANDS, SLIDE_SYSTEMS } from "./hardware";
 import { hardwareChoice } from "./hardwareSwap";
 import { HardwareWindow } from "./HardwareWindow";
 import { createPortal } from "react-dom";
+import { MANAGER_PRICING } from "./buildMode";
+import { withPriceModel } from "./priceModel";
 
 /** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
 
@@ -23,14 +25,7 @@ import "./project-dock.css";
 export type DockTab = "project" | "estimate" | "hardware" | "details" | "docs";
 export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement" | "client-spec";
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
-/** «Модель цены» проекта (менеджер): по коэффициенту, за лист, по большей из двух (calculation.maxModel, решение Макса 26.10.2026). */
-export function withPriceModel(p: Project, v: string, sheetPrice: number): Project {
-  const c = { ...(p.calculation ?? { markup: MARKUP_DEFAULT, overrides: {} }) };
-  if (v !== "markup" && c.sheetPrice === undefined && sheetPrice > 0) c.sheetPrice = sheetPrice;
-  if (v === "max") c.maxModel = true;
-  else { delete c.maxModel; if (v === "sheet") c.model = "sheet"; else delete c.model; }
-  return { ...p, calculation: c };
-}
+export { withPriceModel };
 const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "project", label: "Проект", icon: Box },
   { id: "estimate", label: "Стоимость", icon: Calculator },

@@ -5,7 +5,7 @@ import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,re
 import {partCollisions} from './collisions';
 import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
-import {SLIDES} from './hardware';
+
 import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths,setWorktopMaterial} from './kitchen';

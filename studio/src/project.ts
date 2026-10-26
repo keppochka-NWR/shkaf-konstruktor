@@ -33,7 +33,7 @@ export function localToRoom(a:PlacedModule,u:number,v:number){return transform(a
 export function roomToLocal(a:PlacedModule,x:number,z:number){const p=inverseTransform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,x,z);return p;}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
 /** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
-export function sideExtension(m:Module,side:'left'|'right'){if(m.kitchen?.sideStrip?.side===side)return m.kitchen.sideStrip.ext;/* доборная планка кухни Базиса (kitchen.sideStrip) */if(m.sidePanels?.[side])return RULES.panel;if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
+export function sideExtension(m:Module,side:'left'|'right'){if(m.kitchen?.sideStrip?.side===side)return m.kitchen.sideStrip.ext;/* доборная планка кухни Базиса (kitchen.sideStrip) */if(m.sidePanels?.[side])return RULES.panel*(m.sidePanels[side]!.thick===32?2:1);/* добор 32 — две плиты */if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
 export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
  const c=a.module.corner;
  if(c){const w=a.module.width,d=c.sideDepth,rear=a.module.backType==='none'?0:3,front=a.module.doors?26:0;return [[-rear,-rear],[w,-rear],[w,d+front],[d+front,w],[-rear,w]].map(([u,v])=>localToRoom(a,u,v));}
@@ -114,7 +114,8 @@ export function applyAutoFillers(p:Project):Project{
     // Стены: боковина в пределах wallSnap от стены комнаты.
     const wf:Module['wallFiller']={},before={x:a.x,z:a.z};
     if(needsWallFiller(a.module))for(const side of ['left','right'] as const){
-      if(corner===side)continue;
+      // боковая фальшпанель / добор у стены (заказ 7427796) — сама закрывает зазор до стены, планка торцом поверх неё не нужна
+      if(corner===side||a.module.sidePanels?.[side])continue;
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
       const face=localToRoom(a,u,a.module.depth/2),out=localToRoom(a,u+dir*10,a.module.depth/2);
       const nx=Math.sign(Math.round(out.x-face.x)),nz=Math.sign(Math.round(out.z-face.z));
@@ -236,7 +237,7 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
   if(x.dimensions!==undefined)p.dimensions=structuredClone(x.dimensions);
   if(x.measurement)p.measurement={number:x.measurement.number,date:x.measurement.date,notes:x.measurement.notes,...(x.measurement.niche===undefined?{}:{niche:{width:x.measurement.niche.width,height:x.measurement.niche.height,depth:x.measurement.niche.depth,deviation:x.measurement.niche.deviation,...(x.measurement.niche.readings===undefined?{}:{readings:structuredClone(x.measurement.niche.readings)})}})};
   if(x.cloud)p.cloud={id:x.cloud.id,revision:x.cloud.revision,owner:x.cloud.owner,...(x.cloud.name===undefined?{}:{name:x.cloud.name})};
-  if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.model===undefined?{}:{model:x.calculation.model}),...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice}),...(x.calculation.vernissageMarkup===undefined?{}:{vernissageMarkup:x.calculation.vernissageMarkup}),...(x.calculation.baseMarkup===undefined?{}:{baseMarkup:x.calculation.baseMarkup}),...(x.calculation.baseVernissageMarkup===undefined?{}:{baseVernissageMarkup:x.calculation.baseVernissageMarkup}),...(x.calculation.cuttingEngine===undefined?{}:{cuttingEngine:x.calculation.cuttingEngine}),...(x.calculation.edgeGlue==='pur'?{edgeGlue:'pur' as const}:{}),...(x.calculation.maxModel===true?{maxModel:true}:{})};
+  if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.model===undefined?{}:{model:x.calculation.model}),...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice}),...(x.calculation.vernissageMarkup===undefined?{}:{vernissageMarkup:x.calculation.vernissageMarkup}),...(x.calculation.baseMarkup===undefined?{}:{baseMarkup:x.calculation.baseMarkup}),...(x.calculation.baseVernissageMarkup===undefined?{}:{baseVernissageMarkup:x.calculation.baseVernissageMarkup}),...(x.calculation.cuttingEngine===undefined?{}:{cuttingEngine:x.calculation.cuttingEngine}),...(x.calculation.edgeGlue==='pur'?{edgeGlue:'pur' as const}:{}),...(x.calculation.maxModel===true||(x.calculation as {priceMax?:unknown}).priceMax===true?{maxModel:true}:{})}; // priceMax — то же поле ветки o-7427796 (синоним при загрузке)
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes,...(x.offer.pendingIncluded===undefined?{}:{pendingIncluded:x.offer.pendingIncluded}),...(x.offer.itemPrices===undefined?{}:{itemPrices:x.offer.itemPrices})};const e=projectErrors(p,allowEmpty);if(e.length)throw Error(e[0]);return p;
 }
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{

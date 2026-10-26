@@ -16,7 +16,7 @@ export function dividerInfo(m: Module, i: number): { partial: boolean; from: num
 /** Убрать полку j секции: номера жёстких, стеклянных и подсвеченных полок сдвигаются, как при удалении полки. */
 function dropShelf(s: Section, j: number) {
   s.shelves.splice(j, 1);
-  for (const key of ["fixed", "glassShelves", "shelfLights"] as const) {
+  for (const key of ["fixed", "glassShelves", "thickShelves", "shelfLights"] as const) {
     const v = s[key];
     if (!v) continue;
     const next = v.filter((x) => x !== j).map((x) => (x > j ? x - 1 : x));
