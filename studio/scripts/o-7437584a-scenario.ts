@@ -41,7 +41,7 @@ const visible = async (l: Locator): Promise<Locator> => {
   }
   throw Error("не виден: " + l.toString() + " · совпадений " + (await l.count()) + " · " + JSON.stringify(await l.evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height), !!(e as HTMLElement).offsetParent, (e as HTMLButtonElement).disabled]; }))));
 };
-const btn = (name: string | RegExp, exact = true) => page.getByRole("button", { name, exact: typeof name === "string" ? exact : undefined });
+const btn = (name: string | RegExp, exact = true) => typeof name === "string" ? page.locator(`button[aria-label="${name}"]`).or(page.getByRole("button", { name, exact })) : page.getByRole("button", { name }); /* кнопка-переключатель с aria-label (role=switch) — по метке */
 const byLabel = (label: string) => page.getByLabel(label, { exact: true });
 async function type(text: string) { await page.keyboard.type(text); keys += text.length; }
 async function press(key: string) { await page.keyboard.press(key); keys++; }
@@ -167,6 +167,9 @@ try {
   await open("Штанги"); await click(page.getByRole("group", { name: "Выдвижные тремпели в секции" }).getByRole("button", { name: "1", exact: true }));
   await end();
 
+  begin("И3: нижние фасады по эскизу — 1996 (2000 от пола до антресоли, зазоры 2 + 2)");
+  for (const n of [1, 2, 3]) { await selectModule(n); await open("Фасады и открывание"); await field("Высота фасадов по эскизу", 1996); const err = await errorText(); if (err) console.log(`  [корпус ${n}: ${err.slice(0, 200)}]`); const x = page.locator('button[aria-label="Закрыть сообщение"]'); if (await x.evaluateAll((els) => els.some((e) => (e as HTMLElement).offsetParent))) await click(x); }
+  await end(await errorText());
   // антресоли: «Антресоль сверху на этот корпус» → высота 590, push, карниз 90
   for (const n of [1, 2, 3]) {
     begin(`И3 антресоль над корпусом ${n}: 590, push, карниз 90${n === 3 ? ", полка съёмная" : ""}`);
@@ -174,7 +177,7 @@ try {
     await click(btn(/Антресоль сверху на этот корпус/, false)); await page.waitForTimeout(800);
     await open("Габариты"); await field("Высота", 590);
     await open("Фасады и открывание"); await open("Тип открывания"); await pick("Открывание фасадов", /^Push/);
-    await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Планка под крышей", /^90 мм/);
+    await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Планка под крышей", /^90 мм/); await open("Фасады и открывание"); await field("Высота фасадов по эскизу", 500); /* эскиз: фасад 500 под карнизом 90 (решение 26.10) */
     if (n === 3) { await open("Наполнение"); await open("Полки"); await click(btn("Добавить: Полки")); await field("Полка 1", 279); }
     await end(await errorText());
   }
@@ -192,7 +195,7 @@ try {
   await end(await errorText());
 
   begin("И1 антресоль 800: карниз 90, push, жёсткая полка у кромки фасада, петли сверху (АДАЖИО), одна створка");
-  await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Планка под крышей", /^90 мм/);
+  await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Планка под крышей", /^90 мм/); await open("Фасады и открывание"); await field("Высота фасадов по эскизу", 500); /* эскиз: фасад 500 под карнизом 90 (решение 26.10) */
   await open("Фасады и открывание"); await open("Тип открывания"); await pick("Открывание фасадов", /^Push/);
   await open("Наполнение"); await open("Полки"); await click(btn("Добавить: Полки")); await field("Полка 1", 468); await checkbox("Полка 1 жёсткая", true);
   await open("Фасады и открывание"); await open("Фасад");
@@ -206,13 +209,13 @@ try {
   await click(btn("Пустой шкаф"));
   await field("Ширина новой мебели", 1000); await field("Высота новой мебели", 590); await field("Глубина новой мебели", 282);
   await pickIf("Корпусов в ряд у новой мебели", /^1 ·/);
-  await pickAny("Дверей у новой мебели", [/^2 · секций 2/, /секций 2/]);
+  await pickAny("Дверей у новой мебели", [/^2 · секций 1/]); /* две створки в одной секции, затем «Разделить пополам» — отсеки 500 + 500 */
   await click(btn("Добавить в комнату")); await page.waitForTimeout(1500);
   await open("Корпус и размещение"); await open("Положение");
   await checkbox("Двигать всю композицию", false);
   await field("От пола", 2000); await field("От левой стены", 3600); await field("От задней стены", 3);
   await open("Фасады и открывание"); await open("Тип открывания"); await pick("Открывание фасадов", /^Push/);
-  await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Планка под крышей", /^90 мм/);
+  await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Планка под крышей", /^90 мм/); await open("Фасады и открывание"); await field("Высота фасадов по эскизу", 500); /* эскиз: фасад 500 под карнизом 90 (решение 26.10) */ await open("Наполнение"); await open("Секция"); await click(page.locator("button").filter({ hasText: "Разделить пополам" })); await pick("Выбранная секция", /Секция 1/); await pick("Створки выбранной секции", /^Одна створка/); /* после деления у первой секции остались 2 створки из палитры */
   await end(await errorText());
 
   begin("И1: подвесной ящик 800 × 200 × 282 (комод), push, низ на 750");
@@ -233,27 +236,29 @@ try {
   await click(btn("Пустой шкаф"));
   await field("Ширина новой мебели", 1000); await field("Высота новой мебели", 450); await field("Глубина новой мебели", 300);
   await pickIf("Корпусов в ряд у новой мебели", /^1 ·/);
-  await pickAny("Дверей у новой мебели", [/^2 · секций 2/, /секций 2/]);
+  await pickAny("Дверей у новой мебели", [/^2 · секций 1/]);
   await click(btn("Добавить в комнату")); await page.waitForTimeout(1500);
   await open("Корпус и размещение"); await open("Положение");
   await checkbox("Двигать всю композицию", false);
   await field("От левой стены", 3600); await field("От задней стены", 3);
   await open("Опоры"); await pick("Основание корпуса", /^Без цоколя/);
-  await open("Фасады и открывание"); await open("Фасад"); await click(btn("Распашные фасады", false));
+await open("Наполнение"); await open("Секция"); await click(page.locator("button").filter({ hasText: "Разделить пополам" }));   await open("Фасады и открывание"); await open("Фасад"); await click(btn("Распашные фасады", false));
   await open("Дополнительно"); await open("Конструкция и фурнитура"); await pick("Материал крыши", /^Посадочное место 32/);
   await end(await errorText());
 
   begin("И1: щит 1000 × 1550 над скамьёй — отдельная панель ЛДСП");
   await click(btn("Заказ и инструменты"));
   await open("Общий план · замер · панели");
-  await field("Длина панели", 1000); await field("Ширина панели", 1550); await field("Кромка по контуру", 2);
+  await field("Длина панели", 1000); await field("Ширина панели", 1550); await field("Кромка по контуру", 2); await pick("Материал отдельной панели", /^Клауд$/);
   await click(btn("Добавить панель в комнату")); await page.waitForTimeout(1200);
   await end(await errorText());
 
   begin("И1 щит: положение — от пола 450, от левой стены 3600, к стене");
-  await press("Escape");
-  await end();
-
+  await click(btn("Свернуть верхнюю панель")); await page.waitForTimeout(500);
+  await click(page.locator("button").filter({ hasText: /^\s*Панель/ }).last()); await page.waitForTimeout(500);
+  await open("Положение").catch(() => undefined);
+  await field("От пола", 450); await field("От левой стены", 3600); await field("От задней стены", 0);
+  await end(await errorText());
   // ── 4. Материал Lamarty Клауд — корпуса и фасады всех корпусов ──────────────────────────
   begin("Материал «Клауд» — корпус и фасады всех корпусов");
   await selectModule(1); await open("Корпус и размещение"); await open("Материал корпуса");
@@ -278,7 +283,7 @@ try {
 }
 // проект — файлом, как менеджер: «Заказ и инструменты» → «Скачать комнату»
 let project: any = null;
-try { await press("Escape"); await click(btn("Заказ и инструменты")); const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), click(page.getByRole("button", { name: "Сохранить проект файлом" }))]); await dl.saveAs(`${out}/mouse-room.json`); const raw = JSON.parse(readFileSync(`${out}/mouse-room.json`, "utf8")); const walk = (o: any): any => { if (!o || typeof o !== "object") return null; if (Array.isArray(o.modules) && o.room) return o; for (const x of Object.values(o)) { const r = walk(x); if (r) return r; } return null; }; project = walk(raw); } catch (e) { console.log("скачать проект не вышло: " + (e as Error).message.split("\n")[0]); project = await savedProject(); }
+try { await press("Escape"); if (!(await page.locator('button[aria-label="Сохранить проект файлом"]').evaluateAll((els) => els.some((e) => (e as HTMLElement).offsetParent)))) await click(btn("Заказ и инструменты")); const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), click(page.getByRole("button", { name: "Сохранить проект файлом" }))]); await dl.saveAs(`${out}/mouse-room.json`); const raw = JSON.parse(readFileSync(`${out}/mouse-room.json`, "utf8")); const walk = (o: any): any => { if (!o || typeof o !== "object") return null; if (Array.isArray(o.modules) && o.room) return o; for (const x of Object.values(o)) { const r = walk(x); if (r) return r; } return null; }; project = walk(raw); } catch (e) { console.log("скачать проект не вышло: " + (e as Error).message.split("\n")[0]); project = await savedProject(); }
 writeFileSync(`${out}/storage-keys.txt`, JSON.stringify(await page.evaluate(() => Object.keys(localStorage).map((k) => [k, (localStorage.getItem(k) || "").length, (localStorage.getItem(k) || "").slice(0, 120)])), null, 1));
 writeFileSync(`${out}/mouse-project.json`, JSON.stringify(project, null, 1));
 const total = steps.reduce((a, s) => ({ seconds: a.seconds + s.seconds, clicks: a.clicks + s.clicks, keys: a.keys + s.keys }), { seconds: 0, clicks: 0, keys: 0 });

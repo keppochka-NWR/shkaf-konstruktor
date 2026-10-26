@@ -6,6 +6,7 @@ import { setDoorHinge } from "../src/facadeEditing";
 import { freePanel } from "../src/freePanels";
 import { estimate, slidePrice } from "../src/pricing";
 import { newProject } from "../src/project";
+import { addUpperModule } from "../src/operations";
 import { partCollisions } from "../src/collisions";
 import { roomWarnings } from "../src/roomWarnings";
 
@@ -108,4 +109,24 @@ test("7437584: ящики за дверью над полкой — фальш �
   const panel = freePanel({ name: "Щит", width: 1000, height: 1550, thickness: 16, plane: "xy", edge: 2, decor: "Клауд" });
   Object.assign(panel, { x: 100, y: 450, z: 0 });
   assert.ok(!roomWarnings({ ...newProject(), modules: [panel] }).some((w) => w.kind === "logistics"));
+});
+
+test("7437584: фасады по эскизу (facadeSketchH) — антресоль 500 под карнизом 90, нижние 1996; антресоль сверху высоту фасадов не наследует", () => {
+  const ant = initialModule();
+  Object.assign(ant, { name: "Антресоль", width: 533, height: 590, depth: 384, doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed", facadeSketchH: 500 });
+  ant.sections = [{ ...section(), shelves: [], drawers: 0, rod: false, doorLeaves: 1 }];
+  assert.deepEqual(validate(ant), []);
+  const d = parts(ant).find((p) => p.role === "door")!;
+  assert.equal(Math.round(d.size[1]), 500, "фасад 500 по эскизу");
+  assert.ok(validate({ ...ant, facadeSketchH: 700 }).some((e) => e.startsWith("Высота фасадов по эскизу")), "ниже корпуса больше 10 мм — нельзя");
+  const low = initialModule();
+  Object.assign(low, { width: 533, height: 2000, depth: 384, plinthHeight: 80, facadeSketchH: 1996 });
+  low.sections = [{ ...section(), shelves: [], drawers: 0, rod: false, doorLeaves: 1 }];
+  assert.deepEqual(validate(low), []);
+  const ld = parts(low).find((p) => p.role === "door")!;
+  assert.equal(Math.round(ld.position[1] - ld.size[1] / 2), 2, "низ фасада 2 мм от пола — закрывает цоколь");
+  assert.equal(parseModule(JSON.parse(JSON.stringify(low))).facadeSketchH, 1996);
+  const p = { ...newProject(), room: { width: 3000, depth: 2000, height: 2700, openings: [] }, modules: [{ id: "a", x: 100, y: 0, z: 3, rotation: 0 as const, module: low }] };
+  const up = addUpperModule(p, "a").modules[1].module;
+  assert.equal(up.facadeSketchH, undefined, "антресоль сверху — фасады по правилу");
 });

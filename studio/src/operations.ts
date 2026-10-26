@@ -190,7 +190,7 @@ export function addUpperModule(p:Project,mid:string):Project {
  const n=structuredClone(p),base=n.modules.find(a=>a.id===mid);if(!base)throw Error('Выберите нижний корпус.');
  const y=(base.y??0)+base.module.height,height=Math.min(600,Math.floor(p.room.height-y-MEASUREMENT_RULES.ceilingClearance));
  if(height<RULES.minH)throw Error(`Над корпусом нужно хотя бы ${RULES.minH} мм для отдельной антресоли и ${MEASUREMENT_RULES.ceilingClearance} мм монтажного зазора. Измените высоту нижнего корпуса или замер помещения.`);
- n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]}});
+ n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,facadeSketchH:undefined/* высота фасадов по эскизу — своя у антресоли */,sections:[section()]}});
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
