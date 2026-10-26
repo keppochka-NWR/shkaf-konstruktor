@@ -450,6 +450,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // нижний угловой студии (kitchenCorner.ts): дверь у фальша на «Петля под фальшпанель» — другое изделие, цены в прайсах нет:
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
+        // петли 155–165° (m.wideHinges, заказ 7442203): своя строка; закупочной цены нет — позиция финального расчёта (pendingPrices.ts)
+        else if(a.module.wideHinges&&!push)add('hinge-wide'+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155–165° с доводчиком'+(inset?' · вкладная':''),n,'шт',null,'Петля с углом открывания 155–165°: счёта нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
@@ -466,7 +468,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручка Базиса на фасаде кухни (kitchen.handle.name, n4-wall) — строкой Базиса по ручкам сцены; в bazisItems её нет (markBazis)
       const kh=a.module.kitchen?.handle;
       if(d.role==='handle'&&kh?.name&&d.name==='Ручка фасада · '+kh.name)add('bazis:ручка:'+kh.name,kh.name,1,'шт',null,BZ);
-      else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
+      else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.pending?null:h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
       if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
       // навес кухни — с заглушкой ABS, как в Базисе (34 кухни: у параметрических модулей навесов 34, заглушек 34)
       if(d.id.startsWith('kitchen-hanger:')){add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS',1,'шт',null,'Как в проектах Базиса: заглушка на каждый навес; цена не найдена');}
@@ -492,6 +494,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
+    // подсветка по датчику движения (m.lightSensor, заказ 7442203): датчик и блок питания на модуль с подсветкой — финальный расчёт
+    if(a.module.lightSensor&&allParts.some(p=>p.role==='light'&&!p.id.startsWith('groove:'))){add('light-sensor','Датчик движения для подсветки (включение при открывании)',1,'шт',null,'Датчик движения подсветки: счёта нет — цена после финального расчёта конструктором');add('light-psu','Блок питания 12 В для подсветки',1,'шт',null,'Блок питания подсветки: подбор по мощности ленты, счёта нет — цена после финального расчёта конструктором');}
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews,'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха');
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');

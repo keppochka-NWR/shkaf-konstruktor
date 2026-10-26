@@ -403,6 +403,12 @@ export type Module = {
   ownWidthOnly?: boolean;
   /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
   hingeBrand?: HingeBrand;
+  /** Петли распашных фасадов с большим углом открывания 155–165° (заказ 7442203: дверь открывается к соседней и не мешает проёму).
+   *  Геометрия та же; в смете — своя строка петли (цена после финального расчёта конструктором: счёта на такую петлю нет). */
+  wideHinges?: true;
+  /** Подсветка включается датчиком движения (заказ 7442203): в смете датчик и блок питания на модуль с подсветкой
+   *  (цена после финального расчёта конструктором). Без подсветки в модуле не действует. */
+  lightSensor?: true;
   /** Explicit repair command only: preserve legacy and imported hardware until requested. */
   hingeFit?: true;
   /** Кромка видимых торцов корпуса и кромка фасадов, мм. По умолчанию 2; скрытые торцы всегда 0,4. */
@@ -705,7 +711,9 @@ export function railHeight(m:Module,place:NonNullable<Module['rails']>[number]['
 /** Угловая фальш этого корпуса — планка из фасада (strip). Старые файлы без cornerKind: по наличию фасадов. */
 export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.cornerKind?m.cornerKind==='strip'&&m.doors:m.doors;}
 /** Опоры регулируемые под нижним корпусом (за цоколем): 4, при ширине от 900 — 6. Антресоли и корпуса без цоколя — без опор. */
-export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
+export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;
+  // заказ 7442203: без дна на цоколе боковины стоят на полу (цоколь — царга спереди), опорам не к чему крепиться
+  if(!m.feet&&!hasBottom(m))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
 /** Фальшпанель к стене нужна, когда у стены распашной фасад или накладной ящик. Вкладной ящик открытого корпуса (за купе) внутри проёма — о стену не бьёт. */
 export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'));}
@@ -796,7 +804,10 @@ export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
 export function doorMaxWidth(m:Module){const h=m.height-fe(m)-facadeBottom(m);return h<=RULES.doorLowH?RULES.doorMaxLow:RULES.doorMax;}
 export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeaves;const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>doorMaxWidth(m)?2:1;}
-export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers;}
+export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers&&!nicheDrawers(m,s);}
+/** Шкаф (не кухня) с открытым проёмом между рядами фасадов (doorSplit + doorNiche, заказ 7442203 — пенал): ящики секции стоят в этом
+ *  проёме, их фасады накладные вровень с дверями (не за дверью), нижний фасад не тянется к цоколю. */
+export function nicheDrawers(m:Module,s:Section){return !m.kitchen&&m.doors&&s.doorSplit!==undefined&&s.doorNiche!==undefined;}
 /** Рядов распашных фасадов секции: 1, с разрезом 2, у кухни — плюс средние ряды doorRows. */
 export function doorRowCount(m:Module,s:Section){return s.doorSplit===undefined?1:2+(m.kitchen?s.doorRows?.length??0:0);}
 function fillerSidesBase(m:Module,s:Section){
@@ -1351,7 +1362,7 @@ export function parts(m: Module): Part[] {
         const sp=facadeSpan(m,i,b);fw=sp.right-sp.left;fx=(sp.left+sp.right)/2;
         fh=span[1]-span[0];fy=pitchBottom+(span[0]+span[1])/2;
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
-        if(lowest){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
+        if(lowest&&!nicheDrawers(m,s)){const top=fy+fh/2,floor=facadeBottom(m);if(floor<top-fh){fh=top-floor;fy=(top+floor)/2;}}
         // ящики до крыши без полки над ними (комод, п.29): верхний фасад — до верха накладных фасадов, как нижний до цоколя
         const highest=drawerOffsets(s).every((o,k)=>k===j||o<=drawerOffsets(s)[j]);
         if(highest&&!hasDrawerCap(m,s,b)&&drawersFillRoof(m,s,b)&&!grip){const bottom=fy-fh/2,roof=facadeTop(m);if(roof>bottom+fh){fh=roof-bottom;fy=(roof+bottom)/2;}}
@@ -1428,7 +1439,8 @@ export function parts(m: Module): Part[] {
       const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
       const ft=m.facadeT??t,dz=inset?d-ft/2:d+ft/2+(m.faceAir??2);
       // ниша под технику (кухня, doorNiche): верхний ряд начинается выше верха нижнего на высоту ниши, а не на зазор
-      const upGap=m.kitchen&&s.doorNiche!==undefined?s.doorNiche:gap;
+      // шкаф (заказ 7442203, пенал): открытый проём между рядами фасадов — ящики с накладными фасадами и открытая ниша (nicheDrawers)
+      const upGap=s.doorNiche!==undefined?s.doorNiche:gap;
       const bands=s.doorSplit===undefined?[[doorBottom,y1flat]]:[[doorBottom,doorBottom+s.doorSplit-gap/2]];
       if(s.doorSplit!==undefined){
         // кухня (пенал в 3+ ряда, doorRows): средние ряды — своей высоты фасада, через зазор; верхний — до верха фасадов
@@ -2142,8 +2154,11 @@ export function fastenerCounts(m: Module) {
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
 export function maxHeightOf(m: Module): number {
-  return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : m.kupeZone || m.kupeBody ? kupeBodyMax() : RULES.maxH;
+  return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : m.kupeZone || m.kupeBody || tallBySheet(m) ? kupeBodyMax() : RULES.maxH;
 }
+/** Заказ 7442203 (пенал и угловой шкаф 2620): шкаф без задника или с задником ЛДСП не упирается в лист ЛХДФ — боковины, фасады
+ *  и задник ЛДСП цельные из листа ЛДСП 2750, поэтому высота до kupeBodyMax() (2730), как у корпуса шкафа-купе. С задником ЛХДФ — RULES.maxH. */
+export function tallBySheet(m: Module): boolean { return !m.kitchen && !m.desk && !m.raw && !m.corner && (m.backType === "none" || m.backType === "board"); }
 /** Корпус шкафа-купе с дверями внутри: боковины и крыша цельные — до длины листа ЛДСП за вычетом отступов раскроя. */
 export function kupeBodyMax(): number { return RULES.sheetW - 2 * RULES.sheetMargin; }
 /** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
@@ -2172,7 +2187,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
     const n = m[key];
     if (!Number.isFinite(n) || n < min || n > max)
-      errors.push(`${label}: допустимо от ${min} до ${max} мм.`);
+      errors.push(`${label}: допустимо от ${min} до ${max} мм.`+(key==='height'&&max===RULES.maxH&&!m.kitchen&&!m.desk&&n>max&&n<=kupeBodyMax()?` Выше ${RULES.maxH} — без задней стенки или с задником ЛДСП (до ${kupeBodyMax()} по листу ${RULES.sheetW}).`:''));
   }
   if (m.backType!==undefined && !["nailed","groove","board","none"].includes(m.backType)) errors.push("Выберите допустимый тип задней стенки.");
   if (m.kupeZone!==undefined){
@@ -2204,6 +2219,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');
+  if((m.wideHinges!==undefined&&m.wideHinges!==true)||(m.lightSensor!==undefined&&m.lightSensor!==true))errors.push('Неверный параметр петель или подсветки.');
   for(const e of [m.edgeBody,m.edgeFacade])if(e!==undefined&&![2,1,0.8].includes(e))errors.push('Кромка: выберите 2, 1 или 0,8 мм.');
   if(m.desk!==undefined){
     if(!['both','left','right','none'].includes(m.desk.sides)||!Number.isFinite(m.desk.apron)||m.desk.apron<RULES.deskApronMin||m.desk.apron>RULES.deskApronMax)errors.push(`Стол: опоры слева/справа/обе/нет, царга от ${RULES.deskApronMin} до ${RULES.deskApronMax} мм.`);
@@ -2263,7 +2279,9 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
     // кухня: фасады от 200 мм (антресоль Базиса k13 m02 в два ряда по 342; n3-antresol); шкафы — doorMinH
     const splitMin=m.kitchen?200:RULES.doorMinH;
     if(s.doorSplit!==undefined&&(!Number.isFinite(s.doorSplit)||s.doorSplit<splitMin||s.doorSplit>m.height-splitMin))errors.push(prefix+'недопустимая высота разделения фасадов.');
-    if(s.doorNiche!==undefined&&(!m.kitchen||s.doorSplit===undefined||!Number.isFinite(s.doorNiche)||s.doorNiche<0||s.doorSplit+s.doorNiche>m.height-200))errors.push(prefix+'ниша под технику: только у кухни с разделёнными фасадами, верхний ряд не ниже 200 мм.');
+    if(s.doorNiche!==undefined&&(s.doorSplit===undefined||!Number.isFinite(s.doorNiche)||s.doorNiche<0||s.doorSplit+s.doorNiche>m.height-200))errors.push(prefix+(m.kitchen?'ниша под технику: только у кухни с разделёнными фасадами, верхний ряд не ниже 200 мм.':'проём между рядами фасадов: только при разделённых фасадах, верхний ряд не ниже 200 мм.'));
+    // шкаф (заказ 7442203): ящики в проёме между рядами фасадов — фасады ящиков не выходят за проём (не наезжают на двери)
+    if(nicheDrawers(m,s)&&s.drawers>0&&m.doorMount!=='inset'){const g=s.doorGap??fb(m),lo=facadeBottom(m)+s.doorSplit!-g/2,hi=lo+s.doorNiche!;let bad=false;for(let j=0;j<s.drawers;j++){const c=drawerConfig(m,s,j),sp=drawerFaceSpan(m,s,c),y0=b.bottom+drawerOffsets(s)[j]+sp[0],y1=b.bottom+drawerOffsets(s)[j]+sp[1];if(!c.mesh&&!c.noFacade&&(y0<lo+g/2-0.5||y1>hi-g/2+0.5))bad=true;}if(bad)errors.push(prefix+`ящики в проёме между рядами фасадов: фасады ящиков должны быть в проёме ${Math.round(lo)}–${Math.round(hi)} мм от пола (сместите ящики или измените высоту нижнего ряда).`);}
     if(s.doorLifts!==undefined&&(!Array.isArray(s.doorLifts)||s.doorLifts.length>Math.max(4,2*doorRowCount(m,s))||s.doorLifts.some((v,i)=>v!==null&&(!['adagio','sempre'].includes(v)||s.doorHinges?.[i]!=='top'))))errors.push(prefix+'неверный подъёмный механизм фасада.');
     if(s.doorHinges!==undefined&&(!Array.isArray(s.doorHinges)||s.doorHinges.length>Math.max(4,2*doorRowCount(m,s))||s.doorHinges.some(v=>v!==null&&!['left','right','top','bottom'].includes(v))))errors.push(prefix+'неверное открывание фасада.');
     if(s.drawerGap!==undefined&&(!Number.isFinite(s.drawerGap)||s.drawerGap<2||s.drawerGap>10))errors.push(prefix+'зазор фасадов ящиков от 2 до 10 мм.');
@@ -2716,6 +2734,8 @@ export function parseModule(input: unknown): Module {
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeFit===true?{hingeFit:true as const}:{}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
+    ...(x.wideHinges===true?{wideHinges:true as const}:{}),
+    ...(x.lightSensor===true?{lightSensor:true as const}:{}),
     ...(x.kitchen===undefined?{}:{kitchen:parseKitchenSpec(x.kitchen,{parseKitchenRafix,parseGridRecord})}),
     ...(x.autoFillersOff===true?{autoFillersOff:true}:{}),
     ...(x.ownWidthOnly===true?{ownWidthOnly:true}:{}),
