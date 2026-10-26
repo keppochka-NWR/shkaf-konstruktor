@@ -16,11 +16,16 @@ import {guideKits,guideKitLine,versaliteKit,modernKit,firmaxKit,shareKits,axisSp
 import {MODERN} from './kitchenDrawers';
 import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES} from './facadesVernissage';
 import {PUBLIC_BUILD} from './buildMode';
-import {clientView} from './clientPrices';
+import {clientView,isOffSheetLine} from './clientPrices';
 import {pendingPrice,pendingTotalLabel} from './pendingPrices';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
+  /** Кромка на клей PUR по просьбе клиента (заказ 7427796): надбавка за метр кромки — в прайсах нет, позиция финального расчёта. */
+  edgeGlue?:'pur';
+  /** «Цена по большей модели» (решение Макса 26.10.2026): клиенту — большая из «себестоимость × коэффициент» и «цена за лист»
+   *  (листы × цена листа + то, что вне листовой модели: зеркало, стекло, розница, Вернисаж, Лемана). model при этом не используется. */
+  maxModel?:boolean;
   /** штамп менеджерской версии (withPriceStamp): базовые коэффициенты, с которыми запечена публичная сборка */
   baseMarkup?:number;baseVernissageMarkup?:number};
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
@@ -66,7 +71,7 @@ export function publicSettings(s:PriceSettings):{settings:PriceSettings;ov:numbe
 export function withPriceStamp<P extends {calculation?:PriceSettings}>(p:P):P{
   if(PUBLIC_BUILD||!p.calculation)return p;
   const c=p.calculation;
-  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...(c.model==='sheet'&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
+  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...((c.model==='sheet'||c.maxModel)&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
 }
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
@@ -522,9 +527,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,maxModel=!!settings.maxModel;
+  const chosenModel:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
   // R2: «цена за лист» без цены листа (публичная сборка: цены по умолчанию нет) — модель не меняется молча; итога нет, пока цену листа не укажут
-  const needSheetPrice=model==='sheet'&&!(sheetPrice>0);
+  const needSheetPrice=(chosenModel==='sheet'||maxModel)&&!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
@@ -557,11 +563,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × коэффициент Вернисажа (1,6), как и в
   // «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы.
   const vernissageOnTop=vernissageClient;
-  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop;
+  // Стекло и зеркало (зеркало на фасаде с плёнкой и полировкой, стеклянная крыша) в раскрой ЛДСП не идут — в «цене за лист» они сверху
+  // листов: закупка × коэффициент сметы (решение Макса 26.10.2026: «цена за лист 23 000» + то, что вне листовой модели, например зеркало).
+  const offSheet=Math.round(lines.filter(l=>!l.retail&&isOffSheetLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup);
+  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop+offSheet;
+  // «Цена по большей модели» (maxModel): клиенту — большая из двух; цена по коэффициенту неполная (позиции без цены) — итога нет,
+  // как в модели наценки: большую выбрать нельзя. model результата — модель, по которой цена (КП, публичная смета, Excel).
+  const model:'markup'|'sheet'=maxModel?(byMarkup!==null&&bySheet>byMarkup?'sheet':'markup'):chosenModel;
   /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
    *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
    *  выбор движка для цены — ярус B. */
-  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,maxModel,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }
