@@ -39,7 +39,8 @@ const D1 = 282;
 const drawerBox = mod("И1 · подвесной ящик", 800, 200, D1, { doors: false, plinthHeight: 0, hanging: true, backType: "nailed" },
   [{ drawers: 1, drawerConfigs: [{ slide: "gtv0fpo", brand: "dtc", operation: "push", height: 100 /* ниже навесов в углах корпуса 200 */, length: 250, handle: false }] }]);
 // Скамья 1000 × 450: две открытые секции 500 + 500, без цоколя (дно на полу), посадочное 32 мм.
-const bench = mod("И1 · скамья", 1000, 450, 300, { doors: false, plinthHeight: 0, backType: "nailed", seatTop: true }, [{}, {}]);
+const bench = mod("И1 · скамья", 1000, 450, 300, { doors: false, plinthHeight: 0, backType: "nailed", seatTop: true,
+  bottomType: "none", rails: [{ place: "front-bottom", height: 80 }] /* решение Макса 26.10: без дна — обувь на полу, царга спереди 80 */ }, [{}, {}]);
 // Антресоль 1800 × 590: отсеки 800 / 500 / 500, карниз 90 в плоскости фасадов, фасады 500: 800 — откидной вверх, 500 + 500 — push.
 // Предел ширины корпуса студии 1300 → два навесных корпуса 800 + 1000 (вопрос Максу: нужна ли антресоль 1800 одним корпусом).
 const antPatch1: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, hanging: true, topStrip: 90, backType: "nailed", facadeFrom: -4 /* по эскизу (решение 26.10): фасад 500 — верх 496 под карнизом 90, свес 4 мм ниже корпуса */ };

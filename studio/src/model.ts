@@ -1194,6 +1194,17 @@ export function parts(m: Module): Part[] {
     const y0 = at ?? (low ? (hasBottom(m) ? bottom + t : bottom) : innerTop(m) - r.height);
     // кухни Базиса: стяжка на ребре бывает отступлена от кромки боковин на 1–2 мм (setback — от задней кромки у задней, от лица у передней)
     const esb = m.kitchen ? r.setback ?? 0 : 0;
+    // корпус без дна (скамья «без дна», решение Макса 26.10.2026: обувь стоит на полу): перегородки стоят на полу, нижняя стяжка
+    // (царга) — кусками между боковинами и перегородками, каждый кусок на конфирматах в торцы (см. крепёж стяжек ниже)
+    const cuts = low && at === undefined ? floorDividerXs(m) : [];
+    if (cuts.length) {
+      const xs = [t, ...cuts.flatMap((x) => [x - t / 2, x + t / 2]), m.width - t];
+      for (let j = 0; j < xs.length; j += 2) {
+        const w = xs[j + 1] - xs[j];
+        add("rail:" + r.place + (j ? ":" + j / 2 : ""), "Стяжка " + RAIL_PLACES[r.place] + " " + r.height + " (между перегородками)", [w, r.height, t], [(xs[j] + xs[j + 1]) / 2, y0 + r.height / 2, front ? d - t / 2 : t / 2], w, r.height, t);
+      }
+      continue;
+    }
     add("rail:" + r.place, at !== undefined ? `Стяжка ${r.place.startsWith("front") ? "спереди" : "сзади"} ${r.height} на высоте ${Math.round(at)}` : "Стяжка " + RAIL_PLACES[r.place] + " " + r.height, [m.width - 2 * t, r.height, t], [m.width / 2, y0 + r.height / 2, front ? d - esb - t / 2 : esb + t / 2], m.width - 2 * t, r.height, t);
   }
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
@@ -1767,7 +1778,9 @@ export function parts(m: Module): Part[] {
     }
   }
   // Царги лёжа (кухни Базиса) и стяжки кухни на ребре: по одному конфирмату с каждой стороны через боковину в торец царги.
-  for (const r of fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen) && !(m.kitchen && railsOf(m).some((q) => "rail:" + q.place === p.id && q.fasten === false)))) {
+  // корпус без дна с перегородками на полу (скамья «без дна», 26.10.2026): куски нижней стяжки — на конфирматах в боковины и перегородки
+  const floorRails = floorDividerXs(m).length > 0;
+  for (const r of fastenersMode(m.kitchen) === "pins" ? [] : out.filter((p) => p.id.startsWith("rail:") && (p.size[1] === t || !!m.kitchen || (floorRails && /^rail:(front|rear)-bottom/.test(p.id))) && !(m.kitchen && railsOf(m).some((q) => "rail:" + q.place === p.id && q.fasten === false)))) {
     // кухня Базиса: стяжка на ребре со своими высотами конфирматов из проекта (rails[].confY: k01 m03, k03 m08 — 34 и 66 у стяжки 100;
     // [] — в боковинах их нет, как в Базисе), иначе один по центру. Одно правило для нижних, навесных и антресолей (n4-base, n4-wall)
     const spec = m.kitchen && r.size[1] !== t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay !== "flat") : undefined;
@@ -1783,7 +1796,9 @@ export function parts(m: Module): Part[] {
         });
       continue;
     }
-    const ys = spec?.confY ? spec.confY.map((v) => r.position[1] - r.size[1] / 2 + v) : [r.position[1]];
+    // куски стяжки у перегородки на полу: встречные конфирматы через перегородку разнесены по высоте (±¼ высоты стяжки)
+    const piece = floorRails && r.size[1] !== t && /^rail:(front|rear)-bottom/.test(r.id) ? Number(r.id.split(":")[2] ?? 0) : -1;
+    const ys = spec?.confY ? spec.confY.map((v) => r.position[1] - r.size[1] / 2 + v) : piece >= 0 ? [r.position[1] + (piece % 2 ? 1 : -1) * r.size[1] / 4] : [r.position[1]];
     // царга лёжа со своими точками конфирматов по глубине из проекта (rails[].confZ, k27 m02) — в них, без поиска места
     const flat = m.kitchen && r.size[1] === t ? railsOf(m).find((q) => "rail:" + q.place === r.id && q.lay === "flat") : undefined;
     const zs = flat?.confZ?.length ? flat.confZ.map((v) => r.position[2] - r.size[2] / 2 + v) : undefined;
@@ -1854,8 +1869,10 @@ export function parts(m: Module): Part[] {
     }
     // частичная перегородка: стык с горизонталью-опорой над/под ней (сквозная полка), а не с крышей/дном
     const dsp = dividerSpan(m, m.sections.findIndex((s) => s.id === dv.sectionId), allBoxes);
+    // перегородка на полу корпуса без дна (скамья «без дна», 26.10.2026): снизу дна нет — держат конфирматы кусков стяжки
     for (const [edge, y] of [["top", dsp?.over ? dsp.to + t / 2 : innerTop(m) + t / 2 + (hasTop(m) ? 0 : -t / 2)], ["bottom", dsp?.under ? dsp.from - t / 2 : innerBottom(m) - t / 2 + (hasBottom(m) ? 0 : t / 2)]] as const)
       for (const [k, z] of [z0 + (m.confirmatInset ?? RULES.confirmatInset), z1 - (m.confirmatInset ?? RULES.confirmatInset)].entries()) {
+        if (edge === "bottom" && !dsp?.under && !hasBottom(m)) continue; // дна нет — крепить снизу не во что (перегородка на полу)
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
         else confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], edge === "top" ? y + t / 2 : y - t / 2, z], edge === "top" ? "-y" : "+y", dv.sectionId);
       }
@@ -2814,6 +2831,13 @@ export function setShelfGap(
       ? b.top - value - half
       : gaps[index].bottom + value + half;
   s.shelves[j] = (center - b.bottom) / (b.top - b.bottom);
+}
+/** Перегородки, стоящие на полу у корпуса без дна (не кухня, без раскладки секций, не частичные): X их середины, мм от левого края.
+ *  Скамья «без дна» (решение Макса 26.10.2026): нижние стяжки режутся по ним, крепёж перегородки снизу — через стяжки, не в дно. */
+export function floorDividerXs(m: Module): number[] {
+  if (m.kitchen || hasBottom(m) || m.sectionLayout || m.sections.length < 2) return [];
+  const all = boxes(m);
+  return all.flatMap((b, i) => (i > 0 && !dividerSpan(m, i, all) ? [b.x - RULES.panel / 2] : []));
 }
 /** Интеграция веток заказов 26.10.2026 — старые поля как синонимы при загрузке:
  *  facadeSketchH (высота фасадов по эскизу, o-7437584a) → facadeFrom = верх по правилу − высота (o-7427796, одно поле фасадов по эскизу);

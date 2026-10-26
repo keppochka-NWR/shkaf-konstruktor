@@ -7,6 +7,8 @@ import {isBazisModule,type Project} from './project';
 import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
 import {handleById,handleShape} from './handles';
+import {adagioChoice} from './gasLift';
+import {weightText} from './weight';
 import {meshById} from './mesh';
 import {ledLook,specText} from './lights';
 import {aluProfile,aluColor,aluInsert,aluFill,ALU_SOURCE,ALU_GASKET_PER_M} from './alu';
@@ -234,7 +236,7 @@ export function hardwareKind(id:string):HardwareKind{
     if(c==='прочее'||/рафикс|шуруп|саморез|гвозд|винт|заглушк/.test(n))return 'fasteners';
     return 'other';}
   if(id.startsWith('firmax'))return 'slides';
-  if(/^(hinge|push-latch|lift-mechanism|kitchen-lift)/.test(id))return 'hinges';
+  if(/^(hinge|push-latch|lift-mechanism|kitchen-lift|tip-on)/.test(id))return 'hinges';
   // комплекты направляющих и ящики кухни (guideKits) — к направляющим, не в «Прочее»
   if(/^(slide:|mesh:|pantograph|pullout|axis-pro|guides:|versalite-h45:|modern-slide:|indigo:|start-sc:)/.test(id))return 'slides';
   if(id.startsWith('handle:'))return 'handles';
@@ -490,9 +492,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
         // решение Макса 26.10.2026: газлифты Premial АДАЖИО — по цене с сайта Premial, это сразу цена клиенту (розница, без коэффициента); 2 шт на фасад (по боковине)
-        if(d.hinge==='top'&&selectedLift==='adagio')add('lift-mechanism:premial-adagio','Лифт газовый Premial АДАЖИО ПРЕМИУМ (усилие 60–80N по массе фасада) — 2 шт на фасад',2,'шт',ADAGIO_RETAIL,'allpremial.ru, карточки 62617/62618/59951 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ на 26.10.2026 — цена клиенту (решение Макса 26.10)',true);
+        // усилие — по весу фасада (решение Макса 26.10.2026, gasLift.ts): ПРЕМИУМ 60/80N — цена сайта; 100/120N — стандартная серия
+        // АДАЖИО, цены на сайте нет — финальный расчёт; тяжелее 120N — подбор другого подъёмника
+        if(d.hinge==='top'&&selectedLift==='adagio'){const lc=adagioChoice(d,a.module),wt=weightText(lc.weight)+' кг';
+          if(lc.force&&lc.premium)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ПРЕМИУМ ${lc.force}N — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N на газлифт)`,lc.count,'шт',ADAGIO_RETAIL,'allpremial.ru, карточки 62617/62618/59951 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ на 26.10.2026 — цена клиенту (решение Макса 26.10); усилие по весу фасада (gasLift.ts)',true);
+          else if(lc.force)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ${lc.force}N (стандартный) — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N)`,lc.count,'шт',null,'АДАЖИО стандартный 50N–120N (premial-furniture.ru): цены '+lc.force+'N на сайте нет — цена после финального расчёта конструктором');
+          else add('lift-mechanism:premial-adagio:heavy',`Подъёмник для тяжёлого фасада (фасад ${wt}, нужно ${lc.required}N — больше 120N АДАЖИО)`,1,'компл',null,'Тяжелее ряда АДАЖИО (до 120N): подбор подъёмника Premial для тяжёлых фасадов — цена после финального расчёта конструктором');}
         else if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
         if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
+        // решение Макса 26.10.2026: откидной фасад на газлифте без ручки открывается толкателем TIP-ON — позиция сама; цены в рублях
+        // на allpremial.ru / blum.com не нашли (26.10.2026) — финальный расчёт (pendingPrices.ts)
+        if(d.hinge==='top'&&selectedLift&&!kitchen&&(push||!allParts.some(p=>p.role==='handle'&&p.id===d.id.replace(':door:',':handle:'))))add('tip-on-lift','Толкатель TIP-ON для откидного фасада без ручки',1,'шт',null,'TIP-ON (Blum) для подъёмного фасада: рублёвой цены на allpremial.ru и blum.com нет — цена после финального расчёта конструктором');
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
         else if(nm?.hinges&&!push)bzHinges+=n; // тип петли — по Базису (после цикла)

@@ -12,6 +12,7 @@ import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVer
 import { plural } from "./ru";
 import { rawKitchen } from "./rawModule";
 import { lightSummary } from "./lights";
+import { adagioChoice } from "./gasLift";
 
 export type ModuleDescription = { kind: string; size: string; materials: string[]; filling: string[] };
 
@@ -99,6 +100,16 @@ export function plainFeatures(m: Module): string[] {
   }
   const wide = all.filter((d) => d.role === "door" && d.hingeAngle).reduce((mp, d) => mp.set(d.hingeAngle!, (mp.get(d.hingeAngle!) ?? 0) + 1), new Map<number, number>());
   for (const [a, n] of wide) out.push(`петли ${a === 165 ? "155–165° (широкое открывание)" : "с открыванием на 90°"}: ${n} ${plural(n, ["створка", "створки", "створок"])}`);
+  // решения Макса 26.10.2026: подъёмный фасад — газлифт АДАЖИО с усилием по весу фасада; без ручки — толкатель TIP-ON
+  for (const d of all.filter((p) => p.role === "door" && p.hinge === "top")) {
+    const lift = m.sections.find((s) => s.id === d.sectionId)?.doorLifts?.[Number(d.id.split(":door:")[1])];
+    if (lift !== "adagio") continue;
+    const c = adagioChoice(d, m), handle = all.some((p) => p.role === "handle" && p.id === d.id.replace(":door:", ":handle:"));
+    out.push(`подъёмный фасад: газлифт Premial АДАЖИО${c.force ? " " + c.force + "N" : ""} — ${c.count} шт (фасад ≈ ${c.weight.toLocaleString("ru-RU")} кг)${push || !handle ? ", открывание нажатием (толкатель TIP-ON)" : ""}`);
+  }
+  if (m.seatTop && m.bottomType === "none") out.push("скамья без дна — обувь стоит на полу; спереди царга");
+  const ctl = [m.lightSensor ? "датчик открывания фасадов" : "", m.lightDimmer ? "диммер" : "", m.lightSwitch === "piezo" ? "беспроводной пьезовыключатель" : ""].filter(Boolean);
+  if (ctl.length && all.some((p) => p.role === "light" && !p.id.startsWith("groove:"))) out.push("подсветка: " + ctl.join(", ") + ", блок питания");
   // заказ 7441182: утопленный цоколь, посадочное место и щит над ним — строкой в КП
   if (m.plinthRecess !== undefined) out.push(`цоколь утоплен на ${m.plinthRecess} мм, двери над цоколем`);
   if (m.seatTop) out.push("посадочное место 32 мм сверху — две плиты ЛДСП 16 склейкой под одну кромку");

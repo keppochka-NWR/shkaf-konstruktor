@@ -50,7 +50,7 @@ test("7437584: откидной вверх фасад 800 на подъёмни�
   assert.equal(door.hinge, "top");
   assert.ok(Math.abs(door.size[0] - 796) < 1 && Math.abs(door.size[1] - 494) < 1, "фасад 796 × 494 под карнизом 90");
   assert.ok(parts(lift).some((p) => /:hingeplate:/.test(p.id)), "петли сверху держатся за жёсткую полку у кромки фасада");
-  assert.ok(estimate({ ...newProject(), modules: [{ id: "a", x: 10, y: 2000, z: 10, rotation: 0, module: lift }] }).lines.some((l) => l.id === "lift-mechanism:premial-adagio" && l.quantity === 2 && l.unitPrice === 347.2 && l.retail === true && !l.pending), "АДАЖИО: 2 шт по цене сайта Premial, розница (решение 26.10)");
+  assert.ok(estimate({ ...newProject(), modules: [{ id: "a", x: 10, y: 2000, z: 10, rotation: 0, module: lift }] }).lines.some((l) => l.id === "lift-mechanism:premial-adagio:80" && l.quantity === 2 && l.unitPrice === 347.2 && l.retail === true && !l.pending), "АДАЖИО ПРЕМИУМ 80N по весу фасада: 2 шт (фасад шире 600) по цене сайта Premial, розница (решение 26.10)");
 });
 
 test("7437584: свободная панель (щит на стену) не делает смету неполной; скрытые направляющие 250 — оценка от 300", () => {
