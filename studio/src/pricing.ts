@@ -34,8 +34,7 @@ export const VERNISSAGE_MARKUP_DEFAULT=1.6;
 export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
-export const FALSH_GLUE_RETAIL_M2 = 1000;
-export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
+export const FALSH_GLUE_RETAIL_M2 = 1000;export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
 /** позиции Лемана по выбору клиента (ручки, сетки): в «цене за лист» — сверху листов по рознице Лемана */
@@ -456,6 +455,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
+        // петли без доводчика (Module.hingeSoft = false, заказ 7441182): накладная самозакрывающаяся с пружиной
+        else if(a.module.hingeSoft===false)add((inset?'hinge-simple-inset':'hinge-simple')+suffix,inset?hb.simple.label+' · вкладная':hb.simple.label,n,'шт',hb.simple.price,hb.simple.source);
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }

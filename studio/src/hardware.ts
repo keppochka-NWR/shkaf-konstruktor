@@ -15,16 +15,20 @@ export const SLIDES = {
 /** Петли распашных фасадов: бренд выбирает клиент (решение Макса 06.10.2026: GTV, Pulse, Blum). soft — с доводчиком (фасады с ручками),
  *  free — без пружины под толкатель push-to-open. Цены — закупка, оценки помечены явно. */
 export type HingeBrand = 'gtv' | 'pulse' | 'blum';
-export const HINGE_BRANDS: Record<HingeBrand, { label: string; note: string; soft: { label: string; price: number; source: string }; free: { label: string; price: number; source: string } }> = {
+/** simple — без доводчика, с пружиной (самозакрывающаяся; Module.hingeSoft = false, заказ 7441182). */
+export const HINGE_BRANDS: Record<HingeBrand, { label: string; note: string; soft: { label: string; price: number; source: string }; free: { label: string; price: number; source: string }; simple: { label: string; price: number; source: string } }> = {
   gtv: { label: 'GTV', note: 'стандарт цеха',
     soft: { label: 'Петля GTV SOLID PRO с доводчиком', price: 157, source: 'Счёт Мега-Трейд 6219, 2026 · стандарт цеха при ручках' },
-    free: { label: 'Петля GTV без пружины', price: 80, source: 'ФАМ: петля GTV ZP-COCA клиповая без пружины' } },
+    free: { label: 'Петля GTV без пружины', price: 80, source: 'ФАМ: петля GTV ZP-COCA клиповая без пружины' },
+    simple: { label: 'Петля GTV SOLID PLUS без доводчика', price: 115, source: 'ФАМ: петля SOLID PLUS GTV накладная самозакрывающаяся, 3D-регулировка (справочник закупочных цен 28.08.2026)' } },
   pulse: { label: 'Pulse', note: 'эконом',
     soft: { label: 'Петля Pulse Harmony с доводчиком', price: 112, source: 'Оценка: Pulse Harmony накладная с доводчиком, розница МДМ/Инталика 112 ₽ (10.2026); подтвердить счётом МДМ' },
-    free: { label: 'Петля Pulse без пружины', price: 60, source: 'Оценка по классу Pulse; подтвердить счётом МДМ' } },
+    free: { label: 'Петля Pulse без пружины', price: 60, source: 'Оценка по классу Pulse; подтвердить счётом МДМ' },
+    simple: { label: 'Петля Pulse без доводчика', price: 70, source: 'Оценка по классу Pulse (самозакрывающаяся без доводчика); подтвердить счётом МДМ' } },
   blum: { label: 'Blum', note: 'премиум, Австрия',
     soft: { label: 'Петля Blum CLIP top BLUMOTION 110°', price: 480, source: 'Оценка: дилеры Blum (Москва) 480–490 ₽ за петлю 71B3550, 10.2026; подтвердить закупкой' },
-    free: { label: 'Петля Blum CLIP top без пружины', price: 330, source: 'Оценка: Blum CLIP top без пружины под TIP-ON; подтвердить закупкой' } },
+    free: { label: 'Петля Blum CLIP top без пружины', price: 330, source: 'Оценка: Blum CLIP top без пружины под TIP-ON; подтвердить закупкой' },
+    simple: { label: 'Петля Blum CLIP top 110° без доводчика', price: 350, source: 'Оценка: Blum CLIP top 71T3550 с пружиной без BLUMOTION; подтвердить закупкой' } },
 };
 /** Число петель по высоте и ширине фасада (правило цеха). */
 export function hingeCount(height: number, width: number) { return (height <= 900 ? 2 : height <= 1600 ? 3 : height <= 2000 ? 4 : 5) + (width > 450 ? 1 : 0); }
