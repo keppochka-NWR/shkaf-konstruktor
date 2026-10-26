@@ -1,7 +1,7 @@
 // Заказ 7427796 мышью, как менеджер (требование Макса 26.10.2026: «всё отрисовать в расчётке, чтобы менеджер мог собрать руками»).
 // npx tsx scripts/o-7427796-manager-scenario.ts <url /studio/?fresh=1> <outDir>
 // От пустой комнаты (?fresh=1, без инъекций проекта) только мышью и клавиатурой: помещение → палитра «Добавить мебель» → панели свойств,
-// модалки материалов и ручек → смета (кромка PUR) → вариант 2 (зеркало на двери). В конце проект читается из localStorage и сравнивается
+// модалки материалов и ручек → смета (кромку PUR не делаем — решение 26.10) → вариант 2 (зеркало на двери). В конце проект читается из localStorage и сравнивается
 // со сборкой функциями (scripts/order-7427796.ts build): детали (имя, размеры, положение) и смета (цена, листы, строки).
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -210,14 +210,12 @@ try {
   await pick(sel("К каким корпусам применить ручку"), /Выбранный корпус/);
   await type(field("Найти ручку"), "HEXA L-1200");
   await click(page.locator(".handle-list button.handle-item", { hasText: /чёрный/ }).first());
-  log("Нижняя панель «Фурнитура» → «Выбрать фурнитуру…» (ко всему проекту): «Петли Blum»; «Клей кромки» → «Кромка на клей PUR»");
+  log("Нижняя панель «Фурнитура» → «Выбрать фурнитуру…» (ко всему проекту): «Петли Blum» (кромку PUR не делаем — решение Макса 26.10)");
   await click(page.locator(".dock-tabs button", { hasText: "Фурнитура" }).first());
   await click(btn("Выбрать фурнитуру…"));
   const hw = page.locator('section.hw-window');
   await click(hw.locator(".hw-groups button", { hasText: "Петли" }).first());
   await click(hw.locator('button.hw-card[aria-label="Петли Blum"]'));
-  await click(hw.locator(".hw-groups button", { hasText: "Клей кромки" }).first());
-  await click(hw.locator('button.hw-card[aria-label="Кромка на клей PUR"]'));
   await shot("hardware-window");
   await click(page.locator('button[aria-label="Закрыть окно фурнитуры"]'));
   await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first());

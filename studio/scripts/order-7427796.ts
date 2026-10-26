@@ -42,7 +42,7 @@ export function build(mirror: boolean): Project {
     measurement: { number: "7427796", date: "2026-10-26", notes: "Согласованный конструктив дизайнера: 1334×2450×600, вариант " + (mirror ? "2 — зеркальная дверь" : "1 — дверь ЛДСП") + "." },
     room: { width: 2000, depth: 1800, height: 2700, openings: [] },
     modules: [place(left, X0), place(right, X0 + WL), place(antL, X0, H), place(antR, X0 + WL, H)],
-    calculation: { markup: 2.2, overrides: {}, sheetPrice: 23000, edgeGlue: "pur", maxModel: true }, // цена по большей модели — решение Макса 26.10
+    calculation: { markup: 2.2, overrides: {}, sheetPrice: 23000, maxModel: true } /* кромку PUR не делаем — решение Макса 26.10 */, // цена по большей модели — решение Макса 26.10
   };
   return parseProject(JSON.parse(JSON.stringify(applyAutoFillers(parseProject(JSON.parse(JSON.stringify(p)))))));
 }

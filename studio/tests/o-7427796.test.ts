@@ -87,18 +87,16 @@ test('угол открывания петель по створке: призн
   assert.equal(line(p,'hinge:blum')!.quantity,2);
   assert.ok(validate(mod({},{hingeAngles:[120 as never]})).some(e=>e.includes('угол открывания')));
 });
-test('Blum TANDEM 10 000 ₽ клиенту, кромка PUR — финальный расчёт; ручка-кнопка в каталоге', () => {
+test('Blum TANDEM 10 000 ₽ клиенту; кромки PUR нет (решение Макса 26.10 — старое поле игнорируется); ручка-кнопка в каталоге', () => {
   assert.ok(SLIDE_SYSTEMS.some(s=>s.id==='hidden-blum-soft'));
   const m=mod({doors:false},{drawers:1,drawerConfigs:[{slide:'gtv0fpo',operation:'soft-close',brand:'blum',height:140,length:500}]});
-  const p=proj(m,{markup:2.2,overrides:{},edgeGlue:'pur'}),e=estimate(p);
+  const raw=JSON.parse(JSON.stringify(proj(m,{markup:2.2,overrides:{}})));raw.calculation.edgeGlue='pur'; // проект ветки o-7427796
+  const p=parseProject(raw),e=estimate(p);
   const sl=e.lines.find(l=>l.id.startsWith('slide:gtv0fpo:500:hidden-blum-soft'))!;
   assert.equal(sl.unitPrice,10000);assert.equal(sl.retail,true);
-  const pur=e.lines.find(l=>l.id==='edge-pur')!;
-  assert.equal(pur.pending,true);
-  assert.ok(Math.abs(pur.quantity-e.lines.filter(l=>/^edge(2|1|08|04|05)$/.test(l.id)).reduce((s,l)=>s+l.quantity,0))<0.01);
+  assert.equal(e.lines.some(l=>/pur/i.test(l.id+l.label)),false,'строки PUR в смете нет');
   assert.equal(e.missing.length,0);
-  assert.equal(parseProject(JSON.parse(JSON.stringify(p))).calculation!.edgeGlue,'pur');
-  assert.equal(estimate(proj(m)).lines.some(l=>l.id==='edge-pur'),false);
+  assert.equal((p.calculation as Record<string,unknown>).edgeGlue,undefined,'поле PUR при загрузке отброшено');
   const k=handleById('knob30b');assert.equal(k.id,'knob30b');assert.equal(handleKind(k),'knob');
 });
 test('разбор проекта: новые поля сохраняются, старые модули без новых полей', () => {

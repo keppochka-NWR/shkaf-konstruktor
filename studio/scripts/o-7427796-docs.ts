@@ -19,7 +19,7 @@ for (const [v, title] of [["ldsp", "Вариант 1 — дверь ЛДСП"], 
   const mq = moduleQuote(p, price);
   p.offer = { customer: "Заказ 7427796 · " + title, price: String(price), notes: "" };
   const img = "data:image/png;base64," + readFileSync(OUT + `снимки-${v}/1-3d-room-side.png`).toString("base64");
-  const html = quoteHTML(p, "Заказ 7427796 · " + title, String(price), "Цена — по большей из двух моделей (коэффициент или цена за лист с зеркалом сверху). Кромка на клей PUR, фурнитура Blum. Позиции после финального расчёта конструктором в цену не входят.", img, { cost: e, items: mq?.prices ?? null, pending: mq?.pending ?? null });
+  const html = quoteHTML(p, "Заказ 7427796 · " + title, String(price), "Цена — по большей из двух моделей (коэффициент или цена за лист с зеркалом сверху). Фурнитура Blum. Позиции после финального расчёта конструктором в цену не входят.", img, { cost: e, items: mq?.prices ?? null, pending: mq?.pending ?? null });
   writeFileSync(OUT + `КП 7427796 — ${v === "ldsp" ? "вариант 1 ЛДСП" : "вариант 2 зеркало"}.html`, html, "utf8");
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: "load" });

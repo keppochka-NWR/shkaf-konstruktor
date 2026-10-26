@@ -12,7 +12,7 @@ import { EDGE_CHOICES, type EdgeThickness } from "./model";
 import { hardwareChoice, scopeProject, scopedSwap, setAllEdges, setAllFastening, setAllHandles, setAllHinges, setAllOpening, setAllSlides } from "./hardwareSwap";
 import "./hardware-window.css";
 
-type GroupId = "hinges" | "opening" | "slides" | "handles" | "edgeBody" | "edgeFacade" | "edgeGlue" | "fastening";
+type GroupId = "hinges" | "opening" | "slides" | "handles" | "edgeBody" | "edgeFacade" | "fastening";
 type Option = { id: string; title: string; props: string[]; icon: ReactElement; current: boolean; make: (p: Project) => Project; what: string; search?: string };
 const rub = (n: number) => Math.abs(n).toLocaleString("ru-RU") + " ₽";
 const hex = (n: number) => "#" + n.toString(16).padStart(6, "0");
@@ -36,8 +36,7 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
     if (choice.handles.length) g.push({ id: "handles", label: "Ручки", hint: "Одна ручка на все фасады и ящики выбранной части проекта." });
     g.push({ id: "edgeBody", label: "Кромка корпуса", hint: "Пластиковая кромка на видимых торцах корпуса." });
     if (choice.hasDoors) g.push({ id: "edgeFacade", label: "Кромка фасадов", hint: "Кромка по торцам фасадов ЛДСП." });
-    // заказ 7427796: клей кромки — на весь проект (calculation.edgeGlue); PUR по просьбе клиента, надбавка — после финального расчёта
-    g.push({ id: "edgeGlue", label: "Клей кромки", hint: "Чем приклеена кромка — на весь проект. PUR (полиуретан) — влагостойкий шов по просьбе клиента; надбавка считается в финальном расчёте." });
+    // кромку на клей PUR не делаем (решение Макса 26.10.2026) — группы «Клей кромки» нет
     g.push({ id: "fastening", label: "Крепёж", hint: "Как соединяются стенки корпуса." });
     return g;
   }, [choice]);
@@ -55,14 +54,11 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
       case "slides": return SLIDE_SYSTEMS.map((s) => ({ id: s.id, title: s.label, props: [SLIDE_MOTIONS[s.motion] === "push-to-open" ? "открывание нажатием (push-to-open)" : SLIDE_MOTIONS[s.motion], s.slide === "ball" ? "видны сбоку ящика" : "под дном ящика, снаружи не видны"], icon: <SlideIcon hidden={s.slide !== "ball"} motion={s.motion}/>, current: one(choice.slides, s.id), make: (p) => setAllSlides(p, s.id), what: s.label }));
       case "handles": return HANDLES.slice().sort((a, b) => Number(a.vendor !== "workshop") - Number(b.vendor !== "workshop") || a.len - b.len).map((h) => { const f = HANDLE_FINISHES[handleFinish(h)]; return { id: h.id, title: h.label, props: [h.len + " мм между отверстиями", f.label, h.vendor === "lemana" ? "Лемана Про" : "в наличии у цеха"], icon: <HandleIcon color={hex(f.color)} len={h.len}/>, current: one(choice.handles, h.id), make: (p) => setAllHandles(p, h.id), what: "Ручки " + h.label, search: (h.label + " " + h.len + " " + (h.art ?? "") + " " + f.label).toLowerCase() }; });
       case "edgeBody": case "edgeFacade": { const t = active === "edgeBody" ? "body" : "facade", cur = active === "edgeBody" ? choice.edgeBody : choice.edgeFacade; return EDGE_CHOICES.map((c) => ({ id: String(c.value), title: "Кромка " + c.label.split(" · ")[0], props: c.label.split(" · ").slice(1), icon: <EdgeIcon t={c.value}/>, current: one(cur, c.value), make: (p) => setAllEdges(p, t, c.value as EdgeThickness), what: (t === "body" ? "Кромка корпуса " : "Кромка фасадов ") + c.label.split(" · ")[0] })); }
-      case "edgeGlue": { const pur = project.calculation?.edgeGlue === "pur", set = (v: boolean) => (p: Project): Project => { const c = { ...(p.calculation ?? { markup: 2.2, overrides: {} }) }; if (v) c.edgeGlue = "pur"; else delete c.edgeGlue; return { ...p, calculation: c }; };
-        return [{ id: "standard", title: "Обычный клей (стандарт цеха)", props: ["как сейчас в прайсе"], icon: <EdgeIcon t={2}/>, current: !pur, make: set(false), what: "Кромка на обычный клей" },
-          { id: "pur", title: "Кромка на клей PUR", props: ["полиуретан, влагостойкий шов", "надбавка — после финального расчёта"], icon: <EdgeIcon t={2}/>, current: pur, make: set(true), what: "Кромка на клей PUR" }]; }
       default: return [
         { id: "confirmat", title: "Конфирматы с заглушками", props: ["прочное соединение", "заглушки в цвет на видимых сторонах"], icon: <FastIcon hidden={false}/>, current: one(choice.fastening, "confirmat"), make: (p) => setAllFastening(p, "confirmat"), what: "Крепёж конфирматами" },
         { id: "eccentric", title: "Эксцентрики, скрытый крепёж", props: ["снаружи крепёж не виден"], icon: <FastIcon hidden/>, current: one(choice.fastening, "eccentric"), make: (p) => setAllFastening(p, "eccentric"), what: "Скрытый крепёж" }];
     }
-  }, [active, choice, project.calculation?.edgeGlue]);
+  }, [active, choice]);
   const shown = active === "handles" && search.trim() ? options.filter((o) => o.search!.includes(search.trim().toLowerCase())) : options;
   // Разница в цене: итог сметы после замены минус текущий (розница; в публичной сборке estimate — клиентские цены). Считаем по одному
   // варианту за такт, чтобы окно не подвисало на списке ручек.
@@ -74,7 +70,7 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
     const step = () => {
       if (!live || i >= options.length) return;
       const o = options[i++]; let v: number | null | "err";
-      try { const r = estimate(active === "edgeGlue" ? o.make(project) : scopedSwap(project, scope, o.make)).retail; v = r === null || base === null ? null : r - base; } catch { v = "err"; }
+      try { const r = estimate(scopedSwap(project, scope, o.make)).retail; v = r === null || base === null ? null : r - base; } catch { v = "err"; }
       setDelta((d) => ({ ...d, [key(o)]: v })); setTimeout(step, 0);
     };
     const t = setTimeout(step, 30);
@@ -83,7 +79,7 @@ export function HardwareWindow({ project, commit, onClose, initialModuleId = nul
   const [note, setNote] = useState("");
   function apply(o: Option) {
     let next: Project;
-    try { next = active === "edgeGlue" ? o.make(project) : scopedSwap(project, scope, o.make); } catch (err) { setNote(err instanceof Error ? err.message : "Не удалось заменить фурнитуру."); return; }
+    try { next = scopedSwap(project, scope, o.make); } catch (err) { setNote(err instanceof Error ? err.message : "Не удалось заменить фурнитуру."); return; }
     let after: number | null = null; try { after = estimate(next).retail; } catch { after = null; }
     if (!commit(next)) { setNote("Замена не прошла проверку проекта. Подробности в сообщении сверху."); return; }
     const d = after === null || base === null ? null : after - base;
