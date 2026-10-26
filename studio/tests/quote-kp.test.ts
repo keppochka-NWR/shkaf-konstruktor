@@ -47,3 +47,19 @@ test('КП: push-to-open и купе простыми словами; миниа
   assert.deepEqual(plainFeatures(k),[]);
   assert.ok(moduleThumbSVG(k).startsWith('<svg'));
 });
+
+// Снимок КП Макса 26.10.2026: пустые миниатюры и образцы, «ИЗ · левый», петли в каждой карточке, разрыв карточки между страницами.
+test('КП 26.10: миниатюра — наполнение за прозрачной дверью, линии открывания, заметная ручка; образец — картинкой; «Изделие 3»; петли один раз',()=>{
+  const p=two();p.modules[0].module.name='И3 · левый';p.modules[1].module.name='И3 · правый';
+  p.modules[0].module.sections[0].shelves=[0.5];
+  const m=p.modules[0].module,svg=moduleThumbSVG(m);
+  assert.ok(/fill-opacity="0\.22"/.test(svg),'дверь прозрачная — видно полки и ящики');
+  assert.ok(svg.includes('<polyline'),'линии открывания двери');
+  assert.ok(/fill="#26292b"/.test(svg),'ручка тёмная');
+  const e=estimate(p),html=quoteHTML(p,'',String(e.retail),'',undefined,{cost:e,swatches:{[m.decor]:{img:'data:image/jpeg;base64,AAAA',color:'#808080'}}});
+  assert.ok(html.includes('<img class="sw" src="data:image/jpeg;base64,AAAA"'),'образец текстуры — <img>, печатается без «фона»');
+  assert.equal(html.match(/<h3 class="q-group">Изделие 3<\/h3>/g)?.length,1,'группа «Изделие 3» один раз');
+  assert.ok(!html.includes('И3 ·')&&html.includes('<small>Левый</small>'));
+  assert.equal(html.match(/петли GTV с доводчиком/g)?.length,1,'петли — один раз в общем блоке');
+  assert.ok(/\.q-item\{display:block;[^}]*break-inside:avoid;page-break-inside:avoid/.test(html),'карточка не рвётся между страницами');
+});

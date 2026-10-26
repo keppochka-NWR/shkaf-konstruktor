@@ -8,6 +8,7 @@ import { quoteHTML } from "../src/exports";
 import { modulePrices } from "../src/itemPrices";
 import { lineGroup } from "../src/pricing";
 import { orderProject, PRODUCTS } from "./order-7437584-b";
+import { nodeSwatches } from "./kpSwatches"; // образцы текстур в КП (26.10.2026: были пустые квадраты)
 
 const out = process.argv[2];
 mkdirSync(out, { recursive: true });
@@ -25,7 +26,7 @@ const kupeTotal = e.lines.filter((l) => l.id.startsWith("kupe")).reduce((s, l) =
 const summary = { total, markup: e.markup, sheets: e.ldspSheets, split: e.split, retailExtras: e.retailExtras, kupeDoors: kupeTotal, pending: (e.pending ?? []).map((l) => l.label), missing: e.missing.map((l) => l.label), rows,
   lines: e.lines.map((l) => ({ id: l.id, label: l.label, q: Math.round(l.quantity * 1000) / 1000, unit: l.unit, price: l.unitPrice, total: l.total, retail: !!l.retail })) };
 writeFileSync(`${out}/estimate-7437584-izd-2-4-5.json`, JSON.stringify(summary, null, 1));
-const html = quoteHTML(p, "Заказ 7437584", total.toLocaleString("ru-RU") + " ₽", "Изделия 2, 4, 5. Двери купе — ЛДСП Клауд (материал дверей не указан, допущение). Позиции «после финального расчёта» в итог не входят.");
+const html = quoteHTML(p, "Заказ 7437584", total.toLocaleString("ru-RU") + " ₽", "Изделия 2, 4, 5. Двери купе — ЛДСП Клауд (материал дверей не указан, допущение). Позиции «после финального расчёта» в итог не входят.", undefined, { swatches: await nodeSwatches(p) });
 writeFileSync(`${out}/kp-7437584-izd-2-4-5.html`, html);
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const page = await browser.newPage();

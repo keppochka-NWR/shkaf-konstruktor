@@ -12,7 +12,7 @@ import {packRectangles} from './packing';
 import {edgeLength} from './edges';
 import {catalog} from './catalog';
 import {guillotinePack,type GuillotineCut,type GuillotineResult,type Offcut} from './guillotine';
-import {describeModule,plainFeatures} from './quoteDescribe';
+import {describeModule,plainFeatures,hingeFeature,clientModuleName} from './quoteDescribe';
 import {moduleThumbSVG,decorFallbackColor} from './quoteThumb';
 import {moduleWeight,weightText} from './weight';
 import {vernissageColor} from './facadesVernissage';
@@ -339,8 +339,8 @@ export function splitRows(s: QuoteSplit): [string, number][] {
 }/** Таблица модулей для клиента: описание по типу модуля (quoteDescribe.ts), без нулевых позиций и служебных слов. */
 export function clientModulesTable(p: Project) {
   return `<table><thead><tr><th>№</th><th>Изделие</th><th>Размеры, мм</th><th>Материалы</th><th>Наполнение</th></tr></thead><tbody>${p.modules.map((a, i) => {
-    const d = describeModule(a.module);
-    return `<tr><td>${i + 1}</td><td><b>${esc(d.kind)}</b>${d.kind !== a.module.name ? `<br><small>${esc(a.module.name)}</small>` : ""}</td><td>${esc(d.size)}</td><td>${d.materials.map(esc).join("<br>")}</td><td>${d.filling.length ? d.filling.map(esc).join("<br>") : "—"}</td></tr>`;
+    const d = describeModule(a.module), cn = clientModuleName(a.module.name), sub = cn.group ? cn.group + " · " + cn.name : cn.name;
+    return `<tr><td>${i + 1}</td><td><b>${esc(d.kind)}</b>${d.kind !== a.module.name ? `<br><small>${esc(sub)}</small>` : ""}</td><td>${esc(d.size)}</td><td>${d.materials.map(esc).join("<br>")}</td><td>${d.filling.length ? d.filling.map(esc).join("<br>") : "—"}</td></tr>`;
   }).join("")}</tbody></table>`;
 }
 const clientStyle = `<style>.seller{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #23404c;padding-bottom:10px;margin-bottom:6px}.seller b{font-size:18px}.seller p{margin:0;white-space:pre-wrap;text-align:right}.split{width:auto;min-width:320px;margin-top:16px}.split td{padding:6px 12px}.split td:last-child{text-align:right}.split tr:last-child td{font-weight:bold;font-size:18px;border-top:2px solid #23404c}@media print{.seller b{font-size:15px}img{max-height:95mm!important}}</style>`;
@@ -351,11 +351,11 @@ function sellerBlock(seller?: SellerInfo) {
 export const PENDING_INCLUDED_NOTE = "Цена включает позиции после финального расчёта конструктором (цена согласована менеджером)";
 /** Стили КП (менеджеры 22.10.2026, п. 9): карточки изделий с миниатюрой, образцы материалов, «входит / не входит», печать A4. */
 const quoteStyle = `<style>.q-head p{margin:4px 0 0;color:#637c85}.q-hero{margin:18px auto 8px;width:fit-content;max-width:100%;border:1px solid #d5dfe3;border-radius:8px;overflow:hidden;line-height:0}.q-hero img{display:block;max-width:100%;width:auto;height:auto;max-height:520px}
-.q-legend{color:#637c85;font-size:12px;margin:2px 0 10px}.q-item{display:grid;grid-template-columns:150px 1fr;gap:18px;padding:14px 0;border-top:1px solid #d5dfe3;break-inside:avoid}.q-thumb{display:flex;align-items:center;justify-content:center;background:#f6f4ef;border-radius:6px;padding:8px;min-height:120px}.q-thumb svg{width:100%;height:auto;max-height:170px}
+.q-legend{color:#637c85;font-size:12px;margin:2px 0 10px}.q-item{display:block;padding:14px 0;border-bottom:1px solid #d5dfe3;break-inside:avoid;page-break-inside:avoid}.q-grid{display:grid;grid-template-columns:150px 1fr;gap:18px}.q-group{margin:18px 0 0;font-size:16px;color:#23404c;break-after:avoid;page-break-after:avoid}.q-common{margin:10px 0 0;padding:8px 12px;background:#f6f4ef;border-radius:6px;break-inside:avoid;page-break-inside:avoid}.q-common ul{margin:4px 0 0;padding-left:18px}.q-weight{color:#637c85;font-size:.85em;margin:0 0 4px}.q-thumb{display:flex;align-items:center;justify-content:center;background:#f6f4ef;border-radius:6px;padding:8px;min-height:120px}.q-thumb svg{width:100%;height:auto;max-height:170px}
 .q-title{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.q-title b{font-size:17px}.q-price{font-size:17px;font-weight:bold;white-space:nowrap}.q-size{color:#23404c;margin:2px 0 6px}.q-body small{color:#637c85}.q-body ul{margin:6px 0 0;padding-left:18px}.q-body li{margin:2px 0}
-.q-mats{list-style:none;padding-left:0!important}.q-mats li{display:flex;align-items:center;gap:8px}.sw{flex:none;display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #b9c6cb;background-size:cover;background-position:center}
+.q-mats{list-style:none;padding-left:0!important}.q-mats li{display:flex;align-items:center;gap:8px}.sw{flex:none;display:inline-block;width:22px;height:22px;border-radius:4px;border:1px solid #b9c6cb;background-size:cover;background-position:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;object-fit:cover}
 .q-terms{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px;break-inside:avoid}.q-terms div{border:1px solid #d5dfe3;border-radius:8px;padding:10px 14px}.q-terms h3{margin:0 0 6px;font-size:15px}.q-terms ul{margin:0;padding-left:18px}.q-total-items{font-size:13px;color:#637c85}.q-pending{font-size:13px;font-weight:normal;color:#637c85;white-space:normal}
-@media print{.q-hero img{max-height:105mm}.q-item{grid-template-columns:34mm 1fr;gap:5mm;padding:3mm 0}.q-thumb{min-height:0;padding:2mm}.q-thumb svg{max-height:45mm}.q-title b,.q-price{font-size:13px}.sw{width:5mm;height:5mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}.q-thumb,.q-hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.q-terms{gap:5mm}}</style>`;
+@media print{.q-hero img{max-height:105mm}.q-item{padding:3mm 0}.q-grid{grid-template-columns:34mm 1fr;gap:5mm}.q-group{margin-top:4mm}.q-thumb{min-height:0;padding:2mm}.q-thumb svg{max-height:45mm}.q-title b,.q-price{font-size:13px}.sw{width:5mm;height:5mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}.q-thumb,.q-hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.q-terms{gap:5mm}}</style>`;
 /** Образцы материалов для КП: декор → картинка текстуры (data URL) и средний цвет (decorSwatches.ts, браузер). */
 export type QuoteSwatches = Record<string, { img: string; color: string }>;
 /** Декор строки материала describeModule (для образца цвета): корпус, фасады, фасады ящиков; Вернисаж — его цвет; рамка ALU — без образца. */
@@ -366,7 +366,10 @@ function materialSwatch(m: Module, line: string, sw: QuoteSwatches): string {
   else if (line.startsWith("Фасады:")) { if (m.vernissage) color = "#" + vernissageColor(m.vernissage).toString(16).padStart(6, "0"); else if (!m.alu) decor = m.facadeDecor; else color = "#a7b0b5"; }
   if (!decor && !color) return "";
   const s = decor ? sw[decor] : undefined;
-  return `<span class="sw" style="${s ? `background-image:url('${s.img}');background-color:${s.color}` : `background-color:${color || decorFallbackColor(decor)}`}" title="${esc(decor || "цвет фасадов")}"></span>`;
+  // образец текстуры — картинкой <img>, не фоном: фон в печати пропадает, если в диалоге выключена «Печать фона» (КП Макса 26.10.2026 —
+  // пустые серые квадраты); картинки печать ждёт (printDocument.ts) и печатает всегда
+  if (s?.img) return `<img class="sw" src="${s.img}" alt="" title="${esc(decor)}" style="background-color:${s.color}">`;
+  return `<span class="sw" style="background-color:${color || (s?.color ?? decorFallbackColor(decor))}" title="${esc(decor || "цвет фасадов")}"></span>`;
 }
 /** Карточка изделия КП: миниатюра, тип и размеры, наполнение и «как открывается» простыми словами, материалы с образцом, цена изделия. */
 /** K3 (критик 22.10): у изделия только позиции «после финального расчёта» (доля 0) — так и пишем, не «0 ₽».
@@ -378,11 +381,13 @@ function quotePriceHTML(price: number | null, pending: boolean, rub: (v: number)
   // доля есть — цена; позиции «после расчёта» у такого изделия (опоры, навесы кухни) — общей строкой КП, не в каждой карточке
   return `<span class="q-price">${rub(price)}</span>`;
 }
-function quoteItemHTML(a: Project["modules"][number], i: number, price: number | null, sw: QuoteSwatches, pending = false) {
+function quoteItemHTML(a: Project["modules"][number], i: number, price: number | null, sw: QuoteSwatches, pending = false, omitHinges = false) {
   const m = a.module, d = describeModule(m), rub = (v: number) => v.toLocaleString("ru-RU") + " ₽";
-  const thumb = moduleThumbSVG(m, (decor) => sw[decor]?.color ?? decorFallbackColor(decor));
-  const inside = [...d.filling, ...plainFeatures(m)];
-  return `<article class="q-item"><div class="q-thumb">${thumb}</div><div class="q-body"><div class="q-title"><b>${i + 1}. ${esc(d.kind)}</b>${quotePriceHTML(price, pending, rub)}</div>${d.kind !== m.name ? `<small>${esc(m.name)}</small>` : ""}<div class="q-size">${esc(d.size)} мм</div><div class="q-weight">Вес изделия, кг: ${weightText(moduleWeight(m).total)}</div>${inside.length ? `<ul>${inside.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}<ul class="q-mats">${d.materials.map((x) => `<li>${materialSwatch(m, x, sw)}${esc(x)}</li>`).join("")}</ul></div></article>`;
+  // имя модуля для клиента: «И3 · левый» → «Левый» (группа «Изделие 3» — заголовком над карточками)
+  const cn = clientModuleName(m.name);
+  const thumb = moduleThumbSVG(m, (decor) => sw[decor]?.color ?? decorFallbackColor(decor), (cn.group ? cn.group + " · " : "") + cn.name);
+  const inside = [...d.filling, ...plainFeatures(m, { omitHinges })];
+  return `<article class="q-item"><div class="q-grid"><div class="q-thumb">${thumb}</div><div class="q-body"><div class="q-title"><b>${i + 1}. ${esc(d.kind)}</b>${quotePriceHTML(price, pending, rub)}</div>${d.kind !== cn.name ? `<small>${esc(cn.name)}</small>` : ""}<div class="q-size">${esc(d.size)} мм</div><div class="q-weight">Вес изделия, кг: ${weightText(moduleWeight(m).total)}</div>${inside.length ? `<ul>${inside.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}<ul class="q-mats">${d.materials.map((x) => `<li>${materialSwatch(m, x, sw)}${esc(x)}</li>`).join("")}</ul></div></div></article>`;
 }
 export function quoteHTML(
   p: Project,
@@ -401,6 +406,13 @@ export function quoteHTML(
   // цена по каждому изделию (переключатель offer.itemPrices, по умолчанию да): только когда доли сходятся с ценой КП до рубля
   const items = priced && p.offer?.itemPrices !== false && opts.items && opts.items.length === p.modules.length && opts.items.reduce((s, v) => s + v, 0) === n ? opts.items : null;
   const sw = opts.swatches ?? {};
+  // общее для всех изделий (КП Макса 26.10.2026: «петли GTV с доводчиком…» повторялось в каждой карточке) — один раз над карточками
+  // одинаковые фразы о петлях собираются в общий блок с номерами изделий; в карточках их нет
+  const hingeBy = new Map<string, number[]>();
+  p.modules.forEach((a, i) => { const h = hingeFeature(a.module); if (h) hingeBy.set(h, [...(hingeBy.get(h) ?? []), i + 1]); });
+  const common = p.modules.length > 1 && hingeBy.size > 0;
+  const nums = (v: number[]) => v.map((n, k) => (k && v[k - 1] === n - 1 && v[k + 1] === n + 1 ? "" : (k && v[k - 1] === n - 1 ? "–" : k ? ", " : "") + n)).join("").replace(/–+/g, "–");
+  const commonHTML = common ? `<div class="q-common"><b>Двери и петли</b><ul>${[...hingeBy].map(([h, v]) => `<li>${esc(h)}${hingeBy.size > 1 || v.length < p.modules.length ? ` — ${v.length > 1 ? "изделия" : "изделие"} ${nums(v)}` : ""}</li>`).join("")}</ul></div>` : "";
   const kupe = p.modules.some((a) => a.module.kupe);
   // позиции кухни без счёта (pendingPrices.ts): итог — по известным позициям, рядом явная строка с их числом
   // — по статусу комплектации (ревью R6), не по равенству цены КП итогу: скидка или округление цены её не убирают.
@@ -414,7 +426,7 @@ export function quoteHTML(
   const excluded = ["доставка", "монтаж (сборка и установка)", "крепёж и материалы, не описанные в предложении", ...(pendingN && !p.offer?.pendingIncluded ? [pendingTotalLabel(pendingN).replace(/^П/, "п")] : [])];
   return htmlDocument(
     "Коммерческое предложение",
-    `${clientStyle}${quoteStyle}${sellerBlock(opts.seller)}<header class="q-head"><h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p></header>${image ? `<figure class="q-hero"><img src="${image}" alt="Вид проекта"/></figure>` : ""}<h2>Состав заказа</h2><p class="q-legend">Размеры изделий: ширина × высота × глубина, мм.${items ? " Цена изделия — его доля в общей стоимости заказа." : ""}</p>${p.modules.map((a, i) => quoteItemHTML(a, i, items ? items[i] : null, sw, !!opts.pending?.[i])).join("")}<h2>Стоимость</h2>${sum}${pendingNote}${noticeNote}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<section class="q-terms"><div><h3>Входит в стоимость</h3><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><h3>Не входит</h3><ul>${excluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></section><p><small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small></p>`,
+    `${clientStyle}${quoteStyle}${sellerBlock(opts.seller)}<header class="q-head"><h1>Коммерческое предложение</h1><p>${esc(customer.trim() || "Проект мебели")} · ${new Date().toLocaleDateString("ru-RU")}</p></header>${image ? `<figure class="q-hero"><img src="${image}" alt="Вид проекта"/></figure>` : ""}<h2>Состав заказа</h2><p class="q-legend">Размеры изделий: ширина × высота × глубина, мм.${items ? " Цена изделия — его доля в общей стоимости заказа." : ""}</p>${commonHTML}${p.modules.map((a, i) => { const g = clientModuleName(a.module.name).group, prev = i ? clientModuleName(p.modules[i - 1].module.name).group : null; return (g && g !== prev ? `<h3 class="q-group">${esc(g)}</h3>` : "") + quoteItemHTML(a, i, items ? items[i] : null, sw, !!opts.pending?.[i], !!common); }).join("")}<h2>Стоимость</h2>${sum}${pendingNote}${noticeNote}${notes.trim() ? `<p class="note">${esc(notes)}</p>` : ""}<section class="q-terms"><div><h3>Входит в стоимость</h3><ul>${included.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><h3>Не входит</h3><ul>${excluded.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></section><p><small>Эскиз и комплектация для согласования. Цена предварительная, без доставки и монтажа. Размеры уточняются после замера.</small></p>`,
   );
 }
 /** Спецификация для клиента: те же изделия и материалы, что в КП, без цены, координат и производственных данных. */

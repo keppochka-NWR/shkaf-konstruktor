@@ -86,7 +86,25 @@ function worktopDescription(m: Module): ModuleDescription {
 /** «Что внутри и как открывается» простыми словами для КП (менеджеры 22.10.2026, п. 9): двери и петли, ручки или push-to-open,
  *  ящики и их направляющие. Только факты модели — без нагрузок и выдвижения, которых нет в каталоге. Купе и столешница — пусто
  *  (у них всё сказано в describeModule). */
-export function plainFeatures(m: Module): string[] {
+/** Название модуля для клиента (КП, «Кратко для клиента»): служебное «И3 · левый» (изделие 3 заказа, в печати читалось как «ИЗ»)
+ *  → группа «Изделие 3» и имя «Левый». Другие имена — как есть, группы нет. */
+export function clientModuleName(name: string): { group: string | null; name: string } {
+  const r = /^\s*И\s*(\d+|З)\s*[·.:\-—]\s*(.+)$/u.exec(name);
+  if (!r) return { group: null, name };
+  const rest = r[2].trim();
+  return { group: "Изделие " + (r[1] === "З" ? "3" : r[1]), name: rest.charAt(0).toLocaleUpperCase("ru-RU") + rest.slice(1) };
+}
+/** Петли и открывание дверей простыми словами («петли GTV с доводчиком — двери закрываются плавно и тихо»); нет дверей — null.
+ *  КП (26.10.2026, снимок Макса): одинаковая у всех изделий фраза печатается один раз в общем блоке, а не в каждой карточке. */
+export function hingeFeature(m: Module): string | null {
+  if (m.kupe || m.worktop || m.kitchen?.hinges === false) return null;
+  let all: Part[];
+  try { all = parts(m); } catch { return null; }
+  if (!all.some((d) => d.role === "door" && d.id !== "slope-filler")) return null;
+  const hb = HINGE_BRANDS[m.hingeBrand ?? "gtv"] ?? HINGE_BRANDS.gtv;
+  return m.doorOpen === "push" ? `открывание нажатием (push-to-open), без ручек: петли ${hb.label} без пружины и толкатели` : m.hingeSoft === false ? `петли ${hb.label} без доводчика (самозакрывающиеся)` : `петли ${hb.label} с доводчиком — двери закрываются плавно и тихо`;
+}
+export function plainFeatures(m: Module, opts: { omitHinges?: boolean } = {}): string[] {
   if (m.kupe || m.worktop) return [];
   let all: Part[];
   try { all = parts(m); } catch { return []; }
@@ -96,7 +114,8 @@ export function plainFeatures(m: Module): string[] {
   if (doors && m.kitchen?.hinges !== false) {
     const lift = all.some((d) => d.role === "door" && d.hinge === "top");
     out.push(`${doors} ${plural(doors, ["распашная дверь", "распашные двери", "распашных дверей"])}${m.doorMount === "inset" ? " (вкладные — внутри корпуса)" : ""}${lift ? ", есть подъёмная" : ""}`);
-    out.push(push ? `открывание нажатием (push-to-open), без ручек: петли ${hb.label} без пружины и толкатели` : m.hingeSoft === false ? `петли ${hb.label} без доводчика (самозакрывающиеся)` : `петли ${hb.label} с доводчиком — двери закрываются плавно и тихо`);
+    const hf = hingeFeature(m);
+    if (hf && !opts.omitHinges) out.push(hf);
   }
   const wide = all.filter((d) => d.role === "door" && d.hingeAngle).reduce((mp, d) => mp.set(d.hingeAngle!, (mp.get(d.hingeAngle!) ?? 0) + 1), new Map<number, number>());
   for (const [a, n] of wide) out.push(`петли ${a === 165 ? "155–165° (широкое открывание)" : "с открыванием на 90°"}: ${n} ${plural(n, ["створка", "створки", "створок"])}`);

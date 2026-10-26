@@ -8,6 +8,7 @@ import { quoteHTML, quoteBreakdown, splitRows } from "../src/exports";
 import { estimateXLSX } from "../src/estimateXlsx";
 import { moduleQuote } from "../src/itemPrices";
 import { describeModule, plainFeatures } from "../src/quoteDescribe";
+import { nodeSwatches } from "./kpSwatches"; // образцы текстур в КП (26.10.2026: были пустые квадраты)
 
 const LP = "C:/Users/My PC/Desktop/Claude Project/Конструктор-claude/studio/public/local-projects/";
 const OUT = "C:/Users/My PC/Desktop/Claude Project/Кухни/ГардерЁб/Заказы/7427796/";
@@ -19,7 +20,7 @@ for (const [v, title] of [["ldsp", "Вариант 1 — дверь ЛДСП"], 
   const mq = moduleQuote(p, price);
   p.offer = { customer: "Заказ 7427796 · " + title, price: String(price), notes: "" };
   const img = "data:image/png;base64," + readFileSync(OUT + `снимки-${v}/1-3d-room-side.png`).toString("base64");
-  const html = quoteHTML(p, "Заказ 7427796 · " + title, String(price), "Цена — по большей из двух моделей (коэффициент или цена за лист с зеркалом сверху). Фурнитура Blum. Позиции после финального расчёта конструктором в цену не входят.", img, { cost: e, items: mq?.prices ?? null, pending: mq?.pending ?? null });
+  const html = quoteHTML(p, "Заказ 7427796 · " + title, String(price), "Цена — по большей из двух моделей (коэффициент или цена за лист с зеркалом сверху). Фурнитура Blum. Позиции после финального расчёта конструктором в цену не входят.", img, { swatches: await nodeSwatches(p), cost: e, items: mq?.prices ?? null, pending: mq?.pending ?? null });
   writeFileSync(OUT + `КП 7427796 — ${v === "ldsp" ? "вариант 1 ЛДСП" : "вариант 2 зеркало"}.html`, html, "utf8");
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: "load" });

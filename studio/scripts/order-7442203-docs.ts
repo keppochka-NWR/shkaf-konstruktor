@@ -9,6 +9,7 @@ import { estimate } from "../src/pricing";
 import { estimateXLSX } from "../src/estimateXlsx";
 import { moduleQuote } from "../src/itemPrices";
 import { quoteHTML } from "../src/exports";
+import { nodeSwatches } from "./kpSwatches"; // образцы текстур в КП (26.10.2026: были пустые квадраты)
 
 const [url, file, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -47,7 +48,7 @@ const e = estimate(project), total = e.retail === null ? null : Math.max(e.retai
 if (total === null) throw Error("Нет цены проекта — КП не собирается.");
 const q = moduleQuote(project, total);
 const img = "data:image/png;base64," + readFileSync(join(out, "Снимок шкаф — 3D.png")).toString("base64");
-const html = quoteHTML(project, "", String(total), "Заказ 7442203. Согласованный конструктив: угловой шкаф 2620 и пенал 2620. Позиции «после финального расчёта конструктором» в итог не входят.", img, { cost: e, items: q?.prices ?? null, pending: q?.pending ?? null });
+const html = quoteHTML(project, "", String(total), "Заказ 7442203. Согласованный конструктив: угловой шкаф 2620 и пенал 2620. Позиции «после финального расчёта конструктором» в итог не входят.", img, { swatches: await nodeSwatches(project), cost: e, items: q?.prices ?? null, pending: q?.pending ?? null });
 writeFileSync(join(out, "КП 7442203.html"), html);
 const doc = await browser.newPage();
 await doc.setContent(html, { waitUntil: "load" });

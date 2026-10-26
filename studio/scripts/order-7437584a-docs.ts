@@ -8,6 +8,7 @@ import { estimateXLSX } from "../src/estimateXlsx";
 import { quoteHTML } from "../src/exports";
 import { moduleQuote } from "../src/itemPrices";
 import type { Project } from "../src/project";
+import { nodeSwatches } from "./kpSwatches"; // образцы текстур в КП (26.10.2026: были пустые квадраты)
 
 const [out = ".", image] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -49,7 +50,7 @@ lines.push("## Весь заказ (общий раскрой)", "", `матер
 writeFileSync(`${out}/смета-изделия-1-3.md`, lines.join("\n"));
 writeFileSync(`${out}/Смета заказ ${ORDER} изделия 1-3.xlsx`, await estimateXLSX(p, e));
 const img = image && existsSync(image) ? "data:image/png;base64," + readFileSync(image).toString("base64") : undefined;
-const html = quoteHTML(p, `Заказ ${ORDER}`, String(total), "Изделие 1 — шкаф в прихожую справа от двери (антресоль с откидным фасадом, скамья, щит, подвесной ящик). Изделие 3 — шкаф в прихожую слева от входной двери 1600 × 2590 × 400. ЛДСП Lamarty Клауд. Позиции «после финального расчёта» в цену не входят.", img, { cost: e, items: mq?.prices ?? null, pending: mq?.pending ?? null });
+const html = quoteHTML(p, `Заказ ${ORDER}`, String(total), "Изделие 1 — шкаф в прихожую справа от двери (антресоль с откидным фасадом, скамья, щит, подвесной ящик). Изделие 3 — шкаф в прихожую слева от входной двери 1600 × 2590 × 400. ЛДСП Lamarty Клауд. Позиции «после финального расчёта» в цену не входят.", img, { swatches: await nodeSwatches(p), cost: e, items: mq?.prices ?? null, pending: mq?.pending ?? null });
 writeFileSync(`${out}/КП заказ ${ORDER} изделия 1-3.html`, html);
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const page = await browser.newPage();
