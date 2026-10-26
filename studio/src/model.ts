@@ -35,6 +35,8 @@ export const RULES = {
   minW: 250,
   maxW: 1300, // ТЗ Макса 1200, но заказ 7212718 — шкаф и антресоль 1244; СТП 900 — предупреждение по логистике выше 900
   minH: 250, // антресоли заказов 300–372
+  // Подвесной ящик на стене (заказ 7437584: 800 × 200 и 600 × 200, push): корпус без дверей, в секциях только ящики — от 150 (minHeightOf)
+  minDrawerModuleH: 150,
   maxH: 2500, // шкафы заказа 6785429 2412 (боковина 2396 из листа 2750); было 2200
   minD: 200, // заказы цеха: шкафы 240 (заказ 6990041), стеллажи 200 (Дельта КИП)
   maxD: 700,
@@ -2141,6 +2143,15 @@ export function fastenerCounts(m: Module) {
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !fixedIds.has(p.id)).length + ps.filter((p) => /^shp:.*:r\d+:\d+$/.test(p.id)).length /* перфорация kitchen.pinRows */, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
+/** Ящичный модуль: без распашных дверей, в каждой секции есть ящики и нет полок, штанг и тремпелей (подвесной ящик, комод-ящик). */
+export function isDrawerModule(m: Module): boolean {
+  return !m.doors && !m.kitchen && !m.desk && !m.kupe && !m.raw && !m.corner && !m.casework && m.sections.length > 0
+    && m.sections.every((s) => s.drawers > 0 && !s.shelves.length && !s.rod && !s.pullouts && !s.pantograph);
+}
+/** Нижний предел высоты корпуса: ящичный модуль (подвесной ящик 200, заказ 7437584) — от RULES.minDrawerModuleH, остальное — от RULES.minH. */
+export function minHeightOf(m: Module): number {
+  return isDrawerModule(m) ? RULES.minDrawerModuleH : RULES.minH;
+}
 export function maxHeightOf(m: Module): number {
   return m.kitchen?.role === "tall" ? KITCHEN.maxHeight : m.kupeZone || m.kupeBody ? kupeBodyMax() : RULES.maxH;
 }
@@ -2167,7 +2178,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   ] : [
     // кухня: бутылочница 150 (вкладка «Кухня»); до 1650 — самый широкий модуль 34 кухонь Базиса 1649 (k19 m07), мойки 1430/1480 (n4-base)
     ["width", "Ширина", m.kitchen ? KITCHEN.minWidth : RULES.minW, m.kitchen ? KITCHEN.maxModuleWidth : m.kupeZone ? kupeBodyMax() : RULES.maxW],
-    ["height", "Высота", RULES.minH, maxHeightOf(m)], // кухонный пенал до 2900 (Базис), остальное до 2500
+    ["height", "Высота", minHeightOf(m), maxHeightOf(m)], // кухонный пенал до 2900 (Базис), остальное до 2500; ящичный модуль от 150
     ["depth", "Глубина", RULES.minD, RULES.maxD],
   ]) as readonly (readonly ["width" | "height" | "depth", string, number, number])[]) {
     const n = m[key];
@@ -2377,11 +2388,11 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
     });
     if (
       s.drawers > 0 &&
-      (b.width - (drawersBehindDoors(m,s) ? RULES.drawerFiller : 0) < 250 || dTooSmall(m))
+      (b.width - (drawersBehindDoors(m,s) ? RULES.drawerFiller : 0) < 250 || dTooSmall(m, s))
     )
       errors.push(
         prefix +
-          "для ящиков нужно от 250 мм внутри и глубина корпуса от 300 мм.",
+          (isDrawerModule(m) ? `для ящиков нужно от 250 мм внутри и глубина корпуса от ${drawerMinDepth(m, s)} мм (направляющая 250).` : "для ящиков нужно от 250 мм внутри и глубина корпуса от 300 мм."),
       );
     const rodY=s.rodAt===undefined?(shelfY[0]??h)-RULES.rodTopOffset:s.rodAt*h;
     const support=Math.max(drawerTop+(s.drawers?RULES.panel:0),0,...shelfY.filter(y=>y<rodY).map(y=>y+RULES.panel/2));
@@ -2423,7 +2434,9 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
     // антресоль кухни с подъёмным фасадом (петли сверху) — до ширины кухонного корпуса 1200, как в Базисе (А 975×357)
     // горизонтальный фасад кухни (ширина больше высоты) — тоже до 1200: по всей базе Базиса фасадов шире 700 с высотой
     // не меньше ширины нет ни одного, а горизонтальных навесных 767–896 (вм 3, ВМ 5, ВМ «Стенка в паз», ВМ 3) — десятки
-    const doorWMax = m.kitchen ? (p.hinge === "top" || p.width > p.length ? KITCHEN.maxWidth : Math.max(700, RULES.doorMax)) : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax;
+    // шкафы: откидной вверх фасад на подъёмнике (петли сверху, заказ 7437584 — антресоль 800) — до той же ширины, что у кухонь (1200),
+    // правило распашной створки 600/640 к нему не относится
+    const doorWMax = m.kitchen ? (p.hinge === "top" || p.width > p.length ? KITCHEN.maxWidth : Math.max(700, RULES.doorMax)) : p.hinge === "top" ? KITCHEN.maxWidth : p.length <= RULES.doorLowH ? RULES.doorMaxLow : RULES.doorMax;
     if (p.role === "door" && p.width > doorWMax)
       errors.push(`Фасад шире ${doorWMax} мм при высоте ${Math.round(p.length)}. Разделите модуль на секции или уберите фасады.`);
     // кухонные антресоли Базиса — фасады от 247 мм (корпус 250–400); шкафы — правило цеха doorMinH
@@ -2537,8 +2550,13 @@ export function vernissageSizes(m: Module): [number, number][] {
   if(!m.vernissage)return [];
   try{return parts(m).filter(p=>p.vernissage).map(p=>[Math.round(p.size[0]),Math.round(p.size[1])] as [number,number]);}catch{return [];}
 }
-function dTooSmall(m: Module) {
-  return m.depth < 300;
+/** Ящичный модуль (подвесной ящик глубиной 300 вместе с фасадом, заказ 7437584): корпус — сколько нужно самой короткой
+ *  направляющей 250 (+ задник и зазор, как в проверке длины направляющей); остальные корпуса с ящиками — от 300, как было. */
+function drawerMinDepth(m: Module, s: Section) {
+  return isDrawerModule(m) ? Math.min(...SLIDES.gtv0fpo.lengths) + rearClear(m) + (drawersBehindDoors(m, s) ? 44 : 25) : 300;
+}
+function dTooSmall(m: Module, s: Section) {
+  return m.depth < drawerMinDepth(m, s);
 }
 export function distribute(m: Module, s: Section, count: number): number[] {
   // секция у частичной перегородки (решение Макса 23.10.2026): полки «в секции» — в зоне перегородки (половина), а не через общий проём

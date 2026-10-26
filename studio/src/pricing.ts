@@ -124,7 +124,8 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
   // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
-  const range=sys.brand==='premial'?[300,550]:[300,500];
+  // 250 мм — шкафы и подвесные ящики глубиной 300 вместе с фасадом (заказ 7437584): та же оценка шагом −50 ₽ от 300 мм
+  const range=sys.brand==='premial'?[300,550]:[250,500];
   if(L<range[0]||L>range[1])return {price:null,source:'Длины нет в закупке цеха для '+sys.label+'; цену уточнить',label};
   const steps=(L-300)/50;
   if(sys.brand==='dtc'){
@@ -299,7 +300,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // сырой шкаф из корпуса Базиса без счётчиков (bazis-corpus, импорт без counts): петли, конфирматы, направляющие не посчитаны —
       // строка без цены, чтобы «по коэффициенту» честно стало «—», а не цена одних листов (wardrobe-012: 51 500 из 3 строк, аудит 11.10.2026).
       // Следующий шаг — подсчёт counts из raw.hardware при импорте (план A3 п. 11).
-      if(!kr&&!r.counts)add('bazis-hardware:raw','Фурнитура Базиса не импортирована (счётчиков нет в файле)',Math.max(1,r.hardware.length),'поз.',null,'Сырой шкаф Базиса без счётчиков фурнитуры: петли, конфирматы, направляющие в смете отсутствуют — переимпорт с подсчётом по списку Базиса');
+      // свободная панель студии (freePanels.ts: щит на стену, заказ 7437584) — не импорт Базиса: фурнитуры у неё нет, смета полная
+      if(!kr&&!r.counts&&r.source!=='garderyob-free-panel')add('bazis-hardware:raw','Фурнитура Базиса не импортирована (счётчиков нет в файле)',Math.max(1,r.hardware.length),'поз.',null,'Сырой шкаф Базиса без счётчиков фурнитуры: петли, конфирматы, направляющие в смете отсутствуют — переимпорт с подсчётом по списку Базиса');
       // крепёж корпуса под именем Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50», n3-wall)
       if(r.confirmatName)add('confirmat:'+r.confirmatName,r.confirmatName+' (по проекту Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
       else add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');

@@ -100,6 +100,7 @@ import {
   type Module,
   type Section,
   maxHeightOf,
+  minHeightOf,
 } from "./model";
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
@@ -1653,7 +1654,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <NumberField
                   label="Высота"
                   value={m.height}
-                  min={RULES.minH}
+                  min={minHeightOf(m)}
                   max={maxHeightOf(m)}
                   reasons={v=>({list:fieldReasons(m,'height',v),moduleId:placed.id,moduleName:m.name})}
                   onChange={(v) => modify((n) => (n.height = v))}
