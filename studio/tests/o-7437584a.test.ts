@@ -1,7 +1,7 @@
 // Заказ 7437584 (часть «а», изделия 1 и 3): общие функции студии, которых не хватало для сборки по ТЗ.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialModule, section, validate, minHeightOf, isDrawerModule, parts, RULES, type Module } from "../src/model";
+import { initialModule, section, validate, minHeightOf, isDrawerModule, parts, parseModule, RULES, TOP_STRIP_STEPS, type Module } from "../src/model";
 import { setDoorHinge } from "../src/facadeEditing";
 import { freePanel } from "../src/freePanels";
 import { estimate, slidePrice } from "../src/pricing";
@@ -61,4 +61,26 @@ test("7437584: свободная панель (щит на стену) не д�
   assert.equal(s.price, 990);
   assert.match(s.source, /Оценка/);
   assert.equal(slidePrice({ slide: "gtv0fpo", brand: "dtc", operation: "push", length: 300 }).price, 1040, "300 — по счёту, как было");
+});
+
+test("7437584: скамья — посадочное место 32 (две плиты склейкой на боковинах), склейка в смете; карниз 90 в списке планки", () => {
+  const m = initialModule();
+  Object.assign(m, { name: "Скамья", width: 1000, height: 450, depth: 300, doors: false, plinthHeight: 0, backType: "nailed", seatTop: true });
+  m.sections = [{ ...section(), shelves: [], drawers: 0, rod: false }, { ...section(), shelves: [], drawers: 0, rod: false }];
+  assert.deepEqual(validate(m), []);
+  const ps = parts(m), top = ps.find((p) => p.id === "top")!, glue = ps.find((p) => p.id === "top:glue")!, left = ps.find((p) => p.id === "left")!;
+  assert.deepEqual(top.size, [1000, 16, 300], "верхняя плита на всю ширину");
+  assert.equal(glue.position[1], 450 - 24, "нижняя плита под верхней");
+  assert.equal(left.size[1], 450 - 32, "боковины короче на 32");
+  assert.deepEqual(top.edge, [2, 2, 2, 2]);
+  assert.deepEqual(glue.edge, [0, 0, 0, 0]);
+  assert.ok(ps.filter((p) => p.id.startsWith("fast:top:")).every((p) => p.size[1] === 50 && Math.abs(p.position[1] - 425) < 1), "конфирматы сверху в торец боковин");
+  const e = estimate({ ...newProject(), modules: [{ id: "b", x: 10, y: 0, z: 10, rotation: 0, module: m }] });
+  const g = e.lines.find((l) => l.id === "seat-glue")!;
+  assert.equal(g.quantity, 0.3);
+  assert.equal(g.retail, true);
+  assert.ok(validate({ ...m, topGlass: "glass" }).some((e) => e.startsWith("Посадочное место 32")));
+  assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).seatTop, true, "сохраняется в проекте");
+  assert.ok(TOP_STRIP_STEPS.includes(90));
+  const a = initialModule(); a.topStrip = 90; assert.deepEqual(validate(a), []);
 });

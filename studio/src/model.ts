@@ -37,6 +37,8 @@ export const RULES = {
   minH: 250, // антресоли заказов 300–372
   // Подвесной ящик на стене (заказ 7437584: 800 × 200 и 600 × 200, push): корпус без дверей, в секциях только ящики — от 150 (minHeightOf)
   minDrawerModuleH: 150,
+  seatMaxH: 600, // посадочное место 32 (Module.seatTop): скамья, тумба-сиденье — до 600 мм при накладных дверях
+  seatH: 450, // предлагаемая высота скамьи в прихожей (заказ 7437584)
   maxH: 2500, // шкафы заказа 6785429 2412 (боковина 2396 из листа 2750); было 2200
   minD: 200, // заказы цеха: шкафы 240 (заказ 6990041), стеллажи 200 (Дельта КИП)
   maxD: 700,
@@ -145,6 +147,8 @@ export const RULES = {
 } as const;
 /** Почему в секцию больше не добавить полку / ящик (предел секции): один текст для ПКМ «Добавить», счётчика панели (подсказка у
  *  неактивного «+», критик релиза 22.10) и причины отказа. */
+/** Высоты планки под крышей (карниза в плоскости фасадов) в панели и ПКМ; 90 — заказ 7437584 (карниз 90 у антресолей). */
+export const TOP_STRIP_STEPS = [40, 60, 80, 90, 100, 120] as const;
 export const MAX_SHELVES_REASON = `В секции уже ${RULES.maxShelves} полок — это предел для одной секции. Выберите другую секцию или удалите ненужную полку.`;
 export const MAX_DRAWERS_REASON = `В секции уже ${RULES.maxDrawers} ящиков — это предел для одной секции. Выберите другую секцию или удалите ненужный ящик.`;
 export type Section = {
@@ -283,6 +287,9 @@ export type Module = {
   aluDrawers?: true;
   /** Крыша из стекла вместо ЛДСП: id вставки из alu.ts (стекло, сатин, лакобель, зеркало), закалённое 4 мм с полировкой. */
   topGlass?: string;
+  /** Посадочное место скамьи (заказ 7437584, скамья в прихожей): крыша 32 — две плиты 16 склейкой под одну кромку, лежит на боковинах
+   *  на всю ширину и глубину корпуса (боковины короче на 32); кромка 2 по периметру верхней плиты, у нижней — нет. Склейка — розница 1000 ₽/м². */
+  seatTop?: true;
   /** Навесной шкаф (решение Макса 23.10.2026: подъём «От пола» > 0 у шкафа на цоколе — способ создать навесной): без цоколя и ножек,
    *  на двух навесах ABS у верха боковин (как навесные кухни; смета — «Навес мебельный регулируемый» + заглушка). Без поля — как было. */
   hanging?: true;
@@ -686,7 +693,7 @@ export function innerMinus(m: Module, kind: "fixed" | "removable"): number {
 export function shelfMaxDepth(m:Module){return m.depth-rearClear(m)-(m.doors&&m.doorMount==='inset'?RULES.panel+fe(m):0);}
 /** Верхняя плоскость дна (или низ проёма без дна) и нижняя плоскость крыши (или верх боковин без крыши). */
 export function innerBottom(m:Module){return baseLevel(m)+(hasBottom(m)?RULES.panel:0);}
-export function innerTop(m:Module){const topT=hasTop(m)?(m.topGlass?RULES.glassTop:RULES.panel):0;return (m.slope?m.slope.lowHeight:m.height)-topT;}
+export function innerTop(m:Module){const topT=hasTop(m)?(m.topGlass?RULES.glassTop:m.seatTop?2*RULES.panel:RULES.panel):0;return (m.slope?m.slope.lowHeight:m.height)-topT;}
 /** Высота верхней плоскости корпуса в точке x (для скоса линейно от высокой стороны к низкой). */
 export function slopeAt(m:Module,x:number){if(!m.slope)return m.height;const lo=m.slope.lowHeight,hi=m.height;const k=Math.min(1,Math.max(0,x/m.width));return m.slope.side==='right'?hi-(hi-lo)*k:lo+(hi-lo)*k;}
 export function slopeAngle(m:Module){return m.slope?Math.atan2(m.height-m.slope.lowHeight,m.width):0;}
@@ -721,7 +728,7 @@ export function deskModule(base?:Module):Module{
   const m=base?structuredClone(base):initialModule();
   return {...m,name:'Стол',height:750,depth:Math.max(500,Math.min(m.depth,700)),doors:false,plinthHeight:0,bottomType:'none',backType:'none',topType:'panel',
     sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
-    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
+    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,seatTop:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** Деталь — фасад ящика (ящики студии, ящики и глухие фасады кухни). */
 export const isDrawerFront=(p:Part)=>p.role==='drawer'&&p.id.endsWith(':facade');
@@ -1017,7 +1024,7 @@ export function parts(m: Module): Part[] {
   // Боковины: от пола (на цоколе) или от верха ножек; под стеклянной крышей — короче на её толщину.
   // Скос под потолок (правило Макса): крыша плоская на высоте низкой стороны, низкая боковина — до крыши, высокая — до потолка;
   // треугольник над фасадами закрывает фальш из фасадного материала вровень с фасадами. Так дешевле, чем косая крыша.
-  const sideTopAt = (x: number) => (m.slope ? (x < m.width / 2 === (m.slope.side === "left") ? m.slope.lowHeight : m.height) : m.height - (m.topGlass && hasTop(m) ? RULES.glassTop : 0));
+  const sideTopAt = (x: number) => (m.slope ? (x < m.width / 2 === (m.slope.side === "left") ? m.slope.lowHeight : m.height) : m.height - (m.topGlass && hasTop(m) ? RULES.glassTop : m.seatTop && hasTop(m) ? 2 * t : 0));
   const lT = sideTopAt(t / 2), rT = sideTopAt(m.width - t / 2);
   // Скос фронта в плане: боковины разной глубины, горизонтали — трапецией (в раскрое габарит с пометкой «скос»).
   const dL = depthAt(m, 0), dR = depthAt(m, m.width), sk = m.skew ? " · скос" : "";
@@ -1052,6 +1059,12 @@ export function parts(m: Module): Part[] {
       const g = RULES.glassTop;
       add("top", "Крыша · " + (aluInsert(m.topGlass)?.label ?? "стекло") + " закалённое", [m.width, g, d], [m.width / 2, m.height - g / 2, d / 2], m.width, d, g, "body", undefined, "glass");
       out.at(-1)!.decor = aluInsert(m.topGlass)?.label ?? "стекло";
+    } else if (m.seatTop) {
+      // посадочное место 32 (заказ 7437584): две плиты 16 на боковинах заподлицо с наружными гранями, склейка под одну кромку
+      add("top", "Посадочное место 32 · верхняя плита 16", [m.width, t, d], [m.width / 2, m.height - t / 2, d / 2], m.width, d, t);
+      out.at(-1)!.edge = [2, 2, 2, 2];
+      add("top:glue", "Посадочное место 32 · нижняя плита 16 (склейка до 32)", [m.width, t, d], [m.width / 2, m.height - 1.5 * t, d / 2], m.width, d, t);
+      out.at(-1)!.edge = [0, 0, 0, 0];
     } else if (m.kitchen?.topBack) { // кухня Базиса (k33, k34): крыша короче сзади — перед ХДФ
       const tb = m.kitchen.topBack, td = d - tb;
       add("top", "Крыша" + sk, [m.width - 2 * t, t, td], [m.width / 2, m.height - t / 2, tb + td / 2], m.width - 2 * t, td, t); planTaper(out.at(-1)!, t, m.width - t, tb, 0);
@@ -1626,7 +1639,9 @@ export function parts(m: Module): Part[] {
           const ins = m.confirmatInset ?? RULES.confirmatInset;
           // своя точка стыка из Базиса (jointZ n3-wall, сетка joints n3-tall) — главнее
           const zc = k === 0 && !!m.kitchen && fixedIds.has(hp.id) && grooveBackFront !== undefined && Math.abs(z0 - grooveBackFront) < 0.6 && ins - z0 >= 20 && !m.kitchen.jointZ?.[`${hp.id}:${side}`] && !kitchenJointGrid(m, hp.id) ? ins : z;
-          confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], zc], dir > 0 ? "+x" : "-x", hp.sectionId);
+          // посадочное место 32 лежит на боковинах (Module.seatTop): конфирмат сверху через обе плиты в торец боковины (под заглушку)
+          if (hp.id === "top" && m.seatTop) confirmat(`fast:${hp.id}:${side}:${k}`, [side === "left" ? t / 2 : m.width - t / 2, m.height, zc], "-y", hp.sectionId);
+          else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], zc], dir > 0 ? "+x" : "-x", hp.sectionId);
         }
       }
     }
@@ -2199,6 +2214,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluFill(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
+  if(m.seatTop!==undefined&&(m.seatTop!==true||m.topGlass||m.slope||m.skew||m.kitchen||m.kupe||m.kupeZone||m.desk||m.raw||m.corner||!hasTop(m)||m.doors&&m.doorMount!=='inset'&&m.height>RULES.seatMaxH))errors.push(`Посадочное место 32: у прямого корпуса с крышей ЛДСП (не стекло, не скос); с накладными дверями — только у корпуса до ${RULES.seatMaxH} мм.`);
   if(m.feet!==undefined&&(!Number.isFinite(m.feet.height)||m.feet.height<RULES.feetMin||m.feet.height>RULES.feetMax))errors.push(`Ножки: высота от ${RULES.feetMin} до ${RULES.feetMax} мм.`);
   if(m.bottomType!==undefined&&!['panel','none'].includes(m.bottomType))errors.push('Неверный тип дна.');
   if(m.topType!==undefined&&!['panel','none'].includes(m.topType))errors.push('Неверный тип крыши.');
@@ -2690,6 +2706,7 @@ export function parseModule(input: unknown): Module {
     ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
     ...(x.alu!==undefined&&x.aluDrawers===true?{aluDrawers:true as const}:{}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
+    ...(x.seatTop===true?{seatTop:true as const}:{}),
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),
