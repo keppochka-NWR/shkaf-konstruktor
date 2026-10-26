@@ -76,7 +76,7 @@ const project: Project = {
   version: 3,
   measurement: { number: ORDER, date: "2026-10-26", notes: "Изделия 1 и 3 по эскизам дизайнера (ТЗ.md заказа). Помещение условное: размеры стен не заданы." },
   // решение Макса 26.10: цена клиенту — по большей из двух моделей (коэффициент / лист); ветка o-7441182, коммит ef9811a
-  calculation: { markup: MARKUP_DEFAULT, overrides: {}, maxModel: true },
+  calculation: { markup: MARKUP_DEFAULT, overrides: {}, maxModel: true, sheetPrice: 23000 /* как ставит «Модель цены» на вкладке «Стоимость» */ },
   room: {
     width: ROOM_W, depth: 2400, height: ROOM_H,
     // входная дверь между изделиями не рисуется: в квартирах она открывается наружу, зона открывания мешала бы только для вида
