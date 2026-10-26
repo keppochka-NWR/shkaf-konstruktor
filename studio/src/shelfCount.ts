@@ -9,7 +9,7 @@ export function maxEvenShelves(m:Module,s:Section):number{
   const fit=Math.floor((h-base-RULES.shelfMinClear)/(RULES.panel+RULES.shelfMinClear));
   // v3 (замер удобства 22.10): оценка выше осторожна (+16 над ящиками) — в нишу над ящиками комода полка не добавлялась («от 0 до 0»).
   // Итог сверяем с validate: сколько полок поровну реально проходит проверку (±2 от оценки).
-  const ok=(n:number)=>{if(n<=0)return true;const t=structuredClone(m),ts=t.sections.find(x=>x.id===s.id);if(!ts)return false;ts.shelves=distribute(t,ts,n);for(const k of ['fixed','glassShelves','shelfLights'] as const)delete ts[k];const e0=new Set(validate({...t,sections:t.sections.map(x=>x.id===s.id?{...x,shelves:[]}:x)}));return validate(t).every(e=>e0.has(e));};
+  const ok=(n:number)=>{if(n<=0)return true;const t=structuredClone(m),ts=t.sections.find(x=>x.id===s.id);if(!ts)return false;ts.shelves=distribute(t,ts,n);for(const k of ['fixed','glassShelves','thickShelves','shelfLights'] as const)delete ts[k];const e0=new Set(validate({...t,sections:t.sections.map(x=>x.id===s.id?{...x,shelves:[]}:x)}));return validate(t).every(e=>e0.has(e));};
   let n=Math.max(0,Math.min(RULES.maxShelves,fit));
   for(let k=0;k<2&&n<RULES.maxShelves&&ok(n+1);k++)n++;
   while(n>0&&!ok(n))n--;
@@ -31,5 +31,5 @@ export function setShelfCount(m:Module,s:Section,count:number){
     if(list.length===n&&validate(t).every(e=>e0.has(e)))kept=list;
   }
   s.shelves=kept??(n?distribute(m,s,n):[]);
-  for(const key of ['fixed','glassShelves','shelfLights'] as const){const kept=s[key]?.filter(j=>j<n);if(kept?.length)s[key]=kept;else delete s[key];}
+  for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const){const kept=s[key]?.filter(j=>j<n);if(kept?.length)s[key]=kept;else delete s[key];}
 }
