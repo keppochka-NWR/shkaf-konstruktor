@@ -51,7 +51,7 @@ test('один цикл вместо трёх: до — ошибки по одн
   // «до»: каждое «Добавить» показывает одну ошибку; исправляем её — следующая
   const steps:[number,number,number|undefined][]=[[2575,2587,undefined],[1288,2587,undefined],[1288,2500,undefined]],seen:string[]=[];
   for(const [w,h,doors] of steps){try{createModule('empty',w,h,600,source,doors);seen.push('ok');}catch(e){seen.push((e as Error).message);}}
-  assert.deepEqual(seen,['Ширина: допустимо от 250 до 1300 мм.','Высота: допустимо от 250 до 2500 мм.','Фасад шире 600 мм при высоте 2468. Разделите модуль на секции или уберите фасады.']);
+  assert.deepEqual(seen,['Ширина: допустимо от 250 до 1300 мм.','Высота: допустимо от 250 до 2500 мм. Выше 2500 — без задней стенки или с задником ЛДСП (до 2730 по листу 2750).' /* заказ 7442203: подсказка, как получить выше 2500 */,'Фасад шире 600 мм при высоте 2468. Разделите модуль на секции или уберите фасады.']);
   // «после»: те же три причины — в первом же списке
   const now=paletteIssues({kind:'empty',width:2575,height:2587,depth:600},source).map(x=>x.text);
   for(const t of seen)assert.ok(now.includes(t),t);
