@@ -64,7 +64,8 @@ async function pick(aria: string, option: RegExp) {
   if (want === cur) return;
   await sel.focus(); stats.clicks++;
   const key = want > cur ? "ArrowDown" : "ArrowUp";
-  for (let i = 0; i < Math.abs(want - cur); i++) { await page.keyboard.press(key); stats.keys++; }
+  // список, который сразу пересчитывает проект («Модель цены»), после каждой стрелки может потерять фокус — фокус снова, по одной
+  for (let i = 0; i < Math.abs(want - cur); i++) { if (i) { await sel.focus(); await page.waitForTimeout(200); } await page.keyboard.press(key); stats.keys++; }
   await page.waitForTimeout(300);
   if ((await sel.evaluate((s) => (s as HTMLSelectElement).selectedIndex)) !== want) throw Error(`«${aria}»: пункт не выбран`);
 }
@@ -206,6 +207,12 @@ await step("материалы: корпус Бамбук, фасады Тэфф
   await modalPick("Бамбук", /Бамбук/, { scope: /Все корпуса проекта/ });
   await openPanels(); await click(page.getByRole("button", { name: /^Материал фасадов/ }).filter({ visible: true }).first());
   await modalPick("Тэффи", /Тэффи/, { scope: /Все корпуса проекта/ });
+});
+// решение Макса 26.10: цена по большей модели — нижняя панель «Стоимость» → «Модель цены» (интеграция 26.10: проект функциями — maxModel)
+await step("стоимость: «Модель цены» → «Цена по большей модели»", async () => {
+  await page.keyboard.press("Escape"); await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first());
+  await pick("Модель цены", /по большей модели/);
+  await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first());
 });
 const seconds = Math.round((Date.now() - t0) / 1000);
 await page.keyboard.press("Escape"); await click(page.locator("button", { hasText: "Модуль 1" }).first()).catch(() => undefined); await page.waitForTimeout(6000); // сохранение проекта в хранилище — с задержкой
