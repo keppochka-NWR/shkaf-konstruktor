@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import type { Module } from "./model";
 import { LIGHT_TONES, LIGHT_TYPES, type LightTone, type LightType } from "./model";
 import { applyToAll, clearLights, lightList, lightSummary, pricePerM, setDetailSpec, setLight, TONE_INFO, TYPE_INFO, type LightOrient } from "./lights";
+import { LIGHT_DIMMER_RETAIL, LIGHT_PIEZO_RETAIL, LIGHT_PSU_RETAIL, LIGHT_SENSOR_RETAIL } from "./pricing";
 import "./light-panel.css";
 
 const rub = (v: number) => Math.round(v).toLocaleString("ru-RU") + " ₽";
@@ -55,8 +56,13 @@ export function LightPanel(p: { module: Module; onModify: (u: (n: Module) => voi
         <div className="lp-field"><span>Тип — на весь модуль</span>
           <div className="lp-chips" role="group" aria-label="Тип подсветки модуля">{LIGHT_TYPES.map((t) => <button key={t} type="button" aria-pressed={m.lightType === t} title={TYPE_INFO[t].hint} onClick={() => p.onModify((n) => applyToAll(n, { type: t }))}>{TYPE_INFO[t].label}</button>)}</div>
           {m.lightType === undefined && <small>Не выбран: врезной профиль, в смете без описания</small>}</div>
-        <label className="lp-field lp-sensor"><span><input type="checkbox" aria-label="Включение по датчику движения" checked={!!m.lightSensor} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightSensor = true; else delete n.lightSensor; }); }} /> Включение по датчику движения</span>
-          <small>В смете датчик и блок питания на модуль — цена после финального расчёта конструктором (заказ 7442203).</small></label>
+        {/* управление подсветкой модуля — цены Макса 26.10.2026 (клиенту, поверх коэффициента), pricing.ts LIGHT_*_RETAIL */}
+        <div className="lp-field lp-controls" role="group" aria-label="Управление подсветкой"><span>Управление и питание — на модуль</span>
+          <label className="lp-sensor"><span><input type="checkbox" aria-label="Включение по датчику движения" checked={!!m.lightSensor} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightSensor = true; else delete n.lightSensor; }); }} /> Датчик открывания фасадов (включение при открывании) · {rub(LIGHT_SENSOR_RETAIL)}</span></label>
+          <label className="lp-sensor"><span><input type="checkbox" aria-label="Диммер подсветки" checked={!!m.lightDimmer} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightDimmer = true; else delete n.lightDimmer; }); }} /> Диммер (яркость) · {rub(LIGHT_DIMMER_RETAIL)}</span></label>
+          <label className="lp-sensor"><span><input type="checkbox" aria-label="Беспроводной пьезовыключатель" checked={m.lightSwitch === "piezo"} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightSwitch = "piezo"; else delete n.lightSwitch; }); }} /> Беспроводной пьезовыключатель · {rub(LIGHT_PIEZO_RETAIL)}</span></label>
+          <label className="lp-sensor"><span><input type="checkbox" aria-label="Блок питания подсветки" checked={!!(m.lightPsu || m.lightSensor || m.lightDimmer || m.lightSwitch)} disabled={!!(m.lightSensor || m.lightDimmer || m.lightSwitch)} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightPsu = true; else delete n.lightPsu; }); }} /> Блок питания 12 В · {rub(LIGHT_PSU_RETAIL)}</span></label>
+          <small>{rows.length ? "Цены клиенту, в смете отдельными строками. Блок питания ставится сам с датчиком, диммером или выключателем — один на модуль." : "Без подсветки в модуле не считаются."}</small></div>
         <p className="field-note">Цена не зависит от типа и тона: вертикали {rub(pricePerM("vertical"))} за пог. м, горизонтали {rub(pricePerM("horizontal"))} за пог. м (решение 20.10). Выбранные тип и тон идут в смету и КП описанием строки. У отдельной детали — свой выбор в списке.</p>
       </div>
       {rows.length ? <table className="lp-table" aria-label="Подсвеченные детали">

@@ -28,3 +28,4 @@
 .light-panel .lp-actions button { border: 1px solid #c9c6bb; border-radius: 7px; padding: 6px 12px; font-size: 13px; background: #fff; }
 .light-panel .lp-actions button.danger { color: #9a2a1a; border-color: #e3b5ab; }
 .light-panel .lp-actions button:disabled { opacity: .45; }
+.light-panel .lp-controls label { display: block; font-size: 12.5px; margin: 3px 0; } /* управление подсветкой (цены 26.10) */

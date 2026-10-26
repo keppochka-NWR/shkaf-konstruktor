@@ -53,15 +53,18 @@ test('проём между рядами фасадов: ящики в проё�
   assert.ok(validate(noSplit).some(e=>/проём между рядами фасадов: только при разделённых фасадах/.test(e)));
 });
 
-test('петли 155–165°, датчик движения, торцевые ручки — строки сметы «после финального расчёта»', () => {
+test('петли 155–165°, датчик открывания, блок питания, торцевые ручки — с ценами Макса 26.10 (клиенту, поверх коэффициента)', () => {
   // интеграция 26.10: «Петли 155–165°» модуля = угол 165 у всех створок (hingeAngles, o-7427796); wideHinges — синоним при загрузке
   const m=parseModule({...JSON.parse(JSON.stringify(base({lightSensor:true,handleId:'edge600b'}))),wideHinges:true});m.sections[0].standLights=['left'];
   assert.ok(allHingeAngles(m,165));
   const p=project(m),e=estimate(p),line=(id:string)=>e.lines.find(l=>l.id===id);
   assert.equal(line('hinge'),undefined);
   assert.ok(line('hinge-165')?.retail&&line('hinge-165')!.unitPrice===1700&&line('hinge-165')!.quantity>=4,'петля 155° — 1 700 ₽ клиенту (решение Макса 26.10)');
-  assert.ok(line('light-sensor')?.pending&&line('light-psu')?.pending);
-  assert.ok(line('handle:edge600b')?.pending);
+  // решение Макса 26.10: датчик 700, блок питания 1 800, торцевая ручка 2 ₽/мм (600 → 1 200) — розница, не «после расчёта»
+  assert.ok(line('light-sensor')?.retail&&line('light-sensor')!.unitPrice===700&&!line('light-sensor')!.pending);
+  assert.ok(line('light-psu')?.retail&&line('light-psu')!.unitPrice===1800);
+  assert.ok(line('handle:edge600b')?.retail&&line('handle:edge600b')!.unitPrice===1200);
+  assert.equal(e.pending.length,0);
   assert.equal(e.missing.length,0);
   assert.ok((e.byMarkup??0)>0);
   // без подсветки датчика нет; без флага — обычные петли
@@ -71,7 +74,7 @@ test('петли 155–165°, датчик движения, торцевые р
   // флаги переживают сохранение
   const back=parseModule(JSON.parse(JSON.stringify(m)));
   assert.ok(allHingeAngles(back,165));assert.equal(back.lightSensor,true);
-  for(const id of ['edge350b','edge500b','edge600b'])assert.ok(HANDLES.find(h=>h.id===id)?.pending);
+  for(const id of ['edge350b','edge500b','edge600b'])assert.ok(HANDLES.find(h=>h.id===id)&&!HANDLES.find(h=>h.id===id)!.pending);
 });
 
 test('без дна на цоколе: боковины на полу, опор нет; с дном — как было', () => {

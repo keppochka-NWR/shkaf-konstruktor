@@ -6,7 +6,7 @@ import {nest,unplacedDetails,cuttingEngine,quoteBreakdown,splitRows,type Sheet} 
 import {isBazisModule,type Project} from './project';
 import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
-import {handleById} from './handles';
+import {handleById,handleShape} from './handles';
 import {meshById} from './mesh';
 import {ledLook,specText} from './lights';
 import {aluProfile,aluColor,aluInsert,aluFill,ALU_SOURCE,ALU_GASKET_PER_M} from './alu';
@@ -50,6 +50,18 @@ export const HINGE110_RETAIL = 800;
 export const HINGE155_RETAIL = 1700;
 export const HINGE_LIMITER_RETAIL = 50;
 const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, поверх коэффициента)';
+/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md), источник «Макс 26.10.2026»: цены КЛИЕНТУ — розница поверх коэффициента (в «цене за лист» —
+ *  вне листовой модели, сверху листов); сборка их не запекает ×2,2. Подсветка: блок питания, датчик открывания фасадов, диммер,
+ *  беспроводной пьезовыключатель — на модуль с подсветкой (опции окна «Подсветка»). Торцевые ручки — 2 ₽ за мм длины
+ *  (1200 → 2 400 ₽, 600 → 1 200 ₽, 500 → 1 000 ₽, 350 → 700 ₽), все торцевые (HEXA L-1200, FP527, торцевые под размер). */
+export const LIGHT_PSU_RETAIL = 1800;
+export const LIGHT_SENSOR_RETAIL = 700;
+export const LIGHT_DIMMER_RETAIL = 1200;
+export const LIGHT_PIEZO_RETAIL = 8000;
+export const EDGE_HANDLE_RETAIL_PER_MM = 2;
+const MAX_SRC_2610 = 'Макс 26.10.2026: цена клиенту (розница поверх коэффициента)';
+/** Цена клиенту торцевой ручки (решение Макса 26.10.2026): 2 ₽ за мм длины. */
+export const edgeHandleRetail = (lenMm: number) => Math.round(EDGE_HANDLE_RETAIL_PER_MM * lenMm);
 /** Петля с доводчиком бренда: Blum 110° — розница Макса (800 ₽), остальные — закупка из hardware.ts. */
 function softHinge(bk: string, hb: { soft: { price: number; source: string } }): { price: number; source: string; retail: boolean } {
   return bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
@@ -510,6 +522,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручка Базиса на фасаде кухни (kitchen.handle.name, n4-wall) — строкой Базиса по ручкам сцены; в bazisItems её нет (markBazis)
       const kh=a.module.kitchen?.handle;
       if(d.role==='handle'&&kh?.name&&d.name==='Ручка фасада · '+kh.name)add('bazis:ручка:'+kh.name,kh.name,1,'шт',null,BZ);
+      // торцевые ручки (решение Макса 26.10.2026): 2 ₽ за мм длины клиенту, розница поверх коэффициента
+      else if(d.role==='handle'&&handleShape(handleById(facadeHandleId(a.module,d.id)))==='edge'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',edgeHandleRetail(h.len),MAX_SRC_2610+': торцевая ручка — '+EDGE_HANDLE_RETAIL_PER_MM+' ₽ за мм длины ('+h.len+' мм)',true);}
       else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.pending?null:h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
       // вешалка в два яруса на трубе (заказ 7437584): держатель штанги на трубе — своей строкой, фланцы трубы — как фланцы штанги
       if(d.role==='flange'&&d.id.includes(':pipe:holder:'))add('rod-pipe-holder','Держатель штанги на вертикальную трубу D25',1,'шт',null,'Держатель штанги на трубу (вешалка в два яруса): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
@@ -545,8 +559,13 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
-    // подсветка по датчику движения (m.lightSensor, заказ 7442203): датчик и блок питания на модуль с подсветкой — финальный расчёт
-    if(a.module.lightSensor&&allParts.some(p=>p.role==='light'&&!p.id.startsWith('groove:'))){add('light-sensor','Датчик движения для подсветки (включение при открывании)',1,'шт',null,'Датчик движения подсветки: счёта нет — цена после финального расчёта конструктором');add('light-psu','Блок питания 12 В для подсветки',1,'шт',null,'Блок питания подсветки: подбор по мощности ленты, счёта нет — цена после финального расчёта конструктором');}
+    // управление подсветкой модуля (окно «Подсветка», цены Макса 26.10.2026 — клиенту, поверх коэффициента): датчик открывания фасадов
+    // (m.lightSensor, заказ 7442203), диммер, беспроводной пьезовыключатель; блок питания — флагом или сам с любым из них (один на модуль)
+    if(allParts.some(p=>p.role==='light'&&!p.id.startsWith('groove:'))){const mm=a.module;
+      if(mm.lightSensor)add('light-sensor','Датчик открывания фасадов для подсветки (включение при открывании)',1,'шт',LIGHT_SENSOR_RETAIL,MAX_SRC_2610+': датчик открывания фасадов — '+LIGHT_SENSOR_RETAIL+' ₽',true);
+      if(mm.lightDimmer)add('light-dimmer','Диммер подсветки',1,'шт',LIGHT_DIMMER_RETAIL,MAX_SRC_2610+': диммер — '+LIGHT_DIMMER_RETAIL+' ₽',true);
+      if(mm.lightSwitch==='piezo')add('light-piezo','Беспроводной пьезовыключатель подсветки',1,'шт',LIGHT_PIEZO_RETAIL,MAX_SRC_2610+': беспроводной пьезовыключатель — '+LIGHT_PIEZO_RETAIL+' ₽',true);
+      if(mm.lightPsu||mm.lightSensor||mm.lightDimmer||mm.lightSwitch)add('light-psu','Блок питания 12 В для подсветки',1,'шт',LIGHT_PSU_RETAIL,MAX_SRC_2610+': блок питания — '+LIGHT_PSU_RETAIL+' ₽',true);}
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews*(s.rodLower!==undefined?3:1),'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха'+(s.rodLower!==undefined?' (в два яруса: + нижняя штанга и фланцы трубы)':''));
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');

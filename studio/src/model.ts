@@ -449,9 +449,15 @@ export type Module = {
   ownWidthOnly?: boolean;
   /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
   hingeBrand?: HingeBrand;
-  /** Подсветка включается датчиком движения (заказ 7442203): в смете датчик и блок питания на модуль с подсветкой
-   *  (цена после финального расчёта конструктором). Без подсветки в модуле не действует. */
+  /** Подсветка включается датчиком открывания фасадов (заказ 7442203): в смете датчик 700 ₽ и блок питания 1 800 ₽ на модуль с подсветкой
+   *  (цены Макса 26.10.2026, клиенту). Без подсветки в модуле не действует. */
   lightSensor?: true;
+  /** Диммер подсветки модуля — 1 200 ₽ клиенту (Макс 26.10.2026); с ним в смете и блок питания. */
+  lightDimmer?: true;
+  /** Выключатель подсветки: «piezo» — беспроводной пьезовыключатель 8 000 ₽ клиенту (Макс 26.10.2026); с ним и блок питания. */
+  lightSwitch?: 'piezo';
+  /** Блок питания 12 В подсветки — 1 800 ₽ клиенту (Макс 26.10.2026); ставится и сам с датчиком, диммером или выключателем. */
+  lightPsu?: true;
   /** Explicit repair command only: preserve legacy and imported hardware until requested. */
   hingeFit?: true;
   /** Кромка видимых торцов корпуса и кромка фасадов, мм. По умолчанию 2; скрытые торцы всегда 0,4. */
@@ -2370,7 +2376,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');
-  if(m.lightSensor!==undefined&&m.lightSensor!==true)errors.push('Неверный параметр петель или подсветки.');
+  if((m.lightSensor!==undefined&&m.lightSensor!==true)||(m.lightDimmer!==undefined&&m.lightDimmer!==true)||(m.lightPsu!==undefined&&m.lightPsu!==true)||(m.lightSwitch!==undefined&&m.lightSwitch!=='piezo'))errors.push('Неверный параметр подсветки.');
   for(const e of [m.edgeBody,m.edgeFacade])if(e!==undefined&&![2,1,0.8].includes(e))errors.push('Кромка: выберите 2, 1 или 0,8 мм.');
   if(m.desk!==undefined){
     if(!['both','left','right','none'].includes(m.desk.sides)||!Number.isFinite(m.desk.apron)||m.desk.apron<RULES.deskApronMin||m.desk.apron>RULES.deskApronMax)errors.push(`Стол: опоры слева/справа/обе/нет, царга от ${RULES.deskApronMin} до ${RULES.deskApronMax} мм.`);
@@ -2948,6 +2954,9 @@ export function parseModule(input: unknown): Module {
     ...(x.hingeFit===true?{hingeFit:true as const}:{}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
     ...(x.lightSensor===true?{lightSensor:true as const}:{}),
+    ...(x.lightDimmer===true?{lightDimmer:true as const}:{}),
+    ...(x.lightSwitch==='piezo'?{lightSwitch:'piezo' as const}:{}),
+    ...(x.lightPsu===true?{lightPsu:true as const}:{}),
     ...(x.kitchen===undefined?{}:{kitchen:parseKitchenSpec(x.kitchen,{parseKitchenRafix,parseGridRecord})}),
     ...(x.autoFillersOff===true?{autoFillersOff:true}:{}),
     ...(x.ownWidthOnly===true?{ownWidthOnly:true}:{}),
