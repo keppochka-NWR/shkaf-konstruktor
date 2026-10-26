@@ -21,7 +21,9 @@ import { modulePrices } from "../src/itemPrices";
 import { handleById } from "../src/handles";
 
 export const CLOUD = "Клауд", TEFFY = "Тэффи";
-export const EDGE_HANDLE = "fp527-160"; // торцевая FP527 160 чёрный мат (каталог цеха, счета ФАМ) — «горизонтальная торцевая ручка»
+// Ручка ящиков комода (ответ Макса 26.10): HEXA L-1200 чёрный мат как торцевая — если помещается; на фасаде 896 не помещается
+// (validate: «Ручка 1200 мм длиннее фасада», длину ручки в студии задать нельзя) → HEXA 160 чёрный мат (hexa160b), как решил Макс.
+export const EDGE_HANDLE = "hexa160b";
 const look = (decor: string): Module => ({ ...initialModule(), decor, facadeDecor: decor });
 const frac = (b: { bottom: number; top: number }, y: number) => Math.round(((y - b.bottom) / (b.top - b.bottom)) * 10000) / 10000;
 
@@ -64,8 +66,9 @@ export function product4(x = 2200, z = 3): PlacedModule[] {
     const m = assembleModule("drawers", 900, 800, 284, look(TEFFY));
     m.name = "Изделие 4 · комод " + (k + 1); m.plinthHeight = 80;
     const s = m.sections[0], b = boxes(m)[0];
-    // ящики снизу вверх 260 + 260 + 200 (шаг фасада), верхний — до крыши; короба = шаг − 40
-    const pitches = [260, 260, b.top - b.bottom - 520];
+    // фасады снизу вверх 308 / 258 / 198 (ответ Макса 26.10: видимого цоколя нет, нижний фасад закрывает цоколь до 30 от пола; ТЗ 260+260+200):
+    // шаги ящиков 244 + 260 + остаток до крыши, короба = шаг − 40
+    const pitches = [244, 260, b.top - b.bottom - 504];
     let y = 0;
     s.drawers = 3;
     s.drawerConfigs = pitches.map((p, j) => { const c = { ...drawerConfig(m, s, j), slide: "gtv0fpo" as const, operation: "soft-close" as const, brand: "unihopper" as const, height: p - 40, length: 250, y, handleId: EDGE_HANDLE }; y += p; return c; });
