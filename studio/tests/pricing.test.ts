@@ -34,11 +34,12 @@ test('estimate is complete for the default project and includes hinges, kit and 
 
 test('hidden slides use workshop purchase of DTC/Unihopper and unknown lengths stay open',()=>{
   const p=newProject();const s=p.modules[0].module.sections[0];
+  // 250 с ветки o-7437584a (общая функция, влита в o-7442203) оценивается от DTC 300 шагом −50 ₽ — уже не «нет цены»
   s.drawerConfigs=[{slide:'gtv0fpo',height:140,length:300},{slide:'gtv0fpo',height:140,length:250}];
   const e=estimate(p);
   const known=e.lines.find(l=>l.id==='slide:gtv0fpo:300')!,unknown=e.lines.find(l=>l.id==='slide:gtv0fpo:250')!;
   assert.equal(known.unitPrice,1040);assert.match(known.source,/DTC F10D300H/);
-  assert.equal(unknown.unitPrice,null);assert.equal(e.retail,null);
+  assert.ok(unknown.unitPrice!==null&&unknown.unitPrice<1040);assert.match(unknown.source,/Оценка/);
 });
 
 test('stand lighting adds LED strips per stand face and a retail line on top of the markup',()=>{

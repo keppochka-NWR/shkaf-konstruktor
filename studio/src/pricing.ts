@@ -35,6 +35,8 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
 export const FALSH_GLUE_RETAIL_M2 = 1000;
+/** Петля 155–165° (Module.wideHinges, заказ 7442203): цена Макса 26.10.2026 — 1 700 ₽/шт клиенту, розница поверх коэффициента. */
+export const WIDE_HINGE_RETAIL = 1700;
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -456,7 +458,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         // петли 155–165° (m.wideHinges, заказ 7442203): своя строка; закупочной цены нет — позиция финального расчёта (pendingPrices.ts)
-        else if(a.module.wideHinges&&!push)add('hinge-wide'+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155–165° с доводчиком'+(inset?' · вкладная':''),n,'шт',null,'Петля с углом открывания 155–165°: счёта нет — цена после финального расчёта конструктором');
+        // цена Макса 26.10.2026 (РЕШЕНИЯ.md): петля 155° — 1 700 ₽/шт клиенту, поверх коэффициента (розничная строка)
+        else if(a.module.wideHinges&&!push)add('hinge-wide'+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155–165° с доводчиком'+(inset?' · вкладная':''),n,'шт',WIDE_HINGE_RETAIL,'Цена Макса 26.10.2026: петля 155° — '+WIDE_HINGE_RETAIL+' ₽/шт клиенту, поверх коэффициента',true);
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
