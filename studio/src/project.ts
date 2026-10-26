@@ -140,7 +140,8 @@ export function setWallFillersOff(p:Project,mid:string,off:boolean):Project{
   const n=structuredClone(p),a=n.modules.find(x=>x.id===mid);if(!a)throw Error('Выберите корпус.');
   if(!off){delete a.module.autoFillersOff;return applyAutoFillers(n);}
   const sides=(['left','right'] as const).filter(side=>a.module.wallFiller?.[side]);
-  delete a.module.wallFiller;a.module.autoFillersOff=true;
+  // интеграция 26.10: тот же флаг, что «Без автофальшей — по эскизу» ветки o-7442203 — снимает и угловую планку к соседу под 90°
+  delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;a.module.autoFillersOff=true;
   for(const side of sides){
     const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
     const face=localToRoom(a,u,a.module.depth/2),out=localToRoom(a,u+dir*10,a.module.depth/2);

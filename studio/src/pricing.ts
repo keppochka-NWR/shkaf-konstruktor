@@ -56,6 +56,8 @@ const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, поверх к
 function softHinge(bk: string, hb: { soft: { price: number; source: string } }): { price: number; source: string; retail: boolean } {
   return bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
 }
+/** Петля 155–165° (Module.wideHinges, заказ 7442203): цена Макса 26.10.2026 — 1 700 ₽/шт клиенту, розница поверх коэффициента. */
+export const WIDE_HINGE_RETAIL = 1700;
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -489,6 +491,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // нижний угловой студии (kitchenCorner.ts): дверь у фальша на «Петля под фальшпанель» — другое изделие, цены в прайсах нет:
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
+        // петли 155–165° (m.wideHinges, заказ 7442203): своя строка; закупочной цены нет — позиция финального расчёта (pendingPrices.ts)
+        // цена Макса 26.10.2026 (РЕШЕНИЯ.md): петля 155° — 1 700 ₽/шт клиенту, поверх коэффициента (розничная строка)
+        else if(a.module.wideHinges&&!push)add('hinge-wide'+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155–165° с доводчиком'+(inset?' · вкладная':''),n,'шт',WIDE_HINGE_RETAIL,'Цена Макса 26.10.2026: петля 155° — '+WIDE_HINGE_RETAIL+' ₽/шт клиенту, поверх коэффициента',true);
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         // угол открывания створки (решение Макса 26.10.2026): «петля на 90°» = петля 110° бренда + ограничитель угла на каждую петлю
         // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница поверх коэффициента.
@@ -547,6 +552,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
+    // подсветка по датчику движения (m.lightSensor, заказ 7442203): датчик и блок питания на модуль с подсветкой — финальный расчёт
+    if(a.module.lightSensor&&allParts.some(p=>p.role==='light'&&!p.id.startsWith('groove:'))){add('light-sensor','Датчик движения для подсветки (включение при открывании)',1,'шт',null,'Датчик движения подсветки: счёта нет — цена после финального расчёта конструктором');add('light-psu','Блок питания 12 В для подсветки',1,'шт',null,'Блок питания подсветки: подбор по мощности ленты, счёта нет — цена после финального расчёта конструктором');}
     for(const s of a.module.sections){
       if(s.rod)add('screw35x16-rod','Саморез 3,5×16 · крепление штанги',RULES.rodMountScrews*(s.rodLower!==undefined?3:1),'шт',0.3,'ФАМ: шуруп 4×16 — 0,28 ₽ (ориентир); 6 на штангу по фрагменту цеха'+(s.rodLower!==undefined?' (в два яруса: + нижняя штанга и фланцы трубы)':''));
       if(s.pantograph)add('pantograph','Пантограф GTV',1,'компл',null,'Закупочная цена не найдена; 9000 ₽ в прайсе — цена продажи');

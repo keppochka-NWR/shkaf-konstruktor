@@ -249,7 +249,8 @@ test('дно/крыша без крепежа и отверстий у торц�
 
 test('ниша под технику — только у кухни с разделёнными фасадами',()=>{
   const m=initialModule();m.sections[0].doorNiche=500;
-  assert.ok(validate(m).some(e=>e.includes('ниша под технику')));
+  // заказ 7442203: у шкафа проём между рядами разрешён, но только при разделённых фасадах — без разделения по-прежнему ошибка
+  assert.ok(validate(m).some(e=>e.includes('ниша под технику')||e.includes('проём между рядами фасадов: только при разделённых фасадах')));
   const t={...initialModule(),height:2100,kitchen:{role:'tall' as const}};t.sections=[{...t.sections[0],doorSplit:800,doorNiche:600}];
   assert.deepEqual(validate(t),[]);
   const k=parseModule(JSON.parse(JSON.stringify(t)));

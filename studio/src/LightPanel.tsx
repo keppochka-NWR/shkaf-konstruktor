@@ -55,6 +55,8 @@ export function LightPanel(p: { module: Module; onModify: (u: (n: Module) => voi
         <div className="lp-field"><span>Тип — на весь модуль</span>
           <div className="lp-chips" role="group" aria-label="Тип подсветки модуля">{LIGHT_TYPES.map((t) => <button key={t} type="button" aria-pressed={m.lightType === t} title={TYPE_INFO[t].hint} onClick={() => p.onModify((n) => applyToAll(n, { type: t }))}>{TYPE_INFO[t].label}</button>)}</div>
           {m.lightType === undefined && <small>Не выбран: врезной профиль, в смете без описания</small>}</div>
+        <label className="lp-field lp-sensor"><span><input type="checkbox" aria-label="Включение по датчику движения" checked={!!m.lightSensor} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightSensor = true; else delete n.lightSensor; }); }} /> Включение по датчику движения</span>
+          <small>В смете датчик и блок питания на модуль — цена после финального расчёта конструктором (заказ 7442203).</small></label>
         <p className="field-note">Цена не зависит от типа и тона: вертикали {rub(pricePerM("vertical"))} за пог. м, горизонтали {rub(pricePerM("horizontal"))} за пог. м (решение 20.10). Выбранные тип и тон идут в смету и КП описанием строки. У отдельной детали — свой выбор в списке.</p>
       </div>
       {rows.length ? <table className="lp-table" aria-label="Подсвеченные детали">
