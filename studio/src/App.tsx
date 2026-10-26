@@ -104,7 +104,8 @@ import {
   minHeightOf,
   TOP_STRIP_STEPS,
 } from "./model";
-import { setAllHingeAngles, allHingeAngles } from "./model"; // интеграция 26.10: петли 155–165° всем дверям модуля = угол по створке
+import { setAllHingeAngles, allHingeAngles } from "./model";
+import { moduleWeight, weightText, LDSP_DENSITY } from "./weight"; // вес изделия (решение Макса 26.10.2026) // интеграция 26.10: петли 155–165° всем дверям модуля = угол по створке
 import { setRodTiers, drawerFaceInset } from "./model"; // заказ 7437584: вешалка в два яруса, фасады ящиков в шкафу-купе
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
@@ -1646,6 +1647,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   <h2>Габариты корпуса</h2>
                   <Ruler size={17} />
                 </div>
+                {/* вес изделия по деталям (решение Макса 26.10.2026; weight.ts — плотность ЛДСП константой) */}
+                {(()=>{let w:ReturnType<typeof moduleWeight>|null=null;try{w=moduleWeight(m);}catch{w=null;}return w?<p className="field-note" data-testid="module-weight" title={`ЛДСП ${weightText(w.board)} · ЛХДФ ${weightText(w.hdf)}${w.mdf?' · МДФ '+weightText(w.mdf):''}${w.glass?' · стекло '+weightText(w.glass):''}${w.mirror?' · зеркало '+weightText(w.mirror):''} кг; фурнитура без массы (${w.hardwareNoMass} дет.) не учтена; плотность ЛДСП ${LDSP_DENSITY} кг/м³`}>Вес изделия: <b>{weightText(w.total)} кг</b> <small>(плита, ЛХДФ, стекло; без фурнитуры)</small></p>:null;})()}
                 <button className="outline full upper-cta" onClick={addUpper}><Plus size={16}/> Антресоль сверху на этот корпус</button>
                 <p className="field-note">Антресоль встанет на крышу корпуса той же ширины и глубины, без цоколя; до потолка останется зазор по регламенту.</p>
                 <NumberField

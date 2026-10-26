@@ -7,6 +7,7 @@
 import { estimate, engineNote, lineGroup, isKupeLine, type PriceLine } from "./pricing";
 import { details, detailGrooves, orderNumber, quoteBreakdown, splitRows } from "./exports";
 import { describeModule } from "./quoteDescribe";
+import { moduleWeight, weightText } from "./weight";
 import { pendingTotalLabel } from "./pendingPrices";
 import { CLIENT_SOURCE_IN_SHEET } from "./clientPrices";
 import { PUBLIC_BUILD } from "./buildMode";
@@ -128,6 +129,9 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
     return refs.length ? fml(refs.join("+"), v, XS.subMoney) : num(v, XS.subMoney);
   };
   if (split) { rows.push([]); for (const [k, v] of splitRows(split)) plain("Разбивка: " + k, splitCell(k, v)); }
+  // вес изделий по деталям (решение Макса 26.10.2026, weight.ts): плита, ЛХДФ, стекло, зеркало; фурнитура без массы не учтена
+  rows.push([]);
+  p.modules.forEach((a, i) => plain(`Вес изделия, кг · ${i + 1}. ${a.module.name}`, num(moduleWeight(a.module).total, XS.subNum)));
   rows.push([]);
   const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", e.missing.length ? "Позиций без цены: " + e.missing.length + "." : "", "Доставка, монтаж и неописанный крепёж не включены.", manager ? engineNote(e) + "." : ""].filter(Boolean);
   for (const t of notes) { rows.push(row([empty(XS.text), str(t, XS.note)], 2, XS.text)); merges.push(`B${rows.length}:${ref(W - 1, rows.length - 1)}`); }
@@ -165,8 +169,9 @@ export function clientSheet(p: Project, e: Estimate, created = new Date()): XShe
   const linesIn = (t: string, w: number) => t.split("\n").reduce((s, x) => s + Math.max(1, Math.ceil(x.length / w)), 0);
   p.modules.forEach((a, i) => {
     const d = describeModule(a.module), kind = d.kind + (d.kind !== a.module.name ? "\n" + a.module.name : ""), mats = d.materials.join("\n"), fill = d.filling.length ? d.filling.join("\n") : "—";
+    const size = d.size + "\nВес изделия, кг: " + weightText(moduleWeight(a.module).total); // решение Макса 26.10.2026
     heights[rows.length] = Math.max(15, 13 * Math.max(linesIn(kind, 28), linesIn(mats, items ? 42 : 44), linesIn(fill, items ? 28 : 32)) + 4);
-    rows.push([num(i + 1, XS.numCenter), str(kind), str(d.size), str(mats), str(fill), ...(items ? [items[i] === 0 && iq!.pending[i] ? str(PENDING_ITEM_PRICE, XS.note) : num(items[i], XS.money)] : [])]);
+    rows.push([num(i + 1, XS.numCenter), str(kind), str(size), str(mats), str(fill), ...(items ? [items[i] === 0 && iq!.pending[i] ? str(PENDING_ITEM_PRICE, XS.note) : num(items[i], XS.money)] : [])]);
   });
   const last = rows.length;
   const split = e.retail === null ? null : quoteBreakdown(String(e.retail), e);

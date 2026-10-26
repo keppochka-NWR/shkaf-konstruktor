@@ -14,6 +14,7 @@ import {catalog} from './catalog';
 import {guillotinePack,type GuillotineCut,type GuillotineResult,type Offcut} from './guillotine';
 import {describeModule,plainFeatures} from './quoteDescribe';
 import {moduleThumbSVG,decorFallbackColor} from './quoteThumb';
+import {moduleWeight,weightText} from './weight';
 import {vernissageColor} from './facadesVernissage';
 import type {Module} from './model';
 import {hasSeller,type SellerInfo} from './sellerInfo';
@@ -381,7 +382,7 @@ function quoteItemHTML(a: Project["modules"][number], i: number, price: number |
   const m = a.module, d = describeModule(m), rub = (v: number) => v.toLocaleString("ru-RU") + " ₽";
   const thumb = moduleThumbSVG(m, (decor) => sw[decor]?.color ?? decorFallbackColor(decor));
   const inside = [...d.filling, ...plainFeatures(m)];
-  return `<article class="q-item"><div class="q-thumb">${thumb}</div><div class="q-body"><div class="q-title"><b>${i + 1}. ${esc(d.kind)}</b>${quotePriceHTML(price, pending, rub)}</div>${d.kind !== m.name ? `<small>${esc(m.name)}</small>` : ""}<div class="q-size">${esc(d.size)} мм</div>${inside.length ? `<ul>${inside.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}<ul class="q-mats">${d.materials.map((x) => `<li>${materialSwatch(m, x, sw)}${esc(x)}</li>`).join("")}</ul></div></article>`;
+  return `<article class="q-item"><div class="q-thumb">${thumb}</div><div class="q-body"><div class="q-title"><b>${i + 1}. ${esc(d.kind)}</b>${quotePriceHTML(price, pending, rub)}</div>${d.kind !== m.name ? `<small>${esc(m.name)}</small>` : ""}<div class="q-size">${esc(d.size)} мм</div><div class="q-weight">Вес изделия, кг: ${weightText(moduleWeight(m).total)}</div>${inside.length ? `<ul>${inside.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}<ul class="q-mats">${d.materials.map((x) => `<li>${materialSwatch(m, x, sw)}${esc(x)}</li>`).join("")}</ul></div></article>`;
 }
 export function quoteHTML(
   p: Project,
