@@ -7,7 +7,7 @@ import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
 import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
-import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths} from './kitchen';
+import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths,setWorktopMaterial} from './kitchen';
 import type {PlacedModule} from './project';
 // 'kitchen-corner' и 'kitchen-u' (w-lwing 23.10) — группы в угол комнаты, собираются kitchenCornerRow.ts (createKitchenCornerRow/createKitchenURow)
 export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'hanging-drawer'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
@@ -84,6 +84,8 @@ export function assembleModule(kind:ModuleKind,width:number,height:number,depth:
   }
   if(kind==='worktop'){
     const m=kitchenWorktop(initialModule(),width);m.height=height;m.depth=depth;m.decor=source.decor;m.worktop!.thickness=height;
+    // мельче 400 кухонной столешницы не бывает (WORKTOP_LDSP_MIN_DEPTH…400): это шкафная — ЛДСП 32 в цвет корпуса (ТВ-зона заказа 7437584)
+    if(depth<400)setWorktopMaterial(m,'ldsp',32);
     m.sections=[{...section(),shelves:[],drawers:0,rod:false}];
     return m;
   }

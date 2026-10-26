@@ -2869,6 +2869,8 @@ export function parseModule(input: unknown): Module {
       ...(s.pantograph===undefined?{}:{pantograph:s.pantograph}),
     ...(s.pullouts===undefined?{}:{pullouts:s.pullouts}),
       ...(s.rodAt===undefined?{}:{rodAt:s.rodAt}),
+      ...(typeof s.rodLower==='number'?{rodLower:s.rodLower}:{}), // вешалка в два яруса (заказ 7437584) — переживает сохранение
+
       ...(s.shelfLight===true?{shelfLight:true}:{}),
       ...(Array.isArray(s.standLights)?{standLights:(['left','right'] as const).filter(x=>(s.standLights as unknown[]).includes(x))}:{}),
       ...(Array.isArray(s.shelfLights)?{shelfLights:[...new Set((s.shelfLights as unknown[]).map(Number))].filter(j=>Number.isInteger(j)&&j>=0&&j<s.shelves.length).sort((a,z)=>a-z)}:{}),

@@ -2,14 +2,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { initialModule, section, validate, parts, boxes, setRodTiers, drawerFaceInset, RULES, type Module } from "../src/model";
+import { initialModule, section, validate, parts, boxes, setRodTiers, drawerFaceInset, parseModule, RULES, type Module } from "../src/model";
 import { createKupeWardrobe, assembleModule, hangingDrawer, KIND_LABEL } from "../src/paletteBuild";
 import { setWorktopMaterial, WORKTOP_CHOICES } from "../src/kitchen";
 import { partCollisions } from "../src/collisions";
 import { estimate } from "../src/pricing";
 import { pendingPrice } from "../src/pendingPrices";
 import { appendModule, newProject, type Project } from "../src/project";
-import { removePart } from "../src/operations";
+import { removePart, applyDrawerSlide, captureSectionFilling, pasteSectionFilling } from "../src/operations";
+import { editDrawerConfig } from "../src/drawerEditing";
 import { orderProject, PRODUCTS } from "../scripts/order-7437584-b";
 
 const look = (decor: string): Module => ({ ...initialModule(), decor, facadeDecor: decor });
@@ -48,6 +49,10 @@ test("вешалка в два яруса: проверки ярусов, сня
   const r = removePart(p, p.modules[0].id, s.id, s.id + ":rod:lower");
   const s2 = r.modules[0].module.sections[0];
   assert.ok(s2.rod && s2.rodLower === undefined, "ПКМ «Удалить» по нижней штанге снимает только второй ярус");
+  // переживает сохранение/открытие проекта (parseModule)
+  const again = parseModule(JSON.parse(JSON.stringify(m)));
+  assert.equal(again.sections[0].rodLower, s.rodLower);
+  assert.ok(parts(again).some((x) => x.id.endsWith(":pipe")));
   setRodTiers(m, s, false);
   assert.equal(s.rodLower, undefined);
 });
@@ -102,8 +107,34 @@ test("столешница ЛДСП 32 (16+16): две плиты в раскр�
   const e = estimate(p), ids = e.lines.map((l) => l.id);
   assert.ok(ids.includes("worktop-glue") && !ids.some((x) => x.startsWith("worktop:ldsp")), ids.join(","));
   assert.equal(e.lines.find((l) => l.id === "worktop-glue")!.quantity, 0.832);
+  // палитра: глубина меньше 400 — сразу шкафная ЛДСП 32 (кухонных столешниц мельче 400 нет), 400 и глубже — как было
+  const shallow = assembleModule("worktop", 2600, 32, 320, look("Тэффи"));
+  assert.deepEqual([shallow.worktop!.material, shallow.worktop!.thickness, shallow.height, validate(shallow).length], ["ldsp", 32, 32, 0]);
+  assert.equal(assembleModule("worktop", 2400, 38, 600, look("Тэффи")).worktop!.material, "postforming");
   // без кухонных низов и без комода/тумбы (только высокий шкаф) — как было: отказ
   assert.throws(() => appendModule(newProject(wardrobe()), assembleModule("worktop", 2600, 38, 600, look("Тэффи"))), /нижние кухонные корпуса/);
+});
+test("панель ящиков: «Эти направляющие всем ящикам» копирует систему целиком (ход и бренд), комод до крыши — высоты без запаса под полку", () => {
+  const p = newProject(assembleModule("drawers", 900, 800, 284, look("Тэффи"))), m = p.modules[0].module, s = m.sections[0];
+  s.drawerConfigs![0] = { ...s.drawerConfigs![0], slide: "gtv0fpo", operation: "soft-close", brand: "unihopper", length: 250 };
+  const r = applyDrawerSlide(p, p.modules[0].id, s.id, 0).modules[0].module.sections[0];
+  assert.ok(r.drawerConfigs!.every((c) => c.slide === "gtv0fpo" && c.operation === "soft-close" && c.brand === "unihopper"), JSON.stringify(r.drawerConfigs));
+  // комод 3 ящика до крыши: 3-й 144, затем 2-й 220 (верхний поднимается), 1-й 204 — фасады 308 / 258 / 198, как в сборке функциями
+  const k = r.drawerConfigs!.map((c) => ({ ...c }));
+  const mm = structuredClone(m); mm.sections[0].drawerConfigs = k;
+  for (const [j, h] of [[2, 144], [1, 220], [0, 204]] as const) mm.sections[0].drawerConfigs = editDrawerConfig(mm, mm.sections[0], j, { height: h });
+  assert.deepEqual(mm.sections[0].drawerConfigs!.map((c) => [c.height, c.y]), [[204, 0], [220, 244], [144, 504]]);
+  assert.deepEqual(parts(mm).filter((x) => x.id.endsWith(":facade")).map((x) => Math.round(x.size[1])), [308, 258, 198]);
+  assert.deepEqual(validate(mm), []);
+});
+test("«Копировать наполнение секции» переносит «Зазор между ящиками 30 мм», полку над ящиками и второй ярус штанги", () => {
+  const p = orderProject(), a = p.modules.find((x) => x.module.kupeZone)!, m = a.module;
+  const copy = captureSectionFilling(p, a.id, m.sections[1].id);
+  const r = pasteSectionFilling(p, a.id, m.sections[2].id, copy).modules.find((x) => x.id === a.id)!.module;
+  assert.equal(r.sections[2].drawerGrip, true);
+  assert.deepEqual(parts(r).filter((x) => x.sectionId === r.sections[2].id).map((x) => x.name + x.size.map(Math.round).join("×")).sort(), parts(m).filter((x) => x.sectionId === m.sections[2].id).map((x) => x.name + x.size.map(Math.round).join("×")).sort());
+  const two = pasteSectionFilling(p, a.id, m.sections[0].id, captureSectionFilling(p, a.id, m.sections[0].id)).modules.find((x) => x.id === a.id)!.module;
+  assert.ok(two.sections[0].rodLower !== undefined && Math.abs(two.sections[0].rodLower - m.sections[0].rodLower!) < 1e-6, "вешалка в два яруса сохраняется");
 });
 test("заказ 7437584 (изделия 2, 4, 5): собирается функциями без ошибок и пересечений, все позиции с ценой", () => {
   const p = orderProject();
@@ -115,6 +146,7 @@ test("заказ 7437584 (изделия 2, 4, 5): собирается функ
   assert.equal(e.missing.length, 0, e.missing.map((l) => l.label).join("; "));
   assert.ok((e.byMarkup ?? 0) > 100000);
   assert.ok(PRODUCTS.every(([, re]) => p.modules.some((a) => re.test(a.module.name))));
+  assert.ok(e.lines.some((l) => l.id === "pipe25"), "в сохранённом проекте вешалка в два яруса (труба в смете)");
   const kupe = p.modules.find((a) => a.module.kupeZone)!.module, bb = boxes(kupe);
   assert.deepEqual(bb.map((b) => Math.round(b.width)), [816, 390, 390]);
   assert.equal(kupe.plinthHeight, 100);

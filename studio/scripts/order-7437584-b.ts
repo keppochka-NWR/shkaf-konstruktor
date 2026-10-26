@@ -28,7 +28,8 @@ const look = (decor: string): Module => ({ ...initialModule(), decor, facadeDeco
 const frac = (b: { bottom: number; top: number }, y: number) => Math.round(((y - b.bottom) / (b.top - b.bottom)) * 10000) / 10000;
 
 /** Изделие 2: корпус шкафа-купе и двери купе (2 полотна). x, z — левый задний угол. */
-export function product2(x = 200, z = 3): PlacedModule[] {
+// Раскладка — как у менеджера мышью (scripts/order-7437584-b-manager.ts): помещение 9000, купе палитра ставит на x 1690, z 33; ТВ-зона правее.
+export function product2(x = 1690, z = 33): PlacedModule[] {
   const [bodyP, doorsP] = createKupeWardrobe(1660, 2600, 600, look(CLOUD), 2, "inside");
   const m = bodyP.module;
   m.name = "Изделие 2 · корпус шкафа-купе";
@@ -58,7 +59,7 @@ export function product2(x = 200, z = 3): PlacedModule[] {
   return [{ ...bodyP, x, z }, { ...doorsP, x: x + 16, z: z + m.depth }];
 }
 /** Изделие 4: ТВ-зона — подвесной ящик слева, два комода 900 справа, столешница ЛДСП 32 на всю длину. */
-export function product4(x = 2200, z = 3): PlacedModule[] {
+export function product4(x = 3700, z = 33): PlacedModule[] {
   const out: PlacedModule[] = [];
   const hang = hangingDrawer(800, 200, 284, look(TEFFY)); hang.name = "Изделие 4 · подвесной ящик";
   out.push({ id: "p4-hang", x, y: 800 - 200, z, rotation: 0, module: hang });
@@ -71,9 +72,9 @@ export function product4(x = 2200, z = 3): PlacedModule[] {
     const pitches = [244, 260, b.top - b.bottom - 504];
     let y = 0;
     s.drawers = 3;
-    s.drawerConfigs = pitches.map((p, j) => { const c = { ...drawerConfig(m, s, j), slide: "gtv0fpo" as const, operation: "soft-close" as const, brand: "unihopper" as const, height: p - 40, length: 250, y, handleId: EDGE_HANDLE }; y += p; return c; });
+    s.drawerConfigs = pitches.map((p, j) => { const c = { ...drawerConfig(m, s, j), slide: "gtv0fpo" as const, operation: "soft-close" as const, brand: "unihopper" as const, height: p - 40, length: 250, y }; y += p; return c; });
     s.drawerCap = false;
-    m.drawerHandleId = EDGE_HANDLE;
+    m.drawerHandleId = EDGE_HANDLE; // как «Ручки ящиков» в панели: одна ручка на все ящики корпуса
     out.push({ id: "p4-kom" + k, x: x + 800 + k * 900, y: 0, z, rotation: 0, module: m });
   }
   const top = assembleModule("worktop", 2600, 32, 320, look(TEFFY));
@@ -83,7 +84,7 @@ export function product4(x = 2200, z = 3): PlacedModule[] {
   return out;
 }
 /** Изделие 5: подвесной ящик 600 × 200 × 284 (низ на 900 от пола — высота в ТЗ не указана). */
-export function product5(x = 5200, z = 3): PlacedModule[] {
+export function product5(x = 7000, z = 33): PlacedModule[] {
   const m = hangingDrawer(600, 200, 284, look(TEFFY)); m.name = "Изделие 5 · подвесной ящик";
   return [{ id: "p5", x, y: 900, z, rotation: 0, module: m }];
 }
@@ -91,7 +92,7 @@ export function orderProject(): Project {
   const p: Project = {
     version: 3,
     measurement: { number: "7437584", date: "2026-10-26", notes: "Изделия 2, 4, 5 по ТЗ (эскизы дизайнера). Изделия 1 и 3 — отдельный расчёт." },
-    room: { width: 6200, depth: 3000, height: 2800, openings: [], obstacles: [] },
+    room: { width: 9000, depth: 3000, height: 2800, openings: [], obstacles: [] },
     modules: [...product2(), ...product4(), ...product5()],
     calculation: { markup: 2.2, overrides: {}, model: "sheet", sheetPrice: 23000 },
   } as Project;
