@@ -221,8 +221,8 @@ try {
   await shot("hardware-window");
   await click(page.locator('button[aria-label="Закрыть окно фурнитуры"]'));
   await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first());
-  log("Стоимость: «Цена по большей модели» — включить");
-  await check(box("Цена по большей модели"));
+  log("Стоимость: «Модель цены» → «Цена по большей модели» (интеграция 26.10: одно поле maxModel)");
+  await pick(sel("Модель цены"), /по большей модели/);
   await shot("estimate-ldsp");
   const a = await saved();
   writeFileSync(`${out}/project-ldsp-mouse.json`, JSON.stringify(a, null, 1));

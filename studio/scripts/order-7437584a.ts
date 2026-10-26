@@ -42,7 +42,7 @@ const drawerBox = mod("И1 · подвесной ящик", 800, 200, D1, { door
 const bench = mod("И1 · скамья", 1000, 450, 300, { doors: false, plinthHeight: 0, backType: "nailed", seatTop: true }, [{}, {}]);
 // Антресоль 1800 × 590: отсеки 800 / 500 / 500, карниз 90 в плоскости фасадов, фасады 500: 800 — откидной вверх, 500 + 500 — push.
 // Предел ширины корпуса студии 1300 → два навесных корпуса 800 + 1000 (вопрос Максу: нужна ли антресоль 1800 одним корпусом).
-const antPatch1: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, hanging: true, topStrip: 90, backType: "nailed", facadeSketchH: 500 /* по эскизу (решение 26.10) */ };
+const antPatch1: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, hanging: true, topStrip: 90, backType: "nailed", facadeFrom: -4 /* по эскизу (решение 26.10): фасад 500 — верх 496 под карнизом 90, свес 4 мм ниже корпуса */ };
 // жёсткая полка у верхней кромки откидного фасада — под петли (без неё у карниза петлям не за что держаться)
 const ant1a = mod("И1 · антресоль 800 (откидная)", 800, 590, D1, antPatch1, [{ doorLeaves: 1, shelves: [468 / 558], fixed: [0] }]);
 const ant1b = mod("И1 · антресоль 1000", 1000, 590, D1, antPatch1, [{ doorLeaves: 1 }, { doorLeaves: 1 }]);
@@ -52,7 +52,7 @@ Object.assign(shield, { id: nid("i1"), x: X1 + 800, y: 450, z: 0 });
 
 // ─── Изделие 3 · 1600 × 2590 × 400 (корпус 384), три модуля 533 ───
 const D3 = 384, W3 = [533, 533, 534], LOW = 2000, PL = 80;
-const lowPatch: Partial<Module> = { doors: true, plinthHeight: PL, backType: "nailed", facadeSketchH: 1996 /* эскиз: 2000 от пола до низа антресоли, зазоры 2 + 2, фасад закрывает цоколь */, handleId: "hexa1200b" /* торцевая HEXA L-1200 чёрный мат (ответ Макса 26.10: торцевые — HEXA L) */ };
+const lowPatch: Partial<Module> = { doors: true, plinthHeight: PL, backType: "nailed", facadeFrom: 30 /* эскиз: фасад до низа антресоли, закрывает цоколь; низ 30 от пола (решение Макса 26.10: и по эскизу не ниже 30) */, handleId: "hexa1200b" /* торцевая HEXA L-1200 чёрный мат (ответ Макса 26.10: торцевые — HEXA L) */ };
 const left = mod("И3 · левый", W3[0], LOW, D3, lowPatch, [{ doorLeaves: 1, pullouts: 1 }]);
 left.sections[0].shelves = [shelfAt(left, 500)]; left.sections[0].fixed = [0];
 const mid = mod("И3 · центр", W3[1], LOW, D3, lowPatch, [{ doorLeaves: 1, pullouts: 1, drawerGrip: true }]);
@@ -65,7 +65,7 @@ const mid = mod("И3 · центр", W3[1], LOW, D3, lowPatch, [{ doorLeaves: 1,
 }
 const right = mod("И3 · правый", W3[2], LOW, D3, lowPatch, [{ doorLeaves: 1, pullouts: 1 }]);
 right.sections[0].shelves = [shelfAt(right, 1500)]; right.sections[0].fixed = [0];
-const antPatch: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed", facadeSketchH: 500 /* по эскизу */ };
+const antPatch: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed", facadeFrom: -4 /* по эскизу: фасад 500 */ };
 const ant3 = (name: string, w: number, shelf: boolean) => {
   const a = mod(name, w, 590, D3, antPatch, [{ doorLeaves: 1 }]);
   if (shelf) a.sections[0].shelves = [0.5];

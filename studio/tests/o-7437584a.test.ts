@@ -111,22 +111,26 @@ test("7437584: ящики за дверью над полкой — фальш �
   assert.ok(!roomWarnings({ ...newProject(), modules: [panel] }).some((w) => w.kind === "logistics"));
 });
 
-test("7437584: фасады по эскизу (facadeSketchH) — антресоль 500 под карнизом 90, нижние 1996; антресоль сверху высоту фасадов не наследует", () => {
+test("7437584: фасады по эскизу — антресоль 500 под карнизом 90 (свес 4 мм), нижние не ниже 30 от пола; старое поле facadeSketchH читается; антресоль сверху не наследует", () => {
+  // интеграция 26.10: одно поле facadeFrom/facadeTo (o-7427796); facadeSketchH ветки o-7437584a — синоним при загрузке (верх по правилу − высота)
   const ant = initialModule();
-  Object.assign(ant, { name: "Антресоль", width: 533, height: 590, depth: 384, doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed", facadeSketchH: 500 });
+  Object.assign(ant, { name: "Антресоль", width: 533, height: 590, depth: 384, doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed" });
   ant.sections = [{ ...section(), shelves: [], drawers: 0, rod: false, doorLeaves: 1 }];
-  assert.deepEqual(validate(ant), []);
-  const d = parts(ant).find((p) => p.role === "door")!;
+  const antL = parseModule({ ...JSON.parse(JSON.stringify(ant)), facadeSketchH: 500 });
+  assert.equal(antL.facadeFrom, -4, "низ на 4 мм ниже корпуса — свес фасада антресоли");
+  assert.deepEqual(validate(antL), []);
+  const d = parts(antL).find((p) => p.role === "door")!;
   assert.equal(Math.round(d.size[1]), 500, "фасад 500 по эскизу");
-  assert.ok(validate({ ...ant, facadeSketchH: 700 }).some((e) => e.startsWith("Высота фасадов по эскизу")), "ниже корпуса больше 10 мм — нельзя");
+  assert.ok(validate({ ...antL, facadeFrom: -204 }).some((e) => e.startsWith("Фасады по эскизу")), "ниже корпуса больше 10 мм — нельзя");
   const low = initialModule();
-  Object.assign(low, { width: 533, height: 2000, depth: 384, plinthHeight: 80, facadeSketchH: 1996 });
+  Object.assign(low, { width: 533, height: 2000, depth: 384, plinthHeight: 80 });
   low.sections = [{ ...section(), shelves: [], drawers: 0, rod: false, doorLeaves: 1 }];
-  assert.deepEqual(validate(low), []);
-  const ld = parts(low).find((p) => p.role === "door")!;
-  assert.equal(Math.round(ld.position[1] - ld.size[1] / 2), 2, "низ фасада 2 мм от пола — закрывает цоколь");
-  assert.equal(parseModule(JSON.parse(JSON.stringify(low))).facadeSketchH, 1996);
-  const p = { ...newProject(), room: { width: 3000, depth: 2000, height: 2700, openings: [] }, modules: [{ id: "a", x: 100, y: 0, z: 3, rotation: 0 as const, module: low }] };
+  const lowL = parseModule({ ...JSON.parse(JSON.stringify(low)), facadeSketchH: 1996 });
+  assert.deepEqual(validate(lowL), []);
+  const ld = parts(lowL).find((p) => p.role === "door")!;
+  // решение Макса 26.10: низ нижних фасадов — 30 мм от пола и при «фасадах по эскизу» (было 2 мм)
+  assert.equal(Math.round(ld.position[1] - ld.size[1] / 2), 30, "низ фасада 30 мм от пола");
+  const p = { ...newProject(), room: { width: 3000, depth: 2000, height: 2700, openings: [] }, modules: [{ id: "a", x: 100, y: 0, z: 3, rotation: 0 as const, module: lowL }] };
   const up = addUpperModule(p, "a").modules[1].module;
-  assert.equal(up.facadeSketchH, undefined, "антресоль сверху — фасады по правилу");
+  assert.equal(up.facadeFrom, undefined, "антресоль сверху — фасады по правилу");
 });

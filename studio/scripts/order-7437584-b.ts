@@ -94,7 +94,7 @@ export function orderProject(): Project {
     measurement: { number: "7437584", date: "2026-10-26", notes: "Изделия 2, 4, 5 по ТЗ (эскизы дизайнера). Изделия 1 и 3 — отдельный расчёт." },
     room: { width: 9000, depth: 3000, height: 2800, openings: [], obstacles: [] },
     modules: [...product2(), ...product4(), ...product5()],
-    calculation: { markup: 2.2, overrides: {}, model: "sheet", sheetPrice: 23000 },
+    calculation: { markup: 2.2, overrides: {}, maxModel: true, sheetPrice: 23000 } /* решение Макса 26.10: цена по большей модели */,
   } as Project;
   return applyAutoFillers(parseProject(JSON.parse(JSON.stringify(p))));
 }

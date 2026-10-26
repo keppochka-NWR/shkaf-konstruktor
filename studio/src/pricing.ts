@@ -56,8 +56,6 @@ const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, поверх к
 function softHinge(bk: string, hb: { soft: { price: number; source: string } }): { price: number; source: string; retail: boolean } {
   return bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
 }
-/** Петля 155–165° (Module.wideHinges, заказ 7442203): цена Макса 26.10.2026 — 1 700 ₽/шт клиенту, розница поверх коэффициента. */
-export const WIDE_HINGE_RETAIL = 1700;
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -491,9 +489,6 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // нижний угловой студии (kitchenCorner.ts): дверь у фальша на «Петля под фальшпанель» — другое изделие, цены в прайсах нет:
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
-        // петли 155–165° (m.wideHinges, заказ 7442203): своя строка; закупочной цены нет — позиция финального расчёта (pendingPrices.ts)
-        // цена Макса 26.10.2026 (РЕШЕНИЯ.md): петля 155° — 1 700 ₽/шт клиенту, поверх коэффициента (розничная строка)
-        else if(a.module.wideHinges&&!push)add('hinge-wide'+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155–165° с доводчиком'+(inset?' · вкладная':''),n,'шт',WIDE_HINGE_RETAIL,'Цена Макса 26.10.2026: петля 155° — '+WIDE_HINGE_RETAIL+' ₽/шт клиенту, поверх коэффициента',true);
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         // угол открывания створки (решение Макса 26.10.2026): «петля на 90°» = петля 110° бренда + ограничитель угла на каждую петлю
         // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница поверх коэффициента.
@@ -517,7 +512,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручка Базиса на фасаде кухни (kitchen.handle.name, n4-wall) — строкой Базиса по ручкам сцены; в bazisItems её нет (markBazis)
       const kh=a.module.kitchen?.handle;
       if(d.role==='handle'&&kh?.name&&d.name==='Ручка фасада · '+kh.name)add('bazis:ручка:'+kh.name,kh.name,1,'шт',null,BZ);
-      else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
+      else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.pending?null:h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
       // вешалка в два яруса на трубе (заказ 7437584): держатель штанги на трубе — своей строкой, фланцы трубы — как фланцы штанги
       if(d.role==='flange'&&d.id.includes(':pipe:holder:'))add('rod-pipe-holder','Держатель штанги на вертикальную трубу D25',1,'шт',null,'Держатель штанги на трубу (вешалка в два яруса): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
       else if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');

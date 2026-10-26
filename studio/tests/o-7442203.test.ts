@@ -5,7 +5,7 @@
 // 4) без дна на цоколе — опор нет (боковины на полу); 5) проект заказа: 0 ошибок, 0 пересечений, цена есть.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule,section,id,parts,validate,maxHeightOf,kupeBodyMax,RULES,legCount,parseModule,type Module} from '../src/model';
+import {initialModule,section,id,parts,validate,maxHeightOf,kupeBodyMax,RULES,legCount,parseModule,allHingeAngles,type Module} from '../src/model';
 import {newProject,projectErrors,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {partCollisions} from '../src/collisions';
@@ -54,10 +54,12 @@ test('проём между рядами фасадов: ящики в проё�
 });
 
 test('петли 155–165°, датчик движения, торцевые ручки — строки сметы «после финального расчёта»', () => {
-  const m=base({wideHinges:true,lightSensor:true,handleId:'edge600b'});m.sections[0].standLights=['left'];
+  // интеграция 26.10: «Петли 155–165°» модуля = угол 165 у всех створок (hingeAngles, o-7427796); wideHinges — синоним при загрузке
+  const m=parseModule({...JSON.parse(JSON.stringify(base({lightSensor:true,handleId:'edge600b'}))),wideHinges:true});m.sections[0].standLights=['left'];
+  assert.ok(allHingeAngles(m,165));
   const p=project(m),e=estimate(p),line=(id:string)=>e.lines.find(l=>l.id===id);
   assert.equal(line('hinge'),undefined);
-  assert.ok(line('hinge-wide')?.retail&&line('hinge-wide')!.unitPrice===1700&&line('hinge-wide')!.quantity>=4,'петля 155° — 1 700 ₽ клиенту (решение Макса 26.10)');
+  assert.ok(line('hinge-165')?.retail&&line('hinge-165')!.unitPrice===1700&&line('hinge-165')!.quantity>=4,'петля 155° — 1 700 ₽ клиенту (решение Макса 26.10)');
   assert.ok(line('light-sensor')?.pending&&line('light-psu')?.pending);
   assert.ok(line('handle:edge600b')?.pending);
   assert.equal(e.missing.length,0);
@@ -68,7 +70,7 @@ test('петли 155–165°, датчик движения, торцевые р
   assert.ok(e2.lines.find(l=>l.id==='hinge'));
   // флаги переживают сохранение
   const back=parseModule(JSON.parse(JSON.stringify(m)));
-  assert.equal(back.wideHinges,true);assert.equal(back.lightSensor,true);
+  assert.ok(allHingeAngles(back,165));assert.equal(back.lightSensor,true);
   for(const id of ['edge350b','edge500b','edge600b'])assert.ok(HANDLES.find(h=>h.id===id)?.pending);
 });
 

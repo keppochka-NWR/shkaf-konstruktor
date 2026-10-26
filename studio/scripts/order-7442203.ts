@@ -4,7 +4,7 @@
 // Клиентских данных здесь нет и быть не должно: только номер заказа и размеры.
 // Замер (фото): угол 1386 по задней стене × 1070 по боковой, потолок 2638–2643; ниша пенала 431–434 × 344–346 × 2638–2639.
 import { writeFileSync, mkdirSync } from "node:fs";
-import { initialModule, section, parts, validate, type Module, type Section } from "../src/model";
+import { initialModule, section, parts, validate, setAllHingeAngles, type Module, type Section } from "../src/model";
 import { partCollisions } from "../src/collisions";
 import { setModuleHandleFloor } from "../src/handleFloorGroup";
 import { parseProject, projectErrors, applyAutoFillers, type Project, type PlacedModule } from "../src/project";
@@ -47,9 +47,10 @@ const left = mod("Угловой шкаф · левый", 500, H, D_L, { ...lowe
   drawerConfigs: [hidden(250 - IB, 50, 500, { tray: true, facadeH: 50, handle: false }) /* как ставит панель «Выкатная полка» */, hidden(480 - IB, 160, 500), hidden(680 - IB, 160, 500)],
 }]);
 // Центральный модуль: полка 480 (жёсткая), штанга, петли 155–165°, подсветка в левой стойке по датчику движения.
-const center = mod("Угловой шкаф · центр", 500, H, D_L, { ...lower, hingeSide: "left", wideHinges: true, lightSensor: true }, [{
+const center = mod("Угловой шкаф · центр", 500, H, D_L, { ...lower, hingeSide: "left", lightSensor: true }, [{
   rod: true, rodAt: at(IT - 70, IB, IT) /* штанга в 70 под крышей, над полкой 480 */, shelves: [at(472, IB, IT)], fixed: [0], standLights: ["left"],
 }]);
+setAllHingeAngles(center, 165); // петли 155–165° на двери центра (интеграция 26.10: угол по створке)
 // Правое крыло вдоль боковой стены (глубина 380 с фасадом): полки 360 · 260 · 260 · 220 · 220 · 280 · 280 снизу, 2 жёсткие.
 const rightShelves = [368, 644, 920, 1156, 1392, 1688].map((c) => at(c, IB, IT));
 const W_R = 470; // крыло по эскизу: фасад 470 от линии фасадов задней части (600) до конца боковой стены 1070 — без угловой планки (по эскизу)
@@ -99,7 +100,7 @@ export const project: Project = {
     ],
   },
   modules: [...corner, pencilPlaced],
-  calculation: { markup: 2.2, overrides: {}, model: "markup" },
+  calculation: { markup: 2.2, overrides: {}, maxModel: true, sheetPrice: 23000 } /* решение Макса 26.10: цена по большей модели */,
 };
 
 export function build(): Project { return applyAutoFillers(parseProject(JSON.parse(JSON.stringify(project)))); }

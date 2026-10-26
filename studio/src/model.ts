@@ -311,9 +311,6 @@ export type Module = {
   /** Посадочное место скамьи (заказ 7437584, скамья в прихожей): крыша 32 — две плиты 16 склейкой под одну кромку, лежит на боковинах
    *  на всю ширину и глубину корпуса (боковины короче на 32); кромка 2 по периметру верхней плиты, у нижней — нет. Склейка — розница 1000 ₽/м². */
   seatTop?: true;
-  /** Высота распашных фасадов по эскизу, мм — ручное отклонение от правил зазоров (решение Макса 26.10.2026 «подгонять под эскиз всё»,
-   *  заказ 7437584: фасады антресоли 500 под карнизом 90, нижние 2000 от пола до антресоли). Верх — по правилу, низ — ниже на эту высоту. */
-  facadeSketchH?: number;
   /** Щит над корпусом у стены (заказ 7441182: щит 16 над посадочным местом на задней стене ниши): ЛДСП 16 на всю ширину корпуса,
    *  стоит на крыше (сиденье) у задней кромки, высота height от верха корпуса; декор — свой (decor) или корпуса. В раскрое — по своему декору. */
   seatPanel?: { height: number; decor?: string };
@@ -452,9 +449,6 @@ export type Module = {
   ownWidthOnly?: boolean;
   /** Бренд петель распашных фасадов (hardware.ts HINGE_BRANDS). По умолчанию GTV. */
   hingeBrand?: HingeBrand;
-  /** Петли распашных фасадов с большим углом открывания 155–165° (заказ 7442203: дверь открывается к соседней и не мешает проёму).
-   *  Геометрия та же; в смете — своя строка петли (цена после финального расчёта конструктором: счёта на такую петлю нет). */
-  wideHinges?: true;
   /** Подсветка включается датчиком движения (заказ 7442203): в смете датчик и блок питания на модуль с подсветкой
    *  (цена после финального расчёта конструктором). Без подсветки в модуле не действует. */
   lightSensor?: true;
@@ -796,9 +790,10 @@ export function aluDrawersAvailable(m:Module):boolean{return !!m.alu&&aluDrawerF
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
 export function facadeBottom(m:Module){
-  // фасады по эскизу (решение Макса 26.10 «подгонять под эскиз всё», заказ 7437584): высота задана вручную, верх — по правилу, низ — ниже на неё
-  if(m.facadeSketchH!==undefined&&!m.kitchen&&m.doorMount!=='inset')return facadeTop(m)-m.facadeSketchH;
-  if(!m.kitchen&&m.facadeFrom!==undefined)return m.facadeFrom; // фасады по эскизу (ручное отклонение, заказ 7427796)
+  // фасады по эскизу (решение Макса 26.10 «подгонять под эскиз всё», заказы 7427796/7437584): низ задан вручную. Ограничение
+  // (решение Макса 26.10): у корпуса на цоколе низ фасада не ниже 30 мм от пола (как правило цоколя) — эскиз ниже не опускает;
+  // у антресоли/навесного свес ниже корпуса (до 10 мм) остаётся.
+  if(!m.kitchen&&m.facadeFrom!==undefined)return plinth(m)>0?Math.max(m.facadeFrom,Math.min(RULES.facadeFloorGap,plinth(m))):m.facadeFrom;
   if(m.feet){
     // На ножках: накладной фасад закрывает торец дна; без дна — начинается над передней/задней нижней стяжкой.
     const rail=Math.max(railHeight(m,'front-bottom'),hasBottom(m)?0:railHeight(m,'rear-bottom'));
@@ -2354,7 +2349,6 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluFill(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
-  if(m.facadeSketchH!==undefined&&(!Number.isFinite(m.facadeSketchH)||m.facadeSketchH<RULES.doorMinH-200||facadeTop(m)-m.facadeSketchH<-10||m.facadeSketchH>RULES.sheetW))errors.push('Высота фасадов по эскизу: низ фасада не ниже 10 мм под корпусом, не больше листа.');
   // заказ 7441182: щит над сиденьем, утопленный цоколь, петли без доводчика
   if(m.seatPanel!==undefined&&(!Number.isFinite(m.seatPanel.height)||m.seatPanel.height<RULES.seatPanelMin||m.seatPanel.height>RULES.maxH-RULES.minH||(m.seatPanel.decor!==undefined&&!String(m.seatPanel.decor).trim())||!hasTop(m)||m.kitchen||m.kupe||m.desk||m.raw||m.corner||m.slope))errors.push(`Щит над сиденьем: высота от ${RULES.seatPanelMin} до ${RULES.maxH-RULES.minH} мм, у прямого корпуса с крышей.`);
   if(m.plinthRecess!==undefined&&(!Number.isFinite(m.plinthRecess)||m.plinthRecess<RULES.plinthInset||m.plinthRecess>Math.min(RULES.plinthRecessMax,m.depth-100)||plinth(m)<=0||m.feet||m.kitchen))errors.push(`Цоколь утоплен: от ${RULES.plinthInset} до ${RULES.plinthRecessMax} мм от переда, только у корпуса на цоколе.`);
@@ -2376,7 +2370,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.slope!==undefined){if(!['left','right'].includes(m.slope.side)||!Number.isFinite(m.slope.lowHeight)||m.slope.lowHeight<RULES.slopeMinLow||m.slope.lowHeight>m.height-RULES.slopeMinDrop)errors.push(`Скос под потолок: высота низкой стороны от ${RULES.slopeMinLow} до ${m.height-RULES.slopeMinDrop} мм (корпус ${m.height}).`);if(m.topGlass)errors.push('Скос со стеклянной крышей не делаем.');if(m.topType==='none')errors.push('Скос без крыши не делаем.');if(m.alu)errors.push('Скос с алюминиевыми фасадами не делаем: рамки не режутся по косой.');}
   if(m.fastening!==undefined&&!['confirmat','eccentric'].includes(m.fastening))errors.push('Неверный тип крепежа.');
   if(m.hingeBrand!==undefined&&!(m.hingeBrand in HINGE_BRANDS))errors.push('Неизвестный бренд петель.');
-  if((m.wideHinges!==undefined&&m.wideHinges!==true)||(m.lightSensor!==undefined&&m.lightSensor!==true))errors.push('Неверный параметр петель или подсветки.');
+  if(m.lightSensor!==undefined&&m.lightSensor!==true)errors.push('Неверный параметр петель или подсветки.');
   for(const e of [m.edgeBody,m.edgeFacade])if(e!==undefined&&![2,1,0.8].includes(e))errors.push('Кромка: выберите 2, 1 или 0,8 мм.');
   if(m.desk!==undefined){
     if(!['both','left','right','none'].includes(m.desk.sides)||!Number.isFinite(m.desk.apron)||m.desk.apron<RULES.deskApronMin||m.desk.apron>RULES.deskApronMax)errors.push(`Стол: опоры слева/справа/обе/нет, царга от ${RULES.deskApronMin} до ${RULES.deskApronMax} мм.`);
@@ -2414,7 +2408,8 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
   if((m.facadeFrom!==undefined||m.facadeTo!==undefined)&&!m.kitchen){const a=facadeBottom(m),b=facadeTop(m);
-    if(![a,b].every(Number.isFinite)||a<0||b>m.height||b-a<RULES.doorMinH)errors.push(`Фасады по эскизу: низ от 0, верх до ${m.height} мм, высота фасада не меньше ${RULES.doorMinH} мм.`);
+    // низ — не ниже 10 мм под корпусом (свес фасада антресоли, заказ 7437584), высота — не больше листа
+    if(![a,b].every(Number.isFinite)||a<-10||b>m.height||b-a<RULES.doorMinH||b-a>RULES.sheetW)errors.push(`Фасады по эскизу: низ не ниже 10 мм под корпусом, верх до ${m.height} мм, высота фасада от ${RULES.doorMinH} мм и не больше листа.`);
     else if(m.topStrip&&m.facadeTo!==undefined&&b+fe(m)>m.height-m.topStrip+.001)errors.push(`Фасады по эскизу: верх фасадов ${b} мм заходит на планку под крышей (её низ ${m.height-m.topStrip} мм, нужен зазор ${fe(m)} мм).`);}
   if(m.backFrom!==undefined&&(!Number.isFinite(m.backFrom)||m.backFrom<0||m.backFrom>m.height-RULES.minSection||m.backType!=='board'))errors.push(`Задник ЛДСП от высоты: только у задника ЛДСП, от 0 до ${m.height-RULES.minSection} мм от пола.`);
   if(m.mirror!==undefined&&(!ALU_INSERTS.some(i=>i.id===m.mirror&&i.mirror)||!m.doors||m.alu||m.vernissage))errors.push('Зеркало на фасадах: только у распашных фасадов ЛДСП (не в рамке и не МДФ), зеркало из списка.');
@@ -2814,6 +2809,32 @@ export function setShelfGap(
       : gaps[index].bottom + value + half;
   s.shelves[j] = (center - b.bottom) / (b.top - b.bottom);
 }
+/** Интеграция веток заказов 26.10.2026 — старые поля как синонимы при загрузке:
+ *  facadeSketchH (высота фасадов по эскизу, o-7437584a) → facadeFrom = верх по правилу − высота (o-7427796, одно поле фасадов по эскизу);
+ *  wideHinges (петли 155–165° на весь модуль, o-7442203) → hingeAngles 165 у всех створок (угол по створке, o-7427796). */
+function migrateSketchFields(x: Record<string, unknown>, m: Module) {
+  if (x.facadeSketchH !== undefined && m.facadeFrom === undefined && !m.kitchen && m.doorMount !== "inset") {
+    const h = Number(x.facadeSketchH);
+    if (Number.isFinite(h)) m.facadeFrom = Math.round((facadeTop(m) - h) * 10) / 10;
+  }
+  if (x.wideHinges === true && m.doors) setAllHingeAngles(m, 165);
+}
+/** Угол петель у всех распашных створок модуля (галочка «Петли 155–165°» панели; null — стандарт 110°). Створки, у которых
+ *  угол 90° (ограничитель), при включении 165 тоже переходят на 165 — один угол на модуль. */
+export function setAllHingeAngles(m: Module, angle: HingeAngle | null) {
+  for (const s of m.sections) delete s.hingeAngles;
+  if (angle === null) return;
+  const ps = parts(m);
+  for (const s of m.sections) {
+    const ks = ps.filter((p) => p.role === "door" && p.id.startsWith(s.id + ":door:") && /:door:\d+$/.test(p.id)).map((p) => Number(p.id.split(":door:")[1]));
+    if (ks.length) s.hingeAngles = Array.from({ length: Math.max(...ks) + 1 }, (_, k) => (ks.includes(k) ? angle : null));
+  }
+}
+/** Все распашные створки модуля с углом angle (для галочки модуля). */
+export function allHingeAngles(m: Module, angle: HingeAngle): boolean {
+  const doors = parts(m).filter((p) => p.role === "door" && /:door:\d+$/.test(p.id));
+  return doors.length > 0 && doors.every((p) => p.hingeAngle === angle);
+}
 export function parseModule(input: unknown): Module {
   if (!input || typeof input !== "object")
     throw new Error("Файл не содержит модуль.");
@@ -2875,7 +2896,6 @@ export function parseModule(input: unknown): Module {
     ...(x.alu!==undefined&&x.aluDrawers===true?{aluDrawers:true as const}:{}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.seatTop===true?{seatTop:true as const}:{}),
-    ...(x.facadeSketchH===undefined?{}:{facadeSketchH:Number(x.facadeSketchH)}),
     ...(x.seatPanel&&typeof x.seatPanel==='object'?{seatPanel:{height:Number((x.seatPanel as {height:number}).height),...(typeof (x.seatPanel as {decor?:unknown}).decor==='string'?{decor:String((x.seatPanel as {decor:string}).decor)}:{})}}:{}),
     ...(x.plinthRecess===undefined?{}:{plinthRecess:Number(x.plinthRecess)}),
     ...(x.hingeSoft===false?{hingeSoft:false as const}:{}),
@@ -2927,7 +2947,6 @@ export function parseModule(input: unknown): Module {
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeFit===true?{hingeFit:true as const}:{}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),
-    ...(x.wideHinges===true?{wideHinges:true as const}:{}),
     ...(x.lightSensor===true?{lightSensor:true as const}:{}),
     ...(x.kitchen===undefined?{}:{kitchen:parseKitchenSpec(x.kitchen,{parseKitchenRafix,parseGridRecord})}),
     ...(x.autoFillersOff===true?{autoFillersOff:true}:{}),
@@ -3014,6 +3033,7 @@ export function parseModule(input: unknown): Module {
   if(m.corner)normalizeCorner(m);
   migrateLights(m);
   parseLightSpec(x, m);
+  migrateSketchFields(x, m);
   const errors = validate(m);
   if (errors.length) throw new Error(errors[0]);
   return m;

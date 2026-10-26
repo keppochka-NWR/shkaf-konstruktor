@@ -197,7 +197,7 @@ export function addUpperModule(p:Project,mid:string):Project {
  // боковые фальшпанели/добор до потолка (они уже стоят у нижнего) и зеркало на двери
  const own=(m:Module):Module=>{const c:Module={...structuredClone(m),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]};delete c.backFrom;delete c.sidePanels;delete c.mirror;delete c.facadeFrom;delete c.facadeTo;
    // заказы 7441182/7437584: сиденье, щит, утопленный цоколь и высоту фасадов по эскизу антресоль не наследует
-   delete c.seatTop;delete c.seatPanel;delete c.plinthRecess;delete c.facadeSketchH;return c;};
+   delete c.seatTop;delete c.seatPanel;delete c.plinthRecess;return c;};
  n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):own(base.module)});
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
