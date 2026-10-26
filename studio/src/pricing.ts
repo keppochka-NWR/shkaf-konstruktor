@@ -16,11 +16,16 @@ import {guideKits,guideKitLine,versaliteKit,modernKit,firmaxKit,shareKits,axisSp
 import {MODERN} from './kitchenDrawers';
 import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES} from './facadesVernissage';
 import {PUBLIC_BUILD} from './buildMode';
-import {clientView} from './clientPrices';
+import {clientView,isOffSheetLine} from './clientPrices';
 import {pendingPrice,pendingTotalLabel} from './pendingPrices';
 import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
+  /** Кромка на клей PUR по просьбе клиента (заказ 7427796): надбавка за метр кромки — в прайсах нет, позиция финального расчёта. */
+  edgeGlue?:'pur';
+  /** «Цена по большей модели» (решение Макса 26.10.2026): клиенту — большая из «себестоимость × коэффициент» и «цена за лист»
+   *  (листы × цена листа + то, что вне листовой модели: зеркало, стекло, розница, Вернисаж, Лемана). model при этом не используется. */
+  maxModel?:boolean;
   /** штамп менеджерской версии (withPriceStamp): базовые коэффициенты, с которыми запечена публичная сборка */
   baseMarkup?:number;baseVernissageMarkup?:number};
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
@@ -35,6 +40,8 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
 export const FALSH_GLUE_RETAIL_M2 = 1000;
+/** Лифт газовый Premial АДАЖИО ПРЕМИУМ, ₽/шт клиенту — цена сайта allpremial.ru 26.10.2026 (решение Макса: по цене сайта, без коэффициента). */
+export const ADAGIO_RETAIL = 347.2;
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -66,7 +73,7 @@ export function publicSettings(s:PriceSettings):{settings:PriceSettings;ov:numbe
 export function withPriceStamp<P extends {calculation?:PriceSettings}>(p:P):P{
   if(PUBLIC_BUILD||!p.calculation)return p;
   const c=p.calculation;
-  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...(c.model==='sheet'&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
+  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...((c.model==='sheet'||c.maxModel)&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
 }
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
@@ -124,7 +131,8 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
   // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
-  const range=sys.brand==='premial'?[300,550]:[300,500];
+  // 250 мм — шкафы и подвесные ящики глубиной 300 вместе с фасадом (заказ 7437584): та же оценка шагом −50 ₽ от 300 мм
+  const range=sys.brand==='premial'?[300,550]:[250,500];
   if(L<range[0]||L>range[1])return {price:null,source:'Длины нет в закупке цеха для '+sys.label+'; цену уточнить',label};
   const steps=(L-300)/50;
   if(sys.brand==='dtc'){
@@ -156,7 +164,7 @@ export const DOWEL={price:0.7,source:'ФАМ: шкант 8×30 бук'};
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы, покупные материалы (фасады МДФ, цоколь из фасадного,
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
@@ -299,7 +307,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // сырой шкаф из корпуса Базиса без счётчиков (bazis-corpus, импорт без counts): петли, конфирматы, направляющие не посчитаны —
       // строка без цены, чтобы «по коэффициенту» честно стало «—», а не цена одних листов (wardrobe-012: 51 500 из 3 строк, аудит 11.10.2026).
       // Следующий шаг — подсчёт counts из raw.hardware при импорте (план A3 п. 11).
-      if(!kr&&!r.counts)add('bazis-hardware:raw','Фурнитура Базиса не импортирована (счётчиков нет в файле)',Math.max(1,r.hardware.length),'поз.',null,'Сырой шкаф Базиса без счётчиков фурнитуры: петли, конфирматы, направляющие в смете отсутствуют — переимпорт с подсчётом по списку Базиса');
+      // свободная панель студии (freePanels.ts: щит на стену, заказ 7437584) — не импорт Базиса: фурнитуры у неё нет, смета полная
+      if(!kr&&!r.counts&&r.source!=='garderyob-free-panel')add('bazis-hardware:raw','Фурнитура Базиса не импортирована (счётчиков нет в файле)',Math.max(1,r.hardware.length),'поз.',null,'Сырой шкаф Базиса без счётчиков фурнитуры: петли, конфирматы, направляющие в смете отсутствуют — переимпорт с подсчётом по списку Базиса');
       // крепёж корпуса под именем Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50», n3-wall)
       if(r.confirmatName)add('confirmat:'+r.confirmatName,r.confirmatName+' (по проекту Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
       else add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
@@ -419,6 +428,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // (решение 16.10). Розничная позиция: идёт после коэффициента; цена — именованной константой, чтобы сборка её не запекала ×2,2.
     const glueM2=allParts.filter(p=>/:filler:(left|right):a:r?\d+$/.test(p.id)).reduce((s,p)=>s+p.length*p.width/1e6,0);
     if(glueM2)add('falsh-glue','Склейка фальш-панели: 2 плиты 16 в 32 мм (работа, клей)',Math.round(glueM2*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026)',true);
+    // посадочное место 32 скамьи (Module.seatTop, заказ 7437584): та же склейка двух плит 16, 1000 ₽/м² клиенту
+    const seatM2=allParts.filter(p=>p.id==='top:glue').reduce((s,p)=>s+p.length*p.width/1e6,0);
+    if(seatM2)add('seat-glue','Склейка посадочного места: 2 плиты 16 в 32 мм (работа, клей)',Math.round(seatM2*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026)',true);
     for(const d of allParts){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха
@@ -442,7 +454,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(d.vernissage&&d.hinge!=='top'||d.vernissage&&placedHinges)add('vernissage-hinge-boring','Присадка под петли на фасадах Вернисаж',n,'шт',VERNISSAGE_NOTES.hingeBoringPerPc,`Прайс Вернисаж от ${priceDateRu()}: присадка под петли`);
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
-        if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,selectedLift==='adagio'?'Газлифты Premial АДАЖИО — подбор усилия и комплектации':'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
+        // решение Макса 26.10.2026: газлифты Premial АДАЖИО — по цене с сайта Premial, это сразу цена клиенту (розница, без коэффициента); 2 шт на фасад (по боковине)
+        if(d.hinge==='top'&&selectedLift==='adagio')add('lift-mechanism:premial-adagio','Лифт газовый Premial АДАЖИО ПРЕМИУМ (усилие 60–80N по массе фасада) — 2 шт на фасад',2,'шт',ADAGIO_RETAIL,'allpremial.ru, карточки 62617/62618/59951 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ на 26.10.2026 — цена клиенту (решение Макса 26.10)',true);
+        else if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
         if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
@@ -517,9 +531,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,model:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,maxModel=!!settings.maxModel;
+  const chosenModel:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
   // R2: «цена за лист» без цены листа (публичная сборка: цены по умолчанию нет) — модель не меняется молча; итога нет, пока цену листа не укажут
-  const needSheetPrice=model==='sheet'&&!(sheetPrice>0);
+  const needSheetPrice=(chosenModel==='sheet'||maxModel)&&!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
@@ -552,11 +567,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // не входят. В цене клиента они в любой модели: при «цене за лист» — сверху листов, закупка × коэффициент Вернисажа (1,6), как и в
   // «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы.
   const vernissageOnTop=vernissageClient;
-  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop;
+  // Стекло и зеркало (зеркало на фасаде с плёнкой и полировкой, стеклянная крыша) в раскрой ЛДСП не идут — в «цене за лист» они сверху
+  // листов: закупка × коэффициент сметы (решение Макса 26.10.2026: «цена за лист 23 000» + то, что вне листовой модели, например зеркало).
+  const offSheet=Math.round(lines.filter(l=>!l.retail&&isOffSheetLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup);
+  const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop+offSheet;
+  // «Цена по большей модели» (maxModel): клиенту — большая из двух; цена по коэффициенту неполная (позиции без цены) — итога нет,
+  // как в модели наценки: большую выбрать нельзя. model результата — модель, по которой цена (КП, публичная смета, Excel).
+  const model:'markup'|'sheet'=maxModel?(byMarkup!==null&&bySheet>byMarkup?'sheet':'markup'):chosenModel;
   /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
    *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
    *  выбор движка для цены — ярус B. */
-  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,maxModel,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }

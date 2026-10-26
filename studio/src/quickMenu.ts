@@ -6,7 +6,7 @@
 import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash, PanelRight, Ruler, Columns2, SlidersHorizontal } from "lucide-react";
 import { cornerOf, reshapeCorner, type CornerSide } from "./kitchenCorner";
 import type { RadialItem } from "./RadialMenu";
-import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, type Module, type Section } from "./model";
+import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, TOP_STRIP_STEPS, type Module, type Section } from "./model";
 import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
 import { rawKitchen } from "./rawModule";
 
@@ -174,7 +174,7 @@ export function fillersItem(m: Module, ops: QuickMenuOps): RadialItem {
       hint: sp ? `Сейчас ${sp.height} × ${sp.depth} мм. Размеры — в панели` : "Боковая фальшпанель до потолка: высота от 2400, глубина корпуса + 18",
       run: () => ops.modify((n) => { const next = { ...n.sidePanels }; if (next[side]) delete next[side]; else next[side] = { height: Math.max(n.height, 2400), depth: n.depth + 18 }; if (Object.keys(next).length) n.sidePanels = next; else delete n.sidePanels; }) };
   };
-  const strip: RadialItem = { id: "q-top-strip", label: "Планка под крышей", icon: ArrowUpToLine, active: !!m.topStrip, hint: m.topStrip ? `Сейчас ${m.topStrip} мм, в цвет фасадов` : "Нет", children: [0, 40, 60, 80, 100, 120].map((v) => ({
+  const strip: RadialItem = { id: "q-top-strip", label: "Планка под крышей", icon: ArrowUpToLine, active: !!m.topStrip, hint: m.topStrip ? `Сейчас ${m.topStrip} мм, в цвет фасадов` : "Нет", children: [0, ...TOP_STRIP_STEPS].map((v) => ({
     id: "q-top-strip-" + v, label: v ? `${v} мм` : "Нет", icon: ArrowUpToLine, active: (m.topStrip ?? 0) === v, hint: v ? `Планка ${v} мм в цвет фасадов` : "Без планки под крышей",
     run: () => ops.modify((n) => { if (v) n.topStrip = v; else delete n.topStrip; }) })) };
   const wall = (["left", "right"] as const).filter((side) => m.wallFiller?.[side]).map((side): RadialItem => {

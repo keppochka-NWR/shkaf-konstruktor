@@ -6,7 +6,7 @@
 // занятой площади (доля листа), а не целыми листами: больше материала — больше доля.
 // K3: изделие, у которого все позиции «после финального расчёта конструктором» (столешница и т. п.), — без доли («0 ₽» в КП был
 // неверен); признак pending — у изделия есть такие позиции.
-import { estimate, type PriceLine } from "./pricing";
+import { estimate, MARKUP_DEFAULT, type PriceLine } from "./pricing";
 import { nest, type Sheet } from "./exports";
 import { clientLine, SHEETS_LINE_ID } from "./clientPrices";
 import type { Project } from "./project";
@@ -24,37 +24,58 @@ function fractionalSheets(plan: Sheet[]): Map<string, number> {
   }
   return out;
 }
-/** Собственная «цена» изделия для пропорции: розница строк (как у клиента), листы — по занятой площади. null — смета не считается. */
-export function ownValue(q: Project): { value: number; pending: boolean } | null {
+/** Собственная «цена» изделия для пропорции: розница строк (как у клиента), листы — по занятой площади. null — смета не считается.
+ *  model 'sheet' (цена проекта — «цена за лист», в т.ч. по большей модели): доля = листы ЛДСП по занятой площади × цена листа +
+ *  то, что вне листа (зеркало, стекло, розница, Вернисаж, Лемана); плита, кромка, фурнитура и работа — внутри цены листа. */
+export function ownValue(q: Project, model: "markup" | "sheet" = "markup"): { value: number; pending: boolean; sheets: number } | null {
+  // смета изделия — в модели доли (у проекта с «ценой за лист» или «по большей» иначе клиентские строки были бы другой модели)
+  const c0 = q.calculation;
+  if (c0 && (c0.maxModel || (c0.model ?? "markup") !== model)) { const calc = { ...c0, model }; delete calc.maxModel; q = { ...q, calculation: calc }; }
+  else if (!c0 && model === "sheet") q = { ...q, calculation: { markup: MARKUP_DEFAULT, overrides: {}, model } };
   let plan: Sheet[], e: ReturnType<typeof estimate>;
   try { plan = nest(q); e = estimate(q, plan); } catch { return null; }
   if (e.retail === null && !e.pending.length) return null;
   const frac = fractionalSheets(plan);
-  const value = e.lines.reduce((s, l: PriceLine) => {
+  let value = e.lines.reduce((s, l: PriceLine) => {
     if (l.pending || l.unitPrice === null) return s;
-    const c = clientLine(l, e.markup, e.vernissageMarkup, "markup");
+    const c = clientLine(l, e.markup, e.vernissageMarkup, model);
     if (c.unitPrice === null) return s;
     const qty = frac.has(l.id) ? frac.get(l.id)! : l.quantity;
     return s + qty * c.unitPrice;
   }, 0);
-  return { value: Number.isFinite(value) && value > 0 ? value : 0, pending: e.pending.length > 0 };
+  // «за лист»: листовая часть изделия — листы ЛДСП по занятой площади × цена листа (у менеджерской сметы строки листов нет,
+  // у публичной она есть — client:sheets, тогда она уже в value выше)
+  const sheets = model === "sheet" ? (frac.get(SHEETS_LINE_ID) ?? 0) * e.sheetPrice : 0;
+  if (model === "sheet" && !e.lines.some((l) => l.id === SHEETS_LINE_ID)) value += sheets;
+  const ok = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
+  return { value: ok(value), pending: e.pending.length > 0, sheets: Math.min(ok(sheets), ok(value)) };
+}
+/** Модель, по которой посчитан итог проекта: «цена за лист» или «по большей модели» — по estimate(), иначе по коэффициенту. */
+export function priceModel(p: Project): "markup" | "sheet" {
+  const c = p.calculation;
+  if (!c || (!c.maxModel && c.model !== "sheet")) return "markup";
+  try { return estimate(p).model; } catch { return c.model === "sheet" ? "sheet" : "markup"; }
 }
 
-/** Цены изделий и признак «есть позиции после финального расчёта» в порядке p.modules; сумма цен = total. */
-export function moduleQuote(p: Project, total: number | null): { prices: number[]; pending: boolean[] } | null {
+/** Цены изделий и признак «есть позиции после финального расчёта» в порядке p.modules; сумма цен = total.
+ *  model — модель долей; по умолчанию та, по которой посчитан итог проекта (priceModel). */
+export function moduleQuote(p: Project, total: number | null, model: "markup" | "sheet" = priceModel(p)): { prices: number[]; pending: boolean[] } | null {
   if (total === null || !Number.isFinite(total) || total <= 0 || !p.modules.length) return null;
-  const own: number[] = [], pending: boolean[] = [];
+  const own: number[] = [], pending: boolean[] = [], sheets: number[] = [];
   for (const a of p.modules) {
-    const v = ownValue({ ...p, modules: [a] });
+    const v = ownValue({ ...p, modules: [a] }, model);
     if (!v) return null;
-    own.push(v.value); pending.push(v.pending);
+    own.push(v.value); pending.push(v.pending); sheets.push(v.sheets);
   }
   if (p.modules.length === 1) return own[0] > 0 || !pending[0] ? { prices: [total], pending } : null;
   const sum = own.reduce((s, v) => s + v, 0);
   if (!(sum > 0)) return null;
   // итог кратен сотне — цены изделий тоже сотнями; иначе — рублями
   const step = Math.round(total) % 100 === 0 ? 100 : 1, units = Math.round(total / step);
-  const raw = own.map((v) => (v / sum) * units), out = raw.map(Math.floor);
+  // «за лист»: по долям листов делится только листовая часть итога, то, что вне листа (зеркало, склейка, розница), — у своего изделия
+  // как есть (зеркало шкафа не меняет цену тумбы); итог меньше суммы «вне листа» (скидка) или листов нет — пропорция, как у коэффициента
+  const sheetSum = sheets.reduce((s, v) => s + v, 0), extra = own.map((v, i) => v - sheets[i]), pool = total - extra.reduce((s, v) => s + v, 0);
+  const raw = model === "sheet" && sheetSum > 0 && pool >= 0 ? own.map((_, i) => (extra[i] + (sheets[i] / sheetSum) * pool) / step) : own.map((v) => (v / sum) * units), out = raw.map(Math.floor);
   let rest = units - out.reduce((s, v) => s + v, 0);
   // метод наибольших остатков: недостающие единицы — изделиям с самой большой дробной частью (изделие без доли не получает)
   const order = raw.map((v, i) => [v - Math.floor(v), i] as const).filter(([, i]) => own[i] > 0).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
@@ -62,8 +83,8 @@ export function moduleQuote(p: Project, total: number | null): { prices: number[
   return { prices: out.map((v) => v * step), pending };
 }
 /** Цены изделий в порядке p.modules, сумма = total. null — разделить нельзя (нет итога, у изделия нет цены, смета не считается). */
-export function modulePrices(p: Project, total: number | null): number[] | null {
-  return moduleQuote(p, total)?.prices ?? null;
+export function modulePrices(p: Project, total: number | null, model?: "markup" | "sheet"): number[] | null {
+  return moduleQuote(p, total, model ?? priceModel(p))?.prices ?? null;
 }
 /** Изделие только из позиций «после финального расчёта конструктором» (доля 0): карточка КП пишет это вместо «0 ₽». */
 export const PENDING_ITEM_PRICE = "цена после финального расчёта конструктором";

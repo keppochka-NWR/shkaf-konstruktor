@@ -121,5 +121,6 @@ test('limit of height is one for validate and both "Высота" fields: tall 2
   // поля «Высота» во вкладке «Кухня» и в общей панели берут тот же предел, что validate
   const src=(f:string)=>readFileSync(fileURLToPath(new URL('../src/'+f,import.meta.url)),'utf8');
   assert.match(src('KitchenPanel.tsx'),/value=\{m\.height\} min=\{RULES\.minH\} max=\{maxHeightOf\(m\)\}/);
-  assert.match(src('App.tsx'),/label="Высота"\s+value=\{m\.height\}\s+min=\{RULES\.minH\}\s+max=\{maxHeightOf\(m\)\}/);
+  // заказ 7437584: нижний предел шкафа — minHeightOf (ящичный модуль от 150, остальное RULES.minH)
+  assert.match(src('App.tsx'),/label="Высота"\s+value=\{m\.height\}\s+min=\{minHeightOf\(m\)\}\s+max=\{maxHeightOf\(m\)\}/);
 });

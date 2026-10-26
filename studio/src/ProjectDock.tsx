@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
-import {estimate} from "./pricing";
+import {estimate, MARKUP_DEFAULT} from "./pricing";
+import { PUBLIC_BUILD } from "./buildMode";
 import { missingPriceLabel } from "./clientLabels";
 import { handleById } from "./handles";
 import { HINGE_BRANDS, SLIDE_SYSTEMS } from "./hardware";
@@ -22,6 +23,14 @@ import "./project-dock.css";
 export type DockTab = "project" | "estimate" | "hardware" | "details" | "docs";
 export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement" | "client-spec";
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
+/** «Модель цены» проекта (менеджер): по коэффициенту, за лист, по большей из двух (calculation.maxModel, решение Макса 26.10.2026). */
+export function withPriceModel(p: Project, v: string, sheetPrice: number): Project {
+  const c = { ...(p.calculation ?? { markup: MARKUP_DEFAULT, overrides: {} }) };
+  if (v !== "markup" && c.sheetPrice === undefined && sheetPrice > 0) c.sheetPrice = sheetPrice;
+  if (v === "max") c.maxModel = true;
+  else { delete c.maxModel; if (v === "sheet") c.model = "sheet"; else delete c.model; }
+  return { ...p, calculation: c };
+}
 const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "project", label: "Проект", icon: Box },
   { id: "estimate", label: "Стоимость", icon: Calculator },
@@ -96,6 +105,9 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
       <div className="dock-sum total"><span>Итоговая стоимость</span><b>{calcError?.project === project ? 'Ошибка расчёта' : !e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
       {split && <div className={"dock-cost-split" + (split.kupe ? " has-kupe" : "")} aria-label="Разбивка стоимости">{splitRows(split).map(([k, v], i) => <div key={k} className={"dock-sum " + ["material", "hardware", "kupe"][i]}><span>{k}</span><b>{rub(v)}</b></div>)}</div>}
       {fresh && <p className="dock-sheets" aria-label="Листы раскроя">Листов ЛДСП в раскрое: <b>{fresh.ldsp}</b>{fresh.hdf ? <> · ЛХДФ: <b>{fresh.hdf}</b></> : null}{fresh.note && <small role="status">{fresh.note}</small>}</p>}
+      {/* модель цены — только менеджеру (решение Макса 26.10.2026: «цена по большей модели»); клиент видит итог */}
+      {!PUBLIC_BUILD && e && <p className="dock-sheets dock-price-model"><label>Модель цены <select aria-label="Модель цены" value={project.calculation?.maxModel ? "max" : project.calculation?.model === "sheet" ? "sheet" : "markup"} onChange={(ev) => commit(withPriceModel(project, ev.target.value, e.sheetPrice))}><option value="markup">По коэффициенту</option><option value="sheet">За лист ЛДСП</option><option value="max">Цена по большей модели</option></select></label>
+        <small aria-label="Цены по моделям">По коэффициенту {String(e.markup).replace(".", ",")}: <b>{e.byMarkup === null ? "не менее " + rub(e.byMarkupKnown) : rub(e.byMarkup)}</b> · за лист: <b>{rub(e.bySheet)}</b> ({e.ldspSheets} × {rub(e.sheetPrice)}{e.offSheet ? " + зеркало и стекло " + rub(e.offSheet) : ""}{e.retailExtras ? " + розница " + rub(e.retailExtras) : ""}){project.calculation?.maxModel && total !== null ? " · в цене большая" : ""}</small></p>}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setHwOpen(true)}>Поменять фурнитуру</button></div>
     </div>
   ) : tab === "hardware" ? (

@@ -3,6 +3,7 @@
 import {refitKDrawers} from './kitchenDrawers';
 import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,RULES,type Module} from './model';
 import {withDoorCount} from './paletteDoors';
+import {SLIDES} from './hardware';
 import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths} from './kitchen';
@@ -81,7 +82,10 @@ export function assembleModule(kind:ModuleKind,width:number,height:number,depth:
     if(kind==='shelves'){m.doors=false;s.shelves=distribute(m,s,4);}
     if(kind==='wardrobe'){s.rod=true;s.shelves=distribute(m,s,1);}
     // комод: ящики поровну до крыши, полки над ними нет (п.29 волны 22.10)
-    if(kind==='drawers'){m.doors=false;s.drawers=3;try{s.drawerConfigs=drawersToRoof(m,s);}catch{/* низкий корпус — ящики по умолчанию, ошибку покажет validate */}}
+    // комод: 3 ящика до крыши; низкий корпус (подвесной ящик 200, заказ 7437584) — столько ящиков, сколько помещается (2, затем 1)
+  if(kind==='drawers'){m.doors=false;if(height<350)m.plinthHeight=0;/* низкий ящичный модуль (подвесной ящик) — без цоколя: его поднимают «От пола» */for(const n of [3,2,1]){s.drawers=n;try{s.drawerConfigs=drawersToRoof(m,s);}catch{delete s.drawerConfigs;}if(!validate(m).some(e=>/ящики не помещаются|для ящиков нужно/.test(e)))break;}
+    // один ящик и тот не встал по умолчанию: короб ниже (проём − 68), направляющая — самая длинная, что входит по глубине
+    if(s.drawers===1&&validate(m).some(e=>/ящики не помещаются/.test(e))){const inner=m.height-2*RULES.panel,len=[...SLIDES.gtv0fpo.lengths].reverse().find(l=>l<=m.depth-25)??250;s.drawerConfigs=[{slide:'gtv0fpo',height:Math.max(68,Math.min(RULES.drawerH,inner-68)),length:len}];}}
     // число дверей выбрано в палитре (п.21): секции и створки под него
     if(doors&&m.doors&&(kind==='empty'||kind==='wardrobe'))m=withDoorCount(m,doors);
   }

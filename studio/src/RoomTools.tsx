@@ -345,6 +345,7 @@ export function RoomTools({
           <label>
             Плоскость
             <select
+              aria-label="Плоскость отдельной панели"
               value={panel.plane}
               onChange={(e) =>
                 setPanel({
@@ -361,6 +362,7 @@ export function RoomTools({
           <label>
             Материал
             <select
+              aria-label="Материал отдельной панели"
               value={panel.decor}
               onChange={(e) => setPanel({ ...panel, decor: e.target.value })}
             >
