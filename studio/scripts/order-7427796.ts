@@ -1,8 +1,8 @@
 // Заказ 7427796 — прихожая 1334×2450×600 (согласованный конструктив, ТЗ с эскиза дизайнера). Собрана функциями студии.
 // Запуск: npx tsx scripts/order-7427796.ts → public/local-projects/order-7427796-ldsp.json и -mirror.json (личные проекты, не в git) + смета.
 // Два варианта: 1) дверь правого модуля ЛДСП; 2) та же дверь полностью зеркальная (зеркало 4 мм на основе ЛДСП 16).
-// Состав: левый открытый модуль 702 (посадочное место 32 на 450, ящик Blum под ним, ниша 218 до пола, задник ЛДСП только над сиденьем),
-// правый модуль 600 (дверь, полка, штанга, задник ХДФ, справа добор 32 в цвет корпуса до 2450), антресоли 450 = фасады + карниз 80
+// Состав: левый открытый модуль 716, в свету 684 (посадочное место 32 на 450, ящик Blum под ним, ниша 218 до пола, задник ЛДСП только над сиденьем),
+// правый модуль 586 (дверь 1920 на торцевой ручке, полка, штанга, задник ХДФ, справа добор 32 в цвет корпуса до 2450), антресоли 450 = фасады + карниз 80
 // (над нишей 2 фасада, у среднего петли 155–165°; над шкафом 1 фасад). Корпус Дуб Сонома, фасады и карниз Белый Кристалл, Blum.
 import { writeFileSync, mkdirSync } from "node:fs";
 import { initialModule, section, parts, type Module, type Section } from "../src/model";
@@ -20,27 +20,29 @@ function mod(name: string, w: number, h: number, d: number, patch: Partial<Modul
   return m;
 }
 const place = (module: Module, x: number, y = 0): PlacedModule => ({ id: nid(), x, z: 3, y, rotation: 0, module });
-const H = 2000, ANT = 450, X0 = 2000 - 1334, WL = 702, WR = 600;
+// решение Макса 26.10.2026 «подгонять под эскиз всё»: ниша в свету 684 (модуль 716), правый 586 (1334 − 716 − добор 32), антресоли — по нижним;
+// дверь 1920 (низ 78 … верх 1998 — фасады по эскизу), фасады антресолей 370 + карниз 78 (2 мм зазор до карниза, итог 450); сиденье глубиной 568.
+const H = 2000, ANT = 450, X0 = 2000 - 1334, WL = 716, WR = 586, EDGE = "hexa1200b" /* торцевая HEXA L-1200 чёрный мат — решение Макса: дверь шкафа на торцевой ручке */;
 // левый модуль без цоколя: дно на полу, проём 16…1984; сиденье — верх на 450 (центр верхней плиты 442), ящик 220…416 (вкладной фасад 196)
 const at = (center: number, bottom: number, top: number) => Math.round((center - bottom) / (top - bottom) * 1e5) / 1e5;
 export function build(mirror: boolean): Project {
   n = 0;
   const left = mod("Ниша с сиденьем", WL, H, 600, { doors: false, plinthHeight: 0, backType: "board", backFrom: 450 }, {
-    shelves: [at(442, 16, H - 16)], fixed: [0], thickShelves: [0], drawerCap: false, drawers: 1, drawerMount: "inset",
+    shelves: [at(442, 16, H - 16)], fixed: [0], thickShelves: [0], shelfDepth: 568, drawerCap: false, drawers: 1, drawerMount: "inset",
     drawerConfigs: [{ slide: "gtv0fpo", operation: "soft-close", brand: "blum", height: 140, facadeH: 196, length: 550, handle: false, y: 218 - 16 }],
   });
-  const right = mod("Шкаф с дверью", WR, H, 582, { doors: true, plinthHeight: 80, backType: "nailed", hingeSide: "right",
+  const right = mod("Шкаф с дверью", WR, H, 582, { doors: true, plinthHeight: 80, backType: "nailed", hingeSide: "right", handleId: EDGE, facadeFrom: 78, facadeTo: 1998,
     sidePanels: { right: { height: 2450, depth: 600, thick: 32 } }, ...(mirror ? { mirror: "mirror-silver" } : {}) }, {
     shelves: [at(442, 96, H - 16)], rod: true, rodAt: at(H - 16 - 70, 96, H - 16), doorLeaves: 1, hingeSide: "right", hingeAngles: [90],
   });
-  const antL = mod("Антресоль над нишей", WL, ANT, 582, { doors: true, plinthHeight: 0, backType: "nailed", topStrip: 80 }, { doorLeaves: 2, hingeAngles: [null, 165] });
-  const antR = mod("Антресоль над шкафом", WR, ANT, 582, { doors: true, plinthHeight: 0, backType: "nailed", topStrip: 80, hingeSide: "right" }, { doorLeaves: 1, hingeSide: "right" });
+  const antL = mod("Антресоль над нишей", WL, ANT, 582, { doors: true, plinthHeight: 0, backType: "nailed", topStrip: 78, facadeFrom: 0, facadeTo: 370 }, { doorLeaves: 2, hingeAngles: [null, 165] });
+  const antR = mod("Антресоль над шкафом", WR, ANT, 582, { doors: true, plinthHeight: 0, backType: "nailed", topStrip: 78, facadeFrom: 0, facadeTo: 370, hingeSide: "right" }, { doorLeaves: 1, hingeSide: "right" });
   const p: Project = {
     version: 3,
     measurement: { number: "7427796", date: "2026-10-26", notes: "Согласованный конструктив дизайнера: 1334×2450×600, вариант " + (mirror ? "2 — зеркальная дверь" : "1 — дверь ЛДСП") + "." },
     room: { width: 2000, depth: 1800, height: 2700, openings: [] },
     modules: [place(left, X0), place(right, X0 + WL), place(antL, X0, H), place(antR, X0 + WL, H)],
-    calculation: { markup: 2.2, overrides: {}, edgeGlue: "pur" },
+    calculation: { markup: 2.2, overrides: {}, sheetPrice: 23000, edgeGlue: "pur", priceMax: true }, // цена по большей модели — решение Макса 26.10
   };
   return parseProject(JSON.parse(JSON.stringify(applyAutoFillers(parseProject(JSON.parse(JSON.stringify(p)))))));
 }

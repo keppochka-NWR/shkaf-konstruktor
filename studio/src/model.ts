@@ -393,6 +393,10 @@ export type Module = {
   backFrom?: number;
   /** Зеркало 4 мм на распашных фасадах (заказ 7427796): id стекла из ALU_INSERTS, наклеено на основу — фасад ЛДСП 16 (армирующая плёнка). */
   mirror?: string;
+  /** Фасады по эскизу (решение Макса 26.10.2026 «подгонять под эскиз всё»): низ и верх распашных фасадов от низа модуля, мм — ручное
+   *  отклонение от правил студии (низ на 30 от пола у цоколя, зазоры 2). С facadeTo планка под крышей встаёт вплотную к верху модуля. */
+  facadeFrom?: number;
+  facadeTo?: number;
   /** Штанга: круглая D25 (по умолчанию) или овальная 15×30 (труба-штанга овальная 3000). */
   rodType?: "round" | "oval";
   /** Скос под мансардный потолок: крыша наклонная, у стороны side корпус ниже — lowHeight. Фасады и задник трапецией, полки — до низкой высоты. */
@@ -749,6 +753,7 @@ export function aluDrawersAvailable(m:Module):boolean{return !!m.alu&&aluDrawerF
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
 export function facadeBottom(m:Module){
+  if(!m.kitchen&&m.facadeFrom!==undefined)return m.facadeFrom; // фасады по эскизу (ручное отклонение, заказ 7427796)
   if(m.feet){
     // На ножках: накладной фасад закрывает торец дна; без дна — начинается над передней/задней нижней стяжкой.
     const rail=Math.max(railHeight(m,'front-bottom'),hasBottom(m)?0:railHeight(m,'rear-bottom'));
@@ -767,7 +772,7 @@ export function facadeBottom(m:Module){
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
 /** Верх накладных фасадов: под скосом — по низкой стороне (крыша плоская на её высоте), выше идёт фальш из фасадного материала. */
-export function facadeTop(m:Module){if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;if(m.kitchen?.faceTop!==undefined&&m.feet)return m.height-m.kitchen.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
+export function facadeTop(m:Module){if(!m.kitchen&&m.facadeTo!==undefined)return m.facadeTo;if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;if(m.kitchen?.faceTop!==undefined&&m.feet)return m.height-m.kitchen.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;
@@ -1094,7 +1099,8 @@ export function parts(m: Module): Part[] {
   // Планка под крышей спереди (фальшпанель над фасадами) — в плоскости фасадов.
   if (m.topStrip) {
     const inset = m.doorMount === "inset";
-    const y1 = inset ? innerTop(m) : m.height - fe(m), sw = inset ? m.width - 2 * t - 2 * fe(m) : m.width - 2 * fe(m);
+    // фасады по эскизу (facadeTo): планка-карниз вплотную к верху модуля, зазор — между ней и фасадами
+    const y1 = inset ? innerTop(m) : !m.kitchen && m.facadeTo !== undefined ? m.height : m.height - fe(m), sw = inset ? m.width - 2 * t - 2 * fe(m) : m.width - 2 * fe(m);
     add("top-strip", "Планка под крышей " + m.topStrip, [sw, m.topStrip, t], [m.width / 2, y1 - m.topStrip / 2, inset ? d - t / 2 : d + t / 2 + 2], sw, m.topStrip, t);
     out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
   }
@@ -2267,6 +2273,9 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.backType==="groove" && (![m.grooveInset??16,m.grooveDepth??8].every(Number.isFinite)||(m.grooveInset??16)<8||(m.grooveInset??16)>grooveInsetMax(m)||(m.grooveDepth??8)<4||(m.grooveDepth??8)>10))errors.push("Паз: отступ 8–30 мм, глубина 4–10 мм.");
   errors.push(...kitchenErrors(m),...rafixErrors(m),...kitchenDrawerErrors(m),...kitchenLiftErrors(m,{facadeTop:facadeTop(m),innerBottom:innerBottom(m),carcassBottom:baseLevel(m),innerTop:innerTop(m),leaves:s=>{try{return doorCount(m,s);}catch{return 4;}},rows:s=>doorRowCount(m,s)}));
   if(m.facadeEdge!==undefined&&(!Number.isFinite(m.facadeEdge)||m.facadeEdge<0||m.facadeEdge>2))errors.push('Кромка фасадов: 0–2 мм.');
+  if((m.facadeFrom!==undefined||m.facadeTo!==undefined)&&!m.kitchen){const a=facadeBottom(m),b=facadeTop(m);
+    if(![a,b].every(Number.isFinite)||a<0||b>m.height||b-a<RULES.doorMinH)errors.push(`Фасады по эскизу: низ от 0, верх до ${m.height} мм, высота фасада не меньше ${RULES.doorMinH} мм.`);
+    else if(m.topStrip&&m.facadeTo!==undefined&&b+fe(m)>m.height-m.topStrip+.001)errors.push(`Фасады по эскизу: верх фасадов ${b} мм заходит на планку под крышей (её низ ${m.height-m.topStrip} мм, нужен зазор ${fe(m)} мм).`);}
   if(m.backFrom!==undefined&&(!Number.isFinite(m.backFrom)||m.backFrom<0||m.backFrom>m.height-RULES.minSection||m.backType!=='board'))errors.push(`Задник ЛДСП от высоты: только у задника ЛДСП, от 0 до ${m.height-RULES.minSection} мм от пола.`);
   if(m.mirror!==undefined&&(!ALU_INSERTS.some(i=>i.id===m.mirror&&i.mirror)||!m.doors||m.alu||m.vernissage))errors.push('Зеркало на фасадах: только у распашных фасадов ЛДСП (не в рамке и не МДФ), зеркало из списка.');
   if (errors.length && opts?.all !== true) return errors;
@@ -2749,6 +2758,8 @@ export function parseModule(input: unknown): Module {
     ...(x.sidePanels===undefined?{}:{sidePanels:Object.fromEntries(Object.entries(x.sidePanels as Record<string,{height:number;depth:number;thick?:unknown}>).map(([k,v])=>[k,{height:Number(v?.height),depth:Number(v?.depth),...(Number(v?.thick)===32?{thick:32 as const}:{})}]))}),
     ...(x.backFrom===undefined?{}:{backFrom:Number(x.backFrom)}),
     ...(typeof x.mirror==='string'?{mirror:x.mirror}:{}),
+    ...(x.facadeFrom===undefined?{}:{facadeFrom:Number(x.facadeFrom)}),
+    ...(x.facadeTo===undefined?{}:{facadeTo:Number(x.facadeTo)}),
     ...(x.rodType===undefined?{}:{rodType:x.rodType as Module['rodType']}),
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
