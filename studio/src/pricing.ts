@@ -124,7 +124,8 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
   // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
-  const range=sys.brand==='premial'?[300,550]:[300,500];
+  // 250 мм — шкафы и подвесные ящики глубиной 300 вместе с фасадом (заказ 7437584): та же оценка шагом −50 ₽ от 300 мм
+  const range=sys.brand==='premial'?[300,550]:[250,500];
   if(L<range[0]||L>range[1])return {price:null,source:'Длины нет в закупке цеха для '+sys.label+'; цену уточнить',label};
   const steps=(L-300)/50;
   if(sys.brand==='dtc'){
@@ -156,7 +157,7 @@ export const DOWEL={price:0.7,source:'ФАМ: шкант 8×30 бук'};
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы, покупные материалы (фасады МДФ, цоколь из фасадного,
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
@@ -299,7 +300,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // сырой шкаф из корпуса Базиса без счётчиков (bazis-corpus, импорт без counts): петли, конфирматы, направляющие не посчитаны —
       // строка без цены, чтобы «по коэффициенту» честно стало «—», а не цена одних листов (wardrobe-012: 51 500 из 3 строк, аудит 11.10.2026).
       // Следующий шаг — подсчёт counts из raw.hardware при импорте (план A3 п. 11).
-      if(!kr&&!r.counts)add('bazis-hardware:raw','Фурнитура Базиса не импортирована (счётчиков нет в файле)',Math.max(1,r.hardware.length),'поз.',null,'Сырой шкаф Базиса без счётчиков фурнитуры: петли, конфирматы, направляющие в смете отсутствуют — переимпорт с подсчётом по списку Базиса');
+      // свободная панель студии (freePanels.ts: щит на стену, заказ 7437584) — не импорт Базиса: фурнитуры у неё нет, смета полная
+      if(!kr&&!r.counts&&r.source!=='garderyob-free-panel')add('bazis-hardware:raw','Фурнитура Базиса не импортирована (счётчиков нет в файле)',Math.max(1,r.hardware.length),'поз.',null,'Сырой шкаф Базиса без счётчиков фурнитуры: петли, конфирматы, направляющие в смете отсутствуют — переимпорт с подсчётом по списку Базиса');
       // крепёж корпуса под именем Базиса, если это не «Конфирмат 7х50» (k33/k34: «Евровинт 6х50», n3-wall)
       if(r.confirmatName)add('confirmat:'+r.confirmatName,r.confirmatName+' (по проекту Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
       else add('confirmat-7x50','Конфирмат 7×50, Zn (как в проектах Базиса)',c.confirmats??0,'шт',FASTENERS.confirmat.price,'Цена как у 5×50 — уточнить по счёту');
@@ -419,6 +421,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // (решение 16.10). Розничная позиция: идёт после коэффициента; цена — именованной константой, чтобы сборка её не запекала ×2,2.
     const glueM2=allParts.filter(p=>/:filler:(left|right):a:r?\d+$/.test(p.id)).reduce((s,p)=>s+p.length*p.width/1e6,0);
     if(glueM2)add('falsh-glue','Склейка фальш-панели: 2 плиты 16 в 32 мм (работа, клей)',Math.round(glueM2*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026)',true);
+    // посадочное место 32 скамьи (Module.seatTop, заказ 7437584): та же склейка двух плит 16, 1000 ₽/м² клиенту
+    const seatM2=allParts.filter(p=>p.id==='top:glue').reduce((s,p)=>s+p.length*p.width/1e6,0);
+    if(seatM2)add('seat-glue','Склейка посадочного места: 2 плиты 16 в 32 мм (работа, клей)',Math.round(seatM2*1000)/1000,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026)',true);
     for(const d of allParts){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха

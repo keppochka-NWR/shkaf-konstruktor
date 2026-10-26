@@ -82,10 +82,10 @@ test('(в) «Фальши ›»: боковая фальшпанель слев�
   assert.equal(s.mod.sidePanels,undefined,'последняя убрана — поле удалено, как в панели');
 });
 
-test('(в) планка под крышей: 40–120 мм и «Нет», как select панели',()=>{
+test('(в) планка под крышей: 40–120 мм (и 90) и «Нет», как select панели',()=>{
   const s=spy(wardrobe());
   const strip=child(fillersItem(s.mod,s.ops),'q-top-strip');
-  assert.deepEqual(strip.children!.map(c=>c.label),['Нет','40 мм','60 мм','80 мм','100 мм','120 мм']);
+  assert.deepEqual(strip.children!.map(c=>c.label),['Нет','40 мм','60 мм','80 мм','90 мм','100 мм','120 мм'] /* 90 — карниз заказа 7437584 */);
   child(strip,'q-top-strip-80').run!();
   assert.equal(s.mod.topStrip,80);assert.deepEqual(validate(s.mod),[]);
   assert.ok(child(child(fillersItem(s.mod,s.ops),'q-top-strip'),'q-top-strip-80').active);
