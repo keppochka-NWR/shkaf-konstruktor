@@ -80,16 +80,19 @@ test('угол открывания петель по створке: призн
   assert.equal(ds.find(d=>d.id.endsWith(':door:1'))!.hingeAngle,165);
   assert.equal(ds.find(d=>d.id.endsWith(':door:0'))!.hingeAngle,undefined);
   const p=proj(m);
-  assert.equal(line(p,'hinge-165:blum')!.quantity,2);assert.equal(line(p,'hinge-165:blum')!.pending,true);
+  // решение Макса 26.10.2026: петля 155° — 1 700 ₽, петля Blum 110° — 800 ₽ клиенту (розница)
+  assert.equal(line(p,'hinge-165:blum')!.quantity,2);assert.equal(line(p,'hinge-165:blum')!.unitPrice,1700);assert.equal(line(p,'hinge-165:blum')!.retail,true);assert.equal(line(p,'hinge:blum')!.unitPrice,800);
+  const p90=proj(mod({height:450,plinthHeight:0,hingeBrand:'blum'},{doorLeaves:2,hingeAngles:[90,null]}));
+  assert.equal(line(p90,'hinge:blum')!.quantity,4);assert.equal(line(p90,'hinge-limiter-90:blum')!.quantity,2);assert.equal(line(p90,'hinge-limiter-90:blum')!.unitPrice,50);
   assert.equal(line(p,'hinge:blum')!.quantity,2);
   assert.ok(validate(mod({},{hingeAngles:[120 as never]})).some(e=>e.includes('угол открывания')));
 });
-test('Blum TANDEM, кромка PUR — позиции финального расчёта; ручка-кнопка в каталоге', () => {
+test('Blum TANDEM 10 000 ₽ клиенту, кромка PUR — финальный расчёт; ручка-кнопка в каталоге', () => {
   assert.ok(SLIDE_SYSTEMS.some(s=>s.id==='hidden-blum-soft'));
   const m=mod({doors:false},{drawers:1,drawerConfigs:[{slide:'gtv0fpo',operation:'soft-close',brand:'blum',height:140,length:500}]});
   const p=proj(m,{markup:2.2,overrides:{},edgeGlue:'pur'}),e=estimate(p);
   const sl=e.lines.find(l=>l.id.startsWith('slide:gtv0fpo:500:hidden-blum-soft'))!;
-  assert.equal(sl.pending,true);
+  assert.equal(sl.unitPrice,10000);assert.equal(sl.retail,true);
   const pur=e.lines.find(l=>l.id==='edge-pur')!;
   assert.equal(pur.pending,true);
   assert.ok(Math.abs(pur.quantity-e.lines.filter(l=>/^edge(2|1|08|04|05)$/.test(l.id)).reduce((s,l)=>s+l.quantity,0))<0.01);
@@ -116,4 +119,16 @@ test('заказ 7427796: оба варианта собираются функ�
   const xs=b.modules.map(x=>[x.x,x.x+x.module.width+sideExtension(x.module,'right')]).flat();
   assert.equal(Math.max(...xs)-Math.min(...xs),1334);
   assert.equal(Math.max(...b.modules.map(x=>(x.y??0)+x.module.height)),2450);
+});
+
+test('цена по большей модели: max(коэффициент; лист + стекло/зеркало), по умолчанию выключена', () => {
+  const m=mod({width:600,mirror:'mirror-silver'},{doorLeaves:1});
+  const base=proj(m,{markup:2.2,overrides:{},sheetPrice:23000}),e0=estimate(base);
+  assert.equal(e0.priceMax,false);assert.equal(e0.retail,e0.byMarkup);
+  const e=estimate(proj(m,{markup:2.2,overrides:{},sheetPrice:23000,priceMax:true}));
+  const glass=e.lines.filter(l=>l.id.startsWith('glass-')&&!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
+  assert.equal(e.outsideSheet,Math.round(glass*2.2/100)*100);
+  assert.equal(e.bySheetFull,e.bySheet+e.outsideSheet);
+  assert.equal(e.retail,Math.max(e.byMarkup!,e.bySheetFull));
+  assert.equal(parseProject(JSON.parse(JSON.stringify(proj(m,{markup:2.2,overrides:{},priceMax:true})))).calculation!.priceMax,true);
 });

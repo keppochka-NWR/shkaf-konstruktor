@@ -23,6 +23,9 @@ import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawI
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
   /** Кромка на клей PUR по просьбе клиента (заказ 7427796): надбавка за метр кромки — в прайсах нет, позиция финального расчёта. */
   edgeGlue?:'pur';
+  /** Цена по большей модели (решение Макса 26.10.2026, расчёты заказов): клиенту — max(коэффициент; «цена за лист» + то, что вне листовой
+   *  модели — стекло и зеркало). Настройка проекта; по умолчанию (сайт) выключена — цена по выбранной модели, как раньше. */
+  priceMax?:true;
   /** штамп менеджерской версии (withPriceStamp): базовые коэффициенты, с которыми запечена публичная сборка */
   baseMarkup?:number;baseVernissageMarkup?:number};
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
@@ -39,6 +42,18 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 export const FALSH_GLUE_RETAIL_M2 = 1000;
 /** Армирующая плёнка для зеркала — закупка АТБ, ₽/м² (прайс 01.01.2026, справочник закупочных цен). */
 export const MIRROR_FILM_M2 = 90;
+/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md): цены КЛИЕНТУ — розница поверх коэффициента, общими константами (сборка их не запекает ×2,2):
+ *  Blum TANDEM — 10 000 ₽ за комплект на ящик; петля 110° (Blum) — 800 ₽/шт; петля 155° — 1 700 ₽/шт; ограничитель угла — 50 ₽;
+ *  «петля на 90°» = петля 110° + ограничитель (на каждую петлю створки). */
+export const BLUM_TANDEM_RETAIL = 10000;
+export const HINGE110_RETAIL = 800;
+export const HINGE155_RETAIL = 1700;
+export const HINGE_LIMITER_RETAIL = 50;
+const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, поверх коэффициента)';
+/** Петля с доводчиком бренда: Blum 110° — розница Макса (800 ₽), остальные — закупка из hardware.ts. */
+function softHinge(bk: string, hb: { soft: { price: number; source: string } }): { price: number; source: string; retail: boolean } {
+  return bk === 'blum' ? { price: HINGE110_RETAIL, source: MAX_SRC + ': петля Blum 110° — ' + HINGE110_RETAIL + ' ₽/шт', retail: true } : { price: hb.soft.price, source: hb.soft.source, retail: false };
+}
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -118,7 +133,7 @@ const hidden:Record<number,{price:number;source:string}>={
   450:{price:1200,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   500:{price:1250,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'}};
 /** Цена комплекта направляющих по системе и длине. Опора — известные цены; остальное — шаг по длине и множители класса, помечено «оценка». */
-export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string}{
+export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string;/** цена клиенту поверх коэффициента (Blum TANDEM) */retail?:boolean}{
   const sys=slideSystem(c),L=c.length;
   const label=sys.label+' · '+L+' мм';
   if(sys.slide==='ball'){
@@ -127,8 +142,8 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     if(sys.motion==='simple')return {price:Math.round(base.price*0.55/10)*10,source:'Оценка: шариковые без доводчика ≈ 55 % от Versalite с доводчиком; подтвердить счётом ФАМ',label};
     return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
-  // Blum TANDEM (заказ 7427796): закупки в прайсах нет — позиция финального расчёта (pendingPrices), цену не выдумываем
-  if(sys.brand==='blum')return {price:null,source:'Blum TANDEM: закупочной цены в прайсах нет',label};
+  // Blum TANDEM (решение Макса 26.10.2026): 10 000 ₽ клиенту за комплект на ящик — розница поверх коэффициента (retail)
+  if(sys.brand==='blum')return {price:BLUM_TANDEM_RETAIL,source:MAX_SRC+': Blum TANDEM — '+BLUM_TANDEM_RETAIL+' ₽ за комплект на ящик',label,retail:true};
   // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
   const range=sys.brand==='premial'?[300,550]:[300,500];
   if(L<range[0]||L>range[1])return {price:null,source:'Длины нет в закупке цеха для '+sys.label+'; цену уточнить',label};
@@ -278,8 +293,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
    *  цену накладной не подставляем — строка «уточнить» (n4-kitchens3; раньше шла цена накладной). */
   function addHinges(names:Record<string,number>,bk:string){const hb=HINGE_BRANDS[bk as keyof typeof HINGE_BRANDS]??HINGE_BRANDS.gtv,suffix=bk==='gtv'?'':':'+bk;
     for(const [name,n] of Object.entries(names)){const t=hingeType(name);
-      if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
-      else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',hb.soft.price,hb.soft.source);
+      const sh=softHinge(bk,hb);
+      if(/^накладная$/i.test(t))add('hinge'+suffix,hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
+      else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',sh.price,sh.source,sh.retail);
       else add('hinge-bazis:'+t+suffix,'Петля '+hb.label+' · '+t+' (тип как в Базисе)',n,'шт',null,'Тип петли — по Базису; закупочной цены этого типа в прайсах нет (есть только накладная '+hb.soft.price+' ₽) — уточнить');}}
   function addShelfHolders(names:Record<string,number>){for(const [name,n] of Object.entries(names))add('shelf-holder:'+name,/^полкодержатель/i.test(name)?name:'Полкодержатель '+name,n,'шт',FASTENERS.shelfHolder.price,'Артикул — как в Базисе; цена — оценка как у Boyard p521, подтвердить');}
   function addLegs(names:Record<string,number>){for(const [name,n] of Object.entries(names)){if(/^опора кухонная регулируемая/i.test(name))add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',n,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else add('kitchen-leg:'+name,name,n,'шт',null,BZ);}}
@@ -316,7 +332,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(r.names?.legs)addLegs(r.names.legs);else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',c.legs??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',c.clips??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-hanger','Навес мебельный регулируемый',c.hangers??0,'шт',null,'Закупочная цена навеса не найдена');
-      if(r.names?.hinges)addHinges(r.names.hinges,bk);else{const hb=HINGE_BRANDS[bk];add('hinge'+(bk==='gtv'?'':':'+bk),hb.soft.label,c.hinges??0,'шт',hb.soft.price,hb.soft.source);}
+      if(r.names?.hinges)addHinges(r.names.hinges,bk);else{const hb=HINGE_BRANDS[bk],sh=softHinge(bk,hb);add('hinge'+(bk==='gtv'?'':':'+bk),hb.soft.label,c.hinges??0,'шт',sh.price,sh.source,sh.retail);}
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       // ящики и направляющие — комплектами по ящикам модуля (guideKits: короба/фасады ящиков, система — по направляющим Базиса);
       // Axis PRO — комплект ящика (в нём пара направляющих). Сырой шкаф (не кухня) — как было: Axis PRO по держателям фасада.
@@ -460,12 +476,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
-        // угол открывания створки (заказ 7427796): на 90° — обычная петля бренда (цена из прайса студии) + ограничитель угла на створку
-        // (цены ограничителя в прайсах нет — финальный расчёт); 155–165° — другое изделие (у Blum — CLIP top 155°), цены нет — финальный расчёт
-        else if(d.hingeAngle===90){add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
-          add('hinge-limiter-90'+suffix,'Ограничитель угла открывания 90° '+hb.label+' (на створку)',1,'шт',null,'Ограничитель открывания '+hb.label+' на петлю створки: в прайсах цеха и справочнике закупок цены нет — цена после финального расчёта конструктором');}
-        else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',null,'Петля '+HINGE_ANGLE_LABEL[d.hingeAngle]+(bk==='blum'?' (Blum CLIP top 155°)':'')+': в прайсах цеха и справочнике закупок цены нет (есть только петля 110° '+hb.soft.price+' ₽) — цена после финального расчёта конструктором')
-        else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
+        // угол открывания створки (решение Макса 26.10.2026): «петля на 90°» = петля 110° бренда + ограничитель угла на каждую петлю
+        // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница поверх коэффициента.
+        else if(d.hingeAngle===90){const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
+          add('hinge-limiter-90'+suffix,'Ограничитель угла открывания 90° '+hb.label,n,'шт',HINGE_LIMITER_RETAIL,MAX_SRC+': ограничитель угла — '+HINGE_LIMITER_RETAIL+' ₽ (петля на 90° = петля 110° + ограничитель)',true);}
+        else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155° · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',HINGE155_RETAIL,MAX_SRC+': петля 155° — '+HINGE155_RETAIL+' ₽/шт',true);
+        else{const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);}
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.material==='alu'&&a.module.alu){ // распашные и фасады ящиков в рамке (aluDrawers)
@@ -520,7 +536,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         const c=drawerConfig(a.module,s,j);
         if(c.mesh){const item=meshById(c.mesh);add('mesh:'+c.mesh,item?item.label+' · Лемана Про':'Элемент Лемана Про',1,'шт',item?.price??null,item?'Лемана Про, розница 01.09.2026, арт. '+item.art:'Не найден в каталоге');if(item&&!shelf.has('mesh:'+c.mesh))shelf.set('mesh:'+c.mesh,item.shelf??item.price);continue;}
         const sys=slideSystem(c),q=slidePrice(c),isDefault=sys.id==='ball-soft'||sys.id==='hidden-dtc-push';
-        add('slide:'+c.slide+':'+c.length+(isDefault?'':':'+sys.id),q.label,1,'компл',q.price,q.source);
+        add('slide:'+c.slide+':'+c.length+(isDefault?'':':'+sys.id),q.label,1,'компл',q.price,q.source,!!q.retail);
       }
     }
   }
@@ -575,10 +591,14 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // «Материалах» модели наценки; розничными строками их не делаем — закупка остаётся в себестоимости сметы.
   const vernissageOnTop=vernissageClient;
   const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop;
+  // вне листовой модели (решение Макса 26.10.2026): стекло и зеркало (строки glass-…) — закупка × коэффициент сверху «цены за лист»;
+  // только для «цены по большей модели» (priceMax), сама модель «цена за лист» — как раньше
+  const outsideSheet=Math.round(lines.filter(l=>!l.retail&&l.id.startsWith('glass-')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup/100)*100;
+  const bySheetFull=bySheet+outsideSheet,priceMax=!!settings.priceMax;
   /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
    *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
    *  выбор движка для цены — ярус B. */
-  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,bySheetFull,outsideSheet,priceMax,retail:unplacedLines||blocked||needSheetPrice?null:priceMax?(byMarkup===null?null:Math.max(byMarkup,bySheetFull)):model==='sheet'?bySheet:byMarkup};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }
