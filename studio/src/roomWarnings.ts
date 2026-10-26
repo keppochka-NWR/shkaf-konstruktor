@@ -53,7 +53,8 @@ export function roomWarnings(project:Project){
   // «Ряд» импорта Базиса (столешница, цоколь, панели; m.worktop / raw.row) — не корпус в сборе. Кухни (параметрика m.kitchen и сырые
   // кухонные модули Базиса) — без «лифта»: ширины модулей заданы проектом Базиса, предупреждение было 100 % шумом (k30 4 из 4, k25 2 из 2;
   // аудит 11.10.2026). Шкафы студии и сырые шкафы Базиса (bazis-corpus) — как прежде; порог 900 — вопрос Макса (ярус B).
-  for(const a of project.modules)if(a.module.width>900&&!a.module.worktop&&!a.module.kupe&&!a.module.raw?.row&&!a.module.kitchen&&!rawKitchen(a.module.raw))warnings.push({moduleId:a.id,kind:'logistics',message:`«${a.module.name}»: корпус шириной ${a.module.width} мм в сборе не во все лифты входит. Уточните лифт и подъём на этаж или разбейте на два корпуса.`});
+  // свободная панель (щит на стену, заказ 7437584) — плоская деталь, не корпус в сборе: без «лифта»
+  for(const a of project.modules)if(a.module.width>900&&!a.module.worktop&&!a.module.kupe&&!a.module.raw?.row&&!a.module.kitchen&&!rawKitchen(a.module.raw)&&a.module.raw?.source!=='garderyob-free-panel')warnings.push({moduleId:a.id,kind:'logistics',message:`«${a.module.name}»: корпус шириной ${a.module.width} мм в сборе не во все лифты входит. Уточните лифт и подъём на этаж или разбейте на два корпуса.`});
   for(const {a,b} of closed){
     const exits=[['левой',-b.x],['задней',-b.z],['правой',b.x+b.w-project.room.width],['передней',b.z+b.d-project.room.depth]] as const;
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});

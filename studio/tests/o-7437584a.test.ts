@@ -6,6 +6,8 @@ import { setDoorHinge } from "../src/facadeEditing";
 import { freePanel } from "../src/freePanels";
 import { estimate, slidePrice } from "../src/pricing";
 import { newProject } from "../src/project";
+import { partCollisions } from "../src/collisions";
+import { roomWarnings } from "../src/roomWarnings";
 
 const drawerBox = (patch: Partial<Module> = {}): Module => {
   const m = initialModule();
@@ -83,4 +85,26 @@ test("7437584: скамья — посадочное место 32 (две пл�
   assert.deepEqual(parseModule(JSON.parse(JSON.stringify(m))).seatTop, true, "сохраняется в проекте");
   assert.ok(TOP_STRIP_STEPS.includes(90));
   const a = initialModule(); a.topStrip = 90; assert.deepEqual(validate(a), []);
+});
+
+test("7437584: ящики за дверью над полкой — фальш только в зоне ящиков, полка под ними не пересекает фальш; щит без «лифта»", () => {
+  const m = initialModule();
+  Object.assign(m, { name: "Центр", width: 533, height: 2000, depth: 384, doors: true, plinthHeight: 80, backType: "nailed" });
+  m.sections = [{ ...section(), rod: false, doorLeaves: 1, pullouts: 1, drawerGrip: true, shelves: [0.1631], drawers: 2,
+    drawerConfigs: [0, 1].map((k) => ({ slide: "gtv0fpo" as const, brand: "unihopper" as const, operation: "soft-close" as const, height: 120, length: 300, handle: false, y: 516 + k * 200 })) }];
+  assert.deepEqual(validate(m), []);
+  const ps = parts(m), sid = m.sections[0].id;
+  const fillers = ps.filter((p) => p.id.startsWith(`${sid}:filler:`)), shelf = ps.find((p) => p.id === `${sid}:shelf:0`)!;
+  assert.ok(fillers.length > 0, "фальши у ящиков есть");
+  const low = Math.min(...fillers.map((p) => p.position[1] - p.size[1] / 2)), shelfTop = shelf.position[1] + shelf.size[1] / 2;
+  assert.ok(low >= shelfTop, `фальш начинается выше полки: ${low} ≥ ${shelfTop}`);
+  assert.equal(partCollisions(ps, m).length, 0, "пересечений нет");
+  // без полки под ящиками — как было: фальш от дна
+  const old = structuredClone(m); old.sections[0].shelves = [];
+  const of = parts(old).filter((p) => p.id.startsWith(`${sid}:filler:`));
+  assert.ok(Math.abs(Math.min(...of.map((p) => p.position[1] - p.size[1] / 2)) - 96) < 0.5, "фальш от дна");
+  // щит 1000 — не корпус: предупреждения о лифте нет
+  const panel = freePanel({ name: "Щит", width: 1000, height: 1550, thickness: 16, plane: "xy", edge: 2, decor: "Клауд" });
+  Object.assign(panel, { x: 100, y: 450, z: 0 });
+  assert.ok(!roomWarnings({ ...newProject(), modules: [panel] }).some((w) => w.kind === "logistics"));
 });

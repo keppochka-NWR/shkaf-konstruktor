@@ -894,6 +894,14 @@ export function falshInserts(y0:number,y1:number,zones:{y:number;z:number}[],zRe
 }
 /** Длина выдвижного тремпеля: самый длинный из ряда GTV 250–500, который помещается в глубину секции с зазором 20 спереди и сзади. */
 export function pulloutLength(m:Module){const free=shelfMaxDepth(m)-40;return [500,450,400,350,300,250].find(l=>l<=free)??0;}
+/** Низ фальшей у ящиков за дверью от дна проёма, мм (h — высота проёма): обычно от дна; если под поднятыми ящиками есть полка
+ *  (заказ 7437584: отсек 300, полка съёмная, отсек 200, ящики), фальш — только в зоне ящиков (правило Макса «фальш только в зоне
+ *  выкатного»), от низа нижнего ящика: полка под ящиками остаётся во всю ширину проёма и не пересекает фальш. */
+export function drawerFillerFrom(s: Section, h: number): number {
+  const yy = drawerOffsets(s); if (!yy.length) return 0;
+  const low = Math.min(...yy), below = s.shelves.some((f) => f * h + RULES.panel / 2 <= low + 0.5);
+  return below ? Math.max(0, low) : 0;
+}
 export function drawerStackHeight(s: Section) {
   const yy=drawerOffsets(s);return Math.max(0,...yy.map((y,j)=>y+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap)));
 }
@@ -1268,14 +1276,14 @@ export function parts(m: Module): Part[] {
     for(const side of ['left','right'] as const)if(f[side]&&glue[s.id+':'+side]){
       // составной фальш (решение Макса 16.10): 2 плиты 16 склейкой в 32, разрыв 100 мм у каждой петли — через обе плиты, но только
       // в зоне петли спереди (ревью R4): за петлёй — вставка той же склейки до задней кромки, она держит направляющую ящика
-      const zones=glue[s.id+':'+side],H=drawerStackHeight(s),pieces=falshPieces(b.bottom,b.bottom+H,zones.map(g=>g.y)),sideName=side==='left'?'левая':'правая';
-      const inserts=falshInserts(b.bottom,b.bottom+H,zones,rear,rear+sd);
+      const zones=glue[s.id+':'+side],H=drawerStackHeight(s),y0=b.bottom+drawerFillerFrom(s,h),pieces=falshPieces(y0,b.bottom+H,zones.map(g=>g.y)),sideName=side==='left'?'левая':'правая';
+      const inserts=falshInserts(y0,b.bottom+H,zones,rear,rear+sd);
       for(const layer of [0,1]){
         const x=side==='left'?b.x+t/2+layer*t:b.x+b.width-t/2-layer*t;
         pieces.forEach(([y0,y1],k)=>add(`${s.id}:filler:${side}:${layer?'b':'a'}:${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}${pieces.length>1?`, кусок ${k+1} из ${pieces.length}`:''}`,[t,y1-y0,sd],[x,(y0+y1)/2,rear+sd/2],y1-y0,sd,t,'body',s.id));
         inserts.forEach(([y0,y1,z1],k)=>add(`${s.id}:filler:${side}:${layer?'b':'a'}:r${k}`,`Фальш-панель ${sideName} · склейка 32 мм, ${layer?'плита к ящикам':'плита у боковины'}, вставка за петлёй ${k+1}`,[t,y1-y0,z1-rear],[x,(y0+y1)/2,(rear+z1)/2],y1-y0,z1-rear,t,'body',s.id));
       }
-    }else if(f[side]) add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,drawerStackHeight(s),sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+drawerStackHeight(s)/2,rear+sd/2],drawerStackHeight(s),sd,t,'body',s.id);
+    }else if(f[side]){const y0=drawerFillerFrom(s,h),fh=drawerStackHeight(s)-y0;add(s.id+':filler:'+side,'Фальш-панель '+(side==='left'?'левая':'правая'),[t,fh,sd],[side==='left'?b.x+t/2:b.x+b.width-t/2,b.bottom+y0+fh/2,rear+sd/2],fh,sd,t,'body',s.id);}
     if(hasDrawerCap(m,s,b)){add(s.id+':drawer-cap','Обязательная полка над ящиками'+sk,[b.width,t,sdF],[b.x+b.width/2,b.bottom+drawerStackHeight(s)+t/2,rear+sdF/2],b.width,sdF,t,'shelf',s.id);planTaper(out.at(-1)!,b.x,b.x+b.width,rear,innerMinus(m,'fixed'));}
     let nextY = b.bottom + RULES.drawerStep / 2;
     for (let j = 0; j < s.drawers; j++) {
