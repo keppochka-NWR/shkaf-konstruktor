@@ -76,7 +76,8 @@ test("7437584: скамья — посадочное место 32 (две пл�
   assert.equal(left.size[1], 450 - 32, "боковины короче на 32");
   assert.deepEqual(top.edge, [2, 2, 2, 2]);
   assert.deepEqual(glue.edge, [0, 0, 0, 0]);
-  assert.ok(ps.filter((p) => p.id.startsWith("fast:top:")).every((p) => p.size[1] === 50 && Math.abs(p.position[1] - 425) < 1), "конфирматы сверху в торец боковин");
+  assert.equal(ps.filter((p) => p.id.startsWith("fast:top:")).length, 0, "решение 26.10: видимого крепежа нет");
+  assert.equal(ps.filter((p) => p.id.startsWith("ecc:top:") && !p.id.endsWith(":pin")).length, 4, "сиденье на эксцентриках снизу");
   const e = estimate({ ...newProject(), modules: [{ id: "b", x: 10, y: 0, z: 10, rotation: 0, module: m }] });
   const g = e.lines.find((l) => l.id === "seat-glue")!;
   assert.equal(g.quantity, 0.3);

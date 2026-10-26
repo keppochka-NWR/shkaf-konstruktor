@@ -105,7 +105,7 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
         const group=kind==='kitchen-u'?createKitchenURow(source,{left:uLeft,back:width,right:cornerSide,room,height,depth}):createKitchenCornerRow(source,{back:width,side:cornerSide,wing:cornerWing,room,height,depth});
         setOffer(null);if(onAddGroup(group,true)){setError('');resetCheck();}return;}
       if(kind==='kupe-wardrobe'||kind==='kitchen-row'){const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):onAddGroup(createKitchenRow(width,source,height,depth));if(ok){setError('');resetCheck();}return;}
-      if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg))){setError('');resetCheck();}return;}
+      if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg))){setError('');resetCheck();setBodies(1);/* заказ 7437584: «Корпусов в ряд» не остаётся 3 для следующей мебели (список прячется при 1 и узкой ширине) */}return;}
       const m=createModule(kind,width,height,depth,source,doorArg),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
       setOffer(null);if(onAdd(m)){setError('');resetCheck();}}catch(e){refuse(e);}};
   const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'

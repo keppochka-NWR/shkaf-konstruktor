@@ -46,14 +46,22 @@ const byLabel = (label: string) => page.getByLabel(label, { exact: true });
 async function type(text: string) { await page.keyboard.type(text); keys += text.length; }
 async function press(key: string) { await page.keyboard.press(key); keys++; }
 /** Поле: тройной щелчок (выделить), набрать, Tab. */
+/** Элемент в свёрнутом разделе (details закрыт, но разметка видна): раскрыть разделы мышью по заголовкам, от внешнего к внутреннему. */
+async function openAncestors(l: Locator) {
+  for (let k = 0; k < 4; k++) { const n = await l.evaluate((e) => { let c = 0; for (let d = e.closest("details"); d; d = d.parentElement?.closest("details") ?? null) if (!d.open) c++; return c; }); if (!n) break;
+    await click(l.locator("xpath=ancestor::details[not(@open)][last()]/summary").first()); }
+}
 async function field(label: string, value: number | string) {
-  const l = await visible(byLabel(label)); await l.evaluate((e) => e.scrollIntoView({ block: "center", behavior: "instant" })); await page.waitForTimeout(150);
-  const b = (await l.boundingBox())!; await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2, { clickCount: 3 }); clicks++;
-  await type(String(value)); await press("Tab"); await page.waitForTimeout(350);
+  const l = await visible(byLabel(label)); await openAncestors(l); await l.evaluate((e) => e.scrollIntoView({ block: "center", behavior: "instant" })); await page.waitForTimeout(150);
+  const b = (await l.boundingBox())!; await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); clicks++;
+  const act = await page.evaluate(() => { const a = document.activeElement as HTMLElement | null; return a ? a.tagName + "|" + (a.getAttribute("aria-label") ?? "") + "|" + a.className : "нет"; });
+  if (!act.includes(label)) console.log(`  [поле «${label}»: после щелчка фокус на ${act}] ` + await l.evaluate((e) => { const b = e.getBoundingClientRect(); const t = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2) as HTMLElement; const d = e.closest("details"); return `rect ${Math.round(b.x)},${Math.round(b.y)} ${Math.round(b.width)}x${Math.round(b.height)}; сверху: ${t?.tagName} «${t?.innerText?.slice(0, 40)}»; details open=${(d as HTMLDetailsElement)?.open}, summary «${d?.querySelector("summary")?.textContent?.slice(0, 30)}»`; }));
+  await page.keyboard.press("Control+A"); keys++; await type(String(value)); const typed = await l.inputValue(); await press("Tab"); await page.waitForTimeout(350);
+  const after = await l.inputValue().catch(() => "?"); if (after !== String(value)) console.log(`  [поле «${label}»: набрано ${typed}, стало ${after}]`);
 }
 /** Список: щелчок, стрелки до нужного пункта, Enter (как с клавиатуры). */
 async function pick(label: string, option: RegExp) {
-  const sel = await visible(byLabel(label));
+  const sel = await visible(byLabel(label)); await openAncestors(sel);
   for (let t = 0; t < 10 && !(await sel.evaluate((s: HTMLSelectElement, src: string) => [...s.options].some((o) => new RegExp(src).test(o.text) && !o.disabled), option.source)); t++) await page.waitForTimeout(300);
   const info = await sel.evaluate((s: HTMLSelectElement) => ({ opts: [...s.options].map((o) => o.text), cur: s.selectedIndex, dis: [...s.options].map((o) => o.disabled) }));
   const want = info.opts.findIndex((o, i) => option.test(o) && !info.dis[i]);
@@ -69,7 +77,9 @@ async function pick(label: string, option: RegExp) {
 async function pickIf(label: string, option: RegExp) { if (await byLabel(label).evaluateAll((els) => els.some((e) => (e as HTMLElement).offsetParent !== null))) await pick(label, option); }
 async function pickAny(label: string, options: RegExp[]) { const sel = await visible(byLabel(label)); await page.waitForTimeout(600); const texts = await sel.evaluate((s: HTMLSelectElement) => [...s.options].map((o) => o.text)); const o = options.find((r) => texts.some((t) => r.test(t))); if (!o) throw Error(`нет пунктов ${options.join(", ")} в «${label}»: ${texts.join(" | ")}`); await pick(label, o); }
 async function checkbox(label: string, on: boolean) {
-  const l = await visible(byLabel(label)); if ((await l.isChecked()) !== on) await click(l);
+  const l = await visible(byLabel(label)); await openAncestors(l); const before = await l.isChecked(); if (before !== on) await click(l);
+  if ((await (await visible(byLabel(label))).isChecked()) !== on) { const r = await (await visible(byLabel(label))).evaluate((e) => { const b = e.getBoundingClientRect(), t = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return t ? t.tagName + "." + (t as HTMLElement).className : "нет"; }); console.log(`  [щелчок по галочке попал в ${r} — пробел с клавиатуры]`); await (await visible(byLabel(label))).focus(); await press("Space"); await page.waitForTimeout(400); }
+  console.log(`  [галочка «${label}»: было ${before}, стало ${await (await visible(byLabel(label))).isChecked()}]`);
 }
 /** Раскрыть раздел панели (summary), если закрыт. */
 async function open(text: string) {

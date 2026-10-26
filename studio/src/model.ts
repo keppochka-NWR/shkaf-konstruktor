@@ -1648,7 +1648,10 @@ export function parts(m: Module): Part[] {
           // своя точка стыка из Базиса (jointZ n3-wall, сетка joints n3-tall) — главнее
           const zc = k === 0 && !!m.kitchen && fixedIds.has(hp.id) && grooveBackFront !== undefined && Math.abs(z0 - grooveBackFront) < 0.6 && ins - z0 >= 20 && !m.kitchen.jointZ?.[`${hp.id}:${side}`] && !kitchenJointGrid(m, hp.id) ? ins : z;
           // посадочное место 32 лежит на боковинах (Module.seatTop): конфирмат сверху через обе плиты в торец боковины (под заглушку)
-          if (hp.id === "top" && m.seatTop) confirmat(`fast:${hp.id}:${side}:${k}`, [side === "left" ? t / 2 : m.width - t / 2, m.height, zc], "-y", hp.sectionId);
+          // решение Макса 26.10: видимого крепежа быть не должно — сиденье крепим эксцентриками снизу (бочонок в нижней плите, шток в торец боковины)
+          if (hp.id === "top" && m.seatTop) { const sx = side === "left" ? t / 2 : m.width - t / 2, py = m.height - 2 * t;
+            add(`ecc:${hp.id}:${side}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelD, RULES.eccBarrelH, RULES.eccBarrelD], [sx + (side === "left" ? RULES.eccCenter : -RULES.eccCenter), py + RULES.eccBarrelH / 2 - 0.3, zc], RULES.eccBarrelD, RULES.eccBarrelH, RULES.eccBarrelD, "fastener", hp.sectionId, "metal");
+            add(`ecc:${hp.id}:${side}:${k}:pin`, "Эксцентрик D15 · шток", [7, 7, 7], [sx, py - 3.5, zc], 7, 7, 7, "fastener", hp.sectionId, "metal"); }
           else confirmat(`fast:${hp.id}:${side}:${k}`, [edgeX - dir * t, hp.position[1], zc], dir > 0 ? "+x" : "-x", hp.sectionId);
         }
       }
