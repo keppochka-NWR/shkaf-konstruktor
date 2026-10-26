@@ -28,6 +28,9 @@ export const RULES = {
   back: 3,
   plinth: 80,
   plinthInset: 2, // цоколь шкафа утоплен от переда на 2 мм (правило Макса 06.09.2026); фасады опускаются на цоколь
+  plinthRecessStd: 50, // «Цоколь утоплен» (Module.plinthRecess, заказ 7441182): предлагаемое утопление, фасады над цоколем — вопрос Максу о стандарте цеха
+  plinthRecessMax: 150,
+  seatPanelMin: 100, // щит над сиденьем (Module.seatPanel): высота 100–2400
   facadeFloorGap: 30, // низ распашного фасада и нижнего накладного фасада ящика — 30 мм от пола, регулировка по цоколю
   shelfDepthMinus: 25, // кухни и фальши у ящиков; шкафы — innerMinus (решение Макса 23.10.2026)
   shelfRemovableMinus: 5, // съёмная полка шкафа на 5 мм меньше глубины корпуса (решение Макса 23.10.2026)
@@ -311,6 +314,14 @@ export type Module = {
   /** Высота распашных фасадов по эскизу, мм — ручное отклонение от правил зазоров (решение Макса 26.10.2026 «подгонять под эскиз всё»,
    *  заказ 7437584: фасады антресоли 500 под карнизом 90, нижние 2000 от пола до антресоли). Верх — по правилу, низ — ниже на эту высоту. */
   facadeSketchH?: number;
+  /** Щит над корпусом у стены (заказ 7441182: щит 16 над посадочным местом на задней стене ниши): ЛДСП 16 на всю ширину корпуса,
+   *  стоит на крыше (сиденье) у задней кромки, высота height от верха корпуса; декор — свой (decor) или корпуса. В раскрое — по своему декору. */
+  seatPanel?: { height: number; decor?: string };
+  /** Цоколь утоплен (заказ 7441182): цоколь на столько мм от переда корпуса (обычно RULES.plinthInset 2), распашные фасады — над цоколем
+   *  (низ фасада = низ дна), а не до 30 мм от пола. Без поля — как было. */
+  plinthRecess?: number;
+  /** Петли распашных фасадов без доводчика (заказ 7441182): накладная самозакрывающаяся (пружина) — HINGE_BRANDS[*].simple. Без поля — с доводчиком. */
+  hingeSoft?: false;
   /** Навесной шкаф (решение Макса 23.10.2026: подъём «От пола» > 0 у шкафа на цоколе — способ создать навесной): без цоколя и ножек,
    *  на двух навесах ABS у верха боковин (как навесные кухни; смета — «Навес мебельный регулируемый» + заглушка). Без поля — как было. */
   hanging?: true;
@@ -764,7 +775,7 @@ export function deskModule(base?:Module):Module{
   const m=base?structuredClone(base):initialModule();
   return {...m,name:'Стол',height:750,depth:Math.max(500,Math.min(m.depth,700)),doors:false,plinthHeight:0,bottomType:'none',backType:'none',topType:'panel',
     sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
-    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,seatTop:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
+    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,seatTop:undefined,seatPanel:undefined,plinthRecess:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** Деталь — фасад ящика (ящики студии, ящики и глухие фасады кухни). */
 export const isDrawerFront=(p:Part)=>p.role==='drawer'&&p.id.endsWith(':facade');
@@ -794,6 +805,8 @@ export function facadeBottom(m:Module){
   // у таких модулей базы (k17, k21, k23, k28, k30) низ фасада = 0; цоколя у навесных нет. Ниша с дном выше 100 мм при боковинах
   // от низа (вытяжка, сушка) — в Базисе низ фасада 1,5–2, здесь пока 0 (модули расходятся и по другим причинам).
   if(m.kitchen&&(m.kitchen.role==='wall'||m.kitchen.role==='antresol')&&plinth(m)>0)return 0;
+  // цоколь утоплен (Module.plinthRecess, заказ 7441182): фасад над цоколем — вровень с низом дна
+  if(m.plinthRecess!==undefined&&!m.kitchen&&plinth(m)>0)return plinth(m);
   return plinth(m)>0?Math.min(RULES.facadeFloorGap,plinth(m)):fe(m);
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
@@ -1146,6 +1159,12 @@ export function parts(m: Module): Part[] {
       add("top", "Крыша" + sk, [m.width - 2 * t, t, td], [m.width / 2, m.height - t / 2, tb + td / 2], m.width - 2 * t, td, t); planTaper(out.at(-1)!, t, m.width - t, tb, 0);
     } else { add("top", "Крыша" + sk, [m.width - 2 * t, t, d + kz], [m.width / 2, m.height - t / 2, (d + kz) / 2], m.width - 2 * t, d + kz, t); planTaper(out.at(-1)!, t, m.width - t, 0, 0); }
   }
+  // Щит над корпусом у стены (Module.seatPanel, заказ 7441182): ЛДСП 16 на крыше у задней кромки, на всю ширину, свой декор.
+  if (m.seatPanel && hasTop(m)) {
+    const sp = m.seatPanel;
+    add("seat-panel", "Щит над сиденьем " + sp.height + "×" + m.width, [m.width, sp.height, t], [m.width / 2, m.height + sp.height / 2, t / 2], sp.height, m.width, t);
+    out.at(-1)!.decor = sp.decor ?? m.decor; out.at(-1)!.edge = [2, 2, 2, 2]; out.at(-1)!.grainAxis = 1;
+  }
   // Ножки: по 2 под каждой боковиной (для сцены и опор в смете), в раскрой не идут.
   if (m.feet && !m.kitchen) for (const [side, x] of [["left", t / 2], ["right", m.width - t / 2]] as const) for (const [k, z] of [[0, 60], [1, d - 60]] as const)
     add(`leg:${side}:${k}`, "Ножка", [40, m.feet.height, 40], [x, m.feet.height / 2, z], m.feet.height, 40, 40, "fastener", undefined, "metal");
@@ -1221,7 +1240,7 @@ export function parts(m: Module): Part[] {
     [m.width - 2 * t, bottom, t],
     // кухня Базиса без опор: свой отступ цоколя (k20 m09: 16, n3-base); навесной/антресоль: щит под поднятым дном в Базисе заподлицо
     // с передом боковин (k14 m03, k32 m13, k15 m08, k18 m12, k30 m09; n3-antresol)
-    [m.width / 2, bottom / 2, d - (m.kitchen?.plinth?.inset ?? (m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol") ? 0 : RULES.plinthInset)) - t / 2],
+    [m.width / 2, bottom / 2, d - (m.kitchen?.plinth?.inset ?? (m.kitchen && (m.kitchen.role === "wall" || m.kitchen.role === "antresol") ? 0 : m.plinthRecess ?? RULES.plinthInset)) - t / 2],
     m.width - 2 * t,
     bottom,
     t,
@@ -2321,6 +2340,10 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluFill(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
   if(m.facadeSketchH!==undefined&&(!Number.isFinite(m.facadeSketchH)||m.facadeSketchH<RULES.doorMinH-200||facadeTop(m)-m.facadeSketchH<-10||m.facadeSketchH>RULES.sheetW))errors.push('Высота фасадов по эскизу: низ фасада не ниже 10 мм под корпусом, не больше листа.');
+  // заказ 7441182: щит над сиденьем, утопленный цоколь, петли без доводчика
+  if(m.seatPanel!==undefined&&(!Number.isFinite(m.seatPanel.height)||m.seatPanel.height<RULES.seatPanelMin||m.seatPanel.height>RULES.maxH-RULES.minH||(m.seatPanel.decor!==undefined&&!String(m.seatPanel.decor).trim())||!hasTop(m)||m.kitchen||m.kupe||m.desk||m.raw||m.corner||m.slope))errors.push(`Щит над сиденьем: высота от ${RULES.seatPanelMin} до ${RULES.maxH-RULES.minH} мм, у прямого корпуса с крышей.`);
+  if(m.plinthRecess!==undefined&&(!Number.isFinite(m.plinthRecess)||m.plinthRecess<RULES.plinthInset||m.plinthRecess>Math.min(RULES.plinthRecessMax,m.depth-100)||plinth(m)<=0||m.feet||m.kitchen))errors.push(`Цоколь утоплен: от ${RULES.plinthInset} до ${RULES.plinthRecessMax} мм от переда, только у корпуса на цоколе.`);
+  if(m.hingeSoft!==undefined&&m.hingeSoft!==false)errors.push('Неверный тип петель.');
   if(m.seatTop!==undefined&&(m.seatTop!==true||m.topGlass||m.slope||m.skew||m.kitchen||m.kupe||m.kupeZone||m.desk||m.raw||m.corner||!hasTop(m)||m.doors&&m.doorMount!=='inset'&&m.height>RULES.seatMaxH))errors.push(`Посадочное место 32: у прямого корпуса с крышей ЛДСП (не стекло, не скос); с накладными дверями — только у корпуса до ${RULES.seatMaxH} мм.`);
   if(m.feet!==undefined&&(!Number.isFinite(m.feet.height)||m.feet.height<RULES.feetMin||m.feet.height>RULES.feetMax))errors.push(`Ножки: высота от ${RULES.feetMin} до ${RULES.feetMax} мм.`);
   if(m.bottomType!==undefined&&!['panel','none'].includes(m.bottomType))errors.push('Неверный тип дна.');
@@ -2835,6 +2858,9 @@ export function parseModule(input: unknown): Module {
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.seatTop===true?{seatTop:true as const}:{}),
     ...(x.facadeSketchH===undefined?{}:{facadeSketchH:Number(x.facadeSketchH)}),
+    ...(x.seatPanel&&typeof x.seatPanel==='object'?{seatPanel:{height:Number((x.seatPanel as {height:number}).height),...(typeof (x.seatPanel as {decor?:unknown}).decor==='string'?{decor:String((x.seatPanel as {decor:string}).decor)}:{})}}:{}),
+    ...(x.plinthRecess===undefined?{}:{plinthRecess:Number(x.plinthRecess)}),
+    ...(x.hingeSoft===false?{hingeSoft:false as const}:{}),
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),

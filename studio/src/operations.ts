@@ -152,7 +152,7 @@ export function setWallDistance(p:Project,mid:string,axis:'x'|'y'|'z',distance:n
  // угловые — как были. Антресоль на нижнем корпусе (стоит на нём, «Антресоль») навесной не становится.
  if(axis==='y')for(const item of whole?n.modules:ids?.includes(mid)?n.modules.filter(item=>ids.includes(item.id)):[a]){const mm=item.module;
    if(mm.feet||mm.kitchen||mm.raw||mm.kupe||mm.desk||mm.worktop||mm.corner||mm.casework)continue;
-   if((item.y??0)>0){if(!restsOnModule(n,item)){mm.hanging=true;mm.plinthHeight=0;}}
+   if((item.y??0)>0){if(!restsOnModule(n,item)){mm.hanging=true;mm.plinthHeight=0;delete mm.plinthRecess;}}
    else if(mm.hanging){delete mm.hanging;mm.plinthHeight=0;}}
  // Auto fillers change the mounting envelope near walls and perpendicular runs.
  // Keep the manager's distance tied to the final envelope, not the old filler.
@@ -195,7 +195,9 @@ export function addUpperModule(p:Project,mid:string):Project {
  if(height<RULES.minH)throw Error(`Над корпусом нужно хотя бы ${RULES.minH} мм для отдельной антресоли и ${MEASUREMENT_RULES.ceilingClearance} мм монтажного зазора. Измените высоту нижнего корпуса или замер помещения.`);
  // заказ 7427796: антресоль не копирует то, что относится только к нижнему корпусу — задник ЛДСП «от высоты» (ниша над сиденьем),
  // боковые фальшпанели/добор до потолка (они уже стоят у нижнего) и зеркало на двери
- const own=(m:Module):Module=>{const c:Module={...structuredClone(m),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]};delete c.backFrom;delete c.sidePanels;delete c.mirror;delete c.facadeFrom;delete c.facadeTo;return c;};
+ const own=(m:Module):Module=>{const c:Module={...structuredClone(m),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,sections:[section()]};delete c.backFrom;delete c.sidePanels;delete c.mirror;delete c.facadeFrom;delete c.facadeTo;
+   // заказы 7441182/7437584: сиденье, щит, утопленный цоколь и высоту фасадов по эскизу антресоль не наследует
+   delete c.seatTop;delete c.seatPanel;delete c.plinthRecess;delete c.facadeSketchH;return c;};
  n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):own(base.module)});
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }

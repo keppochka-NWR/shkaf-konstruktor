@@ -495,6 +495,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         else if(d.hingeAngle===90){const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
           add('hinge-limiter-90'+suffix,'Ограничитель угла открывания 90° '+hb.label,n,'шт',HINGE_LIMITER_RETAIL,MAX_SRC+': ограничитель угла — '+HINGE_LIMITER_RETAIL+' ₽ (петля на 90° = петля 110° + ограничитель)',true);}
         else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155° · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',HINGE155_RETAIL,MAX_SRC+': петля 155° — '+HINGE155_RETAIL+' ₽/шт',true);
+        // петли без доводчика (Module.hingeSoft = false, заказ 7441182): накладная самозакрывающаяся с пружиной
+        else if(a.module.hingeSoft===false)add((inset?'hinge-simple-inset':'hinge-simple')+suffix,inset?hb.simple.label+' · вкладная':hb.simple.label,n,'шт',hb.simple.price,hb.simple.source);
         else{const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);}
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }

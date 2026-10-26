@@ -95,10 +95,14 @@ export function plainFeatures(m: Module): string[] {
   if (doors && m.kitchen?.hinges !== false) {
     const lift = all.some((d) => d.role === "door" && d.hinge === "top");
     out.push(`${doors} ${plural(doors, ["распашная дверь", "распашные двери", "распашных дверей"])}${m.doorMount === "inset" ? " (вкладные — внутри корпуса)" : ""}${lift ? ", есть подъёмная" : ""}`);
-    out.push(push ? `открывание нажатием (push-to-open), без ручек: петли ${hb.label} без пружины и толкатели` : `петли ${hb.label} с доводчиком — двери закрываются плавно и тихо`);
+    out.push(push ? `открывание нажатием (push-to-open), без ручек: петли ${hb.label} без пружины и толкатели` : m.hingeSoft === false ? `петли ${hb.label} без доводчика (самозакрывающиеся)` : `петли ${hb.label} с доводчиком — двери закрываются плавно и тихо`);
   }
   const wide = all.filter((d) => d.role === "door" && d.hingeAngle).reduce((mp, d) => mp.set(d.hingeAngle!, (mp.get(d.hingeAngle!) ?? 0) + 1), new Map<number, number>());
   for (const [a, n] of wide) out.push(`петли ${a === 165 ? "155–165° (широкое открывание)" : "с открыванием на 90°"}: ${n} ${plural(n, ["створка", "створки", "створок"])}`);
+  // заказ 7441182: утопленный цоколь, посадочное место и щит над ним — строкой в КП
+  if (m.plinthRecess !== undefined) out.push(`цоколь утоплен на ${m.plinthRecess} мм, двери над цоколем`);
+  if (m.seatTop) out.push("посадочное место 32 мм сверху — две плиты ЛДСП 16 склейкой под одну кромку");
+  if (m.seatPanel) out.push(`щит ЛДСП 16 над сиденьем ${m.seatPanel.height} мм${m.seatPanel.decor && m.seatPanel.decor !== m.decor ? ", декор " + m.seatPanel.decor : ""}`);
   const handles = new Map<string, number>();
   for (const d of all) if (d.role === "handle") { const h = handleById(facadeHandleId(m, d.id) ?? DEFAULT_HANDLE); handles.set(h.label, (handles.get(h.label) ?? 0) + 1); }
   if (handles.size) out.push("ручки: " + [...handles].map(([l, n]) => `${l} — ${n} шт.`).join("; "));
