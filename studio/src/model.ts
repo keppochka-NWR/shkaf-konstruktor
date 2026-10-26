@@ -290,6 +290,9 @@ export type Module = {
   /** Посадочное место скамьи (заказ 7437584, скамья в прихожей): крыша 32 — две плиты 16 склейкой под одну кромку, лежит на боковинах
    *  на всю ширину и глубину корпуса (боковины короче на 32); кромка 2 по периметру верхней плиты, у нижней — нет. Склейка — розница 1000 ₽/м². */
   seatTop?: true;
+  /** Высота распашных фасадов по эскизу, мм — ручное отклонение от правил зазоров (решение Макса 26.10.2026 «подгонять под эскиз всё»,
+   *  заказ 7437584: фасады антресоли 500 под карнизом 90, нижние 2000 от пола до антресоли). Верх — по правилу, низ — ниже на эту высоту. */
+  facadeSketchH?: number;
   /** Навесной шкаф (решение Макса 23.10.2026: подъём «От пола» > 0 у шкафа на цоколе — способ создать навесной): без цоколя и ножек,
    *  на двух навесах ABS у верха боковин (как навесные кухни; смета — «Навес мебельный регулируемый» + заглушка). Без поля — как было. */
   hanging?: true;
@@ -741,6 +744,8 @@ export function aluDrawersAvailable(m:Module):boolean{return !!m.alu&&aluDrawerF
 export function hasHandles(m:Module){return m.doors||m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)&&!drawerGripOn(m,s,c)));}
 /** Низ накладного фасада: на цоколе — 30 мм от пола (регулировка по цоколю), без цоколя — зазор 2 от низа корпуса. */
 export function facadeBottom(m:Module){
+  // фасады по эскизу (решение Макса 26.10 «подгонять под эскиз всё», заказ 7437584): высота задана вручную, верх — по правилу, низ — ниже на неё
+  if(m.facadeSketchH!==undefined&&!m.kitchen&&m.doorMount!=='inset')return facadeTop(m)-m.facadeSketchH;
   if(m.feet){
     // На ножках: накладной фасад закрывает торец дна; без дна — начинается над передней/задней нижней стяжкой.
     const rail=Math.max(railHeight(m,'front-bottom'),hasBottom(m)?0:railHeight(m,'rear-bottom'));
@@ -2225,6 +2230,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluFill(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
+  if(m.facadeSketchH!==undefined&&(!Number.isFinite(m.facadeSketchH)||m.facadeSketchH<RULES.doorMinH-200||facadeTop(m)-m.facadeSketchH<-10||m.facadeSketchH>RULES.sheetW))errors.push('Высота фасадов по эскизу: низ фасада не ниже 10 мм под корпусом, не больше листа.');
   if(m.seatTop!==undefined&&(m.seatTop!==true||m.topGlass||m.slope||m.skew||m.kitchen||m.kupe||m.kupeZone||m.desk||m.raw||m.corner||!hasTop(m)||m.doors&&m.doorMount!=='inset'&&m.height>RULES.seatMaxH))errors.push(`Посадочное место 32: у прямого корпуса с крышей ЛДСП (не стекло, не скос); с накладными дверями — только у корпуса до ${RULES.seatMaxH} мм.`);
   if(m.feet!==undefined&&(!Number.isFinite(m.feet.height)||m.feet.height<RULES.feetMin||m.feet.height>RULES.feetMax))errors.push(`Ножки: высота от ${RULES.feetMin} до ${RULES.feetMax} мм.`);
   if(m.bottomType!==undefined&&!['panel','none'].includes(m.bottomType))errors.push('Неверный тип дна.');
@@ -2718,6 +2724,7 @@ export function parseModule(input: unknown): Module {
     ...(x.alu!==undefined&&x.aluDrawers===true?{aluDrawers:true as const}:{}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
     ...(x.seatTop===true?{seatTop:true as const}:{}),
+    ...(x.facadeSketchH===undefined?{}:{facadeSketchH:Number(x.facadeSketchH)}),
     ...(x.feet===undefined?{}:{feet:{height:Number((x.feet as {height:number})?.height)}}),
     ...(x.bottomType===undefined?{}:{bottomType:x.bottomType as Module['bottomType']}),
     ...(x.topType===undefined?{}:{topType:x.topType as Module['topType']}),

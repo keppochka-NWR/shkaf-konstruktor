@@ -14,7 +14,7 @@ mkdirSync(out, { recursive: true });
 const p = build();
 const e = estimate(p);
 const rub = (v: number) => Math.round(v).toLocaleString("ru-RU") + " ₽";
-/** Разбивка клиенту: материалы (плита, кромка, обработка), работа цеха, фурнитура, розница (склейка), после финального расчёта. */
+/** Разбивка клиенту: материалы (плита, кромка, обработка), работа цеха, фурнитура, розница (склейка 32, газлифты АДАЖИО по цене сайта), после финального расчёта. */
 function breakdown(q: Project) {
   const r = estimate(q), k = r.markup, cost = (l: PriceLine) => l.quantity * (l.unitPrice ?? 0);
   const own = r.lines.filter((l) => !l.retail && l.unitPrice !== null);
@@ -34,7 +34,7 @@ for (const k of [1, 3]) {
   const b = breakdown({ ...p, modules: p.modules.filter((m) => productOf(m) === k) });
   lines.push(`## Изделие ${k}`, "", `- Цена в составе заказа (доля общего итога по изделиям, как в КП): **${share === null ? "—" : rub(share)}**`,
     `- Отдельным заказом (свой раскрой): ${rub(b.r.retail ?? 0)} · листов ЛДСП ${b.r.ldspSheets}`,
-    `- Разбивка отдельного заказа: материалы ${rub(b.material)} · работа цеха ${rub(b.work)} · фурнитура ${rub(b.hardware)} · розница (склейка) ${rub(b.retail)} (до округления итога к 100 ₽)`,
+    `- Разбивка отдельного заказа: материалы ${rub(b.material)} · работа цеха ${rub(b.work)} · фурнитура ${rub(b.hardware)} · розница (склейка 32, газлифты АДАЖИО по цене сайта) ${rub(b.retail)} (до округления итога к 100 ₽)`,
     `- После финального расчёта (в цену не входят): ${b.pending.length ? b.pending.join("; ") : "нет"}`, "",
     "| Позиция | Кол-во | Цена закупки | Сумма |", "|---|---|---|---|",
     ...b.r.lines.map((l) => `| ${l.label}${l.retail ? " (розница)" : ""}${l.pending ? " — после финального расчёта" : ""} | ${l.quantity} ${l.unit} | ${l.unitPrice ?? "—"} | ${l.unitPrice === null ? "—" : Math.round(l.quantity * l.unitPrice)} |`), "");

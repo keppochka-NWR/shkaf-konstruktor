@@ -40,6 +40,8 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
 export const FALSH_GLUE_RETAIL_M2 = 1000;
+/** Лифт газовый Premial АДАЖИО ПРЕМИУМ, ₽/шт клиенту — цена сайта allpremial.ru 26.10.2026 (решение Макса: по цене сайта, без коэффициента). */
+export const ADAGIO_RETAIL = 347.2;
 export type PriceLine={id:string;label:string;quantity:number;unit:string;unitPrice:number|null;source:string;retail?:boolean;pending?:boolean;
   /** розница Лемана как есть, если отличается от цены строки (публичная сборка: цена строки запечена × коэффициент) — для «цены за лист» */
   shelf?:number};
@@ -452,7 +454,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         if(d.vernissage&&d.hinge!=='top'||d.vernissage&&placedHinges)add('vernissage-hinge-boring','Присадка под петли на фасадах Вернисаж',n,'шт',VERNISSAGE_NOTES.hingeBoringPerPc,`Прайс Вернисаж от ${priceDateRu()}: присадка под петли`);
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
-        if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,selectedLift==='adagio'?'Газлифты Premial АДАЖИО — подбор усилия и комплектации':'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
+        // решение Макса 26.10.2026: газлифты Premial АДАЖИО — по цене с сайта Premial, это сразу цена клиенту (розница, без коэффициента); 2 шт на фасад (по боковине)
+        if(d.hinge==='top'&&selectedLift==='adagio')add('lift-mechanism:premial-adagio','Лифт газовый Premial АДАЖИО ПРЕМИУМ (усилие 60–80N по массе фасада) — 2 шт на фасад',2,'шт',ADAGIO_RETAIL,'allpremial.ru, карточки 62617/62618/59951 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ на 26.10.2026 — цена клиенту (решение Макса 26.10)',true);
+        else if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
         if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}

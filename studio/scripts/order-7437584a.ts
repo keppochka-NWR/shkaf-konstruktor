@@ -7,7 +7,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { initialModule, section, type Module, type Section } from "../src/model";
 import { parseProject, projectErrors, applyAutoFillers, type Project, type PlacedModule } from "../src/project";
-import { estimate } from "../src/pricing";
+import { estimate, MARKUP_DEFAULT } from "../src/pricing";
 import { freePanel } from "../src/freePanels";
 import { setDoorHinge } from "../src/facadeEditing";
 import { roomWarnings, collisionWarnings } from "../src/roomWarnings";
@@ -42,7 +42,7 @@ const drawerBox = mod("И1 · подвесной ящик", 800, 200, D1, { door
 const bench = mod("И1 · скамья", 1000, 450, 300, { doors: false, plinthHeight: 0, backType: "nailed", seatTop: true }, [{}, {}]);
 // Антресоль 1800 × 590: отсеки 800 / 500 / 500, карниз 90 в плоскости фасадов, фасады 500: 800 — откидной вверх, 500 + 500 — push.
 // Предел ширины корпуса студии 1300 → два навесных корпуса 800 + 1000 (вопрос Максу: нужна ли антресоль 1800 одним корпусом).
-const antPatch1: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, hanging: true, topStrip: 90, backType: "nailed" };
+const antPatch1: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, hanging: true, topStrip: 90, backType: "nailed", facadeSketchH: 500 /* по эскизу (решение 26.10) */ };
 // жёсткая полка у верхней кромки откидного фасада — под петли (без неё у карниза петлям не за что держаться)
 const ant1a = mod("И1 · антресоль 800 (откидная)", 800, 590, D1, antPatch1, [{ doorLeaves: 1, shelves: [468 / 558], fixed: [0] }]);
 const ant1b = mod("И1 · антресоль 1000", 1000, 590, D1, antPatch1, [{ doorLeaves: 1 }, { doorLeaves: 1 }]);
@@ -52,7 +52,7 @@ Object.assign(shield, { id: nid("i1"), x: X1 + 800, y: 450, z: 0 });
 
 // ─── Изделие 3 · 1600 × 2590 × 400 (корпус 384), три модуля 533 ───
 const D3 = 384, W3 = [533, 533, 534], LOW = 2000, PL = 80;
-const lowPatch: Partial<Module> = { doors: true, plinthHeight: PL, backType: "nailed", handleId: "hexa1200b" /* торцевая HEXA L-1200 чёрный мат (ответ Макса 26.10: торцевые — HEXA L) */ };
+const lowPatch: Partial<Module> = { doors: true, plinthHeight: PL, backType: "nailed", facadeSketchH: 1996 /* эскиз: 2000 от пола до низа антресоли, зазоры 2 + 2, фасад закрывает цоколь */, handleId: "hexa1200b" /* торцевая HEXA L-1200 чёрный мат (ответ Макса 26.10: торцевые — HEXA L) */ };
 const left = mod("И3 · левый", W3[0], LOW, D3, lowPatch, [{ doorLeaves: 1, pullouts: 1 }]);
 left.sections[0].shelves = [shelfAt(left, 500)]; left.sections[0].fixed = [0];
 const mid = mod("И3 · центр", W3[1], LOW, D3, lowPatch, [{ doorLeaves: 1, pullouts: 1, drawerGrip: true }]);
@@ -65,7 +65,7 @@ const mid = mod("И3 · центр", W3[1], LOW, D3, lowPatch, [{ doorLeaves: 1,
 }
 const right = mod("И3 · правый", W3[2], LOW, D3, lowPatch, [{ doorLeaves: 1, pullouts: 1 }]);
 right.sections[0].shelves = [shelfAt(right, 1500)]; right.sections[0].fixed = [0];
-const antPatch: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed" };
+const antPatch: Partial<Module> = { doors: true, doorOpen: "push", plinthHeight: 0, topStrip: 90, backType: "nailed", facadeSketchH: 500 /* по эскизу */ };
 const ant3 = (name: string, w: number, shelf: boolean) => {
   const a = mod(name, w, 590, D3, antPatch, [{ doorLeaves: 1 }]);
   if (shelf) a.sections[0].shelves = [0.5];
@@ -75,6 +75,8 @@ const ant3 = (name: string, w: number, shelf: boolean) => {
 const project: Project = {
   version: 3,
   measurement: { number: ORDER, date: "2026-10-26", notes: "Изделия 1 и 3 по эскизам дизайнера (ТЗ.md заказа). Помещение условное: размеры стен не заданы." },
+  // решение Макса 26.10: цена клиенту — по большей из двух моделей (коэффициент / лист); ветка o-7441182, коммит ef9811a
+  calculation: { markup: MARKUP_DEFAULT, overrides: {}, maxModel: true },
   room: {
     width: ROOM_W, depth: 2400, height: ROOM_H,
     // входная дверь между изделиями не рисуется: в квартирах она открывается наружу, зона открывания мешала бы только для вида
