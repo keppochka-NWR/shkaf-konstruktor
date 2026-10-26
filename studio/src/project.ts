@@ -245,9 +245,11 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   // (добавлен из пустой комнаты) получит её при следующем сохранении и сдвинется на 21 мм — новый не должен встать в этот вылет.
   // Ложное «пересекается» на втором «Добавить в комнату» (критик 20.10, было и на night-release).
   const f=applyAutoFillers(p),anchorId=anchor?.id;if(anchor)anchor=f.modules.find(x=>x.id===anchorId)??anchor;p={...p,modules:f.modules};
-  const supports=p.modules.filter(a=>a.module.kitchen?.role==='base');
-  const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?(p.modules.find(a=>a.module.kitchen?.role==='wall')?.y??wallFloorY(supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):undefined)):0); /* навесной — в ряд навесных или на низ по умолчанию от пола (п. 6, 22.10) */
-  if(source.worktop&&!supports.length)throw Error('Сначала добавьте нижние кухонные корпуса: столешница устанавливается над ними.');
+  const kitchenBases=p.modules.filter(a=>a.module.kitchen?.role==='base');
+  // столешница ЛДСП 32 без кухонных низов (заказ 7437584, ТВ-зона): над корпусами, стоящими на полу (комод, тумбы)
+  const supports=kitchenBases.length||source.worktop?.material!=='ldsp'?kitchenBases:p.modules.filter(a=>!(a.y??0)&&!a.module.kupe&&!a.module.worktop&&!a.module.hanging);
+  const initialY=anchor?.y??(source.worktop&&supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):source.kitchen?.role==='wall'?(p.modules.find(a=>a.module.kitchen?.role==='wall')?.y??wallFloorY(supports.length?Math.max(...supports.map(a=>(a.y??0)+a.module.height)):undefined)):source.hanging&&!source.kitchen?RULES.hangingFloorY:0); /* навесной — в ряд навесных или на низ по умолчанию от пола (п. 6, 22.10); подвесной ящик — 750 */
+  if(source.worktop&&!supports.length)throw Error(source.worktop.material==='ldsp'?'Сначала добавьте корпуса на полу (комод, тумбы): столешница ставится на них.':'Сначала добавьте нижние кухонные корпуса: столешница устанавливается над ними.');
   const a:PlacedModule={id:id(),x:0,y:initialY,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
   const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=source.worktop&&supports.length?Math.min(...supports.map(a=>a.x)):anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),source.kitchen?21:0),preferredZ=anchor?bounds(anchor).z:source.kitchen?kitchenRowZ(p,module,initialY)+base.z:source.worktop&&supports.length?Math.min(...supports.map(a=>a.z-kitchenRowZ({ ...p, modules: [] },a.module,a.y??0))):30;
   const xs=[preferredX,0,...occupied.flatMap(b=>[b.x+b.w,b.x-base.w,b.x]),p.room.width-base.w],zs=[preferredZ,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-base.d,b.z]),p.room.depth-base.d];

@@ -28,7 +28,7 @@ export const XGROUPS: { id: XGroup; label: string }[] = [
 export function xlsxGroup(l: Pick<PriceLine, "id" | "pending">): XGroup {
   if (l.pending) return "pending";
   if (isKupeLine(l.id)) return "kupe";
-  if (/^(work$|work-hdf$|small$|falsh-glue$)/.test(l.id)) return "work";
+  if (/^(work$|work-hdf$|small$|falsh-glue$|worktop-glue$)/.test(l.id)) return "work";
   if (l.id.startsWith("client:")) return "material";
   return lineGroup(l.id) === "material" ? "material" : "hardware";
 }
