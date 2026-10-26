@@ -113,8 +113,10 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
     plain("Коэффициент", num(e.markup, XS.subNum));
     if (e.vernissageOnTop) plain("Фасады Вернисаж клиенту (закупка × " + String(e.vernissageMarkup).replace(".", ",") + ")", num(e.vernissageOnTop, XS.subMoney), "свой коэффициент вместо общего");
     if (retail.length) plain("Розничные позиции поверх коэффициента", sumCells(retail, e.retailExtras));
-    plain("Цена по коэффициенту", e.byMarkup === null ? str("не менее " + e.byMarkupKnown.toLocaleString("ru-RU") + " ₽", XS.subLabel) : num(e.byMarkup, XS.subMoney), e.model === "markup" ? "выбрана" : "для сравнения");
-    plain(`Цена за лист: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽`, num(e.bySheet, XS.subMoney), e.model === "sheet" ? "выбрана" : "для сравнения");
+    // «Цена по большей модели» (calculation.maxModel, решение Макса 26.10.2026): в цене — большая из двух
+    const chosen = e.maxModel ? "выбрана — большая из двух" : "выбрана";
+    plain("Цена по коэффициенту", e.byMarkup === null ? str("не менее " + e.byMarkupKnown.toLocaleString("ru-RU") + " ₽", XS.subLabel) : num(e.byMarkup, XS.subMoney), e.model === "markup" ? chosen : "для сравнения");
+    plain(`Цена за лист: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽${e.offSheet ? " + зеркало и стекло " + e.offSheet.toLocaleString("ru-RU") + " ₽" : ""}`, num(e.bySheet, XS.subMoney), e.model === "sheet" ? chosen : "для сравнения");
   } else plain("Итого по позициям", sumCells(buy, fit ? e.retail! : e.knownCost));
   const rounded = !!fit && e.retail !== null && e.retail % 100 === 0;
   total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (rounded ? "итог округлён до 100 ₽; " : "") + "предварительно, без доставки и монтажа");
