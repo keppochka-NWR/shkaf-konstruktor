@@ -57,6 +57,11 @@ export const RULES = {
   rodMountScrews: 6, // Штанга 25мм.fr3d: два фланца, по три самореза 3,5×16.
   rodTopOffset: 70,
   rodMinClear: 900,
+  // Двухъярусная вешалка на вертикальной трубе (заказ 7437584, изделие 2): две штанги D25, вертикальная труба D25 от дна до полки над
+  // штангами, держатели штанг на трубе. Ярус — от 800 мм (рубашки, брюки; предложение Claude, вопрос Максу).
+  rodTierClear: 800,
+  // Палитра «Подвесной ящик»: низ над полом по умолчанию (заказ 7437584, изделие 1 — 750), дальше — поле «От пола».
+  hangingFloorY: 750,
   shelfMinClear: 80,
   sheetW: 2750,
   sheetH: 1830,
@@ -209,6 +214,10 @@ export type Section = {
   /** Выдвижные тремпели (GTV, крепление к полке/крыше, выдвигаются вперёд): количество в ряд по ширине секции, 1–3. */
   pullouts?: number;
   rodAt?: number;
+  /** Двухъярусная вешалка на вертикальной трубе (заказ 7437584): высота нижней штанги — доля высоты проёма, как rodAt.
+   *  Есть поле (и rod) — вторая штанга ниже основной, вертикальная труба D25 по центру секции от дна до полки над штангами,
+   *  держатели штанг на трубе. Ярусы — от RULES.rodTierClear. Без поля — одна штанга, как было. */
+  rodLower?: number;
   /** Подсветка в полках (запрос Макса 19.10.2026): LED-профиль в передней кромке снизу каждой полки секции. Цена — RULES.shelfLightRetailPerM
    *  (4000 ₽/пог.м клиенту, решение Макса 20.10.2026), розничная строка сметы light-shelf поверх коэффициента. */
   shelfLight?: boolean;
@@ -720,7 +729,10 @@ export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.c
 export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;return m.width>=RULES.legsWideW?RULES.legsWide:RULES.legsPerModule;}
 /** В корпусе есть распашные фасады или выкатные элементы — по регламенту у стены нужна фальшпанель. */
 /** Фальшпанель к стене нужна, когда у стены распашной фасад или накладной ящик. Вкладной ящик открытого корпуса (за купе) внутри проёма — о стену не бьёт. */
-export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0&&s.drawerMount!=='inset'));}
+export function needsWallFiller(m:Module){return !m.desk&&(m.doors||m.sections.some(s=>s.drawers>0&&!drawerFaceInset(m,s)));}
+/** Фасады ящиков внутри проёма: выбрано «Вкладные фасады ящиков» или корпус шкафа-купе с дверями внутри (kupeZone, заказ 7437584) —
+ *  там боковины выдвинуты вперёд на зону дверей и накладной фасад крайней секции упирается в боковину. */
+export function drawerFaceInset(m:Pick<Module,'kupeZone'>,s:Pick<Section,'drawerMount'>){return s.drawerMount==='inset'||!!m.kupeZone;}
 /** Геометрия подстолья: границы опор по X, глубина опор, отступ царги — с подстановкой значений по умолчанию. */
 export function deskGeometry(m:Module){
   const dk=m.desk!,x0=dk.baseX??0,bw=dk.baseWidth??m.width-x0;
@@ -968,6 +980,35 @@ export function throughShelf(m: Module, k: number, y: number, bb?: SectionBox[])
     if (sp && (y < sp.from || y > sp.to)) return { x0: bb[r - 1].x, x1: bb[r].x + bb[r].width, left: r - 1, right: r };
   }
   return undefined;
+}
+/** Двухъярусная вешалка на вертикальной трубе (Section.rodLower, заказ 7437584): нижняя штанга D25 с фланцами в стойки,
+ *  вертикальная труба D25 по центру секции перед штангами — от опоры под нижней штангой (дно, полка, ящики) до полки над верхней
+ *  (или крыши), фланцы трубы сверху и снизу, держатели обеих штанг на трубе. up — деталь верхней (основной) штанги. */
+function rodTierParts(m: Module, s: Section, b: SectionBox, h: number, d: number, up: Part): Part[] {
+  const t = RULES.panel, D = RULES.rodDiameter, ly = b.bottom + s.rodLower! * h, xc = b.x + b.width / 2, rz = up.position[2], pz = rz + D;
+  const shelfY = s.shelves.map((f) => b.bottom + f * h);
+  const topY = Math.min(b.top, ...shelfY.filter((y) => y > up.position[1]).map((y) => y - t / 2));
+  const botY = Math.max(b.bottom, ...shelfY.filter((y) => y < ly).map((y) => y + t / 2), s.drawers ? b.bottom + drawerStackHeight(s) + (hasDrawerCap(m, s, b) ? t : 0) : b.bottom);
+  const metal = (id: string, name: string, size: Part["size"], position: Part["position"], role: Part["role"]): Part => ({ id, name, sectionId: s.id, size, position, length: Math.max(...size), width: [...size].sort((a, z) => z - a)[1], thickness: Math.min(...size), role, material: "metal", decor: m.decor, grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+  const out: Part[] = [];
+  const oval = m.rodType === "oval";
+  out.push({ ...metal(`${s.id}:rod:lower`, oval ? "Штанга овальная 15×30 · нижний ярус" : "Штанга · нижний ярус", [b.width, oval ? 15 : D, oval ? 30 : D], [xc, ly, rz], "rod"), length: b.width });
+  for (const side of [0, 1]) out.push(metal(`${s.id}:flange:lower:${side}`, "Фланец штанги D25", [5, 48, 48], [side ? b.x + b.width - 2.5 : b.x + 2.5, ly, rz], "flange"));
+  const L = topY - botY - 0.2;
+  out.push({ ...metal(`${s.id}:pipe`, "Труба вертикальная D25 · вешалка в два яруса", [D, L, D], [xc, (topY + botY) / 2, pz], "rod"), length: L });
+  out.push(metal(`${s.id}:pipe:flange:0`, "Фланец трубы D25", [48, 5, 48], [xc, botY + 2.5, pz], "flange"));
+  out.push(metal(`${s.id}:pipe:flange:1`, "Фланец трубы D25", [48, 5, 48], [xc, topY - 2.5, pz], "flange"));
+  for (const [k, y] of [up.position[1], ly].entries()) out.push(metal(`${s.id}:pipe:holder:${k}`, "Держатель штанги на трубу D25", [40, 34, D + 12], [xc, y, rz + D / 2], "flange"));
+  return out;
+}
+/** Включить/выключить вторую (нижнюю) штангу на вертикальной трубе: по умолчанию — посередине между опорой под штангами и верхней. */
+export function setRodTiers(m: Module, s: Section, on: boolean) {
+  if (!on) { delete s.rodLower; return; }
+  const b = boxes(m).find((x) => x.id === s.id)!, h = b.top - b.bottom, ys = s.shelves.map((f) => f * h);
+  const rodY = s.rodAt === undefined ? (ys.length ? Math.min(...ys) : h) - RULES.rodTopOffset : s.rodAt * h;
+  const sup = Math.max(0, s.drawers ? drawerStackHeight(s) + RULES.panel : 0, ...ys.filter((y) => y < rodY).map((y) => y + RULES.panel / 2));
+  s.rod = true; delete s.pantograph;
+  s.rodLower = Math.round(((sup + rodY) / 2 / h) * 10000) / 10000;
 }
 export function parts(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
@@ -1375,7 +1416,7 @@ export function parts(m: Module): Part[] {
           add(s.id + ":drawer:" + j + ":slide:" + side, "Направляющая · " + slideLabel(cfg), [hidden ? 20 : 12, hidden ? 12 : 45, cfg.length], [hidden ? bx + (side ? boxW - 10 : 10) : bx + (side ? boxW + 6 : -6), hidden ? y + 6 : y + bh / 2, z + boxD - cfg.length / 2], cfg.length, 20, 12, "drawer", s.id, "metal");
         continue;
       }
-      if(!drawersBehindDoors(m,s)&&s.drawerMount!=='inset'){
+      if(!drawersBehindDoors(m,s)&&!drawerFaceInset(m,s)){
         const sp=facadeSpan(m,i,b);fw=sp.right-sp.left;fx=(sp.left+sp.right)/2;
         fh=span[1]-span[0];fy=pitchBottom+(span[0]+span[1])/2;
         const lowest=drawerOffsets(s).every((o,k)=>k===j||o>=drawerOffsets(s)[j]);
@@ -1385,9 +1426,9 @@ export function parts(m: Module): Part[] {
         if(highest&&!hasDrawerCap(m,s,b)&&drawersFillRoof(m,s,b)&&!grip){const bottom=fy-fh/2,roof=facadeTop(m);if(roof>bottom+fh){fh=roof-bottom;fy=(roof+bottom)/2;}}
       }
       // фасад ящика в алюминиевой рамке (aluDrawers): толщина рамки, задняя плоскость там же, где у ЛДСП — короб и крепёж не сдвигаются
-      const aluFront=!!(m.alu&&m.aluDrawers&&!drawersBehindDoors(m,s)&&s.drawerMount!=='inset'); // вкладной ящик — ЛДСП: рамка ушла бы в короб
+      const aluFront=!!(m.alu&&m.aluDrawers&&!drawersBehindDoors(m,s)&&!drawerFaceInset(m,s)); // вкладной ящик — ЛДСП: рамка ушла бы в короб
       const dft=drawersBehindDoors(m,s)?t:aluFront?ALU_EXTRAS.frameDepth:m.facadeT??t;
-      add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад'+(aluFront?' в алюминиевой рамке':''),[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:s.drawerMount==='inset'?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id,aluFront?'alu':'board');
+      add(s.id+':drawer:'+j+':facade',(cfg.tray?'Выкатная полка':'Ящик '+(j+1))+' · фасад'+(aluFront?' в алюминиевой рамке':''),[fw,fh,dft],[fx,fy,drawersBehindDoors(m,s)?d-36:drawerFaceInset(m,s)?d-dft/2:d+dft/2+(m.faceAir??2)],fh,fw,dft,'drawer',s.id,aluFront?'alu':'board');
       out.at(-1)!.decor=aluFront?aluLabel(m.alu!):m.drawerFacadeDecor??m.facadeDecor;out.at(-1)!.edge=aluFront?[0,0,0,0]:[2,2,2,2];
       if(drawerHasHandle(cfg)&&!m.noHandles&&!grip){const hl=handleById(cfg.handleId??m.drawerHandleId??m.handleId).len;add(s.id+':drawer:'+j+':handle','Ручка ящика · '+handleById(cfg.handleId??m.drawerHandleId??m.handleId).label,[hl,10,18],[fx,y+bh/2,drawersBehindDoors(m,s)?d-20:d+28+(aluFront?dft-t:0)],hl,10,18,'handle',s.id,'metal');}
       for (const side of [0, 1])
@@ -1428,6 +1469,7 @@ export function parts(m: Module): Part[] {
       );
     }
     if(s.rod){const rp=out.find(p=>p.id===s.id+':rod')!;for(const side of [0,1])add(s.id+':flange:'+side,'Фланец штанги D25',[5,48,48],[side?b.x+b.width-2.5:b.x+2.5,rp.position[1],rp.position[2]],48,48,5,'flange',s.id,'metal');}
+    if(s.rod&&s.rodLower!==undefined)out.push(...rodTierParts(m,s,b,h,d,out.find(p=>p.id===s.id+':rod')!));
     if(s.pullouts){
       // Тремпель крепится под ближайшей полкой сверху (или под крышей), выдвигается вперёд. Длина — стандартный ряд GTV под глубину секции.
       // Под самой верхней полкой, если она в верхних 40 % секции (зона одежды под ней), иначе под крышей.
@@ -1755,6 +1797,21 @@ export function parts(m: Module): Part[] {
         if (ecc) add(`ecc:${dv.id}:${edge}:${k}`, "Эксцентрик D15 · бочонок", [RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD], [dv.position[0], edge === "top" ? y - RULES.eccBarrelH : y + RULES.eccBarrelH, z], RULES.eccBarrelH, RULES.eccBarrelD, RULES.eccBarrelD, "fastener", dv.sectionId, "metal");
         else confirmat(`fast:${dv.id}:${edge}:${k}`, [dv.position[0], edge === "top" ? y + t / 2 : y - t / 2, z], edge === "top" ? "-y" : "+y", dv.sectionId);
       }
+  }
+  // Встречные конфирматы через перегородку (заказ 7437584: жёсткие полки и полки над ящиками на одной высоте по обе стороны перегородки):
+  // винты шли в одну точку перегородки. Правило цеха — разнести по глубине: винт правой горизонтали (стык «:left:») сдвигается внутрь
+  // стыка на 32 мм. Только шкафы студии (кухни и модули Базиса — точки по проекту) и только при совпадении — остальное без изменений.
+  if (!m.kitchen && !m.raw && !m.bazis) {
+    const cf = out.filter((p) => p.id.startsWith("fast:") && p.role === "fastener" && p.size[0] > p.size[1] && p.size[0] > p.size[2]);
+    for (const q of cf) {
+      const sm = /:left:(\d+)$/.exec(q.id);
+      if (!sm) continue;
+      const hit = cf.some((p) => p !== q && /:right:\d+$/.test(p.id) && Math.abs(p.position[1] - q.position[1]) < RULES.confirmatD && Math.abs(p.position[2] - q.position[2]) < RULES.confirmatD && Math.abs(p.position[0] - q.position[0]) < RULES.confirmatL);
+      if (!hit) continue;
+      const dz = sm[1] === "0" ? 32 : -32;
+      q.position[2] += dz;
+      if (q.model?.origin) q.model.origin = [q.model.origin[0], q.model.origin[1], q.model.origin[2] + dz];
+    }
   }
   // Edge pulls mount on the free edge, not at the bracket-handle drilling offset.
   for(const handle of out.filter(p=>p.role==='handle')){
@@ -2430,6 +2487,14 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
     const rodY=s.rodAt===undefined?(shelfY[0]??h)-RULES.rodTopOffset:s.rodAt*h;
     const support=Math.max(drawerTop+(s.drawers?RULES.panel:0),0,...shelfY.filter(y=>y<rodY).map(y=>y+RULES.panel/2));
     if(s.rod&&shelfY.some(y=>Math.abs(y-rodY)<(RULES.panel+RULES.rodDiameter)/2))errors.push(prefix+'штанга пересекает полку. Измените высоту.');
+    // двухъярусная вешалка на трубе (заказ 7437584): ярусы от RULES.rodTierClear, между штангами полок нет
+    if(s.rodLower!==undefined&&s.rod){ // без штанги поле не действует (parts его не строит)
+      if(s.pantograph||!Number.isFinite(s.rodLower)||s.rodLower<0.05||s.rodLower>0.9)errors.push(prefix+'вешалка в два яруса: нужна штанга (не пантограф) и высота нижней штанги в пределах проёма.');
+      else{const ly=s.rodLower*h,sup=Math.max(drawerTop+(s.drawers?RULES.panel:0),0,...shelfY.filter(y=>y<ly).map(y=>y+RULES.panel/2));
+        if(rodY-ly<RULES.rodTierClear)errors.push(prefix+`вешалка в два яруса: между штангами нужно не менее ${RULES.rodTierClear} мм — опустите нижнюю штангу или поднимите верхнюю.`);
+        if(ly-sup<RULES.rodTierClear)errors.push(prefix+`вешалка в два яруса: под нижней штангой нужно не менее ${RULES.rodTierClear} мм до полки, ящиков или дна.`);
+        if(shelfY.some(y=>y>ly&&y<rodY))errors.push(prefix+'вешалка в два яруса: между штангами не должно быть полок.');}
+    }
     if (
       s.rod && rodY - support < (s.rodClearance??RULES.rodMinClear)
     )
@@ -2822,6 +2887,8 @@ export function parseModule(input: unknown): Module {
       ...(s.pantograph===undefined?{}:{pantograph:s.pantograph}),
     ...(s.pullouts===undefined?{}:{pullouts:s.pullouts}),
       ...(s.rodAt===undefined?{}:{rodAt:s.rodAt}),
+      ...(typeof s.rodLower==='number'?{rodLower:s.rodLower}:{}), // вешалка в два яруса (заказ 7437584) — переживает сохранение
+
       ...(s.shelfLight===true?{shelfLight:true}:{}),
       ...(Array.isArray(s.standLights)?{standLights:(['left','right'] as const).filter(x=>(s.standLights as unknown[]).includes(x))}:{}),
       ...(Array.isArray(s.shelfLights)?{shelfLights:[...new Set((s.shelfLights as unknown[]).map(Number))].filter(j=>Number.isInteger(j)&&j>=0&&j<s.shelves.length).sort((a,z)=>a-z)}:{}),

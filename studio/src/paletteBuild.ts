@@ -1,17 +1,19 @@
 // Сборка мебели из палитры «Добавить мебель» (перенесено из ModulePalette.tsx, w-formerrors 23.10: проверка формы paletteCheck.ts
 // собирает те же модули без исключения на первой ошибке). Тексты ошибок прежние; ModulePalette.tsx реэкспортирует функции.
 import {refitKDrawers} from './kitchenDrawers';
-import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,RULES,type Module} from './model';
+import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,rearClear,parts,RULES,type Module} from './model';
+import {partCollisions} from './collisions';
+import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
 import {SLIDES} from './hardware';
 import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
-import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths} from './kitchen';
+import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths,setWorktopMaterial} from './kitchen';
 import type {PlacedModule} from './project';
 // 'kitchen-corner' и 'kitchen-u' (w-lwing 23.10) — группы в угол комнаты, собираются kitchenCornerRow.ts (createKitchenCornerRow/createKitchenURow)
-export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
+export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'hanging-drawer'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
 /** Названия видов мебели палитры (имя нового модуля). */
-export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',wardrobe:'Для одежды',drawers:'Комод',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
+export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',wardrobe:'Для одежды',drawers:'Комод','hanging-drawer':'Подвесной ящик',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
 /** Куда складывать ошибки вместо исключения на первой (проверка формы — все ошибки сразу). */
 type Sink=string[]|undefined;
 const fail=(sink:Sink,text:string)=>{if(sink)sink.push(text);else throw Error(text);};
@@ -61,6 +63,19 @@ export function createKitchenRow(length:number,source:Module,height:number=KITCH
   for(const p of pieces){out.push({id:id(),x:wx,y:height,z:0,rotation:0,module:look({...kitchenWorktop(initialModule(),p),depth:depth+KITCHEN.worktopDepth-KITCHEN.baseDepth,sections:[{...section(),shelves:[],drawers:0,rod:false}]})});wx+=p;}
   return out;
 }
+/** Подвесной ящик (заказ 7437584, изделия 1, 4, 5): навесной корпус без цоколя на навесах, один ящик на всю высоту — скрытые направляющие
+ *  DTC push-to-open (без ручки), длина — самая длинная, что встаёт в глубину. В комнату ставится низом на RULES.hangingFloorY от пола. */
+export function hangingDrawer(width:number,height:number,depth:number,source:Module):Module{
+  const m:Module={...initialModule(),name:KIND_LABEL['hanging-drawer'],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,hanging:true,plinthHeight:0,sections:[section()]};
+  const s=m.sections[0];s.drawers=1;s.drawerCap=false; // ящик на всю высоту — полки над ним нет
+  const len=[...SLIDES.gtv0fpo.lengths].reverse().find(l=>l<=depth-rearClear(m)-25)??SLIDES.gtv0fpo.lengths[0];
+  try{const c=drawersToRoof(m,s)[0];s.drawerConfigs=[{...c,slide:'gtv0fpo',operation:'push',brand:'dtc',length:len}];}catch{/* низкий корпус — ошибку покажет validate */return m;}
+  // навесы ABS стоят в задних верхних углах боковин: короб — ниже них (шаг 4 мм), фасад — на всю высоту корпуса (без зазора над ним)
+  const cfg=s.drawerConfigs[0],hit=()=>partCollisions(parts(m),m).some(x=>x.names.some(n=>/^Навес|^Заглушка навеса/.test(n)));
+  cfg.facadeH=height-2*RULES.panel-RULES.drawerFrontGap; // шаг = проём: ящик «до крыши», накладной фасад растягивается на дно и крышу
+  while(cfg.height>68&&hit())cfg.height-=4;
+  return m;
+}
 /** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
 export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):Module{
   if(kind==='kitchen-base'||kind==='kitchen-wall'){
@@ -70,9 +85,12 @@ export function assembleModule(kind:ModuleKind,width:number,height:number,depth:
   }
   if(kind==='worktop'){
     const m=kitchenWorktop(initialModule(),width);m.height=height;m.depth=depth;m.decor=source.decor;m.worktop!.thickness=height;
+    // мельче 400 кухонной столешницы не бывает (WORKTOP_LDSP_MIN_DEPTH…400): это шкафная — ЛДСП 32 в цвет корпуса (ТВ-зона заказа 7437584)
+    if(depth<400)setWorktopMaterial(m,'ldsp',32);
     m.sections=[{...section(),shelves:[],drawers:0,rod:false}];
     return m;
   }
+  if(kind==='hanging-drawer')return hangingDrawer(width,height,depth,source);
   if(kind==='corner')return createCornerModule(width,height,depth,source);
   if(kind==='kupe')return createKupeModule(width,height,source,doors);
   let m:Module={...initialModule(),name:KIND_LABEL[kind],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,sections:[section()]};

@@ -103,6 +103,7 @@ import {
   minHeightOf,
   TOP_STRIP_STEPS,
 } from "./model";
+import { setRodTiers, drawerFaceInset } from "./model"; // заказ 7437584: вешалка в два яруса, фасады ящиков в шкафу-купе
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
 import { KupePanel } from "./KupePanel";
@@ -1963,11 +1964,17 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     role="switch"
                     aria-label="Штанга"
                     aria-checked={s.rod}
-                    onClick={() => modifySection((a) => (a.rod = !a.rod))}
+                    onClick={() => modifySection((a) => { a.rod = !a.rod; if (!a.rod) delete a.rodLower; })}
                   >
                     <span />
                   </button>
                 </div>
+                {/* заказ 7437584: двухъярусная вешалка — вторая штанга ниже и вертикальная труба D25 по центру секции */}
+                {!s.pantograph&&<div className="toggle-row">
+                  <span>Вешалка в два яруса<small>Вторая штанга ниже, вертикальная труба D25 от дна до полки</small></span>
+                  <button className="switch" role="switch" aria-label="Вешалка в два яруса" aria-checked={s.rod&&s.rodLower!==undefined} onClick={()=>modifySection((a,n)=>setRodTiers(n,a,!(a.rod&&a.rodLower!==undefined)))}><span /></button>
+                </div>}
+                {s.rod&&s.rodLower!==undefined&&<NumberField label="Нижняя штанга от дна" selected={selectedPart?.pid===s.id+':rod:lower'} onSelect={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:s.id+':rod:lower'});setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}} value={Math.round(s.rodLower*(b.top-b.bottom))} min={100} max={b.top-b.bottom-RULES.rodTierClear} onChange={v=>modifySection(a=>{a.rodLower=v/(b.top-b.bottom);})}/>}
                 <button className="outline full" onClick={()=>modifySection(a=>{a.pantograph=!a.pantograph;a.rod=false})}>{s.pantograph?'Убрать пантограф':'Добавить пантограф'}</button>
                 <div className="kupe-field"><span>Выдвижной тремпель{s.pullouts?' · '+pulloutLength(m)+' мм':''}</span>
                   <div className="kupe-chips" role="group" aria-label="Выдвижные тремпели в секции">{[0,1,2,3].map(n=><button key={n} type="button" aria-pressed={(s.pullouts??0)===n} onClick={()=>modifySection(a=>{if(n)a.pullouts=n;else delete a.pullouts;})}>{n?n:'нет'}</button>)}</div>
@@ -2087,7 +2094,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               </SettingsSection>
 {quickMenuApplies(m)&&!m.sectionLayout&&m.sections.length>1&&<SettingsSection title="Перегородки секции"><PartialDividerPanel module={m} sectionIndex={idx} edit={modify}/></SettingsSection>}
 <SettingsSection title="Дополнительные параметры секции">
-                <label className="hardware-field"><span><input type="checkbox" aria-label="Вкладные фасады ящиков" checked={s.drawerMount==='inset'} onChange={e=>modifySection(a=>{a.drawerMount=e.target.checked?'inset':undefined;})}/> Фасады ящиков внутри проёма, без растяжения к цоколю</span></label>
+                <label className="hardware-field"><span><input type="checkbox" aria-label="Вкладные фасады ящиков" checked={drawerFaceInset(m,s)} disabled={!!m.kupeZone} onChange={e=>modifySection(a=>{a.drawerMount=e.target.checked?'inset':undefined;})}/> Фасады ящиков внутри проёма, без растяжения к цоколю</span></label>{m.kupeZone&&<p className="field-note">Шкаф-купе с дверями внутри: фасады ящиков всегда внутри проёма — боковины выдвинуты на зону дверей купе.</p>}
                 {s.rod&&<NumberField label="Минимальный просвет под штангой" value={s.rodClearance??900} min={300} max={1500} onChange={v=>modifySection(a=>{a.rodClearance=v;})}/>}
                 {selectedDetail?.id.includes(':shelf:')&&<label className="hardware-field"><span><input type="checkbox" aria-label="Стеклянная полка" checked={!!s.glassShelves?.includes(Number(selectedDetail.id.split(':shelf:')[1]))} onChange={e=>{const j=Number(selectedDetail.id.split(':shelf:')[1]);modifySection(a=>{a.glassShelves=e.target.checked?[...new Set([...(a.glassShelves??[]),j])]:(a.glassShelves??[]).filter(k=>k!==j);});}}/> Стекло 6 мм вместо ЛДСП</span></label>}
               </SettingsSection>

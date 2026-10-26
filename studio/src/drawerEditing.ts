@@ -1,4 +1,4 @@
-import {boxes,drawerConfig,drawerOffsets,drawerPitch,drawerStackHeight,innerTop,RULES,type Module,type Section} from './model';
+import {boxes,drawerConfig,drawerOffsets,drawerPitch,drawerStackHeight,hasDrawerCap,innerTop,RULES,type Module,type Section} from './model';
 import type {DrawerConfig} from './hardware';
 
 /** Grow a front upwards, pushing only the drawers it reaches. Source stays untouched. */
@@ -21,7 +21,10 @@ export function editDrawerConfig(m:Module,s:Section,index:number,patch:Partial<D
   const height=box.top-box.bottom,partitionCap=!!m.sectionLayout&&box.top<innerTop(m);
   const trayOnly=configs.every(c=>c.tray),cap=trayOnly?0:RULES.panel;
   const stack=drawerStackHeight({...s,drawerConfigs:configs});
-  const ceiling=partitionCap?height:height-RULES.shelfMinClear-cap;
+  // комод с ящиками до крыши (полки над ящиками нет: «нет» или ящики до крыши, п.29) — потолок проёма — крыша, без запаса под полку
+  // (заказ 7437584: ящики 260 / 260 / до крыши мышью не задавались — «не хватает 81 мм»)
+  const noCap=!partitionCap&&!trayOnly&&!hasDrawerCap(m,{...s,drawerConfigs:configs},box);
+  const ceiling=partitionCap||noCap?height:height-RULES.shelfMinClear-cap;
   if(stack>ceiling+.001)throw Error(`Для увеличения фасада и подъёма верхних ящиков не хватает ${Math.ceil(stack-ceiling)} мм до крыши или перегородки. Уменьшите фасад либо увеличьте проём.`);
   for(const f of s.shelves){
     const y=f*height,half=RULES.panel/2;

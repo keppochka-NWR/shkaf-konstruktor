@@ -18,7 +18,9 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
   else if(pid.includes(':pullout:')){const left=(s.pullouts??1)-1;if(left>0)s.pullouts=left;else delete s.pullouts;}
-  else if(pid.endsWith(':rod')||pid.includes(':flange:')){s.rod=false;delete s.rodAt;}
+  // вешалка в два яруса (заказ 7437584): нижняя штанга, труба или её держатели — снимается только второй ярус
+  else if(pid.endsWith(':rod:lower')||pid.includes(':flange:lower:')||pid.includes(':pipe')){delete s.rodLower;}
+  else if(pid.endsWith(':rod')||pid.includes(':flange:')){s.rod=false;delete s.rodAt;delete s.rodLower;}
   else throw Error('Эта деталь относится к конструкции корпуса.');
   return n;
 }
@@ -211,7 +213,9 @@ export function applyDrawerSlide(p:Project,mid:string,sid:string,index:number):P
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
  if(!m||!s||!Number.isInteger(index)||index<0||index>=s.drawers)throw Error('Выберите ящик.');
  const chosen=drawerConfig(m,s,index),offsets=drawerOffsets(s);
- s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>{const old=drawerConfig(m,s,k);return {...old,slide:chosen.slide,length:chosen.length,y:offsets[k],handle:old.slide===chosen.slide?old.handle:undefined};});
+ // система целиком — тип, ход и бренд (заказ 7437584: «Скрытые Unihopper с доводчиком» другим ящикам приходили как DTC push — копировались
+ // только тип и длина, а у старых шариковых ход не задан → у скрытых по умолчанию push)
+ s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>{const old=drawerConfig(m,s,k);const {operation:_o,brand:_b,...rest}=old;void _o;void _b;return {...rest,slide:chosen.slide,length:chosen.length,...(chosen.operation?{operation:chosen.operation}:{}),...(chosen.brand?{brand:chosen.brand}:{}),y:offsets[k],handle:old.slide===chosen.slide?old.handle:undefined};});
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
@@ -264,12 +268,13 @@ export function duplicatePart(p:Project,mid:string,sid:string,pid:string):{proje
 }
 
 
-export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number;shelfDepth?:number;fixed?:number[]};
+/** Заказ 7437584: копия несёт и настройки ящиков секции (зазор 30 / хват за фасад, полка над ящиками, посадка фасадов, зазор фасадов) и второй ярус штанги. */
+export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number;shelfDepth?:number;fixed?:number[];drawerGrip?:boolean;drawerCap?:boolean;drawerMount?:'inset';drawerGap?:number;rodLowerHeight?:number};
 export function captureSectionFilling(p:Project,mid:string,sid:string):SectionFilling{
  const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для копирования.');
  const b=boxes(m).find(b=>b.id===sid)!,offsets=drawerOffsets(s),hanger=s.pantograph?'pantograph':s.rod?'rod':null;
  const rod=parts(m).find(a=>a.id===sid+':rod'||a.id===sid+':pantograph:rod');
- return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),...(s.fixed?{fixed:[...s.fixed]}:{}),...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{})};
+ return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),...(s.fixed?{fixed:[...s.fixed]}:{}),...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{}),...(s.drawerGrip?{drawerGrip:true}:{}),...(s.drawerCap!==undefined?{drawerCap:s.drawerCap}:{}),...(s.drawerMount?{drawerMount:s.drawerMount}:{}),...(s.drawerGap!==undefined?{drawerGap:s.drawerGap}:{}),...(s.rod&&s.rodLower!==undefined?{rodLowerHeight:s.rodLower*(b.top-b.bottom)}:{})};
 }
 export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:SectionFilling):Project{
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для вставки.');
@@ -278,6 +283,11 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
  if(copy.shelfDepth!==undefined)s.shelfDepth=copy.shelfDepth;else delete s.shelfDepth;
  if(copy.fixed)s.fixed=[...copy.fixed];else delete s.fixed;delete s.shelfLight;delete s.shelfLights;
  if(copy.hanger&&copy.hangerHeight!==undefined)s.rodAt=copy.hangerHeight/height;else delete s.rodAt;
+ if(copy.drawerGrip)s.drawerGrip=true;else delete s.drawerGrip;
+ if(copy.drawerCap!==undefined)s.drawerCap=copy.drawerCap;else delete s.drawerCap;
+ if(copy.drawerMount)s.drawerMount=copy.drawerMount;else delete s.drawerMount;
+ if(copy.drawerGap!==undefined)s.drawerGap=copy.drawerGap;else delete s.drawerGap;
+ if(copy.hanger==='rod'&&copy.rodLowerHeight!==undefined)s.rodLower=copy.rodLowerHeight/height;else delete s.rodLower;
  const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;
 }
 
