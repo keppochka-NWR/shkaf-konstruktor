@@ -72,8 +72,8 @@ try {
   await type(field("Ширина пустой комнаты"), 2000);
   await type(field("Глубина пустой комнаты"), 1800); await page.keyboard.press("Tab");
   // 2. Левый модуль — стеллаж 702×2000×600
-  log("Палитра: «Стеллаж» 702×2000×600 → «Добавить в комнату»");
-  await addFromPalette("Стеллаж", 702, 2000, 600);
+  log("Палитра: «Стеллаж» 716×2000×600 → «Добавить в комнату»");
+  await addFromPalette("Стеллаж", 716, 2000, 600);
   await shot("left-added");
   await stage("Построение мебели");
   // основание без цоколя
@@ -96,6 +96,8 @@ try {
   await type(field("Полок в секции"), 1);
   await type(field("Полка 1"), 426);
   await check(box("Полка 1 жёсткая"));
+  log("Полки: «Глубина полок» 568 (сиденье по эскизу)");
+  await type(field("Глубина полок"), 568);
   // ящик: добавить, без полки над ящиками, Blum TANDEM, 550, без ручки, вкладной, от дна 202, боковина 140, фасад 196
   log("Ящики: «+» ящик; «Полка над ящиками» — нет; Blum TANDEM с доводчиком 550; без ручки; вкладной; от дна 202; боковина 140; фасад 196");
   await openSet("Наполнение", "Ящики");
@@ -120,10 +122,10 @@ try {
   let p = await saved();
   console.log("модулей", p.modules.length);
   // 3. Правый модуль — «Для одежды» 600×2000×582
-  log("Палитра: «Для одежды» 600×2000×582, одна дверь → «Добавить в комнату»");
-  await addFromPalette("Для одежды", 600, 2000, 582, "1");
+  log("Палитра: «Для одежды» 586×2000×582, одна дверь → «Добавить в комнату»");
+  await addFromPalette("Для одежды", 586, 2000, 582, "1");
   await openSet("Корпус и размещение", "Положение");
-  await type(num("От левой стены"), 1368);
+  await type(num("От левой стены"), 1382);
   await type(num("От задней стены"), 0);
   log("Полка 1 — 346 от дна проёма; штанга 1818 от дна");
   await openSet("Наполнение", "Полки");
@@ -140,9 +142,13 @@ try {
   await check(box("Боковая фальшпанель справа"));
   { const h = page.locator('input[aria-label="Высота боковой панели right"]'); await type(h, 2450); }
   await check(box("Добор 32 мм справа"));
+  log("Конструкция: «Фасады по эскизу» — низ 78, верх 1998 (дверь 1920)");
+  await check(box("Фасады по эскизу"));
+  await type(field("Низ фасадов от низа корпуса, мм"), 78);
+  await type(field("Верх фасадов от низа корпуса, мм"), 1998);
   await shot("right-done");
   // 4. Антресоли
-  log("Левый корпус → «Антресоль сверху на этот корпус»; высота 450, глубина 582; фасады включить, 2 створки; ХДФ; планка под крышей 80");
+  log("Левый корпус → «Антресоль сверху на этот корпус»; высота 450, глубина 582; фасады включить, 2 створки; ХДФ; карниз 78; фасады по эскизу 0…370");
   await selectModule(/Модуль 1/);
   await openSet("Корпус и размещение", "Габариты");
   await click(btn(/Антресоль сверху на этот корпус/));
@@ -161,7 +167,11 @@ try {
   await pick(sel("Угол открывания петель"), "155–165°");
   await openConstruction();
   await pick(sel("Планка под крышей"), /^80 мм/);
-  log("Правый корпус → «Антресоль сверху»; высота 450; петли справа; планка под крышей 80");
+  await type(field("Планка под крышей (карниз), мм"), 78);
+  await check(box("Фасады по эскизу"));
+  await type(field("Низ фасадов от низа корпуса, мм"), 0);
+  await type(field("Верх фасадов от низа корпуса, мм"), 370);
+  log("Правый корпус → «Антресоль сверху»; высота 450; петли справа; карниз 78; фасады по эскизу 0…370");
   await selectModule(/Для одежды/);
   await openSet("Корпус и размещение", "Габариты");
   await click(btn(/Антресоль сверху на этот корпус/));
@@ -171,6 +181,10 @@ try {
   await pick(sel("Петли выбранной секции"), "Справа");
   await openConstruction();
   await pick(sel("Планка под крышей"), /^80 мм/);
+  await type(field("Планка под крышей (карниз), мм"), 78);
+  await check(box("Фасады по эскизу"));
+  await type(field("Низ фасадов от низа корпуса, мм"), 0);
+  await type(field("Верх фасадов от низа корпуса, мм"), 370);
   // 5. Материалы, ручки, петли Blum — всем корпусам
   log("Материал корпуса → «Все корпуса» → Дуб Сонома; материал фасадов → все → Белый Кристалл");
   await openSet("Корпус и размещение", "Материал корпуса");
@@ -188,6 +202,14 @@ try {
   await pick(sel("К каким корпусам применить ручку"), /Все/);
   await type(field("Найти ручку"), "кнопка");
   await click(page.locator(".handle-list button.handle-item").first());
+  log("Шкаф с дверью → «Ручки фасадов» → «Выбранный корпус» → «HEXA L-1200 · чёрный мат» (торцевая)");
+  await click(page.locator(".dock-tabs button", { hasText: "Проект" }).first());
+  await selectModule(/Для одежды/);
+  await openSet("Фасады и открывание", "Фасад");
+  await click(page.locator('details[data-setting="Фасад"] button', { hasText: /Ручки фасадов/ }).first());
+  await pick(sel("К каким корпусам применить ручку"), /Выбранный корпус/);
+  await type(field("Найти ручку"), "HEXA L-1200");
+  await click(page.locator(".handle-list button.handle-item", { hasText: /чёрный/ }).first());
   log("Нижняя панель «Фурнитура» → «Выбрать фурнитуру…» (ко всему проекту): «Петли Blum»; «Клей кромки» → «Кромка на клей PUR»");
   await click(page.locator(".dock-tabs button", { hasText: "Фурнитура" }).first());
   await click(btn("Выбрать фурнитуру…"));
@@ -199,6 +221,8 @@ try {
   await shot("hardware-window");
   await click(page.locator('button[aria-label="Закрыть окно фурнитуры"]'));
   await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first());
+  log("Стоимость: «Цена по большей модели» — включить");
+  await check(box("Цена по большей модели"));
   await shot("estimate-ldsp");
   const a = await saved();
   writeFileSync(`${out}/project-ldsp-mouse.json`, JSON.stringify(a, null, 1));

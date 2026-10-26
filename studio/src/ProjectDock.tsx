@@ -10,6 +10,8 @@ import { HINGE_BRANDS, SLIDE_SYSTEMS } from "./hardware";
 import { hardwareChoice } from "./hardwareSwap";
 import { HardwareWindow } from "./HardwareWindow";
 import { createPortal } from "react-dom";
+import { MANAGER_PRICING } from "./buildMode";
+import { withPriceMax } from "./priceMax";
 
 /** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
 
@@ -96,6 +98,9 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
       <div className="dock-sum total"><span>Итоговая стоимость</span><b>{calcError?.project === project ? 'Ошибка расчёта' : !e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
       {split && <div className={"dock-cost-split" + (split.kupe ? " has-kupe" : "")} aria-label="Разбивка стоимости">{splitRows(split).map(([k, v], i) => <div key={k} className={"dock-sum " + ["material", "hardware", "kupe"][i]}><span>{k}</span><b>{rub(v)}</b></div>)}</div>}
       {fresh && <p className="dock-sheets" aria-label="Листы раскроя">Листов ЛДСП в раскрое: <b>{fresh.ldsp}</b>{fresh.hdf ? <> · ЛХДФ: <b>{fresh.hdf}</b></> : null}{fresh.note && <small role="status">{fresh.note}</small>}</p>}
+      {/* заказ 7427796 мышью: «Цена по большей модели» (решение Макса 26.10) была только в EstimatePanel, которую интерфейс не открывает —
+          менеджеру нужна в панели стоимости (только менеджерская сборка; как в EstimatePanel: без цены листа ставится текущая) */}
+      {MANAGER_PRICING && <label className="hardware-field"><span><input type="checkbox" aria-label="Цена по большей модели" checked={!!project.calculation?.priceMax} onChange={(ev) => commit(withPriceMax(project, ev.target.checked, e?.sheetPrice))} /> Цена по большей модели: коэффициент или «цена за лист» + стекло и зеркало сверху</span></label>}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setHwOpen(true)}>Поменять фурнитуру</button></div>
     </div>
   ) : tab === "hardware" ? (

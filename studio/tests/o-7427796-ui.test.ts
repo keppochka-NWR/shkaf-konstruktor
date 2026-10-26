@@ -9,6 +9,8 @@ import {newProject,projectErrors} from '../src/project';
 import {editDrawerConfig} from '../src/drawerEditing';
 import {moveShelfKeepRod} from '../src/shelfRod';
 import {addUpperModule} from '../src/operations';
+import {withPriceMax} from '../src/priceMax';
+import {estimate} from '../src/pricing';
 
 const seatModule=():Module=>{const m={...initialModule(),width:702,height:2000,depth:600,doors:false,plinthHeight:0};
   m.sections=[{...section(),shelves:[(442-16)/1968],fixed:[0],thickShelves:[0],drawerCap:false,drawers:1,drawerMount:'inset',
@@ -39,4 +41,11 @@ test('антресоль сверху: без задника «от высоты
   const n=addUpperModule(p,p.modules[0].id),up=n.modules[1].module;
   assert.equal(up.backFrom,undefined);assert.equal(up.mirror,undefined);assert.equal(up.sidePanels,undefined);
   assert.deepEqual(projectErrors(n),[]);
+});
+test('«Цена по большей модели» из панели стоимости: priceMax и цена листа, выключение убирает', () => {
+  const p=newProject({...initialModule(),width:600,height:2000,depth:550});
+  const on=withPriceMax(p,true,23000);
+  assert.equal(on.calculation!.priceMax,true);assert.equal(on.calculation!.sheetPrice,23000);
+  assert.ok(estimate(on).retail!>=estimate(p).retail!);
+  const off=withPriceMax(on,false);assert.equal(off.calculation!.priceMax,undefined);assert.equal(off.calculation!.sheetPrice,23000);
 });
