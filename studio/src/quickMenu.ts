@@ -70,7 +70,7 @@ export function applySectionTemplate(n: Module, sid: string, kind: SectionTempla
   if (!s) throw Error("Выберите секцию.");
   // «Очистить наполнение» панели (clearSection): полки, ящики, штанга, пантограф, отметки полок
   s.shelves = []; s.drawers = 0; s.rod = false;
-  delete s.pantograph; delete s.rodAt; delete s.drawerConfigs; delete s.glassShelves; delete s.fixed; delete s.pullouts; delete s.shelfLight; delete s.shelfLights;
+  delete s.pantograph; delete s.rodAt; delete s.drawerConfigs; delete s.glassShelves; delete s.thickShelves; delete s.fixed; delete s.pullouts; delete s.shelfLight; delete s.shelfLights;
   if (kind === "shelves3" || kind === "shelves5") s.shelves = distribute(n, s, kind === "shelves3" ? 3 : 5);
   if (kind === "rod-shelf") { s.rod = true; s.shelves = distribute(n, s, 1); }
   if (kind === "drawers-rod") { s.drawers = 2; s.rod = true; s.shelves = distribute(n, s, 1); }

@@ -13,7 +13,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
-  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
+  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
@@ -57,6 +57,7 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
       if(s.fixed)s.fixed=s.shelves.flatMap((f,j)=>fixedHeights.has(f)?[j]:[]);
       // стеклянные полки — по высоте, как жёсткие: новая полка ниже не переносит «стекло» на соседнюю
       if(s.glassShelves)s.glassShelves=s.shelves.flatMap((f,j)=>glassHeights.has(f)?[j]:[]);
+      if(s.thickShelves){const th=new Set(s.thickShelves.map(j=>oldShelves[j]));s.thickShelves=s.shelves.flatMap((f,j)=>th.has(f)?[j]:[]);} // посадочное место 32 — по высоте
       // подсветка полок (20.10.2026) — тоже по высоте: новая полка не забирает подсветку соседней
       if(s.shelfLights)s.shelfLights=s.shelves.flatMap((f,j)=>litHeights.has(f)?[j]:[]);
     }
@@ -190,14 +191,14 @@ export function addUpperModule(p:Project,mid:string):Project {
  const n=structuredClone(p),base=n.modules.find(a=>a.id===mid);if(!base)throw Error('Выберите нижний корпус.');
  const y=(base.y??0)+base.module.height,height=Math.min(600,Math.floor(p.room.height-y-MEASUREMENT_RULES.ceilingClearance));
  if(height<RULES.minH)throw Error(`Над корпусом нужно хотя бы ${RULES.minH} мм для отдельной антресоли и ${MEASUREMENT_RULES.ceilingClearance} мм монтажного зазора. Измените высоту нижнего корпуса или замер помещения.`);
- n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,seatTop:undefined,seatPanel:undefined,plinthRecess:undefined,sections:[section()]}}); // заказ 7441182: сиденье, щит и утопленный цоколь нижнего корпуса антресоль не наследует
+ n.modules.push({...base,id:id(),y,module:base.module.corner?createCornerUpper(base.module,height):{...structuredClone(base.module),name:'Антресоль',height,plinthHeight:0,handleId:undefined,drawerHandleId:undefined,seatTop:undefined,seatPanel:undefined,plinthRecess:undefined,mirror:undefined,sections:[section()]}}); // заказ 7441182: сиденье, щит, утопленный цоколь и зеркало нижнего корпуса антресоль не наследует
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
 
 export function clearSection(p:Project,mid:string,sid:string):Project {
  const n=structuredClone(p),s=n.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);if(!s)throw Error('Выберите секцию.');
- s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;delete s.glassShelves;delete s.fixed;delete s.shelfLight;delete s.shelfLights;return n;
+ s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;delete s.glassShelves;delete s.thickShelves;delete s.fixed;delete s.shelfLight;delete s.shelfLights;return n;
 }
 export function removeSection(p:Project,mid:string,sid:string):Project {
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;if(!m||m.sections.length<2)throw Error('В корпусе должна остаться хотя бы одна секция.');

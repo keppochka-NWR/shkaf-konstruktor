@@ -5,6 +5,7 @@ import {newProject,projectErrors,parseProject} from '../src/project';
 import {parts,section,drawerConfig} from '../src/model';
 import {HINGE_BRANDS,SLIDE_SYSTEMS,slideSystem,hingeCount,hingePositions,drawerHasHandle} from '../src/hardware';
 import {setAllHinges,setAllSlides,setAllEdges,hardwareChoice} from '../src/hardwareSwap';
+import {pendingPrice} from '../src/pendingPrices';
 
 function withDrawers(){const p=newProject();const m=p.modules[0].module;m.sections=[{...section(),drawers:2},...m.sections.slice(1)];return p;}
 
@@ -22,7 +23,8 @@ test('hinge brand changes hinge line, price and keeps GTV ids for old projects',
 });
 
 test('every slide system has a price at 450 mm, push systems have no handle, old hidden configs stay DTC push',()=>{
-  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(q.price!==null&&q.price>0,s.id);assert.ok(q.source.length>0);}
+  // Blum TANDEM (заказ 7427796): закупки нет — не «нет цены», а позиция финального расчёта (pendingPrices), остальные — с ценой
+  for(const s of SLIDE_SYSTEMS){const q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:450});assert.ok(s.brand==='blum'?q.price===null&&!!pendingPrice('slide:gtv0fpo:450:'+s.id):q.price!==null&&q.price>0,s.id);assert.ok(q.source.length>0);}
   assert.equal(slideSystem({slide:'gtv0fpo'}).id,'hidden-dtc-push');assert.equal(slideSystem({slide:'ball'}).id,'ball-soft');
   assert.equal(drawerHasHandle({slide:'ball',height:140,length:450,operation:'push'}),false);
   assert.equal(drawerHasHandle({slide:'gtv0fpo',height:140,length:450,operation:'soft-close',brand:'premial'}),true);

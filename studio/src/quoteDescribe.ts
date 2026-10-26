@@ -7,7 +7,7 @@ import { HINGE_BRANDS, SLIDE_MOTIONS, slideSystem } from "./hardware";
 import { handleById, DEFAULT_HANDLE } from "./handles";
 import { kupeSystem, kupeColor, kupeDoorFill, kupeSections } from "./kupe";
 import { worktopLabel } from "./kitchen";
-import { aluProfile, aluColor, aluFill } from "./alu";
+import { aluProfile, aluColor, aluFill, aluInsert } from "./alu";
 import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
 import { plural } from "./ru";
 import { rawKitchen } from "./rawModule";
@@ -97,6 +97,8 @@ export function plainFeatures(m: Module): string[] {
     out.push(`${doors} ${plural(doors, ["распашная дверь", "распашные двери", "распашных дверей"])}${m.doorMount === "inset" ? " (вкладные — внутри корпуса)" : ""}${lift ? ", есть подъёмная" : ""}`);
     out.push(push ? `открывание нажатием (push-to-open), без ручек: петли ${hb.label} без пружины и толкатели` : m.hingeSoft === false ? `петли ${hb.label} без доводчика (самозакрывающиеся)` : `петли ${hb.label} с доводчиком — двери закрываются плавно и тихо`);
   }
+  const wide = all.filter((d) => d.role === "door" && d.hingeAngle).reduce((mp, d) => mp.set(d.hingeAngle!, (mp.get(d.hingeAngle!) ?? 0) + 1), new Map<number, number>());
+  for (const [a, n] of wide) out.push(`петли ${a === 165 ? "155–165° (широкое открывание)" : "с открыванием на 90°"}: ${n} ${plural(n, ["створка", "створки", "створок"])}`);
   // заказ 7441182: утопленный цоколь, посадочное место и щит над ним — строкой в КП
   if (m.plinthRecess !== undefined) out.push(`цоколь утоплен на ${m.plinthRecess} мм, двери над цоколем`);
   if (m.seatPanel) out.push(`щит ЛДСП 16 над сиденьем ${m.seatPanel.height} мм${m.seatPanel.decor && m.seatPanel.decor !== m.decor ? ", декор " + m.seatPanel.decor : ""}`);
@@ -121,13 +123,18 @@ export function describeModule(m: Module): ModuleDescription {
   if (m.worktop) return worktopDescription(m);
   const size = `${m.width} × ${m.height} × ${m.depth}`;
   const drawers = drawerCount(m), all = parts(m), doors = m.raw ? hasDoorParts(m) : m.doors && all.some((d) => d.role === "door");
-  const shelves = all.filter((d) => d.role === "shelf").length, rods = m.sections.filter((s) => s.rod).length;
+  const shelves = all.filter((d) => d.role === "shelf" && !d.id.endsWith(":glue") && !d.name.startsWith("Посадочное место")).length, seats = m.sections.reduce((n, s) => n + (s.thickShelves?.length ?? 0), 0), rods = m.sections.filter((s) => s.rod).length;
   const pantographs = m.sections.filter((s) => s.pantograph).length, pullouts = m.sections.reduce((n, s) => n + (s.pullouts || 0), 0);
   const materials = [`Корпус: ЛДСП ${m.decor}`];
   if (doors) materials.push(`Фасады: ${facadeMaterialLabel(m)}`);
+  const mi = doors && m.mirror ? aluInsert(m.mirror) : undefined;
+  if (mi) materials.push(`Зеркало: ${mi.label} во весь фасад, на основе ЛДСП`);
+  for (const side of ["left", "right"] as const) { const sp = m.sidePanels?.[side]; if (sp?.thick === 32) materials.push(`Добор ${side === "left" ? "слева" : "справа"}: 32 мм в цвет корпуса, ${sp.height} мм`); }
   if (drawers && !(m.vernissage && doors)) materials.push(`Фасады ящиков: ${drawerFacadeLabel(m, all)}`);
   const filling: string[] = [];
   if (shelves) filling.push(`${shelves} ${plural(shelves, ["полка", "полки", "полок"])}`);
+  // заказ 7427796: посадочное место 32, добор 32, карниз, зеркало на фасадах — словами для КП
+  if (seats) filling.push(`посадочное место 32 мм (две плиты склейкой)${seats > 1 ? " — " + seats : ""}`);
   if (drawers) filling.push(`${drawers} ${plural(drawers, ["ящик", "ящика", "ящиков"])}`);
   if (rods) filling.push(`${rods} ${plural(rods, ["штанга", "штанги", "штанг"])}`);
   if (pantographs) filling.push(`${pantographs} ${plural(pantographs, ["пантограф", "пантографа", "пантографов"])}`);

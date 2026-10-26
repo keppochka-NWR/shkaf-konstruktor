@@ -49,8 +49,8 @@ export function hingeShifts(limit = 200, step = 5): number[] {
 /** Ход ящика: с доводчиком, простой (без доводчика, только шариковые), push-to-open (нажал — выехал, без ручки). */
 export type SlideMotion = 'soft-close' | 'simple' | 'push';
 /** Производитель направляющих: шариковые — GTV; скрытые — Unihopper, DTC или Premial (решение Макса 06.10.2026). */
-export type SlideBrand = 'gtv' | 'unihopper' | 'dtc' | 'premial';
-export const SLIDE_BRANDS: Record<SlideBrand, string> = { gtv: 'GTV', unihopper: 'Unihopper', dtc: 'DTC', premial: 'Premial' };
+export type SlideBrand = 'gtv' | 'unihopper' | 'dtc' | 'premial' | 'blum';
+export const SLIDE_BRANDS: Record<SlideBrand, string> = { gtv: 'GTV', unihopper: 'Unihopper', dtc: 'DTC', premial: 'Premial', blum: 'Blum TANDEM' };
 export const SLIDE_MOTIONS: Record<SlideMotion, string> = { 'soft-close': 'с доводчиком', simple: 'без доводчика', push: 'push-to-open' };
 /** Готовые системы для выбора одним списком: тип + ход + бренд. */
 export const SLIDE_SYSTEMS: { id: string; slide: 'ball' | 'gtv0fpo'; motion: SlideMotion; brand: SlideBrand; label: string }[] = [
@@ -63,6 +63,9 @@ export const SLIDE_SYSTEMS: { id: string; slide: 'ball' | 'gtv0fpo'; motion: Sli
   { id: 'hidden-dtc-push', slide: 'gtv0fpo', motion: 'push', brand: 'dtc', label: 'Скрытые DTC · push-to-open' },
   { id: 'hidden-premial-soft', slide: 'gtv0fpo', motion: 'soft-close', brand: 'premial', label: 'Скрытые Premial · с доводчиком' },
   { id: 'hidden-premial-push', slide: 'gtv0fpo', motion: 'push', brand: 'premial', label: 'Скрытые Premial · push-to-open' },
+  // заказ 7427796 (фурнитура Blum): скрытые Blum TANDEM, геометрия ящика — по карте скрытых (проём − 42), цена — после финального расчёта
+  { id: 'hidden-blum-soft', slide: 'gtv0fpo', motion: 'soft-close', brand: 'blum', label: 'Скрытые Blum TANDEM · с доводчиком' },
+  { id: 'hidden-blum-push', slide: 'gtv0fpo', motion: 'push', brand: 'blum', label: 'Скрытые Blum TANDEM · push-to-open' },
 ];
 /** Ход ящика с учётом старых проектов: скрытые без поля — push (как было), шариковые — с доводчиком. */
 export function slideMotion(c: Pick<DrawerConfig, 'slide' | 'operation'>): SlideMotion {
