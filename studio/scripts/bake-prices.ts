@@ -31,7 +31,7 @@ type Rule = {
   fnMulIdent?: Record<string, string[]>;
 };
 export const BAKE_RULES: Rule[] = [
-  { file: 'pricing.ts', coef: 'markup', props: ['price'], decls: ['sheets', 'tierPrice', 'HDF_SHEET', 'SHOP_WORK_LDSP_SHEET', 'SHOP_WORK_HDF_SHEET', 'PULLOUT_PRICE'], calls: { add: 4 },
+  { file: 'pricing.ts', coef: 'markup', props: ['price'], decls: ['sheets', 'tierPrice', 'HDF_SHEET', 'SHOP_WORK_LDSP_SHEET', 'SHOP_WORK_HDF_SHEET', 'PULLOUT_PRICE', /* заказ 7441182: плёнка под зеркало (o-7427796) — закупка, без запекания публичная цена была ниже на ×1,2 */ 'MIRROR_FILM_M2'], calls: { add: 4 },
     fnLits: { slidePrice: [1040, 1729, 1100, 60] }, fnMulIdent: { slidePrice: ['steps'] } },
   { file: 'hardware.ts', coef: 'markup', props: ['price'] },
   { file: 'handles.ts', coef: 'markup', calls: { workshop: 3 }, shelfCalls: { lemana: 3 } },
