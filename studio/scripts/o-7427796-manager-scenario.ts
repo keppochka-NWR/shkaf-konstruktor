@@ -219,7 +219,7 @@ try {
   await shot("fail");
 }
 // сравнение с функциями
-const sig = (p: Project) => p.modules.flatMap((x) => parts(x.module).filter((q) => q.role !== "fastener" || true).map((q) => [q.name.replace(/[0-9a-f-]{36}/g, ""), q.size.map((v) => Math.round(v)).join("x"), [x.x + q.position[0], (x.y ?? 0) + q.position[1], x.z + q.position[2]].map((v) => Math.round(v)).join(",")].join(" | "))).sort();
+const sig = (p: Project) => p.modules.flatMap((x) => parts(x.module).map((q) => [q.name.replace(/[0-9a-f-]{36}/g, ""), q.decor, q.material, q.mirror ?? "", q.hingeAngle ?? "", q.size.map((v) => Math.round(v)).join("x"), [x.x + q.position[0], (x.y ?? 0) + q.position[1], x.z + q.position[2]].map((v) => Math.round(v)).join(",")].join(" | "))).sort();
 const cmp = (name: string, file: string, ref: Project) => {
   let got: Project; try { got = parseProject(JSON.parse(require("node:fs").readFileSync(file, "utf8"))); } catch { console.log(name, ": проекта нет"); return; }
   const A = sig(got), B = sig(ref), onlyA = A.filter((x) => !B.includes(x)), onlyB = B.filter((x) => !A.includes(x));

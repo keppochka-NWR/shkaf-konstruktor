@@ -23,13 +23,17 @@ export function editDrawerConfig(m:Module,s:Section,index:number,patch:Partial<D
   const stack=drawerStackHeight({...s,drawerConfigs:configs});
   const ceiling=partitionCap?height:height-RULES.shelfMinClear-cap;
   if(stack>ceiling+.001)throw Error(`Для увеличения фасада и подъёма верхних ящиков не хватает ${Math.ceil(stack-ceiling)} мм до крыши или перегородки. Уменьшите фасад либо увеличьте проём.`);
-  for(const f of s.shelves){
+  s.shelves.forEach((f,j)=>{
     const y=f*height,half=RULES.panel/2;
+    // заказ 7427796 (как validate в model.ts): без полки над ящиками жёсткая полка (посадочное место) может лежать прямо на ящиках —
+    // её низ (у полки 32 — низ нижней плиты) не ниже верха шага ящика
+    const seat=s.drawerCap===false&&s.fixed?.includes(j)?(s.thickShelves?.includes(j)?RULES.panel:0):undefined;
     for(const c of configs){
       const bottom=c.y!,end=bottom+drawerPitch(c,s.drawerGap)+(trayOnly?20:RULES.panel+RULES.shelfMinClear);
+      if(seat!==undefined){const top=bottom+drawerPitch(c,s.drawerGap);if(y+half>bottom+.001&&y-half-seat<top-.001)throw Error(`Ящик заходит под посадочное место: опустите ящик или уменьшите фасад на ${Math.ceil(top-(y-half-seat))} мм.`);continue;}
       if(y+half>bottom-RULES.shelfMinClear+.001&&y-half<end-.001)
         throw Error(`Над ящиками мешает полка: для этой высоты фасада поднимите её минимум на ${Math.ceil(end+half-y)} мм либо уменьшите фасад.`);
     }
-  }
+  });
   return configs;
 }
