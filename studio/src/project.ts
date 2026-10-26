@@ -133,6 +133,24 @@ export function applyAutoFillers(p:Project):Project{
   }
   return n;
 }
+/** «Без фальша у стены · по эскизу» (решение Макса 26.10.2026: эскиз дизайнера главнее регламента цеха — общая ширина без лишних
+ *  фальшей). off: автофальши корпуса выключены (autoFillersOff), планки у стен сняты, корпус придвинут боковиной вплотную к стене;
+ *  !off: автофальши снова — applyAutoFillers ставит планки и отодвигает корпус. «Антресоль сверху» наследует признак нижнего. */
+export function setWallFillersOff(p:Project,mid:string,off:boolean):Project{
+  const n=structuredClone(p),a=n.modules.find(x=>x.id===mid);if(!a)throw Error('Выберите корпус.');
+  if(!off){delete a.module.autoFillersOff;return applyAutoFillers(n);}
+  const sides=(['left','right'] as const).filter(side=>a.module.wallFiller?.[side]);
+  delete a.module.wallFiller;a.module.autoFillersOff=true;
+  for(const side of sides){
+    const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
+    const face=localToRoom(a,u,a.module.depth/2),out=localToRoom(a,u+dir*10,a.module.depth/2);
+    const nx=Math.sign(Math.round(out.x-face.x)),nz=Math.sign(Math.round(out.z-face.z));
+    const dist=nx<0?face.x:nx>0?n.room.width-face.x:nz<0?face.z:n.room.depth-face.z;
+    if(dist>0)shiftAlongWidth(a,side==='left'?-dist:dist);
+  }
+  const error=projectErrors(n)[0];if(error)throw Error(error);
+  return n;
+}
 export function overlap(a:ReturnType<typeof bounds>,b:ReturnType<typeof bounds>){return a.x<b.x+b.w-0.1&&a.x+a.w>b.x+0.1&&a.y<b.y+b.h-0.1&&a.y+a.h>b.y+0.1&&a.z<b.z+b.d-0.1&&a.z+a.d>b.z+0.1;}
 /** Занятые объёмы корпуса для проверки пересечений: обычный корпус — один габарит; стол — столешница, опоры и царга,
  *  чтобы под столешницу можно было поставить тумбу. */

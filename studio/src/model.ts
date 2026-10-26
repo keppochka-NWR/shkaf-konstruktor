@@ -789,7 +789,7 @@ export function facadeBottom(m:Module){
 }
 /** Верх накладного фасада: под крышей минус зазор, ниже планки под крышей, если она есть. */
 /** Верх накладных фасадов: под скосом — по низкой стороне (крыша плоская на её высоте), выше идёт фальш из фасадного материала. */
-export function facadeTop(m:Module){if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;if(m.kitchen?.faceTop!==undefined&&m.feet)return m.height-m.kitchen.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0)-(m.seatTop&&!m.kitchen?2*RULES.panel:0);} // посадочное место 32 — над фасадом (заказ 7441182: фасад тумбы под сиденьем)
+export function facadeTop(m:Module){if(m.kitchen&&m.gola?.faceTop!==undefined)return m.height-m.gola.faceTop;if(m.kitchen?.faceTop!==undefined&&m.feet)return m.height-m.kitchen.faceTop;return (m.slope?m.slope.lowHeight:m.height)-fe(m)-(m.topStrip?m.topStrip+fe(m):0);}
 /** Горизонтальный размах накладных фасадов секции i: крайние секции до края корпуса минус зазор, между секциями — до середины перегородки. */
 export function facadeSpan(m:Module,i:number,b:SectionBox){
   const t=RULES.panel;

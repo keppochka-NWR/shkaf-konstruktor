@@ -4,7 +4,9 @@
 // Пишет <outDir>/steps-v<variant>.json (шаги: клики, клавиши, поля, мс), снимки после ключевых шагов и проект
 // <outDir>/manager-v<variant>.json (кнопка «Сохранить проект файлом»).
 // Порядок важен: антресоли создаются кнопкой «Антресоль сверху» (копия нижнего корпуса) ДО включения у тумбы сиденья/щита/цоколя —
-// иначе антресоль унаследует их от тумбы.
+// иначе антресоль унаследует их от тумбы. «Без фальша у стены» — сразу после тумбы: антресоль над ней наследует признак.
+// Решения Макса 26.10: всё по эскизу (общая ширина 930 без фальша у стены, ниша 1500, фасад тумбы 420 от цоколя до верха сиденья),
+// цена — «по большей модели» (нижняя панель «Стоимость» → «Модель цены»); проект сохраняется файлом последним, с моделью цены.
 // НОВОЕ (дописывается в ветке claude/o-7441182, на базе a966b13 элементов нет — шаг пропускается с пометкой «нет в интерфейсе»):
 //   «Открывание фасадов» → «Ручка · петли без доводчика»; «Цоколь утоплен»; «Материал крыши» → «Посадочное место 32 мм»;
 //   «Щит над сиденьем» + «Высота щита над сиденьем» + «Декор щита над сиденьем»; вариант 2 — «Тип распашных фасадов» → «Зеркало на ЛДСП».
@@ -103,14 +105,15 @@ async function newControl(l: Locator, what: string) {
 
 // ── проверка (только чтение) ──────────────────────────────────────────────────────────────────────────────────
 type Placed = { x: number; y?: number; z: number; module: Record<string, unknown> & { name: string; width: number; height: number; depth: number; sections: Record<string, unknown>[] } };
-async function saved(): Promise<{ room?: Record<string, number>; modules: Placed[] }> {
+type Saved = { room?: Record<string, number>; modules: Placed[]; calculation?: Record<string, unknown> };
+async function saved(): Promise<Saved> {
   await wait(600);
   const raw = (await page.evaluate("localStorage.getItem('garderyob-rooms-v1') || ''")) as string;
-  let res: { room?: Record<string, number>; modules: Placed[] } = { modules: [] };
+  let res: Saved = { modules: [] };
   const walk = (v: unknown) => {
     if (!v || typeof v !== "object" || res.modules.length) return;
     const o = v as Record<string, unknown>;
-    if (Array.isArray(o.modules) && o.room) { res = { room: o.room as Record<string, number>, modules: o.modules as Placed[] }; return; }
+    if (Array.isArray(o.modules) && o.room) { res = { room: o.room as Record<string, number>, modules: o.modules as Placed[], calculation: o.calculation as Record<string, unknown> | undefined }; return; }
     for (const x of Object.values(o)) walk(x);
   };
   try { walk(JSON.parse(raw)); } catch { /* нет проекта */ }
@@ -153,14 +156,18 @@ try {
   await field(byLabel("Глубина пустой комнаты"), "2000");
   await field(byLabel("Высота пустой комнаты"), "2600");
 
-  // ── 2. Тумба 500 × 532 × 510 (корпус 420 на цоколе 80 + сиденье 32) ───────────────────────────────────────────
-  step("2. Тумба: «Пустой шкаф» 500 × 532 × 510 → «Добавить в комнату»");
+  // ── 2. Тумба 500 × 500 × 510 (цоколь 80 + фасад 420 до верха сиденья 32 — по эскизу) ───────────────────────────
+  step("2. Тумба: «Пустой шкаф» 500 × 500 × 510 → «Добавить в комнату»");
   await click(btn("Пустой шкаф"));
   await field(byLabel("Ширина новой мебели"), "500");
-  await field(byLabel("Высота новой мебели"), "532");
+  await field(byLabel("Высота новой мебели"), "500");
   await field(byLabel("Глубина новой мебели"), "510");
   await click(btn("Добавить в комнату")); await wait(1500);
   await shot("tumba");
+
+  step("2а. Тумба: «Без фальша у стены» — по эскизу, общая ширина 930 (решение Макса 26.10)");
+  const noFiller = byLabel("Без фальша у стены"); // НОВОЕ
+  if (await newControl(noFiller, "«Без фальша у стены»")) { if (!(await noFiller.first().isChecked())) await click(noFiller); }
 
   step("3. Тумба: одна полка посередине («Полок в секции» = 1)");
   await field(byLabel("Полок в секции"), "1");
@@ -185,7 +192,7 @@ try {
   await shot("upper-right");
 
   step("7. Антресоль над тумбой: выбрать тумбу, «Антресоль сверху», высота 450, от пола 2000");
-  await select(500, 532);
+  await select(500, 500);
   await click(btn(/^Антресоль сверху$/)); await wait(1200);
   await field(byLabel("Высота"), "450");
   await field(byLabel("От пола"), "2000");
@@ -216,28 +223,28 @@ try {
 
   // ── 11. Новое: петли без доводчика, цоколь утоплен, сиденье, щит, (вариант 2) зеркало ───────────────────────────
   const opening = byLabel("Открывание фасадов");
-  for (const [w, h, label] of [[500, 532, "тумба"], [430, 2000, "шкаф"], [430, 450, "антресоль на шкафу"], [500, 450, "антресоль над нишей"]] as const) {
+  for (const [w, h, label] of [[500, 500, "тумба"], [430, 2000, "шкаф"], [430, 450, "антресоль на шкафу"], [500, 450, "антресоль над нишей"]] as const) {
     step(`11. ${label}: петли без доводчика`);
     await select(w, h);
     if (await newControl(opening.locator("option", { hasText: "петли без доводчика" }), "«Открывание фасадов» → «Ручка · петли без доводчика»"))
       check(`${label}: петли без доводчика выбраны`, await pick(opening, /петли без доводчика/));
   }
-  for (const [w, h, label] of [[500, 532, "тумба"], [430, 2000, "шкаф"]] as const) {
+  for (const [w, h, label] of [[500, 500, "тумба"], [430, 2000, "шкаф"]] as const) {
     step(`12. ${label}: цоколь утоплен`);
     await select(w, h);
     const recess = byLabel("Цоколь утоплен"); // НОВОЕ
     if (await newControl(recess, "«Цоколь утоплен»")) { if (!(await recess.first().isChecked())) await click(recess); }
   }
   step("13. Тумба: посадочное место 32 мм («Крыша корпуса», функция ветки o-7437584a)");
-  await select(500, 532);
+  await select(500, 500);
   const roof = byLabel("Крыша корпуса");
   if (await newControl(roof.locator("option", { hasText: "Посадочное место 32" }), "«Крыша корпуса» → «Посадочное место 32»"))
     check("тумба: посадочное место 32 мм", await pick(roof, /Посадочное место 32/));
-  step("14. Тумба: щит над сиденьем 1468, декор Марципан");
+  step("14. Тумба: щит над сиденьем 1500 (ниша по эскизу), декор Марципан");
   const panel = byLabel("Щит над сиденьем"); // НОВОЕ
   if (await newControl(panel, "«Щит над сиденьем»")) {
     if (!(await panel.first().isChecked())) await click(panel);
-    await field(byLabel("Высота щита над сиденьем"), "1468"); // НОВОЕ
+    await field(byLabel("Высота щита над сиденьем"), "1500"); // НОВОЕ
     check("щит: декор Марципан", await pickType(byLabel("Декор щита над сиденьем"), "МАРЦ", /марципан/i)); // НОВОЕ
   }
   await shot("tumba-seat");
@@ -250,8 +257,21 @@ try {
     await shot("mirror");
   }
 
-  // ── 16. Итог: снимки и сохранение файла ────────────────────────────────────────────────────────────────────
-  step("16. Снимки: 3D, спереди, без фасадов (Esc — снять выделение)");
+  // ── 16. Цена по большей модели (решение Макса 26.10.2026): нижняя панель «Стоимость» → «Модель цены» ───────────────
+  step("16. Цена: «Стоимость» → «Модель цены» → «Цена по большей модели»");
+  await page.mouse.move(660, 450); await key("Escape"); await wait(300);
+  await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }));
+  const model = byLabel("Модель цены"); // НОВОЕ
+  if (await newControl(model, "«Модель цены» → «Цена по большей модели»")) {
+    check("модель цены: по большей", await pick(model, /по большей модели/));
+    await wait(900);
+    note("цены по моделям: " + ((await byLabel("Цены по моделям").first().innerText().catch(() => "")) || "").replace(/\s+/g, " ").trim());
+  }
+  await shot("price-model");
+  await click(page.locator(".dock-tabs button", { hasText: "Стоимость" })); // закрыть панель (вкладка — переключатель)
+
+  // ── 17. Итог: снимки ─────────────────────────────────────────────────────────────────────────────────────────
+  step("17. Снимки: 3D, спереди, без фасадов (Esc — снять выделение)");
   await page.mouse.move(660, 450); await key("Escape"); await wait(300);
   // «Показать размеры» — снять подписи размеров на снимках; колесо мыши — приблизить композицию (как менеджер перед показом клиенту)
   const dims = byLabel("Показать размеры"); if (await exists(dims) && (await dims.first().getAttribute("aria-pressed")) === "true") await click(dims);
@@ -262,17 +282,7 @@ try {
   await click(btn("Показать фасады").or(btn("Скрыть фасады"))); await wait(400);
   await click(btn("3D")); await wait(400);
 
-  step("17. «Заказ и инструменты» → «Сохранить проект файлом»");
-  const save = byLabel("Сохранить проект файлом");
-  if (!(await save.first().isVisible())) await click(byLabel("Заказ и инструменты"));
-  const dl = page.waitForEvent("download", { timeout: 20000 });
-  dl.catch(() => {});
-  await click(save);
-  const file = await dl; await file.saveAs(`${out}/manager-v${variant}.json`);
-  note("проект сохранён: manager-v" + variant + ".json");
-  end();
-
-  // ── 18. Документы: смета Excel и КП (как менеджер: нижняя панель «Стоимость», «Коммерческое предложение») ──────────
+  // ── 18–19. Документы: смета Excel и КП (как менеджер: нижняя панель «Стоимость», «Коммерческое предложение») ──────────
   step("18. «Стоимость» → «Стоимость проекта» → «Скачать Excel»");
   await click(page.locator(".dock-tabs button", { hasText: "Стоимость" }));
   await click(btn("Стоимость проекта"));
@@ -298,14 +308,25 @@ try {
   await click(btn("Закрыть окно")).catch(async () => { await key("Escape"); });
   end();
 
+  step("20. «Заказ и инструменты» → «Сохранить проект файлом» (последним — с моделью цены)");
+  const save = byLabel("Сохранить проект файлом");
+  if (!(await save.first().isVisible())) await click(byLabel("Заказ и инструменты"));
+  const dl = page.waitForEvent("download", { timeout: 20000 });
+  dl.catch(() => {});
+  await click(save);
+  const file = await dl; await file.saveAs(`${out}/manager-v${variant}.json`);
+  note("проект сохранён: manager-v" + variant + ".json");
+  end();
+
+
   // ── проверки результата (чтение localStorage и строки цены — без действий) ───────────────────────────────────
   priceShown = ((await byLabel("Открыть стоимость").first().innerText().catch(() => "")) || "").replace(/\s+/g, " ").trim();
   console.log("   цена в строке состояния: " + priceShown);
   const p = await saved();
   check("комната 3000 × 2000 × 2600", p.room?.width === 3000 && p.room?.depth === 2000 && p.room?.height === 2600, JSON.stringify(p.room && { w: p.room.width, d: p.room.depth, h: p.room.height }));
   check("в проекте 4 корпуса", p.modules.length === 4, `корпусов ${p.modules.length}`);
-  const tumba = findMod(p.modules, 500, 532), ward = findMod(p.modules, 430, 2000), upR = findMod(p.modules, 430, 450), upL = findMod(p.modules, 500, 450);
-  check("тумба 500 × 532 × 510, одна полка", !!tumba && tumba.module.depth === 510 && (tumba.module.sections[0]?.shelves as unknown[])?.length === 1, tumba ? `x ${tumba.x}, полок ${(tumba.module.sections[0]?.shelves as unknown[])?.length}` : "нет");
+  const tumba = findMod(p.modules, 500, 500), ward = findMod(p.modules, 430, 2000), upR = findMod(p.modules, 430, 450), upL = findMod(p.modules, 500, 450);
+  check("тумба 500 × 500 × 510, одна полка", !!tumba && tumba.module.depth === 510 && (tumba.module.sections[0]?.shelves as unknown[])?.length === 1, tumba ? `x ${tumba.x}, полок ${(tumba.module.sections[0]?.shelves as unknown[])?.length}` : "нет");
   check("шкаф 430 × 2000 × 510 справа вплотную, штанга", !!ward && !!tumba && Math.abs(ward.x - (tumba.x + 500)) <= 1 && ward.module.sections[0]?.rod === true, ward ? `x ${ward.x}` : "нет");
   check("антресоль 430 × 450 на шкафу (от пола 2000)", !!upR && upR.y === 2000 && !!ward && upR.x === ward.x, upR ? `x ${upR.x} y ${upR.y}` : "нет");
   check("антресоль 500 × 450 над тумбой (от пола 2000)", !!upL && upL.y === 2000 && !!tumba && upL.x === tumba.x, upL ? `x ${upL.x} y ${upL.y} навесной ${String(upL.module.hanging)}` : "нет");
@@ -316,9 +337,14 @@ try {
   check("цоколь утоплен у тумбы и шкафа (50)", tumba?.module.plinthRecess === 50 && ward?.module.plinthRecess === 50, `${tumba?.module.plinthRecess} / ${ward?.module.plinthRecess}`);
   check("тумба: посадочное место 32", tumba?.module.seatTop === true);
   const sp = tumba?.module.seatPanel as { height?: number; decor?: string } | undefined;
-  check("тумба: щит над сиденьем 1468 Марципан", sp?.height === 1468 && sp?.decor === "МАРЦИПАН", JSON.stringify(sp));
+  check("тумба: щит над сиденьем 1500 Марципан (ниша 1500 по эскизу)", sp?.height === 1500 && sp?.decor === "МАРЦИПАН", JSON.stringify(sp));
   check("антресоли без сиденья/щита/утопленного цоколя", !!upL && !!upR && [upL, upR].every((a) => !a.module.seatTop && !a.module.seatPanel && a.module.plinthRecess === undefined));
   check(variant === 2 ? "вариант 2: зеркало на фасаде шкафа" : "вариант 1: зеркала нет", variant === 2 ? ward?.module.mirror === "mirror-silver" : !p.modules.some((a) => a.module.mirror), String(ward?.module.mirror));
+  // решения Макса 26.10: общая ширина 930 без фальша у стены, цена по большей модели
+  const left = Math.min(...p.modules.map((a) => a.x)), right = Math.max(...p.modules.map((a) => a.x + a.module.width));
+  check("по эскизу: общая ширина 930 от стены (без фальша)", left === 0 && right - left === 930, `от ${left} до ${right}`);
+  check("без фальша у стены: тумба и антресоль над нишей", !!tumba && !!upL && [tumba, upL].every((a) => a.module.autoFillersOff === true && !a.module.wallFiller));
+  check("цена по большей модели в проекте", p.calculation?.maxModel === true, JSON.stringify(p.calculation && { maxModel: p.calculation.maxModel, sheetPrice: p.calculation.sheetPrice }));
   check("ошибок страницы нет", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
 } catch (e) {
   note("ОШИБКА: " + (e as Error).message.split("\n")[0]);
