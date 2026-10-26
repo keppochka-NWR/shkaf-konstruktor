@@ -57,7 +57,7 @@ test('петли 155–165°, датчик движения, торцевые р
   const m=base({wideHinges:true,lightSensor:true,handleId:'edge600b'});m.sections[0].standLights=['left'];
   const p=project(m),e=estimate(p),line=(id:string)=>e.lines.find(l=>l.id===id);
   assert.equal(line('hinge'),undefined);
-  assert.ok(line('hinge-wide')?.pending&&line('hinge-wide')!.quantity>=4);
+  assert.ok(line('hinge-wide')?.retail&&line('hinge-wide')!.unitPrice===1700&&line('hinge-wide')!.quantity>=4,'петля 155° — 1 700 ₽ клиенту (решение Макса 26.10)');
   assert.ok(line('light-sensor')?.pending&&line('light-psu')?.pending);
   assert.ok(line('handle:edge600b')?.pending);
   assert.equal(e.missing.length,0);
@@ -80,14 +80,15 @@ test('без дна на цоколе: боковины на полу, опор 
   assert.equal(ps.some(p=>p.id==='bottom'),false);
 });
 
-test('проект заказа 7442203: 0 ошибок, 0 пересечений, угловая планка у крыла, цена по изделиям', () => {
+test('проект заказа 7442203: 0 ошибок, 0 пересечений, размеры по эскизу, цена по изделиям', () => {
   const p=build();
   assert.deepEqual(projectErrors(p),[]);
   for(const a of p.modules){assert.deepEqual(validate(a.module),[],a.module.name);const ps=parts(a.module);assert.deepEqual(partCollisions(ps,a.module).map(c=>c.names.join(' × ')),[],a.module.name);}
   const wing=p.modules.filter(a=>a.module.name.includes('правое крыло'));
   assert.equal(wing.length,2);
-  for(const a of wing){assert.equal(a.module.cornerFiller,'left');assert.equal(a.module.cornerKind,'strip');}
-  assert.ok(p.modules.find(a=>a.module.name==='Угловой шкаф · левый')!.module.wallFiller?.left);
+  // решение Макса 26.10 «подгонять под эскиз всё»: крыло 470 без угловой планки, левый 500 без ФП к стене (отклонение флагом autoFillersOff)
+  for(const a of wing){assert.equal(a.module.cornerFiller,undefined);assert.equal(a.module.width,470);}
+  const left=p.modules.find(a=>a.module.name==='Угловой шкаф · левый')!.module;assert.equal(left.width,500);assert.equal(left.autoFillersOff,true);assert.equal(left.wallFiller,undefined);
   const t=estimate(p);
   assert.equal(t.missing.length,0);
   assert.ok((t.retail??0)>0);

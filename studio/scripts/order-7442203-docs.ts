@@ -42,7 +42,8 @@ await shots("Снимок шкаф", (n) => !n.startsWith("Пенал"), false);
 await shots("Снимок пенал", (n) => n.startsWith("Пенал"));
 await shots("Снимок проект", () => true);
 // КП: цена — расчёт студии (модель «по коэффициенту»), цены изделий — доли итога (как переключатель «Цены по изделиям»)
-const e = estimate(project), total = e.retail;
+// решение Макса 26.10: цена клиенту — от большей из двух моделей (коэффициент 2,2 или «цена за лист 23 000» + вне листа)
+const e = estimate(project), total = e.retail === null ? null : Math.max(e.retail, e.bySheet ?? 0);
 if (total === null) throw Error("Нет цены проекта — КП не собирается.");
 const q = moduleQuote(project, total);
 const img = "data:image/png;base64," + readFileSync(join(out, "Снимок шкаф — 3D.png")).toString("base64");
