@@ -460,8 +460,11 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // позиция финального расчёта конструктором (pendingPrices.ts), не цена накладной
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
-        // угол открывания створки (заказ 7427796): петли 155–165° или на 90° — другое изделие, закупочной цены нет — финальный расчёт
-        else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',null,'Петля '+HINGE_ANGLE_LABEL[d.hingeAngle]+': закупочной цены в прайсах нет — цена после финального расчёта конструктором')
+        // угол открывания створки (заказ 7427796): на 90° — обычная петля бренда (цена из прайса студии) + ограничитель угла на створку
+        // (цены ограничителя в прайсах нет — финальный расчёт); 155–165° — другое изделие (у Blum — CLIP top 155°), цены нет — финальный расчёт
+        else if(d.hingeAngle===90){add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
+          add('hinge-limiter-90'+suffix,'Ограничитель угла открывания 90° '+hb.label+' (на створку)',1,'шт',null,'Ограничитель открывания '+hb.label+' на петлю створки: в прайсах цеха и справочнике закупок цены нет — цена после финального расчёта конструктором');}
+        else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',null,'Петля '+HINGE_ANGLE_LABEL[d.hingeAngle]+(bk==='blum'?' (Blum CLIP top 155°)':'')+': в прайсах цеха и справочнике закупок цены нет (есть только петля 110° '+hb.soft.price+' ₽) — цена после финального расчёта конструктором')
         else add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',hb.soft.price,hb.soft.source);
         if(push&&d.hinge!=='top')add('push-latch','Толкатель push-to-open',1,'шт',PUSH_LATCH.price,PUSH_LATCH.source);
       }
