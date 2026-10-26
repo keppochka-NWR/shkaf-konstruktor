@@ -150,8 +150,9 @@ def names_dir_components(path):
     out = []
     for name in os.listdir(path):
         base = os.path.splitext(name)[0]
-        # служебные проекты: кухни базы, импорт шкафов, тестовые и демо-расчёты (имена без клиентов) — не источник фамилий
-        if base.startswith(("kitchen", "wardrobe-", "test-", "garderob-", "demo-")):
+        # служебные проекты: кухни базы, импорт шкафов, тестовые и демо-расчёты, расчёты заказов order-<номер>-<вариант>
+        # (имена без клиентов) — не источник фамилий; order-7441182-mirror давал ложное «mirror» в manifest.json (mirrorX), 26.10
+        if base.startswith(("kitchen", "wardrobe-", "test-", "garderob-", "demo-", "order-")):
             continue
         out.append(base)
     return out
