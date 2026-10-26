@@ -1,6 +1,6 @@
 import {facadeHandleId} from './model';
 import {parts,drawerConfig,RULES,legCount,fastenerCounts,pulloutLength} from './model';
-import {worktopLines} from './kitchen';
+import {worktopLines,isSlabWorktop} from './kitchen';
 import {edgeLength} from './edges';
 import {nest,unplacedDetails,cuttingEngine,quoteBreakdown,splitRows,type Sheet} from './exports';
 import {isBazisModule,type Project} from './project';
@@ -289,7 +289,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     for(const c of a.module.worktop?.cutouts??[])if(c.fixture==='210245')add('premial-sink:210245','Мойка Premial PRODIGY 6045, графит, 210245 (слив в комплекте)',1,'компл',null,'Артикул подтверждён allpremial.ru; закупочную цену уточнить');
     // ЛДСП 32 (16+16, заказ 7437584 — ТВ-зона): две плиты в раскрое ЛДСП, кромка 2 — как детали корпуса (ниже), склейка — розничной строкой
     // (1000 ₽/м², как фальш 32, решение Макса 16.10); без мелочёвки корпуса и заглушек — это не корпус
-    const slab=a.module.worktop?.material==='ldsp';
+    const slab=!!a.module.worktop&&isSlabWorktop(a.module.worktop);
     if(a.module.worktop&&!slab){const w=a.module.worktop;for(const l of worktopLines(a.module))add(l.id,l.label,l.quantity,l.unit,null,l.source);for(const c of w.cutouts)add('worktop-cut:'+c.kind,c.kind==='sink'?'Вырез под мойку':'Вырез под варочную панель',1,'шт',null,'Цена работы не найдена');continue;}
     if(slab){for(const c of a.module.worktop!.cutouts)add('worktop-cut:'+c.kind,c.kind==='sink'?'Вырез под мойку':'Вырез под варочную панель',1,'шт',null,'Цена работы не найдена');
       add('worktop-glue','Склейка столешницы: 2 плиты 16 в 32 мм (работа, клей)',Math.round(a.module.width*a.module.depth/1e3)/1e3,'м²',FALSH_GLUE_RETAIL_M2,'Цена цеха: склейка 1000 ₽/м² (решение Макса 16.10.2026, как фальш 32)',true);}

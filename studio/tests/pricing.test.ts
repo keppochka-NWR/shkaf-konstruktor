@@ -34,9 +34,9 @@ test('estimate is complete for the default project and includes hinges, kit and 
 
 test('hidden slides use workshop purchase of DTC/Unihopper and unknown lengths stay open',()=>{
   const p=newProject();const s=p.modules[0].module.sections[0];
-  s.drawerConfigs=[{slide:'gtv0fpo',height:140,length:300},{slide:'gtv0fpo',height:140,length:250}];
+  s.drawerConfigs=[{slide:'gtv0fpo',height:140,length:300},{slide:'gtv0fpo',height:140,length:550}]; // 250 — с оценкой с заказа 7437584 (ветка o-7437584a), «неизвестная» длина — 550
   const e=estimate(p);
-  const known=e.lines.find(l=>l.id==='slide:gtv0fpo:300')!,unknown=e.lines.find(l=>l.id==='slide:gtv0fpo:250')!;
+  const known=e.lines.find(l=>l.id==='slide:gtv0fpo:300')!,unknown=e.lines.find(l=>l.id==='slide:gtv0fpo:550')!;
   assert.equal(known.unitPrice,1040);assert.match(known.source,/DTC F10D300H/);
   assert.equal(unknown.unitPrice,null);assert.equal(e.retail,null);
 });

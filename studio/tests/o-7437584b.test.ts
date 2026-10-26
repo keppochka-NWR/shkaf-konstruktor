@@ -85,21 +85,25 @@ test("палитра «Подвесной ящик»: навесной, push DTC
   assert.match(readFileSync("src/ModulePalette.tsx", "utf8"), /'hanging-drawer'/);
 });
 test("столешница ЛДСП 32 (16+16): две плиты в раскрое, глубина 320, без кухонных низов — над корпусом на полу; склейка в смете", () => {
-  assert.ok(WORKTOP_CHOICES.some((c) => c.id === "ldsp-32" && c.material === "ldsp" && c.thickness === 32));
+  assert.equal(WORKTOP_CHOICES.length, 5, "кухонный список (задача Макса 19.10) не меняется");
   const top = assembleModule("worktop", 2600, 32, 320, look("Тэффи"));
   setWorktopMaterial(top, "ldsp", 32);
   assert.deepEqual(validate(top), []);
   const ps = parts(top);
   assert.deepEqual(ps.map((p) => [p.id, p.thickness, !!p.external]), [["worktop", 16, false], ["worktop:lower", 16, false]]);
+  // из палитры (постформинг по умолчанию) без кухонных низов: на комод, ЛДСП 32 в раскрое
   const kom = assembleModule("drawers", 900, 800, 284, look("Тэффи"));
   let p: Project = newProject(kom);
-  p = appendModule(p, top);
-  assert.equal(p.modules.at(-1)!.y, 800, "ставится на комод");
+  p = appendModule(p, assembleModule("worktop", 2600, 38, 320, look("Тэффи")));
+  const wt = p.modules.at(-1)!;
+  assert.equal(wt.y, 800, "ставится на комод");
+  assert.deepEqual([wt.module.worktop!.material, wt.module.worktop!.thickness, wt.module.height], ["ldsp", 32, 32]);
+  assert.deepEqual(validate(wt.module), []);
   const e = estimate(p), ids = e.lines.map((l) => l.id);
   assert.ok(ids.includes("worktop-glue") && !ids.some((x) => x.startsWith("worktop:ldsp")), ids.join(","));
   assert.equal(e.lines.find((l) => l.id === "worktop-glue")!.quantity, 0.832);
-  // кухонная (постформинг) без кухонных низов — как было: отказ
-  assert.throws(() => appendModule(newProject(kom), assembleModule("worktop", 2600, 38, 600, look("Тэффи"))), /нижние кухонные корпуса/);
+  // без кухонных низов и без комода/тумбы (только высокий шкаф) — как было: отказ
+  assert.throws(() => appendModule(newProject(wardrobe()), assembleModule("worktop", 2600, 38, 600, look("Тэффи"))), /нижние кухонные корпуса/);
 });
 test("заказ 7437584 (изделия 2, 4, 5): собирается функциями без ошибок и пересечений, все позиции с ценой", () => {
   const p = orderProject();

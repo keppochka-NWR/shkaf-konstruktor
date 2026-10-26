@@ -370,16 +370,17 @@ export const WORKTOP_CHOICES: readonly { id: string; label: string; material: Wo
   { id: "quartz-20", label: "Кварц 20", material: "quartz", thickness: 20, hint: "Кварцевый агломерат 20 мм, торец полированный" },
   { id: "postforming-38", label: "ЛДСП 38", material: "postforming", thickness: 38, hint: "ЛДСП постформинг 38 мм (СКИФ) — как сейчас" },
   { id: "acrylic-40", label: "Акрил 40", material: "acrylic", thickness: 40, hint: "Акриловый камень 12 мм с подклейкой до 40 мм" },
-  // заказ 7437584 (ТВ-зона): столешница из ЛДСП корпуса — две плиты 16 склейкой в 32, кромка 2 по периметру, в раскрое ЛДСП
-  { id: "ldsp-32", label: "ЛДСП 32 (16+16)", material: "ldsp", thickness: 32, hint: "Две плиты ЛДСП 16 в цвет корпуса склейкой в 32 мм, кромка 2 мм по периметру — в раскрое ЛДСП (ТВ-зоны, комоды, шкафы)" },
 ];
-/** Столешница ЛДСП 32 (16+16) — шкафная (ТВ-зона, комод): глубина от 250; остальные материалы — кухонные, от 400. */
+/** Шкафная столешница ЛДСП 32 (заказ 7437584, ТВ-зона): две плиты 16 в цвет корпуса склейкой, кромка 2 по периметру, в раскрое ЛДСП.
+ *  Кухонный список выбора (5 вариантов, задача Макса 19.10) не меняется: такая столешница получается сама, когда её ставят без
+ *  кухонных низов — на комод/тумбы (project.ts appendModule). Глубина — от 250; кухонные — от 400. */
+export const isSlabWorktop = (w: Pick<WorktopSpec, "material" | "thickness">) => w.material === "ldsp" && w.thickness === 32;
 export const WORKTOP_LDSP_MIN_DEPTH = 250;
-export const worktopMinDepth = (w: Pick<WorktopSpec, "material">) => (w.material === "ldsp" ? WORKTOP_LDSP_MIN_DEPTH : 400);
+export const worktopMinDepth = (w: Pick<WorktopSpec, "material" | "thickness">) => (isSlabWorktop(w) ? WORKTOP_LDSP_MIN_DEPTH : 400);
 /** Камень и компакт: толщина задана материалом, кромки ЛДСП нет — торец обрабатывается (строка сметы «обработка торца»). */
 export const worktopSolid = (w: WorktopSpec) => w.material === "compact" || w.material === "acrylic" || w.material === "quartz";
 /** Допустимые толщины материала с фиксированной толщиной; у старых материалов — не ограничено (поле «Толщина» 12–60). */
-export const WORKTOP_THICKNESS: Partial<Record<WorktopMaterial, number[]>> = { compact: [12], acrylic: [12, 40], quartz: [20], ldsp: [32] };
+export const WORKTOP_THICKNESS: Partial<Record<WorktopMaterial, number[]>> = { compact: [12], acrylic: [12, 40], quartz: [20] };
 /** Сменить материал: толщина — по материалу (акрил сохраняет выбранную подклейку), высота модуля = толщина. */
 export function setWorktopMaterial(m: Module, material: WorktopMaterial, thickness?: number) {
   const fixed = WORKTOP_THICKNESS[material], cur = m.worktop!.thickness;
@@ -1139,7 +1140,7 @@ export function worktopParts(m: Module): Part[] {
   const w = m.worktop!, T = w.thickness, out: Part[] = [];
   // ЛДСП 32 (заказ 7437584, ТВ-зона): две плиты 16 в цвет корпуса склейкой, кромка 2 по периметру у обеих — в раскрое ЛДСП как обычные
   // детали 16 мм (как столешница стола RULES.deskTop); склейка — строкой сметы «worktop-glue» (1000 ₽/м², решение Макса 16.10)
-  if (w.material === "ldsp") {
+  if (isSlabWorktop(w)) {
     const t = 16;
     for (const [k, y] of [[0, T - t / 2], [1, t / 2]] as const)
       out.push({ id: k ? "worktop:lower" : "worktop", name: k ? `Столешница ЛДСП · нижняя плита 16 (склейка до ${T})` : "Столешница ЛДСП · верхняя плита 16", size: [m.width, t, m.depth], position: [m.width / 2, y, m.depth / 2], length: m.width, width: m.depth, thickness: t, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: [2, 2, 2, 2] });
@@ -1148,7 +1149,7 @@ export function worktopParts(m: Module): Part[] {
     return out;
   }
   // компакт/кварц/акрил — без кромки ЛДСП (торец обрабатывается — строка сметы), постформинг и ЛДСП — как было
-  out.push({ id: "worktop", name: `Столешница ${worktopLabel(w)} ${T} мм`, size: [m.width, T, m.depth], position: [m.width / 2, T / 2, m.depth / 2], length: m.width, width: m.depth, thickness: T, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: worktopSolid(w) ? [0, 0, 0, 0] : [0, 0, 2, 0], external: true }); // ЛДСП 32 — выше, двумя плитами в раскрое
+  out.push({ id: "worktop", name: `Столешница ${worktopLabel(w)} ${T} мм`, size: [m.width, T, m.depth], position: [m.width / 2, T / 2, m.depth / 2], length: m.width, width: m.depth, thickness: T, role: "body", material: "board", decor: m.decor, grain: "length", grainAxis: 0, edge: worktopSolid(w) ? [0, 0, 0, 0] : [0, 0, 2, 0], external: w.material !== "ldsp" }); // шкафная ЛДСП 32 — выше, двумя плитами
   if(w.cutouts.length) out[0].planHoles=w.cutouts.map(c=>({x:c.x,z:c.z??(m.depth-c.depth)/2,width:c.width,depth:c.depth}));
   for(const c of w.cutouts)if(c.tap){const cx=c.x+c.width/2,cz=(c.z??(m.depth-c.depth)/2)+c.depth/2;(out[0].planHoles??=[]).push({x:cx-17.5,z:cz-230,width:35,depth:35});}
   for (const [i,c] of w.cutouts.entries()) out.push(...sinkParts(m,c,i));
