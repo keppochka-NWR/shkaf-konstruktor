@@ -3,7 +3,7 @@
 // скрытые Blum TANDEM, кромка на клей PUR, ручка-кнопка. Цены без счёта — «после финального расчёта» (pendingPrices).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule,section,parts,parseModule,validate,fastenerCounts,type Module} from '../src/model';
+import {initialModule,section,parts,parseModule,validate,fastenerCounts,facadeBottom,facadeTop,type Module} from '../src/model';
 import {newProject,parseProject,projectErrors,applyAutoFillers,sideExtension,type Project} from '../src/project';
 import {estimate} from '../src/pricing';
 import {partCollisions} from '../src/collisions';
@@ -131,4 +131,19 @@ test('цена по большей модели: max(коэффициент; л�
   assert.equal(e.bySheetFull,e.bySheet+e.outsideSheet);
   assert.equal(e.retail,Math.max(e.byMarkup!,e.bySheetFull));
   assert.equal(parseProject(JSON.parse(JSON.stringify(proj(m,{markup:2.2,overrides:{},priceMax:true})))).calculation!.priceMax,true);
+});
+test('фасады по эскизу: свои низ и верх, карниз вплотную к верху, проверка зазора до карниза', () => {
+  const m=mod({width:586,plinthHeight:80,facadeFrom:78,facadeTo:1998},{doorLeaves:1});
+  assert.deepEqual(validate(m),[]);
+  const d=parts(m).find(p=>p.role==='door')!;
+  assert.equal(d.size[1],1920);assert.equal(facadeBottom(m),78);assert.equal(facadeTop(m),1998);
+  const a=mod({width:586,height:450,plinthHeight:0,topStrip:78,facadeFrom:0,facadeTo:370},{doorLeaves:1});
+  assert.deepEqual(validate(a),[]);
+  const s=parts(a).find(p=>p.id==='top-strip')!;
+  assert.equal(s.position[1]+s.size[1]/2,450);assert.equal(parts(a).find(p=>p.role==='door')!.size[1],370);
+  assert.ok(validate({...a,topStrip:80}).some(e=>e.includes('заходит на планку')));
+  assert.ok(validate({...m,facadeTo:300}).some(e=>e.includes('Фасады по эскизу')));
+  // без полей — как раньше
+  const old=mod({width:586,plinthHeight:80},{doorLeaves:1});
+  assert.equal(parts(old).find(p=>p.role==='door')!.size[1],2000-2-30);
 });
