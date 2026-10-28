@@ -7,6 +7,7 @@ import {OVEN} from './ovenDimensions';
 import type { Module, Part } from "./model";
 import { ALU_EXTRAS, aluLabel } from "./alu";
 import { qrot, type Quat } from "./quat";
+import { handleById } from "./handles";
 
 export type KDrawerSystem = "axis-pro" | "firmax-ldsp" | "versalite-h45" | "start-sc" | "indigo" | "modern-slide";
 /** Короб ящика Firmax скрытого монтажа (ЛДСП 16), по 37 ящикам Базиса (k03–k31): боковины в gap от боковин корпуса, длина len;
@@ -838,6 +839,13 @@ export function kitchenDrawerParts(m: Module, out: Part[], faceGap: number, faca
         // id с «:drawer:» — как у ручек ящиков студии: сцена и проверки длины ручки ищут фасад по этому маркеру
         out.push({ id: `${id}:drawer:handle`, name: "Ручка фасада · " + kh.name, size: [L, W, D], position: [hx, hy, fz + (kh.size ? D / 2 : 13)], length: L, width: D, thickness: W, role: "handle", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], anchor: [hx, hy, fz],
           ...(kh.mesh && kh.quat ? { model: { file: `hardware/bazis/${kh.mesh}.glb`, length: "x", native: true, origin: [hx, hy, fz], quat: kh.quat } } : {}) });
+      } else if (!kh && !m.bazis && !m.noHandles && !m.gola && m.doorOpen !== "push") {
+        // критик 28.10.2026: кухня из шаблона студии («Нижний с ящиками» кухни прямой) — фасады ящиков были без ручек, хотя у дверей
+        // кухни ручка есть. Ручка ящика — ручка модуля (drawerHandleId ?? handleId, как у дверей), горизонтально по центру у верхней
+        // кромки (решение 20.10: у нижних — «сверху по центру»), RULES.handleCenterEdge = 40 мм. Модули Базиса (m.bazis) — как в Базисе.
+        const h = handleById(m.drawerHandleId ?? m.handleId), hx = m.width / 2, hy = k.y1 - 40, fz = F + faceAir + fT;
+        if (h.len + 40 <= fw)
+          out.push({ id: `${id}:drawer:handle`, name: "Ручка ящика · " + h.label, size: [h.len, 10, 25], position: [hx, hy, fz + 13], length: h.len, width: 25, thickness: 10, role: "handle", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], anchor: [hx, hy, fz] });
       }
     }
     if (isIndigo(k)) {
