@@ -16,7 +16,7 @@ export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value:
 import {caseworkParts,caseworkErrors,type Casework} from './casework';
 import {cornerParts,cornerErrors,cornerBoxes,cornerDrawer,normalizeCorner,type CornerSpec} from './cornerWardrobe';
 import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
-import { handleById, handleKind, handleSpec, HANDLES, HANDLE_MARGIN, LONG_HANDLE, type Handle } from "./handles";
+import { handleById, handleKind, handleShape, handleSpec, HANDLES, HANDLE_MARGIN, LONG_HANDLE, DEFAULT_HANDLE, type Handle } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, ALU_EXTRAS, ALU_INSERTS, type AluFacade } from "./alu";
 import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
@@ -627,6 +627,25 @@ export function setFacadeHandle(m:Module,pid:string,handleId:string){
  const s=m.sections.find(s=>s.id===pid.split(':')[0]);if(!s)throw Error('Секция фасада не найдена.');
  if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].handleId=handleId;}
  else{const k=Number(pid.split(':door:')[1]);s.doorHandles=Array.from({length:4},(_,i)=>s.doorHandles?.[i]??null);s.doorHandles[k]=handleId;}
+}
+/** Решение Макса 26.10.2026: зеркальная дверь (зеркало на основе ЛДСП) открывается торцевой ручкой. Ручка по умолчанию при выборе
+ *  зеркала — торцевая FP527 (как в заказе 7441182); в смете торцевые — 2 ₽ за мм длины. */
+export const MIRROR_EDGE_HANDLE = "fp527-160";
+const isEdgeHandle = (id?: string | null) => handleShape(handleById(id ?? undefined)) === "edge";
+/** Выбор зеркала на фасадах (App, панель «Зеркало на фасадах»): скобы дверей → торцевая ручка. Ручки ящиков не меняются (их ручка
+ *  шла от ручки модуля — закрепляем её в drawerHandleId). Push-to-open и «без ручек» — не трогаем (ручки нет). */
+export function mirrorEdgeHandles(m: Module): void {
+  if (m.doorOpen === "push" || m.noHandles) return;
+  if (!isEdgeHandle(m.handleId)) {
+    if (m.drawerHandleId === undefined && m.sections.some((s) => s.drawers > 0)) m.drawerHandleId = m.handleId ?? DEFAULT_HANDLE;
+    m.handleId = MIRROR_EDGE_HANDLE;
+  }
+  for (const s of m.sections) if (s.doorHandles) s.doorHandles = s.doorHandles.map((h) => (h && !isEdgeHandle(h) ? MIRROR_EDGE_HANDLE : h));
+}
+/** Двери с зеркалом, на которых стоит не торцевая ручка (скоба на зеркале) — предупреждение панели. */
+export function mirrorBracketDoors(m: Module): number {
+  if (!m.mirror) return 0;
+  return parts(m).filter((p) => p.role === "handle" && !p.id.includes(":drawer:") && /:handle:\d+$/.test(p.id) && !isEdgeHandle(facadeHandleId(m, p.id))).length;
 }
 /** Ручка распашной двери ставится от пола (запрос Макса 20.10): высота центра ручки длиной hl на фасаде y0..y1 (мм от низа корпуса).
  * Обычная ручка без поля — по центру фасада, как раньше; с полем handleFloor — центр на этой высоте.
