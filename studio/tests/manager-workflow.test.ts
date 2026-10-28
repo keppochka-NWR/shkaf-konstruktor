@@ -216,7 +216,10 @@ import {fitDrawersAfterResize,drawerCapTop} from '../src/model';
 test('external drawers shorten hinged doors above their mandatory cap and save correctly',()=>{
  const m=initialModule();m.sections=[section()];const s=m.sections[0];s.drawers=2;s.externalDrawers=true;
  const ps=parts(m),door=ps.find(p=>p.role==='door')!,front=ps.find(p=>p.id.endsWith(':drawer:0:facade'))!;
+ // правка Макса 29.10.2026 «ящик в накладку»: дверь как была (над полкой ящиков), фасад верхнего ящика поднят до неё — зазор как между фасадами
+ const top=ps.find(p=>p.id.endsWith(':drawer:1:facade'))!;
  assert.deepEqual(validate(m),[]);assert.ok(door.position[1]-door.size[1]/2>=drawerCapTop(m,s));
+ assert.ok(Math.abs(door.position[1]-door.size[1]/2-(top.position[1]+top.size[1]/2)-RULES.faceGap)<0.01);
  assert.ok(front.position[2]>m.depth);assert.ok(!ps.some(p=>p.id.includes(':filler:')));
  assert.equal(parseModule(JSON.parse(JSON.stringify(m))).sections[0].externalDrawers,true);
 });

@@ -6,9 +6,10 @@
 import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash, PanelRight, Ruler, Columns2, SlidersHorizontal } from "lucide-react";
 import { cornerOf, reshapeCorner, type CornerSide } from "./kitchenCorner";
 import type { RadialItem } from "./RadialMenu";
-import { boxes, distribute, drawerCapTop, facadeBottom, facadeTop, plinth, RULES, TOP_STRIP_STEPS, type Module, type Section } from "./model";
+import { boxes, distribute, drawerCapTop, drawerFacesEqual, evenDrawerConfigs, externalDrawerBoundary, facadeBottom, facadeTop, plinth, RULES, TOP_STRIP_STEPS, type Module, type Section } from "./model";
 import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
 import { rawKitchen } from "./rawModule";
+import { fullSectionDrawer, relayoutDrawers, setDrawersOverlay } from "./drawerModes";
 
 export type QuickMenuOps = {
   /** Правка этого корпуса (modifyAt) — как селекты и галочки панели. */
@@ -64,10 +65,12 @@ export function backItem(m: Module, ops: QuickMenuOps): RadialItem {
 }
 
 /** Шаблоны наполнения одной секции: те же расчёты, что шаблоны панели (distribute), но только для выбранной секции. */
-export type SectionTemplate = "clear" | "shelves3" | "shelves5" | "rod-shelf" | "drawers-rod" | "drawers-shelves";
+export type SectionTemplate = "clear" | "shelves3" | "shelves5" | "rod-shelf" | "drawers-rod" | "drawers-shelves" | "drawer-full";
 export function applySectionTemplate(n: Module, sid: string, kind: SectionTemplate) {
   const s = n.sections.find((x) => x.id === sid);
   if (!s) throw Error("Выберите секцию.");
+  // правка Макса 29.10.2026: один выкатной ящик на всю секцию (антресоль) — фасад вместо двери секции, короб под высоту, направляющие по глубине
+  if (kind === "drawer-full") { fullSectionDrawer(n, sid); return; }
   // «Очистить наполнение» панели (clearSection): полки, ящики, штанга, пантограф, отметки полок
   s.shelves = []; s.drawers = 0; s.rod = false;
   delete s.pantograph; delete s.rodAt; delete s.drawerConfigs; delete s.glassShelves; delete s.thickShelves; delete s.fixed; delete s.pullouts; delete s.shelfLight; delete s.shelfLights;
@@ -75,6 +78,8 @@ export function applySectionTemplate(n: Module, sid: string, kind: SectionTempla
   if (kind === "rod-shelf") { s.rod = true; s.shelves = distribute(n, s, 1); }
   if (kind === "drawers-rod") { s.drawers = 2; s.rod = true; s.shelves = distribute(n, s, 1); }
   if (kind === "drawers-shelves") { s.drawers = 3; s.shelves = distribute(n, s, 2); }
+  // накладные ящики (корпус без дверей, «в накладку») — равные фасады, нижний опускается на цоколь (правка Макса 29.10.2026)
+  if (s.drawers) relayoutDrawers(n, s);
 }
 
 export function sectionFillItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
@@ -87,6 +92,7 @@ export function sectionFillItem(m: Module, sid: string, ops: QuickMenuOps): Radi
     t("rod-shelf", "Штанга + полка", Shirt, "Полка сверху и штанга под ней"),
     t("drawers-rod", "Ящики 2 + штанга", Archive, "Два ящика внизу, над ними штанга"),
     t("drawers-shelves", "Ящики 3 + полки", Archive, "Три ящика внизу и две полки"),
+    t("drawer-full", "Ящик на всю секцию", Archive, "Один выкатной ящик на всю высоту секции (антресоль): фасад вместо двери, направляющие по глубине"),
     t("clear", "Очистить", Eraser, "Пустая секция. Вернуть — Ctrl+Z"),
   ] };
 }
@@ -141,7 +147,9 @@ export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem
 
 /** Высота нижнего ряда при включении «Разделить фасады по высоте» — та же формула, что галочка панели (половина высоты фасадов секции). */
 export function defaultDoorSplit(m: Module, s: Section) {
-  return Math.round((facadeTop(m) - (s.externalDrawers && s.drawers ? drawerCapTop(m, s) + (s.doorGap ?? RULES.faceGap) : facadeBottom(m))) / 2);
+  // ящики в накладку (правка 29.10): дверь начинается над ящиками — от низа двери (externalDrawerBoundary), как в parts()
+  const ext = externalDrawerBoundary(m, s);
+  return Math.round((facadeTop(m) - (ext && Number.isFinite(ext.doorBottom) ? Math.max(facadeBottom(m), ext.doorBottom) : s.externalDrawers && s.drawers ? drawerCapTop(m, s) + (s.doorGap ?? RULES.faceGap) : facadeBottom(m))) / 2);
 }
 
 /** Ф3b (Покрытие.md, «деление двери по высоте» — 72 изделия): вкл/выкл деления фасадов секции, как галочка панели. */
@@ -191,6 +199,25 @@ export function fillersItem(m: Module, ops: QuickMenuOps): RadialItem {
 export function doorQuickItems(m: Module, sid: string, ops: QuickMenuOps): RadialItem[] {
   if (!quickMenuApplies(m) || !m.doors) return [];
   return [doorSplitItem(m, sid, ops), doorMountItem(m, ops)];
+}
+
+/** Меню ящика (правки Макса 29.10.2026): «В накладку» / «За дверью» — как выбор «Фасады ящиков» панели; «Фасады поровну» — когда
+ *  накладные фасады ящиков секции разной высоты, а расстановку можно выровнять (evenDrawerConfigs). */
+export function drawerQuickItems(m: Module, sid: string, ops: QuickMenuOps): RadialItem[] {
+  if (!quickMenuApplies(m)) return [];
+  const s = m.sections.find((x) => x.id === sid);
+  if (!s || !s.drawers) return [];
+  const out: RadialItem[] = [];
+  if (m.doors) {
+    const on = !!s.externalDrawers;
+    out.push({ id: "drawer-mount", label: on ? "За дверью" : "В накладку", icon: Rows2, active: on,
+      hint: on ? "Ящики за распашной дверью: дверь снова во всю высоту секции" : "Фасады ящиков в плоскости дверей, дверь короче и начинается над ящиками через зазор; петли — по новой высоте",
+      run: () => ops.modify((n) => setDrawersOverlay(n, sid, !on)) });
+  }
+  if (s.drawers > 1 && !drawerFacesEqual(m, s) && evenDrawerConfigs(m, s))
+    out.push({ id: "drawer-even", label: "Фасады поровну", icon: Rows3, hint: "Сделать фасады ящиков секции одинаковой высоты (нижний — до цоколя); верх ящиков не меняется",
+      run: () => ops.modify((n) => { const a = n.sections.find((x) => x.id === sid); if (a) relayoutDrawers(n, a); }) });
+  return out;
 }
 
 /** Быстрые пункты меню корпуса по порядку кольца. */
