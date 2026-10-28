@@ -91,7 +91,8 @@ test("m3: перенос 1100 от стены в ряд — минус целы�
   const inRow = applyAutoFillers({ ...atWall, modules: atWall.modules.map((a) => (a.id === "m2" ? { ...a, x: 1221, z: 30 } : a)) });
   const ea = estimate(atWall), eb = estimate(inRow);
   assert.deepEqual([ea.ldspSheets, eb.ldspSheets, fillerCount(atWall), fillerCount(inRow)], [5, 4, 2, 1]);
-  assert.deepEqual([ea.retail, eb.retail], [97900, 84000], "числа критика: 97 900 → 84 000");
+  // числа критика 97 900 → 84 000; с 28.10.2026 + крепёж корпуса (эксцентрики цоколя, коробы ящиков, саморезы фальша) — по +100
+  assert.deepEqual([ea.retail, eb.retail], [98000, 84100], "числа критика: 97 900 → 84 000 (+100 крепёж корпуса 28.10)");
   assert.ok(sameDesign(atWall, inRow));
   assert.equal(sheetChangeNote({ ldsp: 5, total: ea.retail, fillers: 2 }, { ldsp: 4, total: eb.retail, fillers: 1 }),
     `Цена снизилась на ${(13900).toLocaleString("ru-RU")} ₽: листов ЛДСП 5 → 4 — фальшпанель у стены или в углу убрана. Плита и работа цеха считаются целыми листами раскроя.`);

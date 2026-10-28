@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {catalog} from '../src/catalog';
 import {decorPrice,estimate,HINGE,HARDWARE_KIT} from '../src/pricing';
+import {hullFasteners} from '../src/hullFasteners';
 import {newProject,parseProject,applyCornerFillers,applyAutoFillers,projectErrors} from '../src/project';
 import {roomWarnings} from '../src/roomWarnings';
 import {parts,initialModule,validate,legCount,fastenerCounts,drawerPitch,drawerCapTop,distributeDrawers,section,deskModule} from '../src/model';
@@ -221,7 +222,8 @@ test('price models: markup vs 23 000 per LDSP sheet; fasteners drawn and counted
   const m=p.modules[0].module,fc=fastenerCounts(m),fast=parts(m).filter(x=>x.role==='fastener'&&!x.id.startsWith('shp:'));
   assert.equal(fast.length,fc.confirmats);assert.equal(parts(m).filter(x=>x.id.startsWith('shp:')).length,fc.shelfHolders,'shelf holders drawn as counted');assert.ok(fc.confirmats>=8,'bottom and top give 8 confirmats');
   assert.ok(fast.every(f=>f.material==='metal'));
-  const lines=estimate(newProject()).lines;assert.equal(lines.find(l=>l.id==='confirmat')!.quantity,fc.confirmats);assert.equal(lines.find(l=>l.id==='shelf-holder')!.quantity,fc.shelfHolders);
+  // + конфирматы сборки коробов ящиков (hullFasteners, критик 28.10.2026) — в той же строке, без заглушек
+  const lines=estimate(newProject()).lines;assert.equal(lines.find(l=>l.id==='confirmat')!.quantity,fc.confirmats+hullFasteners(m).boxConfirmats);assert.equal(lines.find(l=>l.id==='confirmat-cap')!.quantity,fc.confirmats);assert.equal(lines.find(l=>l.id==='shelf-holder')!.quantity,fc.shelfHolders);
   assert.ok(!details(newProject()).some(d=>d.role==='fastener'),'fasteners are not board details');
 });
 
@@ -313,7 +315,9 @@ test('eccentric fastening replaces confirmats with barrels and pins and is price
   assert.ok(barrels.length>=8);assert.ok(pins.length>=8);
   const fc=fastenerCounts(m);assert.equal(fc.confirmats,0);assert.equal(fc.eccentrics,barrels.length);
   const p=newProject();p.modules[0].module.fastening='eccentric';const e=estimate(p);
-  assert.ok(e.lines.some(l=>l.id==='eccentric'&&l.quantity===barrels.length));assert.ok(!e.lines.some(l=>l.id==='confirmat'));
+  // + эксцентрики цоколя; конфирматы — только сборка коробов ящиков (внутри корпуса, без заглушек) — hullFasteners, критик 28.10.2026
+  const hx=hullFasteners(p.modules[0].module);
+  assert.ok(e.lines.some(l=>l.id==='eccentric'&&l.quantity===barrels.length+hx.eccentrics));assert.equal(e.lines.find(l=>l.id==='confirmat')?.quantity??0,hx.boxConfirmats);assert.ok(!e.lines.some(l=>l.id==='confirmat-cap'));
 });
 
 test('fixed shelves are full-width, fastened like body horizontals and not counted for shelf holders',()=>{

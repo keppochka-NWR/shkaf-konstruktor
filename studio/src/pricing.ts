@@ -8,6 +8,7 @@ import type {BazisItem} from './model';
 import {catalog,type Tier} from './catalog';
 import {handleById,handleShape} from './handles';
 import {adagioChoice} from './gasLift';
+import {hullFasteners} from './hullFasteners';
 import {weightText} from './weight';
 import {meshById} from './mesh';
 import {ledLook,specText} from './lights';
@@ -438,6 +439,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // кухня по Базису — конфирмат 7×50 (под него присадка D8+D5×35); шкафы — 5×50 по прайсу цеха
     // кухня (правила Базиса): только то, что есть в спецификации Базиса — без заглушек под конфирмат и норматива «Мелочёвка корпуса»
     const kitchen=!!a.module.kitchen;
+    // крепёж корпуса вне 3D-стыков (hullFasteners.ts, критик 28.10.2026): угловой шкаф — стыки корпуса; шкафы — эксцентрики цоколя,
+    // конфирматы сборки коробов ящиков (без заглушек — головки внутри корпуса), саморезы фальшпанелей к стене изнутри корпуса
+    const hx=bz||slab?{confirmats:0,eccentrics:0,boxConfirmats:0,fillerScrews:0}:hullFasteners(a.module);
+    fc.confirmats+=hx.confirmats;fc.eccentrics+=hx.eccentrics;
     // крепёж с другим именем в проекте Базиса (k33/k34: «Евровинт 6х50», n3-wall) — своей строкой, цена как у 5×50 до счёта;
     // евровинт шаблонов (n3-sink, kitchen.screw) — та же строка confirmat:<имя>, один артикул одним ключом (аудит 11.10.2026; после A2
     // `screw` станет parse-алиасом confirmatName, и чтение screw здесь можно убрать)
@@ -448,6 +453,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // кухня (правила Базиса — для кухонь m.kitchen) и модуль из Базиса (bz = isBazisModule из project.ts — единственная точка признака,
     // kitchen.bazis здесь не читается): заглушек под конфирмат и «Мелочёвки корпуса» в проектах Базиса нет; шкафы — как раньше
     if(!kitchen&&!bz&&!slab)add('confirmat-cap','Заглушка самоклеящаяся под конфирмат',fc.confirmats,'шт',FASTENERS.cap.price,FASTENERS.cap.source);
+    if(hx.boxConfirmats)add('confirmat','Конфирмат 5×50 чёрный цинк',hx.boxConfirmats,'шт',FASTENERS.confirmat.price,FASTENERS.confirmat.source);
+    if(hx.fillerScrews)add('screw-4x30-filler','Саморез 4×30 · фальшпанели к боковине изнутри корпуса',hx.fillerScrews,'шт',0.45,'ФАМ: саморез 4×30 — 0,45 ₽; шаг до 500 мм, не меньше 2 на фальшпанель (допущение)');
     if(fc.shelfHolders){if(nm?.shelfHolders)addShelfHolders(byNames(fc.shelfHolders,nm.shelfHolders));else add('shelf-holder','Полкодержатель Boyard p521',fc.shelfHolders,'шт',FASTENERS.shelfHolder.price,FASTENERS.shelfHolder.source);}
     if(fc.eccentrics)add('eccentric','Эксцентриковая стяжка D15 (бочонок + шток)',fc.eccentrics,'компл',FASTENERS.eccentric.price,FASTENERS.eccentric.source);
     if(!kitchen&&!bz&&!slab)add('kit',HARDWARE_KIT.label,1,'корпус',HARDWARE_KIT.price,HARDWARE_KIT.source);
@@ -654,7 +661,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // Части клиенту — до рубля; округление до 100 ₽ — один раз по итогу (аудит 11.10.2026: округление по частям обнуляло
   // фурнитуру 44 ₽ шаблона tpl-base-drawers). Итог = (материалы + фурнитура) × коэффициент, к сотне, + Вернисаж (своя сотня) + розница.
   const split={materialCost,hardwareCost,material:Math.round(materialOwn*settings.markup)+vernissageClient+retailOf('material'),hardware:Math.round(hardwareCost*settings.markup)+retailOf('hardware'),kupe};
-  const byMarkupKnown=Math.round((materialOwn+hardwareCost)*settings.markup/100)*100+vernissageClient+retailOf('material')+retailOf('hardware')+kupe;
+  // сотня итога — от НЕокруглённой себестоимости (критик 28.10.2026, после ручек ящиков кухни): части, округлённые до рубля, × 2,2 давали
+  // у менеджера 106 249,8 → 106 200, а публичная сборка (те же строки, запечённые × 2,2) — 106 250 → 106 300; без округления частей — одна сотня
+  const ownRaw=lines.filter(l=>!l.retail&&!isVernissageLine(l.id)&&(lineGroup(l.id)==='material'||lineGroup(l.id)==='hardware')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
+  const byMarkupKnown=Math.round(Math.round(ownRaw*settings.markup*100)/100/100)*100+vernissageClient+retailOf('material')+retailOf('hardware')+kupe;
   const byMarkup=missing.length?null:byMarkupKnown;
   // смета не завершена: деталь не поместилась в лист (гильотина — unplaced:, сырая деталь Базиса больше листа — unplaced-raw:) —
   // расчётной цены нет, пока технолог не решит (сращивание / отдельная плита)

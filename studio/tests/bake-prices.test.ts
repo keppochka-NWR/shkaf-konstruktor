@@ -138,7 +138,8 @@ test('R1: ручная цена проекта (лист 10 000) в публич
   const m=estimate(p),pub=baked.estimate(p);
   // 83 000 у Codex (5bd8335) + склейка составного фальша 1000 ₽/м² (3dd13b2) и вставки за петлёй (R4) = 83 303
   // + работа цеха 20.10.2026 (3 листа ЛДСП × 1 000 + 1 лист ЛХДФ × (2 000 − 2 500)) × 2,2 = +5 500
-  assert.equal(m.retail,88803);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
+  // + крепёж корпуса 28.10.2026 (hullFasteners: эксцентрики цоколя, конфирматы коробов ящиков) = +100
+  assert.equal(m.retail,88903);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
 });
 test('R1: кухня с 5 ручными ценами 1000 — итог как в менеджерской, позиции не pending',()=>{
   // 5 (было 7): навесы ABS и заглушки с 27.10.2026 с ценой Макса — комплект 120 ₽ клиенту, розница
@@ -147,7 +148,8 @@ test('R1: кухня с 5 ручными ценами 1000 — итог как �
   const m=estimate(p),pub=baked.estimate(p);
   // + работа цеха 20.10.2026: 6 листов ЛДСП × (3 500 − 2 500) × 2,2 = +13 200; ЛХДФ у кухни без работы
   // 27.10.2026: навесы (10 шт) и заглушки (10 шт) больше не ручные 1000 × 2,2 (−44 000), а 5 комплектов × 120 ₽ розницы (+600) = −43 400
-  assert.equal(m.retail,185400);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
+  // 28.10.2026: ручки на фасадах ящиков нижнего с ящиками (3 × UZ 819 · 128, 100 × 2,2) = +600 после округления итога
+  assert.equal(m.retail,186000);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
 });
 test('R1: нестандартный коэффициент проекта не теряется: со штампом менеджера — итог менеджера, без штампа — явное предупреждение',()=>{
   const p=newProject();p.calculation={markup:2.5,overrides:{}};
