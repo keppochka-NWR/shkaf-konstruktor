@@ -1,6 +1,7 @@
 import type {Module,Part,Section,SectionBox} from './model';
 import type {DrawerConfig} from './hardware';
 import type {Project} from './project';
+import {HANDLES,handleById} from './handles';
 
 export type CornerSpec={level:'main'|'upper';sideDepth:number;bayWidth:number;bayDepth:number;middleClear:number;drawerHeight:number;slide:'ball'|'gtv0fpo';slideLength:number;fillingVersion?:1;sharedTop?:boolean};
 export type CornerParameters={arm:number;height:number;sideDepth:number;upperClear:number;middleClear:number;bayWidth:number;bayDepth:number;drawerHeight:number;slide:'ball'|'gtv0fpo';slideLength:number;decor:string;facadeDecor:string;back:'hdf'|'none'};
@@ -46,7 +47,7 @@ export const CORNER_NOTES=[
  'По три ящика с каждой стороны развёрнуты на 90° друг к другу. Глубина боковых полок 400, полочный блок 350. Чистый проём 334, вкладные фасады 330 мм с зазорами по 2. Размер 334 на исходном рисунке трактуется как проём; назначение уточнить.',
  'Направляющие и высота коробов на изображении не подписаны. Для предварительной деталировки приняты шариковые GTV с боковым зазором 13 мм, длина 350; дно ЛДСП 16. Можно выбрать геометрию GTV 0FPO 16 мм. Артикул и присадка подлежат согласованию.',
  'Над каждым блоком ящиков предусмотрена обязательная полка. В центре — штанга и трапециевидная полка из заготовки 618 × 350; её передний край подогнан к проёму. Контур центральной полки восстановлен предположительно.',
- 'Точные петли для диагональных дверей и длинная ручка не выбраны. Показаны условные габариты. Проверка открывания механизма требует артикула; одновременно выдвигать встречные ящики нельзя.',
+ 'Точные петли для диагональных дверей не выбраны. Ручка — выбранная в модуле (по умолчанию модуль без ручки: ручки нет ни в модели, ни в смете). Проверка открывания механизма требует артикула; одновременно выдвигать встречные ящики нельзя.',
  'Раскрой предварительный: лист ЛДСП 2750 × 1830, ХДФ 2800 × 2070, поле 10 мм, пропил 4 мм. Кромка вычтена из размеров заготовок. Фигурные детали укладываются по прямоугольным заготовкам с нанесённым контуром; обрезки внутри этих заготовок повторно не используются. Это не УП и не разрешение в производство.',
 ];
 
@@ -210,9 +211,12 @@ export function cornerParts(m:Module):Part[]{
    if(frontSection.removedDoors?.includes(leaf))continue;
    const s=(leaf?1:-1)*(dw/2+1),v=(w+d)/Math.SQRT2+10;
    const q=add(`${frontId}:door:${leaf}`,'Распашной фасад '+(leaf+1),[dw,dh,t],[(v+s)/Math.SQRT2,y0+dh/2,(v-s)/Math.SQRT2],'door');q.rotY=45;q.hinge=leaf?'right':'left';q.edge=[2,2,2,2];
-   if(leaf===1&&c.level==='main'){
-    const along=s-dw/2+42,normal=v+26;
-    const handle=add(frontId+':handle:1','Ручка условная · длина 900 мм',[22,900,34],[(normal+along)/Math.SQRT2,1100,(normal-along)/Math.SQRT2],'handle',1,'metal');handle.rotY=45;handle.simpleHandle=true;
+   // ручка — выбранная в модуле (критик 28.10.2026: модель рисовала «условную 900 мм» при модуле «без ручки», а смета подставляла
+   // первую ручку каталога). Нет ручки в каталоге (handleId «none» по умолчанию), push-to-open или «без ручек» — ручки нет ни в модели, ни в смете.
+   const hid=frontSection.doorHandles?.[1]??m.handleId,hh=hid&&HANDLES.some(x=>x.id===hid)&&m.doorOpen!=='push'&&!m.noHandles?handleById(hid):undefined;
+   if(leaf===1&&c.level==='main'&&hh){
+    const along=s-dw/2+42,normal=v+26,hy=Math.min(Math.max(1100,y0+50+hh.len/2),y0+dh-50-hh.len/2);
+    const handle=add(frontId+':handle:1','Ручка фасада · '+hh.label,[10,hh.len,25],[(normal+along)/Math.SQRT2,hy,(normal-along)/Math.SQRT2],'handle',1,'metal');handle.rotY=45;handle.simpleHandle=true;
    }
   }
  }
