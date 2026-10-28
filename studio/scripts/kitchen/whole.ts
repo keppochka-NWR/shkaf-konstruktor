@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { parts, type Part } from "../../src/model";
 import { parseProject, applyAutoFillers, projectErrors, type PlacedModule, type Project } from "../../src/project";
-import { estimate } from "../../src/pricing";
+import { estimate, hangerKits } from "../../src/pricing";
 import { interModule, studioBox, pen, isBoard } from "./interModule";
 import { worktopGroupRole } from "./rowWorktop";
 import { etalonHoleItems, holeSig, supplierEdgeKind } from "./wholeChecks";
@@ -137,6 +137,9 @@ for (const k of keys) {
   // штуки Базиса против строк сметы (направляющие — комплектами по ящикам, см. ниже)
   const cnt = (re: RegExp, cat?: string) => Object.entries(names).filter(([n]) => (!cat || n.split(" | ")[0].endsWith(cat)) && re.test(n.split(" | ")[1] ?? "")).reduce((s, [, c]) => s + c, 0);
   const sum = (re: RegExp, mul = 1) => est.filter((l) => re.test(l.id)).reduce((s, l) => s + l.quantity * mul, 0);
+  // навесы ABS — комплектами (пара левый + правый) на модуль, нечётный остаток — комплект (решение Макса 27.10.2026, pricing.ts hangerKits)
+  const rowHangers = Object.entries(names).filter(([n]) => n.startsWith("ряд ") && n.split(" | ")[0].endsWith("навес")).reduce((s, [, c]) => s + c, 0);
+  const hangerKitsBazis = mods.reduce((s, m) => s + hangerKits(m.hardware.filter((h) => h.category === "навес").length), 0) + hangerKits(rowHangers);
   // строки «как в Базисе» (n3): bazis:<категория>:<название>, firmax:<артикул> (комплекты), shelf-holder:<название>, kitchen-leg:<название>
   const pipes = est.some((l) => /^bazis:прочее:Труба/i.test(l.id)) ? cnt(/труба/i) : 0;
   const prodProfiles = cnt(/gola|kb \d|врезной|фасадный профиль|алюминиев/i, "профиль");
@@ -162,7 +165,7 @@ for (const k of keys) {
   const notKit = est.filter((l) => /направляющ/i.test(l.label) && l.unit !== "компл");
   if (notKit.length) { log(`  направляющие не комплектами: ${notKit.map((l) => `${l.id} ${l.quantity} ${l.unit}`).join("; ")}`); issues.push(`направляющие не комплектами (${notKit.length})`); }
   const pairs: [string, number, number][] = [
-    ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["навесы", cnt(/./, "навес"), sum(/^kitchen-hanger$/)],
+    ["опоры", cnt(/./, "опора"), sum(/^kitchen-leg/)], ["клипсы", cnt(/./, "клипса"), sum(/^kitchen-clip$/)], ["комплекты навесов (пара на модуль, Макс 27.10.2026)", hangerKitsBazis, sum(/^kitchen-hanger$/)],
     ["конфирматы", cnt(/./, "конфирмат"), sum(/^confirmat(-7x50)?$/)], ["эксцентрики", cnt(/./, "эксцентрик"), sum(/^eccentric$/)], ["полкодержатели", cnt(/./, "полкодержатель"), sum(/^shelf-holder/)],
     ["шканты", cnt(/./, "шкант"), sum(/^dowel$/)], ["петли", cnt(/^петля/i), sum(/^hinge/)], ["рафиксы", cnt(/./, "рафикс"), sum(/^bazis:рафикс:/)], ["сушки", cnt(/^сушка/i, "сушка"), sum(/^bazis:сушка:Сушка/i)],
     // направляющие — комплектами по 2 шт. (левая + правая), N — ящики (правило Макса 10.10.2026): комплекты сметы (Firmax, Versalite,

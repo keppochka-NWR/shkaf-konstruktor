@@ -237,7 +237,7 @@ test("навесной (решение Макса 23.10): «От пола» > 0 
   assert.deepEqual(ps.filter((x) => /^kitchen-hanger(-cap)?:/.test(x.id)).map((x) => x.id).sort(), ["kitchen-hanger-cap:left", "kitchen-hanger-cap:right", "kitchen-hanger:left", "kitchen-hanger:right"]);
   assert.deepEqual(hits(m), []);
   const lines = estimate(r).lines;
-  assert.equal(lines.find((l) => l.id === "kitchen-hanger")?.quantity, 2);
+  assert.equal(lines.find((l) => l.id === "kitchen-hanger")?.quantity, 1, "два навеса = один комплект ABS (Макс 27.10.2026)");
   assert.equal(lines.find((l) => l.id === "kitchen-hanger-cap")?.quantity, 2);
   assert.equal(parseModule(JSON.parse(JSON.stringify(m))).hanging, true);
   // опустили на пол — снова стоит на полу (без цоколя), навесов нет

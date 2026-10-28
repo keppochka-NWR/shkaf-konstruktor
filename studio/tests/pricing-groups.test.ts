@@ -68,7 +68,10 @@ test('заглушка навеса — одна строка kitchen-hanger-cap
   const p=project(rawModule({source:'bazis-kitchen',counts:{hangers:2},panels:[panel('Вертикальная',[0,0,0,16,720,300])],hardware:[],items:[{name:'Заглушка для мебельного навеса ABS правая',category:'заглушка',n:1},{name:'Заглушка для мебельного навеса ABS левая',category:'заглушка',n:1}]}));
   const e=estimate(p);
   assert.equal(q(p,'kitchen-hanger-cap')?.quantity,2);assert.ok(!e.lines.some(l=>l.id.startsWith('bazis:заглушка:')));
-  assert.equal(q(p,'kitchen-hanger')?.quantity,2);
+  // 2 навеса Базиса = 1 комплект ABS (левый + правый с заглушками) 120 ₽; заглушки — в комплекте, цена 0 (Макс 27.10.2026)
+  assert.equal(q(p,'kitchen-hanger')?.quantity,1);assert.equal(q(p,'kitchen-hanger')?.unit,'компл');assert.equal(q(p,'kitchen-hanger-cap')?.unitPrice,0);
+  // нечётное число навесов модуля — остаток тоже комплектом
+  assert.equal(q(project(rawModule({source:'bazis-kitchen',counts:{hangers:3},panels:[panel('Вертикальная',[0,0,0,16,720,300])],hardware:[]})),'kitchen-hanger')?.quantity,2);
 });
 
 test('сырой шкаф из корпуса Базиса без счётчиков: строка «Фурнитура Базиса не импортирована» без цены → «по коэффициенту» нет',()=>{
@@ -119,7 +122,9 @@ test('округление до 100 ₽ один раз по итогу: час�
   // кухня студии: маленькая фурнитура (шурупы, шканты) даёт ненулевую часть «фурнитура»
   const k=estimate(kitchenProject());
   assert.ok(k.split.hardwareCost>0&&k.split.hardware>0,'фурнитура не обнуляется округлением');
-  assert.equal(k.split.hardware,Math.round(k.split.hardwareCost*k.markup));
+  // + розница фурнитуры поверх коэффициента (навесы ABS комплектами по 120 ₽, Макс 27.10.2026)
+  const retailHw=Math.round(k.lines.filter(l=>l.retail&&lineGroup(l.id)==='hardware').reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
+  assert.ok(retailHw>0);assert.equal(k.split.hardware,Math.round(k.split.hardwareCost*k.markup)+retailHw);
   // решение 16.10.2026: позиции кухни без счёта — «после финального расчёта конструктором», итог — по известным позициям
   assert.equal(k.missing.length,0);assert.ok(k.pending.length>0);assert.equal(k.byMarkup,k.byMarkupKnown);assert.equal(k.byMarkupKnown%100,0);assert.ok(k.byMarkupKnown>0);
   assert.match(estimateCSV(kitchenProject(),k),/Позиции после финального расчёта конструктором: \d+/);
@@ -147,11 +152,11 @@ test('ящики Axis PRO сырого модуля: высота и длина 
   assert.equal(q(p0,'axis-pro:raw')?.quantity,1);
 });
 
-test('k25 построчно: конфирматы 175, опоры 46, клипсы 23, навесы 14, заглушки 14, шканты 30 по 0,7; Axis PRO 3 × 300 + 4 × 500',{skip:!has('kitchen-k25')},()=>{
+test('k25 построчно: конфирматы 175, опоры 46, клипсы 23, навесы 14 (7 комплектов), заглушки 14, шканты 30 по 0,7; Axis PRO 3 × 300 + 4 × 500',{skip:!has('kitchen-k25')},()=>{
   const p=load('kitchen-k25'),e=estimate(p);
   const qty=(id:string)=>e.lines.filter(l=>l.id===id).reduce((s,l)=>s+l.quantity,0);
   assert.equal(qty('confirmat-7x50'),175);assert.equal(qty('kitchen-leg'),46);assert.equal(qty('kitchen-clip'),23);
-  assert.equal(qty('kitchen-hanger'),14);assert.equal(qty('kitchen-hanger-cap'),14);assert.ok(!e.lines.some(l=>l.id.startsWith('bazis:заглушка:')));
+  assert.equal(qty('kitchen-hanger'),7);assert.equal(qty('kitchen-hanger-cap'),14);assert.ok(!e.lines.some(l=>l.id.startsWith('bazis:заглушка:')));
   assert.equal(qty('dowel'),30);assert.equal(q(p,'dowel')?.unitPrice,0.7);
   const axis=e.lines.filter(l=>/^axis-pro:(\d+|raw):/.test(l.id)&&!l.id.startsWith('axis-pro:inner'));
   const byLen=(L:number)=>axis.filter(l=>l.id.split(':').includes(String(L))).reduce((s,l)=>s+l.quantity,0);

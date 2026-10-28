@@ -59,7 +59,7 @@ test('добор 32: две плиты в цвет корпуса, вылет 32
   assert.equal(n.modules[0].x,0);
   assert.ok(line(n,'glue32')!.quantity>1.4);
 });
-test('зеркало на фасаде: признак двери, строки зеркала, плёнки, полировки; наклейка — финальный расчёт', () => {
+test('зеркало на фасаде: признак двери, строки зеркала, плёнки, полировки; наклейка — 1 200 ₽/м² клиенту (Макс 27.10.2026)', () => {
   const m=mod({width:600,mirror:'mirror-silver',hingeBrand:'blum'},{doorLeaves:1});
   assert.deepEqual(validate(m),[]);
   const door=parts(m).find(p=>p.role==='door')!;
@@ -69,7 +69,8 @@ test('зеркало на фасаде: признак двери, строки 
   assert.ok(Math.abs(line(p,'glass-mirror:mirror-silver')!.quantity-area)<0.001);
   assert.equal(line(p,'glass-mirror-film')!.unitPrice,90);
   assert.equal(line(p,'glass-mirror-polish')!.unitPrice,100);
-  assert.equal(line(p,'glass-mirror-glue')!.pending,true);
+  const glue=line(p,'glass-mirror-glue')!;
+  assert.deepEqual([glue.unitPrice,glue.retail,!!glue.pending],[1200,true,false]);assert.ok(Math.abs(glue.quantity-area)<0.001);
   assert.ok(estimate(p).byMarkup!>estimate(proj({...m,mirror:undefined})).byMarkup!);
   assert.ok(validate({...m,doors:false}).some(e=>e.includes('Зеркало на фасадах')));
   assert.ok(validate({...m,mirror:'glass-clear'}).some(e=>e.includes('Зеркало на фасадах')));
@@ -111,8 +112,10 @@ test('заказ 7427796: оба варианта собираются функ�
   for(const p of [a,b]){assert.deepEqual(projectErrors(p),[]);for(const x of p.modules)assert.deepEqual(partCollisions(parts(x.module),x.module),[],x.module.name);}
   const ea=estimate(a),eb=estimate(b);
   assert.equal(ea.missing.length,0);assert.equal(eb.missing.length,0);
-  const mirrorCost=eb.lines.filter(l=>l.id.startsWith('glass-mirror')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
-  assert.ok(Math.abs((eb.byMarkup!-ea.byMarkup!)-mirrorCost*2.2)<=100);
+  // закупка зеркала (зеркало, плёнка, полировка) × 2,2 + наклейка — розница 1 200 ₽/м² как есть (Макс 27.10.2026)
+  const mirrorLines=eb.lines.filter(l=>l.id.startsWith('glass-mirror')),cost=(ls:typeof mirrorLines)=>ls.reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
+  const mirrorCost=cost(mirrorLines.filter(l=>!l.retail))*2.2+cost(mirrorLines.filter(l=>l.retail));
+  assert.ok(Math.abs((eb.byMarkup!-ea.byMarkup!)-mirrorCost)<=100);
   // габарит: 1334 по ширине (с добором 32), 2450 по высоте
   const xs=b.modules.map(x=>[x.x,x.x+x.module.width+sideExtension(x.module,'right')]).flat();
   assert.equal(Math.max(...xs)-Math.min(...xs),1334);

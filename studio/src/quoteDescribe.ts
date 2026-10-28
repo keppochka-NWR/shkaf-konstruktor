@@ -128,7 +128,8 @@ export function plainFeatures(m: Module, opts: { omitHinges?: boolean } = {}): s
   }
   if (m.seatTop && m.bottomType === "none") out.push("скамья без дна — обувь стоит на полу; спереди царга");
   const ctl = [m.lightSensor ? "датчик открывания фасадов" : "", m.lightDimmer ? "диммер" : "", m.lightSwitch === "piezo" ? "беспроводной пьезовыключатель" : ""].filter(Boolean);
-  if (ctl.length && all.some((p) => p.role === "light" && !p.id.startsWith("groove:"))) out.push("подсветка: " + ctl.join(", ") + ", блок питания");
+  // блок питания — своей строкой сметы (отдельно от цены подсветки за метр, решение Макса 27.10.2026): с управлением или флагом lightPsu
+  if ((ctl.length || m.lightPsu) && all.some((p) => p.role === "light" && !p.id.startsWith("groove:"))) out.push("подсветка: " + [...ctl, "блок питания"].join(", "));
   // заказ 7441182: утопленный цоколь, посадочное место и щит над ним — строкой в КП
   if (m.plinthRecess !== undefined) out.push(`цоколь утоплен на ${m.plinthRecess} мм, двери над цоколем`);
   if (m.seatTop) out.push("посадочное место 32 мм сверху — две плиты ЛДСП 16 склейкой под одну кромку");

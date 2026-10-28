@@ -15,8 +15,9 @@ import {pendingTotalLabel} from '../src/pendingPrices';
 
 test('R6: строка о неоценённых позициях в КП — по статусу комплектации, скидка её не убирает; закрыть — только явной отметкой',()=>{
   const p:Project={...newProject(),modules:createKitchenRow(3000,initialModule())},k=estimate(p);
-  assert.equal(k.pending.length,7);
-  const note=pendingTotalLabel(7);
+  // 5: навесы и заглушки с 27.10.2026 с ценой Макса (комплект 120 ₽), не финальный расчёт
+  assert.equal(k.pending.length,5);
+  const note=pendingTotalLabel(5);
   assert.ok(quoteHTML(p,'Client',String(k.retail),'',undefined,{cost:k}).includes(note),'цена = смете');
   assert.ok(quoteHTML(p,'Client',String(k.retail!-1000),'',undefined,{cost:k}).includes(note),'скидка 1000 ₽ — строка остаётся');
   assert.ok(quoteHTML(p,'Client','',' ',undefined,{cost:k}).includes(note),'цена «после согласования» — строка остаётся');

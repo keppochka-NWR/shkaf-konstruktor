@@ -40,8 +40,25 @@ export const isVernissageLine=(id:string)=>id.startsWith('vernissage');
 /** pending — позиция без цены «после финального расчёта конструктором» (pendingPrices.ts, решение Макса 16.10.2026): не в missing, в итог не входит. */
 /** Склейка составного фальша 32 мм — розничная цена цеха за м² (решение Макса 16.10.2026). */
 export const FALSH_GLUE_RETAIL_M2 = 1000;
-/** Лифт газовый Premial АДАЖИО ПРЕМИУМ, ₽/шт клиенту — цена сайта allpremial.ru 26.10.2026 (решение Макса: по цене сайта, без коэффициента). */
+/** Лифт газовый Premial АДАЖИО ПРЕМИУМ, ₽/шт клиенту — цена сайта allpremial.ru 26.10.2026 (решение Макса: по цене сайта, без коэффициента);
+ *  проверено 27.10.2026: 60N — allpremial.ru/catalog/gazlifty-premial/59951/ (59952), 80N — /62617/ (62618), 347,20 руб. */
 export const ADAGIO_RETAIL = 347.2;
+/** Лифт газовый Premial АДАЖИО стандартный 50N–120N, ₽/шт клиенту — цена сайта allpremial.ru 27.10.2026 (решение Макса 27.10.2026: АДАЖИО
+ *  всех усилий, в т.ч. 100/120N, по цене сайта Premial, розница без коэффициента). Белый — 122,50 руб. (серый — 121,40), карточки ниже. */
+export const ADAGIO_STD_RETAIL = 122.5;
+export const ADAGIO_STD_URL: Record<number, string> = {
+  50: 'allpremial.ru/catalog/gazlifty-premial/58860/', 60: 'allpremial.ru/catalog/gazlifty-premial/58861/', 80: 'allpremial.ru/catalog/gazlifty-premial/58862/',
+  100: 'allpremial.ru/catalog/gazlifty-premial/58863/', 120: 'allpremial.ru/catalog/gazlifty-premial/58864/'};
+/** Решение Макса 27.10.2026 (РЕШЕНИЯ.md), источник «Макс 27.10.2026»: цены КЛИЕНТУ — розница поверх коэффициента (в «цене за лист» — вне
+ *  листовой модели, сверху листов); сборка их не запекает ×2,2. Толкатель TIP-ON — 120 ₽/шт; навесы ABS — 120 ₽ за комплект (комплект =
+ *  пара левый + правый с заглушками; в смете навесы комплектами, заглушки — в комплекте, без своей цены); наклейка зеркала на основу —
+ *  1 200 ₽/м² (клеит цех). */
+export const TIP_ON_RETAIL = 120;
+export const HANGER_KIT_RETAIL = 120;
+export const MIRROR_GLUE_RETAIL_M2 = 1200;
+const MAX_SRC_2710 = 'Макс 27.10.2026: цена клиенту (розница поверх коэффициента)';
+/** Навесов в комплекте ABS: левый + правый. Нечётный остаток модуля — ещё комплект (половину не продают). */
+export const hangerKits = (pieces: number) => Math.ceil(pieces / 2);
 /** Армирующая плёнка для зеркала — закупка АТБ, ₽/м² (прайс 01.01.2026, справочник закупочных цен). */
 export const MIRROR_FILM_M2 = 90;
 /** Решение Макса 26.10.2026 (РЕШЕНИЯ.md): цены КЛИЕНТУ — розница поверх коэффициента, общими константами (сборка их не запекает ×2,2):
@@ -297,7 +314,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
     // отверстие-крепёж Базиса («3x3», «5x12»…): изделия нет — строка с количеством, как в Базисе, цена 0 (сверловка — в «Работе цеха»)
     if(it.category==='отверстие'){add('bazis:отверстие:'+it.name,it.name+' (крепёж Базиса без изделия)',it.n,'шт',0,'Как в проекте Базиса: отверстие-крепёж с позицией; изделия нет, сверловка — в «Работе цеха»');continue;}
     // заглушка навеса Базиса («… ABS правая/левая») — одной строкой с заглушками параметрических модулей (k25: 6 + 4 + 4 = 14 одной строкой)
-    if(it.category==='заглушка'&&/навес/i.test(it.name)){add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS',it.n,'шт',null,'Как в проектах Базиса: заглушка на каждый навес; цена не найдена');continue;}
+    if(it.category==='заглушка'&&/навес/i.test(it.name)){add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS (в комплекте навесов)',it.n,'шт',0,HANGER_CAP_SRC);continue;}
     // крепёж и штанги Базиса с ценой цеха (ФАМ, старый калькулятор: шуруп 3,5×16, саморез 4×30, фланец D25, труба D25 по длине) —
     // строка Базиса с ценой; остальное — «как в Базисе» без цены
     const pr=bazisPriced(it.name,it.len);
@@ -313,6 +330,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       else if(/^вкладная$/i.test(t))add('hinge-inset'+suffix,hb.soft.label+' · вкладная',n,'шт',sh.price,sh.source,sh.retail);
       else add('hinge-bazis:'+t+suffix,'Петля '+hb.label+' · '+t+' (тип как в Базисе)',n,'шт',null,'Тип петли — по Базису; закупочной цены этого типа в прайсах нет (есть только накладная '+hb.soft.price+' ₽) — уточнить');}}
   function addShelfHolders(names:Record<string,number>){for(const [name,n] of Object.entries(names))add('shelf-holder:'+name,/^полкодержатель/i.test(name)?name:'Полкодержатель '+name,n,'шт',FASTENERS.shelfHolder.price,'Артикул — как в Базисе; цена — оценка как у Boyard p521, подтвердить');}
+  /** Навесы ABS модуля — комплектами (решение Макса 27.10.2026): pieces навесов → hangerKits(pieces) комплектов по 120 ₽ клиенту; заглушки —
+   *  в комплекте (строка kitchen-hanger-cap остаётся с количеством, как в Базисе, цена 0 — без двойного счёта). */
+  function addHangers(pieces:number){add('kitchen-hanger','Навесы мебельные ABS регулируемые — комплект (левый + правый с заглушками)',hangerKits(pieces),'компл',HANGER_KIT_RETAIL,MAX_SRC_2710+': навесы ABS — '+HANGER_KIT_RETAIL+' ₽ за комплект (пара левый + правый с заглушками)',true);}
+  const HANGER_CAP_SRC='Заглушка навеса — входит в комплект навесов ABS ('+HANGER_KIT_RETAIL+' ₽ за комплект, Макс 27.10.2026); количество — как в Базисе';
   function addLegs(names:Record<string,number>){for(const [name,n] of Object.entries(names)){if(/^опора кухонная регулируемая/i.test(name))add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',n,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');else add('kitchen-leg:'+name,name,n,'шт',null,BZ);}}
   for(const a of p.modules){
     if(a.module.kitchen?.premialPullout) {
@@ -352,7 +373,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       add('dowel','Шкант 8×30',c.dowels??0,'шт',DOWEL.price,DOWEL.source);
       if(r.names?.legs)addLegs(r.names.legs);else add('kitchen-leg','Опора кухонная регулируемая H100-120, чёрная',c.legs??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
       add('kitchen-clip','Клипса для ПВХ цоколя, чёрная',c.clips??0,'шт',null,'Как в проектах Базиса цеха; закупочная цена не найдена — уточнить');
-      add('kitchen-hanger','Навес мебельный регулируемый',c.hangers??0,'шт',null,'Закупочная цена навеса не найдена');
+      if(c.hangers)addHangers(c.hangers);
       if(r.names?.hinges)addHinges(r.names.hinges,bk);else{const hb=HINGE_BRANDS[bk],sh=softHinge(bk,hb);add('hinge'+(bk==='gtv'?'':':'+bk),hb.soft.label,c.hinges??0,'шт',sh.price,sh.source,sh.retail);}
       add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',c.lifts??0,'компл',null,src+' (ФриФолд/подъёмник); цена не найдена');
       // ящики и направляющие — комплектами по ящикам модуля (guideKits: короба/фасады ящиков, система — по направляющим Базиса);
@@ -492,17 +513,17 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
         // решение Макса 26.10.2026: газлифты Premial АДАЖИО — по цене с сайта Premial, это сразу цена клиенту (розница, без коэффициента); 2 шт на фасад (по боковине)
-        // усилие — по весу фасада (решение Макса 26.10.2026, gasLift.ts): ПРЕМИУМ 60/80N — цена сайта; 100/120N — стандартная серия
-        // АДАЖИО, цены на сайте нет — финальный расчёт; тяжелее 120N — подбор другого подъёмника
+        // усилие — по весу фасада (решение Макса 26.10.2026, gasLift.ts): ПРЕМИУМ 60/80N — цена сайта 347,2; 100/120N — стандартная серия
+        // АДАЖИО по цене сайта 122,5 (решение Макса 27.10.2026, карточки allpremial.ru — ADAGIO_STD_URL); тяжелее 120N — подбор другого подъёмника
         if(d.hinge==='top'&&selectedLift==='adagio'){const lc=adagioChoice(d,a.module),wt=weightText(lc.weight)+' кг';
-          if(lc.force&&lc.premium)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ПРЕМИУМ ${lc.force}N — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N на газлифт)`,lc.count,'шт',ADAGIO_RETAIL,'allpremial.ru, карточки 62617/62618/59951 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ на 26.10.2026 — цена клиенту (решение Макса 26.10); усилие по весу фасада (gasLift.ts)',true);
-          else if(lc.force)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ${lc.force}N (стандартный) — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N)`,lc.count,'шт',null,'АДАЖИО стандартный 50N–120N (premial-furniture.ru): цены '+lc.force+'N на сайте нет — цена после финального расчёта конструктором');
+          if(lc.force&&lc.premium)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ПРЕМИУМ ${lc.force}N — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N на газлифт)`,lc.count,'шт',ADAGIO_RETAIL,'allpremial.ru/catalog/gazlifty-premial/ карточки 62617/62618/59951/59952 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ (26.10, проверено 27.10.2026) — цена клиенту (решение Макса 26.10); усилие по весу фасада (gasLift.ts)',true);
+          else if(lc.force)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ${lc.force}N (стандартный) — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N)`,lc.count,'шт',ADAGIO_STD_RETAIL,MAX_SRC_2710+': АДАЖИО всех усилий по цене сайта Premial — '+ADAGIO_STD_URL[lc.force]+', '+String(ADAGIO_STD_RETAIL).replace('.',',')+' ₽ (белый) на 27.10.2026; усилие по весу фасада (gasLift.ts)',true);
           else add('lift-mechanism:premial-adagio:heavy',`Подъёмник для тяжёлого фасада (фасад ${wt}, нужно ${lc.required}N — больше 120N АДАЖИО)`,1,'компл',null,'Тяжелее ряда АДАЖИО (до 120N): подбор подъёмника Premial для тяжёлых фасадов — цена после финального расчёта конструктором');}
         else if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
         if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
-        // решение Макса 26.10.2026: откидной фасад на газлифте без ручки открывается толкателем TIP-ON — позиция сама; цены в рублях
-        // на allpremial.ru / blum.com не нашли (26.10.2026) — финальный расчёт (pendingPrices.ts)
-        if(d.hinge==='top'&&selectedLift&&!kitchen&&(push||!allParts.some(p=>p.role==='handle'&&p.id===d.id.replace(':door:',':handle:'))))add('tip-on-lift','Толкатель TIP-ON для откидного фасада без ручки',1,'шт',null,'TIP-ON (Blum) для подъёмного фасада: рублёвой цены на allpremial.ru и blum.com нет — цена после финального расчёта конструктором');
+        // решение Макса 26.10.2026: откидной фасад на газлифте без ручки открывается толкателем TIP-ON — позиция сама; цена — Макс 27.10.2026:
+        // 120 ₽/шт клиенту, розница поверх коэффициента
+        if(d.hinge==='top'&&selectedLift&&!kitchen&&(push||!allParts.some(p=>p.role==='handle'&&p.id===d.id.replace(':door:',':handle:'))))add('tip-on-lift','Толкатель TIP-ON для откидного фасада без ручки',1,'шт',TIP_ON_RETAIL,MAX_SRC_2710+': толкатель TIP-ON — '+TIP_ON_RETAIL+' ₽/шт',true);
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
         else if(nm?.hinges&&!push)bzHinges+=n; // тип петли — по Базису (после цикла)
@@ -538,17 +559,16 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // вешалка в два яруса на трубе (заказ 7437584): держатель штанги на трубе — своей строкой, фланцы трубы — как фланцы штанги
       if(d.role==='flange'&&d.id.includes(':pipe:holder:'))add('rod-pipe-holder','Держатель штанги на вертикальную трубу D25',1,'шт',null,'Держатель штанги на трубу (вешалка в два яруса): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
       else if(d.role==='flange')add('flange25','Фланец D25',1,'шт',40,'Старый калькулятор: 40 ₽; закупку подтвердить');
-      // навес кухни — с заглушкой ABS, как в Базисе (34 кухни: у параметрических модулей навесов 34, заглушек 34)
-      if(d.id.startsWith('kitchen-hanger:')){add('kitchen-hanger','Навес мебельный регулируемый',1,'шт',null,'Закупочная цена навеса не найдена');add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS',1,'шт',null,'Как в проектах Базиса: заглушка на каждый навес; цена не найдена');}
       if(d.material==='glass'&&d.role==='shelf')add('glass-shelf','Стеклянная полка · обработка и держатели',d.size[0]*d.size[2]/1e6,'м²',null,'Толщина/обработка и цена требуют согласования; дополнительно к листовой модели');
       if(d.role==='rod'&&d.id.endsWith(':pipe'))add('pipe25','Труба вертикальная D25 · вешалка в два яруса',d.length/1000,'м',300,'Как штанга D25 (старый калькулятор: 300 ₽/м); закупку подтвердить');
       else if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
-      // зеркало на фасаде (заказ 7427796): зеркало 4 мм по площади фасада на основу ЛДСП (фасад в раскрое), армирующая плёнка, полировка кромки; наклейка — финальный расчёт
+      // зеркало на фасаде (заказ 7427796): зеркало 4 мм по площади фасада на основу ЛДСП (фасад в раскрое), армирующая плёнка, полировка кромки;
+      // наклейка на основу — клеит цех, 1 200 ₽/м² клиенту (Макс 27.10.2026, розница поверх коэффициента; в «цене за лист» — сверху листов)
       if(d.role==='door'&&d.mirror){const ins=aluInsert(d.mirror),area=d.size[0]*d.size[1]/1e6,perimeter=2*(d.size[0]+d.size[1])/1000;
         add('glass-mirror:'+d.mirror,(ins?.label??'Зеркало')+' на фасад (основа — фасад ЛДСП 16)',area,'м²',ins?.perM2??null,ins?.source??'Цена зеркала не найдена');
         add('glass-mirror-film','Армирующая плёнка для зеркала',area,'м²',MIRROR_FILM_M2,'АТБ, прайс 01.01.2026: армировочная плёнка для зеркала 90 ₽/м²');
         add('glass-mirror-polish','Полировка кромки зеркала 4 мм',perimeter,'пог.м',RULES.glassTopPolishPerM,'Прайс МВМ стеклообработка 13.01.2026 (как у стеклянной крыши)');
-        add('glass-mirror-glue','Наклейка зеркала на основу (клей, работа)',area,'м²',null,'Как цех клеит зеркало на основу — цена после финального расчёта конструктором');}
+        add('glass-mirror-glue','Наклейка зеркала на основу (клей, работа цеха)',area,'м²',MIRROR_GLUE_RETAIL_M2,MAX_SRC_2710+': наклейка зеркала на основу — '+MIRROR_GLUE_RETAIL_M2+' ₽/м², клеит цех',true);}
       if(d.id==='top'&&d.material==='glass'&&a.module.topGlass){
         const ins=aluInsert(a.module.topGlass),area=d.size[0]*d.size[2]/1e6,perimeter=2*(d.size[0]+d.size[2])/1000;
         add('glass-top:'+a.module.topGlass,'Крыша · '+(ins?.label??'стекло'),area,'м²',ins?.perM2??null,ins?.source??'Цена стекла не найдена');
@@ -569,8 +589,13 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
+    // навесы ABS (кухни, подвесные модули) — комплектами на модуль (решение Макса 27.10.2026), заглушка ABS — на каждый навес, как в Базисе
+    // (34 кухни: у параметрических модулей навесов 34, заглушек 34), цена заглушек — в комплекте навесов
+    const hangerPcs=allParts.filter(p=>p.id.startsWith('kitchen-hanger:')).length;
+    if(hangerPcs){addHangers(hangerPcs);add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS (в комплекте навесов)',hangerPcs,'шт',0,HANGER_CAP_SRC);}
     // управление подсветкой модуля (окно «Подсветка», цены Макса 26.10.2026 — клиенту, поверх коэффициента): датчик открывания фасадов
-    // (m.lightSensor, заказ 7442203), диммер, беспроводной пьезовыключатель; блок питания — флагом или сам с любым из них (один на модуль)
+    // (m.lightSensor, заказ 7442203), диммер, беспроводной пьезовыключатель; блок питания — флагом или сам с любым из них (один на модуль).
+    // Блок питания — ОТДЕЛЬНОЙ строкой, в цену подсветки за метр (light-shelf / light-roof / light-stand) он не входит (решение Макса 27.10.2026)
     if(allParts.some(p=>p.role==='light'&&!p.id.startsWith('groove:'))){const mm=a.module;
       if(mm.lightSensor)add('light-sensor','Датчик открывания фасадов для подсветки (включение при открывании)',1,'шт',LIGHT_SENSOR_RETAIL,MAX_SRC_2610+': датчик открывания фасадов — '+LIGHT_SENSOR_RETAIL+' ₽',true);
       if(mm.lightDimmer)add('light-dimmer','Диммер подсветки',1,'шт',LIGHT_DIMMER_RETAIL,MAX_SRC_2610+': диммер — '+LIGHT_DIMMER_RETAIL+' ₽',true);

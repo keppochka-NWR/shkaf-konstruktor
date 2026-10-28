@@ -2,7 +2,7 @@
 //  - детали: число панелей студии (плита, ХДФ, стекло) = число панелей Базиса (модули + «Ряд» как его собирает импорт);
 //  - листы: толщины листов раскроя — только толщины плитных деталей Базиса (не «16.7» от повёрнутой детали);
 //  - столешница: толщины строк worktop:raw — только толщины столешниц Базиса (не «16 мм» из полок пенала, не «6 мм» из макета);
-//  - фурнитура: опоры, клипсы, навесы, конфирматы, шканты, петли — ровно счётчики Базиса;
+//  - фурнитура: опоры, клипсы, конфирматы, шканты, петли — ровно счётчики Базиса; навесы — комплектами (пара на модуль, Макс 27.10.2026);
 //  - направляющие: комплекты по 2 шт. (левая + правая) = ящики Базиса по коробам (guideKits), не записи Базиса (правило Макса 10.10.2026);
 //  - строки сметы, которых в Базисе нет вовсе (заглушки конфирмата, вырезы, подсветка, ножки шкафов) — должно быть 0;
 //    строки-нормативы цеха («Мелочёвка корпуса», «Обработка деталей уже 70 мм», «Работа») показаны отдельно — это цена работ
@@ -11,7 +11,7 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs";
 import { parseProject } from "../../src/project";
 import { parts } from "../../src/model";
-import { estimate } from "../../src/pricing";
+import { estimate, hangerKits } from "../../src/pricing";
 import { nest } from "../../src/exports";
 import { rawThickness } from "../../src/rawModule";
 import { rowPanelsOf, worktopGroupRole, type EtPanel } from "./rowWorktop";
@@ -44,7 +44,10 @@ for (const f of readdirSync(ET).filter((x) => /^k\d\d\.json$/.test(x)).sort()) {
   const rowLoose = (["other", "profiles"] as const).flatMap((g) => ((e.row?.[g] ?? []) as (H & { box?: number[] })[]).filter((x) => !Array.isArray(x.box) && x.category));
   const hw = [...mods.flatMap((m) => m.hardware), ...((e.row?.hardware ?? []) as H[]), ...rowLoose];
   const cnt = (c: string, rx?: RegExp) => hw.filter((h) => h.category === c && (!rx || rx.test(h.name.trim()))).length;
-  const bHw: Record<string, number> = { "kitchen-leg": cnt("опора"), "kitchen-clip": cnt("клипса"), "kitchen-hanger": cnt("навес"), "confirmat-7x50": cnt("конфирмат"), dowel: cnt("шкант"), eccentric: cnt("эксцентрик"), "shelf-holder": cnt("полкодержатель"),
+  // навесы ABS — комплектами (пара левый + правый) на модуль, нечётный остаток — комплект (решение Макса 27.10.2026, pricing.ts hangerKits)
+  const rowHangers = [...((e.row?.hardware ?? []) as H[]), ...rowLoose].filter((h) => h.category === "навес").length;
+  const hangerKitsB = mods.reduce((s, m) => s + hangerKits(m.hardware.filter((h) => h.category === "навес").length), 0) + hangerKits(rowHangers);
+  const bHw: Record<string, number> = { "kitchen-leg": cnt("опора"), "kitchen-clip": cnt("клипса"), "kitchen-hanger": hangerKitsB, "confirmat-7x50": cnt("конфирмат"), dowel: cnt("шкант"), eccentric: cnt("эксцентрик"), "shelf-holder": cnt("полкодержатель"),
     hinge: cnt("петля", /^петля/i) + cnt("подъёмник", /^петля/i) + cnt("газлифт", /^петля/i) };
   // студия
   const sParts = p.modules.flatMap((a) => parts(a.module)).filter((d) => d.material === "board" || d.material === "hdf" || d.material === "glass");

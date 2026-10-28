@@ -27,17 +27,33 @@ test("газлифт АДАЖИО: усилие по весу фасада (мо
   assert.equal(c.force, 80); assert.equal(c.premium, true);
   const line = est(m).lines.find((l) => l.id.startsWith("lift-mechanism:premial-adagio"))!;
   assert.match(line.label, /80N/); assert.equal(line.unitPrice, 347.2); assert.equal(line.quantity, 2);
-  // тяжёлый фасад (зеркало) — стандартная серия без цены сайта → финальный расчёт с усилием в названии
+  // тяжёлый фасад (зеркало) — стандартная серия АДАЖИО 100/120N по цене сайта Premial 122,5 ₽ (решение Макса 27.10.2026), розница;
+  // тяжелее 120N — подбор подъёмника, финальный расчёт
   const heavy = ant({ mirror: "mirror-silver" }), hd = parts(heavy).find((p) => p.role === "door")!, hc = adagioChoice(hd, heavy);
   assert.ok(hc.required > 80);
   const hl = est(heavy).lines.find((l) => l.id.startsWith("lift-mechanism:premial-adagio"))!;
-  assert.equal(hl.unitPrice, null); assert.ok(hl.pending);
+  if (hc.force) { assert.equal(hl.unitPrice, 122.5); assert.ok(hl.retail && !hl.pending); assert.match(hl.source, /allpremial\.ru\/catalog\/gazlifty-premial\/5886[34]\//); }
+  else { assert.equal(hl.unitPrice, null); assert.ok(hl.pending); }
 });
 
-test("откидной фасад на газлифте без ручки — толкатель TIP-ON (после финального расчёта); с ручкой — нет", () => {
+test("АДАЖИО стандартный 100N и 120N — цена сайта Premial с карточкой товара в источнике (Макс 27.10.2026)", () => {
+  // фасад с зеркалом разной ширины (2 газлифта) — нужное усилие проходит 100N и 120N
+  const found = new Set<number>();
+  for (let width = 610; width <= 1600 && found.size < 2; width += 10) {
+    const m = ant({ width, mirror: "mirror-silver" }), d = parts(m).find((p) => p.role === "door")!, c = adagioChoice(d, m);
+    if ((c.force !== 100 && c.force !== 120) || found.has(c.force)) continue;
+    found.add(c.force);
+    const l = est(m).lines.find((x) => x.id === "lift-mechanism:premial-adagio:" + c.force)!;
+    assert.ok(l, `строка ${c.force}N`); assert.equal(l.unitPrice, 122.5); assert.equal(l.retail, true); assert.ok(!l.pending);
+    assert.match(l.source, c.force === 100 ? /gazlifty-premial\/58863\// : /gazlifty-premial\/58864\//);
+  }
+  assert.deepEqual([...found].sort(), [100, 120], "оба усилия встретились");
+});
+
+test("откидной фасад на газлифте без ручки — толкатель TIP-ON 120 ₽ клиенту (Макс 27.10.2026); с ручкой — нет", () => {
   const e = est(ant());
   const tip = e.lines.find((l) => l.id === "tip-on-lift")!;
-  assert.ok(tip && tip.pending && tip.quantity === 1);
+  assert.ok(tip && !tip.pending && tip.quantity === 1 && tip.unitPrice === 120 && tip.retail);
   const withHandle = ant({ doorOpen: undefined });
   const hasHandle = parts(withHandle).some((p) => p.role === "handle");
   assert.equal(est(withHandle).lines.some((l) => l.id === "tip-on-lift"), !hasHandle);

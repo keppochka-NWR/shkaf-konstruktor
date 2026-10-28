@@ -46,7 +46,8 @@ for (const f of files) {
       ["шканты", qty(/^dowel$/), refN((h) => h.category === "шкант")],
       ["опоры", qty(/^kitchen-leg$/), refN((h) => h.category === "опора")],
       ["клипсы", qty(/^kitchen-clip$/), refN((h) => h.category === "клипса")],
-      ["навесы", qty(/^kitchen-hanger$/), refN((h) => h.category === "навес")],
+      // навесы ABS — комплектами (пара левый + правый) на модуль (решение Макса 27.10.2026)
+      ["комплекты навесов", qty(/^kitchen-hanger$/), Math.ceil(refN((h) => h.category === "навес") / 2)],
       ["заглушки навесов", qty(/^kitchen-hanger-cap$/), refN((h) => h.category === "заглушка" && /навес/i.test(h.name))],
       ["газлифты (комплект на боковину)", qty(/^kitchen-lift:/), Math.ceil(refN((h) => h.category === "газлифт") / 2)],
       // направляющие — комплектами по 2 шт. (левая + правая), N — ящики Базиса по коробам (guideKits; правило Макса 10.10.2026)

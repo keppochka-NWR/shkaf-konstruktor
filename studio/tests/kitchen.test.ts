@@ -53,7 +53,8 @@ test('kitchen wall cabinet: HDF in the groove П16-4×8 — (W−18)×(H−18) a
   assert.equal(back.size[0],582);assert.equal(back.size[1],KITCHEN.wallHeight-18);assert.deepEqual(box(back)[2],[17,20]);
   assert.equal(ps.filter(p=>p.id.startsWith('kitchen-hanger:')).length,2);
   const e=estimate(newProject(m));
-  assert.ok(e.lines.some(l=>l.id==='kitchen-hanger'&&l.quantity===2));
+  // два навеса = один комплект ABS (левый + правый, решение Макса 27.10.2026)
+  assert.ok(e.lines.some(l=>l.id==='kitchen-hanger'&&l.quantity===1&&l.unit==='компл'));
 });
 
 test('kitchen templates have no intersecting parts — hinges clear rails, shelves, fasteners; legs, clips and plinth fit together',()=>{

@@ -22,7 +22,9 @@ const ids=(p:Project)=>estimate(p).lines.map(l=>l.id);
 test('кухня из Базиса (k25, навесной с пазом под подсветку): в смете нет подсветки, паз остаётся полосой в 3D',()=>{
   const p=project(k25wall());
   assert.ok(!ids(p).includes('light-stand'),'подсветки в Базисе нет — строки «Подсветка врезная в стойках» нет');
-  assert.equal(estimate(p).retailExtras,0,'нет розничной надбавки за подсветку');
+  // розница модуля — только навесы ABS комплектами (решение Макса 27.10.2026), подсветки нет
+  const e=estimate(p);assert.deepEqual(e.lines.filter(l=>l.retail).map(l=>l.id),['kitchen-hanger'],'нет розничной надбавки за подсветку');
+  assert.equal(e.retailExtras,e.lines.find(l=>l.id==='kitchen-hanger')!.quantity*120);
   const g=parts(p.modules[0].module).filter(d=>d.id.startsWith('groove:'));
   assert.equal(g.length,2,'пазы — тёмные полосы в 3D');
   assert.ok(g.every(d=>d.material==='metal'&&d.external),'полоса не в раскрое ЛДСП');
@@ -186,9 +188,10 @@ test('прочая фурнитура Базиса (bazisItems): рафиксы,
   assert.ok(!estimate(project(w)).lines.some(l=>l.id.startsWith('bazis:')),'сырой шкаф Базиса — как было');
 });
 
-test('кухня: навес — с заглушкой, как в Базисе (у параметрических модулей 34 кухонь навесов 34 и заглушек 34)',()=>{
-  const e=estimate(project(kitchenWall(initialModule(),600))),h=e.lines.find(l=>l.id==='kitchen-hanger')!;
-  assert.ok(h.quantity>0);assert.equal(e.lines.find(l=>l.id==='kitchen-hanger-cap')?.quantity,h.quantity);
+test('кухня: навес — с заглушкой, как в Базисе (у параметрических модулей 34 кухонь навесов 34 и заглушек 34); в смете навесы комплектами (Макс 27.10.2026)',()=>{
+  const e=estimate(project(kitchenWall(initialModule(),600))),h=e.lines.find(l=>l.id==='kitchen-hanger')!,c=e.lines.find(l=>l.id==='kitchen-hanger-cap')!;
+  // 2 навеса (левый + правый) = 1 комплект 120 ₽ клиенту; заглушки — на каждый навес, в комплекте (цена 0, без двойного счёта)
+  assert.deepEqual([h.quantity,h.unit,h.unitPrice,h.retail,!!h.pending],[1,'компл',120,true,false]);assert.deepEqual([c.quantity,c.unitPrice,!!c.pending],[2,0,false]);
   assert.ok(!ids(newProject()).includes('kitchen-hanger-cap'),'шкаф студии — без изменений');
 });
 

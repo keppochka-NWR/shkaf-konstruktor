@@ -11,6 +11,7 @@ import {estimate} from '../src/pricing';
 import {partCollisions} from '../src/collisions';
 import {HANDLES} from '../src/handles';
 import {moduleQuote} from '../src/itemPrices';
+import {plainFeatures} from '../src/quoteDescribe';
 import {build,CORNER_IDS,PENCIL_IDS} from '../scripts/order-7442203';
 
 const base=(p:Partial<Module>={}):Module=>({...initialModule(),name:'Шкаф',width:500,height:2000,depth:582,doors:true,sections:[section()],...p});
@@ -63,6 +64,13 @@ test('петли 155–165°, датчик открывания, блок пит
   // решение Макса 26.10: датчик 700, блок питания 1 800, торцевая ручка 2 ₽/мм (600 → 1 200) — розница, не «после расчёта»
   assert.ok(line('light-sensor')?.retail&&line('light-sensor')!.unitPrice===700&&!line('light-sensor')!.pending);
   assert.ok(line('light-psu')?.retail&&line('light-psu')!.unitPrice===1800);
+  // решение Макса 27.10.2026: блок питания — ОТДЕЛЬНО от цены подсветки за метр: одна строка на модуль, подсветка — только своя цена за пог.м
+  assert.equal(line('light-psu')!.quantity,1);
+  for(const l of e.lines.filter(x=>/^light-(stand|shelf|roof)/.test(x.id)))assert.ok(l.unit==='пог.м'&&(l.unitPrice===RULES.lightRetailPerM||l.unitPrice===RULES.shelfLightRetailPerM),l.id);
+  // только флаг «Блок питания» (без датчика) — строка блока питания есть, в КП «подсветка: блок питания»
+  const psuOnly=base({lightPsu:true});psuOnly.sections[0].standLights=['left'];
+  assert.equal(estimate(project(psuOnly)).lines.find(l=>l.id==='light-psu')?.quantity,1);
+  assert.ok(plainFeatures(psuOnly).includes('подсветка: блок питания'));
   assert.ok(line('handle:edge600b')?.retail&&line('handle:edge600b')!.unitPrice===1200);
   assert.equal(e.pending.length,0);
   assert.equal(e.missing.length,0);

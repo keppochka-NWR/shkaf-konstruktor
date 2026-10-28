@@ -21,9 +21,12 @@ test("цена по большей модели — max(коэффициент; 
   const calc = (extra: object) => ({ markup: MARKUP_DEFAULT, overrides: {}, ...extra });
   const p: Project = { ...proj(plain, mirror) };
   const base = estimate(p), sheet = estimate({ ...p, calculation: calc({ model: "sheet" }) }), max = estimate({ ...p, calculation: calc({ maxModel: true }) });
-  const mirrorCost = base.lines.filter((l) => l.id.startsWith("glass-") && l.unitPrice !== null).reduce((s, l) => s + l.quantity * l.unitPrice!, 0);
+  const mirrorCost = base.lines.filter((l) => l.id.startsWith("glass-") && l.unitPrice !== null && !l.retail).reduce((s, l) => s + l.quantity * l.unitPrice!, 0);
   assert.ok(mirrorCost > 0, "зеркало, плёнка, полировка в смете");
   assert.equal(sheet.offSheet, Math.round(mirrorCost * MARKUP_DEFAULT), "зеркало сверху листов × коэффициент");
+  // наклейка зеркала — розница 1 200 ₽/м² (Макс 27.10.2026): сверху листов как есть, в retailExtras, не × коэффициент
+  const glue = sheet.lines.find((l) => l.id === "glass-mirror-glue")!;
+  assert.deepEqual([glue.unitPrice, glue.retail], [1200, true]); assert.equal(sheet.retailExtras, Math.round(glue.quantity * 1200));
   assert.equal(sheet.bySheet, sheet.ldspSheets * sheet.sheetPrice + sheet.retailExtras + sheet.offSheet);
   assert.equal(max.retail, Math.max(base.byMarkup!, sheet.bySheet), "большая из двух");
   assert.equal(max.model, sheet.bySheet > base.byMarkup! ? "sheet" : "markup"); assert.equal(max.maxModel, true);
@@ -44,7 +47,9 @@ test("цена за лист: зеркало шкафа меняет цену т
   const calc = { markup: MARKUP_DEFAULT, overrides: {}, model: "sheet" as const };
   const a: Project = { ...proj(box(), box()), calculation: calc }, b: Project = { ...proj(box(), box({ mirror: "mirror-silver" })), calculation: calc };
   const ea = estimate(a), eb = estimate(b), pa = modulePrices(a, ea.retail)!, pb = modulePrices(b, eb.retail)!;
-  assert.equal(eb.retail! - ea.retail!, eb.offSheet);
+  // вне листа: зеркало, плёнка, полировка × коэффициент (offSheet) + наклейка зеркала — розница (retailExtras, Макс 27.10.2026)
+  const extra = eb.offSheet + eb.retailExtras - ea.retailExtras;
+  assert.equal(eb.retail! - ea.retail!, extra);
   assert.equal(pb[0], pa[0], "корпус без зеркала — та же цена");
-  assert.equal(pb[1] - pa[1], eb.offSheet, "шкаф дороже ровно на зеркало");
+  assert.equal(pb[1] - pa[1], extra, "шкаф дороже ровно на зеркало");
 });
