@@ -29,13 +29,17 @@ export type LiftChoice = {
   premium: boolean;
 };
 
-/** Подбор газлифта АДАЖИО для откидного фасада (деталь-дверь с петлями сверху). */
-export function adagioChoice(door: Part, m?: Module): LiftChoice {
+/** Серия АДАЖИО: стандартная 50–120N (по умолчанию) или ПРЕМИУМ 60/80N — только явным выбором (в интерфейсе выбора серии пока нет). */
+export type AdagioSeries = "standard" | "premium";
+/** Подбор газлифта АДАЖИО для откидного фасада (деталь-дверь с петлями сверху): усилие — ближайшее большее в ряду ОДНОЙ серии.
+ *  Критик 28.10.2026: раньше ПРЕМИУМ 60/80N выбирался раньше стандартной серии — лёгкий фасад выходил дороже тяжёлого (347,2 против
+ *  122,5 ₽), а стандартный 50N не выбирался никогда. Физика (число газлифтов, плечо 80 мм) не менялась. */
+export function adagioChoice(door: Part, m?: Module, series: AdagioSeries = "standard"): LiftChoice {
   const weight = facadeWeight(door, m);
   const count = door.size[0] > LIFT_WIDE_FACADE_MM ? 2 : 1; // ширина фасада
   const height = door.size[1] / 1000; // высота фасада (по вертикали в закрытом положении)
   const required = Math.round((weight * 9.81 * (height / 2)) / (count * LIFT_ARM_M));
-  const premium = ADAGIO_PREMIUM_FORCES.find((f) => f >= required);
-  const force = premium ?? ADAGIO_FORCES.find((f) => f >= required) ?? null;
-  return { weight, count, required, force, premium: premium !== undefined };
+  const row: readonly number[] = series === "premium" ? ADAGIO_PREMIUM_FORCES : ADAGIO_FORCES;
+  const force = row.find((f) => f >= required) ?? null;
+  return { weight, count, required, force, premium: series === "premium" };
 }

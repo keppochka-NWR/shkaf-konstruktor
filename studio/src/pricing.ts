@@ -517,8 +517,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // кухня: подъёмник — только выбранный газлифт Базиса (kitchenLift); без него у Базиса на откидном фасаде одни петли
         const selectedLift=a.module.sections.find(s=>s.id===d.sectionId)?.doorLifts?.[Number(d.id.split(':door:')[1])];
         // решение Макса 26.10.2026: газлифты Premial АДАЖИО — по цене с сайта Premial, это сразу цена клиенту (розница, без коэффициента); 2 шт на фасад (по боковине)
-        // усилие — по весу фасада (решение Макса 26.10.2026, gasLift.ts): ПРЕМИУМ 60/80N — цена сайта 347,2; 100/120N — стандартная серия
-        // АДАЖИО по цене сайта 122,5 (решение Макса 27.10.2026, карточки allpremial.ru — ADAGIO_STD_URL); тяжелее 120N — подбор другого подъёмника
+        // усилие — по весу фасада (решение Макса 26.10.2026, gasLift.ts) в ряду ОДНОЙ серии: по умолчанию стандартная АДАЖИО 50–120N по цене
+        // сайта 122,5 (решение Макса 27.10.2026, карточки allpremial.ru — ADAGIO_STD_URL); ПРЕМИУМ 60/80N (347,2) — только явным выбором серии
+        // (критик 28.10.2026: раньше ПРЕМИУМ шёл первым, выбора серии в интерфейсе нет); тяжелее 120N — подбор другого подъёмника
         if(d.hinge==='top'&&selectedLift==='adagio'){const lc=adagioChoice(d,a.module),wt=weightText(lc.weight)+' кг';
           if(lc.force&&lc.premium)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ПРЕМИУМ ${lc.force}N — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N на газлифт)`,lc.count,'шт',ADAGIO_RETAIL,'allpremial.ru/catalog/gazlifty-premial/ карточки 62617/62618/59951/59952 (АДАЖИО ПРЕМИУМ 60N/80N), 347,2 ₽ (26.10, проверено 27.10.2026) — цена клиенту (решение Макса 26.10); усилие по весу фасада (gasLift.ts)',true);
           else if(lc.force)add('lift-mechanism:premial-adagio:'+lc.force,`Лифт газовый Premial АДАЖИО ${lc.force}N (стандартный) — ${lc.count} шт на фасад (фасад ${wt}, нужно ${lc.required}N)`,lc.count,'шт',ADAGIO_STD_RETAIL,MAX_SRC_2710+': АДАЖИО всех усилий по цене сайта Premial — '+ADAGIO_STD_URL[lc.force]+', '+String(ADAGIO_STD_RETAIL).replace('.',',')+' ₽ (белый) на 27.10.2026; усилие по весу фасада (gasLift.ts)',true);

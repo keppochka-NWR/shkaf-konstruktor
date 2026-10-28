@@ -19,14 +19,16 @@ const ant = (patch: Partial<Module> = {}): Module => {
 };
 const est = (m: Module) => estimate({ ...newProject(), modules: [{ id: "a", x: 10, y: 2000, z: 10, rotation: 0, module: m }] });
 
-test("газлифт АДАЖИО: усилие по весу фасада (момент в горизонтали / плечо), ряд 60/80 ПРЕМИУМ, 100/120 — без цены", () => {
+test("газлифт АДАЖИО: усилие по весу фасада (момент в горизонтали / плечо), ряд стандартной серии 50–120N; ПРЕМИУМ — только явным выбором", () => {
   const m = ant(), door = parts(m).find((p) => p.role === "door")!;
   const c = adagioChoice(door, m), w = facadeWeight(door, m);
   assert.equal(c.count, 2, "фасад шире 600 — 2 газлифта (правило Premial)");
   assert.equal(c.required, Math.round((w * 9.81 * door.size[1] / 2000) / (2 * LIFT_ARM_M)));
-  assert.equal(c.force, 80); assert.equal(c.premium, true);
+  // критик 28.10.2026: стандартная серия по умолчанию (раньше ПРЕМИУМ 60/80N шёл первым — лёгкий фасад дороже тяжёлого)
+  assert.equal(c.force, 80); assert.equal(c.premium, false);
   const line = est(m).lines.find((l) => l.id.startsWith("lift-mechanism:premial-adagio"))!;
-  assert.match(line.label, /80N/); assert.equal(line.unitPrice, 347.2); assert.equal(line.quantity, 2);
+  assert.match(line.label, /80N \(стандартный\)/); assert.equal(line.unitPrice, 122.5); assert.equal(line.quantity, 2);
+  const pc = adagioChoice(door, m, "premium"); assert.equal(pc.force, 80); assert.equal(pc.premium, true);
   // тяжёлый фасад (зеркало) — стандартная серия АДАЖИО 100/120N по цене сайта Premial 122,5 ₽ (решение Макса 27.10.2026), розница;
   // тяжелее 120N — подбор подъёмника, финальный расчёт
   const heavy = ant({ mirror: "mirror-silver" }), hd = parts(heavy).find((p) => p.role === "door")!, hc = adagioChoice(hd, heavy);
