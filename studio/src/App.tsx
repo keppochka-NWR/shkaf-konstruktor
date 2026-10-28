@@ -129,10 +129,10 @@ import { decorPrice, withPriceStamp } from "./pricing";
 import { HANDLES, DEFAULT_HANDLE, handleById, handleShape, HANDLE_SHAPE_LABELS } from "./handles";
 import { HandleThumb } from "./HandleThumb";
 import { MESH, DEFAULT_MESH, MESH_KIND_LABEL, meshById } from "./mesh";
-import { ALU_INSERTS, DEFAULT_ALU, aluProfile } from "./alu";
+import { ALU_INSERTS, aluProfile } from "./alu";
 import { moveShelfKeepRod } from "./shelfRod";
 import { AluPicker, AluDrawersCheck } from "./AluPicker";
-import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
+import { FACADE_KINDS, facadeKindBlock, facadeKindOf, setFacadeKind, type FacadeKind } from "./facadeKind";
 import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 import { slidePrice } from "./pricing";
@@ -2033,7 +2033,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {/* dp-2810: у комода и подвесного ящика (только ящики) фасады Вернисаж выбирались лишь ПКМ по фасаду в сцене — тип фасадов и в панели */}
                 {(m.doors || m.sections.some(s=>s.drawers>0)) && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;delete n.aluDrawers;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;delete n.aluDrawers;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">{FACADE_KIND_LABEL.ldsp} 16 мм</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={facadeKindOf(m)} onChange={e=>modify(n=>setFacadeKind(n,e.target.value as FacadeKind))}>{/* интеграция 29.10: неподходящий тип (рамка у дверей выше 2000) недоступен — стрелки его пропускают, выбор не откатывается */}{FACADE_KINDS.map(k=>{const why=facadeKindBlock(m,k);return <option key={k} value={k} disabled={!!why} title={why||undefined}>{k==='ldsp'?FACADE_KIND_LABEL.ldsp+' 16 мм':FACADE_KIND_LABEL[k]}{why?' — не подходит':''}</option>;})}</select></label>
                 )}
                 {(m.doors || m.sections.some(s=>s.drawers>0)) && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 

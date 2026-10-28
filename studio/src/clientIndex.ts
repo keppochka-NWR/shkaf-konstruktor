@@ -3,7 +3,7 @@
 // (module-studio-v3:<key>); прежний единственный проект остаётся первым проектом первого клиента (key '').
 import { type Project } from "./project";
 import { CURRENT_PROJECT } from "./projectStorage";
-import {ROOM_DOCUMENT_KEY, ROOM_DOCUMENT_BACKUP, parseRoomDocument, migrateRoomDocument, activeRoom, type RoomDocument} from './roomDocument';
+import {ROOM_DOCUMENT_KEY, ROOM_DOCUMENT_BACKUP, parseRoomDocument, migrateRoomDocument, activeRoom, storedRoomDocument, type RoomDocument} from './roomDocument';
 
 export const CLIENT_INDEX = "studio-clients-v1";
 export type ClientProject = { key: string; title: string; price?: number | null };
@@ -50,7 +50,7 @@ export function addProject(store: Store, index: ClientIndex, title: string, copy
   const key = newKey();
   if (copyFrom !== undefined) {
     const rooms=detachedRooms(readClientRooms(store,copyFrom));
-    store.setItem(clientRoomsKey(key),JSON.stringify(rooms));
+    store.setItem(clientRoomsKey(key),JSON.stringify(storedRoomDocument(rooms)));
     store.setItem(projectStorageKey(key),JSON.stringify(activeRoom(rooms).project));
   }
   return { key, index: withClient(index, (c) => ({ ...c, projects: [...c.projects, { key, title: uniqueTitle(c, title) }], active: key })) };
@@ -95,6 +95,6 @@ export function isClientBundle(x: unknown): x is ClientBundle { return !!x && ty
 export function importBundle(store: Store, index: ClientIndex, bundle: ClientBundle): { index: ClientIndex; key: string } {
   if (!Array.isArray(bundle.projects) || !bundle.projects.length || bundle.projects.length > 30) throw Error("В файле клиента должно быть от 1 до 30 проектов.");
   const parsed = bundle.projects.map((p) => ({ title: String(p.title || "Проект").slice(0, 60), rooms:detachedRooms(p.rooms?parseRoomDocument(p.rooms):migrateRoomDocument(p.project)) }));
-  const id = "client-" + crypto.randomUUID().slice(0, 8), projects = parsed.map((p) => { const key = newKey();store.setItem(clientRoomsKey(key),JSON.stringify(p.rooms)); store.setItem(projectStorageKey(key), JSON.stringify(activeRoom(p.rooms).project)); return { key, title: p.title }; });
+  const id = "client-" + crypto.randomUUID().slice(0, 8), projects = parsed.map((p) => { const key = newKey();store.setItem(clientRoomsKey(key),JSON.stringify(storedRoomDocument(p.rooms))); store.setItem(projectStorageKey(key), JSON.stringify(activeRoom(p.rooms).project)); return { key, title: p.title }; });
   return { key: projects[0].key, index: { ...index, clients: [...index.clients, { id, label: String(bundle.label || "").slice(0, 80), projects, active: projects[0].key }], active: id } };
 }

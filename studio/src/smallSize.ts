@@ -44,7 +44,7 @@ export function fitSmallModule(m: Module): string[] {
   }
   // 4) наполнение секций — по ошибкам проверки этой секции (тексты validate)
   const moved = new Set<string>();
-  for (let round = 0; round < 6; round++) {
+  for (let round = 0; round < 16; round++) { // по одному снятию на секцию за круг: ящики по одному, затем полки по одной
     const errs = validate(m);
     let changed = false;
     m.sections.forEach((s, i) => {
@@ -67,6 +67,9 @@ export function fitSmallModule(m: Module): string[] {
         else if (fits < s.shelves.length) { const n = fits; clearShelves(s); s.shelves = distribute(m, s, n); notes.push(`Полок${where} оставлено ${n}: больше в проём ${Math.round(h)} мм не встаёт.`); changed = true; }
         // полки встают, но после смены размера упёрлись в дно/крышу (положение — доля высоты): поровну, число и номера те же
         else if (!moved.has(s.id)) { s.shelves = distribute(m, s, s.shelves.length); moved.add(s.id); notes.push(`Полки${where} расставлены поровну по новой высоте.`); changed = true; }
+        // интеграция 29.10 (малый корпус × ящики): над оставшимися ящиками полки поровну всё равно не встают — по одной, пока не встанут
+        else { const n = s.shelves.length - 1; clearShelves(s); if (n > 0) s.shelves = distribute(m, s, n);
+          notes.push(n > 0 ? `Полок${where} оставлено ${n}: больше над ящиками не встаёт.` : `Полки сняты${where}: над ящиками полка не встаёт (по 80 мм над и под ней).`); changed = true; }
       }
     });
     if (!changed) break;

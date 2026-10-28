@@ -53,6 +53,11 @@ export type RoomDocument = {
   revision: number;
   activeRoomId: string;
   rooms: RoomEntry[];
+  /** Настройки расчёта ЗАКАЗА (модель цены, «по большей модели», цена листа, коэффициент, правки цен, движок раскроя) — одно место
+   *  хранения на весь документ комнат (интеграция 29.10.2026: «Модель цены» расходилась с модулями — у каждой комнаты была своя,
+   *  новая/скопированная комната и вкладка цены клиента считали по другой модели). В памяти тот же объект подставлен в project.calculation
+   *  каждой комнаты (редактор, смета, документы работают с проектом комнаты как раньше); в хранилище и в файле — только здесь. */
+  calculation?: Project["calculation"];
 };
 type Store = Pick<Storage, "getItem" | "setItem">;
 const uid = () => crypto.randomUUID();
@@ -70,6 +75,35 @@ function identifier(value: unknown): string {
 export function parseRoomProject(raw: unknown): Project {
   return structuredClone(parseProject(raw, true));
 }
+/** Настройки расчёта документа (одно место): заданные в документе, иначе (документы до 29.10.2026) — активной комнаты, иначе — первой
+ *  комнаты с настройками. */
+export function documentCalculation(d: Pick<RoomDocument, "calculation" | "rooms" | "activeRoomId">): Project["calculation"] {
+  return d.calculation ?? d.rooms.find((r) => r.id === d.activeRoomId)?.project.calculation ?? d.rooms.find((r) => r.project.calculation)?.project.calculation;
+}
+/** Подставить настройки расчёта документа во все комнаты (в памяти редактор и смета берут их из project.calculation комнаты). */
+function withCalculation(d: RoomDocument, calc: Project["calculation"]): RoomDocument {
+  const rooms = d.rooms.map((r) => {
+    const project = { ...r.project };
+    if (calc) project.calculation = structuredClone(calc);
+    else delete project.calculation;
+    return { ...r, project };
+  });
+  const out: RoomDocument = { ...d, rooms };
+  if (calc) out.calculation = structuredClone(calc);
+  else delete out.calculation;
+  return out;
+}
+/** Документ для хранилища и файла: настройки расчёта — только в документе, без копий в комнатах. */
+export function storedRoomDocument(d: RoomDocument): RoomDocument {
+  return {
+    ...d,
+    rooms: d.rooms.map((r) => {
+      const { calculation: _c, ...project } = r.project;
+      void _c;
+      return { ...r, project: project as Project };
+    }),
+  };
+}
 function entry(project: Project, title: string): RoomEntry {
   return {
     id: uid(),
@@ -84,13 +118,13 @@ export function migrateRoomDocument(raw?: unknown): RoomDocument {
   const p =
     raw === undefined ? { ...newProject(), modules: [] } : parseRoomProject(raw);
   const room = entry(p, "Комната 1");
-  return {
+  return withCalculation({
     format: "garderyob-rooms",
     version: 1,
     revision: 0,
     activeRoomId: room.id,
     rooms: [room],
-  };
+  }, p.calculation);
 }
 export function parseRoomDocument(raw: unknown): RoomDocument {
   const d = raw as RoomDocument;
@@ -182,7 +216,12 @@ export function parseRoomDocument(raw: unknown): RoomDocument {
       typeof d.cloud.owner !== "string")
   )
     throw Error("Некорректная связь с сервером.");
-  return {
+  // настройки расчёта заказа — одно место (d.calculation); прежние документы — из активной комнаты (documentCalculation)
+  const calc =
+    d.calculation !== undefined && d.calculation !== null
+      ? parseRoomProject({ ...rooms[0].project, modules: [], calculation: d.calculation }).calculation
+      : documentCalculation({ rooms, activeRoomId: d.activeRoomId });
+  return withCalculation({
     ...(d.cloud ? { cloud: { ...d.cloud } } : {}),
     format: "garderyob-rooms",
     version: 1,
@@ -191,7 +230,7 @@ export function parseRoomDocument(raw: unknown): RoomDocument {
     rooms,
     ...(links ? { links } : {}),
     ...(d.customer ? { customer: label(d.customer) } : {}),
-  };
+  }, calc);
 }
 export function activeRoom(d: RoomDocument): RoomEntry {
   const r = d.rooms.find((r) => r.id === d.activeRoomId);
@@ -220,7 +259,8 @@ export function addRoom(
       ) + 500,
     z: 0,
   };
-  return { ...d, activeRoomId: room.id, rooms: [...d.rooms, room] };
+  // новая и скопированная комната считаются по настройкам заказа (раньше — пустая по умолчанию, копия — со своими)
+  return withCalculation({ ...d, activeRoomId: room.id, rooms: [...d.rooms, room] }, documentCalculation(d));
 }
 export function selectRoom(d: RoomDocument, id: string): RoomDocument {
   if (!d.rooms.some((r) => r.id === id)) throw Error("Комната не найдена.");
@@ -318,7 +358,8 @@ export function updateRoom(
       ),
     };
   }
-  return next;
+  // правка расчёта в редакторе комнаты (модель цены, коэффициент…) — настройка всего заказа: одно значение на документ
+  return withCalculation(next, parsed.calculation);
 }
 /** Source and destination are untouched on validation or stale-write failure. */
 export function persistRoomDocument(
@@ -334,7 +375,7 @@ export function persistRoomDocument(
   const previousRevision =
     expected === null ? -1 : parseRoomDocument(JSON.parse(expected)).revision;
   const document = { ...valid, revision: previousRevision + 1 };
-  const serialized = JSON.stringify(document);
+  const serialized = JSON.stringify(storedRoomDocument(document));
   if (expected !== null) store.setItem(ROOM_DOCUMENT_BACKUP, expected);
   store.setItem(ROOM_DOCUMENT_KEY, serialized);
   return { document, serialized };
@@ -443,5 +484,9 @@ export function loadVariant(d: RoomDocument, id: string): RoomDocument {
   const r = activeRoom(d),
     v = r.variants?.find((v) => v.id === id);
   if (!v) throw Error("Вариант не найден.");
-  return updateRoom(d, r.id, structuredClone(v.project));
+  // вариант — снимок мебели и комнаты; настройки расчёта остаются заказа (не откатываются к снимку)
+  const project = structuredClone(v.project), calc = documentCalculation(d);
+  if (calc) project.calculation = structuredClone(calc);
+  else delete project.calculation;
+  return updateRoom(d, r.id, project);
 }

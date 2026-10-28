@@ -7,7 +7,7 @@ import App from './App';
 import { CURRENT_PROJECT } from './projectStorage';
 import { newProject, type Project } from './project';
 import { saveFile } from './exports';
-import { activeRoom, addRoom, migrateRoomDocument, parseRoomDocument, persistRoomDocument, removeRoom, renameRoom, selectRoom, updateRoom, ROOM_DOCUMENT_KEY, ROOM_DOCUMENT_BACKUP, type RoomDocument } from './roomDocument';
+import { activeRoom, addRoom, migrateRoomDocument, parseRoomDocument, persistRoomDocument, removeRoom, renameRoom, selectRoom, updateRoom, storedRoomDocument, ROOM_DOCUMENT_KEY, ROOM_DOCUMENT_BACKUP, type RoomDocument } from './roomDocument';
 import './room-workspace.css';
 
 /** Only the selected room is mounted in the furniture editor. */
@@ -74,8 +74,8 @@ export function RoomWorkspace({workspaceKey='',clientBar,onDocumentChange,onImpo
       if(nowValid)throw Error('В другой вкладке уже восстановлен документ. Перезагрузите страницу.');
       if (original !== null) store.setItem(ROOM_DOCUMENT_KEY + ':damaged:' + crypto.randomUUID(), original);
       // A corrupt document cannot provide a revision. Restore a validated copy atomically.
-      store.setItem(ROOM_DOCUMENT_KEY, JSON.stringify(candidate));
-      expected.current = JSON.stringify(candidate); current.current = candidate; setDocument(candidate); setError('');
+      store.setItem(ROOM_DOCUMENT_KEY, JSON.stringify(storedRoomDocument(candidate)));
+      expected.current = JSON.stringify(storedRoomDocument(candidate)); current.current = candidate; setDocument(candidate); setError('');
       setSaved('Восстановлена предыдущая копия'); setEpoch(v => v + 1);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
@@ -93,7 +93,7 @@ export function RoomWorkspace({workspaceKey='',clientBar,onDocumentChange,onImpo
       <button disabled={!undo.current.length} onClick={() => history(true)}>Отменить изменение заказа</button>
       <button disabled={!redo.current.length} onClick={() => history(false)}>Повторить изменение заказа</button>
       <button onClick={() => commit(current.current!,false)}>Сохранить комнаты</button>
-      <button onClick={() => saveFile('Ё Конструктор комнаты.json',JSON.stringify(current.current,null,2),'application/json')}>Скачать все комнаты</button>
+      <button onClick={() => saveFile('Ё Конструктор комнаты.json',JSON.stringify(storedRoomDocument(current.current!),null,2),'application/json')}>Скачать все комнаты</button>
       <button onClick={() => upload.current?.click()}>Открыть документ комнат</button>
     </div>
     {confirmDelete && <div role="alert">Удалить «{room.title}» вместе с её мебелью? <button onClick={() => run(d => removeRoom(d,room.id))}>Подтвердить удаление комнаты</button><button onClick={() => setConfirmDelete(false)}>Оставить комнату</button></div>}
@@ -113,7 +113,7 @@ export function RoomWorkspace({workspaceKey='',clientBar,onDocumentChange,onImpo
       } catch(e){setError(e instanceof Error?e.message:String(e));}
     }}/>
   </section></>;
-  if (!room.project.modules.length) return <EmptyRoomView title={room.title} bar={bar} viewKey={workspaceKey+':'+room.id} project={room.project} onAdd={()=>run(d=>updateRoom(d,room.id,{...room.project,modules:newProject().modules}))} onDownload={()=>saveFile('Ё Конструктор комнаты.json',JSON.stringify(current.current,null,2),'application/json')} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/>;
+  if (!room.project.modules.length) return <EmptyRoomView title={room.title} bar={bar} viewKey={workspaceKey+':'+room.id} project={room.project} onAdd={()=>run(d=>updateRoom(d,room.id,{...room.project,modules:newProject().modules}))} onDownload={()=>saveFile('Ё Конструктор комнаты.json',JSON.stringify(storedRoomDocument(current.current!),null,2),'application/json')} update={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}}/>;
   return <App managedHistory={{undo:()=>history(true),redo:()=>history(false),undoCount:undo.current.length,redoCount:redo.current.length}} onImportBundle={onImportBundle} onEmptyProject={p=>{try{return commit(updateRoom(current.current!,room.id,p));}catch(e){setError((e as Error).message);return false;}}} key={room.id} viewKey={workspaceKey+':'+room.id} externalVersion={epoch} initialProject={room.project} clientBar={bar} saveManagedProject={(p:Project) => {
     try { return commit(updateRoom(current.current!,room.id,p)); } catch(e){setError(e instanceof Error?e.message:String(e));return false;}
   }}/>;
