@@ -40,6 +40,6 @@ await toggle(/Скрыть фасады/);
 await shot("5-3d-other-side-open");
 await view("3D");
 await shot("6-3d-room-side-open");
-await page.locator(".dock-tabs button", { hasText: "Смета" }).click();
+await page.locator(".dock-tabs button", { hasText: "Стоимость" }).first().click(); // вкладка «Смета» переименована в «Стоимость»
 await shot("7-estimate");
 await browser.close();

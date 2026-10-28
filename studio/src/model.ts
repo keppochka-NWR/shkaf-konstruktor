@@ -20,7 +20,7 @@ import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
 import { handleById, handleKind, handleShape, handleSpec, HANDLES, HANDLE_MARGIN, LONG_HANDLE, DEFAULT_HANDLE, type Handle } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
 import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, ALU_EXTRAS, ALU_INSERTS, type AluFacade } from "./alu";
-import { vernissageSizeCheck, type VernissageFacade } from "./facadesVernissage";
+import { vernissageSizeCheck, sideFacadeSpec, vernissageMillingName, vernissageColor, type VernissageFacade } from "./facadesVernissage";
 import { V_MILLINGS } from "./vernissageData";
 /** Поворот модели конфирмата Базиса по оси ввинчивания (X модели — ось винта, головка при x = 0); общий для parts() и kitchen.ts (короб вытяжки). */
 export const CONFIRMAT_QUATS: Record<"+x" | "-x" | "+y" | "-y" | "-z" | "+z", [number, number, number, number]> = { "+x": [1, 0, 0, 0], "-x": [0, 0, 1, 0], "+y": [Math.SQRT1_2, 0, 0, Math.SQRT1_2], "-y": [Math.SQRT1_2, 0, 0, -Math.SQRT1_2], "-z": [Math.SQRT1_2, 0, Math.SQRT1_2, 0], "+z": [Math.SQRT1_2, 0, -Math.SQRT1_2, 0] };
@@ -431,7 +431,11 @@ export type Module = {
   /** Планка под крышей спереди (фальшпанель над фасадами), высота 30–150; фасады укорачиваются. */
   topStrip?: number;
   /** Боковая фальшпанель до потолка снаружи боковины: своя высота (от пола) и глубина, заподлицо с фасадом. */
-  sidePanels?: Partial<Record<"left" | "right", { height: number; depth: number; /** 32 — добор из двух плит 16 склейкой (заказ 7427796) */ thick?: 32 }>>;
+  sidePanels?: Partial<Record<"left" | "right", { height: number; depth: number; /** 32 — добор из двух плит 16 склейкой (заказ 7427796) */ thick?: 32;
+    /** Видимый бок из фасадного материала (дизайн-проект dp-2810, 28.10.2026: «видимые бока — эмаль гладкая»): панель снаружи боковины —
+     *  МДФ Вернисаж гладкая (SIDE_FACADE_MILLING) в покрытии и цвете фасадов модуля, покраска с одной стороны; сторонний участок, вне раскроя
+     *  ЛДСП и без кромки цеха. Только у модуля с фасадами Вернисаж. */
+    facade?: true }>>;
   /** Задник ЛДСП (backType 'board') только выше этой высоты от пола, мм (заказ 7427796: задник посадочного места — только у ниши над сиденьем). */
   backFrom?: number;
   /** Зеркало 4 мм на распашных фасадах (заказ 7427796): id стекла из ALU_INSERTS, наклеено на основу — фасад ЛДСП 16 (армирующая плёнка). */
@@ -560,6 +564,8 @@ export type Part = {
   external?: boolean;
   /** Фасад МДФ «Вернисаж» (m.vernissage): геометрия по фрезеровке (vernissageGeometry.ts), цена по прайсу Вернисажа. */
   vernissage?: true;
+  /** Видимый бок из фасадного материала (sidePanels[side].facade): цена — по прайсу Вернисажа гладкого №15 (sideFacadeSpec), не раскрой ЛДСП. */
+  sideFacade?: true;
   /** Готовый вид материала в 3D (цвет, прозрачность, металл) — для наполнений купе и профиля. */
   look?: { color: number; opacity?: number; metalness?: number; roughness?: number };
   /** Модель профиля из Blender (public/models/<file>): вписывается в габарит детали, length — ось длины. */
@@ -1285,6 +1291,13 @@ function partsCore(m: Module): Part[] {
   for (const side of ["left", "right"] as const) {
     const sp = m.sidePanels?.[side];
     if (!sp) continue;
+    // видимый бок из фасадного материала (dp-2810): МДФ Вернисаж толщиной фасада, лицо заподлицо с лицом фасадов модуля
+    const sf = sp.facade && m.vernissage ? sideFacadeSpec(m.vernissage) : undefined, st = sf ? sf.thickness : t;
+    if (sf) {
+      add("side-panel:" + side, "Видимый бок " + (side === "left" ? "левый" : "правый") + " · МДФ " + vernissageMillingName(sf.milling) + " " + sp.height + "×" + sp.depth, [st, sp.height, sp.depth], [side === "left" ? -st / 2 : m.width + st / 2, sp.height / 2, d + (m.faceAir ?? 2) + (m.facadeT ?? t) - sp.depth / 2], sp.height, sp.depth, st);
+      const p = out.at(-1)!; p.edge = [0, 0, 0, 0]; p.external = true; p.sideFacade = true; p.decor = "Вернисаж"; p.look = { color: vernissageColor(sf), roughness: 0.62 };
+      continue;
+    }
     add("side-panel:" + side, (sp.thick === 32 ? "Добор декоративный 32 · плита 1 · " : "Фальшпанель боковая ") + (side === "left" ? "левая" : "правая") + " " + sp.height + "×" + sp.depth, [t, sp.height, sp.depth], [side === "left" ? -t / 2 : m.width + t / 2, sp.height / 2, d + 18 - sp.depth / 2], sp.height, sp.depth, t);
     out.at(-1)!.edge = [2, 2, 2, 2];
     // добор 32 (заказ 7427796): вторая плита 16 снаружи, склейка в 32 под одну кромку — кромка у первой плиты (широкая), у второй нет
@@ -2556,7 +2569,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   if(m.doorMount!==undefined&&!['overlay','inset'].includes(m.doorMount))errors.push('Неверный тип монтажа фасадов.');
   if(m.doorOpen!==undefined&&!['handle','push'].includes(m.doorOpen))errors.push('Неверный тип открывания фасадов.');
   if(m.topStrip!==undefined&&(!Number.isFinite(m.topStrip)||m.topStrip<RULES.topStripMin||m.topStrip>RULES.topStripMax))errors.push(`Планка под крышей: от ${RULES.topStripMin} до ${RULES.topStripMax} мм.`);
-  if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);}
+  if(m.sidePanels!==undefined)for(const side of ['left','right'] as const){const sp=m.sidePanels[side];if(sp===undefined)continue;if(!Number.isFinite(sp.height)||!Number.isFinite(sp.depth)||sp.height<m.height-1||sp.height>RULES.sidePanelMaxH||sp.depth<m.depth||sp.depth>RULES.sidePanelMaxD)errors.push(`Боковая фальшпанель: высота от высоты корпуса до ${RULES.sidePanelMaxH}, глубина от глубины корпуса до ${RULES.sidePanelMaxD} мм.`);if(sp.facade&&!m.vernissage)errors.push('Видимый бок из фасадного материала — только у модуля с фасадами МДФ Вернисаж: выберите фасады Вернисаж или снимите флажок.');if(sp.facade&&sp.thick)errors.push('Видимый бок из фасадного материала не склеивается в 32 мм: снимите «Добор 32 мм».');}
   if(m.rodType!==undefined&&!['round','oval'].includes(m.rodType))errors.push('Неверный тип штанги.');
   if(m.feet&&m.bottomType==='none'&&!railsOf(m).some(r=>r.place.endsWith('bottom')))errors.push('Каркас без дна на ножках нужно связать нижней стяжкой.');
   for(const [k,lo,hi] of [['faceGap',0,5],['faceGapBetween',0,10],['backGap',0,10],['grooveWidth',3,10],['grooveClear',0,3],['facadeT',3,40],['faceAir',0,10],['shelfRear',m.kitchen?-100:0,100],['shelfPinInset',20,200],['confirmatInset',20,200]] as const){const v=m[k];if(v!==undefined&&(!Number.isFinite(v)||v<lo||v>hi))errors.push(`Параметр ${k}: ${lo}–${hi} мм.`);}
@@ -3140,7 +3153,7 @@ export function parseModule(input: unknown): Module {
     ...(x.doorMount===undefined?{}:{doorMount:x.doorMount as Module['doorMount']}),
     ...(x.doorOpen===undefined?{}:{doorOpen:x.doorOpen as Module['doorOpen']}),
     ...(x.topStrip===undefined?{}:{topStrip:Number(x.topStrip)}),
-    ...(x.sidePanels===undefined?{}:{sidePanels:Object.fromEntries(Object.entries(x.sidePanels as Record<string,{height:number;depth:number;thick?:unknown}>).map(([k,v])=>[k,{height:Number(v?.height),depth:Number(v?.depth),...(Number(v?.thick)===32?{thick:32 as const}:{})}]))}),
+    ...(x.sidePanels===undefined?{}:{sidePanels:Object.fromEntries(Object.entries(x.sidePanels as Record<string,{height:number;depth:number;thick?:unknown}>).map(([k,v])=>[k,{height:Number(v?.height),depth:Number(v?.depth),...(Number(v?.thick)===32?{thick:32 as const}:{}),...((v as {facade?:unknown})?.facade===true?{facade:true as const}:{})}]))}),
     ...(x.backFrom===undefined?{}:{backFrom:Number(x.backFrom)}),
     ...(typeof x.mirror==='string'?{mirror:x.mirror}:{}),
     ...(x.facadeFrom===undefined?{}:{facadeFrom:Number(x.facadeFrom)}),
