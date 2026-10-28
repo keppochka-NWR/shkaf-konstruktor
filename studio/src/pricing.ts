@@ -214,7 +214,9 @@ export const DOWEL={price:0.7,source:'ФАМ: шкант 8×30 бук'};
 export type LineGroup='material'|'hardware';
 /** Материал: плита, кромка, обработка, работа цеха, рамочные и стеклянные элементы, покупные материалы (фасады МДФ, цоколь из фасадного,
  *  столешницы, стеновые панели) и детали, не попавшие в лист. Всё остальное — фурнитура (аудит 11.10.2026: покупные шли в «Фурнитуру»). */
-export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
+/** Фигурные детали (shapes.ts, задача 29.10.2026): цены работы «вырез / сложный выпил» и «кромка по кривой» Макс ещё не назвал. */
+export const CUT_WORK_SRC='Цех: цена работы не задана — вопрос Максу (фигурные детали 29.10.2026)';
+export function lineGroup(id:string):LineGroup{return /^(sheet:|mat:|cut-work$|edge|small$|work$|work-hdf$|falsh-glue$|seat-glue$|worktop-glue$|glue32$|alu-|glass-|vernissage|kupe-(fill|profile|track|work|film)|facade-external|plinth-external|worktop:|wallpanel:raw:|unplaced-raw:|unplaced:)/.test(id)?'material':'hardware';}
 /** Покупные материалы (фасады МДФ, цоколь из фасадного, столешницы, стеновые панели, не ЛДСП-материалы Базиса): в раскрой ЛДСП не идут,
  *  в цене «за лист» их нет. Сумма закупки × коэффициент — для включения в bySheet сверху листов; пока не вызывается (ярус B: коэффициент —
  *  решение Макса, вариант «закупка × 1,6 как Вернисаж» или свой на группу). */
@@ -504,8 +506,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.material==='board'){
         // кромка фасадов из фасадного материала — у поставщика фасадов, не кромка цеха
         if(!d.external)d.edge.forEach((edge,k)=>{const length=edgeLength(d,k)/1000;if(edge===2)edge2+=length;else if(edge===0.4)edge04+=length;else if(edge===0.5)edge05+=length;else if(edge===1)edge1+=length;else if(edge===0.8)edge08+=length;});
+        // фигурные детали (shapes.ts): кромка по сторонам выреза и по дуге — в кромку той же толщины; работа — строками ниже
+        if(!d.external)for(const e of [d.cutEdge,d.curveEdge])if(e){const length=e.len/1000;if(e.t===2)edge2+=length;else if(e.t===1)edge1+=length;else if(e.t===0.8)edge08+=length;else if(e.t===0.5)edge05+=length;else edge04+=length;}
+        if(d.curveEdge&&!d.external)add('edge-curve','Кромка по криволинейному контуру (радиус, круглый вырез) — работа цеха',d.curveEdge.len/1000,'м',null,CUT_WORK_SRC);
         if(Math.min(d.length,d.width)<70)small++;
       }
+      if(d.cutWork&&!d.external)add('cut-work','Вырез / сложный выпил в детали (фигурная деталь) — работа цеха',d.cutWork,'шт',null,CUT_WORK_SRC);
       if(d.id.startsWith('gola:')&&!(bz&&rowGola))add(`gola-${d.id.split(':')[1]}`,`Профиль Gola ${d.id.split(':')[1]==='L'?'L (верхний)':'C (средний)'}, алюминий`,d.length/1000,'м',null,'Профиль-ручка Gola по Базису; цена не найдена — уточнить');
       // фасады «Вернисаж»: м² по прайсу (серия фрезеровки × колонка покрытия × толщина), ПВХ меньше 0,3 м² — как 0,3, наценки прайса
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const v=a.module.vernissage,pr=vernissageFacadePrice(v,d.size[0],d.size[1]);

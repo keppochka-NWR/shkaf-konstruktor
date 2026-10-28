@@ -1,7 +1,8 @@
 // Сборка мебели из палитры «Добавить мебель» (перенесено из ModulePalette.tsx, w-formerrors 23.10: проверка формы paletteCheck.ts
 // собирает те же модули без исключения на первой ошибке). Тексты ошибок прежние; ModulePalette.tsx реэкспортирует функции.
 import {refitKDrawers} from './kitchenDrawers';
-import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,rearClear,parts,RULES,type Module} from './model';
+import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,rearClear,parts,boxes,RULES,type Module} from './model';
+import {RADIUS,radiusMax} from './shapes';
 import {partCollisions} from './collisions';
 import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
@@ -11,9 +12,9 @@ import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN,kitchenBase,kitchenWall,kitchenWorktop,kitchenRowWidths,setWorktopMaterial} from './kitchen';
 import type {PlacedModule} from './project';
 // 'kitchen-corner' и 'kitchen-u' (w-lwing 23.10) — группы в угол комнаты, собираются kitchenCornerRow.ts (createKitchenCornerRow/createKitchenURow)
-export type ModuleKind='empty'|'shelves'|'wardrobe'|'drawers'|'hanging-drawer'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
+export type ModuleKind='empty'|'shelves'|'radius'|'wardrobe'|'drawers'|'hanging-drawer'|'desk'|'corner'|'kupe'|'kupe-wardrobe'|'kitchen-row'|'kitchen-corner'|'kitchen-u'|'kitchen-base'|'kitchen-wall'|'worktop';
 /** Названия видов мебели палитры (имя нового модуля). */
-export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',wardrobe:'Для одежды',drawers:'Комод','hanging-drawer':'Подвесной ящик',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
+export const KIND_LABEL:Record<ModuleKind,string>={empty:'Пустой шкаф',shelves:'Стеллаж',radius:'Стеллаж радиусный',wardrobe:'Для одежды',drawers:'Комод','hanging-drawer':'Подвесной ящик',corner:'Угловой шкаф',desk:'Стол','kupe-wardrobe':'Шкаф-купе','kitchen-row':'Кухня прямая','kitchen-corner':'Кухня угловая (Г)','kitchen-u':'Кухня П-образная','kitchen-base':'Нижний кухонный','kitchen-wall':'Навесной кухонный',worktop:'Столешница',kupe:'Двери купе'};
 /** Куда складывать ошибки вместо исключения на первой (проверка формы — все ошибки сразу). */
 type Sink=string[]|undefined;
 const fail=(sink:Sink,text:string)=>{if(sink)sink.push(text);else throw Error(text);};
@@ -76,6 +77,22 @@ export function hangingDrawer(width:number,height:number,depth:number,source:Mod
   while(cfg.height>68&&hit())cfg.height-=4;
   return m;
 }
+/** Стеллаж с радиусными полками (задача Макса 29.10.2026, shapes.ts): открытый торцевой, скругление у правого переднего угла
+ *  радиусом «четверть круга» (до глубины/ширины полки), 4 полки поровну, дно и крыша тоже радиусные. */
+export function radiusShelving(width:number,height:number,depth:number,source:Module,opts:{side?:'left'|'right';r?:number;shelves?:number}={}):Module{
+  const m:Module={...initialModule(),name:KIND_LABEL.radius,width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,doors:false,sections:[section()],radius:{side:opts.side??'right',r:Math.max(RADIUS.min,Math.min(opts.r??radiusMax({width,depth}),radiusMax({width,depth})))}};
+  m.sections[0].shelves=distribute(m,m.sections[0],opts.shelves??4);
+  return m;
+}
+/** Мансарда (скос назад) у шкафа из палитры: задняя высота rear; полки, штанги — под скос (поровну по задней высоте, штанга — под верхней полкой). */
+export function withMansard(m:Module,rear:number):Module{
+  const n:Module={...structuredClone(m),mansard:{rear}};
+  if(n.kitchen||n.radius||n.corner||n.desk||n.kupe||n.raw)return n;
+  const low:Module={...n,height:Math.max(RULES.minH,rear-RULES.panel*2)};
+  for(const [i,s] of n.sections.entries()){const k=s.shelves.length;if(!k)continue;const fr=distribute(low,low.sections[i],k),bl=boxes(low)[i],bh=boxes(n)[i];
+    s.shelves=fr.map(f=>Math.round(((bl.bottom+f*(bl.top-bl.bottom)-bh.bottom)/(bh.top-bh.bottom))*1e4)/1e4);}
+  return n;
+}
 /** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
 export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):Module{
   if(kind==='kitchen-base'||kind==='kitchen-wall'){
@@ -91,6 +108,7 @@ export function assembleModule(kind:ModuleKind,width:number,height:number,depth:
     return m;
   }
   if(kind==='hanging-drawer')return hangingDrawer(width,height,depth,source);
+  if(kind==='radius')return radiusShelving(width,height,depth,source);
   if(kind==='corner')return createCornerModule(width,height,depth,source);
   if(kind==='kupe')return createKupeModule(width,height,source,doors);
   let m:Module={...initialModule(),name:KIND_LABEL[kind],width,height,depth,decor:source.decor,facadeDecor:source.facadeDecor,sections:[section()]};

@@ -148,7 +148,7 @@ export function detailsSheet(p: Project): XSheet {
   if (!order) rows.push(row([str("Укажите номер заказа — без него производственные документы (деталировка) не выгружаются.", XS.note)], 1, XS.text));
   else {
     const ds = details(p), first = rows.length;
-    for (const d of ds) { const r = rows.length; rows.push([str(d.code), str(d.moduleName), str(d.name), str(d.material === "hdf" ? "ЛХДФ" : d.decor), num(d.length), num(d.width), num(d.thickness, XS.numCenter), ...d.edge.map((v) => num(v, XS.numCenter)), str(detailGrooves(p, d.moduleId, d.id)), fml(`ROUND(E${r + 1}*F${r + 1}/1000000,3)`, Math.round(d.length * d.width / 1e3) / 1e3, XS.area)]); }
+    for (const d of ds) { const r = rows.length; rows.push([str(d.code), str(d.moduleName), str(d.name), str(d.material === "hdf" ? "ЛХДФ" : d.decor), num(d.length), num(d.width), num(d.thickness, XS.numCenter), ...d.edge.map((v) => num(v, XS.numCenter)), str(detailGrooves(p, d.moduleId, d.id, d.shapeNote)), fml(`ROUND(E${r + 1}*F${r + 1}/1000000,3)`, Math.round(d.length * d.width / 1e3) / 1e3, XS.area)]); }
     const r = rows.length;
     rows.push(row([str("Всего деталей: " + ds.length, XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), empty(XS.subLabel), str("Площадь", XS.subLabel), fml(ds.length ? `SUM(M${first + 1}:M${r})` : "0", ds.reduce((s, d) => s + Math.round(d.length * d.width / 1e3) / 1e3, 0), XS.subNum)], W, XS.subLabel));
   }

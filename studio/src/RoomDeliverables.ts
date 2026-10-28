@@ -85,6 +85,7 @@ export function bazisExport(d: RoomDocument) {
           p.planContour ||
           p.faceContour ||
           p.taper ||
+          p.shape ||
           p.golaCuts ||
           p.rearNotch ||
           p.topNotches ||

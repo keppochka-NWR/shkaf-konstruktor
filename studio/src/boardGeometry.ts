@@ -101,6 +101,26 @@ export function planTaperGeometry(part:Part):THREE.BufferGeometry{
  const shape=new THREE.Shape();shape.moveTo(-w/2,rear);shape.lineTo(w/2,rear);shape.lineTo(w/2,rear+dR);shape.lineTo(-w/2,rear+dL);shape.closePath();
  const g=new THREE.ExtrudeGeometry(shape,{depth:t,bevelEnabled:false});g.translate(0,0,-t/2);g.rotateX(Math.PI/2);return g;
 }
+/** Фигурная деталь (shapes.ts, Part.shape): контур с вырезами в плоскости (u, v) от угла габарита, выдавлен по оси w на size[w].
+ *  Оси детали — перестановка осей модуля; у нечётной перестановки обход треугольников разворачивается (иначе грани наизнанку).
+ *  UV — проекцией по главной оси нормали (на пластях — как у прямоугольной панели, вдоль длины детали). */
+export function shapeGeometry(part:Part):THREE.BufferGeometry{
+ const sh=part.shape!,{u,v,w}=sh.axes,s=new THREE.Shape(),U=part.size[u],V=part.size[v],T=part.size[w];
+ sh.outline.forEach(([a,b],i)=>i?s.lineTo(a-U/2,b-V/2):s.moveTo(a-U/2,b-V/2));s.closePath();
+ for(const h of sh.holes){const p=new THREE.Path();h.forEach(([a,b],i)=>i?p.lineTo(a-U/2,b-V/2):p.moveTo(a-U/2,b-V/2));p.closePath();s.holes.push(p);}
+ const g=new THREE.ExtrudeGeometry(s,{depth:T,bevelEnabled:false,curveSegments:4});g.translate(0,0,-T/2);
+ // (X, Y, Z) формы → оси детали (u, v, w)
+ const m=new THREE.Matrix4(),e=[0,0,0,0,0,0,0,0,0];e[u*3+0]=1;e[v*3+1]=1;e[w*3+2]=1;
+ m.set(e[0],e[1],e[2],0,e[3],e[4],e[5],0,e[6],e[7],e[8],0,0,0,0,1);g.applyMatrix4(m);
+ if(m.determinant()<0){for(const name of ['position','normal','uv']){const a=g.getAttribute(name);for(let i=0;i+2<a.count;i+=3)for(let k=0;k<a.itemSize;k++){const x=a.getComponent(i+1,k);a.setComponent(i+1,k,a.getComponent(i+2,k));a.setComponent(i+2,k,x);}a.needsUpdate=true;}}
+ const pos=g.getAttribute('position'),nor=g.getAttribute('normal'),uv=g.getAttribute('uv'),L=part.grainAxis;
+ for(let i=0;i<pos.count;i++){
+  const n=[Math.abs(nor.getX(i)),Math.abs(nor.getY(i)),Math.abs(nor.getZ(i))],main=n.indexOf(Math.max(...n)),rest=[0,1,2].filter(k=>k!==main);
+  const along=rest.includes(L)?L:rest[1],across=rest.find(k=>k!==along)!;
+  uv.setXY(i,pos.getComponent(i,across)/part.size[across]+.5,pos.getComponent(i,along)/part.size[along]+.5);
+ }
+ uv.needsUpdate=true;g.computeBoundingBox();return g;
+}
 /** Keep the image's vertical grain aligned with the cut-list length on board faces. */
 export function boardGeometry(part:Part):THREE.BoxGeometry{
  const geometry=new THREE.BoxGeometry(...part.size);

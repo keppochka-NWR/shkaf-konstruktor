@@ -1,5 +1,8 @@
 import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
-import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal,CornerDownRight} from 'lucide-react';
+import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal,CornerDownRight,CircleDashed} from 'lucide-react';
+import {withMansard,radiusShelving} from './paletteBuild';
+import {MANSARD,RADIUS,radiusMax} from './shapes';
+import {validate} from './model';
 import {createKitchenCornerRow,createKitchenURow} from './kitchenCornerRow';
 import {RULES,type Module} from './model';
 import {doorCountOptions,autoDoorCount} from './paletteDoors';
@@ -12,11 +15,11 @@ import {paletteIssues,paletteAutoFix,SPLIT_KINDS,type PaletteField,type PaletteI
 // сборка мебели палитры живёт в paletteBuild.ts (w-formerrors 23.10) — прежние импорты из ModulePalette работают
 export {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,type ModuleKind} from './paletteBuild';
 // «Кухня угловая (Г)» и «Кухня П-образная» (w-lwing 23.10) — группы в угол комнаты (kitchenCornerRow.ts)
-const choices=([['empty',Box],['shelves',Rows3],['wardrobe',Shirt],['drawers',Archive],['hanging-drawer',PanelTopOpen],['corner',Box],['desk',PanelTop],['kupe-wardrobe',Columns2],['kitchen-row',CookingPot],['kitchen-corner',CornerDownRight],['kitchen-u',Columns2],['kitchen-base',PanelBottom],['kitchen-wall',PanelTopOpen],['worktop',RectangleHorizontal],['kupe',SquareSplitHorizontal]] as const).map(([id,icon])=>({id,label:KIND_LABEL[id],icon}));
-const SIZES:Partial<Record<ModuleKind,[number,number,number]>>={'kitchen-row':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-corner':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-u':[3600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-base':[600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-wall':[600,KITCHEN.wallHeight,KITCHEN.wallDepth],worktop:[2400,KITCHEN.worktopThickness,KITCHEN.worktopDepth],corner:[1050,2000,450],desk:[1200,750,600],drawers:[600,850,550],'hanging-drawer':[800,200,284],kupe:[1600,2400,KUPE_DEPTH],'kupe-wardrobe':[1800,2400,600]};
+const choices=([['empty',Box],['shelves',Rows3],['radius',CircleDashed],['wardrobe',Shirt],['drawers',Archive],['hanging-drawer',PanelTopOpen],['corner',Box],['desk',PanelTop],['kupe-wardrobe',Columns2],['kitchen-row',CookingPot],['kitchen-corner',CornerDownRight],['kitchen-u',Columns2],['kitchen-base',PanelBottom],['kitchen-wall',PanelTopOpen],['worktop',RectangleHorizontal],['kupe',SquareSplitHorizontal]] as const).map(([id,icon])=>({id,label:KIND_LABEL[id],icon}));
+const SIZES:Partial<Record<ModuleKind,[number,number,number]>>={'kitchen-row':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-corner':[3000,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-u':[3600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-base':[600,KITCHEN.baseHeight,KITCHEN.baseDepth],'kitchen-wall':[600,KITCHEN.wallHeight,KITCHEN.wallDepth],worktop:[2400,KITCHEN.worktopThickness,KITCHEN.worktopDepth],corner:[1050,2000,450],desk:[1200,750,600],drawers:[600,850,550],'hanging-drawer':[800,200,284],radius:[400,2000,400],kupe:[1600,2400,KUPE_DEPTH],'kupe-wardrobe':[1800,2400,600]};
 /** Типы распашных шкафов, между которыми габариты палитры переносятся при смене типа (v5). */
 const KEEP_SIZES=['empty','shelves','wardrobe','drawers'] as const;
-const categories=[{id:'wardrobe',label:'Шкафы распашные',kinds:['empty','shelves','wardrobe','drawers','hanging-drawer','corner','desk']},{id:'kitchen',label:'Кухонные модули',kinds:['kitchen-row','kitchen-corner','kitchen-u','kitchen-base','kitchen-wall','worktop']},{id:'kupe',label:'Шкафы-купе',kinds:['kupe-wardrobe','kupe']}] as const;
+const categories=[{id:'wardrobe',label:'Шкафы распашные',kinds:['empty','shelves','radius','wardrobe','drawers','hanging-drawer','corner','desk']},{id:'kitchen',label:'Кухонные модули',kinds:['kitchen-row','kitchen-corner','kitchen-u','kitchen-base','kitchen-wall','worktop']},{id:'kupe',label:'Шкафы-купе',kinds:['kupe-wardrobe','kupe']}] as const;
 const PALETTE_KEY='studio-palette';
 type PaletteChoice={category:string;kind:ModuleKind;width:number;height:number;depth:number;/** K6 (критик 22.10): установка дверей купе и число дверей — тоже переживают пересоздание палитры */mount?:'free'|'inside';doors?:'auto'|number;bodies?:number;
   /** критик релиза 24.10: угловая (Г) и П-образная кухня — длина по боковой/левой стене и сторона второго крыла тоже переживают пересоздание */side?:number;wing?:'left'|'right';left?:number};
@@ -47,6 +50,11 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
   // «Кухня П-образная»: длина по левой стене (по правой — cornerSide), по задней — во всю ширину комнаты
   const [uLeft,setULeft]=useState(okLen(saved?.left)?saved!.left!:2400);
   const cornerKitchen=kind==='kitchen-corner'||kind==='kitchen-u';
+  // фигурные детали (29.10.2026, shapes.ts): мансарда у шкафа/стеллажа; сторона и радиус у радиусного стеллажа (0 — четверть круга)
+  const [mansardOn,setMansardOn]=useState(false),[mansardRear,setMansardRear]=useState(1700);
+  const [radSide,setRadSide]=useState<'left'|'right'>('right'),[radR,setRadR]=useState(0);
+  const mansardKind=kind==='empty'||kind==='shelves'||kind==='wardrobe';
+  const shaped=(m:Module):Module=>{let n=m;if(kind==='radius')n=radiusShelving(m.width,m.height,m.depth,source,{side:radSide,r:radR||radiusMax(m)});else if(mansardKind&&mansardOn)n={...withMansard(m,mansardRear),name:m.name+' · мансарда'};if(n!==m){const e=validate(n)[0];if(e)throw Error(e);}return n;};
   // v5 (замер удобства 22.10): смена типа шкафа (Пустой → Стеллаж) не сбрасывает введённые габариты, если новый тип их принимает;
   // у кухни, купе, углового и стола размеры значат другое — там, как раньше, размеры типа (П-образная — по задней стене во всю ширину комнаты)
   const pick=(next:ModuleKind)=>{const same=(KEEP_SIZES as readonly string[]).includes(kind)&&(KEEP_SIZES as readonly string[]).includes(next);let keep=false;if(same&&next!==kind){try{createModule(next,Math.max(...bodyWidths(width,bodies)),height,depth,source);keep=true;}catch{keep=false;}}
@@ -95,7 +103,7 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
   // после каждой проверки с ошибками (и после «Исправлено…»); пока курсор в поле размеров — не дёргаем панель из-под ввода
   useEffect(()=>{if(!shown.length&&!fixedNote)return;const ae=document.activeElement;if(ae instanceof HTMLInputElement&&ae.closest('.module-palette'))return;revealIssues();},[probe,submitted,fixedNote]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{if(offer)offerRef.current?.scrollIntoView?.({block:'center'});},[offer]);
-  const narrowed=(w:number,off:boolean):Module=>{let m:Module;try{m=createModule(kind,w,height,depth,source,doorArg);}catch{m=createModule(kind,w,height,depth,source);}return off?{...m,autoFillersOff:true}:m;};
+  const narrowed=(w:number,off:boolean):Module=>{let m:Module;try{m=shaped(createModule(kind,w,height,depth,source,doorArg));}catch{m=shaped(createModule(kind,w,height,depth,source));}return off?{...m,autoFillersOff:true}:m;};
   const take=(make:()=>Module)=>{try{const ok=onAdd(make());if(ok){setOffer(null);setError('');}}catch(e){setOffer(null);setError((e as Error).message);}};
   // отказ сборки — все ошибки формы списком у полей (w-formerrors); если разбор ничего не нашёл — прежнее сообщение
   const refuse=(e:unknown)=>{const list=paletteIssues(input,source);if(list.length){setProbe(input);setSubmitted(true);setError('');setFixedNote('');revealIssues();}else setError((e as Error).message);};
@@ -105,10 +113,11 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
         const group=kind==='kitchen-u'?createKitchenURow(source,{left:uLeft,back:width,right:cornerSide,room,height,depth}):createKitchenCornerRow(source,{back:width,side:cornerSide,wing:cornerWing,room,height,depth});
         setOffer(null);if(onAddGroup(group,true)){setError('');resetCheck();}return;}
       if(kind==='kupe-wardrobe'||kind==='kitchen-row'){const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):onAddGroup(createKitchenRow(width,source,height,depth));if(ok){setError('');resetCheck();}return;}
-      if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg))){setError('');resetCheck();setBodies(1);/* заказ 7437584: «Корпусов в ряд» не остаётся 3 для следующей мебели (список прячется при 1 и узкой ширине) */}return;}
-      const m=createModule(kind,width,height,depth,source,doorArg),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
+      if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg).map(a=>({...a,module:shaped(a.module)})))){setError('');resetCheck();setBodies(1);/* заказ 7437584: «Корпусов в ряд» не остаётся 3 для следующей мебели (список прячется при 1 и узкой ширине) */}return;}
+      const m=shaped(createModule(kind,width,height,depth,source,doorArg)),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
       setOffer(null);if(onAdd(m)){setError('');resetCheck();}}catch(e){refuse(e);}};
-  const note=kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
+  const note=kind==='radius'?'Открытый торцевой стеллаж: боковина у соседнего шкафа, задник ЛДСП, 4 жёсткие полки, дно и крыша — со скруглённым передним углом. В раскрое — по габариту с пометкой «фигурная», кромка по дуге — криволинейная.'
+    :kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'
     :kind==='kupe-wardrobe'&&kupeMount==='inside'?'Боковины до пола и крыша на всю глубину; двери купе между боковинами под крышей, нижняя направляющая на полу. Дно, цоколь и секции — за дверями, 100 мм глубины занимают направляющие.'
     :kind==='kupe-wardrobe'?'Корпуса без распашных дверей и двери купе на всю ширину. Глубина — общая, 100 мм из неё занимают направляющие.'
@@ -135,6 +144,10 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
       {doorChoice.options.map(n=><option key={n} value={n}>{n}{kupeKind?'':` · секций ${Math.ceil(n/2)}`}</option>)}
     </select>{!doorChoice.options.length&&!shown.length&&<small>{doorChoice.why?`Число дверей не выбирается: ${doorChoice.why}`:'При этой ширине число дверей не выбирается — измените ширину.'}</small>}</label>}
     {kind==='kitchen-corner'&&<label className="hardware-field">Второе крыло<select aria-label="Второе крыло угловой кухни" value={cornerWing} onChange={e=>{setCornerWing(e.target.value==='left'?'left':'right');again();}}><option value="right">у правой стены</option><option value="left">у левой стены</option></select></label>}
+    {mansardKind&&<label className="hardware-field palette-mansard"><span><input type="checkbox" aria-label="Мансарда (скос назад) у новой мебели" checked={mansardOn} onChange={e=>{setMansardOn(e.target.checked);setError('');}}/> Мансарда (скос назад)</span></label>}
+    {mansardKind&&mansardOn&&<label className="hardware-field">Высота сзади, мм<input type="number" aria-label="Высота сзади новой мебели" value={mansardRear} onChange={e=>{setMansardRear(Number(e.target.value));setError('');}}/><small>Спереди — высота {height}; сзади от {MANSARD.minRear} до {height-MANSARD.minDrop}. Крыша наклонная, полки — под скос.</small></label>}
+    {kind==='radius'&&<label className="hardware-field">Скругление полок<select aria-label="Сторона скругления новой мебели" value={radSide} onChange={e=>setRadSide(e.target.value==='left'?'left':'right')}><option value="right">справа спереди (боковина слева)</option><option value="left">слева спереди (боковина справа)</option></select></label>}
+    {kind==='radius'&&<label className="hardware-field">Радиус, мм<input type="number" aria-label="Радиус скругления новой мебели" value={radR||radiusMax({width,depth})} onChange={e=>{const v=Number(e.target.value);setRadR(v>=radiusMax({width,depth})?0:v);setError('');}}/><small>{RADIUS.min}–{radiusMax({width,depth})}; наибольший — полка четвертью круга.</small></label>}
     {kind==='kupe-wardrobe'&&<label className="hardware-field">Установка дверей<select aria-label="Установка дверей купе" value={kupeMount} onChange={e=>{setKupeMount(e.target.value==='inside'?'inside':'free');again();}}><option value="inside">внутри шкафа</option><option value="free">отдельно (ниша или перед корпусами)</option></select></label>}
     <small>{note}</small>
     {shown.length>0&&<div className="palette-issues" role="alert" aria-label="Ошибки формы" ref={issuesRef}>

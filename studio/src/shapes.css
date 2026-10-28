@@ -1,0 +1,21 @@
+/* Окно «Вырезы детали» (CutoutEditor.tsx, фигурные детали 29.10.2026) */
+.cut-editor{max-width:min(860px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto}
+.cut-body{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start;margin-top:10px}
+@media (max-width:760px){.cut-body{grid-template-columns:1fr}}
+.cut-view{margin:0;padding:8px;border:1px solid #dce5e8;border-radius:10px;background:#fbfcfd;text-align:center}
+.cut-view svg{display:block;margin:0 auto;font:11px Arial;fill:#637c85}
+.cut-view .cut-shape{fill:#d7e9e8;stroke:#4a8e98;stroke-width:1.5}
+.cut-view .cut-side{writing-mode:vertical-rl}
+.cut-view figcaption{font-size:12px;color:#637c85;margin-top:4px}
+.cut-list{display:grid;gap:10px}
+.cut-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;border:1px solid #dce5e8;border-radius:10px;padding:8px 12px 10px;margin:0}
+.cut-row legend{font-weight:650;font-size:13px;padding:0 4px}
+.cut-num{display:grid;gap:2px;font-size:12px;color:#4d6370}
+.cut-num input,.cut-num select{font-size:13px;padding:5px 7px;border:1px solid #cbd4df;border-radius:6px;min-width:0}
+.cut-row .cut-text,.cut-row button{grid-column:1/-1;margin:0}
+.cut-presets{display:flex;flex-wrap:wrap;gap:6px}
+.cut-warnings{margin-top:8px;padding:8px 12px;border:1px solid #e6c48f;border-radius:8px;background:#fff8eb;color:#6b4300;font-size:13px}
+.cut-warnings p{margin:2px 0}
+.shape-panel{display:grid;gap:6px;margin:6px 0 10px}
+.shape-cut-head,.shape-cut-item{margin:0;font-size:12.5px;color:#33485a;line-height:1.4}
+.cut-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}

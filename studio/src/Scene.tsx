@@ -4,7 +4,7 @@ import {surfacePoint} from './roomSurvey';
 import {hiddenWalls,roomEdges,edgeVisible,readCutaway,type CutawayWall} from './roomCutaway';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
-import {worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
+import {shapeGeometry,worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
 import {aluProfile,aluInsert,aluFill,aluFillLookId} from './alu';
 import {facadeGeometry} from './vernissageGeometry';
 import {vernissageLayout,vernissageColor,vernissageGlossy,vernissageTexture} from './facadesVernissage';
@@ -542,7 +542,7 @@ export function Scene(p: Props) {
               : (part.role === "rod" || part.role === "flange")
               ? (() => { const c = rodCylinder(part.size); return new THREE.CylinderGeometry(c.r, c.r, c.h, 24); })()
               : vern ? facadeGeometry(vernissageLayout(vern, part.size[0], part.size[1], part.size[2]), part.grainAxis, vTex?.tileMm)
-              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.planHoles?.length ? worktopGeometry(part) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.topNotches ? topNotchGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
+              : isAlu ? aluFrameGeometry(part, aluProfile(m.alu!.profile)?.face ?? 19) : part.shape ? shapeGeometry(part) : part.planHoles?.length ? worktopGeometry(part) : part.planContour ? planContourGeometry(part) : part.golaCuts?.length ? golaSideGeometry(part) : part.rearNotch ? rearNotchSideGeometry(part) : part.topNotches ? topNotchGeometry(part) : part.faceContour ? faceContourGeometry(part) : part.taper ? taperGeometry(part) : part.taperZ ? planTaperGeometry(part) : boardGeometry(part);
           if (isAlu) {
             const colour = ALU_COLOURS[m.alu!.color] ?? 0xc9ccd1;
             mat.color.set(colour); mat.metalness = 0.75; mat.roughness = 0.35; mat.transparent = false; mat.opacity = 1; mat.depthWrite = true;

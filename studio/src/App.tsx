@@ -1,5 +1,8 @@
 import {FacadeEditor} from './FacadeEditor';
 import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
+import {Scissors} from 'lucide-react';
+import {CutoutEditor,cutAllowed} from './CutoutEditor';
+import {ShapePanel} from './ShapePanel';
 import {readCutaway,saveCutaway} from './roomCutaway';
 import './editor-visibility.css';
 import {repairHinges} from './hingeRepair';
@@ -510,6 +513,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     ),
     [search, setSearch] = useState("");
   const [facadePreview,setFacadePreview]=useState<{base:Project;next:Project}|null>(null);
+  // окно «Вырезы детали» (фигурные детали 29.10.2026, CutoutEditor.tsx): корпус и деталь, с которой открыли
+  const [cutHost,setCutHost]=useState<{mid:string;pid:string}|null>(null);
   const editingFacades=modal==='facade-editor';
   const sceneProject=editingFacades&&facadePreview?.base===project?facadePreview.next:project;
   useEffect(()=>{setFacadePreview(null);setModal(value=>value==='facade-editor'?null:value);},[project,active,stage]);
@@ -735,6 +740,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const a=project.modules.find(x=>x.id===c.mid)!,mod=a.module,sidx=Math.max(0,mod.sections.findIndex(s=>s.id===c.sid)),sec=mod.sections[sidx];
     const pid=c.pid??'',y=c.localY??mod.height/2;
     const select=()=>{selectModule(a.id);chooseSection(c.sid);};
+    // «Вырез…» (фигурные детали 29.10.2026): у детали корпуса и фасада; клик по петле/ручке — вырез в её фасаде
+    const cutPid=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),canCut=!!pid&&cutAllowed(mod,cutPid);
+    const cutItem:RadialItem={id:'cutout',label:'Вырез…',icon:Scissors,disabled:!canCut,hint:canCut?'Вырез в детали: под плинтус, трубу, подоконник, розетку, кабель — прямоугольный или круглый, с привязкой от края':'В этой детали вырез не делается',run:()=>{select();setCutHost({mid:a.id,pid:cutPid});}};
     const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{n[key]=v;}));}});
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
@@ -799,7 +807,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');}} as RadialItem});
     if(/:shelf:\d+$/.test(pid)){
       const j=Number(pid.split(':shelf:')[1]),isFixed=!!sec.fixed?.includes(j),p=part('Полка');
-      return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},p.params,body,p.remove]};
+      return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},cutItem,p.params,body,p.remove]};
     }
     if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:facadeMenu([editFacade])};
     if(pid.includes(':drawer:')){
@@ -812,7 +820,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
       const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,p.up,p.down,p.copy,p.params,p.remove];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
-        [...facadeMenu([editFacade,drawerItems[1]]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle')}]:[...drawerItems,body]};
+        [...facadeMenu([editFacade,drawerItems[1],cutItem]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle')}]:[...drawerItems,body]};
     }
     if(pid.includes(':door:')||/:(hingecup|hingearm|hingeplate):/.test(pid)||pid.includes(':handle:')){
       const doorId=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),p={...part('Фасад')};
@@ -839,7 +847,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'handle-pos-all',label:'Для всех фасадов модуля',icon:Layers,hint:`Расположение «${HANDLE_POS_LABEL[curPos]}» — всем распашным фасадам этого модуля`,run:()=>modifyAt(a.id,n=>{setModuleHandlePos(n,curPos);})},
       ]};
       return {title:'Фасад',subtitle:mod.name,items:facadeMenu([editFacade,doorHandle,
-        hinges,doorOpening,...doorQuickItems(mod,c.sid,quickOps),{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
+        hinges,doorOpening,cutItem,...doorQuickItems(mod,c.sid,quickOps),{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
         {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}])};
@@ -857,7 +865,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         return {title:info.partial?`Перегородка ${Math.round(info.from)}–${Math.round(info.to)}`:'Перегородка',subtitle:mod.name,items:[
           {id:'divider-full',label:'Во всю высоту',icon:Columns2,active:!info.partial,hint:'От дна до крыши, как раньше',run:()=>modifyAt(a.id,n=>{setPartialDivider(n,dsid,null);})},
           {id:'divider-partial',label:'Частичная…',icon:Ruler,active:info.partial,hint:'«От» и «до» в мм от пола. Над и под перегородкой полки — во всю ширину двух секций',run:askRange},
-          pick('lo'),pick('hi'),
+          pick('lo'),pick('hi'),cutItem,
           {...p.params,hint:'Перегородки секции — справа, в «Наполнении»'},body]};
       }
     }
@@ -865,7 +873,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const p=part('Штанга');
       return {title:'Штанга',subtitle:mod.name,items:[p.up,p.down,p.params,body,{...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,c.sid+':rod')))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]};
     }
-    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,body]};
+    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,body,...(canCut?[cutItem]:[])]};
   }
   // Папка клиента: новый проект сразу пишется в браузер под своим ключом, а вкладка получает цену без ожидания первой правки.
   useEffect(()=>{
@@ -1065,6 +1073,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         <button className="outline" aria-label="Быстро поднять элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ 10 мм</button></>}
         {selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="outline" onClick={copySelected}>Копировать</button>}
         {selectedDetail&&(selectedDetail.id.includes(':door:')||selectedDetail.id.endsWith(':facade'))&&<button className="outline" onClick={()=>{setHandleFace(selectedDetail.id);setMaterialScope('active');setModal('handles');}}>Ручка этого фасада</button>}
+        {selectedDetail&&cutAllowed(m,selectedDetail.id)&&<button className="outline" onClick={()=>setCutHost({mid:placed.id,pid:selectedDetail.id})}>Вырез…</button>}
         <button className="text-action danger" onClick={removeSelected}>Удалить</button>
         <button className="text-action" aria-label="Снять выделение детали" onClick={()=>setSelectedPart(null)}>Закрыть</button>
       </div>}
@@ -2212,11 +2221,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <label className="hardware-field">Крепёж корпуса<select aria-label="Крепёж корпуса" value={m.fastening??'confirmat'} onChange={e=>modify(n=>{if(e.target.value==='eccentric')n.fastening='eccentric';else delete n.fastening;})}><option value="confirmat">Евровинты · видны снаружи, под заглушки</option><option value="eccentric">Эксцентрики D15 · скрытый крепёж</option></select></label>
                 <label className="hardware-field">Кромка корпуса<select aria-label="Кромка корпуса" value={m.edgeBody??2} onChange={e=>modify(n=>{const v=Number(e.target.value) as EdgeThickness;if(v===2)delete n.edgeBody;else n.edgeBody=v;})}>{EDGE_CHOICES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></label>
                 <p className="field-note">{m.fastening==='eccentric'?'Бочонок в пласти горизонталей на 34 мм от торца, шток в боковине; снаружи корпус чистый. В 3D — светлые бочонки при открытых фасадах.':'Конфирматы 5×50 через боковины в дно, крышу, жёсткие полки и полку над ящиками; снаружи — заглушки в цвет. В 3D — тёмные головки на боковинах.'}</p>
-                {m.topType!=='none'&&!m.topGlass&&!m.alu&&<label className="hardware-field">Скос под потолок<select aria-label="Скос под потолок" value={m.slope?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.slope;else n.slope={side:v as 'left'|'right',lowHeight:Math.min(n.height-RULES.slopeMinDrop,Math.max(RULES.slopeMinLow,n.slope?.lowHeight??Math.round((n.height*0.65)/10)*10))};})}><option value="none">Нет · крыша ровная</option><option value="left">Ниже слева</option><option value="right">Ниже справа</option></select></label>}
+                {/* фигурные детали (29.10.2026): мансарда (скос назад), радиусные полки, вырезы — ShapePanel.tsx */}
+                <ShapePanel m={m} modify={modify} openCuts={pid=>setCutHost({mid:placed.id,pid})}/>
+                {m.topType!=='none'&&!m.topGlass&&!m.alu&&!m.mansard&&!m.radius&&<label className="hardware-field">Скос под потолок<select aria-label="Скос под потолок" value={m.slope?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.slope;else n.slope={side:v as 'left'|'right',lowHeight:Math.min(n.height-RULES.slopeMinDrop,Math.max(RULES.slopeMinLow,n.slope?.lowHeight??Math.round((n.height*0.65)/10)*10))};})}><option value="none">Нет · крыша ровная</option><option value="left">Ниже слева</option><option value="right">Ниже справа</option></select></label>}
                 {m.slope&&<NumberField label={`Высота корпуса у ${m.slope.side==='left'?'левой':'правой'} стороны`} value={m.slope.lowHeight} min={RULES.slopeMinLow} max={m.height-RULES.slopeMinDrop} onChange={v=>modify(n=>{n.slope={...n.slope!,lowHeight:v};})}/>}
                 {m.slope&&<p className="field-note">Как задать: выберите, с какой стороны потолок ниже, и впишите высоту корпуса у этой стороны (от {RULES.slopeMinLow} до {m.height-RULES.slopeMinDrop} мм). Высокая сторона — общая высота корпуса выше.</p>}
                 {m.slope&&<p className="field-note">Конструкция цеха: крыша плоская на высоте низкой стороны, низкая боковина — до крыши, высокая — до потолка. Фасады прямоугольные до низкой стороны, треугольник над ними закрывает фальш из фасадного материала вровень с фасадами (трапеция в раскрое). Набивной задник — трапецией. Так дешевле, чем косая крыша.</p>}
-                {!m.slope&&!m.alu&&m.doorMount!=='inset'&&!m.sections.some(s=>s.drawers>0)&&<label className="hardware-field">Скос фронта в плане<select aria-label="Скос фронта в плане" value={m.skew?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.skew;else n.skew={side:v as 'left'|'right',depth:n.skew?.depth??Math.max(RULES.minD,Math.round((n.depth-150)/10)*10)};})}><option value="none">Нет · фронт ровный</option><option value="left">Мельче слева</option><option value="right">Мельче справа</option></select></label>}
+                {!m.slope&&!m.mansard&&!m.radius&&!m.alu&&m.doorMount!=='inset'&&!m.sections.some(s=>s.drawers>0)&&<label className="hardware-field">Скос фронта в плане<select aria-label="Скос фронта в плане" value={m.skew?.side??'none'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='none')delete n.skew;else n.skew={side:v as 'left'|'right',depth:n.skew?.depth??Math.max(RULES.minD,Math.round((n.depth-150)/10)*10)};})}><option value="none">Нет · фронт ровный</option><option value="left">Мельче слева</option><option value="right">Мельче справа</option></select></label>}
                 {m.skew&&<NumberField label={`Глубина корпуса у ${m.skew.side==='left'?'левой':'правой'} стороны`} value={m.skew.depth} min={RULES.minD} max={m.depth-30} onChange={v=>modify(n=>{n.skew={...n.skew!,depth:v};})}/>}
                 {m.skew&&<p className="field-note">Фасады и цоколь идут под углом {Math.round(Math.abs(skewAngle(m))*180/Math.PI)}° к задней стенке, боковины разной глубины, дно, крыша и полки — трапецией (в раскрое габарит с пометкой «скос»). Ящики, вкладные и алюминиевые фасады при скосе не ставятся.</p>}
                 <label className="hardware-field">Петли одиночной двери<select aria-label="Сторона петель" value={m.hingeSide??'left'} onChange={e=>modify(n=>n.hingeSide=e.target.value as Module['hingeSide'])}><option value="left">Слева</option><option value="right">Справа</option></select></label>
@@ -2236,6 +2247,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </SafeBoundary></aside>
       </WorkspacePanels>
       {!presentation&&<SafeBoundary label="Нижняя панель" resetKey={project}><ProjectDock project={project} commit={commitProject} inspect={inspectPart} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/></SafeBoundary>}
+      {cutHost&&!presentation&&<CutoutEditor key={cutHost.mid+cutHost.pid} project={project} mid={cutHost.mid} pid={cutHost.pid} commit={commitProject} close={()=>setCutHost(null)}/>}
       {modal && modal!=="facade-editor" && (
         <div
           className="modal-backdrop"

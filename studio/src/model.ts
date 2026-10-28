@@ -10,6 +10,7 @@ import { kitchenDividerZ } from "./kitchenDivider";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
+import { applyCutouts, applyMansard, radiusParts, cutoutErrors, mansardErrors, radiusErrors, parseShapes, type PartShape, type Cutout } from "./shapes";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -433,6 +434,14 @@ export type Module = {
   rodType?: "round" | "oval";
   /** Скос под мансардный потолок: крыша наклонная, у стороны side корпус ниже — lowHeight. Фасады и задник трапецией, полки — до низкой высоты. */
   slope?: { side: "left" | "right"; lowHeight: number };
+  /** Мансарда — скос потолка назад (задача Макса 29.10.2026, shapes.ts): высота спереди — height, сзади — rear; крыша наклонная,
+   *  боковины и перегородки трапецией, задник по задней высоте, фасады по передней. */
+  mansard?: { rear: number };
+  /** Открытый стеллаж с радиусными полками (shapes.ts radiusParts): side — у какой стороны скруглён передний угол, r — радиус;
+   *  top/bottom: false — крыша/дно прямоугольные. */
+  radius?: { side: "left" | "right"; r: number; top?: false; bottom?: false };
+  /** Вырезы в деталях и фасадах (shapes.ts): под плинтус, трубу, подоконник, розетку, кабель. */
+  cutouts?: Cutout[];
   /** Крепёж корпуса по СТП: видимый — евровинты (конфирматы), скрытый — эксцентриковые стяжки. По умолчанию евровинты. */
   fastening?: "confirmat" | "eccentric";
   /** Двери-купе (kupe.ts): объект-проём с направляющими и полотнами, глубина 100. Перед корпусами или в нише. */
@@ -512,6 +521,15 @@ export type GolaCut = { top0: number; top1: number; depth: number; r: number; /*
   /** Средний вырез: верхний угол без скругления (k10, k15, k17, k30 — в нём стяжка соседних модулей «5»), скруглён только нижний. */ sharpTop?: boolean;
   /** Вырез только в этой боковине (k30 m12: средний — только в правой; k30 m14: в правой вырезов нет). Без поля — в обеих. */ side?: 'left' | 'right' };
 export type Part = {
+  /** Фигурная деталь (shapes.ts): контур в плоскости детали с вырезами — сцена рисует по нему; раскрой — по габариту. */
+  shape?: PartShape;
+  /** Пометка фигурной детали для раскроя, деталировки, бирки: размеры вырезов, радиус, трапеция. */
+  shapeNote?: string;
+  /** Кромка по прямым сторонам выреза и по дуге (мм, толщина кромки): смета считает в кромку; по дуге — ещё работа «кромка по кривой». */
+  cutEdge?: { len: number; t: number };
+  curveEdge?: { len: number; t: number };
+  /** Операций «вырез / сложный выпил» у детали (смета: работа цеха). */
+  cutWork?: number;
   facadeSide?: boolean;
   /** Вырезы Gola в боковине (координаты детали: от её верха вниз по Y, глубина — от переднего торца +Z); раскрой — по габариту. */
   golaCuts?: GolaCut[];
@@ -805,7 +823,7 @@ export function deskModule(base?:Module):Module{
   const m=base?structuredClone(base):initialModule();
   return {...m,name:'Стол',height:750,depth:Math.max(500,Math.min(m.depth,700)),doors:false,plinthHeight:0,bottomType:'none',backType:'none',topType:'panel',
     sections:[{...section(),shelves:[]}],desk:{sides:'both',apron:100},
-    feet:undefined,slope:undefined,skew:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,seatTop:undefined,seatPanel:undefined,plinthRecess:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
+    feet:undefined,slope:undefined,skew:undefined,mansard:undefined,radius:undefined,cutouts:undefined,alu:undefined,aluDrawers:undefined,topGlass:undefined,seatTop:undefined,seatPanel:undefined,plinthRecess:undefined,sidePanels:undefined,topStrip:undefined,standLight:undefined,lightTone:undefined,lightType:undefined,rails:undefined,cornerFiller:undefined,wallFiller:undefined,doorMount:undefined,doorOpen:undefined};
 }
 /** Деталь — фасад ящика (ящики студии, ящики и глухие фасады кухни). */
 export const isDrawerFront=(p:Part)=>p.role==='drawer'&&p.id.endsWith(':facade');
@@ -1079,13 +1097,24 @@ export function setRodTiers(m: Module, s: Section, on: boolean) {
   s.rod = true; delete s.pantograph;
   s.rodLower = Math.round(((sup + rodY) / 2 / h) * 10000) / 10000;
 }
+/** Детали модуля. Фигурные детали (shapes.ts): мансарда и радиусный стеллаж — контуром, затем вырезы (Module.cutouts) поверх. */
 export function parts(m: Module): Part[] {
+  const out = shapeBaseParts(m);
+  if (m.cutouts?.length) applyCutouts(m, out);
+  return out;
+}
+/** Детали без вырезов (проверка вырезов и окно «Вырезы» строят контур от них). */
+export function shapeBaseParts(m: Module): Part[] {
+  if (m.radius && !m.kupe && !m.raw && !m.worktop && !m.corner && !m.casework && !m.kitchen) return radiusParts(m);
+  return partsCore(m);
+}
+function partsCore(m: Module): Part[] {
   if(m.kupe)return kupeParts(m);
   if(m.raw)return rawParts(m);
   if(m.worktop)return worktopParts(m);
   if(m.corner)return cornerParts(m);
   if(m.casework)return caseworkParts(m);
-  if(m.kitchen?.sideRecess)return sideRecessParts(m,parts); // кухня Базиса: боковины разной глубины (пакет 4) — корпус depth − back у лица, длинная боковина во всю глубину
+  if(m.kitchen?.sideRecess)return sideRecessParts(m,partsCore); // кухня Базиса: боковины разной глубины (пакет 4) — корпус depth − back у лица, длинная боковина во всю глубину
   const out: Part[] = [];
   const t = RULES.panel;
   const d = m.depth;
@@ -1997,6 +2026,8 @@ export function parts(m: Module): Part[] {
       for(const [k,y] of (ss.confTop??[]).entries())confirmat(`fast:side-strip:top:${k}`,[xh,s.b-y,zc],L?'-x':'+x');
     }
   }
+  // мансарда (shapes.ts) — до фурнитуры: петли ищут свободную высоту уже под наклонной крышей
+  if(m.mansard)applyMansard(m,out);
   hardwareParts(m,out);
   if(m.hanging&&!m.kitchen&&!m.feet)wallHangers(m,out); // навесной шкаф (поднят от пола, решение Макса 23.10.2026) — на навесах, как навесные кухни
   kitchenExtraParts(m,out);
@@ -2332,6 +2363,7 @@ export function fastenerCounts(m: Module) {
   const fixedIds = new Set(m.sections.flatMap((s) => (s.fixed ?? []).map((j) => `${s.id}:shelf:${j}`)));
   const rafix = m.kitchen ? rafixCount(ps) : 0; // рафиксы — только у кухонь Базиса (kitchenRafix.ts)
   for (const j of m.kitchen?.bareShelves ?? []) fixedIds.add(`${m.sections[0].id}:shelf:${j}`); // полка без крепежа в Базисе — без полкодержателей
+  if (m.radius) for (const p of ps) if (p.role === "shelf") fixedIds.add(p.id); // радиусные полки — жёсткие, на конфирматах (shapes.ts)
   return { confirmats: ps.filter((p) => p.role === "fastener" && p.id.startsWith("fast:")).length, shelfHolders: fastenersMode(m.kitchen) === false ? 0 : 4 * ps.filter((p) => p.role === "shelf" && !p.id.endsWith(":drawer-cap") && !p.id.endsWith(":glue") && !fixedIds.has(p.id)).length + ps.filter((p) => /^shp:.*:r\d+:\d+$/.test(p.id)).length /* перфорация kitchen.pinRows */, eccentrics: ps.filter((p) => p.id.startsWith("ecc:") && !p.id.endsWith(":pin")).length + (cornerStrip(m) ? 4 : 0), ...(rafix ? { rafix } : {}) };
 }
 /** Предел высоты модуля: кухонный пенал до KITCHEN.maxHeight 2900 (Базис до 2869), остальное (шкафы, нижние/навесные/антресоли) — RULES.maxH 2500. Один источник для validate и полей «Высота». */
@@ -2355,6 +2387,14 @@ export function kupeBodyMax(): number { return RULES.sheetW - 2 * RULES.sheetMar
 /** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
  *  вызывающий ловит исключения: при недопустимых габаритах дальнейшие проверки могут не собраться. */
 export function validate(m: Module, opts?: {all?: boolean}): string[] {
+  const errors = validateCore(m, opts);
+  if (!m.cutouts?.length && !m.mansard && !m.radius) return errors;
+  // фигурные детали (shapes.ts): мансарда, радиусный стеллаж, вырезы — после общих проверок; контур вырезов — от деталей без вырезов
+  const more = [...mansardErrors(m), ...radiusErrors(m)];
+  if (m.cutouts?.length && !errors.length && !more.length) { try { more.push(...cutoutErrors(m, shapeBaseParts(m))); } catch (e) { more.push((e as Error).message); } }
+  return [...errors, ...more];
+}
+function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   if(m.kupe)return kupeErrors(m);
   if(m.raw)return rawErrors(m);
   if(m.worktop)return kitchenErrors(m);
@@ -2996,6 +3036,7 @@ export function parseModule(input: unknown): Module {
     ...(x.facadeTo===undefined?{}:{facadeTo:Number(x.facadeTo)}),
     ...(x.rodType===undefined?{}:{rodType:x.rodType as Module['rodType']}),
     ...(x.slope===undefined?{}:{slope:{side:(x.slope as {side:'left'|'right'})?.side,lowHeight:Number((x.slope as {lowHeight:number})?.lowHeight)}}),
+    ...parseShapes(x),
     ...(x.fastening===undefined?{}:{fastening:x.fastening as Module['fastening']}),
     ...(x.hingeFit===true?{hingeFit:true as const}:{}),
     ...(x.hingeBrand===undefined?{}:{hingeBrand:x.hingeBrand as Module['hingeBrand']}),

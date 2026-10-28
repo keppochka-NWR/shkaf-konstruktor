@@ -191,6 +191,8 @@ export function rotateModule(p:Project,mid:string,rotation:number):Project {
 
 export function addUpperModule(p:Project,mid:string):Project {
  const n=structuredClone(p),base=n.modules.find(a=>a.id===mid);if(!base)throw Error('Выберите нижний корпус.');
+ // мансарда (shapes.ts, 29.10.2026): над шкафом со скосом назад потолок скошен — антресоль не ставится
+ if(base.module.mansard)throw Error('Над мансардным шкафом антресоль не ставится: потолок там скошен назад. Сделайте шкаф выше или уберите мансарду.');
  const y=(base.y??0)+base.module.height,height=Math.min(600,Math.floor(p.room.height-y-MEASUREMENT_RULES.ceilingClearance));
  if(height<RULES.minH)throw Error(`Над корпусом нужно хотя бы ${RULES.minH} мм для отдельной антресоли и ${MEASUREMENT_RULES.ceilingClearance} мм монтажного зазора. Измените высоту нижнего корпуса или замер помещения.`);
  // заказ 7427796: антресоль не копирует то, что относится только к нижнему корпусу — задник ЛДСП «от высоты» (ниша над сиденьем),
