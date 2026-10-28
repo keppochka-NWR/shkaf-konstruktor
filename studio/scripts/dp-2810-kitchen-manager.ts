@@ -334,7 +334,7 @@ for (const v of ["3D", "Спереди", "Сверху"]) { await page.getByRole
 
 // ---------- Сверка: проект из хранилища (только чтение) против сборки функциями
 const storageKeys = await page.evaluate(`Object.keys(localStorage)`) as string[];
-const saved = await page.evaluate(`(() => { let best = null; const walk = (x, d) => { if (!x || typeof x !== "object" || d > 8) return; if (Array.isArray(x.modules) && x.room && (!best || x.modules.length > best.modules.length)) best = x; for (const v of Object.values(x)) walk(v, d + 1); }; for (const k of Object.keys(localStorage)) { if (k.includes(":previous")) continue; try { walk(JSON.parse(localStorage.getItem(k) || "null"), 0); } catch {} } return best; })()`) as Project | null;
+const saved = await page.evaluate(`(() => { let best = null; const walk = (x, d) => { if (!x || typeof x !== "object" || d > 8) return; if (Array.isArray(x.modules) && x.room && (!best || x.modules.length > best.modules.length)) best = x; for (const v of Object.values(x)) walk(v, d + 1); }; for (const k of Object.keys(localStorage)) { if (k.includes(":previous")) continue; try { const doc = JSON.parse(localStorage.getItem(k) || "null"), before = best; walk(doc, 0); if (best && best !== before && doc && doc.calculation && !best.calculation) best = Object.assign({}, best, { calculation: doc.calculation }); /* расчёт — в документе комнат (29.10) */ } catch {} } return best; })()`) as Project | null;
 await browser.close();
 writeFileSync(join(out, "manager-project.json"), JSON.stringify(saved, null, 1));
 const key = (a: PlacedModule) => { const b = bounds(a); return [Math.round(b.x), Math.round(b.y), Math.round(b.z), a.rotation ?? 0].join(","); };

@@ -15,7 +15,8 @@ export function nextOption(options: { disabled: boolean }[], from: number, key: 
   return -1;
 }
 
-export function installSelectGuard(root: Document = document): () => void {
+/** Слушатели — на window в фазе захвата, ставятся до запуска студии: срабатывают раньше её обработчиков Esc/стрелок. */
+export function installSelectGuard(root: Window | Document = window): () => void {
   const pending = new WeakMap<HTMLSelectElement, number>();
   const isClosedSelect = (t: EventTarget | null): t is HTMLSelectElement => t instanceof HTMLSelectElement && !t.multiple && t.size <= 1;
   const commit = (s: HTMLSelectElement) => {
@@ -27,7 +28,7 @@ export function installSelectGuard(root: Document = document): () => void {
   const keydown = (e: KeyboardEvent) => {
     const s = e.target;
     if (!isClosedSelect(s) || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.key === "Enter") { commit(s); return; }
+    if (e.key === "Enter") { if (pending.has(s)) { e.preventDefault(); commit(s); } return; }
     if (e.key === "Escape") { if (pending.has(s)) { s.selectedIndex = pending.get(s)!; pending.delete(s); e.preventDefault(); e.stopPropagation(); } return; }
     if (!NAV.has(e.key)) return;
     e.preventDefault();
@@ -37,7 +38,7 @@ export function installSelectGuard(root: Document = document): () => void {
     s.selectedIndex = i;
   };
   const focusout = (e: FocusEvent) => { if (isClosedSelect(e.target)) commit(e.target); };
-  root.addEventListener("keydown", keydown, true);
-  root.addEventListener("focusout", focusout, true);
-  return () => { root.removeEventListener("keydown", keydown, true); root.removeEventListener("focusout", focusout, true); };
+  root.addEventListener("keydown", keydown as EventListener, true);
+  root.addEventListener("focusout", focusout as EventListener, true);
+  return () => { root.removeEventListener("keydown", keydown as EventListener, true); root.removeEventListener("focusout", focusout as EventListener, true); };
 }

@@ -28,7 +28,7 @@ const shot = (p: Page, name: string) => p.screenshot({ path: join(out, `${String
 const click = async (p: Page, name: string) => { await p.getByRole("button", { name, exact: true }).filter({ visible: true }).first().click(); stats.clicks++; await p.waitForTimeout(300); };
 async function field(p: Page, label: string, v: number) { const f = p.getByLabel(label, { exact: true }).filter({ visible: true }).first(); await f.click({ clickCount: 3 }); stats.clicks++; await p.keyboard.type(String(v)); await p.keyboard.press("Enter"); stats.keys += 2; await p.waitForTimeout(500); }
 async function project(p: Page) {
-  return p.evaluate(() => { const s = JSON.parse(localStorage.getItem("garderyob-rooms-v1") || "null"); if (!s) return null; const r = s.rooms.find((r: { id: string }) => r.id === s.activeRoomId); return r?.project ?? null; });
+  return p.evaluate(() => { const s = JSON.parse(localStorage.getItem("garderyob-rooms-v1") || "null"); if (!s) return null; const r = s.rooms.find((r: { id: string }) => r.id === s.activeRoomId); return r?.project ? (s.calculation && !r.project.calculation ? { ...r.project, calculation: s.calculation } : r.project) : null; /* расчёт — в документе (29.10) */ });
 }
 const banner = (p: Page) => p.evaluate(() => [...document.querySelectorAll("div,section,p")].filter((e) => (e as HTMLElement).offsetParent && /Изменение не применено|Малый корпус|Ширина: допустимо|Сделано/.test((e as HTMLElement).innerText ?? "") && e.getBoundingClientRect().width < 700).map((e) => (e as HTMLElement).innerText.replace(/\s+/g, " ").slice(0, 400)).slice(-2));
 /** ПКМ по фасаду модуля (над подписью ширины модуля в 3D) и путь по круговому меню. */

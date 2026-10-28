@@ -35,7 +35,7 @@ let lastRaw = "";
 const saved = async (): Promise<Project> => { for (let k = 0; k < 40; k++) { await page.waitForTimeout(250); const raw = (await page.evaluate(() => Object.keys(localStorage).sort().map((key) => localStorage.getItem(key) ?? "").join("\u0001"))) as string; if (raw !== lastRaw) { await page.waitForTimeout(300); lastRaw = (await page.evaluate(() => Object.keys(localStorage).sort().map((key) => localStorage.getItem(key) ?? "").join("\u0001"))) as string; break; } }
   const all = (await page.evaluate(() => Object.keys(localStorage).map((k) => [k, localStorage.getItem(k) ?? ""]))) as [string, string][];
   const found: [string, Project][] = []; const walk = (k: string, v: unknown, depth = 0) => { if (!v || typeof v !== "object" || depth > 6) return; const o = v as Record<string, unknown>; if (Array.isArray(o.modules) && o.room) { found.push([k, o as unknown as Project]); return; } for (const x of Object.values(o)) walk(k, x, depth + 1); };
-  for (const [k, s] of all) { try { walk(k, JSON.parse(s)); } catch { /* не JSON */ } }
+  for (const [k, s] of all) { try { const doc = JSON.parse(s), n0 = found.length; walk(k, doc); if (doc?.calculation) for (const f of found.slice(n0)) if (!f[1].calculation) f[1] = { ...f[1], calculation: doc.calculation }; /* расчёт — в документе комнат (29.10) */ } catch { /* не JSON */ } }
   const best = found.filter(([k]) => !k.endsWith(":previous") && !/undo|history/i.test(k)).sort((a, b) => b[1].modules.length - a[1].modules.length)[0];
   if (!best) throw Error("проект не сохранён"); return parseProject(JSON.parse(JSON.stringify(best[1]))); };
 const mod = (p: Project, i: number) => p.modules[i].module; // по порядку добавления: комод, шкаф, антресоль (палитра называет «Модуль N»)

@@ -27,7 +27,7 @@ async function field(aria: string, value: string, exact = true) {
   await l.scrollIntoViewIfNeeded(); await l.click({ clickCount: 3 }); await page.keyboard.type(value); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
 }
 /** Текущий проект комнаты (только для проверки — действия делаются мышью). */
-const project = (): Promise<Project | null> => page.evaluate(() => { const s = JSON.parse(localStorage.getItem("garderyob-rooms-v1") || "null"); if (!s) { const p = localStorage.getItem("module-studio-v3"); return p ? JSON.parse(p) : null; } return s.rooms.find((x: { id: string }) => x.id === s.activeRoomId)?.project ?? null; });
+const project = (): Promise<Project | null> => page.evaluate(() => { const s = JSON.parse(localStorage.getItem("garderyob-rooms-v1") || "null"); if (!s) { const p = localStorage.getItem("module-studio-v3"); return p ? JSON.parse(p) : null; } const r = s.rooms.find((x: { id: string }) => x.id === s.activeRoomId)?.project ?? null; return r && s.calculation && !r.calculation ? { ...r, calculation: s.calculation } : r; /* расчёт — в документе (29.10) */ });
 const moduleWith = async (f: (m: Module) => boolean): Promise<Module | undefined> => (await project())?.modules.find((a) => f(a.module))?.module;
 const view = async (name: string) => { await page.getByRole("button", { name, exact: true }).first().click().catch(() => {}); await page.waitForTimeout(900); };
 /** «Приблизить выбранный корпус» — переключатель: включаем, только если выключен; затем отводим мышь (подсказка не закрывает вид). */
