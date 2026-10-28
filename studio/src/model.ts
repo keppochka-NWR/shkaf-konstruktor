@@ -105,6 +105,10 @@ export const RULES = {
   // Фальши цеха: планка 100×16 торцом (Макс, 06.09.2026); к стене +5 мм (регламент по ФП).
   fillerStrip: 100,
   fillerGap: 3, // зазор между фальш-планкой из фасада и соседним фасадом
+  // Стык угловых фальшей (волна 29.10, общее правило с кухней «наша версия» 23.10): фальш из фасада корпуса, чей фасад упирается
+  // в соседа, — глухая часть до лица угловой планки соседа + 27 (kitchenCornerRow CORNER_CLEARANCE, эталон k27); дальше зазор 3 и фасады.
+  cornerGap: 27,
+  minDoorW: 100, // створка уже 100 не делается (чашка петли 35 в 22 от кромки + ручка): у глухой части угла — понятная ошибка
   wallSnap: 25,
   wallFillerEdgeGap: 5,
   wallFillerMin: 60,
@@ -302,6 +306,9 @@ export type Module = {
   /** Вид угловой фальши: plank — планка 100×16 торцом снаружи боковины с выступом 40 (сосед примыкает к боковине);
    *  strip — фальш-планка из фасада вровень с фасадами (фасад этого корпуса упирается в боковину соседа). */
   cornerKind?: "plank" | "strip";
+  /** Ширина фальша из фасада (cornerKind strip) — «глухая часть» угла: от края корпуса до лица планки соседа + CORNER_GAP
+   *  (стык угловых фальшей, волна 29.10). Считает applyAutoFillers по соседу; нет — 100 (RULES.fillerStrip, как в файлах до 29.10). */
+  cornerFillerWidth?: number;
   /** Фальшпанели к стене по регламенту цеха: ставятся автоматически, когда боковина у стены и в корпусе есть фасады/ящики.
    *  Только «торцом» (Макс, 06.09): планка width×16 на всю высоту снаружи боковины, заподлицо с фасадом, +5 мм к стене. */
   wallFiller?: Partial<Record<"left" | "right", WallFiller>>;
@@ -785,6 +792,10 @@ export function railAt(m:Pick<Module,'height'>,r:{height:number;at?:number;atTop
 export function railHeight(m:Module,place:NonNullable<Module['rails']>[number]['place']){return railsOf(m).find(r=>r.place===place)?.height??0;}
 /** Угловая фальш этого корпуса — планка из фасада (strip). Старые файлы без cornerKind: по наличию фасадов. */
 export function cornerStrip(m:Module){if(!m.cornerFiller)return false;return m.cornerKind?m.cornerKind==='strip'&&m.doors:m.doors;}
+/** Ширина фальша из фасада в углу (глухая часть): своя, если посчитана по соседу (applyAutoFillers), иначе 100. */
+export function cornerStripWidth(m:Pick<Module,'cornerFillerWidth'>){const w=m.cornerFillerWidth;return w!==undefined&&Number.isFinite(w)&&w>RULES.fillerStrip?w:RULES.fillerStrip;}
+/** На сколько глухая часть угла шире стандартной планки 100 в крайней секции s (0 — не крайняя или планка 100): створки считаются по остатку. */
+function cornerStripExtra(m:Module,s:Section){if(!cornerStrip(m))return 0;const i=m.sections.indexOf(s),edge=m.cornerFiller==='left'?0:m.sections.length-1;return i===edge?cornerStripWidth(m)-RULES.fillerStrip:0;}
 /** Опоры регулируемые под нижним корпусом (за цоколем): 4, при ширине от 900 — 6. Антресоли и корпуса без цоколя — без опор. */
 export function legCount(m:Module,y=0){if(y>0||(!m.feet&&plinth(m)===0))return 0;
   // заказ 7442203: без дна на цоколе боковины стоят на полу (цоколь — царга спереди), опорам не к чему крепиться
@@ -849,8 +860,9 @@ export function facadeSpan(m:Module,i:number,b:SectionBox){
   let left=i===0?fe(m):b.x-t/2+fb(m)/2;
   let right=i===m.sections.length-1?m.width-fe(m):b.x+b.width+t/2-fb(m)/2;
   // Угловая фальш-планка из фасада занимает край проёма: фасады крайней секции сдвигаются на планку + зазор 3.
-  if(cornerStrip(m)&&m.cornerFiller==='left'&&i===0)left+=RULES.fillerStrip+RULES.fillerGap;
-  if(cornerStrip(m)&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=RULES.fillerStrip+RULES.fillerGap;
+  // Ширина — глухая часть угла (cornerStripWidth: до лица планки соседа + 27), по умолчанию 100.
+  if(cornerStrip(m)&&m.cornerFiller==='left'&&i===0)left+=cornerStripWidth(m)+RULES.fillerGap;
+  if(cornerStrip(m)&&m.cornerFiller==='right'&&i===m.sections.length-1)right-=cornerStripWidth(m)+RULES.fillerGap;
   // угловая мойка Базиса: фальш ЛДСП + планка из фасада у края модуля, фасады — через зазор faceGap (kitchen.faceFiller, n4-base).
   // Отдельно от cornerFiller/cornerKind 'strip' (планка шкафа студии RULES.fillerStrip): правила Базиса — только кухне (правило 3).
   const ff=m.kitchen?.faceFiller,fx=faceFillerEdge(m);
@@ -887,7 +899,7 @@ export function drawerPitch(c:{height?:number;facadeH?:number;tray?:boolean},gap
 export function drawerOffsets(s:Section){let y=0;return Array.from({length:Math.max(0,Math.min(5,s.drawers))},(_,j)=>{const start=s.drawerConfigs?.[j]?.y??y;y=start+drawerPitch(s.drawerConfigs?.[j]??{},s.drawerGap);return start;});}
 /** Предельная ширина распашного фасада: 640 при высоте фасада до 920, иначе 600 (Перечень для производства). */
 export function doorMaxWidth(m:Module){const h=m.height-fe(m)-facadeBottom(m);return h<=RULES.doorLowH?RULES.doorMaxLow:RULES.doorMax;}
-export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeaves;const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel>doorMaxWidth(m)?2:1;}
+export function doorCount(m:Module,s:Section){if(s.doorLeaves)return s.doorLeaves;const b=boxes(m).find(b=>b.id===s.id)!;return b.width+RULES.panel-cornerStripExtra(m,s)>doorMaxWidth(m)?2:1;}
 export function drawersBehindDoors(m:Module,s:Section){return m.doors&&!s.externalDrawers&&!nicheDrawers(m,s);}
 /** Шкаф (не кухня) с открытым проёмом между рядами фасадов (doorSplit + doorNiche, заказ 7442203 — пенал): ящики секции стоят в этом
  *  проёме, их фасады накладные вровень с дверями (не за дверью), нижний фасад не тянется к цоколю. */
@@ -1251,9 +1263,13 @@ export function parts(m: Module): Part[] {
   if (m.cornerFiller && cornerStrip(m)) {
     // Фасад корпуса упирается в боковину соседа: фальш-планка из фасадного материала вровень с фасадами, на эксцентриках
     // к каркасу, зазор 3 к соседнему фасаду (Макс, 06.09). Занимает край фасадного проёма; распашные фасады становятся уже.
-    const w = RULES.fillerStrip, y0 = facadeBottom(m), y1 = m.height - fe(m);
-    add("corner-filler:" + m.cornerFiller, "Фальш-планка угловая из фасада " + (m.cornerFiller === "left" ? "левая" : "правая"), [w, y1 - y0, t], [m.cornerFiller === "left" ? fe(m) + w / 2 : m.width - fe(m) - w / 2, (y0 + y1) / 2, d + t / 2 + 2], y1 - y0, w, t);
-    out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = [2, 2, 2, 2];
+    // Стык углом (волна 29.10): ширина — глухая часть до лица планки соседа + 27 (cornerStripWidth); планка соседа лежит на ней пластью,
+    // её торец — на виду со стороны соседа, фальш из фасада идёт насквозь со стороны этого корпуса.
+    const w = cornerStripWidth(m), y0 = facadeBottom(m), y1 = m.height - fe(m);
+    add("corner-filler:" + m.cornerFiller, (w > RULES.fillerStrip ? "Фальшпанель угловая из фасада (глухая часть) " : "Фальш-планка угловая из фасада ") + (m.cornerFiller === "left" ? "левая" : "правая"), [w, y1 - y0, t], [m.cornerFiller === "left" ? fe(m) + w / 2 : m.width - fe(m) - w / 2, (y0 + y1) / 2, d + t / 2 + 2], y1 - y0, w, t);
+    // кромка 2 — на видимых торцах (верх, низ, к фасадам); торец в угол закрыт соседом — скрытый, 0,4 (решение Макса 06.10).
+    // edge: [−y, +y, +x, −x] (длина детали — высота)
+    out.at(-1)!.decor = m.facadeDecor; out.at(-1)!.edge = m.cornerFiller === "left" ? [2, 2, 2, 0.4] : [2, 2, 0.4, 2];
   } else if (m.cornerFiller) {
     // Сосед примыкает к боковине: планка 100×16 торцом снаружи боковины, выступает вперёд на 40 (правило Макса).
     const w = RULES.fillerStrip, front = d + RULES.cornerFillerExtra;
@@ -2392,6 +2408,9 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if(m.drawerHandleId!==undefined&&!HANDLES.some(h=>h.id===m.drawerHandleId))errors.push('Выберите ручку ящиков из каталога.');
   if(m.cornerFiller!==undefined&&!['left','right'].includes(m.cornerFiller))errors.push('Неверная угловая фальш.');
   if(m.cornerKind!==undefined&&!['plank','strip'].includes(m.cornerKind))errors.push('Неверный вид угловой фальши.');
+  if(m.cornerFillerWidth!==undefined&&(!Number.isFinite(m.cornerFillerWidth)||m.cornerFillerWidth<0))errors.push('Неверная ширина угловой фальши.');
+  // глухая часть угла закрыла крайнюю секцию целиком: створкам не осталось места (корпус почти весь за соседом)
+  if(cornerStrip(m)&&cornerStripWidth(m)>RULES.fillerStrip){const i=m.cornerFiller==='left'?0:m.sections.length-1,b=boxes(m)[i];if(b){const sp=facadeSpan(m,i,b);if(sp.right-sp.left<RULES.minDoorW)errors.push(`Угол: фасад корпуса упирается в соседа — глухая часть ${Math.round(cornerStripWidth(m))} мм (до лица планки соседа + ${RULES.cornerGap}), створкам крайней секции остаётся ${Math.max(0,Math.round(sp.right-sp.left))} мм. Сделайте крайнюю секцию шире или отодвиньте соседа.`);}}
   if(m.alu!==undefined&&(!aluProfile(m.alu.profile)||!aluColor(m.alu.profile,m.alu.color)||!aluFill(m.alu.insert)))errors.push('Алюминиевый фасад: выберите профиль, цвет и вставку из каталога.');
   if(m.topGlass!==undefined&&!aluInsert(m.topGlass))errors.push('Стеклянная крыша: выберите стекло из каталога.');
   // заказ 7441182: щит над сиденьем, утопленный цоколь, петли без доводчика
@@ -2944,6 +2963,7 @@ export function parseModule(input: unknown): Module {
     ...(x.drawerHandleId===undefined?{}:{drawerHandleId:x.drawerHandleId as string}),
     ...(x.cornerFiller===undefined?{}:{cornerFiller:x.cornerFiller as Module["cornerFiller"]}),
     ...(x.cornerKind===undefined?{}:{cornerKind:x.cornerKind as Module["cornerKind"]}),
+    ...(x.cornerFillerWidth===undefined?{}:{cornerFillerWidth:Number(x.cornerFillerWidth)}),
     ...(x.alu===undefined?{}:{alu:{profile:String((x.alu as AluFacade)?.profile),color:String((x.alu as AluFacade)?.color),insert:String((x.alu as AluFacade)?.insert)}}),
     ...(x.alu!==undefined&&x.aluDrawers===true?{aluDrawers:true as const}:{}),
     ...(x.topGlass===undefined?{}:{topGlass:String(x.topGlass)}),
