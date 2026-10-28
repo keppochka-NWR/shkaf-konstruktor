@@ -114,7 +114,7 @@ async function lightLeftOnly(sensor: boolean) {
   await btn("Настроить подсветку…");
   const right = page.getByRole("button", { name: /^Убрать: секция 1, .*прав/i });
   if (await right.count()) await click(right.first());
-  if (sensor) await check("Включение по датчику движения", true);
+  if (sensor) await check("Датчик открывания фасадов (включение при открывании)", true);
   await click(page.getByRole("button", { name: "Закрыть окно" }).first());
 }
 async function antresol(o: { height: number; right?: boolean }) {
