@@ -193,8 +193,10 @@ export function nest(p:Project,gap:number=RULES.sheetKerf):Sheet[]{
     let best:Sheet[]|null=base.reduce((n,s)=>n+s.items.length,0)===ds.length?base:null;
     const byId=new Map(ds.map(d=>[d.code,d]));
     const footprint=(s:Sheet[])=>Math.max(...s.at(-1)!.items.map(p=>p.y+p.h));
-    for(const order of ['area','height','width'] as const)for(const fit of ['short','area'] as const){
-      const M=RULES.sheetMargin,packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width-2*M,height-2*M,gap,order,fit);
+    // укладка эвристическая и не монотонна по промежутку: с пропилом 4 мм в редком проекте выходило на лист больше, чем с прежними 10
+    // (кухня из 2 листов → 3). Промежуток больше пропила — тоже допустимая карта, поэтому прежний 10 мм — ещё один кандидат.
+    for(const g of gap<10?[gap,10]:[gap])for(const order of ['area','height','width'] as const)for(const fit of ['short','area'] as const){
+      const M=RULES.sheetMargin,packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width-2*M,height-2*M,g,order,fit);
       if(best&&packed.length>best.length)continue;
       const candidate:Sheet[]=packed.map(items=>({decor,material:first.material,thickness:first.thickness,width,height,items:items.map(a=>({detail:byId.get(a.id)!,x:a.x+M,y:a.y+M,w:a.w,h:a.h}))}));
       if(!best||candidate.length<best.length||footprint(candidate)<footprint(best))best=candidate;
