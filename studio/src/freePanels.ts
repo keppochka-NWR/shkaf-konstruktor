@@ -6,6 +6,7 @@ import {
   type PlacedModule,
 } from "./project";
 import { parseRoomProject } from "./roomDocument";
+import { normalizeVernissage, type VernissageFacade } from "./facadesVernissage";
 export type FreePanelInput = {
   name: string;
   width: number;
@@ -15,8 +16,16 @@ export type FreePanelInput = {
   edge: number;
   decor: string;
   contour?: [number, number][];
+  /** Панель из МДФ «Вернисаж» (накладная видимая боковина пенала в эмали, щит у барной стойки, задняя стенка витрины): фрезеровка,
+   *  покрытие, толщина МДФ — как у фасадов. Не раскрой ЛДСП и без кромки ЛДСП; в смете — строкой Вернисажа (одна панель = один фасад
+   *  по прайсу, коэффициент Вернисажа). Толщина панели = толщина МДФ, кромка не задаётся. */
+  vernissage?: VernissageFacade;
 };
 export function freePanel(input: FreePanelInput): PlacedModule {
+  if (input.vernissage) {
+    const v = normalizeVernissage(input.vernissage);
+    input = { ...input, vernissage: v, thickness: v.thickness, edge: 0 };
+  }
   if (
     !input.name.trim() ||
     ![input.width, input.height, input.thickness, input.edge].every(
@@ -93,6 +102,7 @@ export function freePanel(input: FreePanelInput): PlacedModule {
         ),
       ] as [number, number],
   );
+  const vern = input.vernissage;
   return {
     id: crypto.randomUUID(),
     x: 100,
@@ -109,15 +119,18 @@ export function freePanel(input: FreePanelInput): PlacedModule {
       decor: input.decor,
       facadeDecor: input.decor,
       sections: [section()],
+      ...(vern ? { vernissage: vern } : {}),
       raw: {
         source: "garderyob-free-panel",
         panels: [
           {
             name: input.name,
-            kind: "ldsp",
+            // МДФ Вернисаж — фасадный материал (fm): вне раскроя ЛДСП, кромки цеха нет
+            kind: vern ? "mdf" : "ldsp",
+            ...(vern ? { fm: true } : {}),
             box: [0, 0, 0, ...size],
             thick: t,
-            edges,
+            ...(vern ? {} : { edges }),
             plane: input.plane,
             ...(input.contour
               ? {

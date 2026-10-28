@@ -107,7 +107,9 @@
 .number-field{flex-wrap:wrap;row-gap:5px}
 .number-field .number-range,.number-field .number-feedback{flex:0 0 100%;font-size:11px;line-height:1.45;text-align:left}
 .number-field .number-range{display:none;color:#53616f}
-.number-field:focus-within .number-range{display:block}
+/* интеграция 29.10: подсказка поля в фокусе — поверх, не в потоке: поля ниже не прыгают на её высоту (21 px), щелчок проходит сквозь неё */
+.number-field{position:relative}
+.number-field:focus-within .number-range{display:block;position:absolute;left:0;right:0;top:100%;z-index:6;pointer-events:none;margin-top:1px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,.96);box-shadow:0 2px 6px rgba(16,24,40,.12)}
 .number-field .number-feedback{display:block;color:#a32820}
 .number-field.has-error>div{border-color:#b6352b;background:#fff5f3}
 .number-field.has-error input{background:#fff5f3}

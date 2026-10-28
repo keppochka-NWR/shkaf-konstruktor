@@ -133,6 +133,7 @@ import { ALU_INSERTS, aluProfile } from "./alu";
 import { moveShelfKeepRod } from "./shelfRod";
 import { AluPicker, AluDrawersCheck } from "./AluPicker";
 import { FACADE_KINDS, facadeKindBlock, facadeKindOf, setFacadeKind, type FacadeKind } from "./facadeKind";
+import { isFreePanel } from "./rawModule";
 import { VernissagePicker } from "./VernissagePicker";
 import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS, SLIDE_MOTIONS, slideSystem, slideMotion, HINGE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 import { slidePrice } from "./pricing";
@@ -473,11 +474,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   /** Сырой модуль из Базиса (m.raw): наполнение не настраивается — пресеты, композер и перетаскивание выходят без записи в историю (A5). */
   const RAW_FILLING_MESSAGE='Модуль перенесён из Базиса как есть — наполнение здесь не настраивается. Правится в Базисе (переимпорт).';
+  /* интеграция 29.10: отдельная панель студии (freePanels.ts) хранится сырым модулем, но это не импорт Базиса — правится в «Отдельная панель» */
+  const rawMessage=(x:Module)=>isFreePanel(x)?'Отдельная панель студии — размеры, материал и положение правятся в окне «Отдельная панель» (инструменты комнаты), наполнения у неё нет.':RAW_FILLING_MESSAGE;
   function dropFilling(kind:string,mid:string,sid:string,y:number,meshId?:string,glass?:boolean,keepMode=false){
     if(!['shelf','drawer','rod','pantograph','mesh'].includes(kind))return false;
     const target=project.modules.find(a=>a.id===mid)?.module;
     if(target?.kupe){setError('Двери купе — это только двери. Полки, ящики и штанги ставьте в корпус за ними.');return false;}
-    if(target?.raw){setError(RAW_FILLING_MESSAGE);return false;}
+    if(target?.raw){setError(rawMessage(target));return false;}
     setMeshFit(null);
     try{const next=glass&&kind==='shelf'?insertGlassShelf(project,mid,sid,y):insertItem(project,kind as FillKind,mid,sid,y,undefined,meshId);if(commitProject(next)){selectInserted(next,mid,sid,kind as FillKind,keepMode);return true;}}
     catch(e){
@@ -963,7 +966,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }, [modal]);
   function preset(type: "shelves" | "wardrobe" | "drawers" | "empty" | "desk") {
     // сырой модуль Базиса: шаблон раньше копировал модуль вместе с raw и молча писал шаг в историю (1/1 → 2/2), ничего не меняя
-    if (m.raw) { setError(RAW_FILLING_MESSAGE); return; }
+    if (m.raw) { setError(rawMessage(m)); return; }
     if (type === "desk") { const n = deskModule(m); if (commit(n)) { setSelected(n.sections[0].id); setTab("module"); } return; }
     const n = {...structuredClone(m),sections:[section()]};
     delete n.desk; if (m.desk) { n.height = 2000; n.doors = true; delete n.plinthHeight; delete n.bottomType; delete n.backType; }
@@ -1218,7 +1221,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   <b>{a.module.name}</b>{liveGroupIds.includes(a.id)&&<small>В выделенной группе</small>}{hiddenIds.includes(a.id)&&<small className="hidden-module-note">Скрыт · нажмите, чтобы показать</small>}
                   <small>
                     {a.module.width} × {a.module.height} × {a.module.depth}
-                    {a.module.raw&&<em className="module-badge" title="Детали и фурнитура — как в проекте Базиса; наполнение правится в Базисе">Базис · как есть</em>}
+                    {a.module.raw&&(isFreePanel(a.module)?<em className="module-badge" title="Отдельная панель студии: ЛДСП или МДФ Вернисаж, правится в окне «Отдельная панель»">Отдельная панель</em>:<em className="module-badge" title="Детали и фурнитура — как в проекте Базиса; наполнение правится в Базисе">Базис · как есть</em>)}
                   </small>
                 </span>
                 <small>{i + 1}</small>
@@ -1248,7 +1251,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           <button className="text-action upper-add" data-stages="bodies" title={`Высота до 600 мм; под потолком остаётся ${MEASUREMENT_RULES.ceilingClearance} мм по СТП`} onClick={addUpper}><Plus size={16}/> Антресоль сверху</button>
           <button className="text-action upper-add" data-stages="bodies filling" onClick={()=>setModal("library")}>Моя библиотека модулей</button>
           {/* сырой модуль Базиса: вместо пресетов и кнопок наполнения — заметка; «Пересобрать модулем студии» появится вместе с распознавателем (ярус C) */}
-          {!!m.raw&&<div className="stage-note raw-note" data-stages="bodies filling"><b>Модуль перенесён из Базиса как есть</b><p>Наполнение здесь не настраивается. Правится в Базисе (переимпорт). Положение в комнате, смета и раскрой работают как обычно. Кнопка «Пересобрать модулем студии» будет позже — когда появится распознаватель корпусов Базиса.</p></div>}
+          {!!m.raw&&!isFreePanel(m)&&<div className="stage-note raw-note" data-stages="bodies filling"><b>Модуль перенесён из Базиса как есть</b><p>Наполнение здесь не настраивается. Правится в Базисе (переимпорт). Положение в комнате, смета и раскрой работают как обычно. Кнопка «Пересобрать модулем студии» будет позже — когда появится распознаватель корпусов Базиса.</p></div>}
           <details hidden={!!m.corner||kitchenModule||!!m.worktop||!!m.raw} className="replace-filling" data-stages="filling"><summary>Заменить всё наполнение корпуса</summary>
           <div className="presets" data-stages="filling">
             {(

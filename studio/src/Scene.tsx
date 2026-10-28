@@ -501,7 +501,7 @@ export function Scene(p: Props) {
           const texture = catalog.find(
             (c) => c.n === part.decor,
           )?.tex;
-          const vTex = part.vernissage && m.vernissage && !part.rotZ ? vernissageTexture(m.vernissage) : null;
+          const vTex = part.vernissage && m.vernissage && !part.rotZ && part.size[2] <= Math.min(part.size[0], part.size[1]) ? vernissageTexture(m.vernissage) : null;
           if (part.vernissage && m.vernissage) {
             // плёнка с рисунком — текстура образца с сайта Вернисажа (UV фасада в образцах tileMm, повтор); однотонные и эмаль — цветом;
             // глянец — низкая шероховатость
@@ -523,7 +523,8 @@ export function Scene(p: Props) {
           }
           const isAlu = part.material === "alu" && !!m.alu;
           // Фасад «Вернисаж»: сетка по фрезеровке строится заново под габарит детали (рамка постоянной ширины, филёнка тянется)
-          const vern = part.vernissage && m.vernissage && !part.rotZ ? m.vernissage : undefined;
+          // лицо фасада — в плоскости XY (толщина по Z); горизонтальная/боковая свободная панель МДФ Вернисаж — плитой цвета покрытия
+          const vern = part.vernissage && m.vernissage && !part.rotZ && part.size[2] <= Math.min(part.size[0], part.size[1]) ? m.vernissage : undefined;
           // Цилиндр-заглушка только для деталей без модели: модель из Blender (part.model) — дочерний объект меша и унаследовала бы его поворот.
           // процедурная модель фурнитуры без сетки (hardwareModels.ts): профиль Gola, штанга, направляющая, эксцентрик, шкант, толкатель —
           // невидимый бокс детали для выбора + модель внутри; бокс не поворачивается (у модели свои оси)

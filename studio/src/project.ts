@@ -5,7 +5,7 @@ import type {Niche,CeilingType} from './measurement';
 import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
 import {rawKitchen} from './rawModule';
-import {wallFloorY} from './kitchen';
+import {wallFloorY,waterfallSides} from './kitchen';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,fe,facadeBottom,facadeTop,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
@@ -78,7 +78,8 @@ export const KITCHEN_TIGHT_CORNER:{mode:'plank'|'butt'}={mode:'plank'};
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
-    if(a.module.worktop&&!isBazisModule(n,a)){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
+    // столешница и отдельная панель (freePanels.ts) — не корпус с фасадами: фальшей у них нет (ДП 28.10: панель МДФ за витриной получала угловую планку и уезжала за стену)
+    if((a.module.worktop&&!isBazisModule(n,a))||a.module.raw?.source==='garderyob-free-panel'){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner||a.module.autoFillersOff)continue;
     // Кухня из Базиса (правило Макса 09.10.2026): фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней
@@ -89,7 +90,8 @@ export function applyAutoFillers(p:Project):Project{
     // Orthogonal workshop auto-fillers have no validated rule for oblique walls.
     if(rot%90!==0)continue;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
-    const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
+    // отдельная панель (обшивка, задняя стенка за витриной) — не корпус: угловых фальшей соседям не ставит (ДП 28.10)
+    const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&b.module.raw?.source!=='garderyob-free-panel'&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
     for(const side of ['left','right'] as const){
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
       // 1) Фасад этого корпуса упирается в тело соседа: точка чуть внутри края фасада и на 15 мм перед ним лежит в соседе → планка из фасада.
@@ -188,6 +190,8 @@ function moduleSolids(a:PlacedModule):Solid[]{
  // шкаф-купе с дверями внутри: корпус + боковины и крыша над зоной дверей; сама зона (между боковинами под крышей) свободна для дверей купе
  if(m.kupeZone&&!m.desk){const t=RULES.panel,d=m.depth,f=d+m.kupeZone,rear=!m.backType||m.backType==='nailed'?3:0;
   return [box(0,m.width,-rear,d,0,m.height),box(0,t,d,f,0,m.height),box(m.width-t,m.width,d,f,0,m.height),box(t,m.width-t,d,f,m.height-t,m.height)];}
+ // столешница с водопадом (kitchen.ts WorktopWaterfall): плита + боковины под ней (вниз от низа столешницы) — они тоже занимают место
+ if(m.worktop&&waterfallSides(m.worktop).length){const T=m.worktop.thickness,dr=m.worktop.waterfall!.drop;return [{polygon:moduleFootprint(a),y,h:m.height},...waterfallSides(m.worktop).map(s=>s==='left'?box(0,T,0,m.depth,-dr,0):box(m.width-T,m.width,0,m.depth,-dr,0))];}
  if(!m.desk)return [{polygon:moduleFootprint(a),y,h:m.height}];
  const g=deskGeometry(m),T=RULES.deskTop,t=RULES.panel,out=[box(0,m.width,0,m.depth,m.height-T,m.height)];
  if(g.hasL)out.push(box(g.x0,g.x0+t,0,g.baseDepth,0,m.height-T));
@@ -253,6 +257,7 @@ export function projectErrors(p:Project,allowEmpty=false):string[]{
     if(a.rotation!==undefined&&(!Number.isFinite(a.rotation)||Math.abs(a.rotation)>36000))errors.push('Поворот корпуса должен быть конечным числом в пределах ±36000°.');
     errors.push(...validate(a.module).map(e=>`${a.module.name}: ${e}`));const b=bounds(a);
     if(![a.x,a.z,a.y??0].every(Number.isFinite)||b.x<0||b.y<0||b.z<0||b.x+b.w>p.room.width+0.1||b.z+b.d>p.room.depth+0.1||b.y+b.h>p.room.height+0.1)errors.push(`${a.module.name}: корпус выходит за границы помещения. Измените замер или положение.`);
+    if(a.module.worktop&&waterfallSides(a.module.worktop).length&&a.module.worktop.waterfall!.drop>(a.y??0)+0.1)errors.push(`${a.module.name}: водопад ниже пола — высота боковины не больше ${Math.round(a.y??0)} мм (до пола).`);
     for(const other of p.modules.slice(0,i))if(modulesOverlap(a,other))errors.push(`«${a.module.name}» пересекается с «${other.module.name}». Сдвиньте корпус или поставьте его сверху.`);
   });return [...new Set(errors)];
 }

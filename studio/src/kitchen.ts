@@ -12,6 +12,7 @@ import {columnErrors,columnParts,type TallColumn} from './kitchenTall';
 import { CONFIRMAT_QUATS, RULES, type GolaCut, type Module, type Part } from "./model";
 import { setEdges, edgeDirs } from "./edges";
 import { axisLayout, type FirmaxBox } from "./kitchenDrawers";
+import { underLightParts } from "./kitchenUnderLight";
 import { RAFIX, RAFIX_MODEL, rafixZs, type KitchenRafix, type RafixGrid } from "./kitchenRafix";
 import { kitchenDividerErrors, mirrorDivider, parseDivider, type KitchenDivider } from "./kitchenDivider";
 import { allegroErrors, parsePremialPullout, type PremialPullout } from './premialPullout';
@@ -20,6 +21,8 @@ export type KitchenRole = "base" | "wall" | "tall" | "antresol";
 export type ApplianceKind = "sink" | "oven" | "microwave" | "dishwasher" | "hob" | "hood" | "fridge";
 export type KitchenSpec = { role: KitchenRole; appliance?: ApplianceKind;
   facadeSides?: FacadeSides;
+  /** Подсветка рабочей зоны под навесным (LED снизу дна у переднего края, kitchenUnderLight.ts): только role 'wall'. */
+  underLight?: true;
   oven?: OvenSpec;
   premialPullout?: PremialPullout;
   /** Цоколь модуля: высота (Базис 95, на 5 мм ниже дна) и есть ли он у этого модуля (сплошной цоколь ряда — у крайнего). */
@@ -362,7 +365,11 @@ export type WorktopCutout = { kind: "sink" | "hob"; x: number; z?: number; width
  *  Задача Макса 19.10.2026 — толщина следует из материала: compact — компакт-плита 12; acrylic — акрил 12 в один слой или 40 с подклейкой;
  *  quartz — кварц 20; ЛДСП постформинг 38 — прежний postforming. */
 export type WorktopMaterial = "postforming" | "ldsp" | "stone" | "compact" | "acrylic" | "quartz";
-export type WorktopSpec = { material: WorktopMaterial; thickness: number; overhang: number; cutouts: WorktopCutout[] };
+/** Водопад (барная стойка, остров из акрила/кварца/компакта): столешница опускается боковинами. Боковина — толщиной столешницы, во всю
+ *  глубину, ВНУТРИ длины столешницы (x 0…T слева, W−T…W справа), под нижней пластью на drop мм вниз (до пола — drop = высота низа
+ *  столешницы над полом). Стык со столешницей — под 45° (строка сметы без цены). Только цельные материалы (worktopSolid). */
+export type WorktopWaterfall = { left?: boolean; right?: boolean; drop: number };
+export type WorktopSpec = { material: WorktopMaterial; thickness: number; overhang: number; cutouts: WorktopCutout[]; waterfall?: WorktopWaterfall };
 /** Выбор столешницы в панели и в меню правой кнопки: материал + толщина одним пунктом (у акрила толщина = подклейка). */
 export const WORKTOP_CHOICES: readonly { id: string; label: string; material: WorktopMaterial; thickness: number; hint: string }[] = [
   { id: "compact-12", label: "Компакт 12", material: "compact", thickness: 12, hint: "Компакт-плита HPL 12 мм: торец без кромки, шлифованный" },
@@ -388,6 +395,7 @@ export function setWorktopMaterial(m: Module, material: WorktopMaterial, thickne
   // иначе «Компакт 12» → «ЛДСП» давал деталь ЛДСП 12 мм в раскрое (ревью 19.10); ЛДСП тоже 38, не 32 (баг Макса по демо 20.10)
   const t = thickness ?? (fixed ? (fixed.includes(cur) ? cur : fixed[0]) : worktopSolid(m.worktop!) ? KITCHEN.worktopThickness : cur);
   m.worktop = { ...m.worktop!, material, thickness: t };
+  if (!worktopSolid(m.worktop)) delete m.worktop.waterfall; // водопад только из камня: на ЛДСП/постформинге его снимаем, а не отказываем
   m.height = t;
 }
 
@@ -814,6 +822,7 @@ export function kitchenExtraParts(m: Module, out: Part[]) {
   raiseFrontParts(m, out);
   kitchenStrip(m, out);
   cornerStopParts(m, out);
+  underLightParts(m, out); // подсветка рабочей зоны под навесным (флаг kitchen.underLight)
   const t = 16;
   const metal = (id: string, name: string, size: Part["size"], position: Part["position"], model?: Part["model"]): Part =>
     ({ id, name, size, position, length: Math.max(...size), width: [...size].sort((a, b) => b - a)[1], thickness: Math.min(...size), role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], ...(model ? { model } : {}) });
@@ -1153,7 +1162,34 @@ export function worktopParts(m: Module): Part[] {
   if(w.cutouts.length) out[0].planHoles=w.cutouts.map(c=>({x:c.x,z:c.z??(m.depth-c.depth)/2,width:c.width,depth:c.depth}));
   for(const c of w.cutouts)if(c.tap){const cx=c.x+c.width/2,cz=(c.z??(m.depth-c.depth)/2)+c.depth/2;(out[0].planHoles??=[]).push({x:cx-17.5,z:cz-230,width:35,depth:35});}
   for (const [i,c] of w.cutouts.entries()) out.push(...sinkParts(m,c,i));
+  out.push(...waterfallParts(m));
   return out;
+}
+/** Стороны водопада, которые реально есть (drop > 0). */
+export function waterfallSides(w: WorktopSpec): ("left" | "right")[] {
+  const f = w.waterfall;
+  return f && f.drop > 0 && worktopSolid(w) ? (["left", "right"] as const).filter((s) => f[s]) : [];
+}
+/** Боковины-водопад: под нижней пластью столешницы (y от −drop до 0 в координатах модуля), толщина T, во всю глубину. */
+function waterfallParts(m: Module): Part[] {
+  const w = m.worktop!, T = w.thickness, drop = w.waterfall?.drop ?? 0;
+  return waterfallSides(w).map((s) => ({ id: `worktop:waterfall:${s}`, name: `Боковина-водопад ${s === "left" ? "левая" : "правая"} · ${worktopLabel(w)} ${T} мм (стык под 45°)`,
+    size: [T, drop, m.depth] as Part["size"], position: [s === "left" ? T / 2 : m.width - T / 2, -drop / 2, m.depth / 2] as Part["position"],
+    length: drop, width: m.depth, thickness: T, role: "body" as const, material: "board" as const, decor: m.decor, grain: "length" as const, grainAxis: 1 as const, edge: [0, 0, 0, 0] as Part["edge"], external: true }));
+}
+/** Площадь камня боковин-водопадов, м²: по наружной грани при стыке под 45° — (drop + T) × глубина на сторону. */
+export function waterfallArea(m: Module): number { return waterfallMm2(m) / 1e6; }
+function waterfallMm2(m: Module): number {
+  const w = m.worktop!, n = waterfallSides(w).length;
+  return n ? n * (w.waterfall!.drop + w.thickness) * m.depth : 0;
+}
+/** Включить/снять водопад стороны. Высота по умолчанию — floorDrop (до пола: высота низа столешницы над полом). */
+export function setWaterfall(m: Module, side: "left" | "right", on: boolean, floorDrop: number) {
+  const cur = m.worktop!.waterfall, next: WorktopWaterfall = { ...(cur ?? {}), drop: Math.round(cur?.drop ?? floorDrop), [side]: on };
+  if (!next.left) delete next.left;
+  if (!next.right) delete next.right;
+  m.worktop = { ...m.worktop!, waterfall: next.left || next.right ? next : undefined };
+  if (!m.worktop.waterfall) delete m.worktop.waterfall;
 }
 export function worktopLabel(w: WorktopSpec) {
   if (w.material === "acrylic") return w.thickness >= 40 ? "акрил с подклейкой" : "акрил в один слой";
@@ -1164,11 +1200,15 @@ export function worktopLabel(w: WorktopSpec) {
 export function worktopLines(m: Module): { id: string; label: string; quantity: number; unit: string; source: string }[] {
   const w = m.worktop!, key = w.material + ":" + w.thickness, name = "Столешница " + worktopLabel(w) + " " + w.thickness + " мм";
   if (!worktopSolid(w)) return [{ id: "worktop:" + key, label: name, quantity: m.width / 1000, unit: "пог.м", source: "Закупочная цена столешницы не найдена — нужен прайс поставщика" }];
+  const falls = waterfallSides(w), drop = w.waterfall?.drop ?? 0;
   return [
     // без габарита одной детали: pricing.add() суммирует строки по id, а подпись берёт первой — у кухни из двух кусков
     // «(2400 × 600) — 2,88 м²» не сходилось бы с площадью (ревью 19.10). Площадь — в количестве.
-    { id: "worktop:" + key, label: name, quantity: Math.round(m.width * m.depth / 1e4) / 100, unit: "м²", source: "Закупочная цена не найдена — нужен прайс поставщика за м²" },
+    // водопад: площадь боковин (по наружной грани, (drop + T) × глубина) — в той же строке камня
+    { id: "worktop:" + key, label: name, quantity: Math.round((m.width * m.depth + waterfallMm2(m)) / 1e4) / 100, unit: "м²", source: "Закупочная цена не найдена — нужен прайс поставщика за м²" + (falls.length ? `; вкл. боковины-водопад (${falls.length} шт.)` : "") },
     { id: "worktop:edge:" + key, label: "Обработка лицевого торца: " + worktopLabel(w) + " " + w.thickness + " мм", quantity: m.width / 1000, unit: "пог.м", source: "Цена обработки торца не найдена — нужен прайс поставщика" },
+    // стык столешницы с боковиной под 45° (на всю глубину) и лицевой торец боковины (на высоту) — работа, цены нет
+    ...(falls.length ? [{ id: "worktop:waterfall:" + key, label: "Водопад: стык под 45° со столешницей и обработка лицевого торца боковины — " + worktopLabel(w) + " " + w.thickness + " мм", quantity: Math.round(falls.length * (m.depth + drop)) / 1000, unit: "пог.м", source: "Цена стыка и обработки торцов не найдена — нужен прайс поставщика" }] : []),
   ];
 }
 
@@ -1188,12 +1228,22 @@ export function kitchenErrors(m: Module): string[] {
     const fixed = WORKTOP_THICKNESS[w.material];
     if (fixed && !fixed.includes(w.thickness)) e.push(`Столешница ${worktopLabel({ ...w, thickness: fixed[0] })}: толщина ${fixed.join(" или ")} мм.`);
     if (m.width < 200 || m.width > 4100) e.push("Столешница: длина 200–4100 мм (длиннее — со стыком).");
+    const wf = w.waterfall;
+    if (wf) {
+      if (!worktopSolid(w)) e.push("Водопад столешницы — только из цельного материала (компакт, акрил, кварц): у ЛДСП и постформинга боковины-водопада нет.");
+      if (!Number.isFinite(wf.drop) || wf.drop < 50 || wf.drop > 1500) e.push("Водопад столешницы: высота боковины 50–1500 мм.");
+      if (wf.left && wf.right && m.width < 2 * w.thickness + 100) e.push("Водопад столешницы: с двух сторон — длина столешницы не меньше двух толщин + 100 мм.");
+      // боковина внутри длины столешницы: вырез не должен заходить на неё
+      const T = w.thickness;
+      if (w.cutouts.some((c) => (wf.left && c.x < T) || (wf.right && c.x + c.width > m.width - T))) e.push("Водопад столешницы: вырез заходит на боковину — сдвиньте вырез от торца.");
+    }
     e.push(...worktopCutErrors(m));
   }
   if (m.kitchen) {
     const k = m.kitchen;
     e.push(...facadeSideErrors(m));
     if (!["base", "wall", "tall", "antresol"].includes(k.role)) e.push("Кухня: тип корпуса — нижний, навесной, пенал или антресоль.");
+    if (k.underLight && k.role !== "wall") e.push("Подсветка рабочей зоны — только у навесного модуля.");
     if (k.appliance && !(k.appliance in APPLIANCES)) e.push("Кухня: неизвестная техника.");
     // без опор — у кухни из Базиса (noLegs) или при явном низе (plinthHeight): в Базисе мойки и корпуса без опор бывают
     // (k21 m02, k33/k34 — корпус на полу или подиуме; 33 модуля 13 кухонь — дно на полу или на своём цоколе)
@@ -1337,6 +1387,7 @@ export function parseKitchenSpec(input: unknown, deps: { parseKitchenRafix: (x: 
     ...(k.faceOver && (num(k.faceOver.left) > 0 || num(k.faceOver.right) > 0) ? { faceOver: { ...(num(k.faceOver.left) > 0 ? { left: num(k.faceOver.left) } : {}), ...(num(k.faceOver.right) > 0 ? { right: num(k.faceOver.right) } : {}) } } : {}),
     ...(k.backGaps ? { backGaps: { bottom: num(k.backGaps.bottom), top: num(k.backGaps.top) } } : {}),
     ...(k.faceBottom !== undefined ? { faceBottom: num(k.faceBottom) } : {}),
+    ...(k.underLight === true ? { underLight: true as const } : {}),
     ...(k.facadeSides && typeof k.facadeSides === "object" ? {facadeSides:{left:k.facadeSides.left===true,right:k.facadeSides.right===true,...(k.facadeSides.toFloor===false?{toFloor:false}:{})}} : {}),
     ...(k.sideDown && (k.sideDown.side === "left" || k.sideDown.side === "right") ? { sideDown: { side: k.sideDown.side, y0: num(k.sideDown.y0) } } : {}),
     ...(Array.isArray(k.sideScrews) && k.sideScrews.length && k.sideScrews.every(fin) ? { sideScrews: k.sideScrews.map(Number) } : {}),

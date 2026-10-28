@@ -30,7 +30,7 @@ test("видимый бок из фасада: МДФ Вернисаж №15 г�
   assert.equal(spec.milling, "15"); assert.equal(spec.cover, "enamel-matte"); assert.equal(spec.enamelColor, "RAL 9001"); assert.equal(spec.twoSided, undefined, "бок — покраска с одной стороны");
   const pr: Project = { version: 3, room: room(), modules: [{ id: "a", x: 0, y: 0, z: 3, rotation: 0, module: m }] };
   assert.ok(!nest(pr).some((s) => s.items.some((q) => q.detail.name.includes("Видимый бок"))), "в раскрой ЛДСП не идёт");
-  const e = estimate(pr), line = e.lines.find((l) => l.id.endsWith(":side"))!;
+  const e = estimate(pr), line = e.lines.find((l) => l.id.startsWith("vernissage-panel:"))!; // интеграция 29.10: общая строка «Панели МДФ» с отдельной панелью МДФ
   assert.ok(line, "строка «Видимые бока МДФ»");
   assert.ok(Math.abs(line.quantity - 2.4 * 0.447) < 0.001, "площадь бока 2400 × 447");
   assert.equal(line.unitPrice, vernissageFacadePrice(spec, 2400, 447).perM2);

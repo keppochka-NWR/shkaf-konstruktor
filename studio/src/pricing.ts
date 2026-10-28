@@ -12,16 +12,25 @@ import {hullFasteners} from './hullFasteners';
 import {weightText} from './weight';
 import {meshById} from './mesh';
 import {ledLook,specText} from './lights';
+import {UNDER_LIGHT_ID} from './kitchenUnderLight';
 import {aluProfile,aluColor,aluInsert,aluFill,ALU_SOURCE,ALU_GASKET_PER_M} from './alu';
 import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware';
 import {kupeLines} from './kupe';
 import {guideKits,guideKitLine,versaliteKit,modernKit,firmaxKit,shareKits,axisSpecs} from './guideKits';
 import {MODERN} from './kitchenDrawers';
-import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES,sideFacadeSpec} from './facadesVernissage';
+import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES,sideFacadeSpec,type VernissageFacade} from './facadesVernissage';
 import {PUBLIC_BUILD} from './buildMode';
 import {clientView,isOffSheetLine} from './clientPrices';
 import {pendingPrice,pendingTotalLabel} from './pendingPrices';
-import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize} from './rawModule';
+import {rawKitchen,rawOwnMaterial,rawDims,rawWorktop,rawIsWorktop,rawIsRoom,rawIsNonBoard,rawOversize,rawFaceSize} from './rawModule';
+/** Строка Вернисажа одного фасада/панели w×h: ключ сочетания (серия, покрытие, толщина, исполнение, наценки), подпись, м² к оплате
+ *  (ПВХ меньше 0,3 м² — как 0,3), закупка за м² и источник. Фасады модулей — «vernissage:», свободная панель МДФ — «vernissage-panel:». */
+/** Панели из МДФ Вернисаж вне фасадов (интеграция 29.10.2026 — один механизм): видимый бок из фасада (sidePanels.facade) и отдельная
+ *  панель МДФ (freePanels.ts) — одна строка «Панели МДФ» на одинаковый МДФ (фрезеровка, покрытие, толщина), цена по прайсу Вернисажа. */
+const vernissagePanelLabel=(label:string)=>`Панели МДФ ${label} (видимые бока, отдельные панели) — сторонний участок, без раскроя ЛДСП`;
+function vernissageRow(v:VernissageFacade,w:number,h:number){const pr=vernissageFacadePrice(v,w,h);
+  return {key:`${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,label:vernissageLabel(v),qty:Math.round(pr.billArea*1e4)/1e4,perM2:pr.perM2,
+    source:`Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`};}
 /** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
 export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
   /** «Цена по большей модели» (решение Макса 26.10.2026): клиенту — большая из «себестоимость × коэффициент» и «цена за лист»
@@ -423,6 +432,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         // цоколь ряда кухни из фасадного материала (импорт Базиса: «Цоколь · …») — тот же материал поставщика, но своей строкой:
         // это цоколь, не фасад. Только ряд кухни (r.row) — сырые шкафы не меняются.
         if(r.row&&p.fm&&/^\s*цокол/i.test(p.name)){add('plinth-external','Цоколь — фасадный материал (по проекту Базиса), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадного материала по прайсу поставщика — уточнить');continue;}
+        // свободная панель из МДФ «Вернисаж» (freePanels.ts): одна панель = один «фасад» по прайсу Вернисажа, коэффициент Вернисажа
+        if(p.fm&&r.source==='garderyob-free-panel'&&a.module.vernissage){const [fw,fh]=rawFaceSize(p),q=vernissageRow(a.module.vernissage,fw,fh);
+          add('vernissage-panel:'+q.key,vernissagePanelLabel(q.label),q.qty,'м²',q.perM2,q.source);continue;}
         if(p.fm){add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(s[0]*s[1]/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');continue;}
         // не плитный материал Базиса — не лист ЛДСП: строка м² по материалу Базиса (кромка Базиса на нём — как в Базисе, обработки узких
         // деталей нет). Кухня Базиса — любой «прочий» материал без фасадного (пластик, хром, стеновая панель вне «Ряда»; n3-additions),
@@ -514,13 +526,12 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.cutWork&&!d.external)add('cut-work','Вырез / сложный выпил в детали (фигурная деталь) — работа цеха',d.cutWork,'шт',null,CUT_WORK_SRC);
       if(d.id.startsWith('gola:')&&!(bz&&rowGola))add(`gola-${d.id.split(':')[1]}`,`Профиль Gola ${d.id.split(':')[1]==='L'?'L (верхний)':'C (средний)'}, алюминий`,d.length/1000,'м',null,'Профиль-ручка Gola по Базису; цена не найдена — уточнить');
       // фасады «Вернисаж»: м² по прайсу (серия фрезеровки × колонка покрытия × толщина), ПВХ меньше 0,3 м² — как 0,3, наценки прайса
-      if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const v=a.module.vernissage,pr=vernissageFacadePrice(v,d.size[0],d.size[1]);
-        add(`vernissage:${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,`Фасады МДФ ${vernissageLabel(v)} — сторонний участок, без раскроя ЛДСП`,Math.round(pr.billArea*1e4)/1e4,'м²',pr.perM2,
-          `Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`);}
-      // видимый бок из фасадного материала (sidePanels.facade, dp-2810): гладкий МДФ №15 в покрытии фасадов модуля, с одной стороны
-      else if(d.sideFacade&&a.module.vernissage){const v=sideFacadeSpec(a.module.vernissage),pr=vernissageFacadePrice(v,d.length,d.width);
-        add(`vernissage:${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:side`,`Видимые бока МДФ ${vernissageLabel(v)} — сторонний участок, без раскроя ЛДСП`,Math.round(pr.billArea*1e4)/1e4,'м²',pr.perM2,
-          `Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`);}
+      if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const r=vernissageRow(a.module.vernissage,d.size[0],d.size[1]);
+        add('vernissage:'+r.key,`Фасады МДФ ${r.label} — сторонний участок, без раскроя ЛДСП`,r.qty,'м²',r.perM2,r.source);}
+      // видимый бок из фасадного материала (sidePanels.facade, dp-2810): гладкий МДФ №15 в покрытии фасадов модуля, с одной стороны —
+      // интеграция 29.10: та же строка «Панели МДФ», что у отдельной панели МДФ Вернисаж (freePanels.ts), один механизм цены (vernissageRow)
+      else if(d.sideFacade&&a.module.vernissage){const r=vernissageRow(sideFacadeSpec(a.module.vernissage),d.length,d.width);
+        add('vernissage-panel:'+r.key,vernissagePanelLabel(r.label),r.qty,'м²',r.perM2,r.source);}
       else if((d.facadeSide||d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.length*d.width/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       // кухня из Базиса без петель (kitchen.hinges:false, n3-base) или фасад без петель (фасад холодильника на двери техники,
       // sections.hingeless, n3-tall) — петель и толкателя в смете нет, как в Базисе
@@ -607,6 +618,8 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       const led=d.role==='light'&&!d.id.startsWith('groove:')?ledLook(a.module,d.id):null,ledId=led?.explicit?':'+led.type+':'+led.tone:'',ledText=led?.explicit?' · '+specText(led):'';
       if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf'+ledId,'Подсветка в полках'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м, поверх коэффициента (решение Макса 20.10.2026)',true);
       // Подсветка в крыше нижнего модуля (casework, заказ Вотан, id «…:light:roof») — тоже горизонталь: 4000 ₽/пог.м, своей строкой.
+      // подсветка рабочей зоны под навесным кухонным (kitchenUnderLight.ts) — горизонталь: 4000 ₽/пог.м, своей строкой
+      else if(d.role==='light'&&d.id===UNDER_LIGHT_ID)add('light-under'+ledId,'Подсветка рабочей зоны под навесными модулями'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
       else if(d.role==='light'&&d.id.endsWith(':light:roof'))add('light-roof'+ledId,'Подсветка в крыше'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
       else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
     }

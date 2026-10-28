@@ -12,6 +12,8 @@ import {CURRENT_PROJECT} from './projectStorage';
 import "./style.css";
 import "./studio-refresh.css";
 import "./layout-fixes.css";
+import {installSelectGuard} from './selectGuard';
+installSelectGuard(); // стрелки в закрытом списке не применяют промежуточные пункты (интеграция 29.10)
 async function start(){
   const query=new URLSearchParams(location.search),slug=query.get('project');
   if(query.get('rooms')==='1'){

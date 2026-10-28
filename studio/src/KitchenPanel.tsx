@@ -1,4 +1,5 @@
 import {SettingsTree} from './SettingsTree';
+import {isFreePanel} from './rawModule';
 import {MANAGER_PRICING} from './buildMode';
 import {applyFacadeStyle} from './applyFacadeStyle';
 import {OVEN} from './ovenDimensions';
@@ -15,9 +16,11 @@ import {layoutKitchenDrawers,resizeKitchenDrawerFront,setKitchenDrawerCount,setK
 import { useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WALL_LABEL, type PlaceTarget, type Wall, type CornerTurn } from "./wallPlacement";
 import { ManagerMode, FACADE_KIND_LABEL, hingeBrandLabel, allegroLabel, allegroVisible } from "./clientLabels";
-import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck } from "lucide-react";
+import { Footprints, Layers, Link2, Rows3, Anchor, RectangleHorizontal, Box, Move, Wrench, Info, TriangleAlert, CircleCheck, Lightbulb } from "lucide-react";
 import { scaleHingeY, parts, distribute, maxHeightOf, RULES, RAIL_PLACES, vernissageSizes, grooveInsetMax, aluDrawersAvailable, isDrawerFront, handleDoors, doorHandlePos, setModuleHandlePos, isUpperModule, handlePosIssue, HANDLE_POS_LABEL, type HandlePos, type Module, type Part } from "./model";
-import { KITCHEN, APPLIANCES, wallFloorY, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, type WorktopSpec, type WorktopMaterial } from "./kitchen";
+import { KITCHEN, APPLIANCES, wallFloorY, kitchenLegs, worktopLabel, hardwareRows, WORKTOP_CHOICES, WORKTOP_THICKNESS, setWorktopMaterial, worktopSolid, type WorktopSpec, type WorktopMaterial } from "./kitchen";
+import { toggleWaterfall, waterfallFloorDrop } from "./worktopWaterfall";
+import { setRowUnderLight, wallRowIds } from "./kitchenUnderLightRow";
 import { HINGE_BRANDS, hingePositions, type HingeBrand } from "./hardware";
 import { handleById } from "./handles";
 import { partCollisions, rawCheck, bazisAirHardware, BAZIS_AIR, RAW_JOINT, RAW_SEAT_GAP, RAW_FAR } from "./collisions";
@@ -232,7 +235,8 @@ function CabinetPanel(props: KitchenPanelProps) {
   // Петли: текущая высота фасада и фактические ручные высоты (scaleHingeY), чтобы панель показывала и сохраняла то, что стоит в 3D
   const dhNow = door ? Math.round(door.size[1] * 10) / 10 : 0;
   const shownY = s.hingeY?.length ? scaleHingeY(s.hingeY, s.hingeYFor ?? dhNow, dhNow).map((y) => Math.round(y * 10) / 10) : [];
-  // K1 (критик 22.10): подсветки у кухонных модулей пока нет — подзаголовок «Наполнения» её не обещает
+  // K1 (критик 22.10): подсветки внутри кухонных модулей пока нет — подзаголовок «Наполнения» её не обещает
+  // (подсветка рабочей зоны под навесным — своей группой ниже, 28.10.2026)
   return <SettingsTree className="kitchen-panel" hints={{ "Наполнение": m.kitchen ? "Полки, ящики и бутылочницы" : "Полки и ящики" }}>
     <div className="property-section kitchen-head">
       <span className="eyebrow">{ROLE[role] ?? "Кухонный модуль"}{appliance ? " · " + appliance.label.toLowerCase() : ""}</span>
@@ -265,6 +269,18 @@ function CabinetPanel(props: KitchenPanelProps) {
       {k.oven&&<><Num label="Высота ниши духовки" value={k.oven.nicheHeight} min={OVEN.baseNiche.heightMin} max={OVEN.baseNiche.heightMax} change={v=>modify(n=>configureOven(n,{nicheHeight:v}))}/><p className="field-note">Опорная полка на {ovenSupportTop(m)} мм от низа модуля. Ящик занимает только пространство под ней.</p></>}
       <p className="field-note">Bosch HBF113BR0B: под столешницей ниша 600–604 мм, ширина в свету 560–568 мм, глубина от 550 мм. Глубина встраивания 548 мм; фасад 20 мм и ручка до 50 мм выступают вперёд. Форма ручки и корпуса — оценка, вентиляцию сверить по схеме. <a href={OVEN_SOURCE} target="_blank" rel="noreferrer">Паспорт, стр. 3</a></p>
     </Group>}
+    {role === "wall" && (() => {
+      // подсветка рабочей зоны под навесным (kitchenUnderLight.ts): у модуля и всем навесным ряда; блок питания — один на ряд
+      const rowIds = wallRowIds(project, placed.id), rowLit = rowIds.every((x) => project.modules.find((a) => a.id === x)?.module.kitchen?.underLight);
+      const led = list.find((p) => p.id === "kitchen-underlight");
+      const run = (v: boolean, row: boolean) => { try { commit(setRowUnderLight(project, placed.id, v, row)); } catch (e) { window.dispatchEvent(new CustomEvent("studio-error", { detail: (e as Error).message })); } };
+      return <Group icon={<Lightbulb size={15} />} title="Подсветка рабочей зоны" note={k.underLight ? "есть" : undefined}>
+        <Check label="Подсветка рабочей зоны под модулем" checked={!!k.underLight} change={(v) => run(v, false)} />
+        {rowIds.length > 1 && <button type="button" className="outline full" aria-label={rowLit ? "Снять подсветку рабочей зоны у всех навесных ряда" : "Подсветка рабочей зоны всем навесным ряда"} onClick={() => run(!rowLit, true)}>{rowLit ? "Снять у всех навесных ряда" : `Всем навесным ряда (${rowIds.length} шт.)`}</button>}
+        {k.underLight && <Check label="Блок питания подсветки рабочей зоны" checked={!!m.lightPsu} change={(v) => modify((n) => { if (v) n.lightPsu = true; else delete n.lightPsu; })} />}
+        <p className="field-note">LED-профиль снизу дна у переднего края{led ? `, ${Math.round(led.length)} мм` : ""} — светит на столешницу; {RULES.shelfLightRetailPerM.toLocaleString("ru-RU")} ₽/пог.м (горизонталь). Блок питания 12 В — отдельной строкой сметы, ставится один на ряд.</p>
+      </Group>;
+    })()}
     <Group icon={<Box size={15} />} title="Корпус" open={stage === "bodies"}>
       {item && kinds.length > 1 && <label className="hardware-field">Назначение<select aria-label="Назначение кухонного модуля" value={item} onChange={(e) => modify((n) => { const r = rebuildKitchen(n, e.target.value as KitchenItem); for (const key of Object.keys(n)) delete (n as Record<string, unknown>)[key]; Object.assign(n, r); })}>
         {kinds.map((x) => <option key={x} value={x}>{KITCHEN_ITEMS[x].label}</option>)}</select></label>}
@@ -488,6 +504,13 @@ function WorktopPanel(props: KitchenPanelProps) {
       {WORKTOP_THICKNESS[w.material] ? <>{w.material === "acrylic" && <Check label="С подклейкой до 40 мм" checked={w.thickness === 40} change={(v) => modify((n) => setWorktopMaterial(n, "acrylic", v ? 40 : 12))} />}<p className="field-note">Толщина по материалу: {w.thickness} мм. Торец без кромки ЛДСП — обработка торца отдельной строкой сметы.</p></>
         : <Num label="Толщина" value={w.thickness} min={12} max={60} change={(v) => modify((n) => { n.worktop = { ...n.worktop!, thickness: v }; n.height = v; })} note="СКИФ 26, 28, 38, 40" />}
       <Num label="Свес над фасадом" value={w.overhang} min={0} max={60} change={(v) => setW({ overhang: v })} note={`Базис: 21–${KITCHEN.worktopOverhang}`} />
+      {/* водопад (барная стойка, остров): боковины из того же камня до пола — worktopWaterfall.ts */}
+      {worktopSolid(w) ? <fieldset className="kitchen-rails"><legend>Водопад — боковины до пола</legend>
+        {(["left", "right"] as const).map((side) => <Check key={side} label={side === "left" ? "Водопад слева" : "Водопад справа"} checked={!!w.waterfall?.[side]}
+          change={(v) => { try { props.commit(toggleWaterfall(props.project, props.placed.id, side, v)); } catch (e) { window.dispatchEvent(new CustomEvent("studio-error", { detail: (e as Error).message })); } }} />)}
+        {w.waterfall && <Num label="Высота водопада" value={w.waterfall.drop} min={50} max={Math.max(50, Math.min(1500, waterfallFloorDrop(props.placed)))} change={(v) => setW({ waterfall: { ...w.waterfall!, drop: v } })} note={`До пола — ${waterfallFloorDrop(props.placed)} мм (от низа столешницы)`} />}
+        <p className="field-note">Боковина толщиной {w.thickness} мм во всю глубину, стык со столешницей под 45°; площадь — в строке камня, стык и торец — отдельной строкой. Над нижним корпусом столешница удлиняется на толщину в сторону водопада.</p>
+      </fieldset> : <p className="field-note">Водопад (боковины до пола) — только у компакта, акрила и кварца.</p>}
       <Colors m={m} material={material} />
       <div className="kitchen-cuts">
         <span className="rails-title">Вырезы</span>
@@ -535,6 +558,9 @@ function RawInfo(props: KitchenPanelProps) {
   // figure + contour — внешний контур нарисован, внутренние вырезы нет; figure без контура или skew — габаритом
   const figures = r.panels.filter((p) => p.contour).length, boxes = r.panels.filter((p) => (p.figure && !p.contour) || p.skew).length, holes = r.panels.filter((p) => p.figure && p.contour).length, turned = r.panels.filter((p) => p.obb).length, rods = r.profiles?.length ?? 0;
   // пересечения проверяются только у позиций с 3D-моделью Базиса (check.checked), а не у всей фурнитуры сметы (total) — сказать это прямо
+  // интеграция 29.10: отдельная панель студии (freePanels.ts) — сырой модуль по хранению, но не импорт Базиса
+  if (isFreePanel(m)) return <div className="kitchen-panel"><div className="property-section kitchen-head"><span className="eyebrow">Отдельная панель студии</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
+    <div className="property-section kitchen-note"><Info size={14} /><p>Размеры и материал (ЛДСП или МДФ Вернисаж) правятся в окне «Отдельная панель» инструментов комнаты; здесь — положение в комнате, смета и раскрой.</p></div></div>;
   return <div className="kitchen-panel">
     <div className="property-section kitchen-head"><span className="eyebrow">Импорт из Базиса · как есть</span><h2>{m.name}</h2><p>{Math.round(m.width)} × {Math.round(m.height)} × {Math.round(m.depth)} мм</p></div>
     <div className="property-section kitchen-note raw"><Info size={14} /><p><b>Настройка наполнения недоступна</b> — размеры, полки, ящики и фурнитура правятся в Базисе (переимпорт); здесь — положение в комнате, смета и раскрой.<br />Модуль перенесён из проекта Базиса как есть: {panels} деталей (фасадов {fronts}), фурнитура по Базису — {total} шт. (в 3D показано {r.hardware.length}).{figures ? ` Фигурных по контуру Базиса — ${figures}.` : ""}{turned ? ` Повёрнутых не на 90° — ${turned}.` : ""}{rods ? ` Штанг Ø25 — ${rods}.` : ""}{boxes ? ` Нарисованы габаритом (контур или поворот не перенесён) — ${boxes}.` : ""}{holes ? ` Внутренние вырезы не нарисованы (контур — внешний) — ${holes}.` : ""}</p></div>

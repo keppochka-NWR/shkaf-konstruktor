@@ -8,6 +8,9 @@ import { activeRoom, addRoom, loadVariant, migrateRoomDocument, parseRoomDocumen
 import { clientBundle, importBundle, loadIndex, activeClient, readClientRooms, clientRoomsKey } from '../src/clientIndex';
 import { initialModule, section, validate, parts, drawerFacesEqual, type Module } from '../src/model';
 import { facadeKindBlock, facadeKindOf, setFacadeKind } from '../src/facadeKind';
+import { nextOption } from '../src/selectGuard';
+import { freePanel } from '../src/freePanels';
+import { sideFacadeSpec } from '../src/facadesVernissage';
 import { setDrawersOverlay, relayoutDrawers, fullSectionDrawer } from '../src/drawerModes';
 import { withMansard } from '../src/paletteBuild';
 import { fitSmallModule } from '../src/smallSize';
@@ -140,7 +143,7 @@ test('совместимость: вырез на фасаде ящика в н�
   assert.ok(side.sideFacade);
   const vc: Module = { ...v, cutouts: [cut({ host: 'side-panel:left', w: 20, h: 80, label: 'под плинтус' })] };
   assert.ok(validate(vc).some((e) => /Видимый бок левый.*вырез не делается/.test(e)), JSON.stringify(validate(vc)));
-  assert.ok(estimate(one(v)).lines.some((l) => /^vernissage:15:.*:side$/.test(l.id)), 'бок — своей строкой Вернисажа');
+  assert.ok(estimate(one(v)).lines.some((l) => /^vernissage-panel:15:/.test(l.id)), 'бок — строкой «Панели МДФ» (общей с отдельной панелью МДФ)');
 });
 
 test('совместимость: стык угловых фальшей рядом с мансардой — без пересечений и ошибок', () => {
@@ -153,4 +156,23 @@ test('совместимость: стык угловых фальшей ряд�
     assert.deepEqual(cornerReport(q).overlaps, [], s.name);
     assert.deepEqual(projectErrors(q), [], s.name);
   }
+});
+
+test('стрелки в закрытом списке: листают доступные пункты (недоступные пропускаются), без применения промежуточных', () => {
+  const o = [{ disabled: false }, { disabled: true }, { disabled: false }];
+  assert.equal(nextOption(o, 0, 'ArrowDown'), 2, 'рамка (недоступна) пропущена: ЛДСП → Вернисаж');
+  assert.equal(nextOption(o, 2, 'ArrowUp'), 0);
+  assert.equal(nextOption(o, 2, 'ArrowDown'), -1);
+  assert.equal(nextOption(o, 1, 'Home'), 0); assert.equal(nextOption(o, 0, 'End'), 2);
+});
+
+test('один механизм панелей МДФ: видимый бок из фасада и отдельная панель МДФ — одна строка «Панели МДФ» при одном МДФ', () => {
+  const v = sideFacadeSpec({ ...DEFAULT_VERNISSAGE });
+  const m: Module = { ...wardrobe(), vernissage: { ...DEFAULT_VERNISSAGE }, facadeT: DEFAULT_VERNISSAGE.thickness, sidePanels: { left: { height: 2200, depth: 550, facade: true } } };
+  const p = one(m);
+  const panel = freePanel({ name: 'Щит', width: 550, height: 2200, thickness: 16, edge: 0, decor: m.decor, plane: 'yz', vernissage: v } as Parameters<typeof freePanel>[0]);
+  p.modules.push({ ...panel, x: 1000, z: 30 });
+  const rows = estimate(p).lines.filter((l) => l.id.startsWith('vernissage-panel:'));
+  assert.equal(rows.length, 1, rows.map((r) => r.id).join(' | '));
+  assert.ok(Math.abs(rows[0].quantity - 2 * 0.55 * 2.2) < 0.05, 'две панели 550×2200 в одной строке: ' + rows[0].quantity);
 });
