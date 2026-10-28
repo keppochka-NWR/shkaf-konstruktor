@@ -8,7 +8,7 @@ import { partCollisions } from "../src/collisions";
 import { estimate } from "../src/pricing";
 import { nest } from "../src/exports";
 import { appendModule, projectErrors, type Project } from "../src/project";
-import { sideFacadeSpec, vernissageFacadePrice } from "../src/facadesVernissage";
+import { sideFacadeSpec, vernissageFacadePrice, normalizeVernissage } from "../src/facadesVernissage";
 import { buildZone, ZONES, itemOf, type ZoneId } from "../scripts/dp-2810-rooms";
 
 const look = (decor: string): Module => ({ ...initialModule(), decor, facadeDecor: decor });
@@ -42,6 +42,13 @@ test("видимый бок из фасада: МДФ Вернисаж №15 г�
   const plain = cabinet(); plain.sidePanels = { right: { height: 2400, depth: 447 } };
   const q = parts(plain).find((x) => x.id === "side-panel:right")!;
   assert.equal(q.size[0], 16); assert.ok(!q.external); assert.deepEqual(q.edge, [2, 2, 2, 2]);
+});
+
+test("Вернисаж: смена плёнки на эмаль убирает плёнку — строка сметы и подпись по цвету эмали (сборка мышью dp-2810)", () => {
+  const v = normalizeVernissage({ milling: "63", cover: "enamel-matte", film: "Моно белый", enamelColor: "RAL 9001", thickness: 19, twoSided: true });
+  assert.equal(v.film, undefined); assert.equal(v.enamelColor, "RAL 9001"); assert.equal(v.twoSided, true);
+  const back = normalizeVernissage({ ...v, cover: "film" });
+  assert.ok(back.film, "обратно на плёнку — плёнка по умолчанию категории"); assert.equal(back.twoSided, undefined);
 });
 
 test("столешница палитры над подвесной тумбой (ванная): ложится на самый высокий верх, а не на низкую тумбу рядом; акрил 40", () => {

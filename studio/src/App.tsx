@@ -2014,10 +2014,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </button>
                 </div>
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
-                {m.doors && (
+                {/* dp-2810: у комода и подвесного ящика (только ящики) фасады Вернисаж выбирались лишь ПКМ по фасаду в сцене — тип фасадов и в панели */}
+                {(m.doors || m.sections.some(s=>s.drawers>0)) && (
                   <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={m.vernissage?'vernissage':m.alu?'alu':'ldsp'} onChange={e=>modify(n=>{const v=e.target.value;if(v==='alu'){n.alu={...DEFAULT_ALU};if(n.vernissage){delete n.vernissage;delete n.facadeT;}}else if(v==='vernissage'){delete n.alu;delete n.aluDrawers;n.vernissage={...DEFAULT_VERNISSAGE};n.facadeT=DEFAULT_VERNISSAGE.thickness;}else{delete n.alu;delete n.aluDrawers;if(n.vernissage){delete n.vernissage;delete n.facadeT;}}})}><option value="ldsp">{FACADE_KIND_LABEL.ldsp} 16 мм</option><option value="alu">{FACADE_KIND_LABEL.alu}</option><option value="vernissage">{FACADE_KIND_LABEL.vernissage}</option></select></label>
                 )}
-                {m.doors && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
+                {(m.doors || m.sections.some(s=>s.drawers>0)) && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 
                 {m.doors && m.alu && (<>
                   <AluPicker value={m.alu} onChange={v=>modify(n=>{n.alu=v;})}/>{aluDrawersAvailable(m)&&<AluDrawersCheck checked={!!m.aluDrawers} onChange={v=>modify(n=>{if(v)n.aluDrawers=true;else delete n.aluDrawers;})}/>}

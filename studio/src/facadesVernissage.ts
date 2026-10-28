@@ -238,6 +238,8 @@ export function normalizeVernissage(v: VernissageFacade): VernissageFacade {
   if (out.cover === 'adilet' && !V_ADILET_FILMS.some((f) => f.name === out.film)) out.film = V_ADILET_FILMS.find((f) => !f.out)!.name;
   if (out.cover === 'pet' && !PET_DECORS.includes(out.film ?? '')) out.film = PET_DECORS[0];
   if (!out.cover.startsWith('enamel')) { delete out.twoSided; delete out.lacquer; }
+  // dp-2810 (сборка мышью): при смене плёнки на эмаль плёнка оставалась в фасаде — подпись и строка сметы шли «…:Моно белый», а не цвет эмали
+  else delete out.film;
   if (out.cover !== 'enamel-matte') delete out.lacquer;
   if (!ths.includes(out.thickness)) out.thickness = ths.includes(19) ? 19 : ths[0];
   const m = vernissageMilling(v.milling);

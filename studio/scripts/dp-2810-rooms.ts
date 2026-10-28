@@ -6,7 +6,7 @@
 // → public/local-projects/dp-2810-<зона>.json (личные проекты, в публикацию не идут) + смета по изделиям и зонам.
 // Клиентских данных здесь нет и быть не должно: только обезличенное имя проекта и размеры.
 import { writeFileSync, mkdirSync } from "node:fs";
-import { initialModule, section, parts, validate, drawersToRoof, innerBottom, innerTop, type Module, type Section } from "../src/model";
+import { initialModule, section, parts, validate, drawersToRoof, distribute, innerBottom, innerTop, type Module, type Section } from "../src/model";
 import { createModule, assembleModule } from "../src/paletteBuild";
 import { setWorktopMaterial } from "../src/kitchen";
 import { freePanel } from "../src/freePanels";
@@ -38,6 +38,7 @@ function pal(kind: Kind, w: number, h: number, d: number, decor: string, facadeD
   // решение Макса 26.10: видимого крепежа нет — эксцентрики («Крепёж корпуса» → «Эксцентрики D15»)
   if (kind !== "worktop") m.fastening = "eccentric";
   Object.assign(m, patch);
+  if (m.vernissage) m.facadeT = m.vernissage.thickness; // как панель «Тип фасадов» / окно фасада: толщина МДФ — толщина фасадов модуля
   return m;
 }
 /** Доля проёма для центра полки, заданного от пола. */
@@ -138,7 +139,7 @@ function loggia(): { room: Project["room"]; items: Item[] } {
   // 4.1 Шкаф 900 × 2620 × 450, 2 двери, эмаль с молдингами; справа 170 до стены — видимый бок эмаль гладкая (sidePanels.facade)
   const wr = pal("empty", 900, H, 429, CREAM, CREAM, { plinthHeight: 100, vernissage: V(MILL.molding), handleId: HANDLE_LONG, autoFillersOff: true }, 2);
   shelvesAt(wr, wr.sections[0], [500, 900, 1300, 1700, 2100]);
-  wr.sidePanels = { right: { height: H, depth: 429 + 18, facade: true } }; // глубина бока = корпус + фасад (как ставит панель)
+  wr.sidePanels = { right: { height: H, depth: 429 + 18, facade: true } }; // глубина бока = корпус + 18 (как ставит панель); лицо заподлицо с фасадами 19, сзади 3 мм до стены
   setModuleHandleFloor(wr, 700);
   // 4.2 Консоль подвесная 1070 × 200 × 400 на стене 4-1, низ 550: фасад и бока — эмаль гладкая; радиусные бока — НЕ умеем (прямые бока)
   // корпус 1032 + бока 2 × 19 = 1070 от стены до стены; фасад 1070 шире паспорта №15 (ящик до 1000) → 2 ящика по 516 (отклонение)
@@ -225,7 +226,7 @@ function shower(): { room: Project["room"]; items: Item[] } {
   const Z = "shower", H = 2650, RD = 1760, D = 629; // глубина пеналов 650 = 629 + 2 + 19 (ДОПУЩЕНИЕ: по стиральной машине 600)
   // 7.1 Узкий пенал 250 × 2650 × 650: полки с подсветкой стоек, дверь — стекло в узком алюминиевом профиле (F1-09, золото)
   const nar = pal("empty", 250, H, D, CREAM, CREAM, { plinthHeight: 60, alu: { profile: "F1-09", color: "gold", insert: "glass-clear" }, lightPsu: true, autoFillersOff: true }, 1);
-  nar.sections[0].shelves = [1, 2, 3, 4, 5, 6].map((k) => Math.round(k / 7 * 10000) / 10000); lights(nar.sections[0], { stands: ["left", "right"] });
+  nar.sections[0].shelves = distribute(nar, nar.sections[0], 6); /* «Полок в секции» 6 → «Распределить полки» */ lights(nar.sections[0], { stands: ["left", "right"] });
   nar.sections[0].doorSplit = 1300; // алюм. фасад по СТП не выше 2000 → 2 стеклянных фасада 1300 + 1316 (на эскизе одно полотно)
   // 7.2 Пенал под стиральную и сушильную машины 600 × 2650 × 650 (корпус 581 + видимый бок 19): без дна (машины на полу), ниша колонны 1750, жёсткая полка над ней,
   // выше 2 полки; двери в 2 ряда (1750 + верх), эмаль с молдингами; правый бок виден (рядом шкаф 250) — эмаль гладкая
