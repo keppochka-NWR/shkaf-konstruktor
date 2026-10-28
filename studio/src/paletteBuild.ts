@@ -1,7 +1,7 @@
 // Сборка мебели из палитры «Добавить мебель» (перенесено из ModulePalette.tsx, w-formerrors 23.10: проверка формы paletteCheck.ts
 // собирает те же модули без исключения на первой ошибке). Тексты ошибок прежние; ModulePalette.tsx реэкспортирует функции.
 import {refitKDrawers} from './kitchenDrawers';
-import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,rearClear,parts,RULES,type Module} from './model';
+import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,drawerFacesEqual,rearClear,parts,RULES,type Module} from './model';
 import {partCollisions} from './collisions';
 import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
@@ -101,7 +101,12 @@ export function assembleModule(kind:ModuleKind,width:number,height:number,depth:
     if(kind==='wardrobe'){s.rod=true;s.shelves=distribute(m,s,1);}
     // комод: ящики поровну до крыши, полки над ними нет (п.29 волны 22.10)
     // комод: 3 ящика до крыши; низкий корпус (подвесной ящик 200, заказ 7437584) — столько ящиков, сколько помещается (2, затем 1)
-  if(kind==='drawers'){m.doors=false;if(height<350)m.plinthHeight=0;/* низкий ящичный модуль (подвесной ящик) — без цоколя: его поднимают «От пола» */for(const n of [3,2,1]){s.drawers=n;try{s.drawerConfigs=drawersToRoof(m,s);}catch{delete s.drawerConfigs;}if(!validate(m).some(e=>/ящики не помещаются|для ящиков нужно/.test(e)))break;}
+  if(kind==='drawers'){m.doors=false;if(height<350)m.plinthHeight=0;/* низкий ящичный модуль (подвесной ящик) — без цоколя: его поднимают «От пола» */
+    // правка Макса 29.10.2026: фасады комода равные со старта (drawersToRoof → evenDrawerConfigs); высокому комоду — 4–5 ящиков,
+    // если при трёх короб вышел бы выше 300 и фасады не сравнять
+    const fits=()=>!validate(m).some(e=>/ящики не помещаются|для ящиков нужно/.test(e));
+    const tall=[3,4,5].find(n=>{s.drawers=n;try{s.drawerConfigs=drawersToRoof(m,s);}catch{return false;}return fits()&&drawerFacesEqual(m,s);});
+    if(tall===undefined)for(const n of [3,2,1]){s.drawers=n;try{s.drawerConfigs=drawersToRoof(m,s);}catch{delete s.drawerConfigs;}if(fits())break;}
     // один ящик и тот не встал по умолчанию: короб ниже (проём − 68), направляющая — самая длинная, что входит по глубине
     if(s.drawers===1&&validate(m).some(e=>/ящики не помещаются/.test(e))){const inner=m.height-2*RULES.panel,len=[...SLIDES.gtv0fpo.lengths].reverse().find(l=>l<=m.depth-25)??250;s.drawerConfigs=[{slide:'gtv0fpo',height:Math.max(68,Math.min(RULES.drawerH,inner-68)),length:len}];}}
     // число дверей выбрано в палитре (п.21): секции и створки под него

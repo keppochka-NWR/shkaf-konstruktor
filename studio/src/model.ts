@@ -1518,6 +1518,8 @@ export function parts(m: Module): Part[] {
         // ящики до крыши без полки над ними (комод, п.29): верхний фасад — до верха накладных фасадов, как нижний до цоколя
         const highest=drawerOffsets(s).every((o,k)=>k===j||o<=drawerOffsets(s)[j]);
         if(highest&&!hasDrawerCap(m,s,b)&&drawersFillRoof(m,s,b)&&!grip){const bottom=fy-fh/2,roof=facadeTop(m);if(roof>bottom+fh){fh=roof-bottom;fy=(roof+bottom)/2;}}
+        // ящики в накладку под дверью (правка Макса 29.10.2026): верхний фасад — до границы с дверью (середина полки над ящиками − пол-зазора)
+        else if(highest){const ext=externalDrawerBoundary(m,s,b),bottom=fy-fh/2;if(ext&&ext.faceTop>bottom+fh){fh=ext.faceTop-bottom;fy=(ext.faceTop+bottom)/2;}}
       }
       // фасад ящика в алюминиевой рамке (aluDrawers): толщина рамки, задняя плоскость там же, где у ЛДСП — короб и крепёж не сдвигаются
       const aluFront=!!(m.alu&&m.aluDrawers&&!drawersBehindDoors(m,s)&&!drawerFaceInset(m,s)); // вкладной ящик — ЛДСП: рамка ушла бы в короб
@@ -1589,7 +1591,8 @@ export function parts(m: Module): Part[] {
       // Скос фронта: фасады лежат вдоль наклонной линии фронта, их суммарная ширина — по косой (длиннее проёма).
       const cosK=Math.cos(skewAngle(m)),frontLen=(spanR-spanL)/cosK;
       const gap=s.doorGap??fb(m),count=doorCount(m,s),dw=(frontLen-(count-1)*gap)/count;
-      const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
+      const extB=inset?undefined:externalDrawerBoundary(m,s,b); // ящики в накладку: дверь над ними через обычный зазор фасадов (правка 29.10)
+      const baseY=inset?b.bottom+fe(m):facadeBottom(m),doorBottom=extB?Math.max(baseY,extB.doorBottom):s.externalDrawers&&s.drawers?Math.max(baseY,drawerCapTop(m,s)+gap):baseY,y1flat=inset?b.top-fe(m)-(m.topStrip?m.topStrip+fe(m):0):facadeTop(m);
       const ft=m.facadeT??t,dz=inset?d-ft/2:d+ft/2+(m.faceAir??2);
       // ниша под технику (кухня, doorNiche): верхний ряд начинается выше верха нижнего на высоту ниши, а не на зазор
       // шкаф (заказ 7442203, пенал): открытый проём между рядами фасадов — ящики с накладными фасадами и открытая ниша (nicheDrawers)
@@ -1603,6 +1606,7 @@ export function parts(m: Module): Part[] {
       }
       for(let row=0;row<bands.length;row++){
       const [y0,yTop]=bands[row];
+      if(!(yTop>y0+1))continue; // выкатной ящик на всю секцию (ящики в накладку до крыши) — двери в секции нет
       for(let col=0;col<count;col++){
         const k=row*2+col;
         if(s.removedDoors?.includes(k))continue;
@@ -2296,7 +2300,10 @@ export function drawersToRoof(m:Module,s:Section):DrawerConfig[]{
   if(n<1)throw Error('В секции нет ящиков.');
   const pitch=Math.min(Math.floor((b.top-b.bottom)/n),300+RULES.drawerStep),box=pitch-RULES.drawerStep;
   if(box<68)throw Error(`Ящики не помещаются: при ${n} ящиках нужна высота проёма от ${n*(68+RULES.drawerStep)} мм.`);
-  return Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};});
+  // один ящик в проёме выше 340 (выкатной ящик на всю секцию антресоли, правка 29.10): короб 300, фасад на весь проём — шаг = проём
+  const one=n===1?(b.top-b.bottom)-(s.drawerGap??RULES.drawerFrontGap):0;
+  if(n===1&&pitch<b.top-b.bottom&&one<=800){const c=drawerConfig(m,s,0);return [{...c,height:box,y:0,facadeH:one}];}
+  return withEvenFaces(m,s,Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};}));
 }
 /**
  * Задать высоту верха полки над ящиками (от низа корпуса): ящики делятся поровну по высоте.
@@ -2309,10 +2316,16 @@ export function distributeDrawers(m:Module,s:Section,capTop:number):DrawerConfig
   const box=pitch-RULES.drawerStep;
   if(box<68)throw Error(`Слишком низко: при ${n} ящиках нужно не меньше ${b.bottom+RULES.panel+n*(68+RULES.drawerStep)} мм от низа корпуса.`);
   if(box>300)throw Error(`Слишком высоко: боковина ящика выйдет ${box} мм, максимум 300. Добавьте ящик или опустите полку.`);
-  return Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};});
+  return withEvenFaces(m,s,Array.from({length:n},(_,j)=>{const c=drawerConfig(m,s,j);const {facadeH:_f,...rest}=c;void _f;return {...rest,height:box,y:j*pitch};}));
 }
 /** Refit only overflowing drawer stacks on a height change; reject infeasible hardware instead of deleting it. */
 export function fitDrawersAfterResize(m:Module,before?:Module){
+ // ящики с расстановкой «по правилу» (не заданы вручную) после смены высоты — снова с равными фасадами (правка Макса 29.10.2026)
+ const auto=new Set(before?m.sections.filter(s=>{const was=before.sections.find(x=>x.id===s.id);return !!was&&isAutoDrawerLayout(before,was);}).map(s=>s.id):[]);
+ fitDrawerStacks(m,before);
+ for(const s of m.sections)if(auto.has(s.id)){const e=evenDrawerConfigs(m,s,true);if(e)s.drawerConfigs=e;}
+}
+function fitDrawerStacks(m:Module,before?:Module){
  for(const section of m.sections){
   if(!section.drawers)continue;
   const b=boxes(m).find(b=>b.id===section.id)!,h=b.top-b.bottom;
@@ -2325,6 +2338,79 @@ export function fitDrawersAfterResize(m:Module,before?:Module){
   if(section.drawerConfigs?.some(c=>c.mesh))throw Error('Корзины имеют фиксированную высоту. Увеличьте корпус или уберите корзину.');
   section.drawerConfigs=distributeDrawers(m,section,ceiling);
  }
+}
+/** Ящики в накладку под распашной дверью (Section.externalDrawers; правка Макса 29.10.2026 «ящик в накладку»): граница фасадов ящиков
+ *  и двери секции, мм от низа модуля. Фасады ящиков — в плоскости накладных дверей. Дверь — как было: от верха полки над ящиками +
+ *  зазор фасадов (s.doorGap / fb), её высота и петли в прежних проектах не меняются; фасад верхнего ящика поднимается до двери и
+ *  закрывает торец полки — между ним и дверью обычный зазор фасадов («Зазор 30 мм» — 30 мм хвата). Раньше там была щель 16 + 2 зазора.
+ *  Ящики до крыши без полки — двери в секции нет (doorBottom = Infinity: «выкатной ящик на всю секцию»). Вкладные двери и кухня — как было. */
+export function externalDrawerBoundary(m:Module,s:Section,b=boxes(m).find(x=>x.id===s.id)!):{faceTop:number;doorBottom:number}|undefined{
+  if(!m.doors||!s.externalDrawers||!(s.drawers>0)||m.kitchen||m.doorMount==='inset'||nicheDrawers(m,s)||!b)return undefined;
+  const cs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));if(cs.every(c=>c.mesh||c.noFacade))return undefined;
+  if(!hasDrawerCap(m,s,b)&&drawersFillRoof(m,s,b))return {faceTop:facadeTop(m),doorBottom:Infinity};
+  const door=b.bottom+drawerStackHeight(s)+RULES.panel+(s.doorGap??fb(m));
+  return {faceTop:door-(s.drawerGrip&&!m.raw?RULES.drawerGrip:(s.doorGap??fb(m))),doorBottom:door};
+}
+/** Равные видимые фасады ящиков секции (правка Макса 29.10.2026 «в комоде неравномерные ящики со старта»): накладные фасады стопки
+ *  ящиков от дна делят столбец фасадов поровну с зазором между ними. Столбец — от низа фасадов (у нижнего ящика фасад опускается на
+ *  цоколь до 30 мм от пола) до верха фасада верхнего ящика, как его строит parts() (по шагу; до крыши — до верха фасадов; в накладку
+ *  под дверью — до границы с дверью). Короба встают по своим фасадам: шаг ящика = фасад + зазор, короб = шаг − 40; верх стопки
+ *  (полка над ящиками, «до крыши») не меняется. Фасады по 0,5 мм, остаток (меньше 0,5 мм на ящик) — верхнему, как axisLayout кухни.
+ *  null — не применимо: ящики за дверью или вкладные (фасады и так равны по шагу), один ящик, корзины, выкатные полки, внутренние ящики,
+ *  заданная вручную высота фасада, ящики не стопкой от дна, короб выйдет за 68…300. Кухня и модули Базиса — по своим правилам. */
+export function evenDrawerConfigs(m:Module,s:Section,force=false):DrawerConfig[]|null{
+  const n=s.drawers;
+  if(n<2||n>RULES.maxDrawers||m.kitchen||m.raw||m.corner||m.kupe||m.casework||drawersBehindDoors(m,s)||drawerFaceInset(m,s)||nicheDrawers(m,s))return null;
+  const b=boxes(m).find(x=>x.id===s.id);if(!b)return null;
+  const cs=Array.from({length:n},(_,j)=>drawerConfig(m,s,j));
+  // force — расстановка «по правилу» (isAutoDrawerLayout): высота фасада нижнего ящика — своя же, пересчитывается заново
+  if(cs.some(c=>c.mesh||c.tray||c.noFacade||(!force&&c.facadeH!==undefined)))return null;
+  const off=drawerOffsets(s);let stack=0;
+  for(let j=0;j<n;j++){if(Math.abs(off[j]-stack)>0.01)return null;stack+=drawerPitch(cs[j],s.drawerGap);}
+  const grip=drawerGripOn(m,s,cs[0]),g=grip?RULES.drawerGrip:(s.drawerGap??fb(m));
+  const bottom=Math.min(facadeBottom(m),b.bottom),natural=b.bottom+stack-g,ext=externalDrawerBoundary(m,s,b);
+  const roof=!grip&&!hasDrawerCap(m,s,b)&&drawersFillRoof(m,s,b);
+  const top=roof?Math.max(natural,facadeTop(m)):ext&&ext.faceTop>natural?ext.faceTop:natural;
+  const fh=Math.floor((top-bottom-(n-1)*g)/n*2)/2;if(!(fh>0))return null;
+  const ys=Array.from({length:n},(_,j)=>j===0?0:Math.round((bottom+j*(fh+g)-b.bottom)*10)/10);
+  const out:DrawerConfig[]=[];
+  for(let j=0;j<n;j++){
+    let pitch=(j<n-1?ys[j+1]:stack)-ys[j];
+    // ящики до крыши: верхний фасад тянется до верха фасадов сам — короб верхнего не выше 300, если стопка остаётся «до крыши»
+    const {facadeH:_f,...plain}=cs[j];void _f;
+    if(j===n-1&&roof&&pitch-RULES.drawerStep>300){pitch=300+RULES.drawerStep;if(!drawersFillRoof(m,{...s,drawerConfigs:[...out,{...plain,height:300,y:ys[j]}]},b))return null;}
+    // нижний ящик над цоколем: короб выше 300 не делаем — короб 300, фасад задан высотой (до своего верха, вниз — до цоколя сам);
+    // шаг по фасаду не длиннее шага до следующего ящика (зазор шага 3 при зазоре фасадов 2 — пол-зазора у низа фасада)
+    if(j===0&&n>1&&!grip&&pitch-RULES.drawerStep>300){const gf=s.drawerGap??fb(m),facadeH=Math.round((bottom+fh-b.bottom-gf/2)*10)/10;
+      if(facadeH+(s.drawerGap??RULES.drawerFrontGap)>pitch+0.01||facadeH>800)return null;out.push({...plain,height:300,y:0,facadeH});continue;}
+    const height=Math.round((pitch-RULES.drawerStep)*10)/10;
+    if(!(height>=68&&height<=300)||ys[j]<0)return null;
+    out.push({...plain,height,y:ys[j]});
+  }
+  return out;
+}
+/** Расстановка с равными фасадами, если применима к секции с этими ящиками, иначе — как есть. */
+export function withEvenFaces(m:Module,s:Section,configs:DrawerConfig[]):DrawerConfig[]{
+  return evenDrawerConfigs(m,{...s,drawerConfigs:configs})??configs;
+}
+/** Ящики секции расставлены «по правилу», а не заданы вручную: без настроек ящиков, стопкой от дна одинаковые короба (как добавляет
+ *  студия) или уже с равными фасадами (evenDrawerConfigs). Такие ящики при смене высоты корпуса и числа ящиков пересчитываются;
+ *  заданные вручную (высота ящика, фасада, положение) — не трогаются. */
+export function isAutoDrawerLayout(m:Module,s:Section):boolean{
+  if(!(s.drawers>0))return false;
+  if(!s.drawerConfigs?.length)return true;
+  const cs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));
+  if(cs.some(c=>c.mesh||c.tray||c.noFacade))return false;
+  const off=drawerOffsets(s);let y=0;
+  for(let j=0;j<cs.length;j++){if(Math.abs(off[j]-y)>0.01)return false;y+=drawerPitch(cs[j],s.drawerGap);}
+  if(cs.every(c=>c.facadeH===undefined&&Math.abs(c.height-cs[0].height)<0.01))return true;
+  const e=evenDrawerConfigs(m,s,true);
+  return !!e&&e.every((c,j)=>Math.abs(c.height-cs[j].height)<0.06&&Math.abs((c.y??0)-off[j])<0.06&&Math.abs((c.facadeH??0)-(cs[j].facadeH??0))<0.06);
+}
+/** Видимые фасады ящиков секции (по parts) одинаковой высоты — с допуском 1 мм; без фасадов или один ящик — true. */
+export function drawerFacesEqual(m:Module,s:Section):boolean{
+  const hs=parts(m).filter(p=>p.sectionId===s.id&&/:drawer:\d+:facade$/.test(p.id)).map(p=>p.size[1]);
+  return hs.length<2||Math.max(...hs)-Math.min(...hs)<=1;
 }
 /** Число конфирматов корпуса и полкодержателей под съёмные полки. */
 export function fastenerCounts(m: Module) {

@@ -1,7 +1,8 @@
 import {MEASUREMENT_RULES} from './measurement';
 import {createCornerUpper} from './cornerWardrobe';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
-import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,type Module,type Section} from './model';
+import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,evenDrawerConfigs,isAutoDrawerLayout,drawersToRoof,type Module,type Section} from './model';
+import {roofDrawers,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
@@ -15,7 +16,9 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
   else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
-  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;}
+  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofDrawers(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;
+    // ящики по правилу (правка 29.10): комод — оставшиеся снова поровну до крыши; стопка от дна — сомкнуть и выровнять фасады
+    if(s.drawers&&(roof||auto)){if(roof){try{s.drawerConfigs=drawersToRoof(m,s);}catch{/* не встали — как есть */}}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}}}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
   else if(pid.includes(':pullout:')){const left=(s.pullouts??1)-1;if(left>0)s.pullouts=left;else delete s.pullouts;}
   // вешалка в два яруса (заказ 7437584): нижняя штанга, труба или её держатели — снимается только второй ярус
@@ -45,6 +48,12 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     const inner=b.width-fillerSides(source,target).left-fillerSides(source,target).right;
     if(inner<item.reqW||inner>item.reqW+MESH_WIDTH_TOLERANCE)throw Error(`«${item.label}» нужен проём ${item.reqW}–${item.reqW+MESH_WIDTH_TOLERANCE} мм внутри, сейчас ${Math.round(inner)}. Сделайте секцию ${Math.round(item.reqW+(b.width-inner)+2*RULES.panel)} мм по корпусу или выберите другой элемент.`);
   }
+  // ящики по правилу (правка Макса 29.10.2026): комод / ящики до крыши — ещё один ящик, и все снова поровну на весь проём;
+  // стопка от дна — новый ящик сверху, фасады снова равные. Заданные вручную ящики — как раньше.
+  const autoDrawers=kind==='drawer'&&!drawer?.mesh&&(target.drawers===0||isAutoDrawerLayout(source,target));
+  if(kind==='drawer'&&!drawer?.mesh&&roofDrawers(source,target)){
+    try{const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module;setDrawerCount(m,sid,target.drawers+1);if(!projectErrors(n).length)return n;}catch{/* не встали до крыши — обычная вставка */}
+  }
   const desired=Math.round((worldY-b.bottom)/5)*5;
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));
   for(const y of candidates){
@@ -70,6 +79,7 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
       if((fillers.left||fillers.right)&&s.shelves.some(f=>f*(b.top-b.bottom)<drawerStackHeight(s)+RULES.panel))continue;
     }else if(kind==='rod'){s.rod=true;s.pantograph=false;s.rodAt=y/(b.top-b.bottom);}
     else {s.pantograph=true;s.rod=false;s.rodAt=y/(b.top-b.bottom);}
+    if(autoDrawers){const e=evenDrawerConfigs(m,s,true);if(e){const even=structuredClone(n),es=even.modules.find(a=>a.id===mid)!.module.sections.find(x=>x.id===sid)!;es.drawerConfigs=e;if(!projectErrors(even).length)return even;}}
     const errs=projectErrors(n);if(!errs.length)return n;
     if(drawer?.mesh&&/Лемана|нужен проём|нужна глубина|фиксирована/.test(errs[0]))throw Error(errs[0]);
   }

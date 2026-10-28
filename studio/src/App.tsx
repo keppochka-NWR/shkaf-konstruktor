@@ -16,7 +16,8 @@ import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { configureColumn } from "./kitchenTall";
 import { syncKitchenLift } from "./kitchenLift";
-import {facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable} from './model';
+import {facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable,evenDrawerConfigs,drawerFacesEqual} from './model';
+import {setDrawerCount,setDrawersOverlay,fullSectionDrawer} from './drawerModes';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -133,7 +134,7 @@ import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS,
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem,worktopMaterialItem} from './addMenu';
-import {quickItems,quickMenuApplies,lightUnavailable,upperItem,menuDropY,doorQuickItems,cornerItems,type QuickMenuOps} from './quickMenu';
+import {quickItems,quickMenuApplies,lightUnavailable,upperItem,menuDropY,doorQuickItems,cornerItems,defaultDoorSplit,drawerQuickItems,type QuickMenuOps} from './quickMenu';
 import {allStandsLit,applyToAll,pickTargets,setAllStands,toggleGroup,type LightOrient} from './lights';
 import {LightModeBar,LightPanel} from './LightPanel';
 import {composeContextMenu,menuArea} from './contextMenu';
@@ -810,9 +811,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'hidden',label:'Скрытые',icon:Spline,hint:'Unihopper, DTC, Premial',active:cur.slide==='gtv0fpo',children:SLIDE_SYSTEMS.filter(s=>s.slide==='gtv0fpo').map(s=>slideItem(s.id))}]};
       const capOn=hasDrawerCap(mod,sec),capItem:RadialItem={id:'drawer-cap',label:capOn?'Убрать полку сверху':'Полка над ящиками',icon:Rows3,disabled:!!mod.kitchen||!!mod.corner||!!mod.raw||(!capOn&&!!sec.drawerConfigs?.every(x=>x.tray)),
         hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
-      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,p.up,p.down,p.copy,p.params,p.remove];
+      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,p.remove];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
-        [...facadeMenu([editFacade,drawerItems[1]]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle')}]:[...drawerItems,body]};
+        [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps)]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,body]};
     }
     if(pid.includes(':door:')||/:(hingecup|hingearm|hingeplate):/.test(pid)||pid.includes(':handle:')){
       const doorId=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),p={...part('Фасад')};
@@ -1841,9 +1842,15 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   value={s.drawers}
                   max={RULES.maxDrawers}
                   maxHint={MAX_DRAWERS_REASON}
-                  onChange={c=>{if(c>s.drawers){/* заказ 7442203: первый ящик в проёме между рядами фасадов встаёт к низу проёма, а не на дно секции (там его не пустит проверка проёма) */const nicheY=nicheDrawers(m,s)&&!s.drawers?facadeBottom(m)+s.doorSplit!:null;if(nicheY!==null?dropFilling('drawer',placed.id,selectedId,nicheY):drawerFitsOnTop(project,placed.id,selectedId)&&dropFilling('drawer',placed.id,selectedId,b.bottom+drawerStackHeight(s)))setDrawerBlock(null);else{const why=drawerAddReason(project,placed.id,selectedId);setError(why);setDrawerBlock({mid:placed.id,sid:selectedId,drawers:s.drawers,text:why});}}else{modifySection(a=>a.drawers=c);setSelectedPart(null);setDrawerBlock(null);}}}
+                  onChange={c=>{if(c>s.drawers){/* заказ 7442203: первый ящик в проёме между рядами фасадов встаёт к низу проёма, а не на дно секции (там его не пустит проверка проёма) */const nicheY=nicheDrawers(m,s)&&!s.drawers?facadeBottom(m)+s.doorSplit!:null;if(nicheY!==null?dropFilling('drawer',placed.id,selectedId,nicheY):drawerFitsOnTop(project,placed.id,selectedId)&&dropFilling('drawer',placed.id,selectedId,b.bottom+drawerStackHeight(s)))setDrawerBlock(null);else{const why=drawerAddReason(project,placed.id,selectedId);setError(why);setDrawerBlock({mid:placed.id,sid:selectedId,drawers:s.drawers,text:why});}}else{modify(n=>setDrawerCount(n,s.id,c));setSelectedPart(null);setDrawerBlock(null);}}}
                 />
                 {drawerBlock&&drawerBlock.mid===placed.id&&drawerBlock.sid===s.id&&drawerBlock.drawers===s.drawers&&<p className="field-note drawer-limit" role="note" data-testid="drawer-limit">{drawerBlock.text}</p>}
+                {/* правки Макса 29.10.2026 (fix-drawers): ящики в накладку / за дверью, равные фасады, выкатной ящик на всю секцию */}
+                {quickMenuApplies(m)&&<div className="drawer-modes" data-testid="drawer-modes">
+                  {m.doors&&s.drawers>0&&<label className="hardware-field">Фасады ящиков<select aria-label="Фасады ящиков" value={s.externalDrawers?'overlay':'behind'} onChange={e=>modify(n=>setDrawersOverlay(n,s.id,e.target.value==='overlay'))}><option value="behind">За дверью</option><option value="overlay">В накладку, дверь над ящиками</option></select><small>В накладку: фасады ящиков в плоскости дверей, дверь короче и начинается над ящиками через зазор между фасадами; петли — по новой высоте двери.</small></label>}
+                  {s.drawers>1&&!drawerFacesEqual(m,s)&&!!evenDrawerConfigs(m,s)&&<button className="outline full" onClick={()=>modifySection((a,n)=>{const e=evenDrawerConfigs(n,a);if(e)a.drawerConfigs=e;})}>Фасады ящиков поровну</button>}
+                  {b.top-b.bottom>=68+RULES.drawerStep&&b.top-b.bottom-RULES.drawerFrontGap<=800&&!(s.drawers===1&&!s.shelves.length&&s.drawerCap===false)&&<button className="outline full" title="Наполнение секции заменится одним ящиком на всю высоту: короб под высоту секции, фасад на всю секцию, направляющие по глубине" onClick={()=>modify(n=>fullSectionDrawer(n,s.id))}>Один выкатной ящик на всю секцию</button>}
+                </div>}
                 {s.drawers > 0 && (
                   <div className="drawer-selection">
                     <h3>Настройка ящиков</h3>
@@ -2052,9 +2059,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 <label className="hardware-field">Створки<select aria-label="Створки выбранной секции" value={s.doorLeaves??'auto'} onChange={e=>modifySection(a=>{a.doorLeaves=e.target.value==='auto'?undefined:Number(e.target.value) as 1|2;delete a.removedDoors;})}><option value="auto">Автоматически по ширине</option><option value="1">Одна створка</option><option value="2">Две створки</option></select></label>
 <label className="hardware-field">Петли одной створки<select aria-label="Петли выбранной секции" value={s.hingeSide??m.hingeSide??'left'} onChange={e=>modifySection(a=>a.hingeSide=e.target.value as 'left'|'right')}><option value="left">Слева</option><option value="right">Справа</option></select></label>
 <p className="field-note">Выберите дверь выше: её ручка и сторона открывания меняются независимо.</p>
-<label className="hardware-field"><span><input type="checkbox" checked={!!s.externalDrawers} onChange={e=>modifySection(a=>a.externalDrawers=e.target.checked)}/> Ящики снаружи, дверь над ящиками</span></label>
-<p className="field-note">Дверь начинается над полкой ящиков. Ручка каждого фасада выбирается отдельно нажатием на фасад в модели.</p>
-<label className="hardware-field"><span><input type="checkbox" checked={s.doorSplit!==undefined} onChange={e=>modifySection(a=>{a.doorSplit=e.target.checked?Math.round((facadeTop(m)-(a.externalDrawers&&a.drawers?drawerCapTop(m,a)+(a.doorGap??RULES.faceGap):facadeBottom(m)))/2):undefined;delete a.removedDoors;})}/> Разделить фасады по высоте</span></label>
+<label className="hardware-field"><span><input type="checkbox" checked={!!s.externalDrawers} onChange={e=>modify(n=>setDrawersOverlay(n,s.id,e.target.checked))}/> Ящики в накладку, дверь над ящиками</span></label>
+<p className="field-note">Фасады ящиков в одной плоскости с дверью; дверь начинается над ящиками через зазор между фасадами. Ручка каждого фасада выбирается отдельно нажатием на фасад в модели.</p>
+<label className="hardware-field"><span><input type="checkbox" checked={s.doorSplit!==undefined} onChange={e=>modifySection(a=>{a.doorSplit=e.target.checked?defaultDoorSplit(m,a):undefined;delete a.removedDoors;})}/> Разделить фасады по высоте</span></label>
 {s.doorSplit!==undefined&&<NumberField label="Высота нижнего ряда фасадов" value={s.doorSplit} min={RULES.doorMinH} max={m.height-RULES.doorMinH} onChange={v=>modifySection(a=>a.doorSplit=v)}/>}
 {s.doorSplit!==undefined&&m.kitchen&&<label className="hardware-field">Рядов фасадов<select aria-label="Рядов фасадов пенала" value={2+(s.doorRows?.length??0)} onChange={e=>modifySection(a=>{const n=Number(e.target.value)-2,r=[...(a.doorRows??[])].slice(0,n);while(r.length<n)r.push(400);if(r.length)a.doorRows=r;else delete a.doorRows;delete a.removedDoors;delete a.doorHinges;delete a.doorLifts;if(a.hingeYMid){const hm=a.hingeYMid.slice(0,n),hf=(a.hingeYMidFor??[]).slice(0,n);if(hm.length){a.hingeYMid=hm;a.hingeYMidFor=hf;}else{delete a.hingeYMid;delete a.hingeYMidFor;}}if(a.hingeless){const hl=a.hingeless.filter(k=>k<2*(n+2));if(hl.length)a.hingeless=hl;else delete a.hingeless;}})}>{[2,3,4].map(n=><option key={n} value={n}>{n}</option>)}</select></label>}
 {s.doorSplit!==undefined&&m.kitchen&&(s.doorRows??[]).map((h,i)=><NumberField key={'dr'+i} label={`Высота фасада ${i+2}-го ряда`} value={h} min={100} max={m.height-200} onChange={v=>modifySection(a=>{const r=[...(a.doorRows??[])];r[i]=v;a.doorRows=r;})}/>)}
