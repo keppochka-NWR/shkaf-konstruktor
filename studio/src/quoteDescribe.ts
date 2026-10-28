@@ -6,7 +6,7 @@ import { parts, isDrawerFront, drawerConfig, facadeHandleId, type Module, type P
 import { HINGE_BRANDS, SLIDE_MOTIONS, slideSystem } from "./hardware";
 import { handleById, DEFAULT_HANDLE } from "./handles";
 import { kupeSystem, kupeColor, kupeDoorFill, kupeSections } from "./kupe";
-import { worktopLabel } from "./kitchen";
+import { worktopLabel, waterfallSides } from "./kitchen";
 import { aluProfile, aluColor, aluFill, aluInsert } from "./alu";
 import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
 import { plural } from "./ru";
@@ -80,6 +80,8 @@ function worktopDescription(m: Module): ModuleDescription {
   const filling: string[] = [];
   if (sinks) filling.push(`вырез под мойку${sinks > 1 ? " — " + sinks : ""}`);
   if (hobs) filling.push(`вырез под варочную панель${hobs > 1 ? " — " + hobs : ""}`);
+  const falls = waterfallSides(w);
+  if (falls.length) filling.push(`водопад ${falls.length > 1 ? "с двух сторон" : falls[0] === "left" ? "слева" : "справа"} — боковины до пола, стык под 45°`);
   return { kind: "Столешница", size: `${m.width} × ${m.depth} × ${w.thickness}`, materials: [`Столешница: ${worktopLabel(w)}, ${w.thickness} мм`], filling };
 }
 

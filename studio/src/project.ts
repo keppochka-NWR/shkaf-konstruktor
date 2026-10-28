@@ -5,7 +5,7 @@ import type {Niche,CeilingType} from './measurement';
 import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
 import {rawKitchen} from './rawModule';
-import {wallFloorY} from './kitchen';
+import {wallFloorY,waterfallSides} from './kitchen';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
@@ -163,6 +163,8 @@ function moduleSolids(a:PlacedModule):Solid[]{
  // шкаф-купе с дверями внутри: корпус + боковины и крыша над зоной дверей; сама зона (между боковинами под крышей) свободна для дверей купе
  if(m.kupeZone&&!m.desk){const t=RULES.panel,d=m.depth,f=d+m.kupeZone,rear=!m.backType||m.backType==='nailed'?3:0;
   return [box(0,m.width,-rear,d,0,m.height),box(0,t,d,f,0,m.height),box(m.width-t,m.width,d,f,0,m.height),box(t,m.width-t,d,f,m.height-t,m.height)];}
+ // столешница с водопадом (kitchen.ts WorktopWaterfall): плита + боковины под ней (вниз от низа столешницы) — они тоже занимают место
+ if(m.worktop&&waterfallSides(m.worktop).length){const T=m.worktop.thickness,dr=m.worktop.waterfall!.drop;return [{polygon:moduleFootprint(a),y,h:m.height},...waterfallSides(m.worktop).map(s=>s==='left'?box(0,T,0,m.depth,-dr,0):box(m.width-T,m.width,0,m.depth,-dr,0))];}
  if(!m.desk)return [{polygon:moduleFootprint(a),y,h:m.height}];
  const g=deskGeometry(m),T=RULES.deskTop,t=RULES.panel,out=[box(0,m.width,0,m.depth,m.height-T,m.height)];
  if(g.hasL)out.push(box(g.x0,g.x0+t,0,g.baseDepth,0,m.height-T));
@@ -228,6 +230,7 @@ export function projectErrors(p:Project,allowEmpty=false):string[]{
     if(a.rotation!==undefined&&(!Number.isFinite(a.rotation)||Math.abs(a.rotation)>36000))errors.push('Поворот корпуса должен быть конечным числом в пределах ±36000°.');
     errors.push(...validate(a.module).map(e=>`${a.module.name}: ${e}`));const b=bounds(a);
     if(![a.x,a.z,a.y??0].every(Number.isFinite)||b.x<0||b.y<0||b.z<0||b.x+b.w>p.room.width+0.1||b.z+b.d>p.room.depth+0.1||b.y+b.h>p.room.height+0.1)errors.push(`${a.module.name}: корпус выходит за границы помещения. Измените замер или положение.`);
+    if(a.module.worktop&&waterfallSides(a.module.worktop).length&&a.module.worktop.waterfall!.drop>(a.y??0)+0.1)errors.push(`${a.module.name}: водопад ниже пола — высота боковины не больше ${Math.round(a.y??0)} мм (до пола).`);
     for(const other of p.modules.slice(0,i))if(modulesOverlap(a,other))errors.push(`«${a.module.name}» пересекается с «${other.module.name}». Сдвиньте корпус или поставьте его сверху.`);
   });return [...new Set(errors)];
 }

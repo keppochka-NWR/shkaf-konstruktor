@@ -15,6 +15,8 @@ import { catalog } from "./catalog";
 import { saveFile } from "./exports";
 import { estimate } from "./pricing";
 import { RoomSurveyEditor } from "./RoomSurveyEditor";
+import { VernissagePicker } from "./VernissagePicker";
+import { DEFAULT_VERNISSAGE } from "./facadesVernissage";
 export function RoomTools({
   document,
   update,
@@ -63,6 +65,7 @@ export function RoomTools({
       plane,
       edge: p.edges?.[0]?.[0] ?? 0,
       decor: m.decor,
+      ...(m.vernissage ? { vernissage: m.vernissage } : {}),
     });
     setEditPanel(id);
     setContour(
@@ -77,6 +80,7 @@ export function RoomTools({
         edited.module.name,
         edited.module.decor,
         edited.module.raw,
+        edited.module.vernissage,
       ])
     : "";
   useEffect(() => {
@@ -315,7 +319,26 @@ export function RoomTools({
               onChange={(e) => setPanel({ ...panel, name: e.target.value })}
             />
           </label>
-          {(["width", "height", "thickness", "edge"] as const).map((k) => (
+          <label>
+            Материал панели
+            <select
+              aria-label="Тип материала отдельной панели"
+              value={panel.vernissage ? "vernissage" : "ldsp"}
+              onChange={(e) => {
+                // МДФ Вернисаж: фрезеровка/покрытие/толщина — выбором ниже; ЛДСП — декор и кромка, как раньше
+                if (e.target.value === "vernissage")
+                  setPanel({ ...panel, vernissage: DEFAULT_VERNISSAGE, thickness: DEFAULT_VERNISSAGE.thickness, edge: 0 });
+                else {
+                  const { vernissage: _v, ...rest } = panel;
+                  setPanel({ ...rest, thickness: 16, edge: 0.4 });
+                }
+              }}
+            >
+              <option value="ldsp">ЛДСП (раскрой цеха, кромка)</option>
+              <option value="vernissage">МДФ Вернисаж (фрезеровка, плёнка или эмаль)</option>
+            </select>
+          </label>
+          {(panel.vernissage ? (["width", "height"] as const) : (["width", "height", "thickness", "edge"] as const)).map((k) => (
             <label key={k}>
               {
                 {
@@ -359,20 +382,33 @@ export function RoomTools({
               <option value="yz">Боковая</option>
             </select>
           </label>
-          <label>
-            Материал
-            <select
-              aria-label="Материал отдельной панели"
-              value={panel.decor}
-              onChange={(e) => setPanel({ ...panel, decor: e.target.value })}
-            >
-              {catalog.map((c) => (
-                <option value={c.n} key={c.n}>
-                  {c.n}
-                </option>
-              ))}
-            </select>
-          </label>
+          {panel.vernissage ? (
+            <div aria-label="МДФ Вернисаж отдельной панели" role="group">
+              <VernissagePicker
+                value={panel.vernissage}
+                onChange={(v) => setPanel({ ...panel, vernissage: v, thickness: v.thickness })}
+                sample={[panel.width, panel.height]}
+              />
+              <p>
+                Панель МДФ {panel.vernissage.thickness} мм: не в раскрое ЛДСП и без кромки цеха; в смете — строкой Вернисажа по площади панели.
+              </p>
+            </div>
+          ) : (
+            <label>
+              Материал
+              <select
+                aria-label="Материал отдельной панели"
+                value={panel.decor}
+                onChange={(e) => setPanel({ ...panel, decor: e.target.value })}
+              >
+                {catalog.map((c) => (
+                  <option value={c.n} key={c.n}>
+                    {c.n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             Контур: пары координат через пробел, каждая вершина с новой строки
             <textarea

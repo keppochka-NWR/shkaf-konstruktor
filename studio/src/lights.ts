@@ -8,6 +8,7 @@
 // и тип (врезной / накладной профиль / лента без профиля) — на модуль и на отдельную деталь (Section.lightSpec). Цена не меняется:
 // по-прежнему по ориентации (решение 20.10); тип и тон — описанием строки сметы и КП, только когда выбраны (старые проекты считаются как раньше).
 import { boxes, lightSpecAt, migrateLights, parts, RULES, type LightSpec, type LightTone, type LightType, type Module, type Part, type Section } from "./model";
+import { UNDER_LIGHT_ID } from "./kitchenUnderLight";
 
 export { migrateLights, lightSpecAt };
 export type { LightTone, LightType };
@@ -252,7 +253,9 @@ function groupSpec(m: Module, list: Part[]): string {
 export function lightSummary(m: Module): { vertical: { count: number; meters: number; spec: string }; horizontal: { count: number; meters: number; where: string; spec: string } } {
   const leds = parts(m).filter((p) => p.role === "light" && !p.id.startsWith("groove:"));
   const sum = (list: Part[]) => ({ count: list.length, meters: Math.round(list.reduce((a, p) => a + p.length, 0)) / 1000, spec: groupSpec(m, list) });
-  const horizontal = leds.filter((p) => p.id.includes(":shelf-light:") || p.id.endsWith(":light:roof"));
-  const shelf = horizontal.some((p) => p.id.includes(":shelf-light:")), roof = horizontal.some((p) => p.id.endsWith(":light:roof"));
-  return { vertical: sum(leds.filter((p) => !horizontal.includes(p))), horizontal: { ...sum(horizontal), where: shelf && roof ? "в полках и под крышей" : roof ? "под крышей" : "в полках" } };
+  // горизонтали: полки, крыша и подсветка рабочей зоны под навесным кухонным (kitchenUnderLight.ts)
+  const horizontal = leds.filter((p) => p.id.includes(":shelf-light:") || p.id.endsWith(":light:roof") || p.id === UNDER_LIGHT_ID);
+  const places = [horizontal.some((p) => p.id.includes(":shelf-light:")) && "в полках", horizontal.some((p) => p.id.endsWith(":light:roof")) && "под крышей", horizontal.some((p) => p.id === UNDER_LIGHT_ID) && "рабочей зоны под навесными"].filter((x): x is string => !!x);
+  const where = !places.length ? "в полках" : places.length === 1 ? places[0] : places.slice(0, -1).join(", ") + " и " + places[places.length - 1];
+  return { vertical: sum(leds.filter((p) => !horizontal.includes(p))), horizontal: { ...sum(horizontal), where } };
 }

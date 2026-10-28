@@ -5,6 +5,7 @@
 import type { BazisItem, Module, Part } from "./model";
 import { RAW_SEAT_GAP } from "./collisions";
 import { edgeDirs } from "./edges";
+import { vernissageSizeCheck } from "./facadesVernissage";
 
 /** Кромка Базиса сырой детали ([толщина, длина] без стороны) → Part.edge по четырём торцам (edges.ts: 0/1 — торцы по ширине,
  *  2/3 — по длине), чтобы деталировка и бирки показывали её (аудит 11.10.2026: k04 — бирки 35,1 м против 87,8 м в смете, сырые детали
@@ -55,6 +56,18 @@ export type RawPanel = { name: string; kind: string; box: [number, number, numbe
   thick?: number; t?: number; lw?: [number, number];
   contour?: [number, number][]; plane?: "xz" | "xy" | "yz"; obb?: { size: [number, number, number]; ry: number; rz: number }; skew?: boolean; figure?: boolean; room?: true };
 
+/** Лицевая сторона плоской детали [ширина, высота], мм, по плоскости: xy — фронтальная, xz — горизонтальная (длина × глубина),
+ *  yz — боковая (глубина × высота). Без плоскости — две большие стороны габарита. Для цены свободной панели МДФ Вернисаж. */
+export function rawFaceSize(p: Pick<RawPanel, "box" | "obb" | "plane">): [number, number] {
+  const s = rawSize(p);
+  if (p.plane === "xy") return [s[0], s[1]];
+  if (p.plane === "xz") return [s[0], s[2]];
+  if (p.plane === "yz") return [s[2], s[1]];
+  const d = [...s].sort((a, b) => b - a);
+  return [d[0], d[1]];
+}
+/** Свободная панель студии из МДФ «Вернисаж» (freePanels.ts): фасадный материал Вернисажа, не раскрой ЛДСП. */
+export const isVernissagePanel = (m: Pick<Module, "raw" | "vernissage">) => m.raw?.source === "garderyob-free-panel" && !!m.vernissage;
 /** Размеры детали Базиса по её собственным осям: у повёрнутой — obb.size (габарит в модуле у наклонной полки — не толщина), иначе бокс. */
 export function rawSize(p: Pick<RawPanel, "box" | "obb">): [number, number, number] {
   return p.obb ? [...p.obb.size] : [p.box[3] - p.box[0], p.box[4] - p.box[1], p.box[5] - p.box[2]];
@@ -310,6 +323,8 @@ export function rawParts(m: Module): Part[] {
       if (p.plane === "xz" && thin === 1) q.planContour = rel;
       else if ((p.plane === "xy" && thin === 2) || (p.plane === "yz" && thin === 0)) q.faceContour = rel;
     }
+    // свободная панель МДФ «Вернисаж»: вид и вес — как у фасада Вернисажа (сцена: фрезеровка у фронтальной, цвет/плёнка у остальных)
+    if (p.fm && isVernissagePanel(m)) { const q = out[out.length - 1]; q.vernissage = true; q.name += ` · МДФ Вернисаж №${m.vernissage!.milling}`; }
   });
   // Сторона петель фасада «как есть» — по петлям Базиса у его кромок: каждая петля голосует за ближайшую кромку фасада.
   // Без этого сцена открывала вбок фасад на петлях сверху (навесной откидной: 42 фасада в 34 кухнях). Петли не нашлись (повёрнутый фасад
@@ -373,6 +388,9 @@ export function rawErrors(m: Module): string[] {
   if (!r || !Array.isArray(r.panels) || !Array.isArray(r.hardware)) return ["Сырой модуль: нет списка деталей."];
   if (r.panels.length > 600) return ["Сырой модуль: больше 600 панелей."];
   for (const p of r.panels) if (!Array.isArray(p.box) || p.box.length !== 6 || p.box.some((v) => !Number.isFinite(v)) || p.box[3] < p.box[0] || p.box[4] < p.box[1] || p.box[5] < p.box[2]) return [`Сырой модуль: неверная деталь «${p.name}».`];
+  // свободная панель МДФ «Вернисаж»: размеры по паспорту фрезеровки (как у фасадов, model.ts validate); ширина × высота лица панели
+  if (isVernissagePanel(m)) for (const p of r.panels) if (p.fm) { const [w, h] = rawFaceSize(p);
+    return vernissageSizeCheck(m.vernissage!.milling, m.vernissage!.open, w, h).errors.map((e) => "Панель МДФ Вернисаж " + e + ". Выберите другую фрезеровку или измените размер."); }
   return [];
 }
 
