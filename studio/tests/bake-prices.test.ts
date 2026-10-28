@@ -182,3 +182,17 @@ test('R5: «цена за лист» с ручками Лемана — розн
   assert.equal(baked.estimate(pk).lines.find(l=>l.id==='handle:lm86728212')!.unitPrice,215.6);
   assert.equal(baked.estimate(pk).retail,clientView(estimate(pk)).retail);
 });
+
+// Критик 28.10.2026: оценочные направляющие округлялись до 10 ₽ от запечённой цены — публичная смета расходилась с менеджерской
+// (push 450 — 1 640 против 1 650, без доводчика 450 — 790 против 792, Premial 400 — 3 800 против 3 806). Теперь формула без
+// промежуточного округления: клиенту одна и та же цена в обеих сборках (до копеек).
+test('запекание: оценочные направляющие — одна цена клиенту у менеджера и в публичной сборке',async()=>{
+  const {slidePrice}=await import('../src/pricing'),{MARKUP_DEFAULT}=await import('../src/pricing');
+  const cases=[{slide:'ball',operation:'push',length:450},{slide:'ball',operation:'simple',length:450},{slide:'gtv0fpo',operation:'soft-close',brand:'premial',length:400},
+    {slide:'gtv0fpo',operation:'push',brand:'premial',length:500},{slide:'gtv0fpo',operation:'soft-close',brand:'dtc',length:450},{slide:'gtv0fpo',operation:'push',brand:'unihopper',length:450},{slide:'gtv0fpo',operation:'soft-close',brand:'unihopper',length:550}] as const;
+  for(const c of cases){
+    const m=slidePrice(c as never),b=baked.slidePrice(c as never);
+    if(m.price===null||b.price===null){assert.equal(b.price,m.price,JSON.stringify(c));continue;}
+    assert.ok(Math.abs(b.price-m.price*MARKUP_DEFAULT)<0.05,`${JSON.stringify(c)}: публичная ${b.price}, менеджер × коэффициент ${m.price*MARKUP_DEFAULT}`);
+  }
+});

@@ -163,6 +163,8 @@ const hidden:Record<number,{price:number;source:string}>={
   400:{price:1150,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   450:{price:1200,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'},
   500:{price:1250,source:'Оценка по классу DTC/Unihopper (1000–1250); подтвердить счётом'}};
+/** Оценочная цена — до копейки, без округления до 10 ₽: формула линейна, и запечённая (× коэффициент) публичная сборка даёт тот же итог. */
+const est=(v:number)=>Math.round(v*100)/100;
 /** Цена комплекта направляющих по системе и длине. Опора — известные цены; остальное — шаг по длине и множители класса, помечено «оценка». */
 export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string;/** цена клиенту поверх коэффициента (Blum TANDEM) */retail?:boolean}{
   const sys=slideSystem(c),L=c.length;
@@ -170,8 +172,10 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
   if(sys.slide==='ball'){
     const base=ball[L];if(!base)return {price:null,source:'Длины нет в закупке цеха; цену уточнить',label};
     if(sys.motion==='soft-close')return {price:base.price,source:base.source,label};
-    if(sys.motion==='simple')return {price:Math.round(base.price*0.55/10)*10,source:'Оценка: шариковые без доводчика ≈ 55 % от Versalite с доводчиком; подтвердить счётом ФАМ',label};
-    return {price:Math.round(base.price*1.15/10)*10,source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
+    // оценки — линейные доли без промежуточного округления до 10 ₽ (критик 28.10.2026): публичная сборка считает их от запечённой
+    // (× коэффициент) цены, и округление до 10 ₽ давало другой итог, чем у менеджера (push 450: 1 640 против 1 650); est() — до копейки
+    if(sys.motion==='simple')return {price:est(base.price*0.55),source:'Оценка: шариковые без доводчика ≈ 55 % от Versalite с доводчиком; подтвердить счётом ФАМ',label};
+    return {price:est(base.price*1.15),source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
   // Blum TANDEM (решение Макса 26.10.2026): 10 000 ₽ клиенту за комплект на ящик — розница поверх коэффициента (retail)
   if(sys.brand==='blum')return {price:BLUM_TANDEM_RETAIL,source:MAX_SRC+': Blum TANDEM — '+BLUM_TANDEM_RETAIL+' ₽ за комплект на ящик',label,retail:true};
@@ -182,14 +186,14 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
   const steps=(L-300)/50;
   if(sys.brand==='dtc'){
     if(sys.motion==='push'&&L===300)return {price:1040,source:'Счёт ФАМ: DTC F10D300H push-to-open, 300 мм',label};
-    return {price:Math.round((1040+steps*50)*(sys.motion==='soft-close'?1.05:1)/10)*10,source:'Оценка от DTC F10D300H (1040 ₽ за 300 мм), +50 ₽ на каждые 50 мм; подтвердить счётом ФАМ',label};
+    return {price:est((1040+steps*50)*(sys.motion==='soft-close'?1.05:1)),source:'Оценка от DTC F10D300H (1040 ₽ за 300 мм), +50 ₽ на каждые 50 мм; подтвердить счётом ФАМ',label};
   }
   if(sys.brand==='premial'){
     const soft=1729+(L-400)/50*60;
-    return {price:Math.round((sys.motion==='soft-close'?soft:soft*0.95)/10)*10,source:'Оценка: Premial Morendo с доводчиком 400 мм — 1729 ₽ (розница allpremial.ru, 10.2026), ±60 ₽ на 50 мм'+(sys.motion==='push'?', push ≈ −5 %':'')+'; подтвердить закупкой',label};
+    return {price:est(sys.motion==='soft-close'?soft:soft*0.95),source:'Оценка: Premial Morendo с доводчиком 400 мм — 1729 ₽ (розница allpremial.ru, 10.2026), ±60 ₽ на 50 мм'+(sys.motion==='push'?', push ≈ −5 %':'')+'; подтвердить закупкой',label};
   }
   const uni=hidden[L]?.price??(1100+steps*50);
-  return {price:Math.round((sys.motion==='soft-close'?uni:uni*0.95)/10)*10,source:'Оценка по классу Unihopper (1000–1250 ₽); цены в счетах нет, подтвердить',label};
+  return {price:est(sys.motion==='soft-close'?uni:uni*0.95),source:'Оценка по классу Unihopper (1000–1250 ₽); цены в счетах нет, подтвердить',label};
 }
 export const HINGE={label:HINGE_BRANDS.gtv.soft.label,price:HINGE_BRANDS.gtv.soft.price,source:HINGE_BRANDS.gtv.soft.source};
 export const LEG={price:127.4,source:'МДМ, INTEGRATO TECH G опора регулируемая с шипами; 4 на корпус, 6 при ширине от 900'};
