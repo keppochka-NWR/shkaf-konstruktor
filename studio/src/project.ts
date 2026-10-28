@@ -78,7 +78,8 @@ export const KITCHEN_TIGHT_CORNER:{mode:'plank'|'butt'}={mode:'plank'};
 export function applyAutoFillers(p:Project):Project{
   const n=structuredClone(p),t=RULES.panel,room=n.room,bazis=fromBazis(n);
   for(const a of n.modules){
-    if(a.module.worktop&&!isBazisModule(n,a)){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
+    // столешница и отдельная панель (freePanels.ts) — не корпус с фасадами: фальшей у них нет (ДП 28.10: панель МДФ за витриной получала угловую планку и уезжала за стену)
+    if((a.module.worktop&&!isBazisModule(n,a))||a.module.raw?.source==='garderyob-free-panel'){delete a.module.wallFiller;delete a.module.cornerFiller;delete a.module.cornerKind;continue;}
     // Bespoke open assemblies describe their corner themselves; no door filler.
     if(a.module.openJunction||a.module.corner||a.module.autoFillersOff)continue;
     // Кухня из Базиса (правило Макса 09.10.2026): фальши, сдвиги и стыки — только как в Базисе (регламент фальшей шкафов к ней
@@ -89,7 +90,8 @@ export function applyAutoFillers(p:Project):Project{
     // Orthogonal workshop auto-fillers have no validated rule for oblique walls.
     if(rot%90!==0)continue;
     let corner:Module['cornerFiller'],kind:Module['cornerKind'];
-    const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
+    // отдельная панель (обшивка, задняя стенка за витриной) — не корпус: угловых фальшей соседям не ставит (ДП 28.10)
+    const perpendicular=(b:PlacedModule)=>b!==a&&!b.module.corner&&b.module.raw?.source!=='garderyob-free-panel'&&Math.abs(((b.rotation??0)-rot+360)%360)%180===90;
     for(const side of ['left','right'] as const){
       const u=side==='left'?0:a.module.width,dir=side==='left'?-1:1;
       // 1) Фасад этого корпуса упирается в тело соседа: точка чуть внутри края фасада и на 15 мм перед ним лежит в соседе → планка из фасада.
