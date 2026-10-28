@@ -32,6 +32,9 @@ DEFAULT_INDEX = os.path.normpath(os.path.join(HERE, "..", "..", "..", "Кухн�
 DEFAULT_DECORS = os.path.normpath(os.path.join(HERE, "..", "..", "web", "assets", "catalog-lamarty.js"))
 DEFAULT_NAMES_DIR = os.path.normpath(os.path.join(HERE, "..", "public", "local-projects"))
 DEFAULT_TOKENS = os.path.join(os.path.dirname(DEFAULT_INDEX), "privacy-tokens.txt")
+# Словарь материалов студии (интеграция 29.10.2026): декоры каталога студии (src/catalog.ts — шире Lamarty: «Дуб Вотан»), стёкла и
+# зеркала купе/ALU (kupeData.ts, aluData.ts: «Мору бронза»). Это названия товаров поставщиков, они и так в публичном репозитории.
+MATERIAL_VOCAB = [os.path.normpath(os.path.join(HERE, "..", "src", f)) for f in ("catalog.ts", "kupeData.ts", "aluData.ts")]
 
 TEXT_EXT = {".ts", ".tsx", ".js", ".cjs", ".mjs", ".md", ".json", ".html", ".css", ".py", ".ps1",
             ".txt", ".csv", ".yml", ".yaml", ".bat", ".svg", ".cmd", ".sh", ".toml", ".ini", ".env"}
@@ -66,6 +69,14 @@ autosave bazis kupe name prikhozhaya sanuzely shkaf kitchen kitchens wardrobe wa
 фабрика файл фальш фальшпанелью фасад фасадами фасады фаысавыф финал финальная финальное
 финальный фосновной хзамер цоколя чертежи что шаблон ширина шка шкаф шкафы шпон щкаф
 экспозитарий этот ящик ящики горнолыжка горящий ждоприсадка
+""".split())
+
+# Английские названия изделий в именах расчётов заказа (<номер>-<комната>-<изделие><размер>.json: desk, shelf, glass, rack, bench,
+# combo — интеграция 29.10.2026: давали 65 ложных совпадений в бандле на кодовых словах). Не имена; номер заказа и фамилии в именах
+# файлов по-прежнему токены.
+STOP |= set("""
+bench combo desk glass rack shelf shelves door doors drawer drawers panel panels mirror corner front side rail rails base plinth
+niche column cabinet console table chest hall shower bath bedroom loggia kids tv living
 """.split())
 
 # Декоры и цвета, которые встречаются в названиях папок, но не являются именами.
@@ -107,7 +118,7 @@ def load_decor_words(path):
         src = open(path, "r", encoding="utf-8", errors="replace").read()
     except OSError:
         return words
-    for m in re.finditer(r'"n"\s*:\s*"([^"]+)"', src):
+    for m in re.finditer(r'"n"\s*:\s*"([^"]+)"', src):  # JSON-объекты и catalog.ts ("n": "Дуб Вотан")
         for w in WORD_RX.findall(m.group(1)):
             words.add(w.lower())
     return words
@@ -172,6 +183,12 @@ def tokens_file_lines(path):
 def load_tokens(index_path, decors_path, min_len, names_dirs=(), tokens_path=None):
     """Возвращает (cyr, lat, counts) — counts: сколько токенов дал каждый источник."""
     stop = STOP | load_decor_words(decors_path)
+    for p in MATERIAL_VOCAB:
+        stop |= load_decor_words(p)
+    # имена файлов local-projects бывают латиницей (votan-moru-*.json = декор «Дуб Вотан» + стекло «Мору»): стоп-слова и словарь
+    # материалов — и в транслитерации, иначе латинское «votan» из имени файла становилось «фамилией» (ложные совпадения в бандле:
+    # VotanStudio, стекло moru-bronze). Реальные имена клиентов не задеты: исключаются только слова мебели и названия материалов.
+    stop |= {t for w in list(stop) if re.fullmatch(r"[а-яё]+", w) for t in translits(w)}
     cyr, lat = set(), set()
     counts = {}
 
