@@ -72,6 +72,9 @@ export const RULES = {
   hdfH: 2070,
   // Conservative preview envelope from G code/RULES.md; production release requires confirmation.
   sheetMargin: 10,
+  // Пропил между деталями в раскрое (правило Макса: лист 2750×1830, пропил 4 мм; обрезка края листа — sheetMargin отдельно).
+  // До 28.10.2026 промежуток был 10 мм тем же параметром, что и поле, — смета брала лишний лист (критик 28.10).
+  sheetKerf: 4,
   faceGap: 2,
   doorMax: 600,
   drawerFiller: 16,

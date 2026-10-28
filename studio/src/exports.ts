@@ -60,7 +60,7 @@ export function details(p: Project): Detail[] {
   );
 }
 /** Conservative guillotine preview. Grain locked to sheet long side; no mirroring or rotation. */
-export function nestGuillotine(p: Project, gap = 10): Sheet[] {
+export function nestGuillotine(p: Project, gap: number = RULES.sheetKerf): Sheet[] {
   const err = projectErrors(p);
   if (err.length) throw Error(err[0]);
   if (!Number.isFinite(gap) || gap < 0 || gap > 30)
@@ -74,7 +74,8 @@ export function nestGuillotine(p: Project, gap = 10): Sheet[] {
       height = d.material === "hdf" ? RULES.hdfW : RULES.sheetW;
     const key = d.material === "hdf" ? "ЛХДФ" : d.decor;
     // больше листа — не исключение: такую деталь смета показывает «не помещается в лист» (classicUnplaced), раскрой остальных идёт
-    if (d.width > width - 20 || d.length > height - 20) continue;
+    const M = RULES.sheetMargin;
+    if (d.width > width - 2 * M || d.length > height - 2 * M) continue;
     let best:
       { s: (typeof result)[number]; i: number; score: number } | undefined;
     for (const s of result.filter(
@@ -97,7 +98,7 @@ export function nestGuillotine(p: Project, gap = 10): Sheet[] {
         width,
         height,
         items: [],
-        free: [{ x: 10, y: 10, w: width - 20, h: height - 20 }],
+        free: [{ x: M, y: M, w: width - 2 * M, h: height - 2 * M }],
       };
       result.push(s);
       best = { s, i: 0, score: 0 };
@@ -123,9 +124,9 @@ export const GUILLOTINE_RULES={kerf:4.4,trim:12,minTrim:10,maxStages:5,iteration
   /** аварийный предел на группу в браузере; обычные проекты укладываются в десятки мс и результат детерминирован */ timeLimitMs:1500};
 export type NestPlan={sheets:Sheet[];unplaced:{detail:Detail;reason:string}[];engine:'classic'|'guillotine'};
 /** Раскрой с подробностями: карты + детали, которые не помещаются в лист (только у гильотины — старый движок в этом случае падает). */
-/** Прежний движок: влезает ли деталь в рабочее поле листа (поле 10 мм; поперёк — только без направления текстуры). */
+/** Прежний движок: влезает ли деталь в рабочее поле листа (поле RULES.sheetMargin 10 мм; поперёк — только без направления текстуры). */
 function classicFits(d:Detail){
-  const W=(d.material==='hdf'?RULES.hdfH:RULES.sheetH)-20,H=(d.material==='hdf'?RULES.hdfW:RULES.sheetW)-20;
+  const M2=2*RULES.sheetMargin,W=(d.material==='hdf'?RULES.hdfH:RULES.sheetH)-M2,H=(d.material==='hdf'?RULES.hdfW:RULES.sheetW)-M2;
   return (d.width<=W&&d.length<=H)||(grainFree(d)&&d.length<=W&&d.width<=H);
 }
 /** Детали больше листа у прежнего движка (БЛОКЕР 1 критика релиза 22.10): раньше раскрой бросал «Деталь не помещается в лист»
@@ -168,14 +169,16 @@ function cachedGuillotine(parts:{id:string;w:number;h:number;rot:boolean}[],widt
   else{guillotineCache.delete(key);guillotineCache.set(key,r);}
   return r;
 }
-/** Compare six fixed-grain nestings against the previous guaranteed baseline. */
-export function nest(p:Project,gap=10):Sheet[]{
+/** Compare six fixed-grain nestings against the previous guaranteed baseline.
+ *  Классический движок (по умолчанию, смета и карты): поле по краю листа RULES.sheetMargin (10 мм) и пропил между деталями gap
+ *  (RULES.sheetKerf, 4 мм — правило Макса 28.10.2026; до этого промежуток 10 мм завышал число листов). */
+export function nest(p:Project,gap:number=RULES.sheetKerf):Sheet[]{
   if(cuttingEngine(p)==='guillotine'){
     if(!Number.isFinite(gap)||gap<0||gap>30)throw Error("Неверный промежуток между деталями.");
     return nestPlan(p).sheets;
   }
   if(p.modules.some(a=>a.module.corner)){
-    if(gap!==10)throw Error('Фигурный раскрой: промежуток 10 мм.');
+    if(gap!==RULES.sheetKerf)throw Error(`Фигурный раскрой: пропил ${RULES.sheetKerf} мм.`);
     const result=cutting(p),byKey=new Map(details(p).map(d=>[d.moduleId+'/'+d.id,d]));
     return result.sheets.map(s=>({decor:s.decor,material:s.material==='ХДФ'?'hdf':'board',thickness:s.thickness,width:s.width,height:s.height,items:s.items.map(a=>({detail:byKey.get(a.id)!,x:a.x,y:a.y,w:a.w,h:a.h,cutContour:sheetPolygon(a)}))}));
   }
@@ -191,9 +194,9 @@ export function nest(p:Project,gap=10):Sheet[]{
     const byId=new Map(ds.map(d=>[d.code,d]));
     const footprint=(s:Sheet[])=>Math.max(...s.at(-1)!.items.map(p=>p.y+p.h));
     for(const order of ['area','height','width'] as const)for(const fit of ['short','area'] as const){
-      const packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width-20,height-20,gap,order,fit);
+      const M=RULES.sheetMargin,packed=packRectangles(ds.map(d=>({id:d.code,w:d.width,h:d.length,rot:grainFree(d)})),width-2*M,height-2*M,gap,order,fit);
       if(best&&packed.length>best.length)continue;
-      const candidate:Sheet[]=packed.map(items=>({decor,material:first.material,thickness:first.thickness,width,height,items:items.map(a=>({detail:byId.get(a.id)!,x:a.x+10,y:a.y+10,w:a.w,h:a.h}))}));
+      const candidate:Sheet[]=packed.map(items=>({decor,material:first.material,thickness:first.thickness,width,height,items:items.map(a=>({detail:byId.get(a.id)!,x:a.x+M,y:a.y+M,w:a.w,h:a.h}))}));
       if(!best||candidate.length<best.length||footprint(candidate)<footprint(best))best=candidate;
     }
     result.push(...best!);
@@ -308,7 +311,7 @@ export function nestingHTML(p: Project) {
   if(plan.engine==='guillotine')return htmlDocument('Карты листов',`<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · под форматную пилу</h1><p>${esc(guillotineNote())}</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.unplaced.length?`<h2>Не помещаются в лист — сращивать или заказать отдельно</h2><ul>${plan.unplaced.map(u=>`<li><b>${esc(u.detail.code)}</b> ${esc(u.detail.moduleName)} / ${esc(u.detail.name)}: ${esc(u.reason)}</li>`).join('')}</ul>`:''}${plan.sheets.map((s,i)=>{const g=s.guillotine!,used=s.items.reduce((n,a)=>n+a.w*a.h,0),offcuts=g.offcuts.filter(o=>o.business).sort((a,b)=>b.w*b.h-a.w*a.h);return `<section class="nest-sheet"><h2>Лист ${i+1} · ${esc(s.decor)} · ${s.thickness} мм</h2>${sheetSVG(s)}<p>${s.height} × ${s.width} мм · ${count(s.items.length,DETAILS)} · КИМ ${Math.round(used/(s.width*s.height)*1000)/10} % · стадий резов ${g.stages} · резов ${g.cuts.length}${g.trim!==GUILLOTINE_RULES.trim?` · обрезка края ${g.trim} мм`:''}</p>${offcuts.length?`<p>Деловые обрезки: ${offcuts.slice(0,6).map(o=>`${Math.round(o.h)} × ${Math.round(o.w)}${o.large?' (крупный)':''}`).join(', ')}${offcuts.length>6?` и ещё ${offcuts.length-6}`:''}.</p>`:''}<table><thead><tr><th>Код · лист ${i+1}</th><th>Модуль / деталь</th><th>Размер</th></tr></thead><tbody>${s.items.map(a=>`<tr><td>${a.detail.code}</td><td>${esc(a.detail.moduleName)} / ${esc(a.detail.name)}</td><td>${a.detail.length} × ${a.detail.width}${blankNote(a)}</td></tr>`).join('')}</tbody></table></section>`;}).join('')}`);
   return htmlDocument(
     "Карты листов",
-    `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; промежуток 10 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.sheets
+    `<style>@media print{.nest-sheet{break-before:page;margin:0}.nest-sheet:first-of-type{break-before:auto}.nest-sheet h2{margin:10px 0;font-size:16px}.nest-sheet svg{display:block;width:auto;height:105mm;max-width:100%}.nest-sheet table{font-size:10px}.nest-sheet th,.nest-sheet td{padding:3px}}</style><h1>Карты листов · для технолога</h1><p>ЛДСП Lamarty 2750 × 1830 мм. Поле обрезки 10 мм; пропил между деталями 4 мм. Направление текстуры вдоль длинной стороны листа; ЛХДФ и однотонные декоры без рисунка укладываются в любом направлении.</p><p>Предварительная укладка габаритов деталей. Припуски, инструмент, присадка и режимы станка требуют проверки; карты не являются управляющей программой.</p>${plan.sheets
       .map(
         (s, i) =>
           `<section class="nest-sheet"><h2>Лист ${i + 1} · ${esc(s.decor)} · ${s.thickness} мм</h2>${sheetSVG(s)}<p>${s.height} × ${s.width} мм · ${count(s.items.length,DETAILS)}</p><table><thead><tr><th>Код · лист ${i+1}</th><th>Модуль / деталь</th><th>Размер</th></tr></thead><tbody>${s.items.map((a) => `<tr><td>${a.detail.code}</td><td>${esc(a.detail.moduleName)} / ${esc(a.detail.name)}</td><td>${a.h} × ${a.w}</td></tr>`).join("")}</tbody></table></section>`,

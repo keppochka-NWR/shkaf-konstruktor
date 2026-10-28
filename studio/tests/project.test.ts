@@ -154,12 +154,13 @@ test("sheet maps contain every detail exactly once, conserve grain and never ove
           a.x + a.w <= s.width - 10 &&
           a.y + a.h <= s.height - 10,
       );
+      // пропил между деталями 4 мм (правило Макса 28.10.2026), поле по краю листа — 10 мм отдельно
       for (const b of s.items.slice(0, i))
         assert.ok(
-          a.x >= b.x + b.w + 10 ||
-            b.x >= a.x + a.w + 10 ||
-            a.y >= b.y + b.h + 10 ||
-            b.y >= a.y + a.h + 10,
+          a.x >= b.x + b.w + 4 ||
+            b.x >= a.x + a.w + 4 ||
+            a.y >= b.y + b.h + 4 ||
+            b.y >= a.y + a.h + 4,
         );
     }
   assert.equal(seen.size, details(p).length);
