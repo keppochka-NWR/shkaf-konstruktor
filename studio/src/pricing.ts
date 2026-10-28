@@ -17,7 +17,7 @@ import {hingeCount,HINGE_BRANDS,slideSystem,type DrawerConfig} from './hardware'
 import {kupeLines} from './kupe';
 import {guideKits,guideKitLine,versaliteKit,modernKit,firmaxKit,shareKits,axisSpecs} from './guideKits';
 import {MODERN} from './kitchenDrawers';
-import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES} from './facadesVernissage';
+import {vernissageFacadePrice,vernissageLabel,priceDateRu,VERNISSAGE_NOTES,sideFacadeSpec} from './facadesVernissage';
 import {PUBLIC_BUILD} from './buildMode';
 import {clientView,isOffSheetLine} from './clientPrices';
 import {pendingPrice,pendingTotalLabel} from './pendingPrices';
@@ -510,6 +510,10 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // фасады «Вернисаж»: м² по прайсу (серия фрезеровки × колонка покрытия × толщина), ПВХ меньше 0,3 м² — как 0,3, наценки прайса
       if((d.role==='door'||d.id.endsWith(':facade'))&&d.vernissage&&a.module.vernissage){const v=a.module.vernissage,pr=vernissageFacadePrice(v,d.size[0],d.size[1]);
         add(`vernissage:${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,`Фасады МДФ ${vernissageLabel(v)} — сторонний участок, без раскроя ЛДСП`,Math.round(pr.billArea*1e4)/1e4,'м²',pr.perM2,
+          `Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`);}
+      // видимый бок из фасадного материала (sidePanels.facade, dp-2810): гладкий МДФ №15 в покрытии фасадов модуля, с одной стороны
+      else if(d.sideFacade&&a.module.vernissage){const v=sideFacadeSpec(a.module.vernissage),pr=vernissageFacadePrice(v,d.length,d.width);
+        add(`vernissage:${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:side`,`Видимые бока МДФ ${vernissageLabel(v)} — сторонний участок, без раскроя ЛДСП`,Math.round(pr.billArea*1e4)/1e4,'м²',pr.perM2,
           `Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`);}
       else if((d.facadeSide||d.role==='door'||d.id.endsWith(':facade'))&&d.external&&a.module.facadeMaterial==='external')add('facade-external','Фасады — фасадный материал (МДФ/плёнка/эмаль), без раскроя ЛДСП',Math.round(d.length*d.width/1e2)/1e4,'м²',null,'Цена фасадов по прайсу поставщика — уточнить');
       // кухня из Базиса без петель (kitchen.hinges:false, n3-base) или фасад без петель (фасад холодильника на двери техники,

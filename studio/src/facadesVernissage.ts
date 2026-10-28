@@ -22,6 +22,16 @@ export type VernissageFacade = {
   lacquer?: boolean;
 };
 export const DEFAULT_VERNISSAGE: VernissageFacade = { milling: '1', cover: 'film', film: 'Моно белый', thickness: 19 };
+/** Видимый бок из фасадного материала (Module.sidePanels[side].facade, dp-2810 28.10.2026): гладкий МДФ №15 «мыло» (серия Стандарт —
+ *  самая доступная гладкая, есть эмаль мат/глянец) в покрытии, плёнке/цвете и толщине фасадов модуля; бок красится с одной стороны
+ *  (без +50 %), без рамки/решётки и патины. */
+export const SIDE_FACADE_MILLING = '15';
+export function sideFacadeSpec(v: VernissageFacade): VernissageFacade {
+  const out: VernissageFacade = { ...v, milling: SIDE_FACADE_MILLING };
+  delete out.open; delete out.patina; delete out.twoSided;
+  return normalizeVernissage(out);
+}
+export const vernissageMillingName = (id: string) => (id === SIDE_FACADE_MILLING ? `Вернисаж №${id} гладкий` : `Вернисаж №${id}`);
 export const VERNISSAGE_SERIES = V_SERIES;
 export const VERNISSAGE_FILMS = V_FILMS;
 export const ADILET_FILMS = V_ADILET_FILMS;

@@ -74,6 +74,10 @@ export function hangingDrawer(width:number,height:number,depth:number,source:Mod
   const cfg=s.drawerConfigs[0],hit=()=>partCollisions(parts(m),m).some(x=>x.names.some(n=>/^Навес|^Заглушка навеса/.test(n)));
   cfg.facadeH=height-2*RULES.panel-RULES.drawerFrontGap; // шаг = проём: ящик «до крыши», накладной фасад растягивается на дно и крышу
   while(cfg.height>68&&hit())cfg.height-=4;
+  // dp-2810 (консоль прихожей 900 × 150): у низкого корпуса шаг давал короб 66 < 68 (модуль палитры не проходил проверку), а короб 68
+  // упирается в навесы — короб не ниже 68, направляющая короче, пока короб не уйдёт от навесов в задних углах
+  if(cfg.height<68)cfg.height=68;
+  for(const l of [...SLIDES.gtv0fpo.lengths].filter(l=>l<cfg.length).reverse()){if(!hit())break;cfg.length=l;}
   return m;
 }
 /** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
