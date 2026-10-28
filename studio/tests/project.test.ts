@@ -313,7 +313,7 @@ test('divider drag resizes only adjacent sections and rejects an unusable result
  const p=newProject(),m=p.modules[0].module;m.width=900;m.sections=Array.from({length:3},(_,i)=>({id:'s'+i,weight:1,shelves:[],drawers:0,rod:false}));
  const before=boxes(m),n=moveDivider(p,p.modules[0].id,'s1',35),after=boxes(n.modules[0].module);
  assert.ok(Math.abs(after[0].width-before[0].width-35)<.001);assert.ok(Math.abs(after[1].width-before[1].width+35)<.001);assert.equal(after[2].width,before[2].width);
- assert.deepEqual(boxes(m),before);assert.throws(()=>moveDivider(p,p.modules[0].id,'s1',200),/180/);assert.throws(()=>moveDivider(p,p.modules[0].id,'s0',10));
+ assert.deepEqual(boxes(m),before);/* волна 29.10: секция от 68 внутри (100 по корпусу), было 180 */assert.doesNotThrow(()=>moveDivider(p,p.modules[0].id,'s1',200));assert.throws(()=>moveDivider(p,p.modules[0].id,'s1',215),/68/);assert.throws(()=>moveDivider(p,p.modules[0].id,'s0',10));
  assert.equal(n.modules[0].module.width,900);
 });
 

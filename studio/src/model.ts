@@ -35,17 +35,20 @@ export const RULES = {
   shelfDepthMinus: 25, // кухни и фальши у ящиков; шкафы — innerMinus (решение Макса 23.10.2026)
   shelfRemovableMinus: 5, // съёмная полка шкафа на 5 мм меньше глубины корпуса (решение Макса 23.10.2026)
   shelfGap: 1,
-  minW: 250,
+  // Волна 29.10 (правка Макса «убрать ограничения размеров на минимальную ширину и высоту до 100 мм»): корпус от 100×100 (было 250×250,
+  // ящичный модуль от 150). Наполнение, которое в малый корпус физически не входит (двери, ящики, штанга, полки, цоколь), не запрещает
+  // размер — снимается с сообщением (smallSize.ts fitSmallModule).
+  minW: 100,
   maxW: 1300, // ТЗ Макса 1200, но заказ 7212718 — шкаф и антресоль 1244; СТП 900 — предупреждение по логистике выше 900
-  minH: 250, // антресоли заказов 300–372
-  // Подвесной ящик на стене (заказ 7437584: 800 × 200 и 600 × 200, push): корпус без дверей, в секциях только ящики — от 150 (minHeightOf)
-  minDrawerModuleH: 150,
+  minH: 100, // было 250 (антресоли заказов 300–372)
+  // Подвесной ящик на стене (заказ 7437584: 800 × 200 и 600 × 200, push): корпус без дверей, в секциях только ящики (minHeightOf); было 150
+  minDrawerModuleH: 100,
   seatMaxH: 600, // посадочное место 32 (Module.seatTop): скамья, тумба-сиденье — до 600 мм при накладных дверях
   seatH: 450, // предлагаемая высота скамьи в прихожей (заказ 7437584)
   maxH: 2500, // шкафы заказа 6785429 2412 (боковина 2396 из листа 2750); было 2200
   minD: 200, // заказы цеха: шкафы 240 (заказ 6990041), стеллажи 200 (Дельта КИП)
   maxD: 700,
-  minSection: 180,
+  minSection: 68, // секция от 100 мм по корпусу (100 − 2 × 16 внутри; волна 29.10, было 180 внутри)
   partialDividerMin: 150, // частичная перегородка — не ниже 150 мм (решение Макса 23.10.2026: перегородка между двумя горизонталями)
   maxSections: 4,
   maxShelves: 10,
@@ -2358,6 +2361,8 @@ export function isDrawerModule(m: Module): boolean {
 }
 /** Нижний предел высоты корпуса: ящичный модуль (подвесной ящик 200, заказ 7437584) — от RULES.minDrawerModuleH, остальное — от RULES.minH. */
 export function minHeightOf(m: Module): number {
+  // нижний кухонный на опорах (kitchenErrors: «ставится на опоры»): корпус от 100 над опорами (волна 29.10)
+  if (m.kitchen?.role === "base" && m.feet) return Math.ceil(m.feet.height) + RULES.minH;
   return isDrawerModule(m) ? RULES.minDrawerModuleH : RULES.minH;
 }
 export function maxHeightOf(m: Module): number {
@@ -2530,7 +2535,7 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
       const lim=m.depth-rearClear(m);
       if(!m.kitchen||!Number.isFinite(v.depth)||!Number.isFinite(v.rear)||v.rear<0||v.depth<100||v.rear+v.depth>lim+0.01)errors.push(prefix+`полка ${Number(j)+1}: своя глубина — только у кухни, от 100 мм и не глубже корпуса (${lim} мм).`);
     }
-    const minSection = m.kitchen ? KITCHEN.minWidth - 2 * RULES.panel : RULES.minSection; // кухонная бутылочница 150: 118 внутри
+    const minSection = m.kitchen ? KITCHEN.minWidth - 2 * RULES.panel : RULES.minSection; // кухня от 100: 68 внутри (волна 29.10; было бутылочница 150 — 118)
     if (b.width < minSection)
       errors.push(
         prefix +

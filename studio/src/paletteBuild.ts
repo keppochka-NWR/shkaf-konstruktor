@@ -5,6 +5,7 @@ import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,re
 import {partCollisions} from './collisions';
 import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
+import {fitSmallModule} from './smallSize';
 
 import {createCornerModule} from './cornerWardrobe';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
@@ -77,7 +78,18 @@ export function hangingDrawer(width:number,height:number,depth:number,source:Mod
   return m;
 }
 /** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
-export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):Module{
+export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number,fit=true):Module{
+  // волна 29.10: корпус от 100×100 — наполнение, которое в малый корпус не входит, снимается (smallSize.ts), а не запрещает размер
+  const m=assembleRaw(kind,width,height,depth,source,doors);
+  if(fit&&!['corner','kupe','worktop','desk'].includes(kind))fitSmallModule(m);
+  return m;
+}
+/** Что палитра сняла с малого корпуса (сообщение менеджеру после добавления; пусто — ничего). */
+export function paletteFitNotes(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):string[]{
+  if(['corner','kupe','worktop','desk'].includes(kind))return [];
+  try{return fitSmallModule(assembleRaw(kind,width,height,depth,source,doors));}catch{return [];}
+}
+function assembleRaw(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number):Module{
   if(kind==='kitchen-base'||kind==='kitchen-wall'){
     const m={...(kind==='kitchen-base'?kitchenBase(initialModule(),width):kitchenWall(initialModule(),width)),height,depth,decor:source.decor,facadeDecor:source.facadeDecor};
     m.sections.forEach(s=>s.shelfDepth=depth-(kind==='kitchen-base'?2.5:22));

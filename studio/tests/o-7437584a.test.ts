@@ -25,8 +25,9 @@ test("7437584: подвесной ящик 800×200 глубиной 300 с фа
   const ps = parts(m);
   assert.ok(ps.some((p) => p.role === "drawer"), "ящик построен");
   assert.ok(!ps.some((p) => p.id === "plinth"), "навесной — без цоколя");
-  // ниже предела ящичного модуля — ошибка с пределом 150
-  assert.ok(validate(drawerBox({ height: 140 })).some((e) => e.startsWith(`Высота: допустимо от ${RULES.minDrawerModuleH} до`)));
+  // ниже предела ящичного модуля — ошибка с пределом (волна 29.10: 100, было 150)
+  assert.equal(RULES.minDrawerModuleH, 100);
+  assert.ok(validate(drawerBox({ height: 90 })).some((e) => e.startsWith(`Высота: допустимо от ${RULES.minDrawerModuleH} до`)));
   // с полкой или дверями это уже не ящичный модуль: прежний предел 250 и глубина 300 для ящиков
   const shelf = drawerBox(); shelf.sections[0].shelves = [0.5];
   assert.equal(minHeightOf(shelf), RULES.minH);

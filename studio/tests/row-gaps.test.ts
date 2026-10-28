@@ -83,7 +83,7 @@ test("planStretch: свободный край — привязка 10 мм и �
   assert.deepEqual(get(over.project!, "d").x, 2600);
   const shrink = planStretch(p, "d", "right", -100);
   assert.deepEqual([shrink.width, shrink.gap, get(shrink.project!, "c").module.width], [500, 400, 600]);
-  assert.equal(planStretch(p, "d", "right", -1000).width, 250, "не уже минимума");
+  assert.equal(planStretch(p, "d", "right", -1000).width, 100, "не уже минимума (волна 29.10: 100, было 250)");
   const left = planStretch(p, "e", "left", 100);
   assert.deepEqual([get(left.project!, "e").x, left.width], [3400, 700], "левый край тянется, правый на месте");
 });
@@ -92,7 +92,7 @@ test("planStretch: край вплотную к соседу — двигает�
   const p = maxRow();
   const j = planStretch(p, "c", "right", 100);
   assert.deepEqual([j.mode, j.width, j.neighbor?.width, get(j.project!, "d").x, get(j.project!, "d").module.width], ["joint", 700, 500, 2700, 500]);
-  assert.deepEqual([planStretch(p, "c", "right", 600).width, planStretch(p, "c", "right", 600).neighbor?.width], [950, 250], "сосед не уже минимума");
+  assert.deepEqual([planStretch(p, "c", "right", 600).width, planStretch(p, "c", "right", 600).neighbor?.width], [1100, 100], "сосед не уже минимума (волна 29.10: 100, было 250)");
   const k = (kind: Parameters<typeof kitchenTemplate>[0], w: number) => kitchenTemplate(kind, w, initialModule());
   const oven = planStretch(proj([at("a", 500, k("base-doors", 600)), at("o", 1100, k("oven", 600))]), "a", "right", 100);
   assert.equal(oven.project, undefined);

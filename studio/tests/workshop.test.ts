@@ -82,7 +82,9 @@ test('upper module inherits cabinet finishes and fits available height without c
  assert.equal(upper.y,2200);assert.equal(upper.module.height,470);assert.equal(upper.module.plinthHeight,0);assert.equal(upper.rotation,90);assert.equal(upper.x,a.x);assert.equal(upper.z,a.z);
  for(const k of ['width','depth','decor','facadeDecor','doors','backType','grooveInset','hingeSide'] as const)assert.equal(upper.module[k],a.module[k]);
  assert.equal(upper.module.sections[0].drawers,0);assert.notEqual(upper.module.sections[0].id,a.module.sections[0].id);assert.deepEqual(projectErrors(n),[]);assert.deepEqual(p,original);
- p.room.height=2470;assert.throws(()=>addUpperModule(p,a.id),/монтажного зазора/);p.room.height=2630;assert.equal(addUpperModule(p,a.id).modules[1].module.height,400);
+ // волна 29.10: антресоль от 100 мм (было 250) — 240 встаёт без дверей (створка ниже 360); 90 — уже нет
+ p.room.height=2470;const low=addUpperModule(p,a.id).modules[1].module;assert.equal(low.height,240);assert.equal(low.doors,false);assert.deepEqual(validate(low),[]);
+ p.room.height=2320;assert.throws(()=>addUpperModule(p,a.id),/монтажного зазора/);p.room.height=2630;assert.equal(addUpperModule(p,a.id).modules[1].module.height,400);
 });
 
 test('section clear removes all filling settings and removal expands only the adjacent opening',()=>{
