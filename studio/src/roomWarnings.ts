@@ -7,6 +7,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts} from './model';
 import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
 import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
+import {cutoutWarnings,mansardWarnings} from './shapes';
 
 export type RoomWarning={moduleId:string;openingId?:string;obstacleId?:string;fixtureId?:string;kind?:string;message:string};
 /** Что советуем по каждому типу объекта на стене, если его перекрывает мебель. */
@@ -76,7 +77,17 @@ export function roomWarnings(project:Project){
       if(actual>limit+.1)warnings.push({moduleId:edge.a.id,kind:'niche-'+size,message:`Ниша: ${label.toLocaleLowerCase('ru')} мебели ${Math.round(actual*10)/10} мм превышает допустимые ${limit} мм после вычетов СТП. Проверьте состав композиции и замер. Учтены закрытые фасады, ручки и промежутки между корпусами.`});
     }
   }
-  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project)];
+  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project)];
+}
+/** Фигурные детали (shapes.ts, 29.10.2026): вырез задевает петлю/полкодержатель/крепёж; полка или штанга выше скоса мансарды;
+ *  антресоль над мансардным шкафом (потолок скошен — не ставится). Предупреждения, не ошибки. */
+export function shapeWarnings(project:Project):RoomWarning[]{
+  const out:RoomWarning[]=[];
+  for(const a of project.modules){const m=a.module;if(!m.cutouts?.length&&!m.mansard)continue;let ps;try{ps=parts(m);}catch{continue;}
+    for(const message of [...cutoutWarnings(m,ps),...mansardWarnings(m,ps)])out.push({moduleId:a.id,kind:'shape',message:`«${m.name}»: ${message}`});
+    if(m.mansard){const b=bounds(a),topY=(a.y??0)+m.height;
+      for(const o of project.modules)if(o.id!==a.id&&(o.y??0)>=topY-2&&overlap({...bounds(o),y:0,h:1},{...b,y:0,h:1}))out.push({moduleId:o.id,kind:'mansard-upper',message:`«${o.module.name}» стоит над мансардным шкафом «${m.name}»: потолок там скошен назад — антресоль не ставится. Уберите её или сделайте шкаф выше без мансарды.`});}}
+  return out;
 }
 /** Пересечения деталей внутри корпусов (петли, полки, царги, крепёж, фурнитура) — правило Макса 09.10.2026: ничего не должно пересекаться.
  *  Отдельно от roomWarnings (размещение в помещении); панель предупреждений студии показывает оба списка. */

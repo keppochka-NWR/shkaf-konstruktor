@@ -228,11 +228,12 @@ export function saveFile(
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 /** Пазы детали для деталировки: паз под ЛХДФ (если задник в паз) и пазы под подсветку — тот же текст, что на бирке. */
-export function detailGrooves(p: Project, moduleId: string, partId: string) {
+export function detailGrooves(p: Project, moduleId: string, partId: string, shapeNote?: string) {
   const m = p.modules.find((a) => a.id === moduleId)?.module;
   if (!m) return "";
   const back = m.backType === "groove" && ["left", "right", "top", "bottom"].includes(partId) ? `паз ${m.grooveWidth ?? 4}×${m.grooveDepth ?? 8} под ЛХДФ, отступ ${m.grooveInset ?? 16}` : "";
-  return [back, grooveText(m, partId)].filter(Boolean).join("; ");
+  // фигурная деталь (shapes.ts): раскрой по габариту, обработка — по пометке (вырезы с размерами, радиус, трапеция)
+  return [back, grooveText(m, partId), shapeNote ? "фигурная: " + shapeNote : ""].filter(Boolean).join("; ");
 }
 export function detailCSV(p: Project) {
   if(p.modules.some(a=>a.module.corner))return cutCSV(cutting(p));
@@ -260,7 +261,7 @@ export function detailCSV(p: Project) {
       d.width,
       d.thickness,
       ...d.edge,
-      detailGrooves(p, d.moduleId, d.id),
+      detailGrooves(p, d.moduleId, d.id, d.shapeNote),
     ]),
   ];
   return (
@@ -478,7 +479,7 @@ export function labelData(p:Project):LabelData[]{
       // Кромка: 1–2 — торцы по ширине (короткие, слева/справа на бирке), 3–4 — по длине (сверху/снизу).
       // материал — как в смете: ЛХДФ без декора корпуса; декор вне каталога Lamarty (МДФ IDM, «Ясень Бронхольм» из Базиса) — «Плита», не «Lamarty»
       return {order,material:labelMaterial(d),module:(i+1)+'. '+m.name,code:`${i+1}.${j+1}`,name:d.name,
-        groove:grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:grooveText(m,d.id)||'—', // «Пазование» — паз под ЛХДФ, «Паз» — пазы под подсветку (каждая строка влезает в бирку)
+        groove:grooved?`паз ${m.grooveWidth??4}×${m.grooveDepth??8} под ЛХДФ, отступ ${m.grooveInset??16}`:'—',notches:[grooveText(m,d.id),d.shapeNote?'фигурная: '+d.shapeNote:''].filter(Boolean).join('; ')||'—', // «Пазование» — паз под ЛХДФ, «Паз» — пазы под подсветку (каждая строка влезает в бирку)
         endHoles:endHoles?`${endHoles} отв.`:'—',
         length:Math.round(d.length),width:Math.round(d.width),edges:{W1:d.edge[0],W2:d.edge[1],L1:d.edge[2],L2:d.edge[3]},...(d.edgeLen?{edgeLens:{W1:edgeLength(d,0),W2:edgeLength(d,1),L1:edgeLength(d,2),L2:edgeLength(d,3)}}:{})};
     });
