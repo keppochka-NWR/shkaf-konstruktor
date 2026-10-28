@@ -10,7 +10,7 @@ import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN} from './kitchen';
 import type {PlacedModule} from './project';
 import {rowShortageText,type RowShortage} from './rowFit';
-import {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,createModuleRow,bodyWidths,KIND_LABEL,type ModuleKind} from './paletteBuild';
+import {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,createModuleRow,bodyWidths,KIND_LABEL,paletteFitNotes,type ModuleKind} from './paletteBuild';
 import {paletteIssues,paletteAutoFix,SPLIT_KINDS,type PaletteField,type PaletteInput,type PalettePatch} from './paletteCheck';
 // сборка мебели палитры живёт в paletteBuild.ts (w-formerrors 23.10) — прежние импорты из ModulePalette работают
 export {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,type ModuleKind} from './paletteBuild';
@@ -115,7 +115,10 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
       if(kind==='kupe-wardrobe'||kind==='kitchen-row'){const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):onAddGroup(createKitchenRow(width,source,height,depth));if(ok){setError('');resetCheck();}return;}
       if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg).map(a=>({...a,module:shaped(a.module)})))){setError('');resetCheck();setBodies(1);/* заказ 7437584: «Корпусов в ряд» не остаётся 3 для следующей мебели (список прячется при 1 и узкой ширине) */}return;}
       const m=shaped(createModule(kind,width,height,depth,source,doorArg)),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
-      setOffer(null);if(onAdd(m)){setError('');resetCheck();}}catch(e){refuse(e);}};
+      setOffer(null);if(onAdd(m)){setError('');resetCheck();smallNote();}}catch(e){refuse(e);}};
+  // волна 29.10: малый корпус — что палитра сняла (двери, ящики, полки, цоколь…) — сообщением, не ошибкой
+  // первый корпус ставится из пустой комнаты — редактор с приёмником сообщений появляется после, поэтому с задержкой
+  const smallNote=()=>{const notes=paletteFitNotes(kind,width,height,depth,source,doorArg);if(notes.length)setTimeout(()=>window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:notes.join(' ')}})),700);};
   const note=kind==='radius'?'Открытый торцевой стеллаж: боковина у соседнего шкафа, задник ЛДСП, 4 жёсткие полки, дно и крыша — со скруглённым передним углом. В раскрое — по габариту с пометкой «фигурная», кромка по дуге — криволинейная.'
     :kind==='corner'?'Пятиугольный корпус с диагональными дверями и двумя боковыми блоками. Стороны угла одинаковые. Антресоль добавляется отдельно.'
     :kind==='kupe'?'Размеры проёма. Ставьте перед корпусами или в нишу между стенами. Глубина направляющих 100 мм. Цена — по калькулятору купе.'

@@ -6,7 +6,7 @@ import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
 import {rawKitchen} from './rawModule';
 import {wallFloorY} from './kitchen';
-import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,type Module,section} from './model';
+import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,fe,facadeBottom,facadeTop,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
 export type Opening={id:string;type:'window'|'door';wall:'back'|'left'|'right'|'front';offset:number;width:number;height:number;sill:number;
   color?:string;frameDepth?:number;direction?:'in'|'out';swingAngle?:number;handleProjection?:number;casing?:number;casingThick?:number;hinge?:'left'|'right';reveal?:number;windowSill?:{width:number;thick:number;overhang:number;offset:number}};
@@ -131,7 +131,32 @@ export function applyAutoFillers(p:Project):Project{
     // Ниша впритык (заказ 7212718: 1244 в 1252): планкам негде встать, сдвиг вытолкнул бы корпус за стену — оставляем корпус без планок.
     if(a.module.wallFiller){const b=bounds(a);if(b.x<-0.5||b.z<-0.5||b.x+b.w>room.width+0.5||b.z+b.d>room.depth+0.5){a.x=before.x;a.z=before.z;delete a.module.wallFiller;}}
   }
+  // Стык угловых фальшей (волна 29.10): у корпуса, чей фасад упирается в соседа (strip), фальш из фасада — глухая часть до лица
+  // планки соседа + RULES.cornerGap; считается после всех сдвигов (планка соседа уже стоит). Было: всегда 100 у края корпуса —
+  // за соседом, а створки за его корпусом не открывались.
+  for(const a of n.modules){
+    if(!a.module.cornerFiller||!cornerStrip(a.module)){delete a.module.cornerFillerWidth;continue;}
+    const w=cornerStripReach(n,a);
+    if(w>RULES.fillerStrip)a.module.cornerFillerWidth=w;else delete a.module.cornerFillerWidth;
+  }
   return n;
+}
+/** Глухая часть угла у корпуса a (cornerKind strip): от края фасадов до лица соседа (с его угловой планкой) + RULES.cornerGap, мм.
+ *  Сосед — перпендикулярный корпус перед фасадом a у края cornerFiller (как правило 1 applyAutoFillers). 0 — соседа нет. */
+export function cornerStripReach(p:Pick<Project,'modules'>,a:PlacedModule):number{
+  const m=a.module,side=m.cornerFiller;if(!side)return 0;
+  const rot=a.rotation??0,u=side==='left'?2:m.width-2,v0=m.depth+18+2,v1=m.depth+18+45,y0=(a.y??0)+facadeBottom(m),y1=(a.y??0)+facadeTop(m);
+  let reach=0;
+  for(const b of p.modules){
+    if(b===a||b.module.corner||Math.abs(((b.rotation??0)-rot+360)%360)%180!==90)continue;
+    // сосед закрывает фасады почти на всю высоту (≥ 90 %): глухая часть на всю высоту оправдана. Низкий сосед (нижний ряд кухни перед
+    // пеналом) закрывает только низ — там как было, планка 100 (вопрос Максу: глухой нижний фасад пенала).
+    const bb=bounds(b);if(Math.min(y1,bb.y+bb.h)-Math.max(y0,bb.y)<0.9*(y1-y0))continue;
+    const pts=[[bb.x,bb.z],[bb.x+bb.w,bb.z],[bb.x,bb.z+bb.d],[bb.x+bb.w,bb.z+bb.d]].map(([x,z])=>roomToLocal(a,x,z)),us=pts.map(q=>q.x),vs=pts.map(q=>q.z);
+    if(Math.min(...us)>u||Math.max(...us)<u||Math.min(...vs)>v1||Math.max(...vs)<v0)continue;
+    reach=Math.max(reach,side==='left'?Math.max(...us):m.width-Math.min(...us));
+  }
+  return reach>0?Math.round(reach+RULES.cornerGap-fe(m)):0;
 }
 /** «Без фальша у стены · по эскизу» (решение Макса 26.10.2026: эскиз дизайнера главнее регламента цеха — общая ширина без лишних
  *  фальшей). off: автофальши корпуса выключены (autoFillersOff), планки у стен сняты, корпус придвинут боковиной вплотную к стене;

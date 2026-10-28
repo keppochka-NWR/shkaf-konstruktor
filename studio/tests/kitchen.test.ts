@@ -116,7 +116,8 @@ test('limit of height is one for validate and both "Высота" fields: tall 2
   for(const role of ['base','wall','antresol'] as const){
     const m={...b,kitchen:{...b.kitchen!,role},height:2600};
     assert.equal(maxHeightOf(m),RULES.maxH,role);
-    assert.ok(validate(m).some(e=>e.startsWith('Высота: допустимо от 250 до 2500')),role+' above 2500 is rejected');
+    // волна 29.10: корпус от 100 мм; нижний на опорах — опоры 100 + корпус 100 (minHeightOf)
+    assert.ok(validate(m).some(e=>e.startsWith(`Высота: допустимо от ${role==='base'?200:100} до 2500`)),role+' above 2500 is rejected');
   }
   assert.equal(maxHeightOf(initialModule()),RULES.maxH);
   // поля «Высота» во вкладке «Кухня» и в общей панели берут тот же предел, что validate

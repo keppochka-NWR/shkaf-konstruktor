@@ -6,7 +6,7 @@
 // 3) cornerTurns / continueAroundCorner — крайний модуль ряда: следующий модуль на соседнюю стену сразу за глубиной первого крыла.
 // Только логика, без React: панель «Положение» (KitchenPanel) и круговое меню (App) коммитят результат обычным commitProject.
 import { applyAutoFillers, bounds, overlap, projectErrors, obstacleBounds, type PlacedModule, type Project } from "./project";
-import { id, type Module } from "./model";
+import { id, RULES, type Module } from "./model";
 import { rekeySections } from "./sectionLayout";
 
 export type Wall = "back" | "left" | "right" | "front";
@@ -87,7 +87,8 @@ export function placeToWall(p: Project, mid: string, wall: Wall, order: AlongOrd
   // занятые места — как их поставит сохранение (автофальши), без самого модуля; сырые модули Базиса пересечения не проверяют
   const others = applyAutoFillers({ ...p, modules: p.modules.filter((x) => x.id !== mid) }).modules;
   const occupied = [...others.filter((x) => !x.module.raw).map(bounds), ...(p.room.obstacles ?? []).map(obstacleBounds)];
-  const raw = [cur, 0, L - w, ...occupied.flatMap((b) => { const s = b[along], e = s + size(b); return [e, s - w, e + 16, s - w - 16, e + 21, s - w - 21]; })];
+  // у конца стены — и с фальшем к стене (16 + 5): габарит с ним длиннее, иначе «от конца стены» уходил на первое свободное место у начала (волна 29.10)
+  const raw = [cur, 0, L - w, L - w - RULES.panel - RULES.wallFillerEdgeGap, ...occupied.flatMap((b) => { const s = b[along], e = s + size(b); return [e, s - w, e + 16, s - w - 16, e + 21, s - w - 21]; })];
   const xs = [...new Set(raw.map((v) => Math.round(Math.max(0, Math.min(L - w, v)) * 10) / 10))];
   xs.sort(order === "from-start" ? (u, v) => u - v : order === "from-end" ? (u, v) => v - u : (u, v) => Math.abs(u - cur) - Math.abs(v - cur) || u - v);
   // дешёвая проверка габарита по стене (поворот и спина к стене), затем полная — placeModuleAt

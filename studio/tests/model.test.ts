@@ -54,8 +54,11 @@ test("narrow split rejected while valid empty split succeeds", () => {
   m.sections = [section()];
   m.width = 700;
   assert.deepEqual(validate(splitSection(m, m.sections[0].id)), []);
+  // волна 29.10: секция от 100 по корпусу (68 внутри) — 350 делится (151 + 151), 150 — нет (51 + 51)
   m.width = 350;
-  assert.ok(validate(splitSection(m, m.sections[0].id)).length);
+  assert.deepEqual(validate(splitSection(m, m.sections[0].id)).filter((e) => /мм внутри/.test(e)), []);
+  m.width = 150;
+  assert.ok(validate(splitSection(m, m.sections[0].id)).some((e) => /не менее 68 мм внутри/.test(e)));
 });
 test("shelf collisions and drawer overlap are rejected", () => {
   const m = initialModule();

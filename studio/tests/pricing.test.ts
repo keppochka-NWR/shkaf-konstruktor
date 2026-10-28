@@ -141,10 +141,13 @@ test('corner filler appears when a body meets another at 90 degrees and disappea
   assert.equal(a.module.cornerFiller,'left');assert.equal(a.module.cornerKind,'plank');
   const plank=parts(a.module).find(x=>x.id==='corner-filler:left')!;assert.deepEqual(plank.size,[16,a.module.height,100]);assert.ok(Math.abs(plank.position[2]+50-(a.module.depth+40))<0.01);
   assert.ok(a.x>=3+B.module.depth+18+16-0.01,'A moved right by the plank thickness');
-  // B: его фасад упирается в тело A → фальш-планка из фасада на этом краю, фасад уже на 103
+  // B: его фасад упирается в тело A → фальш из фасада на этом краю. Волна 29.10 (стык угловых фальшей): не 100 у края B (за корпусом A,
+  // створки B за A не открывались), а глухая часть до лица планки A (3 + 600 + 40 = 643 от угла) + 27, минус зазор 2 у края: 668
   assert.equal(b.module.cornerFiller,'right');assert.equal(b.module.cornerKind,'strip');
   const f=parts(b.module).find(x=>x.id==='corner-filler:right')!,door=parts(b.module).filter(x=>x.role==='door').sort((p,q)=>q.position[0]-p.position[0])[0];
-  assert.equal(f.size[0],100,'facade-material strip 100 wide');assert.equal(f.decor,b.module.facadeDecor);assert.ok(Math.abs(f.position[2]-door.position[2])<0.01,'strip flush with the doors');
+  assert.equal(f.size[0],668,'facade-material blind part up to the plank face of A + 27');assert.equal(b.module.cornerFillerWidth,668);
+  assert.equal(parts(b.module).filter(x=>x.role==='door').length,1,'one leaf on the rest of the section (868 − 568)');
+  assert.deepEqual(f.edge,[2,2,0.4,2],'the end towards the corner is hidden behind A — 0.4');assert.equal(f.decor,b.module.facadeDecor);assert.ok(Math.abs(f.position[2]-door.position[2])<0.01,'strip flush with the doors');
   assert.ok(Math.abs((f.position[0]-f.size[0]/2)-(door.position[0]+door.size[0]/2)-3)<0.01,'3 mm gap between door and strip');
   assert.equal(fastenerCounts(b.module).eccentrics,4);assert.equal(fastenerCounts(a.module).eccentrics,0);
   assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
