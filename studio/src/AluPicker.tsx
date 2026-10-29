@@ -18,6 +18,6 @@ export function AluPicker({ value, onChange }: { value: AluFacade; onChange: (v:
     <label className="hardware-field">Профиль<select aria-label="Профиль рамки" value={value.profile} onChange={(e) => { const n = aluProfile(e.target.value)!; onChange({ ...value, profile: n.id, color: n.colors.some((c) => c.id === value.color) ? value.color : n.colors[0].id }); }}>{ALU_PROFILES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
     <label className="hardware-field">Цвет профиля<select aria-label="Цвет профиля" value={value.color} onChange={(e) => onChange({ ...value, color: e.target.value })}>{p.colors.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
     <label className="hardware-field">Наполнение<select aria-label="Вставка рамки" value={value.insert} onChange={(e) => onChange({ ...value, insert: e.target.value })}>{aluFillOptions()}</select></label>
-    <p className="field-note" data-alu-max-h={g.maxH}>Высота фасада до {g.maxH} мм: лист стекла {g.sheet[0]}×{g.sheet[1]}{g.standard ? " (стандартный)" : ""}, вставка до {g.glassMax} мм. Ширина — до 600 мм.</p>
+    <p className="field-note" data-alu-max-h={g.maxH}>Высота фасада до {g.maxH} мм: лист стекла {g.sheet[0]}×{g.sheet[1]}{g.standard ? " (в прайсе не указан — принят стандартный)" : ""}, вставка до {g.glassMax} мм. Ширина — до 600 мм.</p>
   </>;
 }

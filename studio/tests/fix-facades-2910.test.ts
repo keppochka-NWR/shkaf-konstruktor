@@ -126,3 +126,9 @@ test('Подсказки ALU без старого предела СТП 2000 (�
   const { readFileSync } = await import('node:fs');
   for (const f of ['../src/App.tsx', '../docs/WORKSHOP-RULES.md']) assert.ok(!/не выше 2000/.test(readFileSync(new URL(f, import.meta.url), 'utf8')), f);
 });
+test('ALU: лист 2550×1605 — из прайса (не «стандартный, не указан»); у заказных узорчатых — принят стандартный с пометкой', async () => {
+  const { aluMaxHeight, DEFAULT_ALU, ALU_FILLS } = await import('../src/alu');
+  for (const id of ['glass-clear', 'satin', 'lacobel-white', 'lacobel-black']) assert.equal(aluMaxHeight({ ...DEFAULT_ALU, insert: id }).standard, false, id);
+  const hc = ALU_FILLS.find((f) => /^Hithicross/.test(f.label))!.id, g = aluMaxHeight({ ...DEFAULT_ALU, insert: hc });
+  assert.deepEqual([g.standard, g.sheet[0]], [true, 2550]);
+});
