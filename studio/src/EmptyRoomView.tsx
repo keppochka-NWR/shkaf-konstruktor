@@ -9,6 +9,7 @@ import {STAGES,stageIndex,normalizeStage,rememberStage,type Stage} from './stage
 import {Scene,type View} from './Scene';
 import {RoomPlan} from './RoomPlan';
 import {RoomEditor} from './RoomEditor';
+import {RoomFinishes} from './RoomFinishPicker';
 import {RoomFixtures} from './RoomFixtures';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomSurveyEditor} from './RoomSurveyEditor';
@@ -78,7 +79,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  <aside className="properties"><section className="property-section"><h2>{stage==='fixtures'?'Коммуникации':'Замер помещения'}</h2>
  {(advanced||stage==='room')&&<><details><summary>Точки замера и кривые стены</summary><RoomSurveyEditor room={project.room} onChange={change}/></details>
  {(['width','depth','height'] as const).map(axis=><label className="number-field" key={axis}><span>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}</span><div><input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} key={project.room[axis]} defaultValue={project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.currentTarget.value=String(project.room[axis]);e.currentTarget.blur();}}} onBlur={e=>{const n=e.target.value.trim()?Number(e.target.value):NaN;if(n!==project.room[axis]&&!change({...project.room,[axis]:n}))e.target.value=String(project.room[axis]);}}/><span>мм</span></div></label>)}</>}
- {(advanced||stage==='room'||stage==='fixtures')&&<><details open><summary>Двери и окна</summary><RoomEditor room={project.room} part="openings" onSelect={id=>pick('opening',id)} onChange={change}/></details><details><summary>Трубы, радиаторы и объекты на стенах</summary><RoomFixtures room={project.room} onSelect={id=>pick('fixture',id)} onChange={change} onImport={r=>change(r.room)}/></details><details><summary>Колонны и отдельные препятствия</summary><RoomObstacles room={project.room} onSelect={id=>pick('obstacle',id)} onChange={change}/></details></>}
+ {(advanced||stage==='room'||stage==='fixtures')&&<><details><summary>Отделка: пол и стены</summary><RoomFinishes room={project.room} onChange={change}/></details><details open><summary>Двери и окна</summary><RoomEditor room={project.room} part="openings" onSelect={id=>pick('opening',id)} onChange={change}/></details><details><summary>Трубы, радиаторы и объекты на стенах</summary><RoomFixtures room={project.room} onSelect={id=>pick('fixture',id)} onChange={change} onImport={r=>change(r.room)}/></details><details><summary>Колонны и отдельные препятствия</summary><RoomObstacles room={project.room} onSelect={id=>pick('obstacle',id)} onChange={change}/></details></>}
  {['bodies','filling','facades'].includes(stage)&&<><p className="field-note">В этой комнате пока нет мебели. Добавьте шкаф, чтобы настроить корпуса, наполнение и фасады.</p><button className="primary full" onClick={add}>Добавить шкаф в комнату</button></>}
  {stage==='docs'&&<><p className="field-note">Сохраните помещение с замером и проёмами. Деталировка появится после добавления мебели.</p><button className="outline full" onClick={onDownload}>Скачать документ комнат</button></>}
  </section></aside></WorkspacePanels>
