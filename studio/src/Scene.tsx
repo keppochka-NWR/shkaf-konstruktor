@@ -110,6 +110,10 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
 import {gapLabelX,openingSizeLabel} from './clientLabels';
 import {missMenuTarget,screenRect} from './missMenu';
+import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,type Guide,type GuideLine,type V3} from './guides';
+import {cornerDims,axisOf,edgeOf,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
+import {editsText} from './historyShortcuts';
+import './guides.css';
 /** side — вид справа (камера с +X), left — вид слева (клавиша A, п.28 волны 22.10). */
 export type View = "iso" | "front" | "side" | "left" | "top";
 type Props = {
@@ -189,13 +193,23 @@ type Props = {
   stretchable?:boolean;
   stretchPlan?:(mid:string,side:'left'|'right',raw:number,snap:boolean)=>Partial<StretchPlan>;
   onStretch?:(mid:string,side:'left'|'right',raw:number,snap:boolean)=>boolean;
+  /** Растяжение за угол (решение Макса 29.10.2026, как эластичная секция Базиса): квадратные ручки по углам выбранного корпуса
+   *  в видах спереди/сверху/сбоку; cornerPlan — что получится (живая плашка), onCorner — применить (одна отмена). */
+  cornerPlan?:(pull:CornerPull)=>CornerPlan;
+  onCorner?:(pull:CornerPull)=>boolean;
+  /** Помещение для линий Q (стены, пол, потолок) — и когда помещение на сцене не показано. */
+  guideRoom?:Room;
+  /** Вспомогательные линии (Q, guides.ts): хранятся в проекте, видны в своём виде; onGuides — новый список (одна отмена). */
+  guides?:Guide[];
+  onGuides?:(next:Guide[])=>boolean;
 };
 export function Scene(p: Props) {
   const host = useRef<HTMLDivElement>(null),
     current = useRef(p);
   current.current = p;
   const [error, setError] = useState("");
-  const api = useRef<{ rebuild: () => void; fit: () => void; refresh: () => void } | null>(null);
+  const [guideCount, setGuideCount] = useState(0);
+  const api = useRef<{ rebuild: () => void; fit: () => void; refresh: () => void; guides: () => void; clearGuides: () => void } | null>(null);
   useEffect(() => {
     const target = host.current!;
     let disposed = false;
@@ -301,7 +315,9 @@ export function Scene(p: Props) {
     // Для снимков проверки: скрипт ждёт, пока догрузятся текстуры и модели фурнитуры (window.__pending() === 0).
     (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;
     // Для сценариев мышью (scripts/stretch-scenario.ts): только чтение — положение и ширина корпусов на сцене.
-    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width}));
+    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width,y:a.y??0,h:a.module.height,d:a.module.depth}));
+    // scripts/stretch-guides-scenario.ts (только чтение): вспомогательные линии проекта
+    (window as unknown as {__guides?:()=>unknown}).__guides=()=>current.current.guides??[];
     // Для сценария scripts/fastener-render-check.ts (только чтение): коробки ОТРИСОВАННОЙ фурнитуры (сетки GLB, запасные модели,
     // процедурные модели, видимые заглушки) по каждому модулю — в мм модуля, и коробка корпуса (плиты без фасадов, столешницы, цоколя).
     (window as unknown as {__hardwareBoxes?:()=>unknown[]}).__hardwareBoxes=()=>current.current.arrangement.flatMap(a=>{
@@ -334,7 +350,7 @@ export function Scene(p: Props) {
             ? o.material
             : [o.material];
           for (const mat of materials) {
-            mat.dispose();
+            if (!mat.userData.keep) mat.dispose(); // keep — общие материалы вспомогательных линий
           }
         }
       });
@@ -429,6 +445,16 @@ export function Scene(p: Props) {
       b.setAttribute('aria-label','Растянуть '+(side==='right'?'правый':'левый')+' край');
       passThrough(b);
       b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startStretch(side,e);});
+      target.appendChild(b);labels.push({element:b,position:pos,fixed:true});
+    }
+    const DIM_WORD:Record<Dim,string>={width:'ширина',height:'высота',depth:'глубина'};
+    /** Квадратная ручка на углу выбранного корпуса (ортогональный вид): тянуть — меняются два размера, противоположный угол на месте. */
+    function cornerHandle(dims:[Dim,Dim],ends:[End,End],pos:THREE.Vector3){
+      const b=document.createElement('button');b.type='button';b.className='corner-handle';b.dataset.corner=ends.join('-');b.dataset.dims=dims.join('-');
+      b.title=`Угол: тяните — ${DIM_WORD[dims[0]]} и ${DIM_WORD[dims[1]]}, противоположный угол на месте. Привязка к краям, стенам и вспомогательным линиям; Alt — без привязки, Esc — отмена`;
+      b.setAttribute('aria-label',`Растянуть за угол: ${DIM_WORD[dims[0]]} и ${DIM_WORD[dims[1]]}`);
+      passThrough(b);
+      b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startCorner(dims,ends,pos,e);});
       target.appendChild(b);labels.push({element:b,position:pos,fixed:true});
     }
     let sceneOrigin: {x:number;z:number}|undefined;
@@ -900,11 +926,13 @@ export function Scene(p: Props) {
           new THREE.Vector3(x - 30, m.height / 2+(focus.y??0), z),
           () => current.current.onDimension("height"),
         );
+        labels[labels.length-1].element.dataset.dim="height"; // обновляется во время растяжения за угол
         label(
           m.depth + " мм",
           new THREE.Vector3(m.width / 2 + 150, fy+100, 0),
           () => current.current.onDimension("depth"),
         );
+        labels[labels.length-1].element.dataset.dim="depth";
         if (
           b && state.gapDimensions!==false &&
           m.sections.find((s) => s.id === b.id)!.shelves.length &&
@@ -941,7 +969,14 @@ export function Scene(p: Props) {
           }
           if(state.mode==='move'&&state.stretchable&&state.onStretch&&!state.lightMode)stretchHandle(side,at(side==='right'?fm.width:0,fm.depth+25,fy));
         }
+        // Ручки углов (решение Макса 29.10.2026): спереди — ширина+высота (плоскость фасада), сверху — ширина+глубина (крыша),
+        // сбоку — глубина+высота (видимый бок)
+        const dims=cornerDims(state.view);
+        if(dims&&state.mode==='move'&&state.stretchable&&state.onCorner&&!state.lightMode){
+          for(const e1 of ['lo','hi'] as const)for(const e2 of ['lo','hi'] as const)cornerHandle(dims,[e1,e2],cornerAt(focus,dims,[e1,e2]));
+        }
       }
+      guideGroup=null;drawGuides();
     }
     function fit() {
       fitting=true;needsRender=true;
@@ -994,6 +1029,8 @@ export function Scene(p: Props) {
       controls.update();
       if(current.current.fit===p.fit&&current.current.view===p.view)restoreCamera();
       fitting=false;
+      // другой вид — свои вспомогательные линии; начатая линия Q отменяется
+      cancelTool();selectedGuide=null;drawGuides();
     }
     let initial = true;
     const observer = new ResizeObserver(() => {
@@ -1065,7 +1102,9 @@ export function Scene(p: Props) {
       needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
         const raw={x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
-        const next=e.altKey?{x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}:current.current.snap(drag.mid,raw);
+        let next=e.altKey?{x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}:current.current.snap(drag.mid,raw);
+        // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
+        const da=current.current.arrangement.find(a=>a.id===drag!.mid);if(da&&!e.altKey)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front')next.y=drag.origin.y;
         drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||current.current.groupIds?.includes(drag.mid)&&current.current.groupIds.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':current.current.groupIds?.includes(drag.mid)?'Группа · ':'')+(e.altKey?'Без привязки · ':'')+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
@@ -1148,6 +1187,9 @@ export function Scene(p: Props) {
       st.moved=true;
       const du=((e.clientX-st.start[0])*st.screen.x+(e.clientY-st.start[1])*st.screen.y)/st.screen.k;
       st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=!e.altKey;
+      // край — к вспомогательной линии (Q) точно, без шага 10 мм
+      const sa=current.current.arrangement.find(x=>x.id===st.mid),sg=st.snap?viewGuides():[];
+      if(sa&&sg.length){const {E,o}=edgeOf(sa,'width',st.side==='right'?'hi':'lo'),hit=snapOut(E,o,st.raw,guidePlanes(sg),snapTol());if(hit){st.raw=hit.raw;st.snap=false;}}
       const plan=current.current.stretchPlan?.(st.mid,st.side,st.raw,st.snap)??{};
       previewStretch(st,plan);needsRender=true;
       badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
@@ -1166,12 +1208,194 @@ export function Scene(p: Props) {
       badge.hidden=true;badge.classList.remove('invalid');badge.style.cssText='';controls.enabled=true;needsRender=true;
     }
     function stretchUp(){const st=stretch;endStretch();if(st?.moved)current.current.onStretch?.(st.mid,st.side,st.raw,st.snap);}
+    // ── Вспомогательные линии и растяжение за угол (решение Макса 29.10.2026) ──────────────────────────────────────────────
+    const so=()=>sceneOrigin??{x:0,z:0};
+    const toScene=(p:V3)=>new THREE.Vector3(p.x-so().x,p.y,p.z-so().z);
+    const fromScene=(v:THREE.Vector3):V3=>({x:v.x+so().x,y:v.y,z:v.z+so().z});
+    /** Направление «на камеру» ортогонального вида (оси без дрожания 0,001 из fit), в 3D — null. */
+    function lookNow():V3|null{
+      if(current.current.view==='iso'||camera!==orthographic)return null;
+      const d=camera.getWorldDirection(new THREE.Vector3()).negate();
+      for(const k of ['x','y','z'] as const)if(Math.abs(d[k])<0.01)d[k]=0;
+      d.normalize();return {x:d.x,y:d.y,z:d.z};
+    }
+    const viewGuides=()=>current.current.presentation?[]:guidesInView(current.current.guides,lookNow());
+    /** Допуск привязки, мм: 10 px экрана, не больше 30 мм (как привязка ручки «↔», STRETCH_SNAP). */
+    function snapTol(){const mm=camera===orthographic?(orthographic.top-orthographic.bottom)/orthographic.zoom/Math.max(1,target.clientHeight):3;return Math.min(30,Math.max(2,10*mm));}
+    type CornerDrag={mid:string;dims:[Dim,Dim];ends:[End,End];out:THREE.Vector3[];plane:THREE.Plane;start:THREE.Vector3;origin:[number,number];moved:boolean;pull?:CornerPull;touched:string[];texts:{el:HTMLElement;text:string}[];handle?:{label:typeof labels[number];base:THREE.Vector3}};
+    let corner:CornerDrag|null=null;
+    /** Угол корпуса a в координатах сцены: края по dims/ends; ось вне вида — видимая грань (фасад спереди, крыша сверху, бок сбоку). */
+    function cornerAt(a:PlacedModule,dims:[Dim,Dim],ends:[End,End]){
+      const m=a.module,y0=a.y??0,end=(d:Dim)=>dims[0]===d?ends[0]:dims[1]===d?ends[1]:undefined;
+      const u=end('width')?(end('width')==='hi'?m.width:0):current.current.view==='left'?0:m.width;
+      const v=end('depth')?(end('depth')==='hi'?m.depth:0):m.depth;
+      const y=end('height')?(end('height')==='hi'?y0+m.height:y0):y0+m.height;
+      const q=localToRoom(a,u,v);return new THREE.Vector3(q.x-so().x,y,q.z-so().z);
+    }
+    function startCorner(dims:[Dim,Dim],ends:[End,End],pos:THREE.Vector3,e:PointerEvent){
+      const s=current.current,a=s.arrangement.find(x=>x.id===s.activeId);if(!a||drag||stretch||corner||tool)return;
+      const out=dims.map((d,i)=>{const v=axisOf(a,d),k=ends[i]==='hi'?1:-1;return new THREE.Vector3(v.x*k,v.y*k,v.z*k);});
+      const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()),pos);
+      cast(e.clientX,e.clientY);const start=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,start))return;
+      const texts=labels.filter(l=>l.element.dataset.dim&&dims.includes(l.element.dataset.dim as Dim)).map(l=>({el:l.element as HTMLElement,text:l.element.textContent??''}));
+      const hl=labels.find(l=>l.element.classList.contains('corner-handle')&&l.element.dataset.corner===ends.join('-'));
+      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined};
+      hl?.element.classList.add('active');
+      controls.enabled=false;target.classList.add('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=false;
+      window.addEventListener('pointermove',cornerMove);window.addEventListener('pointerup',cornerUp);window.addEventListener('pointercancel',endCorner);
+    }
+    function resetCornerPreview(c:CornerDrag){for(const id of c.touched){const g=moduleGroups.get(id);if(g){g.scale.set(1,1,1);g.position.copy(g.userData.base);}}c.touched=[];}
+    /** Показ итога на сцене: корпуса, что меняются (сам и сосед при стыке), масштабируются и встают на новое место. */
+    function previewCorner(c:CornerDrag,plan:CornerPlan){
+      resetCornerPreview(c);
+      for(const n of plan.preview??[]){
+        const cur=current.current.arrangement.find(x=>x.id===n.id),g=moduleGroups.get(n.id);if(!cur||!g)continue;
+        const same=Math.abs(cur.x-n.x)<.05&&Math.abs(cur.z-n.z)<.05&&Math.abs((cur.y??0)-(n.y??0))<.05&&cur.module.width===n.module.width&&cur.module.height===n.module.height&&cur.module.depth===n.module.depth;
+        if(same)continue;
+        const o=localToRoom(n,0,0);g.scale.set(n.module.width/cur.module.width,n.module.height/cur.module.height,n.module.depth/cur.module.depth);g.position.set(o.x-so().x,n.y??0,o.z-so().z);c.touched.push(n.id);
+      }
+      for(const t of c.texts){const d=t.el.dataset.dim as Dim;t.el.textContent=plan[d]+' мм';}
+      const me=plan.preview?.find(x=>x.id===c.mid);if(c.handle)c.handle.label.position.copy(me?cornerAt(me,c.dims,c.ends):c.handle.base); // ручка едет за углом
+    }
+    function cornerMove(e:PointerEvent){
+      const c=corner;if(!c)return;
+      if(!c.moved&&Math.hypot(e.clientX-c.origin[0],e.clientY-c.origin[1])<3)return;
+      c.moved=true;cast(e.clientX,e.clientY);const P=new THREE.Vector3();if(!ray.ray.intersectPlane(c.plane,P))return;P.sub(c.start);
+      const pull:CornerPull={mid:c.mid,snap:!e.altKey,tol:snapTol(),guides:viewGuides()};
+      c.dims.forEach((d,i)=>{pull[d]={end:c.ends[i],raw:Math.round(P.dot(c.out[i])*10)/10};});
+      c.pull=pull;const plan=current.current.cornerPlan?.(pull);if(!plan)return;
+      previewCorner(c,plan);needsRender=true;
+      badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
+      badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+c.dims.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'');
+      const r=target.getBoundingClientRect();
+      Object.assign(badge.style,{left:Math.max(8,Math.min(e.clientX-r.left,target.clientWidth-8))+'px',top:Math.max(40,e.clientY-r.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
+    }
+    function endCorner(){
+      window.removeEventListener('pointermove',cornerMove);window.removeEventListener('pointerup',cornerUp);window.removeEventListener('pointercancel',endCorner);
+      const c=corner;corner=null;if(!c)return;
+      resetCornerPreview(c);for(const t of c.texts)t.el.textContent=t.text;
+      if(c.handle){c.handle.label.position.copy(c.handle.base);c.handle.label.element.classList.remove('active');}
+      target.classList.remove('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=true;
+      badge.hidden=true;badge.classList.remove('invalid');badge.style.cssText='';controls.enabled=true;needsRender=true;
+    }
+    function cornerUp(){const c=corner;endCorner();if(c?.moved&&c.pull)current.current.onCorner?.(c.pull);}
+    // Линии: пунктир в своём виде; выбранная — оранжевая. Группа внутри modelGroup (на снимок КП не попадает — captureGuide).
+    let guideGroup:THREE.Group|null=null,selectedGuide:string|null=null;
+    // общие материалы (геометрия линий — своя; материалы не уничтожаются с группой: группа живёт внутри modelGroup)
+    const guideMat=new THREE.LineDashedMaterial({color:0x2f6fdb,dashSize:40,gapSize:24,depthTest:false,depthWrite:false}),guideSelMat=new THREE.LineDashedMaterial({color:0xe8590c,dashSize:60,gapSize:24,depthTest:false,depthWrite:false});guideMat.userData.keep=guideSelMat.userData.keep=true;
+    const centerRoom=()=>fromScene(controls.target);
+    function drawGuides(){
+      if(guideGroup){guideGroup.parent?.remove(guideGroup);guideGroup.traverse(o=>{if(o instanceof THREE.Line)o.geometry.dispose();});}
+      guideGroup=new THREE.Group();guideGroup.userData.captureGuide=true;modelGroup.add(guideGroup);needsRender=true;
+      const look=lookNow(),list=viewGuides();setGuideCount(list.length);
+      if(selectedGuide&&!list.some(g=>g.id===selectedGuide))selectedGuide=null;
+      if(!look)return;
+      for(const g of list){
+        const [a,b]=guideSegment({n:v3(g.n),at:g.at},look,centerRoom()),sel=g.id===selectedGuide;
+        const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([toScene(a),toScene(b)]),sel?guideSelMat:guideMat);
+        l.computeLineDistances();l.renderOrder=110;l.userData.guideId=g.id;guideGroup.add(l);
+      }
+    }
+    // Инструмент Q: pick — навести и щёлкнуть линию; place — линия идёт за мышью, цифры — расстояние, Enter/щелчок — поставить.
+    const toolMat=new THREE.LineBasicMaterial({color:0xe8590c,depthTest:false,transparent:true}),ghostMat=new THREE.LineDashedMaterial({color:0xe8590c,dashSize:30,gapSize:18,depthTest:false,transparent:true});
+    const hoverLine=new THREE.Line(new THREE.BufferGeometry(),toolMat),ghostLine=new THREE.Line(new THREE.BufferGeometry(),ghostMat);
+    for(const l of [hoverLine,ghostLine]){l.renderOrder=120;l.visible=false;l.frustumCulled=false;scene.add(l);}
+    type Tool={phase:'pick';lines:GuideLine[];hover?:GuideLine}|{phase:'place';look:V3;base:GuideLine;typed:string;at?:number;dist?:number};
+    let tool:Tool|null=null,lastMouse:[number,number]|null=null;
+    function setSegment(l:THREE.Line,a:V3,b:V3,dashed=false){l.geometry.dispose();l.geometry=new THREE.BufferGeometry().setFromPoints([toScene(a),toScene(b)]);if(dashed)l.computeLineDistances();l.visible=true;needsRender=true;}
+    function toolBadge(text:string,x?:number,y?:number){
+      badge.hidden=false;badge.classList.remove('invalid');badge.textContent=text;
+      const r=target.getBoundingClientRect(),[cx,cy]=x!==undefined&&y!==undefined?[x,y]:lastMouse??[r.left+r.width/2,r.top+80];
+      Object.assign(badge.style,{left:Math.max(8,Math.min(cx-r.left,target.clientWidth-8))+'px',top:Math.max(40,cy-r.top-22)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
+    }
+    function segDist(mx:number,my:number,a:V3,b:V3){
+      const A=toScreen(toScene(a)),B=toScreen(toScene(b)),dx=B.x-A.x,dy=B.y-A.y,L=dx*dx+dy*dy;
+      const t=L?Math.max(0,Math.min(1,((mx-A.x)*dx+(my-A.y)*dy)/L)):0;return Math.hypot(mx-A.x-t*dx,my-A.y-t*dy);
+    }
+    function mouseRoom(clientX:number,clientY:number):V3|null{cast(clientX,clientY);const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()),controls.target),q=new THREE.Vector3();return ray.ray.intersectPlane(plane,q)?fromScene(q):null;}
+    function startTool(){
+      const look=lookNow(),s=current.current;if(!look||!s.onGuides)return;
+      endCorner();endStretch();resetDrag();selectGuide(null);
+      tool={phase:'pick',lines:candidateLines(s.arrangement.filter(a=>!s.hiddenModuleIds?.includes(a.id)&&!s.hideFurniture),look,s.activeId,s.guideRoom??s.room,s.guides)};
+      target.classList.add('guide-tool');
+      if(lastMouse)toolMove(lastMouse[0],lastMouse[1]);else toolBadge('Q: наведите на линию (край корпуса, деталь, стена, пол) и щёлкните · Esc — отмена');
+    }
+    function cancelTool(){if(!tool)return;tool=null;hoverLine.visible=false;ghostLine.visible=false;badge.hidden=true;badge.style.cssText='';target.classList.remove('guide-tool');needsRender=true;}
+    function toolMove(clientX:number,clientY:number){
+      const t=tool;if(!t)return;
+      const r=target.getBoundingClientRect(),mx=clientX-r.left,my=clientY-r.top;
+      if(t.phase==='pick'){
+        let best:GuideLine|undefined,bd=10;for(const l of t.lines){const d=segDist(mx,my,l.a,l.b);if(d<bd-0.01){bd=d;best=l;}}
+        t.hover=best;if(best)setSegment(hoverLine,best.a,best.b);else{hoverLine.visible=false;needsRender=true;}
+        toolBadge(best?'Q: '+best.what+' — щёлкните, чтобы строить от неё':'Q: наведите на линию (край корпуса, деталь, стена, пол) и щёлкните · Esc — отмена',clientX,clientY);
+        return;
+      }
+      const m=mouseRoom(clientX,clientY);if(!m)return;
+      const pl=placeGuide(t.base,m,parseTyped(t.typed));t.at=pl.at;t.dist=pl.dist;
+      const [a,b]=guideSegment({n:t.base.n,at:pl.at},t.look,centerRoom());setSegment(ghostLine,a,b,true);
+      toolBadge((t.typed?'Размер: '+t.typed+'▏':'Расстояние '+pl.dist)+' мм · Enter — поставить · Esc — отмена',clientX,clientY);
+    }
+    function placeNow(){
+      const t=tool,s=current.current;if(!t||t.phase!=='place'||t.at===undefined||!s.onGuides)return;
+      const list=s.guides??[],dup=list.some(g=>Math.abs(g.at-t.at!)<.05&&Math.abs(v3(g.n).x-t.base.n.x)+Math.abs(v3(g.n).y-t.base.n.y)+Math.abs(v3(g.n).z-t.base.n.z)<.01&&guidesInView([g],t.look).length);
+      const at=t.at,look=t.look,n=t.base.n;cancelTool();
+      if(!dup)s.onGuides([...list,makeGuide('g'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),look,n,at)]);
+    }
+    function selectGuide(id:string|null){if(selectedGuide===id)return;selectedGuide=id;drawGuides();if(!id&&!tool&&!drag&&!stretch&&!corner){badge.hidden=true;badge.style.cssText='';}}
+    function guideAt(clientX:number,clientY:number){
+      const look=lookNow();if(!look)return null;const r=target.getBoundingClientRect(),mx=clientX-r.left,my=clientY-r.top;
+      let best:string|null=null,bd=6;for(const g of viewGuides()){const [a,b]=guideSegment({n:v3(g.n),at:g.at},look,centerRoom()),d=segDist(mx,my,a,b);if(d<bd){bd=d;best=g.id;}}
+      return best;
+    }
+    function removeGuides(ids:string[]){const s=current.current;if(!s.onGuides||!ids.length)return;selectGuide(null);s.onGuides((s.guides??[]).filter(g=>!ids.includes(g.id)));}
+    /** Щелчки инструмента Q и выбор линии — до обработчиков сцены (фаза захвата на контейнере). */
+    function toolDown(e:PointerEvent){
+      if(e.button!==0||current.current.presentation)return;
+      const t=tool;
+      if(t){
+        e.preventDefault();e.stopPropagation();toolMove(e.clientX,e.clientY);
+        if(t.phase==='pick'){const h=t.hover,look=lookNow();if(!h||!look)return;tool={phase:'place',look,base:h,typed:''};toolMove(e.clientX,e.clientY);}
+        else placeNow();
+        return;
+      }
+      if(e.target!==renderer.domElement)return;
+      const g=guideAt(e.clientX,e.clientY);
+      if(g){e.preventDefault();e.stopPropagation();selectGuide(g);toolBadge('Вспомогательная линия · Delete — убрать · Esc — снять выбор',e.clientX,e.clientY);}
+      else if(selectedGuide)selectGuide(null);
+    }
+    function trackMouse(e:PointerEvent){lastMouse=[e.clientX,e.clientY];if(tool)toolMove(e.clientX,e.clientY);}
+    /** Q, цифры, Enter, Esc, Delete для линий — раньше App (фаза захвата на window; App пропускает defaultPrevented). */
+    function guideKey(e:KeyboardEvent){
+      const s=current.current;if(s.presentation||editsText(e.target))return;
+      if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+        if(!lookNow()||!s.onGuides)return;
+        e.preventDefault();if(e.repeat)return;
+        if(tool)cancelTool();else startTool();return;
+      }
+      const t=tool;
+      if(t){
+        if(e.key==='Escape'){e.preventDefault();cancelTool();return;}
+        if(t.phase==='place'){
+          if(/^[0-9]$/.test(e.key)||((e.key===','||e.key==='.')&&!/[.,]/.test(t.typed))){e.preventDefault();if(t.typed.length<7)t.typed+=e.key;if(lastMouse)toolMove(lastMouse[0],lastMouse[1]);return;}
+          if(e.key==='Backspace'){e.preventDefault();t.typed=t.typed.slice(0,-1);if(lastMouse)toolMove(lastMouse[0],lastMouse[1]);return;}
+          if(e.key==='Enter'||e.key==='NumpadEnter'){e.preventDefault();if(lastMouse)toolMove(lastMouse[0],lastMouse[1]);placeNow();return;}
+        }
+        if(e.key==='Delete'||e.key==='Enter')e.preventDefault();
+        return;
+      }
+      if(selectedGuide){
+        if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();removeGuides([selectedGuide]);return;}
+        if(e.key==='Escape'){e.preventDefault();selectGuide(null);}
+      }
+    }
+    function clearGuides(){removeGuides(viewGuides().map(g=>g.id));}
+    target.addEventListener('pointerdown',toolDown,true);window.addEventListener('pointermove',trackMouse);window.addEventListener('keydown',guideKey,true);
     // Alt во время тяги (корпуса или края) не уводит фокус в меню браузера Chrome на Windows (критик 20.10, m11)
-    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch))e.preventDefault();}
+    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner))e.preventDefault();}
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     // Esc отменяет тягу; событие помечается, чтобы App не снимал выделение тем же нажатием (п.19 волны 22.10)
-    function key(e:KeyboardEvent){if(e.key==='Escape'){if(drag||stretch)e.preventDefault();resetDrag();endStretch();}altGuard(e);}
+    function key(e:KeyboardEvent){if(e.key==='Escape'){if(drag||stretch||corner)e.preventDefault();resetDrag();endStretch();endCorner();}altGuard(e);}
     window.addEventListener('keyup',altGuard);
     // Правая кнопка: короткий клик — круговое меню; протяжка — движение камеры (меню не открываем).
     let rightDown:{x:number;y:number}|null=null;
@@ -1219,7 +1443,7 @@ export function Scene(p: Props) {
     renderer.domElement.addEventListener("webglcontextlost", loss);
     rebuild();
     fit();
-    api.current = { rebuild, fit, refresh: () => { needsRender = true; } };
+    api.current = { rebuild, fit, refresh: () => { needsRender = true; }, guides: drawGuides, clearGuides };
     current.current.captureReady((opts) => {
       if(pendingTextures>0)throw Error("Материалы ещё загружаются. Подождите несколько секунд и повторите сохранение изображения.");
       const size=renderer.getSize(new THREE.Vector2()),ratio=renderer.getPixelRatio(),background=scene.background,gridVisible=grid.visible;
@@ -1273,7 +1497,7 @@ export function Scene(p: Props) {
       // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
       // вверх/вниз на её высоту, а если места нет — прячем до следующего поворота камеры (аудит вёрстки 06.10.2026).
       const rect=target.getBoundingClientRect();
-      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar')??[])
+      const blocked=Array.from(target.parentElement?.querySelectorAll<HTMLElement>('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help,.presentation-tools,.rmb-tip,.light-mode-bar,.clear-guides')??[])
         .filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-rect.left+r.width/2,y:r.top-rect.top+r.height/2,w:r.width+12,h:r.height+12};});
       const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
       // Порядок: ручки растяжения (стоят на боку), плашки зазора (сразу над ручкой), размеры, проёмы.
@@ -1281,8 +1505,9 @@ export function Scene(p: Props) {
       const rank=(l:typeof labels[number])=>l.fixed?-2:rowGap(l)?-1:Number(l.element.classList.contains('gap-dimension'));
       const ordered = [...labels].sort((a,b)=>rank(a)-rank(b));
       // Ручки прячем, если на экране они ближе 48 px друг к другу (узкий модуль издалека, ось ширины вдоль взгляда) — критик 20.10, m7.
-      const handles=labels.filter(l=>l.fixed);let hideHandles=false,handleRow:number|undefined;
-      if(handles.length===2&&!stretch){const [p,q]=handles.map(l=>l.position.clone().project(camera));hideHandles=Math.hypot((p.x-q.x)/2*target.clientWidth,(p.y-q.y)/2*target.clientHeight)<48;}
+      const isStretchHandle=(l:typeof labels[number])=>l.element.classList.contains('stretch-handle');
+      const handles=labels.filter(isStretchHandle);let hideHandles=false,handleRow:number|undefined;
+      if(handles.length===2&&!stretch&&!corner){const [p,q]=handles.map(l=>l.position.clone().project(camera));hideHandles=Math.hypot((p.x-q.x)/2*target.clientWidth,(p.y-q.y)/2*target.clientHeight)<48;}
       for (const l of ordered) {
         const v = l.position.clone().project(camera);
         const x = ((v.x + 1) / 2) * target.clientWidth, y0 = ((-v.y + 1) / 2) * target.clientHeight;
@@ -1291,7 +1516,7 @@ export function Scene(p: Props) {
         if ((l.wall&&cutawayHidden.has(l.wall)) || !(v.z < 1 && v.z > -1 && Math.abs(v.x)<1 && Math.abs(v.y)<1)) { l.element.style.display = "none"; continue; }
         l.element.style.display = "";
         const w = l.element.offsetWidth + 4, h = l.element.offsetHeight + 4;
-        if (l.fixed) { if (hideHandles) { l.element.style.display = "none"; continue; } l.element.style.top = y0 + "px"; placed.push({ x, y: y0, w, h }); handleRow = y0; continue; }
+        if (l.fixed) { if (hideHandles && isStretchHandle(l)) { l.element.style.display = "none"; continue; } l.element.style.top = y0 + "px"; placed.push({ x, y: y0, w, h }); if (isStretchHandle(l)) handleRow = y0; continue; }
         const hits = (y:number) => placed.some(p => Math.abs(p.x - x) < (p.w + w) / 2 && Math.abs(p.y - y) < (p.h + h) / 2);
         const inside = (c:number) => x-w/2>=4 && x+w/2<=target.clientWidth-4 && c-h/2>=4 && c+h/2<=target.clientHeight-4;
         // плашка зазора — над ручкой, не под ней (узкий зазор 20–150 мм: центр зазора у самой ручки) — критик 20.10, B1
@@ -1310,7 +1535,9 @@ export function Scene(p: Props) {
     animate();
     return () => {
       saveCamera();controls.removeEventListener('end',saveCamera);
-      endStretch();window.removeEventListener('keyup',altGuard);
+      endStretch();endCorner();cancelTool();window.removeEventListener('keyup',altGuard);
+      target.removeEventListener('pointerdown',toolDown,true);window.removeEventListener('pointermove',trackMouse);window.removeEventListener('keydown',guideKey,true);
+      scene.remove(hoverLine,ghostLine);hoverLine.geometry.dispose();ghostLine.geometry.dispose();toolMat.dispose();ghostMat.dispose();guideMat.dispose();guideSelMat.dispose();
       disposed = true;
       current.current.captureReady(undefined);
       cancelAnimationFrame(frame);
@@ -1361,12 +1588,16 @@ export function Scene(p: Props) {
       p.rowGaps,
       p.stretchable,
       p.presentation,
+      p.view, // ручки углов — свои в каждом виде
+      !!p.onCorner,
       p.drawerPreview?.sid,
       p.drawerPreview?.index,
     ],
   );
   // Переключатель «Ближние стены» — только видимость, без пересборки сцены.
   useEffect(() => api.current?.refresh(), [p.cutaway]);
+  // Вспомогательные линии изменились (поставили, убрали, Ctrl+Z) — перерисовать без пересборки сцены.
+  useEffect(() => api.current?.guides(), [p.guides]);
   useEffect(
     () => api.current?.fit(),
     [
@@ -1380,6 +1611,7 @@ export function Scene(p: Props) {
   useEffect(()=>{const action=p.presentation||p.mode==='orbit'?'Перетаскивание — поворот вида':p.mode==='fill'?'Перетаскивайте полки и ящики по высоте, перегородки по ширине':p.moveAll?'Перетаскивание корпуса перемещает всю композицию':'Перетаскивайте корпуса для расстановки';host.current?.querySelector('canvas')?.setAttribute('aria-label','3D-модель мебели. '+action+'. Колесо — масштаб, зажатое колесо — вращение камеры.');},[p.mode,p.moveAll,p.presentation]);
   return (
     <div className={p.lightMode?"scene light-picking":"scene"} ref={host} data-testid="scene">
+      {guideCount>0&&!p.presentation&&p.onGuides&&<button type="button" className="clear-guides" title="Убрать вспомогательные линии этого вида (Ctrl+Z — вернуть)" onClick={()=>api.current?.clearGuides()}>Убрать вспомогательные линии ({guideCount})</button>}
       {error && (
         <div className="scene-error" role="alert">
           {error}
