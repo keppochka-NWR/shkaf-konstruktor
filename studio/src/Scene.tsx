@@ -1444,6 +1444,8 @@ export function Scene(p: Props) {
     /** Q, цифры, Enter, Esc, Delete для линий — раньше App (фаза захвата на window; App пропускает defaultPrevented). */
     function guideKey(e:KeyboardEvent){
       const s=current.current;if(s.presentation||editsText(e.target))return;
+      // открыто окно (вопрос «Удалить?», фурнитура, подсветка…) — клавиши сцены не действуют (критик 29.10: Q под вопросом начинал линию)
+      if(document.querySelector('[aria-modal="true"]'))return;
       // тяга за угол: набор размеров «600;2400», Enter, Esc, Backspace — раньше App и Q
       if(corner){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(corner,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
