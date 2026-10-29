@@ -9,9 +9,16 @@ const sectionOf = (m: Module, sid: string) => { const s = m.sections.find((x) =>
 /** Ящики «до крыши» без полки над ними (комод, выкатной ящик антресоли), расставленные по правилу: при смене числа ящиков
  *  они снова делятся на всю высоту проёма. Один ящик (в т.ч. с фасадом на весь проём) — тоже. */
 export function roofDrawers(m: Module, s: Section): boolean {
+  return (s.drawers === 1 || isAutoDrawerLayout(m, s)) && roofColumn(m, s);
+}
+/** Ящики закрывают проём до крыши без полки над ними — по правилу или с высотой фасада/короба, заданной полем (круг 2 критика 29.10).
+ *  Число ящиков у такой секции («+/−», поле «Ящиков в секции», удаление ящика) — снова поровну на весь проём: иначе «−» оставлял
+ *  щель/открытую нишу сверху (800×1000: 2 ящика, фасад 452,5 полем, «−» → фасад 30…482,5 и ниша 515 мм), а «+» отказывал
+ *  «Ящики не до крыши». Зазор между фасадами (setDrawerGap) пересчитывает только расстановку по правилу (roofDrawers). */
+export function roofColumn(m: Module, s: Section): boolean {
   if (!(s.drawers > 0) || m.kitchen || m.raw || m.corner || m.kupe || s.shelves.length || s.rod || s.pantograph) return false;
   if (s.drawerConfigs?.some((c) => c.mesh || c.tray || c.noFacade)) return false;
-  return (s.drawers === 1 || isAutoDrawerLayout(m, s)) && !hasDrawerCap(m, s) && drawersFillRoof(m, s);
+  return !hasDrawerCap(m, s) && drawersFillRoof(m, s);
 }
 
 /** Пересчитать ящики секции на равные накладные фасады (расстановка «по правилу» или по кнопке «Фасады поровну»). */
@@ -26,7 +33,7 @@ export function relayoutDrawers(m: Module, s: Section): void {
 export function setDrawerCount(m: Module, sid: string, count: number): void {
   const s = sectionOf(m, sid), c = Math.max(0, Math.min(RULES.maxDrawers, Math.round(count)));
   if (c === s.drawers) return;
-  const roof = roofDrawers(m, s), auto = isAutoDrawerLayout(m, s);
+  const roof = roofColumn(m, s), auto = isAutoDrawerLayout(m, s);
   const cs = Array.from({ length: s.drawers }, (_, j) => ({ ...drawerConfig(m, s, j) }));
   // критик 29.10 (блокер 3): ящики до крыши — снова РАВНЫЕ фасады на всю высоту проёма (drawersToRoof → roofEvenLayout); не встают
   // равными (фасад выше 800, нижнему коробу мало места) — ошибка с причиной, секция не меняется (раньше: щель без фасада сверху)

@@ -3,7 +3,7 @@ import {createCornerUpper} from './cornerWardrobe';
 import {fitSmallModule} from './smallSize';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,evenDrawerConfigs,isAutoDrawerLayout,drawersToRoof,type Module,type Section} from './model';
-import {roofDrawers,setDrawerCount} from './drawerModes';
+import {roofColumn,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
 import {remapDrawerCutouts,dropCutoutsOnRemovedParts} from './cutoutBinding';
@@ -18,7 +18,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
   else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
-  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofDrawers(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;remapDrawerCutouts(m,sid,j);/* круг 2 критика 29.10: вырез идёт за своим ящиком */
+  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofColumn(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;remapDrawerCutouts(m,sid,j);/* круг 2 критика 29.10: вырез идёт за своим ящиком */
     // ящики по правилу (правка 29.10): комод — оставшиеся снова поровну до крыши; стопка от дна — сомкнуть и выровнять фасады
     if(s.drawers&&(roof||auto)){if(roof){s.drawerConfigs=drawersToRoof(m,s);/* критик 29.10: не встают поровну до крыши — ящик не убирается (ошибка с причиной), а не щель сверху */}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}}}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
@@ -53,7 +53,7 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   // ящики по правилу (правка Макса 29.10.2026): комод / ящики до крыши — ещё один ящик, и все снова поровну на весь проём;
   // стопка от дна — новый ящик сверху, фасады снова равные. Заданные вручную ящики — как раньше.
   const autoDrawers=kind==='drawer'&&!drawer?.mesh&&(target.drawers===0||isAutoDrawerLayout(source,target));
-  if(kind==='drawer'&&!drawer?.mesh&&roofDrawers(source,target)){
+  if(kind==='drawer'&&!drawer?.mesh&&roofColumn(source,target)){
     /* критик 29.10 (блокер 3): не встают поровну до крыши — отказ с причиной, а не обычная вставка с неравными фасадами */const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module;setDrawerCount(m,sid,target.drawers+1);const errs=projectErrors(n);if(!errs.length)return n;throw Error(errs[0]);
   }
   const desired=Math.round((worldY-b.bottom)/5)*5;

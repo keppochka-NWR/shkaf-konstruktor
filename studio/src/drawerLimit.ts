@@ -3,7 +3,7 @@
 // высоты свободно до ближайшей полки или крыши и сколько ящиков секция вмещает сейчас. Та же вставка, что у insertItem.
 import {boxes,drawerConfig,drawerPitch,drawerStackHeight,fillerSides,RULES,MAX_DRAWERS_REASON,type Module,type Section} from './model';
 import {projectErrors,type Project} from './project';
-import {roofDrawers,setDrawerCount} from './drawerModes';
+import {roofColumn,setDrawerCount} from './drawerModes';
 
 const plural=(n:number)=>n%10===1&&n%100!==11?'ящик':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'ящика':'ящиков';
 /** Проект с ещё одним ящиком поверх стопки секции (как insertItem при желаемой высоте = верх стопки) и что ему мешает. */
@@ -11,7 +11,7 @@ function drawerOnTop(p:Project,mid:string,sid:string):{next:Project;m:Module;s:S
   const next=structuredClone(p),m=next.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(x=>x.id===sid),b=m&&boxes(m).find(x=>x.id===sid);
   if(!m||!s||!b)return null;
   // комод / ящики до крыши по правилу (правка 29.10): ещё один ящик — все снова поровну на весь проём (как insertItem)
-  if(roofDrawers(m,s)){try{setDrawerCount(m,sid,s.drawers+1);return {next,m,s};}catch{return null;}}
+  if(roofColumn(m,s)){try{setDrawerCount(m,sid,s.drawers+1);return {next,m,s};}catch{return null;}}
   const y=drawerStackHeight(s);
   s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
   // как в insertItem: за дверью с фальшами полка ниже верха ящиков не пускает ящик (фальш идёт до полки)
@@ -38,7 +38,7 @@ export function drawerAddReason(p:Project,mid:string,sid:string):string{
   if(!m||!s||!b)return 'Выберите секцию с ящиками.';
   if(s.drawers>=RULES.maxDrawers)return MAX_DRAWERS_REASON;
   // комод (ящики до крыши поровну, критик 29.10): причина — почему N+1 равных фасадов не встают
-  if(roofDrawers(m,s)){const c=structuredClone(m);try{setDrawerCount(c,sid,s.drawers+1);}catch(e){return `Ящик ${s.drawers+1} не добавить: ${(e as Error).message.replace(/^Ящики поровну до крыши не встают: /,'')} Сейчас в секции ${s.drawers} ${plural(s.drawers)} поровну до крыши.`;}}
+  if(roofColumn(m,s)){const c=structuredClone(m);try{setDrawerCount(c,sid,s.drawers+1);}catch(e){return `Ящик ${s.drawers+1} не добавить: ${(e as Error).message.replace(/^Ящики поровну до крыши не встают: /,'')} Сейчас в секции ${s.drawers} ${plural(s.drawers)} поровну до крыши.`;}}
   const t=drawerOnTop(p,mid,sid),base=new Set(projectErrors(p)),n=s.drawers+1;
   const stack=drawerStackHeight(s),pitch=drawerPitch(drawerConfig(m,s,s.drawers),s.drawerGap),H=b.top-b.bottom;
   const shelf=s.shelves.map((v,j)=>({y:v*H,j})).filter(x=>x.y>stack).sort((a,z)=>a.y-z.y)[0];

@@ -4,7 +4,7 @@ import {environmentChecks} from './environmentChecks';
 import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
-import {parts,RULES} from './model';
+import {parts,RULES,facadeTop,hasDrawerCap,isDrawerModule} from './model';
 import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
 import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
 import {cutoutWarnings,mansardWarnings} from './shapes';
@@ -83,10 +83,13 @@ export function roomWarnings(project:Project){
  *  предупреждения). Правки фасада/короба смыкают ящики сами (editDrawerConfig); здесь — разрыв, заданный положением ящика. */
 export function drawerGapWarnings(project:Project):RoomWarning[]{
   const out:RoomWarning[]=[];
-  for(const a of project.modules){const m=a.module;if(m.kitchen||m.raw||m.kupe||m.corner||!m.sections.some(s=>s.drawers>1))continue;let ps;try{ps=parts(m);}catch{continue;}
-    m.sections.forEach((s,i)=>{if(s.drawers<2)return;
+  for(const a of project.modules){const m=a.module;if(m.kitchen||m.raw||m.kupe||m.corner||!m.sections.some(s=>s.drawers>0))continue;let ps;try{ps=parts(m);}catch{continue;}
+    m.sections.forEach((s,i)=>{if(s.drawers<1)return;
       const f=ps.filter(p=>p.sectionId===s.id&&/:drawer:\d+:facade$/.test(p.id)).map(p=>({j:Number(p.id.split(':drawer:')[1].split(':')[0]),lo:p.position[1]-p.size[1]/2,hi:p.position[1]+p.size[1]/2})).sort((x,y)=>x.lo-y.lo);
       const allow=Math.max(s.drawerGrip?RULES.drawerGrip:0,s.drawerGap??RULES.drawerFrontGap,RULES.drawerFrontGap)+1;
+      // круг 2 критика 29.10: и у одного ящика — ящичный модуль (комод), ящики не до крыши, над ними сама встала полка: открытая ниша без
+      // фасада над верхним ящиком (2 ящика, фасад полем, «−» → фасад 30…482,5 и ниша 515 мм без предупреждения). Полка, заданная явно, — замысел.
+      const top=f.at(-1);if(top&&isDrawerModule(m)&&s.drawerCap===undefined&&hasDrawerCap(m,s)){const niche=facadeTop(m)-top.hi;if(niche>allow)out.push({moduleId:a.id,kind:`drawer-niche-${s.id}`,message:`«${m.name}»: секция ${i+1} — над ящиком ${top.j+1} открытая ниша ${Math.round(niche)} мм без фасада: ящики не до крыши, над ними встала полка. «Полка над ящиками» — «Нет»: фасады снова поровну до крыши; если ниша задумана — «Есть».`});}
       for(let k=1;k<f.length;k++){const gap=f[k].lo-f[k-1].hi;if(gap>allow)out.push({moduleId:a.id,kind:`drawer-gap-${s.id}-${k}`,message:`«${m.name}»: секция ${i+1} — между фасадами ящиков ${f[k-1].j+1} и ${f[k].j+1} щель ${Math.round(gap)} мм. Нажмите «Собрать ящики от дна» или задайте высоту фасада ящика ${f[k-1].j+1} больше на ${Math.round(gap-(s.drawerGap??RULES.faceGap))} мм.`});}
     });}
   return out;
