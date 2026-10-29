@@ -28,19 +28,21 @@ export function setDrawerCount(m: Module, sid: string, count: number): void {
   if (c === s.drawers) return;
   const roof = roofDrawers(m, s), auto = isAutoDrawerLayout(m, s);
   const cs = Array.from({ length: s.drawers }, (_, j) => ({ ...drawerConfig(m, s, j) }));
+  // критик 29.10 (блокер 3): ящики до крыши — снова РАВНЫЕ фасады на всю высоту проёма (drawersToRoof → roofEvenLayout); не встают
+  // равными (фасад выше 800, нижнему коробу мало места) — ошибка с причиной, секция не меняется (раньше: щель без фасада сверху)
   if (c < s.drawers) {
-    s.drawers = c;
-    if (!c) { delete s.drawerConfigs; return; }
-    s.drawerConfigs = cs.slice(0, c);
-    if (roof) s.drawerConfigs = drawersToRoof(m, s);
-    else if (auto) relayoutDrawers(m, s);
+    if (!c) { s.drawers = 0; delete s.drawerConfigs; return; }
+    const t: Section = { ...s, drawers: c, drawerConfigs: cs.slice(0, c) };
+    if (roof) t.drawerConfigs = drawersToRoof(m, t);
+    else if (auto) relayoutDrawers(m, t);
+    s.drawers = c; s.drawerConfigs = t.drawerConfigs;
     return;
   }
   if (!roof) throw Error("Ящики не до крыши: новый ящик ставится поверх стопки.");
   const { y: _y, facadeH: _f, ...last } = cs[cs.length - 1]; void _y; void _f;
-  s.drawerConfigs = [...cs, ...Array.from({ length: c - s.drawers }, () => ({ ...last }))];
-  s.drawers = c;
-  s.drawerConfigs = drawersToRoof(m, s);
+  const t: Section = { ...s, drawers: c, drawerConfigs: [...cs, ...Array.from({ length: c - s.drawers }, () => ({ ...last }))] };
+  t.drawerConfigs = drawersToRoof(m, t);
+  s.drawers = c; s.drawerConfigs = t.drawerConfigs;
 }
 
 /** Направляющая, которая встаёт по глубине (за дверью нужно на 19 мм больше места спереди): самая длинная из ряда системы не длиннее доступного. */

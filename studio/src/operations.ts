@@ -19,7 +19,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofDrawers(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;
     // ящики по правилу (правка 29.10): комод — оставшиеся снова поровну до крыши; стопка от дна — сомкнуть и выровнять фасады
-    if(s.drawers&&(roof||auto)){if(roof){try{s.drawerConfigs=drawersToRoof(m,s);}catch{/* не встали — как есть */}}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}}}
+    if(s.drawers&&(roof||auto)){if(roof){s.drawerConfigs=drawersToRoof(m,s);/* критик 29.10: не встают поровну до крыши — ящик не убирается (ошибка с причиной), а не щель сверху */}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}}}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
   else if(pid.includes(':pullout:')){const left=(s.pullouts??1)-1;if(left>0)s.pullouts=left;else delete s.pullouts;}
   // вешалка в два яруса (заказ 7437584): нижняя штанга, труба или её держатели — снимается только второй ярус
@@ -53,7 +53,7 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   // стопка от дна — новый ящик сверху, фасады снова равные. Заданные вручную ящики — как раньше.
   const autoDrawers=kind==='drawer'&&!drawer?.mesh&&(target.drawers===0||isAutoDrawerLayout(source,target));
   if(kind==='drawer'&&!drawer?.mesh&&roofDrawers(source,target)){
-    try{const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module;setDrawerCount(m,sid,target.drawers+1);if(!projectErrors(n).length)return n;}catch{/* не встали до крыши — обычная вставка */}
+    /* критик 29.10 (блокер 3): не встают поровну до крыши — отказ с причиной, а не обычная вставка с неравными фасадами */const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module;setDrawerCount(m,sid,target.drawers+1);const errs=projectErrors(n);if(!errs.length)return n;throw Error(errs[0]);
   }
   const desired=Math.round((worldY-b.bottom)/5)*5;
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));

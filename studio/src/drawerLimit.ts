@@ -37,6 +37,8 @@ export function drawerAddReason(p:Project,mid:string,sid:string):string{
   const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(x=>x.id===sid),b=m&&boxes(m).find(x=>x.id===sid);
   if(!m||!s||!b)return 'Выберите секцию с ящиками.';
   if(s.drawers>=RULES.maxDrawers)return MAX_DRAWERS_REASON;
+  // комод (ящики до крыши поровну, критик 29.10): причина — почему N+1 равных фасадов не встают
+  if(roofDrawers(m,s)){const c=structuredClone(m);try{setDrawerCount(c,sid,s.drawers+1);}catch(e){return `Ящик ${s.drawers+1} не добавить: ${(e as Error).message.replace(/^Ящики поровну до крыши не встают: /,'')} Сейчас в секции ${s.drawers} ${plural(s.drawers)} поровну до крыши.`;}}
   const t=drawerOnTop(p,mid,sid),base=new Set(projectErrors(p)),n=s.drawers+1;
   const stack=drawerStackHeight(s),pitch=drawerPitch(drawerConfig(m,s,s.drawers),s.drawerGap),H=b.top-b.bottom;
   const shelf=s.shelves.map((v,j)=>({y:v*H,j})).filter(x=>x.y>stack).sort((a,z)=>a.y-z.y)[0];
