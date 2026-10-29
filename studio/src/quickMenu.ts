@@ -10,6 +10,7 @@ import { boxes, distribute, drawerCapTop, drawerFacesEqual, evenDrawerConfigs, e
 import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
 import { rawKitchen } from "./rawModule";
 import { fullSectionDrawer, relayoutDrawers, setDrawersOverlay } from "./drawerModes";
+import { sideFillerApplies } from "./sideFiller";
 
 export type QuickMenuOps = {
   /** Правка этого корпуса (modifyAt) — как селекты и галочки панели. */
@@ -26,6 +27,8 @@ export type QuickMenuOps = {
   ask?: (label: string, value: number, update: (v: number) => (n: Module) => void) => void;
   /** Корпус навесной — низ выше пола (y > 0): цоколь и ножки в меню не предлагаются, только «Без цоколя». */
   elevated?: boolean;
+  /** «Фальшпанель слева/справа» по правилу Макса 29.10 (sideFiller.ts: сдвиг или сужение модуля); undefined — старая правка модели. */
+  sideFiller?: (side: "left" | "right") => void;
 };
 
 /** Нижний угловой кухни (kitchenCorner.ts): «Угловой ›» — сторона глухой части, ширина двери и фальша (перестройка тем же генератором). */
@@ -179,8 +182,8 @@ export function fillersItem(m: Module, ops: QuickMenuOps): RadialItem {
   const sideItem = (side: "left" | "right"): RadialItem => {
     const sp = m.sidePanels?.[side], name = side === "left" ? "слева" : "справа";
     return { id: "q-side-" + side, label: (sp ? "Убрать фальшпанель " : "Фальшпанель ") + name, icon: PanelLeft, active: !!sp,
-      hint: sp ? `Сейчас ${sp.height} × ${sp.depth} мм. Размеры — в панели` : "Боковая фальшпанель до потолка: высота от 2400, глубина корпуса + 18",
-      run: () => ops.modify((n) => { const next = { ...n.sidePanels }; if (next[side]) delete next[side]; else next[side] = { height: Math.max(n.height, 2400), depth: n.depth + 18 }; if (Object.keys(next).length) n.sidePanels = next; else delete n.sidePanels; }) };
+      hint: sp ? `Сейчас ${sp.height} × ${sp.depth} мм. Размеры — в панели` : (m.kitchen ? "Высотой модуля" : "До потолка") + `; модуль сдвинется или станет уже на ${RULES.panel}`,
+      run: ops.sideFiller ? () => ops.sideFiller!(side) : () => ops.modify((n) => { const next = { ...n.sidePanels }; if (next[side]) delete next[side]; else next[side] = { height: Math.max(n.height, 2400), depth: n.depth + 18 }; if (Object.keys(next).length) n.sidePanels = next; else delete n.sidePanels; }) };
   };
   const strip: RadialItem = { id: "q-top-strip", label: "Планка под крышей", icon: ArrowUpToLine, active: !!m.topStrip, hint: m.topStrip ? `Сейчас ${m.topStrip} мм, в цвет фасадов` : "Нет", children: [0, ...TOP_STRIP_STEPS].map((v) => ({
     id: "q-top-strip-" + v, label: v ? `${v} мм` : "Нет", icon: ArrowUpToLine, active: (m.topStrip ?? 0) === v, hint: v ? `Планка ${v} мм в цвет фасадов` : "Без планки под крышей",
@@ -192,7 +195,13 @@ export function fillersItem(m: Module, ops: QuickMenuOps): RadialItem {
       run: () => ops.modify((n) => { n.wallFiller = { ...n.wallFiller, [side]: { kind: "edge", width: v } }; }) })) };
   });
   return { id: "q-fillers", label: "Фальши", icon: PanelLeft, active: !!(m.sidePanels || m.topStrip || m.wallFiller),
-    hint: "Фальшпанели, планка под крышей" + (m.wallFiller ? ", фальш к стене" : ". Фальш к стене добавляется сам, когда корпус у стены"), children: [sideItem("left"), sideItem("right"), strip, ...wall] };
+    hint: "Фальшпанели, планка под крышей" + (m.wallFiller ? ", фальш к стене" : ". Фальш к стене добавляется сам, когда корпус у стены"), children: m.kitchen ? [sideItem("left"), sideItem("right")] : [sideItem("left"), sideItem("right"), strip, ...wall] };
+}
+
+/** Кухонный модуль палитры (не из Базиса): «Фальши ›» — только боковые фальшпанели (баг Макса 29.10: у кухни пункта не было). */
+export function kitchenFillerItems(m: Module, ops: QuickMenuOps): RadialItem[] {
+  if (!m.kitchen || !sideFillerApplies(m)) return [];
+  return [fillersItem(m, ops)];
 }
 
 /** Пункты для меню фасада/двери (тот же модуль): деление по высоте и тип петли. */

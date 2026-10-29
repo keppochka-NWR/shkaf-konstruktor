@@ -1,6 +1,7 @@
 import {FacadeEditor} from './FacadeEditor';
 import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
 import {Scissors} from 'lucide-react';
+import {toggleSideFiller} from './sideFiller';
 import {CutoutEditor,cutAllowed} from './CutoutEditor';
 import {ShapePanel} from './ShapePanel';
 import {readCutaway,saveCutaway} from './roomCutaway';
@@ -143,7 +144,7 @@ import { compatibleSlideLength, SLIDES, GTV_SOURCE, SLIDE_SYSTEMS, SLIDE_BRANDS,
 import { slidePrice } from "./pricing";
 import { RadialMenu, type RadialItem } from "./RadialMenu";
 import {addMenuItem,worktopMaterialItem} from './addMenu';
-import {quickItems,quickMenuApplies,lightUnavailable,upperItem,menuDropY,doorQuickItems,cornerItems,defaultDoorSplit,drawerQuickItems,type QuickMenuOps} from './quickMenu';
+import {quickItems,quickMenuApplies,lightUnavailable,upperItem,menuDropY,doorQuickItems,cornerItems,defaultDoorSplit,drawerQuickItems,kitchenFillerItems,type QuickMenuOps} from './quickMenu';
 import {allStandsLit,applyToAll,pickTargets,setAllStands,toggleGroup,type LightOrient} from './lights';
 import {LightModeBar,LightPanel} from './LightPanel';
 import {composeContextMenu,menuArea} from './contextMenu';
@@ -786,11 +787,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       removeUpper:above?()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==above.id)});}:undefined,
       lightMode:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightNote('');setLightMode(a.id);}:undefined,
       lightPanel:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightPanel(a.id);}:undefined,
-      ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));},elevated:(a.y??0)>0};
+      ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));},elevated:(a.y??0)>0,
+      // фальшпанель сбоку (баг Макса 29.10): сдвиг или сужение модуля под неё — sideFiller.ts
+      sideFiller:side=>{try{const r=toggleSideFiller(project,a.id,side);if(commitProject(r.project)&&r.note)setNotice({title:'Фальшпанель',text:r.note});}catch(e){setError((e as Error).message);}}};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id)]},
       mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
-      ...quickItems(mod,c.sid,quickOps),...cornerItems(mod,quickOps),
+      ...quickItems(mod,c.sid,quickOps),...kitchenFillerItems(mod,quickOps),...cornerItems(mod,quickOps),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
         editFacade,{id:'facades-add',label:'Добавить',icon:Plus,hint:'Установить или восстановить распашные фасады',disabled:!!mod.desk||!!mod.raw||!!mod.worktop,run:()=>{const next=structuredClone(project),target=next.modules.find(x=>x.id===a.id)!.module;target.doors=true;target.sections.forEach(s=>delete s.removedDoors);if(commitProject(next)){setActive(a.id);goStage('facades');}}},
