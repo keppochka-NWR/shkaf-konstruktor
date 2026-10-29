@@ -6,7 +6,8 @@
 //  5. Шкаф в комнату: цена в доке с отделкой и без неё одинаковая.
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { parseProject, type Project } from "../src/project";
+import { newProject, parseProject, type Project } from "../src/project";
+import { initialModule } from "../src/model";
 import { FINISHES } from "../src/roomFinishes";
 
 const [url, out] = process.argv.slice(2);
@@ -43,7 +44,32 @@ async function openFinishes() {
 }
 const byName = (t: string) => FINISHES.find((f) => f.name.includes(t))!;
 
-await page.goto(url, { timeout: 60000 });
+// fix-plan-click (29.10): настоящий щелчок по «План» и обратно в проекте с мебелью, панель отделки ни разу не открывалась
+// (вкладка «Помещение» монтирует список образцов): щелчок не возвращался — образцы растеризовались на холсте видеокарты
+// десятки секунд. Отдельная вкладка: проект из хранилища, как в stretch-guides-scenario.
+{
+  const plan = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  plan.on("pageerror", (e) => errors.push(e.message));
+  await plan.addInitScript({ content: "window.__long=[];try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window.__long.push(Math.round(e.duration));});}).observe({type:'longtask',buffered:true});}catch(e){}" });
+  const pr = newProject(); pr.room = { ...pr.room, width: 4000, depth: 3000, height: 2700 }; pr.modules = [{ id: "a", x: 1000, y: 0, z: 3, rotation: 0, module: { ...initialModule(), name: "Шкаф", width: 600, height: 2000, depth: 550 } }];
+  await plan.goto(url, { timeout: 60000 });
+  await plan.evaluate((raw) => { localStorage.clear(); localStorage.setItem("module-studio-v3", raw); localStorage.setItem("studio-stage", "bodies"); localStorage.setItem("studio-tip-rmb", "1"); }, JSON.stringify(pr));
+  await plan.goto(url, { timeout: 60000 }); await plan.waitForSelector("canvas"); await plan.waitForTimeout(2500);
+  const n0 = (await plan.evaluate("window.__long.length")) as number;
+  let t0 = Date.now();
+  const planOk = await plan.getByRole("button", { name: "План", exact: true }).click({ timeout: 8000 }).then(() => true, () => false);
+  const planMs = Date.now() - t0;
+  check("план: настоящий щелчок по «План» возвращается быстро", planOk && planMs < 2000, planMs + " мс");
+  await plan.waitForTimeout(1500);
+  const frames = planOk ? ((await plan.evaluate("new Promise(function(r){var n=0,t=performance.now();(function f(){n++;if(performance.now()-t<1000)requestAnimationFrame(f);else r(n);})();})")) as number) : 0;
+  const longs = planOk ? ((await plan.evaluate(`window.__long.slice(${n0})`)) as number[]) : [];
+  check("план: после открытия страница свободна (кадры идут, нет задач > 500 мс)", planOk && frames >= 20 && longs.every((d) => d < 500), `кадров за 1 с: ${frames}, длинные задачи: ${JSON.stringify(longs)}`);
+  if (planOk) await plan.screenshot({ path: `${out}/00-plan-open.png`, timeout: 60000 });
+  t0 = Date.now();
+  const backOk = planOk && (await plan.getByRole("button", { name: "3D", exact: true }).first().click({ timeout: 8000 }).then(() => true, () => false));
+  check("план: щелчок «3D» обратно возвращается быстро", backOk && Date.now() - t0 < 2000, Date.now() - t0 + " мс");
+  await plan.close().catch(() => {});
+}await page.goto(url, { timeout: 60000 });
 await page.waitForTimeout(2500);
 await shot("start");
 await openFinishes();

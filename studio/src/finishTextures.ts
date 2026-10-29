@@ -102,7 +102,10 @@ function wallpaper(g:CanvasRenderingContext2D,f:FinishItem,unit:FinishUnit,px:nu
 export function drawFinish(f:FinishItem,maxPx=FINISH_TEXTURE_PX):{canvas:HTMLCanvasElement;unit:FinishUnit}{
   const unit=finishUnit(f),px=texturePxPerMm(unit,maxPx),canvas=document.createElement('canvas');
   canvas.width=Math.max(1,Math.round(unit.w*px));canvas.height=Math.max(1,Math.round(unit.h*px));
-  const g=canvas.getContext('2d');if(!g)return {canvas,unit};
+  // willReadFrequently — рисовать на процессоре: тысячи мелких операций (волокна, пятна, крошка) на холсте видеокарты копятся и
+  // растеризуются разом при первом чтении (образец toDataURL, загрузка в текстуру) — секунды на одном кадре; в софтверном GL
+  // (swiftshader, сценарии) десятки секунд, «План» не отвечал (fix-plan-click 29.10).
+  const g=canvas.getContext('2d',{willReadFrequently:true});if(!g)return {canvas,unit};
   const sx=canvas.width/(unit.w*px),sy=canvas.height/(unit.h*px);g.scale(sx,sy);
   if(f.kind==='wallpaper')wallpaper(g,f,unit,px);
   else if(f.kind==='laminate'){g.fillStyle=f.tone[1];g.fillRect(0,0,unit.w*px,unit.h*px);for(const rect of unit.rects)plankRect(g,f,rect,unit,px);}

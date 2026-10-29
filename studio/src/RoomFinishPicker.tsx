@@ -18,8 +18,16 @@ function Swatch({f,paint}:{f?:FinishItem;paint?:string}){
   // образец рисуется после первого кадра (60+ позиций не тормозят открытие списка); смена позиции — свой образец
   const [drawn,setDrawn]=useState<{id:string;url:string}>();
   const url=f?(drawn?.id===f.id?drawn.url:swatches.get(f.id)):undefined;
-  useEffect(()=>{if(f&&url===undefined){const t=setTimeout(()=>setDrawn({id:f.id,url:swatchUrl(f)}),0);return ()=>clearTimeout(t);}},[f,url]);
-  return <span className="finish-swatch" aria-hidden="true" style={paint?{background:paint}:url?{backgroundImage:`url(${url})`}:{background:f?.tone[0]}}/>;
+  // …и только когда образец на экране (fix-plan-click 29.10): скрытая панель и прокрученный список ничего не рисуют
+  const el=useRef<HTMLSpanElement>(null);
+  useEffect(()=>{
+    if(!f||url!==undefined)return;
+    let t:ReturnType<typeof setTimeout>|undefined;const draw=()=>{t=setTimeout(()=>setDrawn({id:f.id,url:swatchUrl(f)}),0);};
+    const node=el.current;if(!node||typeof IntersectionObserver==='undefined'){draw();return ()=>clearTimeout(t);}
+    const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)){io.disconnect();draw();}});io.observe(node);
+    return ()=>{io.disconnect();clearTimeout(t);};
+  },[f,url]);
+  return <span ref={el} className="finish-swatch" aria-hidden="true" style={paint?{background:paint}:url?{backgroundImage:`url(${url})`}:{background:f?.tone[0]}}/>;
 }
 const norm=(s:string)=>s.toLowerCase().replace(/ё/g,'е');
 function Item({f,active,onPick}:{f:FinishItem;active:boolean;onPick:()=>void}){
