@@ -30,3 +30,9 @@ test("кухня: отступ ряда от стены и место под ф�
 test("текст палитры: «у стены нужна фальшпанель 20 мм (16 + 4)»", () => {
   assert.match(rowShortageText("Комод", { width: 600, free: 590, filler: 20, withFiller: 570, withoutFiller: 590 }), /фальшпанель 20 мм \(16 \+ 4\)/);
 });
+
+test("кухонный модуль палитры в пустую комнату — от стены 20 (было литералом 21)", async () => {
+  const { appendModule } = await import("../src/project");
+  const p = applyAutoFillers(appendModule({ version: 3, room: { width: 3000, depth: 2000, height: 2700, openings: [] }, modules: [] }, kitchenTemplate("base-doors", 600, initialModule())));
+  assert.equal(p.modules[0].x, 20);
+});

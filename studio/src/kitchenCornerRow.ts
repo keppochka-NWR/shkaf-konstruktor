@@ -71,7 +71,7 @@ function layout(source: Pick<Module, "decor" | "facadeDecor">, o: { back: number
   // зазор от глухой части до боковой стены: дверь углового кончается за CORNER_CLEARANCE до лица планки крыла
   const g = Math.max(0, Math.round((plankFace + CORNER_CLEARANCE - blind) * 10) / 10);
   const has = (w: Wing) => wings.includes(w);
-  // ряд у задней стены: от угла(ов) до конца ряда; у свободного конца у стены — место под фальш-планку 21
+  // ряд у задней стены: от угла(ов) до конца ряда; у свободного конца у стены — место под фальш-планку 20 (16 + 4)
   const start = has("left") ? g + Wc : Math.max(has("right") ? R - o.back : 0, WALL_OFFSET);
   const end = has("right") ? R - g - Wc : Math.min(has("left") ? o.back : R, R - WALL_OFFSET);
   const Lb = Math.round(end - start);
