@@ -393,6 +393,14 @@ try {
   const stj = await status(), bxj = await boxes();
   check("11. Ctrl+щелчок с дрожанием 6 px — отмечен, не сдвинут", /Отмеченные корпуса/.test(stj) && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
   await modClick("Control", nb);
+  // критик 29.10 п.8: «Прозрачный корпус» — Ctrl+протяжка за оболочку «Сосед» тоже переносит
+  await page.getByRole("button", { name: "Прозрачный корпус" }).click(); await page.waitForTimeout(600);
+  const tgrab = { x: X(3100), y: Y(1700) };
+  await modDrag("Control", tgrab, { x: tgrab.x - 200 * fk, y: tgrab.y - 2 }, "transparent-ctrl-move");
+  const b11t = await settled((b) => b.b.x !== 2800);
+  check("11. прозрачный корпус: Ctrl+протяжка «Сосед» — перенос (≈ 2600)", Math.abs(b11t.b.x - 2600) <= 6 && !/Отмеченные корпуса/.test(await status()), fmt(b11t.b));
+  if (b11t.b.x !== 2800) { await key("Control+z"); await settled((b) => b.b.x === 2800); }
+  await page.getByRole("button", { name: "Прозрачный корпус" }).click(); await page.waitForTimeout(600);
   // Ctrl + перенос «Сосед»: левый нижний угол — в пересечение линии x = 1900 и пола
   const grab = { x: X(2800) + 25, y: Y(0) - 40 };
   const m11 = await modDrag("Control", grab, { x: grab.x + X(1900) - X(2800) + 5, y: grab.y + 4 }, "ctrl-move");

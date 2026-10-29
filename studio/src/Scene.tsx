@@ -1120,7 +1120,8 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
       if(first?.object.userData.fixtureId){current.current.onFixtureSelect?.(first.object.userData.fixtureId);return;}
-      const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
+      // allowShell — перенос из Ctrl+нажатия: корпус выбран по оболочке и в прозрачном режиме (критик 29.10 п.8)
+      const hit=hitAt(e.clientX,e.clientY,!!(e as PointerEvent&{allowShell?:boolean}).allowShell);if(!hit)return;
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
@@ -1141,7 +1142,7 @@ export function Scene(p: Props) {
       lastPtr={clientX:e.clientX,clientY:e.clientY};
       // Ctrl+нажатие на корпус потянули — начинается обычный перенос из точки нажатия (дальше — с привязкой Ctrl)
       if(ctrlPress&&!drag){const cp=ctrlPress;if(!ctrlDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;ctrlPress=null;
-        pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,preventDefault(){}} as unknown as PointerEvent);
+        pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,allowShell:true,preventDefault(){}} as unknown as PointerEvent);
         if(!drag){controls.enabled=true;return;}}
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
       needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
