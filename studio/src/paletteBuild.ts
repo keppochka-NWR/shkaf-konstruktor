@@ -2,7 +2,7 @@
 // собирает те же модули без исключения на первой ошибке). Тексты ошибок прежние; ModulePalette.tsx реэкспортирует функции.
 import {refitKDrawers} from './kitchenDrawers';
 import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,roofEvenLayout,roofLayoutApplies,drawerFacesEqual,rearClear,parts,boxes,RULES,type Module} from './model';
-import {RADIUS,radiusMax} from './shapes';
+import {RADIUS,radiusMax,mansardIntrusions} from './shapes';
 import {partCollisions} from './collisions';
 import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
@@ -96,6 +96,19 @@ export function withMansard(m:Module,rear:number):Module{
   const low:Module={...n,height:Math.max(RULES.minH,rear-RULES.panel*2)};
   for(const [i,s] of n.sections.entries()){const k=s.shelves.length;if(!k)continue;const fr=distribute(low,low.sections[i],k),bl=boxes(low)[i],bh=boxes(n)[i];
     s.shelves=fr.map(f=>Math.round(((bl.bottom+f*(bl.top-bl.bottom)-bh.bottom)/(bh.top-bh.bottom))*1e4)/1e4);}
+  return n;
+}
+/** «Опустить полки под скос» (кнопка панели и плашки ошибки, критик 29.10 блокер 4): полки — поровну под задней высотой (withMansard),
+ *  штанга с заданной высотой — ниже, пока она не уйдёт из-под крыши (с местом под плечики 50 мм). */
+export function fitUnderMansard(m:Module):Module{
+  if(!m.mansard)return m;
+  const n=withMansard(m,m.mansard.rear);
+  for(const s of n.sections){
+    if(s.rodAt===undefined)continue;
+    const b=boxes(n).find(x=>x.id===s.id);if(!b)continue;
+    const h=b.top-b.bottom,step=10/h;
+    for(let k=0;k<300&&s.rodAt-step>=0.1&&mansardIntrusions(n,parts(n)).some(x=>x.part.sectionId===s.id&&x.part.role==='rod');k++)s.rodAt=Math.round((s.rodAt-step)*1e4)/1e4;
+  }
   return n;
 }
 /** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */

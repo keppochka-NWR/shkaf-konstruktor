@@ -367,16 +367,30 @@ export function applyMansard(m: Module, out: Part[]): void {
     else if (p.role === "light" && p.id.endsWith(":light:roof")) shift(p, g.under(p.position[2] - p.size[2] / 2) - (H - t));
   }
 }
-/** Что выше скоса мансарды (предупреждения): полки, штанги, ящики, подсветка у задней кромки выше нижней пласти крыши. */
-export function mansardWarnings(m: Module, ps: Part[]): string[] {
+/** Наполнение выше скоса мансарды: полка, штанга, пантограф, короб ящика у задней кромки выше нижней пласти крыши — деталь проходит
+ *  сквозь крышу: ОШИБКА модели, как любое пересечение деталей (критик 29.10, блокер 4; раньше — только предупреждение), с кнопкой
+ *  «Опустить полки под скос». Штанга ниже крыши, но без места под плечики (50 мм) — предупреждение. */
+export function mansardIntrusions(m: Module, ps: Part[]): { part: Part; over: number; error: boolean }[] {
   if (!m.mansard) return [];
-  const g = mansardGeom(m), out: string[] = [];
+  const g = mansardGeom(m), out: { part: Part; over: number; error: boolean }[] = [];
   for (const p of ps) {
     if (!(p.role === "shelf" || p.role === "rod" || p.role === "pantograph" || (p.role === "drawer" && /:drawer:\d+:(back|left)$/.test(p.id)))) continue;
-    const top = p.position[1] + p.size[1] / 2 + (p.role === "rod" ? 50 : 0), rear = p.position[2] - p.size[2] / 2, gap = g.under(rear) - top;
-    if (gap < -0.5) out.push(`«${p.name.replace(/ · .*$/, "")}» выше скоса мансарды на ${Math.ceil(-gap)} мм у задней кромки${p.role === "rod" ? " (с местом под плечики 50 мм)" : ""} — опустите её или уменьшите глубину.`);
+    const body = p.position[1] + p.size[1] / 2, rear = p.position[2] - p.size[2] / 2, under = g.under(rear);
+    if (body - under > 0.5) out.push({ part: p, over: Math.ceil(body - under), error: true });
+    else if (p.role === "rod" && body + 50 - under > 0.5) out.push({ part: p, over: Math.ceil(body + 50 - under), error: false });
   }
-  return [...new Set(out)];
+  return out;
+}
+const intrusionText = (x: { part: Part; over: number; error: boolean }) => x.error
+  ? `«${x.part.name.replace(/ · .*$/, "")}» выше скоса мансарды на ${x.over} мм у задней кромки — пересекает крышу. Нажмите «Опустить полки под скос» или уменьшите глубину.`
+  : `«${x.part.name.replace(/ · .*$/, "")}» выше скоса мансарды на ${x.over} мм у задней кромки (с местом под плечики 50 мм) — опустите её или уменьшите глубину.`;
+/** Ошибки мансарды по деталям (validate): наполнение сквозь наклонную крышу. */
+export function mansardFitErrors(m: Module, ps: Part[]): string[] {
+  return [...new Set(mansardIntrusions(m, ps).filter((x) => x.error).map(intrusionText))];
+}
+/** Что выше скоса мансарды для панели «Фигурные детали»: ошибки (сквозь крышу) и предупреждения (штанга без места под плечики). */
+export function mansardWarnings(m: Module, ps: Part[]): string[] {
+  return [...new Set(mansardIntrusions(m, ps).map(intrusionText))];
 }
 /** Ошибки мансарды (validate). */
 export function mansardErrors(m: Module): string[] {

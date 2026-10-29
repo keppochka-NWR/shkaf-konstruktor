@@ -2,7 +2,7 @@
 // Всё — функциями калькулятора: переключатель/поля меняют модуль через modify (проверка validate, Ctrl+Z).
 import { parts, type Module } from "./model";
 import { MANSARD, RADIUS, mansardAngleDeg, mansardRearByAngle, mansardWarnings, radiusMax, cutText, faceAxes } from "./shapes";
-import { withMansard } from "./paletteBuild";
+import { withMansard, fitUnderMansard } from "./paletteBuild";
 import { Num, cutHosts } from "./CutoutEditor";
 
 /** Мансарда ставится у прямого шкафа/стеллажа студии с крышей ЛДСП. */
@@ -34,7 +34,7 @@ export function ShapePanel({ m, modify, openCuts }: { m: Module; modify: (u: (n:
         <Num label={`Угол скоса, ° (до ${MANSARD.maxAngle})`} value={mansardAngleDeg(m)} min={1} onChange={(deg) => modify((n) => { n.mansard = { rear: mansardRearByAngle(n.height, n.depth, deg) }; })} />
         <p className="field-note">Высота корпуса выше — спереди ({m.height} мм), сзади — {m.mansard.rear} мм, скос {String(mansardAngleDeg(m)).replace(".", ",")}°. Крыша наклонная, боковины и перегородки — трапеции, задняя стенка — по задней высоте, фасады — по передней. Антресоль над мансардой не ставится.</p>
         {warn.length > 0 && <div className="cut-warnings" role="status" aria-label="Выше скоса">{warn.map((w, i) => <p key={i}>{w}</p>)}
-          <button type="button" className="outline" onClick={() => modify((n) => { Object.assign(n, withMansard(n, n.mansard!.rear)); })}>Опустить полки под скос</button></div>}
+          <button type="button" className="outline" onClick={() => modify((n) => { Object.assign(n, fitUnderMansard(n)); })}>Опустить полки под скос</button></div>}
       </>}
     </>}
     {hosts.length > 0 && <div className="shape-cuts">

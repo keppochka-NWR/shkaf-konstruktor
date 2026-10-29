@@ -50,6 +50,7 @@ import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {priceModelLabel,withOrderCalculation} from './priceModel';
 import {rebindCutouts} from './cutoutBinding';
+import {fitUnderMansard} from './paletteBuild';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
@@ -565,6 +566,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setError("");
     touched.current = true;
   };
+  // отклонённый вариант (кнопки исправления в плашке ошибки применяют исправление к нему: «Опустить полки под скос», критик 29.10)
+  const rejectedProject=useRef<Project|null>(null);
   function commitProject(raw: Project) {
     // Модель цены — свойство заказа (критик 29.10, блокер 1): проект комнаты без настроек расчёта («Новый проект», «без мебели»,
     // файл без расчёта) получает настройки заказа, а не сбрасывает их.
@@ -576,6 +579,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const next = applyAutoFillers(raw);
     const e = projectErrors(next,!!onEmptyProject);
     if (e.length) {
+      rejectedProject.current=next;
       setError(e[0]);
       // п.4 волны 22.10: все ошибки списком — где (корпус, секция, деталь) и что сделать
       try{setErrorList(explainErrors(next,e));}catch{setErrorList(e.map(text=>({text,problem:text,action:''})));}
@@ -1483,7 +1487,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {errorDetails.length?<ol className="error-list" aria-label="Что мешает применить изменение">
                   {errorDetails.slice(0,5).map((d,i)=><li key={i} data-text={d.text}>
                     <p>{errorPlace(d)&&<b className="error-place">{errorPlace(d)}: </b>}{d.problem}{d.moduleId&&project.modules.some(a=>a.id===d.moduleId)&&<button className="error-show" aria-label={'Показать: '+errorPlace(d)} onClick={()=>showError(d)}><Search size={12}/> Показать</button>}</p>
-                    {d.action&&<p className="error-fix"><b>Что сделать:</b> {d.action}{d.moduleId&&d.sectionId&&/«Одна створка в секции»/.test(d.action)&&<> <button className="error-show" onClick={()=>{if(modifyAt(d.moduleId!,n=>{if(!oneLeafAtDivider(n,d.sectionId!))throw Error('Секция не у частичной перегородки.');}))setError('');}}>Одна створка в секции</button></>}</p>}
+                    {d.action&&<p className="error-fix"><b>Что сделать:</b> {d.action}{d.moduleId&&d.sectionId&&/«Одна створка в секции»/.test(d.action)&&<> <button className="error-show" onClick={()=>{if(modifyAt(d.moduleId!,n=>{if(!oneLeafAtDivider(n,d.sectionId!))throw Error('Секция не у частичной перегородки.');}))setError('');}}>Одна створка в секции</button></>}{d.moduleId&&/«Опустить полки под скос»/.test(d.action)&&<> <button className="error-show" onClick={()=>{const base=rejectedProject.current&&rejectedProject.current.modules.some(a=>a.id===d.moduleId)?rejectedProject.current:project;const next={...base,modules:base.modules.map(a=>a.id===d.moduleId?{...a,module:fitUnderMansard(a.module)}:a)};if(commitProject(next))setError('');}}>Опустить полки под скос</button></>}</p>}
                   </li>)}
                   {errorDetails.length>5&&<li className="error-more">…и ещё {errorDetails.length-5}. Исправьте эти — проверка покажет остальные.</li>}
                 </ol>:<p>{error}</p>}

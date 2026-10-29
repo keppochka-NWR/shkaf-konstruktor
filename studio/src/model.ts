@@ -10,7 +10,7 @@ import { kitchenDividerZ } from "./kitchenDivider";
 import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
-import { applyCutouts, applyMansard, radiusParts, cutoutErrors, mansardErrors, radiusErrors, parseShapes, type PartShape, type Cutout } from "./shapes";
+import { applyCutouts, applyMansard, radiusParts, cutoutErrors, mansardErrors, mansardFitErrors, radiusErrors, parseShapes, type PartShape, type Cutout } from "./shapes";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -2572,8 +2572,10 @@ export function validate(m: Module, opts?: {all?: boolean}): string[] {
   if (!m.cutouts?.length && !m.mansard && !m.radius) return errors;
   // фигурные детали (shapes.ts): мансарда, радиусный стеллаж, вырезы — после общих проверок; контур вырезов — от деталей без вырезов
   const more = [...mansardErrors(m), ...radiusErrors(m)];
+  // мансарда: полка/штанга/ящик сквозь наклонную крышу — ошибка (критик 29.10, блокер 4), как пересечение деталей
+  const fit = m.mansard && !errors.length && !more.length ? (() => { try { return mansardFitErrors(m, shapeBaseParts(m)); } catch (e) { return [(e as Error).message]; } })() : [];
   if (m.cutouts?.length && !errors.length && !more.length) { try { more.push(...cutoutErrors(m, shapeBaseParts(m))); } catch (e) { more.push((e as Error).message); } }
-  return [...errors, ...more];
+  return [...errors, ...more, ...fit];
 }
 function validateCore(m: Module, opts?: {all?: boolean}): string[] {
   if(m.kupe)return kupeErrors(m);
