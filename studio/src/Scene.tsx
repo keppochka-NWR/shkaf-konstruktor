@@ -2,6 +2,8 @@ import {dishwasherServiceModel} from './dishwasherServices';
 import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
 import {hiddenWalls,roomEdges,edgeVisible,readCutaway,type CutawayWall} from './roomCutaway';
+import {finishById,floorUv,wallUv,defaultAlong,type FinishUnit} from './roomFinishes';
+import {drawFinish} from './finishTextures';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
 import {shapeGeometry,worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
@@ -364,13 +366,26 @@ export function Scene(p: Props) {
     // Ближние стены: что принадлежит какой стене; видимость меняется по камере без пересборки сцены.
     const cutawayParts:{obj:THREE.Object3D;walls:CutawayWall[]}[]=[];
     let cutawayRoom:{x0:number;z0:number;width:number;depth:number}|undefined,cutawayHidden=new Set<CutawayWall>(),cutawayKey='';
+    // Отделка стен (обои, плитка, покраска — roomFinishes.ts): дальние стены непрозрачные, стена между камерой и комнатой
+    // (если «Ближние стены» её не скрыли) — полупрозрачная, чтобы не заслонять мебель.
+    const finishParts:{mat:THREE.MeshStandardMaterial;wall:CutawayWall}[]=[];
     function applyCutaway(){
-      const r=cutawayRoom,on=current.current.cutaway??readCutaway();
-      const hidden=r?hiddenWalls(r,{x:camera.position.x-r.x0,z:camera.position.z-r.z0},on):new Set<CutawayWall>();
-      const key=[...hidden].join(',');if(key===cutawayKey)return;
+      const r=cutawayRoom,on=current.current.cutaway??readCutaway(),cam=r?{x:camera.position.x-r.x0,z:camera.position.z-r.z0}:undefined;
+      const hidden=r&&cam?hiddenWalls(r,cam,on):new Set<CutawayWall>(),beyond=r&&cam&&finishParts.length?hiddenWalls(r,cam,true):new Set<CutawayWall>();
+      const key=[...hidden].join(',')+'|'+[...beyond].join(',');if(key===cutawayKey)return;
       cutawayKey=key;cutawayHidden=hidden;
       for(const p of cutawayParts)p.obj.visible=edgeVisible(p.walls,hidden);
+      for(const p of finishParts){const near=beyond.has(p.wall);p.mat.transparent=near;p.mat.opacity=near?.15:1;p.mat.depthWrite=!near;p.mat.needsUpdate=true;}
     }
+    /** Текстура отделки — одна на позицию каталога на всё время жизни сцены. */
+    const finishMaps=new Map<string,{map:THREE.CanvasTexture;unit:FinishUnit}>();
+    function finishMap(id:string){
+      let t=finishMaps.get(id);if(t)return t;const f=finishById(id);if(!f)return undefined;
+      const {canvas,unit}=drawFinish(f),map=new THREE.CanvasTexture(canvas);
+      map.colorSpace=THREE.SRGBColorSpace;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+      loadedTextures.add(map);finishMaps.set(id,t={map,unit});return t;
+    }
+    function finishMaterial(id:string){const t=finishMap(id),f=finishById(id);if(!t||!f)return undefined;return {mat:new THREE.MeshStandardMaterial({map:t.map,roughness:f.look==='marble'?.3:f.kind==='tile'?.6:f.kind==='laminate'?.7:.92,metalness:0,side:THREE.DoubleSide}),unit:t.unit};}
     function label(
       text: string,
       pos: THREE.Vector3,
@@ -471,7 +486,7 @@ export function Scene(p: Props) {
       scene.background=state.presentation?new THREE.Color(0xf1f0eb):null;
       for (const l of labels) l.element.remove();
       labels.length = 0;
-      cutawayParts.length=0;cutawayRoom=undefined;cutawayKey='\u0000';
+      cutawayParts.length=0;finishParts.length=0;cutawayRoom=undefined;cutawayKey='\u0000';
       moduleGroups.clear();
       generation++;pendingTextures=0;
       const gen = generation;
@@ -792,17 +807,32 @@ export function Scene(p: Props) {
           const mesh=new THREE.Mesh(new THREE.BoxGeometry(horizontal?w:depth,h,horizontal?depth:w),new THREE.MeshStandardMaterial({color,transparent:opacity<1,opacity,depthWrite:opacity===1}));
           mesh.position.set(horizontal?x0+u:x0+(wall==='left'?-depth/2:r.width+depth/2),y,horizontal?z0+(wall==='back'?-depth/2:r.depth+depth/2):z0+u);mesh.receiveShadow=true;if(environmentOpeningId)mesh.userData.openingId=environmentOpeningId;modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[wall as CutawayWall]});return mesh;
         }
+        // Отделка стены: позиция каталога (обои/плитка) — текстура в настоящих мм, покраска — цвет. Только показ, в смету не идёт.
+        const wallFinish=new Map<string,{mat:THREE.MeshStandardMaterial;unit?:FinishUnit}>();
+        for(const [w,v] of Object.entries(r.finish?.walls??{})){
+          const m='paint' in v?{mat:new THREE.MeshStandardMaterial({color:new THREE.Color(v.paint),roughness:.95,side:THREE.DoubleSide})}:finishMaterial(v.id);
+          if(m){wallFinish.set(w,m);finishParts.push({mat:m.mat,wall:w as CutawayWall});}
+        }
+        const innerPoint=(wall:string,u:number,y:number)=>wall==='back'?new THREE.Vector3(x0+u,y,z0+.5):wall==='front'?new THREE.Vector3(x0+u,y,z0+r.depth-.5):wall==='left'?new THREE.Vector3(x0+.5,y,z0+u):new THREE.Vector3(x0+r.width-.5,y,z0+u);
         for(const panel of wallPanels(r)){
+          const fin=wallFinish.get(panel.wall);
+          if(fin&&!r.survey?.surfaces[panel.wall]){
+            const u0=panel.u-panel.width/2,u1=panel.u+panel.width/2,y0=panel.y-panel.height/2,y1=panel.y+panel.height/2,pos:number[]=[],uv:number[]=[];
+            for(const [u,y] of [[u0,y0],[u1,y0],[u1,y1],[u0,y0],[u1,y1],[u0,y1]]){const p=innerPoint(panel.wall,u,y);pos.push(p.x,p.y,p.z);uv.push(...(fin.unit?wallUv(u,y,fin.unit):[0,0]));}
+            const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();
+            const mesh=new THREE.Mesh(g,fin.mat);mesh.receiveShadow=true;mesh.userData.roomFinish=panel.wall;modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[panel.wall]});continue;
+          }
           if(!r.survey?.surfaces[panel.wall]){wallBox(panel.wall,panel.u,panel.y,panel.width,panel.height,80,0xd5d5cc,panel.wall==='front'||panel.wall==='right'?0.06:0.25);continue;}
           const vertices:number[]=[];const grid=r.survey.surfaces[panel.wall]!;
           const cuts=(lo:number,hi:number,measured:number[])=>[...new Set([lo,hi,...measured.filter(v=>v>lo&&v<hi),...Array.from({length:5},(_,i)=>lo+(hi-lo)*(i+1)/6)])].sort((a,b)=>a-b);
           const us=cuts(panel.u-panel.width/2,panel.u+panel.width/2,grid.u),vs=cuts(panel.y-panel.height/2,panel.y+panel.height/2,grid.v);
+          const uvs:number[]=[];
           for(let j=0;j<vs.length-1;j++)for(let i=0;i<us.length-1;i++){
-            const points=[[us[i],vs[j]],[us[i+1],vs[j]],[us[i+1],vs[j+1]],[us[i],vs[j+1]]].map(([u,v])=>surfacePoint(r,panel.wall,u,v));
-            for(const n of [0,1,2,0,2,3]){const p=points[n];vertices.push(x0+p.x,p.y,z0+p.z);}
+            const uv=[[us[i],vs[j]],[us[i+1],vs[j]],[us[i+1],vs[j+1]],[us[i],vs[j+1]]],points=uv.map(([u,v])=>surfacePoint(r,panel.wall,u,v));
+            for(const n of [0,1,2,0,2,3]){const p=points[n];vertices.push(x0+p.x,p.y,z0+p.z);uvs.push(...(fin?.unit?wallUv(uv[n][0],uv[n][1],fin.unit):[0,0]));}
           }
-          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.computeVertexNormals();
-          const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb5c9c1,transparent:true,opacity:panel.wall==='front'||panel.wall==='right'?.08:.35,side:THREE.DoubleSide,depthWrite:false}));modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[panel.wall]});
+          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));if(fin)g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.computeVertexNormals();
+          const mesh=new THREE.Mesh(g,fin?fin.mat:new THREE.MeshStandardMaterial({color:0xb5c9c1,transparent:true,opacity:panel.wall==='front'||panel.wall==='right'?.08:.35,side:THREE.DoubleSide,depthWrite:false}));if(fin)mesh.userData.roomFinish=panel.wall;modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[panel.wall]});
         }
         for(const side of ['floor','ceiling'] as const)if(r.survey?.surfaces[side]){
           const grid=r.survey.surfaces[side]!,vertices:number[]=[];
@@ -870,7 +900,12 @@ export function Scene(p: Props) {
           const fsel=(r.fixtures||[]).find(f=>f.id===state.selectedFixture);
           if(fsel)chain('fixture',fsel.id,fsel.wall,fsel.offset,fsel.width,fsel.fromFloor+fsel.height/2,fsel.fromFloor+fsel.height,[`${fsel.fromFloor} от пола`,Math.max(40,fsel.fromFloor/2),'fromFloor']);
         }
-        const roomFloor=new THREE.Mesh(new THREE.PlaneGeometry(r.width,r.depth),new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
+        // Пол: ламинат/плитка — текстура в настоящих мм, длинная сторона доски вдоль ширины или глубины комнаты (roomFinishes.ts).
+        const floorFin=r.finish?.floor?finishMaterial(r.finish.floor.id):undefined,floorGeo=new THREE.PlaneGeometry(r.width,r.depth);
+        if(floorFin){const pos=floorGeo.getAttribute('position'),uv=floorGeo.getAttribute('uv'),along=r.finish?.floor?.along??defaultAlong(r);
+          // плоскость повёрнута на −90° вокруг X: локальный x → x комнаты, локальный y → −z
+          for(let i=0;i<pos.count;i++){const [s,t]=floorUv(pos.getX(i)+r.width/2,r.depth/2-pos.getY(i),floorFin.unit,along);uv.setXY(i,s,t);}uv.needsUpdate=true;}
+        const roomFloor=new THREE.Mesh(floorGeo,floorFin?floorFin.mat:new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));if(floorFin)roomFloor.userData.roomFinish='floor';roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
       const b = state.hideFurniture||state.hiddenModuleIds?.includes(focus.id)||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
       if (b) {
