@@ -1,7 +1,7 @@
 // Отделка помещения (список Макса 29.10.2026): каталог Лемана ПРО, масштаб текстур, сохранение в файле, цена не меняется.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FINISHES,finishUnit,floorUv,wallUv,parseRoomFinish,withFinish,setWallFinish,finishFits,finishById,defaultAlong,FINISH_WALLS,type FinishItem} from '../src/roomFinishes';
+import {FINISHES,finishUnit,floorUv,wallUv,parseRoomFinish,withFinish,setWallFinish,finishFits,finishById,finishSize,defaultAlong,FINISH_WALLS,type FinishItem} from '../src/roomFinishes';
 import {newProject,parseProject} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -37,12 +37,23 @@ test('каталог: размеры правдоподобны (доска, п�
   }
   for(const f of of('wallpaper')){
     assert.ok([530,1060].includes(f.size[0]),f.id+' ширина рулона');assert.ok(f.size[1]>=10000&&f.size[1]<=10050,f.id+' длина рулона');
-    assert.ok(f.repeat!==undefined&&f.repeat>=0&&f.repeat<=1000,f.id);
+    assert.ok(f.repeat===undefined||(f.repeat>=0&&f.repeat<=1000),f.id);
     assert.ok(['plain','texture','stripes','geometric','floral','concrete','abstract'].includes(f.look),f.id);
   }
   // на пол — ламинат и напольная плитка, на стены — обои и настенная плитка
   assert.ok(FINISHES.filter(f=>finishFits(f,'floor')).every(f=>f.kind!=='wallpaper'&&f.surface!=='wall'));
   assert.ok(FINISHES.filter(f=>finishFits(f,'wall')).every(f=>f.kind!=='laminate'&&f.surface!=='floor'));
+});
+
+test('обои: раппорт клиенту — только из карточки (неизвестный не показывается, нет «по умолчанию» у половины), марка без догадок', () => {
+  const wps=of('wallpaper'),counts=new Map<number,number>();
+  for(const f of wps)if(f.repeat)counts.set(f.repeat,(counts.get(f.repeat)??0)+1);
+  assert.ok([...counts.values()].every(n=>n<=3),'один и тот же раппорт у многих обоев — похоже на значение по умолчанию: '+JSON.stringify([...counts]));
+  for(const f of wps.filter(f=>f.repeat===undefined))assert.ok(!finishSize(f).includes('раппорт'),f.id);
+  assert.match(finishSize(finishById('82283853')!),/раппорт 32 см/);
+  assert.match(finishSize(finishById('82061801')!),/без подбора рисунка/);
+  assert.equal(finishById('16582308')!.brand,'марка не указана','марка «Цветов» не подтверждена карточкой');
+  assert.ok(!finishUnit(finishById('92330909')!).h||finishUnit(finishById('92330909')!).h>=530,'раппорт текстуры без известного шага — условный');
 });
 
 test('масштаб: доска, плитка и рулон в раппорте — настоящего размера, раппорт стыкуется без зазоров', () => {

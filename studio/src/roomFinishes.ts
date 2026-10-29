@@ -18,7 +18,8 @@ export type FinishItem={
   id:string;kind:FinishKind;name:string;brand:string;collection?:string;article:string;url:string;
   /** Ламинат — доска (длина × ширина), плитка — плитка (длина × ширина), мм. Обои — [ширина рулона, длина рулона], мм. */
   size:[number,number];
-  /** Обои: шаг раппорта, мм (0 — без подбора). */
+  /** Обои: шаг раппорта, мм, — только если он есть в карточке товара (0 — «без подбора рисунка»); нет поля — раппорт не известен,
+   *  клиенту не показывается (критик 29.10: 640 мм у половины обоев было значением по умолчанию, не из карточки). */
   repeat?:number;
   /** Ламинат: класс, толщина, фаска. Плитка: толщина. */
   grade?:number;thickness?:number;chamfer?:boolean;
@@ -34,7 +35,7 @@ export type FinishItem={
 const L='https://lemanapro.ru/product/';
 const lam=(article:string,slug:string,name:string,brand:string,collection:string|undefined,size:[number,number],grade:number,thickness:number,chamfer:boolean|undefined,look:'plank'|'herringbone',colour:string,tone:[string,string]):FinishItem=>({id:article,kind:'laminate',name,brand,...(collection?{collection}:{}),article,url:L+slug+'-'+article+'/',size,grade,thickness,...(chamfer===undefined?{}:{chamfer}),look,colour,tone});
 const tile=(article:string,slug:string,name:string,brand:string,collection:string,size:[number,number],thickness:number|undefined,surface:'floor'|'wall'|'both',look:FinishLook,colour:string,tone:[string,string]):FinishItem=>({id:article,kind:'tile',name,brand,collection,article,url:L+slug+'-'+article+'/',size,...(thickness?{thickness}:{}),surface,look,colour,tone});
-const wp=(article:string,slug:string,name:string,brand:string,collection:string|undefined,rollWidth:number,rollLength:number,repeat:number,look:FinishLook,colour:string,tone:[string,string]):FinishItem=>({id:article,kind:'wallpaper',name,brand,...(collection?{collection}:{}),article,url:L+slug+'-'+article+'/',size:[rollWidth,rollLength],repeat,look,colour,tone});
+const wp=(article:string,slug:string,name:string,brand:string,collection:string|undefined,rollWidth:number,rollLength:number,repeat:number|undefined,look:FinishLook,colour:string,tone:[string,string]):FinishItem=>({id:article,kind:'wallpaper',name,brand,...(collection?{collection}:{}),article,url:L+slug+'-'+article+'/',size:[rollWidth,rollLength],...(repeat===undefined?{}:{repeat}),look,colour,tone});
 
 export const FINISHES:readonly FinishItem[]=[
   // ── Ламинат ──
@@ -87,24 +88,24 @@ export const FINISHES:readonly FinishItem[]=[
   tile('86745651','plitka-nastennaya-shahtinskaya-plitka-vostok-01-25x40-sm-14-m-glyancevaya-cvet-belyy-mramor','Плитка настенная Шахтинская плитка Восток 01 25×40 глянцевая белый мрамор','Шахтинская плитка','Восток',[400,250],8,'wall','marble','белый мрамор, глянец',['#efede9','#b3aea6']),
   tile('89360221','plitka-nastennaya-cersanit-marvel-17349-298x598-sm-1425-m-glyancevaya-cvet-belyy','Плитка настенная Cersanit Marvel 29,8×59,8 глянцевая белая','Cersanit','Marvel',[598,298],8.5,'wall','marble','белый мрамор, глянец',['#f3f2ef','#a8a6a2']),
   // ── Обои ──
-  wp('92330794','oboi-flizelinovye-erismann-fashion-for-walls-4-er12185-48-106x1005-m','Обои флизелиновые Erismann Fashion for Walls 4 ER12185-48 1,06×10,05 м коричневые','Erismann','Fashion for Walls 4',1060,10050,0,'texture','коричневые, фактура штукатурки',['#8e735b','#76604b']),
-  wp('92330801','oboi-flizelinovye-erismann-fashion-for-walls-4-er12182-48-106x1005-m','Обои флизелиновые Erismann Fashion for Walls 4 ER12182-48 1,06×10,05 м коричневые','Erismann','Fashion for Walls 4',1060,10050,640,'geometric','коричневые, геометрический принт',['#9a7f66','#6b5644']),
+  wp('92330794','oboi-flizelinovye-erismann-fashion-for-walls-4-er12185-48-106x1005-m','Обои флизелиновые Erismann Fashion for Walls 4 ER12185-48 1,06×10,05 м коричневые','Erismann','Fashion for Walls 4',1060,10050,undefined,'texture','коричневые, фактура штукатурки',['#8e735b','#76604b']),
+  wp('92330801','oboi-flizelinovye-erismann-fashion-for-walls-4-er12182-48-106x1005-m','Обои флизелиновые Erismann Fashion for Walls 4 ER12182-48 1,06×10,05 м коричневые','Erismann','Fashion for Walls 4',1060,10050,undefined,'geometric','коричневые, геометрический принт',['#9a7f66','#6b5644']),
   wp('92330986','oboi-flizelinovye-erismann-versailles-106-m-cvet-persikovyy-er12172-38','Обои флизелиновые Erismann Versailles 1,06 м персиковые ER12172-38','Erismann','Versailles',1060,10050,0,'texture','персиковые, фактура штукатурки',['#e8c4a8','#d2a988']),
   wp('92330854','oboi-flizelinovye-erismann-gentle-106-m-cvet-izumrudnyy-er12207-07','Обои флизелиновые Erismann Gentle 1,06 м изумрудные ER12207-07','Erismann','Gentle',1060,10050,0,'plain','изумрудные однотонные',['#2e6b5a','#255a4b']),
-  wp('92330909','oboi-flizelinovye-erismann-martinique-106-m-cvet-siniy-er12191-19','Обои флизелиновые Erismann Martinique 1,06 м синие ER12191-19','Erismann','Martinique',1060,10050,640,'floral','синие, растительный принт',['#2f4a6b','#8fa7c2']),
-  wp('89344378','oboi-flizelinovye-inspire-decobeton-svetlo-bezhevye-106-m-is72016-12','Обои флизелиновые Inspire Decobeton светло-бежевые 1,06 м IS72016-12','Inspire','Decobeton',1060,10050,640,'concrete','светло-бежевый бетон',['#d9cfc2','#bfb3a3']),
+  wp('92330909','oboi-flizelinovye-erismann-martinique-106-m-cvet-siniy-er12191-19','Обои флизелиновые Erismann Martinique 1,06 м синие ER12191-19','Erismann','Martinique',1060,10050,undefined,'floral','синие, растительный принт',['#2f4a6b','#8fa7c2']),
+  wp('89344378','oboi-flizelinovye-inspire-decobeton-svetlo-bezhevye-106-m-is72016-12','Обои флизелиновые Inspire Decobeton светло-бежевые 1,06 м IS72016-12','Inspire','Decobeton',1060,10050,undefined,'concrete','светло-бежевый бетон',['#d9cfc2','#bfb3a3']),
   {id:'82061801',kind:'wallpaper',name:'Обои Inspire Stripe виниловые на флизелине светло-серые 1,06 м',brand:'Inspire',collection:'Stripe',article:'82061801',url:L+'oboi-inspire-stripe-82061801/',size:[1060,10050],repeat:0,look:'stripes',colour:'светло-серые в полоску',tone:['#d6d6d3','#bdbdb9']},
-  wp('89190807','oboi-flizelinovye-inspire-krakelyur-serye-106-m-bohemia-6','Обои флизелиновые Inspire Кракелюр серые 1,06 м Bohemia 6','Inspire','Bohemia',1060,10050,640,'texture','серые, фактура кракелюр',['#a9a8a4','#8a8985']),
-  wp('17036296','oboi-flizelinovye-pod-shtukaturku-inspire-106x10-m-cvet-ekryu-er-4290-2','Обои флизелиновые под штукатурку Inspire 1,06×10 м экрю ER 4290-2','Inspire',undefined,1060,10000,0,'texture','экрю, фактура штукатурки',['#e9e1cf','#d3c9b4']),
-  wp('84534430','oboi-flizelinovye-victoria-stenova-michelle-bezhevye-106-m-889622','Обои флизелиновые Victoria Stenova Michelle бежевые 1,06 м 889622','Victoria Stenova','Michelle',1060,10000,640,'plain','бежевые однотонные с рельефом',['#dccbb1','#c9b796']),
-  wp('86759616','oboi-flizelinovye-victoria-stenova-weekend-belye-106-m-989261','Обои флизелиновые Victoria Stenova Weekend белые 1,06 м 989261','Victoria Stenova','Weekend',1060,10000,640,'plain','белые однотонные',['#f2f1ed','#e2e0da']),
+  wp('89190807','oboi-flizelinovye-inspire-krakelyur-serye-106-m-bohemia-6','Обои флизелиновые Inspire Кракелюр серые 1,06 м Bohemia 6','Inspire','Bohemia',1060,10050,undefined,'texture','серые, фактура кракелюр',['#a9a8a4','#8a8985']),
+  wp('17036296','oboi-flizelinovye-pod-shtukaturku-inspire-106x10-m-cvet-ekryu-er-4290-2','Обои флизелиновые под штукатурку Inspire 1,06×10 м экрю ER 4290-2','Inspire',undefined,1060,10000,undefined,'texture','экрю, фактура штукатурки',['#e9e1cf','#d3c9b4']),
+  wp('84534430','oboi-flizelinovye-victoria-stenova-michelle-bezhevye-106-m-889622','Обои флизелиновые Victoria Stenova Michelle бежевые 1,06 м 889622','Victoria Stenova','Michelle',1060,10000,undefined,'plain','бежевые однотонные с рельефом',['#dccbb1','#c9b796']),
+  wp('86759616','oboi-flizelinovye-victoria-stenova-weekend-belye-106-m-989261','Обои флизелиновые Victoria Stenova Weekend белые 1,06 м 989261','Victoria Stenova','Weekend',1060,10000,undefined,'plain','белые однотонные',['#f2f1ed','#e2e0da']),
   wp('88062319','oboi-flizelinovye-palitra-simple-rogozhka-bezhevye-106-m-sp72075-21','Обои флизелиновые Palitra Simple Rogozhka бежевые 1,06 м SP72075-21','Palitra','Simple Rogozhka',1060,10000,0,'texture','бежевые, фактура рогожки',['#d4c5ac','#bba98c']),
-  wp('82105557','oboi-flizelinovye-polosa-temno-serye-106-m-1025-23','Обои флизелиновые «Полоса» тёмно-серые 1,06 м 1025-23','без марки','Полоса',1060,10000,0,'stripes','тёмно-серые в полоску',['#5d5f61','#7a7c7e']),
-  wp('16582308','oboi-flizelinovye-cvety-106x10-m-cvet-siniy-as-96087-3','Обои флизелиновые Цветы 1,06×10 м синие АС 96087-3','A.S. Creation',undefined,1060,10000,640,'floral','сине-голубые цветы на светлом фоне',['#e9edf2','#5b78a8']),
-  wp('89346599','oboi-flizelinovye-elysium-romby-serye-106-m-e704504','Обои флизелиновые Elysium Ромбы серые 1,06 м Е704504','Elysium','Ромбы',1060,10050,640,'geometric','серые, ромбы',['#b9b9b6','#8e8e8a']),
-  wp('85683049','oboi-flizelinovye-palitra-home-my-forest-zelenye-106-m-hc71960-67','Обои флизелиновые Palitra Home My Forest зелёные 1,06 м HC71960-67','Palitra Home','My Forest',1060,10000,640,'floral','зелёный растительный рисунок',['#6f8c69','#3f5a3c']),
+  wp('82105557','oboi-flizelinovye-polosa-temno-serye-106-m-1025-23','Обои флизелиновые «Полоса» тёмно-серые 1,06 м 1025-23','марка не указана','Полоса',1060,10000,0,'stripes','тёмно-серые в полоску',['#5d5f61','#7a7c7e']),
+  wp('16582308','oboi-flizelinovye-cvety-106x10-m-cvet-siniy-as-96087-3','Обои флизелиновые Цветы 1,06×10 м синие АС 96087-3','марка не указана',undefined,1060,10000,undefined,'floral','сине-голубые цветы на светлом фоне',['#e9edf2','#5b78a8']),
+  wp('89346599','oboi-flizelinovye-elysium-romby-serye-106-m-e704504','Обои флизелиновые Elysium Ромбы серые 1,06 м Е704504','Elysium','Ромбы',1060,10050,undefined,'geometric','серые, ромбы',['#b9b9b6','#8e8e8a']),
+  wp('85683049','oboi-flizelinovye-palitra-home-my-forest-zelenye-106-m-hc71960-67','Обои флизелиновые Palitra Home My Forest зелёные 1,06 м HC71960-67','Palitra Home','My Forest',1060,10000,undefined,'floral','зелёный растительный рисунок',['#6f8c69','#3f5a3c']),
   wp('82283853','oboi-flizelinovye-marburg-montego-serye-106-m-30876','Обои флизелиновые Marburg Montego серые 1,06 м 30876','Marburg','Montego',1060,10050,320,'abstract','серые, структурный рельеф',['#8f8e8a','#6f6e6a']),
-  wp('88642731','oboi-flizelinovye-elysium-odi-serye-106-m-e57406','Обои флизелиновые Elysium Оди серые 1,06 м Е57406','Elysium','Оди',1060,10050,640,'abstract','серые, абстрактный рисунок',['#a3a29e','#7f7e7a']),
+  wp('88642731','oboi-flizelinovye-elysium-odi-serye-106-m-e57406','Обои флизелиновые Elysium Оди серые 1,06 м Е57406','Elysium','Оди',1060,10050,undefined,'abstract','серые, абстрактный рисунок',['#a3a29e','#7f7e7a']),
   wp('91672374','oboi-flizelinovye-as-creation-original-view-belye-053-m-38967-1','Обои флизелиновые A.S. Creation Original View белые 0,53 м 38967-1','A.S. Creation','Original View',530,10050,0,'abstract','белые, абстрактный рисунок',['#eeece7','#cfccc4']),
 ];
 const BY_ID=new Map(FINISHES.map(f=>[f.id,f]));
@@ -154,7 +155,7 @@ export function setWallFinish<R extends {finish?:RoomFinish}>(room:R,walls:reado
 /** Подпись размера: доска 1292×193 мм · 33 кл.; плитка 60×120 см; рулон 1,06×10,05 м. */
 export function finishSize(f:FinishItem){
   const cm=(v:number)=>String(Math.round(v)/10).replace('.',',');
-  if(f.kind==='wallpaper')return `рулон ${String(f.size[0]/1000).replace('.',',')}×${String(f.size[1]/1000).replace('.',',')} м`+(f.repeat?` · раппорт ${cm(f.repeat)} см`:'');
+  if(f.kind==='wallpaper')return `рулон ${String(f.size[0]/1000).replace('.',',')}×${String(f.size[1]/1000).replace('.',',')} м`+(f.repeat?` · раппорт ${cm(f.repeat)} см`:f.repeat===0?' · без подбора рисунка':'');
   if(f.kind==='tile')return `${cm(f.size[1])}×${cm(f.size[0])} см`+(f.thickness?` · ${String(f.thickness).replace('.',',')} мм`:'');
   return `${f.look==='herringbone'?'ёлочка, ':''}доска ${f.size[0]}×${f.size[1]} мм`+(f.grade?` · ${f.grade} кл.`:'')+(f.thickness?` · ${f.thickness} мм`:'');
 }
