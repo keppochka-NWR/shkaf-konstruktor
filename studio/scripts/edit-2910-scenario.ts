@@ -52,15 +52,15 @@ async function reveal(l: Locator) {
     for (let i = 0, n = await closed.count(); i < n; i++) { const s = closed.nth(i); if (await s.isVisible().catch(() => false)) { await s.click().catch(() => {}); await page.waitForTimeout(80); if (await l.isVisible().catch(() => false)) return; } }
   }
 }
-async function addFromPalette(kind: string, w: number, h: number, d: number) {
+async function addFromPalette(kind: string, w: number, h: number, d: number, tab = "Шкафы распашные") {
   await page.getByRole("button", { name: /Построение мебели/ }).first().click().catch(() => {});
   const pal = page.locator("details.module-palette").first();
   if ((await pal.getAttribute("open")) === null) await click(pal.locator("summary").first());
-  await click(pal.getByRole("tab", { name: "Шкафы распашные" }));
+  await click(pal.getByRole("tab", { name: tab }));
   await click(pal.locator(".module-kinds button", { hasText: kind }).first());
-  await type(pal.locator('input[aria-label="Ширина новой мебели"]'), w);
-  await type(pal.locator('input[aria-label="Высота новой мебели"]'), h);
-  await type(pal.locator('input[aria-label="Глубина новой мебели"]'), d);
+  await type(pal.locator('input[aria-label^="Ширина"][aria-label$="новой мебели"]'), w);
+  await type(pal.locator('input[aria-label^="Высота"][aria-label$="новой мебели"]').first(), h);
+  const dep = pal.locator('input[aria-label="Глубина новой мебели"]'); if (await dep.isVisible().catch(() => false)) await type(dep, d);
   await click(pal.getByRole("button", { name: "Добавить в комнату" }));
   await page.waitForTimeout(1200);
 }
@@ -115,13 +115,42 @@ try {
   await listItem(1).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
   await listItem(2).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
   await page.keyboard.press("Delete"); await page.waitForTimeout(400);
-  check("A6 Ctrl+щелчок по двум корпусам в списке, Delete → «Удалить 2 корпуса?»", (await askText()) === "Удалить 2 корпуса?", await askText());
+  const names = (await page.locator('[data-testid="delete-ask-names"]').innerText().catch(() => "")).trim();
+  check("A6 Ctrl+щелчок по двум корпусам в списке, Delete → «Удалить 2 корпуса?» с именами", (await askText()) === "Удалить 2 корпуса?" && names.includes(`«${ms[1].module.name}»`) && names.includes(`«${ms[2].module.name}»`), `${await askText()} ${names}`);
   await click(ask.getByRole("button", { name: "Да, удалить" }));
   ms = await mods();
   check("A7 «Да, удалить» — оба удалены одной правкой", ms.length === n0 - 2, `${ms.length}`);
   await undo(); ms = await mods();
   check("A8 одна отмена Ctrl+Z — оба вернулись", ms.length === n0, `${ms.length}`);
   await page.getByRole("button", { name: "Снять выделение" }).click().catch(() => {}); await page.waitForTimeout(300);
+  // критик 29.10 (1): Ctrl+щелчок по «Стеллаж» и «Комод», затем обычный щелчок по «Модуль 1» — Delete удаляет «Модуль 1», а не группу
+  await listItem(1).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
+  await listItem(3).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
+  await click(listItem(0));
+  const marks = await page.locator(".module-list .module-group-selected").count();
+  await page.keyboard.press("Delete"); await page.waitForTimeout(400);
+  check("A11 Ctrl+щелчок по двум, обычный по «Модуль 1» — отметки сняты, Delete → «Удалить корпус «Модуль 1»?»", marks === 0 && (await askText()) === `Удалить корпус «${ms[0].module.name}»?`, `отмечено ${marks}; «${await askText()}»`);
+  // критик 29.10 (4): под вопросом Q не начинает вспомогательную линию
+  const guides0 = await page.evaluate(() => JSON.stringify((window as unknown as { __guides?: () => unknown }).__guides?.() ?? []));
+  await page.keyboard.press("q"); await page.mouse.move(700, 400); await page.waitForTimeout(300);
+  const toolOn = await page.locator(".guide-tool, .guide-hint").count();
+  await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  check("A12 под вопросом «Удалить?» клавиша Q не действует; Esc — вопрос закрыт, ничего не удалено", (await ask.count()) === 0 && (await mods()).length === n0 && guides0 === (await page.evaluate(() => JSON.stringify((window as unknown as { __guides?: () => unknown }).__guides?.() ?? []))) && toolOn === 0, `инструмент ${toolOn}`);
+  await page.keyboard.press("Escape"); await page.waitForTimeout(200);
+  // критик 29.10 (3): окно «Фурнитура» открыто или фокус в выпадающем списке — Delete не спрашивает про корпус
+  await click(listItem(0));
+  const dockHw = page.getByRole("button", { name: "Фурнитура", exact: true }).first();
+  await dockHw.click(); await page.waitForTimeout(500); await page.getByRole("button", { name: "Выбрать фурнитуру…" }).first().click(); await page.waitForTimeout(800);
+  const hw = await page.locator(".hw-window").count();
+  await page.keyboard.press("Delete"); await page.waitForTimeout(400);
+  check("A13 открыто окно «Фурнитура», Delete — вопроса нет, корпуса на месте", hw === 1 && (await ask.count()) === 0 && (await mods()).length === n0, `окно ${hw}`);
+  await page.keyboard.press("Escape"); await page.waitForTimeout(400);
+  await dockHw.click(); await page.waitForTimeout(500);
+  const sel = page.locator("aside select:visible, .properties select:visible").first();
+  if (await sel.count()) await sel.focus();
+  await page.keyboard.press("Delete"); await page.waitForTimeout(400);
+  check("A14 фокус в выпадающем списке, Delete — вопроса нет", (await sel.count()) > 0 && (await ask.count()) === 0 && (await mods()).length === n0);
+  await page.mouse.click(5, 300);
   // Ctrl+щелчок в сцене: вид спереди — корпуса в ряд
   await click(listItem(0)); await front(false);
   const cv = await canvas(); let marked = 0;
@@ -226,7 +255,9 @@ try {
   const openCopy = (await page.locator('[data-testid="cut-copy"][open]').count()) === 1;
   check("E5 правой кнопкой по полке с вырезом — «Вырез на схожие…»: окно вырезов с открытым переносом", found && openCopy);
   await shot("E5-rmb-copy");
-  await page.getByRole("button", { name: "Закрыть окно вырезов" }).click().catch(() => {}); await page.waitForTimeout(300);
+  await page.keyboard.press("Escape"); await page.waitForTimeout(400);
+  check("E6 Esc закрывает окно вырезов (открытое правой кнопкой)", (await page.locator(".cut-editor").count()) === 0);
+  await page.getByRole("button", { name: "Закрыть окно вырезов" }).click({ timeout: 1000 }).catch(() => {}); await page.waitForTimeout(300);
 
   // ── F. Плавное открывание, средняя кнопка ──
   await click(listItem(0)); await front(true);
@@ -272,6 +303,15 @@ try {
   await page.getByRole("button", { name: "Сверху", exact: true }).click().catch(() => {}); await page.waitForTimeout(400);
   await page.getByRole("button", { name: /^Изометрия|^3D/ }).first().click().catch(() => {}); await page.waitForTimeout(1000);
   await shot("F8-drawer-open");
+  // критик 29.10 (2): двери купе — средняя кнопка сдвигает полотно, состояние держится после перестройки сцены (выбор другого модуля)
+  await addFromPalette("Двери купе", 1600, 2400, 100, "Шкафы-купе");
+  ms = await mods(); const kupe = ms[ms.length - 1];
+  await front(true);
+  const kc = await canvas(); let leaf = "";
+  for (const fx of [0.5, 0.4, 0.6, 0.3, 0.7]) { await page.mouse.click(kc.x + kc.width * fx, kc.y + kc.height * 0.5, { button: "middle" }); await page.waitForTimeout(700); st = await openState(); leaf = Object.keys(st).find((k) => k.startsWith(kupe.id + "|") && st[k].target === 1 && st[k].t === 1) ?? ""; if (leaf) break; }
+  check("F9 двери купе: средняя кнопка — полотна сдвинуты", !!leaf, leaf.split("|")[1] ?? "");
+  await click(listItem(0)); await page.waitForTimeout(800); st = await openState();
+  check("F10 выбрали другой модуль (сцена перестроена) — полотна купе по-прежнему сдвинуты", !!leaf && st[leaf]?.t === 1, JSON.stringify(st[leaf]));
 } catch (e) { check("сценарий без сбоя", false, (e as Error).message.split("\n")[0]); await shot("fail"); }
 check("ошибок страницы нет", errors.length === 0, errors.slice(0, 2).join(" | "));
 writeFileSync(`${out}/results.json`, JSON.stringify({ results, errors }, null, 1));

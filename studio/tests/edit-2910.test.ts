@@ -13,8 +13,8 @@ import { nest } from '../src/exports';
 import { mansardIntrusions } from '../src/shapes';
 import { roomWarnings } from '../src/roomWarnings';
 import { cutHost } from '../src/partIds';
-import { copyCutouts, similarCutParts, partKind } from '../src/cutoutCopy';
-import { applyDecorAll, deleteKeyTarget, deleteQuestion, removeModules, openToggleKey, openEase, stepOpen, OPEN_MS, sectionRemoveApplies } from '../src/editActions';
+import { copyCutouts, similarCutParts, partKind, mirrorForHinge } from '../src/cutoutCopy';
+import { applyDecorAll, deleteKeyTarget, deleteQuestion, deleteNames, groupAfterPlainClick, removeModules, openToggleKey, openEase, stepOpen, OPEN_MS, sectionRemoveApplies } from '../src/editActions';
 import type { Cutout } from '../src/shapes';
 
 const room = (mods: Module[]): Project => { const p = newProject(mods[0]); p.room.width = 9000; p.modules = mods.map((m, i) => ({ id: 'm' + i, x: 50 + i * 1700, y: 0, z: 30, module: m })); return p; };
@@ -140,4 +140,42 @@ test('Средняя кнопка: что открывается — створ�
   assert.ok(ms >= 300 && ms <= 420, `открытие ${ms} мс`);
   assert.ok(OPEN_MS >= 300 && OPEN_MS <= 400);
   assert.equal(stepOpen(0.5, 0, 10000), 0.5 - 64 / OPEN_MS, 'после паузы вкладки — не прыжок');
+});
+
+test('критик 29.10 (1): обычный щелчок по корпусу вне отмеченной группы снимает отметки; в вопросе — имена удаляемых корпусов', () => {
+  assert.deepEqual(groupAfterPlainClick(['m1', 'm3'], 'm0'), [], 'щелчок по «Модуль 1» вне группы — отметки сняты, Delete удалит его');
+  assert.deepEqual(deleteKeyTarget({ removablePart: false, groupIds: groupAfterPlainClick(['m1', 'm3'], 'm0'), activeId: 'm0', deselected: false, environment: false }), { kind: 'modules', ids: ['m0'] });
+  assert.deepEqual(groupAfterPlainClick(['m1', 'm3'], 'm3'), ['m1', 'm3'], 'щелчок по корпусу из группы — группа остаётся');
+  const p = room([wardrobe(), shelves(), shelves(600)]);
+  assert.equal(deleteNames(p, ['m1', 'm2']), `«${p.modules[1].module.name}» (800 × 2000), «${p.modules[2].module.name}» (600 × 2000)`);
+});
+
+test('критик 29.10 (5, 6): створка ↔ створка — отступ от края у петель; ошибка выреза не прячется за чужой ошибкой корпуса; предупреждения получателя — в сообщении', () => {
+  const w = { ...initialModule(), width: 1000, height: 2000, doors: true, sections: [{ ...section(), shelves: [0.5], drawers: 0, rod: false, doorLeaves: 2 as const }] } as Module;
+  assert.deepEqual(validate(w), []);
+  const doors = parts(w).filter((q) => q.role === 'door').sort((a, b) => a.position[0] - b.position[0]);
+  assert.deepEqual(doors.map((d) => d.hinge), ['left', 'right']);
+  assert.ok(mirrorForHinge(doors[0], doors[1]));
+  const p = room([w]), d0 = doors[0].id, d1 = doors[1].id;
+  const cut: Cutout = { id: 'k1', host: d0, shape: 'round', w: 40, h: 40, u: 120, v: 900, fromU: 'min', fromV: 'min' };
+  p.modules[0].module.cutouts = [cut];
+  assert.ok(similarCutParts(p, 'm0', d0).some((x) => x.pid === d1), 'вторая створка — схожая');
+  const r = copyCutouts(p, 'm0', d0, [cut], [{ mid: 'm0', pid: d1 }]), on = r.project.modules[0].module.cutouts!.find((c) => cutHost(r.project.modules[0].module, c) === d1)!;
+  assert.equal(on.fromU, 'max', 'на створке с петлями справа — от правого края (у петель), как на левой — от левого');
+  assert.equal(on.u, 120);
+  // у корпуса-получателя своя ошибка, которая раньше останавливала проверку (зазор ящиков 1 мм) — вырез ближе 10 мм к другому всё равно отклонён
+  const a = shelves(800), b = shelves(800), sh = a.sections[0].id + ':shelf:0', q = room([a, b]);
+  const tb = similarCutParts(q, 'm0', sh).find((x) => x.mid === 'm1')!;
+  q.modules[1].module.sections[0].drawerGap = 1;
+  q.modules[1].module.cutouts = [{ id: 'old', host: tb.pid, shape: 'round', w: 40, h: 40, u: 150, v: 100, fromU: 'min', fromV: 'min' }];
+  assert.ok(validate(q.modules[1].module).length > 0, 'у получателя своя ошибка');
+  const near: Cutout = { id: 'n1', host: sh, shape: 'round', w: 40, h: 40, u: 175, v: 100, fromU: 'min', fromV: 'min' };
+  assert.throws(() => copyCutouts(q, 'm0', sh, [near], [{ mid: 'm1', pid: tb.pid }]), /ближе 10 мм/);
+  // предупреждение на получателе (вырез на месте чашки петли) — в результате и сообщении
+  const hingeCut: Cutout = { id: 'h1', host: d0, shape: 'round', w: 40, h: 40, u: 40, v: 60, fromU: 'min', fromV: 'min' };
+  const p2 = room([structuredClone(w)]);
+  p2.modules[0].module.cutouts = [hingeCut];
+  const r2 = copyCutouts(p2, 'm0', d0, [hingeCut], [{ mid: 'm0', pid: d1 }]);
+  assert.ok(r2.warnings.length > 0, 'предупреждение получателя');
+  assert.match(r2.note, /Проверьте:/);
 });
