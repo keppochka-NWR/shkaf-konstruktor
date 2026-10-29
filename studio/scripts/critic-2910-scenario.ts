@@ -16,10 +16,15 @@
 // Круг 3:
 //  H. «Ящик 1» выбран: на плашке «Удалить ящик» и «Снять фасад»; Delete — весь ящик, Ctrl+Z; «Снять фасад» — только фасад, Ctrl+Z;
 //     «Удалить ящик» на плашке — весь ящик.
+// Постоянные id (решение Макса 29.10, ветка claude/stable-ids):
+//  I. «Стеллаж»: вырез на второй сверху полке → «+» полка, «−» полка, Ctrl+Z ×2, Ctrl+Y, «Сохранить файл» → «Открыть» — вырез на своей
+//     полке; «Комод»: вырез на среднем ящике → удалить нижний, «+», Ctrl+Z ×2, Ctrl+Y — на своём ящике; удалить ящик с вырезом — снят
+//     с сообщением, Ctrl+Z — вернулся; файл и перезагрузка страницы — оба выреза на своих деталях.
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { parts, facadeTop, facadeBottom, boxes, type Module, type Part } from "../src/model";
 import { parseProject, type Project } from "../src/project";
+import { cutHost } from "../src/partIds";
 
 const [url, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -259,6 +264,79 @@ try {
   picked3 = await selectDrawer(2); if (picked3) await click(bar.getByRole("button", { name: "Удалить ящик", exact: true })); hm = await last();
   check("H5 «Удалить ящик» на плашке — весь ящик: ящиков 2, фасадов 2", picked3 && hm.sections[0].drawers === 2 && facesN(hm) === 2, `ящиков ${hm.sections[0].drawers}, фасадов ${facesN(hm)}`);
   await front(); await shot("H5-delete-whole-drawer");
+
+  // ── I. постоянные id (решение Макса 29.10): вырез на полке и на ящике держится при правках, отмене/повторе, файле и перезагрузке ──
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem("studio-tip-rmb", "1"); });
+  await page.goto(url); await page.waitForSelector("canvas", { state: "attached", timeout: 90000 }); await page.waitForTimeout(2500);
+  const noteText = async () => (await page.locator('[data-testid="studio-note"]').allInnerTexts().catch(() => [] as string[])).join(" ").replace(/\s+/g, " ");
+  const closeNote = async () => { await page.locator('[data-testid="studio-note"] button[aria-label="Закрыть сообщение"]').click({ timeout: 1000 }).catch(() => {}); };
+  const redo = async () => { await page.keyboard.press("Control+y"); await page.waitForTimeout(900); };
+  const mods = async () => (await doc()).active.modules.map((a) => a.module);
+  /** Вырез: деталь (по постоянной ссылке) → место среди деталей своего рода снизу вверх, высота центра детали. */
+  const cutAt = (m: Module, list: (m: Module) => Part[]) => (m.cutouts ?? []).map((c) => { const h = cutHost(m, c), ps = list(m), i = ps.findIndex((p) => p.id === h); return { rank: i, y: i < 0 ? null : Math.round(ps[i].position[1]), ref: c.ref ?? "" }; });
+  const cutPart = async (pid: string) => { await reveal(btn("Вырезы деталей…")); await click(btn("Вырезы деталей…")); await page.locator('select[aria-label="Деталь для выреза"]').selectOption(pid); await click(page.getByRole("group", { name: "Добавить вырез" }).getByRole("button", { name: /Круглый/ })); await click(btn("Сохранить вырезы")); await closeNote(); };
+  /** «Сохранить файл» → «Открыть» тот же файл (как менеджер: скачать, затем выбрать файл в окне). */
+  async function saveAndOpen(tag: string) {
+    // кнопки файла — в верхней панели; свёрнута — раскрыть («Заказ и инструменты»)
+    if (!(await page.getByRole("button", { name: "Сохранить проект файлом" }).first().isVisible().catch(() => false))) await click(page.getByRole("button", { name: /Заказ и инструменты/ }).first());
+    const [dl] = await Promise.all([page.waitForEvent("download"), click(page.getByRole("button", { name: "Сохранить проект файлом" }).first())]);
+    const file = `${out}/I-${tag}.json`; await dl.saveAs(file);
+    const [fc] = await Promise.all([page.waitForEvent("filechooser"), click(page.getByRole("button", { name: /^(Открыть|Заменить мебель комнаты)$/ }).first())]);
+    await fc.setFiles(file); await page.waitForTimeout(1500); await closeNote();
+  }
+  // I0–I5: «Стеллаж» 800×2000×400 — вырез на второй сверху полке
+  await addFromPalette("Стеллаж", 800, 2000, 400); await front();
+  let st = await last();
+  const sh0 = shelves(st), cutShelf = sh0.at(-2)!, shelfY = Math.round(cutShelf.position[1]);
+  await cutPart(cutShelf.id); st = await last();
+  let ci = cutAt(st, shelves)[0];
+  check("I0 вырез на полке: постоянная ссылка (ref) и та же полка", sh0.length >= 3 && ci?.rank === sh0.length - 2 && ci.y === shelfY && /:shelf@/.test(ci.ref), JSON.stringify(ci));
+  await openSet("Наполнение", "Полки"); await click(btn("Добавить: Полки")); st = await last(); ci = cutAt(st, shelves)[0];
+  const n1 = shelves(st).length;
+  check("I1 «+» полка: вырез на той же полке (по высоте)", n1 === sh0.length + 1 && ci?.y === shelfY, `полок ${n1}, ${JSON.stringify(ci)}`);
+  await openSet("Наполнение", "Полки"); await click(btn("Уменьшить: Полки")); st = await last(); ci = cutAt(st, shelves)[0];
+  check("I2 «−» полка (снята верхняя): вырез на своей полке", shelves(st).length === n1 - 1 && ci?.y === shelfY, `полок ${shelves(st).length}, ${JSON.stringify(ci)}; ${await noteText()}`.slice(0, 200));
+  await undo(); await undo(); st = await last(); ci = cutAt(st, shelves)[0];
+  check("I3 Ctrl+Z ×2: полок как было, вырез на своей полке", shelves(st).length === sh0.length && ci?.y === shelfY, `полок ${shelves(st).length}, ${JSON.stringify(ci)}`);
+  await redo(); st = await last(); ci = cutAt(st, shelves)[0];
+  check("I4 Ctrl+Y: снова +1 полка, вырез на своей полке", shelves(st).length === n1 && ci?.y === shelfY, `полок ${shelves(st).length}, ${JSON.stringify(ci)}`);
+  await saveAndOpen("shelf"); st = await last(); ci = cutAt(st, shelves)[0];
+  check("I5 «Сохранить файл» → «Открыть»: вырез на своей полке, ссылка та же", shelves(st).length === n1 && ci?.y === shelfY && /:shelf@/.test(ci.ref), JSON.stringify(ci));
+  await front(); await shot("I5-shelf-cut-after-file");
+  // I6–I11: «Комод» 800×1000×550 — вырез на фасаде среднего ящика
+  await addFromPalette("Комод", 800, 1000, 550); await front();
+  let km = await last();
+  const fids = faces(km).map((p) => p.id);
+  await cutPart(fids[1]); km = await last();
+  let cd = cutAt(km, faces)[0];
+  check("I6 вырез на фасаде среднего ящика: постоянная ссылка", km.sections[0].drawers === 3 && cd?.rank === 1 && /:drawer@/.test(cd.ref), JSON.stringify(cd));
+  const dRef = cd.ref;
+  let ok = await selectDrawer(1);
+  if (ok) { await reveal(btn("Удалить ящик целиком")); await click(btn("Удалить ящик целиком")); }
+  km = await last(); cd = cutAt(km, faces)[0];
+  check("I7 удалили нижний ящик: вырез на своём ящике (теперь нижний), без «снят»", ok && km.sections[0].drawers === 2 && cd?.rank === 0 && cd.ref === dRef && !/снят/.test(await noteText()), `${JSON.stringify(cd)}; ${await noteText()}`.slice(0, 200));
+  await closeNote();
+  await openSet("Наполнение", "Ящики"); await click(btn("Добавить: Ящики")); km = await last(); cd = cutAt(km, faces)[0];
+  check("I8 «+» ящик: 3 ящика, вырез на своём (нижнем)", km.sections[0].drawers === 3 && cd?.rank === 0 && cd.ref === dRef, JSON.stringify(cd));
+  await undo(); await undo(); km = await last(); cd = cutAt(km, faces)[0];
+  check("I9 Ctrl+Z ×2: 3 ящика как было, вырез на среднем", km.sections[0].drawers === 3 && cd?.rank === 1 && cd.ref === dRef, JSON.stringify(cd));
+  await redo(); km = await last(); cd = cutAt(km, faces)[0];
+  check("I10 Ctrl+Y: 2 ящика, вырез на своём (нижнем)", km.sections[0].drawers === 2 && cd?.rank === 0 && cd.ref === dRef, JSON.stringify(cd));
+  // у комода 1000 один ящик на весь проём не встаёт (фасад 968 > 800) — удаляем ящик с вырезом из трёх
+  await openSet("Наполнение", "Ящики"); await click(btn("Добавить: Ящики"));
+  ok = await selectDrawer(1);
+  if (ok) { await reveal(btn("Удалить ящик целиком")); await click(btn("Удалить ящик целиком")); }
+  km = await last();
+  check("I11 удалили ящик с вырезом (из трёх): вырез снят с сообщением, на соседний не переехал", ok && km.sections[0].drawers === 2 && !km.cutouts?.length && /Вырез .* снят: деталь «Ящик 1»/.test(await noteText()), `${km.sections[0].drawers}, вырезов ${km.cutouts?.length ?? 0}; ${await noteText()}`.slice(0, 200));
+  await front(); await shot("I11-drawer-cut-removed");
+  await closeNote(); await undo(); km = await last(); cd = cutAt(km, faces)[0];
+  check("I12 Ctrl+Z: ящик и вырез на нём вернулись", km.sections[0].drawers === 3 && cd?.rank === 0 && cd.ref === dRef, JSON.stringify(cd));
+  await saveAndOpen("drawer"); const [stF, kmF] = (await mods()).slice(-2); cd = cutAt(kmF, faces)[0]; ci = cutAt(stF, shelves)[0];
+  check("I13 файл: оба выреза на своих деталях (полка, ящик)", ci?.y === shelfY && cd?.rank === 0 && cd.ref === dRef, `${JSON.stringify(ci)} ${JSON.stringify(cd)}`);
+  await page.reload(); await page.waitForSelector("canvas", { state: "attached", timeout: 90000 }); await page.waitForTimeout(2500);
+  const [stR, kmR] = (await mods()).slice(-2); ci = cutAt(stR, shelves)[0]; cd = cutAt(kmR, faces)[0];
+  check("I14 перезагрузка страницы: вырезы на своих деталях", ci?.y === shelfY && cd?.rank === 0 && cd.ref === dRef, `${JSON.stringify(ci)} ${JSON.stringify(cd)}`);
+  await front(); await shot("I14-after-reload");
 } catch (e) { check("сценарий без сбоя", false, (e as Error).message.split("\n")[0]); await shot("fail"); }
 check("ошибок страницы нет", errors.length === 0, errors.slice(0, 2).join(" | "));
 writeFileSync(`${out}/results.json`, JSON.stringify({ results, errors }, null, 1));
