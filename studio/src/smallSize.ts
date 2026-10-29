@@ -15,6 +15,37 @@ const clearShelves = (s: Section) => { s.shelves = []; delete s.fixed; delete s.
 const clearRod = (s: Section) => { s.rod = false; delete s.rodAt; delete s.rodLower; delete s.rodClearance; };
 const clearDrawers = (s: Section) => { s.drawers = 0; delete s.drawerConfigs; delete s.drawerCap; delete s.drawerGrip; delete s.drawerGap; delete s.externalDrawers; };
 
+/** Наполнение, снятое правилом малого корпуса (критик 29.10, п.9: опечатка «100» вместо «1000» снимала двери, штангу, полки, цоколь
+ *  безвозвратно). Запоминается до снятия; вернули размер (не меньше запомненного) — наполнение возвращается. */
+export type SmallMemo = { width: number; height: number; depth: number; doors: boolean; plinthHeight?: number; sections: Section[];
+  /** наполнение сразу после снятия (fillingKey): изменили наполнение вручную после этого — запомненное уже не возвращается */ after?: string };
+/** Отпечаток наполнения модуля (двери, цоколь, секции) — запомненное возвращается, только если наполнение после снятия не меняли. */
+export const fillingKey = (m: Module) => JSON.stringify([m.doors, m.plinthHeight ?? null, m.sections]);
+export const smallMemo = (m: Module): SmallMemo => ({ width: m.width, height: m.height, depth: m.depth, doors: m.doors, ...(m.plinthHeight === undefined ? {} : { plinthHeight: m.plinthHeight }), sections: structuredClone(m.sections) });
+/** Вернуть снятое наполнение в модуль next (размер не меньше запомненного): двери, цоколь, секции с наполнением; при другой высоте —
+ *  ящики по правилу пересчитываются (fitResize — fitDrawersAfterResize из model, передаётся, чтобы не тянуть цикл импорта).
+ *  null — размер ещё меньше запомненного или наполнение по-прежнему не встаёт (тогда остаётся как есть). */
+export function restoreSmallFilling(next: Module, memo: SmallMemo, fitResize?: (m: Module, before: Module) => void): Module | null {
+  if (next.width < memo.width - 0.01 || next.height < memo.height - 0.01 || next.depth < memo.depth - 0.01) return null;
+  const r = structuredClone(next);
+  r.doors = memo.doors; r.sections = structuredClone(memo.sections);
+  if (memo.plinthHeight === undefined) delete r.plinthHeight; else r.plinthHeight = memo.plinthHeight;
+  if (fitResize && r.height !== memo.height) fitResize(r, { ...r, width: memo.width, height: memo.height, depth: memo.depth, sections: structuredClone(memo.sections) });
+  if (fitSmallModule(r).length) return null;
+  try { if (validate(r).length) return null; } catch { return null; }
+  return r;
+}
+
+/** Смена размера модуля prev → next (next уже с новым размером) с памятью снятого: вернули размер — наполнение возвращается;
+ *  иначе снимается то, что не входит (fitSmallModule), и запоминается до первого снятия. Меняет next; память — новая (или undefined). */
+export function resizeSmall(prev: Module, next: Module, memo: SmallMemo | undefined, fitResize?: (m: Module, before: Module) => void): { notes: string[]; memo?: SmallMemo; restored: boolean } {
+  if (memo && memo.after !== fillingKey(prev)) memo = undefined; // наполнение после снятия меняли — запомненное не возвращаем поверх
+  const back = memo ? restoreSmallFilling(next, memo, fitResize) : null;
+  if (back) { Object.assign(next, back); if (back.plinthHeight === undefined) delete next.plinthHeight; return { notes: [], restored: true }; }
+  const before = memo ?? smallMemo(prev), notes = fitSmallModule(next);
+  return { notes, restored: false, memo: notes.length || memo ? { ...before, after: fillingKey(next) } : undefined };
+}
+
 /** Модуль, к которому применяется правило малых размеров. */
 export function smallSizeApplies(m: Module): boolean {
   return !m.kupe && !m.raw && !m.worktop && !m.corner && !m.casework && !m.desk && !m.bazis && !m.sectionLayout;

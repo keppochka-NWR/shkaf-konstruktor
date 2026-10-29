@@ -6,7 +6,7 @@ import {ShapePanel} from './ShapePanel';
 import {readCutaway,saveCutaway} from './roomCutaway';
 import './editor-visibility.css';
 import {repairHinges} from './hingeRepair';
-import {fitSmallModule} from './smallSize';
+import {resizeSmall,type SmallMemo} from './smallSize';
 import {savePng} from './savePng';
 import {SettingsTree,revealSettings} from './SettingsTree';
 import {SettingsSection} from './SettingsSection';
@@ -683,10 +683,17 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const a=project.modules.find(x=>x.id===mid);if(!a)return;
     try{const r=continueAroundCorner(project,turn,move?{id:move}:{module:{...structuredClone(a.module),name:a.module.name.replace(/ · копия$/,'')},y:a.y});if(commitProject(r.project)){selectModule(r.id);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
   }
+  const smallMemos=useRef(new Map<string,SmallMemo>());
   function modify(update: (draft: Module) => void) {
-    const next = structuredClone(m);let small:string[]=[];
-    try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}/* волна 29.10: корпус от 100 мм — что в него не входит, снимается с сообщением (smallSize.ts) */if(next.width!==m.width||next.height!==m.height)small=fitSmallModule(next);}catch(e){setError((e as Error).message);return false;}
-    const ok=commit(next);if(ok&&small.length)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:small.join(' ')}}));return ok;
+    const next = structuredClone(m);let small:string[]=[],restored=false;
+    try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}/* волна 29.10: корпус от 100 мм — что в него не входит, снимается с сообщением (smallSize.ts) */if(next.width!==m.width||next.height!==m.height){
+        // критик 29.10 (п.9): снятое малым корпусом наполнение запоминается; вернули размер — оно возвращается (опечатка 100 вместо 1000)
+        const r=resizeSmall(m,next,smallMemos.current.get(placed.id),fitDrawersAfterResize);small=r.notes;restored=r.restored;
+        if(r.memo)smallMemos.current.set(placed.id,r.memo);else if(!r.restored)smallMemos.current.delete(placed.id);
+      }}catch(e){setError((e as Error).message);return false;}
+    const ok=commit(next);
+    if(ok&&restored){smallMemos.current.delete(placed.id);window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:'Размер вернулся — снятое наполнение (двери, цоколь, полки, штанга, ящики) возвращено.'}}));}
+    if(ok&&small.length)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:small.join(' ')+' Вернёте прежний размер — снятое вернётся (или Ctrl+Z).'}}));return ok;
   }
   function modifySection(update: (draft: Section, next: Module) => void) {
     return modify((next) => {
