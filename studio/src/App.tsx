@@ -1062,10 +1062,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         return;
       }
       if(command){e.preventDefault();command==='undo'?undo():redo();return;}
-      if(direct||modal)return;
+      // окно поверх редактора (подсветка, фурнитура, крупные фасады Вернисажа…) или фокус в поле/списке — клавиши редактора не действуют (критик 29.10)
+      if(direct||modal||document.querySelector('[aria-modal="true"]'))return;
       // Delete (правка Макса 29.10: «удаление шкафов по нажатию на Delete»): выбранная деталь — сразу (ящик — целиком), корпус или
       // отмеченные Ctrl+щелчком корпуса — через «Да, удалить / Отмена», как «Удалить корпус» в меню правой кнопки (решение 19.10)
-      if(e.key==='Delete'&&!ctxMenu&&!gapMenu&&!lightMode&&!cutHost&&!presentation){
+      if(e.key==='Delete'&&!ctxMenu&&!gapMenu&&!lightMode&&!cutHost&&!presentation&&!(e.target instanceof Element&&e.target.closest('input,select,textarea'))){
         const t=deleteKeyTarget({removablePart:!!canRemove,groupIds:liveGroupIds,activeId:project.modules.length?placed.id:undefined,deselected,environment:!!(selectedOpening||selectedObstacle||selectedFixture||environmentSelection)});
         if(t?.kind==='part'){e.preventDefault();removeSelected();}
         else if(t?.kind==='modules'){e.preventDefault();setDeleteAsk(t.ids);}
