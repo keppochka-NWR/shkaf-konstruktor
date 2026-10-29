@@ -67,7 +67,8 @@ const byName = (t: string) => FINISHES.find((f) => f.name.includes(t))!;
   if (planOk) await plan.screenshot({ path: `${out}/00-plan-open.png`, timeout: 60000 });
   t0 = Date.now();
   const backOk = planOk && (await plan.getByRole("button", { name: "3D", exact: true }).first().click({ timeout: 8000 }).then(() => true, () => false));
-  check("план: щелчок «3D» обратно возвращается быстро", backOk && Date.now() - t0 < 2000, Date.now() - t0 + " мс");
+  // порог 4 с: пересоздание 3D-сцены в программном рендере (swiftshader) ~2,5 с, на видеокарте ~0,3 с (дымовая проверка 30.10)
+  check("план: щелчок «3D» обратно возвращается быстро", backOk && Date.now() - t0 < 4000, Date.now() - t0 + " мс");
   await plan.close().catch(() => {});
 }await page.goto(url, { timeout: 60000 });
 await page.waitForTimeout(2500);
