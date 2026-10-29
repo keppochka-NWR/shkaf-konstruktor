@@ -289,6 +289,8 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
   if(x.calculation)p.calculation={markup:x.calculation.markup,overrides:x.calculation.overrides,...(x.calculation.model===undefined?{}:{model:x.calculation.model}),...(x.calculation.sheetPrice===undefined?{}:{sheetPrice:x.calculation.sheetPrice}),...(x.calculation.vernissageMarkup===undefined?{}:{vernissageMarkup:x.calculation.vernissageMarkup}),...(x.calculation.baseMarkup===undefined?{}:{baseMarkup:x.calculation.baseMarkup}),...(x.calculation.baseVernissageMarkup===undefined?{}:{baseVernissageMarkup:x.calculation.baseVernissageMarkup}),...(x.calculation.cuttingEngine===undefined?{}:{cuttingEngine:x.calculation.cuttingEngine}),/* edgeGlue (кромка PUR) не читается — PUR не делаем, решение Макса 26.10.2026 */...(x.calculation.maxModel===true||(x.calculation as {priceMax?:unknown}).priceMax===true?{maxModel:true}:{})}; // priceMax — то же поле ветки o-7427796 (синоним при загрузке)
   if(x.offer)p.offer={customer:x.offer.customer,price:x.offer.price,notes:x.offer.notes,...(x.offer.pendingIncluded===undefined?{}:{pendingIncluded:x.offer.pendingIncluded}),...(x.offer.itemPrices===undefined?{}:{itemPrices:x.offer.itemPrices})};const e=projectErrors(p,allowEmpty);if(e.length)throw Error(e[0]);return p;
 }
+/** Поднятый от пола корпус — опора шкафной столешницы, если это тумба: глубина и верх от пола в пределах (круг 2 критика 29.10). */
+export const WORKTOP_BASE={minDepth:350,maxTop:1000};
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
   const n=structuredClone(p),module=structuredClone(source);rekeySections(module,id);module.name=`Модуль ${p.modules.length+1}`;
   // Место ищем по корпусам с автофальшами (как их поставит сохранение): первый шкаф у стены ещё без планки торцом
@@ -300,9 +302,12 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   // до 1200 высотой (комоды, тумбы); с кухонными низами — как было
   // dp-2810 (28.10.2026, подвесная тумба ванной под накладную раковину): опорой шкафной столешницы служит и подвесной (навесной) корпус
   // до 1200 высотой; опоры — корпуса с самым высоким верхом (столешница ложится на них, а не на низкую тумбу рядом)
-  // критик 29.10 (п.6): опора — любой корпус под столешницей по верху, в т.ч. комод, поднятый «От пола» (подвесная тумба без флага
-  // навесного): верх не выше 1200 от пола; на полу и навесные — как было
-  const slabAll=p.modules.filter(a=>(!(a.y??0)||a.module.hanging||(a.y??0)+a.module.height<=1200)&&!a.module.kupe&&!a.module.worktop&&!a.module.kitchen&&a.module.height<=1200),slabTop=Math.max(...slabAll.map(a=>(a.y??0)+a.module.height));
+  // критик 29.10 (п.6): опора — и комод, поднятый «От пола» (подвесная тумба без флага навесного). Круг 2 (регрессия п.6: опорой
+  // становилась любая поднятая полка — настенная 600×300×250 «От пола» 850 с верхом 1150 перехватывала столешницу у комода на полу):
+  // поднятый корпус (навесной или нет) — опора, только если это тумба под столешницу: глубина от 350 и верх не выше 1000 от пола
+  // (подвесная тумба ванной dp-2810 431 × верх 870 — опора). На полу — как было.
+  const worktopBase=(a:PlacedModule)=>!(a.y??0)||(a.module.depth>=WORKTOP_BASE.minDepth&&(a.y??0)+a.module.height<=WORKTOP_BASE.maxTop);
+  const slabAll=p.modules.filter(a=>worktopBase(a)&&!a.module.kupe&&!a.module.worktop&&!a.module.kitchen&&a.module.height<=1200),slabTop=Math.max(...slabAll.map(a=>(a.y??0)+a.module.height));
   const slabSupports=slabAll.filter(a=>Math.abs((a.y??0)+a.module.height-slabTop)<1);
   const slab=!!source.worktop&&!kitchenBases.length&&slabSupports.length>0;
   if(slab){module.worktop={...module.worktop!,material:'ldsp',thickness:32};module.height=32;}
