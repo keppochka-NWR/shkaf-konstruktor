@@ -49,6 +49,7 @@ import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from 
 import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {priceModelLabel,withOrderCalculation} from './priceModel';
+import {rebindCutouts} from './cutoutBinding';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
@@ -568,6 +569,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // Модель цены — свойство заказа (критик 29.10, блокер 1): проект комнаты без настроек расчёта («Новый проект», «без мебели»,
     // файл без расчёта) получает настройки заказа, а не сбрасывает их.
     if(saveManagedProject&&raw.calculation===undefined&&project.calculation)raw={...raw,calculation:structuredClone(project.calculation)};
+    // Вырезы идут за своей деталью, а не за её номером (критик 29.10, блокер 2): вставили/удалили полку, ящик, дверь — перепривязка.
+    const cutNotes:string[]=[];
+    if(raw.modules.some(a=>a.module.cutouts?.length))raw={...raw,modules:raw.modules.map(a=>{const old=project.modules.find(x=>x.id===a.id);if(!old||old.module===a.module||!a.module.cutouts?.length)return a;const r=rebindCutouts(old.module,a.module);cutNotes.push(...r.notes);return r.module===a.module?a:{...a,module:r.module};})};
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
     const e = projectErrors(next,!!onEmptyProject);
@@ -587,6 +591,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setHistory((h) => [...h.slice(0, cursor + 1), next].slice(-61));
     setCursor(Math.min(cursor + 1, 60));
     setError("");
+    if(cutNotes.length)setNotice({title:'Вырезы',text:cutNotes.join(' ')});
     return true;
   }
   function commit(next: Module) {
