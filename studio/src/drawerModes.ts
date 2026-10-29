@@ -1,7 +1,7 @@
 // Ящики секции (fix-drawers, правки Макса 29.10.2026): число ящиков с пересчётом расстановки «по правилу», выкатной ящик на всю
 // секцию (антресоль) и переключатель «ящики в накладку / за дверью». Только правки модели — те же для панели справа и меню правой
 // кнопки; геометрию строит parts() (model.ts), цены — смета по деталям (направляющие комплектами на ящик — guideKits).
-import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, hasDrawerCap, isAutoDrawerLayout, rearClear, RULES, type Module, type Section } from "./model";
+import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, hasDrawerCap, isAutoDrawerLayout, parts, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
 
 const sectionOf = (m: Module, sid: string) => { const s = m.sections.find((x) => x.id === sid); if (!s) throw Error("Выберите секцию."); return s; };
@@ -43,6 +43,25 @@ export function setDrawerCount(m: Module, sid: string, count: number): void {
   const t: Section = { ...s, drawers: c, drawerConfigs: [...cs, ...Array.from({ length: c - s.drawers }, () => ({ ...last }))] };
   t.drawerConfigs = drawersToRoof(m, t);
   s.drawers = c; s.drawerConfigs = t.drawerConfigs;
+}
+
+/** Зазор между фасадами ящиков, как он виден (по деталям): у равных фасадов до крыши с фасадами выше короба — шаг фасада (3 мм),
+ *  иначе — настройка секции. Поле панели показывает его, а не умолчание (критик 29.10). */
+export function drawerFaceGap(m: Module, s: Section): number {
+  const set = s.drawerGap ?? (m.doors && !s.externalDrawers ? RULES.drawerFrontGap : RULES.faceGap);
+  if (s.drawers < 2) return set;
+  try {
+    const f = parts(m).filter((p) => p.sectionId === s.id && /:drawer:\d+:facade$/.test(p.id)).map((p) => [p.position[1] - p.size[1] / 2, p.position[1] + p.size[1] / 2]).sort((a, b) => a[0] - b[0]);
+    const gaps = f.slice(1).map((x, i) => Math.round((x[0] - f[i][1]) * 10) / 10);
+    return gaps.length && gaps.every((g) => Math.abs(g - gaps[0]) < 0.06) && gaps[0] > 0 ? gaps[0] : set;
+  } catch { return set; }
+}
+/** «Зазор между фасадами ящиков»: задать зазор секции; ящики до крыши по правилу — снова равные фасады с этим зазором. */
+export function setDrawerGap(m: Module, sid: string, gap: number): void {
+  const s = sectionOf(m, sid), roof = roofDrawers(m, s);
+  const t: Section = { ...s, drawerGap: gap };
+  if (roof) t.drawerConfigs = drawersToRoof(m, t);
+  s.drawerGap = gap; if (roof) s.drawerConfigs = t.drawerConfigs;
 }
 
 /** Направляющая, которая встаёт по глубине (за дверью нужно на 19 мм больше места спереди): самая длинная из ряда системы не длиннее доступного. */

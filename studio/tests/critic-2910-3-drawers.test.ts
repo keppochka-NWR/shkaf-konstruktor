@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initialModule, parts, validate, boxes, facadeTop, facadeBottom, hasDrawerCap, isAutoDrawerLayout, type Module } from '../src/model';
 import { createModule } from '../src/ModulePalette';
-import { setDrawerCount, roofDrawers } from '../src/drawerModes';
+import { setDrawerCount, roofDrawers, drawerFaceGap, setDrawerGap } from '../src/drawerModes';
 
 // ───────── 3. комод: «+/−» — фасады равные и до крыши ─────────
 function faceStats(m: Module) {
@@ -62,4 +62,16 @@ test('блокер 3: все сочетания высот 400–1500 × 1–6 �
     }
   }
   assert.ok(ok > 300, `сочетаний с равными фасадами: ${ok}, отказов с причиной: ${refused}`);
+});
+test('блокер 3: поле «Зазор между фасадами ящиков» показывает зазор как виден (3 мм у фасадов выше короба); 2 мм — фасады снова поровну', () => {
+  const m = createModule('drawers', 800, 1000, 550, initialModule()), sid = m.sections[0].id;
+  assert.equal(drawerFaceGap(m, m.sections[0]), 2);
+  setDrawerCount(m, sid, 2);
+  assert.equal(drawerFaceGap(m, m.sections[0]), 3, 'фасады выше короба — зазор шага фасада');
+  setDrawerGap(m, sid, 2);
+  assertEven(m, '800×1000, 2 ящика, зазор 2');
+  assert.deepEqual(faceStats(m).gaps.map((g) => Math.round(g * 10) / 10), [2]);
+  assert.equal(drawerFaceGap(m, m.sections[0]), 2);
+  setDrawerCount(m, sid, 3); assertEven(m, '«+» при зазоре 2');
+  assert.ok(faceStats(m).gaps.every((g) => Math.abs(g - 2) < 0.01));
 });

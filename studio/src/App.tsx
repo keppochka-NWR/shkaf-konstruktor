@@ -21,7 +21,7 @@ import { refitKDrawers } from "./kitchenDrawers";
 import { configureColumn } from "./kitchenTall";
 import { syncKitchenLift } from "./kitchenLift";
 import {facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable,evenDrawerConfigs,drawerFacesEqual} from './model';
-import {setDrawerCount,setDrawersOverlay,fullSectionDrawer,fullDrawerFacadeH} from './drawerModes';
+import {setDrawerCount,setDrawersOverlay,fullSectionDrawer,fullDrawerFacadeH,drawerFaceGap,setDrawerGap} from './drawerModes';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -1873,7 +1873,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </>
                 )}
 </SettingsSection>
-<SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)} min={2} max={10} onChange={v=>modifySection(a=>a.drawerGap=v)}/>}
+<SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={drawerFaceGap(m,s)/* критик 29.10: как виден по деталям */} min={2} max={10} onChange={v=>modify(n=>setDrawerGap(n,s.id,v))}/>}
                 {s.drawers>0&&(falshGlue(m)[s.id+':left']||falshGlue(m)[s.id+':right'])&&<p className="field-note" role="note" data-testid="falsh-glue-note">Фальш 32 мм: склейка, разрыв у петель — петля в зоне ящиков не сдвигается, фальш из двух плит 16 с разрывом 100 мм у петли.</p>}
 
                 <Counter
