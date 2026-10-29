@@ -36,6 +36,17 @@ export function remapDrawerCutouts(m: Module, sid: string, removed: number): voi
   }
   if (out.length) m.cutouts = out; else delete m.cutouts;
 }
+/** «Вставить наполнение секции» (круг 3 критика 29.10): полки, ящики, штанги секции заменены копией — вырезы на деталях наполнения
+ *  секции снимаются (сообщение — rebindCutouts), а не остаются молча на новой детали с тем же номером. Модуль next меняется на месте. */
+export function dropCutoutsOnFilling(prev: Module, next: Module, sid: string): void {
+  if (!next.cutouts?.length) return;
+  const before = safeParts(prev);
+  if (!before) return;
+  const filling = new Set(before.filter((p) => p.sectionId === sid && p.role !== "body" && p.role !== "door" && p.role !== "hinge" && p.role !== "handle").map((p) => p.id));
+  const keep = next.cutouts.filter((c) => !filling.has(c.host));
+  if (keep.length === next.cutouts.length) return;
+  if (keep.length) next.cutouts = keep; else delete next.cutouts;
+}
 /** Вырезы на деталях, которых после правки нет (удалили секцию — её полки и перегородка): снимаются, как у удалённой полки
  *  (сообщение — rebindCutouts). Модуль next меняется на месте. */
 export function dropCutoutsOnRemovedParts(prev: Module, next: Module): void {
@@ -63,7 +74,9 @@ export function rebindCutouts(prev: Module, next: Module): { module: Module; not
   for (const c of prev.cutouts) {
     if (ids.has(c.id)) continue;
     const old = before.find((p) => p.id === c.host), x = DRAWER_HOST.exec(c.host);
-    if (old && (!after.some((p) => p.id === c.host) || (x && drawersOf(next, x[1]) < drawersOf(prev, x[1])))) notes.push(removedNote(c, old));
+    // наполнение секции заменили («Вставить наполнение секции», круг 3) — деталь с тем же номером уже другая
+    const refilled = !!old && old.role !== "body" && JSON.stringify(prev.sections.find((s) => s.id === old.sectionId)) !== JSON.stringify(next.sections.find((s) => s.id === old.sectionId));
+    if (old && (!after.some((p) => p.id === c.host) || (x && drawersOf(next, x[1]) < drawersOf(prev, x[1])) || refilled)) notes.push(removedNote(c, old));
   }
   for (const c of cuts) {
     const old = before.find((p) => p.id === c.host), fam = cutFamily(c.host);

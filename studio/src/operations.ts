@@ -6,7 +6,7 @@ import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,
 import {roofColumn,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
-import {remapDrawerCutouts,dropCutoutsOnRemovedParts} from './cutoutBinding';
+import {remapDrawerCutouts,dropCutoutsOnRemovedParts,dropCutoutsOnFilling} from './cutoutBinding';
 import {drawersUnderMansard} from './mansardFit';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
@@ -312,6 +312,7 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
  if(copy.drawerMount)s.drawerMount=copy.drawerMount;else delete s.drawerMount;
  if(copy.drawerGap!==undefined)s.drawerGap=copy.drawerGap;else delete s.drawerGap;
  if(copy.hanger==='rod'&&copy.rodLowerHeight!==undefined)s.rodLower=copy.rodLowerHeight/height;else delete s.rodLower;
+ dropCutoutsOnFilling(p.modules.find(a=>a.id===mid)!.module,m,sid);/* круг 3: вырезы на заменённых деталях наполнения снимаются с сообщением */
  const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;
 }
 
