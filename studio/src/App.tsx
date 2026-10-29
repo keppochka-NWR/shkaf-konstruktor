@@ -134,6 +134,7 @@ import {SafeBoundary} from './SafeBoundary';
 import {RoomWarnings} from './RoomWarningPanel';
 import {roomWarnings} from './roomWarnings';
 import { RoomEditor } from './RoomEditor';
+import { RoomFinishes } from './RoomFinishPicker';
 import {RoomPlan} from './RoomPlan';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
@@ -1776,7 +1777,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <details className="measurement-fields"><summary>Сдвинуть всю композицию</summary><p className="field-note">Все {project.modules.length} корпуса сдвигаются вместе. Стыки, расстояния и положение антресолей относительно нижних модулей сохраняются.</p>{(['x','z','y'] as const).map(axis=><NumberField key={axis} label={{x:'Композиция от левой стены',z:'Композиция от задней стены',y:'Композиция от пола'}[axis]} value={Math.round(mountingComposition[axis]*10)/10} min={0} max={{x:project.room.width-mountingComposition.w,z:project.room.depth-mountingComposition.d,y:project.room.height-mountingComposition.h}[axis]} onChange={v=>{try{commitProject(setCompositionDistance(project,axis,v));}catch(e){setError((e as Error).message);}}}/>)}<p className="field-note">Отступы — по монтажному габариту, как у отдельного корпуса. Выступы ручек проверяются отдельными подсказками. Отмена возвращает всю расстановку одним шагом.</p></details>
               </div>
               <div data-stages="room fixtures bodies filling facades docs"><RoomWarnings project={project} select={w=>{selectModule(w.moduleId);setSelectedOpening(w.openingId);setSelectedObstacle(w.obstacleId);setSelectedFixture(w.fixtureId);setRoomPlan(true);}}/></div>
-              <div data-stages="room"><RoomEditor part="walls" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
+              <div data-stages="room"><RoomEditor part="walls" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
+              <RoomFinishes room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <div data-stages="fixtures"><RoomEditor part="openings" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <RoomFixtures selected={selectedFixture} onSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} room={project.room} roomName={project.measurement?.number?'Замер '+project.measurement.number:project.offer?.customer} onChange={room=>commitProject({...project,room})} onImport={r=>{const room={...project.room,...r.room};if(commitProject({...project,room,measurement:{number:project.measurement?.number||'',date:project.measurement?.date||'',notes:[project.measurement?.notes||'',r.name?'Замер из Базиса: '+r.name:'',...r.notes].filter(Boolean).join('\n')}})){setShowRoom(true);setFit(f=>f+1);}}}/>
               <RoomObstacles modules={project.modules} selected={selectedObstacle} onSelect={setSelectedObstacle} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
@@ -2176,13 +2178,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {/* dp-2810: у комода и подвесного ящика (только ящики) фасады Вернисаж выбирались лишь ПКМ по фасаду в сцене — тип фасадов и в панели */}
                 {(m.doors || m.sections.some(s=>s.drawers>0)) && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={facadeKindOf(m)} onChange={e=>modify(n=>setFacadeKind(n,e.target.value as FacadeKind))}>{/* интеграция 29.10: неподходящий тип (рамка у дверей выше 2000) недоступен — стрелки его пропускают, выбор не откатывается */}{FACADE_KINDS.map(k=>{const why=facadeKindBlock(m,k);return <option key={k} value={k} disabled={!!why} title={why||undefined}>{k==='ldsp'?FACADE_KIND_LABEL.ldsp+' 16 мм':FACADE_KIND_LABEL[k]}{why?' — не подходит':''}</option>;})}</select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={facadeKindOf(m)} onChange={e=>modify(n=>setFacadeKind(n,e.target.value as FacadeKind))}>{/* интеграция 29.10: неподходящий тип (рамка выше листа стекла или шире 600) недоступен — стрелки его пропускают, выбор не откатывается */}{FACADE_KINDS.map(k=>{const why=facadeKindBlock(m,k);return <option key={k} value={k} disabled={!!why} title={why||undefined}>{k==='ldsp'?FACADE_KIND_LABEL.ldsp+' 16 мм':FACADE_KIND_LABEL[k]}{why?' — не подходит':''}</option>;})}</select></label>
                 )}
                 {(m.doors || m.sections.some(s=>s.drawers>0)) && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 
                 {m.doors && m.alu && (<>
                   <AluPicker value={m.alu} onChange={v=>modify(n=>{n.alu=v;})}/>{aluDrawersAvailable(m)&&<AluDrawersCheck checked={!!m.aluDrawers} onChange={v=>modify(n=>{if(v)n.aluDrawers=true;else delete n.aluDrawers;})}/>}
-                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
+                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. Высота рамки — по листу стекла наполнения (зеркало до 3000 мм, предел — под выбором наполнения), ширина по СТП не больше 600 мм; петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
                 </>)}
                 {m.doors && !m.alu && (
                   <button

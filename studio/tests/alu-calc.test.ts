@@ -140,3 +140,33 @@ test('changeFacadeKind: кухня (keepThickness) сохраняет свою �
   const back=changeFacadeKind(v,'ldsp',{keepThickness:true});assert.equal(back.facadeT,undefined,'толщина МДФ Вернисажа не остаётся у ЛДСП');
   assert.equal(changeFacadeKind(m,'alu').facadeT,undefined,'без keepThickness — сброс, как у редактора фасадов');
 });
+test('ALU: высота рамочного фасада — почти по листу стекла поставщика (не 2000 по старому СТП); шире 600 и выше листа — отказ с причиной', async () => {
+  const { aluMaxHeight, aluFill, DEFAULT_ALU, ALU_GLASS } = await import('../src/alu');
+  const { initialModule, section, parts, validate } = await import('../src/model');
+  const { hingeCount } = await import('../src/hardware');
+  // лист 3210×2250 зеркала — ограничение длины обработки (закалка) 3000
+  assert.equal(aluMaxHeight(DEFAULT_ALU).maxH, 3000);
+  // стекло (не зеркало) 3210×2250: вставка не длиннее станка 2750 → фасад до 2779 (критик 29.10, уточнить у Макса)
+  assert.deepEqual([aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-bronze' }).maxH, aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-bronze' }).glassMax], [2779, 2750]);
+  // стандартный лист 2550×1605 (прозрачное, сатин, лакобель): фасад до 2550, вставка 2550 − 29
+  const clear = aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-clear' });
+  assert.deepEqual([clear.maxH, clear.glassMax, clear.sheet[0]], [2550, 2550 - 29, 2550]);
+  assert.equal(aluMaxHeight({ ...DEFAULT_ALU, insert: 'lacobel-white' }).maxH, 2550);
+  const krizet = ALU_FILLS_BY('Кризет б/ц');
+  assert.equal(aluMaxHeight({ ...DEFAULT_ALU, insert: krizet }).maxH, 2100);
+  assert.equal(ALU_GLASS.allowance, 29);
+  // шкаф 440×2500: дверь ~2400 в зеркале — проходит (было «по СТП не выше 2000»); петли по прежнему правилу (выше 2000 — 5)
+  const m = { ...initialModule(), width: 440, height: 2500, sections: [{ ...section(), doorLeaves: 1 as const }], doors: true, alu: { ...DEFAULT_ALU } };
+  const door = parts(m).find((p) => p.role === 'door' && p.material === 'alu')!;
+  assert.ok(door.length > 2300, `дверь ${door.length}`);
+  assert.deepEqual(validate(m).filter((e) => /Алюминиевый/.test(e)), []);
+  assert.equal(parts(m).filter((p) => p.id.includes(':hingecup:')).length, hingeCount(door.length, door.width));
+  // наполнение с малым листом — отказ с причиной (лист поставщика и предел высоты)
+  const k = { ...m, alu: { ...DEFAULT_ALU, insert: krizet } };
+  assert.match(validate(k).join(' '), /Кризет б\/ц.*лист 2100×1600.*не выше 2100/);
+  // ширина — по-прежнему не шире 600
+  const wide = { ...m, width: 700 };
+  assert.match(validate(wide).join(' '), /не шире 600/);
+  void aluFill;
+});
+function ALU_FILLS_BY(name: string) { return ALU_FILLS.find((f) => f.label === name)!.id; }

@@ -1,6 +1,7 @@
 import { V_ADILET_FILMS, V_ADILET_MDF19, V_ADILET_PRICES, V_FILMS, V_MILLINGS, V_NOTES, V_PET_DECORS, V_SERIES, type VLimit, type VMillingRow, type VSeriesId } from './vernissageData';
 import { layoutFacade, type FacadeLayout, type MillShape, type Opening } from './vernissageGeometry';
 import { V_FILM_COLORS, V_TEXTURES } from './vernissageTextures';
+import { enamelColorLabel, ralOf } from './ralClassic';
 
 /** Фасады МДФ «Вернисаж» (г. Бор): каталог фрезеровок, плёнки, эмаль, цены по прайсу от 10.08.2026.
  *  Сторонний участок: фасады не идут в раскрой ЛДСП, цена — м² по серии, категории покрытия и толщине (примечания прайса — ниже).
@@ -63,7 +64,7 @@ export function passportShape(m: VMillingRow): { shape: MillShape; note: string 
   const P = PROVISIONAL, D = g.depthMm ?? 3, base = { edgeR: g.edgeR ?? P.edgeR, top: g.top ?? 'rect', bottom: g.bottom ?? 'rect', archRise: P.archRise, shoulder: P.shoulder } as const;
   const tag = [g.depthStated ? `глубина ${fmtRu(D)} мм` : `глубина ${fmtRu(D)} мм условно`, g.widthsEstimated ? 'часть ширин по чертежу' : ''].filter(Boolean).join(', ');
   const note = `${g.note} (паспорт PDF; ${tag})`;
-  if (g.kind === 'relief') return { shape: { kind: 'relief', ...base, relief: { dir: g.dir ?? 'v', pitch: g.pitch ?? g.module ?? 30, w: g.w ?? 10, d: D, ...(g.shape ? { shape: g.shape } : {}), ...(g.module ? { module: g.module, grooves: g.grooves } : {}), ...(g.band ? { band: g.band } : {}) } }, note };
+  if (g.kind === 'relief') return { shape: { kind: 'relief', ...base, relief: { dir: g.dir ?? 'v', pitch: g.pitch ?? g.module ?? 30, w: g.w ?? 10, d: D, ...(g.shape ? { shape: g.shape } : {}), ...(g.module ? { module: g.module, grooves: g.grooves } : {}), ...(g.band ? { band: g.band } : {}), ...(g.chevron ? { chevron: g.chevron } : {}) } }, note };
   if (g.kind === 'lattice') return { shape: { kind: 'lattice', ...base, lattice: { cellW: g.cellW ?? 34, cellH: g.cellH ?? 63, d: D, vAngle: g.vAngle ?? 90 } }, note };
   const gf = m.pp!.glass?.frame ?? g.glassProvisional;
   const shape: MillShape = {
@@ -312,7 +313,7 @@ export function priceDateRu(): string { const [y, mo, d] = String(V_NOTES.priceD
 
 export function vernissageLabel(v: VernissageFacade): string {
   const m = vernissageMilling(v.milling), s = seriesOf(v.milling);
-  const cover = v.cover === 'film' ? `плёнка ${v.film ?? '—'}` : v.cover === 'adilet' ? `плёнка Адилет ${v.film ?? '—'}` : v.cover === 'pet' ? `ПЭТ ${v.film ?? '—'}` : v.cover === 'enamel-matte' ? `эмаль мат${v.enamelColor ? ' ' + v.enamelColor : ''}` : v.cover === 'enamel-gloss' ? `эмаль глянец${v.enamelColor ? ' ' + v.enamelColor : ''}` : s.id === 'handle' ? 'без покрытия' : 'без плёнки';
+  const cover = v.cover === 'film' ? `плёнка ${v.film ?? '—'}` : v.cover === 'adilet' ? `плёнка Адилет ${v.film ?? '—'}` : v.cover === 'pet' ? `ПЭТ ${v.film ?? '—'}` : v.cover === 'enamel-matte' ? `эмаль мат${v.enamelColor ? ' ' + enamelColorLabel(v.enamelColor) : ''}` : v.cover === 'enamel-gloss' ? `эмаль глянец${v.enamelColor ? ' ' + enamelColorLabel(v.enamelColor) : ''}` : s.id === 'handle' ? 'без покрытия' : 'без плёнки';
   const open = v.open === 'glass' ? ', под стекло' : v.open === 'grille' ? ', решётка' : '';
   if (s.id === 'pet') return `Вернисаж ${s.name}, ${cover}, МДФ ${v.thickness}`;
   return `Вернисаж ${s.name} ${s.id === 'handle' ? '' : '№'}${m?.id ?? v.milling}${open}, ${cover}, МДФ ${v.thickness}`;
@@ -333,18 +334,62 @@ export function vernissageTexture(v: VernissageFacade): VernissageTexture | null
  *  Для плёнок с текстурой (vernissageTexture) цвет — запасной, пока текстура грузится. */
 export function vernissageColor(v: VernissageFacade): number {
   if (v.cover.startsWith('enamel') && v.enamelColor && /^#?[0-9a-f]{6}$/i.test(v.enamelColor)) return parseInt(v.enamelColor.replace('#', ''), 16);
-  // частые RAL эмали — цвета по стандарту RAL (приблизительно для экрана)
-  const ral = v.cover.startsWith('enamel') ? /RAL\s*(\d{4})/i.exec(v.enamelColor ?? '')?.[1] : undefined;
-  const RAL: Record<string, number> = { '9001': 0xe9e0d2, '9002': 0xd7d5cb, '9003': 0xf4f4f4, '9005': 0x0a0a0d, '9010': 0xf1ece1, '9016': 0xf1f0ea, '9018': 0xcfd3cd, '1013': 0xe3d9c6, '1015': 0xe6d2b5, '7035': 0xcbd0cc, '7047': 0xd0d0d0, '7016': 0x383e42, '7024': 0x474a50, '7037': 0x7a7b7a, '6021': 0x89ac76, '5014': 0x606e8c };
-  if (ral && RAL[ral] !== undefined) return RAL[ral];
-  // однотонные плёнки ПВХ и ПЭТ с образцом на сайте Вернисажа — средний цвет образца (scripts/vernissage_textures.py)
-  const sample = (v.cover === 'film' || v.cover === 'pet') && v.film ? V_FILM_COLORS[v.film]?.color : undefined;
-  if (sample) return parseInt(sample.slice(1), 16);
-  const n = (v.cover === 'film' || v.cover === 'adilet' ? v.film ?? '' : v.enamelColor ?? '').toLowerCase();
-  const table: [RegExp, number][] = [[/графит|антрацит|чёрн|черн|венге|обсидиан/, 0x3d3f42], [/сер|грей|grey|бетон|маренго/, 0x9a9c99], [/мят|олив|фисташ|зел|грин|green|шалфей|эвкалипт|мирт|базилик|мелисс/, 0xa9b8a0],
-    [/голуб|скай|синий|деним|азур|индиго|аквамарин|океан/, 0x93a7b8], [/лаванд|пудр|pink|розм|фламинго/, 0xc9b3b8], [/орех|тик|каштан|шоколад|кофе|мокко|трюфель|брауни|темн|тёмн/, 0x7a5a42],
-    [/дуб|ясень|сосна|акаци|вяз|лиственниц|сандал|клен|клён|дерев/, 0xc9a982], [/беж|латте|капучино|крем|ваниль|карамель|песок|кашемир|миндаль|лён|лен|сафари|имбир/, 0xd9c9ad], [/бел|айс|милк|слонов|бьянк|магнол|фарфор|иней/, 0xf1efe9]];
-  for (const [re, c] of table) if (re.test(n)) return c;
-  return 0xe6e4dc;
+  // эмаль по RAL — цвет каталога RAL Classic (приблизительно для экрана, ralClassic.ts)
+  const ral = v.cover.startsWith('enamel') ? ralOf(v.enamelColor) : undefined;
+  if (ral) return parseInt(ral.hex.slice(1), 16);
+  if (v.cover === 'film' || v.cover === 'adilet' || v.cover === 'pet') return v.film ? parseInt(filmSwatch(v.cover, v.film).color.slice(1), 16) : 0xe6e4dc;
+  return filmNameColor(v.enamelColor ?? '') ?? 0xe6e4dc;
+}
+
+/** Образец плёнки — для выбора и 3D. texture — текстура с сайта Вернисажа (vernissageTexture); photo — средний цвет образца с сайта
+ *  (однотонные, ПЭТ); name — УСЛОВНЫЙ цвет по названию: фото этой плёнки на сайте Вернисажа нет (карточки фрезеровок и новости
+ *  показывают ~55 декоров из 260 ПВХ, Адилет — ни одного), в выборе помечается «≈». */
+export type FilmSwatch = { name: string; kind: 'texture' | 'photo' | 'name'; color: string; url?: string; tileMm?: number };
+const hex6 = (n: number) => '#' + n.toString(16).padStart(6, '0');
+export function filmSwatch(cover: 'film' | 'adilet' | 'pet', name: string): FilmSwatch {
+  const t = cover === 'film' ? V_TEXTURES[name] : undefined, photo = cover !== 'adilet' ? V_FILM_COLORS[name]?.color : undefined;
+  const byName = filmNameColor(name) ?? 0xe6e4dc;
+  if (t) return { name, kind: 'texture', color: t.color ?? photo ?? hex6(byName), url: `textures/vernissage/${t.file}`, tileMm: t.tileMm };
+  if (photo) return { name, kind: 'photo', color: photo };
+  return { name, kind: 'name', color: hex6(byName) };
+}
+/** Каталог плёнок для выбора: ПВХ — категории, для которых у серии фрезеровки есть цена; Адилет — все; ПЭТ — 13 декоров. */
+export function filmCatalog(v: VernissageFacade): { name: string; group: string; note?: string }[] {
+  if (v.cover === 'adilet') return V_ADILET_FILMS.map((f) => ({ name: f.name, group: `Адилет, категория ${f.cat}`, ...(f.out ? { note: 'выводится' } : {}) }));
+  if (v.cover === 'pet') return V_PET_DECORS.map((name) => ({ name, group: 'ПЭТ' }));
+  if (v.cover !== 'film') return [];
+  const cats = filmCatsOf(v.milling);
+  return V_FILMS.filter((f) => cats.includes(f.cat)).map((f) => ({ name: f.name, group: `Категория ${f.cat}`, ...(v.milling === 'V5' && f.v5 === false ? { note: 'не для V5' } : {}) }));
+}
+/** Условный цвет по названию плёнки или цвета (нет образца): сначала слово цвета, потом порода/материал; «светл»/«темн» — светлее/темнее.
+ *  null — в названии нет узнаваемого цвета. */
+export function filmNameColor(raw: string): number | null {
+  const n = raw.toLowerCase().replace(/ё/g, 'е');
+  const table: [RegExp, number][] = [
+    [/черн|нуар|неро|оникс|обсидиан|макассар|антрацит|сажа/, 0x2c2c2e], [/графит|сланец|маренго|айрон|дарк|смоук|морион|асфальт/, 0x4b4e52],
+    [/венге/, 0x4a3a30], [/шоколад|кофе|мокко|брауни|какао|трюфел|каштан|эспрессо/, 0x5e4436], [/терракот|кирпич/, 0xa65d42], [/бордо|бруснич|брусник|вишн|гранат/, 0x7a2e35],
+    [/красн|коралл|малин|сальса/, 0xb24a3c], [/пудр|фламинго|pink|розов|роза|сакур|персик/, 0xd8b4b0], [/оранж|манго|апельсин|мандарин/, 0xdf8a3c],
+    [/желт|лимон|горчиц|карри|охр|янтар|солнеч/, 0xd8b24c], [/золот|бронз|медн|медь|коньяк/, 0xae8b56],
+    [/изумруд|нефрит|малахит/, 0x2f6b55], [/лайм|салат/, 0xb3c46c], [/олив|хаки|эрбо/, 0x7f7c55], [/мят|мелисс|фисташ/, 0xb4cfbf], [/эвкалипт/, 0x8fa598],
+    [/шалфей|мирт|базилик|матча/, 0xa3ac91], [/грин|green|зелен/, 0x6f8f6b],
+    [/индиго|синий|синяя|деним|кобальт|ночн|сапфир/, 0x34506e], [/бирюз/, 0x5fa3a0], [/аквамарин|океан|морск/, 0x6fa6aa], [/голуб|азур|скай|бриз|лазур|небес|циан/, 0x9cb6c8],
+    [/лаванд|вереск|сирен|фиалк|аметист|ирис|лилов/, 0xa99ab8],
+    [/бетон|цемент|камень|гранит|стоун|stone|маус|дымк|мист|сталь|металл|титан|платин|серебр|муссон|кварц|минерал|грей|grey|gray|сер(ый|ая|ое|ые|ого)?(?![а-я])/, 0x9b9c99], [/керамик/, 0xc8b6a3],
+    [/милк|молок|фарфор|ваниль|жемчуг|перламутр|иней|айс|(^|[^a-z])ice([^a-z]|$)|сноу|снеж|белоснеж|бел(ый|ая|ое|ые|ен)?(?![а-я])|бланко|бьянк|магнол|слонов/, 0xefebe3],
+    [/крем|ангора|шелк|панакот|джелато|сорбет|райс|шампань/, 0xe5d9c4], [/карамел|имбир|миндал/, 0xc7a073],
+    [/беж|латте|капучино|кашемир|сафари|песок|песоч|дюна|папирус|сенд|бохо|лен(?![а-я])|льн/, 0xcdb898],
+    [/орех|тик|палисандр|ироко|макиотти|махагон|сандал/, 0x7b5a40],
+    [/сосна|берез|клен|липа|ясень|бук|акаци|вяз|лиственниц|дуб|oak|кантри|дерев|массив|пилени|крафт|чесура|торонто|атланта|филадельфия|галиано|рустик|тиберио|монте|лиран|древесн|кедр/, 0xc4a37c],
+    [/мрамор|марморино/, 0xe2ded6],
+  ];
+  // слово — с начала (основа «тик» не в «Антик», «айс» не в «Райс»): перед совпадением не буква
+  const word = (re: RegExp) => new RegExp('(?<![а-яa-z])(?:' + re.source + ')');
+  const hit = table.find(([re]) => word(re).test(n));
+  if (!hit) return null;
+  let c = hit[1];
+  const mix = (k: number, to: number) => { const ch = (s: number) => Math.round(((c >> s) & 255) * (1 - k) + to * k); c = (ch(16) << 16) | (ch(8) << 8) | ch(0); };
+  if (word(/светл/).test(n)) mix(0.35, 255);
+  else if (word(/темн/).test(n)) mix(0.45, 0);
+  return c;
 }
 export function vernissageGlossy(v: VernissageFacade): boolean { return v.cover === 'enamel-gloss' || ((v.cover === 'film' || v.cover === 'adilet') && /глянец|глянц|gloss|HG/i.test(v.film ?? '')); }

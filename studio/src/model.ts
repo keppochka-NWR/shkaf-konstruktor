@@ -20,7 +20,7 @@ import {cornerParts,cornerErrors,cornerBoxes,cornerDrawer,normalizeCorner,type C
 import {resolveLayout,splitOpening,type SectionLayout} from './sectionLayout';
 import { handleById, handleKind, handleShape, handleSpec, HANDLES, HANDLE_MARGIN, LONG_HANDLE, DEFAULT_HANDLE, type Handle } from "./handles";
 import { meshById, MESH_WIDTH_TOLERANCE } from "./mesh";
-import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, ALU_EXTRAS, ALU_INSERTS, type AluFacade } from "./alu";
+import { aluProfile, aluColor, aluInsert, aluFill, aluLabel, aluMaxHeight, ALU_EXTRAS, ALU_INSERTS, type AluFacade } from "./alu";
 import { vernissageSizeCheck, sideFacadeSpec, vernissageMillingName, vernissageColor, type VernissageFacade } from "./facadesVernissage";
 import { V_MILLINGS } from "./vernissageData";
 /** Поворот модели конфирмата Базиса по оси ввинчивания (X модели — ось винта, головка при x = 0); общий для parts() и kitchen.ts (короб вытяжки). */
@@ -2912,8 +2912,12 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     // глухой фасад кухни без петель (k03 m01, k06 m04: под нишей духовки, 116–117 мм) — петли не ставятся, минимум высоты не нужен
     if (p.role === "door" && p.length < doorHMin && m.kitchen?.hinges !== false)
       errors.push(`Распашной фасад ниже ${doorHMin} мм. Увеличьте высоту корпуса или уберите фасады.`);
-    if (p.role === "door" && p.material === "alu" && (p.length > ALU_EXTRAS.maxH || p.width > ALU_EXTRAS.maxW))
-      errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: по СТП не выше ${ALU_EXTRAS.maxH} и не шире ${ALU_EXTRAS.maxW} мм. Разделите секцию или уменьшите высоту.`);
+    // высота — по листу стекла наполнения (решение Макса 29.10.2026), ширина — по СТП
+    if (p.role === "door" && p.material === "alu" && m.alu) {
+      const g = aluMaxHeight(m.alu);
+      if (p.length > g.maxH) errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: наполнение «${g.fill}» — лист ${g.sheet[0]}×${g.sheet[1]} мм${g.standard ? " (размер листа в прайсе не указан — принят стандартный)" : ""}${g.cap ? `, ${g.cap}` : ""}, фасад не выше ${g.maxH} мм (вставка ${g.glassMax}). Уменьшите высоту или выберите наполнение с большим листом.`);
+      if (p.width > ALU_EXTRAS.maxW) errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: по СТП не шире ${ALU_EXTRAS.maxW} мм. Разделите секцию.`);
+    }
   }
   for(const door of geometry.filter(p=>p.role==='door'&&p.id.includes(':door:'))){
     const lift=m.sections.find(s=>s.id===door.sectionId)?.doorLifts?.[Number(door.id.split(':door:')[1])];

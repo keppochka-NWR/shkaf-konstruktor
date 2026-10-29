@@ -199,8 +199,10 @@ add('80', '80.pdf', series='Престиж', mdf=[19], covers='ПВХ, Эмал�
           'note': 'выпуклые волны шагом 30 мм, глубина 4,5 (второй расчётный шаг 22 мм - не используется)'})
 add('83', '83.pdf', series='Престиж', mdf=[19], covers='ПВХ, Эмаль мат.', edge='см. стр. №75', sectionDims=[14, 14], limits=lim(glass=None, grille=None),
     notes=[DRAWER, 'толщина фасада: только 19мм', 'без петель МДФ 16 мм', 'глубина шага 2 мм'],
-    geom={'kind': 'relief', 'dir': 'h', 'pitch': 14, 'w': 5, 'depthMm': 2, 'depthStated': True, 'shape': 'round',
-          'note': 'пазы шагом 14 мм, глубина 2; «ёлочка» на фото - в 3D горизонтальные пазы того же шага (упрощение)'})
+    geom={'kind': 'relief', 'dir': 'chevron', 'pitch': 14, 'w': 5, 'depthMm': 2, 'depthStated': True, 'shape': 'round', 'widthsEstimated': True,
+          'chevron': {'run': 80, 'rise': 30},
+          'note': '«ёлочка»: зигзаг-пазы шагом 14 мм, глубина 2; излом через ~80 мм по ширине, подъём ~30 мм (по чертежу паспорта, '
+                  'фасад 396 мм - 5 изломов), число изломов - по ширине фасада'})
 add('84', '84.pdf', series='Престиж', mdf=[19], covers='ПВХ, Эмаль мат.', edge='см. стр. №75', sectionDims=[70], limits=lim(glass=None, grille=None),
     notes=[DRAWER, 'толщина фасада: только 19 мм', 'без петель МДФ 16 мм', 'глубина шага 2 мм и 1 мм'],
     geom={'kind': 'relief', 'dir': 'v', 'module': 70, 'depthMm': 2, 'depthStated': True, 'widthsEstimated': True,
@@ -211,8 +213,9 @@ add('85', '85.pdf', series='Престиж', mdf=[19], covers='ПВХ, Эмал�
     geom={'kind': 'relief', 'dir': 'v', 'pitch': 10, 'w': 5, 'depthMm': 2, 'depthStated': True, 'shape': 'round', 'note': 'круглые пазы 5 / рейки 5 мм, глубина 2'})
 add('88', '88.pdf', series='Престиж', mdf=[16, 19], covers='ПВХ, Эмаль мат.', edge='см. стр. №75', sectionDims=[20, 20, 20],
     limits=lim(glass=None, grille=None, drawer=[140, 246, 246, 1000]), notes=[DRAWER],
-    geom={'kind': 'profile', 'depthMm': 1.5, 'depthStated': False, 'lines': {'w': 4, 'diag': {'pitch': 20, 'angle': 45}},
-          'note': 'диагональные пазы шагом 20 мм; вторая система диагоналей в верхнем углу не построена'})
+    geom={'kind': 'profile', 'depthMm': 1.5, 'depthStated': False, 'lines': {'w': 4, 'diag': {'pitch': 20, 'angle': 45, 'compose': 'triangle'}},
+          'note': 'диагональные пазы шагом 20 мм: главная диагональ из верхнего правого угла, под ней - пазы «/»; над ней - треугольник '
+                  'с горизонтальными пазами (вершина посередине ширины) и клин слева с пазами «\\» (по чертежу паспорта)'})
 add('98', '98.pdf', series='Престиж', mdf=[19], covers='ПВХ, Эмаль мат.', edge='T1', sectionDims=[15, 3],
     limits=lim(solid=[246, 2450, 246, 1100], glass=None, grille=None, drawer=[177, 246, 246, 1000]),
     notes=[DRAWER, 'толщина фасада: только 19 мм', 'глубина фрезеровки 3 мм', H2750],

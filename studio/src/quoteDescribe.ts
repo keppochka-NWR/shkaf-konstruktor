@@ -10,6 +10,7 @@ import { worktopLabel, waterfallSides } from "./kitchen";
 import { aluProfile, aluColor, aluFill, aluInsert } from "./alu";
 import { vernissageMilling, seriesOf, type VernissageFacade } from "./facadesVernissage";
 import { plural } from "./ru";
+import { enamelColorLabel } from "./ralClassic";
 import { rawKitchen } from "./rawModule";
 import { lightSummary } from "./lights";
 import { adagioChoice } from "./gasLift";
@@ -25,8 +26,8 @@ function vernissageCover(v: VernissageFacade): string {
     case "film": return "плёнка ПВХ" + (v.film ? " «" + v.film + "»" : "");
     case "adilet": return "плёнка Адилет" + (v.film ? " «" + v.film + "»" : "");
     case "pet": return "ПЭТ" + (v.film ? " «" + v.film + "»" : "");
-    case "enamel-matte": return "эмаль матовая" + (v.enamelColor ? " " + v.enamelColor : "");
-    case "enamel-gloss": return "эмаль глянцевая" + (v.enamelColor ? " " + v.enamelColor : "");
+    case "enamel-matte": return "эмаль матовая" + (v.enamelColor ? " " + enamelColorLabel(v.enamelColor) : "");
+    case "enamel-gloss": return "эмаль глянцевая" + (v.enamelColor ? " " + enamelColorLabel(v.enamelColor) : "");
     default: return "без покрытия";
   }
 }
