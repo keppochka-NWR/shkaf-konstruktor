@@ -196,6 +196,8 @@ export function finishUnit(f:FinishItem):FinishUnit{
   for(let i=0;i<k;i++)for(let j=0;j<k;j++)rects.push({x:i*a,y:j*b,w:a,h:b,n:i*k+j});
   return {w:k*a,h:k*b,rects,joint:2};
 }
+/** Разрешение рисунка раппорта, px на мм: не больше 1 и так, чтобы большая сторона ≤ maxPx. */
+export function texturePxPerMm(unit:{w:number;h:number},maxPx:number){return Math.min(1,maxPx/Math.max(unit.w,unit.h));}
 /** Текстурные координаты точки пола (x — от левой стены, z — от задней, мм) для раппорта unit. */
 export function floorUv(x:number,z:number,unit:FinishUnit,along:'width'|'depth'='width'):[number,number]{
   let s=along==='width'?x:z,t=along==='width'?z:x;

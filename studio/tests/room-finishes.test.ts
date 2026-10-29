@@ -1,7 +1,7 @@
 // Отделка помещения (список Макса 29.10.2026): каталог Лемана ПРО, масштаб текстур, сохранение в файле, цена не меняется.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FINISHES,finishUnit,floorUv,wallUv,parseRoomFinish,withFinish,setWallFinish,finishFits,finishById,finishSize,defaultAlong,FINISH_WALLS,type FinishItem} from '../src/roomFinishes';
+import {FINISHES,finishUnit,floorUv,wallUv,parseRoomFinish,withFinish,setWallFinish,finishFits,finishById,finishSize,texturePxPerMm,defaultAlong,FINISH_WALLS,type FinishItem} from '../src/roomFinishes';
 import {newProject,parseProject} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
@@ -64,6 +64,14 @@ test('масштаб: доска, плитка и рулон в раппорте
     for(const r of u.rects){assert.equal(r.w,f.size[0],f.id);assert.equal(r.h,f.size[1],f.id);}
     if(f.kind==='laminate'){assert.equal(u.w,2*f.size[0]);assert.equal(u.h%f.size[1],0);}
     else{assert.equal(u.w%f.size[0],0);assert.equal(u.h%f.size[1],0);}
+  }
+});
+
+test('видеопамять: текстура любой позиции ≤ 1024 px по стороне (≤ 4 МБ), не грубее 0,3 px/мм', () => {
+  for(const f of FINISHES){
+    const u=finishUnit(f),px=texturePxPerMm(u,1024),w=Math.round(u.w*px),h=Math.round(u.h*px);
+    assert.ok(w<=1024&&h<=1024&&w*h*4<=4.2e6,`${f.id}: ${w}×${h}`);
+    assert.ok(px>=0.3,'детализация '+f.id+' '+px.toFixed(2)+' px/мм');/* швы и фаски рисуются не тоньше 1 px (finishTextures.ts) */
   }
 });
 

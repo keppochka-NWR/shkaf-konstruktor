@@ -3,7 +3,7 @@ import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
 import {hiddenWalls,roomEdges,edgeVisible,readCutaway,type CutawayWall} from './roomCutaway';
 import {finishById,floorUv,wallUv,defaultAlong,type FinishUnit} from './roomFinishes';
-import {drawFinish} from './finishTextures';
+import {drawFinish,FINISH_TEXTURE_PX} from './finishTextures';
 import {facadeHandleId} from './model';
 import {frameDistance,frameHeight} from './framing';
 import {shapeGeometry,worktopGeometry,boardGeometry,aluFrameGeometry,taperGeometry,planTaperGeometry,planContourGeometry,golaSideGeometry,faceContourGeometry,rearNotchSideGeometry,topNotchGeometry} from './boardGeometry';
@@ -377,14 +377,19 @@ export function Scene(p: Props) {
       for(const p of cutawayParts)p.obj.visible=edgeVisible(p.walls,hidden);
       for(const p of finishParts){const near=beyond.has(p.wall);p.mat.transparent=near;p.mat.opacity=near?.15:1;p.mat.depthWrite=!near;p.mat.needsUpdate=true;}
     }
-    /** Текстура отделки — одна на позицию каталога на всё время жизни сцены. */
-    const finishMaps=new Map<string,{map:THREE.CanvasTexture;unit:FinishUnit}>();
+    /** Текстура отделки — одна на позицию каталога, пока позиция лежит в комнате; раппорт не больше 1024 px (критик 29.10:
+     *  перебор каталога копил текстуры до ~450 МБ видеопамяти, ёлочка 2048² — 21 МБ). */
+    const finishMaps=new Map<string,{map:THREE.CanvasTexture;unit:FinishUnit}>(),usedFinishes=new Set<string>();
     function finishMap(id:string){
+      usedFinishes.add(id);
       let t=finishMaps.get(id);if(t)return t;const f=finishById(id);if(!f)return undefined;
-      const {canvas,unit}=drawFinish(f),map=new THREE.CanvasTexture(canvas);
+      const {canvas,unit}=drawFinish(f,FINISH_TEXTURE_PX),map=new THREE.CanvasTexture(canvas);
       map.colorSpace=THREE.SRGBColorSpace;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
       loadedTextures.add(map);finishMaps.set(id,t={map,unit});return t;
     }
+    /** После сборки сцены: текстуры позиций, которых больше нет в комнате, освобождаются. */
+    function releaseFinishMaps(){for(const [id,t] of finishMaps)if(!usedFinishes.has(id)){t.map.dispose();loadedTextures.delete(t.map);finishMaps.delete(id);}usedFinishes.clear();}
+    (window as unknown as {__finishTextures?:()=>number}).__finishTextures=()=>finishMaps.size;
     function finishMaterial(id:string){const t=finishMap(id),f=finishById(id);if(!t||!f)return undefined;/* color чуть ниже белого: светлая плитка и обои под светом сцены не выгорают в чистый белый (рисунок и швы видны) */return {mat:new THREE.MeshStandardMaterial({map:t.map,color:0xe4e4e4,roughness:f.look==='marble'?.5:f.kind==='tile'?.65:f.kind==='laminate'?.72:.92,metalness:0,side:THREE.DoubleSide}),unit:t.unit};}
     function label(
       text: string,
@@ -486,7 +491,7 @@ export function Scene(p: Props) {
       scene.background=state.presentation?new THREE.Color(0xf1f0eb):null;
       for (const l of labels) l.element.remove();
       labels.length = 0;
-      cutawayParts.length=0;finishParts.length=0;cutawayRoom=undefined;cutawayKey='\u0000';
+      cutawayParts.length=0;finishParts.length=0;usedFinishes.clear();cutawayRoom=undefined;cutawayKey='\u0000';
       moduleGroups.clear();
       generation++;pendingTextures=0;
       const gen = generation;
@@ -907,6 +912,7 @@ export function Scene(p: Props) {
           for(let i=0;i<pos.count;i++){const [s,t]=floorUv(pos.getX(i)+r.width/2,r.depth/2-pos.getY(i),floorFin.unit,along);uv.setXY(i,s,t);}uv.needsUpdate=true;}
         const roomFloor=new THREE.Mesh(floorGeo,floorFin?floorFin.mat:new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));if(floorFin)roomFloor.userData.roomFinish='floor';roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
       }
+      releaseFinishMaps();
       const b = state.hideFurniture||state.hiddenModuleIds?.includes(focus.id)||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
       if (b) {
         const geo = new THREE.BoxGeometry(

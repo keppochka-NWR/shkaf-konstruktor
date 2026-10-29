@@ -1,7 +1,9 @@
 // Процедурные текстуры отделки помещения (roomFinishes.ts): рисуются на canvas по цвету и рисунку позиции каталога,
 // раппорт — в настоящих миллиметрах (finishUnit), поэтому доска, плитка и рулон на сцене своего размера.
 // Фото товаров Лемана ПРО не используются (права) — вид условный, точный — по ссылке на товар.
-import {finishUnit,type FinishItem,type FinishUnit,type Rect} from './roomFinishes';
+import {finishUnit,texturePxPerMm,type FinishItem,type FinishUnit,type Rect} from './roomFinishes';
+/** Предел стороны текстуры отделки на сцене, px (критик 29.10: 2048² у ёлочки — 21 МБ видеопамяти; 1024 хватает). */
+export const FINISH_TEXTURE_PX=1024;
 
 function rng(seed:number){let a=seed>>>0||1;return ()=>{a=(a+0x6d2b79f5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};}
 function hash(s:string){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0;}
@@ -97,8 +99,8 @@ function wallpaper(g:CanvasRenderingContext2D,f:FinishItem,unit:FinishUnit,px:nu
 }
 
 /** Раппорт на canvas: px — пикселей на мм (по умолчанию так, чтобы большая сторона ≤ maxPx). */
-export function drawFinish(f:FinishItem,maxPx=2048):{canvas:HTMLCanvasElement;unit:FinishUnit}{
-  const unit=finishUnit(f),px=Math.min(1,maxPx/Math.max(unit.w,unit.h)),canvas=document.createElement('canvas');
+export function drawFinish(f:FinishItem,maxPx=FINISH_TEXTURE_PX):{canvas:HTMLCanvasElement;unit:FinishUnit}{
+  const unit=finishUnit(f),px=texturePxPerMm(unit,maxPx),canvas=document.createElement('canvas');
   canvas.width=Math.max(1,Math.round(unit.w*px));canvas.height=Math.max(1,Math.round(unit.h*px));
   const g=canvas.getContext('2d');if(!g)return {canvas,unit};
   const sx=canvas.width/(unit.w*px),sy=canvas.height/(unit.h*px);g.scale(sx,sy);
