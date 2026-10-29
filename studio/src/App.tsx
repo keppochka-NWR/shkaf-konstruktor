@@ -59,6 +59,8 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "re
 import {historyShortcut,editsText,viewShortcut,rotateShortcut} from './historyShortcuts';
 import {GroupFacadePanel} from './GroupFacadePanel';
 import {applyGroupFacade,skippedNote,groupFacadeValue,type GroupFacadeField} from './groupFacades';
+import {matchGroupSize,SIZE_WORD,type SizeKey} from './matchSize';
+import {matchSizeItems,groupSizeItems} from './matchSizeMenu';
 import {editDrawerConfig,facadeForVisible,visibleFacadeH} from './drawerEditing';
 import {maxEvenShelves,setShelfCount} from './shelfCount';
 import {explainErrors,errorPlace,splitAction,type ErrorDetail} from './errorDetails';
@@ -753,6 +755,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const s=skippedNote(r.skipped);setNotice({title:'Фасады выделенных',text:`${label} — применено к ${r.changed.length} из ${liveGroupIds.length}.`+(s?' '+s:'')});return true;}
     catch(e){setError((e as Error).message);return false;}
   }
+  /** «Выровнять высоту/глубину по …»: всем отмеченным — размер модуля sourceId, одним изменением (matchSize.ts). */
+  function groupSizeEdit(key:SizeKey,sourceId:string){
+    try{const r=matchGroupSize(project,liveGroupIds,sourceId,key);if(!r.changed.length)return;if(!commitProject(r.project))return;
+      const s=r.skipped.length?` Не встало: ${r.skipped.map(x=>`«${x.name}» — ${x.reason}`).join('; ')}.`:'';
+      setNotice({title:'Выровнять отмеченные',text:`${SIZE_WORD[key]} ${r.value} мм — изменено у ${r.changed.length} из ${liveGroupIds.length}.`+s+(r.notes.length?' '+r.notes.join(' '):'')});}
+    catch(e){setError((e as Error).message);}
+  }
   /** Поворот на 90° по часовой / против (кнопки, круговое меню, R / Shift+R). Корпус в отмеченной группе — поворачивается группа. */
   function turnSelected(mid:string,dir:Turn,fit=false){
     try{const ids=inGroup(mid)?liveGroupIds:null;if(commitProject(ids?rotateModuleGroup(project,ids,dir):turnModule(project,mid,dir))&&(fit||ids)){if(ids)setFocusActive(false);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
@@ -804,8 +813,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'group-open',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием — всем отмеченным',children:[
         {id:'group-open-handle',label:'С ручками',icon:Hand,active:gv('doorOpen')==='handle',hint:'Ручка и петли с доводчиком',run:()=>{groupFacadeEdit('doorOpen','handle','Открывание: с ручками');}},
         {id:'group-open-push',label:'Нажатием',icon:MousePointerClick,active:gv('doorOpen')==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>{groupFacadeEdit('doorOpen','push','Открывание: нажатием');}}]},
-      {id:'group-panel',label:'Все настройки…',icon:SlidersHorizontal,hint:'Справа «Фасады выделенных модулей»: тип, Вернисаж, декор, ручки, петли',run:()=>{setActive(a.id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}},
+      {id:'group-panel',label:'Все настройки…',icon:SlidersHorizontal,hint:'Раздел справа: все поля фасадов',run:()=>{setActive(a.id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}},
     ]}]:[];
+    // мультивыбор (Макс 29.10): «Выровнять высоту/глубину отмеченных по этому модулю»
+    const groupSize:RadialItem[]=inGroup(a.id)?[{id:'group-size',label:`Выровнять отмеченные · ${liveGroupIds.length}`,icon:Ruler,hint:`Высота или глубина — как у «${mod.name}»`,children:groupSizeItems(project,liveGroupIds,a.id,key=>groupSizeEdit(key,a.id))}]:[];
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const above=project.modules.find(x=>x.id!==a.id&&Math.abs((x.y??0)-((a.y??0)+mod.height))<2&&Math.abs(x.x-a.x)<2&&Math.abs(x.z-a.z)<2);
     const quickOps:QuickMenuOps={modify:u=>{modifyAt(a.id,u);},addUpper:()=>{try{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}},
@@ -814,7 +825,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       lightPanel:quickMenuApplies(mod)?()=>{selectModule(a.id);setLightPanel(a.id);}:undefined,
       ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));},elevated:(a.y??0)>0};
     const bodyRing:RadialItem[]=[hideItem,
-      {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id)]},
+      {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id),...matchSizeItems(project,a.id,(np,notes)=>{if(commitProject(np)&&notes.length)setNotice({title:'Малый корпус',text:notes.join(' ')});})]},
       mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
       ...quickItems(mod,c.sid,quickOps),...cornerItems(mod,quickOps),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
@@ -824,7 +835,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,disabled:!mod.doors,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на все фасады корпуса',disabled:!hasHandles(mod),run:()=>{setActive(a.id);setHandleFace('');setModal('handles');}},
-        hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},...groupItem,
+        hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},...groupItem,...groupSize,
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
       // поворот в обе стороны (решение Макса 29.10); корпус в отмеченной группе — поворачивается вся группа, стыки сохраняются
       ...(['cw','ccw'] as const).map(dir=>({id:dir==='cw'?'rotate':'rotate-ccw',label:dir==='cw'?'Повернуть ↻':'Повернуть ↺',icon:dir==='cw'?RotateCw:RotateCcw,hint:(dir==='cw'?'На 90° по часовой (вид сверху) · клавиша R':'На 90° против часовой (вид сверху) · Shift+R')+(inGroup(a.id)?` · вся отмеченная группа (${liveGroupIds.length})`:''),run:()=>turnSelected(a.id,dir,true)} as RadialItem)),
@@ -837,7 +848,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     ];
     out.ring=bodyRing;
     const facades:RadialItem={...bodyRing.find(item=>item.id==='facades')!,label:'Фасад'};
-    const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades'&&item.id!=='group-facades')};
+    const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades'&&item.id!=='group-facades'&&item.id!=='group-size')};
     const facadeMenu=(items:RadialItem[]):RadialItem[]=>[
       {id:'facade',label:'Фасад',icon:DoorOpen,hint:'Материал, ручки, петли и открывание выбранного фасада',children:items.filter(item=>item.id!=='body'&&item.id!=='hide-module')},body,
     ];
