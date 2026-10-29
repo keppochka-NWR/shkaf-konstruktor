@@ -7,7 +7,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import './guides.css';
 // Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
 // контуры корпусов, стены), Ctrl — ближайшее пересечение двух линий, Shift — без привязки. Для угла, переноса корпуса и линии Q.
@@ -163,6 +163,8 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
   useEffect(()=>{
     const on=(e:KeyboardEvent)=>{
       if(editsText(e.target))return;
+      // Ctrl+Z/Ctrl+Y посреди тяги (Ctrl зажат ради привязки) — не отменять (критик 29.10 п.6)
+      if(historyGuard(e,!!(corner.current||drag.current||ctrlPress.current))){e.preventDefault();e.stopPropagation();return;}
       const c=corner.current;
       if(c){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(c,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(!onGuides)return;e.preventDefault();if(e.repeat)return;if(tool)cancelTool();else startTool();return;}

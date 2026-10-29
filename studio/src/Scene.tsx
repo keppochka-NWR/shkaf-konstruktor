@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -1504,6 +1504,8 @@ export function Scene(p: Props) {
     /** Q, цифры, Enter, Esc, Delete для линий — раньше App (фаза захвата на window; App пропускает defaultPrevented). */
     function guideKey(e:KeyboardEvent){
       const s=current.current;if(s.presentation||editsText(e.target))return;
+      // Ctrl+Z/Ctrl+Y посреди тяги (Ctrl зажат ради привязки) — не отменять (критик 29.10 п.6)
+      if(historyGuard(e,!!(drag||stretch||corner||ctrlPress))){e.preventDefault();e.stopPropagation();return;}
       // тяга за угол: набор размеров «600;2400», Enter, Esc, Backspace — раньше App и Q
       if(corner){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(corner,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){

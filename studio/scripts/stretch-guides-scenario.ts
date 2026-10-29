@@ -349,8 +349,13 @@ try {
   await page.mouse.wheel(0, -120); await page.waitForTimeout(150);
   const wheelOk = (await page.evaluate(() => (window as unknown as { __wheel: boolean[] }).__wheel.at(-1))) === true;
   const zoom = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+  // критик 29.10 п.6: Ctrl+Z посреди тяги (Ctrl зажат) — не отменяет (линии на месте)
+  const gBefore = (await guides()).length;
+  await page.keyboard.press("z"); await page.waitForTimeout(250);
+  const gMid = (await guides()).length;
   await page.keyboard.press("Escape"); await page.mouse.up(); await page.keyboard.up("Control"); await page.waitForTimeout(400);
   check("11. Ctrl+колесо во время тяги — погашено, страница не масштабирована", wheelOk && zoom === 1 && (await boxes()).a.w === 600, `prevented ${wheelOk} · scale ${zoom}`);
+  check("11. Ctrl+Z посреди тяги — без отмены (линии на месте)", gBefore === 2 && gMid === 2 && (await guides()).length === 2, `${gBefore} → ${gMid}`);
   // Alt + угол → точка на линии: ширина по линии, высота по мыши (1 мм, не шаг 10)
   // критик 29.10 (блокер): Alt отпустили ПОСЛЕ мыши — keyup Alt погашен (иначе Chrome на Windows уводит фокус в меню браузера)
   await page.evaluate(() => { const w = window as unknown as { __altUp: boolean[] }; w.__altUp = []; window.addEventListener("keyup", (e) => { if (e.key === "Alt") w.__altUp.push(e.defaultPrevented); }); });

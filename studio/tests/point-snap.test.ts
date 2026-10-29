@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -111,6 +111,15 @@ test('критик 29.10 п.5: Ctrl+колесо гасится только в�
   assert.equal(wheelGuard({ctrlKey:false,metaKey:true},true),true);
   assert.equal(wheelGuard({ctrlKey:true,metaKey:false},false),false,'без тяги — масштаб страницы как обычно');
   assert.equal(wheelGuard({ctrlKey:false,metaKey:false},true),false,'колесо без Ctrl — как было');
+});
+
+test('критик 29.10 п.6: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z во время тяги гасятся, без тяги — как было',()=>{
+  const k=(code:string,o:Partial<KeyboardEvent>={})=>({code,key:code.slice(3).toLowerCase(),ctrlKey:true,metaKey:false,altKey:false,shiftKey:false,repeat:false,target:null,...o}) as unknown as KeyboardEvent;
+  assert.equal(historyGuard(k('KeyZ'),true),true);
+  assert.equal(historyGuard(k('KeyY'),true),true);
+  assert.equal(historyGuard(k('KeyZ',{shiftKey:true}),true),true);
+  assert.equal(historyGuard(k('KeyZ'),false),false);
+  assert.equal(historyGuard(k('KeyQ'),true),false);
 });
 
 test('оси вида: спереди/сверху/План — точка туда и обратно, глубина сохраняется',()=>{
