@@ -7,7 +7,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import './guides.css';
 // Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
 // контуры корпусов, стены), Ctrl — ближайшее пересечение двух линий, Shift — без привязки. Для угла, переноса корпуса и линии Q.
@@ -237,7 +237,10 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
       if(drag.current){if(preview)move({clientX:at[0],clientY:at[1],...m});return;}
       if(tool?.phase==='place')toolMove(tool,at[0],at[1]);
     };
-    window.addEventListener('keydown',on);window.addEventListener('keyup',on);return()=>{window.removeEventListener('keydown',on);window.removeEventListener('keyup',on);};
+    // Ctrl+колесо во время тяги и линии Q не масштабирует страницу браузера (критик 29.10 п.5)
+    const wheel=(e:WheelEvent)=>{if(wheelGuard(e,!!(corner.current||drag.current||ctrlPress.current||tool)))e.preventDefault();};
+    window.addEventListener('keydown',on);window.addEventListener('keyup',on);window.addEventListener('wheel',wheel,{passive:false,capture:true});
+    return()=>{window.removeEventListener('keydown',on);window.removeEventListener('keyup',on);window.removeEventListener('wheel',wheel,{capture:true});};
   });
   function keyboard(e:React.KeyboardEvent,kind:Drag['kind'],id:string){
     if(e.ctrlKey||e.metaKey||e.altKey||drag.current)return;

@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -1534,6 +1534,9 @@ export function Scene(p: Props) {
     // keyup Alt — всегда (кроме полей ввода): Alt отпускают и после того, как отпустили мышь (критик 29.10, блокер)
     function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner||tool||(e.type==='keyup'&&altKeyupGuard(e))))e.preventDefault();}
     window.addEventListener('keydown',modsKey);window.addEventListener('keyup',modsKey);
+    // Ctrl+колесо во время тяги и линии Q не масштабирует страницу браузера (критик 29.10 п.5)
+    function ctrlWheel(e:WheelEvent){if(wheelGuard(e,!!(drag||stretch||corner||ctrlPress||tool)))e.preventDefault();}
+    window.addEventListener('wheel',ctrlWheel,{passive:false,capture:true});
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     // Esc отменяет тягу; событие помечается, чтобы App не снимал выделение тем же нажатием (п.19 волны 22.10)
@@ -1679,7 +1682,7 @@ export function Scene(p: Props) {
     animate();
     return () => {
       saveCamera();controls.removeEventListener('end',saveCamera);
-      endStretch();endCorner();cancelTool();window.removeEventListener('keyup',altGuard);window.removeEventListener('keydown',modsKey);window.removeEventListener('keyup',modsKey);snapMark.remove();
+      endStretch();endCorner();cancelTool();window.removeEventListener('keyup',altGuard);window.removeEventListener('keydown',modsKey);window.removeEventListener('keyup',modsKey);window.removeEventListener('wheel',ctrlWheel,{capture:true});snapMark.remove();
       target.removeEventListener('pointerdown',toolDown,true);window.removeEventListener('pointermove',trackMouse);window.removeEventListener('keydown',guideKey,true);
       scene.remove(hoverLine,ghostLine);hoverLine.geometry.dispose();ghostLine.geometry.dispose();toolMat.dispose();ghostMat.dispose();guideMat.dispose();guideSelMat.dispose();
       disposed = true;

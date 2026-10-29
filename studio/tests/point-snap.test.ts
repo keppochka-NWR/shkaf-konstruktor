@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -104,6 +104,13 @@ test('критик 29.10 п.3: Alt — составляющая, которую 
 test('критик 29.10 п.4: Ctrl+щелчок с дрожанием 6 px — щелчок, перенос — от 9 px',()=>{
   assert.equal(ctrlDragStarts(6,0),false);assert.equal(ctrlDragStarts(4,4),false);
   assert.equal(ctrlDragStarts(9,0),true);assert.equal(ctrlDragStarts(7,7),true);
+});
+
+test('критик 29.10 п.5: Ctrl+колесо гасится только во время тяги',()=>{
+  assert.equal(wheelGuard({ctrlKey:true,metaKey:false},true),true);
+  assert.equal(wheelGuard({ctrlKey:false,metaKey:true},true),true);
+  assert.equal(wheelGuard({ctrlKey:true,metaKey:false},false),false,'без тяги — масштаб страницы как обычно');
+  assert.equal(wheelGuard({ctrlKey:false,metaKey:false},true),false,'колесо без Ctrl — как было');
 });
 
 test('оси вида: спереди/сверху/План — точка туда и обратно, глубина сохраняется',()=>{

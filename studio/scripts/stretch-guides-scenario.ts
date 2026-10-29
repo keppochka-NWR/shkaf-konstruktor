@@ -341,6 +341,16 @@ try {
   check("11. Ctrl: плашка «Ctrl · пересечение» и метка-крестик", /Ctrl · пересечение: вспомогательные линии/.test(c11.live) && c11.mark === "cross", `«${c11.live}» · ${c11.mark}`);
   await key("Control+z"); await settled((b) => b.a.w === 600);
   check("11. Ctrl+Z — одной отменой", (await boxes()).a.h === 2000);
+  // критик 29.10 п.5: Ctrl+колесо посреди тяги с Ctrl — страница не масштабируется (колесо погашено)
+  await page.evaluate(() => { const w = window as unknown as { __wheel: boolean[] }; w.__wheel = []; window.addEventListener("wheel", (e) => { w.__wheel.push(e.defaultPrevented); }, { passive: true }); });
+  const hh = (await handle("hi-hi"))!;
+  await page.mouse.move(hh.x, hh.y); await page.keyboard.down("Control"); await page.mouse.down();
+  for (let i = 1; i <= 5; i++) { await page.mouse.move(hh.x + i * 6, hh.y - i * 4); await page.waitForTimeout(25); }
+  await page.mouse.wheel(0, -120); await page.waitForTimeout(150);
+  const wheelOk = (await page.evaluate(() => (window as unknown as { __wheel: boolean[] }).__wheel.at(-1))) === true;
+  const zoom = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+  await page.keyboard.press("Escape"); await page.mouse.up(); await page.keyboard.up("Control"); await page.waitForTimeout(400);
+  check("11. Ctrl+колесо во время тяги — погашено, страница не масштабирована", wheelOk && zoom === 1 && (await boxes()).a.w === 600, `prevented ${wheelOk} · scale ${zoom}`);
   // Alt + угол → точка на линии: ширина по линии, высота по мыши (1 мм, не шаг 10)
   // критик 29.10 (блокер): Alt отпустили ПОСЛЕ мыши — keyup Alt погашен (иначе Chrome на Windows уводит фокус в меню браузера)
   await page.evaluate(() => { const w = window as unknown as { __altUp: boolean[] }; w.__altUp = []; window.addEventListener("keyup", (e) => { if (e.key === "Alt") w.__altUp.push(e.defaultPrevented); }); });

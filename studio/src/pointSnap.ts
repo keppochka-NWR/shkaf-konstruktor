@@ -7,7 +7,7 @@
 // Ctrl+щелчок без движения — по-прежнему отметить корпус (мультивыбор). Здесь только 2D-геометрия в осях экрана вида
 // (h — вправо, v — вверх, guides.viewAxes) — без React и three; проверяется тестами tests/point-snap.test.ts.
 import { dot, viewAxes, type GuideLine, type V3 } from "./guides";
-import { editsText } from "./historyShortcuts";
+import { editsText, historyShortcut } from "./historyShortcuts";
 
 /** Отпускание Alt (критик 29.10, блокер): Chrome на Windows по keyup Alt уводит фокус в меню браузера — и следующая клавиша
  *  уходит туда. Alt теперь — привязка, его отпускают и после тяги: гасим всегда, кроме полей ввода. */
@@ -30,6 +30,10 @@ export const MODE_WORD: Record<SnapMode, string> = { snap: "", free: "Без п�
 /** Ctrl+нажатие на корпус: перенос — только от 9 px; меньше (дрожание руки) — это щелчок «отметить корпус» (критик 29.10 п.4). */
 export const CTRL_DRAG_PX = 9;
 export const ctrlDragStarts = (dx: number, dy: number) => Math.hypot(dx, dy) >= CTRL_DRAG_PX;
+/** Колесо с Ctrl во время тяги (Ctrl зажат ради привязки) масштабирует всю страницу браузера — гасим (критик 29.10 п.5). */
+export const wheelGuard = (e: { ctrlKey: boolean; metaKey: boolean }, dragging: boolean) => dragging && (e.ctrlKey || e.metaKey);
+/** Ctrl+Z / Ctrl+Y во время тяги (Ctrl зажат ради привязки) не отменяют посреди тяги (критик 29.10 п.6). */
+export const historyGuard = (e: KeyboardEvent, dragging: boolean) => dragging && historyShortcut(e) !== null;
 /** Допуск привязки к точке, px экрана (Alt/Ctrl нажаты нарочно — чуть шире обычных 10 px). */
 export const POINT_SNAP_PX = 14;
 
