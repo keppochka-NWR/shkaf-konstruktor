@@ -13,12 +13,12 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
  const [draft,setDraft]=useState(()=>structuredClone(source)),[scope,setScope]=useState<'module'|'group'|'all'>(()=>selectedIds.includes(moduleId)?'group':'module'),[error,setError]=useState('');
  const selectedKey=selectedIds.join('|');
  useEffect(()=>{
-  try {const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all');onPreview({base:project,next});setError('');}
+  try {const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all',scope==='group');onPreview({base:project,next});setError('');}
   catch(e){onPreview(null);setError((e as Error).message);}
   return ()=>onPreview(null);
  },[draft,scope,project,moduleId,selectedKey,onPreview]);
  const kind=facadeKind(draft);
- const apply=()=>{try{const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all');if(commit(next))close();else setError('Изменение не принято. Проверьте ограничения проекта; исходные фасады сохранены.');}catch(e){setError((e as Error).message);}};
+ const apply=()=>{try{const next=applyFacadeAppearance(project,moduleId,draft,scope==='group'?selectedIds:scope==='all',scope==='group');if(commit(next))close();else setError('Изменение не принято. Проверьте ограничения проекта; исходные фасады сохранены.');}catch(e){setError((e as Error).message);}};
  return <div className="facade-editor">
   <p><b>{source.name}</b></p>
   <p className="field-note">Оформление всех дверей и фасадов ящиков этого корпуса. Отдельный рисунок для одной створки здесь не задаётся. В сцене — предварительный просмотр. Изменения сохранятся после «Применить».</p>
@@ -35,7 +35,7 @@ export function FacadeEditor({project,moduleId,selectedIds=[],commit,close,onPre
   </>}
   {kind==='external'&&<p className="field-note">Для другого поставщика требуется отдельная цена. Выберите Вернисаж, чтобы задать плёнку или краску и фрезеровку из каталога с прайсом.</p>}
   <label className="hardware-field">Область применения<select aria-label="Область применения фасадов" value={scope} onChange={e=>setScope(e.target.value as typeof scope)}><option value="module">Фасады корпуса: {source.name}</option><option value="group" disabled={!selectedIds.length}>Выделенные модули ({selectedIds.length})</option><option value="all">Фасады всех редактируемых модулей</option></select></label>
-  {scope!=='module'&&<p className="field-note">Корпуса без фасадов, импорт Базиса, двери купе и столешницы пропускаются. Размеры и наполнение сохраняются.</p>}
+  {scope==='group'&&<p className="field-note">Выделенным модулям переносится только то, что вы изменили здесь; их остальные настройки фасадов сохраняются. Поле за полем — раздел «Фасады выделенных модулей» справа.</p>}{scope!=='module'&&<p className="field-note">Корпуса без фасадов, импорт Базиса, двери купе и столешницы пропускаются. Размеры и наполнение сохраняются.</p>}
   {error&&<p role="alert" className="field-note">{error}</p>}
   <div style={{display:'flex',gap:12,position:'sticky',bottom:0,background:'var(--surface, white)',padding:'12px 0'}}><button className="primary" onClick={apply}>{scope==='all'?'Применить ко всем модулям':scope==='group'?'Применить к выделенным ('+selectedIds.length+')':'Применить к корпусу'}</button><button className="outline" onClick={close}>Отмена</button></div>
  </div>;

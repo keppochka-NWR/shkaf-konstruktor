@@ -57,6 +57,8 @@ import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measu
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
 import {historyShortcut,editsText,viewShortcut,rotateShortcut} from './historyShortcuts';
+import {GroupFacadePanel} from './GroupFacadePanel';
+import {applyGroupFacade,skippedNote,groupFacadeValue,type GroupFacadeField} from './groupFacades';
 import {editDrawerConfig,facadeForVisible,visibleFacadeH} from './drawerEditing';
 import {maxEvenShelves,setShelfCount} from './shelfCount';
 import {explainErrors,errorPlace,splitAction,type ErrorDetail} from './errorDetails';
@@ -669,7 +671,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       hint:!shift&&lock?lock[0].toUpperCase()+lock.slice(1):shift?`Задать зазор ${sideWord(side)} (сейчас ${g[side].gap} мм до ${g[side].to}): модуль сдвигается, ширина та же`:`Задать зазор ${sideWord(side)} (сейчас ${g[side].gap} мм до ${g[side].to}): меняется ширина, ${side==='right'?'левый':'правый'} край на месте`,run:()=>{(shift?askGapShift:askGap)(mid,side,g[side]);}});
     return [fill('right'),fill('left'),push('right'),push('left'),{id:'gap-set',label:'Задать зазор',icon:Ruler,hint:'Сдвинуть модуль или изменить ширину так, чтобы зазор стал нужным',children:[gapItem('right',true),gapItem('right',false),gapItem('left',true),gapItem('left',false)]}];
   }
-  useEffect(()=>{setMaterialScope("active");},[modal]);
+  // корпус в отмеченной группе (Ctrl+щелчок) — окна «Материалы»/«Ручки» сразу на всю группу (решение Макса 29.10, групповые фасады)
+  useEffect(()=>{setMaterialScope(inGroup(placed.id)?"group":"active");},[modal]); // eslint-disable-line react-hooks/exhaustive-deps
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{return commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);return false;}
   }
@@ -744,6 +747,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function hideRmbTip(){setRmbTip(false);try{localStorage.setItem('studio-tip-rmb','1');}catch{/* без хранилища — просто скрываем */}}
   useEffect(()=>{if(ctxMenu&&rmbTip)hideRmbTip();},[ctxMenu]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Правка любого корпуса по id (круговое меню работает и с неактивным корпусом). */
+  /** Одно поле фасадов всем отмеченным модулям (окна «Материалы»/«Ручки» с «Отмеченная группа», круговое меню группы). Одна отмена. */
+  function groupFacadeEdit(field:GroupFacadeField,value:string,label:string){
+    try{const r=applyGroupFacade(project,liveGroupIds,field,value);if(r.changed.length&&!commitProject(r.project))return false;
+      const s=skippedNote(r.skipped);setNotice({title:'Фасады выделенных',text:`${label} — применено к ${r.changed.length} из ${liveGroupIds.length}.`+(s?' '+s:'')});return true;}
+    catch(e){setError((e as Error).message);return false;}
+  }
   /** Поворот на 90° по часовой / против (кнопки, круговое меню, R / Shift+R). Корпус в отмеченной группе — поворачивается группа. */
   function turnSelected(mid:string,dir:Turn,fit=false){
     try{const ids=inGroup(mid)?liveGroupIds:null;if(commitProject(ids?rotateModuleGroup(project,ids,dir):turnModule(project,mid,dir))&&(fit||ids)){if(ids)setFocusActive(false);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
@@ -786,6 +795,17 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})},
       ...(()=>{const single=mod.doors&&!mod.raw?singleLeafDoors(mod):[];return single.length?(['left','right'] as const).map(side=>({id:'hinge-all-'+side,label:side==='left'?'Петли слева':'Петли справа',icon:DoorOpen,active:single.every(d=>d.hinge===side),hint:'Все одностворчатые фасады корпуса. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{setModuleHingeSide(n,side);})})):[];})()]};
     const editFacade:RadialItem={id:'edit-facade',label:'Редактировать фасад',icon:SlidersHorizontal,hint:'Материал, плёнка, краска и фрезеровка фасадов корпуса',disabled:!!mod.raw||!!mod.bazis||!!mod.kupe,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setModal('facade-editor');}};
+    // мультивыбор (решение Макса 29.10): щелчок по модулю из отмеченной группы — фасадные действия на всю группу
+    const gv=(f:GroupFacadeField)=>groupFacadeValue(project,liveGroupIds,f).value;
+    const groupItem:RadialItem[]=inGroup(a.id)?[{id:'group-facades',label:`Фасады выделенных · ${liveGroupIds.length}`,icon:Layers,hint:'Цвет, ручки, петли, открывание — всем отмеченным модулям сразу (одна отмена Ctrl+Z)',children:[
+      {id:'group-decor',label:'Цвет',icon:Palette,hint:'Декор ЛДСП фасадов отмеченных модулей',run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
+      {id:'group-handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на распашные фасады отмеченных модулей',run:()=>{setActive(a.id);setHandleFace('');setHandleTarget('doors');setModal('handles');}},
+      {id:'group-hinges',label:'Петли',icon:Link2,hint:'Бренд петель отмеченных модулей',children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'group-hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:gv('hingeBrand')===k,hint:HINGE_BRANDS[k].note,run:()=>{groupFacadeEdit('hingeBrand',k,'Петли: '+HINGE_BRANDS[k].label);}}))},
+      {id:'group-open',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием — всем отмеченным',children:[
+        {id:'group-open-handle',label:'С ручками',icon:Hand,active:gv('doorOpen')==='handle',hint:'Ручка и петли с доводчиком',run:()=>{groupFacadeEdit('doorOpen','handle','Открывание: с ручками');}},
+        {id:'group-open-push',label:'Нажатием',icon:MousePointerClick,active:gv('doorOpen')==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>{groupFacadeEdit('doorOpen','push','Открывание: нажатием');}}]},
+      {id:'group-panel',label:'Все настройки…',icon:SlidersHorizontal,hint:'Справа «Фасады выделенных модулей»: тип, Вернисаж, декор, ручки, петли',run:()=>{setActive(a.id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}},
+    ]}]:[];
     const hideItem:RadialItem={id:'hide-module',label:'Скрыть модуль',icon:EyeOff,hint:'Только с экрана. Остаётся в проекте и стоимости',run:()=>hideModule(a.id)};
     const above=project.modules.find(x=>x.id!==a.id&&Math.abs((x.y??0)-((a.y??0)+mod.height))<2&&Math.abs(x.x-a.x)<2&&Math.abs(x.z-a.z)<2);
     const quickOps:QuickMenuOps={modify:u=>{modifyAt(a.id,u);},addUpper:()=>{try{const n=addUpperModule(project,a.id);if(commitProject(n))selectModule(n.modules[n.modules.length-1].id);}catch(e){setError((e as Error).message);}},
@@ -804,7 +824,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,disabled:!mod.doors,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на все фасады корпуса',disabled:!hasHandles(mod),run:()=>{setActive(a.id);setHandleFace('');setModal('handles');}},
-        hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},
+        hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},...groupItem,
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
       // поворот в обе стороны (решение Макса 29.10); корпус в отмеченной группе — поворачивается вся группа, стыки сохраняются
       ...(['cw','ccw'] as const).map(dir=>({id:dir==='cw'?'rotate':'rotate-ccw',label:dir==='cw'?'Повернуть ↻':'Повернуть ↺',icon:dir==='cw'?RotateCw:RotateCcw,hint:(dir==='cw'?'На 90° по часовой (вид сверху) · клавиша R':'На 90° против часовой (вид сверху) · Shift+R')+(inGroup(a.id)?` · вся отмеченная группа (${liveGroupIds.length})`:''),run:()=>turnSelected(a.id,dir,true)} as RadialItem)),
@@ -817,7 +837,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     ];
     out.ring=bodyRing;
     const facades:RadialItem={...bodyRing.find(item=>item.id==='facades')!,label:'Фасад'};
-    const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades')};
+    const body:RadialItem={id:'body',label:'Корпус',icon:Box,hint:'Размеры, наполнение и действия со всем корпусом',children:bodyRing.filter(item=>item.id!=='facades'&&item.id!=='group-facades')};
     const facadeMenu=(items:RadialItem[]):RadialItem[]=>[
       {id:'facade',label:'Фасад',icon:DoorOpen,hint:'Материал, ручки, петли и открывание выбранного фасада',children:items.filter(item=>item.id!=='body'&&item.id!=='hide-module')},body,
     ];
@@ -883,11 +903,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         ...(upper?posItems.slice(0,2):[]),...handleBase,...(upper?posItems.slice(2):posItems),
         {id:'handle-pos-all',label:'Для всех фасадов модуля',icon:Layers,hint:`Расположение «${HANDLE_POS_LABEL[curPos]}» — всем распашным фасадам этого модуля`,run:()=>modifyAt(a.id,n=>{setModuleHandlePos(n,curPos);})},
       ]};
-      return {title:'Фасад',subtitle:mod.name,items:facadeMenu([editFacade,doorHandle,
+      return {title:'Фасад',subtitle:mod.name,items:[...facadeMenu([editFacade,doorHandle,
         hinges,doorOpening,cutItem,...doorQuickItems(mod,c.sid,quickOps),{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
-        {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}])};
+        {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]),...groupItem]};
     }
     // Перегородка (решение Макса 23.10.2026): во всю высоту или частичная — «от … до …» мм от пола, от полки / до полки
     if(/:divider(:under|:over)?$/.test(pid)&&quickMenuApplies(mod)&&!mod.sectionLayout){
@@ -910,7 +930,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const p=part('Штанга');
       return {title:'Штанга',subtitle:mod.name,items:[p.up,p.down,p.params,body,{...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,c.sid+':rod')))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]};
     }
-    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,body,...(canCut?[cutItem]:[])]};
+    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,...groupItem,body,...(canCut?[cutItem]:[])]};
   }
   // Папка клиента: новый проект сразу пишется в браузер под своим ключом, а вкладка получает цену без ожидания первой правки.
   useEffect(()=>{
@@ -1243,7 +1263,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <Plus size={17} /> Добавить модуль
             </button>}
             {(project.modules.length>6||moduleSearch)&&<label className="module-search"><input type="search" aria-label="Найти корпус в проекте" placeholder="Название, номер, размер…" value={moduleSearch} onChange={e=>setModuleSearch(e.target.value)}/><small>{visibleModules.length} из {project.modules.length} корпусов</small></label>}
-            <p className="module-selection-hint">Ctrl + клик — выбрать несколько модулей.</p>{!!liveGroupIds.length&&<div><button className="outline" onClick={()=>{const id=liveGroupIds.includes(placed.id)?placed.id:liveGroupIds[0];selectModule(id);setModal("facade-editor");}}>Фасады выделенных ({liveGroupIds.length})</button><button className="text-action" onClick={()=>setGroupIds([])}>Снять выделение</button></div>}
+            <p className="module-selection-hint">Ctrl + клик — выбрать несколько модулей.</p>{!!liveGroupIds.length&&<div><button className="outline" onClick={()=>{const id=liveGroupIds.includes(placed.id)?placed.id:liveGroupIds[0];if(liveGroupIds.length<2){selectModule(id);setModal("facade-editor");return;}setActive(id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}}>Фасады выделенных ({liveGroupIds.length})</button><button className="text-action" onClick={()=>setGroupIds([])}>Снять выделение</button></div>}
             <div className="module-list" ref={moduleList}>
             {visibleModules.map(({a,i}) => (
               <button
@@ -1650,6 +1670,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </section>:<>
 
           {composer&&<div><FillingComposer key={placed.id+selectedId+composer} module={m} sid={selectedId} kind={composer} onCancel={()=>setComposer(null)} onApply={(count,config,fit)=>{try{const next=composer==='drawer'&&fit&&config?addFittedDrawers(project,placed.id,selectedId,count,config):addFillingBatch(project,placed.id,selectedId,composer,count,config);if(commitProject(next)){selectInserted(next,placed.id,selectedId,composer);setComposer(null);return true;}}catch(e){setError((e as Error).message);}return false;}}/></div>}
+          {/* решение Макса 29.10: фасады отмеченных Ctrl+щелчком модулей — разом (src/groupFacades.ts) */}
+          {tab!=='room'&&liveGroupIds.length>1&&<GroupFacadePanel key={liveGroupIds.join('|')} project={project} ids={liveGroupIds} commit={commitProject}/>}
           {tab!=='room'&&!nothingSelected&&!m.raw&&!m.worktop&&!m.kupe&&<div className="selected-module-heading"><strong>{m.name}</strong><label>Секция<select aria-label="Выбранная секция" value={selectedId} onChange={e=>chooseSection(e.target.value)}>{m.sections.map((section,i)=><option key={section.id} value={section.id}>Секция {i+1}</option>)}</select></label></div>}
           {tab === "room" ? (
             <div className="property-section">
@@ -2382,7 +2404,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         aria-pressed={materialRecipients.length>0&&materialRecipients.every(a=>(a.module[materialTarget]??a.module.facadeDecor)===c.n)}
                         onClick={() => {
                           if(materialScope==='group'&&!liveGroupIds.length){setError("Сначала отметьте корпуса в группе.");return;}
-                          const ok=materialScope==='active'?modify((n) => (n[materialTarget] = c.n)):commitProject({...project,modules:project.modules.map(a=>materialScope==='all'||liveGroupIds.includes(a.id)?({...a,module:{...a.module,[materialTarget]:c.n}}):a)});
+                          // группа + фасады: только к модулям с такими фасадами, остальные — «не применено: причина» (groupFacades.ts)
+                          const ok=materialScope==='active'?modify((n) => (n[materialTarget] = c.n)):materialScope==='group'&&materialTarget!=='decor'?groupFacadeEdit(materialTarget,c.n,(materialTarget==='facadeDecor'?'Декор фасадов: ':'Декор фасадов ящиков: ')+decorLabel(c.n)):commitProject({...project,modules:project.modules.map(a=>materialScope==='all'||liveGroupIds.includes(a.id)?({...a,module:{...a.module,[materialTarget]:c.n}}):a)});
                           if(!ok)return;
                           setMaterialScope("active");
                           setModal(null);
@@ -2423,7 +2446,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         if(materialScope==='group'&&!liveGroupIds.length){setError('Сначала отметьте корпуса в группе.');return;}
                         const value=h.id===DEFAULT_HANDLE?undefined:h.id;
                         const applyHandle=(n:Module)=>{if(handleFace){setFacadeHandle(n,handleFace,h.id);return;}if(handleTarget==='drawers'){n.drawerHandleId=h.id;for(const section of n.sections)for(const c of section.drawerConfigs??[])delete c.handleId;}else{for(const section of n.sections)delete section.doorHandles;n.drawerHandleId??=n.handleId??DEFAULT_HANDLE;n.handleId=value;}};
-                        const ok=handleFace||materialScope==='active'?modify(applyHandle):commitProject({...project,modules:project.modules.map(a=>{if(materialScope!=='all'&&!liveGroupIds.includes(a.id))return a;const module=structuredClone(a.module);applyHandle(module);return {...a,module};})});
+                        const ok=handleFace||materialScope==='active'?modify(applyHandle):materialScope==='group'?groupFacadeEdit(handleTarget==='drawers'?'drawerHandle':'handle',h.id,(handleTarget==='drawers'?'Ручки ящиков: ':'Ручки фасадов: ')+h.label):commitProject({...project,modules:project.modules.map(a=>{if(materialScope!=='all'&&!liveGroupIds.includes(a.id))return a;const module=structuredClone(a.module);applyHandle(module);return {...a,module};})});
                         if(!ok)return;setMaterialScope('active');setModal(null);setSearch('');
                       }}><HandleThumb h={h}/><span className="handle-name">{h.label}<small className="handle-form">{HANDLE_SHAPE_LABELS[handleShape(h)]}</small></span><span className="handle-meta">{h.len} мм{h.art?' · арт. '+h.art:''}</span>{current&&<Check size={15}/>}</button>;
                     })}</div>;
