@@ -86,6 +86,13 @@ await pick("Kronotex");
 p = await active();
 check("2. ламинат ёлочкой", p.room.finish?.floor?.id === byName("Kronotex").id);
 await shot("floor-herringbone");
+// Критик п.1: перебор каталога не копит текстуры — в памяти только позиции комнаты
+await search("");
+const floorItems = panel().getByTestId("finish-list").locator(".finish-item > button");
+for (let i = 0; i < 8; i++) await click(floorItems.nth(i));
+await pick("Kronotex");
+const textures = await page.evaluate(() => (window as unknown as { __finishTextures?: () => number }).__finishTextures?.() ?? -1);
+check("п.1 перебор 9 позиций пола — в памяти 1 текстура (пол)", textures === 1, String(textures));
 
 await click(panel().getByRole("tab", { name: "Стены" }));
 await panel().getByLabel("Стена для отделки").selectOption("all");
@@ -106,6 +113,30 @@ check("3. задняя — покраска, левая — плитка, пра
 await panel().getByLabel("Стена для отделки").selectOption("all");
 check("3. «Все стены» при разной отделке — «Отделка разная»", (await panel().innerText()).includes("Отделка разная"));
 await shot("walls-mixed");
+// Критик п.2: свой цвет — пока палитра открыта, проект не меняется; при закрытии — один раз
+await panel().getByLabel("Стена для отделки").selectOption("right");
+const rawDoc = () => page.evaluate(() => { const k = Object.keys(localStorage).find((x) => x.startsWith("garderyob-rooms-v1") && !x.includes(":previous") && !x.includes(":damaged")); return k ? localStorage.getItem(k) : null; });
+await page.waitForTimeout(900);
+const docBefore = await rawDoc();
+await panel().getByLabel("Другой цвет покраски").evaluate((el) => { const i = el as HTMLInputElement, set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!; for (const c of ["#336699", "#3a6f9f", "#4477aa"]) { set.call(i, c); i.dispatchEvent(new Event("input", { bubbles: true })); } });
+await page.waitForTimeout(1200);
+check("п.2 палитра на ходу — проект не сохраняется", (await rawDoc()) === docBefore);
+check("п.2 палитра на ходу — образец в панели показывает цвет", (await panel().getByTestId("finish-current").locator(".finish-swatch").first().evaluate((e) => getComputedStyle(e).backgroundColor)) === "rgb(68, 119, 170)");
+await panel().getByLabel("Другой цвет покраски").evaluate((el) => el.dispatchEvent(new Event("change", { bubbles: true })));
+p = await active();
+check("п.2 палитру закрыли — цвет записан одним шагом", (p.room.finish?.walls as Record<string, { paint?: string }>)?.right?.paint === "#4477aa", JSON.stringify(p.room.finish?.walls));
+// Критик п.3: артикул, которого нет в каталоге — «Неизвестная позиция» с «Убрать»
+await page.evaluate(() => { const k = Object.keys(localStorage).find((x) => x.startsWith("garderyob-rooms-v1") && !x.includes(":previous") && !x.includes(":damaged"))!; const d = JSON.parse(localStorage.getItem(k)!); for (const r of d.rooms) if (r.project.room.finish?.walls) r.project.room.finish.walls.front = { id: "99999999" }; localStorage.setItem(k, JSON.stringify(d)); });
+await page.reload();
+await page.waitForTimeout(2500);
+await openFinishes();
+await click(panel().getByRole("tab", { name: "Стены" }));
+await panel().getByLabel("Стена для отделки").selectOption("front");
+check("п.3 неизвестный артикул — «Неизвестная позиция 99999999»", (await panel().getByTestId("finish-current").first().innerText()).includes("Неизвестная позиция 99999999"));
+await shot("unknown-article");
+await click(panel().getByRole("button", { name: /Убрать отделку: Передняя/ }));
+p = await active();
+check("п.3 «Убрать» снимает неизвестную позицию", !(p.room.finish?.walls as Record<string, unknown>)?.front, JSON.stringify(p.room.finish?.walls));
 
 await page.reload();
 await page.waitForTimeout(2500);
