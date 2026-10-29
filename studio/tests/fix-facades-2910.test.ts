@@ -156,3 +156,11 @@ test('ALU: вес рамочного фасада — стекло/зеркал�
   assert.equal(facadeWeight(d, m), want);
   assert.equal(moduleWeight(m).hardwareNoMass, moduleWeight({ ...m, alu: undefined }).hardwareNoMass, 'рамочный фасад не считается фурнитурой без массы');
 });
+test('Условный цвет плёнки: слово целиком с начала («тик» не в «Антик/Мистика/Пластик», «айс» не в «Райс»)', async () => {
+  const { filmNameColor } = await import('../src/facadesVernissage');
+  const orech = filmNameColor('Тик')!;
+  for (const n of ['Антик', 'Мистика', 'Пластик']) assert.notEqual(filmNameColor(n), orech, n);
+  assert.equal(filmNameColor('Билд райс'), filmNameColor('Крем'), 'райс — кремовый, не белый «айс»');
+  assert.equal(filmNameColor('Сиена айс'), filmNameColor('Белый'));
+  assert.equal(filmNameColor('Тиковое дерево'), orech);
+});

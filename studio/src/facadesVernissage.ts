@@ -382,12 +382,14 @@ export function filmNameColor(raw: string): number | null {
     [/сосна|берез|клен|липа|ясень|бук|акаци|вяз|лиственниц|дуб|oak|кантри|дерев|массив|пилени|крафт|чесура|торонто|атланта|филадельфия|галиано|рустик|тиберио|монте|лиран|древесн|кедр/, 0xc4a37c],
     [/мрамор|марморино/, 0xe2ded6],
   ];
-  const hit = table.find(([re]) => re.test(n));
+  // слово — с начала (основа «тик» не в «Антик», «айс» не в «Райс»): перед совпадением не буква
+  const word = (re: RegExp) => new RegExp('(?<![а-яa-z])(?:' + re.source + ')');
+  const hit = table.find(([re]) => word(re).test(n));
   if (!hit) return null;
   let c = hit[1];
   const mix = (k: number, to: number) => { const ch = (s: number) => Math.round(((c >> s) & 255) * (1 - k) + to * k); c = (ch(16) << 16) | (ch(8) << 8) | ch(0); };
-  if (/светл|светло/.test(n)) mix(0.35, 255);
-  else if (/темн/.test(n)) mix(0.45, 0);
+  if (word(/светл/).test(n)) mix(0.35, 255);
+  else if (word(/темн/).test(n)) mix(0.45, 0);
   return c;
 }
 export function vernissageGlossy(v: VernissageFacade): boolean { return v.cover === 'enamel-gloss' || ((v.cover === 'film' || v.cover === 'adilet') && /глянец|глянц|gloss|HG/i.test(v.film ?? '')); }
