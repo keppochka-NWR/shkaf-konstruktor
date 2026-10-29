@@ -2176,13 +2176,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {!m.doors&&<button className="primary full" onClick={()=>{if(modify(n=>{n.doors=true;n.sections.forEach(s=>delete s.removedDoors);})){setHideFacades(false);setOpenDoors(false);}}}>Добавить распашные фасады</button>}
                 {/* dp-2810: у комода и подвесного ящика (только ящики) фасады Вернисаж выбирались лишь ПКМ по фасаду в сцене — тип фасадов и в панели */}
                 {(m.doors || m.sections.some(s=>s.drawers>0)) && (
-                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={facadeKindOf(m)} onChange={e=>modify(n=>setFacadeKind(n,e.target.value as FacadeKind))}>{/* интеграция 29.10: неподходящий тип (рамка у дверей выше 2000) недоступен — стрелки его пропускают, выбор не откатывается */}{FACADE_KINDS.map(k=>{const why=facadeKindBlock(m,k);return <option key={k} value={k} disabled={!!why} title={why||undefined}>{k==='ldsp'?FACADE_KIND_LABEL.ldsp+' 16 мм':FACADE_KIND_LABEL[k]}{why?' — не подходит':''}</option>;})}</select></label>
+                  <label className="hardware-field">Тип фасадов<select aria-label="Тип распашных фасадов" value={facadeKindOf(m)} onChange={e=>modify(n=>setFacadeKind(n,e.target.value as FacadeKind))}>{/* интеграция 29.10: неподходящий тип (рамка выше листа стекла или шире 600) недоступен — стрелки его пропускают, выбор не откатывается */}{FACADE_KINDS.map(k=>{const why=facadeKindBlock(m,k);return <option key={k} value={k} disabled={!!why} title={why||undefined}>{k==='ldsp'?FACADE_KIND_LABEL.ldsp+' 16 мм':FACADE_KIND_LABEL[k]}{why?' — не подходит':''}</option>;})}</select></label>
                 )}
                 {(m.doors || m.sections.some(s=>s.drawers>0)) && m.vernissage && <VernissagePicker value={m.vernissage} sizes={vernissageSizes(m)} onChange={v=>modify(n=>{n.vernissage=v;n.facadeT=v.thickness;})} />}
 
                 {m.doors && m.alu && (<>
                   <AluPicker value={m.alu} onChange={v=>modify(n=>{n.alu=v;})}/>{aluDrawersAvailable(m)&&<AluDrawersCheck checked={!!m.aluDrawers} onChange={v=>modify(n=>{if(v)n.aluDrawers=true;else delete n.aluDrawers;})}/>}
-                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. По СТП рамка не выше 2000 и не шире 600 мм, петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
+                  <p className="field-note">Цена — по калькулятору фасадов ALU: профиль по периметру, наполнение по площади фасада, уплотнитель; петли — строками фурнитуры. Высота рамки — по листу стекла наполнения (зеркало до 3000 мм, предел — под выбором наполнения), ширина по СТП не больше 600 мм; петли GTV с доводчиком. Вставка режется с припуском {aluProfile(m.alu.profile)!.allowance} мм.</p>
                 </>)}
                 {m.doors && !m.alu && (
                   <button

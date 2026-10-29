@@ -122,3 +122,7 @@ test('Эмаль: подпись RAL не теряет текст менедже
   const src = (await import('node:fs')).readFileSync(new URL('../src/VernissagePicker.tsx', import.meta.url), 'utf8');
   assert.ok(!/onBlur=\{[^}]*enamelColor/.test(src), 'без перезаписи цвета эмали по onBlur');
 });
+test('Подсказки ALU без старого предела СТП 2000 (критик 29.10)', async () => {
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['../src/App.tsx', '../docs/WORKSHOP-RULES.md']) assert.ok(!/не выше 2000/.test(readFileSync(new URL(f, import.meta.url), 'utf8')), f);
+});
