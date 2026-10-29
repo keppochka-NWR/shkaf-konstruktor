@@ -210,7 +210,8 @@ test('aluminium framed doors: geometry, calculator pricing, limits, cut list and
   m.alu.profile='F1-19';assert.equal(estimate(p).lines.find(l=>l.id==='alu-profile:F1-19:silver')!.unitPrice,3342,'F1-19: 1114 ₽/м × 3');
   assert.equal(parseProject(p).modules[0].module.alu!.profile,'F1-19');
   assert.ok(specificationHTML(p).includes('алюминиевой рамке'));
-  m.height=2200;assert.ok(validate(m).some(x=>x.includes('не выше 2000')),'alu door above 2000 is rejected');
+  m.height=2200;assert.ok(!validate(m).some(x=>x.includes('Алюминиевый')),'alu door above 2000 is allowed up to the glass sheet (Max 29.10.2026)');
+  m.alu.insert='fill:Кризет б/ц';assert.ok(validate(m).some(x=>x.includes('не выше 2100')),'Krizet sheet 2100x1600 limits the door');m.alu.insert='mirror-silver';
   m.height=2000;m.alu={profile:'нет',color:'silver',insert:'mirror-silver'};assert.ok(validate(m).some(x=>x.includes('из каталога')));
 });
 

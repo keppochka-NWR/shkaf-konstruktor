@@ -76,10 +76,12 @@ test('«Модель цены» в экспорте/импорте JSON: пап�
   assert.equal(migrateRoomDocument(single).calculation?.maxModel, true);
 });
 
-test('«Тип фасадов»: рамка у дверей выше 2000 недоступна (стрелки её пропускают), Вернисаж выбирается', () => {
+test('«Тип фасадов»: рамка у дверей 2400 доступна (высота — по листу стекла, Макс 29.10), недоступный тип — с причиной, Вернисаж выбирается', () => {
   const m = initialModule(); m.height = 2400;
   assert.equal(facadeKindOf(m), 'ldsp');
-  assert.match(facadeKindBlock(m, 'alu'), /Алюминиевый фасад/);
+  assert.equal(facadeKindBlock(m, 'alu'), '', 'зеркало: лист 3210×2250 — дверь ~2350 в рамке проходит (прежний предел СТП 2000 снят)');
+  const kz = structuredClone(m); setFacadeKind(kz, 'alu'); kz.alu!.insert = 'fill:Кризет б/ц';
+  assert.match(validate(kz).join(' '), /Алюминиевый фасад.*не выше 2100/, 'наполнение с листом 2100 — отказ с причиной');
   assert.equal(facadeKindBlock(m, 'vernissage'), '');
   const n = structuredClone(m); setFacadeKind(n, 'vernissage');
   assert.deepEqual(validate(n), []);
