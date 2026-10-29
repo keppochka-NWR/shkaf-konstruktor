@@ -423,6 +423,21 @@ try {
   g = await guides();
   check("11. Q + Alt у пола → линия на правый край «Шкаф»: x = 1600 точно", g.some((x) => x.at === 1600 && x.n[0] === 1), JSON.stringify(g.map((x) => x.at)));
   await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
+  // критик 29.10 п.7: «Слева» — Ctrl + перенос «Шкаф» вверх: задний нижний угол в пересечение линии y = 300 и заднего края «Сосед»
+  await view("a");
+  const l0 = (await handle("lo-lo"))!, l1 = (await handle("hi-hi"))!;
+  const lz = (l1.x - l0.x) / 550, ly = (l0.y - l1.y) / 2000, SZ = (z: number) => l0.x + (z - 3) * lz, SY = (y: number) => l0.y - y * ly;
+  await page.mouse.move(SZ(1500), SY(0) - 1); await key("q");
+  await page.mouse.click(SZ(1500), SY(0) - 1); await page.waitForTimeout(200);
+  await page.mouse.move(SZ(1500), SY(0) - 60); for (const c of "300") await page.keyboard.press(c); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. «Слева»: линия y = 300 от пола", g.length === 1 && g[0].at === 300 && g[0].n[1] === 1, JSON.stringify(g.map((x) => [x.n, x.at])));
+  const lgrab = { x: SZ(40), y: SY(150) };
+  const s11m = await modDrag("Control", lgrab, { x: lgrab.x + 3 * Math.sign(lz), y: lgrab.y + SY(300) - SY(0) - 4 }, "left-ctrl-move");
+  const b11l = await settled((b) => b.a.y !== 0);
+  check("11. «Слева» Ctrl + перенос → высота по пересечению: y = 300, z = 3, x на месте", b11l.a.y === 300 && b11l.a.z === 3 && b11l.a.x === 1000 && /Ctrl · пересечение/.test(s11m.live), fmt(b11l.a) + ` · «${s11m.live}»`);
+  await key("Control+z"); await settled((b) => b.a.y === 0);
+  await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
 
   // 12. «План»: те же клавиши
   await page.getByRole("button", { name: "План", exact: true }).click(); await page.waitForTimeout(800);

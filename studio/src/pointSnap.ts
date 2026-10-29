@@ -30,6 +30,9 @@ export const MODE_WORD: Record<SnapMode, string> = { snap: "", free: "Без п�
 /** Ctrl+нажатие на корпус: перенос — только от 9 px; меньше (дрожание руки) — это щелчок «отметить корпус» (критик 29.10 п.4). */
 export const CTRL_DRAG_PX = 9;
 export const ctrlDragStarts = (dx: number, dy: number) => Math.hypot(dx, dy) >= CTRL_DRAG_PX;
+/** Виды сбоку (справа/слева): на экране глубина и высота — перенос корпуса в плоскости экрана, высота своя, как спереди
+ *  (критик 29.10 п.7: раньше высота сбоку держалась, и привязка Ctrl к пересечению теряла вертикаль). */
+export const sideView = (view: string) => view === "side" || view === "left";
 /** Колесо с Ctrl во время тяги (Ctrl зажат ради привязки) масштабирует всю страницу браузера — гасим (критик 29.10 п.5). */
 export const wheelGuard = (e: { ctrlKey: boolean; metaKey: boolean }, dragging: boolean) => dragging && (e.ctrlKey || e.metaKey);
 /** Ctrl+Z / Ctrl+Y во время тяги (Ctrl зажат ради привязки) не отменяют посреди тяги (критик 29.10 п.6). */

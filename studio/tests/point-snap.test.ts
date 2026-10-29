@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,sideView,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -120,6 +120,13 @@ test('критик 29.10 п.6: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z во время т
   assert.equal(historyGuard(k('KeyZ',{shiftKey:true}),true),true);
   assert.equal(historyGuard(k('KeyZ'),false),false);
   assert.equal(historyGuard(k('KeyQ'),true),false);
+});
+
+test('критик 29.10 п.7: сбоку (справа и слева) высота при переносе своя, сверху/3D — нет',()=>{
+  assert.ok(sideView('side')&&sideView('left'));
+  assert.ok(!sideView('front')&&!sideView('top')&&!sideView('iso'));
+  // ось высоты сбоку — вертикаль экрана: Ctrl-пересечение задаёт и глубину, и высоту
+  const look=viewLook('left')!,d=viewDelta(0,300,look);assert.ok(d.y===300&&d.x===0&&d.z===0);
 });
 
 test('оси вида: спереди/сверху/План — точка туда и обратно, глубина сохраняется',()=>{
