@@ -13,6 +13,9 @@ import {placeInRow} from './rowResize';
 import {mirrorKitchen} from './kitchen';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
+/** Что удаляет «Удалить» / Delete у выбранной детали ящика (круг 3 критика 29.10): весь ящик (заголовок плашки — «Ящик N»), а не только
+ *  фасад; фасад отдельно — removePart с id фасада («Снять фасад»). Остальные детали — как есть. */
+export function wholeDrawerPid(pid:string):string{return pid.includes(':drawer:')&&pid.endsWith(':facade')?pid.replace(/:facade$/,':bottom'):pid;}
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');

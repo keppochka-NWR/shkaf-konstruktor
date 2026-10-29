@@ -156,7 +156,7 @@ import {
   appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
   type Project,
 } from "./project";
-import {fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 import {drawerAddReason,drawerFitsOnTop} from './drawerLimit';
 import {moduleHandleFloor,setModuleHandleFloor} from './handleFloorGroup';
 function NumberField({
@@ -375,8 +375,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   },[selectedDetail?.id]);
   const canRemove=selectedDetail&&(/:door:|:shelf:|:drawer:|:pantograph:|:pullout:|:flange:/.test(selectedDetail.id)||selectedDetail.id.endsWith(':rod'));
   const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.id.includes(':shelf:')?'Полка '+(Number(selectedDetail.id.split(':shelf:')[1])+1):selectedDetail?.name;
-  const removalLabel=(selectedDetail?.role==='door'||selectedDetail?.id.endsWith(':facade'))?'Удалить выбранный фасад':selectedDetail?.id.includes(':drawer:')?'Удалить ящик целиком':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':pullout:')?'Удалить тремпель':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
-  function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
+  const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик':(selectedDetail?.role==='door'||selectedDetail?.id.endsWith(':facade'))?'Удалить выбранный фасад':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':pullout:')?'Удалить тремпель':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
+  /* круг 3 критика 29.10: «Удалить» и Delete у выбранного ящика (его фасада) — весь ящик, как в заголовке плашки «Ящик N»; только фасад — «Снять фасад» */function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,wholeDrawerPid(selectedPart.pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
+  function removeSelectedFacade(){if(!selectedPart||!selectedPart.pid.endsWith(':facade'))return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   function nudgeSelected(delta:number){if(!selectedPart||!canRemove||selectedDetail?.role==='door')return;try{moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,delta);}catch(e){setError((e as Error).message);}}
   function copySelected(){if(!selectedPart)return;try{const result=duplicatePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid);if(commitProject(result.project)){setSelectedPart({...selectedPart,pid:result.partId});setDrawerIndex(result.partId.includes(':drawer:')?Number(result.partId.split(':drawer:')[1].split(':')[0]):null);setDrawerPreview(false);setMode('fill');}}catch(e){setError((e as Error).message);}}
   const [snapping,setSnapping]=useState(true);
@@ -847,7 +848,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'hidden',label:'Скрытые',icon:Spline,hint:'Unihopper, DTC, Premial',active:cur.slide==='gtv0fpo',children:SLIDE_SYSTEMS.filter(s=>s.slide==='gtv0fpo').map(s=>slideItem(s.id))}]};
       const capOn=hasDrawerCap(mod,sec),capItem:RadialItem={id:'drawer-cap',label:capOn?'Убрать полку сверху':'Полка над ящиками',icon:Rows3,disabled:!!mod.kitchen||!!mod.corner||!!mod.raw||(!capOn&&!!sec.drawerConfigs?.every(x=>x.tray)),
         hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
-      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,p.remove];
+      const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,{...p.remove,label:'Удалить ящик',hint:'Ящик целиком: короб, фасад, направляющие. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,wholeDrawerPid(pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
         [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps),cutItem]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,body]};
     }
@@ -1103,7 +1104,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="outline" onClick={copySelected}>Копировать</button>}
         {selectedDetail&&(selectedDetail.id.includes(':door:')||selectedDetail.id.endsWith(':facade'))&&<button className="outline" onClick={()=>{setHandleFace(selectedDetail.id);setMaterialScope('active');setModal('handles');}}>Ручка этого фасада</button>}
         {selectedDetail&&cutAllowed(m,selectedDetail.id)&&<button className="outline" onClick={()=>setCutHost({mid:placed.id,pid:selectedDetail.id})}>Вырез…</button>}
-        <button className="text-action danger" onClick={removeSelected}>Удалить</button>
+        {selectedDetail?.id.includes(':drawer:')?<><button className="text-action danger" onClick={removeSelected}>Удалить ящик</button>{selectedDetail.id.endsWith(':facade')&&<button className="text-action" onClick={removeSelectedFacade}>Снять фасад</button>}</>:<button className="text-action danger" onClick={removeSelected}>Удалить</button>}
         <button className="text-action" aria-label="Снять выделение детали" onClick={()=>setSelectedPart(null)}>Закрыть</button>
       </div>}
       <input
