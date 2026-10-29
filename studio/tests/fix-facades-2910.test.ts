@@ -105,3 +105,20 @@ test('Плёнка из каталога Вернисажа: у каждой п�
   assert.equal(cat.length, VERNISSAGE_FILMS.length, 'у №1 (Стандарт) — все категории');
   assert.equal(filmCatalog({ milling: '1', cover: 'adilet', film: ADILET_FILMS[0].name, thickness: 19 }).length, ADILET_FILMS.length);
 });
+test('Эмаль: подпись RAL не теряет текст менеджера; NCS и #hex не принимаются за RAL (критик 29.10)', async () => {
+  const { enamelColorLabel, ralOf } = await import('../src/ralClassic');
+  const { vernissageColor } = await import('../src/facadesVernissage');
+  assert.equal(enamelColorLabel('9003'), 'RAL 9003 Сигнальный белый');
+  assert.equal(enamelColorLabel('RAL9003'), 'RAL 9003 Сигнальный белый');
+  assert.equal(enamelColorLabel('RAL 9003 / RAL 7016'), 'RAL 9003 Сигнальный белый / RAL 7016');
+  assert.equal(enamelColorLabel('RAL 9003 глянец 80%'), 'RAL 9003 Сигнальный белый глянец 80%');
+  assert.equal(enamelColorLabel('RAL 9003 Сигнальный белый'), 'RAL 9003 Сигнальный белый');
+  assert.equal(enamelColorLabel('1002-Y'), '1002-Y'); assert.equal(ralOf('1002-Y'), undefined);
+  assert.equal(enamelColorLabel('NCS S 1002-Y'), 'NCS S 1002-Y');
+  assert.equal(enamelColorLabel('9003AB'), '9003AB'); assert.equal(ralOf('9003AB'), undefined);
+  assert.equal(ralOf('90031'), undefined);
+  assert.equal(vernissageColor({ milling: '15', cover: 'enamel-matte', enamelColor: '9003ab', thickness: 19 }), 0x9003ab, '#hex — свой цвет');
+  // поле в выборе не переписывает введённое при потере фокуса
+  const src = (await import('node:fs')).readFileSync(new URL('../src/VernissagePicker.tsx', import.meta.url), 'utf8');
+  assert.ok(!/onBlur=\{[^}]*enamelColor/.test(src), 'без перезаписи цвета эмали по onBlur');
+});

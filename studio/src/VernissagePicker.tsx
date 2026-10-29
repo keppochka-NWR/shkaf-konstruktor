@@ -9,7 +9,6 @@ import { ADILET_FILMS, PET_DECORS, VERNISSAGE_FILMS, VERNISSAGE_MILLINGS, VERNIS
 import type { VLimit, VSeriesId } from "./vernissageData";
 import { V_FILM_COLORS } from "./vernissageTextures";
 import { FilmSwatches, RalPicker } from "./FacadeColorPickers";
-import { ralOf, ralValue } from "./ralClassic";
 
 const ROW_LABEL = { solid: "глухой", glass: "витрина", grille: "решётка", drawer: "ящик" } as const;
 const lim = (r: VLimit | null) => r ? `${r[0]}–${r[1] ?? "…"} × ${r[2]}–${r[3] ?? "…"}` : "не делается";
@@ -59,7 +58,7 @@ export function VernissagePicker({ value, onChange, sample, sizes }: { value: Ve
     {value.cover === "pet" && <label className="hardware-field">Декор ПЭТ<select aria-label="Декор ПЭТ Вернисаж" value={value.film ?? ""} onChange={(e) => set({ film: e.target.value })}>
       {PET_DECORS.map((d) => <option key={d} value={d}>{d}</option>)}</select></label>}
     {value.cover.startsWith("enamel") && <><RalPicker value={value.enamelColor} onPick={(c) => set({ enamelColor: c })} />
-      <label className="hardware-field">Код RAL или свой цвет (NCS, #hex)<input aria-label="Цвет эмали Вернисаж" value={value.enamelColor ?? ""} onChange={(e) => set({ enamelColor: e.target.value })} onBlur={(e) => { const r = ralOf(e.target.value); if (r && e.target.value !== ralValue(r)) set({ enamelColor: ralValue(r) }); }} placeholder="например RAL 9003" /></label></>}
+      <label className="hardware-field">Код RAL или свой цвет (NCS, #hex)<input aria-label="Цвет эмали Вернисаж" value={value.enamelColor ?? ""} onChange={(e) => set({ enamelColor: e.target.value })} placeholder="например RAL 9003" /></label></>}
     <div className="kitchen-field"><span>Толщина МДФ</span><div className="kitchen-chips" role="group" aria-label="Толщина МДФ Вернисаж">{ths.map((t) => <button key={t} type="button" aria-pressed={value.thickness === t} onClick={() => set({ thickness: t })}>{t}{t === 25 ? " · +40 %" : ""}</button>)}</div></div>
     {m.mdf19Only && <p className="field-note">№{m.id}: МДФ 19 мм для фасадов с петлями; 16 мм — только без петель{manager ? " (прайс, примечание к серии Престиж)" : ""}.</p>}
     {value.cover !== "none" && value.cover !== "pet" && <label className="check-row"><input type="checkbox" checked={!!value.patina} onChange={(e) => set({ patina: e.target.checked || undefined })} /> Патина</label>}

@@ -60,18 +60,27 @@ export const RAL_GROUPS: { digit: string; label: string }[] = [
   { digit: '5', label: 'Синие' }, { digit: '6', label: 'Зелёные' }, { digit: '7', label: 'Серые' }, { digit: '8', label: 'Коричневые' }, { digit: '9', label: 'Белые и чёрные' },
 ];
 const byCode = new Map(RAL_CLASSIC.map((r) => [r.code, r]));
-/** Цвет RAL по коду («9003», «RAL 9003», «RAL9003 Сигнальный белый»); нет в каталоге — undefined. */
+/** Только код: «9003», «RAL 9003», «ral9003». */
+const BARE = /^\s*(?:RAL\s*)?(\d{4})\s*$/i;
+/** Код с приставкой RAL внутри текста («RAL 9003 глянец», «эмаль RAL 7016»): после кода — не цифра, не дефис и не буква
+ *  (NCS «1002-Y», #hex «9003AB», «90031» — не RAL). */
+const IN_TEXT = /RAL\s*(\d{4})(?![\d\-A-Za-zА-Яа-яЁё])/i;
+/** Цвет RAL по коду («9003», «RAL 9003», «RAL 9003 глянец»); не RAL или нет в каталоге — undefined. */
 export function ralOf(text: string | undefined): RalColor | undefined {
-  const m = /(?:^|RAL\s*)(\d{4})(?!\d)/i.exec((text ?? '').trim());
+  const t = text ?? '', m = BARE.exec(t) ?? IN_TEXT.exec(t);
   return m ? byCode.get(m[1]) : undefined;
 }
 /** Запись цвета эмали в проекте: «RAL 9003» (код — как прежде, название добавляется в подписях). */
 export const ralValue = (r: RalColor) => `RAL ${r.code}`;
 /** Подпись цвета эмали для сметы и документов: «RAL 9003 Сигнальный белый»; не RAL (NCS, #hex, свой текст) — как введено. */
+/** Текст менеджера не теряется: только код — заменяется на «RAL 9003 Сигнальный белый»; код в тексте («RAL 9003 глянец 80%»,
+ *  «RAL 9003 / RAL 7016») — название вставляется после первого кода, остальное как введено; название уже есть — как введено. */
 export function enamelColorLabel(text: string | undefined): string {
   const t = (text ?? '').trim(), r = ralOf(t);
   if (!r) return t;
-  return t.toLowerCase().includes(r.name.toLowerCase()) ? t : `RAL ${r.code} ${r.name}`;
+  if (BARE.test(t)) return `RAL ${r.code} ${r.name}`;
+  if (t.toLowerCase().includes(r.name.toLowerCase())) return t;
+  return t.replace(IN_TEXT, `RAL ${r.code} ${r.name}`);
 }
 const fold = (s: string) => s.toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 /** Поиск по коду (с «RAL» или без, по началу кода) и по названию (все слова запроса). */
