@@ -6,6 +6,7 @@ import {validateFixture,type Fixture} from './fixtures';
 import {rekeySections} from './sectionLayout';
 import {rawKitchen} from './rawModule';
 import {parseGuides,type Guide} from './guides';
+import {parseRoomFinish,type RoomFinish} from './roomFinishes';
 import {wallFloorY,waterfallSides} from './kitchen';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,fe,facadeBottom,facadeTop,isDrawerModule,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
@@ -17,7 +18,9 @@ export type Room={survey?:Survey;width:number;depth:number;height:number;opening
   /** Объекты на стенах из замера (розетки, батареи, короба, плинтусы, трубы…). */
   fixtures?:Fixture[];
   /** Стены: толщина и углы между фронтальной (задней) и боковыми, как в скрипте Базиса. */
-  walls?:{thickness:number;angleLeft?:number;angleRight?:number}};
+  walls?:{thickness:number;angleLeft?:number;angleRight?:number};
+  /** Отделка пола и стен (ламинат, плитка, обои, покраска — roomFinishes.ts): только показ, в детали и смету не входит. */
+  finish?:RoomFinish};
 export type PlacedModule={id:string;x:number;z:number;y?:number;rotation?:number;module:Module};
 export type PlanDimension={id:string;from:[number,number];to:[number,number]};
 /** Движок раскроя: 'classic' (по умолчанию) — как было; 'guillotine' — гильотина как в Базисе (пропил 4,4, обрезка 12, ≤ 5 стадий). Решение Макса: новый движок только по флагу. */
@@ -281,6 +284,7 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
     ...(o?.windowSill===undefined?{}:{windowSill:{width:o.windowSill?.width,thick:o.windowSill?.thick,overhang:o.windowSill?.overhang,offset:o.windowSill?.offset}})}));}
   if(x.room.fixtures!==undefined){if(!Array.isArray(x.room.fixtures)||x.room.fixtures.length>60)throw Error('Неверные объекты на стенах.');p.room.fixtures=x.room.fixtures.map((f:any)=>({id:f?.id,type:f?.type,wall:f?.wall,offset:f?.offset,fromFloor:f?.fromFloor,width:f?.width,height:f?.height,depth:f?.depth,...Object.fromEntries(['color','wallGap','diameter','insulation','serviceClearance'].filter(k=>f?.[k]!==undefined).map(k=>[k,f[k]])),...(f?.name===undefined?{}:{name:f.name}),...(f?.round===undefined?{}:{round:!!f.round}),...(f?.horizontal===undefined?{}:{horizontal:!!f.horizontal}),...(f?.grille===undefined?{}:{grille:!!f.grille})}));}
   if(x.room.ceiling!==undefined)p.room.ceiling=x.room.ceiling;
+  if(x.room.finish!==undefined){const f=parseRoomFinish(x.room.finish);if(f)p.room.finish=f;}
   if(x.room.walls!==undefined){const w=x.room.walls;p.room.walls={thickness:Number(w?.thickness),...(w?.angleLeft===undefined?{}:{angleLeft:Number(w.angleLeft)}),...(w?.angleRight===undefined?{}:{angleRight:Number(w.angleRight)})};}
   if(x.room.obstacles!==undefined){if(!Array.isArray(x.room.obstacles)||x.room.obstacles.length>30)throw Error('Неверные объекты замера.');p.room.obstacles=x.room.obstacles.map((o:any)=>({id:o?.id,name:o?.name,type:o?.type,x:o?.x,y:o?.y,z:o?.z,width:o?.width,depth:o?.depth,height:o?.height,...(o?.sinkModuleId!==undefined?{sinkModuleId:o.sinkModuleId}:{})}));}
   for(const a of x.modules){if(!a||typeof a.id!=='string')throw Error('Некорректный модуль проекта.');const pos={id:a.id,x:a.x,z:a.z,y:a.y??0,...(a.rotation===undefined?{}:{rotation:a.rotation})};p.modules.push(...(x.version===2?legacyModules(a.module,pos):[{...pos,module:parseModule(a.module)}]));}

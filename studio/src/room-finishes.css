@@ -1,0 +1,35 @@
+/* Отделка помещения (RoomFinishes.tsx) */
+.room-finishes{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.room-finishes h3{margin:6px 0 0}
+.room-finishes .finish-note{margin:0;font-size:12px;line-height:1.35;color:#63707b}
+.finish-tabs{display:flex;gap:4px;padding:3px;background:#eef1f2;border-radius:8px}
+.finish-tabs button{flex:1;border:0;background:transparent;padding:6px 8px;border-radius:6px;font:inherit;cursor:pointer;color:#45525c}
+.finish-tabs button[aria-selected="true"]{background:#fff;color:#1b697a;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.finish-current{display:flex;align-items:flex-start;gap:8px;padding:8px;border:1px solid #dce1e5;border-radius:8px;background:#fafbfb}
+.finish-current .finish-swatch{width:40px;height:40px}
+.finish-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.finish-text b{font-weight:600;font-size:12.5px;line-height:1.25;overflow-wrap:anywhere}
+.finish-text small{color:#63707b;font-size:11.5px;line-height:1.3}
+.finish-text a{font-size:12px;color:#1b697a}
+.finish-clear{border:0;background:transparent;cursor:pointer;color:#63707b;padding:2px;border-radius:4px}
+.finish-clear:hover{background:#e9edef;color:#252a30}
+.finish-swatch{flex:none;width:32px;height:32px;border-radius:5px;border:1px solid rgba(0,0,0,.12);background-size:cover;background-position:center}
+.finish-paints{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.finish-paints>span{font-size:12px;color:#63707b;margin-right:2px}
+.finish-paint{width:24px;height:24px;border-radius:50%;border:1px solid rgba(0,0,0,.18);cursor:pointer;padding:0}
+.finish-paint.active{outline:2px solid #1b697a;outline-offset:2px}
+.finish-paint.custom{position:relative;overflow:hidden;background:conic-gradient(#e66,#ee6,#6e6,#6ee,#66e,#e6e,#e66)}
+.finish-paint.custom input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.finish-search{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #dce1e5;border-radius:7px;font:inherit}
+.finish-kinds{display:flex;gap:4px;flex-wrap:wrap}
+.finish-kinds button{border:1px solid #dce1e5;background:#fff;border-radius:999px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer}
+.finish-kinds button[aria-pressed="true"]{background:#1b697a;border-color:#1b697a;color:#fff}
+.finish-list{max-height:340px;overflow:auto;border:1px solid #e2e8ea;border-radius:8px;padding:4px}
+.finish-list h4{margin:6px 4px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#7b8d94}
+.finish-item{display:flex;align-items:center;gap:2px;border-radius:6px}
+.finish-item:hover{background:#f2f5f6}
+.finish-item.active{background:#e3f0f2}
+.finish-item>button{flex:1;display:flex;align-items:center;gap:8px;border:0;background:transparent;text-align:left;padding:4px;font:inherit;cursor:pointer;min-width:0;color:inherit}
+.finish-item>a{flex:none;color:#1b697a;padding:6px;border-radius:5px;display:flex}
+.finish-item>a:hover{background:#dcecef}
+.finish-empty{margin:8px;color:#63707b;font-size:12px}
