@@ -112,10 +112,11 @@ export function candidateLines(modules: PlacedModule[], look: V3, activeId?: str
   }
   return out;
 }
-/** Новая линия от базы: сторона — где мышь (n·mouse больше at — вправо/вверх), расстояние — набранное или до мыши (1 мм). */
-export function placeGuide(base: { n: V3; at: number }, mouse: V3, typed?: number): { at: number; dist: number; sign: 1 | -1 } {
+/** Новая линия от базы: сторона — где мышь (n·mouse больше at — вправо/вверх), расстояние — набранное или до мыши (1 мм;
+ *  exact — мышь привязана Alt/Ctrl к точке, pointSnap.ts: точно до 0,1 мм). */
+export function placeGuide(base: { n: V3; at: number }, mouse: V3, typed?: number, exact = false): { at: number; dist: number; sign: 1 | -1 } {
   const s = dot(base.n, mouse) - base.at, sign: 1 | -1 = s < 0 ? -1 : 1;
-  const dist = typed !== undefined && Number.isFinite(typed) ? Math.abs(typed) : Math.round(Math.abs(s));
+  const dist = typed !== undefined && Number.isFinite(typed) ? Math.abs(typed) : exact ? r1(Math.abs(s)) : Math.round(Math.abs(s));
   return { at: r1(base.at + sign * dist), dist, sign };
 }
 /** Набранное число для Q: «600», «12,5», «12.5». Пусто или не число — undefined. */
