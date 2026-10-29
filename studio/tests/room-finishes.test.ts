@@ -1,8 +1,8 @@
 // Отделка помещения (список Макса 29.10.2026): каталог Лемана ПРО, масштаб текстур, сохранение в файле, цена не меняется.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FINISHES,finishUnit,floorUv,wallUv,parseRoomFinish,withFinish,setWallFinish,finishFits,finishById,finishSize,texturePxPerMm,defaultAlong,FINISH_WALLS,type FinishItem} from '../src/roomFinishes';
-import {newProject,parseProject} from '../src/project';
+import {FINISHES,finishUnit,floorUv,wallUv,parseRoomFinish,withFinish,setWallFinish,finishFits,finishById,finishSize,texturePxPerMm,keepFinish,defaultAlong,FINISH_WALLS,type FinishItem} from '../src/roomFinishes';
+import {newProject,parseProject,type Room} from '../src/project';
 import {estimate} from '../src/pricing';
 import {nest} from '../src/exports';
 import {parts} from '../src/model';
@@ -124,6 +124,14 @@ test('сохранение: отделка пола и каждой стены �
   let room=setWallFinish(p.room,FINISH_WALLS,undefined);room=withFinish(room,{...room.finish,floor:undefined});
   assert.equal('finish' in room,false);
   assert.equal(parseProject(JSON.parse(JSON.stringify(newProject()))).room.finish,undefined,'старый файл без отделки');
+});
+
+test('замер из Базиса в пустую комнату: отделка пола и стен остаётся (новое помещение без своей)', () => {
+  const old=finished().room,bazis:Room={width:3200,depth:2600,height:2650,openings:[],walls:{thickness:200}};
+  const next=keepFinish(old,bazis);
+  assert.deepEqual(next.finish,old.finish);assert.equal(next.width,3200);
+  assert.equal(keepFinish(newProject().room,bazis),bazis,'без отделки — помещение как есть');
+  const own={...bazis,finish:{floor:{id:wallTile.id}}};assert.equal(keepFinish(old,own),own,'своя отделка нового помещения главнее');
 });
 
 test('чтение файла: мусор в отделке не мешает открыть проект', () => {

@@ -152,6 +152,9 @@ export function setWallFinish<R extends {finish?:RoomFinish}>(room:R,walls:reado
   return withFinish(room,{...room.finish,walls:next});
 }
 
+/** Новое помещение вместо старого (замер из Базиса в пустую комнату): отделка привязана к стенам по названию (задняя, левая…)
+ *  и к полу, а не к размерам — переносится, если в новом помещении своей нет (критик 29.10 п.4). */
+export function keepFinish<R extends {finish?:RoomFinish}>(previous:{finish?:RoomFinish},next:R):R{return next.finish||!previous.finish?next:{...next,finish:previous.finish};}
 /** Подпись размера: доска 1292×193 мм · 33 кл.; плитка 60×120 см; рулон 1,06×10,05 м. */
 export function finishSize(f:FinishItem){
   const cm=(v:number)=>String(Math.round(v)/10).replace('.',',');
