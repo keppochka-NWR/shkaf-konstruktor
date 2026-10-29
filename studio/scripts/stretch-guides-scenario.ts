@@ -342,7 +342,11 @@ try {
   await key("Control+z"); await settled((b) => b.a.w === 600);
   check("11. Ctrl+Z — одной отменой", (await boxes()).a.h === 2000);
   // Alt + угол → точка на линии: ширина по линии, высота по мыши (1 мм, не шаг 10)
+  // критик 29.10 (блокер): Alt отпустили ПОСЛЕ мыши — keyup Alt погашен (иначе Chrome на Windows уводит фокус в меню браузера)
+  await page.evaluate(() => { const w = window as unknown as { __altUp: boolean[] }; w.__altUp = []; window.addEventListener("keyup", (e) => { if (e.key === "Alt") w.__altUp.push(e.defaultPrevented); }); });
+  const altUp = async () => (await page.evaluate(() => (window as unknown as { __altUp: boolean[] }).__altUp.at(-1))) === true;
   const a11 = await modDrag("Alt", (await handle("hi-hi"))!, { x: X(1900) + 5, y: Y(2103) }, "alt-corner");
+  check("11. Alt отпущен после мыши — keyup Alt погашен (фокус не уходит в меню браузера)", await altUp());
   const b11a = await settled((b) => b.a.w !== 600);
   check("11. Alt + угол → на линию: ширина ровно 900, высота по мыши ≈ 2103 (до 1 мм)", b11a.a.w === 900 && Math.abs(b11a.a.h - 2103) <= 3 && b11a.a.x === 1000, fmt(b11a.a) + ` · «${a11.live}»`);
   check("11. Alt: плашка «Alt · на линии» и метка-кружок", /Alt · на линии: вспомогательная линия/.test(a11.live) && a11.mark === "line", `«${a11.live}» · ${a11.mark}`);
@@ -410,6 +414,7 @@ try {
   await key("Control+z"); await settled((b) => b.a.w === 600);
   const pgrab = { x: PX(1600) - 15, y: PZ(553) - 15 };
   const m12 = await modDrag("Alt", pgrab, { x: pgrab.x + PX(1900) - PX(1600) - 5, y: pgrab.y + 17 * pz }, "plan-alt-move", ".plan-badge", ".plan-snap-mark");
+  check("12. «План»: Alt отпущен после мыши — keyup Alt погашен", await altUp());
   const b12m = await settled((b) => b.a.x !== 1000);
   check("12. Alt + перенос на плане → правый край на линию: x = 1300, z по мыши ≈ 20", b12m.a.x === 1300 && Math.abs(b12m.a.z - 20) <= 3 && m12.mark === "line", fmt(b12m.a) + ` · «${m12.live}» · ${m12.mark}`);
   await key("Control+z"); await settled((b) => b.a.x === 1000);

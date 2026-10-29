@@ -7,7 +7,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
-import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import './guides.css';
 // Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
 // контуры корпусов, стены), Ctrl — ближайшее пересечение двух линий, Shift — без привязки. Для угла, переноса корпуса и линии Q.
@@ -230,7 +230,8 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     const on=(e:KeyboardEvent)=>{
       if(!['Alt','Control','Shift','Meta'].includes(e.key))return;
       const m={altKey:e.altKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey};modeRef.current=snapMode(m);
-      if(e.key==='Alt'&&(corner.current||drag.current||tool))e.preventDefault(); // Alt не уводит фокус в меню браузера
+      // Alt не уводит фокус в меню браузера: при тяге — и нажатие, отпускание — всегда, кроме полей ввода (критик 29.10, блокер)
+      if(e.key==='Alt'&&(corner.current||drag.current||tool||(e.type==='keyup'&&altKeyupGuard(e))))e.preventDefault();
       const at=mouse.current,c=corner.current;if(!at)return;
       if(c){if(c.moved&&!c.typed){c.mode=modeRef.current;cornerByMouse(c);}return;}
       if(drag.current){if(preview)move({clientX:at[0],clientY:at[1],...m});return;}

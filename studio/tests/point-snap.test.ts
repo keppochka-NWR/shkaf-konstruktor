@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -18,6 +18,12 @@ test('модификаторы: Ctrl — пересечение, Alt — на л
   assert.equal(snapMode({ctrlKey:true,altKey:true}),'cross','Ctrl старше Alt');
   assert.equal(snapMode({altKey:true,shiftKey:true}),'line','Alt старше Shift');
   assert.ok(isPointMode('line')&&isPointMode('cross')&&!isPointMode('free')&&!isPointMode('snap'));
+});
+
+test('критик 29.10 (блокер): отпускание Alt гасится всегда — и после того, как отпустили мышь; другие клавиши — нет',()=>{
+  assert.equal(altKeyupGuard({key:'Alt',target:null}),true);
+  assert.equal(altKeyupGuard({key:'Control',target:null}),false);
+  assert.equal(altKeyupGuard({key:'q',target:null}),false);
 });
 
 test('ближайшая точка на линии: перпендикуляр, у концов — конец отрезка; допуск',()=>{

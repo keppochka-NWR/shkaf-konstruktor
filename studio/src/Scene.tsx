@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
-import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -1531,7 +1531,8 @@ export function Scene(p: Props) {
     target.addEventListener('pointerdown',toolDown,true);window.addEventListener('pointermove',trackMouse);window.addEventListener('keydown',guideKey,true);
     // Alt во время тяги (корпуса или края) не уводит фокус в меню браузера Chrome на Windows (критик 20.10, m11)
     // (с 29.10 Alt — привязка к линии: то же и для линии Q)
-    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner||tool))e.preventDefault();}
+    // keyup Alt — всегда (кроме полей ввода): Alt отпускают и после того, как отпустили мышь (критик 29.10, блокер)
+    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner||tool||(e.type==='keyup'&&altKeyupGuard(e))))e.preventDefault();}
     window.addEventListener('keydown',modsKey);window.addEventListener('keyup',modsKey);
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}

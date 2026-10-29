@@ -7,6 +7,12 @@
 // Ctrl+щелчок без движения — по-прежнему отметить корпус (мультивыбор). Здесь только 2D-геометрия в осях экрана вида
 // (h — вправо, v — вверх, guides.viewAxes) — без React и three; проверяется тестами tests/point-snap.test.ts.
 import { dot, viewAxes, type GuideLine, type V3 } from "./guides";
+import { editsText } from "./historyShortcuts";
+
+/** Отпускание Alt (критик 29.10, блокер): Chrome на Windows по keyup Alt уводит фокус в меню браузера — и следующая клавиша
+ *  уходит туда. Alt теперь — привязка, его отпускают и после тяги: гасим всегда, кроме полей ввода. */
+export const altKeyupGuard = (e: { key: string; target: EventTarget | null }) =>
+  e.key === "Alt" && (typeof Element === "undefined" || !editsText(e.target));
 
 /** snap — обычные привязки; free — без привязки (Shift); line — точка на линии (Alt); cross — пересечение (Ctrl). */
 export type SnapMode = "snap" | "free" | "line" | "cross";
