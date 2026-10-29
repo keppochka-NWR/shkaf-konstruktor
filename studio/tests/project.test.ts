@@ -22,6 +22,7 @@ import {
   parseModule,
   drawerConfig,
   RULES,
+  rodClearanceWarnings,
 } from "../src/model";
 import { findSheetDetails, nest, details, quoteHTML, detailCSV, labelDetails, labelOrder, labelEdges, labelsHTML, specificationHTML } from "../src/exports";
 
@@ -118,7 +119,7 @@ test("drawer height participates in collision detection and mixed stack geometry
     { slide: "ball", height: 300, length: 500 },
   ];
   s.rod=true; s.rodAt=0.55;
-  assert.ok(validate(m).length, "rod clearance must fail");
+  /* 29.10: rod clearance is a warning (Max: rod regardless of space below) */assert.deepEqual(validate(m), []); assert.ok(rodClearanceWarnings(m).length, "rod clearance must warn");
   s.rod = false;
   assert.deepEqual(validate(m), []);
   const pp = parts(m),
@@ -319,7 +320,7 @@ test('divider drag resizes only adjacent sections and rejects an unusable result
 
 test('manual rod height respects the nearest shelf and pantograph stays inside its clear space',()=>{
  const m=initialModule(),s=m.sections[0];s.drawers=0;s.shelves=[];s.rod=true;s.rodAt=.8;
- assert.deepEqual(validate(m),[]);s.shelves=[.6];assert.ok(validate(m).some(e=>e.includes('900')));
+ assert.deepEqual(validate(m),[]);s.shelves=[.6];assert.deepEqual(validate(m),[]);assert.ok(rodClearanceWarnings(m).some(e=>e.includes('900')));
  s.shelves=[.8];assert.ok(validate(m).some(e=>e.includes('пересекает полку')));
  s.rod=false;s.pantograph=true;s.shelves=[];s.rodAt=.8;assert.deepEqual(validate(m),[]);
  s.rodAt=.1;assert.ok(validate(m).some(e=>e.includes('внутреннюю высоту')));

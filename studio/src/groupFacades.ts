@@ -116,7 +116,7 @@ export function groupFacadeValue(p:Project,ids:readonly string[],field:GroupFaca
 }
 
 /** Одна правка у каждого отмеченного корпуса (как в его панели, по очереди — placeInRow), пропуски — с причиной. */
-function applyEach(p:Project,ids:readonly string[],mutate:(n:Module,a:Project['modules'][number])=>string|null|void):GroupResult{
+export function applyEach(p:Project,ids:readonly string[],mutate:(n:Module,a:Project['modules'][number])=>string|null|void):GroupResult{
  let next=p;const changed:string[]=[],skipped:GroupSkip[]=[];
  for(const a of chosen(p,ids)){
   const n=structuredClone(a.module);let reason:string|null|void;

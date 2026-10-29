@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule,parts,parseModule,validate,boxes,legCount,shelfGaps,type Module} from '../src/model';
+import {initialModule,parts,parseModule,validate,boxes,legCount,shelfGaps,rodClearanceWarnings,type Module} from '../src/model';
 import {splitOpening,resizeOpening,resolveLayout,rekeySections,mirrorOpenings,removeOpening,setPartition} from '../src/sectionLayout';
 import {newProject,projectErrors,applyAutoFillers} from '../src/project';
 import {movePart,removePart} from '../src/operations';
@@ -46,7 +46,7 @@ test('raised inset drawer keeps its short facade and permits a shelf below',()=>
 });
 test('short clothes clearance is explicit and impossible rod placement still fails',()=>{
   const m={...initialModule(),doors:false,height:2000,width:470,plinthHeight:80} as Module,s=m.sections[0];s.drawers=0;s.shelves=[.3];s.rod=true;s.rodAt=.6;s.rodClearance=450;
-  assert.deepEqual(validate(m),[]);s.rodClearance=900;assert.ok(validate(m).some(e=>e.includes('900')));
+  assert.deepEqual(validate(m),[]);assert.deepEqual(rodClearanceWarnings(m),[]);s.rodClearance=900;/* правка Макса 29.10: нехватка места под штангой — предупреждение, не ошибка */assert.deepEqual(validate(m),[]);assert.ok(rodClearanceWarnings(m).some(e=>e.includes('900')));
 });
 test('open junction is stable across ordinary edits and automatic fillers',()=>{
   const p=newProject(wardrobe());assert.deepEqual(applyAutoFillers(p),p);

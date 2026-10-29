@@ -115,6 +115,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,type Guide,type GuideLine,type V3} from './guides';
+import {openEase,openToggleKey,stepOpen} from './editActions';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -163,6 +164,8 @@ type Props = {
   onEnvironmentContext?:(kind:'opening'|'fixture'|'obstacle',id:string)=>void;
   onContextMenu?: (mid: string, sid: string, x: number, y: number, info?: { pid?: string; role?: string; localY?: number }) => void;
   onToggleModule?: (id:string)=>void;
+  /** Обычный щелчок по корпусу (без Ctrl): App снимает отметки группы, если корпус не в ней (критик 29.10). */
+  onPlainModuleClick?: (id:string)=>void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
@@ -481,12 +484,29 @@ export function Scene(p: Props) {
     let sceneOrigin: {x:number;z:number}|undefined;
     // Снимок для КП (релиз 22.10, m7): что сдвинуто «Открыть фасады»/просмотром ящика — сдвиг (dp) или поворот створки (rot: открыто,
     // закрыто); изделия сцены (корпуса и техника) — остальное (стены, проёмы, препятствия, размеры) на снимке КП прячется.
-    const openMoves:{obj:THREE.Object3D;dp?:THREE.Vector3;rot?:[THREE.Euler,THREE.Euler]}[]=[];
+    // Плавное открывание (правка Макса 29.10): створки поворачиваются, ящики и полотна купе выезжают за OPEN_MS, а не прыгают. Всё, что
+    // открывается, — «движение» с долей открытия t (0 закрыто, 1 открыто) и целью target; кадр анимации ведёт t к цели. Ключ —
+    // `<корпус>|<створка / ящик / полотно>`. Средняя кнопка (колёсико) щелчком без протяжки по фасаду — открыть/закрыть его (по корпусу —
+    // весь корпус): своё состояние поверх общего «Открыть створки» (openOverride), общий переключатель его сбрасывает.
+    // wide — открывается вместе с корпусом (створки, ящики кухни, полотна купе; ящики шкафа — только у корпуса без дверей).
+    type OpenMove={set:(t:number)=>void;t:number;target:number;wide:boolean};
+    const anims=new Map<string,OpenMove>(),openOverride=new Map<string,boolean>();
+    let lastOpenDoors:boolean|undefined,lastFrame=performance.now();
     const products=new Set<THREE.Object3D>();
     function rebuild() {
-      needsRender=true;openMoves.length=0;products.clear();
+      needsRender=true;products.clear();
       const state = current.current,
         m = state.module;
+      // перестройка сцены: положение открытия переходит в новые детали (анимация не обрывается); общий переключатель — сброс своих состояний
+      const prevT=new Map([...anims].map(([k,a])=>[k,a.t]));anims.clear();
+      if(lastOpenDoors!==undefined&&lastOpenDoors!==state.openDoors)openOverride.clear();
+      lastOpenDoors=state.openDoors;
+      /** Зарегистрировать движение: apply(e) ставит объект в долю открытия e (уже сглаженную); open — открыт ли по умолчанию. */
+      const openMove=(mid:string,key:string,open:boolean,wide:boolean,apply:(e:number)=>void)=>{
+        const k=mid+'|'+key,target=(openOverride.get(k)??(wide?openOverride.get(mid+'|*'):undefined)??open)?1:0,have=anims.get(k);
+        if(have){const prev=have.set;have.set=t=>{prev(t);apply(openEase(t));};apply(openEase(have.t));return;}
+        const t=prevT.get(k)??target;anims.set(k,{set:t=>apply(openEase(t)),t,target,wide});apply(openEase(t));
+      };
       grid.visible=!state.presentation;
       scene.background=state.presentation?new THREE.Color(0xf1f0eb):null;
       for (const l of labels) l.element.remove();
@@ -719,18 +739,16 @@ export function Scene(p: Props) {
             part.position[2],
           );
           const preview=state.drawerPreview;
-          // ящики кухни Axis PRO: «открыть» выдвигает короб с фасадом на 3/4 длины (направляющие остаются)
-          if(active&&state.openDoors&&part.id.startsWith('kd:')&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')&&!part.id.includes(':screw:fx3')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd){const travel=(kd.box?kd.box.len:(kd.len??500))*.9,dp=new THREE.Vector3(Math.sin(rotY)*travel,0,Math.cos(rotY)*travel);mesh.position.add(dp);openMoves.push({obj:mesh,dp});}}
-          if(active&&preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')&&!part.id.includes(':slide:')){
-            const section=m.sections.find(s=>s.id===preview.sid);if(section){const travel=drawerConfig(m,section,preview.index).length*.8,dp=new THREE.Vector3(Math.sin(rotY)*travel,0,Math.cos(rotY)*travel);mesh.position.add(dp);openMoves.push({obj:mesh,dp});}
-          }
+          // Ящик: ход и открыт ли по умолчанию. Кухня Axis PRO (kd:N) — «открыть» выдвигает короб с фасадом на 0,9 длины (направляющие
+          // остаются), у выбранного корпуса; ящик шкафа — просмотр ящика (drawerPreview) на 0,8 направляющей; средняя кнопка — любой.
+          // Ящик открывается анимацией (openMove) — регистрируется после «разнесённого вида», от итогового положения детали.
+          let slide:{key:string;travel:number;open:boolean;wide:boolean}|undefined;
+          {const kd=/^(kd:(\d+))(?::|$)/.exec(part.id),sd=/^((.+?):drawer:(\d+))(?::|$)/.exec(part.id);
+            if(kd){const k=m.kdrawers?.[Number(kd[2])];if(k)slide={key:kd[1],travel:(k.box?k.box.len:(k.len??500))*.9,open:active&&state.openDoors,wide:true};}
+            else if(sd){const section=m.sections.find(s=>s.id===sd[2]),j=Number(sd[3]);if(section&&j<section.drawers)slide={key:sd[1],travel:drawerConfig(m,section,j).length*.8,open:active&&!!preview&&(state.openDoors||!m.doors)&&preview.sid===sd[2]&&preview.index===j,wide:!m.doors};}}
+          const slidesWith=slide&&!part.id.includes(':slide:')&&!part.id.includes(':screw:run')&&!part.id.includes(':screw:fx3');
           // направляющая с процедурной моделью: сама деталь стоит в корпусе, подвижные звенья выезжают вместе с ящиком (на тот же ход)
-          if(proc&&part.id.includes(':slide:')&&active){
-            let travel=0;
-            if(state.openDoors&&part.id.startsWith('kd:')){const kd=m.kdrawers?.[Number(part.id.split(':')[1])];if(kd)travel=(kd.box?kd.box.len:(kd.len??500))*.9;}
-            else if(preview&&(state.openDoors||!m.doors)&&part.id.startsWith(preview.sid+':drawer:'+preview.index+':')){const section=m.sections.find(s=>s.id===preview.sid);if(section)travel=drawerConfig(m,section,preview.index).length*.8;}
-            if(travel)proc.traverse(o=>{const dz=o.userData.slide==='run'?travel:o.userData.slide==='mid'?travel/2:0;if(dz){o.position.z+=dz;openMoves.push({obj:o,dp:new THREE.Vector3(0,0,dz)});}});
-          }
+          if(proc&&slide&&part.id.includes(':slide:')){const s=slide;proc.traverse(o=>{const dz=o.userData.slide==='run'?s.travel:o.userData.slide==='mid'?s.travel/2:0;if(dz){const base=o.position.clone();openMove(placed.id,s.key,s.open,s.wide,e=>{o.position.set(base.x,base.y,base.z+dz*e);});}});}
           // у фурнитуры из Базиса тень даёт сама сетка; прозрачный габарит-заглушка тени не отбрасывает
           mesh.castShadow = !part.model?.native;
           // задняя стенка не принимает тень «солнца»: при открытых створках на ней было резкое светлое пятно-«треугольник»
@@ -750,11 +768,13 @@ export function Scene(p: Props) {
               (mesh.position.y - m.height / 2) * 1.18 + m.height / 2;
             mesh.position.z = (mesh.position.z-m.depth/2)*1.6+m.depth/2;
           }
+          if(slidesWith&&slide){const s=slide,base=mesh.position.clone(),dp=new THREE.Vector3(Math.sin(rotY)*s.travel,0,Math.cos(rotY)*s.travel);openMove(placed.id,s.key,s.open,s.wide,e=>{mesh.position.copy(base).addScaledVector(dp,e);});}
           if (part.openShift !== undefined) {
             // Купе: «открыть фасады» — переднее полотно отъезжает за заднее, как в жизни.
-            if (state.openDoors) { mesh.position.x += part.openShift; openMoves.push({ obj: mesh, dp: new THREE.Vector3(part.openShift, 0, 0) }); }
+            const base=mesh.position.clone(),shift=part.openShift;openMove(placed.id,'leaf:'+part.id,state.openDoors,true,e=>{mesh.position.set(base.x+shift*e,base.y,base.z);});
             moduleGroup.add(mesh);
-          } else if (part.role === "door" && state.openDoors && part.id !== "slope-filler" && !part.hingeless) { // фасад техники без петель (холодильник) висит на её двери — техника не открывается
+          } else if (part.role === "door" && part.id !== "slope-filler" && !part.hingeless) { // фасад техники без петель (холодильник) висит на её двери — техника не открывается
+            // створка всегда на петлевой оси (закрыта — поворот 0): открывается и закрывается плавно, в том числе средней кнопкой
             // Петлевая ось — на краю фасада; при скосе фронта фасад повёрнут, ось сдвигается вдоль его наклонной линии.
             const pivot = new THREE.Group();
             pivot.position.copy(mesh.position);
@@ -763,8 +783,8 @@ export function Scene(p: Props) {
             pivot.position.sub(hingeOff);
             mesh.position.set(horizontal?0:sign*part.size[0]/2,horizontal?verticalOffset:0,0);mesh.rotation.y=0;
             pivot.add(mesh);
-            pivot.rotation.y=rotY;if(horizontal)pivot.rotation.x=part.hinge==='bottom'?Math.PI/2:-Math.PI/2;else pivot.rotation.y-=Math.PI*.58*sign;pivot.userData.rotY=rotY;
-            openMoves.push({obj:pivot,rot:[pivot.rotation.clone(),new THREE.Euler(0,rotY,0)]});
+            const openX=horizontal?(part.hinge==='bottom'?Math.PI/2:-Math.PI/2):0,openY=horizontal?rotY:rotY-Math.PI*.58*sign;pivot.userData.rotY=rotY;
+            openMove(placed.id,part.id,state.openDoors,true,e=>{pivot.rotation.set(openX*e,rotY+(openY-rotY)*e,0);});
             doorPivots.set(part.id,pivot);moduleGroup.add(pivot);
           } else if(part.role==='handle' && doorPivots.has(part.id.replace(':handle:',':door:'))){
             const pivot=doorPivots.get(part.id.replace(':handle:',':door:'))!;mesh.position.sub(pivot.position).applyAxisAngle(new THREE.Vector3(0,1,0),-(pivot.userData.rotY as number));mesh.rotation.y=0;pivot.add(mesh);
@@ -1131,6 +1151,7 @@ export function Scene(p: Props) {
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
       if(first?.object.userData.fixtureId){current.current.onFixtureSelect?.(first.object.userData.fixtureId);return;}
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
+      current.current.onPlainModuleClick?.(String(hit.object.userData.moduleId));
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
@@ -1464,6 +1485,8 @@ export function Scene(p: Props) {
     /** Q, цифры, Enter, Esc, Delete для линий — раньше App (фаза захвата на window; App пропускает defaultPrevented). */
     function guideKey(e:KeyboardEvent){
       const s=current.current;if(s.presentation||editsText(e.target))return;
+      // открыто окно (вопрос «Удалить?», фурнитура, подсветка…) — клавиши сцены не действуют (критик 29.10: Q под вопросом начинал линию)
+      if(document.querySelector('[aria-modal="true"]'))return;
       // тяга за угол: набор размеров «600;2400», Enter, Esc, Backspace — раньше App и Q
       if(corner){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(corner,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
@@ -1525,6 +1548,29 @@ export function Scene(p: Props) {
       const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId);if(!a)return;
       current.current.onContextMenu?.(a.id,sectionFor(hit),e.clientX,e.clientY,{pid:hit.object.userData.partId as string|undefined,role:hit.object.userData.role as string|undefined,localY:hit.point.y-(a.y??0)});
     }
+    // Средняя кнопка (колёсико), правка Макса 29.10: щелчок без протяжки по фасаду — открыть/закрыть эту створку или ящик плавно,
+    // по другой детали корпуса — весь корпус (створки и ящики, что открываются вместе с ним). Протяжка — как раньше поворот камеры,
+    // прокрутка колеса — масштаб.
+    let middleDown:{x:number;y:number;t:number}|null=null;
+    function middlePointer(e:PointerEvent){if(e.button===1)middleDown={x:e.clientX,y:e.clientY,t:performance.now()};}
+    function middleUp(e:PointerEvent){
+      if(e.button!==1||!middleDown)return;const d=middleDown;middleDown=null;
+      if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>5||performance.now()-d.t>700)return;
+      const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;
+      toggleOpen(String(hit.object.userData.moduleId),hit.object.userData.partId as string|undefined);
+    }
+    /** Открыть/закрыть: створку, ящик или полотно купе (pid) — плавно; деталь корпуса — всё, что открывается вместе с корпусом. */
+    function toggleOpen(mid:string,pid:string|undefined){
+      const key=openToggleKey(pid),one=key==='*'?undefined:anims.get(mid+'|'+key);
+      if(one){const open=one.target!==1;openOverride.set(mid+'|'+key,open);one.target=open?1:0;needsRender=true;return;}
+      const own=[...anims].filter(([k,a])=>k.startsWith(mid+'|')&&a.wide);if(!own.length)return;
+      const open=!own.some(([,a])=>a.target===1);openOverride.set(mid+'|*',open);
+      for(const [k,a] of own){if(k!==mid+'|*')openOverride.delete(k);a.target=open?1:0;}needsRender=true;
+    }
+    // сценарий мышью scripts/edit-2910-scenario.ts (только чтение): доли открытия створок и ящиков
+    (window as unknown as {__openState?:()=>Record<string,{t:number;target:number}>}).__openState=()=>Object.fromEntries([...anims].map(([k,a])=>[k,{t:Math.round(a.t*1000)/1000,target:a.target}]));
+    renderer.domElement.addEventListener('pointerdown',middlePointer,true);
+    renderer.domElement.addEventListener('pointerup',middleUp,true);
     renderer.domElement.addEventListener('pointerdown',rightPointer,true);
     renderer.domElement.addEventListener('contextmenu',contextMenu);
     renderer.domElement.addEventListener('pointerdown',pointerDown);
@@ -1556,11 +1602,7 @@ export function Scene(p: Props) {
       try{
         guides.forEach(o=>o.visible=false);grid.visible=false;scene.background=new THREE.Color(0xf1f0eb);
         if(opts?.frame){
-          for(const mv of openMoves){
-            const {obj,dp,rot}=mv;
-            if(dp){obj.position.sub(dp);restore.push(()=>obj.position.add(dp));}
-            if(rot){obj.rotation.copy(rot[1]);restore.push(()=>obj.rotation.copy(rot[0]));}
-          }
+          for(const mv of anims.values())if(mv.t>0){const t=mv.t;mv.set(0);restore.push(()=>mv.set(t));}
           for(const o of modelGroup.children)if(o.visible&&!products.has(o)){o.visible=false;restore.push(()=>{o.visible=true;});}
           modelGroup.traverse(o=>{if(!(o instanceof THREE.Mesh))return;for(const q of (Array.isArray(o.material)?o.material:[o.material]) as THREE.Material[]){
             const st=q.userData.seeThrough;if(typeof st!=='number'||q.opacity!==st||!q.transparent)continue;
@@ -1591,6 +1633,8 @@ export function Scene(p: Props) {
     function animate() {
       if (disposed) return;
       controls.update();
+      // плавное открывание: доли открытия идут к цели (stepOpen), сцена перерисовывается, пока что-то движется
+      {const now=performance.now(),dt=now-lastFrame;lastFrame=now;for(const a of anims.values()){if(a.t===a.target)continue;a.t=stepOpen(a.t,a.target,dt);a.set(a.t);needsRender=true;}}
       if(needsRender){
       needsRender=false;applyCutaway();renderer.render(scene, camera);
       // Подписи размеров не налезают друг на друга: сначала основные размеры, потом проёмы; налезающую сдвигаем
@@ -1650,7 +1694,7 @@ export function Scene(p: Props) {
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
-      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);renderer.domElement.removeEventListener('pointerdown',rightPointer,true);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
+      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);renderer.domElement.removeEventListener('pointerdown',rightPointer,true);renderer.domElement.removeEventListener('pointerdown',middlePointer,true);renderer.domElement.removeEventListener('pointerup',middleUp,true);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
       sun.shadow.dispose();
       for(const texture of loadedTextures)texture.dispose();loadedTextures.clear();textureLoads.clear();
       handleEnv?.dispose();

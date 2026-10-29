@@ -30,7 +30,7 @@ test('K3: «Открыть створки» не открывает техник
   assert.ok(!/applianceModel\(o,state\.openDoors\)/.test(scene),'техника замера не получает openDoors');
   assert.ok(scene.includes('!part.hingeless'),'фасад на двери техники (без петель) не распахивается');
   // фасады мебели по-прежнему открываются: условие поворота дверей осталось
-  assert.ok(scene.includes('part.role === "door" && state.openDoors'));
+  /* 29.10 (плавное открывание): створка всегда на петлевой оси, открыта ли — по «Открыть створки» (openMove) */assert.ok(scene.includes('openMove(placed.id,part.id,state.openDoors,true'));
 });
 function OVEN_DEPTH_HALF(p:{size:number[]}){return p.size[2]/2;}
 

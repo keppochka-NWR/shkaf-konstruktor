@@ -2583,6 +2583,24 @@ export function maxHeightOf(m: Module): number {
 export function tallBySheet(m: Module): boolean { return !m.kitchen && !m.desk && !m.raw && !m.corner && (m.backType === "none" || m.backType === "board"); }
 /** Корпус шкафа-купе с дверями внутри: боковины и крыша цельные — до длины листа ЛДСП за вычетом отступов раскроя. */
 export function kupeBodyMax(): number { return RULES.sheetW - 2 * RULES.sheetMargin; }
+/** Штанга без нормы места под одеждой (правка Макса 29.10: «ставить штангу независимо от пространства под ней»): было ошибкой
+ *  validate, теперь предупреждение — «Секция N: под штангой X мм до полки, ящиков или дна — меньше нормы Y мм…». */
+export function rodClearanceWarnings(m: Module): string[] {
+  const out: string[] = [];
+  if (m.raw || m.kupe || m.worktop) return out;
+  let bs: SectionBox[];
+  try { bs = boxes(m); } catch { return out; }
+  bs.forEach((b, i) => {
+    const s = m.sections[i];
+    if (!s?.rod) return;
+    const h = b.top - b.bottom, shelfY = s.shelves.map((f) => f * h).sort((a, z) => a - z), drawerTop = drawerStackHeight(s);
+    const rodY = s.rodAt === undefined ? (shelfY[0] ?? h) - RULES.rodTopOffset : s.rodAt * h;
+    const support = Math.max(drawerTop + (s.drawers ? RULES.panel : 0), 0, ...shelfY.filter((y) => y < rodY).map((y) => y + RULES.panel / 2));
+    const need = s.rodClearance ?? RULES.rodMinClear, have = Math.round(rodY - support);
+    if (rodY - support < need) out.push(`Секция ${i + 1}: под штангой ${Math.max(0, have)} мм до полки, ящиков или дна — меньше нормы ${need} мм, длинная одежда не поместится. Поднимите штангу или уберите полку под ней, если нужно.`);
+  });
+  return out;
+}
 /** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
  *  вызывающий ловит исключения: при недопустимых габаритах дальнейшие проверки могут не собраться. */
 export function validate(m: Module, opts?: {all?: boolean}): string[] {
@@ -2855,8 +2873,11 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
           (isDrawerModule(m) ? `для ящиков нужно от 250 мм внутри и глубина корпуса от ${drawerMinDepth(m, s)} мм (направляющая 250).` : "для ящиков нужно от 250 мм внутри и глубина корпуса от 300 мм."),
       );
     const rodY=s.rodAt===undefined?(shelfY[0]??h)-RULES.rodTopOffset:s.rodAt*h;
-    const support=Math.max(drawerTop+(s.drawers?RULES.panel:0),0,...shelfY.filter(y=>y<rodY).map(y=>y+RULES.panel/2));
     if(s.rod&&shelfY.some(y=>Math.abs(y-rodY)<(RULES.panel+RULES.rodDiameter)/2))errors.push(prefix+'штанга пересекает полку. Измените высоту.');
+    // место под одеждой — предупреждение (rodClearanceWarnings), но сама штанга должна поместиться над полкой, ящиками или дном
+    // (малый корпус: штанга ниже дна снимается — smallSize по этому тексту)
+    else if(s.rod){const support=Math.max(drawerTop+(s.drawers?RULES.panel:0),0,...shelfY.filter(y=>y<rodY).map(y=>y+RULES.panel/2));
+      if(rodY-support<RULES.rodDiameter)errors.push(prefix+`измените высоту штанги: она не помещается над полкой, ящиками или дном (там ${Math.max(0,Math.round(rodY-support))} мм, нужно от ${RULES.rodDiameter}).`);}
     // двухъярусная вешалка на трубе (заказ 7437584): ярусы от RULES.rodTierClear, между штангами полок нет
     if(s.rodLower!==undefined&&s.rod){ // без штанги поле не действует (parts его не строит)
       if(s.pantograph||!Number.isFinite(s.rodLower)||s.rodLower<0.05||s.rodLower>0.9)errors.push(prefix+'вешалка в два яруса: нужна штанга (не пантограф) и высота нижней штанги в пределах проёма.');
@@ -2865,13 +2886,8 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
         if(ly-sup<RULES.rodTierClear)errors.push(prefix+`вешалка в два яруса: под нижней штангой нужно не менее ${RULES.rodTierClear} мм до полки, ящиков или дна.`);
         if(shelfY.some(y=>y>ly&&y<rodY))errors.push(prefix+'вешалка в два яруса: между штангами не должно быть полок.');}
     }
-    if (
-      s.rod && rodY - support < (s.rodClearance??RULES.rodMinClear)
-    )
-      errors.push(
-        prefix +
-          `под штангой нужно ${s.rodClearance??RULES.rodMinClear} мм до полки, ящиков или дна. Измените высоту штанги или назначение проёма.`,
-      );
+    // правка Макса 29.10: штанга ставится независимо от места под ней — нехватка просвета под одежду не ошибка, а предупреждение
+    // (rodClearanceWarnings); штанга сквозь скос мансарды — по-прежнему ошибка (shapes.ts mansardIntrusions)
   });
   errors.push(...dividerErrors(m));
   if (errors.length && opts?.all !== true) return [...new Set(errors)];
