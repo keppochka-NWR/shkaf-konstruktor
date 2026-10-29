@@ -13,6 +13,14 @@ export function viewShortcut(e:KeyboardEvent):'iso'|'front'|'side'|'left'|'top'|
   if(typeof Element!=='undefined'&&e.target instanceof Element&&e.target.closest('select'))return null;
   return ({KeyW:'top',KeyS:'front',KeyA:'left',KeyD:'side',KeyQ:'iso',KeyE:'iso'} as const)[e.code as 'KeyW']??null;
 }
+/** Поворот выбранного корпуса (или отмеченной группы) на 90° — решение Макса 29.10 «поворот в обе стороны»:
+ *  R — по часовой, Shift+R — против часовой (вид сверху). По физической клавише (в русской раскладке — К).
+ *  С Ctrl/Alt/Cmd, автоповтором и в списках выбора не срабатывает; поля ввода отсекает editsText у вызывающего. */
+export function rotateShortcut(e:KeyboardEvent):'cw'|'ccw'|null {
+  if(e.ctrlKey||e.metaKey||e.altKey||e.repeat||e.code!=='KeyR')return null;
+  if(typeof Element!=='undefined'&&e.target instanceof Element&&e.target.closest('select'))return null;
+  return e.shiftKey?'ccw':'cw';
+}
 export function editsText(target:EventTarget|null):boolean {
   if(!(target instanceof Element))return false;
   if(target.closest('textarea,[contenteditable="true"],[contenteditable=""]'))return true;

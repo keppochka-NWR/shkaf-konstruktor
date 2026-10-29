@@ -110,6 +110,8 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {rodCylinder} from './rawModule';
 import {gapLabelX,openingSizeLabel} from './clientLabels';
 import {missMenuTarget,screenRect} from './missMenu';
+import {labelRank,isOverallDim} from './labelPriority';
+import {columnOf} from './matchSize';
 /** side — вид справа (камера с +X), left — вид слева (клавиша A, п.28 волны 22.10). */
 export type View = "iso" | "front" | "side" | "left" | "top";
 type Props = {
@@ -895,11 +897,20 @@ export function Scene(p: Props) {
         );
         labels[labels.length-1].element.dataset.dim="width"; // обновляется во время растяжения
         line([new THREE.Vector3(x, fy, z), new THREE.Vector3(x, m.height+fy, z)]);
+        // Макс 29.10: общая высота выбранного видна всегда (и при подписях проёмов) — выше середины, где стоят ручки растяжения и плашки зазоров
         label(
           m.height + " мм",
-          new THREE.Vector3(x - 30, m.height / 2+(focus.y??0), z),
+          new THREE.Vector3(x - 30, m.height * 0.7+(focus.y??0), z),
           () => current.current.onDimension("height"),
         );
+        labels[labels.length-1].element.dataset.dim="height";
+        // Макс 29.10: модули стопкой (тумба + малый + высокий) — общая высота колонны: своей и соседних слева/справа
+        {const all=current.current.arrangement,cols:{x:number;c:ReturnType<typeof columnOf>}[]=[];
+          try{const own=columnOf(all,focus.id);if(own.ids.length>1)cols.push({x:x-260,c:own});}catch{/* нет модуля */}
+          for(const side of ['left','right'] as const){const g=state.rowGaps?.[side];if(!g?.id)continue;
+            try{const c=columnOf(all,g.id);if(c.ids.length>1&&!c.ids.includes(focus.id))cols.push({x:side==='left'?-m.width/2-g.gap-120:m.width/2+g.gap+120,c});}catch{/* сосед убран */}}
+          for(const {x:cx,c} of cols){line([new THREE.Vector3(cx,c.bottom,z),new THREE.Vector3(cx,c.top,z)]);for(const yy of [c.bottom,c.top])line([new THREE.Vector3(cx-35,yy,z),new THREE.Vector3(cx+35,yy,z)]);
+            label(`колонна ${c.height} мм`,new THREE.Vector3(cx,(c.bottom+c.top)/2,z),undefined);const ce=labels[labels.length-1].element;ce.dataset.dim="column";ce.style.opacity="1";ce.style.color="#1f3a8f";ce.title=`Модули стопкой: ${c.ids.length}, от низа нижнего до верха верхнего`;}}
         label(
           m.depth + " мм",
           new THREE.Vector3(m.width / 2 + 150, fy+100, 0),
@@ -1278,7 +1289,7 @@ export function Scene(p: Props) {
       const placed: {x:number;y:number;w:number;h:number}[] = [...blocked];
       // Порядок: ручки растяжения (стоят на боку), плашки зазора (сразу над ручкой), размеры, проёмы.
       const rowGap=(l:typeof labels[number])=>l.element.classList.contains('row-gap');
-      const rank=(l:typeof labels[number])=>l.fixed?-2:rowGap(l)?-1:Number(l.element.classList.contains('gap-dimension'));
+      const rank=(l:typeof labels[number])=>labelRank({fixed:l.fixed,rowGap:rowGap(l),gap:l.element.classList.contains('gap-dimension'),overall:isOverallDim(l.element.dataset.dim)});
       const ordered = [...labels].sort((a,b)=>rank(a)-rank(b));
       // Ручки прячем, если на экране они ближе 48 px друг к другу (узкий модуль издалека, ось ширины вдоль взгляда) — критик 20.10, m7.
       const handles=labels.filter(l=>l.fixed);let hideHandles=false,handleRow:number|undefined;
@@ -1300,6 +1311,8 @@ export function Scene(p: Props) {
         let y = cands.find(c => inside(c) && !hits(c));
         // зазор не прячем, пока видна ручка: если всё занято — над ручкой поверх (z-index выше размеров)
         if (y === undefined && rowGap(l)) y = cands.find(inside) ?? y0 - off;
+        // общие высота и ширина выбранного модуля не прячутся никогда (Макс 29.10: «как быстро понять высоту модуля»)
+        if (y === undefined && isOverallDim(l.element.dataset.dim)) y = cands.find(inside) ?? y0;
         if (y === undefined) { l.element.style.top = y0 + "px"; l.element.style.visibility = "hidden"; continue; }
         l.element.style.top = y + "px";
         placed.push({ x, y, w, h });

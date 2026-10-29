@@ -18,15 +18,30 @@ export function changeFacadeKind(m:Module,kind:FacadeKind,{keepThickness=false}:
 }
 const keys=['facadeDecor','drawerFacadeDecor','facadeMaterial','alu','aluDrawers','vernissage','facadeT','edgeFacade'] as const;
 const eligible=(m:Module)=>!m.raw&&!m.bazis&&!m.kupe&&!m.worktop&&!m.desk&&parts(m).some(p=>p.facadeSide||p.role==='door'||p.id.endsWith(':facade'));
-/** Appearance only. Never enables doors or copies dimensions, opening or drawer layout. */
-export function applyFacadeAppearance(project:Project,id:string,draft:Module,scope:boolean|string[]=false):Project {
+const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
+/** Appearance only. Never enables doors or copies dimensions, opening or drawer layout.
+ *  onlyChanged (решение Макса 29.10, групповые фасады): остальным корпусам переносится только то, что менеджер изменил в редакторе
+ *  относительно исходного корпуса; у Вернисажа/ALU — только изменённые ключи (фрезеровка, плёнка, эмаль…), свои остальные сохраняются. */
+export function applyFacadeAppearance(project:Project,id:string,draft:Module,scope:boolean|string[]=false,onlyChanged=false):Project {
  const current=project.modules.find(a=>a.id===id);
  if(!current||!eligible(current.module))throw Error('Выберите редактируемый корпус с фасадами.');
- const next=structuredClone(project);
+ const source=current.module,next=structuredClone(project);
  for(const a of next.modules){
   const selected=Array.isArray(scope)?scope.includes(a.id):scope===true||a.id===id;
   if(!selected||!eligible(a.module))continue;
-  for(const key of keys){delete a.module[key];if(draft[key]!==undefined)Object.assign(a.module,{[key]:structuredClone(draft[key])});}
+  for(const key of keys){
+   if(onlyChanged){
+    if(same(draft[key],source[key]))continue;
+    const was=a.module[key],from=source[key],to=draft[key];
+    if((key==='vernissage'||key==='alu')&&was&&from&&to&&typeof was==='object'){
+     const v={...was} as Record<string,unknown>,f=from as Record<string,unknown>,t=to as Record<string,unknown>;
+     for(const k of new Set([...Object.keys(f),...Object.keys(t)]))if(!same(f[k],t[k])){if(t[k]===undefined)delete v[k];else v[k]=structuredClone(t[k]);}
+     Object.assign(a.module,{[key]:v});continue;
+    }
+    delete a.module[key];if(to!==undefined)Object.assign(a.module,{[key]:structuredClone(to)});continue;
+   }
+   delete a.module[key];if(draft[key]!==undefined)Object.assign(a.module,{[key]:structuredClone(draft[key])});
+  }
   const errors=validate(a.module);if(errors.length)throw Error(a.module.name+': '+errors[0]+' Изменения не применены.');
  }
  return next;
