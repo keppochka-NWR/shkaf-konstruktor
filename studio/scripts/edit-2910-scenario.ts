@@ -258,7 +258,7 @@ try {
   for (const fx of [0.5, 0.42, 0.58, 0.35, 0.65]) { const before = (await openState())[doorHit]?.target; await page.mouse.click(f.x + f.width * fx, f.y + f.height * 0.5, { button: "middle" }); await page.waitForTimeout(700); if ((await openState())[doorHit]?.target !== before) break; }
   st = await openState();
   check("F5 средняя ещё раз по открытой створке — закрылась", st[doorHit]?.target === 0 && st[doorHit]?.t === 0, JSON.stringify(st[doorHit]));
-  await click(toggle); await page.waitForTimeout(120); st = await openState();
+  await toggle.click(); await page.waitForTimeout(60); st = await openState(); /* без паузы click(): анимация 350 мс */
   const during = doorKeys.map((k) => st[k]?.t ?? -1);
   check("F6 «Открыть фасады» — все створки открываются плавно (в середине пути)", during.every((t) => t > 0 && t < 1), during.join(","));
   await page.waitForTimeout(700); st = await openState();
