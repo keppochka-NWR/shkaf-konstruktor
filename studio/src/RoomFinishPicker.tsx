@@ -28,11 +28,12 @@ function Item({f,active,onPick}:{f:FinishItem;active:boolean;onPick:()=>void}){
     <a href={f.url} target="_blank" rel="noopener noreferrer" aria-label={'Открыть на Лемана Про: '+f.name} title="Открыть на Лемана Про"><ExternalLink size={14}/></a>
   </div>;
 }
-function Current({label,f,paint,onClear}:{label:string;f?:FinishItem;paint?:string;onClear?:()=>void}){
+/** unknown — артикул из файла, которого нет в каталоге (позицию убрали): видно, что отделка есть, и её можно убрать (критик 29.10 п.3). */
+function Current({label,f,paint,unknown,onClear}:{label:string;f?:FinishItem;paint?:string;unknown?:string;onClear?:()=>void}){
   return <div className="finish-current" data-testid="finish-current">
     <Swatch f={f} paint={paint}/>
-    <span className="finish-text"><small>{label}</small>{f?<><b>{f.name}</b><small>Арт. {f.article} · {finishSize(f)} · {f.colour}</small><a href={f.url} target="_blank" rel="noopener noreferrer">Открыть на Лемана Про</a></>:paint?<b>Покраска {PAINTS.find(p=>p.color===paint)?.name?.toLowerCase()??paint}</b>:<b>Без отделки</b>}</span>
-    {onClear&&(f||paint)&&<button className="finish-clear" aria-label={'Убрать отделку: '+label} title="Убрать отделку" onClick={onClear}><X size={14}/></button>}
+    <span className="finish-text"><small>{label}</small>{f?<><b>{f.name}</b><small>Арт. {f.article} · {finishSize(f)} · {f.colour}</small><a href={f.url} target="_blank" rel="noopener noreferrer">Открыть на Лемана Про</a></>:unknown?<><b>Неизвестная позиция {unknown}</b><small>Артикула нет в каталоге отделки — уберите или выберите другую.</small></>:paint?<b>Покраска {PAINTS.find(p=>p.color===paint)?.name?.toLowerCase()??paint}</b>:<b>Без отделки</b>}</span>
+    {onClear&&(f||paint||unknown)&&<button className="finish-clear" aria-label={'Убрать отделку: '+label} title="Убрать отделку" onClick={onClear}><X size={14}/></button>}
   </div>;
 }
 
@@ -64,11 +65,11 @@ export function RoomFinishes({room,onChange}:{room:Room;onChange:(room:Room)=>bo
       <button role="tab" aria-selected={surface==='wall'} onClick={()=>switchSurface('wall')}>Стены</button>
     </div>
     {surface==='floor'?<>
-      <Current label="Пол" f={floorItem} onClear={()=>onChange(withFinish(room,{...room.finish,floor:undefined}))}/>
+      <Current label="Пол" f={floorItem} unknown={floor&&!floorItem?floor.id:undefined} onClear={()=>onChange(withFinish(room,{...room.finish,floor:undefined}))}/>
       {floorItem&&<label className="hardware-field">Укладка: длинная сторона вдоль<select aria-label="Направление укладки" value={floor?.along??defaultAlong(room)} onChange={e=>onChange(withFinish(room,{...room.finish,floor:{id:floorItem.id,along:e.target.value as 'width'|'depth'}}))}><option value="width">ширины комнаты ({room.width} мм)</option><option value="depth">глубины комнаты ({room.depth} мм)</option></select></label>}
     </>:<>
       <label className="hardware-field">Стена<select aria-label="Стена для отделки" value={wall} onChange={e=>{setPreview(undefined);setWall(e.target.value as FinishWall|'all');}}><option value="all">Все стены</option>{FINISH_WALLS.map(w=><option key={w} value={w}>{FINISH_WALL_NAMES[w]}{room.finish?.walls?.[w]?' ✓':''}</option>)}</select></label>
-      {same?<Current label={wall==='all'?'Все стены':FINISH_WALL_NAMES[wall]+' стена'} f={preview?undefined:wallItem} paint={preview??wallPaint} onClear={()=>setWalls(undefined)}/>:<div className="finish-current"><span className="finish-text"><small>Все стены</small><b>Отделка разная</b><small>Выберите ниже — ляжет на все стены, или выберите одну стену.</small></span><button className="finish-clear" aria-label="Убрать отделку: Все стены" title="Убрать отделку со всех стен" onClick={()=>setWalls(undefined)}><X size={14}/></button></div>}
+      {same?<Current label={wall==='all'?'Все стены':FINISH_WALL_NAMES[wall]+' стена'} f={preview?undefined:wallItem} paint={preview??wallPaint} unknown={!preview&&wallValue&&'id' in wallValue&&!wallItem?wallValue.id:undefined} onClear={()=>setWalls(undefined)}/>:<div className="finish-current"><span className="finish-text"><small>Все стены</small><b>Отделка разная</b><small>Выберите ниже — ляжет на все стены, или выберите одну стену.</small></span><button className="finish-clear" aria-label="Убрать отделку: Все стены" title="Убрать отделку со всех стен" onClick={()=>setWalls(undefined)}><X size={14}/></button></div>}
       <div className="finish-paints" aria-label="Покраска">
         <span>Покраска</span>
         {PAINTS.map(p=><button key={p.color} className={'finish-paint'+(wallPaint===p.color?' active':'')} aria-pressed={wallPaint===p.color} aria-label={'Покраска: '+p.name} title={p.name} style={{background:p.color}} onClick={()=>{setPreview(undefined);setWalls({paint:p.color});}}/>)}
