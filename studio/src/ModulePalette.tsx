@@ -9,7 +9,7 @@ import {doorCountOptions,autoDoorCount} from './paletteDoors';
 import {DEFAULT_KUPE,KUPE_DEPTH} from './kupe';
 import {KITCHEN} from './kitchen';
 import type {PlacedModule} from './project';
-import {rowShortageText,type RowShortage} from './rowFit';
+import {adaptToRow,type RowShortage} from './rowFit';
 import {createKupeModule,createKupeWardrobe,createKitchenRow,createModule,createModuleRow,bodyWidths,KIND_LABEL,paletteFitNotes,type ModuleKind} from './paletteBuild';
 import {paletteIssues,paletteAutoFix,SPLIT_KINDS,type PaletteField,type PaletteInput,type PalettePatch} from './paletteCheck';
 // сборка мебели палитры живёт в paletteBuild.ts (w-formerrors 23.10) — прежние импорты из ModulePalette работают
@@ -32,7 +32,7 @@ const MAX_BODIES=6;
 const plural=(n:number,one:string,few:string,many:string)=>{const a=n%10,b=n%100;return a===1&&b!==11?one:a>=2&&a<=4&&(b<10||b>=20)?few:many;};
 export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room}:{source:Module;onAdd:(module:Module)=>boolean;/** keep — группа встаёт на свои координаты (угловая кухня — в угол комнаты), без поиска места */onAddGroup:(group:PlacedModule[],keep?:boolean)=>boolean;kitchenTemplates?:ReactNode;
   /** комната — для «Кухня угловая (Г)» и «Кухня П-образная»: ряды у задней и боковых стен, длины — в пределах стен (проверка формы) */room?:{width:number;depth:number;height:number};
-  /** Нехватка места в ряду у стены (rowFit.ts, m1 критика 22.10): вместо молчаливой расстановки перед шкафами — варианты. */
+  /** Нехватка места в ряду у стены (rowFit.ts): модуль сужается под остаток с сообщением (решение Макса 29.10) или отказ с причиной. */
   fit?:(module:Module)=>RowShortage|null}) {
   // T1 (18.10): выбор палитры живёт дольше экземпляра — после первого шкафа редактор пересоздаётся, а категория и размеры остаются.
   const [saved]=useState(readPalette);
@@ -92,30 +92,29 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
     if(p.height!==undefined)parts.push('высота '+p.height);if(p.depth!==undefined)parts.push('глубина '+p.depth);
     if(p.doors!==undefined)parts.push(`${p.doors} ${plural(p.doors,'дверь','двери','дверей')}${kupeKind?'':` · ${Math.ceil(p.doors/2)} ${plural(Math.ceil(p.doors/2),'секция','секции','секций')}`}`);
     applyPatch(p);setSubmitted(r.left.length>0);setFixedNote(parts.length?`Исправлено: ${parts.join(', ')}.${r.left.length?'':' Нажмите «Добавить в комнату».'}`:'');};
-  // m1 (критик 22.10): шкаф не встаёт в ряд у стены — сообщение с вариантами; смена вида/размеров убирает предложение
-  const [offer,setOffer]=useState<{module:Module;s:RowShortage}|null>(null);
-  useEffect(()=>{if(offer){setOffer(null);setError('');}},[kind,width,height,depth,doorValue,bodies]); // eslint-disable-line react-hooks/exhaustive-deps
   // кнопка «Добавить в комнату» прилипает к низу панели (m11) — варианты прокручиваем к середине, чтобы она их не закрывала
-  const offerRef=useRef<HTMLDivElement>(null),issuesRef=useRef<HTMLDivElement>(null),addRef=useRef<HTMLButtonElement>(null);
+  const issuesRef=useRef<HTMLDivElement>(null),addRef=useRef<HTMLButtonElement>(null);
   // критик релиза 24.10 (1366×768): список ошибок уводил «Добавить в комнату» за нижний край — левая панель докручивается так,
   // чтобы были видны список и под ним кнопка (кнопка в обычном потоке, поля не перекрывает); не помещаются оба — видна кнопка
   const revealIssues=()=>requestAnimationFrame(()=>{issuesRef.current?.scrollIntoView?.({block:'nearest'});addRef.current?.scrollIntoView?.({block:'nearest'});});
   // после каждой проверки с ошибками (и после «Исправлено…»); пока курсор в поле размеров — не дёргаем панель из-под ввода
   useEffect(()=>{if(!shown.length&&!fixedNote)return;const ae=document.activeElement;if(ae instanceof HTMLInputElement&&ae.closest('.module-palette'))return;revealIssues();},[probe,submitted,fixedNote]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(()=>{if(offer)offerRef.current?.scrollIntoView?.({block:'center'});},[offer]);
-  const narrowed=(w:number,off:boolean):Module=>{let m:Module;try{m=shaped(createModule(kind,w,height,depth,source,doorArg));}catch{m=shaped(createModule(kind,w,height,depth,source));}return off?{...m,autoFillersOff:true}:m;};
-  const take=(make:()=>Module)=>{try{const ok=onAdd(make());if(ok){setOffer(null);setError('');}}catch(e){setOffer(null);setError((e as Error).message);}};
+  const narrowed=(w:number):Module=>{try{return shaped(createModule(kind,w,height,depth,source,doorArg));}catch{return shaped(createModule(kind,w,height,depth,source));}};
+  // решение Макса 29.10.2026: в остаток до стены (не хватает места на фальш) модуль ДОБАВЛЯЕТСЯ сразу, суженный (600 → 580 + фальш 20),
+  // и менеджер видит, что ширина другая, чем в палитре (сообщение «Размер изменён»); сузить нельзя — отказ с причиной. Диалога из трёх кнопок нет.
+  const adapt=(m:Module,s:RowShortage)=>{const r=adaptToRow(m,s,narrowed);if('error' in r){setError(r.error);return;}
+    if(onAdd(r.module)){setError('');resetCheck();setTimeout(()=>window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Размер изменён',text:r.note}})),700);}};
   // отказ сборки — все ошибки формы списком у полей (w-formerrors); если разбор ничего не нашёл — прежнее сообщение
   const refuse=(e:unknown)=>{const list=paletteIssues(input,source);if(list.length){setProbe(input);setSubmitted(true);setError('');setFixedNote('');revealIssues();}else setError((e as Error).message);};
   const add=()=>{try{
       // угловая (Г) и П-образная кухня (w-lwing): группа встаёт на свои координаты — в угол комнаты (keep), без поиска места
       if(cornerKitchen){if(!room)throw Error(`${kind==='kitchen-u'?'П-образная':'Угловая'} кухня ставится в комнату: откройте проект с помещением.`);
         const group=kind==='kitchen-u'?createKitchenURow(source,{left:uLeft,back:width,right:cornerSide,room,height,depth}):createKitchenCornerRow(source,{back:width,side:cornerSide,wing:cornerWing,room,height,depth});
-        setOffer(null);if(onAddGroup(group,true)){setError('');resetCheck();}return;}
+        if(onAddGroup(group,true)){setError('');resetCheck();}return;}
       if(kind==='kupe-wardrobe'||kind==='kitchen-row'){const ok=kind==='kupe-wardrobe'?onAddGroup(createKupeWardrobe(width,height,depth,source,doorArg,kupeMount)):onAddGroup(createKitchenRow(width,source,height,depth));if(ok){setError('');resetCheck();}return;}
-      if(rowBodies>1){setOffer(null);if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg).map(a=>({...a,module:shaped(a.module)})))){setError('');resetCheck();setBodies(1);/* заказ 7437584: «Корпусов в ряд» не остаётся 3 для следующей мебели (список прячется при 1 и узкой ширине) */}return;}
-      const m=shaped(createModule(kind,width,height,depth,source,doorArg)),s=fit?.(m);if(s){setOffer({module:m,s});setError(rowShortageText(m.name,s));return;}
-      setOffer(null);if(onAdd(m)){setError('');resetCheck();smallNote();}}catch(e){refuse(e);}};
+      if(rowBodies>1){if(onAddGroup(createModuleRow(kind,width,rowBodies,height,depth,source,doorArg).map(a=>({...a,module:shaped(a.module)})))){setError('');resetCheck();setBodies(1);/* заказ 7437584: «Корпусов в ряд» не остаётся 3 для следующей мебели (список прячется при 1 и узкой ширине) */}return;}
+      const m=shaped(createModule(kind,width,height,depth,source,doorArg)),s=fit?.(m);if(s){adapt(m,s);return;}
+      if(onAdd(m)){setError('');resetCheck();smallNote();}}catch(e){refuse(e);}};
   // волна 29.10: малый корпус — что палитра сняла (двери, ящики, полки, цоколь…) — сообщением, не ошибкой
   // первый корпус ставится из пустой комнаты — редактор с приёмником сообщений появляется после, поэтому с задержкой
   const smallNote=()=>{const notes=paletteFitNotes(kind,width,height,depth,source,doorArg);if(notes.length)setTimeout(()=>window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:notes.join(' ')}})),700);};
@@ -164,11 +163,6 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
     </div>}
     {fixedNote&&!shown.length&&<p className="palette-fixed" role="status">{fixedNote}</p>}
     {error&&<p role="alert">{error}</p>}
-    {offer&&<div className="palette-row-fit" role="group" aria-label="Шкаф не встаёт в ряд" ref={offerRef}>
-      {offer.s.withFiller!==null&&<button type="button" className="outline" onClick={()=>take(()=>narrowed(offer.s.withFiller!,false))}>Сузить до {offer.s.withFiller} мм{offer.s.filler?' (с фальшем)':''}</button>}
-      {offer.s.withoutFiller!==null&&<button type="button" className="outline" onClick={()=>take(()=>narrowed(offer.s.withoutFiller!,true))}>{offer.s.withoutFiller} мм без фальша у стены</button>}
-      <button type="button" className="text-action" onClick={()=>take(()=>offer.module)}>Поставить отдельно (перед шкафами)</button>
-    </div>}
     <button className="primary full" onClick={add} ref={addRef}>Добавить в комнату</button>
     {category==='kitchen'&&kitchenTemplates&&<details className="catalog-presets"><summary>Готовые кухонные модули</summary>{kitchenTemplates}</details>}
   </details>;
