@@ -14,7 +14,7 @@ const key=(code:string,extra:Partial<KeyboardEvent>={})=>({code,key:code.slice(3
 test('п.28: W/A/S/D/Q/E — виды сцены по физической клавише; с модификаторами и автоповтором — нет',()=>{
   assert.equal(viewShortcut(key('KeyW')),'top');assert.equal(viewShortcut(key('KeyS')),'front');
   assert.equal(viewShortcut(key('KeyA')),'left');assert.equal(viewShortcut(key('KeyD')),'side');
-  assert.equal(viewShortcut(key('KeyQ')),'iso');assert.equal(viewShortcut(key('KeyE')),'iso');
+  assert.equal(viewShortcut(key('KeyQ')),null);/* 29.10: Q — вспомогательная линия, 3D — E */assert.equal(viewShortcut(key('KeyE')),'iso');
   assert.equal(viewShortcut(key('KeyW',{ctrlKey:true})),null);assert.equal(viewShortcut(key('KeyS',{shiftKey:true})),null);
   assert.equal(viewShortcut(key('KeyD',{repeat:true})),null);assert.equal(viewShortcut(key('KeyZ')),null);
 });

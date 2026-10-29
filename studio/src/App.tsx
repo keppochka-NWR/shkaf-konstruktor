@@ -32,6 +32,7 @@ import PartialDividerPanel from './PartialDividerPanel';
 import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd,oneLeafAtDivider,announceDividerNotes} from './partialDivider';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
+import {snapAxis,widthPull,keepOpposite,type CornerPull,type CornerPlan} from './cornerStretch';
 import {rowShortage} from './rowFit';
 import {offWallNote} from './freeSpot';
 import {RoomObstacles} from './RoomObstacles';
@@ -699,13 +700,52 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     try{const r=continueAroundCorner(project,turn,move?{id:move}:{module:{...structuredClone(a.module),name:a.module.name.replace(/ · копия$/,'')},y:a.y});if(commitProject(r.project)){selectModule(r.id);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
   }
   const smallMemos=useRef(new Map<string,SmallMemo>());
-  function modify(update: (draft: Module) => void) {
-    const next = structuredClone(m);let small:string[]=[],restored=false;
-    try{update(next);if(next.kitchen&&next.width!==m.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(m.name))next.name=m.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==m.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=m.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(m.depth-(old??s.shelfDepth))));}}if(next.height!==m.height&&!next.corner){fitDrawersAfterResize(next,m);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}/* волна 29.10: корпус от 100 мм — что в него не входит, снимается с сообщением (smallSize.ts) */if(next.width!==m.width||next.height!==m.height){
+  /** Модуль после правки — общая часть modify и растяжения за угол (cornerStretch.ts): имя кухонного по ширине, глубина полок,
+   *  ящики по высоте, малый корпус. Память малого корпуса не трогает (keepMemo — применить её), бросает Error. */
+  function preparedModule(base:Module,mid:string,update:(draft:Module)=>void,keepMemo:boolean){
+    const next = structuredClone(base);let small:string[]=[],restored=false;
+    update(next);if(next.kitchen&&next.width!==base.width&&/^(Нижний кухонный|Нижний с ящиками|Под мойку|Под духовку|Бутылочница|Навесной кухонный|Навесной открытый|Антресоль|Пенал) \d+$/.test(base.name))next.name=base.name.replace(/ \d+$/,` ${next.width}`);if(next.kitchen&&next.depth!==base.depth)for(const s of next.sections){if(s.shelfDepth!==undefined){const old=base.sections.find(v=>v.id===s.id)?.shelfDepth;if(!s.shelves.length)delete s.shelfDepth;else s.shelfDepth=Math.max(60,Math.min(shelfMaxDepth(next),next.depth-(base.depth-(old??s.shelfDepth))));}}if(next.height!==base.height&&!next.corner){fitDrawersAfterResize(next,base);if(next.gola&&next.kdrawers?.length)next.kdrawers=layoutKitchenDrawers(next,next.kdrawers.length,undefined,next.kdrawers[0].system);}/* волна 29.10: корпус от 100 мм — что в него не входит, снимается с сообщением (smallSize.ts) */if(next.width!==base.width||next.height!==base.height){
         // критик 29.10 (п.9): снятое малым корпусом наполнение запоминается; вернули размер — оно возвращается (опечатка 100 вместо 1000)
-        const r=resizeSmall(m,next,smallMemos.current.get(placed.id),fitDrawersAfterResize);small=r.notes;restored=r.restored;
-        if(r.memo)smallMemos.current.set(placed.id,r.memo);else if(!r.restored)smallMemos.current.delete(placed.id);
-      }}catch(e){setError((e as Error).message);return false;}
+        const r=resizeSmall(base,next,smallMemos.current.get(mid),fitDrawersAfterResize);small=r.notes;restored=r.restored;
+        if(keepMemo){if(r.memo)smallMemos.current.set(mid,r.memo);else if(!r.restored)smallMemos.current.delete(mid);}
+      }
+    return {next,small,restored};
+  }
+  /** Размер из поля/плашки размера (и растяжения за угол): колонна и кухонные ящики подстраиваются. */
+  function applyDimension(n:Module,key:'width'|'height'|'depth',v:number){n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}if(n.kitchen?.column&&key!=='width')configureColumn(n);else if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}
+  /** Растяжение за угол (решение Макса 29.10.2026): высота/глубина — как ввод в панели, противоположный край на месте; ширина — по
+   *  правилу ряда (planStretch, как ручка «↔»). Итог — один проект (одна отмена); keepMemo — для фиксации, не для показа. */
+  function planCorner(pull:CornerPull,keepMemo=false):CornerPlan&{project?:Project;notes?:string[];restored?:boolean}{
+    const a=project.modules.find(x=>x.id===pull.mid);if(!a)return {width:0,height:0,depth:0,snapped:[],problem:'Модуль не найден.'};
+    const lock=widthLock(a.module),base={width:a.module.width,height:a.module.height,depth:a.module.depth,snapped:[] as string[]};
+    if(lock)return {...base,problem:lock[0].toUpperCase()+lock.slice(1)+'.'};
+    try{
+      let p=project,notes:string[]=[],restored=false;
+      const h=pull.height&&snapAxis(project,a,'height',pull.height,pull.snap,pull.tol,pull.guides),d=pull.depth&&snapAxis(project,a,'depth',pull.depth,pull.snap,pull.tol,pull.guides);
+      for(const s of [h,d])if(s&&s.what&&s.raw)base.snapped.push(s.what);
+      if((h&&h.raw)||(d&&d.raw)){
+        const r=preparedModule(a.module,a.id,n=>{if(h&&h.raw)applyDimension(n,'height',h.size);if(d&&d.raw)applyDimension(n,'depth',d.size);},keepMemo);
+        notes=r.small;restored=r.restored;
+        const moved=keepOpposite(a,r.next,{height:h&&h.raw?pull.height!.end:undefined,depth:d&&d.raw?pull.depth!.end:undefined});
+        p={...p,modules:p.modules.map(x=>x.id===a.id?moved:x)};
+      }
+      if(pull.width){const w=widthPull(a,pull.width,pull.snap,pull.tol,pull.guides);if(w.what&&w.raw)base.snapped.push(w.what);const plan=planStretch(p,a.id,w.side,w.raw,w.snap);if(plan.problem)return {...base,problem:plan.problem};if(plan.project)p=plan.project;}
+      const fin=applyAutoFillers(p),b=fin.modules.find(x=>x.id===a.id)!.module,e=p===project?[]:projectErrors(fin);
+      return {width:b.width,height:b.height,depth:b.depth,snapped:base.snapped,problem:e[0],preview:fin.modules,project:p===project?undefined:p,notes,restored};
+    }catch(e){return {...base,problem:(e as Error).message};}
+  }
+  function commitCorner(pull:CornerPull){
+    const plan=planCorner(pull,true);
+    if(plan.problem){setError(plan.problem);return false;}
+    if(!plan.project)return false;
+    const ok=commitProject(plan.project);
+    if(ok&&plan.restored){smallMemos.current.delete(pull.mid);window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:'Размер вернулся — снятое наполнение (двери, цоколь, полки, штанга, ящики) возвращено.'}}));}
+    if(ok&&plan.notes?.length)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:plan.notes.join(' ')+' Вернёте прежний размер — снятое вернётся (или Ctrl+Z).'}}));
+    return ok;
+  }
+  function modify(update: (draft: Module) => void) {
+    let next:Module,small:string[]=[],restored=false;
+    try{({next,small,restored}=preparedModule(m,placed.id,update,true));}catch(e){setError((e as Error).message);return false;}
     const ok=commit(next);
     if(ok&&restored){smallMemos.current.delete(placed.id);window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:'Размер вернулся — снятое наполнение (двери, цоколь, полки, штанга, ящики) возвращено.'}}));}
     if(ok&&small.length)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Малый корпус',text:small.join(' ')+' Вернёте прежний размер — снятое вернётся (или Ctrl+Z).'}}));return ok;
@@ -998,7 +1038,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       if(direct||modal)return;
       if(e.key==='Delete'&&!modal&&canRemove){e.preventDefault();removeSelected();}
       if (e.key === "Escape") {escapeStep(e);return;}
-      // W/A/S/D/Q/E — виды сцены (п.28 волны 22.10); в полях ввода и списках не срабатывают
+      // W/A/S/D/E — виды сцены (Q — вспомогательная линия в Scene, решение Макса 29.10.2026) (п.28 волны 22.10); в полях ввода и списках не срабатывают
       const v=viewShortcut(e);
       if(v&&!ctxMenu&&!gapMenu){e.preventDefault();setView(v);setRoomPlan(false);setFit(f=>f+1);}
       // R / Shift+R — поворот выбранного корпуса (или отмеченной группы) по часовой / против (решение Макса 29.10)
@@ -1424,7 +1464,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <div className="view-tabs">
               {(
                 [
-                  { id: "iso", label: "3D", title: "Объёмный вид · клавиша Q или E" },
+                  { id: "iso", label: "3D", title: "Объёмный вид · клавиша E" },
                   { id: "front", label: "Спереди", title: "Вид спереди · клавиша S" },
                   { id: "side", label: "Сбоку", title: "Вид справа · клавиша D (слева — A)" },
                   { id: "top", label: "Сверху", title: "Вид сверху · клавиша W" },
@@ -1495,7 +1535,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                     ? "Высота"
                     : "Глубина",
                 m[key],
-                (v) => modify((n) => {n[key]=v;if(n.corner&&key!=='height'){n.width=v;n.depth=v;}if(n.kitchen?.column&&key!=='width')configureColumn(n);else if(n.kdrawers&&key!=='width')n.kdrawers=refitKDrawers(n,key==='depth'?'depth':'height');}),
+                (v) => modify((n) => applyDimension(n,key,v)),
               )
             }
             onGap={(index) => {
@@ -1536,6 +1576,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             stretchable={!widthLock(m)&&!lightMode&&!deselected}
             stretchPlan={(mid,side,raw,snap)=>{try{return planStretch(project,mid,side,raw,snap);}catch(e){return {problem:(e as Error).message};}}}
             onStretch={(mid,side,raw,snap)=>{try{const plan=planStretch(project,mid,side,raw,snap);if(plan.problem){setError(plan.problem);return false;}return plan.project?commitProject(plan.project):false;}catch(e){setError((e as Error).message);return false;}}}
+            cornerPlan={pull=>planCorner(pull)}
+            onCorner={commitCorner}
+            guideRoom={project.room}
+            guides={project.guides}
+            onGuides={list=>{const {guides:_old,...rest}=project;void _old;return commitProject(list.length?{...rest,guides:list}:rest);}}
           />}</SafeBoundary>
           {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button>{showRoom&&<button aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={16}/>{cutaway?'Ближние стены: показать':'Ближние стены: скрыть'}</button>}<button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
@@ -1682,7 +1727,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
-            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, Q или E — 3D. R — повернуть выбранный корпус (или отмеченную группу) на 90° по часовой, Shift+R — против. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, Q — 3D, R — поворот, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
+            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, E — 3D. Q — вспомогательная линия (спереди, сверху, сбоку): щёлкните линию, наберите размер и Enter; щелчок по линии и Delete — убрать. Тяните за угол выбранного корпуса — два размера сразу. R — повернуть выбранный корпус (или отмеченную группу) на 90° по часовой, Shift+R — против. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, E — 3D, Q — вспомогательная линия, R — поворот, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}>

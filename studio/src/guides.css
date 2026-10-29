@@ -1,0 +1,35 @@
+/* Растяжение за угол и вспомогательные линии Q (решение Макса 29.10.2026, Scene.tsx, guides.ts, cornerStretch.ts) */
+.corner-handle {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  background: #325bee;
+  box-shadow: 0 1px 6px #1b2f8a66;
+  touch-action: none;
+  cursor: move;
+}
+.corner-handle:hover, .corner-handle:focus-visible { background: #1f3fc4; outline: 2px solid #325bee; outline-offset: 2px; }
+.stretching .corner-handle { pointer-events: none; }
+.corner-dragging .corner-handle:not(.active), .corner-dragging .stretch-handle { visibility: hidden; }
+body.radial-open .corner-handle { pointer-events: none; }
+.scene.guide-tool canvas { cursor: crosshair; }
+.scene.guide-tool .model-dimension, .scene.guide-tool .stretch-handle, .scene.guide-tool .corner-handle { pointer-events: none; }
+.clear-guides {
+  position: absolute;
+  z-index: 6;
+  right: 12px;
+  bottom: 64px;
+  padding: 6px 10px;
+  border: 1px solid #b9c9f5;
+  border-radius: 7px;
+  background: #f4f7ffee;
+  color: #1f3a8f;
+  font: 500 12px "Golos Text", Arial;
+  cursor: pointer;
+}
+.clear-guides:hover { background: #e6edff; }
