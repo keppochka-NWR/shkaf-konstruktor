@@ -1,7 +1,8 @@
 import {FacadeEditor} from './FacadeEditor';
 import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
-import {Scissors} from 'lucide-react';
+import {Scissors,RectangleHorizontal} from 'lucide-react';
 import {toggleSideFiller} from './sideFiller';
+import {worktopOnModule,worktopHostProblem} from './worktopOn';
 import {CutoutEditor,cutAllowed} from './CutoutEditor';
 import {ShapePanel} from './ShapePanel';
 import {readCutaway,saveCutaway} from './roomCutaway';
@@ -790,9 +791,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       ask:(label,v,update)=>{select();editDimension(label,v,x=>modifyAt(a.id,update(x)));},elevated:(a.y??0)>0,
       // фальшпанель сбоку (баг Макса 29.10): сдвиг или сужение модуля под неё — sideFiller.ts
       sideFiller:side=>{try{const r=toggleSideFiller(project,a.id,side);if(commitProject(r.project)&&r.note)setNotice({title:'Фальшпанель',text:r.note});}catch(e){setError((e as Error).message);}}};
+    // «Столешница на этот модуль» (правка Макса 29.10): опору выбирает менеджер — worktopOn.ts
+    const worktopHost=worktopHostProblem(mod),worktopItem:RadialItem={id:'worktop-on',label:'Столешница на модуль',icon:RectangleHorizontal,disabled:!!worktopHost,
+      hint:worktopHost??(mod.kitchen?'Кухонная столешница 38 на этот модуль: его ширина, до фасада + свес 24. Дальше правится как обычно':'Столешница ЛДСП 32 на этот модуль: его ширина и глубина до лица фасадов. Дальше правится как обычно'),
+      run:()=>{try{const r=worktopOnModule(project,a.id);if(commitProject(r.project))selectModule(r.id);}catch(e){setError((e as Error).message);}}};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id)]},
       mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
+      ...(mod.worktop||mod.kupe||mod.raw?[]:[worktopItem]),
       ...quickItems(mod,c.sid,quickOps),...kitchenFillerItems(mod,quickOps),...cornerItems(mod,quickOps),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
       {id:'facades',label:'Фасады',icon:DoorOpen,hint:mod.doors?'Цвет, ручки, петли, открывание':'У корпуса нет распашных фасадов',children:[
