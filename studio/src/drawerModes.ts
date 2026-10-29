@@ -1,7 +1,7 @@
 // Ящики секции (fix-drawers, правки Макса 29.10.2026): число ящиков с пересчётом расстановки «по правилу», выкатной ящик на всю
 // секцию (антресоль) и переключатель «ящики в накладку / за дверью». Только правки модели — те же для панели справа и меню правой
 // кнопки; геометрию строит parts() (model.ts), цены — смета по деталям (направляющие комплектами на ящик — guideKits).
-import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, hasDrawerCap, isAutoDrawerLayout, rearClear, RULES, type Module, type Section } from "./model";
+import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, hasDrawerCap, isAutoDrawerLayout, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
 
 const sectionOf = (m: Module, sid: string) => { const s = m.sections.find((x) => x.id === sid); if (!s) throw Error("Выберите секцию."); return s; };
@@ -84,8 +84,14 @@ export function fullSectionDrawer(m: Module, sid: string): void {
   if (m.doors) s.externalDrawers = true;
   const { y: _y, facadeH: _f, ...base } = drawerConfig(m, { ...s, drawerConfigs: undefined }, 0); void _y; void _f;
   s.drawerConfigs = [fitLength(m, s, base)];
-  const h = b.top - b.bottom;
+  const h = b.top - b.bottom, face = fullDrawerFacadeH(m, sid);
   if (h - RULES.drawerStep < 68) throw Error(`Секция ${Math.round(h)} мм — ящику нужно от ${68 + RULES.drawerStep} мм по высоте.`);
-  if (h - (s.drawerGap ?? RULES.drawerFrontGap) > 800) throw Error(`Секция ${Math.round(h)} мм — фасад ящика выше 800 мм не делаем. Для высокой секции — несколько ящиков.`);
+  // критик 29.10 (п.7): правило «фасад ящика не выше 800» — по высоте ФАСАДА (на всю секцию: от низа до верха фасадов), а не проёма
+  if (face > 800) throw Error(`Фасад ящика на всю секцию выйдет ${Math.round(face)} мм — выше 800 мм не делаем. Для высокой секции — несколько ящиков.`);
   s.drawerConfigs = drawersToRoof(m, s);
+}
+/** Высота фасада «выкатного ящика на всю секцию»: накладной фасад от низа фасадов (на цоколе — 30 мм от пола) до верха фасадов. */
+export function fullDrawerFacadeH(m: Module, sid: string): number {
+  const b = boxes(m).find((x) => x.id === sid);
+  return b ? facadeTop(m) - Math.min(facadeBottom(m), b.bottom) : Infinity;
 }

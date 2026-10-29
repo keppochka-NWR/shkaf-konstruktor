@@ -21,7 +21,7 @@ import { refitKDrawers } from "./kitchenDrawers";
 import { configureColumn } from "./kitchenTall";
 import { syncKitchenLift } from "./kitchenLift";
 import {facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable,evenDrawerConfigs,drawerFacesEqual} from './model';
-import {setDrawerCount,setDrawersOverlay,fullSectionDrawer} from './drawerModes';
+import {setDrawerCount,setDrawersOverlay,fullSectionDrawer,fullDrawerFacadeH} from './drawerModes';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -1878,7 +1878,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {quickMenuApplies(m)&&<div className="drawer-modes" data-testid="drawer-modes">
                   {m.doors&&s.drawers>0&&<label className="hardware-field">Фасады ящиков<select aria-label="Фасады ящиков" value={s.externalDrawers?'overlay':'behind'} onChange={e=>modify(n=>setDrawersOverlay(n,s.id,e.target.value==='overlay'))}><option value="behind">За дверью</option><option value="overlay">В накладку, дверь над ящиками</option></select><small>В накладку: фасады ящиков в плоскости дверей, дверь короче и начинается над ящиками через зазор между фасадами; петли — по новой высоте двери.</small></label>}
                   {s.drawers>1&&!drawerFacesEqual(m,s)&&!!evenDrawerConfigs(m,s)&&<button className="outline full" onClick={()=>modifySection((a,n)=>{const e=evenDrawerConfigs(n,a);if(e)a.drawerConfigs=e;})}>Фасады ящиков поровну</button>}
-                  {b.top-b.bottom>=68+RULES.drawerStep&&b.top-b.bottom-RULES.drawerFrontGap<=800&&!(s.drawers===1&&!s.shelves.length&&s.drawerCap===false)&&<button className="outline full" title="Наполнение секции заменится одним ящиком на всю высоту: короб под высоту секции, фасад на всю секцию, направляющие по глубине" onClick={()=>modify(n=>fullSectionDrawer(n,s.id))}>Один выкатной ящик на всю секцию</button>}
+                  {b.top-b.bottom>=68+RULES.drawerStep&&fullDrawerFacadeH(m,s.id)<=800/* п.7 критика 29.10: по высоте фасада, не проёма */&&!(s.drawers===1&&!s.shelves.length&&s.drawerCap===false)&&<button className="outline full" title="Наполнение секции заменится одним ящиком на всю высоту: короб под высоту секции, фасад на всю секцию, направляющие по глубине" onClick={()=>modify(n=>fullSectionDrawer(n,s.id))}>Один выкатной ящик на всю секцию</button>}
                 </div>}
                 {s.drawers > 0 && (
                   <div className="drawer-selection">
