@@ -49,6 +49,11 @@ export function RoomFinishes({room,onChange}:{room:Room;onChange:(room:Room)=>bo
   const wallItem=wallValue&&'id' in wallValue?finishById(wallValue.id):undefined,wallPaint=wallValue&&'paint' in wallValue?wallValue.paint:undefined;
   const floor=room.finish?.floor,floorItem=finishById(floor?.id);
   const setWalls=(v:WallFinish|undefined)=>onChange(setWallFinish(room,walls,v));
+  // Свой цвет (критик 29.10 п.2): пока менеджер ведёт по палитре — только образец в панели (React onChange = событие input),
+  // в проект — одним шагом, когда палитру закрыли (нативное change): без сохранения, шага «Назад» и пересборки сцены на каждый сдвиг.
+  const [preview,setPreview]=useState<string>(),picker=useRef<HTMLInputElement>(null),commitPaint=useRef<(c:string)=>void>(()=>{});
+  commitPaint.current=c=>{setPreview(undefined);if(c!==wallPaint)setWalls({paint:c});};
+  useEffect(()=>{const el=picker.current;if(!el)return;const done=()=>commitPaint.current(el.value);el.addEventListener('change',done);return ()=>el.removeEventListener('change',done);},[surface]);
   const pickFloor=(f:FinishItem)=>onChange(withFinish(room,{...room.finish,floor:{id:f.id,along:floor?.along??defaultAlong(room)}}));
   const switchSurface=(s:'floor'|'wall')=>{setSurface(s);setKind('all');list.current?.scrollTo?.({top:0});};
   return <div className="room-finishes" data-testid="room-finishes">
@@ -62,12 +67,12 @@ export function RoomFinishes({room,onChange}:{room:Room;onChange:(room:Room)=>bo
       <Current label="Пол" f={floorItem} onClear={()=>onChange(withFinish(room,{...room.finish,floor:undefined}))}/>
       {floorItem&&<label className="hardware-field">Укладка: длинная сторона вдоль<select aria-label="Направление укладки" value={floor?.along??defaultAlong(room)} onChange={e=>onChange(withFinish(room,{...room.finish,floor:{id:floorItem.id,along:e.target.value as 'width'|'depth'}}))}><option value="width">ширины комнаты ({room.width} мм)</option><option value="depth">глубины комнаты ({room.depth} мм)</option></select></label>}
     </>:<>
-      <label className="hardware-field">Стена<select aria-label="Стена для отделки" value={wall} onChange={e=>setWall(e.target.value as FinishWall|'all')}><option value="all">Все стены</option>{FINISH_WALLS.map(w=><option key={w} value={w}>{FINISH_WALL_NAMES[w]}{room.finish?.walls?.[w]?' ✓':''}</option>)}</select></label>
-      {same?<Current label={wall==='all'?'Все стены':FINISH_WALL_NAMES[wall]+' стена'} f={wallItem} paint={wallPaint} onClear={()=>setWalls(undefined)}/>:<div className="finish-current"><span className="finish-text"><small>Все стены</small><b>Отделка разная</b><small>Выберите ниже — ляжет на все стены, или выберите одну стену.</small></span><button className="finish-clear" aria-label="Убрать отделку: Все стены" title="Убрать отделку со всех стен" onClick={()=>setWalls(undefined)}><X size={14}/></button></div>}
+      <label className="hardware-field">Стена<select aria-label="Стена для отделки" value={wall} onChange={e=>{setPreview(undefined);setWall(e.target.value as FinishWall|'all');}}><option value="all">Все стены</option>{FINISH_WALLS.map(w=><option key={w} value={w}>{FINISH_WALL_NAMES[w]}{room.finish?.walls?.[w]?' ✓':''}</option>)}</select></label>
+      {same?<Current label={wall==='all'?'Все стены':FINISH_WALL_NAMES[wall]+' стена'} f={preview?undefined:wallItem} paint={preview??wallPaint} onClear={()=>setWalls(undefined)}/>:<div className="finish-current"><span className="finish-text"><small>Все стены</small><b>Отделка разная</b><small>Выберите ниже — ляжет на все стены, или выберите одну стену.</small></span><button className="finish-clear" aria-label="Убрать отделку: Все стены" title="Убрать отделку со всех стен" onClick={()=>setWalls(undefined)}><X size={14}/></button></div>}
       <div className="finish-paints" aria-label="Покраска">
         <span>Покраска</span>
-        {PAINTS.map(p=><button key={p.color} className={'finish-paint'+(wallPaint===p.color?' active':'')} aria-pressed={wallPaint===p.color} aria-label={'Покраска: '+p.name} title={p.name} style={{background:p.color}} onClick={()=>setWalls({paint:p.color})}/>)}
-        <label className="finish-paint custom" title="Другой цвет"><input type="color" aria-label="Другой цвет покраски" value={wallPaint??'#f4f3ef'} onChange={e=>setWalls({paint:e.target.value})}/></label>
+        {PAINTS.map(p=><button key={p.color} className={'finish-paint'+(wallPaint===p.color?' active':'')} aria-pressed={wallPaint===p.color} aria-label={'Покраска: '+p.name} title={p.name} style={{background:p.color}} onClick={()=>{setPreview(undefined);setWalls({paint:p.color});}}/>)}
+        <label className="finish-paint custom" title="Другой цвет" style={preview?{background:preview}:undefined}><input ref={picker} type="color" aria-label="Другой цвет покраски" value={preview??wallPaint??'#f4f3ef'} onChange={e=>{/* change React тоже присылает после закрытия палитры — это уже записано */if(e.nativeEvent.type!=='change')setPreview(e.target.value);}}/></label>
       </div>
     </>}
     <input className="finish-search" type="search" aria-label="Поиск отделки" placeholder="Поиск: дуб, серый, артикул…" value={query} onChange={e=>setQuery(e.target.value)}/>
