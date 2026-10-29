@@ -358,8 +358,10 @@ export function updateRoom(
       ),
     };
   }
-  // правка расчёта в редакторе комнаты (модель цены, коэффициент…) — настройка всего заказа: одно значение на документ
-  return withCalculation(next, parsed.calculation);
+  // правка расчёта в редакторе комнаты (модель цены, коэффициент…) — настройка всего заказа: одно значение на документ.
+  // Проект комнаты БЕЗ поля расчёта («Новый проект», «Создать проект без мебели», импорт файла без расчёта) модель заказа не трогает
+  // (критик 29.10, блокер 1: раньше отсутствие поля стирало расчёт документа и всех комнат — итог 860 647 → 724 647).
+  return withCalculation(next, parsed.calculation ?? documentCalculation(d));
 }
 /** Source and destination are untouched on validation or stale-write failure. */
 export function persistRoomDocument(

@@ -9,3 +9,18 @@ export function withPriceModel(p: Project, v: string, sheetPrice: number): Proje
   else { delete c.maxModel; if (v === "sheet") c.model = "sheet"; else delete c.model; }
   return { ...p, calculation: c };
 }
+/** Название модели цены для сообщений менеджеру. */
+export function priceModelLabel(c: Project["calculation"] | undefined): string {
+  if (!c) return "по коэффициенту " + String(MARKUP_DEFAULT).replace(".", ",") + " (по умолчанию)";
+  const base = c.maxModel ? "по большей модели" : c.model === "sheet" ? "за лист ЛДСП" : "по коэффициенту " + String(c.markup).replace(".", ",");
+  return base + (c.sheetPrice && (c.maxModel || c.model === "sheet") ? " (" + c.sheetPrice.toLocaleString("ru-RU") + " ₽/лист)" : "");
+}
+/** Модель цены — свойство ЗАКАЗА (документа комнат), а не комнаты (критик 29.10, блокер 1). Проект, который открывают в комнате заказа
+ *  («Новый проект», «Создать проект без мебели», импорт файла), получает настройки расчёта заказа: без поля — молча; со своими, отличными
+ *  от заказа, — модель заказа приоритетна, а в `replaced` — модель из файла (для предупреждения менеджеру). */
+export function withOrderCalculation(next: Project, order: Project["calculation"] | undefined): { project: Project; replaced?: Project["calculation"] } {
+  if (!order) return { project: next };
+  const own = next.calculation;
+  const project = { ...next, calculation: structuredClone(order) };
+  return own && JSON.stringify(own) !== JSON.stringify(order) ? { project, replaced: own } : { project };
+}

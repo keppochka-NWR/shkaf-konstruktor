@@ -48,6 +48,7 @@ import {ChevronRight,TriangleAlert} from 'lucide-react';
 import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from './clientLabels';
 import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
+import {priceModelLabel,withOrderCalculation} from './priceModel';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
@@ -564,6 +565,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     touched.current = true;
   };
   function commitProject(raw: Project) {
+    // Модель цены — свойство заказа (критик 29.10, блокер 1): проект комнаты без настроек расчёта («Новый проект», «без мебели»,
+    // файл без расчёта) получает настройки заказа, а не сбрасывает их.
+    if(saveManagedProject&&raw.calculation===undefined&&project.calculation)raw={...raw,calculation:structuredClone(project.calculation)};
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
     const e = projectErrors(next,!!onEmptyProject);
@@ -1102,7 +1106,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             if(currentProject.current!==before)throw Error("Проект изменился во время чтения файла. Откройте файл ещё раз, чтобы сохранить последние правки в истории отмены.");
             const raw=JSON.parse(text);
             if(isClientBundle(raw)){if(!onImportBundle)throw Error('Папку клиента открывайте в основном редакторе, без ссылки на отдельный проект.');onImportBundle(raw);return;}
-            const imported = parseProject(raw);
+            // в комнате заказа модель цены из файла не заменяет модель заказа молча (критик 29.10, блокер 1): заказ приоритетен, предупреждение
+            const own = saveManagedProject ? withOrderCalculation(parseProject(raw), project.calculation) : { project: parseProject(raw), replaced: undefined };
+            const imported = own.project;
             const next = imported.modules[0].module;
             if (
               imported.modules.some(
@@ -1119,6 +1125,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               setActive(imported.modules[0].id);
               setSelected(next.sections[0].id);
               setFit((f) => f + 1);
+              if (own.replaced) setNotice({ title: "Модель цены заказа сохранена", text: "В файле своя модель цены — " + priceModelLabel(own.replaced) + ". Заказ считается по модели заказа — " + priceModelLabel(project.calculation) + ". Сменить её для всего заказа можно в «Модель цены»." });
             }
           } catch (e) {
             if(request!==importSequence.current)return;
