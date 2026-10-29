@@ -372,6 +372,12 @@ try {
   check("11. Ctrl+щелчок по «Сосед» — отмечен (группа), не сдвинут", /Отмеченные корпуса/.test(st1) && bx1.b.x === 2800, st1);
   await modClick("Control", nb);
   check("11. Ctrl+щелчок ещё раз — снят", !/Отмеченные корпуса/.test(await status()));
+  // критик 29.10 п.4: Ctrl+щелчок с дрожанием 6 px — щелчок (отмечен), корпус не сдвинут
+  const jitter = async (p: Pt) => { await page.mouse.move(p.x, p.y); await page.keyboard.down("Control"); await page.mouse.down(); await page.mouse.move(p.x + 4, p.y + 2); await page.mouse.move(p.x + 6, p.y); await page.mouse.up(); await page.keyboard.up("Control"); await page.waitForTimeout(400); };
+  await jitter(nb);
+  const stj = await status(), bxj = await boxes();
+  check("11. Ctrl+щелчок с дрожанием 6 px — отмечен, не сдвинут", /Отмеченные корпуса/.test(stj) && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
+  await modClick("Control", nb);
   // Ctrl + перенос «Сосед»: левый нижний угол — в пересечение линии x = 1900 и пола
   const grab = { x: X(2800) + 25, y: Y(0) - 40 };
   const m11 = await modDrag("Control", grab, { x: grab.x + X(1900) - X(2800) + 5, y: grab.y + 4 }, "ctrl-move");

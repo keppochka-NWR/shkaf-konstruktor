@@ -7,7 +7,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
-import {altKeyupGuard,acrossSegments,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import './guides.css';
 // Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
 // контуры корпусов, стены), Ctrl — ближайшее пересечение двух линий, Shift — без привязки. Для угла, переноса корпуса и линии Q.
@@ -195,7 +195,7 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     if(tool){toolMove(tool,e.clientX,e.clientY);return;}
     // Ctrl+нажатие на корпус потянули — обычный перенос из точки нажатия (дальше — с привязкой Ctrl)
     const cp=ctrlPress.current;
-    if(cp&&!drag.current){if(Math.hypot(e.clientX-cp.x,e.clientY-cp.y)<4)return;ctrlPress.current=null;beginDrag('module',cp.id,cp.x,cp.y,cp.pointerId);}
+    if(cp&&!drag.current){if(!ctrlDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;ctrlPress.current=null;beginDrag('module',cp.id,cp.x,cp.y,cp.pointerId);}
     const d=drag.current;if(!d)return;const pt=point(e),n=structuredClone(project);
     if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};let pos:{x:number;y:number;z:number},hit:PointHit|undefined;
       if(isPointMode(mode)){

@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
-import {altKeyupGuard,acrossSegments,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -1140,7 +1140,7 @@ export function Scene(p: Props) {
     function pointerMove(e:PtrLike){
       lastPtr={clientX:e.clientX,clientY:e.clientY};
       // Ctrl+нажатие на корпус потянули — начинается обычный перенос из точки нажатия (дальше — с привязкой Ctrl)
-      if(ctrlPress&&!drag){const cp=ctrlPress;if(Math.hypot(e.clientX-cp.x,e.clientY-cp.y)<4)return;ctrlPress=null;
+      if(ctrlPress&&!drag){const cp=ctrlPress;if(!ctrlDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;ctrlPress=null;
         pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,preventDefault(){}} as unknown as PointerEvent);
         if(!drag){controls.enabled=true;return;}}
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;

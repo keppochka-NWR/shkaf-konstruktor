@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {altKeyupGuard,acrossSegments,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -99,6 +99,11 @@ test('критик 29.10 п.3: Alt — составляющая, которую 
   assert.deepEqual(g.delta,{h:13,v:250.5});
   const c=snapDelta('cross',{h:1000,v:0},{h:597.6,v:248.4},[seg(1600,-1000,1600,3000),seg(0,250.5,4000,250.5)],20);
   assert.deepEqual(c.delta,{h:600,v:250.5},'пересечение — обе точно');
+});
+
+test('критик 29.10 п.4: Ctrl+щелчок с дрожанием 6 px — щелчок, перенос — от 9 px',()=>{
+  assert.equal(ctrlDragStarts(6,0),false);assert.equal(ctrlDragStarts(4,4),false);
+  assert.equal(ctrlDragStarts(9,0),true);assert.equal(ctrlDragStarts(7,7),true);
 });
 
 test('оси вида: спереди/сверху/План — точка туда и обратно, глубина сохраняется',()=>{
