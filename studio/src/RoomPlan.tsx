@@ -241,8 +241,8 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     };
     // Ctrl+колесо во время тяги и линии Q не масштабирует страницу браузера (критик 29.10 п.5)
     const wheel=(e:WheelEvent)=>{if(wheelGuard(e,!!(corner.current||drag.current||ctrlPress.current||tool)))e.preventDefault();};
-    window.addEventListener('keydown',on);window.addEventListener('keyup',on);window.addEventListener('wheel',wheel,{passive:false,capture:true});
-    return()=>{window.removeEventListener('keydown',on);window.removeEventListener('keyup',on);window.removeEventListener('wheel',wheel,{capture:true});};
+    window.addEventListener('keydown',on,true);window.addEventListener('keyup',on,true);window.addEventListener('wheel',wheel,{passive:false,capture:true});
+    return()=>{window.removeEventListener('keydown',on,true);window.removeEventListener('keyup',on,true);window.removeEventListener('wheel',wheel,{capture:true});};
   });
   function keyboard(e:React.KeyboardEvent,kind:Drag['kind'],id:string){
     if(e.ctrlKey||e.metaKey||e.altKey||drag.current)return;
