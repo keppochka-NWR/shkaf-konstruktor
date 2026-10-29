@@ -69,6 +69,9 @@ export const ALU_GLASS = {
   source: 'Прайс Стекло 2025.xlsx (16.09.2025): размеры листов; «ТЕХНИЧКА ПО СТЕКЛУ» п. 6 — закалка до 3000 мм',
   allowance: 29,
   temperMax: 3000,
+  /** Стекло (не зеркало): «Максимальный размер листа, который входит в станок 2750×1200» (прайс, «ДЛЯ СПРАВКИ») — вставка не длиннее 2750.
+   *  В прайсе строка стоит в разделе пескоструя; применяем ко всему закалённому стеклу рамок в запас — УТОЧНИТЬ у Макса. Зеркало — до 3000. */
+  machineMax: 2750,
   /** «ДЛЯ СПРАВКИ: ЗЕРКАЛО | СТЕКЛО 4–10 мм — 2550×1605» — для наполнений, у которых в прайсе размер листа не указан. */
   standardSheet: [2550, 1605] as [number, number],
 };
@@ -86,10 +89,13 @@ const ALU_FILL_SHEET: [RegExp, [number, number]][] = [
   [/^Зеркало серебро \(зел|^Зеркало Crystalvision|^Стекло прозрачное|^Стекло просветл|^Стекло сатин|^Данди|^Зеркало Бронза: Уади|^Лакобель/, [2550, 1605]],
 ];
 /** Предел высоты рамочного фасада по наполнению: лист стекла поставщика (длинная сторона по высоте), не длиннее закалки 3000 мм. */
-export function aluMaxHeight(a: AluFacade): { maxH: number; glassMax: number; sheet: [number, number]; fill: string; standard: boolean } {
+export function aluMaxHeight(a: AluFacade): { maxH: number; glassMax: number; sheet: [number, number]; fill: string; standard: boolean; cap: string } {
   const f = aluFill(a.insert), name = f?.label ?? a.insert, hit = ALU_FILL_SHEET.find(([re]) => re.test(name));
-  const sheet = hit ? hit[1] : ALU_GLASS.standardSheet, maxH = Math.min(sheet[0], ALU_GLASS.temperMax);
-  return { maxH, glassMax: maxH - ALU_GLASS.allowance, sheet, fill: name, standard: !hit };
+  const sheet = hit ? hit[1] : ALU_GLASS.standardSheet, mirror = !!f?.mirror;
+  // зеркало: лист, не длиннее 3000 (закалка); стекло: ещё и вставка не длиннее станка 2750 (фасад = вставка + припуск)
+  const lim = mirror ? ALU_GLASS.temperMax : ALU_GLASS.machineMax + ALU_GLASS.allowance, maxH = Math.min(sheet[0], lim);
+  const cap = sheet[0] <= lim ? '' : mirror ? 'закалка до ' + ALU_GLASS.temperMax : 'вставка стекла не длиннее ' + ALU_GLASS.machineMax + ' (станок)';
+  return { maxH, glassMax: maxH - ALU_GLASS.allowance, sheet, fill: name, standard: !hit, cap };
 }
 export type AluFacade = { profile: string; color: string; insert: string };
 export const DEFAULT_ALU: AluFacade = { profile: "F1-09", color: "silver", insert: "mirror-silver" };

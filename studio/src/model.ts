@@ -2915,7 +2915,7 @@ function validateCore(m: Module, opts?: {all?: boolean}): string[] {
     // высота — по листу стекла наполнения (решение Макса 29.10.2026), ширина — по СТП
     if (p.role === "door" && p.material === "alu" && m.alu) {
       const g = aluMaxHeight(m.alu);
-      if (p.length > g.maxH) errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: наполнение «${g.fill}» — лист ${g.sheet[0]}×${g.sheet[1]} мм${g.standard ? " (размер листа в прайсе не указан — принят стандартный)" : ""}${g.sheet[0] > g.maxH ? `, закалка до ${g.maxH}` : ""}, фасад не выше ${g.maxH} мм (вставка ${g.glassMax}). Уменьшите высоту или выберите наполнение с большим листом.`);
+      if (p.length > g.maxH) errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: наполнение «${g.fill}» — лист ${g.sheet[0]}×${g.sheet[1]} мм${g.standard ? " (размер листа в прайсе не указан — принят стандартный)" : ""}${g.cap ? `, ${g.cap}` : ""}, фасад не выше ${g.maxH} мм (вставка ${g.glassMax}). Уменьшите высоту или выберите наполнение с большим листом.`);
       if (p.width > ALU_EXTRAS.maxW) errors.push(`Алюминиевый фасад ${Math.round(p.width)}×${Math.round(p.length)}: по СТП не шире ${ALU_EXTRAS.maxW} мм. Разделите секцию.`);
     }
   }

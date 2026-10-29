@@ -144,9 +144,10 @@ test('ALU: высота рамочного фасада — почти по ли
   const { aluMaxHeight, aluFill, DEFAULT_ALU, ALU_GLASS } = await import('../src/alu');
   const { initialModule, section, parts, validate } = await import('../src/model');
   const { hingeCount } = await import('../src/hardware');
-  // лист 3210×2250 (зеркало серебро/бронза/графит, тонировка) — ограничение длины обработки (закалка) 3000
+  // лист 3210×2250 зеркала — ограничение длины обработки (закалка) 3000
   assert.equal(aluMaxHeight(DEFAULT_ALU).maxH, 3000);
-  assert.equal(aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-bronze' }).maxH, 3000);
+  // стекло (не зеркало) 3210×2250: вставка не длиннее станка 2750 → фасад до 2779 (критик 29.10, уточнить у Макса)
+  assert.deepEqual([aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-bronze' }).maxH, aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-bronze' }).glassMax], [2779, 2750]);
   // стандартный лист 2550×1605 (прозрачное, сатин, лакобель): фасад до 2550, вставка 2550 − 29
   const clear = aluMaxHeight({ ...DEFAULT_ALU, insert: 'glass-clear' });
   assert.deepEqual([clear.maxH, clear.glassMax, clear.sheet[0]], [2550, 2550 - 29, 2550]);
