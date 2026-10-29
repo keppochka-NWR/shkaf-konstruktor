@@ -72,7 +72,8 @@ function tileRect(g:CanvasRenderingContext2D,f:FinishItem,rect:Rect,unit:FinishU
     g.restore();
   }
   // шов
-  g.strokeStyle=f.tone[0]>'#c0'?'rgba(150,146,140,0.9)':'rgba(205,202,196,0.9)';g.lineWidth=Math.max(1,unit.joint*px);g.strokeRect(x,y,w,h);
+  const light=rgb(f.tone[0]).reduce((a,b)=>a+b,0)>3*180;
+  g.strokeStyle=light?'rgba(128,124,118,0.95)':'rgba(205,202,196,0.9)';g.lineWidth=Math.max(2.5,unit.joint*px);g.strokeRect(x,y,w,h);
 }
 function blotchesIn(g:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,r:()=>number,color:string,count:number,size:number,alpha:number){g.save();g.translate(x,y);blotches(g,w,h,r,color,count,size,alpha,false);g.restore();}
 function wallpaper(g:CanvasRenderingContext2D,f:FinishItem,unit:FinishUnit,px:number){

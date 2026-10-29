@@ -385,7 +385,7 @@ export function Scene(p: Props) {
       map.colorSpace=THREE.SRGBColorSpace;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
       loadedTextures.add(map);finishMaps.set(id,t={map,unit});return t;
     }
-    function finishMaterial(id:string){const t=finishMap(id),f=finishById(id);if(!t||!f)return undefined;return {mat:new THREE.MeshStandardMaterial({map:t.map,roughness:f.look==='marble'?.3:f.kind==='tile'?.6:f.kind==='laminate'?.7:.92,metalness:0,side:THREE.DoubleSide}),unit:t.unit};}
+    function finishMaterial(id:string){const t=finishMap(id),f=finishById(id);if(!t||!f)return undefined;/* color чуть ниже белого: светлая плитка и обои под светом сцены не выгорают в чистый белый (рисунок и швы видны) */return {mat:new THREE.MeshStandardMaterial({map:t.map,color:0xe4e4e4,roughness:f.look==='marble'?.5:f.kind==='tile'?.65:f.kind==='laminate'?.72:.92,metalness:0,side:THREE.DoubleSide}),unit:t.unit};}
     function label(
       text: string,
       pos: THREE.Vector3,

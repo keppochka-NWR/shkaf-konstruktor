@@ -15,8 +15,10 @@ function swatchUrl(f:FinishItem){
   swatches.set(f.id,url);return url;
 }
 function Swatch({f,paint}:{f?:FinishItem;paint?:string}){
-  const [url,setUrl]=useState(()=>f?swatches.get(f.id):undefined);
-  useEffect(()=>{if(f&&url===undefined){const t=setTimeout(()=>setUrl(swatchUrl(f)),0);return ()=>clearTimeout(t);}},[f,url]);
+  // образец рисуется после первого кадра (60+ позиций не тормозят открытие списка); смена позиции — свой образец
+  const [drawn,setDrawn]=useState<{id:string;url:string}>();
+  const url=f?(drawn?.id===f.id?drawn.url:swatches.get(f.id)):undefined;
+  useEffect(()=>{if(f&&url===undefined){const t=setTimeout(()=>setDrawn({id:f.id,url:swatchUrl(f)}),0);return ()=>clearTimeout(t);}},[f,url]);
   return <span className="finish-swatch" aria-hidden="true" style={paint?{background:paint}:url?{backgroundImage:`url(${url})`}:{background:f?.tone[0]}}/>;
 }
 const norm=(s:string)=>s.toLowerCase().replace(/ё/g,'е');
