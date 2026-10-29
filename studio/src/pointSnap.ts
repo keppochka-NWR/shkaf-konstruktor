@@ -73,7 +73,9 @@ export function segmentCross(s1: Seg2, s2: Seg2, ext = 0): P2 | undefined {
   if (t < -e1 || t > 1 + e1 || u < -e2 || u > 1 + e2) return undefined;
   return { h: s1.a.h + t * d1h, v: s1.a.v + t * d1v };
 }
-const crossName = (a: string, b: string) => (a === b ? "угол: " + a : a + " × " + b);
+/** Имя пересечения: две вспомогательные — «вспомогательные линии», стена × стена — «угол помещения», края одного корпуса — «угол: край …». */
+export const crossName = (a: string, b: string) =>
+  a !== b ? a + " × " + b : a === "вспомогательная линия" ? "вспомогательные линии" : a === "стена" ? "угол помещения" : "угол: " + a;
 /** Ctrl: ближайшее к p пересечение двух линий в пределах tol (мм). В расчёт идут только линии не дальше 2·tol от курсора. */
 export function nearestCross(p: P2, segs: Seg2[], tol: number): PointHit | undefined {
   const near = segs.filter((s) => dist(p, closestOnSegment(p, s)) <= tol * 2);

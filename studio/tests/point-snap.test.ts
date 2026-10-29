@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,type Seg2} from '../src/pointSnap';
+import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -42,6 +42,9 @@ test('пересечение двух линий: крест, угол (конц
   assert.deepEqual(hit.p,{h:50,v:0});assert.equal(hit.what,'пол × линия');assert.equal(hit.kind,'cross');
   assert.equal(nearestCross({h:48,v:6},[seg(0,0,100,0)],20),undefined,'одна линия — пересечения нет');
   assert.equal(nearestCross({h:80,v:6},[seg(0,0,100,0),seg(50,-50,50,50)],20),undefined,'пересечение дальше допуска');
+  assert.equal(crossName('вспомогательная линия','вспомогательная линия'),'вспомогательные линии');
+  assert.equal(crossName('стена','стена'),'угол помещения');
+  assert.equal(crossName('край «Шкаф»','край «Шкаф»'),'угол: край «Шкаф»');
   // ближайшее из нескольких
   const two=nearestCross({h:95,v:3},[seg(0,0,200,0,'низ'),seg(50,-50,50,50,'a'),seg(100,-50,100,50,'b')],20)!;
   assert.deepEqual(two.p,{h:100,v:0});assert.equal(two.what,'низ × b');
