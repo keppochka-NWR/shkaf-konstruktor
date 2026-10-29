@@ -461,12 +461,37 @@ export function radiusParts(m: Module): Part[] {
     const L = RULES.confirmatL, d = RULES.confirmatD, c: Part["position"] = axis === "+x" ? [head[0] + L / 2, head[1], head[2]] : [head[0], head[1], head[2] + L / 2];
     out.push({ id, name: "Конфирмат 7×50", sectionId: sid, size: axis === "+x" ? [L, d, d] : [d, d, L], position: c, length: L, width: d, thickness: d, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
   };
+  // «Крепёж корпуса: эксцентрики» (критик 29.10, п.8; решение 26.10 — видимого крепежа нет): бочонок в горизонтали (дно — сверху,
+  // крыша и полки — снизу) в eccCenter от стойки, шток — в боковину/задник; задник к боковине — бочонок в заднике. Конфирматы (по
+  // умолчанию) — только через боковину у соседа и через задник у стены: головки там не видны.
+  const ecc = m.fastening === "eccentric", c0 = RULES.eccCenter, bh = RULES.eccBarrelH, bd = RULES.eccBarrelD;
+  const eccAt = (id: string, axis: "x" | "z", face: number, y: number, along: number, up: boolean, sid?: string) => {
+    const by = up ? y + t / 2 - bh / 2 + 0.3 : y - t / 2 + bh / 2 - 0.3, pin = c0 + t / 2;
+    const f = (o: Partial<Part> & Pick<Part, "size" | "position">): Part => ({ id, name: "", sectionId: sid, length: Math.max(...o.size), width: bd, thickness: bd, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0], ...o });
+    out.push(f({ name: "Эксцентрик D15 · бочонок", size: axis === "x" ? [bh, bd, bd] : [bd, bd, bh], position: axis === "x" ? [face + c0, by, along] : [along, by, face + c0], anchor: axis === "x" ? [face, up ? y + t / 2 : y - t / 2, along] : [along, up ? y + t / 2 : y - t / 2, face] }));
+    out.push(f({ id: id + ":pin", name: "Эксцентрик D15 · шток", size: axis === "x" ? [pin, 7, 7] : [7, 7, pin], position: axis === "x" ? [face + (c0 - t / 2) / 2, y, along] : [along, y, face + (c0 - t / 2) / 2] }));
+  };
   for (const p of out.filter((q) => q.size[1] === t && q.material === "board" && !q.id.startsWith("plinth"))) {
-    const y = p.position[1], sid = p.sectionId;
+    const y = p.position[1], sid = p.sectionId, up = p.id === "bottom";
+    if (ecc) {
+      [t + 50, D - 50].forEach((z, k) => eccAt(`ecc:${p.id}:left:${k}`, "x", t, y, z, up, sid));
+      [t + 50, W - 50].forEach((x, k) => eccAt(`ecc:${p.id}:back:${k}`, "z", t, y, x, up, sid));
+      continue;
+    }
     [t + 50, D - 50].forEach((z, k) => conf(`fast:${p.id}:left:${k}`, [0, y, z], "+x", sid));
     [t + 50, W - 50].forEach((x, k) => conf(`fast:${p.id}:back:${k}`, [x, y, 0], "+z", sid));
   }
-  [P + 100, H / 2, H - 100].forEach((y, k) => conf(`fast:back:left:${k}`, [0, y, t / 2], "+x"));
+  [P + 100, H / 2, H - 100].forEach((y, k) => {
+    if (!ecc) { conf(`fast:back:left:${k}`, [0, y, t / 2], "+x"); return; }
+    // задник к боковине: бочонок в внутренней пласти задника, шток — в боковину (по оси x)
+    out.push({ id: `ecc:back:left:${k}`, name: "Эксцентрик D15 · бочонок", size: [bd, bd, bh], position: [t + c0, y, t - bh / 2 + 0.3], anchor: [t, y, t], length: bd, width: bd, thickness: bd, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+    out.push({ id: `ecc:back:left:${k}:pin`, name: "Эксцентрик D15 · шток", size: [c0 + t / 2, 7, 7], position: [t + (c0 - t / 2) / 2, y, t / 2], length: c0 + t / 2, width: 7, thickness: 7, role: "fastener", material: "metal", decor: "", grain: "length", grainAxis: 0, edge: [0, 0, 0, 0] });
+  });
+  // цоколь стеллажа: торцы планок, упёртые в боковину (фронтальная) и в задник (боковая), — на эксцентриках, как цоколь шкафов
+  // (hullFasteners: у стеллажа цоколь считается здесь, по деталям); свободные концы планок у дуги лежат под дном
+  const pf = out.find((p) => p.id === "plinth"), ps = out.find((p) => p.id === "plinth:side"), nE = P < 150 ? 1 : 2;
+  for (let k = 0; k < (pf ? nE : 0); k++) eccAt(`ecc:plinth:left:${k}`, "x", t, nE === 1 ? P / 2 : P * (k + 1) / 3, pf!.position[2], true);
+  for (let k = 0; k < (ps ? nE : 0); k++) eccAt(`ecc:plinth:back:${k}`, "z", t, nE === 1 ? P / 2 : P * (k + 1) / 3, ps!.position[0], true);
   if (rs.side === "left") for (const p of out) mirrorX(p, W);
   return out;
 }

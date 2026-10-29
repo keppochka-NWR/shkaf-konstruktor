@@ -59,7 +59,8 @@ export function hullFasteners(m: Module): HullFasteners {
     return out;
   }
   for (const p of ps) {
-    if (p.id === "plinth" && p.material === "board") out.eccentrics += 2 * endEcc(p.size[1]);
+    // радиусный стеллаж (shapes.radiusParts): эксцентрики цоколя — деталями крепежа (торец к боковине и к заднику), здесь не считаем
+    if (p.id === "plinth" && p.material === "board" && !m.radius) out.eccentrics += 2 * endEcc(p.size[1]);
     // фальш к стене, боковая фальшпанель (добор 32 — первая плита, вторая на клею), угловая фальш 100×16 торцом (не планка из фасада —
     // та на эксцентриках, fastenerCounts: cornerStrip → 4)
     else if (/^(wall-filler|side-panel):(left|right)$/.test(p.id) || (/^corner-filler:(left|right)$/.test(p.id) && p.size[2] > p.size[0]))
