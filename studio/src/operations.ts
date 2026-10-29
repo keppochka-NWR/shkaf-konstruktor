@@ -6,6 +6,7 @@ import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,
 import {roofDrawers,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
+import {remapDrawerCutouts,dropCutoutsOnRemovedParts} from './cutoutBinding';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
 import {mirrorKitchen} from './kitchen';
@@ -17,7 +18,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
   else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
-  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofDrawers(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;
+  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofDrawers(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;remapDrawerCutouts(m,sid,j);/* круг 2 критика 29.10: вырез идёт за своим ящиком */
     // ящики по правилу (правка 29.10): комод — оставшиеся снова поровну до крыши; стопка от дна — сомкнуть и выровнять фасады
     if(s.drawers&&(roof||auto)){if(roof){s.drawerConfigs=drawersToRoof(m,s);/* критик 29.10: не встают поровну до крыши — ящик не убирается (ошибка с причиной), а не щель сверху */}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}}}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
@@ -224,9 +225,10 @@ export function clearSection(p:Project,mid:string,sid:string):Project {
 }
 export function removeSection(p:Project,mid:string,sid:string):Project {
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;if(!m||m.sections.length<2)throw Error('В корпусе должна остаться хотя бы одна секция.');
-  if(m.sectionLayout){removeOpening(m,sid);const e=projectErrors(n)[0];if(e)throw Error(e);return n;}
+  const was=p.modules.find(a=>a.id===mid)!.module;/* круг 2 критика 29.10: вырезы на деталях удалённой секции снимаются (сообщение — rebindCutouts), как у удалённой полки */
+  if(m.sectionLayout){removeOpening(m,sid);dropCutoutsOnRemovedParts(was,m);const e=projectErrors(n)[0];if(e)throw Error(e);return n;}
  const i=m.sections.findIndex(s=>s.id===sid);if(i<0)throw Error('Выберите секцию.');const bb=boxes(m),recipient=i===0?1:i-1;
- m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);
+ m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);dropCutoutsOnRemovedParts(was,m);
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
