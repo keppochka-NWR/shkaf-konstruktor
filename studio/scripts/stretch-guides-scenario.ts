@@ -15,6 +15,13 @@
 // 10. «План»: 4 ручки углов, угол → ширина и глубина; «900;600» + Enter; Q от правого края +600 → x = 2200 (look +Y); щелчок
 //     без числа — на расстоянии мыши; корпус и угол привязываются к линии; те же линии в «Сверху», «Спереди» — нет;
 //     щелчок по линии + Delete, Ctrl+Z, Esc отменяет Q, «Убрать вспомогательные линии».
+// 11. Привязки клавишами (ветка claude/snap-binds, решение Макса 29.10): «Спереди» линии x = 1900 и y = 2250;
+//     Ctrl + угол → в пересечение линий (ширина 900, высота 2250); Alt + угол → на линию (ширина 900, высота по мыши до 1 мм);
+//     Shift + угол — без привязки (1 мм); Alt + «↔» → край на линию; Ctrl+щелчок по «Сосед» — отмечен (и снова — снят), не сдвинут;
+//     Ctrl + перенос «Сосед» → левый нижний угол в пересечение линии и пола (x = 1900); Q + Ctrl → через угол «Сосед» (2800);
+//     Q + Alt → на правый край «Сосед» (3400).
+// 12. «План»: линии x = 1900 и z = 653; Ctrl + угол → ширина 900, глубина 650; Alt + перенос → правый край на линию (x = 1300);
+//     Ctrl+щелчок по «Сосед» — отмечен/снят; Q + Ctrl → через угол «Сосед» (2800).
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, type Module } from "../src/model";
@@ -297,6 +304,197 @@ try {
   await pclear.click(); await page.waitForTimeout(400);
   check("10. линии убраны", (await guides()).length === 0 && !(await pclear.count()));
   await shot("plan-cleared");
+
+  // 11. Привязки клавишами «Спереди»: Alt — на линию, Ctrl — пересечение, Shift — без привязки
+  type Pt = { x: number; y: number };
+  /** Тяга с зажатой клавишей (зажата до нажатия кнопки мыши): плашка и метка привязки перед отпусканием. */
+  async function modDrag(mod: "Alt" | "Control" | "Shift", from: Pt, to: Pt, name: string, badgeSel = ".drag-badge", markSel = ".snap-mark:not([hidden])") {
+    await page.mouse.move(from.x, from.y); await page.keyboard.down(mod); await page.mouse.down();
+    for (let i = 1; i <= 12; i++) { await page.mouse.move(from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12); await page.waitForTimeout(25); }
+    await page.waitForTimeout(120);
+    const live = (await page.locator(badgeSel).first().innerText().catch(() => "")).trim();
+    const mark = (await page.locator(markSel).first().getAttribute("data-kind").catch(() => null)) ?? "";
+    await shot(name + "-live");
+    await page.mouse.up(); await page.keyboard.up(mod); await page.waitForTimeout(600);
+    return { live, mark };
+  }
+  async function modClick(mod: "Alt" | "Control", p: Pt) { await page.keyboard.down(mod); await page.mouse.click(p.x, p.y); await page.keyboard.up(mod); await page.waitForTimeout(400); }
+  const status = async () => (await page.locator(".orbit-help").first().innerText().catch(() => "")).replace(/\s+/g, " ");
+  await view("s");
+  const f0 = (await handle("lo-lo"))!, f1 = (await handle("hi-hi"))!, f2 = (await handle("hi-lo"))!;
+  const fk = (f1.x - f0.x) / 600, X = (x: number) => f0.x + (x - 1000) * fk, Y = (y: number) => f0.y - y * fk;
+  // линия x = 1900 (правый край + 300) и y = 2250 (верх + 250)
+  const fedge = { x: f1.x, y: (f1.y + f2.y) / 2 };
+  await page.mouse.move(fedge.x + 1, fedge.y + 40); await key("q");
+  await page.mouse.click(fedge.x + 1, fedge.y + 40); await page.waitForTimeout(200);
+  await page.mouse.move(fedge.x + 120, fedge.y + 40); for (const c of "300") await page.keyboard.press(c); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  const ftop = { x: (f0.x + f1.x) / 2, y: f1.y };
+  await page.mouse.move(ftop.x, ftop.y - 1); await key("q");
+  await page.mouse.click(ftop.x, ftop.y - 1); await page.waitForTimeout(200);
+  await page.mouse.move(ftop.x, ftop.y - 60); for (const c of "250") await page.keyboard.press(c); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. линии «Спереди»: x = 1900 и y = 2250", g.length === 2 && g.some((x) => x.at === 1900 && x.n[0] === 1) && g.some((x) => x.at === 2250 && x.n[1] === 1), JSON.stringify(g.map((x) => [x.n, x.at])));
+  // Ctrl + угол → пересечение двух линий
+  const c11 = await modDrag("Control", (await handle("hi-hi"))!, { x: X(1900) + 5, y: Y(2250) - 4 }, "ctrl-corner");
+  const b11 = await settled((b) => b.a.w !== 600);
+  check("11. Ctrl + угол → в пересечение линий: ширина 900, высота 2250, левый нижний угол на месте", b11.a.w === 900 && b11.a.h === 2250 && b11.a.x === 1000 && b11.a.y === 0, fmt(b11.a) + ` · «${c11.live}»`);
+  check("11. Ctrl: плашка «Ctrl · пересечение» и метка-крестик", /Ctrl · пересечение: вспомогательные линии/.test(c11.live) && c11.mark === "cross", `«${c11.live}» · ${c11.mark}`);
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  check("11. Ctrl+Z — одной отменой", (await boxes()).a.h === 2000);
+  // критик 29.10 п.5: Ctrl+колесо посреди тяги с Ctrl — страница не масштабируется (колесо погашено)
+  await page.evaluate(() => { const w = window as unknown as { __wheel: boolean[] }; w.__wheel = []; window.addEventListener("wheel", (e) => { w.__wheel.push(e.defaultPrevented); }, { passive: true }); });
+  const hh = (await handle("hi-hi"))!;
+  await page.mouse.move(hh.x, hh.y); await page.keyboard.down("Control"); await page.mouse.down();
+  for (let i = 1; i <= 5; i++) { await page.mouse.move(hh.x + i * 6, hh.y - i * 4); await page.waitForTimeout(25); }
+  await page.mouse.wheel(0, -120); await page.waitForTimeout(150);
+  const wheelOk = (await page.evaluate(() => (window as unknown as { __wheel: boolean[] }).__wheel.at(-1))) === true;
+  const zoom = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+  // критик 29.10 п.6: Ctrl+Z посреди тяги (Ctrl зажат) — не отменяет (линии на месте)
+  const gBefore = (await guides()).length;
+  await page.keyboard.press("z"); await page.waitForTimeout(250);
+  const gMid = (await guides()).length;
+  await page.keyboard.press("Escape"); await page.mouse.up(); await page.keyboard.up("Control"); await page.waitForTimeout(400);
+  check("11. Ctrl+колесо во время тяги — погашено, страница не масштабирована", wheelOk && zoom === 1 && (await boxes()).a.w === 600, `prevented ${wheelOk} · scale ${zoom}`);
+  check("11. Ctrl+Z посреди тяги — без отмены (линии на месте)", gBefore === 2 && gMid === 2 && (await guides()).length === 2, `${gBefore} → ${gMid}`);
+  // Alt + угол → точка на линии: ширина по линии, высота по мыши (1 мм, не шаг 10)
+  // критик 29.10 (блокер): Alt отпустили ПОСЛЕ мыши — keyup Alt погашен (иначе Chrome на Windows уводит фокус в меню браузера)
+  await page.evaluate(() => { const w = window as unknown as { __altUp: boolean[] }; w.__altUp = []; window.addEventListener("keyup", (e) => { if (e.key === "Alt") w.__altUp.push(e.defaultPrevented); }); });
+  const altUp = async () => (await page.evaluate(() => (window as unknown as { __altUp: boolean[] }).__altUp.at(-1))) === true;
+  const a11 = await modDrag("Alt", (await handle("hi-hi"))!, { x: X(1900) + 5, y: Y(2103) }, "alt-corner");
+  check("11. Alt отпущен после мыши — keyup Alt погашен (фокус не уходит в меню браузера)", await altUp());
+  const b11a = await settled((b) => b.a.w !== 600);
+  check("11. Alt + угол → на линию: ширина ровно 900, высота по мыши ≈ 2103 (до 1 мм)", b11a.a.w === 900 && Math.abs(b11a.a.h - 2103) <= 3 && b11a.a.x === 1000, fmt(b11a.a) + ` · «${a11.live}»`);
+  check("11. Alt: плашка «Alt · на линии» и метка-кружок", /Alt · на линии: вспомогательная линия/.test(a11.live) && a11.mark === "line", `«${a11.live}» · ${a11.mark}`);
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  // Shift + угол — без привязки (раньше Alt)
+  const s11 = await modDrag("Shift", (await handle("hi-hi"))!, { x: f1.x + 103 * fk, y: f1.y - 148 * fk }, "shift-corner");
+  const b11s = await settled((b) => b.a.w !== 600);
+  check("11. Shift + угол — без привязки: ≈ 703 × 2148 (не 700 × 2150)", Math.abs(b11s.a.w - 703) <= 2 && Math.abs(b11s.a.h - 2148) <= 2 && /Без привязки/.test(s11.live), fmt(b11s.a) + ` · «${s11.live}»`);
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  // Alt + «↔» → край на линию
+  const sr = await page.locator(".stretch-handle[data-side=right]").first().boundingBox();
+  if (sr) {
+    const from = { x: sr.x + sr.width / 2, y: sr.y + sr.height / 2 };
+    const e11 = await modDrag("Alt", from, { x: from.x + (X(1900) - X(1600)) - 5, y: from.y }, "alt-edge");
+    const b11e = await settled((b) => b.a.w !== 600);
+    check("11. Alt + «↔» → правый край на линию: ширина 900", b11e.a.w === 900 && b11e.a.x === 1000 && /Alt · на линии/.test(e11.live), fmt(b11e.a) + ` · «${e11.live}»`);
+    await key("Control+z"); await settled((b) => b.a.w === 600);
+  } else check("11. ручка «↔» видна", false);
+  // Ctrl+щелчок без движения — по-прежнему отметить корпус
+  const nb = { x: X(3100), y: Y(1000) };
+  await modClick("Control", nb);
+  const st1 = await status(), bx1 = await boxes();
+  check("11. Ctrl+щелчок по «Сосед» — отмечен (группа), не сдвинут", /Отмеченные корпуса/.test(st1) && bx1.b.x === 2800, st1);
+  await modClick("Control", nb);
+  check("11. Ctrl+щелчок ещё раз — снят", !/Отмеченные корпуса/.test(await status()));
+  // критик 29.10 п.4: Ctrl+щелчок с дрожанием 6 px — щелчок (отмечен), корпус не сдвинут
+  const jitter = async (p: Pt) => { await page.mouse.move(p.x, p.y); await page.keyboard.down("Control"); await page.mouse.down(); await page.mouse.move(p.x + 4, p.y + 2); await page.mouse.move(p.x + 6, p.y); await page.mouse.up(); await page.keyboard.up("Control"); await page.waitForTimeout(400); };
+  await jitter(nb);
+  const stj = await status(), bxj = await boxes();
+  check("11. Ctrl+щелчок с дрожанием 6 px — отмечен, не сдвинут", /Отмеченные корпуса/.test(stj) && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
+  await modClick("Control", nb);
+  // критик 29.10 п.8: «Прозрачный корпус» — Ctrl+протяжка за оболочку «Сосед» тоже переносит
+  await page.getByRole("button", { name: "Прозрачный корпус" }).click(); await page.waitForTimeout(600);
+  const tgrab = { x: X(3100), y: Y(1700) };
+  await modDrag("Control", tgrab, { x: tgrab.x - 200 * fk, y: tgrab.y - 2 }, "transparent-ctrl-move");
+  const b11t = await settled((b) => b.b.x !== 2800);
+  check("11. прозрачный корпус: Ctrl+протяжка «Сосед» — перенос (≈ 2600)", Math.abs(b11t.b.x - 2600) <= 6 && !/Отмеченные корпуса/.test(await status()), fmt(b11t.b));
+  if (b11t.b.x !== 2800) { await key("Control+z"); await settled((b) => b.b.x === 2800); }
+  await page.getByRole("button", { name: "Прозрачный корпус" }).click(); await page.waitForTimeout(600);
+  // Ctrl + перенос «Сосед»: левый нижний угол — в пересечение линии x = 1900 и пола
+  const grab = { x: X(2800) + 25, y: Y(0) - 40 };
+  const m11 = await modDrag("Control", grab, { x: grab.x + X(1900) - X(2800) + 5, y: grab.y + 4 }, "ctrl-move");
+  const b11m = await settled((b) => b.b.x !== 2800);
+  check("11. Ctrl + перенос «Сосед» → угол в пересечение: x = 1900, y = 0", b11m.b.x === 1900 && b11m.b.y === 0 && /Ctrl · пересечение/.test(m11.live), fmt(b11m.b) + ` · «${m11.live}»`);
+  check("11. Ctrl+протяжка не отмечает корпус", !/Отмеченные корпуса/.test(await status()));
+  await key("Control+z"); await settled((b) => b.b.x === 2800);
+  // Q + Ctrl: линия через угол «Сосед»; Q + Alt: на правый край «Сосед»
+  await page.mouse.move(fedge.x + 1, fedge.y + 40); await key("q");
+  await page.mouse.click(fedge.x + 1, fedge.y + 40); await page.waitForTimeout(200);
+  await page.keyboard.down("Control"); await page.mouse.move(X(2800) + 4, Y(2000) + 5); await page.waitForTimeout(200);
+  const q11 = (await page.locator(".drag-badge").innerText().catch(() => "")).trim();
+  await shot("q-ctrl");
+  await page.mouse.click(X(2800) + 4, Y(2000) + 5); await page.keyboard.up("Control"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. Q + Ctrl → линия через угол «Сосед»: x = 2800 точно", g.some((x) => x.at === 2800 && x.n[0] === 1) && /Ctrl · пересечение: угол: край «Сосед»/.test(q11), `«${q11}» · ${JSON.stringify(g.map((x) => x.at))}`);
+  await page.mouse.move(fedge.x + 1, fedge.y + 40); await key("q");
+  await page.mouse.click(fedge.x + 1, fedge.y + 40); await page.waitForTimeout(200);
+  await page.keyboard.down("Alt"); await page.mouse.move(X(3400) + 5, Y(1000)); await page.waitForTimeout(200);
+  await page.mouse.click(X(3400) + 5, Y(1000)); await page.keyboard.up("Alt"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. Q + Alt → линия на правый край «Сосед»: x = 3400", g.some((x) => x.at === 3400 && x.n[0] === 1), JSON.stringify(g.map((x) => x.at)));
+  // критик 29.10 п.2: Q от левого края «Шкаф», Alt у пола (4 мм) у правого края — линия ровно 1600 (пол хода не «съедает»)
+  await page.mouse.move(X(1000) - 1, Y(1000)); await key("q");
+  await page.mouse.click(X(1000) - 1, Y(1000)); await page.waitForTimeout(200);
+  await page.keyboard.down("Alt"); await page.mouse.move(X(1608), Y(4)); await page.waitForTimeout(200);
+  await page.mouse.click(X(1608), Y(4)); await page.keyboard.up("Alt"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. Q + Alt у пола → линия на правый край «Шкаф»: x = 1600 точно", g.some((x) => x.at === 1600 && x.n[0] === 1), JSON.stringify(g.map((x) => x.at)));
+  await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
+  // критик 29.10 п.7: «Слева» — Ctrl + перенос «Шкаф» вверх: задний нижний угол в пересечение линии y = 300 и заднего края «Сосед»
+  await view("a");
+  const l0 = (await handle("lo-lo"))!, l1 = (await handle("hi-hi"))!;
+  const lz = (l1.x - l0.x) / 550, ly = (l0.y - l1.y) / 2000, SZ = (z: number) => l0.x + (z - 3) * lz, SY = (y: number) => l0.y - y * ly;
+  await page.mouse.move(SZ(1500), SY(0) - 1); await key("q");
+  await page.mouse.click(SZ(1500), SY(0) - 1); await page.waitForTimeout(200);
+  await page.mouse.move(SZ(1500), SY(0) - 60); for (const c of "300") await page.keyboard.press(c); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. «Слева»: линия y = 300 от пола", g.length === 1 && g[0].at === 300 && g[0].n[1] === 1, JSON.stringify(g.map((x) => [x.n, x.at])));
+  const lgrab = { x: SZ(40), y: SY(150) };
+  const s11m = await modDrag("Control", lgrab, { x: lgrab.x + 3 * Math.sign(lz), y: lgrab.y + SY(300) - SY(0) - 4 }, "left-ctrl-move");
+  const b11l = await settled((b) => b.a.y !== 0);
+  check("11. «Слева» Ctrl + перенос → высота по пересечению: y = 300, z = 3, x на месте", b11l.a.y === 300 && b11l.a.z === 3 && b11l.a.x === 1000 && /Ctrl · пересечение/.test(s11m.live), fmt(b11l.a) + ` · «${s11m.live}»`);
+  await key("Control+z"); await settled((b) => b.a.y === 0);
+  // повторная проверка критика 29.10: сбоку дрожание руки не поднимает корпус с пола; высота — только при главном вертикальном ходе
+  await drag(lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 6 }, "left-plain-wobble");
+  const bw = await settled((b) => b.a.z !== 3);
+  check("11. «Слева»: перенос вперёд 60 px с дрожанием 6 px вверх — на полу (y = 0), глубина сдвинута", bw.a.y === 0 && bw.a.z !== 3, fmt(bw.a));
+  if (bw.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.z === 3); }
+  await modDrag("Shift", lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 2 }, "left-shift-wobble");
+  const bs = await settled((b) => b.a.z !== 3);
+  check("11. «Слева»: Shift-перенос с дрожанием 2 px — на полу (y = 0)", bs.a.y === 0 && bs.a.z !== 3, fmt(bs.a));
+  if (bs.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.z === 3); }
+  await modDrag("Shift", lgrab, { x: lgrab.x + 4 * Math.sign(lz), y: lgrab.y - 40 }, "left-shift-up");
+  const bu = await settled((b) => b.a.y !== 0);
+  check("11. «Слева»: вертикальный ход 40 px главный — высота меняется", bu.a.y > 100, fmt(bu.a));
+  if (bu.a.y !== 0) { await key("Control+z"); await settled((b) => b.a.y === 0); }
+  await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
+
+  // 12. «План»: те же клавиши
+  await page.getByRole("button", { name: "План", exact: true }).click(); await page.waitForTimeout(800);
+  const p0 = (await plan("lo-lo"))!, p1 = (await plan("hi-hi"))!, p2 = (await plan("hi-lo"))!;
+  const px = (p1.x - p0.x) / 600, pz = (p1.y - p0.y) / 550, PX = (x: number) => p0.x + (x - 1000) * px, PZ = (z: number) => p0.y + (z - 3) * pz;
+  const pedge = { x: p1.x, y: (p1.y + p2.y) / 2 }, pfront = { x: (p0.x + p1.x) / 2, y: p1.y };
+  await page.mouse.move(pedge.x, pedge.y); await key("q"); await page.mouse.click(pedge.x, pedge.y); await page.waitForTimeout(150);
+  await page.mouse.move(pedge.x + 100, pedge.y); for (const c of "300") await page.keyboard.press(c); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  await page.mouse.move(pfront.x, pfront.y); await key("q"); await page.mouse.click(pfront.x, pfront.y); await page.waitForTimeout(150);
+  await page.mouse.move(pfront.x, pfront.y + 60); for (const c of "100") await page.keyboard.press(c); await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  g = await guides();
+  check("12. линии плана: x = 1900 и z = 653", g.length === 2 && g.some((x) => x.at === 1900 && x.n[0] === 1) && g.some((x) => x.at === -653 && x.n[2] === -1), JSON.stringify(g.map((x) => [x.n, x.at])));
+  const c12 = await modDrag("Control", (await plan("hi-hi"))!, { x: PX(1900) + 4, y: PZ(653) + 5 }, "plan-ctrl-corner", ".plan-badge", ".plan-snap-mark");
+  const b12 = await settled((b) => b.a.w !== 600);
+  check("12. Ctrl + угол на плане → в пересечение: ширина 900, глубина 650, задняя стенка на месте", b12.a.w === 900 && b12.a.d === 650 && b12.a.x === 1000 && b12.a.z === 3, fmt(b12.a) + ` · «${c12.live}»`);
+  check("12. Ctrl: плашка и метка-крестик на плане", /Ctrl · пересечение/.test(c12.live) && c12.mark === "cross", `«${c12.live}» · ${c12.mark}`);
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  const pgrab = { x: PX(1600) - 15, y: PZ(553) - 15 };
+  const m12 = await modDrag("Alt", pgrab, { x: pgrab.x + PX(1900) - PX(1600) - 5, y: pgrab.y + 17 * pz }, "plan-alt-move", ".plan-badge", ".plan-snap-mark");
+  check("12. «План»: Alt отпущен после мыши — keyup Alt погашен", await altUp());
+  const b12m = await settled((b) => b.a.x !== 1000);
+  check("12. Alt + перенос на плане → правый край на линию: x = 1300, z по мыши ≈ 20", b12m.a.x === 1300 && Math.abs(b12m.a.z - 20) <= 3 && Number.isInteger(b12m.a.z) && m12.mark === "line", fmt(b12m.a) + ` · «${m12.live}» · ${m12.mark}`);
+  await key("Control+z"); await settled((b) => b.a.x === 1000);
+  const pnb = { x: PX(3100), y: PZ(278) }, fill = () => page.locator('g[aria-label="На плане: Сосед"] polygon').first().getAttribute("fill");
+  await modClick("Control", pnb);
+  check("12. Ctrl+щелчок по «Сосед» на плане — отмечен, не сдвинут", (await fill()) === "#cde6df" && (await boxes()).b.x === 2800, String(await fill()));
+  await modClick("Control", pnb);
+  check("12. Ctrl+щелчок ещё раз — снят", (await fill()) !== "#cde6df", String(await fill()));
+  await page.mouse.move(pedge.x, pedge.y); await key("q"); await page.mouse.click(pedge.x, pedge.y); await page.waitForTimeout(150);
+  await page.keyboard.down("Control"); await page.mouse.move(PX(2800) + 4, PZ(3) + 4); await page.waitForTimeout(200);
+  const q12 = (await page.locator(".plan-badge").innerText().catch(() => "")).trim();
+  await shot("plan-q-ctrl");
+  await page.mouse.click(PX(2800) + 4, PZ(3) + 4); await page.keyboard.up("Control"); await page.waitForTimeout(400);
+  g = await guides();
+  check("12. Q + Ctrl на плане → линия через угол «Сосед»: x = 2800", g.some((x) => x.at === 2800 && x.n[0] === 1) && /Ctrl · пересечение/.test(q12), `«${q12}» · ${JSON.stringify(g.map((x) => x.at))}`);
+  await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
   console.log("ошибки страницы: " + (errors.length ? errors.join("; ") : "нет"));
   check("без ошибок страницы", !errors.length, errors.join("; "));
   const bad = results.filter((r) => !r[1]);

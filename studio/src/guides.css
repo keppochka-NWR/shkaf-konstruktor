@@ -37,3 +37,28 @@ body.radial-open .corner-handle { pointer-events: none; }
    перемасштабируется посреди тяги за угол или постановки линии Q и курсор «уезжает» от угла */
 .room-plan .plan-help { min-height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
 .room-plan .plan-badge { z-index: 9; }
+/* Привязки клавишами (pointSnap.ts, решение Макса 29.10.2026): Alt — кружок на линии, Ctrl — крестик в пересечении */
+.snap-mark {
+  position: absolute;
+  z-index: 8;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.snap-mark[data-kind="line"] { border: 2px solid #e8590c; border-radius: 50%; background: #fff8; }
+.snap-mark[data-kind="cross"]::before, .snap-mark[data-kind="cross"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  width: 2px;
+  height: 18px;
+  margin-left: -1px;
+  background: #e8590c;
+  box-shadow: 0 0 0 1px #fff9;
+}
+.snap-mark[data-kind="cross"]::before { transform: rotate(45deg); }
+.snap-mark[data-kind="cross"]::after { transform: rotate(-45deg); }
+.plan-snap-mark { pointer-events: none; }
