@@ -16,7 +16,7 @@ export const KITCHEN_WORKSPACE = "kitchen-workspace";
 /** Комната кухни по умолчанию: 3600 × 3000 × 2700, прямой ряд 3000 у задней стены. */
 export const KITCHEN_ROOM = { width: 3600, depth: 3000, height: 2700 } as const;
 export const KITCHEN_DEFAULT_ROW = 3000;
-/** Отступ ряда от боковой стены: фальш-планка торцом 16 + 5 мм к стене (регламент цеха, applyAutoFillers). */
+/** Отступ ряда от боковой стены: фальш-планка торцом 16 + 4 = 20 мм к стене (решение Макса 29.10.2026, было 16 + 5) (регламент цеха, applyAutoFillers). */
 export const KITCHEN_WALL_OFFSET = RULES.panel + RULES.wallFillerEdgeGap;
 /** Высота антресоли по умолчанию: распашной фасад не ниже 360 (RULES.doorMinH) + отступы 1,5. */
 export const KITCHEN_ANTRESOL_HEIGHT = 400;

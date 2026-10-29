@@ -108,7 +108,7 @@ export function KitchenPalette({ project, source, commit, onAdded, onError, onNo
         <button type="button" className="primary" onClick={() => addRow(true)}>Заменить кухню</button>
         <button type="button" className="outline" onClick={() => addRow(false)}>Добавить ряд</button>
       </div>
-      <small>«Заменить» убирает кухонные модули и ставит ряд от левой стены (место под фальш 16 + 5). Шкафы остаются. Ctrl+Z — вернуть.</small>
+      <small>«Заменить» убирает кухонные модули и ставит ряд от левой стены (место под фальш 16 + 4). Шкафы остаются. Ctrl+Z — вернуть.</small>
     </div>
     <div className="kp-group kp-row">
       <h3><span className="kp-title"><CornerDownRight size={16} />Угловая кухня (Г или П)</span><small>нижний и навесной угловые в углу, крыло от линии фасадов задней стены с угловой планкой, столешница кусками по стенам</small></h3>

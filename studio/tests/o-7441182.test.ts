@@ -76,7 +76,7 @@ test("7441182: «без фальша у стены» по эскизу — пл�
   t.sections = [{ ...section(), shelves: [0.5], drawers: 0, rod: false }];
   let p: Project = { ...proj(t), modules: [{ id: "t", x: 0, y: 0, z: 33, rotation: 0, module: t }] };
   p = applyAutoFillers(p);
-  assert.equal(p.modules[0].x, 21, "регламент: фальш 100×16 торцом + зазор 5");
+  assert.equal(p.modules[0].x, 20, "регламент: фальш 100×16 торцом + зазор 4 = 20 (решение Макса 29.10, было 21)");
   assert.ok(p.modules[0].module.wallFiller?.left);
   p = setWallFillersOff(p, "t", true);
   assert.equal(p.modules[0].x, 0, "вплотную к стене");
@@ -86,5 +86,5 @@ test("7441182: «без фальша у стены» по эскизу — пл�
   const up = p.modules.at(-1)!;
   assert.equal(up.x, 0); assert.equal(up.module.autoFillersOff, true); assert.equal(applyAutoFillers(p).modules.at(-1)!.module.wallFiller, undefined);
   const back = setWallFillersOff(p, "t", false);
-  assert.equal(back.modules[0].x, 21); assert.ok(back.modules[0].module.wallFiller?.left);
+  assert.equal(back.modules[0].x, 20); /* 16 + 4 (29.10) */ assert.ok(back.modules[0].module.wallFiller?.left);
 });

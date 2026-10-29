@@ -4,7 +4,7 @@
 import { RULES, needsWallFiller, type Module } from "./model";
 import { appendModule, applyAutoFillers, bounds, projectErrors, type Project } from "./project";
 
-/** Нехватка места в ряду: free — свободно справа от ряда до стены (мм), filler — фальш у стены (16 + 5),
+/** Нехватка места в ряду: free — свободно справа от ряда до стены (мм), filler — фальш у стены (16 + 4 = 20),
  *  withFiller — ширина, которая встанет в ряд с фальшем, withoutFiller — без фальша у стены (null — вариант не подходит). */
 export type RowShortage = { width: number; free: number; filler: number; withFiller: number | null; withoutFiller: number | null };
 
@@ -38,7 +38,7 @@ export function rowShortage(p: Project, source: Module): RowShortage | null {
   return { width: source.width, free, filler, withFiller, withoutFiller };
 }
 
-/** Текст сообщения: «Пустой шкаф» 1200 мм в ряд не встаёт: справа свободно 1179 из 1200 мм, у стены нужна фальшпанель 21 мм (16 + 5). */
+/** Текст сообщения: «Пустой шкаф» 1200 мм в ряд не встаёт: справа свободно 1179 из 1200 мм, у стены нужна фальшпанель 20 мм (16 + 4). */
 export function rowShortageText(name: string, s: RowShortage): string {
   const wall = s.filler ? `, у стены нужна фальшпанель ${s.filler} мм (${RULES.panel} + ${RULES.wallFillerEdgeGap})` : "";
   const ways = [s.withFiller !== null ? `сузить до ${s.withFiller} мм${s.filler ? " (с фальшпанелью)" : ""}` : "", s.withoutFiller !== null ? `${s.withoutFiller} мм без фальшпанели у стены` : ""].filter(Boolean);

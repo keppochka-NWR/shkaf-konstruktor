@@ -38,11 +38,11 @@ test('Г: длины длиннее стен комнаты — обе ошиб�
   const list=paletteIssues(g(4500,3500),source);
   assert.deepEqual(list.map(x=>x.field),['width','side'],list.map(x=>x.problem).join(' / '));
   assert.equal(list[0].problem,'По задней стене 4500 > 4000 мм');assert.deepEqual(list[0].auto,{width:4000});assert.equal(list[0].limit?.max,4000);
-  assert.equal(list[1].problem,'По боковой стене 3500 > 2979 мм');assert.deepEqual(list[1].auto,{side:2979});assert.match(list[1].action,/без 21 мм под фальш-планку/);
+  assert.equal(list[1].problem,'По боковой стене 3500 > 2980 мм');assert.deepEqual(list[1].auto,{side:2980});assert.match(list[1].action,/без 20 мм под фальш-планку/); /* фальш у стены 16 + 4 (29.10), было 2979 */
   // исходные тексты — тексты сборки (как у прочих видов формы)
   assert.match(list[0].text,/^Угловая кухня: ряд по задней стене 4500 мм длиннее стены \(4000 мм\)\.$/);
   const r=paletteAutoFix(g(4500,3500),source);
-  assert.deepEqual(r.patch,{width:4000,side:2979});assert.equal(r.left.length,0);assert.ok(adds(r.input));
+  assert.deepEqual(r.patch,{width:4000,side:2980});assert.equal(r.left.length,0);assert.ok(adds(r.input));
 });
 
 test('Г: короткие ряды — минимум по задней стене (угловой + модуль) и по боковой (глубина ряда + планка + модуль)',()=>{
@@ -59,7 +59,7 @@ test('П: задняя не во всю ширину комнаты — испр
   const list=paletteIssues(u(3200,3600,3100),source);
   assert.deepEqual(list.map(x=>x.field),['width','left','side'],list.map(x=>x.problem).join(' / '));
   assert.equal(list[0].problem,'По задней стене 3600 ≠ 4000 мм');assert.deepEqual(list[0].auto,{width:4000});
-  assert.deepEqual(list[1].auto,{left:2979});assert.deepEqual(list[2].auto,{side:2979});
+  assert.deepEqual(list[1].auto,{left:2980});assert.deepEqual(list[2].auto,{side:2980});
   const r=paletteAutoFix(u(3200,3600,3100),source);assert.equal(r.left.length,0);assert.ok(adds(r.input));
 });
 

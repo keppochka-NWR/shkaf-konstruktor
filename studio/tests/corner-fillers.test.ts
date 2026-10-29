@@ -55,8 +55,9 @@ test('кромка фальшей угла: 2 мм только на видим�
 
 test('глухая часть сохраняется в файле; сосед уехал — ширина убирается вместе с фальшью; старый файл без ширины — планка 100',()=>{
   const p=get('1').project,a=p.modules.find(x=>x.module.cornerKind==='strip')!;
-  assert.equal(a.module.cornerFillerWidth,647);
-  assert.equal(parseProject(JSON.parse(JSON.stringify(p))).modules.find(x=>x.id===a.id)!.module.cornerFillerWidth,647);
+  // 648: сосед у стены с фальшем 16 + 4 = 20 стоит на 1 мм ближе к углу (решение Макса 29.10; при 16 + 5 было 647)
+  assert.equal(a.module.cornerFillerWidth,648);
+  assert.equal(parseProject(JSON.parse(JSON.stringify(p))).modules.find(x=>x.id===a.id)!.module.cornerFillerWidth,648);
   const moved=applyAutoFillers({...p,modules:p.modules.map(x=>x.id===a.id?x:{...x,z:x.z+800})});
   const m=moved.modules.find(x=>x.id===a.id)!.module;assert.equal(m.cornerFiller,undefined);assert.equal(m.cornerFillerWidth,undefined);
   const old=structuredClone(a.module);delete old.cornerFillerWidth;assert.equal(parts(old).find(x=>x.id==='corner-filler:left')!.size[0],100);

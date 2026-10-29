@@ -19,7 +19,7 @@ import { bounds, localToRoom, applyAutoFillers, projectErrors, type PlacedModule
 export const CORNER_CLEARANCE = 27;
 /** Ширина нижнего углового по умолчанию: 1000 (дверь 488, глухая часть 512 — как у «НМУ» k27 с фальшем 512). */
 export const KITCHEN_CORNER_WIDTH = 1000;
-const WALL_OFFSET = 21; // фальш-планка у стены 16 + 5 (KITCHEN_WALL_OFFSET)
+const WALL_OFFSET = RULES.panel + RULES.wallFillerEdgeGap; // фальш-планка у стены 16 + 4 = 20 (KITCHEN_WALL_OFFSET, решение 29.10)
 const PLANK = RULES.panel; // угловая планка крыла (applyAutoFillers, правило угла)
 
 export type Wing = "left" | "right";

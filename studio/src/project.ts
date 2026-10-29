@@ -32,7 +32,7 @@ export function newProject(module=firstWardrobe()):Project{return {version:3,roo
 export function localToRoom(a:PlacedModule,u:number,v:number){return transform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,u,v);}
 export function roomToLocal(a:PlacedModule,x:number,z:number){const p=inverseTransform(a.x,a.z,a.module.width,a.module.depth,a.rotation??0,x,z);return p;}
 export function moduleCenter(a:PlacedModule){return localToRoom(a,a.module.width/2,a.module.depth/2);}
-/** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 5 к стене, стандартная ФП — её ширина. */
+/** Вылет за боковину: угловая фальш 16, ФП торцом 16 + 4 к стене, стандартная ФП — её ширина. */
 export function sideExtension(m:Module,side:'left'|'right'){if(m.kitchen?.sideStrip?.side===side)return m.kitchen.sideStrip.ext;/* доборная планка кухни Базиса (kitchen.sideStrip) */if(m.sidePanels?.[side]){const sp=m.sidePanels[side]!;if(sp.facade&&m.vernissage)return m.vernissage.thickness;/* видимый бок МДФ (dp-2810) — толщина фасада */return RULES.panel*(sp.thick===32?2:1);}/* добор 32 — две плиты */if(m.cornerFiller===side)return cornerStrip(m)?0:RULES.panel;const w=m.wallFiller?.[side];if(!w)return 0;return RULES.panel+RULES.wallFillerEdgeGap;}
 export function moduleFootprint(a:PlacedModule):{x:number;z:number}[]{
  const c=a.module.corner;
@@ -292,7 +292,7 @@ export function parseProject(data:unknown,allowEmpty=false):Project{
 export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Project{
   const n=structuredClone(p),module=structuredClone(source);rekeySections(module,id);module.name=`Модуль ${p.modules.length+1}`;
   // Место ищем по корпусам с автофальшами (как их поставит сохранение): первый шкаф у стены ещё без планки торцом
-  // (добавлен из пустой комнаты) получит её при следующем сохранении и сдвинется на 21 мм — новый не должен встать в этот вылет.
+  // (добавлен из пустой комнаты) получит её при следующем сохранении и сдвинется на 20 мм — новый не должен встать в этот вылет.
   // Ложное «пересекается» на втором «Добавить в комнату» (критик 20.10, было и на night-release).
   const f=applyAutoFillers(p),anchorId=anchor?.id;if(anchor)anchor=f.modules.find(x=>x.id===anchorId)??anchor;p={...p,modules:f.modules};
   const kitchenBases=p.modules.filter(a=>a.module.kitchen?.role==='base');

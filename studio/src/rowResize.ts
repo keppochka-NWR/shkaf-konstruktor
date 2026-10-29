@@ -251,7 +251,7 @@ function freeSpace(p: Project, a: PlacedModule): Record<Side, GapSide> {
 }
 
 /** Зазоры слева и справа от модуля по оси его ширины (любой поворот): до соседа любого уровня, объекта замера или стены.
- *  До стены: если край дойдёт до стены, у боковины встанет автофальшь (16 + 5 мм) — filler, а fillWidth — фактическая ширина
+ *  До стены: если край дойдёт до стены, у боковины встанет автофальшь (16 + 4 мм) — filler, а fillWidth — фактическая ширина
  *  после «Дотянуть» (критик релиза 22.10, m2: «Дотянуть (+79)» добавляло 58 — 21 мм оставалось под фальш). */
 export function gaps(p: Project, id: string): Record<Side, GapSide> {
   const a = p.modules.find((x) => x.id === id);
@@ -325,7 +325,7 @@ function moveFreeEdge(p: Project, a: PlacedModule, side: Side, d: number): Proje
   const why = ownLocked(a.module);
   if (why) throw Error(`${quote(a.module)}: ${why}.`);
   const w = r1(a.module.width + d), keep: Side = side === "right" ? "left" : "right";
-  // Проверяем ту ширину, что получится: край у стены — автофальшь забирает 16 + 5 мм (settle). Было: проверка до settle по ширине
+  // Проверяем ту ширину, что получится: край у стены — автофальшь забирает 16 + 4 мм (settle). Было: проверка до settle по ширине
   // с фальшем — «Дотянуть (+40; 21 мм — фальш)» отказывало «при ширине 1219: фасад шире 600», хотя станет 1198 (критик релиза 22.10, m2).
   // Порядок отказов прежний (ширина → место → ряд → settle): ошибка settle выдаётся последней, как было.
   let next: Project | null = null, settleErr: unknown = null;
@@ -408,7 +408,7 @@ export function planStretch(p: Project, id: string, side: Side, raw: number, sna
   if (Math.abs(d) < 0.05) return plan;
   try { plan.project = joint ? moveJoint(p, a, n!, side, d) : moveFreeEdge(p, a, side, d); }
   catch (err) { plan.problem = (err as Error).message; }
-  // край у стены: автофальшь забирает 16 + 5 мм — показываем фактическую ширину (m2 критика 22.10)
+  // край у стены: автофальшь забирает 16 + 4 мм — показываем фактическую ширину (m2 критика 22.10)
   const w = plan.project?.modules.find((x) => x.id === id)?.module.width;
   if (w !== undefined && !joint && plan.width - w >= 0.5) { plan.filler = r1(plan.width - w); plan.width = w; plan.delta = r1(w - W); }
   return plan;

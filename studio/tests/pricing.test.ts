@@ -158,11 +158,11 @@ test('corner filler appears when a body meets another at 90 degrees and disappea
   assert.equal(parseProject(n).modules[0].module.cornerFiller,'left');
 });
 
-test('wall fillers are 100x16 edge strips: full height, flush with the facade, 5 mm off the wall',()=>{
+test('wall fillers are 100x16 edge strips: full height, flush with the facade, 4 mm off the wall (16 + 4 = 20, Max 29.10)',()=>{
   const p=newProject();const a=p.modules[0];a.x=0;a.z=3; // левая боковина у левой стены, корпус с дверями
   const n=applyAutoFillers(p),m=n.modules[0].module;
   assert.deepEqual(m.wallFiller,{left:{kind:'edge',width:100}});
-  assert.ok(n.modules[0].x>=16+5-0.01,'body moved off the wall by strip + 5 mm gap');
+  assert.ok(Math.abs(n.modules[0].x-(16+4))<0.01,'body moved off the wall by strip + 4 mm gap: 20');
   const strip=parts(m).find(x=>x.id==='wall-filler:left')!;assert.deepEqual(strip.size,[16,m.height,100]);assert.ok(Math.abs(strip.position[2]+50-(m.depth+18))<0.01,'flush with the facade face');assert.equal(strip.position[0],-8);
   assert.equal(projectErrors(n).length,0,projectErrors(n).join('; '));
   // старые файлы со «стандартной» ФП читаются как планка торцом 100
