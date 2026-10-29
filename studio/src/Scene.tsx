@@ -751,7 +751,7 @@ export function Scene(p: Props) {
           if(slidesWith&&slide){const s=slide,base=mesh.position.clone(),dp=new THREE.Vector3(Math.sin(rotY)*s.travel,0,Math.cos(rotY)*s.travel);openMove(placed.id,s.key,s.open,s.wide,e=>{mesh.position.copy(base).addScaledVector(dp,e);});}
           if (part.openShift !== undefined) {
             // Купе: «открыть фасады» — переднее полотно отъезжает за заднее, как в жизни.
-            const base=mesh.position.clone(),shift=part.openShift;openMove(placed.id,openToggleKey(part.id),state.openDoors,true,e=>{mesh.position.set(base.x+shift*e,base.y,base.z);});
+            const base=mesh.position.clone(),shift=part.openShift;openMove(placed.id,'leaf:'+part.id,state.openDoors,true,e=>{mesh.position.set(base.x+shift*e,base.y,base.z);});
             moduleGroup.add(mesh);
           } else if (part.role === "door" && part.id !== "slope-filler" && !part.hingeless) { // фасад техники без петель (холодильник) висит на её двери — техника не открывается
             // створка всегда на петлевой оси (закрыта — поворот 0): открывается и закрывается плавно, в том числе средней кнопкой
@@ -1522,7 +1522,7 @@ export function Scene(p: Props) {
       if(one){const open=one.target!==1;openOverride.set(mid+'|'+key,open);one.target=open?1:0;needsRender=true;return;}
       const own=[...anims].filter(([k,a])=>k.startsWith(mid+'|')&&a.wide);if(!own.length)return;
       const open=!own.some(([,a])=>a.target===1);openOverride.set(mid+'|*',open);
-      for(const [k,a] of own){openOverride.delete(k);a.target=open?1:0;}needsRender=true;
+      for(const [k,a] of own){if(k!==mid+'|*')openOverride.delete(k);a.target=open?1:0;}needsRender=true;
     }
     // сценарий мышью scripts/edit-2910-scenario.ts (только чтение): доли открытия створок и ящиков
     (window as unknown as {__openState?:()=>Record<string,{t:number;target:number}>}).__openState=()=>Object.fromEntries([...anims].map(([k,a])=>[k,{t:Math.round(a.t*1000)/1000,target:a.target}]));
