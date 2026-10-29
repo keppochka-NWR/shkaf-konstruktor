@@ -1,7 +1,7 @@
 // Окно «Вырезы детали» (задача Макса 29.10.2026, shapes.ts): выбрать деталь/фасад → «Вырез» → тип, размеры, привязка от края;
 // несколько вырезов на деталь. Черновик проверяется сразу (как validate: вырез не разрезает деталь, не выходит за край, мост 10 мм),
 // предупреждения — петля/полкодержатель/крепёж в зоне выреза. «Сохранить» — одним изменением проекта (Ctrl+Z отменяет).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { shapeBaseParts, validate, type Module, type Part } from "./model";
 import { basePolygon, buildCutShape, cutText, cutoutWarnings, faceAxes, EDGE_WORDS, type Cutout } from "./shapes";
@@ -49,7 +49,10 @@ export function CutoutEditor({ project, mid, pid, commit, close, copyOpen }: { p
   const [host, setHost] = useState(pid);
   // деталь выреза — по постоянной ссылке (partIds.ts): host в черновике — id детали сейчас
   const [draft, setDraft] = useState<Cutout[]>(() => (m?.cutouts ?? []).map((c) => ({ ...structuredClone(c), host: cutHost(m!, c) ?? c.host })));
-  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [close]);
+  // Esc — закрыть окно (критик 29.10: не закрывалось). Слушатель в фазе захвата и один на всё время окна: прежний снимался посреди
+  // обработки Esc — App на том же нажатии снимал выделение детали, React перерисовывал и пересоздавал слушатель с новым close.
+  const closeRef = useRef(close); closeRef.current = close;
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); closeRef.current(); } }; window.addEventListener("keydown", k, true); return () => window.removeEventListener("keydown", k, true); }, []);
   // перенос/копия вырезов на схожие детали (правка Макса 29.10): отмеченные детали того же вида и размера, «перенести» — снять с этой
   const similar = useMemo(() => similarCutParts(project, mid, host), [project, mid, host]);
   const [marked, setMarked] = useState<string[]>([]);

@@ -146,7 +146,6 @@ function mansardFitReason(m:Module,n:Module,error:string):string{
     let fit=0;for(let k=s.shelves.length-1;k>=0;k--){const t=structuredClone(m);t.sections[i].shelves=t.sections[i].shelves.slice(0,k);if(!validate(withMansard(t,rear)).some(e=>/между поверхностями полок/.test(e))){fit=k;break;}}
     return `Под скос не встают ${s.shelves.length} полок секции ${i+1}: под высотой сзади ${rear} мм между ними остаётся меньше 80 мм. Уберите полки (встанет не больше ${fit}) или увеличьте высоту сзади.`;
   }
-  if(s&&/под штангой нужно/.test(error))return `Под скос не встаёт штанга секции ${i+1}: под ней нужно 900 мм до полки, ящиков или дна, а под высотой сзади ${rear} мм места меньше. Уберите штангу (или полку под ней) или увеличьте высоту сзади.`;
   return `«Опустить полки под скос» не помогает: после него — ${error.replace(/^[^:]*: /,'').replace(/\s*(Измените|Уберите|Опустите|Поднимите)[^.]*\.\s*$/,'')} Измените наполнение вручную (уберите полку или штангу) или увеличьте высоту сзади.`;
 }/** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
 export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number,fit=true):Module{

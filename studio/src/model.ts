@@ -2583,8 +2583,6 @@ export function maxHeightOf(m: Module): number {
 export function tallBySheet(m: Module): boolean { return !m.kitchen && !m.desk && !m.raw && !m.corner && (m.backType === "none" || m.backType === "board"); }
 /** Корпус шкафа-купе с дверями внутри: боковины и крыша цельные — до длины листа ЛДСП за вычетом отступов раскроя. */
 export function kupeBodyMax(): number { return RULES.sheetW - 2 * RULES.sheetMargin; }
-/** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
- *  вызывающий ловит исключения: при недопустимых габаритах дальнейшие проверки могут не собраться. */
 /** Штанга без нормы места под одеждой (правка Макса 29.10: «ставить штангу независимо от пространства под ней»): было ошибкой
  *  validate, теперь предупреждение — «Секция N: под штангой X мм до полки, ящиков или дна — меньше нормы Y мм…». */
 export function rodClearanceWarnings(m: Module): string[] {
@@ -2603,6 +2601,8 @@ export function rodClearanceWarnings(m: Module): string[] {
   });
   return out;
 }
+/** opts.all (w-formerrors 23.10): не останавливаться на ошибках габаритов — проверить и остальное (все причины отказа поля списком);
+ *  вызывающий ловит исключения: при недопустимых габаритах дальнейшие проверки могут не собраться. */
 export function validate(m: Module, opts?: {all?: boolean}): string[] {
   const errors = validateCore(m, opts);
   if (!m.cutouts?.length && !m.mansard && !m.radius) return errors;
