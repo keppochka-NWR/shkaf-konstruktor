@@ -56,7 +56,7 @@ import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measu
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
 import {historyShortcut,editsText,viewShortcut} from './historyShortcuts';
-import {editDrawerConfig} from './drawerEditing';
+import {editDrawerConfig,facadeForVisible,visibleFacadeH} from './drawerEditing';
 import {maxEvenShelves,setShelfCount} from './shelfCount';
 import {explainErrors,errorPlace,splitAction,type ErrorDetail} from './errorDetails';
 import {fieldReasons} from './paletteCheck';
@@ -1971,7 +1971,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                           />
                           <label className="hardware-field"><span><input type="checkbox" aria-label="Ящик без фасада" checked={!!c.noFacade} onChange={e=>update({noFacade:e.target.checked?true:undefined,handle:undefined})}/> Внутренний ящик без фасада</span></label>
                           {c.noFacade?<p className="field-note">Только короб и направляющие: ящик за распашными дверями или в открытом каркасе. Фасад, ручка и зазоры не считаются.</p>:<>
-                          <NumberField label="Высота фасада ящика" value={drawerGripOn(m,s,c)?drawerFaceSpan(m,s,c)[1]-drawerFaceSpan(m,s,c)[0]:c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap)))} min={c.tray?40:60} max={800} onChange={v=>update({facadeH:v})}/>
+                          {/* критик 29.10, п.5: поле — ВИДИМАЯ высота фасада (как деталь: с продлением до низа/верха фасадов), ввод пересчитывается в высоту фасада модели */}<NumberField label="Высота фасада ящика" value={visibleFacadeH(m,s,j)??(drawerGripOn(m,s,c)?drawerFaceSpan(m,s,c)[1]-drawerFaceSpan(m,s,c)[0]:c.facadeH??(drawerPitch(c,s.drawerGap)-(s.drawerGap??(m.doors&&!s.externalDrawers?RULES.drawerFrontGap:RULES.faceGap))))} min={c.tray?40:60} max={800} onChange={v=>modifySection((a,n)=>{a.drawerConfigs=facadeForVisible(n,a,j,v);})}/>
                           {c.facadeH!==undefined?<button className="text-action" onClick={()=>update({facadeH:undefined})}>Фасад по боковине (боковина + 40 − зазор)</button>:<p className="field-note">Фасад можно сделать выше короба: короб останется низким и сэкономит плиту, шаг ящиков подстроится под фасад.</p>}</>}
                           <p className="field-note">{SLIDES[c.slide].note}</p>
                           {c.slide==='gtv0fpo'&&<p className="field-note">Геометрия ящика под скрытые направляющие — по карте GTV 0FPO. Артикул бренда согласовать перед производством.</p>}

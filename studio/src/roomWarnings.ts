@@ -4,7 +4,7 @@ import {environmentChecks} from './environmentChecks';
 import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
-import {parts} from './model';
+import {parts,RULES} from './model';
 import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
 import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
 import {cutoutWarnings,mansardWarnings} from './shapes';
@@ -77,7 +77,19 @@ export function roomWarnings(project:Project){
       if(actual>limit+.1)warnings.push({moduleId:edge.a.id,kind:'niche-'+size,message:`Ниша: ${label.toLocaleLowerCase('ru')} мебели ${Math.round(actual*10)/10} мм превышает допустимые ${limit} мм после вычетов СТП. Проверьте состав композиции и замер. Учтены закрытые фасады, ручки и промежутки между корпусами.`});
     }
   }
-  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project)];
+  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project),...drawerGapWarnings(project)];
+}
+/** Щель между фасадами ящиков секции больше зазора фасадов (критик 29.10, п.5: после правок высот оставалась щель 34 мм без
+ *  предупреждения). Правки фасада/короба смыкают ящики сами (editDrawerConfig); здесь — разрыв, заданный положением ящика. */
+export function drawerGapWarnings(project:Project):RoomWarning[]{
+  const out:RoomWarning[]=[];
+  for(const a of project.modules){const m=a.module;if(m.kitchen||m.raw||m.kupe||m.corner||!m.sections.some(s=>s.drawers>1))continue;let ps;try{ps=parts(m);}catch{continue;}
+    m.sections.forEach((s,i)=>{if(s.drawers<2)return;
+      const f=ps.filter(p=>p.sectionId===s.id&&/:drawer:\d+:facade$/.test(p.id)).map(p=>({j:Number(p.id.split(':drawer:')[1].split(':')[0]),lo:p.position[1]-p.size[1]/2,hi:p.position[1]+p.size[1]/2})).sort((x,y)=>x.lo-y.lo);
+      const allow=Math.max(s.drawerGrip?RULES.drawerGrip:0,s.drawerGap??RULES.drawerFrontGap,RULES.drawerFrontGap)+1;
+      for(let k=1;k<f.length;k++){const gap=f[k].lo-f[k-1].hi;if(gap>allow)out.push({moduleId:a.id,kind:`drawer-gap-${s.id}-${k}`,message:`«${m.name}»: секция ${i+1} — между фасадами ящиков ${f[k-1].j+1} и ${f[k].j+1} щель ${Math.round(gap)} мм. Нажмите «Собрать ящики от дна» или задайте высоту фасада ящика ${f[k-1].j+1} больше на ${Math.round(gap-(s.drawerGap??RULES.faceGap))} мм.`});}
+    });}
+  return out;
 }
 /** Фигурные детали (shapes.ts, 29.10.2026): вырез задевает петлю/полкодержатель/крепёж; полка или штанга выше скоса мансарды;
  *  антресоль над мансардным шкафом (потолок скошен — не ставится). Предупреждения, не ошибки. */
