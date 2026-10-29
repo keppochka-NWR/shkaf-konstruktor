@@ -69,8 +69,14 @@ function tools(c: Ctx) {
     await btn("Добавить в комнату"); await page.waitForTimeout(900);
     const apart = page.getByRole("button", { name: /^Поставить отдельно/ });
     if (await apart.count() && await apart.first().isVisible()) { await click(apart.first()); await page.waitForTimeout(800); }
+    // критик 29.10: модуль не встал (плашка «Изменение не применено») — шаг не пройден, а не молча дальше по старому модулю
+    const err = (await page.locator(".error-banner[role=alert]").allInnerTexts().catch(() => [] as string[])).join(" ").replace(/\s+/g, " ").trim();
+    if (err) throw Error("палитра: " + err.slice(0, 220));
   }
   async function paletteTab(tab: string, kind: string, w: number, h: number, d: number) {
+    // критик 29.10 (п.6): палитра после первого модуля свёрнута (details.module-palette) — сначала раскрыть её щелчком по заголовку
+    const pal = page.locator("details.module-palette").first();
+    if ((await pal.count()) && (await pal.getAttribute("open")) === null) await click(pal.locator("summary").first());
     await click(page.getByRole("tab", { name: tab }).first()); await click(page.locator(".module-kinds button").filter({ hasText: kind }).first());
     await field("Ширина новой мебели", w); await field("Высота новой мебели", h); await field("Глубина новой мебели", d);
     await btn("Добавить в комнату"); await page.waitForTimeout(1200);
@@ -110,7 +116,10 @@ function tools(c: Ctx) {
   }
   async function decor(target: "body" | "facade", name: string) {
     await openPanels();
-    if (target === "body") await click(vis(page.getByRole("button", { name: "Все", exact: true }))); else await click(vis(page.getByRole("button", { name: /^Материал фасадов/ })));
+    // столешница (критик 29.10, п.6): кнопки «Все» у неё нет — декор кнопкой «Декор столешницы: … — выбрать декор»
+    const worktop = vis(page.getByRole("button", { name: /^Декор столешницы:/ }));
+    if (target === "body" && await worktop.isVisible().catch(() => false)) await click(worktop);
+    else if (target === "body") await click(vis(page.getByRole("button", { name: "Все", exact: true }))); else await click(vis(page.getByRole("button", { name: /^Материал фасадов/ })));
     await modalPick(name, new RegExp(name));
   }
   async function vernissage(o: { series: RegExp; milling: RegExp; cover: RegExp; color?: string; film?: RegExp; twoSided?: boolean }) {
@@ -152,7 +161,9 @@ const SCENARIOS: Scenario[] = [
   } },
   { zone: "tv", items: ["tumba"], room: [3950, 3000, 2714], run: async (t) => {
     const xs = [0, 750, 1500, 2725], ws = [750, 750, 1225, 1225];
-    for (let k = 0; k < 4; k++) {
+    for (const k of [0, 1, 3, 2]) {
+      // крайний правый корпус ставим раньше третьего: в остаток стены впритык (1225 из 1225) с автоматическим фальшем у стены палитре
+      // не хватает места; между вторым и четвёртым третий встаёт без фальша (критик 29.10, прогон ТВ-зоны)
       await t.step(`тумба · корпус ${k + 1}: палитра «Комод» ${ws[k]} × 378 × 431`, () => t.palette("Комод", ws[k], 378, 431));
       await t.step(`корпус ${k + 1}: «Без фальша у стены» (по эскизу)`, () => t.check("Без фальша у стены", true));
       if (!k) await t.step("панель: «Все настройки»", () => t.check("Все настройки", true));
