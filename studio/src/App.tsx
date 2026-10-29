@@ -56,7 +56,7 @@ import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
-import {historyShortcut,editsText,viewShortcut} from './historyShortcuts';
+import {historyShortcut,editsText,viewShortcut,rotateShortcut} from './historyShortcuts';
 import {editDrawerConfig,facadeForVisible,visibleFacadeH} from './drawerEditing';
 import {maxEvenShelves,setShelfCount} from './shelfCount';
 import {explainErrors,errorPlace,splitAction,type ErrorDetail} from './errorDetails';
@@ -156,7 +156,7 @@ import {
   appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
   type Project,
 } from "./project";
-import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,turnModule,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 import {drawerAddReason,drawerFitsOnTop} from './drawerLimit';
 import {moduleHandleFloor,setModuleHandleFloor} from './handleFloorGroup';
 function NumberField({
@@ -387,6 +387,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const liveGroupIds=groupIds.filter(id=>project.modules.some(a=>a.id===id));
   // m5 (критик релиза 22.10): после Esc выделение снято — справа не настройки прежнего модуля, а «Ничего не выбрано» и проект
   const nothingSelected=deselected&&!liveGroupIds.length&&project.modules.length>0;
+  /** Корпус в отмеченной группе из 2+ корпусов (Ctrl+щелчок): поворот и фасады действуют на всю группу. */
+  const inGroup=(mid:string)=>liveGroupIds.length>1&&liveGroupIds.includes(mid);
   const movingTogether=moveAll||liveGroupIds.includes(placed.id);
   const groupBounds=moveAll?mountingComposition:mountingCompositionBounds({...project,modules:project.modules.filter(a=>liveGroupIds.includes(a.id))});
   const [focusActive,setFocusActive]=useState(false);
@@ -742,6 +744,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   function hideRmbTip(){setRmbTip(false);try{localStorage.setItem('studio-tip-rmb','1');}catch{/* без хранилища — просто скрываем */}}
   useEffect(()=>{if(ctxMenu&&rmbTip)hideRmbTip();},[ctxMenu]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Правка любого корпуса по id (круговое меню работает и с неактивным корпусом). */
+  /** Поворот на 90° по часовой / против (кнопки, круговое меню, R / Shift+R). Корпус в отмеченной группе — поворачивается группа. */
+  function turnSelected(mid:string,dir:Turn,fit=false){
+    try{const ids=inGroup(mid)?liveGroupIds:null;if(commitProject(ids?rotateModuleGroup(project,ids,dir):turnModule(project,mid,dir))&&(fit||ids)){if(ids)setFocusActive(false);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
+  }
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
     const next=structuredClone(a.module);
@@ -800,7 +806,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'handles',label:'Ручки',icon:GripHorizontal,hint:'Одна ручка на все фасады корпуса',disabled:!hasHandles(mod),run:()=>{setActive(a.id);setHandleFace('');setModal('handles');}},
         hinges,opening,...doorQuickItems(mod,c.sid,quickOps)]},
       {id:'copy',label:'Копия',icon:Copy,hint:'Такой же корпус рядом',run:()=>{const r=copyModuleGroup(project,[a.id]);if(commitProject(r.project))selectModule(r.ids[0]);}},
-      {id:'rotate',label:'Повернуть',icon:RotateCw,hint:'На 90° по часовой',run:()=>{if(commitProject(rotateModule(project,a.id,(((a.rotation??0)+90)%360) as 0|90|180|270)))setFit(f=>f+1);}},
+      // поворот в обе стороны (решение Макса 29.10); корпус в отмеченной группе — поворачивается вся группа, стыки сохраняются
+      ...(['cw','ccw'] as const).map(dir=>({id:dir==='cw'?'rotate':'rotate-ccw',label:dir==='cw'?'Повернуть ↻':'Повернуть ↺',icon:dir==='cw'?RotateCw:RotateCcw,hint:(dir==='cw'?'На 90° по часовой (вид сверху) · клавиша R':'На 90° против часовой (вид сверху) · Shift+R')+(inGroup(a.id)?` · вся отмеченная группа (${liveGroupIds.length})`:''),run:()=>turnSelected(a.id,dir,true)} as RadialItem)),
       // w-lwing (23.10): постановка второго крыла — к стене одним действием и продолжение ряда за угол
       ...(mod.worktop?[]:[{id:'to-wall',label:'Поставить к стене',icon:BrickWall,hint:'Фасадом в комнату, вплотную к стене — в ближайшее свободное место',children:(['back','left','right'] as Wall[]).map(w=>({id:'to-wall-'+w,label:`К ${WALL_LABEL[w]}`,icon:BrickWall,active:false,hint:`Повернуть фасадом в комнату и поставить вплотную к ${WALL_LABEL[w]} стене`,run:()=>moduleToWall(a.id,w)}))} as RadialItem]),
       ...(()=>{const turns=mod.worktop?[]:cornerTurns(project,a.id);if(!turns.length)return [];const other=active!==a.id&&project.modules.some(x=>x.id===active)?project.modules.find(x=>x.id===active):undefined;
@@ -952,6 +959,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       // W/A/S/D/Q/E — виды сцены (п.28 волны 22.10); в полях ввода и списках не срабатывают
       const v=viewShortcut(e);
       if(v&&!ctxMenu&&!gapMenu){e.preventDefault();setView(v);setRoomPlan(false);setFit(f=>f+1);}
+      // R / Shift+R — поворот выбранного корпуса (или отмеченной группы) по часовой / против (решение Макса 29.10)
+      const turn=rotateShortcut(e);
+      if(turn&&!ctxMenu&&!gapMenu&&!nothingSelected&&tab!=='room'&&!lightMode){e.preventDefault();turnSelected(placed.id,turn);}
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -1259,7 +1269,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             </div>
 <label className="snap-control"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
 <label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);if(e.target.checked){setGroupIds([]);setFocusActive(false);setFit(f=>f+1);}setMode('move');}}/> Двигать всю композицию</label>
-            {project.modules.length>1&&<details className="move-group"><summary>Двигать группу{liveGroupIds.length?' · '+liveGroupIds.length:''}</summary><p className="field-note">Отметьте корпуса и тяните один из отмеченных. Остальные корпуса двигаются отдельно.</p><div className="move-group-list">{project.modules.map((a,i)=><label key={a.id}><input type="checkbox" aria-label={'В группу: '+(i+1)+'. '+a.module.name} checked={liveGroupIds.includes(a.id)} onChange={e=>{setGroupIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id));setMoveAll(false);if(e.target.checked){setFocusActive(false);setFit(f=>f+1);}setMode('move');}}/><span>{i+1}. {a.module.name}</span></label>)}</div><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>{try{const result=copyModuleGroup(project,liveGroupIds);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');}}catch(e){setError(e instanceof Error?e.message:'Не удалось скопировать группу.');}}}>Копировать группу</button><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>{try{if(commitProject(rotateModuleGroup(project,liveGroupIds))){setFocusActive(false);setFit(f=>f+1);setMode('move');}}catch(e){setError((e as Error).message);}}}>Повернуть группу на 90°</button><p className="field-note">Стыки сохраняются. У стены группа сдвинется внутрь комнаты.</p><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>setGroupIds([])}>Снять группу</button></details>}
+            {project.modules.length>1&&<details className="move-group"><summary>Двигать группу{liveGroupIds.length?' · '+liveGroupIds.length:''}</summary><p className="field-note">Отметьте корпуса и тяните один из отмеченных. Остальные корпуса двигаются отдельно.</p><div className="move-group-list">{project.modules.map((a,i)=><label key={a.id}><input type="checkbox" aria-label={'В группу: '+(i+1)+'. '+a.module.name} checked={liveGroupIds.includes(a.id)} onChange={e=>{setGroupIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id));setMoveAll(false);if(e.target.checked){setFocusActive(false);setFit(f=>f+1);}setMode('move');}}/><span>{i+1}. {a.module.name}</span></label>)}</div><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>{try{const result=copyModuleGroup(project,liveGroupIds);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');}}catch(e){setError(e instanceof Error?e.message:'Не удалось скопировать группу.');}}}>Копировать группу</button>{(['ccw','cw'] as const).map(dir=><button key={dir} className="text-action" disabled={!liveGroupIds.length} aria-label={dir==='cw'?'Повернуть группу на 90° по часовой':'Повернуть группу на 90° против часовой'} onClick={()=>{try{if(commitProject(rotateModuleGroup(project,liveGroupIds,dir))){setFocusActive(false);setFit(f=>f+1);setMode('move');}}catch(e){setError((e as Error).message);}}}>{dir==='cw'?'Повернуть группу ↻ по часовой':'Повернуть группу ↺ против часовой'}</button>)}<p className="field-note">Стыки сохраняются. У стены группа сдвинется внутрь комнаты.</p><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>setGroupIds([])}>Снять группу</button></details>}
             <button className="text-action" onClick={() => addModule(true)}>
               <Copy size={14} /> Копировать с наполнением
             </button>
@@ -1583,11 +1593,18 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <Move3D size={19} />
             </button>
             <button
-              aria-label="Повернуть корпус на 90°"
-              title="Повернуть выбранный корпус на 90°"
-              onClick={() => {try{commitProject(rotateModule(project,placed.id,(((placed.rotation??0)+90)%360) as 0|90|180|270));}catch(e){setError((e as Error).message);}}}
+              aria-label="Повернуть корпус на 90° против часовой"
+              title="Повернуть на 90° против часовой (вид сверху) · Shift+R"
+              onClick={() => turnSelected(placed.id,'ccw')}
             >
               <RotateCcw size={19} />
+            </button>
+            <button
+              aria-label="Повернуть корпус на 90° по часовой"
+              title="Повернуть на 90° по часовой (вид сверху) · R"
+              onClick={() => turnSelected(placed.id,'cw')}
+            >
+              <RotateCw size={19} />
             </button>
             {(m.doors || !!m.kdrawers?.length) && (
               <button
@@ -1622,7 +1639,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
-            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, Q или E — 3D. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, Q — 3D, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
+            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, Q или E — 3D. R — повернуть выбранный корпус (или отмеченную группу) на 90° по часовой, Shift+R — против. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, Q — 3D, R — поворот, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}>
@@ -2472,7 +2489,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <p><strong>Размеры:</strong> нажмите число на модели или введите справа и нажмите Enter. Проёмы показывают расстояние в свету между полками.</p>
                 <p><strong>Камера:</strong> режим «Повернуть вид» — вращение мышью; колесо — масштаб; правая кнопка — сдвиг вида. Лупа приближает выбранный корпус, «Вписать модель» возвращает общий вид.</p>
                 <p><strong>Отмена:</strong> Ctrl+Z; повтор — Ctrl+Shift+Z. Delete удаляет выбранное наполнение, когда вы не редактируете поле или список. Escape отменяет незавершённое перетаскивание.</p>
-                <details><summary>Как двигать шкаф вместе с антресолью?</summary><p>Слева раскройте «Двигать группу» и отметьте нижний корпус и антресоль. Тяните любой из отмеченных: они двигаются вместе. Отступы в свойствах тоже сдвигают группу. В этом же разделе можно скопировать группу или повернуть её на 90°.</p><p>«Снять группу» возвращает отдельное перемещение. Изменение ширины и удаление относятся к активному корпусу.</p></details>
+                <details><summary>Как двигать шкаф вместе с антресолью?</summary><p>Слева раскройте «Двигать группу» и отметьте нижний корпус и антресоль. Тяните любой из отмеченных: они двигаются вместе. Отступы в свойствах тоже сдвигают группу. В этом же разделе можно скопировать группу или повернуть её на 90° по часовой или против (клавиши R и Shift+R). Фасады отмеченных корпусов правятся разом — раздел «Фасады выделенных» справа.</p><p>«Снять группу» возвращает отдельное перемещение. Изменение ширины и удаление относятся к активному корпусу.</p></details>
                 <details><summary>Как повторно использовать удачный шкаф?</summary><p>Отметьте нужные корпуса в группе, откройте «Моя библиотека модулей», задайте название и сохраните группу. Можно сохранить и один корпус. При вставке каждый корпус остаётся независимым; антресоли сохраняют положение над нижними модулями. Нижний край шаблона ставится на пол.</p><p>Поиск понимает названия, декоры и размеры, например «500 × 2000 Вотан». Библиотека хранится в браузере и переносится одним файлом. В свойствах секции отдельно можно скопировать её наполнение и вставить в другую секцию.</p><button className="text-action" onClick={()=>setModal('library')}>Открыть мою библиотеку</button></details>
                 <details><summary>Как поменять материал у нескольких корпусов?</summary><p>Отметьте группу, затем откройте каталог нужного материала: корпуса, распашных фасадов или фасадов ящиков. В «Применить материал» выберите группу либо все корпуса проекта. Одна отмена вернёт предыдущие материалы.</p></details>
                 <details><summary>Как точно поставить полку или ящик?</summary><p>Нажмите на элемент в режиме наполнения. В карточке задайте высоту от дна проёма либо используйте «Выше на 10» и «Ниже на 10». Пока фокус на этих кнопках, стрелки ↑/↓ двигают на 1 мм, Shift со стрелкой — на 10 мм.</p><p>Кнопка добавления полки делит самый большой свободный проём, сохраняя остальные высоты. Полка над блоком ящиков создаётся автоматически. «Распределить полки» равномерно расставляет все съёмные полки.</p></details>

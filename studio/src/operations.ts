@@ -320,15 +320,25 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
 }
 
 
-export function rotateModuleGroup(p:Project,ids:readonly string[]):Project{
+/** Поворот на 90° в обе стороны (решение Макса 29.10: «поворот работает только в одну сторону»).
+ *  Вид сверху (задняя стена вверху): 'ccw' — против часовой, это +90° модели (прежняя единственная кнопка);
+ *  'cw' — по часовой, −90°. Поворот вокруг центра, у стены корпус сдвигается внутрь комнаты — как rotateModule. */
+export type Turn='cw'|'ccw';
+export const turnedRotation=(rotation:number|undefined,dir:Turn)=>((((rotation??0)+(dir==='ccw'?90:-90))%360)+360)%360;
+export function turnModule(p:Project,mid:string,dir:Turn):Project{
+ const a=p.modules.find(a=>a.id===mid);if(!a)throw Error('Выберите корпус для поворота.');
+ return rotateModule(p,mid,turnedRotation(a.rotation,dir));
+}
+export function rotateModuleGroup(p:Project,ids:readonly string[],dir:Turn='ccw'):Project{
  const chosen=p.modules.filter(a=>ids.includes(a.id));
  if(!chosen.length)throw Error('Отметьте корпуса для поворота.');
  const box=mountingCompositionBounds({...p,modules:chosen}),cx=box.x+box.w/2,cz=box.z+box.d/2;
  if(box.d>p.room.width||box.w>p.room.depth)throw Error('После поворота группа не помещается в комнате. Измените состав группы или замер.');
- const n=structuredClone(p);
+ const n=structuredClone(p),sign=dir==='ccw'?1:-1;
  for(const a of n.modules.filter(a=>ids.includes(a.id))){
-  const center=moduleCenter(a),x=cx+center.z-cz,z=cz-center.x+cx;
-  a.rotation=(((a.rotation??0)+90)%360) as 0|90|180|270;
+  // центр корпуса поворачивается вокруг центра группы так же, как сам корпус (transform: +90° — (dx,dz)→(dz,−dx))
+  const center=moduleCenter(a),x=cx+sign*(center.z-cz),z=cz-sign*(center.x-cx);
+  a.rotation=turnedRotation(a.rotation,dir);
   const local=moduleCenter({...a,x:0,z:0});a.x=x-local.x;a.z=z-local.z;
  }
  const rotated=mountingCompositionBounds({...n,modules:n.modules.filter(a=>ids.includes(a.id))});
