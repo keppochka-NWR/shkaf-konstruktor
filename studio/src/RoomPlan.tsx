@@ -7,7 +7,7 @@ import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
-import {altKeyupGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import './guides.css';
 // Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
 // контуры корпусов, стены), Ctrl — ближайшее пересечение двух линий, Shift — без привязки. Для угла, переноса корпуса и линии Q.
@@ -131,7 +131,7 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     if(t.phase==='pick'){setMark(null);const hover=nearestPlanLine(t.lines,P,10*mmPx()),n={...t,hover};setTool(n);say(hover?'Q: '+hover.what+' — щёлкните, чтобы строить от неё':PICK_HINT,false,clientX,clientY);return n;}
     // Alt/Ctrl: линия проходит через точку на линии / пересечение у курсора (без набранного числа)
     const mode=modeRef.current,segs=t.segs??planSegs([]);let hit:PointHit|undefined;
-    if(isPointMode(mode)&&!t.typed){hit=pointSnap(mode,toView(P,PLAN_LOOK),segs,pointTol());if(hit)P=fromView(hit.p,PLAN_LOOK,P);}
+    if(isPointMode(mode)&&!t.typed){hit=pointSnap(mode,toView(P,PLAN_LOOK),mode==='line'?acrossSegments(segs,toView(t.base.n,PLAN_LOOK)):segs,pointTol());if(hit)P=fromView(hit.p,PLAN_LOOK,P);}
     showMark(hit);
     const pl=placeGuide(t.base,P,parseTyped(t.typed),!!hit),n={...t,at:pl.at,dist:pl.dist,segs};setTool(n);
     say((isPointMode(mode)&&!t.typed?hitText(hit,mode)+' · ':'')+(t.typed?'Размер: '+t.typed+'▏':'Расстояние '+pl.dist)+' мм · Enter — поставить · Esc — отмена',false,clientX,clientY);return n;

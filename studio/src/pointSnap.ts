@@ -99,6 +99,12 @@ export function nearestCross(p: P2, segs: Seg2[], tol: number): PointHit | undef
 export function pointSnap(mode: SnapMode, p: P2, segs: Seg2[], tol: number): PointHit | undefined {
   return mode === "line" ? nearestOnLine(p, segs, tol) : mode === "cross" ? nearestCross(p, segs, tol) : undefined;
 }
+/** Ход по одной оси dir (линия Q вдоль своей нормали, край «↔» вдоль ширины): линии, параллельные ходу, для Alt не в счёт —
+ *  иначе у пола побеждает пол и ход вдоль оси нулевой (критик 29.10, п.2). */
+export function acrossSegments(segs: Seg2[], dir: P2): Seg2[] {
+  const L = Math.hypot(dir.h, dir.v) || 1;
+  return segs.filter((s) => { const dh = s.b.h - s.a.h, dv = s.b.v - s.a.v, l = Math.hypot(dh, dv) || 1; return Math.abs(dh * dir.v - dv * dir.h) / (l * L) > 0.05; });
+}
 /** Тянется точка ref (угол, опорный угол корпуса, курсор у линии Q) на ход delta (оси экрана): с привязкой — ход до пойманной
  *  точки, иначе ход как есть (без привязки, до 0,1 мм — шаг округляет потребитель). */
 export function snapDelta(mode: SnapMode, ref: P2, delta: P2, segs: Seg2[], tol: number): { delta: P2; hit?: PointHit } {
@@ -109,7 +115,7 @@ export function snapDelta(mode: SnapMode, ref: P2, delta: P2, segs: Seg2[], tol:
  *  Итог — добавка хода вдоль o до пойманной точки (0 — не поймали). */
 export function snapAlong(mode: SnapMode, at: P2, o: P2, cursor: P2, segs: Seg2[], tol: number): { shift: number; hit?: PointHit } {
   const perp = { h: -o.v, v: o.h }, k = (cursor.h - at.h) * perp.h + (cursor.v - at.v) * perp.v;
-  const P = { h: at.h + perp.h * k, v: at.v + perp.v * k }, hit = pointSnap(mode, P, segs, tol);
+  const P = { h: at.h + perp.h * k, v: at.v + perp.v * k }, hit = pointSnap(mode, P, mode === "line" ? acrossSegments(segs, o) : segs, tol);
   return hit ? { shift: (hit.p.h - P.h) * o.h + (hit.p.v - P.v) * o.v, hit } : { shift: 0 };
 }
 /** Опорная точка переноса корпуса: угол его контура в виде, ближайший к месту, где схватили. */

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {altKeyupGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,acrossSegments,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
@@ -78,6 +78,18 @@ test('край «↔» ходит вдоль своей оси: добавка �
   assert.equal(snapAlong('line',{h:650,v:0},{h:1,v:0},{h:650,v:800},segs,20).shift,0,'далеко — нет');
   const c=snapAlong('cross',{h:695,v:0},{h:1,v:0},{h:695,v:5},segs,20);
   assert.equal(c.shift,5);assert.equal(c.hit?.what,'линия × пол');
+});
+
+test('критик 29.10 п.2: ход по одной оси — линии, параллельные ходу, для Alt не в счёт (у пола не «прилипает» к полу)',()=>{
+  const segs=[seg(0,0,5000,0,'пол'),seg(1600,0,1600,2000,'край'),seg(1584,0,1584,2000,'кромка')];
+  assert.deepEqual(acrossSegments(segs,{h:1,v:0}).map(s=>s.what),['край','кромка']);
+  assert.deepEqual(acrossSegments(segs,{h:0,v:1}).map(s=>s.what),['пол']);
+  // край «↔» у пола: курсор на 4 мм выше пола, у края 1600 — ход до 1600, а не 0
+  const r=snapAlong('line',{h:1608,v:0},{h:1,v:0},{h:1608,v:4},segs,20);
+  assert.equal(r.hit?.what,'край');assert.equal(r.shift,-8);
+  // линия Q (ход по нормали h): точка на ближайшей вертикали
+  const q=pointSnap('line',{h:1608,v:4},acrossSegments(segs,{h:1,v:0}),20)!;
+  assert.equal(q.p.h,1600);
 });
 
 test('оси вида: спереди/сверху/План — точка туда и обратно, глубина сохраняется',()=>{

@@ -394,6 +394,13 @@ try {
   await page.mouse.click(X(3400) + 5, Y(1000)); await page.keyboard.up("Alt"); await page.waitForTimeout(400);
   g = await guides();
   check("11. Q + Alt → линия на правый край «Сосед»: x = 3400", g.some((x) => x.at === 3400 && x.n[0] === 1), JSON.stringify(g.map((x) => x.at)));
+  // критик 29.10 п.2: Q от левого края «Шкаф», Alt у пола (4 мм) у правого края — линия ровно 1600 (пол хода не «съедает»)
+  await page.mouse.move(X(1000) - 1, Y(1000)); await key("q");
+  await page.mouse.click(X(1000) - 1, Y(1000)); await page.waitForTimeout(200);
+  await page.keyboard.down("Alt"); await page.mouse.move(X(1608), Y(4)); await page.waitForTimeout(200);
+  await page.mouse.click(X(1608), Y(4)); await page.keyboard.up("Alt"); await page.waitForTimeout(400);
+  g = await guides();
+  check("11. Q + Alt у пола → линия на правый край «Шкаф»: x = 1600 точно", g.some((x) => x.at === 1600 && x.n[0] === 1), JSON.stringify(g.map((x) => x.at)));
   await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
 
   // 12. «План»: те же клавиши

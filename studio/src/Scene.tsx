@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
-import {altKeyupGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -1457,7 +1457,7 @@ export function Scene(p: Props) {
       let m=mouseRoom(clientX,clientY);if(!m)return;
       // Alt/Ctrl: линия проходит через точку на линии / пересечение у курсора (без набранного числа)
       let hit:PointHit|undefined;
-      if(isPointMode(ptrMode)&&!t.typed){t.segs??=snapSegs([]);hit=pointSnap(ptrMode,toView(m,t.look),t.segs,pointTol());if(hit)m=fromView(hit.p,t.look,m);}
+      if(isPointMode(ptrMode)&&!t.typed){t.segs??=snapSegs([]);hit=pointSnap(ptrMode,toView(m,t.look),ptrMode==='line'?acrossSegments(t.segs,toView(t.base.n,t.look)):t.segs,pointTol());if(hit)m=fromView(hit.p,t.look,m);}
       markAt(hit,t.look,m);
       const pl=placeGuide(t.base,m,parseTyped(t.typed),!!hit);t.at=pl.at;t.dist=pl.dist;
       const [a,b]=guideSegment({n:t.base.n,at:pl.at},t.look,centerRoom());setSegment(ghostLine,a,b,true);
