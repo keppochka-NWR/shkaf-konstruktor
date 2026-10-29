@@ -33,3 +33,7 @@ body.radial-open .corner-handle { pointer-events: none; }
   cursor: pointer;
 }
 .clear-guides:hover { background: #e6edff; }
+/* «План» (RoomPlan.tsx): подпись под планом не меняет высоту при смене текста (1↔2 строки, красный отказ) — иначе план
+   перемасштабируется посреди тяги за угол или постановки линии Q и курсор «уезжает» от угла */
+.room-plan .plan-help { min-height: 52px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+.room-plan .plan-badge { z-index: 9; }

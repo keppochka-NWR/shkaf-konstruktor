@@ -32,7 +32,8 @@ import PartialDividerPanel from './PartialDividerPanel';
 import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd,oneLeafAtDivider,announceDividerNotes} from './partialDivider';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
-import {snapAxis,widthPull,keepOpposite,type CornerPull,type CornerPlan} from './cornerStretch';
+import {snapAxis,widthPull,keepOpposite,exactProblem,type CornerPull,type CornerPlan} from './cornerStretch';
+import type {Guide} from './guides';
 import {rowShortage} from './rowFit';
 import {offWallNote} from './freeSpot';
 import {RoomObstacles} from './RoomObstacles';
@@ -731,9 +732,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       }
       if(pull.width){const w=widthPull(a,pull.width,pull.snap,pull.tol,pull.guides);if(w.what&&w.raw)base.snapped.push(w.what);const plan=planStretch(p,a.id,w.side,w.raw,w.snap);if(plan.problem)return {...base,problem:plan.problem};if(plan.project)p=plan.project;}
       const fin=applyAutoFillers(p),b=fin.modules.find(x=>x.id===a.id)!.module,e=p===project?[]:projectErrors(fin);
-      return {width:b.width,height:b.height,depth:b.depth,snapped:base.snapped,problem:e[0],preview:fin.modules,project:p===project?undefined:p,notes,restored};
+      // набранный «600;2400» — точно или отказ (правило ряда могло упереть край в соседа/стену)
+      const exact=exactProblem(p.modules.find(x=>x.id===a.id)!.module,pull.exact);
+      return {width:b.width,height:b.height,depth:b.depth,snapped:base.snapped,problem:exact??e[0],preview:fin.modules,project:p===project?undefined:p,notes,restored};
     }catch(e){return {...base,problem:(e as Error).message};}
   }
+  /** Вспомогательные линии (Q): новый список — одной отменой; пустой — поле убирается из проекта. Общий для сцены и «Плана». */
+  function commitGuides(list:Guide[]){const {guides:_old,...rest}=project;void _old;return commitProject(list.length?{...rest,guides:list}:rest);}
   function commitCorner(pull:CornerPull){
     const plan=planCorner(pull,true);
     if(plan.problem){setError(plan.problem);return false;}
@@ -1489,7 +1494,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
@@ -1580,7 +1585,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             onCorner={commitCorner}
             guideRoom={project.room}
             guides={project.guides}
-            onGuides={list=>{const {guides:_old,...rest}=project;void _old;return commitProject(list.length?{...rest,guides:list}:rest);}}
+            onGuides={commitGuides}
           />}</SafeBoundary>
           {presentation&&<div className="presentation-tools">{import.meta.env.DEV&&<button onClick={localBackup}>Резервная копия</button>}<button aria-pressed={showRoom} onClick={()=>setShowRoom(!showRoom)}>Помещение</button>{showRoom&&<button aria-pressed={cutaway} onClick={toggleCutaway}><BrickWall size={16}/>{cutaway?'Ближние стены: показать':'Ближние стены: скрыть'}</button>}<button aria-pressed={openDoors} onClick={()=>setOpenDoors(!openDoors)}>{openDoors?'Закрыть фасады':'Открыть фасады'}</button><button className="primary" onClick={()=>{try{const png=capture.current?.();if(!png){setError('Изображение ещё загружается. Повторите через несколько секунд.');return;}setRenderImage(png);setModal('render');}catch(e){setError(e instanceof Error?e.message:'Не удалось сохранить изображение. Попробуйте ещё раз.');}}}>Сохранить изображение</button></div>}
           <div className="scene-caption">
@@ -1727,7 +1732,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
             <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Alt — без привязки':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
-            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, E — 3D. Q — вспомогательная линия (спереди, сверху, сбоку): щёлкните линию, наберите размер и Enter; щелчок по линии и Delete — убрать. Тяните за угол выбранного корпуса — два размера сразу. R — повернуть выбранный корпус (или отмеченную группу) на 90° по часовой, Shift+R — против. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, E — 3D, Q — вспомогательная линия, R — поворот, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
+            Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, E — 3D. Q — вспомогательная линия (спереди, сверху, сбоку и на «Плане»; линии «Сверху» и «Плана» общие): щёлкните линию, наберите размер и Enter; щелчок по линии и Delete — убрать. Тяните за угол выбранного корпуса — два размера сразу; во время тяги наберите «600;2400» и Enter — точные размеры в порядке плашки (одно число — первый размер, «;2400» — второй). R — повернуть выбранный корпус (или отмеченную группу) на 90° по часовой, Shift+R — против. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, E — 3D, Q — вспомогательная линия, R — поворот, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
         <aside className="properties" ref={propertiesRef}><SafeBoundary label="Свойства" resetKey={project}>
