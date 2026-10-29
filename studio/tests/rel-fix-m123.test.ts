@@ -23,7 +23,9 @@ test("m1: второй шкаф 1200 в нише 2400 — нехватка 21 м
   const p = niche();
   assert.equal(bounds(p.modules[0]).x + bounds(p.modules[0]).w, 1221, "первый с фальшем у левой стены: 0…1221");
   const s = rowShortage(p, second());
-  assert.deepEqual(s, { width: 1200, free: 1179, filler: 21, withFiller: 1158, withoutFiller: 1179 });
+  const { apart, ...rest } = s!; // apart — место «Поставить отдельно» перед рядом (проверено в palette-apart.test.ts)
+  assert.deepEqual(rest, { width: 1200, free: 1179, filler: 21, withFiller: 1158, withoutFiller: 1179 });
+  assert.ok(apart, "перед первым шкафом место есть");
   assert.equal(rowShortageText("Пустой шкаф", s!), "«Пустой шкаф» 1200 мм в ряд не встаёт: справа свободно 1179 из 1200 мм, у стены нужна фальшпанель 21 мм (16 + 5). Можно сузить до 1158 мм (с фальшпанелью) или 1179 мм без фальшпанели у стены. Или поставить отдельно — встанет перед шкафами.");
   // «Сузить до 1158»: встаёт справа вплотную, фальш у правой стены, без ошибок
   const a = applyAutoFillers(appendModule(p, second(1158)));
@@ -44,7 +46,8 @@ test("m1: встаёт — null; кухня, пустая комната, кор
   assert.equal(rowShortage({ ...p, modules: [] }, second()), null, "первый корпус");
   assert.equal(rowShortage(p, kitchenTemplate("base-doors", 600, src)), null, "кухня — своя расстановка");
   const open = createModule("shelves", 1200, 2400, 550, src);
-  assert.deepEqual(rowShortage(p, open), { width: 1200, free: 1179, filler: 0, withFiller: 1179, withoutFiller: null }, "стеллаж без дверей — фальш не нужен");
+  const { apart: _a, ...rest } = rowShortage(p, open)!; void _a;
+  assert.deepEqual(rest, { width: 1200, free: 1179, filler: 0, withFiller: 1179, withoutFiller: null }, "стеллаж без дверей — фальш не нужен");
 });
 
 test("m2: «Дотянуть (+79)» до стены прибавляет 58 — плашка и пункт пишут фактическую прибавку и фальш 21 мм", () => {

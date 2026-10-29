@@ -167,7 +167,8 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
     {offer&&<div className="palette-row-fit" role="group" aria-label="Шкаф не встаёт в ряд" ref={offerRef}>
       {offer.s.withFiller!==null&&<button type="button" className="outline" onClick={()=>take(()=>narrowed(offer.s.withFiller!,false))}>Сузить до {offer.s.withFiller} мм{offer.s.filler?' (с фальшем)':''}</button>}
       {offer.s.withoutFiller!==null&&<button type="button" className="outline" onClick={()=>take(()=>narrowed(offer.s.withoutFiller!,true))}>{offer.s.withoutFiller} мм без фальша у стены</button>}
-      <button type="button" className="text-action" onClick={()=>take(()=>offer.module)}>Поставить отдельно (перед шкафами)</button>
+      {/* перед рядом — на проверенное место (rowFit apartPlace), а не обычной расстановкой: та ставила в остаток у стены и фальш пересекал соседа */}
+      {offer.s.apart&&<button type="button" className="text-action" onClick={()=>{const at=offer.s.apart!;if(onAddGroup([{id:'apart',x:at.x,y:0,z:at.z,rotation:0,module:offer.module}],true)){setOffer(null);setError('');}}}>Поставить отдельно (перед шкафами)</button>}
     </div>}
     <button className="primary full" onClick={add} ref={addRef}>Добавить в комнату</button>
     {category==='kitchen'&&kitchenTemplates&&<details className="catalog-presets"><summary>Готовые кухонные модули</summary>{kitchenTemplates}</details>}

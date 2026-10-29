@@ -2,11 +2,25 @@
 // второй 1200 молча вставал ПЕРЕД первым — справа свободно 1179, а у правой стены ему тоже нужна фальшпанель 16 + 5 мм.
 // Вместо молчаливой расстановки — понятное сообщение и варианты: сузить под фальш, сузить без фальша у стены, поставить отдельно.
 import { RULES, needsWallFiller, type Module } from "./model";
-import { appendModule, applyAutoFillers, bounds, projectErrors, type Project } from "./project";
+import { appendModule, appendModuleGroup, applyAutoFillers, bounds, projectErrors, type Project } from "./project";
 
 /** Нехватка места в ряду: free — свободно справа от ряда до стены (мм), filler — фальш у стены (16 + 5),
  *  withFiller — ширина, которая встанет в ряд с фальшем, withoutFiller — без фальша у стены (null — вариант не подходит). */
-export type RowShortage = { width: number; free: number; filler: number; withFiller: number | null; withoutFiller: number | null };
+export type RowShortage = { width: number; free: number; filler: number; withFiller: number | null; withoutFiller: number | null;
+  /** «Поставить отдельно (перед шкафами)»: место перед рядом (координаты корпуса), проверенное с автофальшами; null — перед рядом не встаёт. */
+  apart: { x: number; z: number } | null };
+/** Место перед рядом шкафов (вплотную к линии фасадов ряда): справа под концом ряда, под последним корпусом, у левого края…
+ *  Было (палитра 29.10): «Поставить отдельно» искал место обычной расстановкой — в остаток у стены без фальша, а фальш у стены при
+ *  сохранении расширял корпус на соседа: «пересекается с «Комод»». */
+function apartPlace(p: Project, source: Module, rowZ: { lo: number; hi: number }, right: number, xs: number[]): { x: number; z: number } | null {
+  const base = bounds({ id: "apart", x: 0, y: 0, z: 0, rotation: 0, module: source });
+  for (const bx of [right - base.w, ...xs, 0, p.room.width - base.w]) {
+    if (bx < 0 || bx + base.w > p.room.width || rowZ.hi + base.d > p.room.depth) continue;
+    const at = { x: bx - base.x, z: rowZ.hi - base.z };
+    try { appendModuleGroup(p, [{ id: "apart", ...at, y: 0, rotation: 0, module: source }], false, true); return at; } catch { /* следующее место */ }
+  }
+  return null;
+}
 
 const inRow = (p: Project, placed: Project, rowZ: { lo: number; hi: number }, right: number) => {
   const a = placed.modules.at(-1)!, b = bounds(a);
@@ -35,12 +49,12 @@ export function rowShortage(p: Project, source: Module): RowShortage | null {
   const fits = (w: number, off: boolean) => w >= 100 && !!tryAdd({ ...source, width: w, ...(off ? { autoFillersOff: true } : {}) });
   const withFiller = fits(free - filler, false) ? free - filler : null;
   const withoutFiller = filler && fits(free, true) ? free : null;
-  return { width: source.width, free, filler, withFiller, withoutFiller };
+  return { width: source.width, free, filler, withFiller, withoutFiller, apart: apartPlace(p, source, rowZ, right, [last.x, ...bb.map((b) => b.x)]) };
 }
 
 /** Текст сообщения: «Пустой шкаф» 1200 мм в ряд не встаёт: справа свободно 1179 из 1200 мм, у стены нужна фальшпанель 21 мм (16 + 5). */
 export function rowShortageText(name: string, s: RowShortage): string {
   const wall = s.filler ? `, у стены нужна фальшпанель ${s.filler} мм (${RULES.panel} + ${RULES.wallFillerEdgeGap})` : "";
   const ways = [s.withFiller !== null ? `сузить до ${s.withFiller} мм${s.filler ? " (с фальшпанелью)" : ""}` : "", s.withoutFiller !== null ? `${s.withoutFiller} мм без фальшпанели у стены` : ""].filter(Boolean);
-  return `«${name}» ${s.width} мм в ряд не встаёт: справа свободно ${s.free} из ${s.width} мм${wall}.` + (ways.length ? ` Можно ${ways.join(" или ")}.` : "") + " Или поставить отдельно — встанет перед шкафами.";
+  return `«${name}» ${s.width} мм в ряд не встаёт: справа свободно ${s.free} из ${s.width} мм${wall}.` + (ways.length ? ` Можно ${ways.join(" или ")}.` : "") + (s.apart ? " Или поставить отдельно — встанет перед шкафами." : "");
 }
