@@ -19,12 +19,14 @@
 // Постоянные id (решение Макса 29.10, ветка claude/stable-ids):
 //  I. «Стеллаж»: вырез на второй сверху полке → «+» полка, «−» полка, Ctrl+Z ×2, Ctrl+Y, «Сохранить файл» → «Открыть» — вырез на своей
 //     полке; «Комод»: вырез на среднем ящике → удалить нижний, «+», Ctrl+Z ×2, Ctrl+Y — на своём ящике; удалить ящик с вырезом — снят
-//     с сообщением, Ctrl+Z — вернулся; файл и перезагрузка страницы — оба выреза на своих деталях.
+//     с сообщением, Ctrl+Z — вернулся; файл и перезагрузка страницы — оба выреза на своих деталях. Правой кнопкой по полке и по
+//     фасаду ящика → «Вырез…» — редактор сразу на этой детали; «Зеркально отразить наполнение» — вырезы отражаются с деталями, Ctrl+Z.
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { parts, facadeTop, facadeBottom, boxes, type Module, type Part } from "../src/model";
 import { parseProject, type Project } from "../src/project";
 import { cutHost } from "../src/partIds";
+import { faceAxes } from "../src/shapes";
 
 const [url, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -337,6 +339,70 @@ try {
   const [stR, kmR] = (await mods()).slice(-2); ci = cutAt(stR, shelves)[0]; cd = cutAt(kmR, faces)[0];
   check("I14 перезагрузка страницы: вырезы на своих деталях", ci?.y === shelfY && cd?.rank === 0 && cd.ref === dRef, `${JSON.stringify(ci)} ${JSON.stringify(cd)}`);
   await front(); await shot("I14-after-reload");
+
+  // I15–I19 (решение Макса 29.10): «Вырез…» правой кнопкой по детали — редактор сразу на ней; «Отразить корпус» — вырез с деталью
+  const menuOpen = async () => (await page.locator(".radial-menu").count()) > 0;
+  const esc = async () => { for (let k = 0; k < 3 && (await menuOpen()); k++) { await page.keyboard.press("Escape"); await page.waitForTimeout(80); } };
+  const title = async () => (await page.locator(".radial-center b").first().innerText({ timeout: 800 }).catch(() => "")).trim();
+  const item = (label: string) => page.locator(".radial-item").filter({ has: page.locator(".radial-label", { hasText: new RegExp("^" + label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "( ›)?$") }) }).first();
+  /** Как менеджер: правой кнопкой по сцене, пока меню не откроется на нужной детали (заголовок меню). */
+  async function rightClickOn(re: RegExp): Promise<boolean> {
+    const c = (await page.locator("canvas").first().boundingBox())!;
+    for (const fy of [0.5, 0.6, 0.7, 0.4, 0.78]) for (let x = c.x + 40; x < c.x + c.width - 40; x += 14) {
+      const y = c.y + c.height * fy;
+      await page.mouse.click(x, y, { button: "right" }); await page.waitForTimeout(70);
+      if ((await menuOpen()) && re.test(await title())) return true;
+      await esc();
+    }
+    return false;
+  }
+  /** Полка тонкая — по строкам не попасть: сначала столбец, где правая кнопка открывает меню стеллажа (задник, боковина; по имени корпуса), затем вниз по нему. */
+  async function rightClickShelf(name: string): Promise<boolean> {
+    const c = (await page.locator("canvas").first().boundingBox())!, center = async () => (await page.locator(".radial-center").first().innerText({ timeout: 800 }).catch(() => "")).replace(/\s+/g, " ");
+    let col: number | null = null;
+    for (const fy of [0.5, 0.4, 0.6, 0.3]) { for (let x = c.x + 40; x < c.x + c.width - 40 && col === null; x += 14) { await page.mouse.click(x, c.y + c.height * fy, { button: "right" }); await page.waitForTimeout(70); if ((await menuOpen()) && (await center()).includes(name)) col = x; await esc(); } if (col !== null) break; }
+    if (col === null) return false;
+    // стеллаж выбран правой кнопкой — крупный вид спереди на нём, столбец по середине холста
+    await front(); const z = (await page.locator("canvas").first().boundingBox())!; col = z.x + z.width / 2 + 7;
+    for (let y = z.y + 10; y < z.y + z.height - 10; y += 3) { await page.mouse.click(col, y, { button: "right" }); await page.waitForTimeout(70); if ((await menuOpen()) && /^Полка/.test(await title())) return true; await esc(); }
+    return false;
+  }
+  /** Центр отверстия выреза по X модуля (по контуру детали). */
+  const holeX = (m: Module, id: string) => { const c = m.cutouts?.find((x) => x.id === id), p = c && parts(m).find((q) => q.id === cutHost(m, c)); if (!p?.shape?.holes.length) return null; const ax = faceAxes(p), h = p.shape.holes[0]; return ax.u === 0 ? Math.round(p.position[0] - p.size[0] / 2 + h.reduce((s, q) => s + q[0], 0) / h.length) : null; };
+  const unzoom = async () => { await page.getByRole("button", { name: "Спереди", exact: true }).click().catch(() => {}); const z = page.getByRole("button", { name: "Приблизить выбранный корпус" }); if ((await z.getAttribute("aria-pressed").catch(() => "false")) === "true") await z.click().catch(() => {}); await page.mouse.move(5, 300); await page.waitForTimeout(1200); };
+  await unzoom();
+  // полка
+  let hit = await rightClickShelf((await mods()).at(-2)!.name), cutOk = hit && (await item("Вырез…").count()) === 1;
+  const menuTitle = hit ? await title() : "";
+  if (cutOk) await click(item("Вырез…"));
+  let target = await page.locator('select[aria-label="Деталь для выреза"]').inputValue({ timeout: 2000 }).catch(() => "");
+  check("I15 правой кнопкой по полке → «Вырез…»: редактор сразу на этой полке", hit && !!cutOk && /:shelf:\d+$/.test(target) && menuTitle === `Полка ${Number(target.split(":shelf:")[1]) + 1}`, `${hit} меню «${menuTitle}», редактор ${target.replace(/^[^:]+:/, "")}`);
+  // на этой полке уже может быть вырез по центру — новый у левого края (120 мм), чтобы не слился с ним
+  if (target) { await click(page.getByRole("group", { name: "Добавить вырез" }).getByRole("button", { name: /Круглый/ })); await type(page.locator('input[aria-label^="Отступ выреза"][aria-label$="по ширине"]').last(), 120); await click(btn("Сохранить вырезы")); await closeNote(); }
+  const plate = (await page.locator(".selection-context strong").first().innerText({ timeout: 1000 }).catch(() => "")).trim();
+  let [stM] = (await mods()).slice(-2);
+  check("I16 вырез сохранён на той полке, с которой открыли; полка выбрана (плашка)", (stM.cutouts ?? []).some((c) => cutHost(stM, c) === target) && /^Полка/.test(plate), `${(stM.cutouts ?? []).map((c) => cutHost(stM, c)?.replace(/^[^:]+:/, "")).join(",")}; плашка «${plate}»`);
+  // фасад ящика
+  await unzoom();
+  hit = await rightClickOn(/^Ящик/);
+  if (hit && (await item("Фасад").count())) await click(item("Фасад"));
+  cutOk = hit && (await item("Вырез…").count()) === 1;
+  if (cutOk) await click(item("Вырез…"));
+  target = await page.locator('select[aria-label="Деталь для выреза"]').inputValue({ timeout: 2000 }).catch(() => "");
+  check("I17 правой кнопкой по фасаду ящика → «Фасад» › «Вырез…»: редактор на этом фасаде", hit && !!cutOk && /:drawer:\d+:facade$/.test(target), `${hit} ${target.replace(/^[^:]+:/, "")}`);
+  const before = new Set(((await mods()).at(-1)!.cutouts ?? []).map((c) => c.id));
+  if (target) { await click(page.getByRole("group", { name: "Добавить вырез" }).getByRole("button", { name: /Круглый/ })); const u = page.locator('input[aria-label^="Отступ выреза"][aria-label$="по ширине"]').last(); if (await u.count()) await type(u, 120); await click(btn("Сохранить вырезы")); await closeNote(); }
+  km = (await mods()).at(-1)!;
+  const newCut = (km.cutouts ?? []).find((c) => !before.has(c.id));
+  const x0 = newCut ? holeX(km, newCut.id) : null, oldX = holeX(km, (km.cutouts ?? [])[0]?.id ?? "");
+  check("I18 вырез на фасаде ящика сохранён (у левого края, 120 мм)", !!newCut && cutHost(km, newCut) === target && x0 !== null, `${newCut ? cutHost(km, newCut)?.replace(/^[^:]+:/, "") : "нет"} x=${x0}`);
+  // «Зеркально отразить наполнение» у комода (выбран правой кнопкой)
+  await reveal(btn("Зеркально отразить наполнение")); await click(btn("Зеркально отразить наполнение"));
+  const km2 = (await mods()).at(-1)!, x1 = newCut ? holeX(km2, newCut.id) : null, oldX1 = holeX(km2, (km.cutouts ?? [])[0]?.id ?? "");
+  check("I19 «Отразить»: вырезы на тех же ящиках, X зеркальный (было: вырезы не отражались)", x0 !== null && x1 === km.width - x0 && oldX !== null && oldX1 === km.width - oldX && (km2.cutouts ?? []).every((c) => /:drawer@/.test(c.ref ?? "")), `x ${x0}→${x1}, ${oldX}→${oldX1}, ширина ${km.width}`);
+  await front(); await shot("I19-mirrored-cutouts");
+  await undo(); const km3 = (await mods()).at(-1)!;
+  check("I20 Ctrl+Z: вырезы как до отражения", newCut !== undefined && holeX(km3, newCut.id) === x0, `x ${newCut ? holeX(km3, newCut.id) : null}`);
 } catch (e) { check("сценарий без сбоя", false, (e as Error).message.split("\n")[0]); await shot("fail"); }
 check("ошибок страницы нет", errors.length === 0, errors.slice(0, 2).join(" | "));
 writeFileSync(`${out}/results.json`, JSON.stringify({ results, errors }, null, 1));
