@@ -162,6 +162,8 @@ type Props = {
   onEnvironmentContext?:(kind:'opening'|'fixture'|'obstacle',id:string)=>void;
   onContextMenu?: (mid: string, sid: string, x: number, y: number, info?: { pid?: string; role?: string; localY?: number }) => void;
   onToggleModule?: (id:string)=>void;
+  /** Обычный щелчок по корпусу (без Ctrl): App снимает отметки группы, если корпус не в ней (критик 29.10). */
+  onPlainModuleClick?: (id:string)=>void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
   onGap: (index: number) => void;
@@ -1108,6 +1110,7 @@ export function Scene(p: Props) {
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
       if(first?.object.userData.fixtureId){current.current.onFixtureSelect?.(first.object.userData.fixtureId);return;}
       const hit=hitAt(e.clientX,e.clientY);if(!hit)return;
+      current.current.onPlainModuleClick?.(String(hit.object.userData.moduleId));
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.

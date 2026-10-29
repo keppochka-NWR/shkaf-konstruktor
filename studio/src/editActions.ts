@@ -28,6 +28,15 @@ export function deleteQuestion(p: Project, ids: readonly string[]): string {
   return `Удалить ${n} ${word}?`;
 }
 
+/** Что именно удаляется — имена корпусов в вопросе (критик 29.10: видно, какие корпуса отмечены): «Стеллаж», «Комод». */
+export function deleteNames(p: Project, ids: readonly string[]): string {
+  return p.modules.filter((a) => ids.includes(a.id)).map((a) => `«${a.module.name}» (${a.module.width} × ${a.module.height})`).join(", ");
+}
+/** Обычный щелчок по корпусу вне отмеченной группы снимает отметки (как в Проводнике): Delete потом удаляет этот корпус, а не группу. */
+export function groupAfterPlainClick(groupIds: readonly string[], mid: string): string[] {
+  return groupIds.includes(mid) ? [...groupIds] : [];
+}
+
 /** Корпуса ids — из проекта одной правкой. Последний корпус удаляется только там, где проект может быть пустым (комната заказа). */
 export function removeModules(p: Project, ids: readonly string[], allowEmpty: boolean): Project {
   const keep = p.modules.filter((a) => !ids.includes(a.id));

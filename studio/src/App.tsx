@@ -56,7 +56,7 @@ import {orderCalculationNotice,withOrderCalculation,type OrderCalculation} from 
 import {keepProjectCutouts} from './cutoutBinding';
 import {cutHost as cutHostOf} from './partIds';
 import {similarCutParts} from './cutoutCopy';
-import {applyDecorAll,deleteKeyTarget,deleteQuestion,removeModules,sectionRemoveApplies} from './editActions';
+import {applyDecorAll,deleteKeyTarget,deleteNames,deleteQuestion,groupAfterPlainClick,removeModules,sectionRemoveApplies} from './editActions';
 import {fitUnderMansard} from './paletteBuild';
 import {keepRowPsu} from './kitchenUnderLightRow';
 import {NicheReadings} from './NicheReadings';
@@ -1368,7 +1368,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 onContextMenu={e=>{e.preventDefault();setCtxMenu({mid:a.id,sid:a.module.sections[0]?.id??"",x:e.clientX,y:e.clientY});}}
                 title={a.module.name}
                 aria-pressed={!deselected&&a.id === placed.id}
-                onClick={e=>{if(e.ctrlKey||e.metaKey){toggleModuleGroup(a.id);return;}selectModule(a.id);}}
+                onClick={e=>{if(e.ctrlKey||e.metaKey){toggleModuleGroup(a.id);return;}/* критик 29.10: обычный щелчок вне отмеченной группы снимает отметки — Delete удалит этот корпус */setGroupIds(g=>groupAfterPlainClick(g,a.id));selectModule(a.id);}}
               >
                 <Box size={18} />
                 <span>
@@ -1522,7 +1522,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true)}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
@@ -2434,7 +2434,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {deleteAsk&&!presentation&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setDeleteAsk(null);}}>
         <div className="modal delete-ask" role="dialog" aria-modal="true" aria-labelledby="delete-ask-title" data-testid="delete-ask">
           <div className="modal-head"><div><span className="eyebrow">Удаление</span><h2 id="delete-ask-title">{deleteQuestion(project,deleteAsk)}</h2></div></div>
-          <p className="field-note" role="note">Вместе с наполнением и фасадами. Вернуть — Ctrl+Z. Enter — удалить, Esc — отмена.</p>
+          {deleteAsk.length>1&&<p className="field-note" role="note" data-testid="delete-ask-names">{deleteNames(project,deleteAsk)}</p>}<p className="field-note" role="note">Вместе с наполнением и фасадами. Вернуть — Ctrl+Z. Enter — удалить, Esc — отмена.</p>
           <div className="cut-actions"><button autoFocus className="primary" onClick={confirmDelete}>Да, удалить</button><button className="outline" onClick={()=>setDeleteAsk(null)}>Отмена</button></div>
         </div></div>}
       {modal && modal!=="facade-editor" && (
