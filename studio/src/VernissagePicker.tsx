@@ -5,9 +5,10 @@ import { MILL_STYLES, MILLING_TILES, tierGroups, tileOf, type MillStyle } from "
 import { VERNISSAGE_MARKUP_DEFAULT } from "./pricing";
 import "./vernissage-picker.css";
 import { previewSvg } from "./vernissageGeometry";
-import { ADILET_FILMS, PET_DECORS, VERNISSAGE_FILMS, VERNISSAGE_MILLINGS, VERNISSAGE_NOTES, VERNISSAGE_SERIES, PROVISIONAL, SERIES_LABEL, coversOf, filmCatsOf, fmtRu, normalizeVernissage, openings, priceDateRu, seriesOf, thicknessesOf, vernissageFacadePrice, vernissageLayout, vernissageMilling, vernissageSizeCheck, vernissageTexture, type VernissageFacade, type VernissageCover } from "./facadesVernissage";
+import { ADILET_FILMS, PET_DECORS, VERNISSAGE_FILMS, VERNISSAGE_MILLINGS, VERNISSAGE_NOTES, VERNISSAGE_SERIES, PROVISIONAL, SERIES_LABEL, coversOf, filmCatsOf, fmtRu, normalizeVernissage, openings, priceDateRu, seriesOf, thicknessesOf, vernissageFacadePrice, vernissageLayout, vernissageMilling, vernissageSizeCheck, vernissageTexture, filmCatalog, type VernissageFacade, type VernissageCover } from "./facadesVernissage";
 import type { VLimit, VSeriesId } from "./vernissageData";
 import { V_FILM_COLORS } from "./vernissageTextures";
+import { FilmSwatches, RalPicker } from "./FacadeColorPickers";
 
 const ROW_LABEL = { solid: "глухой", glass: "витрина", grille: "решётка", drawer: "ящик" } as const;
 const lim = (r: VLimit | null) => r ? `${r[0]}–${r[1] ?? "…"} × ${r[2]}–${r[3] ?? "…"}` : "не делается";
@@ -32,6 +33,7 @@ export function VernissagePicker({ value, onChange, sample, sizes }: { value: Ve
   const sizeErrors = [...new Set(checks.flatMap((c) => c.errors))], sizeWarnings = [...new Set(checks.flatMap((c) => c.warnings))];
   const misfit = useMemo(() => new Set(VERNISSAGE_MILLINGS.filter((x) => x.pp && fs.some(([fw, fh]) => vernissageSizeCheck(x.id, undefined, fw, fh).errors.length)).map((x) => x.id)), [fs.map((f) => f.join("x")).join(",")]);
   const tex = vernissageTexture(value);
+  const filmList = useMemo(() => filmCatalog(value), [value.cover, value.milling]);
   // клиенту: короткие имена фрезеровок, без «паспорт/условно» и неопознанных рисунков; менеджер («Все настройки») видит всё
   const manager = useContext(ManagerMode);
   return <div className="vernissage-picker">
@@ -52,9 +54,11 @@ export function VernissagePicker({ value, onChange, sample, sizes }: { value: Ve
       {cats.map((cat) => <optgroup key={cat} label={`Категория ${cat}`}>{VERNISSAGE_FILMS.filter((f) => f.cat === cat).map((f) => <option key={cat + f.name} value={f.name}>{f.name}{value.milling === "V5" && f.v5 === false ? " · не для V5" : ""}</option>)}</optgroup>)}</select></label>}
     {value.cover === "adilet" && <label className="hardware-field">Плёнка Адилет<select aria-label="Плёнка Адилет" value={value.film ?? ""} onChange={(e) => set({ film: e.target.value })}>
       {["3", "4", "5", "6"].map((cat) => <optgroup key={cat} label={`Категория ${cat}`}>{ADILET_FILMS.filter((f) => f.cat === cat).map((f) => <option key={cat + f.name} value={f.name}>{f.name}{f.out ? " · выводится" : ""}</option>)}</optgroup>)}</select></label>}
+    {(value.cover === "film" || value.cover === "adilet" || value.cover === "pet") && <FilmSwatches cover={value.cover} list={filmList} value={value.film} onPick={(film) => set({ film })} />}
     {value.cover === "pet" && <label className="hardware-field">Декор ПЭТ<select aria-label="Декор ПЭТ Вернисаж" value={value.film ?? ""} onChange={(e) => set({ film: e.target.value })}>
       {PET_DECORS.map((d) => <option key={d} value={d}>{d}</option>)}</select></label>}
-    {value.cover.startsWith("enamel") && <label className="hardware-field">Цвет эмали (RAL/NCS или #hex)<input aria-label="Цвет эмали Вернисаж" value={value.enamelColor ?? ""} onChange={(e) => set({ enamelColor: e.target.value })} placeholder="например RAL 9003" /></label>}
+    {value.cover.startsWith("enamel") && <><RalPicker value={value.enamelColor} onPick={(c) => set({ enamelColor: c })} />
+      <label className="hardware-field">Код RAL или свой цвет (NCS, #hex)<input aria-label="Цвет эмали Вернисаж" value={value.enamelColor ?? ""} onChange={(e) => set({ enamelColor: e.target.value })} placeholder="например RAL 9003" /></label></>}
     <div className="kitchen-field"><span>Толщина МДФ</span><div className="kitchen-chips" role="group" aria-label="Толщина МДФ Вернисаж">{ths.map((t) => <button key={t} type="button" aria-pressed={value.thickness === t} onClick={() => set({ thickness: t })}>{t}{t === 25 ? " · +40 %" : ""}</button>)}</div></div>
     {m.mdf19Only && <p className="field-note">№{m.id}: МДФ 19 мм для фасадов с петлями; 16 мм — только без петель{manager ? " (прайс, примечание к серии Престиж)" : ""}.</p>}
     {value.cover !== "none" && value.cover !== "pet" && <label className="check-row"><input type="checkbox" checked={!!value.patina} onChange={(e) => set({ patina: e.target.checked || undefined })} /> Патина</label>}
