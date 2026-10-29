@@ -11,6 +11,7 @@ import { partPenetration, allowedContact } from "./collisions";
 import { qmul, qrot, type Quat } from "./quat";
 import { partAxes as partAxesOf } from "./edges";
 import { applyCutouts, applyMansard, radiusParts, cutoutErrors, mansardErrors, mansardFitErrors, radiusErrors, parseShapes, type PartShape, type Cutout } from "./shapes";
+import { bindCutouts, fitIds, parseIds } from "./partIds";
 import { drawerHasHandle, SLIDES, hingePositions, hingeShifts, slideMotion, slideBrand, HINGE_BRANDS, SLIDE_BRANDS, type DrawerConfig, type HingeBrand } from "./hardware";
 export type EdgeThickness = 2 | 1 | 0.8;
 export const EDGE_CHOICES: { value: EdgeThickness; label: string }[] = [{ value: 2, label: "2 мм · стандарт, прочная" }, { value: 1, label: "1 мм" }, { value: 0.8, label: "0,8 мм · тонкая, дешевле" }];
@@ -233,6 +234,10 @@ export type Section = {
   drawers: number;
   rod: boolean;
   drawerConfigs?: DrawerConfig[];
+  /** Постоянные id полок и ящиков (partIds.ts, решение Макса 29.10.2026): параллельно shelves и номерам ящиков; по ним вырез держится за
+   *  свою деталь при любой правке. Заводятся у секции, на наполнении которой есть вырез; на детали, раскрой и цену не влияют. */
+  shelfIds?: string[];
+  drawerIds?: string[];
   pantograph?: boolean;
   /** Выдвижные тремпели (GTV, крепление к полке/крыше, выдвигаются вперёд): количество в ряд по ширине секции, 1–3. */
   pullouts?: number;
@@ -3286,6 +3291,8 @@ export function parseModule(input: unknown): Module {
       ...(s.doorGap===undefined?{}:{doorGap:s.doorGap}),
       ...(s.removedDoors===undefined?{}:{removedDoors:Array.isArray(s.removedDoors)?[...s.removedDoors]:s.removedDoors}),
       shelves: [...s.shelves],
+      ...(Array.isArray(s.shelfIds)?{shelfIds:fitIds(parseIds(s.shelfIds)!,s.shelves.length)}:{}),
+      ...(Array.isArray(s.drawerIds)&&typeof s.drawers==='number'?{drawerIds:fitIds(parseIds(s.drawerIds)!,s.drawers)}:{}),
       ...(s.drawerMount===undefined?{}:{drawerMount:s.drawerMount}),
       ...(s.glassShelves===undefined?{}:{glassShelves:structuredClone(s.glassShelves)}),
       ...(s.thickShelves===undefined?{}:{thickShelves:Array.isArray(s.thickShelves)?s.thickShelves.map(Number):s.thickShelves}),
@@ -3330,6 +3337,8 @@ export function parseModule(input: unknown): Module {
   migrateLights(m);
   parseLightSpec(x, m);
   migrateSketchFields(x, m);
+  // вырезы файлов до 29.10 (host — номер полки/ящика) → постоянные ссылки (partIds.ts): деталь та же, что была при сохранении
+  bindCutouts(m);
   const errors = validate(m);
   if (errors.length) throw new Error(errors[0]);
   return m;

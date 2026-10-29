@@ -6,6 +6,7 @@ import { X, Plus, Trash2 } from "lucide-react";
 import { shapeBaseParts, validate, type Module, type Part } from "./model";
 import { basePolygon, buildCutShape, cutText, cutoutWarnings, faceAxes, EDGE_WORDS, type Cutout } from "./shapes";
 import type { Project } from "./project";
+import { bindCutouts, cutHost } from "./partIds";
 import "./shapes.css";
 
 const PRESETS: { id: string; label: string; make: (p: Part, ax: ReturnType<typeof faceAxes>) => Omit<Cutout, "id" | "host"> }[] = [
@@ -36,7 +37,8 @@ export function CutoutEditor({ project, mid, pid, commit, close }: { project: Pr
   const m = placed?.module;
   const hosts = useMemo(() => (m ? cutHosts(m) : []), [m]);
   const [host, setHost] = useState(pid);
-  const [draft, setDraft] = useState<Cutout[]>(() => structuredClone(m?.cutouts ?? []));
+  // деталь выреза — по постоянной ссылке (partIds.ts): host в черновике — id детали сейчас
+  const [draft, setDraft] = useState<Cutout[]>(() => (m?.cutouts ?? []).map((c) => ({ ...structuredClone(c), host: cutHost(m!, c) ?? c.host })));
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [close]);
   if (!m || !placed) return null;
   const part = hosts.find((p) => p.id === host);
@@ -49,7 +51,8 @@ export function CutoutEditor({ project, mid, pid, commit, close }: { project: Pr
   try { warnings = errors.length ? [] : cutoutWarnings(next, shapeBaseParts(next)).filter((w) => !part || w.startsWith(`«${part.name}`)); } catch { warnings = []; }
   const set = (c: Cutout, patch: Partial<Cutout>) => setDraft((d) => d.map((x) => (x.id === c.id ? { ...x, ...patch } : x)));
   const add = (preset: (typeof PRESETS)[number]) => { if (!part) return; setDraft((d) => [...d, { id: crypto.randomUUID(), host, ...preset.make(part, ax) }]); };
-  const save = () => { const n = structuredClone(project), t = n.modules.find((a) => a.id === mid)!.module; if (draft.length) t.cutouts = draft; else delete t.cutouts; if (commit(n)) close(); };
+  // новый вырез / смена детали — постоянная ссылка на полку/ящик (id заводятся у секции), остальные детали — по роли
+  const save = () => { const n = structuredClone(project), t = n.modules.find((a) => a.id === mid)!.module; if (draft.length) { t.cutouts = draft.map(({ ref, ...c }) => { const h = ref ? cutHost(t, { host: c.host, ref }) : undefined; return ref && (h === c.host || (!h && m.cutouts?.find((x) => x.id === c.id)?.host === c.host)) ? { ...c, ref } : c; }); bindCutouts(t); } else delete t.cutouts; if (commit(n)) close(); };
   // вид детали (контур с вырезами) в масштабе окна
   const U = part ? part.size[ax.u] : 1, V = part ? part.size[ax.v] : 1, k = Math.min(240 / U, 240 / V), pad = 24;
   const path = (pl: [number, number][]) => pl.map(([u, v], i) => `${i ? "L" : "M"}${(pad + u * k).toFixed(1)},${(pad + (V - v) * k).toFixed(1)}`).join("") + "Z";

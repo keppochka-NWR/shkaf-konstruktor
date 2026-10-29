@@ -4,6 +4,7 @@
 import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, hasDrawerCap, isAutoDrawerLayout, parts, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
 import { drawersUnderMansard } from "./mansardFit";
+import { fitDrawerIds } from "./partIds";
 
 const sectionOf = (m: Module, sid: string) => { const s = m.sections.find((x) => x.id === sid); if (!s) throw Error("Выберите секцию."); return s; };
 
@@ -39,7 +40,7 @@ export function setDrawerCount(m: Module, sid: string, count: number): void {
   // критик 29.10 (блокер 3): ящики до крыши — снова РАВНЫЕ фасады на всю высоту проёма (drawersToRoof → roofEvenLayout); не встают
   // равными (фасад выше 800, нижнему коробу мало места) — ошибка с причиной, секция не меняется (раньше: щель без фасада сверху)
   if (c < s.drawers) {
-    if (!c) { s.drawers = 0; delete s.drawerConfigs; return; }
+    if (!c) { s.drawers = 0; delete s.drawerConfigs; fitDrawerIds(s); return; }
     const t: Section = { ...s, drawers: c, drawerConfigs: cs.slice(0, c) };
     if (roof) t.drawerConfigs = drawersToRoof(m, t);
     else if (auto) relayoutDrawers(m, t);
@@ -55,10 +56,10 @@ export function setDrawerCount(m: Module, sid: string, count: number): void {
 /** Новое число ящиков секции; у мансардного шкафа (круг 3 критика 29.10) — ящики под скос (короба ниже, фасады те же) или отказ с
  *  причиной, секция прежняя: «+/−» после «Опустить полки под скос» больше не уводят ящики снова в крышу. */
 function settle(m: Module, s: Section, c: number, configs: Section["drawerConfigs"]): void {
-  const was = { drawers: s.drawers, drawerConfigs: s.drawerConfigs };
-  s.drawers = c; s.drawerConfigs = configs;
+  const was = { drawers: s.drawers, drawerConfigs: s.drawerConfigs, drawerIds: s.drawerIds };
+  s.drawers = c; s.drawerConfigs = configs; fitDrawerIds(s); // id ящиков (partIds.ts): «−» снимает верхний — его id уходит, «+» — новый
   if (!m.mansard) return;
-  try { drawersUnderMansard(m, s); } catch (e) { s.drawers = was.drawers; s.drawerConfigs = was.drawerConfigs; throw e; }
+  try { drawersUnderMansard(m, s); } catch (e) { s.drawers = was.drawers; s.drawerConfigs = was.drawerConfigs; if (was.drawerIds) s.drawerIds = was.drawerIds; throw e; }
 }
 
 /** Зазор между фасадами ящиков, как он виден (по деталям): у равных фасадов до крыши с фасадами выше короба — шаг фасада (3 мм),

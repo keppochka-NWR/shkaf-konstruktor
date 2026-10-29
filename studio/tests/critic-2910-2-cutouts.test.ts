@@ -22,8 +22,9 @@ test('блокер 2: вставили полку ниже — вырез ост
   const { m, sid, topY } = cutShelfModule();
   assert.deepEqual(holeOn(m), [topY]);
   const inserted = insertItem(one(m), 'shelf', 'm0', sid, 900).modules[0].module;
-  // без перепривязки (как было): номер полки тот же, а полка под ним другая — вырез уехал вниз
-  assert.notDeepEqual(holeOn(inserted), [topY], 'находка воспроизводится без перепривязки');
+  // было: номер полки тот же, а полка под ним другая — вырез уезжал вниз, держала только перепривязка при сохранении. С постоянными
+  // id (решение Макса 29.10, partIds.ts) вырез на своей полке уже после самой операции, без перепривязки
+  assert.deepEqual(holeOn(inserted), [topY], 'постоянный id: вырез на своей полке и без перепривязки');
   const r = rebindCutouts(m, inserted);
   assert.deepEqual(holeOn(r.module), [topY], 'вырез на той же полке ' + topY);
   assert.equal(r.module.cutouts![0].host, `${sid}:shelf:3`);

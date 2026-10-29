@@ -49,7 +49,7 @@ import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from 
 import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {orderCalculationNotice,withOrderCalculation,type OrderCalculation} from './priceModel';
-import {rebindCutouts} from './cutoutBinding';
+import {keepProjectCutouts} from './cutoutBinding';
 import {fitUnderMansard} from './paletteBuild';
 import {keepRowPsu} from './kitchenUnderLightRow';
 import {NicheReadings} from './NicheReadings';
@@ -579,7 +579,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     // критик 29.10 (п.10): удалили навесной с блоком питания подсветки — блок переезжает на модуль того же ряда
     if(raw.modules.length<project.modules.length){const r=keepRowPsu(project,raw);raw=r.project;cutNotes.push(...r.notes);}
     // круг 2: и когда правка сняла последний вырез (удалили ящик/секцию с ним) — сообщение, что вырез снят
-    if(raw.modules.some(a=>a.module.cutouts?.length||project.modules.find(x=>x.id===a.id)?.module.cutouts?.length))raw={...raw,modules:raw.modules.map(a=>{const old=project.modules.find(x=>x.id===a.id);if(!old||old.module===a.module||!(a.module.cutouts?.length||old.module.cutouts?.length))return a;const r=rebindCutouts(old.module,a.module);cutNotes.push(...r.notes);return r.module===a.module?a:{...a,module:r.module};})};
+    // решение Макса 29.10: вырез держится за деталь при любой правке — постоянные id (partIds.ts); здесь — правки в обход id и снятые носители
+    {const r=keepProjectCutouts(project,raw);raw=r.project;cutNotes.push(...r.notes);}
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
     const e = projectErrors(next,!!onEmptyProject);
