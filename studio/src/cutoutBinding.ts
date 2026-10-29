@@ -8,7 +8,7 @@
 //  • вырезы старого формата (host — номер полки/ящика) переводятся на постоянные ссылки (bindCutouts).
 // Геометрической перепривязки «по месту» больше нет: id не меняется ни при сдвиге, ни при смене размеров.
 import { shapeBaseParts, type Module, type Part } from "./model";
-import type { Cutout } from "./shapes";
+import { faceAxes, type Cutout } from "./shapes";
 import type { Project } from "./project";
 import { bindCutouts, cutHost, syncIds } from "./partIds";
 
@@ -52,6 +52,26 @@ export function rebindCutouts(prev: Module, next: Module): { module: Module; not
     if (keep.length) n.cutouts = keep; else delete n.cutouts;
   }
   return { module: JSON.stringify(n) === JSON.stringify(next) ? next : n, notes };
+}
+
+/** «Отразить корпус» (решение Макса 29.10, вариант 1): вырез отражается вместе со своей деталью — переходит на деталь, зеркальную
+ *  носителю (левая боковина ↔ правая, створка ↔ створка, перегородка, полка и ящик своей секции), отступ по оси X считается от
+ *  противоположного края (fromU/fromV), размеры те же; по высоте и глубине — без изменений. Дважды отразить — как было.
+ *  prev — модуль до отражения, next — после (меняется на месте). */
+export function mirrorCutouts(prev: Module, next: Module): void {
+  if (!prev.cutouts?.length) return;
+  const before = safeParts(prev), after = safeParts(next);
+  if (!before || !after) return;
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.6;
+  next.cutouts = prev.cutouts.map((c) => {
+    const p = before.find((q) => q.id === cutHost(prev, c));
+    const q = p && after.find((x) => x.role === p.role && [0, 1, 2].every((i) => near(x.size[i], p.size[i])) && near(x.position[0], prev.width - p.position[0]) && near(x.position[1], p.position[1]) && near(x.position[2], p.position[2]));
+    if (!q) return c;
+    const ax = faceAxes(q), { ref: _r, ...rest } = c; void _r;
+    const flip = (v: "min" | "max") => (v === "min" ? "max" : "min");
+    return { ...rest, host: q.id, ...(ax.u === 0 ? { fromU: flip(c.fromU) } : {}), ...(ax.v === 0 ? { fromV: flip(c.fromV) } : {}) };
+  });
+  bindCutouts(next);
 }
 
 /** Сохранение проекта (App.commitProject): вырезы каждого изменённого корпуса — rebindCutouts по корпусу с тем же id. */

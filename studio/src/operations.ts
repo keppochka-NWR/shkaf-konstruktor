@@ -6,7 +6,7 @@ import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,
 import {roofColumn,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
-import {settleCutouts} from './cutoutBinding';
+import {settleCutouts,mirrorCutouts} from './cutoutBinding';
 import {bindCutouts,insertShelf,dropId,fitDrawerIds,renewIds,ensureIds,cutHost} from './partIds';
 import {drawersUnderMansard} from './mansardFit';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
@@ -154,6 +154,7 @@ export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:num
 export function mirrorModule(p:Project,mid:string):Project {
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
  if(!m)throw Error('Выберите корпус для отражения.');
+ const was=structuredClone(m);/* решение Макса 29.10: вырезы отражаются вместе со своими деталями (mirrorCutouts) */
  for(const sec of m.sections){if(sec.doorHinges){const hinges=[...sec.doorHinges];sec.doorHinges=hinges.map((_,k)=>{const h=hinges[doorCount(m,sec)===2?k^1:k];return h==='left'?'right':h==='right'?'left':h??null;});}if(sec.doorLifts&&doorCount(m,sec)===2)sec.doorLifts=Array.from({length:sec.doorLifts.length},(_,k)=>sec.doorLifts?.[k^1]??null);if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=Array.from({length:sec.doorHandles.length},(_,k)=>sec.doorHandles?.[k^1]??null);if(sec.handleFloor&&doorCount(m,sec)===2)sec.handleFloor=Array.from({length:sec.handleFloor.length},(_,k)=>sec.handleFloor?.[k^1]??null);if(sec.handlePos&&doorCount(m,sec)===2)sec.handlePos=Array.from({length:sec.handlePos.length},(_,k)=>sec.handlePos?.[k^1]??null);if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>k^1);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
  if(m.sectionLayout)mirrorOpenings(m);
  // частичная перегородка — у секции справа от неё: после отражения справа оказывается бывшая левая секция
@@ -161,6 +162,7 @@ export function mirrorModule(p:Project,mid:string):Project {
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  if(m.kitchen)mirrorKitchen(m); // поля кухни со стороной (пакет 0): xs↔xr, topConf↔topConfR, маркер −1 у направляющих и т. д.
+ mirrorCutouts(was,m);
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }
