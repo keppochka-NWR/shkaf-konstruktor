@@ -10,6 +10,11 @@
 //  6. Ctrl+Z — ширина 600, линии на месте; Ctrl+Z — линия 1300 убрана. Щелчок по линии + Delete — убрана.
 //  7. Esc отменяет Q; «Убрать вспомогательные линии».
 //  8. E — 3D, Q в 3D ничего не делает.
+//  9. Набор при тяге за угол (ветка claude/guides-plan): «750;2200» + Enter; «800» — только ширина; «;2300» и отпустить кнопку —
+//     только высота; «2500» не помещается — отказ с причиной; Esc — отмена; «Сбоку» «650;2100» (глубина;высота).
+// 10. «План»: 4 ручки углов, угол → ширина и глубина; «900;600» + Enter; Q от правого края +600 → x = 2200 (look +Y); щелчок
+//     без числа — на расстоянии мыши; корпус и угол привязываются к линии; те же линии в «Сверху», «Спереди» — нет;
+//     щелчок по линии + Delete, Ctrl+Z, Esc отменяет Q, «Убрать вспомогательные линии».
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, type Module } from "../src/model";
@@ -42,6 +47,20 @@ async function drag(from: { x: number; y: number }, to: { x: number; y: number }
   for (let i = 1; i <= 12; i++) { await page.mouse.move(from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12); await page.waitForTimeout(25); }
   const live = (await page.locator(".drag-badge").innerText().catch(() => "")).trim();
   await shot(name + "-live");
+  await page.mouse.up(); await page.waitForTimeout(600);
+  return live;
+}
+const planHandle = async (corner: string) => { const b = await page.locator(`.plan-corner[data-corner="${corner}"]`).first().boundingBox(); return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null; };
+/** Тяга за угол с набором размеров: чуть сдвинуть, набрать text, завершить Enter / отпусканием кнопки / Esc. Возвращает плашку. */
+async function typedDrag(from: { x: number; y: number }, text: string, finish: "enter" | "release" | "esc", name: string, badgeSel = ".drag-badge") {
+  await page.mouse.move(from.x, from.y); await page.mouse.down();
+  for (let i = 1; i <= 4; i++) { await page.mouse.move(from.x + i * 3, from.y - i * 2); await page.waitForTimeout(25); }
+  for (const c of text) await page.keyboard.press(c);
+  await page.waitForTimeout(250);
+  const live = (await page.locator(badgeSel).first().innerText().catch(() => "")).trim();
+  await shot(name + "-live");
+  if (finish === "enter") await page.keyboard.press("Enter");
+  if (finish === "esc") await page.keyboard.press("Escape");
   await page.mouse.up(); await page.waitForTimeout(600);
   return live;
 }
@@ -166,6 +185,118 @@ try {
   check("8. Q в 3D — без инструмента, вид тот же", !(await page.locator(".scene.guide-tool").count()) && (await page.locator('.view-tabs button[aria-pressed="true"]').innerText()).trim() === "3D");
   check("8. в 3D ручек углов нет", (await page.locator(".corner-handle").count()) === 0);
   await shot("iso");
+
+  // 9. Размеры с клавиатуры при тяге за угол (решение Макса 29.10): «Спереди» — ширина;высота
+  await view("s");
+  const t1 = (await handle("hi-hi"))!;
+  const typedLive = await typedDrag(t1, "750;2200", "enter", "front-typed");
+  const b9 = await settled((b) => b.a.w !== 600);
+  check("9. плашка показывает набранное «Размер (ширина;высота): 750;2200»", /Размер \(ширина;высота\): 750;2200/.test(typedLive), typedLive);
+  check("9. Enter — ширина 750, высота 2200, левый нижний угол на месте", b9.a.w === 750 && b9.a.h === 2200 && b9.a.x === 1000 && b9.a.y === 0, fmt(b9.a));
+  await key("Control+z");
+  check("9. Ctrl+Z — одной отменой", (await settled((b) => b.a.w === 600)).a.h === 2000);
+  await typedDrag((await handle("hi-hi"))!, "800", "enter", "front-typed-one");
+  const b9b = await settled((b) => b.a.w !== 600);
+  check("9. одно число — только ширина (800), высота прежняя", b9b.a.w === 800 && b9b.a.h === 2000, fmt(b9b.a));
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  await typedDrag((await handle("lo-hi"))!, ";2300", "release", "front-typed-second");
+  const b9c = await settled((b) => b.a.h !== 2000);
+  check("9. «;2300» и отпустили кнопку — только высота 2300, ширина прежняя", b9c.a.h === 2300 && b9c.a.w === 600 && b9c.a.x === 1000, fmt(b9c.a));
+  await key("Control+z"); await settled((b) => b.a.h === 2000);
+  const big = await typedDrag((await handle("hi-hi"))!, "2500", "enter", "front-typed-too-wide");
+  await page.waitForTimeout(300);
+  const err = (await page.locator(".error-banner").innerText().catch(() => "")).trim();
+  // причина — первая, что встретилась: правило ряда (сосед), предел фасада/корпуса или «не получается» (exactProblem)
+  check("9. ширина 2500 не помещается — отказ с причиной в плашке и сообщении, размер прежний", !/Enter — применить/.test(big) && /Размер \(ширина;высота\): 2500/.test(big) && err.length > 10 && (await boxes()).a.w === 600, `«${big}» · «${err}»`);
+  await typedDrag((await handle("hi-hi"))!, "900", "esc", "front-typed-esc");
+  check("9. Esc — набранное отменено, ничего не изменилось", (await boxes()).a.w === 600 && !(await page.locator(".corner-dragging").count()));
+  // «Сбоку» — глубина;высота
+  await view("d");
+  await typedDrag((await handle("hi-hi"))!, "650;2100", "enter", "side-typed");
+  const b9d = await settled((b) => b.a.d !== 550);
+  check("9. «Сбоку» «650;2100» — глубина 650, высота 2100, задняя стенка и низ на месте", b9d.a.d === 650 && b9d.a.h === 2100 && b9d.a.z === 3 && b9d.a.y === 0, fmt(b9d.a));
+  await key("Control+z"); await settled((b) => b.a.d === 550);
+
+  // 10. «План»: ручки углов (ширина + глубина), набор, Q — линии общие с «Сверху», привязка корпуса к линии
+  await page.getByRole("button", { name: "План", exact: true }).click(); await page.waitForTimeout(800);
+  const plan = (c: string) => planHandle(c);
+  check("10. «План»: 4 ручки углов выбранного корпуса", (await page.locator(".plan-corner").count()) === 4);
+  await shot("plan-handles");
+  const pl = (await plan("lo-lo"))!, ph = (await plan("hi-hi"))!;
+  const qx = (ph.x - pl.x) / 600, qz = (ph.y - pl.y) / 550;
+  const live10 = await drag(ph, { x: ph.x + 98 * qx, y: ph.y + 98 * qz }, "plan-corner");
+  const b10 = await settled((b) => b.a.w !== 600);
+  check("10. угол на плане: ширина 700, глубина 650, задняя стенка и левый край на месте", b10.a.w === 700 && b10.a.d === 650 && b10.a.x === 1000 && b10.a.z === 3, fmt(b10.a) + ` · «${live10}»`);
+  await key("Control+z");
+  check("10. Ctrl+Z — одной отменой", (await settled((b) => b.a.w === 600)).a.d === 550);
+  const live10b = await typedDrag((await plan("hi-hi"))!, "900;600", "enter", "plan-typed", ".plan-badge");
+  const b10b = await settled((b) => b.a.w !== 600);
+  check("10. набор на плане «900;600» — ширина 900, глубина 600", b10b.a.w === 900 && b10b.a.d === 600 && b10b.a.x === 1000 && b10b.a.z === 3, fmt(b10b.a) + ` · «${live10b}»`);
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  // Q от правого края корпуса: +600 → линия x = 2200 (вид сверху, общая с «Сверху»)
+  const pr = (await plan("hi-lo"))!, ph2 = (await plan("hi-hi"))!, redge = { x: ph2.x, y: (pr.y + ph2.y) / 2 };
+  await page.mouse.move(redge.x, redge.y); await key("q");
+  const ppick = (await page.locator(".plan-badge").innerText().catch(() => "")).trim();
+  check("10. Q на плане: подсветка края под мышью", /край «Шкаф»|кромка/.test(ppick) && (await page.locator(".plan-guide-hover").count()) === 1, ppick);
+  await shot("plan-q-hover");
+  await page.mouse.click(redge.x, redge.y); await page.waitForTimeout(200);
+  await page.mouse.move(redge.x + 120, redge.y); await page.waitForTimeout(150);
+  for (const c of "600") await page.keyboard.press(c);
+  await page.waitForTimeout(150);
+  const ptyped = (await page.locator(".plan-badge").innerText().catch(() => "")).trim();
+  check("10. набранное расстояние видно: «Размер: 600»", /Размер: 600/.test(ptyped), ptyped);
+  await shot("plan-q-typed");
+  await page.keyboard.press("Enter"); await page.waitForTimeout(400);
+  g = await guides();
+  check("10. Enter — линия плана x = 2200, взгляд сверху", g.length === 1 && g[0].at === 2200 && g[0].n[0] === 1 && JSON.stringify((g[0] as unknown as { look: number[] }).look) === "[0,1,0]", JSON.stringify(g));
+  check("10. линия нарисована на плане", (await page.locator(".plan-guide").count()) === 1);
+  await shot("plan-guide");
+  // от фасадной линии корпуса вниз по плану (к фасадной стене) — щелчок без числа: на расстоянии мыши
+  const pf = (await plan("lo-hi"))!;
+  await page.mouse.move((pf.x + ph2.x) / 2, pf.y); await key("q");
+  await page.mouse.click((pf.x + ph2.x) / 2, pf.y); await page.waitForTimeout(150);
+  await page.mouse.move((pf.x + ph2.x) / 2, pf.y + 400 * qz); await page.waitForTimeout(150);
+  await page.mouse.click((pf.x + ph2.x) / 2, pf.y + 400 * qz); await page.waitForTimeout(400);
+  g = await guides();
+  const zline = g.find((x) => x.n[2] === -1);
+  check("10. щелчок без числа — линия на расстоянии мыши (~400 мм перед фасадом)", g.length === 2 && !!zline && Math.abs(-zline.at - 953) < 15, JSON.stringify(g.map((x) => [x.n, x.at])));
+  // перетаскивание корпуса на плане к линии 2200: правый край ложится на линию
+  const body = { x: (pl.x + ph2.x) / 2, y: (pl.y + ph2.y) / 2 };
+  await drag(body, { x: body.x + 600 * qx - 3, y: body.y }, "plan-move-to-guide");
+  const b10c = await settled((b) => b.a.x !== 1000);
+  check("10. корпус на плане привязался к линии: правый край 2200 (x = 1600)", b10c.a.x === 1600, fmt(b10c.a));
+  await key("Control+z"); await settled((b) => b.a.x === 1000);
+  // угол к линии 2200
+  const ph3 = (await plan("hi-hi"))!;
+  await drag(ph3, { x: ph3.x + 600 * qx - 3, y: ph3.y }, "plan-corner-to-guide");
+  const b10d = await settled((b) => b.a.w !== 600);
+  check("10. угол на плане привязался к линии: ширина 1200", b10d.a.w === 1200 && b10d.a.x === 1000 && b10d.a.d === 550, fmt(b10d.a));
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  // общие с «Сверху»: там те же 2 линии; «Спереди» — своих нет
+  await view("w");
+  const topClear = (await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).innerText().catch(() => "")).trim();
+  check("10. «Сверху» — те же линии (2)", /\(2\)/.test(topClear), topClear);
+  await shot("top-shared-guides");
+  await view("s");
+  check("10. «Спереди» линий плана нет", !(await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).count()));
+  await page.getByRole("button", { name: "План", exact: true }).click(); await page.waitForTimeout(800);
+  // щелчок по линии 2200 + Delete; Ctrl+Z; Esc отменяет Q; «Убрать вспомогательные линии»
+  const gx2 = pl.x + 1200 * qx;
+  await page.mouse.click(gx2, pl.y - 120 * qz); await page.waitForTimeout(250);
+  check("10. щелчок по линии — выбрана", (await page.locator('.plan-guide[stroke="#e8590c"]').count()) === 1);
+  await shot("plan-guide-selected");
+  await page.keyboard.press("Delete"); await page.waitForTimeout(400);
+  check("10. Delete — линия убрана, корпус на месте", (await guides()).length === 1 && (await boxes()).a.w === 600);
+  await key("Control+z");
+  check("10. Ctrl+Z — линия вернулась", (await guides()).length === 2);
+  await page.mouse.move(redge.x + 1, redge.y); await key("q");
+  await page.mouse.click(redge.x + 1, redge.y); await page.keyboard.press("7"); await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  check("10. Esc отменяет начатую линию", (await guides()).length === 2 && !(await page.locator(".plan-guide-ghost").count()));
+  const pclear = page.getByRole("button", { name: /Убрать вспомогательные линии/ });
+  check("10. кнопка «Убрать вспомогательные линии (2)» на плане", /\(2\)/.test(await pclear.innerText().catch(() => "")));
+  await pclear.click(); await page.waitForTimeout(400);
+  check("10. линии убраны", (await guides()).length === 0 && !(await pclear.count()));
+  await shot("plan-cleared");
   console.log("ошибки страницы: " + (errors.length ? errors.join("; ") : "нет"));
   check("без ошибок страницы", !errors.length, errors.join("; "));
   const bad = results.filter((r) => !r[1]);
