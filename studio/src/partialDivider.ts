@@ -3,6 +3,7 @@
 // Здесь — команды панели и меню правой кнопки: задать/снять, по полкам, перевесить фасады с частичной перегородки на боковины.
 import { boxes, doorCount, doorMaxWidth, parts, dividerSpan, RULES, type Module, type Section } from "./model";
 import { setDoorHinge } from "./facadeEditing";
+import { dropId } from "./partIds";
 
 export type DividerBound = "floor" | "roof" | { section: number; shelf: number };
 
@@ -16,6 +17,7 @@ export function dividerInfo(m: Module, i: number): { partial: boolean; from: num
 /** Убрать полку j секции: номера жёстких, стеклянных и подсвеченных полок сдвигаются, как при удалении полки. */
 function dropShelf(s: Section, j: number) {
   s.shelves.splice(j, 1);
+  dropId(s, "shelf", j); // постоянный id полки уходит вместе с ней (partIds.ts)
   for (const key of ["fixed", "glassShelves", "thickShelves", "shelfLights"] as const) {
     const v = s[key];
     if (!v) continue;

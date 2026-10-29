@@ -6,7 +6,8 @@ import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,
 import {roofColumn,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
-import {remapDrawerCutouts,dropCutoutsOnRemovedParts,dropCutoutsOnFilling} from './cutoutBinding';
+import {settleCutouts,mirrorCutouts} from './cutoutBinding';
+import {bindCutouts,insertShelf,dropId,fitDrawerIds,renewIds,ensureIds,cutHost} from './partIds';
 import {drawersUnderMansard} from './mansardFit';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
@@ -19,10 +20,11 @@ export function wholeDrawerPid(pid:string):string{return pid.includes(':drawer:'
 export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);
   if(!m||!s)throw Error('Выберите элемент наполнения.');
+  bindCutouts(m);/* решение Макса 29.10: вырез — по постоянному id полки/ящика (partIds.ts), id уходит вместе с деталью */
   if(pid.includes(':door:')){const k=Number(pid.split(':door:')[1]);if(!parts(m).some(part=>part.id===pid&&part.role==='door'))throw Error('Фасад не найден.');s.removedDoors=[...new Set([...(s.removedDoors??[]),k])];}
-  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
+  else if(pid.includes(':shelf:')){const j=Number(pid.split(':shelf:')[1]);if(!Number.isInteger(j)||j<0||j>=s.shelves.length)throw Error('Полка не найдена.');s.shelves.splice(j,1);dropId(s,'shelf',j);for(const key of ['fixed','glassShelves','thickShelves','shelfLights'] as const)if(s[key])s[key]=s[key]!.filter(k=>k!==j).map(k=>k>j?k-1:k);remapShelfSpec(s,k=>k===j?undefined:k>j?k-1:k);}
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
-  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofColumn(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;remapDrawerCutouts(m,sid,j);/* круг 2 критика 29.10: вырез идёт за своим ящиком */
+  else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofColumn(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;dropId(s,'drawer',j);/* круг 2 критика 29.10: вырез идёт за своим ящиком — по его id */
     // ящики по правилу (правка 29.10): комод — оставшиеся снова поровну до крыши; стопка от дна — сомкнуть и выровнять фасады
     if(s.drawers&&(roof||auto)){if(roof){s.drawerConfigs=drawersToRoof(m,s);/* критик 29.10: не встают поровну до крыши — ящик не убирается (ошибка с причиной), а не щель сверху */}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}if(m.mansard)drawersUnderMansard(m,s);/* круг 3: мансарда — ящики под скос или отказ */}}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
@@ -31,6 +33,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   else if(pid.endsWith(':rod:lower')||pid.includes(':flange:lower:')||pid.includes(':pipe')){delete s.rodLower;}
   else if(pid.endsWith(':rod')||pid.includes(':flange:')){s.rod=false;delete s.rodAt;delete s.rodLower;}
   else throw Error('Эта деталь относится к конструкции корпуса.');
+  settleCutouts(m);/* вырез на удалённой детали снимается (сообщение — при сохранении, rebindCutouts) */
   return n;
 }
 export function moveModule(p:Project,mid:string,pos:{x:number;y:number;z:number}){const n=structuredClone(p),a=n.modules.find(a=>a.id===mid);if(!a)throw Error('Корпус не найден.');Object.assign(a,pos);return n;}
@@ -64,11 +67,12 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   const candidates=[desired,0,drawerStackHeight(source.sections.find(s=>s.id===sid)!),...Array.from({length:Math.ceil((b.top-b.bottom)/16)},(_,i)=>i*16)].sort((a,b)=>Math.abs(a-desired)-Math.abs(b-desired));
   for(const y of candidates){
     const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)!.module,s=m.sections.find(s=>s.id===sid)!;
+    bindCutouts(m);
     if(kind==='shelf'){
       if(s.shelves.length>=RULES.maxShelves)break;
       const fixedHeights=new Set((s.fixed??[]).map(j=>s.shelves[j])),glassHeights=new Set((s.glassShelves??[]).map(j=>s.shelves[j])),litHeights=new Set((s.shelfLights??[]).map(j=>s.shelves[j]));
       const oldShelves=[...s.shelves];
-      s.shelves.push(y/(b.top-b.bottom));s.shelves.sort((a,b)=>a-b);
+      insertShelf(s,y/(b.top-b.bottom));/* у новой полки — новый id, у остальных — прежние */
       // тон/тип подсветки полки (задача 14) — по высоте, как shelfLights
       remapShelfSpec(s,k=>{const j=s.shelves.indexOf(oldShelves[k]);return j<0?undefined:j;});
       if(s.fixed)s.fixed=s.shelves.flatMap((f,j)=>fixedHeights.has(f)?[j]:[]);
@@ -80,7 +84,7 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
     }
     else if(kind==='drawer'){
       if(s.drawers>=RULES.maxDrawers)break;
-      s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawer??drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});
+      s.drawerConfigs=Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j));const cfg=drawer??drawerConfig(m,s,s.drawers);s.drawers++;s.drawerConfigs.push({...cfg,y});fitDrawerIds(s);
       const fillers=fillerSides(m,s);
       if((fillers.left||fillers.right)&&s.shelves.some(f=>f*(b.top-b.bottom)<drawerStackHeight(s)+RULES.panel))continue;
     }else if(kind==='rod'){s.rod=true;s.pantograph=false;s.rodAt=y/(b.top-b.bottom);}
@@ -120,8 +124,17 @@ export function transferPart(p:Project,fromMid:string,fromSid:string,pid:string,
   if(!target)throw Error('Выберите принимающую секцию.');
   if((kind==='rod'||kind==='pantograph')&&(target.rod||target.pantograph))throw Error('В принимающей секции уже есть штанга или пантограф. Выберите свободную секцию или сначала уберите существующий элемент.');
   const cfg=kind==='drawer'?drawerConfig(m,s,Number(pid.split(':drawer:')[1].split(':')[0])):undefined;
-  const n=removePart(p,fromMid,fromSid,kind==='drawer'?pid.replace(':facade',':bottom'):pid);
-  return insertItem(n,kind,toMid,toSid,y,cfg);
+  const n=removePart(p,fromMid,fromSid,kind==='drawer'?pid.replace(':facade',':bottom'):pid),out=insertItem(n,kind,toMid,toSid,y,cfg);
+  // перенос — та же деталь (решение Макса 29.10): постоянный id и вырезы на ней едут в другую секцию; не встают — сняты (сообщение при сохранении)
+  if(kind!=='shelf'&&kind!=='drawer')return out;
+  const src=structuredClone(m);bindCutouts(src);const j=Number(pid.split(':'+kind+':')[1].split(':')[0]),sec=src.sections.find(x=>x.id===fromSid)!;
+  const uid=(kind==='shelf'?sec.shelfIds:sec.drawerIds)?.[j],pre=`${fromSid}:${kind}@${uid}`,own=(src.cutouts??[]).filter(c=>c.ref===pre||!!c.ref?.startsWith(pre+':'));
+  const at=insertedPartId(n,out,toMid,toSid,kind);if(!uid||!own.length||!at)return out;
+  const carried=structuredClone(out),tm=carried.modules.find(a=>a.id===toMid)!.module,ts=tm.sections.find(x=>x.id===toSid)!,ids=ensureIds(ts,kind),k=Number(at.split(':'+kind+':')[1].split(':')[0]);
+  if(ids.includes(uid))return out;
+  ids[k]=uid;tm.cutouts=[...(tm.cutouts??[]),...own.map(c=>({...c,ref:`${toSid}:${kind}@${uid}`+c.ref!.slice(pre.length)}))];
+  for(const c of tm.cutouts)c.host=cutHost(tm,c)??c.host;
+  return projectErrors(carried).length?out:carried;
 }
 
 
@@ -141,6 +154,7 @@ export function moveDivider(p:Project,mid:string,rightSectionId:string,delta:num
 export function mirrorModule(p:Project,mid:string):Project {
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;
  if(!m)throw Error('Выберите корпус для отражения.');
+ const was=structuredClone(m);/* решение Макса 29.10: вырезы отражаются вместе со своими деталями (mirrorCutouts) */
  for(const sec of m.sections){if(sec.doorHinges){const hinges=[...sec.doorHinges];sec.doorHinges=hinges.map((_,k)=>{const h=hinges[doorCount(m,sec)===2?k^1:k];return h==='left'?'right':h==='right'?'left':h??null;});}if(sec.doorLifts&&doorCount(m,sec)===2)sec.doorLifts=Array.from({length:sec.doorLifts.length},(_,k)=>sec.doorLifts?.[k^1]??null);if(sec.doorHandles&&doorCount(m,sec)===2)sec.doorHandles=Array.from({length:sec.doorHandles.length},(_,k)=>sec.doorHandles?.[k^1]??null);if(sec.handleFloor&&doorCount(m,sec)===2)sec.handleFloor=Array.from({length:sec.handleFloor.length},(_,k)=>sec.handleFloor?.[k^1]??null);if(sec.handlePos&&doorCount(m,sec)===2)sec.handlePos=Array.from({length:sec.handlePos.length},(_,k)=>sec.handlePos?.[k^1]??null);if(sec.removedDoors&&doorCount(m,sec)===2)sec.removedDoors=sec.removedDoors.map(k=>k^1);if(sec.hingeSide)sec.hingeSide=sec.hingeSide==='right'?'left':'right';}
  if(m.sectionLayout)mirrorOpenings(m);
  // частичная перегородка — у секции справа от неё: после отражения справа оказывается бывшая левая секция
@@ -148,6 +162,7 @@ export function mirrorModule(p:Project,mid:string):Project {
  m.sections.reverse();
  m.hingeSide=m.hingeSide==='right'?'left':'right';
  if(m.kitchen)mirrorKitchen(m); // поля кухни со стороной (пакет 0): xs↔xr, topConf↔topConfR, маркер −1 у направляющих и т. д.
+ mirrorCutouts(was,m);
  const error=projectErrors(n)[0];if(error)throw Error(error);
  return n;
 }
@@ -224,15 +239,17 @@ export function addUpperModule(p:Project,mid:string):Project {
 
 
 export function clearSection(p:Project,mid:string,sid:string):Project {
- const n=structuredClone(p),s=n.modules.find(a=>a.id===mid)?.module.sections.find(s=>s.id===sid);if(!s)throw Error('Выберите секцию.');
- s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;delete s.glassShelves;delete s.thickShelves;delete s.fixed;delete s.shelfLight;delete s.shelfLights;return n;
+ const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию.');
+ bindCutouts(m);
+ s.shelves=[];s.drawers=0;s.rod=false;delete s.pantograph;delete s.rodAt;delete s.drawerConfigs;delete s.glassShelves;delete s.thickShelves;delete s.fixed;delete s.shelfLight;delete s.shelfLights;delete s.shelfIds;delete s.drawerIds;
+ settleCutouts(m);return n;
 }
 export function removeSection(p:Project,mid:string,sid:string):Project {
   const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module;if(!m||m.sections.length<2)throw Error('В корпусе должна остаться хотя бы одна секция.');
-  const was=p.modules.find(a=>a.id===mid)!.module;/* круг 2 критика 29.10: вырезы на деталях удалённой секции снимаются (сообщение — rebindCutouts), как у удалённой полки */
-  if(m.sectionLayout){removeOpening(m,sid);dropCutoutsOnRemovedParts(was,m);const e=projectErrors(n)[0];if(e)throw Error(e);return n;}
+  bindCutouts(m);/* круг 2 критика 29.10: вырезы на деталях удалённой секции снимаются (сообщение — rebindCutouts), как у удалённой полки */
+  if(m.sectionLayout){removeOpening(m,sid);settleCutouts(m);const e=projectErrors(n)[0];if(e)throw Error(e);return n;}
  const i=m.sections.findIndex(s=>s.id===sid);if(i<0)throw Error('Выберите секцию.');const bb=boxes(m),recipient=i===0?1:i-1;
- m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);dropCutoutsOnRemovedParts(was,m);
+ m.sections.forEach((s,j)=>s.weight=bb[j].width+(j===recipient?bb[i].width+RULES.panel:0));m.sections.splice(i,1);settleCutouts(m);
  const error=projectErrors(n)[0];if(error)throw Error(error);return n;
 }
 
@@ -306,6 +323,7 @@ export function captureSectionFilling(p:Project,mid:string,sid:string):SectionFi
 export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:SectionFilling):Project{
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для вставки.');
  const b=boxes(m).find(b=>b.id===sid)!,height=b.top-b.bottom;
+ bindCutouts(m);
  s.shelves=copy.shelves.map(y=>y/height);s.drawers=copy.drawers.length;s.drawerConfigs=copy.drawers.map(c=>({...c}));s.rod=copy.hanger==='rod';s.pantograph=copy.hanger==='pantograph';
  if(copy.shelfDepth!==undefined)s.shelfDepth=copy.shelfDepth;else delete s.shelfDepth;
  if(copy.fixed)s.fixed=[...copy.fixed];else delete s.fixed;delete s.shelfLight;delete s.shelfLights;
@@ -315,7 +333,7 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
  if(copy.drawerMount)s.drawerMount=copy.drawerMount;else delete s.drawerMount;
  if(copy.drawerGap!==undefined)s.drawerGap=copy.drawerGap;else delete s.drawerGap;
  if(copy.hanger==='rod'&&copy.rodLowerHeight!==undefined)s.rodLower=copy.rodLowerHeight/height;else delete s.rodLower;
- dropCutoutsOnFilling(p.modules.find(a=>a.id===mid)!.module,m,sid);/* круг 3: вырезы на заменённых деталях наполнения снимаются с сообщением */
+ renewIds(s);settleCutouts(m);/* круг 3: наполнение — копия с новыми id; вырезы на заменённых деталях снимаются (сообщение при сохранении) */
  const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;
 }
 

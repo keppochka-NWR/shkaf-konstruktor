@@ -7,6 +7,7 @@
 // кромка по вырезу/дуге — Part.cutEdge / Part.curveEdge, работа — Part.cutWork (pricing.ts: «Вырез / сложный выпил», «Кромка по кривой»).
 import { RULES, boxes, plinth, type Module, type Part } from "./model";
 import { setEdges } from "./edges";
+import { cutHost } from "./partIds";
 
 export type Pt = [number, number];
 export type Axis = 0 | 1 | 2;
@@ -16,7 +17,10 @@ export type PartShape = { axes: { u: Axis; v: Axis; w: Axis }; outline: Pt[]; ho
  *  round — диаметр w, отступы u/v до центра. fromU/fromV — от какого края считать (min — левый/нижний/задний, max — правый/верхний/передний). */
 export type Cutout = { id: string; host: string; shape: "rect" | "round"; w: number; h: number; u: number; v: number; fromU: "min" | "max"; fromV: "min" | "max";
   /** Кромка по контуру выреза: true/false — явно; нет — по правилу (фасад и вырез у кромленого края — да, отверстие в корпусе — нет). */
-  edge?: boolean; /** подпись менеджера: «под трубу», «под плинтус»… */ label?: string };
+  edge?: boolean; /** подпись менеджера: «под трубу», «под плинтус»… */ label?: string;
+  /** Постоянная ссылка на полку/ящик (partIds.ts, формат выреза v2): `<секция>:shelf@<id>`, `<секция>:drawer@<id>:<деталь>`. Есть — деталь
+   *  берётся по ней (cutHost), host — id детали на момент сохранения; нет — деталь по host (боковины, двери, перегородки — id по роли). */
+  ref?: string };
 
 const AX = ["x", "y", "z"] as const;
 /** Ось толщины детали: размер, равный толщине (при нескольких — меньший), иначе наименьший. */
@@ -220,7 +224,7 @@ const edgeT = (m: Module, p: Part) => (isFacadePart(p) ? m.edgeFacade ?? 2 : m.e
 /** Вырезы модуля на деталях: контур, пометка «фигурная», кромка по вырезу и работа. Ошибки — в validate (cutoutErrors). */
 export function applyCutouts(m: Module, out: Part[]): void {
   const by = new Map<string, Cutout[]>();
-  for (const c of m.cutouts ?? []) by.set(c.host, [...(by.get(c.host) ?? []), c]);
+  for (const c of m.cutouts ?? []) { const h = cutHost(m, c); if (h) by.set(h, [...(by.get(h) ?? []), c]); }
   for (const [host, list] of by) {
     const p = out.find((q) => q.id === host);
     if (!p) continue;
@@ -263,7 +267,9 @@ export function cutoutErrors(m: Module, ps: Part[]): string[] {
   const errors: string[] = [], by = new Map<string, Cutout[]>();
   for (const c of m.cutouts) {
     if (!c || typeof c.host !== "string" || !["rect", "round"].includes(c.shape)) { errors.push("Вырез: неверная запись — удалите его и задайте заново."); continue; }
-    by.set(c.host, [...(by.get(c.host) ?? []), c]);
+    const h = cutHost(m, c);
+    if (!h) { errors.push(`Вырез: детали «${c.host}» в корпусе больше нет (полку или ящик убрали) — удалите вырез в окне «Вырезы».`); continue; }
+    by.set(h, [...(by.get(h) ?? []), c]);
   }
   for (const [host, list] of by) {
     const p = ps.find((q) => q.id === host);
@@ -276,7 +282,7 @@ export function cutoutErrors(m: Module, ps: Part[]): string[] {
 export function cutoutWarnings(m: Module, ps: Part[]): string[] {
   const out: string[] = [];
   (m.cutouts ?? []).forEach((c) => {
-    const p = ps.find((q) => q.id === c.host);
+    const h = cutHost(m, c), p = ps.find((q) => q.id === h);
     if (!p) return;
     const ax = faceAxes(p), r = resolveCut(c, p.size[ax.u], p.size[ax.v]), min = p.position.map((v, i) => v - p.size[i] / 2);
     const lo: number[] = [0, 0, 0], hi: number[] = [0, 0, 0];
@@ -287,7 +293,7 @@ export function cutoutWarnings(m: Module, ps: Part[]): string[] {
       && [0, 1, 2].every((i) => q.position[i] - q.size[i] / 2 < hi[i] && q.position[i] + q.size[i] / 2 > lo[i]));
     if (!hits.length) return;
     const kinds = [...new Set(hits.map((q) => q.role === "hinge" ? "петлю" : q.id.startsWith("shp:") ? "полкодержатель" : q.role === "handle" ? "ручку" : "крепёж корпуса"))];
-    out.push(`«${p.name}»: вырез ${(m.cutouts ?? []).filter((x) => x.host === c.host).indexOf(c) + 1} задевает ${kinds.join(", ")} — сместите вырез или фурнитуру.`);
+    out.push(`«${p.name}»: вырез ${(m.cutouts ?? []).filter((x) => cutHost(m, x) === h).indexOf(c) + 1} задевает ${kinds.join(", ")} — сместите вырез или фурнитуру.`);
   });
   return out;
 }
@@ -524,7 +530,8 @@ export function parseShapes(x: Record<string, unknown>): Partial<Pick<Module, "m
   if (x.cutouts !== undefined) out.cutouts = (Array.isArray(x.cutouts) ? x.cutouts : []).map((c: Record<string, unknown>) => ({
     id: String(c?.id ?? ""), host: String(c?.host ?? ""), shape: c?.shape === "round" ? "round" : c?.shape === "rect" ? "rect" : (String(c?.shape) as "rect"),
     w: Number(c?.w), h: Number(c?.h ?? c?.w), u: Number(c?.u), v: Number(c?.v), fromU: c?.fromU === "max" ? "max" : "min", fromV: c?.fromV === "max" ? "max" : "min",
-    ...(typeof c?.edge === "boolean" ? { edge: c.edge } : {}), ...(typeof c?.label === "string" && c.label.trim() ? { label: c.label.trim().slice(0, 60) } : {}) }));
+    ...(typeof c?.edge === "boolean" ? { edge: c.edge } : {}), ...(typeof c?.label === "string" && c.label.trim() ? { label: c.label.trim().slice(0, 60) } : {}),
+    ...(typeof c?.ref === "string" && c.ref ? { ref: c.ref } : {}) }));
   return out;
 }
 /** Ошибки стеллажа с радиусными полками (validate). */

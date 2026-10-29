@@ -4,6 +4,7 @@ import { parts, type Module } from "./model";
 import { MANSARD, RADIUS, mansardAngleDeg, mansardRearByAngle, mansardWarnings, radiusMax, cutText, faceAxes } from "./shapes";
 import { withMansard, fitUnderMansard } from "./paletteBuild";
 import { Num, cutHosts } from "./CutoutEditor";
+import { cutHost } from "./partIds";
 
 /** Мансарда ставится у прямого шкафа/стеллажа студии с крышей ЛДСП. */
 export function mansardApplies(m: Module) {
@@ -39,8 +40,8 @@ export function ShapePanel({ m, modify, openCuts }: { m: Module; modify: (u: (n:
     </>}
     {hosts.length > 0 && <div className="shape-cuts">
       <p className="shape-cut-head"><b>Вырезы в деталях{m.cutouts?.length ? `: ${m.cutouts.length}` : ""}</b> — под плинтус, трубу, подоконник, розетку, кабель.</p>
-      {(m.cutouts ?? []).map((c, i) => { const h = hosts.find((p) => p.id === c.host); return <p key={c.id} className="shape-cut-item">{i + 1}. {name(c.host)}: {h ? cutText(c, faceAxes(h)) : "деталь не найдена"} <button type="button" className="text-action" aria-label={`Изменить вырез ${i + 1}`} onClick={() => openCuts(c.host)}>Изменить</button></p>; })}
-      <button type="button" className="outline" onClick={() => openCuts((m.cutouts?.[0]?.host && hosts.some((p) => p.id === m.cutouts![0].host)) ? m.cutouts![0].host : hosts.find((p) => p.id === "left")?.id ?? hosts[0].id)}>Вырезы деталей…</button>
+      {(m.cutouts ?? []).map((c, i) => { const pid = cutHost(m, c) ?? c.host, h = hosts.find((p) => p.id === pid); return <p key={c.id} className="shape-cut-item">{i + 1}. {name(pid)}: {h ? cutText(c, faceAxes(h)) : "деталь не найдена"} <button type="button" className="text-action" aria-label={`Изменить вырез ${i + 1}`} onClick={() => openCuts(pid)}>Изменить</button></p>; })}
+      {(() => { const first = m.cutouts?.[0] && cutHost(m, m.cutouts[0]); return <button type="button" className="outline" onClick={() => openCuts(first && hosts.some((p) => p.id === first) ? first : hosts.find((p) => p.id === "left")?.id ?? hosts[0].id)}>Вырезы деталей…</button>; })()}
     </div>}
   </div>;
 }

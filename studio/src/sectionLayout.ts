@@ -1,4 +1,5 @@
 import type {Module,SectionBox} from './model';
+import {rekeyCutouts} from './partIds';
 
 /** Binary partition tree. Distances are clear openings from left / bottom. */
 export type SectionLayout={section:string}|{id:string;axis:'x'|'y';at:number;first:SectionLayout;second:SectionLayout};
@@ -55,8 +56,10 @@ export function resizeOpening(m:Module,sid:string,width:number){
 }
 export function rekeySections(m:Module,nextId:()=>string){
   const map=new Map<string,string>();m.sections.forEach(s=>{const old=s.id;s.id=nextId();map.set(old,s.id);});
-  function walk(n:SectionLayout):void{if('section'in n)n.section=map.get(n.section)!;else{n.id=nextId();walk(n.first);walk(n.second);}}
+  function walk(n:SectionLayout):void{if('section'in n)n.section=map.get(n.section)!;else{const old=n.id;n.id=nextId();map.set(old,n.id);walk(n.first);walk(n.second);}}
   if(m.sectionLayout)walk(m.sectionLayout);
+  // копия корпуса (решение Макса 29.10): вырезы копии — на деталях копии (новые id секций и проёмов), а не на чужих
+  rekeyCutouts(m,map);
 }
 export function removeOpening(m:Module,sid:string){
   function remove(n:SectionLayout):SectionLayout{if('section'in n)return n;if('section'in n.first&&n.first.section===sid)return n.second;if('section'in n.second&&n.second.section===sid)return n.first;return {...n,first:remove(n.first),second:remove(n.second)};}
