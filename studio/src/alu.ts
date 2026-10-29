@@ -97,6 +97,15 @@ export function aluMaxHeight(a: AluFacade): { maxH: number; glassMax: number; sh
   const cap = sheet[0] <= lim ? '' : mirror ? 'закалка до ' + ALU_GLASS.temperMax : 'вставка стекла не длиннее ' + ALU_GLASS.machineMax + ' (станок)';
   return { maxH, glassMax: maxH - ALU_GLASS.allowance, sheet, fill: name, standard: !hit, cap };
 }
+/** Высота, с которой стекло Мору заметно выгибает: «ТЕХНИЧКА ПО СТЕКЛУ» п. 26 — «4х2500х500 — изгиб мало заметен, 4х2000х1000 — заметная
+ *  изогнутость»; там же: «Стекло MORU в закалку принимается только под ответственность заказчика». */
+export const MORU_TALL_H = 2000;
+/** Предупреждения по наполнению для фасадов заданной высоты (не ошибка — заказ возможен). */
+export function aluFillWarnings(a: AluFacade, heights: number[]): string[] {
+  const name = aluFill(a.insert)?.label ?? "";
+  if (!/^Мору/.test(name) || !heights.some((h) => h > MORU_TALL_H)) return [];
+  return [`${name}, фасады выше ${MORU_TALL_H} мм: стекло Мору в закалку поставщик принимает только под ответственность заказчика — риск выгиба (у поставщика 4×2000×1000 — «заметная изогнутость»). Согласовать с клиентом.`];
+}
 export type AluFacade = { profile: string; color: string; insert: string };
 export const DEFAULT_ALU: AluFacade = { profile: "F1-09", color: "silver", insert: "mirror-silver" };
 export function aluProfile(id: string) { return ALU_PROFILES.find((p) => p.id === id); }

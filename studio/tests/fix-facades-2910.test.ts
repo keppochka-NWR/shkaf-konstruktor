@@ -132,3 +132,16 @@ test('ALU: лист 2550×1605 — из прайса (не «стандартн�
   const hc = ALU_FILLS.find((f) => /^Hithicross/.test(f.label))!.id, g = aluMaxHeight({ ...DEFAULT_ALU, insert: hc });
   assert.deepEqual([g.standard, g.sheet[0]], [true, 2550]);
 });
+test('ALU: Мору (Флутис) на высоком фасаде — предупреждение о закалке под ответственность заказчика (в ведомости и выборе)', async () => {
+  const { aluFillWarnings, ALU_FILLS, DEFAULT_ALU } = await import('../src/alu');
+  const { initialModule, section } = await import('../src/model');
+  const { newProject } = await import('../src/project');
+  const { specificationHTML } = await import('../src/exports');
+  const moru = ALU_FILLS.find((f) => /^Мору \(Флутис\)/.test(f.label))!.id;
+  assert.equal(aluFillWarnings({ ...DEFAULT_ALU, insert: moru }, [2300]).length, 1);
+  assert.deepEqual(aluFillWarnings({ ...DEFAULT_ALU, insert: moru }, [1800]), []);
+  assert.deepEqual(aluFillWarnings(DEFAULT_ALU, [2300]), []);
+  const m = { ...initialModule(), width: 440, height: 2400, sections: [{ ...section(), doorLeaves: 1 as const }], doors: true, alu: { ...DEFAULT_ALU, insert: moru } };
+  const p = newProject(); p.modules[0].module = m;
+  assert.match(specificationHTML(p), /Мору.*под ответственность заказчика/);
+});
