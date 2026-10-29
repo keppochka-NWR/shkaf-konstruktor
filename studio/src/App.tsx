@@ -1098,7 +1098,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {!presentation&&!environmentSelection&&stage!=='room'&&stage!=='fixtures'&&(selectedOpening||selectedFixture||selectedObstacle)&&<button className="environment-properties-trigger" onClick={()=>setEnvironmentSelection(selectedOpening?{kind:'opening',id:selectedOpening}:selectedFixture?{kind:'fixture',id:selectedFixture}:{kind:'obstacle',id:selectedObstacle!})}>Свойства выбранного объекта</button>}
       {environmentSelection&&!presentation&&<RoomObjectProperties room={project.room} selection={environmentSelection} onChange={room=>commitProject({...project,room})} onClose={()=>setEnvironmentSelection(null)}/>}
       {!presentation&&<StageBar stage={stage} advanced={advanced} onStage={goStage} onAdvanced={setAdvanced} done={stageDone} rawSelected={!!m.raw}/>}
-      {!presentation&&stage==='bodies'&&canRemove&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
+      {/* окно «Вырезы» открыто (в т. ч. правой кнопкой — деталь выбрана): плашку не показываем, иначе она закрывает «Сохранить вырезы» */}
+      {!presentation&&stage==='bodies'&&canRemove&&!cutHost&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
         <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
         <button className="outline" onClick={()=>{setTab('section');requestAnimationFrame(()=>{const target=propertiesRef.current?.querySelector<HTMLElement>('.selected-filling');revealSettings(target);target?.scrollIntoView({block:'nearest'});target?.querySelector<HTMLInputElement>('input')?.focus();});}}>Параметры</button>
         {selectedDetail?.role!=='door'&&<><button className="outline" aria-label="Быстро опустить элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ 10 мм</button>
