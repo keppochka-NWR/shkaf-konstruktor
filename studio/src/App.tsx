@@ -1,7 +1,7 @@
 import {FacadeEditor} from './FacadeEditor';
 import {Eye,EyeOff,PanelTopClose,PanelTopOpen,BrickWall} from 'lucide-react';
 import {Scissors} from 'lucide-react';
-import {CutoutEditor,cutAllowed} from './CutoutEditor';
+import {CutoutEditor,cutAllowed,cutRefusal} from './CutoutEditor';
 import {ShapePanel} from './ShapePanel';
 import {readCutaway,saveCutaway} from './roomCutaway';
 import './editor-visibility.css';
@@ -773,7 +773,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const select=()=>{selectModule(a.id);chooseSection(c.sid);};
     // «Вырез…» (фигурные детали 29.10.2026): у детали корпуса и фасада; клик по петле/ручке — вырез в её фасаде
     const cutPid=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),canCut=!!pid&&cutAllowed(mod,cutPid);
-    const cutItem:RadialItem={id:'cutout',label:'Вырез…',icon:Scissors,disabled:!canCut,hint:canCut?'Вырез в детали: под плинтус, трубу, подоконник, розетку, кабель — прямоугольный или круглый, с привязкой от края':'В этой детали вырез не делается',run:()=>{select();setCutHost({mid:a.id,pid:cutPid});}};
+    // решение Макса 29.10: «Вырез…» по правой кнопке на любой детали, где вырез возможен, — редактор сразу на этой детали, деталь выбрана
+    const cutItem:RadialItem={id:'cutout',label:'Вырез…',icon:Scissors,disabled:!canCut,hint:canCut?'Вырез в этой детали: под плинтус, трубу, подоконник, розетку, кабель — прямоугольный или круглый, с привязкой от края':'Вырез не делается: '+cutRefusal(mod,cutPid),run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:cutPid});setCutHost({mid:a.id,pid:cutPid});}};
     const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{n[key]=v;}));}});
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
@@ -840,7 +841,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const j=Number(pid.split(':shelf:')[1]),isFixed=!!sec.fixed?.includes(j),p=part('Полка');
       return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},cutItem,p.params,body,p.remove]};
     }
-    if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:facadeMenu([editFacade])};
+    if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:facadeMenu([editFacade,cutItem])};
     if(pid.includes(':drawer:')){
       const j=Number(pid.split(':drawer:')[1].split(':')[0]),cfg=drawerConfig(mod,sec,j),cur=slideSystem(cfg),p=part('Ящик');
       const slideItem=(id:string):RadialItem=>{const s=SLIDE_SYSTEMS.find(x=>x.id===id)!,q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:cfg.length});return {id:'slide-'+id,label:s.slide==='ball'?SLIDE_MOTIONS[s.motion].replace(/^./,ch=>ch.toUpperCase()):SLIDE_BRANDS[s.brand]+(s.motion==='push'?' · push':' · доводчик'),icon:s.motion==='push'?MousePointerClick:Spline,active:cur.id===id,hint:s.label+(q.price===null?' · цена требует уточнения':''),run:()=>modifyAt(a.id,n=>{const ns=n.sections.find(x=>x.id===c.sid)!;ns.drawerConfigs=Array.from({length:ns.drawers},(_,k)=>k===j?withSlideSystem(n,ns,{...drawerConfig(n,ns,k)},id):{...drawerConfig(n,ns,k)});})};};
@@ -851,7 +852,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
       const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,{...p.remove,label:'Удалить ящик',hint:'Ящик целиком: короб, фасад, направляющие. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,wholeDrawerPid(pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
-        [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps),cutItem]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,body]};
+        [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps),cutItem]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,...(canCut?[cutItem]:[]),body]};
     }
     if(pid.includes(':door:')||/:(hingecup|hingearm|hingeplate):/.test(pid)||pid.includes(':handle:')){
       const doorId=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),p={...part('Фасад')};

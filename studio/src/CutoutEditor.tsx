@@ -24,6 +24,16 @@ export function cutHosts(m: Module): Part[] {
 }
 /** Можно ли делать вырез в детали pid модуля (пункт меню «Вырез…»). */
 export function cutAllowed(m: Module, pid: string): boolean { try { return cutHosts(m).some((p) => p.id === pid); } catch { return false; } }
+/** Почему в детали pid вырез не делается — подсказка недоступного пункта «Вырез…» в меню правой кнопки. */
+export function cutRefusal(m: Module, pid: string): string {
+  if (m.raw || m.kupe || m.worktop || m.corner || m.casework) return "У импорта Базиса, дверей купе, столешницы и углового шкафа вырезы задаются иначе";
+  let p: Part | undefined;
+  try { p = shapeBaseParts(m).find((q) => q.id === pid); } catch { p = undefined; }
+  if (!p) return "Щёлкните по самой детали: полке, боковине, фасаду";
+  if (p.material !== "board" && p.material !== "hdf") return "Вырез — в ЛДСП и ХДФ; это фурнитура, стекло или металл";
+  if (p.external) return "Деталь стороннего участка (МДФ, алюминий) — вырез у изготовителя фасадов";
+  return "У этой детали контур не прямоугольный — вырез не делается";
+}
 
 export function Num({ label, value, onChange, min = 0 }: { label: string; value: number; onChange: (n: number) => void; min?: number }) {
   const [draft, setDraft] = useState(String(value));
