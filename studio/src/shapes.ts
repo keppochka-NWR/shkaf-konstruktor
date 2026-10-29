@@ -369,12 +369,13 @@ export function applyMansard(m: Module, out: Part[]): void {
 }
 /** Наполнение выше скоса мансарды: полка, штанга, пантограф, короб ящика у задней кромки выше нижней пласти крыши — деталь проходит
  *  сквозь крышу: ОШИБКА модели, как любое пересечение деталей (критик 29.10, блокер 4; раньше — только предупреждение), с кнопкой
- *  «Опустить полки под скос». Штанга ниже крыши, но без места под плечики (50 мм) — предупреждение. */
+ *  «Опустить полки под скос». Штанга ниже крыши, но без места под плечики (50 мм) — предупреждение. Держатели штанги (выше самой
+ *  штанги) — тоже деталь наполнения (круг 2 критика 29.10: штанга на 0,9 при задней высоте 2000 — держатели на 15 мм в крыше без ошибки). */
 export function mansardIntrusions(m: Module, ps: Part[]): { part: Part; over: number; error: boolean }[] {
   if (!m.mansard) return [];
   const g = mansardGeom(m), out: { part: Part; over: number; error: boolean }[] = [];
   for (const p of ps) {
-    if (!(p.role === "shelf" || p.role === "rod" || p.role === "pantograph" || (p.role === "drawer" && /:drawer:\d+:(back|left)$/.test(p.id)))) continue;
+    if (!(p.role === "shelf" || p.role === "rod" || p.role === "flange" || p.role === "pantograph" || (p.role === "drawer" && /:drawer:\d+:(back|left)$/.test(p.id)))) continue;
     const body = p.position[1] + p.size[1] / 2, rear = p.position[2] - p.size[2] / 2, under = g.under(rear);
     if (body - under > 0.5) out.push({ part: p, over: Math.ceil(body - under), error: true });
     else if (p.role === "rod" && body + 50 - under > 0.5) out.push({ part: p, over: Math.ceil(body + 50 - under), error: false });
