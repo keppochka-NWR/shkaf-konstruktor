@@ -92,6 +92,15 @@ test('критик 29.10 п.2: ход по одной оси — линии, п�
   assert.equal(q.p.h,1600);
 });
 
+test('критик 29.10 п.3: Alt — составляющая, которую линия не задаёт, до 1 мм; пойманная — точно',()=>{
+  const r=snapDelta('line',{h:1000,v:0},{h:597.6,v:37.4},[seg(1600,-1000,1600,3000,'линия')],20);
+  assert.deepEqual(r.delta,{h:600,v:37});assert.deepEqual(r.hit?.free,{h:false,v:true});
+  const g=snapDelta('line',{h:1000,v:0},{h:12.6,v:247.2},[seg(0,250.5,4000,250.5,'линия')],20);
+  assert.deepEqual(g.delta,{h:13,v:250.5});
+  const c=snapDelta('cross',{h:1000,v:0},{h:597.6,v:248.4},[seg(1600,-1000,1600,3000),seg(0,250.5,4000,250.5)],20);
+  assert.deepEqual(c.delta,{h:600,v:250.5},'пересечение — обе точно');
+});
+
 test('оси вида: спереди/сверху/План — точка туда и обратно, глубина сохраняется',()=>{
   for(const look of [viewLook('front')!,viewLook('top')!,viewLook('side')!,viewLook('front',90)!,PLAN_LOOK]){
     const P={x:1234,y:567,z:890},q=toView(P,look),back=fromView(q,look,P);

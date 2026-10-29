@@ -32,7 +32,8 @@ export const POINT_SNAP_PX = 14;
 
 export type P2 = { h: number; v: number };
 export type Seg2 = { a: P2; b: P2; what: string };
-export type PointHit = { p: P2; what: string; d: number; kind: "line" | "cross" };
+/** free — составляющие, которые привязка не задаёт (вдоль вертикальной линии — v, вдоль горизонтальной — h): они идут за курсором. */
+export type PointHit = { p: P2; what: string; d: number; kind: "line" | "cross"; free?: { h: boolean; v: boolean } };
 
 const r1 = (v: number) => { const r = Math.round(v * 10) / 10; return r === 0 ? 0 : r; };
 /** Точка помещения → оси экрана вида. */
@@ -65,7 +66,8 @@ export function nearestOnLine(p: P2, segs: Seg2[], tol: number): PointHit | unde
   let best: PointHit | undefined;
   for (const s of segs) {
     const q = closestOnSegment(p, s), d = dist(p, q);
-    if (d <= tol && (!best || d < best.d - 1e-9)) best = { p: { h: r1(q.h), v: r1(q.v) }, what: s.what, d, kind: "line" };
+    const dh = Math.abs(s.b.h - s.a.h), dv = Math.abs(s.b.v - s.a.v), free = { h: dv < 1e-6 * (dh + dv), v: dh < 1e-6 * (dh + dv) };
+    if (d <= tol && (!best || d < best.d - 1e-9)) best = { p: { h: r1(q.h), v: r1(q.v) }, what: s.what, d, kind: "line", free };
   }
   return best;
 }
@@ -109,7 +111,8 @@ export function acrossSegments(segs: Seg2[], dir: P2): Seg2[] {
  *  точки, иначе ход как есть (без привязки, до 0,1 мм — шаг округляет потребитель). */
 export function snapDelta(mode: SnapMode, ref: P2, delta: P2, segs: Seg2[], tol: number): { delta: P2; hit?: PointHit } {
   const hit = pointSnap(mode, { h: ref.h + delta.h, v: ref.v + delta.v }, segs, tol);
-  return hit ? { delta: { h: r1(hit.p.h - ref.h), v: r1(hit.p.v - ref.v) }, hit } : { delta };
+  if (!hit) return { delta };
+  return { delta: { h: hit.free?.h ? Math.round(delta.h) : r1(hit.p.h - ref.h), v: hit.free?.v ? Math.round(delta.v) : r1(hit.p.v - ref.v) }, hit };
 }
 /** Край, который ходит только вдоль o (единичный, оси экрана; ручка «↔»): точка края at, вдоль края — где курсор.
  *  Итог — добавка хода вдоль o до пойманной точки (0 — не поймали). */

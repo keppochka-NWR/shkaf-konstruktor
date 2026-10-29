@@ -423,7 +423,7 @@ try {
   const m12 = await modDrag("Alt", pgrab, { x: pgrab.x + PX(1900) - PX(1600) - 5, y: pgrab.y + 17 * pz }, "plan-alt-move", ".plan-badge", ".plan-snap-mark");
   check("12. «План»: Alt отпущен после мыши — keyup Alt погашен", await altUp());
   const b12m = await settled((b) => b.a.x !== 1000);
-  check("12. Alt + перенос на плане → правый край на линию: x = 1300, z по мыши ≈ 20", b12m.a.x === 1300 && Math.abs(b12m.a.z - 20) <= 3 && m12.mark === "line", fmt(b12m.a) + ` · «${m12.live}» · ${m12.mark}`);
+  check("12. Alt + перенос на плане → правый край на линию: x = 1300, z по мыши ≈ 20", b12m.a.x === 1300 && Math.abs(b12m.a.z - 20) <= 3 && Number.isInteger(b12m.a.z) && m12.mark === "line", fmt(b12m.a) + ` · «${m12.live}» · ${m12.mark}`);
   await key("Control+z"); await settled((b) => b.a.x === 1000);
   const pnb = { x: PX(3100), y: PZ(278) }, fill = () => page.locator('g[aria-label="На плане: Сосед"] polygon').first().getAttribute("fill");
   await modClick("Control", pnb);
