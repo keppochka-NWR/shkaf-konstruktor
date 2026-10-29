@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,type Guide,type GuideLine,type V3} from './guides';
-import {cornerDims,axisOf,edgeOf,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
+import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
 /** side — вид справа (камера с +X), left — вид слева (клавиша A, п.28 волны 22.10). */
@@ -449,11 +449,10 @@ export function Scene(p: Props) {
       b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startStretch(side,e);});
       target.appendChild(b);labels.push({element:b,position:pos,fixed:true});
     }
-    const DIM_WORD:Record<Dim,string>={width:'ширина',height:'высота',depth:'глубина'};
     /** Квадратная ручка на углу выбранного корпуса (ортогональный вид): тянуть — меняются два размера, противоположный угол на месте. */
     function cornerHandle(dims:[Dim,Dim],ends:[End,End],pos:THREE.Vector3){
       const b=document.createElement('button');b.type='button';b.className='corner-handle';b.dataset.corner=ends.join('-');b.dataset.dims=dims.join('-');
-      b.title=`Угол: тяните — ${DIM_WORD[dims[0]]} и ${DIM_WORD[dims[1]]}, противоположный угол на месте. Привязка к краям, стенам и вспомогательным линиям; Alt — без привязки, Esc — отмена`;
+      b.title=cornerHandleTitle(dims);
       b.setAttribute('aria-label',`Растянуть за угол: ${DIM_WORD[dims[0]]} и ${DIM_WORD[dims[1]]}`);
       passThrough(b);
       b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startCorner(dims,ends,pos,e);});
@@ -1232,7 +1231,8 @@ export function Scene(p: Props) {
     const viewGuides=()=>current.current.presentation?[]:guidesInView(current.current.guides,lookNow());
     /** Допуск привязки, мм: 10 px экрана, не больше 30 мм (как привязка ручки «↔», STRETCH_SNAP). */
     function snapTol(){const mm=camera===orthographic?(orthographic.top-orthographic.bottom)/orthographic.zoom/Math.max(1,target.clientHeight):3;return Math.min(30,Math.max(2,10*mm));}
-    type CornerDrag={mid:string;dims:[Dim,Dim];ends:[End,End];out:THREE.Vector3[];plane:THREE.Plane;start:THREE.Vector3;origin:[number,number];moved:boolean;pull?:CornerPull;touched:string[];texts:{el:HTMLElement;text:string}[];handle?:{label:typeof labels[number];base:THREE.Vector3}};
+    /** typed — размеры, набранные с клавиатуры во время тяги («600;2400», решение Макса 29.10.2026); mouse — последнее положение курсора. */
+    type CornerDrag={mid:string;dims:[Dim,Dim];ends:[End,End];out:THREE.Vector3[];plane:THREE.Plane;start:THREE.Vector3;origin:[number,number];moved:boolean;pull?:CornerPull;touched:string[];texts:{el:HTMLElement;text:string}[];handle?:{label:typeof labels[number];base:THREE.Vector3};typed:string;mouse:[number,number];alt:boolean};
     let corner:CornerDrag|null=null;
     /** Угол корпуса a в координатах сцены: края по dims/ends; ось вне вида — видимая грань (фасад спереди, крыша сверху, бок сбоку). */
     function cornerAt(a:PlacedModule,dims:[Dim,Dim],ends:[End,End]){
@@ -1249,7 +1249,7 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);const start=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,start))return;
       const texts=labels.filter(l=>l.element.dataset.dim&&dims.includes(l.element.dataset.dim as Dim)).map(l=>({el:l.element as HTMLElement,text:l.element.textContent??''}));
       const hl=labels.find(l=>l.element.classList.contains('corner-handle')&&l.element.dataset.corner===ends.join('-'));
-      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined};
+      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined,typed:'',mouse:[e.clientX,e.clientY],alt:e.altKey};
       hl?.element.classList.add('active');
       controls.enabled=false;target.classList.add('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=false;
       window.addEventListener('pointermove',cornerMove);window.addEventListener('pointerup',cornerUp);window.addEventListener('pointercancel',endCorner);
@@ -1267,18 +1267,55 @@ export function Scene(p: Props) {
       for(const t of c.texts){const d=t.el.dataset.dim as Dim;t.el.textContent=plan[d]+' мм';}
       const me=plan.preview?.find(x=>x.id===c.mid);if(c.handle)c.handle.label.position.copy(me?cornerAt(me,c.dims,c.ends):c.handle.base); // ручка едет за углом
     }
+    function cornerBadge(c:CornerDrag,text:string,invalid:boolean){
+      badge.hidden=false;badge.classList.toggle('invalid',invalid);badge.textContent=text;
+      const r=target.getBoundingClientRect(),[x,y]=c.mouse;
+      Object.assign(badge.style,{left:Math.max(8,Math.min(x-r.left,target.clientWidth-8))+'px',top:Math.max(40,y-r.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
+    }
     function cornerMove(e:PointerEvent){
       const c=corner;if(!c)return;
+      c.mouse=[e.clientX,e.clientY];c.alt=e.altKey;
+      if(c.typed){cornerTypedShow(c);return;} // набран размер — мышь размер не меняет
       if(!c.moved&&Math.hypot(e.clientX-c.origin[0],e.clientY-c.origin[1])<3)return;
-      c.moved=true;cast(e.clientX,e.clientY);const P=new THREE.Vector3();if(!ray.ray.intersectPlane(c.plane,P))return;P.sub(c.start);
-      const pull:CornerPull={mid:c.mid,snap:!e.altKey,tol:snapTol(),guides:viewGuides()};
+      c.moved=true;cornerByMouse(c);
+    }
+    function cornerByMouse(c:CornerDrag){
+      cast(c.mouse[0],c.mouse[1]);const P=new THREE.Vector3();if(!ray.ray.intersectPlane(c.plane,P))return;P.sub(c.start);
+      const pull:CornerPull={mid:c.mid,snap:!c.alt,tol:snapTol(),guides:viewGuides()};
       c.dims.forEach((d,i)=>{pull[d]={end:c.ends[i],raw:Math.round(P.dot(c.out[i])*10)/10};});
       c.pull=pull;const plan=current.current.cornerPlan?.(pull);if(!plan)return;
       previewCorner(c,plan);needsRender=true;
-      badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
-      badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+c.dims.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'');
-      const r=target.getBoundingClientRect();
-      Object.assign(badge.style,{left:Math.max(8,Math.min(e.clientX-r.left,target.clientWidth-8))+'px',top:Math.max(40,e.clientY-r.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
+      cornerBadge(c,plan.problem||(c.alt?'Без привязки · ':'')+c.dims.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'')+' · цифры «'+c.dims.map(d=>DIM_WORD[d]).join(';')+'» + Enter — точно',!!plan.problem);
+    }
+    /** Набранный размер: показ итога (корпус на сцене и плашка), противоположный угол на месте. */
+    function cornerTypedShow(c:CornerDrag){
+      const a=current.current.arrangement.find(x=>x.id===c.mid);if(!a)return;
+      const head='Размер ('+c.dims.map(d=>DIM_WORD[d]).join(';')+'): '+c.typed+'▏',t=typedCornerPull(a,c.dims,c.ends,c.typed);
+      if(t.problem){resetCornerPreview(c);cornerBadge(c,head+' · '+t.problem,true);needsRender=true;return;}
+      const plan=t.pull&&current.current.cornerPlan?.(t.pull);
+      if(!plan){resetCornerPreview(c);for(const x of c.texts)x.el.textContent=x.text;cornerBadge(c,head+' · Enter — применить, Esc — отмена',false);needsRender=true;return;}
+      previewCorner(c,plan);needsRender=true;
+      cornerBadge(c,head+' · '+(plan.problem||c.dims.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм · Enter — применить, Esc — отмена'),!!plan.problem);
+    }
+    /** Цифры, «;», запятая/точка, Backspace, Enter, Esc во время тяги за угол. true — клавиша съедена. */
+    function cornerKey(c:CornerDrag,e:KeyboardEvent){
+      const k=e.key,part=c.typed.split(';').at(-1)??'';
+      if(k==='Escape'){endCorner();return true;}
+      if(k==='Enter'||k==='NumpadEnter'){applyTyped(c);return true;}
+      if(k==='Backspace')c.typed=c.typed.slice(0,-1);
+      else if(/^[0-9]$/.test(k)){if(c.typed.length<15)c.typed+=k;}
+      else if(k===';'||e.code==='Semicolon'){if(!c.typed.includes(';'))c.typed+=';';} // русская раскладка: «ж» — та же клавиша
+      else if(k===','||k==='.'||e.code==='Comma'||e.code==='Period'||e.code==='NumpadDecimal'){if(!/[.]/.test(part))c.typed+='.';}
+      else return false;
+      if(c.typed)cornerTypedShow(c);else if(c.moved)cornerByMouse(c);else{resetCornerPreview(c);for(const x of c.texts)x.el.textContent=x.text;badge.hidden=true;needsRender=true;}
+      return true;
+    }
+    /** Enter (или отпустили кнопку) с набранным: применить одной отменой; отказ — причина в плашке (≤ 0) или ошибка панели. */
+    function applyTyped(c:CornerDrag){
+      const a=current.current.arrangement.find(x=>x.id===c.mid);if(!a){endCorner();return;}
+      const t=typedCornerPull(a,c.dims,c.ends,c.typed);
+      if(t.problem){cornerTypedShow(c);return;}
+      endCorner();if(t.pull)current.current.onCorner?.(t.pull);
     }
     function endCorner(){
       window.removeEventListener('pointermove',cornerMove);window.removeEventListener('pointerup',cornerUp);window.removeEventListener('pointercancel',endCorner);
@@ -1288,7 +1325,16 @@ export function Scene(p: Props) {
       target.classList.remove('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=true;
       badge.hidden=true;badge.classList.remove('invalid');badge.style.cssText='';controls.enabled=true;needsRender=true;
     }
-    function cornerUp(){const c=corner;endCorner();if(c?.moved&&c.pull)current.current.onCorner?.(c.pull);}
+    // отпустили кнопку с набранным размером — применяется набранное (как Enter); иначе — по мыши
+    function cornerUp(){
+      const c=corner;
+      if(c?.typed&&parseCornerTyped(c.typed)){
+        applyTyped(c);
+        if(corner){const t=badge.textContent??'';endCorner();window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Размер не применён',text:t.replace(/^.*?· /,'')}}));}
+        return;
+      }
+      endCorner();if(c?.moved&&c.pull)current.current.onCorner?.(c.pull);
+    }
     // Линии: пунктир в своём виде; выбранная — оранжевая. Группа внутри modelGroup (на снимок КП не попадает — captureGuide).
     let guideGroup:THREE.Group|null=null,selectedGuide:string|null=null;
     // общие материалы (геометрия линий — своя; материалы не уничтожаются с группой: группа живёт внутри modelGroup)
@@ -1377,6 +1423,8 @@ export function Scene(p: Props) {
     /** Q, цифры, Enter, Esc, Delete для линий — раньше App (фаза захвата на window; App пропускает defaultPrevented). */
     function guideKey(e:KeyboardEvent){
       const s=current.current;if(s.presentation||editsText(e.target))return;
+      // тяга за угол: набор размеров «600;2400», Enter, Esc, Backspace — раньше App и Q
+      if(corner){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(corner,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
         if(!lookNow()||!s.onGuides)return;
         e.preventDefault();if(e.repeat)return;
