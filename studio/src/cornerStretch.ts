@@ -8,7 +8,7 @@
 import { localToRoom, type PlacedModule, type Project } from "./project";
 import type { Module } from "./model";
 import { ceilingClearance } from "./measurement";
-import { carcassCorners, dot, guidePlanes, snapOut, type Guide, type SnapPlane, type V3 } from "./guides";
+import { carcassCorners, dot, guidePlanes, parseTyped, snapOut, type Guide, type SnapPlane, type V3 } from "./guides";
 
 export type Dim = "width" | "height" | "depth";
 /** Какой край оси двигается: lo — левый/нижний/задний, hi — правый/верхний/передний. */
@@ -16,7 +16,9 @@ export type End = "lo" | "hi";
 export type AxisPull = { end: End; raw: number };
 /** Запрос от сцены: какие края тянутся и на сколько мм наружу (по курсору), привязка (Alt — нет), допуск привязки в мм на экране,
  *  вспомогательные линии текущего вида. */
-export type CornerPull = { mid: string; width?: AxisPull; height?: AxisPull; depth?: AxisPull; snap: boolean; tol: number; guides?: Guide[] };
+export type CornerPull = { mid: string; width?: AxisPull; height?: AxisPull; depth?: AxisPull; snap: boolean; tol: number; guides?: Guide[];
+  /** Размеры, набранные с клавиатуры во время тяги («600;2400»): итог должен совпасть точно, иначе отказ (exactProblem). */
+  exact?: Partial<Record<Dim, number>> };
 /** Что получится: размеры, к чему привязалось, почему нельзя; preview — корпуса после правки (для показа на сцене). */
 export type CornerPlan = { width: number; height: number; depth: number; snapped: string[]; problem?: string; preview?: PlacedModule[] };
 export const SIZE_STEP = 10;
@@ -79,6 +81,53 @@ export function widthPull(a: PlacedModule, pull: AxisPull, snap: boolean, tol: n
     if (hit) return { side, raw: hit.raw, snap: false, what: hit.what };
   }
   return { side, raw: r1(pull.raw), snap };
+}
+/** Ход курсора delta (мм, в координатах помещения) → тяга углом: по каждой оси вида — проекция на «наружу» тянущегося края. */
+export function cornerPullFromDelta(a: PlacedModule, dims: [Dim, Dim], ends: [End, End], delta: V3, snap: boolean, tol: number, guides?: Guide[]): CornerPull {
+  const pull: CornerPull = { mid: a.id, snap, tol, guides };
+  dims.forEach((d, i) => { const { o } = edgeOf(a, d, ends[i]); pull[d] = { end: ends[i], raw: r1(dot(delta, o)) }; });
+  return pull;
+}
+export const DIM_WORD: Record<Dim, string> = { width: "ширина", height: "высота", depth: "глубина" };
+/** Подсказка ручки угла (сцена и план). */
+export const cornerHandleTitle = (dims: [Dim, Dim]) =>
+  `Угол: тяните — ${DIM_WORD[dims[0]]} и ${DIM_WORD[dims[1]]}, противоположный угол на месте. Привязка к краям, стенам и вспомогательным линиям; Alt — без привязки. ` +
+  `Во время тяги наберите размеры «${DIM_WORD[dims[0]]};${DIM_WORD[dims[1]]}», например «600;2400» (одно число — только ${DIM_WORD[dims[0]]}, «;2400» — только ${DIM_WORD[dims[1]]}) и Enter; Esc — отмена`;
+/** Набранное во время тяги за угол (решение Макса 29.10.2026): «600;2400» — оба размера в порядке плашки (спереди ширина;высота,
+ *  сверху/план ширина;глубина, сбоку глубина;высота), «600» — только первый, «;2400» — только второй. Пусто/не число — null. */
+export function parseCornerTyped(text: string): [number | undefined, number | undefined] | null {
+  const parts = text.split(";");
+  if (parts.length > 2) return null;
+  const vals = parts.map((s) => (s.trim() ? parseTyped(s) ?? NaN : undefined));
+  if (vals.some((v) => v !== undefined && !Number.isFinite(v))) return null;
+  const pair: [number | undefined, number | undefined] = [vals[0], vals[1]];
+  return pair[0] === undefined && pair[1] === undefined ? null : pair;
+}
+/** Тяга по набранным размерам: края — по ручке (противоположный угол на месте), без привязок, точно до 1 мм. */
+export function typedCornerPull(a: PlacedModule, dims: [Dim, Dim], ends: [End, End], text: string): { pull?: CornerPull; problem?: string } {
+  const typed = parseCornerTyped(text);
+  if (!typed) return {};
+  const pull: CornerPull = { mid: a.id, snap: false, tol: 0, exact: {} };
+  for (let i = 0; i < 2; i++) {
+    const v = typed[i], d = dims[i];
+    if (v === undefined) continue;
+    const want = Math.round(v);
+    if (want <= 0) return { problem: `${DIM_WORD[d][0].toUpperCase() + DIM_WORD[d].slice(1)} должна быть больше нуля.` };
+    pull[d] = { end: ends[i], raw: r1(want - size(a.module, d)) };
+    pull.exact![d] = want;
+  }
+  return { pull };
+}
+/** Набранный размер не получился (правило ряда упёрло край в соседа или стену, предел корпуса) — отказ с причиной, как у поля в панели. */
+export function exactProblem(got: { width: number; height: number; depth: number }, exact?: Partial<Record<Dim, number>>): string | undefined {
+  for (const d of ["width", "height", "depth"] as Dim[]) {
+    const want = exact?.[d];
+    if (want === undefined || Math.abs(got[d] - want) < 0.05) continue;
+    const W = DIM_WORD[d][0].toUpperCase() + DIM_WORD[d].slice(1);
+    return want > got[d] ? `${W} ${want} мм не получается: здесь можно не больше ${got[d]} мм (сосед, стена или предел корпуса).`
+      : `${W} ${want} мм не получается: здесь можно не меньше ${got[d]} мм.`;
+  }
+  return undefined;
 }
 /** Новые высота/глубина модуля, противоположный край на месте: верх тянут — низ стоит (y тот же), низ тянут — верх стоит;
  *  фасад тянут — задняя стенка на месте, заднюю — фасад на месте. next — модуль после правки (ширина та же). */

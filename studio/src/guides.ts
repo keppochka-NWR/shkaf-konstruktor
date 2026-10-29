@@ -38,6 +38,21 @@ export function viewAxes(look: V3): { h: V3; v: V3 } {
   const h = unit({ x: look.z, y: 0, z: -look.x });
   return { h, v: unit(cross(look, h)) };
 }
+/** План помещения (RoomPlan, решение Макса 29.10.2026: линии и ручки углов — везде, включая «План») — это вид сверху в тех же
+ *  координатах помещения (X вправо, Z к фасадной стене), поэтому линии плана и вида «Сверху» общие: look = +Y. */
+export const PLAN_LOOK: V3 = { x: 0, y: 1, z: 0 };
+/** Расстояние от точки до отрезка a–b в плоскости плана (X/Z), мм. */
+export function planDist(p: V3, a: V3, b: V3): number {
+  const dx = b.x - a.x, dz = b.z - a.z, L = dx * dx + dz * dz;
+  const t = L ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / L)) : 0;
+  return Math.hypot(p.x - a.x - t * dx, p.z - a.z - t * dz);
+}
+/** Ближайшая к точке плана линия в пределах tol мм (для Q на плане и выбора поставленной линии). */
+export function nearestPlanLine<T extends { a: V3; b: V3 }>(lines: T[], p: V3, tol: number): T | undefined {
+  let best: T | undefined, bd = tol;
+  for (const l of lines) { const d = planDist(p, l.a, l.b); if (d < bd - 0.01) { bd = d; best = l; } }
+  return best;
+}
 /** Линия поставлена в этом виде (то же направление взгляда). */
 export const sameLook = (g: Guide, look: V3) => dot(unit(v3(g.look)), unit(look)) > 0.9995;
 export const guidesInView = (list: Guide[] | undefined, look: V3 | null) => (look ? (list ?? []).filter((g) => sameLook(g, look)) : []);
