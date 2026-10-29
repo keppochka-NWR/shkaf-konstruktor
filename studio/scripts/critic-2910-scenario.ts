@@ -7,6 +7,12 @@
 //     же полке (по высоте), а не на соседней.
 //  D. п.1 Модель цены «Цена по большей модели» → «Добавить комнату» → «Новый проект / восстановить» → «Создать новый проект»: модель
 //     заказа осталась у документа и всех комнат.
+// Круг 2 (повторная проверка критика):
+//  E. A: модель «за лист» → «Создать новый проект» (копия «за лист») → модель «по большей» 23 000 → «Восстановить предыдущий
+//     проект»: заказ — по большей модели 23 000 (документ и комнаты), сообщение «В резервной копии своя модель цены».
+//  F. B: «Комод» 800×1000×550, вырез на фасаде верхнего ящика → щелчок по нижнему ящику, «Удалить ящик целиком» — вырез на верхнем,
+//     без «удалена»; «+» — вырез на своём ящике; удалили ящик с вырезом — вырез снят с сообщением.
+//  G. C2: «Комод» 800×1000, «−» (482,5/482,5) → «Высота фасада ящика» 452,5 → «−» — отказ с причиной (968 > 800), «+» — 3 равных до крыши.
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { parts, facadeTop, facadeBottom, boxes, type Module, type Part } from "../src/model";
@@ -66,7 +72,22 @@ async function addFromPalette(kind: string, w: number, h: number, d: number) {
   const apart = page.getByRole("button", { name: /^Поставить отдельно/ });
   if (await apart.count() && await apart.first().isVisible()) { await click(apart.first()); await page.waitForTimeout(800); }
 }
-async function front() { await page.getByRole("button", { name: "Спереди", exact: true }).click().catch(() => {}); const z = page.getByRole("button", { name: "Приблизить выбранный корпус" }); if ((await z.getAttribute("aria-pressed").catch(() => "true")) !== "true") await z.click().catch(() => {}); await page.mouse.move(5, 300); await page.waitForTimeout(1200); }
+/** «Модель цены» с клавиатуры (стрелки в раскрытом списке, Enter), как менеджер. */
+async function pickModel(re: RegExp) {
+  const sel = page.locator('select[aria-label="Модель цены"]').first();
+  if (!(await sel.isVisible().catch(() => false))) await page.getByRole("button", { name: /^Стоимость/ }).or(page.getByRole("tab", { name: /^Стоимость/ })).first().click().catch(() => {});
+  await sel.scrollIntoViewIfNeeded(); await sel.focus(); await page.keyboard.press("Alt+ArrowDown");
+  const os = await sel.locator("option").allInnerTexts(), cur = await sel.evaluate((e) => (e as HTMLSelectElement).selectedIndex), want = os.findIndex((o) => re.test(o));
+  for (let i = 0; i < Math.abs(want - cur); i++) await page.keyboard.press(want > cur ? "ArrowDown" : "ArrowUp");
+  await page.keyboard.press("Enter"); await page.waitForTimeout(800);
+}
+/** Выбрать ящик n, как менеджер: «Наполнение › Ящики» → «Настройка ящиков» → вкладка «Ящик n» (выделяет его фасад на сцене; плашка
+ *  выбранной детали внизу сцены — «Ящик n»). Щелчки по сцене в режиме «Наполнение» ставят ящик — для выбора не годятся. */
+async function selectDrawer(n: number): Promise<boolean> {
+  await openSet("Наполнение", "Ящики");
+  await click(page.locator(".drawer-tabs button").nth(n - 1));
+  return (await page.locator(".selection-context strong").first().innerText({ timeout: 1500 }).catch(() => "")).trim() === "Ящик " + n;
+}async function front() { await page.getByRole("button", { name: "Спереди", exact: true }).click().catch(() => {}); const z = page.getByRole("button", { name: "Приблизить выбранный корпус" }); if ((await z.getAttribute("aria-pressed").catch(() => "true")) !== "true") await z.click().catch(() => {}); await page.mouse.move(5, 300); await page.waitForTimeout(1200); }
 
 try {
   await page.goto(url); await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem("studio-tip-rmb", "1"); });
@@ -152,6 +173,69 @@ try {
   const shown = await m2.inputValue().catch(() => "");
   check("D3 в редакторе комнаты «Модель цены» — по большей", shown === "max", shown);
   await shot("D-price-model-kept");
+
+  // ── E. круг 2, A: «Восстановить предыдущий проект» в комнате заказа не меняет модель цены заказа ──
+  await pickModel(/^Цена за лист|^За лист/);
+  d = await doc();
+  check("E0 заказ «за лист» (так будет в резервной копии)", d.calc?.model === "sheet" && !d.calc?.maxModel, JSON.stringify(d.calc ?? null).slice(0, 120));
+  await click(btn("Новый проект / восстановить")); await click(btn("Создать новый проект")); await page.waitForTimeout(1500);
+  await pickModel(/большей/);
+  d = await doc();
+  check("E1 заказ снова «по большей модели» 23 000", !!d.calc?.maxModel && d.calc?.sheetPrice === 23000, JSON.stringify(d.calc ?? null).slice(0, 120));
+  await click(btn("Новый проект / восстановить")); await click(btn("Восстановить предыдущий проект")); await page.waitForTimeout(1500);
+  d = await doc();
+  const note = (await page.locator('[data-testid="studio-note"]').allInnerTexts().catch(() => [] as string[])).join(" ").replace(/\s+/g, " ");
+  check("E2 «Восстановить предыдущий проект» (копия «за лист»): заказ — по большей модели 23 000, документ и все комнаты (было: весь заказ «за лист»)", !!d.calc?.maxModel && d.calc?.sheetPrice === 23000 && d.rooms.every((r) => r.calculation?.maxModel && r.calculation.sheetPrice === 23000), JSON.stringify(d.calc ?? null).slice(0, 120));
+  check("E3 менеджеру сообщение: в копии своя модель, заказ — по модели заказа", /В резервной копии своя модель цены — за лист ЛДСП/.test(note) && /по модели заказа — по большей модели/.test(note), note.slice(0, 220));
+  await shot("E-restore-keeps-order-model");
+  // панель «Стоимость» внизу закрыть (повторный щелчок по вкладке) — сцена и панель справа снова видны
+  for (let k = 0; k < 2 && (await page.locator('select[aria-label="Модель цены"]').first().isVisible().catch(() => false)); k++) { await page.getByRole("button", { name: "Стоимость", exact: true }).last().click().catch(() => {}); await page.waitForTimeout(500); }
+
+  // ── F. круг 2, B: вырез на ящике идёт за своим ящиком ──
+  // новый сеанс (пустая комната, без панели заказа)
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem("studio-tip-rmb", "1"); });
+  await page.goto(url); await page.waitForSelector("canvas", { state: "attached", timeout: 90000 }); await page.waitForTimeout(2500);
+  await addFromPalette("Комод", 800, 1000, 550); await front();
+  let kk = await last();
+  const ksid = kk.sections[0].id, faceIds = (m: Module) => faces(m).map((p) => p.id);
+  const topFace = faceIds(kk)[2];
+  await reveal(btn("Вырезы деталей…")); await click(btn("Вырезы деталей…"));
+  await page.locator('select[aria-label="Деталь для выреза"]').selectOption(topFace);
+  await click(page.getByRole("group", { name: "Добавить вырез" }).getByRole("button", { name: /Круглый/ }));
+  await click(btn("Сохранить вырезы")); kk = await last();
+  const cutOn = (m: Module) => (m.cutouts ?? []).map((c) => faceIds(m).indexOf(c.host));
+  check("F0 комод 800×1000, 3 ящика: вырез на фасаде ВЕРХНЕГО ящика", JSON.stringify(cutOn(kk)) === "[2]", (kk.cutouts ?? []).map((c) => c.host.replace(/^[^:]+:/, "")).join(","));
+  await page.locator('[data-testid="studio-note"] button[aria-label="Закрыть сообщение"]').click().catch(() => {});
+  let picked = await selectDrawer(1);
+  if (picked) { await reveal(btn("Удалить ящик целиком")); await click(btn("Удалить ящик целиком")); }
+  kk = await last();
+  let fnote = (await page.locator('[data-testid="studio-note"]').allInnerTexts().catch(() => [] as string[])).join(" ").replace(/\s+/g, " ");
+  check("F1 удалили НИЖНИЙ ящик мышью: ящиков 2, вырез на верхнем (бывшем верхнем), без «удалена» (было: вырез снят «Ящик 3 удалена»)", picked && kk.sections[0].drawers === 2 && JSON.stringify(cutOn(kk)) === "[1]" && !/снят/.test(fnote), `выбран ${picked}, ящиков ${kk.sections[0].drawers}, вырез на ${cutOn(kk).join(",")}; ${fnote}`.slice(0, 220));
+  await front(); await shot("F1-cut-stays-on-top-drawer");
+  await openSet("Наполнение", "Ящики"); await click(btn("Добавить: Ящики")); kk = await last();
+  check("F2 «+»: 3 ящика, вырез на своём ящике (номер 2 — средний, новый — сверху)", kk.sections[0].drawers === 3 && JSON.stringify(cutOn(kk)) === "[1]", `вырез на ${cutOn(kk).join(",")}`);
+  await page.locator('[data-testid="studio-note"] button[aria-label="Закрыть сообщение"]').click().catch(() => {});
+  picked = await selectDrawer(2);
+  if (picked) { await reveal(btn("Удалить ящик целиком")); await click(btn("Удалить ящик целиком")); }
+  kk = await last();
+  fnote = (await page.locator('[data-testid="studio-note"]').allInnerTexts().catch(() => [] as string[])).join(" ").replace(/\s+/g, " ");
+  check("F3 удалили сам ящик с вырезом: вырез снят с сообщением, на бывший ящик 3 не переехал", picked && kk.sections[0].drawers === 2 && !kk.cutouts?.length && /Вырез .* снят: деталь «Ящик 2»/.test(fnote), `выбран ${picked}, ящиков ${kk.sections[0].drawers}, вырезов ${kk.cutouts?.length ?? 0}; ${fnote}`.slice(0, 220));
+  await front(); await shot("F3-cut-removed-with-drawer");
+
+  // ── G. круг 2, C2: высота фасада полем, затем «−» / «+» ──
+  await addFromPalette("Комод", 800, 1000, 550); await front();
+  await openSet("Наполнение", "Ящики"); await click(btn("Уменьшить: Ящики"));
+  let g = await last();
+  check("G0 комод 800×1000, «−»: 2 фасада 482,5/482,5", hs(faces(g)).join("/") === "482.5/482.5", hs(faces(g)).join("/"));
+  await click(page.locator(".drawer-tabs button").nth(0));
+  await type(page.locator('input[aria-label="Высота фасада ящика"]').first(), 452.5); g = await last();
+  check("G1 «Высота фасада ящика» нижнего 452,5 — верхний 512,5", hs(faces(g)).join("/") === "452.5/512.5", hs(faces(g)).join("/"));
+  await openSet("Наполнение", "Ящики"); await click(btn("Уменьшить: Ящики"));
+  const gwhy = await banner(); g = await last();
+  check("G2 «−»: один фасад на весь проём не встаёт (968 > 800) — отказ с причиной, ящиков 2 (было: фасад 30…482,5 и ниша 515 мм без ошибки)", g.sections[0].drawers === 2 && /не встают: при 1 ящике фасад ящика выйдет 968/.test(gwhy), gwhy.slice(0, 160));
+  await openSet("Наполнение", "Ящики"); await click(btn("Добавить: Ящики")); g = await last();
+  check("G3 «+» после правки полем: 3 равных фасада до крыши (было: отказ «Ящики не до крыши»)", g.sections[0].drawers === 3 && equalNoGap(g) && topGap(g) <= 0.05, `${hs(faces(g)).join("/")}, до верха ${topGap(g)}; ${await banner()}`.slice(0, 200));
+  await front(); await shot("G3-plus-after-manual-equal");
 } catch (e) { check("сценарий без сбоя", false, (e as Error).message.split("\n")[0]); await shot("fail"); }
 check("ошибок страницы нет", errors.length === 0, errors.slice(0, 2).join(" | "));
 writeFileSync(`${out}/results.json`, JSON.stringify({ results, errors }, null, 1));
