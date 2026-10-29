@@ -7,6 +7,7 @@ import {roofColumn,setDrawerCount} from './drawerModes';
 import {meshById,DEFAULT_MESH,MESH_WIDTH_TOLERANCE} from './mesh';
 import {remapShelfSpec} from './lights';
 import {remapDrawerCutouts,dropCutoutsOnRemovedParts} from './cutoutBinding';
+import {drawersUnderMansard} from './mansardFit';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
 import {mirrorKitchen} from './kitchen';
@@ -20,7 +21,7 @@ export function removePart(p:Project,mid:string,sid:string,pid:string):Project{
   else if(pid.includes(':drawer:')&&pid.endsWith(':facade')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k)}));s.drawerConfigs[j].noFacade=true;}
   else if(pid.includes(':drawer:')){const j=Number(pid.split(':drawer:')[1].split(':')[0]);if(!Number.isInteger(j)||j<0||j>=s.drawers)throw Error('Ящик не найден.');const roof=roofColumn(m,s),auto=isAutoDrawerLayout(m,s),offsets=drawerOffsets(s);s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(m,s,k),y:offsets[k]}));s.drawerConfigs.splice(j,1);s.drawers--;remapDrawerCutouts(m,sid,j);/* круг 2 критика 29.10: вырез идёт за своим ящиком */
     // ящики по правилу (правка 29.10): комод — оставшиеся снова поровну до крыши; стопка от дна — сомкнуть и выровнять фасады
-    if(s.drawers&&(roof||auto)){if(roof){s.drawerConfigs=drawersToRoof(m,s);/* критик 29.10: не встают поровну до крыши — ящик не убирается (ошибка с причиной), а не щель сверху */}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}}}
+    if(s.drawers&&(roof||auto)){if(roof){s.drawerConfigs=drawersToRoof(m,s);/* критик 29.10: не встают поровну до крыши — ящик не убирается (ошибка с причиной), а не щель сверху */}else{let y=0;const packed=s.drawerConfigs.map(c=>{const r={...c,y};y+=c.height+RULES.drawerStep;return r;});const e=evenDrawerConfigs(m,{...s,drawerConfigs:packed},true);if(e)s.drawerConfigs=e;}if(m.mansard)drawersUnderMansard(m,s);/* круг 3: мансарда — ящики под скос или отказ */}}
   else if(pid.includes(':pantograph:')){s.pantograph=false;delete s.rodAt;}
   else if(pid.includes(':pullout:')){const left=(s.pullouts??1)-1;if(left>0)s.pullouts=left;else delete s.pullouts;}
   // вешалка в два яруса (заказ 7437584): нижняя штанга, труба или её держатели — снимается только второй ярус

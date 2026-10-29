@@ -3,6 +3,7 @@
 // кнопки; геометрию строит parts() (model.ts), цены — смета по деталям (направляющие комплектами на ящик — guideKits).
 import { boxes, drawerConfig, drawersFillRoof, drawersToRoof, evenDrawerConfigs, facadeBottom, facadeTop, hasDrawerCap, isAutoDrawerLayout, parts, rearClear, RULES, type Module, type Section } from "./model";
 import { SLIDES, type DrawerConfig } from "./hardware";
+import { drawersUnderMansard } from "./mansardFit";
 
 const sectionOf = (m: Module, sid: string) => { const s = m.sections.find((x) => x.id === sid); if (!s) throw Error("Выберите секцию."); return s; };
 
@@ -42,14 +43,22 @@ export function setDrawerCount(m: Module, sid: string, count: number): void {
     const t: Section = { ...s, drawers: c, drawerConfigs: cs.slice(0, c) };
     if (roof) t.drawerConfigs = drawersToRoof(m, t);
     else if (auto) relayoutDrawers(m, t);
-    s.drawers = c; s.drawerConfigs = t.drawerConfigs;
+    settle(m, s, c, t.drawerConfigs);
     return;
   }
   if (!roof) throw Error("Ящики не до крыши: новый ящик ставится поверх стопки.");
   const { y: _y, facadeH: _f, ...last } = cs[cs.length - 1]; void _y; void _f;
   const t: Section = { ...s, drawers: c, drawerConfigs: [...cs, ...Array.from({ length: c - s.drawers }, () => ({ ...last }))] };
   t.drawerConfigs = drawersToRoof(m, t);
-  s.drawers = c; s.drawerConfigs = t.drawerConfigs;
+  settle(m, s, c, t.drawerConfigs);
+}
+/** Новое число ящиков секции; у мансардного шкафа (круг 3 критика 29.10) — ящики под скос (короба ниже, фасады те же) или отказ с
+ *  причиной, секция прежняя: «+/−» после «Опустить полки под скос» больше не уводят ящики снова в крышу. */
+function settle(m: Module, s: Section, c: number, configs: Section["drawerConfigs"]): void {
+  const was = { drawers: s.drawers, drawerConfigs: s.drawerConfigs };
+  s.drawers = c; s.drawerConfigs = configs;
+  if (!m.mansard) return;
+  try { drawersUnderMansard(m, s); } catch (e) { s.drawers = was.drawers; s.drawerConfigs = was.drawerConfigs; throw e; }
 }
 
 /** Зазор между фасадами ящиков, как он виден (по деталям): у равных фасадов до крыши с фасадами выше короба — шаг фасада (3 мм),
@@ -69,6 +78,7 @@ export function setDrawerGap(m: Module, sid: string, gap: number): void {
   const t: Section = { ...s, drawerGap: gap };
   if (roof) t.drawerConfigs = drawersToRoof(m, t);
   s.drawerGap = gap; if (roof) s.drawerConfigs = t.drawerConfigs;
+  if (roof && m.mansard) drawersUnderMansard(m, s);
 }
 
 /** Направляющая, которая встаёт по глубине (за дверью нужно на 19 мм больше места спереди): самая длинная из ряда системы не длиннее доступного. */

@@ -1,8 +1,9 @@
 // Сборка мебели из палитры «Добавить мебель» (перенесено из ModulePalette.tsx, w-formerrors 23.10: проверка формы paletteCheck.ts
 // собирает те же модули без исключения на первой ошибке). Тексты ошибок прежние; ModulePalette.tsx реэкспортирует функции.
 import {refitKDrawers} from './kitchenDrawers';
-import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,roofEvenLayout,roofLayoutApplies,drawerFacesEqual,rearClear,parts,boxes,RULES,drawerConfig,drawerOffsets,drawerPitch,drawersBehindDoors,fb,type Module,type Section,type Part} from './model';
+import {initialModule,section,deskModule,distribute,validate,id,drawersToRoof,roofEvenLayout,roofLayoutApplies,drawerFacesEqual,rearClear,parts,boxes,RULES,type Module,type Section,type Part} from './model';
 import {RADIUS,radiusMax,mansardIntrusions} from './shapes';
+import {fitDrawersUnderRoof} from './mansardFit';
 import {partCollisions} from './collisions';
 import {SLIDES} from './hardware';
 import {withDoorCount} from './paletteDoors';
@@ -121,38 +122,33 @@ export function fitUnderMansard(m:Module):Module{
       for(let f=Math.floor((1-(RULES.panel/2+RULES.shelfMinClear)/h)*1e4)/1e4;f>=floor&&!ok;f=Math.round((f-step)*1e4)/1e4){s.shelves[hi]=f;ok=!hits(s,['pantograph','shelf']).length;}
       if(!ok){s.shelves[hi]=keep;throw Error(`Под скос не встают выдвижные тремпели: они висят под верхней полкой не ниже 0,6 высоты секции (${Math.round(b.bottom+0.6*h)} мм от низа корпуса), а скос там ниже. Уберите тремпели или увеличьте высоту сзади / уменьшите глубину корпуса.`);}
     }
-    if(s.drawers&&hits(s,['drawer']).length)fitDrawersUnderRoof(n,s,()=>hits(s,['drawer']));
+    if(s.drawers)fitDrawersUnderRoof(n,s);
   }
   const left=mansardIntrusions(n,parts(n)).filter(x=>x.error);
-  if(left.length){const x=left[0],what=x.part.name.replace(/ · .*$/,'');
-    throw Error(`Под скос не встаёт «${what}»: выше нижней пласти крыши на ${x.over} мм у задней кромки${x.part.role==='pantograph'?' — выдвижной тремпель висит под верхней полкой (от 0,6 высоты секции), под этим скосом ей места нет. Уберите тремпель':x.part.role==='drawer'?' — даже с коробом 68 мм и самой короткой направляющей. Уберите ящик':''} или увеличьте высоту сзади / уменьшите глубину корпуса.`);}
+  if(left.length){const x=left[0],what=x.part.name.replace(/ · .*$/,''),p=x.part;
+    // что убрать — по детали (круг 3: у полки текст обрывался «…у задней кромки или увеличьте высоту сзади»)
+    const remove=p.role==='pantograph'?' — выдвижной тремпель висит под верхней полкой (от 0,6 высоты секции), под этим скосом ей места нет. Уберите тремпель'
+      :p.role==='drawer'?' — даже с коробом 68 мм и самой короткой направляющей. Уберите ящик'
+      :p.id.endsWith(':drawer-cap')?' — ящики под ней до скоса не опускаются. Уберите ящик или полку над ящиками («Полка над ящиками» — «Нет»)'
+      :p.role==='rod'||p.role==='flange'?'. Уберите штангу':p.role==='shelf'?'. Уберите полку':'. Уберите эту деталь';
+    throw Error(`Под скос не встаёт «${what}»: выше нижней пласти крыши на ${x.over} мм у задней кромки${remove} или увеличьте высоту сзади / уменьшите глубину корпуса.`);}
+  // круг 3: результат кнопки — модель без ошибок; иначе отказ с причиной, а не чужая ошибка проверки (5 полок под задней высотой 700 —
+  // «между полками нужно ≥ 80 мм»)
+  const errs=validate(n);
+  if(errs.length)throw Error(mansardFitReason(m,n,errs[0]));
   return n;
 }
-/** Ящики секции под скос мансарды: короб того ящика, что проходит сквозь крышу, — ниже (до 68 мм), затем короче направляющая.
- *  Фасад и шаг ящика те же: у ящика задаётся высота фасада (как parts() строит фасад с заданной высотой — пол-зазора снизу, ящик ниже
- *  на пол-зазора), ящики выше не двигаются. Короб не уходит из-под крыши — секция остаётся как есть (отказ — в fitUnderMansard). */
-function fitDrawersUnderRoof(n:Module,s:Section,hit:()=>ReturnType<typeof mansardIntrusions>):void{
-  const g=s.drawerGap??(drawersBehindDoors(n,s)?RULES.drawerFrontGap:fb(n)),off=drawerOffsets(s),was=s.drawerConfigs;
-  s.drawerConfigs=Array.from({length:s.drawers},(_,k)=>({...drawerConfig(n,s,k),y:off[k]}));
-  const touched=new Set<number>();
-  for(let guard=0;guard<40;guard++){
-    const x=hit()[0];if(!x)return;
-    const j=Number(x.part.id.split(':drawer:')[1].split(':')[0]),c=s.drawerConfigs[j];
-    if(!touched.has(j)){touched.add(j);
-      // фасад задаётся высотой (у фасада с высотой — пол-зазора снизу, зазор под ним 3 мм как у равных фасадов выше короба): верх фасада
-      // тот же, шаг ящика не длиннее прежнего (ящики не пересекаются); верхний до крыши — шаг тот же (фасад тянется до верха фасадов сам)
-      // шаг ящика в проверке — по зазору шага (s.drawerGap ?? 3), фасад — по зазору фасадов g: верхний — шаг тот же, остальные — верх фасада тот же
-      const highest=off.every((o,k)=>k===j||o<=off[j]),G=s.drawerGap??RULES.drawerFrontGap,pitch=drawerPitch(c,G);
-      if(c.facadeH===undefined)c.facadeH=Math.round((highest?pitch-G:Math.min(pitch-G,pitch-1.5*g))*100)/100;
-    }
-    if(c.height-x.over-1>=68){c.height=Math.floor(c.height-x.over-1);continue;}
-    if(c.height>68){c.height=68;continue;}
-    const shorter=[...SLIDES[c.slide].lengths].filter(l=>l<c.length).sort((a,b)=>b-a)[0];
-    if(shorter===undefined){s.drawerConfigs=was;return;}
-    c.length=shorter;
+/** Почему «Опустить полки под скос» не даёт модели без ошибок — простыми словами, с тем, что убрать. */
+function mansardFitReason(m:Module,n:Module,error:string):string{
+  const rear=m.mansard!.rear,i=Number(/^Секция (\d+):/.exec(error)?.[1]??0)-1,s=n.sections[i];
+  if(s&&/между поверхностями полок/.test(error)&&s.shelves.length){
+    // сколько полок секции встаёт поровну под задней высотой
+    let fit=0;for(let k=s.shelves.length-1;k>=0;k--){const t=structuredClone(m);t.sections[i].shelves=t.sections[i].shelves.slice(0,k);if(!validate(withMansard(t,rear)).some(e=>/между поверхностями полок/.test(e))){fit=k;break;}}
+    return `Под скос не встают ${s.shelves.length} полок секции ${i+1}: под высотой сзади ${rear} мм между ними остаётся меньше 80 мм. Уберите полки (встанет не больше ${fit}) или увеличьте высоту сзади.`;
   }
-}
-/** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
+  if(s&&/под штангой нужно/.test(error))return `Под скос не встаёт штанга секции ${i+1}: под ней нужно 900 мм до полки, ящиков или дна, а под высотой сзади ${rear} мм места меньше. Уберите штангу (или полку под ней) или увеличьте высоту сзади.`;
+  return `«Опустить полки под скос» не помогает: после него — ${error.replace(/^[^:]*: /,'').replace(/\s*(Измените|Уберите|Опустите|Поднимите)[^.]*\.\s*$/,'')} Измените наполнение вручную (уберите полку или штангу) или увеличьте высоту сзади.`;
+}/** Модуль палитры без проверки (проверка формы видит все ошибки собранного модуля). Угловой и двери купе проверяются сами. */
 export function assembleModule(kind:ModuleKind,width:number,height:number,depth:number,source:Module,doors?:number,fit=true):Module{
   // волна 29.10: корпус от 100×100 — наполнение, которое в малый корпус не входит, снимается (smallSize.ts), а не запрещает размер
   const m=assembleRaw(kind,width,height,depth,source,doors);
