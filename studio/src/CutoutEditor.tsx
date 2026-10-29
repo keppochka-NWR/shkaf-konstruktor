@@ -7,6 +7,7 @@ import { shapeBaseParts, validate, type Module, type Part } from "./model";
 import { basePolygon, buildCutShape, cutText, cutoutWarnings, faceAxes, EDGE_WORDS, type Cutout } from "./shapes";
 import type { Project } from "./project";
 import { bindCutouts, cutHost } from "./partIds";
+import { copyCutouts, cutParts, similarCutParts } from "./cutoutCopy";
 import "./shapes.css";
 
 const PRESETS: { id: string; label: string; make: (p: Part, ax: ReturnType<typeof faceAxes>) => Omit<Cutout, "id" | "host"> }[] = [
@@ -19,8 +20,7 @@ const PRESETS: { id: string; label: string; make: (p: Part, ax: ReturnType<typeo
 ];
 /** Детали, в которых можно сделать вырез: доски корпуса, ЛХДФ, фасады ЛДСП (не фурнитура, не сторонний участок). */
 export function cutHosts(m: Module): Part[] {
-  if (m.raw || m.kupe || m.worktop || m.corner || m.casework) return [];
-  return shapeBaseParts(m).filter((p) => (p.material === "board" || p.material === "hdf") && !p.external && basePolygon(p) !== null);
+  return cutParts(m);
 }
 /** Можно ли делать вырез в детали pid модуля (пункт меню «Вырез…»). */
 export function cutAllowed(m: Module, pid: string): boolean { try { return cutHosts(m).some((p) => p.id === pid); } catch { return false; } }
@@ -42,7 +42,7 @@ export function Num({ label, value, onChange, min = 0 }: { label: string; value:
   return <label className="cut-num"><span>{label}</span><input type="number" aria-label={label} value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={apply} onKeyDown={(e) => { if (e.key === "Enter") apply(); }} /></label>;
 }
 
-export function CutoutEditor({ project, mid, pid, commit, close }: { project: Project; mid: string; pid: string; commit: (p: Project) => boolean; close: () => void }) {
+export function CutoutEditor({ project, mid, pid, commit, close, copyOpen }: { project: Project; mid: string; pid: string; commit: (p: Project) => boolean; close: () => void; copyOpen?: boolean }) {
   const placed = project.modules.find((a) => a.id === mid);
   const m = placed?.module;
   const hosts = useMemo(() => (m ? cutHosts(m) : []), [m]);
@@ -50,6 +50,12 @@ export function CutoutEditor({ project, mid, pid, commit, close }: { project: Pr
   // деталь выреза — по постоянной ссылке (partIds.ts): host в черновике — id детали сейчас
   const [draft, setDraft] = useState<Cutout[]>(() => (m?.cutouts ?? []).map((c) => ({ ...structuredClone(c), host: cutHost(m!, c) ?? c.host })));
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [close]);
+  // перенос/копия вырезов на схожие детали (правка Макса 29.10): отмеченные детали того же вида и размера, «перенести» — снять с этой
+  const similar = useMemo(() => similarCutParts(project, mid, host), [project, mid, host]);
+  const [marked, setMarked] = useState<string[]>([]);
+  const [moveCuts, setMoveCuts] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  useEffect(() => { setMarked([]); setCopyError(""); }, [host]);
   if (!m || !placed) return null;
   const part = hosts.find((p) => p.id === host);
   const mine = draft.filter((c) => c.host === host);
@@ -62,7 +68,15 @@ export function CutoutEditor({ project, mid, pid, commit, close }: { project: Pr
   const set = (c: Cutout, patch: Partial<Cutout>) => setDraft((d) => d.map((x) => (x.id === c.id ? { ...x, ...patch } : x)));
   const add = (preset: (typeof PRESETS)[number]) => { if (!part) return; setDraft((d) => [...d, { id: crypto.randomUUID(), host, ...preset.make(part, ax) }]); };
   // новый вырез / смена детали — постоянная ссылка на полку/ящик (id заводятся у секции), остальные детали — по роли
-  const save = () => { const n = structuredClone(project), t = n.modules.find((a) => a.id === mid)!.module; if (draft.length) { t.cutouts = draft.map(({ ref, ...c }) => { const h = ref ? cutHost(t, { host: c.host, ref }) : undefined; return ref && (h === c.host || (!h && m.cutouts?.find((x) => x.id === c.id)?.host === c.host)) ? { ...c, ref } : c; }); bindCutouts(t); } else delete t.cutouts; if (commit(n)) close(); };
+  const saved = () => { const n = structuredClone(project), t = n.modules.find((a) => a.id === mid)!.module; if (draft.length) { t.cutouts = draft.map(({ ref, ...c }) => { const h = ref ? cutHost(t, { host: c.host, ref }) : undefined; return ref && (h === c.host || (!h && m.cutouts?.find((x) => x.id === c.id)?.host === c.host)) ? { ...c, ref } : c; }); bindCutouts(t); } else delete t.cutouts; return n; };
+  const save = () => { if (commit(saved())) close(); };
+  // черновик этой детали + копии на отмеченные — одним изменением проекта (одна отмена Ctrl+Z)
+  const copyTo = () => {
+    const n = saved(), t = n.modules.find((a) => a.id === mid)!.module, cuts = (t.cutouts ?? []).filter((c) => cutHost(t, c) === host);
+    const targets = similar.filter((x) => marked.includes(x.mid + "|" + x.pid));
+    try { const r = copyCutouts(n, mid, host, cuts, targets, moveCuts); if (commit(r.project)) { window.dispatchEvent(new CustomEvent("studio-note", { detail: { title: "Вырезы", text: r.note } })); close(); } }
+    catch (e) { setCopyError((e as Error).message); }
+  };
   // вид детали (контур с вырезами) в масштабе окна
   const U = part ? part.size[ax.u] : 1, V = part ? part.size[ax.v] : 1, k = Math.min(240 / U, 240 / V), pad = 24;
   const path = (pl: [number, number][]) => pl.map(([u, v], i) => `${i ? "L" : "M"}${(pad + u * k).toFixed(1)},${(pad + (V - v) * k).toFixed(1)}`).join("") + "Z";
@@ -107,6 +121,21 @@ export function CutoutEditor({ project, mid, pid, commit, close }: { project: Pr
       </div>}
       {errors.length > 0 && <div className="palette-issues" role="alert" aria-label="Ошибки вырезов"><ol>{errors.map((e, i) => <li key={i}><b>{e}</b></li>)}</ol></div>}
       {warnings.length > 0 && <div className="cut-warnings" role="status" aria-label="Предупреждения вырезов">{warnings.map((w, i) => <p key={i}>{w}</p>)}</div>}
+      {part && <details className="cut-copy" open={copyOpen} data-testid="cut-copy">
+        <summary>Перенести / скопировать вырезы на схожие детали{similar.length ? ` (${similar.length})` : ""}</summary>
+        {!mine.length ? <p className="field-note" role="note">На этой детали вырезов нет — сначала задайте вырез.</p>
+          : !similar.length ? <p className="field-note" role="note">Схожих деталей нет: нужна деталь того же вида и размера ({Math.round(part.length)}×{Math.round(part.width)}) в этом или другом корпусе.</p>
+          : <>
+            <p className="field-note" role="note">Детали того же вида и размера. Вырез ставится с теми же размерами и отступами от тех же краёв; на каждой детали проверяется.</p>
+            <div className="cut-copy-list" role="group" aria-label="Схожие детали">
+              <label className="cut-copy-all"><input type="checkbox" aria-label="Отметить все схожие детали" checked={marked.length === similar.length} onChange={(e) => setMarked(e.target.checked ? similar.map((x) => x.mid + "|" + x.pid) : [])} /> Все ({similar.length})</label>
+              {similar.map((x) => { const k = x.mid + "|" + x.pid; return <label key={k}><input type="checkbox" aria-label={`Скопировать на ${x.name}${x.same ? "" : " · " + x.moduleName}`} checked={marked.includes(k)} onChange={(e) => setMarked((d) => (e.target.checked ? [...d, k] : d.filter((y) => y !== k)))} /> {x.name}{x.same ? " · этот корпус" : ` · «${x.moduleName}»`}</label>; })}
+            </div>
+            <label className="cut-copy-all"><input type="checkbox" aria-label="Перенести: убрать вырезы с этой детали" checked={moveCuts} onChange={(e) => setMoveCuts(e.target.checked)} /> Перенести — убрать вырезы с этой детали</label>
+            {copyError && <p className="field-note cut-copy-error" role="alert">{copyError}</p>}
+            <button type="button" className="outline" disabled={!marked.length || errors.length > 0} onClick={copyTo}>{moveCuts ? "Перенести" : "Скопировать"} на отмеченные · {marked.length}</button>
+          </>}
+      </details>}
       <div className="cut-actions"><button className="primary" disabled={errors.length > 0} onClick={save}>Сохранить вырезы</button><button className="outline" onClick={close}>Отмена</button></div>
     </div>
   </div>;
