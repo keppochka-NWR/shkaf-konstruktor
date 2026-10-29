@@ -145,3 +145,14 @@ test('ALU: Мору (Флутис) на высоком фасаде — пред
   const p = newProject(); p.modules[0].module = m;
   assert.match(specificationHTML(p), /Мору.*под ответственность заказчика/);
 });
+test('ALU: вес рамочного фасада — стекло/зеркало вставки (≈10 кг/м² при 4 мм), а не 0 — для петель и подъёмников', async () => {
+  const { facadeWeight, moduleWeight } = await import('../src/weight');
+  const { aluInsertSize, DEFAULT_ALU } = await import('../src/alu');
+  const { initialModule, section, parts } = await import('../src/model');
+  const m = { ...initialModule(), width: 440, height: 2400, sections: [{ ...section(), doorLeaves: 1 as const }], doors: true, alu: { ...DEFAULT_ALU } };
+  const d = parts(m).find((p) => p.role === 'door' && p.material === 'alu')!, s = aluInsertSize(m.alu, d.width, d.length);
+  const want = Math.round((s.w * s.h / 1e6) * 0.004 * 2500 * 10) / 10;
+  assert.ok(want > 9, `вставка ${want} кг`);
+  assert.equal(facadeWeight(d, m), want);
+  assert.equal(moduleWeight(m).hardwareNoMass, moduleWeight({ ...m, alu: undefined }).hardwareNoMass, 'рамочный фасад не считается фурнитурой без массы');
+});
