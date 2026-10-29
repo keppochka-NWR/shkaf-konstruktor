@@ -33,6 +33,10 @@ export const ctrlDragStarts = (dx: number, dy: number) => Math.hypot(dx, dy) >= 
 /** Виды сбоку (справа/слева): на экране глубина и высота — перенос корпуса в плоскости экрана, высота своя, как спереди
  *  (критик 29.10 п.7: раньше высота сбоку держалась, и привязка Ctrl к пересечению теряла вертикаль). */
 export const sideView = (view: string) => view === "side" || view === "left";
+/** Сбоку высота при обычном переносе меняется, только когда ход по вертикали главный и больше 15 px от начала — иначе
+ *  дрожание руки молча поднимает корпус с пола (повторная проверка критика 29.10). Alt/Ctrl, поймавшие высоту, — по привязке. */
+export const SIDE_HEIGHT_PX = 15;
+export const sideHeightFree = (dx: number, dy: number) => Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > SIDE_HEIGHT_PX;
 /** Колесо с Ctrl во время тяги (Ctrl зажат ради привязки) масштабирует всю страницу браузера — гасим (критик 29.10 п.5). */
 export const wheelGuard = (e: { ctrlKey: boolean; metaKey: boolean }, dragging: boolean) => dragging && (e.ctrlKey || e.metaKey);
 /** Ctrl+Z / Ctrl+Y во время тяги (Ctrl зажат ради привязки) не отменяют посреди тяги (критик 29.10 п.6). */

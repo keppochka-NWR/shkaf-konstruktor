@@ -113,7 +113,7 @@ import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,sideView,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -1147,7 +1147,9 @@ export function Scene(p: Props) {
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
       needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
-        const raw={x:drag.origin.x+point.x,y:current.current.view==='front'||sideView(current.current.view)?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
+        // сбоку высота — только если ход по вертикали главный и > 15 px (дрожание руки не поднимает корпус с пола)
+        const lockY=sideView(current.current.view)&&!sideHeightFree(e.clientX-drag.point[0],e.clientY-drag.point[1]);
+        const raw={x:drag.origin.x+point.x,y:lockY?drag.origin.y:current.current.view==='front'||sideView(current.current.view)?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
         const mode=snapMode(e),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined;
         if(isPointMode(mode)&&look&&da){
           // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
@@ -1165,6 +1167,7 @@ export function Scene(p: Props) {
         markAt(hit,look,fromScene(drag.anchor));
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front'&&!sideView(current.current.view))next.y=drag.origin.y; // сбоку высота своя, как спереди (критик 29.10 п.7)
+        else if(lockY&&!(hit&&!hit.free?.v))next.y=drag.origin.y; // сбоку без вертикального хода — высота прежняя (Alt/Ctrl, поймавшие высоту, — по привязке)
         drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||current.current.groupIds?.includes(drag.mid)&&current.current.groupIds.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':current.current.groupIds?.includes(drag.mid)?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else if(drag.kind==='divider'){
         const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;

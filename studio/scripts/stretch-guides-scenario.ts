@@ -445,6 +445,19 @@ try {
   const b11l = await settled((b) => b.a.y !== 0);
   check("11. «Слева» Ctrl + перенос → высота по пересечению: y = 300, z = 3, x на месте", b11l.a.y === 300 && b11l.a.z === 3 && b11l.a.x === 1000 && /Ctrl · пересечение/.test(s11m.live), fmt(b11l.a) + ` · «${s11m.live}»`);
   await key("Control+z"); await settled((b) => b.a.y === 0);
+  // повторная проверка критика 29.10: сбоку дрожание руки не поднимает корпус с пола; высота — только при главном вертикальном ходе
+  await drag(lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 6 }, "left-plain-wobble");
+  const bw = await settled((b) => b.a.z !== 3);
+  check("11. «Слева»: перенос вперёд 60 px с дрожанием 6 px вверх — на полу (y = 0), глубина сдвинута", bw.a.y === 0 && bw.a.z !== 3, fmt(bw.a));
+  if (bw.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.z === 3); }
+  await modDrag("Shift", lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 2 }, "left-shift-wobble");
+  const bs = await settled((b) => b.a.z !== 3);
+  check("11. «Слева»: Shift-перенос с дрожанием 2 px — на полу (y = 0)", bs.a.y === 0 && bs.a.z !== 3, fmt(bs.a));
+  if (bs.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.z === 3); }
+  await modDrag("Shift", lgrab, { x: lgrab.x + 4 * Math.sign(lz), y: lgrab.y - 40 }, "left-shift-up");
+  const bu = await settled((b) => b.a.y !== 0);
+  check("11. «Слева»: вертикальный ход 40 px главный — высота меняется", bu.a.y > 100, fmt(bu.a));
+  if (bu.a.y !== 0) { await key("Control+z"); await settled((b) => b.a.y === 0); }
   await page.getByRole("button", { name: /Убрать вспомогательные линии/ }).click(); await page.waitForTimeout(400);
 
   // 12. «План»: те же клавиши
