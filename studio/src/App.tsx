@@ -51,6 +51,7 @@ import {NewProjectPanel} from './NewProjectPanel';
 import {priceModelLabel,withOrderCalculation} from './priceModel';
 import {rebindCutouts} from './cutoutBinding';
 import {fitUnderMansard} from './paletteBuild';
+import {keepRowPsu} from './kitchenUnderLightRow';
 import {NicheReadings} from './NicheReadings';
 import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measurement';
 import {ModuleLibrary} from './ModuleLibrary';
@@ -574,6 +575,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     if(saveManagedProject&&raw.calculation===undefined&&project.calculation)raw={...raw,calculation:structuredClone(project.calculation)};
     // Вырезы идут за своей деталью, а не за её номером (критик 29.10, блокер 2): вставили/удалили полку, ящик, дверь — перепривязка.
     const cutNotes:string[]=[];
+    // критик 29.10 (п.10): удалили навесной с блоком питания подсветки — блок переезжает на модуль того же ряда
+    if(raw.modules.length<project.modules.length){const r=keepRowPsu(project,raw);raw=r.project;cutNotes.push(...r.notes);}
     if(raw.modules.some(a=>a.module.cutouts?.length))raw={...raw,modules:raw.modules.map(a=>{const old=project.modules.find(x=>x.id===a.id);if(!old||old.module===a.module||!a.module.cutouts?.length)return a;const r=rebindCutouts(old.module,a.module);cutNotes.push(...r.notes);return r.module===a.module?a:{...a,module:r.module};})};
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
@@ -595,7 +598,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setHistory((h) => [...h.slice(0, cursor + 1), next].slice(-61));
     setCursor(Math.min(cursor + 1, 60));
     setError("");
-    if(cutNotes.length)setNotice({title:'Вырезы',text:cutNotes.join(' ')});
+    if(cutNotes.length)setNotice({title:cutNotes.every(n=>n.startsWith('Блок питания'))?'Подсветка':'Вырезы',text:cutNotes.join(' ')});
     return true;
   }
   function commit(next: Module) {

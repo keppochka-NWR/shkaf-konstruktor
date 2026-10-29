@@ -36,3 +36,22 @@ export function setRowUnderLight(p: Project, id: string, on: boolean, row = true
   }
   return { ...p, modules: next };
 }
+
+/** Удалили навесной с блоком питания подсветки (критик 29.10, п.10): у остальных модулей ряда подсветка оставалась без БП, строка
+ *  «Блок питания» пропадала из сметы молча. Блок переезжает на крайний левый подсвеченный модуль того же ряда — с сообщением. */
+export function keepRowPsu(prev: Project, next: Project): { project: Project; notes: string[] } {
+  const notes: string[] = [];
+  let out = next;
+  for (const gone of prev.modules) {
+    if (next.modules.some((a) => a.id === gone.id) || gone.module.kitchen?.role !== "wall" || !gone.module.lightPsu) continue;
+    let row: string[];
+    try { row = wallRowIds(prev, gone.id).filter((x) => x !== gone.id); } catch { continue; }
+    const rest = row.map((x) => out.modules.find((a) => a.id === x)).filter((a): a is PlacedModule => !!a);
+    if (!rest.length || rest.some((a) => hasPsu(a.module))) continue;
+    const to = rest.find((a) => a.module.kitchen?.underLight);
+    if (!to) continue;
+    out = { ...out, modules: out.modules.map((a) => (a.id === to.id ? { ...a, module: { ...a.module, lightPsu: true as const } } : a)) };
+    notes.push(`Блок питания подсветки перенесён на «${to.module.name}»: модуль с ним («${gone.module.name}») удалён, подсветка ряда осталась.`);
+  }
+  return { project: out, notes };
+}
