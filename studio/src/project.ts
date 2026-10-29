@@ -300,7 +300,9 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   // до 1200 высотой (комоды, тумбы); с кухонными низами — как было
   // dp-2810 (28.10.2026, подвесная тумба ванной под накладную раковину): опорой шкафной столешницы служит и подвесной (навесной) корпус
   // до 1200 высотой; опоры — корпуса с самым высоким верхом (столешница ложится на них, а не на низкую тумбу рядом)
-  const slabAll=p.modules.filter(a=>(!(a.y??0)||a.module.hanging)&&!a.module.kupe&&!a.module.worktop&&!a.module.kitchen&&a.module.height<=1200),slabTop=Math.max(...slabAll.map(a=>(a.y??0)+a.module.height));
+  // критик 29.10 (п.6): опора — любой корпус под столешницей по верху, в т.ч. комод, поднятый «От пола» (подвесная тумба без флага
+  // навесного): верх не выше 1200 от пола; на полу и навесные — как было
+  const slabAll=p.modules.filter(a=>(!(a.y??0)||a.module.hanging||(a.y??0)+a.module.height<=1200)&&!a.module.kupe&&!a.module.worktop&&!a.module.kitchen&&a.module.height<=1200),slabTop=Math.max(...slabAll.map(a=>(a.y??0)+a.module.height));
   const slabSupports=slabAll.filter(a=>Math.abs((a.y??0)+a.module.height-slabTop)<1);
   const slab=!!source.worktop&&!kitchenBases.length&&slabSupports.length>0;
   if(slab){module.worktop={...module.worktop!,material:'ldsp',thickness:32};module.height=32;}
