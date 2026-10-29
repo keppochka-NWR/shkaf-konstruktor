@@ -313,7 +313,7 @@ export type MillShape = {
   /** Нижняя полоса под пазы (№112): нижняя сторона контура поднята на bottomBand от низа фасада. */
   bottomBand?: number;
   /** Прямые пазы: вертикальные/горизонтальные на отступах от кромок (объединены, пересечения честные) или диагональные с шагом. */
-  lines?: { w: number; d: number; v?: { from: 'left' | 'right'; at: number[] }[]; h?: { from: 'bottom' | 'top'; at: number[]; between?: boolean }[]; diag?: { pitch: number; angle: number } };
+  lines?: { w: number; d: number; v?: { from: 'left' | 'right'; at: number[] }[]; h?: { from: 'bottom' | 'top'; at: number[]; between?: boolean }[]; diag?: { pitch: number; angle: number; compose?: 'triangle' } };
   /** Полоса-арка полукругом, открытая книзу: отступ от кромки, ширина полосы, глубина (№98–100). */
   archBand?: { outer: number; width: number; d: number };
   /** Сетка V-пазов: ромб cellW×cellH, глубина d, угол фрезы (V90, V120). */
@@ -341,7 +341,9 @@ export type MillShape = {
   slots?: { dir: 'v' | 'h'; pitch: number; w: number; d: number; zone: 'all' | 'bottom' | 'ends' | 'side' | 'band'; shape?: 'round' | 'v'; inArch?: boolean };
   /** Рельеф по всему полотну: shape — сечение паза; module/grooves — повторяющийся модуль из пазов своей глубины (доля d) и формы;
    *  band — только полоса из count волн от левой кромки (№111). */
-  relief?: { dir: 'v' | 'h' | 'diamond'; pitch: number; w: number; d: number; shape?: GrooveShape; module?: number; grooves?: [number, number, number, GrooveShape][]; band?: { from: 'left'; count: number } };
+  relief?: { dir: 'v' | 'h' | 'diamond' | 'chevron'; pitch: number; w: number; d: number; shape?: GrooveShape; module?: number; grooves?: [number, number, number, GrooveShape][]; band?: { from: 'left'; count: number };
+    /** «Ёлочка» (№83): излом зигзага через run мм по ширине, подъём rise мм на излом (число изломов — по ширине фасада). */
+    chevron?: { run: number; rise: number } };
   /** Подъём арки — доля ширины проёма, не больше доли высоты (арка подстраивается под низкий ящик). */
   archRise?: number; shoulder?: number;
 };
@@ -399,6 +401,42 @@ function archRises(W: number, H: number, s: MillShape): [number, number] {
   return [topA ? r : 0, botA ? r : 0];
 }
 
+/** «Ёлочка» (№83, паспорт PDF): пазы зигзагом шагом pitch по высоте. Ось паза — ломаная через n+1 узлов по ширине поля
+ *  (n ≈ ширина / run, не меньше 2), узлы попеременно выше и ниже на rise/2; полоса паза — ось ± полуширина по вертикали
+ *  (поперёк паза ширина w). У верхней и нижней кромки ось отсекается полем — паз кончается срезом в поле, не уходит за кромку. */
+function chevronGrooves(w: number, h: number, zf: number, r: number, t: number, rv: NonNullable<MillShape['relief']>): Feature[] {
+  const out: Feature[] = [], d = Math.min(rv.d, t / 3), gw = Math.min(rv.w, rv.pitch - 2), ch = rv.chevron ?? { run: 80, rise: 30 };
+  const m = r + 3, x0 = -w / 2 + m, x1 = w / 2 - m, y0 = -h / 2 + m, y1 = h / 2 - m;
+  if (x1 - x0 < 6 * gw || y1 - y0 < 4 * gw) return out;
+  const n = Math.max(2, Math.round((x1 - x0) / ch.run)), run = (x1 - x0) / n, rise = (ch.rise * run) / ch.run;
+  const hv = (gw / 2) * Math.hypot(1, rise / run), down = grooveDown(zf, gw, d, 'round'), kMax = Math.ceil((h / 2 + rise) / rv.pitch);
+  for (let k = -kMax; k <= kMax; k++) {
+    // концы и срезы — с разбросом в доли мм: точки разных дыр на одной прямой ломают earcut
+    const c = k * rv.pitch, ja = 0.3 + 0.4 * hash01(k, 7), jb = 0.3 + 0.4 * hash01(k, 11), lo = y0 + hv + ja, hi = y1 - hv - jb;
+    const pts: P[] = [];
+    for (let i = 0; i <= n; i++) pts.push([i === 0 ? x0 + ja : i === n ? x1 - jb : x0 + i * run, c + ((i % 2 ? -1 : 1) * rise) / 2]);
+    const runs: P[][] = [];
+    let cur: P[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (i > 0) {
+        const a = pts[i - 1], cuts: [number, P][] = [];
+        for (const yb of [lo, hi]) if ((a[1] - yb) * (p[1] - yb) < 0) { const u = (yb - a[1]) / (p[1] - a[1]); cuts.push([u, [a[0] + (p[0] - a[0]) * u, yb]]); }
+        cuts.sort((u, v) => u[0] - v[0]);
+        for (const [, q] of cuts) { if (cur.length) { cur.push(q); runs.push(cur); cur = []; } else cur = [q]; }
+      }
+      if (p[1] >= lo && p[1] <= hi) cur.push(p);
+    }
+    if (cur.length) runs.push(cur);
+    for (const ru of runs) {
+      if (ru.length < 2 || ru[ru.length - 1][0] - ru[0][0] < 2 * gw) continue;
+      const poly = simplifyPoly([...ru.map(([x, y]) => [x, y - hv] as P), ...[...ru].reverse().map(([x, y]) => [x, y + hv] as P)]);
+      if (poly.length >= 4) out.push({ c: poly, path: down });
+    }
+  }
+  return out;
+}
+
 /** Раскладка рисунка под габарит w×h×t. Рамка постоянной ширины; если филёнка не помещается (меньше GRILLE.minPanel),
  *  фасад остаётся с наружным профилем и без рисунка — с пометкой в notes. */
 export function layoutFacade(w: number, h: number, t: number, s: MillShape, open: Opening = 'solid'): FacadeLayout {
@@ -410,6 +448,7 @@ export function layoutFacade(w: number, h: number, t: number, s: MillShape, open
   const L: FacadeLayout = { w, h, t, root, bars: [], frame: null, opening: null, panelZ: null, notes };
   if (s.kind === 'profile') return layoutProfile(L, s, open, r);
   if (s.kind === 'lattice' && s.lattice) return layoutLattice(L, s.lattice, r);
+  if (s.kind === 'relief' && s.relief?.dir === 'chevron') { root.kids!.push(...chevronGrooves(w, h, zf, r, t, s.relief)); if (!root.kids!.length) notes.push('Ёлочка не помещается в габарит — гладкое полотно'); return L; }
   if (s.kind === 'relief' && s.relief && s.relief.dir !== 'diamond') {
     const rv = s.relief, U = rv.dir === 'v' ? w : h, dmax = Math.min(rv.d, t / 3), grooves: [number, number][] = [], gd: number[] = [], gs: GrooveShape[] = [];
     let gw = Math.min(rv.w, rv.pitch - 2);
@@ -548,6 +587,23 @@ export function rectUnion(rs: { x0: number; y0: number; x1: number; y1: number }
 function pointInPoly(p: P, c: P[]): boolean { let inside = false; for (let i = 0, j = c.length - 1; i < c.length; j = i++) { const [xi, yi] = c[i], [xj, yj] = c[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside; } return inside; }
 /** Детерминированное «случайное» число 0..1 по индексам (разброс в доли мм против вырожденной триангуляции). */
 function hash01(i: number, j: number): number { const s = Math.sin(i * 12.9898 + j * 78.233 + 0.5) * 43758.5453; return s - Math.floor(s); }
+/** Полуплоскость nx·x + ny·y ≤ c. */
+type HalfPlane = [number, number, number];
+/** Паз-«капсула» по прямой (px, py) + t·(dx, dy), |t| ≤ L, отсечённой полуплоскостями (Лиан — Барски); концы — полукругом радиуса hw.
+ *  null — короче minLen или мимо зоны. */
+function capsule(px: number, py: number, dx: number, dy: number, L: number, hw: number, minLen: number, zone: HalfPlane[], seg = 6): P[] | null {
+  let t0 = -L, t1 = L;
+  for (const [nx, ny, c] of zone) {
+    const p = nx * dx + ny * dy, q = c - (nx * px + ny * py);
+    if (Math.abs(p) < 1e-12) { if (q < 0) return null; continue; }
+    const r = q / p; if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r);
+  }
+  if (t1 - t0 < minLen) return null;
+  const ax = px + dx * t0, ay = py + dy * t0, bx = px + dx * t1, by = py + dy * t1, base = Math.atan2(dy, dx), c: P[] = [];
+  for (let k = 0; k <= seg; k++) { const a = base - Math.PI / 2 + (Math.PI * k) / seg; c.push([bx + hw * Math.cos(a), by + hw * Math.sin(a)]); }
+  for (let k = 0; k <= seg; k++) { const a = base + Math.PI / 2 + (Math.PI * k) / seg; c.push([ax + hw * Math.cos(a), ay + hw * Math.sin(a)]); }
+  return c;
+}
 /** Без совпадающих (ближе 0,001 мм) и лежащих на одной прямой точек: такие точки дают нулевые треугольники в крышках. */
 function simplifyPoly(c: P[]): P[] {
   let out = c.filter((p, i) => { const q = c[(i + 1) % c.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-3; });
@@ -578,27 +634,33 @@ function clipRect(poly: P[], x0: number, y0: number, x1: number, y1: number): P[
 function lineFeatures(F: { x0: number; y0: number; x1: number; y1: number }, E: { x0: number; y0: number; x1: number; y1: number }, z: number, ln: NonNullable<MillShape['lines']>): Feature[] {
   const w = ln.w, down = grooveDown(z, w, ln.d, 'round'), out: Feature[] = [];
   if (ln.diag) {
-    const a = (ln.diag.angle * Math.PI) / 180, dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx, L = Math.hypot(F.x1 - F.x0, F.y1 - F.y0);
-    const cx = (F.x0 + F.x1) / 2, cy = (F.y0 + F.y1) / 2, n = Math.ceil(L / ln.diag.pitch);
-    // паз — след фрезы: ось отсекается полем (с запасом на полуширину), концы — полукругом радиуса фрезы (у кромки паз
-    // заканчивается в поле, а не уходит за кромку — упрощение; плоские срезы у края дают в крышке лица вырожденную триангуляцию)
-    const hw = w / 2;
-    for (let i = -n; i <= n; i++) {
-      // концы — с разбросом в доли мм: крайние точки дыр на одной прямой ломают earcut
-      const j = 0.5 + 0.4 * hash01(i, 3), X0 = F.x0 + hw + j, Y0 = F.y0 + hw + j, X1 = F.x1 - hw - j, Y1 = F.y1 - hw - j;
-      const o = i * ln.diag.pitch, px = cx + nx * o, py = cy + ny * o;
-      // Лиан — Барски: отрезок оси [-L, L] внутри прямоугольника
-      let t0 = -L, t1 = L;
-      for (const [p, q] of [[-dx, px - X0], [dx, X1 - px], [-dy, py - Y0], [dy, Y1 - py]] as [number, number][]) {
-        if (Math.abs(p) < 1e-12) { if (q < 0) { t0 = 1; t1 = 0; } continue; }
-        const r = q / p; if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r);
-      }
-      if (t1 - t0 < w * 2) continue;
-      const ax = px + dx * t0, ay = py + dy * t0, bx = px + dx * t1, by = py + dy * t1, base = Math.atan2(dy, dx), c: P[] = [], seg = 6;
-      for (let k = 0; k <= seg; k++) { const a = base - Math.PI / 2 + (Math.PI * k) / seg; c.push([bx + hw * Math.cos(a), by + hw * Math.sin(a)]); }
-      for (let k = 0; k <= seg; k++) { const a = base + Math.PI / 2 + (Math.PI * k) / seg; c.push([ax + hw * Math.cos(a), ay + hw * Math.sin(a)]); }
-      out.push({ c, path: down });
+    const L = 2 * Math.hypot(F.x1 - F.x0, F.y1 - F.y0), hw = w / 2;
+    // паз — след фрезы: ось отсекается полем (с запасом на полуширину) и полуплоскостями зоны, концы — полукругом радиуса фрезы
+    // (у кромки паз заканчивается в поле, а не уходит за кромку — упрощение; плоские срезы у края дают в крышке лица вырожденную
+    // триангуляцию). Концы — с разбросом в доли мм: крайние точки дыр на одной прямой ломают earcut.
+    const groove = (key: number, px: number, py: number, dx: number, dy: number, zone: HalfPlane[] = [], seg = 6) => {
+      const j = 0.5 + 0.4 * hash01(key, 3), X0 = F.x0 + hw + j, Y0 = F.y0 + hw + j, X1 = F.x1 - hw - j, Y1 = F.y1 - hw - j;
+      const jz = 0.3 + 0.4 * hash01(key, 5);
+      const c = capsule(px, py, dx, dy, L, hw, w * 2, [[-1, 0, -X0], [1, 0, X1], [0, -1, -Y0], [0, 1, Y1], ...zone.map(([nx, ny, cc]): HalfPlane => [nx, ny, cc - jz])], seg);
+      if (c) out.push({ c, path: down });
+      return !!c;
+    };
+    if (ln.diag.compose === 'triangle') {
+      // №88 по чертежу паспорта: главная диагональ «/» из верхнего правого угла поля, под ней — пазы «/» шагом pitch; над ней —
+      // граница «\» из верхнего левого угла (сходятся посередине ширины): треугольник сверху — горизонтальные пазы, клин слева — «\».
+      // Пазы зон кончаются у граничного паза с перемычкой 1 мм (пересечения пазов в крышке лица не строим). Концы горизонталей лежат на
+      // диагоналях: торец — 7 сегментов (хорды не под 45°), иначе хорда торца ложится на прямую через торцы соседних пазов и earcut выворачивает треугольник.
+      const s = Math.SQRT1_2, p = ln.diag.pitch, gap = w + 1, T: P = [F.x1, F.y1], TL: P = [F.x0, F.y1], n = Math.ceil((F.x1 - F.x0 + F.y1 - F.y0) / p) + 1;
+      const nM: P = [s, -s], nW: P = [-s, -s], cM = nM[0] * T[0] + nM[1] * T[1], cW = nW[0] * TL[0] + nW[1] * TL[1];
+      const aboveMain: HalfPlane = [nM[0], nM[1], cM - gap], rightOfWedge: HalfPlane = [nW[0], nW[1], cW - gap];
+      for (let k = 0; k <= n; k++) groove(k, T[0] + nM[0] * k * p, T[1] + nM[1] * k * p, s, s);
+      for (let k = 0; k <= n; k++) groove(1000 + k, TL[0] + nW[0] * k * p, TL[1] + nW[1] * k * p, s, -s, [aboveMain]);
+      for (let k = 1; k <= n; k++) groove(2000 + k, (F.x0 + F.x1) / 2, F.y1 - k * p, 1, 0, [aboveMain, rightOfWedge], 7);
+      return out;
     }
+    const a = (ln.diag.angle * Math.PI) / 180, dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx;
+    const cx = (F.x0 + F.x1) / 2, cy = (F.y0 + F.y1) / 2, n = Math.ceil(L / 2 / ln.diag.pitch);
+    for (let i = -n; i <= n; i++) { const o = i * ln.diag.pitch; groove(i, cx + nx * o, cy + ny * o, dx, dy); }
     return out;
   }
   // отступы пазов — от кромок фасада E, полосы — в пределах поля F

@@ -63,7 +63,7 @@ export function passportShape(m: VMillingRow): { shape: MillShape; note: string 
   const P = PROVISIONAL, D = g.depthMm ?? 3, base = { edgeR: g.edgeR ?? P.edgeR, top: g.top ?? 'rect', bottom: g.bottom ?? 'rect', archRise: P.archRise, shoulder: P.shoulder } as const;
   const tag = [g.depthStated ? `глубина ${fmtRu(D)} мм` : `глубина ${fmtRu(D)} мм условно`, g.widthsEstimated ? 'часть ширин по чертежу' : ''].filter(Boolean).join(', ');
   const note = `${g.note} (паспорт PDF; ${tag})`;
-  if (g.kind === 'relief') return { shape: { kind: 'relief', ...base, relief: { dir: g.dir ?? 'v', pitch: g.pitch ?? g.module ?? 30, w: g.w ?? 10, d: D, ...(g.shape ? { shape: g.shape } : {}), ...(g.module ? { module: g.module, grooves: g.grooves } : {}), ...(g.band ? { band: g.band } : {}) } }, note };
+  if (g.kind === 'relief') return { shape: { kind: 'relief', ...base, relief: { dir: g.dir ?? 'v', pitch: g.pitch ?? g.module ?? 30, w: g.w ?? 10, d: D, ...(g.shape ? { shape: g.shape } : {}), ...(g.module ? { module: g.module, grooves: g.grooves } : {}), ...(g.band ? { band: g.band } : {}), ...(g.chevron ? { chevron: g.chevron } : {}) } }, note };
   if (g.kind === 'lattice') return { shape: { kind: 'lattice', ...base, lattice: { cellW: g.cellW ?? 34, cellH: g.cellH ?? 63, d: D, vAngle: g.vAngle ?? 90 } }, note };
   const gf = m.pp!.glass?.frame ?? g.glassProvisional;
   const shape: MillShape = {
