@@ -57,3 +57,51 @@ test('№88 «Диагональ»: главная диагональ из ве�
   }
   assert.equal(vernissageFacadePrice(V('88'), 596, 1796).perM2, 7580);
 });
+
+test('Эмаль по RAL: полный RAL Classic (216), поиск по коду и названию, подпись с названием в смете, цвет в 3D по каталогу', async () => {
+  const { RAL_CLASSIC, ralSearch, ralOf, ralValue, enamelColorLabel } = await import('../src/ralClassic');
+  const { vernissageColor, vernissageLabel } = await import('../src/facadesVernissage');
+  assert.equal(RAL_CLASSIC.length, 216);
+  assert.equal(new Set(RAL_CLASSIC.map((r) => r.code)).size, 216, 'коды без повторов');
+  assert.ok(RAL_CLASSIC.every((r) => /^#[0-9a-f]{6}$/.test(r.hex) && r.name.length > 2));
+  for (const g of '123456789') assert.ok(RAL_CLASSIC.some((r) => r.code[0] === g), `группа ${g}xxx`);
+  assert.equal(ralSearch('9003')[0].code, '9003');
+  assert.deepEqual(ralSearch('RAL 70').map((r) => r.code).slice(0, 3), ['7000', '7001', '7002']);
+  assert.ok(ralSearch('антрацит').some((r) => r.code === '7016'));
+  assert.ok(ralSearch('слоновая кость').length >= 2);
+  assert.equal(ralOf('ral9005')?.code, '9005');
+  assert.equal(ralValue(ralOf('9010')!), 'RAL 9010');
+  assert.equal(enamelColorLabel('RAL 9003'), 'RAL 9003 Сигнальный белый');
+  assert.equal(enamelColorLabel('NCS S 0502-Y'), 'NCS S 0502-Y', 'не RAL — как введено');
+  const v: VernissageFacade = { milling: '15', cover: 'enamel-matte', enamelColor: 'RAL 5015', thickness: 19 };
+  assert.equal(vernissageColor(v), 0x007cb0, 'цвет 3D — по каталогу RAL');
+  assert.match(vernissageLabel(v), /эмаль мат RAL 5015 Небесно-синий/);
+  // цена не зависит от цвета эмали
+  assert.equal(vernissageFacadePrice(v, 450, 716).total, vernissageFacadePrice({ ...v, enamelColor: 'RAL 9003' }, 450, 716).total);
+});
+
+test('Плёнка из каталога Вернисажа: у каждой плёнки ПВХ, Адилет и ПЭТ есть образец (текстура/цвет с сайта или условный цвет с пометкой)', async () => {
+  const { filmSwatch, filmCatalog, VERNISSAGE_FILMS, ADILET_FILMS, PET_DECORS } = await import('../src/facadesVernissage');
+  const { V_TEXTURES } = await import('../src/vernissageTextures');
+  const all = [...VERNISSAGE_FILMS.map((f) => ['film', f.name] as const), ...ADILET_FILMS.map((f) => ['adilet', f.name] as const), ...PET_DECORS.map((n) => ['pet', n] as const)];
+  assert.ok(all.length >= 260 + 500 + 13);
+  const kinds = { texture: 0, photo: 0, name: 0 };
+  for (const [cover, name] of all) {
+    const s = filmSwatch(cover, name);
+    assert.match(s.color, /^#[0-9a-f]{6}$/, `${name}: цвет`);
+    kinds[s.kind]++;
+    if (s.kind === 'texture') assert.ok(s.url && V_TEXTURES[name], `${name}: текстура`);
+  }
+  assert.equal(kinds.texture, Object.keys(V_TEXTURES).length);
+  assert.ok(kinds.photo >= 18 && kinds.name > 0);
+  // условный цвет по названию — правдоподобный: белые светлые, чёрные тёмные, мята зеленее серого
+  const lum = (h: string) => { const n = parseInt(h.slice(1), 16); return 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255); };
+  assert.ok(lum(filmSwatch('film', 'Лайн белый').color) > 200 && lum(filmSwatch('film', 'Шарли чёрный').color) < 70);
+  assert.ok(lum(filmSwatch('film', 'Дуб Галиано темный').color) < lum(filmSwatch('film', 'Дуб Галиано светлый').color));
+  const mint = parseInt(filmSwatch('film', 'Шарли эвкалипт').color.slice(1), 16);
+  assert.ok(((mint >> 8) & 255) > (mint >> 16), 'эвкалипт — зеленоватый');
+  // каталог в выборе — все плёнки категорий, разрешённых для фрезеровки (как в прайсе)
+  const cat = filmCatalog({ milling: '1', cover: 'film', film: 'Моно белый', thickness: 19 });
+  assert.equal(cat.length, VERNISSAGE_FILMS.length, 'у №1 (Стандарт) — все категории');
+  assert.equal(filmCatalog({ milling: '1', cover: 'adilet', film: ADILET_FILMS[0].name, thickness: 19 }).length, ADILET_FILMS.length);
+});
