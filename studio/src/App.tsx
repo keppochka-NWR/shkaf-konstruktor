@@ -54,6 +54,9 @@ import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
 import {orderCalculationNotice,withOrderCalculation,type OrderCalculation} from './priceModel';
 import {keepProjectCutouts} from './cutoutBinding';
+import {cutHost as cutHostOf} from './partIds';
+import {similarCutParts} from './cutoutCopy';
+import {applyDecorAll,deleteKeyTarget,deleteQuestion,removeModules,sectionRemoveApplies} from './editActions';
 import {fitUnderMansard} from './paletteBuild';
 import {keepRowPsu} from './kitchenUnderLightRow';
 import {NicheReadings} from './NicheReadings';
@@ -123,7 +126,7 @@ import {
 } from "./model";
 import { setAllHingeAngles, allHingeAngles } from "./model";
 import { moduleWeight, weightText, LDSP_DENSITY } from "./weight"; // вес изделия (решение Макса 26.10.2026) // интеграция 26.10: петли 155–165° всем дверям модуля = угол по створке
-import { setRodTiers, drawerFaceInset } from "./model"; // заказ 7437584: вешалка в два яруса, фасады ящиков в шкафу-купе
+import { setRodTiers, drawerFaceInset, rodClearanceWarnings } from "./model";// заказ 7437584: вешалка в два яруса, фасады ящиков в шкафу-купе
 import { Scene, type View } from "./Scene";
 import { ProjectDock, type OutputTab } from "./ProjectDock";
 import { KupePanel } from "./KupePanel";
@@ -385,6 +388,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const selectedFillingName=selectedDetail?.id.includes(':drawer:')?'Ящик '+(Number(selectedDetail.id.split(':drawer:')[1].split(':')[0])+1):selectedDetail?.id.includes(':pantograph:')?'Пантограф':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Штанга':selectedDetail?.id.includes(':shelf:')?'Полка '+(Number(selectedDetail.id.split(':shelf:')[1])+1):selectedDetail?.name;
   const removalLabel=selectedDetail?.id.includes(':drawer:')?'Удалить ящик':(selectedDetail?.role==='door'||selectedDetail?.id.endsWith(':facade'))?'Удалить выбранный фасад':selectedDetail?.id.includes(':pantograph:')?'Удалить пантограф':selectedDetail?.id.includes(':pullout:')?'Удалить тремпель':selectedDetail?.id.includes(':flange:')||selectedDetail?.id.endsWith(':rod')?'Удалить штангу':'Удалить полку';
   /* круг 3 критика 29.10: «Удалить» и Delete у выбранного ящика (его фасада) — весь ящик, как в заголовке плашки «Ящик N»; только фасад — «Снять фасад» */function removeSelected(){if(!selectedPart||!canRemove)return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,wholeDrawerPid(selectedPart.pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
+  /** «Да, удалить» на вопросе Delete: корпуса — одной правкой (одна отмена Ctrl+Z); отметки группы снимаются. */
+  function confirmDelete(){const ids=deleteAsk;setDeleteAsk(null);if(!ids)return;try{if(commitProject(removeModules(project,ids,!!onEmptyProject))){setGroupIds([]);setSelectedPart(null);}}catch(e){setError((e as Error).message);}}
   function removeSelectedFacade(){if(!selectedPart||!selectedPart.pid.endsWith(':facade'))return;try{if(commitProject(removePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}
   function nudgeSelected(delta:number){if(!selectedPart||!canRemove||selectedDetail?.role==='door')return;try{moveFilling(selectedPart.mid,selectedPart.sid,selectedPart.pid,delta);}catch(e){setError((e as Error).message);}}
   function copySelected(){if(!selectedPart)return;try{const result=duplicatePart(project,selectedPart.mid,selectedPart.sid,selectedPart.pid);if(commitProject(result.project)){setSelectedPart({...selectedPart,pid:result.partId});setDrawerIndex(result.partId.includes(':drawer:')?Number(result.partId.split(':drawer:')[1].split(':')[0]):null);setDrawerPreview(false);setMode('fill');}}catch(e){setError((e as Error).message);}}
@@ -534,7 +539,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     [search, setSearch] = useState("");
   const [facadePreview,setFacadePreview]=useState<{base:Project;next:Project}|null>(null);
   // окно «Вырезы детали» (фигурные детали 29.10.2026, CutoutEditor.tsx): корпус и деталь, с которой открыли
-  const [cutHost,setCutHost]=useState<{mid:string;pid:string}|null>(null);
+  const [cutHost,setCutHost]=useState<{mid:string;pid:string;copy?:boolean}|null>(null);
+  // Delete по корпусу (правка Макса 29.10): то же подтверждение, что «Удалить корпус» в меню правой кнопки — «Да, удалить / Отмена»
+  const [deleteAsk,setDeleteAsk]=useState<string[]|null>(null);
   const editingFacades=modal==='facade-editor';
   const sceneProject=editingFacades&&facadePreview?.base===project?facadePreview.next:project;
   useEffect(()=>{setFacadePreview(null);setModal(value=>value==='facade-editor'?null:value);},[project,active,stage]);
@@ -798,6 +805,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   useEffect(()=>{if(ctxMenu&&rmbTip)hideRmbTip();},[ctxMenu]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Правка любого корпуса по id (круговое меню работает и с неактивным корпусом). */
   /** Одно поле фасадов всем отмеченным модулям (окна «Материалы»/«Ручки» с «Отмеченная группа», круговое меню группы). Одна отмена. */
+  /** «Заменить у всех» в окне материалов: декор корпуса (applyDecorAll) или фасадов (поле группы) — всем корпусам проекта одной правкой. */
+  function replaceAll(target:'decor'|'facadeDecor'|'drawerFacadeDecor',value:string){
+    try{
+      if(target==='decor'){const r=applyDecorAll(project,value);if(r.changed.length&&!commitProject(r.project))return false;setNotice({title:'Заменить у всех',text:r.note});return true;}
+      const all=project.modules.map(a=>a.id),r=applyGroupFacade(project,all,target,value);if(r.changed.length&&!commitProject(r.project))return false;
+      const s=skippedNote(r.skipped);setNotice({title:'Заменить у всех',text:`${target==='facadeDecor'?'Декор фасадов':'Декор фасадов ящиков'} «${decorLabel(value)}» — заменён у ${r.changed.length} из ${all.length}.`+(s?' '+s:'')});return true;
+    }catch(e){setError((e as Error).message);return false;}
+  }
   function groupFacadeEdit(field:GroupFacadeField,value:string,label:string){
     try{const r=applyGroupFacade(project,liveGroupIds,field,value);if(r.changed.length&&!commitProject(r.project))return false;
       const s=skippedNote(r.skipped);setNotice({title:'Фасады выделенных',text:`${label} — применено к ${r.changed.length} из ${liveGroupIds.length}.`+(s?' '+s:'')});return true;}
@@ -846,6 +861,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const cutPid=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),canCut=!!pid&&cutAllowed(mod,cutPid);
     // решение Макса 29.10: «Вырез…» по правой кнопке на любой детали, где вырез возможен, — редактор сразу на этой детали, деталь выбрана
     const cutItem:RadialItem={id:'cutout',label:'Вырез…',icon:Scissors,disabled:!canCut,hint:canCut?'Вырез в этой детали: под плинтус, трубу, подоконник, розетку, кабель — прямоугольный или круглый, с привязкой от края':'Вырез не делается: '+cutRefusal(mod,cutPid),run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:cutPid});setCutHost({mid:a.id,pid:cutPid});}};
+    // перенос вырезов на схожие детали (правка Макса 29.10): у детали с вырезом — «Вырез на схожие…» (окно «Вырезы», раздел переноса открыт)
+    const cutCount=canCut?(mod.cutouts??[]).filter(x=>cutHostOf(mod,x)===cutPid).length:0,similarN=cutCount?similarCutParts(project,a.id,cutPid).length:0;
+    const cutCopy:RadialItem[]=cutCount?[{id:'cutout-copy',label:'Вырез на схожие…',icon:Copy,disabled:!similarN,hint:similarN?`Перенести или скопировать вырезы этой детали на схожие детали (${similarN}): тот же вид и размер, в этом и других корпусах`:'Схожих деталей нет: нужна деталь того же вида и размера',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:cutPid});setCutHost({mid:a.id,pid:cutPid,copy:true});}}]:[];
     const size=(key:'width'|'height'|'depth',label:string)=>({id:'size-'+key,label,icon:Ruler,hint:`Сейчас ${mod[key]} мм. Введите новое значение`,run:()=>{select();editDimension(label+' корпуса, мм',mod[key],v=>modifyAt(a.id,n=>{n[key]=v;}));}});
     const hinges:RadialItem={id:'hinges',label:'Петли',icon:Link2,hint:'Бренд петель этого корпуса. Цена меняется сразу',disabled:!mod.doors,children:(Object.keys(HINGE_BRANDS) as HingeBrand[]).map(k=>({id:'hinge-'+k,label:HINGE_BRANDS[k].label,icon:Link2,active:(mod.hingeBrand??'gtv')===k,hint:`${HINGE_BRANDS[k].note}`,run:()=>modifyAt(a.id,n=>{if(k==='gtv')delete n.hingeBrand;else n.hingeBrand=k;})}))};
     const opening:RadialItem={id:'opening',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием на фасад',disabled:!mod.doors,children:[
@@ -900,6 +918,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       ...(()=>{const turns=mod.worktop?[]:cornerTurns(project,a.id);if(!turns.length)return [];const other=active!==a.id&&project.modules.some(x=>x.id===active)?project.modules.find(x=>x.id===active):undefined;
         return [{id:'around-corner',label:'Продолжить ряд за угол',icon:CornerDownRight,hint:'Крайний модуль ряда: следующий — на соседнюю стену от угла, за глубиной этого ряда',children:turns.flatMap(t=>[{id:'corner-copy-'+t.wall,label:`Такой же ${t.label}`,icon:Copy,hint:`Копия «${mod.name}» на ${WALL_LABEL[t.wall]} стене от угла, фасадом в комнату`,run:()=>aroundCorner(a.id,t)},...(other?[{id:'corner-move-'+t.wall,label:`Перенести «${other.module.name}»`,icon:CornerDownRight,hint:`Выбранный модуль — на ${WALL_LABEL[t.wall]} стену от угла`,run:()=>aroundCorner(a.id,t,other.id)}]:[])])} as RadialItem];})(),
       quickMenuApplies(mod)?upperItem(quickOps):{id:'upper',label:'Антресоль',icon:ArrowUpToLine,hint:'Корпус сверху той же ширины',run:quickOps.addUpper},
+      // «Удаление секций через правую кнопку мыши» (правка Макса 29.10): секция, по которой щёлкнули, — та же операция, что «Удалить секцию» в панели
+      ...(sectionRemoveApplies(mod)?[{id:'section-remove',label:`Удалить секцию ${sidx+1}`,icon:Minus,danger:true,hint:'Секция с наполнением; соседняя станет шире на её ширину. Вырезы на её деталях снимаются с сообщением. Вернуть — Ctrl+Z',run:()=>{try{commitProject(removeSection(project,a.id,c.sid));}catch(e){setError((e as Error).message);}}} as RadialItem]:[]),
       {id:'delete',label:'Удалить',icon:Trash,danger:true,disabled:project.modules.length===1&&!onEmptyProject,hint:'Убрать корпус. Вернуть — Ctrl+Z',run:()=>{commitProject({...project,modules:project.modules.filter(x=>x.id!==a.id)});}},
     ];
     out.ring=bodyRing;
@@ -931,9 +951,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');}} as RadialItem});
     if(/:shelf:\d+$/.test(pid)){
       const j=Number(pid.split(':shelf:')[1]),isFixed=!!sec.fixed?.includes(j),p=part('Полка');
-      return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},cutItem,p.params,body,p.remove]};
+      return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},cutItem,...cutCopy,p.params,body,p.remove]};
     }
-    if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:facadeMenu([editFacade,cutItem])};
+    if(/^kd:\d+:facade$/.test(pid))return {title:'Фасад ящика',subtitle:mod.name,items:facadeMenu([editFacade,cutItem,...cutCopy])};
     if(pid.includes(':drawer:')){
       const j=Number(pid.split(':drawer:')[1].split(':')[0]),cfg=drawerConfig(mod,sec,j),cur=slideSystem(cfg),p=part('Ящик');
       const slideItem=(id:string):RadialItem=>{const s=SLIDE_SYSTEMS.find(x=>x.id===id)!,q=slidePrice({slide:s.slide,operation:s.motion,brand:s.brand,length:cfg.length});return {id:'slide-'+id,label:s.slide==='ball'?SLIDE_MOTIONS[s.motion].replace(/^./,ch=>ch.toUpperCase()):SLIDE_BRANDS[s.brand]+(s.motion==='push'?' · push':' · доводчик'),icon:s.motion==='push'?MousePointerClick:Spline,active:cur.id===id,hint:s.label+(q.price===null?' · цена требует уточнения':''),run:()=>modifyAt(a.id,n=>{const ns=n.sections.find(x=>x.id===c.sid)!;ns.drawerConfigs=Array.from({length:ns.drawers},(_,k)=>k===j?withSlideSystem(n,ns,{...drawerConfig(n,ns,k)},id):{...drawerConfig(n,ns,k)});})};};
@@ -944,7 +964,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         hint:capOn?'Ящики без полки над ними: полку уберут, ящики останутся на месте':'Поставить полку над ящиками; ящики до крыши опустятся под неё',run:()=>{setDrawerCapAt(a.id,c.sid,capOn?'off':'on');}};
       const drawerItems:RadialItem[]=[slides,{id:'drawer-handle',label:'Ручка',icon:GripHorizontal,hint:'Ручка этого ящика',disabled:!!cfg.noFacade||!!cfg.mesh,run:()=>{setActive(a.id);setHandleFace(`${c.sid}:drawer:${j}:facade`);setModal('handles');}},capItem,...drawerQuickItems(mod,c.sid,quickOps),p.up,p.down,p.copy,p.params,{...p.remove,label:'Удалить ящик',hint:'Ящик целиком: короб, фасад, направляющие. Вернуть — Ctrl+Z',run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,wholeDrawerPid(pid))))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}];
       return {title:'Ящик '+(j+1),subtitle:mod.name+' · '+cur.label,items:pid.endsWith(':facade')?
-        [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps),cutItem]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,...(canCut?[cutItem]:[]),body]};
+        [...facadeMenu([editFacade,drawerItems[1],...drawerQuickItems(mod,c.sid,quickOps),cutItem,...cutCopy]),{id:'drawer',label:'Ящик',icon:Archive,hint:'Направляющие и положение ящика',children:drawerItems.filter(item=>item.id!=='drawer-handle'&&item.id!=='drawer-mount'&&item.id!=='drawer-even')}]:[...drawerItems,...(canCut?[cutItem,...cutCopy]:[]),body]};
     }
     if(pid.includes(':door:')||/:(hingecup|hingearm|hingeplate):/.test(pid)||pid.includes(':handle:')){
       const doorId=pid.replace(/:(hingecup|hingearm|hingeplate|handle):/,':door:').replace(/(:door:\d+):\d+$/,'$1'),p={...part('Фасад')};
@@ -971,7 +991,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         {id:'handle-pos-all',label:'Для всех фасадов модуля',icon:Layers,hint:`Расположение «${HANDLE_POS_LABEL[curPos]}» — всем распашным фасадам этого модуля`,run:()=>modifyAt(a.id,n=>{setModuleHandlePos(n,curPos);})},
       ]};
       return {title:'Фасад',subtitle:mod.name,items:[...facadeMenu([editFacade,doorHandle,
-        hinges,doorOpening,cutItem,...doorQuickItems(mod,c.sid,quickOps),{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
+        hinges,doorOpening,cutItem,...cutCopy,...doorQuickItems(mod,c.sid,quickOps),{id:'facade-decor',label:'Цвет',icon:Palette,hint:'Декор фасадов: '+mod.facadeDecor,run:()=>{setActive(a.id);setMaterialTarget('facadeDecor');setModal('materials');}},
         {id:'doors-toggle',label:openDoors?'Закрыть створки':'Открыть створки',icon:openDoors?DoorClosed:DoorOpen,hint:'Только вид: распахнуть створки на экране, чтобы показать, что внутри. Настройка фасада — «Редактировать фасад»',run:()=>setOpenDoors(o=>!o)},
         {...p.params,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid:doorId});setTab('section');}},body,
         {...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,doorId)))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]),...groupItem]};
@@ -989,7 +1009,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         return {title:info.partial?`Перегородка ${Math.round(info.from)}–${Math.round(info.to)}`:'Перегородка',subtitle:mod.name,items:[
           {id:'divider-full',label:'Во всю высоту',icon:Columns2,active:!info.partial,hint:'От дна до крыши, как раньше',run:()=>modifyAt(a.id,n=>{setPartialDivider(n,dsid,null);})},
           {id:'divider-partial',label:'Частичная…',icon:Ruler,active:info.partial,hint:'«От» и «до» в мм от пола. Над и под перегородкой полки — во всю ширину двух секций',run:askRange},
-          pick('lo'),pick('hi'),cutItem,
+          pick('lo'),pick('hi'),cutItem,...cutCopy,
           {...p.params,hint:'Перегородки секции — справа, в «Наполнении»'},body]};
       }
     }
@@ -997,7 +1017,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const p=part('Штанга');
       return {title:'Штанга',subtitle:mod.name,items:[p.up,p.down,p.params,body,{...p.remove,run:()=>{try{if(commitProject(removePart(project,a.id,c.sid,c.sid+':rod')))setSelectedPart(null);}catch(e){setError((e as Error).message);}}}]};
     }
-    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,...groupItem,body,...(canCut?[cutItem]:[])]};
+    return {title:mod.name,subtitle:`${mod.width} × ${mod.height} × ${mod.depth} · секция ${sidx+1}`,items:[facades,...groupItem,body,...(canCut?[cutItem,...cutCopy]:[])]};
   }
   // Папка клиента: новый проект сразу пишется в браузер под своим ключом, а вкладка получает цену без ожидания первой правки.
   useEffect(()=>{
@@ -1033,6 +1053,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented || editsText(e.target)) return;
+      // открыт вопрос «Удалить корпус?»: Esc — отмена; Enter — кнопка «Да, удалить» (в фокусе); остальные клавиши не действуют
+      if(deleteAsk){if(e.key==='Escape'){e.preventDefault();setDeleteAsk(null);}return;}
       const command=historyShortcut(e);
       if(presentation){
         if(e.key==='Escape'){e.preventDefault();changePresentation(false);}
@@ -1041,7 +1063,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       }
       if(command){e.preventDefault();command==='undo'?undo():redo();return;}
       if(direct||modal)return;
-      if(e.key==='Delete'&&!modal&&canRemove){e.preventDefault();removeSelected();}
+      // Delete (правка Макса 29.10: «удаление шкафов по нажатию на Delete»): выбранная деталь — сразу (ящик — целиком), корпус или
+      // отмеченные Ctrl+щелчком корпуса — через «Да, удалить / Отмена», как «Удалить корпус» в меню правой кнопки (решение 19.10)
+      if(e.key==='Delete'&&!ctxMenu&&!gapMenu&&!lightMode&&!cutHost&&!presentation){
+        const t=deleteKeyTarget({removablePart:!!canRemove,groupIds:liveGroupIds,activeId:project.modules.length?placed.id:undefined,deselected,environment:!!(selectedOpening||selectedObstacle||selectedFixture||environmentSelection)});
+        if(t?.kind==='part'){e.preventDefault();removeSelected();}
+        else if(t?.kind==='modules'){e.preventDefault();setDeleteAsk(t.ids);}
+      }
       if (e.key === "Escape") {escapeStep(e);return;}
       // W/A/S/D/E — виды сцены (Q — вспомогательная линия в Scene, решение Макса 29.10.2026) (п.28 волны 22.10); в полях ввода и списках не срабатывают
       const v=viewShortcut(e);
@@ -2143,6 +2171,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   <div className="kupe-chips" role="group" aria-label="Выдвижные тремпели в секции">{[0,1,2,3].map(n=><button key={n} type="button" aria-pressed={(s.pullouts??0)===n} onClick={()=>modifySection(a=>{if(n)a.pullouts=n;else delete a.pullouts;})}>{n?n:'нет'}</button>)}</div>
                 </div>
                 {(s.rod||s.pantograph)&&<NumberField label="Высота штанги от дна" selected={selectedPart?.pid===(s.pantograph?s.id+':pantograph:rod':s.id+':rod')} onSelect={()=>{setSelectedPart({mid:placed.id,sid:s.id,pid:s.pantograph?s.id+':pantograph:rod':s.id+':rod'});setDrawerIndex(null);setDrawerPreview(false);setMode('fill');setOpenDoors(true);}} value={Math.round((parts(m).find(p=>p.id===s.id+':rod'||p.id===s.id+':pantograph:rod')?.position[1]??b.bottom)-b.bottom)} min={100} max={b.top-b.bottom-50} onChange={v=>modifySection(a=>a.rodAt=v/(b.top-b.bottom))}/>}
+                {/* правка Макса 29.10: штанга ставится и без нормы места под ней — предупреждение, не отказ */}
+                {s.rod&&rodClearanceWarnings(m).filter(w=>w.startsWith(`Секция ${idx+1}:`)).map(w=><p key={w} className="field-note" role="status" data-testid="rod-clearance-warning">⚠ {w.replace(/^Секция \d+: /,'')}</p>)}
 </SettingsSection>
 <SettingsSection title="Опоры">                {(placed.y??0)>0&&!m.feet&&quickMenuApplies(m)?<><p className="field-note" role="status" data-testid="base-hanging">{m.hanging?<><b>Навесной (поднят от пола)</b> — низ на {Math.round(placed.y??0)} мм от пола, на двух навесах; цоколя и ножек нет.</>:<>Корпус над полом (низ на {Math.round(placed.y??0)} мм): цоколя и ножек нет{plinth(m)>0?' — сейчас под ним цоколь '+plinth(m)+' мм.':'.'}</>}</p>{plinth(m)>0&&<button className="outline full" onClick={()=>modify(n=>{delete n.feet;n.plinthHeight=0;})}>Убрать цоколь · дно внизу корпуса</button>}</>:<>
                 <label className="hardware-field">Основание<select aria-label="Основание корпуса" value={m.feet?'feet':plinth(m)===0?'none':'plinth'} onChange={e=>modify(n=>{if(e.target.value==='feet'){n.feet={height:18};delete n.plinthRecess;}else if(e.target.value==='none'){delete n.feet;n.plinthHeight=0;delete n.plinthRecess;}else{delete n.feet;if(plinth(n)===0)n.plinthHeight=RULES.plinth;}})}><option value="plinth">Цоколь</option><option value="none">Без цоколя (дно на полу)</option><option value="feet">Ножки (боковины на ножках)</option></select></label>
@@ -2400,7 +2430,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </SafeBoundary></aside>
       </WorkspacePanels>
       {!presentation&&<SafeBoundary label="Нижняя панель" resetKey={project}><ProjectDock project={project} commit={commitProject} inspect={inspectPart} warnings={placementWarnings.length} onWarnings={()=>{setRoomPlan(true);setTab("room");}} openParts={()=>setModal("parts")} onLayout={()=>setFit(f=>f+1)} openOutput={t=>{if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab(t);setModal("output");}}/></SafeBoundary>}
-      {cutHost&&!presentation&&<CutoutEditor key={cutHost.mid+cutHost.pid} project={project} mid={cutHost.mid} pid={cutHost.pid} commit={commitProject} close={()=>setCutHost(null)}/>}
+      {cutHost&&!presentation&&<CutoutEditor key={cutHost.mid+cutHost.pid} project={project} mid={cutHost.mid} pid={cutHost.pid} commit={commitProject} close={()=>setCutHost(null)} copyOpen={cutHost.copy}/>}
+      {deleteAsk&&!presentation&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setDeleteAsk(null);}}>
+        <div className="modal delete-ask" role="dialog" aria-modal="true" aria-labelledby="delete-ask-title" data-testid="delete-ask">
+          <div className="modal-head"><div><span className="eyebrow">Удаление</span><h2 id="delete-ask-title">{deleteQuestion(project,deleteAsk)}</h2></div></div>
+          <p className="field-note" role="note">Вместе с наполнением и фасадами. Вернуть — Ctrl+Z. Enter — удалить, Esc — отмена.</p>
+          <div className="cut-actions"><button autoFocus className="primary" onClick={confirmDelete}>Да, удалить</button><button className="outline" onClick={()=>setDeleteAsk(null)}>Отмена</button></div>
+        </div></div>}
       {modal && modal!=="facade-editor" && (
         <div
           className="modal-backdrop"
@@ -2455,7 +2491,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               /></SafeBoundary>
             ) : modal === "materials" ? (
               <>
-                <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label><p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p>
+                <p className="field-note">Материал: {materialTarget==='decor'?'корпуса':materialTarget==='facadeDecor'?'распашных фасадов':'фасадов ящиков'}.</p><label className="hardware-field">Применить материал<select aria-label="К каким корпусам применить материал" value={materialScope} onChange={e=>setMaterialScope(e.target.value as typeof materialScope)}><option value="active">Выбранный корпус: {m.name}</option><option value="group" disabled={!liveGroupIds.length}>Отмеченная группа ({liveGroupIds.length})</option><option value="all">Все корпуса проекта ({project.modules.length})</option></select></label>{project.modules.length>1&&<label className="hardware-field"><span><input type="checkbox" aria-label="Заменить у всех" checked={materialScope==='all'} onChange={e=>setMaterialScope(e.target.checked?'all':'active')}/> Заменить у всех ({project.modules.length}) — {materialTarget==='decor'?'каркасы':'фасады'} всех корпусов проекта</span></label>}<p className="field-note">Меняется только указанный выше материал. Группу можно отметить в списке корпусов, в разделе «Двигать группу».</p>
                 <label className="search">
                   <Search size={18} />
                   <input
@@ -2478,7 +2514,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                         onClick={() => {
                           if(materialScope==='group'&&!liveGroupIds.length){setError("Сначала отметьте корпуса в группе.");return;}
                           // группа + фасады: только к модулям с такими фасадами, остальные — «не применено: причина» (groupFacades.ts)
-                          const ok=materialScope==='active'?modify((n) => (n[materialTarget] = c.n)):materialScope==='group'&&materialTarget!=='decor'?groupFacadeEdit(materialTarget,c.n,(materialTarget==='facadeDecor'?'Декор фасадов: ':'Декор фасадов ящиков: ')+decorLabel(c.n)):commitProject({...project,modules:project.modules.map(a=>materialScope==='all'||liveGroupIds.includes(a.id)?({...a,module:{...a.module,[materialTarget]:c.n}}):a)});
+                          // «Заменить у всех» (правка Макса 29.10): всем корпусам проекта, как правка по одному; неподходящие — с причиной, одна отмена
+                          const ok=materialScope==='active'?modify((n) => (n[materialTarget] = c.n)):materialScope==='all'?replaceAll(materialTarget,c.n):materialScope==='group'&&materialTarget!=='decor'?groupFacadeEdit(materialTarget,c.n,(materialTarget==='facadeDecor'?'Декор фасадов: ':'Декор фасадов ящиков: ')+decorLabel(c.n)):commitProject({...project,modules:project.modules.map(a=>liveGroupIds.includes(a.id)?({...a,module:{...a.module,[materialTarget]:c.n}}):a)});
                           if(!ok)return;
                           setMaterialScope("active");
                           setModal(null);
