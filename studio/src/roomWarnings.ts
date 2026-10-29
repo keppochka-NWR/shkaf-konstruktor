@@ -4,7 +4,7 @@ import {environmentChecks} from './environmentChecks';
 import {ceilingClearance,nicheSize} from './measurement';
 import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
-import {parts,RULES,facadeTop,hasDrawerCap,isDrawerModule} from './model';
+import {parts,RULES,facadeTop,hasDrawerCap,isDrawerModule,rodClearanceWarnings} from './model';
 import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
 import {rawHangerSeats,rawKitchen,RAW_HANGER_DROP} from './rawModule';
 import {cutoutWarnings,mansardWarnings} from './shapes';
@@ -77,7 +77,13 @@ export function roomWarnings(project:Project){
       if(actual>limit+.1)warnings.push({moduleId:edge.a.id,kind:'niche-'+size,message:`Ниша: ${label.toLocaleLowerCase('ru')} мебели ${Math.round(actual*10)/10} мм превышает допустимые ${limit} мм после вычетов СТП. Проверьте состав композиции и замер. Учтены закрытые фасады, ручки и промежутки между корпусами.`});
     }
   }
-  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project),...drawerGapWarnings(project)];
+  return [...warnings,...sinkChecks(project),...dishwasherServiceWarnings(project),...shapeWarnings(project),...drawerGapWarnings(project),...rodWarnings(project)];
+}
+/** Штанга без нормы места под одеждой — предупреждение, не ошибка (правка Макса 29.10: штангу ставить независимо от места под ней). */
+export function rodWarnings(project:Project):RoomWarning[]{
+  const out:RoomWarning[]=[];
+  for(const a of project.modules)for(const message of rodClearanceWarnings(a.module))out.push({moduleId:a.id,kind:'rod-clearance',message:`«${a.module.name}»: ${message}`});
+  return out;
 }
 /** Щель между фасадами ящиков секции больше зазора фасадов (критик 29.10, п.5: после правок высот оставалась щель 34 мм без
  *  предупреждения). Правки фасада/короба смыкают ящики сами (editDrawerConfig); здесь — разрыв, заданный положением ящика. */
