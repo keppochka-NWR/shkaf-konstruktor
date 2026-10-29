@@ -13,6 +13,9 @@
 //  F. B: «Комод» 800×1000×550, вырез на фасаде верхнего ящика → щелчок по нижнему ящику, «Удалить ящик целиком» — вырез на верхнем,
 //     без «удалена»; «+» — вырез на своём ящике; удалили ящик с вырезом — вырез снят с сообщением.
 //  G. C2: «Комод» 800×1000, «−» (482,5/482,5) → «Высота фасада ящика» 452,5 → «−» — отказ с причиной (968 > 800), «+» — 3 равных до крыши.
+// Круг 3:
+//  H. «Ящик 1» выбран: на плашке «Удалить ящик» и «Снять фасад»; Delete — весь ящик, Ctrl+Z; «Снять фасад» — только фасад, Ctrl+Z;
+//     «Удалить ящик» на плашке — весь ящик.
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { parts, facadeTop, facadeBottom, boxes, type Module, type Part } from "../src/model";
@@ -236,6 +239,26 @@ try {
   await openSet("Наполнение", "Ящики"); await click(btn("Добавить: Ящики")); g = await last();
   check("G3 «+» после правки полем: 3 равных фасада до крыши (было: отказ «Ящики не до крыши»)", g.sections[0].drawers === 3 && equalNoGap(g) && topGap(g) <= 0.05, `${hs(faces(g)).join("/")}, до верха ${topGap(g)}; ${await banner()}`.slice(0, 200));
   await front(); await shot("G3-plus-after-manual-equal");
+  // ── H. круг 3: ловушка удаления — «Ящик N» на плашке: «Удалить ящик» (и Delete) — весь ящик, «Снять фасад» — только фасад ──
+  await addFromPalette("Комод", 800, 1000, 550); await front();
+  const bar = page.locator(".selection-action-bar");
+  const facesN = (m: Module) => faces(m).length;
+  let hm = await last();
+  const undo = async () => { await page.keyboard.press("Control+z"); await page.waitForTimeout(900); };
+  let picked3 = await selectDrawer(1);
+  const labels = (await bar.getByRole("button").allInnerTexts().catch(() => [] as string[])).map((x) => x.trim());
+  check("H0 выбран «Ящик 1»: на плашке «Удалить ящик» и «Снять фасад» (было: общее «Удалить», снимавшее только фасад)", picked3 && labels.includes("Удалить ящик") && labels.includes("Снять фасад") && !labels.includes("Удалить"), labels.join(" | "));
+  await page.locator(".drawer-tabs button").nth(0).focus().catch(() => {}); await page.keyboard.press("Delete"); await page.waitForTimeout(900); hm = await last();
+  check("H1 Delete — весь ящик: ящиков 2, у каждого фасад", hm.sections[0].drawers === 2 && facesN(hm) === 2, `ящиков ${hm.sections[0].drawers}, фасадов ${facesN(hm)}`);
+  await undo(); hm = await last();
+  check("H2 Ctrl+Z — ящик вернулся (3 ящика, 3 фасада)", hm.sections[0].drawers === 3 && facesN(hm) === 3, `ящиков ${hm.sections[0].drawers}, фасадов ${facesN(hm)}`);
+  picked3 = await selectDrawer(1); if (picked3) await click(bar.getByRole("button", { name: "Снять фасад", exact: true })); hm = await last();
+  check("H3 «Снять фасад» — ящиков 3, фасадов 2", picked3 && hm.sections[0].drawers === 3 && facesN(hm) === 2, `ящиков ${hm.sections[0].drawers}, фасадов ${facesN(hm)}`);
+  await undo(); hm = await last();
+  check("H4 Ctrl+Z — фасад вернулся", hm.sections[0].drawers === 3 && facesN(hm) === 3, `фасадов ${facesN(hm)}`);
+  picked3 = await selectDrawer(2); if (picked3) await click(bar.getByRole("button", { name: "Удалить ящик", exact: true })); hm = await last();
+  check("H5 «Удалить ящик» на плашке — весь ящик: ящиков 2, фасадов 2", picked3 && hm.sections[0].drawers === 2 && facesN(hm) === 2, `ящиков ${hm.sections[0].drawers}, фасадов ${facesN(hm)}`);
+  await front(); await shot("H5-delete-whole-drawer");
 } catch (e) { check("сценарий без сбоя", false, (e as Error).message.split("\n")[0]); await shot("fail"); }
 check("ошибок страницы нет", errors.length === 0, errors.slice(0, 2).join(" | "));
 writeFileSync(`${out}/results.json`, JSON.stringify({ results, errors }, null, 1));
