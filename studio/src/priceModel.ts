@@ -18,9 +18,18 @@ export function priceModelLabel(c: Project["calculation"] | undefined): string {
 /** Модель цены — свойство ЗАКАЗА (документа комнат), а не комнаты (критик 29.10, блокер 1). Проект, который открывают в комнате заказа
  *  («Новый проект», «Создать проект без мебели», импорт файла), получает настройки расчёта заказа: без поля — молча; со своими, отличными
  *  от заказа, — модель заказа приоритетна, а в `replaced` — модель из файла (для предупреждения менеджеру). */
-export function withOrderCalculation(next: Project, order: Project["calculation"] | undefined): { project: Project; replaced?: Project["calculation"] } {
-  if (!order) return { project: next };
+export type OrderCalculation = { project: Project; replaced?: Project["calculation"]; adopted?: Project["calculation"] };
+export function withOrderCalculation(next: Project, order: Project["calculation"] | undefined): OrderCalculation {
+  // модель заказа не выбрана (по умолчанию): своя модель проекта становится моделью заказа — в `adopted`, чтобы сказать какая (круг 2)
+  if (!order) return next.calculation ? { project: next, adopted: next.calculation } : { project: next };
   const own = next.calculation;
   const project = { ...next, calculation: structuredClone(order) };
   return own && JSON.stringify(own) !== JSON.stringify(order) ? { project, replaced: own } : { project };
+}
+/** Сообщение менеджеру о модели цены проекта, открытого в комнате заказа (импорт файла, «Восстановить предыдущий проект»):
+ *  модель заказа сохранена, а в источнике была другая — или модель заказа не была выбрана и применена модель источника. */
+export function orderCalculationNotice(r: OrderCalculation, order: Project["calculation"] | undefined, source: "файле" | "резервной копии"): { title: string; text: string } | undefined {
+  if (r.replaced) return { title: "Модель цены заказа сохранена", text: "В " + source + " своя модель цены — " + priceModelLabel(r.replaced) + ". Заказ считается по модели заказа — " + priceModelLabel(order) + ". Сменить её для всего заказа можно в «Модель цены»." };
+  if (r.adopted) return { title: "Модель цены заказа", text: "В заказе модель цены не была выбрана — применена модель из " + (source === "файле" ? "файла" : "резервной копии") + ": " + priceModelLabel(r.adopted) + ". Она действует на весь заказ; сменить — в «Модель цены»." };
+  return undefined;
 }

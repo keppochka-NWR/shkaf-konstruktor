@@ -48,7 +48,7 @@ import {ChevronRight,TriangleAlert} from 'lucide-react';
 import {ManagerMode,FACADE_KIND_LABEL,decorLabel,decorTitle,newModuleName} from './clientLabels';
 import {buildCheck} from './buildCheck';
 import {NewProjectPanel} from './NewProjectPanel';
-import {priceModelLabel,withOrderCalculation} from './priceModel';
+import {orderCalculationNotice,withOrderCalculation,type OrderCalculation} from './priceModel';
 import {rebindCutouts} from './cutoutBinding';
 import {fitUnderMansard} from './paletteBuild';
 import {keepRowPsu} from './kitchenUnderLightRow';
@@ -1126,7 +1126,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             const raw=JSON.parse(text);
             if(isClientBundle(raw)){if(!onImportBundle)throw Error('Папку клиента открывайте в основном редакторе, без ссылки на отдельный проект.');onImportBundle(raw);return;}
             // в комнате заказа модель цены из файла не заменяет модель заказа молча (критик 29.10, блокер 1): заказ приоритетен, предупреждение
-            const own = saveManagedProject ? withOrderCalculation(parseProject(raw), project.calculation) : { project: parseProject(raw), replaced: undefined };
+            const own: OrderCalculation = saveManagedProject ? withOrderCalculation(parseProject(raw), project.calculation) : { project: parseProject(raw) };
             const imported = own.project;
             const next = imported.modules[0].module;
             if (
@@ -1144,7 +1144,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               setActive(imported.modules[0].id);
               setSelected(next.sections[0].id);
               setFit((f) => f + 1);
-              if (own.replaced) setNotice({ title: "Модель цены заказа сохранена", text: "В файле своя модель цены — " + priceModelLabel(own.replaced) + ". Заказ считается по модели заказа — " + priceModelLabel(project.calculation) + ". Сменить её для всего заказа можно в «Модель цены»." });
+              const priceNote = saveManagedProject ? orderCalculationNotice(own, project.calculation, "файле") : undefined; if (priceNote) setNotice(priceNote);
             }
           } catch (e) {
             if(request!==importSequence.current)return;
@@ -2330,7 +2330,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <label className="hardware-field">Номер замера<input aria-label="Номер замера" maxLength={60} key={project.measurement?.number??''} defaultValue={project.measurement?.number??''} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}} onBlur={e=>{const v=e.target.value.trim();if(v!==(project.measurement?.number??''))commitProject({...project,measurement:{number:v,date:project.measurement?.date??'',notes:project.measurement?.notes??''}});}}/></label>
                 <div className="room-setup-actions"><button className="primary" onClick={()=>goStage('fixtures')}>Дальше: окна, двери, коммуникации <ChevronRight size={15}/></button><button className="outline" onClick={()=>{setModal(null);goStage('bodies');}}>Пропустить, сразу к каркасам</button></div>
                 <p className="field-note">Есть Config.xml из скрипта Базиса «Замер помещения»? Его можно загрузить на шаге «Коммуникации» — комната и объекты появятся сами.</p>
-              </div> : modal === "new" ? <NewProjectPanel project={project} allowEmpty={!!onEmptyProject} open={next=>{if(commitProject(next)){if(next.modules[0])selectModule(next.modules[0].id);setRoomPlan(false);setView("iso");setMode("move");setModal(null);return true;}return false;}}/> : modal === "library" ? <ModuleLibrary module={m} group={project.modules.filter(a=>liveGroupIds.includes(a.id))} insertGroup={source=>{const result=appendModuleGroup(project,source);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');setModal(null);return true;}return false;}} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><button className="primary render-download" onClick={()=>savePng(renderImage)}>Скачать PNG</button><p className="field-note">PNG, до 2560 пикселей. Файл можно сохранить и отправить клиенту.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
+              </div> : modal === "new" ? <NewProjectPanel project={project} allowEmpty={!!onEmptyProject} open={(raw,source)=>{/* круг 2 (критик 29.10, блокер 1): «Восстановить предыдущий проект» в комнате заказа — как импорт: модель заказа не заменяется молча, менеджеру сообщение */const own:OrderCalculation=saveManagedProject?withOrderCalculation(raw,project.calculation):{project:raw},next=own.project,priceNote=saveManagedProject&&source?orderCalculationNotice(own,project.calculation,source):undefined;if(commitProject(next)){if(priceNote)setNotice(priceNote);if(next.modules[0])selectModule(next.modules[0].id);setRoomPlan(false);setView("iso");setMode("move");setModal(null);return true;}return false;}}/> : modal === "library" ? <ModuleLibrary module={m} group={project.modules.filter(a=>liveGroupIds.includes(a.id))} insertGroup={source=>{const result=appendModuleGroup(project,source);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');setModal(null);return true;}return false;}} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><button className="primary render-download" onClick={()=>savePng(renderImage)}>Скачать PNG</button><p className="field-note">PNG, до 2560 пикселей. Файл можно сохранить и отправить клиенту.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <SafeBoundary label="Документы проекта" resetKey={project}><OutputPanel
                   initialTab={outputTab}
                 project={project}
