@@ -112,7 +112,8 @@ import {gapLabelX,openingSizeLabel} from './clientLabels';
 import {missMenuTarget,screenRect} from './missMenu';
 import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
-import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,type Guide,type GuideLine,type V3} from './guides';
+import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
+import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -443,7 +444,7 @@ export function Scene(p: Props) {
     /** Ручка растяжения «↔» на боку выбранного корпуса (режим «Двигать корпуса»). */
     function stretchHandle(side:'left'|'right',pos:THREE.Vector3){
       const b=document.createElement('button');b.type='button';b.className='stretch-handle';b.dataset.side=side;b.textContent='↔';
-      b.title=(side==='right'?'Правый':'Левый')+' край: тяните, чтобы изменить ширину. Вплотную к соседу — двигается стык. Alt — без привязки';
+      b.title=(side==='right'?'Правый':'Левый')+' край: тяните, чтобы изменить ширину. Вплотную к соседу — двигается стык. Shift — без привязки (1 мм), Alt — к линии, Ctrl — к пересечению линий';
       b.setAttribute('aria-label','Растянуть '+(side==='right'?'правый':'левый')+' край');
       passThrough(b);
       b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startStretch(side,e);});
@@ -1060,8 +1061,36 @@ export function Scene(p: Props) {
     const ray = new THREE.Raycaster(),
       pointer = new THREE.Vector2();
     const badge=document.createElement('div');badge.className='drag-badge';badge.hidden=true;target.appendChild(badge);
-    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider'|'dividerEnd';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number};
+    // ── Привязки курсора клавишами (решение Макса 29.10.2026, pointSnap.ts): Alt — точка на ближайшей линии, Ctrl — ближайшее
+    // пересечение двух линий, Shift — без привязки (1 мм). Для линии Q, угла, края «↔» и переноса корпуса в ортогональных видах.
+    type PtrLike={clientX:number;clientY:number;altKey:boolean;ctrlKey:boolean;metaKey:boolean;shiftKey:boolean};
+    const snapMark=document.createElement('div');snapMark.className='snap-mark';snapMark.hidden=true;target.appendChild(snapMark);
+    let lastPtr:{clientX:number;clientY:number}|null=null,ptrMode:SnapMode='snap';
+    const r1=(v:number)=>Math.round(v*10)/10;
+    /** Допуск привязки к точке, мм: 14 px экрана (без потолка 30 мм — Alt/Ctrl нажаты нарочно). */
+    function pointTol(){const mm=camera===orthographic?(orthographic.top-orthographic.bottom)/orthographic.zoom/Math.max(1,target.clientHeight):3;return Math.max(1,POINT_SNAP_PX*mm);}
+    /** Линии вида для Alt/Ctrl: вспомогательные, контуры видимых корпусов (кроме тех, что тянутся), кромки деталей выбранного,
+     *  стены/пол/потолок — те же, от которых строится линия Q (guides.candidateLines). */
+    function snapSegs(exclude:string[]):Seg2[]{
+      const s=current.current,look=lookNow();if(!look)return [];
+      const mods=s.hideFurniture?[]:s.arrangement.filter(a=>!s.hiddenModuleIds?.includes(a.id)&&!exclude.includes(a.id));
+      return toSegments(candidateLines(mods,look,s.activeId,s.guideRoom??s.room,s.presentation?[]:s.guides),look);
+    }
+    /** Метка пойманной точки: кружок — на линии (Alt), крестик — пересечение (Ctrl). */
+    function markAt(hit:PointHit|undefined,look:V3|null,depth:V3){
+      if(!hit||!look){if(!snapMark.hidden){snapMark.hidden=true;}return;}
+      const p=toScreen(toScene(fromView(hit.p,look,depth)));snapMark.hidden=false;snapMark.dataset.kind=hit.kind;snapMark.dataset.at=hit.p.h+';'+hit.p.v;
+      snapMark.style.left=p.x+'px';snapMark.style.top=p.y+'px';
+    }
+    /** Начало плашки по режиму: «Без привязки · », «Ctrl · пересечение: … · »; обычные привязки — пусто. */
+    const modeText=(mode:SnapMode,hit:PointHit|undefined,look:V3|null)=>mode==='snap'?'':(isPointMode(mode)&&!look?'Без привязки':hitText(hit,mode))+' · ';
+    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider'|'dividerEnd';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number;
+      /** Alt/Ctrl (pointSnap.ts): опорный угол корпуса в осях вида и линии для привязки — считаются при первом нажатии. */
+      ref?:P2;segs?:Seg2[]};
     let drag:Drag|null=null;
+    /** Ctrl+нажатие на корпус в ортогональном виде (режим «Двигать»): отпустили без движения — отметить корпус (как раньше),
+     *  потянули — перенос с привязкой к пересечениям (решение Макса 29.10.2026). */
+    let ctrlPress:{mid:string;x:number;y:number;pointerId:number}|null=null;
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
     function indicateTarget(hit:THREE.Intersection|undefined){
@@ -1083,7 +1112,9 @@ export function Scene(p: Props) {
     function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x,yy=hit.point.y-(a.y??0);return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width&&yy>=b.bottom&&yy<=b.top)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.presentation)return;
-      if((e.ctrlKey||e.metaKey)&&current.current.onToggleModule){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();current.current.onToggleModule(picked.object.userData.moduleId);}return;}
+      if((e.ctrlKey||e.metaKey)&&current.current.onToggleModule){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();
+        const s=current.current;if(s.mode==='move'&&!s.lightMode&&lookNow()&&picked.object.userData.role!=='handle'){ctrlPress={mid:picked.object.userData.moduleId,x:e.clientX,y:e.clientY,pointerId:e.pointerId};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);}
+        else s.onToggleModule!(picked.object.userData.moduleId);}return;}
       if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();const mid=picked.object.userData.moduleId,alts=[...new Set(ray.intersectObjects(modelGroup.children,true).filter(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId===mid&&h.object.userData.partId).map(h=>h.object.userData.partId as string))].filter(x=>x!==picked.object.userData.partId);current.current.onLightPick(mid,picked.object.userData.partId,alts);}return;}
       if(current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
@@ -1106,17 +1137,34 @@ export function Scene(p: Props) {
       moduleGroups.get(a.id)?.traverse(o=>{if(o instanceof THREE.Mesh&&(o.userData.partId===pid||o.userData.partId?.startsWith(prefix)||((pid===sid+':rod'||pid.includes(':flange:'))&&(o.userData.partId===sid+':rod'||o.userData.partId?.startsWith(sid+':flange:')))))meshes.push(o);});
       drag={mid:a.id,sid:isDividerEnd?pid.split(':')[0]:sid,pid,kind:isDivider?'divider':isDividerEnd?'dividerEnd':isPart?'part':'module',plane,anchor,origin:{x:a.x,y:a.y??0,z:a.z},point:[e.clientX,e.clientY],moved:false,candidate:{x:a.x,y:a.y??0,z:a.z},meshes,delta:0};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);
     }
-    function pointerMove(e:PointerEvent){
+    function pointerMove(e:PtrLike){
+      lastPtr={clientX:e.clientX,clientY:e.clientY};
+      // Ctrl+нажатие на корпус потянули — начинается обычный перенос из точки нажатия (дальше — с привязкой Ctrl)
+      if(ctrlPress&&!drag){const cp=ctrlPress;if(Math.hypot(e.clientX-cp.x,e.clientY-cp.y)<4)return;ctrlPress=null;
+        pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,preventDefault(){}} as unknown as PointerEvent);
+        if(!drag){controls.enabled=true;return;}}
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
       needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
         const raw={x:drag.origin.x+point.x,y:current.current.view==='front'?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
-        let next=e.altKey?{x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}:current.current.snap(drag.mid,raw);
-        // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
-        const da=current.current.arrangement.find(a=>a.id===drag!.mid);if(da&&!e.altKey)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
+        const mode=snapMode(e),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined;
+        if(isPointMode(mode)&&look&&da){
+          // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
+          const s=current.current,d=drag;
+          d.ref??=nearestOutlineCorner(carcassCorners({...da,...d.origin}),look,toView(fromScene(d.anchor),look));
+          d.segs??=snapSegs(s.moveAll?s.arrangement.map(a=>a.id):s.groupIds?.includes(d.mid)?s.groupIds:[d.mid]);
+          const r=snapDelta(mode,d.ref,toView({x:raw.x-d.origin.x,y:raw.y-d.origin.y,z:raw.z-d.origin.z},look),d.segs,pointTol()),dv=viewDelta(r.delta.h,r.delta.v,look);hit=r.hit;
+          next=hit?{x:r1(d.origin.x+dv.x),y:Math.max(0,r1(d.origin.y+dv.y)),z:r1(d.origin.z+dv.z)}:{x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)};
+        }else if(mode!=='snap')next={x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}; // Shift (и Alt/Ctrl в 3D) — без привязки
+        else{
+          next=current.current.snap(drag.mid,raw);
+          // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
+          if(da)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
+        }
+        markAt(hit,look,fromScene(drag.anchor));
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front')next.y=drag.origin.y;
-        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||current.current.groupIds?.includes(drag.mid)&&current.current.groupIds.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':current.current.groupIds?.includes(drag.mid)?'Группа · ':'')+(e.altKey?'Без привязки · ':'')+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||current.current.groupIds?.includes(drag.mid)&&current.current.groupIds.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':current.current.groupIds?.includes(drag.mid)?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else if(drag.kind==='divider'){
         const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;
         for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
@@ -1135,8 +1183,10 @@ export function Scene(p: Props) {
         badge.textContent=problem||(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';
       }
     }
-    function resetDrag(){needsRender=true;dropTarget.visible=false;if(!drag)return;if(drag.kind==='module'){for(const group of moduleGroups.values())group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
+    function resetDrag(){needsRender=true;dropTarget.visible=false;snapMark.hidden=true;if(ctrlPress){ctrlPress=null;controls.enabled=true;}if(!drag)return;if(drag.kind==='module'){for(const group of moduleGroups.values())group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
+      // Ctrl+щелчок без движения — отметить корпус (мультивыбор, как раньше)
+      if(ctrlPress&&!drag){const cp=ctrlPress;ctrlPress=null;controls.enabled=true;if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);current.current.onToggleModule?.(cp.mid);return;}
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
       if(d.moved){
@@ -1159,7 +1209,7 @@ export function Scene(p: Props) {
     // Сдвиг курсора переводится в мм по экранной проекции оси ширины (px на мм у края модуля), без усиления: на «Спереди» 1 px = мм
     // по масштабу, в 3D — по видимой длине оси (критик 20.10, m8: раньше плоскость фасада под косым углом давала 10 px ≈ 250 мм).
     type Stretch={mid:string;side:'left'|'right';axis:THREE.Vector3;screen:{x:number;y:number;k:number};start:[number,number];raw:number;snap:boolean;moved:boolean;touched:string[];
-      handle?:{label:typeof labels[number];base:THREE.Vector3};width?:{label:typeof labels[number];base:THREE.Vector3;text:string}};
+      handle?:{label:typeof labels[number];base:THREE.Vector3};width?:{label:typeof labels[number];base:THREE.Vector3;text:string};segs?:Seg2[]};
     let stretch:Stretch|null=null;
     /** Экранная проекция точки сцены, px относительно холста. */
     function toScreen(v:THREE.Vector3){const q=v.clone().project(camera);return {x:(q.x+1)/2*target.clientWidth,y:(1-q.y)/2*target.clientHeight,z:q.z};}
@@ -1190,26 +1240,36 @@ export function Scene(p: Props) {
       const nb=plan.mode==='joint'?plan.neighbor:undefined,n=nb&&s.arrangement.find(x=>x.id===nb.id),ng=n&&moduleGroups.get(n.id);
       if(nb&&n&&ng){ng.scale.x=nb.width/n.module.width;if(st.side==='right')ng.position.addScaledVector(st.axis,n.module.width-nb.width);st.touched.push(n.id);}
     }
-    function stretchMove(e:PointerEvent){
+    function stretchMove(e:PtrLike){
       const st=stretch;if(!st)return;
+      lastPtr={clientX:e.clientX,clientY:e.clientY};
       if(!st.moved&&Math.hypot(e.clientX-st.start[0],e.clientY-st.start[1])<3)return;
       st.moved=true;
       const du=((e.clientX-st.start[0])*st.screen.x+(e.clientY-st.start[1])*st.screen.y)/st.screen.k;
-      st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=!e.altKey;
-      // край — к вспомогательной линии (Q) точно, без шага 10 мм
-      const sa=current.current.arrangement.find(x=>x.id===st.mid),sg=st.snap?viewGuides():[];
-      if(sa&&sg.length){const {E,o}=edgeOf(sa,'width',st.side==='right'?'hi':'lo'),hit=snapOut(E,o,st.raw,guidePlanes(sg),snapTol());if(hit){st.raw=hit.raw;st.snap=false;}}
+      const mode=snapMode(e),look=lookNow();let hit:PointHit|undefined,cur:V3|null=null;
+      st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=mode==='snap';
+      const sa=current.current.arrangement.find(x=>x.id===st.mid);
+      if(isPointMode(mode)&&look&&sa){
+        // Alt/Ctrl: край ходит вдоль своей оси — до точки на линии / пересечения у курсора (ширина точно, без шага 10 мм)
+        const {E,o}=edgeOf(sa,'width',st.side==='right'?'hi':'lo'),o2=toView(o,look),k=Math.hypot(o2.h,o2.v);cur=mouseRoom(e.clientX,e.clientY);
+        if(cur&&k>.1){st.segs??=snapSegs([st.mid]);const r=snapAlong(mode,toView({x:E.x+o.x*st.raw,y:E.y,z:E.z+o.z*st.raw},look),{h:o2.h/k,v:o2.v/k},toView(cur,look),st.segs,pointTol());if(r.hit){hit=r.hit;st.raw=r1(st.raw+r.shift/k);}}
+      }else if(st.snap){
+        // край — к вспомогательной линии (Q) точно, без шага 10 мм
+        const sg=viewGuides();
+        if(sa&&sg.length){const {E,o}=edgeOf(sa,'width',st.side==='right'?'hi':'lo'),h=snapOut(E,o,st.raw,guidePlanes(sg),snapTol());if(h){st.raw=h.raw;st.snap=false;}}
+      }
+      markAt(hit,look,cur??{x:0,y:0,z:0});
       const plan=current.current.stretchPlan?.(st.mid,st.side,st.raw,st.snap)??{};
       previewStretch(st,plan);needsRender=true;
       badge.hidden=false;badge.classList.toggle('invalid',!!plan.problem);
-      badge.textContent=plan.problem||(e.altKey?'Без привязки · ':'')+`ширина ${plan.width} мм · зазор ${plan.gap??0}`+(plan.filler?` · ${plan.filler} мм — фальш у стены`:'')+(plan.mode==='joint'&&plan.neighbor?` · сосед «${plan.neighbor.name}» ${plan.neighbor.width} мм`:'');
+      badge.textContent=plan.problem||modeText(mode,hit,look)+`ширина ${plan.width} мм · зазор ${plan.gap??0}`+(plan.filler?` · ${plan.filler} мм — фальш у стены`:'')+(plan.mode==='joint'&&plan.neighbor?` · сосед «${plan.neighbor.name}» ${plan.neighbor.width} мм`:'');
       // живая плашка — у курсора (над ним), а не внизу сцены (критик 20.10, m6)
       const r=target.getBoundingClientRect();
       Object.assign(badge.style,{left:Math.max(8,Math.min(e.clientX-r.left,target.clientWidth-8))+'px',top:Math.max(40,e.clientY-r.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
     }
     function endStretch(){
       window.removeEventListener('pointermove',stretchMove);window.removeEventListener('pointerup',stretchUp);window.removeEventListener('pointercancel',endStretch);
-      const st=stretch;stretch=null;if(!st)return;
+      const st=stretch;stretch=null;if(!st)return;snapMark.hidden=true;
       for(const id of st.touched){const g=moduleGroups.get(id);if(g){g.scale.x=1;g.position.copy(g.userData.base);}}
       if(st.handle)st.handle.label.position.copy(st.handle.base);
       if(st.width){st.width.label.position.copy(st.width.base);st.width.label.element.textContent=st.width.text;}
@@ -1232,7 +1292,7 @@ export function Scene(p: Props) {
     /** Допуск привязки, мм: 10 px экрана, не больше 30 мм (как привязка ручки «↔», STRETCH_SNAP). */
     function snapTol(){const mm=camera===orthographic?(orthographic.top-orthographic.bottom)/orthographic.zoom/Math.max(1,target.clientHeight):3;return Math.min(30,Math.max(2,10*mm));}
     /** typed — размеры, набранные с клавиатуры во время тяги («600;2400», решение Макса 29.10.2026); mouse — последнее положение курсора. */
-    type CornerDrag={mid:string;dims:[Dim,Dim];ends:[End,End];out:THREE.Vector3[];plane:THREE.Plane;start:THREE.Vector3;origin:[number,number];moved:boolean;pull?:CornerPull;touched:string[];texts:{el:HTMLElement;text:string}[];handle?:{label:typeof labels[number];base:THREE.Vector3};typed:string;mouse:[number,number];alt:boolean};
+    type CornerDrag={mid:string;dims:[Dim,Dim];ends:[End,End];out:THREE.Vector3[];plane:THREE.Plane;start:THREE.Vector3;origin:[number,number];moved:boolean;pull?:CornerPull;touched:string[];texts:{el:HTMLElement;text:string}[];handle?:{label:typeof labels[number];base:THREE.Vector3};typed:string;mouse:[number,number];mode:SnapMode;segs?:Seg2[]};
     let corner:CornerDrag|null=null;
     /** Угол корпуса a в координатах сцены: края по dims/ends; ось вне вида — видимая грань (фасад спереди, крыша сверху, бок сбоку). */
     function cornerAt(a:PlacedModule,dims:[Dim,Dim],ends:[End,End]){
@@ -1249,7 +1309,7 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);const start=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,start))return;
       const texts=labels.filter(l=>l.element.dataset.dim&&dims.includes(l.element.dataset.dim as Dim)).map(l=>({el:l.element as HTMLElement,text:l.element.textContent??''}));
       const hl=labels.find(l=>l.element.classList.contains('corner-handle')&&l.element.dataset.corner===ends.join('-'));
-      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined,typed:'',mouse:[e.clientX,e.clientY],alt:e.altKey};
+      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined,typed:'',mouse:[e.clientX,e.clientY],mode:snapMode(e)};
       hl?.element.classList.add('active');
       controls.enabled=false;target.classList.add('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=false;
       window.addEventListener('pointermove',cornerMove);window.addEventListener('pointerup',cornerUp);window.addEventListener('pointercancel',endCorner);
@@ -1274,22 +1334,30 @@ export function Scene(p: Props) {
     }
     function cornerMove(e:PointerEvent){
       const c=corner;if(!c)return;
-      c.mouse=[e.clientX,e.clientY];c.alt=e.altKey;
+      c.mouse=[e.clientX,e.clientY];c.mode=snapMode(e);lastPtr={clientX:e.clientX,clientY:e.clientY};
       if(c.typed){cornerTypedShow(c);return;} // набран размер — мышь размер не меняет
       if(!c.moved&&Math.hypot(e.clientX-c.origin[0],e.clientY-c.origin[1])<3)return;
       c.moved=true;cornerByMouse(c);
     }
     function cornerByMouse(c:CornerDrag){
       cast(c.mouse[0],c.mouse[1]);const P=new THREE.Vector3();if(!ray.ray.intersectPlane(c.plane,P))return;P.sub(c.start);
-      const pull:CornerPull={mid:c.mid,snap:!c.alt,tol:snapTol(),guides:viewGuides()};
+      const pull:CornerPull={mid:c.mid,snap:c.mode==='snap',tol:snapTol(),guides:viewGuides()};
+      const look=lookNow(),a=current.current.arrangement.find(x=>x.id===c.mid);let hit:PointHit|undefined;
+      if(isPointMode(c.mode)&&look&&a){
+        // Alt/Ctrl: сам угол — на точку линии / в пересечение (размеры точно, без шага 10 мм)
+        c.segs??=snapSegs([c.mid]);
+        const r=snapDelta(c.mode,toView(fromScene(cornerAt(a,c.dims,c.ends)),look),toView({x:P.x,y:P.y,z:P.z},look),c.segs,pointTol());hit=r.hit;
+        const dv=viewDelta(r.delta.h,r.delta.v,look);P.set(dv.x,dv.y,dv.z);
+      }
+      markAt(hit,look,fromScene(c.start));
       c.dims.forEach((d,i)=>{pull[d]={end:c.ends[i],raw:Math.round(P.dot(c.out[i])*10)/10};});
       c.pull=pull;const plan=current.current.cornerPlan?.(pull);if(!plan)return;
       previewCorner(c,plan);needsRender=true;
-      cornerBadge(c,plan.problem||(c.alt?'Без привязки · ':'')+c.dims.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'')+' · цифры «'+c.dims.map(d=>DIM_WORD[d]).join(';')+'» + Enter — точно',!!plan.problem);
+      cornerBadge(c,plan.problem||modeText(c.mode,hit,look)+c.dims.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'')+' · цифры «'+c.dims.map(d=>DIM_WORD[d]).join(';')+'» + Enter — точно',!!plan.problem);
     }
     /** Набранный размер: показ итога (корпус на сцене и плашка), противоположный угол на месте. */
     function cornerTypedShow(c:CornerDrag){
-      const a=current.current.arrangement.find(x=>x.id===c.mid);if(!a)return;
+      const a=current.current.arrangement.find(x=>x.id===c.mid);if(!a)return;snapMark.hidden=true;
       const head='Размер ('+c.dims.map(d=>DIM_WORD[d]).join(';')+'): '+c.typed+'▏',t=typedCornerPull(a,c.dims,c.ends,c.typed);
       if(t.problem){resetCornerPreview(c);cornerBadge(c,head+' · '+t.problem,true);needsRender=true;return;}
       const plan=t.pull&&current.current.cornerPlan?.(t.pull);
@@ -1319,7 +1387,7 @@ export function Scene(p: Props) {
     }
     function endCorner(){
       window.removeEventListener('pointermove',cornerMove);window.removeEventListener('pointerup',cornerUp);window.removeEventListener('pointercancel',endCorner);
-      const c=corner;corner=null;if(!c)return;
+      const c=corner;corner=null;if(!c)return;snapMark.hidden=true;
       resetCornerPreview(c);for(const t of c.texts)t.el.textContent=t.text;
       if(c.handle){c.handle.label.position.copy(c.handle.base);c.handle.label.element.classList.remove('active');}
       target.classList.remove('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=true;
@@ -1356,7 +1424,7 @@ export function Scene(p: Props) {
     const toolMat=new THREE.LineBasicMaterial({color:0xe8590c,depthTest:false,transparent:true}),ghostMat=new THREE.LineDashedMaterial({color:0xe8590c,dashSize:30,gapSize:18,depthTest:false,transparent:true});
     const hoverLine=new THREE.Line(new THREE.BufferGeometry(),toolMat),ghostLine=new THREE.Line(new THREE.BufferGeometry(),ghostMat);
     for(const l of [hoverLine,ghostLine]){l.renderOrder=120;l.visible=false;l.frustumCulled=false;scene.add(l);}
-    type Tool={phase:'pick';lines:GuideLine[];hover?:GuideLine}|{phase:'place';look:V3;base:GuideLine;typed:string;at?:number;dist?:number};
+    type Tool={phase:'pick';lines:GuideLine[];hover?:GuideLine}|{phase:'place';look:V3;base:GuideLine;typed:string;at?:number;dist?:number;segs?:Seg2[]};
     let tool:Tool|null=null,lastMouse:[number,number]|null=null;
     function setSegment(l:THREE.Line,a:V3,b:V3,dashed=false){l.geometry.dispose();l.geometry=new THREE.BufferGeometry().setFromPoints([toScene(a),toScene(b)]);if(dashed)l.computeLineDistances();l.visible=true;needsRender=true;}
     function toolBadge(text:string,x?:number,y?:number){
@@ -1376,20 +1444,24 @@ export function Scene(p: Props) {
       target.classList.add('guide-tool');
       if(lastMouse)toolMove(lastMouse[0],lastMouse[1]);else toolBadge('Q: наведите на линию (край корпуса, деталь, стена, пол) и щёлкните · Esc — отмена');
     }
-    function cancelTool(){if(!tool)return;tool=null;hoverLine.visible=false;ghostLine.visible=false;badge.hidden=true;badge.style.cssText='';target.classList.remove('guide-tool');needsRender=true;}
+    function cancelTool(){if(!tool)return;tool=null;snapMark.hidden=true;hoverLine.visible=false;ghostLine.visible=false;badge.hidden=true;badge.style.cssText='';target.classList.remove('guide-tool');needsRender=true;}
     function toolMove(clientX:number,clientY:number){
       const t=tool;if(!t)return;
       const r=target.getBoundingClientRect(),mx=clientX-r.left,my=clientY-r.top;
       if(t.phase==='pick'){
-        let best:GuideLine|undefined,bd=10;for(const l of t.lines){const d=segDist(mx,my,l.a,l.b);if(d<bd-0.01){bd=d;best=l;}}
+        snapMark.hidden=true;let best:GuideLine|undefined,bd=10;for(const l of t.lines){const d=segDist(mx,my,l.a,l.b);if(d<bd-0.01){bd=d;best=l;}}
         t.hover=best;if(best)setSegment(hoverLine,best.a,best.b);else{hoverLine.visible=false;needsRender=true;}
         toolBadge(best?'Q: '+best.what+' — щёлкните, чтобы строить от неё':'Q: наведите на линию (край корпуса, деталь, стена, пол) и щёлкните · Esc — отмена',clientX,clientY);
         return;
       }
-      const m=mouseRoom(clientX,clientY);if(!m)return;
-      const pl=placeGuide(t.base,m,parseTyped(t.typed));t.at=pl.at;t.dist=pl.dist;
+      let m=mouseRoom(clientX,clientY);if(!m)return;
+      // Alt/Ctrl: линия проходит через точку на линии / пересечение у курсора (без набранного числа)
+      let hit:PointHit|undefined;
+      if(isPointMode(ptrMode)&&!t.typed){t.segs??=snapSegs([]);hit=pointSnap(ptrMode,toView(m,t.look),t.segs,pointTol());if(hit)m=fromView(hit.p,t.look,m);}
+      markAt(hit,t.look,m);
+      const pl=placeGuide(t.base,m,parseTyped(t.typed),!!hit);t.at=pl.at;t.dist=pl.dist;
       const [a,b]=guideSegment({n:t.base.n,at:pl.at},t.look,centerRoom());setSegment(ghostLine,a,b,true);
-      toolBadge((t.typed?'Размер: '+t.typed+'▏':'Расстояние '+pl.dist)+' мм · Enter — поставить · Esc — отмена',clientX,clientY);
+      toolBadge((isPointMode(ptrMode)&&!t.typed?hitText(hit,ptrMode)+' · ':'')+(t.typed?'Размер: '+t.typed+'▏':'Расстояние '+pl.dist)+' мм · Enter — поставить · Esc — отмена',clientX,clientY);
     }
     function placeNow(){
       const t=tool,s=current.current;if(!t||t.phase!=='place'||t.at===undefined||!s.onGuides)return;
@@ -1409,7 +1481,7 @@ export function Scene(p: Props) {
       if(e.button!==0||current.current.presentation)return;
       const t=tool;
       if(t){
-        e.preventDefault();e.stopPropagation();toolMove(e.clientX,e.clientY);
+        e.preventDefault();e.stopPropagation();ptrMode=snapMode(e);toolMove(e.clientX,e.clientY);
         if(t.phase==='pick'){const h=t.hover,look=lookNow();if(!h||!look)return;tool={phase:'place',look,base:h,typed:''};toolMove(e.clientX,e.clientY);}
         else placeNow();
         return;
@@ -1419,7 +1491,16 @@ export function Scene(p: Props) {
       if(g){e.preventDefault();e.stopPropagation();selectGuide(g);toolBadge('Вспомогательная линия · Delete — убрать · Esc — снять выбор',e.clientX,e.clientY);}
       else if(selectedGuide)selectGuide(null);
     }
-    function trackMouse(e:PointerEvent){lastMouse=[e.clientX,e.clientY];if(tool)toolMove(e.clientX,e.clientY);}
+    function trackMouse(e:PointerEvent){lastMouse=[e.clientX,e.clientY];ptrMode=snapMode(e);if(tool)toolMove(e.clientX,e.clientY);}
+    /** Нажали/отпустили Alt, Ctrl, Shift без движения мыши — привязка пересчитывается сразу (тяга, линия Q). */
+    function modsKey(e:KeyboardEvent){
+      if(!['Alt','Control','Shift','Meta'].includes(e.key)||current.current.presentation)return;
+      const m={altKey:e.altKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey};ptrMode=snapMode(m);
+      if(corner){if(corner.moved&&!corner.typed){corner.mode=ptrMode;cornerByMouse(corner);}return;}
+      if(stretch){if(stretch.moved&&lastPtr)stretchMove({...lastPtr,...m});return;}
+      if(drag){if(drag.moved&&drag.kind==='module'&&lastPtr)pointerMove({...lastPtr,...m});return;}
+      if(tool?.phase==='place'&&lastMouse)toolMove(lastMouse[0],lastMouse[1]);
+    }
     /** Q, цифры, Enter, Esc, Delete для линий — раньше App (фаза захвата на window; App пропускает defaultPrevented). */
     function guideKey(e:KeyboardEvent){
       const s=current.current;if(s.presentation||editsText(e.target))return;
@@ -1449,7 +1530,9 @@ export function Scene(p: Props) {
     function clearGuides(){removeGuides(viewGuides().map(g=>g.id));}
     target.addEventListener('pointerdown',toolDown,true);window.addEventListener('pointermove',trackMouse);window.addEventListener('keydown',guideKey,true);
     // Alt во время тяги (корпуса или края) не уводит фокус в меню браузера Chrome на Windows (критик 20.10, m11)
-    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner))e.preventDefault();}
+    // (с 29.10 Alt — привязка к линии: то же и для линии Q)
+    function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner||tool))e.preventDefault();}
+    window.addEventListener('keydown',modsKey);window.addEventListener('keyup',modsKey);
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
     // Esc отменяет тягу; событие помечается, чтобы App не снимал выделение тем же нажатием (п.19 волны 22.10)
@@ -1595,7 +1678,7 @@ export function Scene(p: Props) {
     animate();
     return () => {
       saveCamera();controls.removeEventListener('end',saveCamera);
-      endStretch();endCorner();cancelTool();window.removeEventListener('keyup',altGuard);
+      endStretch();endCorner();cancelTool();window.removeEventListener('keyup',altGuard);window.removeEventListener('keydown',modsKey);window.removeEventListener('keyup',modsKey);snapMark.remove();
       target.removeEventListener('pointerdown',toolDown,true);window.removeEventListener('pointermove',trackMouse);window.removeEventListener('keydown',guideKey,true);
       scene.remove(hoverLine,ghostLine);hoverLine.geometry.dispose();ghostLine.geometry.dispose();toolMat.dispose();ghostMat.dispose();guideMat.dispose();guideSelMat.dispose();
       disposed = true;

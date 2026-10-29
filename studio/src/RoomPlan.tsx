@@ -4,20 +4,25 @@ import {openingZone,roomWarnings} from './roomWarnings';
 import {useEffect,useRef,useState} from 'react';
 import {projectErrors,bounds,moduleFootprint,localToRoom,snapComposition,snapPlacement,type Project,type Opening} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
-import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
+import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
+import {snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import './guides.css';
+// Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
+// контуры корпусов, стены), Ctrl — ближайшее пересечение двух линий, Shift — без привязки. Для угла, переноса корпуса и линии Q.
+// Ctrl+щелчок по корпусу без движения — по-прежнему отметить его; Ctrl+протяжка — перенос с привязкой к пересечениям.
+type PtrLike={clientX:number;clientY:number;altKey:boolean;ctrlKey:boolean;metaKey:boolean;shiftKey:boolean;pointerId?:number};
 // План = вид сверху (решение Макса 29.10.2026: вспомогательные линии Q и ручки углов — везде, включая «План»): ручки углов выбранного
 // корпуса — ширина + глубина, противоположный угол на месте (те же правила, привязки, отмена и отказ, что в виде «Сверху» — App.planCorner);
 // линии Q общие с видом «Сверху» (те же координаты помещения, look = +Y, guides.ts PLAN_LOOK); перетаскивание корпуса привязывается к ним.
 // Во время тяги за угол можно набрать «600;2400» (ширина;глубина) и Enter.
-type Corner={mid:string;ends:[End,End];start:{x:number;y:number};origin:[number,number];pointerId:number;moved:boolean;pull?:CornerPull;typed:string;mouse:[number,number];alt:boolean};
-type Tool={phase:'pick';lines:GuideLine[];hover?:GuideLine}|{phase:'place';base:GuideLine;typed:string;at?:number;dist?:number};
+type Corner={mid:string;ends:[End,End];start:{x:number;y:number};origin:[number,number];pointerId:number;moved:boolean;pull?:CornerPull;typed:string;mouse:[number,number];mode:SnapMode;segs?:Seg2[]};
+type Tool={phase:'pick';lines:GuideLine[];hover?:GuideLine}|{phase:'place';base:GuideLine;typed:string;at?:number;dist?:number;segs?:Seg2[]};
 const DIMS:['width','depth']=['width','depth'];
 const PICK_HINT='Q: наведите на линию (край корпуса, деталь, стена, другая линия) и щёлкните · Esc — отмена';
 type Props={stretchable?:boolean;cornerPlan?:(pull:CornerPull)=>CornerPlan;onCorner?:(pull:CornerPull)=>boolean;guides?:Guide[];onGuides?:(next:Guide[])=>boolean;onToggleModule?:(id:string)=>void;hiddenModuleIds?:string[];onModuleContext?:(mid:string,x:number,y:number)=>void;onEnvironmentContext?:(kind: 'opening'|'fixture'|'obstacle',id:string)=>void;showModules?:boolean;groupIds?:string[];moveAll:boolean;snapping:boolean;project:Project;active:string;onSelect:(id:string)=>void;onRoom:()=>void;selectedObstacle?:string;onObstacleSelect:(id:string)=>void;selectedOpening?:string;onOpeningSelect:(id:string)=>void;selectedFixture?:string;onFixtureSelect?:(id:string)=>void;onDimension?:(kind:'room'|'opening'|'fixture',id:string,field:string,value:number)=>void;update:(p:Project)=>boolean};
-type Drag={kind:'module'|'opening'|'obstacle'|'fixture';id:string;start:{x:number;y:number};origin:{x:number;z:number};pointerId:number};
+type Drag={kind:'module'|'opening'|'obstacle'|'fixture';id:string;start:{x:number;y:number};origin:{x:number;z:number};pointerId:number;ref?:P2;segs?:Seg2[]};
 export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onToggleModule,hiddenModuleIds=[],onModuleContext,onEnvironmentContext,showModules=true,groupIds=[],moveAll,snapping,project,active,onSelect,onRoom,selectedOpening,onOpeningSelect,selectedObstacle,onObstacleSelect,selectedFixture,onFixtureSelect,onDimension,update}:Props){
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag|null>(null),[preview,setPreview]=useState<Project|null>(null);
   const p=preview||project,r=p.room,margin=Math.max(r.width,r.depth)*0.1;
@@ -37,7 +42,7 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
   }
   const warnings=roomWarnings(p);
   const problem=preview?projectErrors(preview,project.modules.length===0)[0]:undefined;
-  function point(e:React.PointerEvent){const pt=new DOMPoint(e.clientX,e.clientY),matrix=svg.current?.getScreenCTM();return matrix?pt.matrixTransform(matrix.inverse()):pt;}
+  function point(e:{clientX:number;clientY:number}){const pt=new DOMPoint(e.clientX,e.clientY),matrix=svg.current?.getScreenCTM();return matrix?pt.matrixTransform(matrix.inverse()):pt;}
   // ── Ручки углов и вспомогательные линии Q (решение Макса 29.10.2026) ──────────────────────────────────────────────────────────
   const box=useRef<HTMLDivElement>(null),corner=useRef<Corner|null>(null),mouse=useRef<[number,number]|null>(null);
   const [badge,setBadge]=useState<{text:string;invalid:boolean;x:number;y:number}|null>(null);
@@ -50,6 +55,18 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
   /** Допуск привязки 10 px, как в сцене; потолок 60 мм (в сцене 30): план не масштабируется колесом, 1 px здесь ≈ 10 мм,
    *  и 30 мм были бы 3 px — привязку было бы не поймать. */
   const snapTol=()=>Math.min(60,Math.max(2,10*mmPx()));
+  // ── Alt/Ctrl/Shift (pointSnap.ts) ──
+  const [mark,setMark]=useState<PointHit|null>(null),modeRef=useRef<SnapMode>('snap');
+  const ctrlPress=useRef<{id:string;x:number;y:number;pointerId:number}|null>(null);
+  /** Допуск привязки к точке, мм: 14 px (без потолка — Alt/Ctrl нажаты нарочно). */
+  const pointTol=()=>Math.max(1,POINT_SNAP_PX*mmPx());
+  /** Линии плана для Alt/Ctrl: вспомогательные, контуры видимых корпусов (кроме тех, что тянутся), кромки выбранного, стены. */
+  function planSegs(exclude:string[]):Seg2[]{
+    const mods=showModules?project.modules.filter(a=>!hiddenModuleIds.includes(a.id)&&!exclude.includes(a.id)):[];
+    return toSegments(candidateLines(mods,PLAN_LOOK,active,project.room,guides),PLAN_LOOK);
+  }
+  const showMark=(hit:PointHit|undefined)=>setMark(m=>hit?(m&&m.p.h===hit.p.h&&m.p.v===hit.p.v&&m.kind===hit.kind?m:hit):null);
+  const modeText=(mode:SnapMode,hit:PointHit|undefined)=>mode==='snap'?'':hitText(hit,mode)+' · ';
   function say(text:string,invalid:boolean,clientX?:number,clientY?:number){
     const el=box.current;if(!el)return;const b=el.getBoundingClientRect(),[cx,cy]=clientX!==undefined&&clientY!==undefined?[clientX,clientY]:mouse.current??[b.left+b.width/2,b.top+120];
     setBadge({text,invalid,x:Math.max(8,Math.min(cx-b.left,b.width-8))+el.scrollLeft,y:Math.max(40,cy-b.top-22)+el.scrollTop});
@@ -57,19 +74,26 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
   const moduleOf=(id:string)=>project.modules.find(x=>x.id===id);
   function startCorner(e:React.PointerEvent,ends:[End,End]){
     if(e.button!==0||!onCorner||tool||drag.current||corner.current)return;e.preventDefault();e.stopPropagation();
-    const pt=point(e);corner.current={mid:active,ends,start:{x:pt.x,y:pt.y},origin:[e.clientX,e.clientY],pointerId:e.pointerId,moved:false,typed:'',mouse:[e.clientX,e.clientY],alt:e.altKey};
+    const pt=point(e);corner.current={mid:active,ends,start:{x:pt.x,y:pt.y},origin:[e.clientX,e.clientY],pointerId:e.pointerId,moved:false,typed:'',mouse:[e.clientX,e.clientY],mode:snapMode(e)};
     svg.current?.setPointerCapture(e.pointerId);
     say('Тяните угол: ширина и глубина · цифры «ширина;глубина» + Enter — точно',false,e.clientX,e.clientY);
   }
   function cornerByMouse(c:Corner){
     const a=moduleOf(c.mid);if(!a||!cornerPlan)return;
-    const P=toRoom(c.mouse[0],c.mouse[1]),pull=cornerPullFromDelta(a,DIMS,c.ends,{x:P.x-c.start.x,y:0,z:P.z-c.start.y},!c.alt,snapTol(),planGuides);
+    const P=toRoom(c.mouse[0],c.mouse[1]);let delta:V3={x:P.x-c.start.x,y:0,z:P.z-c.start.y},hit:PointHit|undefined;
+    if(isPointMode(c.mode)){
+      // Alt/Ctrl: сам угол — на точку линии / в пересечение (размеры точно, без шага 10 мм)
+      c.segs??=planSegs([c.mid]);const q=localToRoom(a,c.ends[0]==='hi'?a.module.width:0,c.ends[1]==='hi'?a.module.depth:0);
+      const r=snapDelta(c.mode,toView({x:q.x,y:0,z:q.z},PLAN_LOOK),toView(delta,PLAN_LOOK),c.segs,pointTol());hit=r.hit;delta=viewDelta(r.delta.h,r.delta.v,PLAN_LOOK);
+    }
+    showMark(hit);
+    const pull=cornerPullFromDelta(a,DIMS,c.ends,delta,c.mode==='snap',snapTol(),planGuides);
     c.pull=pull;const plan=cornerPlan(pull);
     setPreview(plan.preview?{...project,modules:plan.preview}:null);
-    say(plan.problem||(c.alt?'Без привязки · ':'')+DIMS.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'')+' · цифры «ширина;глубина» + Enter — точно',!!plan.problem,...c.mouse);
+    say(plan.problem||modeText(c.mode,hit)+DIMS.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм'+(plan.snapped.length?' · по: '+plan.snapped.join(', '):'')+' · цифры «ширина;глубина» + Enter — точно',!!plan.problem,...c.mouse);
   }
   function cornerTypedShow(c:Corner){
-    const a=moduleOf(c.mid);if(!a)return;
+    const a=moduleOf(c.mid);if(!a)return;setMark(null);
     const head='Размер (ширина;глубина): '+c.typed+'▏',t=typedCornerPull(a,DIMS,c.ends,c.typed);
     if(t.problem){setPreview(null);say(head+' · '+t.problem,true,...c.mouse);return;}
     const plan=t.pull&&cornerPlan?.(t.pull);
@@ -77,7 +101,7 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     setPreview(plan.preview?{...project,modules:plan.preview}:null);
     say(head+' · '+(plan.problem||DIMS.map(d=>DIM_WORD[d]+' '+plan[d]).join(' × ')+' мм · Enter — применить, Esc — отмена'),!!plan.problem,...c.mouse);
   }
-  function endCorner(){const c=corner.current;corner.current=null;if(c&&svg.current?.hasPointerCapture(c.pointerId))svg.current.releasePointerCapture(c.pointerId);setPreview(null);setBadge(null);}
+  function endCorner(){const c=corner.current;corner.current=null;if(c&&svg.current?.hasPointerCapture(c.pointerId))svg.current.releasePointerCapture(c.pointerId);setPreview(null);setBadge(null);setMark(null);}
   /** Enter (или отпустили кнопку) с набранным — одной отменой; ≤ 0 — отказ в плашке, остальное проверяет App (как поле панели). */
   function applyTyped(c:Corner){
     const a=moduleOf(c.mid);if(!a){endCorner();return true;}
@@ -101,12 +125,16 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     const t:Tool={phase:'pick',lines:candidateLines(showModules?project.modules.filter(a=>!hiddenModuleIds.includes(a.id)):[],PLAN_LOOK,active,project.room,guides)};
     setTool(t);if(mouse.current)toolMove(t,...mouse.current);else say(PICK_HINT,false);
   }
-  function cancelTool(){setTool(null);setBadge(null);}
+  function cancelTool(){setTool(null);setBadge(null);setMark(null);}
   function toolMove(t:Tool,clientX:number,clientY:number):Tool{
-    const P=toRoom(clientX,clientY);
-    if(t.phase==='pick'){const hover=nearestPlanLine(t.lines,P,10*mmPx()),n={...t,hover};setTool(n);say(hover?'Q: '+hover.what+' — щёлкните, чтобы строить от неё':PICK_HINT,false,clientX,clientY);return n;}
-    const pl=placeGuide(t.base,P,parseTyped(t.typed)),n={...t,at:pl.at,dist:pl.dist};setTool(n);
-    say((t.typed?'Размер: '+t.typed+'▏':'Расстояние '+pl.dist)+' мм · Enter — поставить · Esc — отмена',false,clientX,clientY);return n;
+    let P=toRoom(clientX,clientY);
+    if(t.phase==='pick'){setMark(null);const hover=nearestPlanLine(t.lines,P,10*mmPx()),n={...t,hover};setTool(n);say(hover?'Q: '+hover.what+' — щёлкните, чтобы строить от неё':PICK_HINT,false,clientX,clientY);return n;}
+    // Alt/Ctrl: линия проходит через точку на линии / пересечение у курсора (без набранного числа)
+    const mode=modeRef.current,segs=t.segs??planSegs([]);let hit:PointHit|undefined;
+    if(isPointMode(mode)&&!t.typed){hit=pointSnap(mode,toView(P,PLAN_LOOK),segs,pointTol());if(hit)P=fromView(hit.p,PLAN_LOOK,P);}
+    showMark(hit);
+    const pl=placeGuide(t.base,P,parseTyped(t.typed),!!hit),n={...t,at:pl.at,dist:pl.dist,segs};setTool(n);
+    say((isPointMode(mode)&&!t.typed?hitText(hit,mode)+' · ':'')+(t.typed?'Размер: '+t.typed+'▏':'Расстояние '+pl.dist)+' мм · Enter — поставить · Esc — отмена',false,clientX,clientY);return n;
   }
   function placeNow(t:Tool){
     if(t.phase!=='place'||t.at===undefined||!onGuides)return;
@@ -118,7 +146,7 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
   function downCapture(e:React.PointerEvent){
     if(e.button!==0)return;
     if(tool){
-      e.preventDefault();e.stopPropagation();const t=toolMove(tool,e.clientX,e.clientY);
+      e.preventDefault();e.stopPropagation();modeRef.current=snapMode(e);const t=toolMove(tool,e.clientX,e.clientY);
       if(t.phase==='pick'){if(t.hover)toolMove({phase:'place',base:t.hover,typed:''},e.clientX,e.clientY);}else placeNow(t);
       return;
     }
@@ -155,17 +183,34 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     };
     window.addEventListener('keydown',on,true);return()=>window.removeEventListener('keydown',on,true);
   });
-  function start(e:React.PointerEvent,kind:Drag['kind'],id:string){if(e.button!==0)return;if(kind==='module'&&(e.ctrlKey||e.metaKey)&&onToggleModule){e.preventDefault();e.stopPropagation();onToggleModule(id);return;}(e.currentTarget as SVGGElement).focus();e.stopPropagation();const a=project.modules.find(a=>a.id===id),o=project.room.openings?.find(o=>o.id===id),ob=project.room.obstacles?.find(o=>o.id===id),fx=project.room.fixtures?.find(f=>f.id===id);const pt=point(e);drag.current={kind,id,start:pt,origin:kind==='module'?{x:a!.x,z:a!.z}:kind==='obstacle'?{x:ob!.x,z:ob!.z}:kind==='fixture'?{x:fx!.offset,z:0}:{x:o!.offset,z:0},pointerId:e.pointerId};svg.current?.setPointerCapture(e.pointerId);if(kind==='module')onSelect(id);else {onRoom();if(kind==='obstacle')onObstacleSelect(id);else if(kind==='fixture')onFixtureSelect?.(id);else onOpeningSelect(id);}}
-  function move(e:React.PointerEvent){
-    mouse.current=[e.clientX,e.clientY];
+  function start(e:React.PointerEvent,kind:Drag['kind'],id:string){if(e.button!==0)return;
+    // Ctrl+щелчок без движения — отметить корпус (как раньше, при отпускании); Ctrl+протяжка — перенос с привязкой к пересечениям
+    if(kind==='module'&&(e.ctrlKey||e.metaKey)&&onToggleModule){e.preventDefault();e.stopPropagation();ctrlPress.current={id,x:e.clientX,y:e.clientY,pointerId:e.pointerId};svg.current?.setPointerCapture(e.pointerId);return;}
+    (e.currentTarget as SVGGElement).focus();e.stopPropagation();beginDrag(kind,id,e.clientX,e.clientY,e.pointerId);}
+  function beginDrag(kind:Drag['kind'],id:string,clientX:number,clientY:number,pointerId:number){const a=project.modules.find(a=>a.id===id),o=project.room.openings?.find(o=>o.id===id),ob=project.room.obstacles?.find(o=>o.id===id),fx=project.room.fixtures?.find(f=>f.id===id);const pt=point({clientX,clientY});drag.current={kind,id,start:{x:pt.x,y:pt.y},origin:kind==='module'?{x:a!.x,z:a!.z}:kind==='obstacle'?{x:ob!.x,z:ob!.z}:kind==='fixture'?{x:fx!.offset,z:0}:{x:o!.offset,z:0},pointerId};svg.current?.setPointerCapture(pointerId);if(kind==='module')onSelect(id);else {onRoom();if(kind==='obstacle')onObstacleSelect(id);else if(kind==='fixture')onFixtureSelect?.(id);else onOpeningSelect(id);}}
+  function move(e:PtrLike){
+    mouse.current=[e.clientX,e.clientY];const mode=snapMode(e);modeRef.current=mode;
     const c=corner.current;
-    if(c){c.mouse=[e.clientX,e.clientY];c.alt=e.altKey;if(c.typed){cornerTypedShow(c);return;}if(!c.moved&&Math.hypot(e.clientX-c.origin[0],e.clientY-c.origin[1])<3)return;c.moved=true;cornerByMouse(c);return;}
+    if(c){c.mouse=[e.clientX,e.clientY];c.mode=mode;if(c.typed){cornerTypedShow(c);return;}if(!c.moved&&Math.hypot(e.clientX-c.origin[0],e.clientY-c.origin[1])<3)return;c.moved=true;cornerByMouse(c);return;}
     if(tool){toolMove(tool,e.clientX,e.clientY);return;}
+    // Ctrl+нажатие на корпус потянули — обычный перенос из точки нажатия (дальше — с привязкой Ctrl)
+    const cp=ctrlPress.current;
+    if(cp&&!drag.current){if(Math.hypot(e.clientX-cp.x,e.clientY-cp.y)<4)return;ctrlPress.current=null;beginDrag('module',cp.id,cp.x,cp.y,cp.pointerId);}
     const d=drag.current;if(!d)return;const pt=point(e),n=structuredClone(project);
-    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};let pos=!snapping||e.altKey?{x:Math.round(raw.x),y:raw.y,z:Math.round(raw.z)}:moveAll?snapComposition(project,d.id,raw):groupIds.includes(d.id)?snapComposition(project,d.id,raw,35,groupIds):snapPlacement(project,d.id,raw);pos.y=raw.y;
-      // края корпуса — к вспомогательным линиям плана (общие с «Сверху»), ближе обычной привязки
-      if(snapping&&!e.altKey&&planGuides.length)pos={...snapMoveToGuides(a,raw,pos,planGuides,snapTol()),y:raw.y};if(moveAll||groupIds.includes(d.id))n.modules=moveComposition(project,d.id,pos,moveAll?undefined:groupIds).modules;else Object.assign(a,pos);}
-    else if(d.kind==='obstacle'){const o=n.room.obstacles!.find(o=>o.id===d.id)!;o.x=Math.round(d.origin.x+pt.x-d.start.x);o.z=Math.round(d.origin.z+pt.y-d.start.y);if(snapping&&!e.altKey){const tol=35;if(Math.abs(o.x)<=tol)o.x=0;else if(Math.abs(o.x+o.width-r.width)<=tol)o.x=r.width-o.width;if(Math.abs(o.z)<=tol)o.z=0;else if(Math.abs(o.z+o.depth-r.depth)<=tol)o.z=r.depth-o.depth;}}
+    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};let pos:{x:number;y:number;z:number},hit:PointHit|undefined;
+      if(isPointMode(mode)){
+        // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
+        const orig={...a,x:d.origin.x,z:d.origin.z};d.ref??=nearestOutlineCorner(carcassCorners(orig),PLAN_LOOK,toView({x:d.start.x,y:0,z:d.start.y},PLAN_LOOK));
+        d.segs??=planSegs(moveAll?project.modules.map(x=>x.id):groupIds.includes(d.id)?groupIds:[d.id]);
+        const r=snapDelta(mode,d.ref,toView({x:raw.x-d.origin.x,y:0,z:raw.z-d.origin.z},PLAN_LOOK),d.segs,pointTol()),dv=viewDelta(r.delta.h,r.delta.v,PLAN_LOOK);hit=r.hit;
+        pos=hit?{x:Math.round((d.origin.x+dv.x)*10)/10,y:raw.y,z:Math.round((d.origin.z+dv.z)*10)/10}:{x:Math.round(raw.x),y:raw.y,z:Math.round(raw.z)};
+      }else{
+        pos=!snapping||mode==='free'?{x:Math.round(raw.x),y:raw.y,z:Math.round(raw.z)}:moveAll?snapComposition(project,d.id,raw):groupIds.includes(d.id)?snapComposition(project,d.id,raw,35,groupIds):snapPlacement(project,d.id,raw);pos.y=raw.y;
+        // края корпуса — к вспомогательным линиям плана (общие с «Сверху»), ближе обычной привязки
+        if(snapping&&mode==='snap'&&planGuides.length)pos={...snapMoveToGuides(a,raw,pos,planGuides,snapTol()),y:raw.y};
+      }
+      showMark(hit);if(moveAll||groupIds.includes(d.id))n.modules=moveComposition(project,d.id,pos,moveAll?undefined:groupIds).modules;else Object.assign(a,pos);}
+    else if(d.kind==='obstacle'){const o=n.room.obstacles!.find(o=>o.id===d.id)!;o.x=Math.round(d.origin.x+pt.x-d.start.x);o.z=Math.round(d.origin.z+pt.y-d.start.y);if(snapping&&mode==='snap'){const tol=35;if(Math.abs(o.x)<=tol)o.x=0;else if(Math.abs(o.x+o.width-r.width)<=tol)o.x=r.width-o.width;if(Math.abs(o.z)<=tol)o.z=0;else if(Math.abs(o.z+o.depth-r.depth)<=tol)o.z=r.depth-o.depth;}}
     else if(d.kind==='fixture'){const f=n.room.fixtures!.find(f=>f.id===d.id)!,horizontal=f.wall==='back'||f.wall==='front',length=horizontal?r.width:r.depth;f.offset=Math.max(0,Math.min(length-f.width,Math.round((d.origin.x+(horizontal?pt.x-d.start.x:pt.y-d.start.y))/10)*10));}
     else{const o=n.room.openings!.find(o=>o.id===d.id)!,horizontal=o.wall==='back'||o.wall==='front',length=horizontal?r.width:r.depth;o.offset=Math.max(0,Math.min(length-o.width,Math.round((d.origin.x+(horizontal?pt.x-d.start.x:pt.y-d.start.y))/10)*10));}
     setPreview(n);
@@ -177,8 +222,22 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
       if(c.typed&&parseCornerTyped(c.typed)){const a=moduleOf(c.mid),problem=a&&typedCornerPull(a,DIMS,c.ends,c.typed).problem;if(!applyTyped(c)){endCorner();if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Размер не применён',text:problem}}));}return;}
       endCorner();if(c.moved&&c.pull)onCorner?.(c.pull);return;
     }
-    const d=drag.current;if(!d)return;if(preview)update(preview);drag.current=null;setPreview(null);if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);}
-  function cancel(){if(corner.current)endCorner();drag.current=null;setPreview(null);}
+    const cp=ctrlPress.current;if(cp&&!drag.current){ctrlPress.current=null;if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);onToggleModule?.(cp.id);return;}
+    const d=drag.current;if(!d)return;if(preview)update(preview);drag.current=null;setPreview(null);setMark(null);if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);}
+  function cancel(){if(corner.current)endCorner();drag.current=null;ctrlPress.current=null;setPreview(null);setMark(null);}
+  // Нажали/отпустили Alt, Ctrl, Shift без движения мыши — привязка пересчитывается сразу (угол, перенос, линия Q)
+  useEffect(()=>{
+    const on=(e:KeyboardEvent)=>{
+      if(!['Alt','Control','Shift','Meta'].includes(e.key))return;
+      const m={altKey:e.altKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey};modeRef.current=snapMode(m);
+      if(e.key==='Alt'&&(corner.current||drag.current||tool))e.preventDefault(); // Alt не уводит фокус в меню браузера
+      const at=mouse.current,c=corner.current;if(!at)return;
+      if(c){if(c.moved&&!c.typed){c.mode=modeRef.current;cornerByMouse(c);}return;}
+      if(drag.current){if(preview)move({clientX:at[0],clientY:at[1],...m});return;}
+      if(tool?.phase==='place')toolMove(tool,at[0],at[1]);
+    };
+    window.addEventListener('keydown',on);window.addEventListener('keyup',on);return()=>{window.removeEventListener('keydown',on);window.removeEventListener('keyup',on);};
+  });
   function keyboard(e:React.KeyboardEvent,kind:Drag['kind'],id:string){
     if(e.ctrlKey||e.metaKey||e.altKey||drag.current)return;
     const select=()=>{if(kind==='module')onSelect(id);else {onRoom();if(kind==='obstacle')onObstacleSelect(id);else onOpeningSelect(id);}};
@@ -234,6 +293,9 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
     {planGuides.map(g=>{const {a,b}=seg(g),sel=g.id===selGuide;return <line key={'guide-'+g.id} className="plan-guide" data-guide={g.id} data-at={g.at} x1={a.x} y1={a.z} x2={b.x} y2={b.z} stroke={sel?'#e8590c':'#2f6fdb'} strokeWidth={u*(sel?2.4:1.6)} strokeDasharray={`${u*10} ${u*6}`} pointerEvents="none"/>;})}
     {tool?.phase==='pick'&&tool.hover&&<line className="plan-guide-hover" x1={tool.hover.a.x} y1={tool.hover.a.z} x2={tool.hover.b.x} y2={tool.hover.b.z} stroke="#e8590c" strokeWidth={u*3} pointerEvents="none"/>}
     {tool?.phase==='place'&&tool.at!==undefined&&(()=>{const [a,b]=guideSegment({n:tool.base.n,at:tool.at},PLAN_LOOK,center);return <line className="plan-guide-ghost" x1={a.x} y1={a.z} x2={b.x} y2={b.z} stroke="#e8590c" strokeWidth={u*2} strokeDasharray={`${u*8} ${u*5}`} pointerEvents="none"/>;})()}
+    {mark&&(()=>{const P=fromView(mark.p,PLAN_LOOK,{x:0,y:0,z:0}),s=u*7,at=mark.p.h+';'+mark.p.v;return mark.kind==='cross'
+      ?<g className="plan-snap-mark" data-kind="cross" data-at={at} stroke="#e8590c" strokeWidth={u*2}><line x1={P.x-s} y1={P.z-s} x2={P.x+s} y2={P.z+s}/><line x1={P.x-s} y1={P.z+s} x2={P.x+s} y2={P.z-s}/></g>
+      :<circle className="plan-snap-mark" data-kind="line" data-at={at} cx={P.x} cy={P.z} r={s} fill="#ffffff88" stroke="#e8590c" strokeWidth={u*2}/>;})()}
     {showCorners&&(['lo','hi'] as const).flatMap(w=>(['lo','hi'] as const).map(d=>{const q=localToRoom(act,w==='hi'?act.module.width:0,d==='hi'?act.module.depth:0),hs=u*16,on=corner.current?.ends.join('-')===w+'-'+d;return <rect key={'corner-'+w+d} className="plan-corner" data-corner={w+'-'+d} role="button" aria-label="Растянуть за угол: ширина и глубина" x={q.x-hs/2} y={q.z-hs/2} width={hs} height={hs} rx={u*3} fill={on?'#1f3fc4':'#325bee'} stroke="#fff" strokeWidth={u*2} style={{cursor:'move',touchAction:'none'}} onPointerDown={e=>startCorner(e,[w,d])}><title>{cornerHandleTitle(DIMS)}</title></rect>;}))}</svg>
-    {badge&&<div className={'drag-badge plan-badge'+(badge.invalid?' invalid':'')} role="status" style={{left:badge.x,top:badge.y,bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'}}>{badge.text}</div>}{r.survey&&<label className="plan-slice">Сечение стен на высоте, мм <input aria-label="Высота сечения стен" type="number" min={0} max={r.height} value={sliceHeight} onChange={e=>{const v=Number(e.target.value);if(Number.isFinite(v)&&v>=0&&v<=r.height)setSliceHeight(v);}}/><span> Зелёная линия — измеренная сетка; пунктир — недостаточно точек. Мебель остаётся прямой.</span></label>}{!!p.dimensions?.length&&<details className="plan-measure-list"><summary>Пользовательские размеры ({p.dimensions.length})</summary>{p.dimensions.map((d,i)=><div key={d.id}><span>{i+1}. {Math.round(Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1]))} мм · ({d.from.join('; ')}) → ({d.to.join('; ')})</span><button className="text-action" aria-label={'Удалить размер '+(i+1)} onClick={()=>update({...project,dimensions:project.dimensions?.filter(x=>x.id!==d.id)})}>Удалить</button></div>)}<p>Размеры привязаны к координатам помещения. После перестановки мебели проверьте их заново.</p></details>}<div className={"plan-help"+(problem?" invalid":"")} role={problem?"alert":undefined}>{problem||warnings.find(w=>w.moduleId===active)?.message||warnings[0]?.message||(moveAll?"Двигается вся композиция · ":groupIds.includes(active)?"Двигается отмеченная группа · ":"")+(snapping?"Alt — без привязки · Толстая линия — фасад · Пунктир — верхний модуль":"Привязки отключены · Толстая линия — фасад · Пунктир — верхний модуль")+(onGuides?" · Q — вспомогательная линия":"")+(stretchable&&onCorner?" · Угол выбранного корпуса — ширина и глубина («600;550» + Enter)":"")}</div><p className="field-note plan-keyboard-help">Выберите корпус, проём или объект замера: стрелки — 10 мм, Shift + стрелки — 100 мм. Проёмы двигаются вдоль своей стены. Клавиши работают без привязок.{onCorner&&' Угол выбранного корпуса: тяните — ширина и глубина, противоположный угол на месте; во время тяги наберите «ширина;глубина» (одно число — только ширина, «;550» — только глубина) и Enter, Esc — отмена.'}{onGuides&&' Q — вспомогательная линия (общая с видом «Сверху»): щёлкните край корпуса или стену, наберите расстояние и Enter; щелчок по линии и Delete — убрать.'}</p></div>;
+    {badge&&<div className={'drag-badge plan-badge'+(badge.invalid?' invalid':'')} role="status" style={{left:badge.x,top:badge.y,bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'}}>{badge.text}</div>}{r.survey&&<label className="plan-slice">Сечение стен на высоте, мм <input aria-label="Высота сечения стен" type="number" min={0} max={r.height} value={sliceHeight} onChange={e=>{const v=Number(e.target.value);if(Number.isFinite(v)&&v>=0&&v<=r.height)setSliceHeight(v);}}/><span> Зелёная линия — измеренная сетка; пунктир — недостаточно точек. Мебель остаётся прямой.</span></label>}{!!p.dimensions?.length&&<details className="plan-measure-list"><summary>Пользовательские размеры ({p.dimensions.length})</summary>{p.dimensions.map((d,i)=><div key={d.id}><span>{i+1}. {Math.round(Math.hypot(d.to[0]-d.from[0],d.to[1]-d.from[1]))} мм · ({d.from.join('; ')}) → ({d.to.join('; ')})</span><button className="text-action" aria-label={'Удалить размер '+(i+1)} onClick={()=>update({...project,dimensions:project.dimensions?.filter(x=>x.id!==d.id)})}>Удалить</button></div>)}<p>Размеры привязаны к координатам помещения. После перестановки мебели проверьте их заново.</p></details>}<div className={"plan-help"+(problem?" invalid":"")} role={problem?"alert":undefined}>{problem||warnings.find(w=>w.moduleId===active)?.message||warnings[0]?.message||(moveAll?"Двигается вся композиция · ":groupIds.includes(active)?"Двигается отмеченная группа · ":"")+(snapping?"Shift — без привязки · Alt — к линии · Ctrl — к пересечению · Толстая линия — фасад · Пунктир — верхний модуль":"Привязки отключены · Толстая линия — фасад · Пунктир — верхний модуль")+(onGuides?" · Q — вспомогательная линия":"")+(stretchable&&onCorner?" · Угол выбранного корпуса — ширина и глубина («600;550» + Enter)":"")}</div><p className="field-note plan-keyboard-help">Выберите корпус, проём или объект замера: стрелки — 10 мм, Shift + стрелки — 100 мм. Проёмы двигаются вдоль своей стены. Клавиши работают без привязок.{onCorner&&' Угол выбранного корпуса: тяните — ширина и глубина, противоположный угол на месте; во время тяги наберите «ширина;глубина» (одно число — только ширина, «;550» — только глубина) и Enter, Esc — отмена.'}{onGuides&&' Q — вспомогательная линия (общая с видом «Сверху»): щёлкните край корпуса или стену, наберите расстояние и Enter; щелчок по линии и Delete — убрать.'}</p></div>;
 }
