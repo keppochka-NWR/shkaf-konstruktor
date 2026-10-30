@@ -1,7 +1,7 @@
 // Решение Макса 29.10.2026 мышью, как менеджер (своя сборка; проект для проверки читается из хранилища браузера):
 // npx tsx scripts/rotate-group-facades-scenario.ts <url ?fresh=1> <outDir>
 //  R. Поворот в обе стороны: кнопки «↺»/«↻» на панели сцены, R / Shift+R, круговое меню «Повернуть ↻/↺»; Ctrl+Z возвращает.
-//  G. Групповые фасады: три шкафа Ctrl+щелчком → раздел «Фасады выделенных модулей · 3» → декор фасадов и ручки → у всех трёх;
+//  G. Групповые фасады: три шкафа Shift+щелчком → раздел «Фасады выделенных модулей · 3» → декор фасадов и ручки → у всех трёх;
 //     «— разные —» до правки; одна отмена Ctrl+Z возвращает всех трёх; модуль без фасадов в группе — «не применено: причина».
 import { chromium, type Locator } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -102,11 +102,11 @@ try {
   p = await current();
   check("G0 петли Blum у одного шкафа (по одному)", p.modules.find((x) => x.id === wardrobes[1].id)!.module.hingeBrand === "blum");
   await click(item(idx(wardrobes[0].id)));
-  for (const a of wardrobes.slice(1)) await click(item(idx(a.id)), { modifiers: ["Control"] });
-  await click(item(idx(wardrobes[0].id)), { modifiers: ["Control"] });
-  await click(item(idx(shelf.id)), { modifiers: ["Control"] });
+  for (const a of wardrobes.slice(1)) await click(item(idx(a.id)), { modifiers: ["Shift"] });
+  await click(item(idx(wardrobes[0].id)), { modifiers: ["Shift"] });
+  await click(item(idx(shelf.id)), { modifiers: ["Shift"] });
   const panel = page.getByTestId("group-facades");
-  check("G1 Ctrl+щелчок по 3 шкафам и стеллажу — раздел «Фасады выделенных модулей · 4»", await panel.isVisible() && /· 4/.test(await panel.locator("summary").innerText()));
+  check("G1 Shift+щелчок по 3 шкафам и стеллажу — раздел «Фасады выделенных модулей · 4»", await panel.isVisible() && /· 4/.test(await panel.locator("summary").innerText()));
   const hingeSel = panel.locator('select[aria-label="Группа: Петли"]');
   const hingeShown = await hingeSel.evaluate((s) => (s as HTMLSelectElement).selectedOptions[0]?.textContent ?? "");
   check("G1b поле «Петли» у группы — «— разные —» (у одного Blum, у двух GTV)", /разные/.test(hingeShown), hingeShown);
@@ -154,11 +154,11 @@ try {
   p = await current();
   check("G9 круговое меню группы: петли GTV — у трёх шкафов разом", wardrobes.every((a) => (p.modules.find((x) => x.id === a.id)!.module.hingeBrand ?? "gtv") === "gtv"));
   await shot("G9-after-radial-hinges");
-  // поворот группы: оставить в группе два шкафа (Ctrl+щелчок снимает), R — оба по часовой, Ctrl+Z — оба назад
+  // поворот группы: оставить в группе два шкафа (Shift+щелчок снимает), R — оба по часовой, Ctrl+Z — оба назад
   await page.keyboard.press("Escape").catch(() => {}); // закрыть меню, если открыто
   p = await current();
-  if (!(await page.getByTestId("group-facades").isVisible().catch(() => false))) { await click(item(idx(wardrobes[0].id))); for (const a of [wardrobes[0], wardrobes[1]]) await click(item(idx(a.id)), { modifiers: ["Control"] }); }
-  else { await click(item(idx(wardrobes[2].id)), { modifiers: ["Control"] }); await click(item(idx(shelf.id)), { modifiers: ["Control"] }); }
+  if (!(await page.getByTestId("group-facades").isVisible().catch(() => false))) { await click(item(idx(wardrobes[0].id))); for (const a of [wardrobes[0], wardrobes[1]]) await click(item(idx(a.id)), { modifiers: ["Shift"] }); }
+  else { await click(item(idx(wardrobes[2].id)), { modifiers: ["Shift"] }); await click(item(idx(shelf.id)), { modifiers: ["Shift"] }); }
   const g2 = [wardrobes[0].id, wardrobes[1].id], rb = g2.map((id) => rot(p, id));
   await page.mouse.move(5, 300); await page.keyboard.press("r"); p = await current();
   check("G10 R на группе из 2 — оба шкафа по часовой, в комнате", g2.every((id, i) => rot(p, id) === (rb[i] + 270) % 360) && inside(p), g2.map((id) => rot(p, id)).join(","));
@@ -203,7 +203,7 @@ try {
   check("M4 Ctrl+Z — стеллаж снова 2000", p.modules.find((x) => x.id === shelf.id)!.module.height === 2000);
   // (b) мультивыбор: «Выровнять высоту по «шкаф» (2500)» — всем отмеченным одним шагом
   await click(item(idx(wardrobes[2].id)));
-  for (const a of [wardrobes[2], wardrobes[0], wardrobes[1], shelf]) await click(item(idx(a.id)), { modifiers: ["Control"] });
+  for (const a of [wardrobes[2], wardrobes[0], wardrobes[1], shelf]) await click(item(idx(a.id)), { modifiers: ["Shift"] });
   await item(idx(wardrobes[2].id)).click({ button: "right" }); await page.waitForTimeout(500);
   await click(page.getByRole("menuitem", { name: /^Выровнять отмеченные · 4/ }).first());
   await shot("M5-radial-align-group");

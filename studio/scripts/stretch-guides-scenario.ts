@@ -17,11 +17,12 @@
 //     щелчок по линии + Delete, Ctrl+Z, Esc отменяет Q, «Убрать вспомогательные линии».
 // 11. Привязки клавишами (ветка claude/snap-binds, решение Макса 29.10): «Спереди» линии x = 1900 и y = 2250;
 //     Ctrl + угол → в пересечение линий (ширина 900, высота 2250); Alt + угол → на линию (ширина 900, высота по мыши до 1 мм);
-//     Shift + угол — без привязки (1 мм); Alt + «↔» → край на линию; Ctrl+щелчок по «Сосед» — отмечен (и снова — снят), не сдвинут;
+//     без привязки — галочка «Привязки корпусов» (с 30.10, не Shift); Alt + «↔» → край на линию; Ctrl+щелчок — не отмечает;
+//     Shift+щелчок по «Сосед» — отмечен (и снова — снят); Shift+протяжка — отмеченная группа едет вместе (решение Макса 30.10);
 //     Ctrl + перенос «Сосед» → левый нижний угол в пересечение линии и пола (x = 1900); Q + Ctrl → через угол «Сосед» (2800);
 //     Q + Alt → на правый край «Сосед» (3400).
 // 12. «План»: линии x = 1900 и z = 653; Ctrl + угол → ширина 900, глубина 650; Alt + перенос → правый край на линию (x = 1300);
-//     Ctrl+щелчок по «Сосед» — отмечен/снят; Q + Ctrl → через угол «Сосед» (2800).
+//     Shift+щелчок по «Сосед» — отмечен/снят, Shift+протяжка — группа; Q + Ctrl → через угол «Сосед» (2800).
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, type Module } from "../src/model";
@@ -305,7 +306,7 @@ try {
   check("10. линии убраны", (await guides()).length === 0 && !(await pclear.count()));
   await shot("plan-cleared");
 
-  // 11. Привязки клавишами «Спереди»: Alt — на линию, Ctrl — пересечение, Shift — без привязки
+  // 11. Привязки клавишами «Спереди»: Alt — на линию, Ctrl — пересечение; Shift — отметить / тянуть группу (с 30.10), без привязки — галочка
   type Pt = { x: number; y: number };
   /** Тяга с зажатой клавишей (зажата до нажатия кнопки мыши): плашка и метка привязки перед отпусканием. */
   async function modDrag(mod: "Alt" | "Control" | "Shift", from: Pt, to: Pt, name: string, badgeSel = ".drag-badge", markSel = ".snap-mark:not([hidden])") {
@@ -318,7 +319,9 @@ try {
     await page.mouse.up(); await page.keyboard.up(mod); await page.waitForTimeout(600);
     return { live, mark };
   }
-  async function modClick(mod: "Alt" | "Control", p: Pt) { await page.keyboard.down(mod); await page.mouse.click(p.x, p.y); await page.keyboard.up(mod); await page.waitForTimeout(400); }
+  /** Галочка «Привязки корпусов» (с 30.10 «без привязки» — только она; Shift отмечает корпуса и тянет группу). */
+  const snapToggle = async (on: boolean) => { const cb = page.getByRole("checkbox", { name: "Привязки корпусов" }); if ((await cb.isChecked()) !== on) await cb.evaluate((el) => (el as HTMLInputElement).click()); await page.waitForTimeout(250); };
+  async function modClick(mod: "Alt" | "Control" | "Shift", p: Pt) { await page.keyboard.down(mod); await page.mouse.click(p.x, p.y); await page.keyboard.up(mod); await page.waitForTimeout(400); }
   const status = async () => (await page.locator(".orbit-help").first().innerText().catch(() => "")).replace(/\s+/g, " ");
   await view("s");
   const f0 = (await handle("lo-lo"))!, f1 = (await handle("hi-hi"))!, f2 = (await handle("hi-lo"))!;
@@ -366,10 +369,16 @@ try {
   check("11. Alt + угол → на линию: ширина ровно 900, высота по мыши ≈ 2103 (до 1 мм)", b11a.a.w === 900 && Math.abs(b11a.a.h - 2103) <= 3 && b11a.a.x === 1000, fmt(b11a.a) + ` · «${a11.live}»`);
   check("11. Alt: плашка «Alt · на линии» и метка-кружок", /Alt · на линии: вспомогательная линия/.test(a11.live) && a11.mark === "line", `«${a11.live}» · ${a11.mark}`);
   await key("Control+z"); await settled((b) => b.a.w === 600);
-  // Shift + угол — без привязки (раньше Alt)
-  const s11 = await modDrag("Shift", (await handle("hi-hi"))!, { x: f1.x + 103 * fk, y: f1.y - 148 * fk }, "shift-corner");
+  // без привязки — галочка «Привязки корпусов» снята (решение Макса 30.10: Shift больше не «без привязки»)
+  await snapToggle(false);
+  const s11 = await drag((await handle("hi-hi"))!, { x: f1.x + 103 * fk, y: f1.y - 148 * fk }, "nosnap-corner");
+  await snapToggle(true);
   const b11s = await settled((b) => b.a.w !== 600);
-  check("11. Shift + угол — без привязки: ≈ 703 × 2148 (не 700 × 2150)", Math.abs(b11s.a.w - 703) <= 2 && Math.abs(b11s.a.h - 2148) <= 2 && /Без привязки/.test(s11.live), fmt(b11s.a) + ` · «${s11.live}»`);
+  check("11. галочка «Привязки корпусов» снята, угол — без привязки: ≈ 703 × 2148 (не 700 × 2150)", Math.abs(b11s.a.w - 703) <= 2 && Math.abs(b11s.a.h - 2148) <= 2 && /Без привязки/.test(s11), fmt(b11s.a) + ` · «${s11}»`);
+  await key("Control+z"); await settled((b) => b.a.w === 600);
+  const sh11 = await modDrag("Shift", (await handle("hi-hi"))!, { x: f1.x + 103 * fk, y: f1.y - 148 * fk }, "shift-corner-snaps");
+  const b11h = await settled((b) => b.a.w !== 600);
+  check("11. Shift + угол — привязка как обычно (700 × 2150, Shift больше не «без привязки»)", b11h.a.w === 700 && b11h.a.h === 2150 && !/Без привязки/.test(sh11.live), fmt(b11h.a) + ` · «${sh11.live}»`);
   await key("Control+z"); await settled((b) => b.a.w === 600);
   // Alt + «↔» → край на линию
   const sr = await page.locator(".stretch-handle[data-side=right]").first().boundingBox();
@@ -380,26 +389,46 @@ try {
     check("11. Alt + «↔» → правый край на линию: ширина 900", b11e.a.w === 900 && b11e.a.x === 1000 && /Alt · на линии/.test(e11.live), fmt(b11e.a) + ` · «${e11.live}»`);
     await key("Control+z"); await settled((b) => b.a.w === 600);
   } else check("11. ручка «↔» видна", false);
-  // Ctrl+щелчок без движения — по-прежнему отметить корпус
-  const nb = { x: X(3100), y: Y(1000) };
+  // решение Макса 30.10: отметить — Shift+щелчок; Ctrl+щелчок больше не отмечает (Ctrl — только привязка к пересечению)
+  const nb = { x: X(3100), y: Y(1000) }, sb = { x: X(1300), y: Y(1000) };
+  const marks = async () => page.locator(".module-list .module-group-selected").count();
   await modClick("Control", nb);
+  const stc = await status(), bxc = await boxes();
+  check("11. Ctrl+щелчок по «Сосед» — НЕ отмечает, не сдвигает", !/Отмеченные корпуса/.test(stc) && (await marks()) === 0 && bxc.b.x === 2800, stc);
+  await page.mouse.click(sb.x, sb.y); await page.waitForTimeout(400); // снова выбран «Шкаф»
+  await modClick("Shift", nb);
   const st1 = await status(), bx1 = await boxes();
-  check("11. Ctrl+щелчок по «Сосед» — отмечен (группа), не сдвинут", /Отмеченные корпуса/.test(st1) && bx1.b.x === 2800, st1);
-  await modClick("Control", nb);
-  check("11. Ctrl+щелчок ещё раз — снят", !/Отмеченные корпуса/.test(await status()));
-  // критик 29.10 п.4: Ctrl+щелчок с дрожанием 6 px — щелчок (отмечен), корпус не сдвинут
-  const jitter = async (p: Pt) => { await page.mouse.move(p.x, p.y); await page.keyboard.down("Control"); await page.mouse.down(); await page.mouse.move(p.x + 4, p.y + 2); await page.mouse.move(p.x + 6, p.y); await page.mouse.up(); await page.keyboard.up("Control"); await page.waitForTimeout(400); };
+  check("11. Shift+щелчок по «Сосед» — отмечен (группа), не сдвинут", /Отмеченные корпуса/.test(st1) && (await marks()) === 1 && bx1.b.x === 2800, st1);
+  await modClick("Shift", nb);
+  check("11. Shift+щелчок ещё раз — снят", !/Отмеченные корпуса/.test(await status()) && (await marks()) === 0);
+  // критик 29.10 п.4 (тогда для Ctrl): Shift+щелчок с дрожанием 6 px — щелчок (отмечен), корпус не сдвинут
+  const jitter = async (p: Pt) => { await page.mouse.move(p.x, p.y); await page.keyboard.down("Shift"); await page.mouse.down(); await page.mouse.move(p.x + 4, p.y + 2); await page.mouse.move(p.x + 6, p.y); await page.mouse.up(); await page.keyboard.up("Shift"); await page.waitForTimeout(400); };
   await jitter(nb);
   const stj = await status(), bxj = await boxes();
-  check("11. Ctrl+щелчок с дрожанием 6 px — отмечен, не сдвинут", /Отмеченные корпуса/.test(stj) && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
-  await modClick("Control", nb);
-  // критик 29.10 п.8: «Прозрачный корпус» — Ctrl+протяжка за оболочку «Сосед» тоже переносит
+  check("11. Shift+щелчок с дрожанием 6 px — отмечен, не сдвинут", /Отмеченные корпуса/.test(stj) && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
+  // Shift+протяжка «Шкаф» (ещё не отмечен) при отмеченном «Сосед» — едут оба, «Шкаф» отмечается; одна отмена
+  const gm = await modDrag("Shift", sb, { x: sb.x + 100 * fk, y: sb.y }, "shift-group-move");
+  const bg = await settled((b) => b.a.x !== 1000);
+  check("11. Shift+протяжка — группа едет вместе (+100: «Шкаф» 1100, «Сосед» 2900), «Шкаф» отмечен", Math.abs(bg.a.x - 1100) <= 5 && bg.b.x - bg.a.x === 1800 && bg.a.y === 0 && (await marks()) === 2, fmt(bg.a) + " / " + fmt(bg.b) + ` · «${gm.live}»`);
+  await key("Control+z");
+  const bgu = await settled((b) => b.a.x === 1000);
+  check("11. Ctrl+Z — группа обратно одной отменой", bgu.a.x === 1000 && bgu.b.x === 2800, fmt(bgu.a) + " / " + fmt(bgu.b));
+  await modClick("Shift", nb); await modClick("Shift", sb);
+  check("11. Shift+щелчок — отметки сняты", (await marks()) === 0);
+  // Shift+протяжка, упирающаяся в стену, — отказ всей группы (ничего не сдвинуто)
+  await modClick("Shift", nb);
+  await modDrag("Shift", sb, { x: sb.x + 900 * fk, y: sb.y }, "shift-group-refuse");
+  const br = await boxes();
+  check("11. Shift+протяжка группы за стену — отказ, оба на месте", br.a.x === 1000 && br.b.x === 2800, fmt(br.a) + " / " + fmt(br.b));
+  await modClick("Shift", nb); await modClick("Shift", sb);
+  // критик 29.10 п.8: «Прозрачный корпус» — Shift+протяжка за оболочку «Сосед» тоже переносит (и отмечает его)
   await page.getByRole("button", { name: "Прозрачный корпус" }).click(); await page.waitForTimeout(600);
   const tgrab = { x: X(3100), y: Y(1700) };
-  await modDrag("Control", tgrab, { x: tgrab.x - 200 * fk, y: tgrab.y - 2 }, "transparent-ctrl-move");
+  await modDrag("Shift", tgrab, { x: tgrab.x - 200 * fk, y: tgrab.y - 2 }, "transparent-shift-move");
   const b11t = await settled((b) => b.b.x !== 2800);
-  check("11. прозрачный корпус: Ctrl+протяжка «Сосед» — перенос (≈ 2600)", Math.abs(b11t.b.x - 2600) <= 6 && !/Отмеченные корпуса/.test(await status()), fmt(b11t.b));
+  check("11. прозрачный корпус: Shift+протяжка «Сосед» — перенос (≈ 2600)", Math.abs(b11t.b.x - 2600) <= 6, fmt(b11t.b));
   if (b11t.b.x !== 2800) { await key("Control+z"); await settled((b) => b.b.x === 2800); }
+  if ((await marks()) > 0) await modClick("Shift", nb);
   await page.getByRole("button", { name: "Прозрачный корпус" }).click(); await page.waitForTimeout(600);
   // Ctrl + перенос «Сосед»: левый нижний угол — в пересечение линии x = 1900 и пола
   const grab = { x: X(2800) + 25, y: Y(0) - 40 };
@@ -450,11 +479,13 @@ try {
   const bw = await settled((b) => b.a.z !== 3);
   check("11. «Слева»: перенос вперёд 60 px с дрожанием 6 px вверх — на полу (y = 0), глубина сдвинута", bw.a.y === 0 && bw.a.z !== 3, fmt(bw.a));
   if (bw.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.z === 3); }
-  await modDrag("Shift", lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 2 }, "left-shift-wobble");
+  await snapToggle(false); // без привязки — галочка (до 30.10 — Shift)
+  await drag(lgrab, { x: lgrab.x + 60 * Math.sign(lz), y: lgrab.y - 2 }, "left-nosnap-wobble");
   const bs = await settled((b) => b.a.z !== 3);
-  check("11. «Слева»: Shift-перенос с дрожанием 2 px — на полу (y = 0)", bs.a.y === 0 && bs.a.z !== 3, fmt(bs.a));
+  check("11. «Слева»: перенос без привязки с дрожанием 2 px — на полу (y = 0)", bs.a.y === 0 && bs.a.z !== 3, fmt(bs.a));
   if (bs.a.z !== 3) { await key("Control+z"); await settled((b) => b.a.z === 3); }
-  await modDrag("Shift", lgrab, { x: lgrab.x + 4 * Math.sign(lz), y: lgrab.y - 40 }, "left-shift-up");
+  await drag(lgrab, { x: lgrab.x + 4 * Math.sign(lz), y: lgrab.y - 40 }, "left-nosnap-up");
+  await snapToggle(true);
   const bu = await settled((b) => b.a.y !== 0);
   check("11. «Слева»: вертикальный ход 40 px главный — высота меняется", bu.a.y > 100, fmt(bu.a));
   if (bu.a.y !== 0) { await key("Control+z"); await settled((b) => b.a.y === 0); }
@@ -483,10 +514,21 @@ try {
   check("12. Alt + перенос на плане → правый край на линию: x = 1300, z по мыши ≈ 20", b12m.a.x === 1300 && Math.abs(b12m.a.z - 20) <= 3 && Number.isInteger(b12m.a.z) && m12.mark === "line", fmt(b12m.a) + ` · «${m12.live}» · ${m12.mark}`);
   await key("Control+z"); await settled((b) => b.a.x === 1000);
   const pnb = { x: PX(3100), y: PZ(278) }, fill = () => page.locator('g[aria-label="На плане: Сосед"] polygon').first().getAttribute("fill");
+  const psb = { x: PX(1300), y: PZ(278) };
   await modClick("Control", pnb);
-  check("12. Ctrl+щелчок по «Сосед» на плане — отмечен, не сдвинут", (await fill()) === "#cde6df" && (await boxes()).b.x === 2800, String(await fill()));
-  await modClick("Control", pnb);
-  check("12. Ctrl+щелчок ещё раз — снят", (await fill()) !== "#cde6df", String(await fill()));
+  check("12. Ctrl+щелчок по «Сосед» на плане — НЕ отмечает, не сдвигает", (await fill()) !== "#cde6df" && (await marks()) === 0 && (await boxes()).b.x === 2800, String(await fill()));
+  await page.mouse.click(psb.x, psb.y); await page.waitForTimeout(400); // снова выбран «Шкаф»
+  await modClick("Shift", pnb);
+  check("12. Shift+щелчок по «Сосед» на плане — отмечен, не сдвинут", (await fill()) === "#cde6df" && (await boxes()).b.x === 2800, String(await fill()));
+  // Shift+протяжка «Шкаф» на плане — группа едет вместе, одна отмена
+  await modDrag("Shift", psb, { x: psb.x + 300 * px, y: psb.y }, "plan-shift-group-move", ".plan-badge", ".plan-snap-mark");
+  const pg = await settled((b) => b.a.x !== 1000);
+  check("12. Shift+протяжка на плане — «Шкаф» и «Сосед» едут вместе (+300), «Шкаф» отмечен", Math.abs(pg.a.x - 1300) <= 5 && pg.b.x - pg.a.x === 1800 && (await marks()) === 2, fmt(pg.a) + " / " + fmt(pg.b));
+  await key("Control+z");
+  const pgu = await settled((b) => b.a.x === 1000);
+  check("12. Ctrl+Z — группа обратно одной отменой", pgu.a.x === 1000 && pgu.b.x === 2800, fmt(pgu.a) + " / " + fmt(pgu.b));
+  await modClick("Shift", pnb); await modClick("Shift", psb);
+  check("12. Shift+щелчок ещё раз — сняты", (await fill()) !== "#cde6df" && (await marks()) === 0, String(await fill()));
   await page.mouse.move(pedge.x, pedge.y); await key("q"); await page.mouse.click(pedge.x, pedge.y); await page.waitForTimeout(150);
   await page.keyboard.down("Control"); await page.mouse.move(PX(2800) + 4, PZ(3) + 4); await page.waitForTimeout(200);
   const q12 = (await page.locator(".plan-badge").innerText().catch(() => "")).trim();

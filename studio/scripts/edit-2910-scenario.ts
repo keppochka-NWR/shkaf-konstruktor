@@ -1,8 +1,8 @@
 // Правки редактирования по списку Макса 29.10.2026 — мышью, как менеджер (ветка claude/fix-edit-2910). Проект для проверки читается из
 // хранилища браузера (только чтение). npx tsx scripts/edit-2910-scenario.ts <url ?fresh=1> <outDir>
 //  A. Delete: корпус выбран (список слева и щелчок по сцене после поля ввода справа) → Delete → «Удалить корпус «…»?»; Esc — отмена;
-//     Enter — удалён; Ctrl+Z — вернулся. Ctrl+щелчок по двум корпусам → Delete → «Удалить 2 корпуса?» → «Да, удалить» → одна отмена.
-//     Ctrl+щелчок в сцене — группа, Delete — тот же вопрос.
+//     Enter — удалён; Ctrl+Z — вернулся. Shift+щелчок по двум корпусам → Delete → «Удалить 2 корпуса?» → «Да, удалить» → одна отмена.
+//     Shift+щелчок в сцене — группа, Delete — тот же вопрос.
 //  B. Правой кнопкой по секции → «Удалить секцию 2» → секций 1; Ctrl+Z — 2.
 //  C. «Материал корпуса» → «Заменить у всех» → декор → у всех корпусов, одна отмена.
 //  D. Стеллаж: «Добавить штангу» — штанга встаёт (раньше отказ «под штангой нужно 900 мм»), в панели предупреждение, ошибки нет.
@@ -112,24 +112,24 @@ try {
   await undo(); ms = await mods();
   check("A5 Ctrl+Z — корпус вернулся", ms.length === n0, `${ms.length}`);
   await click(listItem(0));
-  await listItem(1).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
-  await listItem(2).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
+  await listItem(1).click({ modifiers: ["Shift"] }); await page.waitForTimeout(300);
+  await listItem(2).click({ modifiers: ["Shift"] }); await page.waitForTimeout(300);
   await page.keyboard.press("Delete"); await page.waitForTimeout(400);
   const names = (await page.locator('[data-testid="delete-ask-names"]').innerText().catch(() => "")).trim();
-  check("A6 Ctrl+щелчок по двум корпусам в списке, Delete → «Удалить 2 корпуса?» с именами", (await askText()) === "Удалить 2 корпуса?" && names.includes(`«${ms[1].module.name}»`) && names.includes(`«${ms[2].module.name}»`), `${await askText()} ${names}`);
+  check("A6 Shift+щелчок по двум корпусам в списке, Delete → «Удалить 2 корпуса?» с именами", (await askText()) === "Удалить 2 корпуса?" && names.includes(`«${ms[1].module.name}»`) && names.includes(`«${ms[2].module.name}»`), `${await askText()} ${names}`);
   await click(ask.getByRole("button", { name: "Да, удалить" }));
   ms = await mods();
   check("A7 «Да, удалить» — оба удалены одной правкой", ms.length === n0 - 2, `${ms.length}`);
   await undo(); ms = await mods();
   check("A8 одна отмена Ctrl+Z — оба вернулись", ms.length === n0, `${ms.length}`);
   await page.getByRole("button", { name: "Снять выделение" }).click().catch(() => {}); await page.waitForTimeout(300);
-  // критик 29.10 (1): Ctrl+щелчок по «Стеллаж» и «Комод», затем обычный щелчок по «Модуль 1» — Delete удаляет «Модуль 1», а не группу
-  await listItem(1).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
-  await listItem(3).click({ modifiers: ["Control"] }); await page.waitForTimeout(300);
+  // критик 29.10 (1): Shift+щелчок по «Стеллаж» и «Комод», затем обычный щелчок по «Модуль 1» — Delete удаляет «Модуль 1», а не группу
+  await listItem(1).click({ modifiers: ["Shift"] }); await page.waitForTimeout(300);
+  await listItem(3).click({ modifiers: ["Shift"] }); await page.waitForTimeout(300);
   await click(listItem(0));
   const marks = await page.locator(".module-list .module-group-selected").count();
   await page.keyboard.press("Delete"); await page.waitForTimeout(400);
-  check("A11 Ctrl+щелчок по двум, обычный по «Модуль 1» — отметки сняты, Delete → «Удалить корпус «Модуль 1»?»", marks === 0 && (await askText()) === `Удалить корпус «${ms[0].module.name}»?`, `отмечено ${marks}; «${await askText()}»`);
+  check("A11 Shift+щелчок по двум, обычный по «Модуль 1» — отметки сняты, Delete → «Удалить корпус «Модуль 1»?»", marks === 0 && (await askText()) === `Удалить корпус «${ms[0].module.name}»?`, `отмечено ${marks}; «${await askText()}»`);
   // критик 29.10 (4): под вопросом Q не начинает вспомогательную линию
   const guides0 = await page.evaluate(() => JSON.stringify((window as unknown as { __guides?: () => unknown }).__guides?.() ?? []));
   await page.keyboard.press("q"); await page.mouse.move(700, 400); await page.waitForTimeout(300);
@@ -151,19 +151,19 @@ try {
   await page.keyboard.press("Delete"); await page.waitForTimeout(400);
   check("A14 фокус в выпадающем списке, Delete — вопроса нет", (await sel.count()) > 0 && (await ask.count()) === 0 && (await mods()).length === n0);
   await page.mouse.click(5, 300);
-  // Ctrl+щелчок в сцене: вид спереди — корпуса в ряд
+  // Shift+щелчок в сцене: вид спереди — корпуса в ряд
   await click(listItem(0)); await front(false);
   const cv = await canvas(); let marked = 0;
-  await page.keyboard.down("Control");
+  await page.keyboard.down("Shift");
   for (let x = cv.x + 30; x < cv.x + cv.width - 30 && marked < 2; x += 25) {
     await page.mouse.click(x, cv.y + cv.height * 0.6); await page.waitForTimeout(150);
     const now = await page.locator(".module-list .module-group-selected").count();
     if (now > marked) { marked = now; x += 150; }
   }
-  await page.keyboard.up("Control");
+  await page.keyboard.up("Shift");
   await page.keyboard.press("Delete"); await page.waitForTimeout(400);
   const q3 = await askText();
-  check("A9 Ctrl+щелчок по двум корпусам в сцене, Delete → «Удалить 2 корпуса?»", marked === 2 && q3 === "Удалить 2 корпуса?", `отмечено ${marked}; «${q3}»`);
+  check("A9 Shift+щелчок по двум корпусам в сцене, Delete → «Удалить 2 корпуса?»", marked === 2 && q3 === "Удалить 2 корпуса?", `отмечено ${marked}; «${q3}»`);
   await shot("A9-scene-group-ask");
   await page.keyboard.press("Escape"); await page.waitForTimeout(300);
   check("A10 Esc — ничего не удалено", (await mods()).length === n0);
