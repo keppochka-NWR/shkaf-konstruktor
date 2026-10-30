@@ -1,7 +1,9 @@
 import {dishwasherServiceModel} from './dishwasherServices';
 import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
-import {hiddenWalls,roomEdges,edgeVisible,readCutaway,type CutawayWall} from './roomCutaway';
+import {hiddenWalls,roomEdges,edgeVisible,readCutaway,hiddenEdges,outlineEdges,type CutawayWall,type CutKey} from './roomCutaway';
+import {edgePanels,edgeLegacyWall,floorPolygon,openingEdge,wallFace,wallPrism,wallSpot,type OnWall} from './roomEdges';
+import {edgeLength,type RoomOutline} from './roomOutline';
 import {finishById,floorUv,wallUv,defaultAlong,type FinishUnit} from './roomFinishes';
 import {drawFinish,FINISH_TEXTURE_PX} from './finishTextures';
 import {facadeHandleId} from './model';
@@ -147,6 +149,8 @@ type Props = {
   snapping?:boolean;
   groupIds?:string[];
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
+  /** Комната с контуром (критик 30.10): последний шаг тяги корпуса — упереться в стену (project.keepInRoom), на всех путях тяги. */
+  keepIn?:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
   onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
   moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
   onMoveDivider:(mid:string,sid:string,delta:number)=>boolean;
@@ -378,17 +382,19 @@ export function Scene(p: Props) {
       scene.remove(group);
     }
     // fixed — ручка растяжения: стоит точно на боку корпуса, другие плашки обходят её, а не она их.
-    const labels: { element: HTMLButtonElement; position: THREE.Vector3; wall?: CutawayWall; fixed?: boolean }[] =
+    const labels: { element: HTMLButtonElement; position: THREE.Vector3; wall?: CutKey; fixed?: boolean }[] =
       [];
     // Ближние стены: что принадлежит какой стене; видимость меняется по камере без пересборки сцены.
-    const cutawayParts:{obj:THREE.Object3D;walls:CutawayWall[]}[]=[];
-    let cutawayRoom:{x0:number;z0:number;width:number;depth:number}|undefined,cutawayHidden=new Set<CutawayWall>(),cutawayKey='';
+    // Стена — имя у прямоугольника, номер ребра у контура произвольной формы (задача Макса 30.10.2026).
+    const cutawayParts:{obj:THREE.Object3D;walls:CutKey[]}[]=[];
+    let cutawayRoom:{x0:number;z0:number;width:number;depth:number;outline?:RoomOutline}|undefined,cutawayHidden=new Set<CutKey>(),cutawayKey='';
     // Отделка стен (обои, плитка, покраска — roomFinishes.ts): дальние стены непрозрачные, стена между камерой и комнатой
     // (если «Ближние стены» её не скрыли) — полупрозрачная, чтобы не заслонять мебель.
-    const finishParts:{mat:THREE.MeshStandardMaterial;wall:CutawayWall}[]=[];
+    const finishParts:{mat:THREE.MeshStandardMaterial;wall:CutKey}[]=[];
     function applyCutaway(){
       const r=cutawayRoom,on=current.current.cutaway??readCutaway(),cam=r?{x:camera.position.x-r.x0,z:camera.position.z-r.z0}:undefined;
-      const hidden=r&&cam?hiddenWalls(r,cam,on):new Set<CutawayWall>(),beyond=r&&cam&&finishParts.length?hiddenWalls(r,cam,true):new Set<CutawayWall>();
+      const near=(enabled:boolean):Set<CutKey>=>!r||!cam?new Set<CutKey>():r.outline?hiddenEdges(r.outline,cam,enabled):hiddenWalls(r,cam,enabled);
+      const hidden=near(on),beyond=finishParts.length?near(true):new Set<CutKey>();
       const key=[...hidden].join(',')+'|'+[...beyond].join(',');if(key===cutawayKey)return;
       cutawayKey=key;cutawayHidden=hidden;
       for(const p of cutawayParts)p.obj.visible=edgeVisible(p.walls,hidden);
@@ -413,7 +419,7 @@ export function Scene(p: Props) {
       pos: THREE.Vector3,
       action?: () => void,
       small = false,
-      wall?: CutawayWall,
+      wall?: CutKey,
     ) {
       const active=current.current.arrangement.find(a=>a.id===current.current.activeId)!;
       pos.applyAxisAngle(new THREE.Vector3(0,1,0),(active.rotation??0)*Math.PI/180);
@@ -437,7 +443,7 @@ export function Scene(p: Props) {
     }
 
     /** Подпись в координатах комнаты (без поворота активного корпуса). */
-    function roomLabel(text:string,pos:THREE.Vector3,action?:()=>void,small=false,wall?:CutawayWall){
+    function roomLabel(text:string,pos:THREE.Vector3,action?:()=>void,small=false,wall?:CutKey){
       const button=document.createElement("button");button.type="button";button.className="model-dimension room-dimension"+(small?" gap-dimension":"");button.textContent=text;
       button.setAttribute("aria-label","Размер помещения: "+text);button.title=action?"Нажмите, чтобы изменить размер":text;
       button.addEventListener("pointerdown",e=>e.stopPropagation());passThrough(button);button.addEventListener("click",()=>action?.());button.disabled=!action;
@@ -834,6 +840,85 @@ export function Scene(p: Props) {
         const r = state.room,
           x0 = -moduleCenter(focus).x,
           z0 = -moduleCenter(focus).z;
+        if(r.outline){
+        // Контур произвольной формы (задача Макса 30.10.2026: 5 углов, скос, скругление, дуга): стены по рёбрам контура (дуга — ломаной)
+        // с проёмами, пол — многоугольником, проёмы и объекты — на своей стене контура (roomEdges.openingEdge). Прямоугольник без контура —
+        // ниже, как было. Сетки замера (survey) — только у прямоугольника. Отделка стен — по старому имени стороны, к которой обращена
+        // стена контура (edgeLegacyWall; своя отделка у каждой стены контура — этап 2).
+        const o=r.outline,ro={...r,outline:o};cutawayRoom={x0,z0,width:r.width,depth:r.depth,outline:o};
+        const at3=(p:{x:number;z:number},y:number,inward=0,n={x:0,z:0})=>new THREE.Vector3(x0+p.x+n.x*inward,y,z0+p.z+n.z*inward);
+        // рёбра: отрезки одной стены (или угла двух стен) — одной линией, чтобы дуга не плодила сотни объектов
+        const lines=new Map<string,{walls:number[];pts:THREE.Vector3[]}>();
+        for(const e of outlineEdges(o,r.height)){const k=e.walls.join(','),l=lines.get(k)??{walls:e.walls,pts:[]};l.pts.push(new THREE.Vector3(x0+e.a[0],e.a[1],z0+e.a[2]),new THREE.Vector3(x0+e.b[0],e.b[1],z0+e.b[2]));lines.set(k,l);}
+        for(const l of lines.values()){const edge=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(l.pts),new THREE.LineBasicMaterial({color:0x8dabb4,transparent:true,opacity:0.5}));modelGroup.add(edge);cutawayParts.push({obj:edge,walls:l.walls});}
+        let openingId:string|undefined;
+        /** Брусок у стены контура: w вдоль стены (по касательной в точке s), depth — наружу от поверхности стены (как wallBox), inward — сдвиг в комнату. */
+        const edgeBox=(edge:number,s:number,y:number,w:number,h:number,depth:number,color:number,opacity:number,inward=0)=>{
+          const q=wallSpot(o,edge,s),mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,depth),new THREE.MeshStandardMaterial({color,transparent:opacity<1,opacity,depthWrite:opacity===1}));
+          mesh.position.copy(at3(q.p,y,inward-depth/2,q.n));mesh.rotation.y=Math.atan2(-q.t.z,q.t.x);mesh.receiveShadow=true;if(openingId)mesh.userData.openingId=openingId;modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[edge]});return mesh;
+        };
+        const nearSide=(i:number)=>{const w=edgeLegacyWall(o,i);return w==='front'||w==='right';};
+        const fins=o.map((_,i)=>{const v=r.finish?.walls?.[edgeLegacyWall(o,i)];if(!v)return undefined;const m='paint' in v?{mat:new THREE.MeshStandardMaterial({color:new THREE.Color(v.paint),roughness:.95,side:THREE.DoubleSide}),unit:undefined as FinishUnit|undefined}:finishMaterial(v.id);if(m){evenWallLight(m.mat);finishParts.push({mat:m.mat,wall:i});}return m;});
+        const shift=(pos:number[])=>{for(let k=0;k<pos.length;k+=3){pos[k]+=x0;pos[k+2]+=z0;}return pos;};
+        for(const panel of edgePanels(ro)){
+          const fin=fins[panel.edge],g=new THREE.BufferGeometry();
+          if(fin){const f=wallFace(o,panel),uv:number[]=[];for(let k=0;k<f.su.length;k+=2)uv.push(...(fin.unit?wallUv(f.su[k],f.su[k+1],fin.unit):[0,0]));
+            g.setAttribute('position',new THREE.Float32BufferAttribute(shift(f.pos),3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();
+            const mesh=new THREE.Mesh(g,fin.mat);mesh.receiveShadow=true;mesh.userData.roomFinish=edgeLegacyWall(o,panel.edge);modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[panel.edge]});continue;}
+          g.setAttribute('position',new THREE.Float32BufferAttribute(shift(wallPrism(o,panel,80)),3));g.computeVertexNormals();
+          const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xd5d5cc,transparent:true,opacity:nearSide(panel.edge)?0.06:0.25,depthWrite:false}));mesh.receiveShadow=true;modelGroup.add(mesh);cutawayParts.push({obj:mesh,walls:[panel.edge]});
+        }
+        for(const op of r.openings||[]){
+          openingId=op.id;const e=openingEdge(r,op),u=e.offset+op.width/2,y=op.sill+op.height/2,fd=op.frameDepth??85,color=op.color?Number.parseInt(op.color.slice(1),16):0xf3eee4;
+          for(const dx of [-op.width/2+20,op.width/2-20])edgeBox(e.edge,u+dx,y,40,op.height,fd,0xfafaf6,0.95);
+          edgeBox(e.edge,u,op.sill+op.height-20,op.width,40,fd,0xfafaf6,0.95);
+          if(op.type==='window'){edgeBox(e.edge,u,op.sill+20,op.width,40,fd,0xfafaf6,0.95);edgeBox(e.edge,u,y,40,op.height,fd,0xfafaf6,0.95);edgeBox(e.edge,u,y,op.width-80,op.height-80,4,0x8cbac6,0.2);}
+          else edgeBox(e.edge,u,y,op.width-80,op.height-40,35,op.color?Number.parseInt(op.color.slice(1),16):0xaa8e6d,0.6);
+          const casing=op.casing??0,thick=op.casingThick??12;
+          if(casing){edgeBox(e.edge,e.offset-casing/2,y,casing,op.height,thick,color,.9);edgeBox(e.edge,e.offset+op.width+casing/2,y,casing,op.height,thick,color,.9);edgeBox(e.edge,u,op.sill+op.height+casing/2,op.width+2*casing,casing,thick,color,.9);}
+          // подоконник: сдвиг его середины от середины проёма — по старому отсчёту, переведённому на направление стены контура (dir)
+          if(op.windowSill){const w=op.windowSill;edgeBox(e.edge,u+e.dir*(w.offset+w.width/2-op.offset-op.width/2),op.sill-w.thick/2,w.width,w.thick,w.overhang+(op.reveal??0),color,.95,w.overhang);}
+        }
+        openingId=undefined;
+        for(const ob of r.obstacles||[]){if(APPLIANCE_MODEL_TYPES.includes(ob.type))continue;const mesh=new THREE.Mesh(new THREE.BoxGeometry(ob.width,ob.height,ob.depth),new THREE.MeshStandardMaterial({color:ob.type==='radiator'?0xd9e0e4:0xc7bcae,roughness:.85}));mesh.userData.obstacleId=ob.id;mesh.position.set(x0+ob.x+ob.width/2,ob.y+ob.height/2,z0+ob.z+ob.depth/2);mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:!state.presentation&&state.selectedObstacle===ob.id?0x087f94:0x786d62,transparent:true,opacity:!state.presentation&&state.selectedObstacle===ob.id?1:.5}));edge.userData.captureGuide=!state.presentation&&state.selectedObstacle===ob.id;mesh.add(edge);}
+        // объекты на стенах: на своей стене контура, повёрнуты по касательной; выступ — в комнату, ниша — в стену
+        for(const [fi,f] of (r.fixtures||[]).entries()){
+          const spec=FIXTURES[f.type],e=openingEdge(r,f),recess=spec.recess,d=recess?f.depth:Math.max(2,f.depth),q=wallSpot(o,e.edge,e.offset+f.width/2);
+          const geo=f.round?new THREE.CylinderGeometry(Math.min(f.width,f.height)/2,Math.min(f.width,f.height)/2,f.horizontal?f.width:f.height,20):new THREE.BoxGeometry(f.width,f.height,d);
+          const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:f.color?Number.parseInt(f.color.slice(1),16):spec.color,roughness:.8,metalness:f.round?.4:0,transparent:!!recess,opacity:recess?.35:1}));
+          const c=at3(q.p,f.fromFloor+f.height/2,recess?-f.depth/2:d/2+(f.wallGap??0),q.n),rot=Math.atan2(-q.t.z,q.t.x);mesh.position.copy(c);
+          if(f.round&&f.horizontal)mesh.rotation.set(0,rot,Math.PI/2);else mesh.rotation.y=rot;
+          mesh.userData.fixtureId=f.id;mesh.castShadow=true;mesh.receiveShadow=true;modelGroup.add(mesh);
+          if(recess)cutawayParts.push({obj:mesh,walls:[e.edge]});
+          const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:state.selectedFixture===f.id?0x087f94:0x6f6a60,transparent:true,opacity:state.selectedFixture===f.id?1:.45}));mesh.add(edge);
+          if(!state.presentation)label(fixtureLabel(f,fi),new THREE.Vector3(c.x,f.fromFloor+f.height+40,c.z),()=>current.current.onFixtureSelect?.(f.id),true,recess?e.edge:undefined);
+        }
+        // Размеры: длина каждой стены контура (по дуге — длина дуги) снаружи у пола; высота — как у прямоугольника. Правка контура — в
+        // редакторе плана; отступы выбранного проёма/объекта — по его стене контура (правятся числом, только если он уже привязан к стене edge).
+        if(!state.presentation&&state.onRoomDimension&&state.roomDimensions!==false){
+          const dim=state.onRoomDimension;
+          o.forEach((_,i)=>{const L=edgeLength(o,i),q=wallSpot(o,i,L/2);roomLabel(`${Math.round(L)} мм`,at3(q.p,-60,-80,q.n));});
+          roomLabel(`${r.height} мм`,at3(o[0],r.height/2,-80,wallSpot(o,0,0).n),()=>dim('room','','height',r.height));
+          const chain=(kind:'opening'|'fixture',id:string,item:OnWall,y:number,top:number,own:boolean,extra?:[string,number,string])=>{
+            const e=openingEdge(r,item),L=edgeLength(o,e.edge),rest=L-e.offset-item.width,wall=own?e.edge:undefined,at=(s:number,yy:number,out=60)=>{const q=wallSpot(o,e.edge,s);return at3(q.p,yy,out,q.n);};
+            const along=item.edge!==undefined; // без edge отступ хранится по старым правилам — число здесь только показываем
+            roomLabel(`${Math.round(e.offset)} от угла`,at(e.offset/2,y),along?()=>dim(kind,id,'offset',e.offset):undefined,true,wall);
+            roomLabel(`${Math.round(item.width)} мм`,at(e.offset+item.width/2,top+90,40),()=>dim(kind,id,'width',item.width),false,wall);
+            roomLabel(`${Math.round(rest)} до угла`,at(e.offset+item.width+rest/2,y),undefined,true,wall);
+            if(extra)roomLabel(extra[0],at(e.offset+item.width/2,extra[1],40),()=>dim(kind,id,extra[2],extra[1]),true,wall);
+          };
+          const op=(r.openings||[]).find(x=>x.id===state.selectedOpening);
+          if(op)chain('opening',op.id,op,op.sill+op.height/2,op.sill+op.height,true,op.type==='window'?[`${op.sill} от пола`,op.sill/2,'sill']:[`высота ${op.height}`,op.sill+op.height/2-120,'height']);
+          const fsel=(r.fixtures||[]).find(f=>f.id===state.selectedFixture);
+          if(fsel)chain('fixture',fsel.id,fsel,fsel.fromFloor+fsel.height/2,fsel.fromFloor+fsel.height,!!FIXTURES[fsel.type].recess,[`${fsel.fromFloor} от пола`,Math.max(40,fsel.fromFloor/2),'fromFloor']);
+        }
+        // Пол — многоугольник контура; ламинат/плитка — текстура в мм комнаты, как у прямоугольника (floorUv по x, z комнаты).
+        const floorFin=r.finish?.floor?finishMaterial(r.finish.floor.id):undefined,floorGeo=new THREE.ShapeGeometry(new THREE.Shape(floorPolygon(o).map(p=>new THREE.Vector2(p.x,-p.z))));
+        if(floorFin){const pos=floorGeo.getAttribute('position'),uv=new Float32Array(pos.count*2),along=r.finish?.floor?.along??defaultAlong(r);
+          // плоскость повёрнута на −90° вокруг X: локальный x → x комнаты, локальный y → −z
+          for(let i=0;i<pos.count;i++){const [s,t]=floorUv(pos.getX(i),-pos.getY(i),floorFin.unit,along);uv[2*i]=s;uv[2*i+1]=t;}floorGeo.setAttribute('uv',new THREE.BufferAttribute(uv,2));}
+        const roomFloor=new THREE.Mesh(floorGeo,floorFin?floorFin.mat:new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));if(floorFin)roomFloor.userData.roomFinish='floor';roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0,-3,z0);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
+        }else{
         // Контур комнаты — 12 рёбер, у каждого свои стены: при «Ближние стены: скрыть» ребро пропадает вместе со стеной.
         cutawayRoom={x0,z0,width:r.width,depth:r.depth};
         for(const e of roomEdges(r.width,r.height,r.depth)){
@@ -945,6 +1030,7 @@ export function Scene(p: Props) {
           // плоскость повёрнута на −90° вокруг X: локальный x → x комнаты, локальный y → −z
           for(let i=0;i<pos.count;i++){const [s,t]=floorUv(pos.getX(i)+r.width/2,r.depth/2-pos.getY(i),floorFin.unit,along);uv.setXY(i,s,t);}uv.needsUpdate=true;}
         const roomFloor=new THREE.Mesh(floorGeo,floorFin?floorFin.mat:new THREE.MeshStandardMaterial({color:0xdcd6ca,roughness:0.9}));if(floorFin)roomFloor.userData.roomFinish='floor';roomFloor.rotation.x=-Math.PI/2;roomFloor.position.set(x0+r.width/2,-3,z0+r.depth/2);roomFloor.receiveShadow=true;modelGroup.add(roomFloor);
+        }
       }
       releaseFinishMaps();
       const b = state.hideFurniture||state.hiddenModuleIds?.includes(focus.id)||m.corner?undefined:boxes(m).find((b) => b.id === state.selected);
@@ -1280,6 +1366,8 @@ export function Scene(p: Props) {
           // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
           if(da)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
         }
+        // контур: после линий Q, Alt/Ctrl и без привязки — корпус упирается в стену, а не проходит сквозь скос (критик 30.10)
+        if(current.current.keepIn)next={...current.current.keepIn(drag.mid,next),y:next.y};
         markAt(hit,look,fromScene(drag.anchor));
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front'&&!sideView(current.current.view))next.y=drag.origin.y; // сбоку высота своя, как спереди (критик 29.10 п.7)

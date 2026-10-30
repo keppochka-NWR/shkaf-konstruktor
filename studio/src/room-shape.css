@@ -1,0 +1,25 @@
+/* «Форма комнаты» (задача Макса 30.10.2026): заготовки, таблица стен, окно ввода дуги */
+.room-shape-panel { display: grid; gap: 8px; margin: 10px 0 14px; }
+.room-shape-panel h3 { margin: 0; }
+.room-shape-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.room-shape-presets button { display: grid; justify-items: center; align-content: start; gap: 3px; padding: 6px 1px; min-width: 0; border: 1px solid #d5dbe2; border-radius: 8px; background: #fff; font: inherit; font-size: 10px; letter-spacing: -0.1px; line-height: 1.2; color: #2b3640; cursor: pointer; }
+.room-shape-presets button:hover { border-color: #e8590c; background: #fff7f2; }
+.room-shape-presets button[aria-pressed="true"] { border-color: #e8590c; box-shadow: inset 0 0 0 1px #e8590c; }
+.room-shape-walls { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.room-shape-walls th:nth-child(1) { width: 8%; } .room-shape-walls th:nth-child(2) { width: 22%; } .room-shape-walls th:nth-child(3) { width: 26%; } .room-shape-walls th:nth-child(4), .room-shape-walls th:nth-child(5) { width: 22%; }
+.room-shape-walls input::-webkit-outer-spin-button, .room-shape-walls input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.room-shape-walls input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.room-shape-walls th { text-align: left; font-weight: 600; color: #5d6b70; padding: 2px 3px; border-bottom: 1px solid #e6eaef; }
+.room-shape-walls td { padding: 2px 3px; }
+.room-shape-walls td:nth-child(2) { color: #5d6b70; }
+.room-shape-walls input { width: 100%; min-width: 0; box-sizing: border-box; padding: 3px 5px; font: inherit; border: 1px solid #cfd8de; border-radius: 4px; }
+.room-shape-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.room-shape-note { color: #a92d32; }
+.room-shape-ask-title { width: 100%; font-size: 16px; }
+.room-shape-seg { display: flex; width: 100%; gap: 0; }
+.room-shape-seg button { flex: 1; border-radius: 0; background: #fff; }
+.room-shape-seg button:first-child { border-radius: 6px 0 0 6px; }
+.room-shape-seg button:last-child { border-radius: 0 6px 6px 0; }
+.room-shape-seg button[aria-checked="true"] { background: #325bee; border-color: #325bee; color: #fff; }
+.room-plan .room-shape-toggle[aria-pressed="true"] { background: #e8590c; border-color: #e8590c; color: #fff; }
+.room-plan .plan-wall-length[role="button"]:hover { fill: #e8590c; }

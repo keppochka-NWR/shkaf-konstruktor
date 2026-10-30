@@ -7,7 +7,8 @@ import {rekeySections} from './sectionLayout';
 import {rawKitchen} from './rawModule';
 import {parseGuides,type Guide} from './guides';
 import {parseRoomFinish,type RoomFinish} from './roomFinishes';
-import {outlineError,outlineBounds,flatten,polygonInOutline,type RoomOutline} from './roomOutline';
+import {outlineError,outlineBounds,flatten,polygonInOutline,edgeLength,projectToEdges,type RoomOutline,type FlatPolygon} from './roomOutline';
+import {openingEdge} from './roomEdges';
 import {wallFloorY,waterfallSides} from './kitchen';
 import {parts,id,initialModule,parseModule,validate,RULES,needsWallFiller,cornerStrip,deskGeometry,fe,facadeBottom,facadeTop,isDrawerModule,type Module,section} from './model';
 /** Проём: дверь или окно. Дополнения из замера Базиса: наличник, сторона открывания, откос, подоконник. */
@@ -247,6 +248,8 @@ export function projectErrors(p:Project,allowEmpty=false):string[]{
   if(obstacles!==undefined){
     if(!Array.isArray(obstacles)||obstacles.length>30)return ['Допустимо до 30 объектов замера.'];
     for(const o of obstacles)if(!o||typeof o.id!=='string'||!o.id||typeof o.name!=='string'||!o.name.trim()||o.name.length>80||!['column','beam','radiator','fridge','washer','stove','dishwasher','hood','hob'].includes(o.type)||![o.x,o.y,o.z,o.width,o.depth,o.height].every(Number.isFinite)||o.x<0||o.y<0||o.z<0||Math.min(o.width,o.depth,o.height)<10||o.x+o.width>p.room.width||o.z+o.depth>p.room.depth||o.y+o.height>p.room.height)return ['Объект замера «'+(typeof o?.name==='string'?o.name:'без названия')+'»: проверьте название, размеры и положение — он должен помещаться в комнате.'];
+    // контур (критик 30.10): объект замера — внутри стен, не в срезанном углу и не за скосом (габарит пропускал)
+    if(roomPoly)for(const o of obstacles)if(!polygonInOutline([{x:o.x,z:o.z},{x:o.x+o.width,z:o.z},{x:o.x+o.width,z:o.z+o.depth},{x:o.x,z:o.z+o.depth}],roomPoly))return ['Объект замера «'+o.name+'»: проверьте название, размеры и положение — он должен помещаться в комнате.'];
     if(obstacles.some(o=>o.sinkModuleId!==undefined&&(o.type!=='dishwasher'||typeof o.sinkModuleId!=='string'||o.sinkModuleId.length>100)))return ['Подключение мойки: неверная ссылка.'];
     if(new Set(obstacles.map(o=>o.id)).size!==obstacles.length)return ['Идентификаторы объектов замера повторяются.'];
   }
@@ -258,14 +261,21 @@ export function projectErrors(p:Project,allowEmpty=false):string[]{
   if(p.room.walls!==undefined){const w=p.room.walls;if(!Number.isFinite(w.thickness)||w.thickness<20||w.thickness>1000||(w.angleLeft!==undefined&&(!Number.isFinite(w.angleLeft)||w.angleLeft<45||w.angleLeft>135))||(w.angleRight!==undefined&&(!Number.isFinite(w.angleRight)||w.angleRight<45||w.angleRight>135)))return ['Стены: толщина 20–1000 мм, углы 45–135°.'];}
   if(p.room.openings&&(!Array.isArray(p.room.openings)||p.room.openings.length>30))return ['Допустимо до 30 окон и дверей.'];
   for(const [index,o] of (p.room.openings||[]).entries()){
-    if(!o||!['window','door'].includes(o.type)||!['back','left','right','front'].includes(o.wall)||typeof o.id!=='string'||!o.id.trim()||![o.offset,o.width,o.height,o.sill].every(Number.isFinite)||o.offset<0||o.width<200||o.height<200||o.sill<0||o.sill+o.height>p.room.height||o.offset+o.width>(o.wall==='back'||o.wall==='front'?p.room.width:p.room.depth))return ['Проём '+(index+1)+': проверьте параметры. Окно или дверь выходят за границы стены либо имеют некорректные данные.'];
+    // контур (задача Макса 30.10.2026): проём со стеной контура edge — номер стены есть в контуре, длина — по этой стене (дуга — по дуге)
+    const onEdge=!!p.room.outline&&o?.edge!==undefined;
+    if(onEdge&&(!Number.isInteger(o.edge)||o.edge!<0||o.edge!>=p.room.outline!.length))return ['Проём '+(index+1)+': стена '+(Number(o.edge)+1)+' не найдена в контуре помещения.'];
+    if(!o||!['window','door'].includes(o.type)||!['back','left','right','front'].includes(o.wall)||typeof o.id!=='string'||!o.id.trim()||![o.offset,o.width,o.height,o.sill].every(Number.isFinite)||o.offset<0||o.width<200||o.height<200||o.sill<0||o.sill+o.height>p.room.height||o.offset+o.width>(onEdge?edgeLength(p.room.outline!,o.edge!)+0.1:o.wall==='back'||o.wall==='front'?p.room.width:p.room.depth))return ['Проём '+(index+1)+': проверьте параметры. Окно или дверь выходят за границы стены либо имеют некорректные данные.'];
+    // критик 30.10: старый проём без edge в комнате с контуром стоит на стене контура своей стороны (openingEdge) — должен на ней поместиться
+    if(p.room.outline&&!onEdge){const L=edgeLength(p.room.outline,openingEdge(p.room,o).edge);if(o.width>L+0.1)return ['Проём '+(index+1)+': проверьте параметры. Окно или дверь выходят за границы стены либо имеют некорректные данные.'];}
     if((o.color!==undefined&&!/^#[0-9a-f]{6}$/i.test(o.color))||(o.direction!==undefined&&!['in','out'].includes(o.direction))||[o.frameDepth,o.handleProjection].some(v=>v!==undefined&&(!Number.isFinite(v)||v<0||v>1000))||(o.swingAngle!==undefined&&(!Number.isFinite(o.swingAngle)||o.swingAngle<0||o.swingAngle>180)))return ['Проверьте цвет, глубину и открывание проёма.'];
     if((o.casing!==undefined&&(!Number.isFinite(o.casing)||o.casing<0||o.casing>200))||(o.casingThick!==undefined&&(!Number.isFinite(o.casingThick)||o.casingThick<0||o.casingThick>60))||(o.hinge!==undefined&&!['left','right'].includes(o.hinge))||(o.reveal!==undefined&&(!Number.isFinite(o.reveal)||o.reveal<0||o.reveal>500)))return ['Проём '+(index+1)+': наличник до 200×60, откос до 500 мм, открывание слева/справа.'];
     if(o.windowSill!==undefined){const s=o.windowSill;if(![s.width,s.thick,s.overhang,s.offset].every(Number.isFinite)||s.width<100||s.thick<5||s.thick>100||s.overhang<0||s.overhang>400||s.offset<0)return ['Проём '+(index+1)+': подоконник — ширина от 100, толщина 5–100, вылет до 400 мм.'];}
   }
   const os=p.room.openings||[];
   if(new Set(os.map(o=>o.id)).size!==os.length)errors.push('Идентификаторы проёмов повторяются.');
-  os.forEach((o,i)=>{for(const b of os.slice(0,i))if(o.wall===b.wall&&o.offset<b.offset+b.width&&o.offset+o.width>b.offset&&o.sill<b.sill+b.height&&o.sill+o.height>b.sill)errors.push('Окна и двери не должны пересекаться.');});
+  // с контуром — по стене контура (своя edge или ближайшая к старому месту, roomEdges.openingEdge), отступы — по этой стене
+  if(p.room.outline){const at=os.map(o=>openingEdge(p.room,o));os.forEach((o,i)=>{for(const [j,b] of os.slice(0,i).entries())if(at[i].edge===at[j].edge&&at[i].offset<at[j].offset+b.width&&at[i].offset+o.width>at[j].offset&&o.sill<b.sill+b.height&&o.sill+o.height>b.sill)errors.push('Окна и двери не должны пересекаться.');});}
+  else os.forEach((o,i)=>{for(const b of os.slice(0,i))if(o.wall===b.wall&&o.offset<b.offset+b.width&&o.offset+o.width>b.offset&&o.sill<b.sill+b.height&&o.sill+o.height>b.sill)errors.push('Окна и двери не должны пересекаться.');});
   p.modules.forEach((a,i)=>{
     if(a.rotation!==undefined&&(!Number.isFinite(a.rotation)||Math.abs(a.rotation)>36000))errors.push('Поворот корпуса должен быть конечным числом в пределах ±36000°.');
     errors.push(...validate(a.module).map(e=>`${a.module.name}: ${e}`));const b=bounds(a);
@@ -332,16 +342,42 @@ export function appendModule(p:Project,source:Module,anchor?:PlacedModule):Proje
   const a:PlacedModule={id:id(),x:0,y:initialY,z:0,rotation:anchor?.rotation??0,module},base=bounds(a);
   const moduleBounds=p.modules.map(bounds),occupied=[...moduleBounds,...(p.room.obstacles||[]).map(obstacleBounds)],preferredX=source.worktop&&supports.length?Math.min(...supports.map(a=>a.x)):anchor?bounds(anchor).x+bounds(anchor).w:Math.max(...moduleBounds.filter(b=>b.y===0).map(b=>b.x+b.w),source.kitchen?RULES.panel+RULES.wallFillerEdgeGap:0/* кухня палитры от стены — с местом под фальш 16 + 4 (29.10) */),preferredZ=anchor?bounds(anchor).z:source.kitchen?kitchenRowZ(p,module,initialY)+base.z:source.worktop&&supports.length?Math.min(...supports.map(a=>a.z-kitchenRowZ({ ...p, modules: [] },a.module,a.y??0))):30;
   const xs=[preferredX,0,...occupied.flatMap(b=>[b.x+b.w,b.x-base.w,b.x]),p.room.width-base.w],zs=[preferredZ,30,0,...occupied.flatMap(b=>[b.z+b.d,b.z-base.d,b.z]),p.room.depth-base.d];
+  const poly=p.room.outline?flatten(p.room.outline):null; // контур (задача Макса 30.10.2026): место — только внутри стен, не в срезанном углу
+  // контур (критик 30.10): у эркера по порядку кандидатов первым годным был второй ряд посреди комнаты (z = перед первого шкафа), а не
+  // место рядом с ним по хорде. Сначала — места задом к стене или боком к корпусу; нет таких — первое годное, как раньше
+  const across=Math.abs(Math.round((a.rotation??0)/90))%2===1,first:{x:number;z:number}[]=[];
+  const touches=(box:typeof base)=>occupied.some(b=>box.y<b.y+b.h-.1&&box.y+box.h>b.y+.1&&(across?(Math.abs(box.z-b.z-b.d)<1||Math.abs(box.z+box.d-b.z)<1)&&box.x<b.x+b.w-1&&box.x+box.w>b.x+1:(Math.abs(box.x-b.x-b.w)<1||Math.abs(box.x+box.w-b.x)<1)&&box.z<b.z+b.d-1&&box.z+box.d>b.z+1))
+    ||moduleFootprint({...a,x:box.x-base.x,z:box.z-base.z}).slice(0,2).every(q=>projectToEdges(p.room.outline!,q).dist<=60); // оба задних угла у стены
   for(const z of [...new Set(zs)])for(const x of [...new Set(xs)]){
-    const box={...base,x,z};if(x<0||z<0||x+base.w>p.room.width||z+base.d>p.room.depth||base.y+base.h>p.room.height||occupied.some(b=>overlap(box,b)))continue;
+    const box={...base,x,z};if(x<0||z<0||x+base.w>p.room.width||z+base.d>p.room.depth||base.y+base.h>p.room.height||occupied.some(b=>overlap(box,b))||(poly&&!polygonInOutline(moduleFootprint({...a,x:x-base.x,z:z-base.z}),poly)))continue;
+    if(poly&&!touches(box)){if(!first.length)first.push({x,z});continue;}
     a.x=x-base.x;a.z=z-base.z;n.modules.push(a);return n;
   }
+  if(first.length){a.x=first[0].x-base.x;a.z=first[0].z-base.z;n.modules.push(a);return n;}
   // Keep the invalid candidate reviewable by the common commit validator.
   a.x=preferredX-base.x;a.z=preferredZ-base.z;n.modules.push(a);return n;
 }
 export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z:number},tolerance=35){
   const a=p.modules.find(a=>a.id===mid)!,ab=bounds({...a,x:0,z:0,y:0});const candidates={x:[-ab.x,p.room.width-ab.x-ab.w],y:[0],z:[-ab.z,p.room.depth-ab.z-ab.d]};
-  for(const b of p.modules){if(b.id===mid)continue;const bb=bounds(b);candidates.x.push(bb.x-ab.x,bb.x+bb.w-ab.x,bb.x-ab.w-ab.x,bb.x+bb.w-ab.w-ab.x);candidates.y.push(b.y??0,(b.y??0)+b.module.height,(b.y??0)-a.module.height);candidates.z.push(bb.z-ab.z,bb.z+bb.d-ab.z,bb.z-ab.d-ab.z,bb.z+bb.d-ab.d-ab.z);}  const next={...position};for(const k of ['x','y','z'] as const){let diff=tolerance;for(const v of candidates[k])if(v>=0&&Math.abs(position[k]-v)<diff){diff=Math.abs(position[k]-v);next[k]=v;}next[k]=Math.round(next[k]);}return next;
+  for(const b of p.modules){if(b.id===mid)continue;const bb=bounds(b);candidates.x.push(bb.x-ab.x,bb.x+bb.w-ab.x,bb.x-ab.w-ab.x,bb.x+bb.w-ab.w-ab.x);candidates.y.push(b.y??0,(b.y??0)+b.module.height,(b.y??0)-a.module.height);candidates.z.push(bb.z-ab.z,bb.z+bb.d-ab.z,bb.z-ab.d-ab.z,bb.z+bb.d-ab.d-ab.z);}  const next={...position};for(const k of ['x','y','z'] as const){let diff=tolerance;for(const v of candidates[k])if(v>=0&&Math.abs(position[k]-v)<diff){diff=Math.abs(position[k]-v);next[k]=v;}next[k]=Math.round(next[k]);}return p.room.outline?keepInside(p,[a],a,position,next):next;
+}
+/** Контур помещения (задача Макса 30.10.2026): привязка не выводит корпус за стену. Первый годный: с привязкой, без привязки по x,
+ *  по z, совсем без привязки; иначе корпус упирается в стену — самое дальнее годное место на пути от текущего (стена скосом или дугой
+ *  останавливает перетаскивание, а не пропускает корпус сквозь себя). Корпус уже вне контура — не мешаем (покажет проверка). */
+/** Последний шаг перетаскивания в комнате с контуром (критик 30.10): после линий Q, Alt/Ctrl и без привязки корпус тоже упирается в
+ *  стену, а не проходит сквозь скос (отказ был только при отпускании). ids — что едет вместе (композиция, группа); прямоугольник — как есть. */
+export function keepInRoom<T extends {x:number;y:number;z:number}>(p:Project,mid:string,next:T,ids?:readonly string[]):T{
+  const a=p.modules.find(a=>a.id===mid);if(!p.room.outline||!a)return next;
+  return {...next,...keepInside(p,ids?p.modules.filter(b=>ids.includes(b.id)):[a],a,next,next)};
+}
+function keepInside(p:Project,moving:PlacedModule[],a:PlacedModule,position:{x:number;y:number;z:number},next:{x:number;y:number;z:number}){
+  const poly:FlatPolygon=flatten(p.room.outline!),ok=(q:{x:number;z:number})=>moving.every(b=>polygonInOutline(moduleFootprint({...b,x:b.x+q.x-a.x,z:b.z+q.z-a.z}),poly));
+  const raw={...next,x:Math.round(position.x),z:Math.round(position.z)};
+  for(const q of [next,{...next,x:raw.x},{...next,z:raw.z},raw])if(ok(q))return q;
+  if(!ok(a))return next;
+  let lo=0,hi=1;for(let k=0;k<16;k++){const t=(lo+hi)/2;if(ok({x:a.x+(next.x-a.x)*t,z:a.z+(next.z-a.z)*t}))lo=t;else hi=t;}
+  const stop={...next,x:a.x+Math.trunc((next.x-a.x)*lo),z:a.z+Math.trunc((next.z-a.z)*lo)};
+  return ok(stop)?stop:{...next,x:a.x,z:a.z};
 }
 
 
@@ -352,6 +388,14 @@ export function closedModuleBounds(a:PlacedModule){
  const points=parts(a.module).filter(part=>part.role!=='fastener'&&part.role!=='light'&&!part.rotZ&&!part.rotY).flatMap(part=>[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>{const q=localToRoom(a,part.position[0]+x*part.size[0]/2,part.position[2]+z*part.size[2]/2);return {...q,y:(a.y??0)+part.position[1]+y*part.size[1]/2};}))));
  const x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y)),z=Math.min(...points.map(p=>p.z));
  return {x,y,z,w:Math.max(...points.map(p=>p.x))-x,h:Math.max(...points.map(p=>p.y))-y,d:Math.max(...points.map(p=>p.z))-z};
+}
+/** Закрытый габарит корпуса на плане — повёрнутые углы (критик 30.10): те же детали, что у closedModuleBounds, но в осях корпуса.
+ *  Корпус под 45° вплотную к скосу не «выступает» габаритом по осям. Угловой — его след. */
+export function closedModuleCorners(a:PlacedModule):{x:number;z:number}[]{
+ if(a.module.corner)return moduleFootprint(a);
+ let u0=Infinity,u1=-Infinity,v0=Infinity,v1=-Infinity;
+ for(const part of parts(a.module))if(part.role!=='fastener'&&part.role!=='light'&&!part.rotZ&&!part.rotY){u0=Math.min(u0,part.position[0]-part.size[0]/2);u1=Math.max(u1,part.position[0]+part.size[0]/2);v0=Math.min(v0,part.position[2]-part.size[2]/2);v1=Math.max(v1,part.position[2]+part.size[2]/2);}
+ return [[u0,v0],[u1,v0],[u1,v1],[u0,v1]].map(([u,v])=>localToRoom(a,u,v));
 }
 export function compositionBounds(p:Project){return unionBounds(p.modules.map(closedModuleBounds));}
 export function mountingCompositionBounds(p:Project){return unionBounds(p.modules.map(bounds));}
@@ -369,7 +413,7 @@ export function snapComposition(p:Project,mid:string,position:{x:number;y:number
  for(const axis of ['x','y','z'] as const){const start=a[axis]??0,candidates=[start-b[axis],start+limits[axis]-b[axis]-sizes[axis]];let distance=tolerance;
   if(ids)for(const other of p.modules.filter(a=>!ids.includes(a.id))){const ob=bounds(other),size={x:ob.w,y:ob.h,z:ob.d}[axis];candidates.push(start+ob[axis]-b[axis],start+ob[axis]+size-b[axis],start+ob[axis]-b[axis]-sizes[axis],start+ob[axis]+size-b[axis]-sizes[axis]);}
   for(const candidate of candidates)if(Math.abs(candidate-position[axis])<distance){next[axis]=candidate;distance=Math.abs(candidate-position[axis]);}next[axis]=Math.round(next[axis]);}
- return next;
+ return p.room.outline?keepInside(p,moving,a,position,next):next;
 }
 
 export function copyModuleGroup(p:Project,ids:readonly string[]):{project:Project;ids:string[]}{

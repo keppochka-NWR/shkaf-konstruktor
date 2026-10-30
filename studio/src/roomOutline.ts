@@ -182,10 +182,12 @@ export function edgeTangent(o: RoomOutline, i: number, s: number): { t: P2; n: P
   const l = Math.hypot(q.x - p.x, q.z - p.z) || 1, t = { x: (q.x - p.x) / l, z: (q.z - p.z) / l };
   return { t, n: { x: -t.z, z: t.x } };
 }
-/** Ближайшая к точке стена: номер, расстояние s вдоль неё (от начала), отступ от стены. */
-export function projectToEdges(o: RoomOutline, p: P2): { edge: number; s: number; dist: number } {
+/** Ближайшая к точке стена: номер, расстояние s вдоль неё (от начала), отступ от стены. only — только из этих стен (критик 30.10:
+ *  старый проём ищет стену своей стороны). */
+export function projectToEdges(o: RoomOutline, p: P2, only?: (i: number) => boolean): { edge: number; s: number; dist: number } {
   let best = { edge: 0, s: 0, dist: Infinity };
   o.forEach((_, i) => {
+    if (only && !only(i)) return;
     const pts = edgePoints(o, i, 20);
     let acc = 0;
     for (let k = 0; k < pts.length - 1; k++) {
@@ -204,6 +206,45 @@ export function legacyToEdge(w: number, d: number, wall: RectWall, offset: numbe
 }
 
 // ── правки контура (редактор плана). Все возвращают новый массив; нормализацию делает вызывающий (normalizeOutline). ──
+// Перенумерация стен после правки (для проёмов и объектов на стенах, roomShape.applyOutline): старая стена → новая,
+// undefined — стену разрезали/слили/её начало уехало — проём ищет ближайшую стену по своему месту на плане.
+// Точнее числа (критик 30.10 — проёмы ехали по стене, плинтус резался пополам): parts — участки старой стены [from, to] (мм от её
+// начала) → стена edge, отступ − from (абсолютное место на плане то же); проём, что не лёг целиком ни в один участок, — отказ why
+// («на месте точки», «мешает скосу»), без why — по месту; объект во всю стену — во всю стену каждого участка. scale — стена
+// растянута (поля «Ширина/Глубина»): середина проёма — в той же доле длины.
+export type EdgePart = { edge: number; from: number; to: number };
+export type EdgeTo = number | undefined | { parts: EdgePart[]; why?: string } | { edge: number; scale: true };
+export type EdgeMap = EdgeTo[];
+export const sameEdges = (n: number): number[] => Array.from({ length: n }, (_, e) => e);
+/** insertVertex(o, i): стена i разрезана, дальше — +1. s — место точки от начала стены i (мм по стене): проёмы до неё — на первой
+ *  половине, после — на второй с тем же местом на плане, поперёк точки — отказ (критик 30.10); без s — по месту. */
+export const insertEdgeMap = (n: number, i: number, s?: number): EdgeMap => sameEdges(n).map((e) => (e < i ? e : e === i ? (s === undefined ? undefined : { parts: [{ edge: i, from: 0, to: s }, { edge: i + 1, from: s, to: Infinity }], why: "на месте точки" }) : e + 1));
+/** removeVertex(o, i): стены i−1 и i слиты в одну, дальше — −1. */
+export const removeEdgeMap = (n: number, i: number): EdgeMap => sameEdges(n).map((e) => (e === i || e === (i - 1 + n) % n ? undefined : e > i ? e - 1 : e));
+/** chamferCorner / roundCorner(o, i): вершина i → две; входящая стена та же (начало на месте), выходящая — её начало уехало. */
+export const cornerEdgeMap = (n: number, i: number): EdgeMap => sameEdges(n).map((e) => (e < i ? e : e === i ? undefined : e + 1));
+/** Растяжение контура (scaleOutline): стены те же, середины проёмов — в долю новой длины. */
+export const scaleEdgeMap = (n: number): EdgeMap => sameEdges(n).map((e) => ({ edge: e, scale: true as const }));
+/** Срез угла i на da мм по входящей стене и db по выходящей (скос, скругление): проём на срезанной части — отказ why (критик 30.10:
+ *  окно молча уезжало на скос), объект во всю стену укорачивается; выходящая стена — с тем же местом на плане. */
+function cutEdgeMap(o: RoomOutline, i: number, da: number, db: number, why: string): EdgeMap {
+  const n = o.length, p = (i - 1 + n) % n, Lp = edgeLength(o, p);
+  return sameEdges(n).map((e) => (e === p ? { parts: [{ edge: i === 0 ? n : p, from: 0, to: Lp - da }], why } : e < i ? e : e === i ? { parts: [{ edge: i + 1, from: db, to: Infinity }], why } : e + 1));
+}
+/** Скос и скругление угла с картой стен; рядом дуга — отказ (критик 30.10: срез ложился на хорду, дуга менялась). */
+const arcNext = (o: RoomOutline, i: number) => !!(o[(i - 1 + o.length) % o.length].bulge || o[i].bulge);
+export const ARC_NEXT = "Сначала сделайте стену прямой";
+export function chamferEdit(o: RoomOutline, i: number, da: number, db = da): { outline: RoomOutline; map: EdgeMap } | string {
+  if (arcNext(o, i)) return ARC_NEXT;
+  return { outline: chamferCorner(o, i, da, db), map: cutEdgeMap(o, i, da, db, "мешает скосу") };
+}
+export function roundEdit(o: RoomOutline, i: number, R: number): { outline: RoomOutline; map: EdgeMap } | string {
+  if (arcNext(o, i)) return ARC_NEXT;
+  const d = roundTangent(o, i, R);
+  return { outline: roundCorner(o, i, R), map: cutEdgeMap(o, i, d, d, "мешает скруглению") };
+}
+/** moveEdge(o, i): сама стена едет с проёмами; у следующей начало скользит по её линии — проёмы стоят на месте плана. */
+export const moveEdgeMap = (n: number, i: number): EdgeMap => sameEdges(n).map((e) => (e === (i + 1) % n ? undefined : e));
 export function moveVertex(o: RoomOutline, i: number, p: P2): RoomOutline { return o.map((q, k) => (k === i ? { ...q, x: p.x, z: p.z } : q)); }
 /** Вставить вершину на стене i в доле t (0..1) хорды; дуга делится на две с сохранением формы приблизительно (стрелы по 1/4). */
 export function insertVertex(o: RoomOutline, i: number, t = 0.5): RoomOutline {
@@ -225,11 +266,17 @@ export function chamferCorner(o: RoomOutline, i: number, da: number, db = da): R
   return out;
 }
 /** Скругление угла i радиусом R: касательные точки на обеих стенах и дуга между ними (вогнутая часть комнаты — дуга внутрь). */
+/** От угла i до точек касания скругления радиусом R, мм. */
+export function roundTangent(o: RoomOutline, i: number, R: number): number {
+  const n = o.length, p = o[(i - 1 + n) % n], c = o[i], q = o[(i + 1) % n];
+  const u1 = { x: p.x - c.x, z: p.z - c.z }, u2 = { x: q.x - c.x, z: q.z - c.z };
+  const cos = (u1.x * u2.x + u1.z * u2.z) / (Math.hypot(u1.x, u1.z) * Math.hypot(u2.x, u2.z)), th = Math.acos(Math.max(-1, Math.min(1, cos))); // внутренний угол по хордам
+  return R / Math.tan(th / 2);
+}
 export function roundCorner(o: RoomOutline, i: number, R: number): RoomOutline {
   const n = o.length, p = o[(i - 1 + n) % n], c = o[i], q = o[(i + 1) % n];
   const u1 = { x: p.x - c.x, z: p.z - c.z }, u2 = { x: q.x - c.x, z: q.z - c.z }, l1 = Math.hypot(u1.x, u1.z), l2 = Math.hypot(u2.x, u2.z);
-  const cos = (u1.x * u2.x + u1.z * u2.z) / (l1 * l2), th = Math.acos(Math.max(-1, Math.min(1, cos))); // внутренний угол по хордам
-  const d = R / Math.tan(th / 2); // от угла до точек касания
+  const d = roundTangent(o, i, R); // от угла до точек касания
   const A = { x: c.x + (u1.x * d) / l1, z: c.z + (u1.z * d) / l1 }, B = { x: c.x + (u2.x * d) / l2, z: c.z + (u2.z * d) / l2 };
   const ch = Math.hypot(B.x - A.x, B.z - A.z), sag = R - Math.sqrt(Math.max(0, R * R - (ch * ch) / 4));
   // выпуклый угол комнаты (внутренний < 180): дуга срезает угол — относительно хорды A→B она выгнута наружу, к вершине угла
@@ -247,6 +294,70 @@ export function setEdgeLength(o: RoomOutline, i: number, len: number): RoomOutli
   return moveVertex(o, j, { x: r1(f.a.x + f.t.x * len), z: r1(f.a.z + f.t.z * len) });
 }
 
+/** Пересечение прямой p1→p2 с прямой через q по направлению dir; почти параллельные — null. */
+function lineCross(p1: P2, p2: P2, q: P2, dir: P2): P2 | null {
+  const ux = p2.x - p1.x, uz = p2.z - p1.z, den = ux * dir.z - uz * dir.x, l = Math.hypot(ux, uz);
+  if (!l || Math.abs(den) < 1e-6 * l) return null;
+  const t = ((q.x - p1.x) * dir.z - (q.z - p1.z) * dir.x) / den;
+  return { x: p1.x + ux * t, z: p1.z + uz * t };
+}
+/** Перенос стены i параллельно себе на d мм наружу (< 0 — внутрь), как в Базисе (задача Макса 30.10.2026): соседние стены
+ *  тянутся по своим линиям, углы сохраняются. Сосед на одной линии со стеной (точка посреди стены) — вершина просто сдвигается. */
+export function moveEdge(o: RoomOutline, i: number, d: number): RoomOutline {
+  const n = o.length, j = (i + 1) % n, f = edgeFrame(o, i), out = { x: -f.n.x * d, z: -f.n.z * d };
+  const a2 = { x: f.a.x + out.x, z: f.a.z + out.z }, b2 = { x: f.b.x + out.x, z: f.b.z + out.z };
+  const A = lineCross(o[(i - 1 + n) % n], o[i], a2, f.t) ?? a2, B = lineCross(o[(j + 1) % n], o[j], b2, f.t) ?? b2;
+  return o.map((p, k) => (k === i ? { ...p, x: r1(A.x), z: r1(A.z) } : k === j ? { ...p, x: r1(B.x), z: r1(B.z) } : p));
+}
+/** Длина стены i (по дуге — длина дуги, форма дуги та же): переносится следующая стена параллельно себе, все углы на месте —
+ *  у прямоугольника «длина задней стены» двигает правую стену, как поле «Ширина». Следующая стена на одной линии — едет только конец. */
+export function setWallLength(o: RoomOutline, i: number, len: number): RoomOutline { return wallLengthEdit(o, i, len).outline; }
+/** Длина стены с картой стен (критик 30.10: в запасном пути — следующая стена на одной линии — проёмы следующей стены ехали
+ *  вместе с её началом): у стены, чьё начало скользит по своей линии, проёмы стоят на месте плана. */
+export function wallLengthEdit(o: RoomOutline, i: number, len: number): { outline: RoomOutline; map: EdgeMap } {
+  const n = o.length, j = (i + 1) % n, f = edgeFrame(o, i), L = edgeLength(o, i), a = o[i];
+  const chord = a.bulge ? (f.chord * len) / L : len, delta = chord - f.chord, g = edgeFrame(o, j), k = -(f.t.x * g.n.x + f.t.z * g.n.z);
+  const moved = Math.abs(k) > 0.05 && n > 3;
+  let out = moved ? moveEdge(o, j, delta * k) : setEdgeLength(o, i, chord);
+  if (a.bulge) out = setBulge(out, i, r1((a.bulge * chord) / f.chord));
+  // стена s: начало уехало на d мм вдоль неё (> 0 — стена короче); дуга — по месту на плане
+  const slide = (s: number, d: number): EdgeTo => (o[s].bulge ? undefined : { parts: [{ edge: s, from: d, to: Infinity }] });
+  const map: EdgeMap = sameEdges(n);
+  if (moved) { const s = (j + 1) % n, h = edgeFrame(o, s), v = { x: out[s].x - o[s].x, z: out[s].z - o[s].z }; map[s] = slide(s, v.x * h.t.x + v.z * h.t.z); }
+  else map[j] = f.t.x * g.t.x + f.t.z * g.t.z > 0.999 ? slide(j, delta) : undefined; // на одной линии — сдвиг вдоль; треугольник — по месту
+  return { outline: out, map };
+}
+/** Внутренний угол при вершине i = deg: стена i поворачивается вокруг вершины i, её длина та же (едет вершина i+1). */
+export function setCornerAngle(o: RoomOutline, i: number, deg: number): RoomOutline {
+  const n = o.length, p = o[(i - 1 + n) % n], c = o[i], q = o[(i + 1) % n];
+  const a1 = Math.atan2(p.z - c.z, p.x - c.x), a2 = a1 - (deg * Math.PI) / 180, L = Math.hypot(q.x - c.x, q.z - c.z);
+  return moveVertex(o, (i + 1) % n, { x: r1(c.x + L * Math.cos(a2)), z: r1(c.z + L * Math.sin(a2)) });
+}
+/** Растянуть контур по осям (поля «Ширина/Глубина комнаты» при контуре): дуги — стрела по растяжению поперёк хорды. */
+export function scaleOutline(o: RoomOutline, sx: number, sz: number): RoomOutline {
+  return o.map((p, i) => {
+    const q = { x: r1(p.x * sx), z: r1(p.z * sz) };
+    if (!p.bulge) return q;
+    // стрела — по растяжению поперёк хорды (второй габарит точно тот же), но не больше полуокружности новой хорды (критик 30.10:
+    // сузить «Эркер» до 1900 было нельзя — «Дуга больше полуокружности»)
+    const b = o[(i + 1) % o.length], n = inwardNormal(p, b), ch = Math.hypot((b.x - p.x) * sx, (b.z - p.z) * sz);
+    return { ...q, bulge: r1(Math.sign(p.bulge) * Math.min(Math.abs(p.bulge) * Math.hypot(n.x * sx, n.z * sz), ch / 2 - 0.1)) };
+  });
+}
+/** Расстояние вдоль стены i (от её начала) до точки стены, ближайшей к p. */
+export function projectToEdge(o: RoomOutline, i: number, p: P2): number {
+  const pts = edgePoints(o, i, 10);
+  let best = { d: Infinity, s: 0 }, acc = 0;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const a = pts[k], b = pts[k + 1], seg = Math.hypot(b.x - a.x, b.z - a.z), t = seg ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / (seg * seg))) : 0;
+    const d = Math.hypot(p.x - a.x - t * (b.x - a.x), p.z - a.z - t * (b.z - a.z));
+    if (d < best.d - 1e-9) best = { d, s: acc + t * seg };
+    acc += seg;
+  }
+  // дуга по ломаной чуть короче — в долю настоящей длины
+  return r1(acc ? (best.s / acc) * edgeLength(o, i) : 0);
+}
+
 /** Готовые формы (заготовки в панели «Форма комнаты»): размеры — от габарита w × d. */
 export type OutlinePreset = "rect" | "chamfer" | "pentagon" | "L" | "rounded" | "bay";
 export function outlinePreset(kind: OutlinePreset, w: number, d: number): RoomOutline {
@@ -257,7 +368,12 @@ export function outlinePreset(kind: OutlinePreset, w: number, d: number): RoomOu
     case "pentagon": return [{ x: 0, z: 0 }, { x: w, z: 0 }, { x: w, z: d - cut }, { x: w - cut, z: d }, { x: 0, z: d }]; // скошен передний правый
     case "L": return [{ x: 0, z: 0 }, { x: w, z: 0 }, { x: w, z: Math.round(d / 2) }, { x: Math.round(w / 2), z: Math.round(d / 2) }, { x: Math.round(w / 2), z: d }, { x: 0, z: d }];
     case "rounded": return roundCorner(r, 1, cut * 2);
-    case "bay": return setBulge(r, 0, Math.round(Math.min(w / 4, d / 3) / 10) * 10); // задняя стена — дуга наружу (эркер)
+    case "bay": {
+      // задняя стена — дуга наружу (эркер) в том же габарите w × d (критик 30.10: комната 4000 × 3000 вырастала до 4000 × 4000):
+      // прямоугольник короче на стрелу, вершина дуги — у прежней задней стены
+      const s = Math.round(Math.min(w / 4, d / 4) / 10) * 10;
+      return [{ x: 0, z: s, bulge: s }, { x: w, z: s }, { x: w, z: d }, { x: 0, z: d }];
+    }
   }
 }
 export const PRESET_NAMES: Record<OutlinePreset, string> = { rect: "Прямоугольная", chamfer: "Скошенный угол", pentagon: "Пятиугольная", L: "Г-образная", rounded: "Скруглённый угол", bay: "Эркер (дуга)" };

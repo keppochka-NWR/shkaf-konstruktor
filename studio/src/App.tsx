@@ -140,6 +140,10 @@ import {roomWarnings} from './roomWarnings';
 import { RoomEditor } from './RoomEditor';
 import { RoomFinishes } from './RoomFinishPicker';
 import {RoomPlan} from './RoomPlan';
+import {RoomShapePanel} from './RoomShapePanel';
+import {edgeLength} from './roomOutline';
+import {itemEdge,scaleRoom} from './roomShape';
+import {withBazisRoom} from './bazisRoom';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { decorPrice, withPriceStamp } from "./pricing";
@@ -166,7 +170,7 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
+  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, keepInRoom, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
   type Project,
 } from "./project";
 import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,turnModule,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
@@ -332,7 +336,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   });
   const [history, setHistory] = useState<Project[]>([startup.model]),
     [cursor, setCursor] = useState(0);
-  const project = history[cursor];
+  // отмена/повтор заказа (RoomWorkspace, externalVersion) — история сбрасывается в том же рендере, а не эффектом после него (критик 30.10:
+  // под нагрузкой первый рендер после Ctrl+Z показывал прежний проект ~0,5 с — «первая отмена ничего не сделала», вторая «перескакивала»,
+  // и правка в этом окне шла бы от устаревшего проекта)
+  const [historyVersion,setHistoryVersion]=useState(externalVersion);
+  const externalReset=historyVersion!==externalVersion&&!!saveManagedProject&&!!initialProject;
+  if(historyVersion!==externalVersion){setHistoryVersion(externalVersion);if(externalReset){setHistory([initialProject!]);setCursor(0);}}
+  const project = externalReset?initialProject!:history[cursor];
   const lastLocalWrite=useRef(startup.currentRaw);
   const currentProject=useRef(project),importSequence=useRef(0);currentProject.current=project;
   const [active, setActive] = useState(()=>{try{const id=viewKey?sessionStorage.getItem('garderyob-selection:'+viewKey):null;return project.modules.some(a=>a.id===id)?id!:project.modules[0].id;}catch{return project.modules[0].id;}});
@@ -418,6 +428,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const hideModule=(id:string)=>{setHiddenModules(ids=>ids.includes(id)?ids:[...ids,id]);setSelectedPart(null);setCtxMenu(null);};
   const [showRoom, setShowRoom] = useState(false);
   const [roomPlan,setRoomPlan]=useState(false);
+  // «Форма комнаты» на плане (задача Макса 30.10.2026): ручки углов и стен, меню правой кнопкой
+  const [shapeEdit,setShapeEdit]=useState(false);
   const [selectedOpening,setSelectedOpening]=useState<string>();
   const [selectedObstacle,setSelectedObstacle]=useState<string>();
   const [selectedFixture,setSelectedFixture]=useState<string>();
@@ -463,10 +475,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const labels:Record<string,string>={width:'Ширина',depth:'Глубина комнаты',height:'Высота',offset:'От угла стены',end:'До конца стены',sill:'Подоконник от пола',fromFloor:'От пола'};
     const label=(kind==='room'?{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота потолка'}[field]:labels[field])??field;
     editDimension(label,Math.round(value),v=>{
-      if(kind==='room')return commitProject({...project,room:{...room,[field]:v}});
+      // комната с контуром: ширина/глубина с эскиза — тоже габарит, контур растягивается (критик 30.10)
+      if(kind==='room'){if(room.outline&&(field==='width'||field==='depth')){const r=scaleRoom(project,field,v);if(r.problem){setError(r.problem);return false;}return commitProject(r.project);}return commitProject({...project,room:{...room,[field]:v}});}
       const list=kind==='opening'?(room.openings||[]):(room.fixtures||[]);
-      const item=list.find(x=>x.id===id) as {wall:'back'|'left'|'right'|'front';offset:number;width:number}|undefined;if(!item)return false;
-      const len=item.wall==='back'||item.wall==='front'?room.width:room.depth;
+      const item=list.find(x=>x.id===id) as {wall:'back'|'left'|'right'|'front';edge?:number;offset:number;width:number}|undefined;if(!item)return false;
+      // комната с контуром: «до конца стены» — по длине своей стены контура (задача Макса 30.10.2026)
+      const len=room.outline?edgeLength(room.outline,itemEdge(room,item).edge):item.wall==='back'||item.wall==='front'?room.width:room.depth;
       const patch=field==='end'?{offset:len-item.width-v}:{[field]:v};
       const next=kind==='opening'?{...room,openings:(room.openings||[]).map(o=>o.id===id?{...o,...patch}:o)}:{...room,fixtures:(room.fixtures||[]).map(f=>f.id===id?{...f,...patch}:f)};
       return commitProject({...project,room:next});
@@ -474,7 +488,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   /** Переход на этап: подстраивает вкладку, режим, вид и открытие фасадов. */
   function goStage(next:Stage){
-    setStageState(normalizeStage(next));setModal(m=>m==='room-setup'?null:m);
+    setStageState(normalizeStage(next));setModal(m=>m==='room-setup'?null:m);setShapeEdit(false);
     if(next==='room'){setTab('room');setShowRoom(true);setRoomPlan(false);setView('iso');setFit(f=>f+1);}
     else if(next==='fixtures'){setTab('room');setShowRoom(true);setRoomPlan(true);}
     else if(next==='bodies'){setTab('module');setMode('move');setRoomPlan(false);setShowRoom(true);setOpenDoors(false);}
@@ -559,6 +573,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Restore the workspace as well as the stage label after a reload.
   useEffect(()=>{goStage(stage);},[]);
   useEffect(()=>{if((stage==='room'||stage==='fixtures')&&tab!=='room'&&!advanced)setTab('room');},[stage,tab,advanced]);
+  // ручки формы — только на «Помещении» с открытым планом (критик 30.10: режим оставался на «Построении мебели» и прятал ручки корпуса)
+  const shapeStage=tab==='room'&&(advanced||stage==='room');
+  useEffect(()=>{if(shapeEdit&&(!roomPlan||!shapeStage))setShapeEdit(false);},[shapeEdit,roomPlan,shapeStage]);
   const materialRecipients=project.modules.filter(a=>materialScope==='all'||(materialScope==='group'?liveGroupIds.includes(a.id):a.id===placed.id));
   const capture = useRef<((opts?: {frame?: boolean}) => string) | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null),
@@ -574,8 +591,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);
     setSelectedOpening(undefined);setSelectedObstacle(undefined);
   }
-  const externalSeen=useRef(externalVersion);
-  useEffect(()=>{if(externalVersion===externalSeen.current)return;externalSeen.current=externalVersion;if(saveManagedProject&&initialProject){setHistory([initialProject]);setCursor(0);setActive(a=>initialProject.modules.some(m=>m.id===a)?a:initialProject.modules[0].id);clearHistorySelection();}},[externalVersion]);
+  if(externalReset){setActive(a=>initialProject!.modules.some(m=>m.id===a)?a:initialProject!.modules[0].id);clearHistorySelection();}
   const undo = () => {
     if(managedHistory){managedHistory.undo();return;}
     if(saveManagedProject&&!saveManagedProject(history[Math.max(0,cursor-1)]))return;
@@ -1531,7 +1547,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={shapeStage?setShapeEdit:undefined}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
@@ -1540,6 +1556,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snapping={snapping}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
+            keepIn={project.room.outline?(mid,p)=>keepInRoom(project,mid,p,moveAll?project.modules.map(a=>a.id):liveGroupIds.includes(mid)?liveGroupIds:undefined):undefined}
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
@@ -1787,10 +1804,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {tab === "room" ? (
             <div className="property-section">
               <h2>{stage==='fixtures'&&!advanced?'Окна, двери и коммуникации':'Замер помещения'}</h2>
-              <div data-stages="room bodies filling facades docs"><details className="measurement-fields"><summary>Точки замера и кривые стены</summary><RoomSurveyEditor room={project.room} onChange={room=>commitProject({...project,room})}/></details>
+              <div data-stages="room bodies filling facades docs"><details className="measurement-fields"><summary>Точки замера и кривые стены</summary>{project.room.outline?<p className="field-note">Точки замера и кривые стены пока работают для прямоугольной комнаты.</p>:<RoomSurveyEditor room={project.room} onChange={room=>commitProject({...project,room})}/>}</details>
               <p className="field-note">
-                Прямоугольное помещение. Модули не должны пересекаться или
-                выходить за стены.
+                {project.room.outline?`Помещение произвольной формы: ${project.room.outline.length} стен, ширина и глубина — габарит. `:'Прямоугольное помещение. '}Модули не должны пересекаться или
+                выходить за стены. Скос, 5 углов, скругление, дуга — в «Форма комнаты».
               </p>
               {(["width", "height", "depth"] as const).map((k, i) => (
                 <NumberField
@@ -1801,14 +1818,18 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   value={project.room[k]}
                   min={500}
                   max={20000}
-                  onChange={(v) =>
-                    commitProject({
+                  onChange={(v) => {
+                    // комната с контуром: ширина/глубина — габарит, контур растягивается пропорционально (задача Макса 30.10.2026)
+                    const o=project.room.outline;
+                    if(o&&k!=='height'){const r=scaleRoom(project,k,v);if(r.problem){setError(r.problem);return false;}return commitProject(r.project);}
+                    return commitProject({
                       ...project,
                       room: { ...project.room, [k]: v },
-                    })
-                  }
+                    });
+                  }}
                 />
               ))}
+              <div data-stages="room"><RoomShapePanel project={project} commit={commitProject} onPlan={()=>{setRoomPlan(true);setTab('room');setShapeEdit(true);}}/></div>
               <details className="measurement-fields"><summary>Карточка замера</summary><p className="field-note">Номер и дата из задания на корпус. Примечания сохранятся в ведомости проекта.</p>{(['number','date','notes'] as const).map(k=>{const measure=project.measurement||{number:'',date:'',notes:''};const change=(value:string)=>commitProject({...project,measurement:{...measure,[k]:value}});const label={number:'Номер замера',date:'Дата замера',notes:'Особенности замера'}[k];return <label className="hardware-field" key={k}>{label}{k==='notes'?<textarea key={measure[k]} aria-label={label} defaultValue={measure[k]} maxLength={2000} rows={4} placeholder="Перепады стен, плинтус, розетки, доступ к коммуникациям…" onBlur={e=>{if(e.target.value!==measure[k]&&!change(e.target.value))e.target.value=measure[k];}}/>:<input key={measure[k]} aria-label={label} type={k==='date'?'date':'text'} maxLength={k==='number'?60:10} defaultValue={measure[k]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}} onBlur={e=>{if(e.target.value!==measure[k]&&!change(e.target.value))e.target.value=measure[k];}}/>}</label>;})}</details>
               <details className="measurement-fields"><summary>Мебель в нише · вычеты СТП</summary><p className="field-note">Введите минимальные размеры по нескольким точкам. Отклонение стены измеряется относительно уровня.</p>{!project.measurement?.niche?<button className="outline" onClick={()=>commitProject({...project,measurement:{number:'',date:'',notes:'',...project.measurement,niche:{width:project.room.width,height:project.room.height,depth:project.room.depth,deviation:0}}})}>Рассчитать по замеру</button>:<>{(['width','height','depth','deviation'] as const).map(k=><NumberField key={k} label={{width:'Минимальная ширина ниши',height:'Нижняя точка потолка',depth:'Минимальная глубина ниши',deviation:'Отклонение стены'}[k]} value={k==='deviation'?project.measurement!.niche![k]:nicheMinimum(project.measurement!.niche!,k)} min={k==='deviation'?0:500} max={k==='deviation'?300:20000} onChange={v=>commitProject({...project,measurement:{...project.measurement!,niche:{...project.measurement!.niche!,[k]:v,readings:Object.fromEntries(Object.entries(project.measurement!.niche!.readings??{}).filter(([axis])=>axis!==k))}}})}/>)}<NicheReadings niche={project.measurement!.niche!} onApply={niche=>commitProject({...project,measurement:{...project.measurement!,niche}})}/>{(()=>{const fit=nicheSize(project.measurement!.niche!,project.room.ceiling);return <div className="niche-result"><strong>Предельные габариты мебели</strong><p>{fit.width} × {fit.height} × {fit.depth} мм</p><small>Ширина −{fit.side}, высота −{ceilingClearance(project.room.ceiling)}, глубина −5 мм. Предел редактора для одного корпуса — {RULES.maxW} × {RULES.maxH} мм; логистику крупных корпусов проверьте отдельно.</small></div>;})()}<p className="field-note">При отклонении ровно 10 мм выбран запас 15 мм. Проверьте светильники, выступы и карнизы. Расчёт не меняет размеры комнаты и модулей автоматически. Габариты всей закрытой композиции сравниваются с нишей; превышения видны в замечаниях и документах.</p><button className="text-action" onClick={()=>{const measurement={...project.measurement!};delete measurement.niche;commitProject({...project,measurement});}}>Убрать расчёт ниши</button></>}</details>
               <details className="measurement-fields"><summary>Сдвинуть всю композицию</summary><p className="field-note">Все {project.modules.length} корпуса сдвигаются вместе. Стыки, расстояния и положение антресолей относительно нижних модулей сохраняются.</p>{(['x','z','y'] as const).map(axis=><NumberField key={axis} label={{x:'Композиция от левой стены',z:'Композиция от задней стены',y:'Композиция от пола'}[axis]} value={Math.round(mountingComposition[axis]*10)/10} min={0} max={{x:project.room.width-mountingComposition.w,z:project.room.depth-mountingComposition.d,y:project.room.height-mountingComposition.h}[axis]} onChange={v=>{try{commitProject(setCompositionDistance(project,axis,v));}catch(e){setError((e as Error).message);}}}/>)}<p className="field-note">Отступы — по монтажному габариту, как у отдельного корпуса. Выступы ручек проверяются отдельными подсказками. Отмена возвращает всю расстановку одним шагом.</p></details>
@@ -1817,7 +1838,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div data-stages="room"><RoomEditor part="walls" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <RoomFinishes room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <div data-stages="fixtures"><RoomEditor part="openings" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
-              <RoomFixtures selected={selectedFixture} onSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} room={project.room} roomName={project.measurement?.number?'Замер '+project.measurement.number:project.offer?.customer} onChange={room=>commitProject({...project,room})} onImport={r=>{const room={...project.room,...r.room};if(commitProject({...project,room,measurement:{number:project.measurement?.number||'',date:project.measurement?.date||'',notes:[project.measurement?.notes||'',r.name?'Замер из Базиса: '+r.name:'',...r.notes].filter(Boolean).join('\n')}})){setShowRoom(true);setFit(f=>f+1);}}}/>
+              <RoomFixtures selected={selectedFixture} onSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} room={project.room} roomName={project.measurement?.number?'Замер '+project.measurement.number:project.offer?.customer} onChange={room=>commitProject({...project,room})} onImport={r=>{const room=withBazisRoom(project.room,r.room);if(commitProject({...project,room,measurement:{number:project.measurement?.number||'',date:project.measurement?.date||'',notes:[project.measurement?.notes||'',r.name?'Замер из Базиса: '+r.name:'',...r.notes].filter(Boolean).join('\n')}})){setShowRoom(true);setFit(f=>f+1);}}}/>
               <RoomObstacles modules={project.modules} selected={selectedObstacle} onSelect={setSelectedObstacle} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <button className="text-action" data-stages="bodies filling facades" onClick={() => setTab("module")}>
                 К выбранному модулю
@@ -2623,7 +2644,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             ) : (
               <div className="help-content">
                 <div className="help-steps">
-                  <button onClick={()=>{setModal(null);setRoomPlan(true);setTab('room');}}><b>1. Замерьте помещение</b><span>Габариты комнаты, окна и двери. В карточке замера — номер, дата и особенности.</span></button>
+                  <button onClick={()=>{setModal(null);setRoomPlan(true);setTab('room');}}><b>1. Замерьте помещение</b><span>Габариты и форма комнаты (скос, 5 углов, скругление, дуга — «Форма комнаты»), окна и двери. В карточке замера — номер, дата и особенности.</span></button>
                   <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('module');setMode('move');}}><b>2. Соберите шкаф из корпусов</b><span>Добавьте модули до 900 × 2200 мм. Тяните их в режиме «Двигать корпуса» или на плане: края притягиваются к соседям. Shift + щелчок отмечает несколько корпусов, Shift + перетаскивание двигает их вместе; Alt — встать на линию, Ctrl — в пересечение линий; точный отступ без привязки — снимите галочку «Привязки корпусов».</span></button>
                   <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('section');setMode('fill');setOpenDoors(true);}}><b>3. Настройте наполнение</b><span>В режиме «Наполнение» тяните полки и ящики по высоте или в другой корпус. Новые элементы перетаскивайте слева. Перегородки тяните влево или вправо. Нажмите ящик, чтобы выбрать направляющие.</span></button>
                   <button onClick={()=>{setOutputTab('sheets');setModal('output');}}><b>4. Проверьте проект</b><span>Смета, деталировка, карты Lamarty 2750 × 1830, ведомость и бирки — в «Выдать документы». «Скачать комплект ZIP» собирает их вместе для технолога.</span></button>

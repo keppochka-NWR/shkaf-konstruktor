@@ -2,7 +2,9 @@ import {dishwasherServiceWarnings} from './dishwasherServices';
 import {sinkChecks} from './sinkChecks';
 import {environmentChecks} from './environmentChecks';
 import {ceilingClearance,nicheSize} from './measurement';
-import {obstacleBounds,bounds,closedModuleBounds,overlap,type Opening,type Project,type Room} from './project';
+import {obstacleBounds,bounds,closedModuleBounds,closedModuleCorners,moduleFootprint,overlap,type Opening,type Project,type Room} from './project';
+import {convexOverlap} from './roomGeometry';
+import {edgeZone,openingEdge,outsideOutline,pointsBox} from './roomEdges';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {parts,RULES,facadeTop,hasDrawerCap,isDrawerModule,rodClearanceWarnings} from './model';
 import {partCollisions,rawCheck,bazisAirHardware,edgePullGaps,LEAF_GAP_MIN,RAW_FAR,BAZIS_AIR,type EdgePullGap} from './collisions';
@@ -34,17 +36,29 @@ const FIXTURE_ADVICE:Record<string,string>={
 
 // Advisory inspection zones, not workshop rules or door-swing geometry.
 export function openingZone(room:Room,o:Opening){
+  // контур (задача Макса 30.10.2026): зона — повёрнутый четырёхугольник перед стеной контура (openingPolygon); здесь — его габарит для плана
+  if(room.outline){const q=openingPolygon(room,o);return {...pointsBox(q.pts),y:q.y,h:q.h};}
   const horizontal=o.wall==='back'||o.wall==='front';
   const reach=Math.min(o.type==='door'?900:100,horizontal?room.depth:room.width);
   return {x:horizontal?o.offset:o.wall==='left'?0:room.width-reach,
     z:horizontal?(o.wall==='back'?0:room.depth-reach):o.offset,
     y:o.sill,w:horizontal?o.width:reach,d:horizontal?reach:o.width,h:o.height};
 }
+/** Зона перед проёмом на стене контура: дверь — 900 мм в комнату, окно — 100 мм, вдоль стены — ширина проёма (по хорде). */
+export function openingPolygon(room:Room,o:Opening){
+  const e=openingEdge(room,o);
+  return {pts:edgeZone(room.outline!,e.edge,e.offset,e.offset+o.width,0,o.type==='door'?900:100),y:o.sill,h:o.height};
+}
+/** Пересечение повёрнутого следа корпуса (выпуклый многоугольник на плане, высота y..y+h) с повёрнутой зоной у стены (критик 30.10:
+ *  габарит по осям у корпуса под 45° у скоса давал ложные предупреждения). */
+const hitsZone=(poly:{x:number;z:number}[],b:{y:number;h:number},z:{pts:{x:number;z:number}[];y:number;h:number})=>b.y<z.y+z.h-.1&&b.y+b.h>z.y+.1&&convexOverlap(poly,z.pts);
 export function roomWarnings(project:Project){
-  const closed=project.modules.map(a=>({a,b:closedModuleBounds(a)}));
+  const ol=project.room.outline;
+  // контур: ещё и повёрнутые углы закрытого габарита (closedModuleCorners) — проверки у стен контура идут по ним
+  const closed=project.modules.map(a=>({a,b:closedModuleBounds(a),q:ol?closedModuleCorners(a):[]}));
   const warnings:RoomWarning[]=environmentChecks(project);
   for(const [index,o] of (project.room.openings||[]).entries())for(const a of project.modules){
-    if(!overlap(bounds(a),openingZone(project.room,o)))continue;
+    if(ol?!hitsZone(moduleFootprint(a),{y:a.y??0,h:a.module.height},openingPolygon(project.room,o)):!overlap(bounds(a),openingZone(project.room,o)))continue;
     warnings.push({moduleId:a.id,openingId:o.id,message:o.type==='door'
       ?`«${a.module.name}»: проверьте проход к двери ${index+1}. Корпус попадает в зону 900 мм перед проёмом.`
       :`«${a.module.name}»: корпус перекрывает окно ${index+1} у стены. Проверьте доступ к окну и подоконнику.`});
@@ -56,18 +70,27 @@ export function roomWarnings(project:Project){
   // аудит 11.10.2026). Шкафы студии и сырые шкафы Базиса (bazis-corpus) — как прежде; порог 900 — вопрос Макса (ярус B).
   // свободная панель (щит на стену, заказ 7437584) — плоская деталь, не корпус в сборе: без «лифта»
   for(const a of project.modules)if(a.module.width>900&&!a.module.worktop&&!a.module.kupe&&!a.module.raw?.row&&!a.module.kitchen&&!rawKitchen(a.module.raw)&&a.module.raw?.source!=='garderyob-free-panel')warnings.push({moduleId:a.id,kind:'logistics',message:`«${a.module.name}»: корпус шириной ${a.module.width} мм в сборе не во все лифты входит. Уточните лифт и подъём на этаж или разбейте на два корпуса.`});
-  for(const {a,b} of closed){
+  // контур: выход повёрнутых углов закрытого габарита за стены контура (критик 30.10: габарит по осям у корпуса под 45° вплотную к
+  // скосу давал «выступает на ~300 мм»)
+  if(ol)for(const {a,q} of closed)for(const [edge,amount] of outsideOutline(ol,q))if(amount>.1)
+    warnings.push({moduleId:a.id,kind:`closed-wall-e${edge}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость стены ${edge+1} на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});
+  if(!ol)for(const {a,b} of closed){
     const exits=[['левой',-b.x],['задней',-b.z],['правой',b.x+b.w-project.room.width],['передней',b.z+b.d-project.room.depth]] as const;
     for(const [wall,amount] of exits)if(amount>.1)warnings.push({moduleId:a.id,kind:`closed-wall-${wall}`,message:`«${a.module.name}»: закрытая мебель выступает за плоскость ${wall} стены на ${Math.ceil(amount)} мм. Проверьте ручки и фасады; отодвиньте модуль от стены.`});
   }
   for(const [i,f] of (project.room.fixtures||[]).entries()){
     const spec=FIXTURES[f.type],box=fixtureBox(project.room,f);
+    // контур: зона объекта — от стены контура (с зазором wallGap) на выступ, плоские — на 40 мм; по высоте — сам объект
+    if(ol){const e=openingEdge(project.room,f),gap=f.wallGap??0,d=spec.recess?0:Math.max(0,f.depth),z={pts:edgeZone(ol,e.edge,e.offset,e.offset+f.width,gap,gap+Math.max(d,spec.access||spec.recess?40:1)),y:f.fromFloor,h:f.height};
+      for(const {a,b,q} of closed)if(hitsZone(q,b,z))warnings.push({moduleId:a.id,fixtureId:f.id,kind:'fixture-'+f.id,message:`«${a.module.name}» перекрывает «${fixtureLabel(f,i)}»: ${FIXTURE_ADVICE[f.type]??'проверьте по замеру'}.`});
+      continue;}
     // Плоские объекты (розетка, лючок, ниша) считаем с зоной 40 мм от стены: корпус вплотную к стене их закрывает.
     const reach=Math.max(spec.access||spec.recess?40:1,box.w===0||box.d===0?1:0);
     const probe=f.wall==='back'?{...box,d:Math.max(box.d,reach)}:f.wall==='front'?{...box,z:project.room.depth-Math.max(box.d,reach),d:Math.max(box.d,reach)}:f.wall==='left'?{...box,w:Math.max(box.w,reach)}:{...box,x:project.room.width-Math.max(box.w,reach),w:Math.max(box.w,reach)};
     for(const {a,b} of closed)if(overlap(b,probe))warnings.push({moduleId:a.id,fixtureId:f.id,kind:'fixture-'+f.id,message:`«${a.module.name}» перекрывает «${fixtureLabel(f,i)}»: ${FIXTURE_ADVICE[f.type]??'проверьте по замеру'}.`});
   }
-  for(const o of project.room.obstacles||[])for(const {a,b} of closed)if(overlap(b,obstacleBounds(o)))warnings.push({moduleId:a.id,obstacleId:o.id,kind:'obstacle-'+o.id,message:`«${a.module.name}» пересекается с объектом замера «${o.name}». Измените расстановку или уточните замер${o.type==='radiator'?'; отдельно проверьте доступ и теплоотвод':''}.`});
+  // контур: повёрнутый закрытый габарит против коробки объекта (критик 30.10), прямоугольник — как было
+  for(const o of project.room.obstacles||[])for(const {a,b,q} of closed)if(ol?hitsZone(q,b,{pts:[{x:o.x,z:o.z},{x:o.x+o.width,z:o.z},{x:o.x+o.width,z:o.z+o.depth},{x:o.x,z:o.z+o.depth}],y:o.y,h:o.height}):overlap(b,obstacleBounds(o)))warnings.push({moduleId:a.id,obstacleId:o.id,kind:'obstacle-'+o.id,message:`«${a.module.name}» пересекается с объектом замера «${o.name}». Измените расстановку или уточните замер${o.type==='radiator'?'; отдельно проверьте доступ и теплоотвод':''}.`});
   if(project.measurement?.niche&&closed.length){
     const fit=nicheSize(project.measurement.niche,project.room.ceiling);
     for(const [axis,size,label,limit] of [['x','w','Ширина',fit.width],['z','d','Глубина',fit.depth],['y','h','Высота от пола',fit.height]] as const){

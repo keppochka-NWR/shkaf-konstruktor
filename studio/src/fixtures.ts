@@ -1,6 +1,8 @@
 // Объекты замера на стенах — по составу скрипта Базиса «Замер помещения» (технолог.бел): всё, что замерщик
 // отмечает на стене и что мешает мебели или требует доступа. Двери и окна остаются проёмами (Opening), здесь — остальное.
 import type { Opening } from "./project";
+import { edgeLength, type RoomOutline } from "./roomOutline";
+import { edgeLegacyWall, edgeZone, openingEdge, pointsBox } from "./roomEdges";
 export type Wall = Opening["wall"];
 export type FixtureType =
   | "vent" | "socket" | "switch" | "stoveSocket" | "api" | "panel" | "cableDuct"
@@ -81,21 +83,32 @@ function baseFixtureBox(room: { width: number; depth: number; height: number }, 
   }
 }
 export function fixtureLabel(f: Fixture, index: number) { return `О${index + 1} · ${f.name || FIXTURES[f.type].label}`; }
-export function newFixture(room: { width: number; depth: number; height: number }, type: FixtureType, wall: Wall = "back", idValue: string): Fixture {
-  const s = FIXTURES[type], len = wallLength(room, wall);
+/** Новый объект на стене. Комната с контуром (критик 30.10): на стене контура edge (не задана — стена контура стороны wall), длина —
+ *  по этой стене: «во всю стену» — во всю её длину, не по габариту. */
+export function newFixture(room: { width: number; depth: number; height: number; outline?: RoomOutline }, type: FixtureType, wall: Wall = "back", idValue: string, edge?: number): Fixture {
+  const s = FIXTURES[type], ol = room.outline;
+  const e = ol ? (edge !== undefined && Number.isInteger(edge) && edge >= 0 && edge < ol.length ? edge : openingEdge(room, { wall, offset: wallLength(room, wall) / 2, width: 0 }).edge) : undefined;
+  const len = ol ? Math.floor(edgeLength(ol, e!)) : wallLength(room, wall);
   const width = s.fullWall ? len : Math.min(s.w, len);
   const height = type === "verticalBox" || type === "pipe" && !s.fullWall ? room.height : Math.min(s.h, room.height);
   const fromFloor = type === "ceilingPlinth" ? room.height - height : Math.min(s.y, Math.max(0, room.height - height));
-  return { id: idValue, type, wall, offset: s.fullWall ? 0 : Math.round((len - width) / 2), fromFloor, width, height, depth: s.d, ...(s.round ? { round: true } : {}) };
+  return { id: idValue, type, wall: ol ? edgeLegacyWall(ol, e!) : wall, ...(ol ? { edge: e } : {}), offset: s.fullWall ? 0 : ol ? Math.round(((len - width) / 2) * 10) / 10 : Math.round((len - width) / 2), fromFloor, width, height, depth: s.d, ...(s.round ? { round: true } : {}) };
 }
-export function validateFixture(room: { width: number; depth: number; height: number }, f: Fixture): string | null {
+export function validateFixture(room: { width: number; depth: number; height: number; outline?: RoomOutline }, f: Fixture): string | null {
   if (!f || typeof f.id !== "string" || !f.id) return "Объект на стене без идентификатора.";
   if (!(f.type in FIXTURES)) return "Неизвестный тип объекта на стене.";
   if (!["back", "left", "right", "front"].includes(f.wall)) return "Объект на стене: укажите стену.";
   if (![f.offset, f.fromFloor, f.width, f.height, f.depth].every(Number.isFinite)) return "Объект на стене: размеры и отступы должны быть числами.";
-  const len = wallLength(room, f.wall), label = f.name || FIXTURES[f.type].label;
+  // контур произвольной формы (задача Макса 30.10.2026): объект со стеной контура edge — отступ и длина по этой стене (дуга — по дуге);
+  // без контура edge не читается — старые правила по wall
+  const onEdge = !!room.outline && f.edge !== undefined;
+  if (onEdge && (!Number.isInteger(f.edge) || f.edge! < 0 || f.edge! >= room.outline!.length)) return `«${f.name || FIXTURES[f.type].label}»: стена ${Number(f.edge) + 1} не найдена в контуре помещения.`;
+  const len = onEdge ? Math.round(edgeLength(room.outline!, f.edge!) * 10) / 10 : wallLength(room, f.wall), label = f.name || FIXTURES[f.type].label;
   if (f.width < 5 || f.height < 3 || f.depth < 0 || f.depth > 600) return `«${label}»: ширина от 5, высота от 3, выступ 0–600 мм.`;
   if (f.offset < 0 || f.offset + f.width > len + 0.1) return `«${label}»: выходит за длину стены (${len} мм).`;
+  // критик 30.10: старый объект без edge в комнате с контуром рисуется на стене контура своей стороны (roomEdges.openingEdge) — он
+  // должен поместиться на ней, а не только на стороне габарита (плинтус 4000 на стене 3250 свисал)
+  if (room.outline && !onEdge) { const L = Math.round(edgeLength(room.outline, openingEdge(room, f).edge) * 10) / 10; if (f.width > L + 0.1) return `«${label}»: выходит за длину стены (${L} мм).`; }
   if (f.fromFloor < 0 || f.fromFloor + f.height > room.height + 0.1) return `«${label}»: выходит за высоту помещения (${room.height} мм).`;
   if((f.color!==undefined&&!/^#[0-9a-f]{6}$/i.test(f.color))||[f.wallGap,f.insulation,f.serviceClearance].some(v=>v!==undefined&&(!Number.isFinite(v)||v<0||v>2000))||(f.diameter!==undefined&&(!Number.isFinite(f.diameter)||f.diameter<5||f.diameter>600)))return 'Проверьте диаметр, изоляцию, зазор и цвет.';
   if(f.type==='pipe'&&f.diameter!==undefined){const outer=f.diameter+2*(f.insulation??0);if(Math.abs(f.depth-outer)>.1||Math.abs((f.horizontal?f.height:f.width)-outer)>.1)return 'Габарит трубы должен равняться наружному диаметру плюс две толщины изоляции.';}
@@ -103,4 +116,7 @@ export function validateFixture(room: { width: number; depth: number; height: nu
   return null;
 }
 
-export function fixtureBox(room: {width:number;depth:number;height:number},f:Fixture){const box=baseFixtureBox(room,f),gap=f.wallGap??0;return {...box,x:box.x+(f.wall==='left'?gap:f.wall==='right'?-gap:0),z:box.z+(f.wall==='back'?gap:f.wall==='front'?-gap:0)};}
+export function fixtureBox(room: {width:number;depth:number;height:number;outline?:RoomOutline},f:Fixture){
+  // комната с контуром (критик 30.10): габарит объекта у его стены контура (edge и отступ по ней), а не по старому имени стены
+  if(room.outline){const e=openingEdge(room,f),gap=f.wallGap??0,d=FIXTURES[f.type].recess?0:Math.max(0,f.depth);return {...pointsBox(edgeZone(room.outline,e.edge,e.offset,e.offset+f.width,gap,gap+d)),y:f.fromFloor,h:f.height};}
+  const box=baseFixtureBox(room,f),gap=f.wallGap??0;return {...box,x:box.x+(f.wall==='left'?gap:f.wall==='right'?-gap:0),z:box.z+(f.wall==='back'?gap:f.wall==='front'?-gap:0)};}

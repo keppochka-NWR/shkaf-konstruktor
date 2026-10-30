@@ -6,6 +6,7 @@
 import { id } from "./model";
 import type { Room, Opening } from "./project";
 import { FIXTURES, type Fixture, type FixtureType, type Wall } from "./fixtures";
+import { edgeToLegacy, keepHanded, openingEdge } from "./roomEdges";
 
 type Node = { name: string; value?: string; items: Node[] };
 /** Разбор простого XML скрипта (Item/Items/Value) без DOMParser, чтобы работало и в тестах node. */
@@ -44,6 +45,9 @@ function fromOffset(wall: Wall, len: number, offset: number, width: number) { re
 const otstup = (n: Node | undefined, dflt: number) => num(n, "Отступ слева", NaN) || num(n, "Отступ справа", NaN) || num(n, "Отступ слева до откоса", NaN) || num(n, "Отступ справа до откоса", NaN) || dflt;
 
 export type BazisImport = { room: Room; name: string; notes: string[] };
+/** Замер из Базиса поверх комнаты проекта (отделка, стены и прочее остаются): контур — нет, замер Базиса прямоугольный (критик 30.10:
+ *  старый контур оставался, и при другом габарите проект не принимался — «Контур помещения не совпадает с его габаритом»). */
+export function withBazisRoom(prev: Room, imported: Room): Room { const { outline: _old, ...rest } = prev; void _old; return { ...rest, ...imported }; }
 export function importBazisConfig(xml: string): BazisImport {
   const cfg = parseConfigXml(xml);
   const root = cfg.items[0]?.items?.length && cfg.items[0].name === "" ? cfg.items[0] : cfg;
@@ -125,13 +129,36 @@ export function importBazisConfig(xml: string): BazisImport {
   return { room, name: find(items, "НАЗВАНИЕ ПОМЕЩЕНИЯ")?.value ?? "", notes };
 }
 
+/** Контур произвольной формы (задача Макса 30.10.2026) скрипт Базиса не знает: у него 4 стены и 2 угла. Выгружается габарит, проёмы и
+ *  объекты — на сторону габарита, к которой обращена их стена контура (центр — проекцией на неё). */
+export const BAZIS_OUTLINE_NOTE = "Контур помещения в Базис не передаётся — выгружен габарит.";
+const WALL_LABEL: Record<Wall, string> = { back: "задней (фронтальной)", left: "левой", right: "правой", front: "передней (тыльной)" };
+/** Пометка к выгрузке. Скрипт Базиса читает на стене одну дверь и одно окно (первые): у прямоугольника так было всегда, у контура
+ *  несколько стен ложатся на одну сторону габарита — говорим, какие проёмы в Базис не уйдут (критик 30.10). */
+export const bazisExportNote = (room: Room) => {
+  if (!room.outline) return null;
+  const all = room.openings ?? [], rect = bazisRectRoom(room).openings ?? [], lost: string[] = [];
+  for (const { wall } of WALLS) for (const type of ["door", "window"] as const) {
+    const on = rect.map((o, i) => ({ o, i })).filter((x) => x.o.wall === wall && x.o.type === type);
+    if (on.length > 1) lost.push(`${on.slice(1).map((x) => (type === "door" ? "дверь " : "окно ") + (all.findIndex((q) => q.id === x.o.id) + 1)).join(", ")} — в Базис уйдёт только ${type === "door" ? "первая дверь" : "первое окно"} ${WALL_LABEL[wall]} стены`);
+  }
+  return lost.length ? `${BAZIS_OUTLINE_NOTE} Не перенесутся: ${lost.join("; ")}.` : BAZIS_OUTLINE_NOTE;
+};
+function bazisRectRoom(room: Room): Room {
+  if (!room.outline) return room;
+  const rect = room as Room & { outline: NonNullable<Room["outline"]> }, { outline: _o, ...plain } = room;
+  // проём — на сторону габарита, к которой обращена его стена; петля и подоконник — на том же месте (критик 30.10: сдвиг подоконника —
+  // с проекцией стены на ось стороны, как и середина проёма)
+  const place = <T extends { wall: Wall; edge?: number; offset: number; width: number }>(x: T): T => { const e = openingEdge(rect, x), l = edgeToLegacy(rect, e.edge, e.offset, x.width); const { edge: _, ...rest } = x; return keepHanded(x, rect, { ...rest, wall: l.wall, offset: l.offset } as T, plain, true); };
+  return { ...plain, openings: (room.openings ?? []).map(place), fixtures: (room.fixtures ?? []).map(place) };
+}
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 function item(name: string, body: string, value?: string) { return `<Item Name="${esc(name)}">${value === undefined ? "" : `<Value>${esc(value)}</Value>`}${body ? `<Items>${body}</Items>` : ""}</Item>`; }
 const numItem = (name: string, v: number) => item(name, "", String(Math.round(v)));
 const boolOn = (name: string, body: string) => item(name, body, "Y");
 /** Room студии → Config.xml для скрипта Базиса: строит те же стены, проёмы и объекты. Неподдержанное скриптом опускается. */
-export function exportBazisConfig(room: Room, name = "ПОМЕЩЕНИЕ"): string {
-  const t = room.walls?.thickness ?? 120;
+export function exportBazisConfig(source: Room, name = "ПОМЕЩЕНИЕ"): string {
+  const room = bazisRectRoom(source), t = room.walls?.thickness ?? 120;
   const walls = WALLS.map(({ key, wall }) => {
     const len = wall === "back" || wall === "front" ? room.width : room.depth;
     const side = wall === "left" ? "справа" : "слева";
