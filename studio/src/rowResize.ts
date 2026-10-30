@@ -373,7 +373,7 @@ export function flush(p: Project, id: string, side: Side, gap = 0): Project {
 }
 
 /** План растяжения мышью: край side уходит наружу на raw мм (по курсору). snap — ширина к 10 мм и край к препятствию
- *  или к краю модуля любого уровня в той же линии в пределах 30 мм (Shift — без привязки; до 29.10 — Alt). Свободный край — меняется только
+ *  или к краю модуля любого уровня в той же линии в пределах 30 мм (без привязки — галочка «Привязки корпусов»; до 29.10 — Alt, до 30.10 — Shift). Свободный край — меняется только
  *  модуль (не заходит в соседа); край вплотную к соседу ряда — двигается стык (модуль и сосед вместе, с пределами соседа).
  *  project — результат (если можно), problem — почему нельзя. */
 export type StretchPlan = { mode: "free" | "joint"; width: number; delta: number; gap: number; neighbor?: { id: string; name: string; width: number }; project?: Project; problem?: string; filler?: number };

@@ -3,8 +3,9 @@
 //   Alt  — точка на ближайшей линии: перпендикуляр от курсора на вспомогательную линию, край/контур корпуса, кромку детали,
 //          стену, пол, потолок (в пределах допуска на экране);
 //   Ctrl — ближайшее пересечение двух линий (линия × линия, линия × край, край × край — угол корпуса, углы помещения);
-//   Shift — без привязки, шаг 1 мм (раньше это был Alt).
-// Ctrl+щелчок без движения — по-прежнему отметить корпус (мультивыбор). Здесь только 2D-геометрия в осях экрана вида
+//   без привязки (1 мм) — галочка «Привязки корпусов» (Shift с 30.10 — отметить корпус / тянуть группу).
+// Отметить корпус (мультивыбор) — Shift+щелчок без движения (решение Макса 30.10: «Ctrl — привязка к пересечению 2 линий,
+// выделение через Shift»); Shift+протяжка — перенос отмеченной группы вместе (с привязками); Ctrl+щелчок ничего не отмечает. Здесь только 2D-геометрия в осях экрана вида
 // (h — вправо, v — вверх, guides.viewAxes) — без React и three; проверяется тестами tests/point-snap.test.ts.
 import { dot, viewAxes, type GuideLine, type V3 } from "./guides";
 import { editsText, historyShortcut } from "./historyShortcuts";
@@ -14,22 +15,25 @@ import { editsText, historyShortcut } from "./historyShortcuts";
 export const altKeyupGuard = (e: { key: string; target: EventTarget | null }) =>
   e.key === "Alt" && (typeof Element === "undefined" || !editsText(e.target));
 
-/** snap — обычные привязки; free — без привязки (Shift); line — точка на линии (Alt); cross — пересечение (Ctrl). */
+/** snap — обычные привязки; free — без привязки (галочка «Привязки корпусов» снята); line — точка на линии (Alt); cross — пересечение (Ctrl). */
 export type SnapMode = "snap" | "free" | "line" | "cross";
 type Mods = { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean };
-/** Модификаторы → режим. Ctrl (Cmd) старше Alt, Alt старше Shift. */
-export function snapMode(e: Mods): SnapMode {
+/** Модификаторы → режим. Ctrl (Cmd) старше Alt. Shift — не привязка: с 30.10 Shift отмечает корпуса и тянет группу
+ *  (решение Макса 30.10); «без привязки» — только галочка «Привязки корпусов» (snapping = false). */
+export function snapMode(e: Mods, snapping = true): SnapMode {
   if (e.ctrlKey || e.metaKey) return "cross";
   if (e.altKey) return "line";
-  if (e.shiftKey) return "free";
-  return "snap";
+  return snapping ? "snap" : "free";
 }
 /** Режим привязки к точке (Alt/Ctrl). */
 export const isPointMode = (m: SnapMode): m is "line" | "cross" => m === "line" || m === "cross";
 export const MODE_WORD: Record<SnapMode, string> = { snap: "", free: "Без привязки", line: "Alt — точка на линии", cross: "Ctrl — пересечение" };
-/** Ctrl+нажатие на корпус: перенос — только от 9 px; меньше (дрожание руки) — это щелчок «отметить корпус» (критик 29.10 п.4). */
-export const CTRL_DRAG_PX = 9;
-export const ctrlDragStarts = (dx: number, dy: number) => Math.hypot(dx, dy) >= CTRL_DRAG_PX;
+/** Shift+нажатие на корпус: перенос (без привязки) — только от 9 px; меньше (дрожание руки) — это щелчок «отметить корпус»
+ *  (критик 29.10 п.4, тогда для Ctrl; с 30.10 отмечают Shift). */
+export const MARK_DRAG_PX = 9;
+export const markDragStarts = (dx: number, dy: number) => Math.hypot(dx, dy) >= MARK_DRAG_PX;
+/** Щелчок «отметить корпус» (мультивыбор) — Shift (решение Макса 30.10; до 30.10 — Ctrl, теперь Ctrl — только привязка). */
+export const isMarkClick = (e: { shiftKey: boolean }) => e.shiftKey;
 /** Виды сбоку (справа/слева): на экране глубина и высота — перенос корпуса в плоскости экрана, высота своя, как спереди
  *  (критик 29.10 п.7: раньше высота сбоку держалась, и привязка Ctrl к пересечению теряла вертикаль). */
 export const sideView = (view: string) => view === "side" || view === "left";
