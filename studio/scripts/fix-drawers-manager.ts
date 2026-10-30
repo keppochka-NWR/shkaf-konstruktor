@@ -38,7 +38,7 @@ const saved = async (): Promise<Project> => { for (let k = 0; k < 40; k++) { awa
   for (const [k, s] of all) { try { const doc = JSON.parse(s), n0 = found.length; walk(k, doc); if (doc?.calculation) for (const f of found.slice(n0)) if (!f[1].calculation) f[1] = { ...f[1], calculation: doc.calculation }; /* расчёт — в документе комнат (29.10) */ } catch { /* не JSON */ } }
   const best = found.filter(([k]) => !k.endsWith(":previous") && !/undo|history/i.test(k)).sort((a, b) => b[1].modules.length - a[1].modules.length)[0];
   if (!best) throw Error("проект не сохранён"); return parseProject(JSON.parse(JSON.stringify(best[1]))); };
-const mod = (p: Project, i: number) => p.modules[i].module; // по порядку добавления: комод, шкаф, антресоль (палитра называет «Модуль N»)
+const mod = (p: Project, i: number) => p.modules[i].module; // по порядку добавления: комод, шкаф, антресоль (первый из пустой комнаты назван по виду — «Комод», ae6153a 30.10; остальные «Модуль N»)
 const faces = (m: Module) => parts(m).filter((p) => /:drawer:\d+:facade$/.test(p.id)).sort((a, b) => a.position[1] - b.position[1]);
 const hs = (ps: Part[]) => ps.map((p) => Math.round(p.size[1] * 10) / 10).join(" / ");
 const spread = (ps: Part[]) => ps.length ? Math.max(...ps.map((p) => p.size[1])) - Math.min(...ps.map((p) => p.size[1])) : 0;
@@ -108,7 +108,7 @@ try {
   await click(btn("Добавить: Ящики")); p = await saved(); k = mod(p, 0);
   note(`«+» ящик: ${k.sections[0].drawers} ящ., фасады ${hs(faces(k))}`);
   if (!base) check("«+» в полный комод: 4 ящика, снова поровну до крыши", k.sections[0].drawers === 4 && spread(faces(k)) <= 1 && Math.abs(hi(faces(k).at(-1)!) - facadeTop(k)) < 0.1, hs(faces(k)));
-  await view(/^Модуль 1/); await shot("komod-plus");
+  await view(/Комод\s*600 ×/); await shot("komod-plus");
   await openSet("Наполнение", "Ящики");
   await click(btn("Уменьшить: Ящики")); await click(btn("Уменьшить: Ящики")); p = await saved(); k = mod(p, 0);
   note(`«−» два раза: ${k.sections[0].drawers} ящ., фасады ${hs(faces(k))}`);
@@ -118,7 +118,7 @@ try {
   await type(field("Высота"), 1000); p = await saved(); k = mod(p, 0);
   note(`высота 1000: ${k.sections[0].drawers} ящ., фасады ${hs(faces(k))}`);
   if (!base) check("высота комода 1000: фасады снова равные", spread(faces(k)) <= 1 && Math.abs(lo(faces(k)[0]) - facadeBottom(k)) < 0.1, hs(faces(k)));
-  await view(/^Модуль 1/); await shot("komod-1000");
+  await view(/Комод\s*600 ×/); await shot("komod-1000");
 
   // ── правка 3: ящики в накладку ──
   await addFromPalette("Для одежды", 800, 2000, 600);

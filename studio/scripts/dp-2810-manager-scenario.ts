@@ -240,7 +240,8 @@ for (const sc of SCENARIOS.filter((s) => only.includes(s.zone))) {
   await page.goto(url); await page.waitForSelector("canvas", { state: "attached", timeout: 90000 }); await page.waitForTimeout(2000);
   await t.step(`комната ${sc.room.join(" × ")}`, async () => { await t.field("Ширина пустой комнаты", sc.room[0]); await t.field("Глубина пустой комнаты", sc.room[1]); await t.field("Высота пустой комнаты", sc.room[2]); });
   await sc.run(t, page);
-  await t.step("стоимость: «Модель цены» → «по большей модели»", async () => { await page.keyboard.press("Escape"); const est = page.getByRole("button", { name: "Стоимость проекта" }).filter({ visible: true }); if (!(await est.count())) await t.click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first()); if (!(await page.getByLabel("Модель цены", { exact: true }).filter({ visible: true }).count())) await t.click(est.first()); await page.waitForTimeout(500); await t.pick("Модель цены", /по большей модели/); });
+  /* с 30.10 цена только по листам (d764832): выбора «Модель цены» нет — открыть «Стоимость» и убедиться, что выбора нет */
+  await t.step("стоимость: «Стоимость» — цена по листам, выбора «Модель цены» нет", async () => { await page.keyboard.press("Escape"); const est = page.getByRole("button", { name: "Стоимость проекта" }).filter({ visible: true }); if (!(await est.count())) await t.click(page.locator(".dock-tabs button", { hasText: "Стоимость" }).first()); await page.waitForTimeout(500); if (await page.locator('select[aria-label="Модель цены"]').count()) throw Error("выбор «Модель цены» всё ещё есть"); });
   const seconds = Math.round((Date.now() - t0) / 1000);
   await page.keyboard.press("Escape"); await page.waitForTimeout(10000);
   await t.shot("final");

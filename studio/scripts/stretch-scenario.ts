@@ -183,7 +183,14 @@ try {
   for (const [name, cam] of [["3D по умолчанию", null], ["3D ближе", [[4300, 1700, 2900], [3400, 1000, 0]]]] as const) {
     await open(gapProject(700)); // зазор шире 50 px на любом из ракурсов — сдвиг не упирается в соседа
     if (cam) { await page.evaluate((c) => (window as unknown as { __camera: (p: number[], l: number[]) => void }).__camera(c[0] as number[], c[1] as number[]), cam); await page.waitForTimeout(600); }
-    const hl = (await center(".stretch-handle[data-side=left]"))!, hr = (await center(".stretch-handle[data-side=right]"))!;
+    // Стартовый 3D-ракурс зависит от сборки (на dev-сервере vite, React StrictMode, камера дальше): корпус 600 издалека — ручки ближе
+    // 48 px и по правилу m7 скрыты. Тогда, как менеджер, колесом ближе к ручкам (смотрим и в 788901d — так же), а не падаем на null.
+    for (let i = 0; i < 6 && !(await center(".stretch-handle[data-side=right]")); i++) {
+      const at = await page.evaluate(`(() => { const h = document.querySelector(".stretch-handle[data-side=right]"), c = document.querySelector(".scene canvas") || document.querySelector("canvas"); const r = c.getBoundingClientRect(); return h && h.style.left ? { x: r.left + parseFloat(h.style.left), y: r.top + parseFloat(h.style.top) } : { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`) as { x: number; y: number };
+      await page.mouse.move(at.x, at.y); await page.mouse.wheel(0, -240); await page.waitForTimeout(500);
+    }
+    const hl = await center(".stretch-handle[data-side=left]"), hr = await center(".stretch-handle[data-side=right]");
+    if (!hl || !hr) { check(`m8: ${name} — ручки «↔» видны после перезагрузки проекта`, false, "ручки скрыты и колесом"); await shot(`12-m8-${cam ? "near" : "default"}-no-handles`); continue; }
     const k = Math.hypot(hr.x - hl.x, hr.y - hl.y) / 600, ux = (hr.x - hl.x) / Math.hypot(hr.x - hl.x, hr.y - hl.y), uy = (hr.y - hl.y) / Math.hypot(hr.x - hl.x, hr.y - hl.y);
     await snapToggle(false); await page.mouse.move(hr.x, hr.y); await page.mouse.down();
     for (let i = 1; i <= 10; i++) { await page.mouse.move(hr.x + ux * 5 * i, hr.y + uy * 5 * i); await page.waitForTimeout(20); }

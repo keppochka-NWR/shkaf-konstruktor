@@ -5,11 +5,10 @@
 //  B. п.5 «Подвесной ящик» 825×400×431, 2 ящика: «Высота фасада ящика» 196 у нижнего — деталь 196 (было 211), щели между фасадами нет.
 //  C. п.2 «Стеллаж» 800×2000×400: вырез Ø60 на верхней полке («Вырезы деталей…» → «Круглый» → «Сохранить»), «+» полка — вырез на той
 //     же полке (по высоте), а не на соседней.
-//  D. п.1 Модель цены «Цена по большей модели» → «Добавить комнату» → «Новый проект / восстановить» → «Создать новый проект»: модель
-//     заказа осталась у документа и всех комнат.
+//  D. п.1 (с 30.10 цена только по листам, выбора «Модель цены» нет): «Стоимость» без выбора модели → «Добавить комнату» →
+//     «Новый проект / восстановить» → «Создать новый проект»: в документе и комнатах нет model/maxModel.
 // Круг 2 (повторная проверка критика):
-//  E. A: модель «за лист» → «Создать новый проект» (копия «за лист») → модель «по большей» 23 000 → «Восстановить предыдущий
-//     проект»: заказ — по большей модели 23 000 (документ и комнаты), сообщение «В резервной копии своя модель цены».
+//  E. A: «Восстановить предыдущий проект» — модели цены нет, сообщения про «свою модель цены» нет (до 30.10: выбор моделей).
 //  F. B: «Комод» 800×1000×550, вырез на фасаде верхнего ящика → щелчок по нижнему ящику, «Удалить ящик целиком» — вырез на верхнем,
 //     без «удалена»; «+» — вырез на своём ящике; удалили ящик с вырезом — вырез снят с сообщением.
 //  G. C2: «Комод» 800×1000, «−» (482,5/482,5) → «Высота фасада ящика» 452,5 → «−» — отказ с причиной (968 > 800), «+» — 3 равных до крыши.
@@ -82,15 +81,6 @@ async function addFromPalette(kind: string, w: number, h: number, d: number) {
   const apart = page.getByRole("button", { name: /^Поставить отдельно/ });
   if (await apart.count() && await apart.first().isVisible()) { await click(apart.first()); await page.waitForTimeout(800); }
 }
-/** «Модель цены» с клавиатуры (стрелки в раскрытом списке, Enter), как менеджер. */
-async function pickModel(re: RegExp) {
-  const sel = page.locator('select[aria-label="Модель цены"]').first();
-  if (!(await sel.isVisible().catch(() => false))) await page.getByRole("button", { name: /^Стоимость/ }).or(page.getByRole("tab", { name: /^Стоимость/ })).first().click().catch(() => {});
-  await sel.scrollIntoViewIfNeeded(); await sel.focus(); await page.keyboard.press("Alt+ArrowDown");
-  const os = await sel.locator("option").allInnerTexts(), cur = await sel.evaluate((e) => (e as HTMLSelectElement).selectedIndex), want = os.findIndex((o) => re.test(o));
-  for (let i = 0; i < Math.abs(want - cur); i++) await page.keyboard.press(want > cur ? "ArrowDown" : "ArrowUp");
-  await page.keyboard.press("Enter"); await page.waitForTimeout(800);
-}
 /** Выбрать ящик n, как менеджер: «Наполнение › Ящики» → «Настройка ящиков» → вкладка «Ящик n» (выделяет его фасад на сцене; плашка
  *  выбранной детали внизу сцены — «Ящик n»). Щелчки по сцене в режиме «Наполнение» ставят ящик — для выбора не годятся. */
 async function selectDrawer(n: number): Promise<boolean> {
@@ -158,48 +148,35 @@ try {
   check("C1 «+» полка: полок стало больше, вырез на той же (верхней) полке, а не на соседней", n === shelvesBefore + 1 && JSON.stringify(hole(s)) === JSON.stringify([Math.round(top.position[1])]), `полки ${shelves(s).map((p) => Math.round(p.position[1])).join("/")}, вырез на ${hole(s).join(",")}; ${await banner()}`.slice(0, 220));
   await front(); await shot("C-cut-stays-on-top-shelf");
 
-  // ── D. п.1: модель цены заказа ──
-  const model = page.locator('select[aria-label="Модель цены"]').first();
-  if (!(await model.isVisible().catch(() => false))) await click(page.getByRole("button", { name: /^Стоимость/ }).or(page.getByRole("tab", { name: /^Стоимость/ })).first());
-  await model.scrollIntoViewIfNeeded(); await model.focus(); await page.keyboard.press("Alt+ArrowDown");
-  const opts = await model.locator("option").allInnerTexts(), cur = await model.evaluate((e) => (e as HTMLSelectElement).selectedIndex), want = opts.findIndex((o) => /большей/.test(o));
-  for (let i = 0; i < Math.abs(want - cur); i++) await page.keyboard.press(want > cur ? "ArrowDown" : "ArrowUp");
-  await page.keyboard.press("Enter"); await page.waitForTimeout(800);
+  // ── D/E. п.1: цена заказа ──
+  // С 30.10.2026 цена только по листам (решение Макса, d764832): выбора «Модель цены» нет. Шаги D/E (выбор «по большей»/«за лист»
+  // мышью) устарели; вместо них — тот же путь мышью («Добавить комнату» → «Создать новый проект» → «Восстановить предыдущий
+  // проект»): в «Стоимости» нет выбора модели, в документе и комнатах нет model/maxModel, цена — листы × цена листа.
+  const stoim = page.getByRole("button", { name: /^Стоимость/ }).or(page.getByRole("tab", { name: /^Стоимость/ })).first();
+  const noModel = (c: Project["calculation"] | undefined) => !c || (!(c as Record<string, unknown>).maxModel && !(c as Record<string, unknown>).model && !(c as Record<string, unknown>).priceMax);
+  await click(stoim);
+  const dockText = (await page.locator(".dock-estimate").first().innerText().catch(() => "")).replace(/\s+/g, " ");
+  check("D0 «Стоимость»: выбора «Модель цены» и строки «По коэффициенту» нет, листы ЛДСП показаны", (await page.locator('select[aria-label="Модель цены"]').count()) === 0 && !/По коэффициенту/.test(dockText) && /Листов ЛДСП в раскрое/.test(dockText), dockText.slice(0, 160));
+  await shot("D-price-sheets-only");
   let d = await doc();
-  check("D0 «Цена по большей модели» — в документе заказа", !!d.calc?.maxModel);
+  check("D1 документ заказа без модели цены", noModel(d.calc) && d.rooms.every((r) => noModel(r.calculation)), JSON.stringify(d.calc ?? null).slice(0, 120));
   if (!(await btn("Добавить комнату").isVisible().catch(() => false))) await click(page.getByRole("button", { name: /Заказ и инструменты/ }).first());
   await click(btn("Добавить комнату")); await page.waitForTimeout(1500);
   d = await doc();
-  check("D1 новая комната — по модели заказа", !!d.calc?.maxModel && d.rooms.every((r) => r.calculation?.maxModel));
+  check("D2 «Добавить комнату»: комнат 2, модели цены нет", d.rooms.length === 2 && noModel(d.calc) && d.rooms.every((r) => noModel(r.calculation)), JSON.stringify(d.calc ?? null).slice(0, 120));
   const add = page.getByRole("button", { name: /Добавить мебель|Начать с мебели|Добавить первый/ }).first();
   if (await add.isVisible().catch(() => false)) { await click(add); await page.waitForTimeout(1500); }
   await click(btn("Новый проект / восстановить"));
   await click(btn("Создать новый проект")); await page.waitForTimeout(1500);
   d = await doc();
-  check("D2 «Создать новый проект» в комнате 2: модель заказа не стёрта (документ и все комнаты)", !!d.calc?.maxModel && d.rooms.every((r) => r.calculation?.maxModel), JSON.stringify(d.calc ?? null).slice(0, 120));
-  const m2 = page.locator('select[aria-label="Модель цены"]').first();
-  if (!(await m2.isVisible().catch(() => false))) await page.getByRole("button", { name: /^Стоимость/ }).or(page.getByRole("tab", { name: /^Стоимость/ })).first().click().catch(() => {});
-  await page.waitForTimeout(800);
-  const shown = await m2.inputValue().catch(() => "");
-  check("D3 в редакторе комнаты «Модель цены» — по большей", shown === "max", shown);
-  await shot("D-price-model-kept");
-
-  // ── E. круг 2, A: «Восстановить предыдущий проект» в комнате заказа не меняет модель цены заказа ──
-  await pickModel(/^Цена за лист|^За лист/);
-  d = await doc();
-  check("E0 заказ «за лист» (так будет в резервной копии)", d.calc?.model === "sheet" && !d.calc?.maxModel, JSON.stringify(d.calc ?? null).slice(0, 120));
-  await click(btn("Новый проект / восстановить")); await click(btn("Создать новый проект")); await page.waitForTimeout(1500);
-  await pickModel(/большей/);
-  d = await doc();
-  check("E1 заказ снова «по большей модели» 23 000", !!d.calc?.maxModel && d.calc?.sheetPrice === 23000, JSON.stringify(d.calc ?? null).slice(0, 120));
+  check("D3 «Создать новый проект» в комнате 2: без ошибки, модели цены нет", d.rooms.length === 2 && noModel(d.calc) && d.rooms.every((r) => noModel(r.calculation)), JSON.stringify(d.calc ?? null).slice(0, 120));
   await click(btn("Новый проект / восстановить")); await click(btn("Восстановить предыдущий проект")); await page.waitForTimeout(1500);
   d = await doc();
   const note = (await page.locator('[data-testid="studio-note"]').allInnerTexts().catch(() => [] as string[])).join(" ").replace(/\s+/g, " ");
-  check("E2 «Восстановить предыдущий проект» (копия «за лист»): заказ — по большей модели 23 000, документ и все комнаты (было: весь заказ «за лист»)", !!d.calc?.maxModel && d.calc?.sheetPrice === 23000 && d.rooms.every((r) => r.calculation?.maxModel && r.calculation.sheetPrice === 23000), JSON.stringify(d.calc ?? null).slice(0, 120));
-  check("E3 менеджеру сообщение: в копии своя модель, заказ — по модели заказа", /В резервной копии своя модель цены — за лист ЛДСП/.test(note) && /по модели заказа — по большей модели/.test(note), note.slice(0, 220));
-  await shot("E-restore-keeps-order-model");
+  check("E «Восстановить предыдущий проект»: модели цены нет, сообщения про «свою модель цены» нет", noModel(d.calc) && d.rooms.every((r) => noModel(r.calculation)) && !/модель цены/i.test(note), note.slice(0, 220));
+  await shot("E-restore-sheets-only");
   // панель «Стоимость» внизу закрыть (повторный щелчок по вкладке) — сцена и панель справа снова видны
-  for (let k = 0; k < 2 && (await page.locator('select[aria-label="Модель цены"]').first().isVisible().catch(() => false)); k++) { await page.getByRole("button", { name: "Стоимость", exact: true }).last().click().catch(() => {}); await page.waitForTimeout(500); }
+  for (let k = 0; k < 2 && (await page.locator(".dock-estimate").first().isVisible().catch(() => false)); k++) { await page.getByRole("button", { name: "Стоимость", exact: true }).last().click().catch(() => {}); await page.waitForTimeout(500); }
 
   // ── F. круг 2, B: вырез на ящике идёт за своим ящиком ──
   // новый сеанс (пустая комната, без панели заказа)
