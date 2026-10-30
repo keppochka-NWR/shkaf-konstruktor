@@ -1158,7 +1158,7 @@ export function Scene(p: Props) {
     /** Группа, что едет с корпусом: при Shift+протяжке — своя (отметка ещё не дошла из App), иначе — отмеченные. */
     const dragGroup=(d:Drag)=>d.group??current.current.groupIds;
     /** Shift+нажатие на корпус (режим «Двигать»): отпустили без движения — отметить корпус (мультивыбор), потянули от 9 px —
-     *  перенос без привязки (решение Макса 30.10: «Ctrl — привязка к пересечению 2 линий, выделение через Shift»). */
+     *  перенос отмеченной группы вместе, с привязками (решение Макса 30.10: «Ctrl — привязка к пересечению 2 линий, выделение через Shift»; «Shift при перетягивании — группу вместе»). */
     let markPress:{mid:string;x:number;y:number;pointerId:number}|null=null;
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);

@@ -28,7 +28,7 @@ export function snapMode(e: Mods, snapping = true): SnapMode {
 /** Режим привязки к точке (Alt/Ctrl). */
 export const isPointMode = (m: SnapMode): m is "line" | "cross" => m === "line" || m === "cross";
 export const MODE_WORD: Record<SnapMode, string> = { snap: "", free: "Без привязки", line: "Alt — точка на линии", cross: "Ctrl — пересечение" };
-/** Shift+нажатие на корпус: перенос (без привязки) — только от 9 px; меньше (дрожание руки) — это щелчок «отметить корпус»
+/** Shift+нажатие на корпус: перенос отмеченной группы (с привязками) — только от 9 px; меньше (дрожание руки) — это щелчок «отметить корпус»
  *  (критик 29.10 п.4, тогда для Ctrl; с 30.10 отмечают Shift). */
 export const MARK_DRAG_PX = 9;
 export const markDragStarts = (dx: number, dy: number) => Math.hypot(dx, dy) >= MARK_DRAG_PX;
