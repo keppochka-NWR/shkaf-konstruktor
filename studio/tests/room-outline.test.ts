@@ -103,3 +103,16 @@ test('битый контур в файле — понятная ошибка, �
   const q=newProject() as any;q.room.outline=rectOutline(3000,3000);q.room.outline[1].bulge=300;
   assert.throws(()=>parseProject(JSON.parse(JSON.stringify(q))),/габарит/);
 });
+
+test('точка на стене, ближайшая стена, старые проёмы → стены контура',async()=>{
+  const {edgePoint,projectToEdges,legacyToEdge,edgeTangent}=await import('../src/roomOutline');
+  const r=rectOutline(4000,3000);
+  assert.deepEqual(edgePoint(r,2,1000),{x:3000,z:3000},'передняя идёт справа налево');
+  assert.deepEqual(projectToEdges(r,{x:3000,z:2900}),{edge:2,s:1000,dist:100});
+  // окно на передней стене от левой 500, ширина 1200 → по обходу от правого угла 4000−500−1200
+  assert.deepEqual(legacyToEdge(4000,3000,'front',500,1200),{edge:2,offset:2300});
+  assert.deepEqual(legacyToEdge(4000,3000,'right',500,1200),{edge:1,offset:500});
+  const arc=setBulge(r,0,500),L=edgeLength(arc,0),m=edgePoint(arc,0,L/2);
+  assert.ok(Math.abs(m.x-2000)<1&&Math.abs(m.z+500)<1,'середина дуги — вершина');
+  const n=edgeTangent(arc,0,L/2).n;assert.ok(Math.abs(n.x)<1e-6&&Math.abs(n.z-1)<1e-6,'внутрь комнаты');
+});

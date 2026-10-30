@@ -169,6 +169,39 @@ export function cornerAngle(o: RoomOutline, i: number): number {
 export const RECT_WALLS = ["back", "right", "front", "left"] as const;
 export type RectWall = (typeof RECT_WALLS)[number];
 export const wallEdgeIndex = (w: RectWall) => RECT_WALLS.indexOf(w);
+/** Точка на стене i на расстоянии s мм от её начала (вершины i) — по хорде или по дуге. */
+export function edgePoint(o: RoomOutline, i: number, s: number): P2 {
+  const a = o[i], b = o[(i + 1) % o.length], arc = edgeArc(a, b, a.bulge ?? 0);
+  if (!arc) { const l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return { x: a.x + ((b.x - a.x) * s) / l, z: a.z + ((b.z - a.z) * s) / l }; }
+  const t = (Math.sign(arc.sweep) * s) / arc.R;
+  return { x: arc.c.x + (a.x - arc.c.x) * Math.cos(t) - (a.z - arc.c.z) * Math.sin(t), z: arc.c.z + (a.x - arc.c.x) * Math.sin(t) + (a.z - arc.c.z) * Math.cos(t) };
+}
+/** Касательная (по обходу) и внутренняя нормаль стены i в точке s. */
+export function edgeTangent(o: RoomOutline, i: number, s: number): { t: P2; n: P2 } {
+  const L = edgeLength(o, i), d = Math.min(1, L / 4), p = edgePoint(o, i, Math.max(0, s - d)), q = edgePoint(o, i, Math.min(L, s + d));
+  const l = Math.hypot(q.x - p.x, q.z - p.z) || 1, t = { x: (q.x - p.x) / l, z: (q.z - p.z) / l };
+  return { t, n: { x: -t.z, z: t.x } };
+}
+/** Ближайшая к точке стена: номер, расстояние s вдоль неё (от начала), отступ от стены. */
+export function projectToEdges(o: RoomOutline, p: P2): { edge: number; s: number; dist: number } {
+  let best = { edge: 0, s: 0, dist: Infinity };
+  o.forEach((_, i) => {
+    const pts = edgePoints(o, i, 20);
+    let acc = 0;
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1], seg = Math.hypot(b.x - a.x, b.z - a.z), d = distToSeg(p, a, b);
+      if (d < best.dist - 1e-9) { const t = seg ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / (seg * seg))) : 0; best = { edge: i, s: r1(acc + t * seg), dist: d }; }
+      acc += seg;
+    }
+  });
+  return best;
+}
+/** Проём/объект старой прямоугольной комнаты (wall + offset от начала по старым правилам: задняя и передняя — от левой стены,
+ *  левая и правая — от задней) → стена контура-прямоугольника и отступ от её начала по обходу (передняя и левая идут обратно). */
+export function legacyToEdge(w: number, d: number, wall: RectWall, offset: number, width: number): { edge: number; offset: number } {
+  const e = wallEdgeIndex(wall), len = wall === "back" || wall === "front" ? w : d;
+  return { edge: e, offset: wall === "front" || wall === "left" ? r1(len - offset - width) : offset };
+}
 
 // ── правки контура (редактор плана). Все возвращают новый массив; нормализацию делает вызывающий (normalizeOutline). ──
 export function moveVertex(o: RoomOutline, i: number, p: P2): RoomOutline { return o.map((q, k) => (k === i ? { ...q, x: p.x, z: p.z } : q)); }
