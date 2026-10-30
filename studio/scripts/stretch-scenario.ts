@@ -82,7 +82,7 @@ try {
   // (б) клик по плашке → меню → «Дотянуть»
   await page.locator(".row-gap[data-side=right]").first().click();
   const menu = (await page.locator(".gap-menu").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
-  check("(б) меню плашки: Дотянуть / Придвинуть / Задать зазор", /Дотянуть \(\+200 мм\).*Придвинуть вплотную.*Задать зазор/.test(menu), menu);
+  check("(б) меню плашки: Дотянуть / Придвинуть / Задать зазор", /Дотянуть \(\+200 мм\).*Придвинуть вплотную.*Задать зазор — изменить ширину/.test(menu), menu);
   await shot("03-gap-menu");
   await page.getByRole("menuitem", { name: /Дотянуть/ }).click();
   const b = await settled((r) => r.d?.w === 900);
@@ -140,7 +140,7 @@ try {
   await page.locator(".row-gap[data-side=right]").first().click();
   const flushBtn = page.getByRole("menuitem", { name: /Придвинуть вплотную/ });
   check("m3: «Придвинуть вплотную» неактивно — оторвёт от «Шкаф 3»", (await flushBtn.isDisabled()) && /оторвёт от «Шкаф 3»/.test(await flushBtn.innerText()), (await flushBtn.innerText()).replace(/\s+/g, " "));
-  await page.getByRole("menuitem", { name: /Задать зазор/ }).click(); await page.waitForTimeout(300);
+  await page.getByRole("menuitem", { name: /Задать зазор — изменить ширину/ }).click(); // два пункта: «сдвинуть модуль» и «изменить ширину» (App) — m3 про ширину await page.waitForTimeout(300);
   const dlg = (await page.locator(".dimension-editor").innerText().catch(() => "")).replace(/\s+/g, " ");
   check("m4: окно «Задать зазор» без двойного «мм»", !/мм, мм/.test(dlg) && /Зазор справа до «Угловой», мм/.test(dlg), dlg.slice(0, 80));
   await shot("09-gap-dialog");

@@ -398,14 +398,14 @@ try {
   await page.mouse.click(sb.x, sb.y); await page.waitForTimeout(400); // снова выбран «Шкаф»
   await modClick("Shift", nb);
   const st1 = await status(), bx1 = await boxes();
-  check("11. Shift+щелчок по «Сосед» — отмечен (группа), не сдвинут", /Отмеченные корпуса/.test(st1) && (await marks()) === 1 && bx1.b.x === 2800, st1);
+  check("11. Shift+щелчок по «Сосед» — отмечен, не сдвинут (подсказка «Отмеченные… вместе» — только от 2)", !/Отмеченные корпуса/.test(st1) && (await marks()) === 1 && bx1.b.x === 2800, st1);
   await modClick("Shift", nb);
   check("11. Shift+щелчок ещё раз — снят", !/Отмеченные корпуса/.test(await status()) && (await marks()) === 0);
   // критик 29.10 п.4 (тогда для Ctrl): Shift+щелчок с дрожанием 6 px — щелчок (отмечен), корпус не сдвинут
   const jitter = async (p: Pt) => { await page.mouse.move(p.x, p.y); await page.keyboard.down("Shift"); await page.mouse.down(); await page.mouse.move(p.x + 4, p.y + 2); await page.mouse.move(p.x + 6, p.y); await page.mouse.up(); await page.keyboard.up("Shift"); await page.waitForTimeout(400); };
   await jitter(nb);
   const stj = await status(), bxj = await boxes();
-  check("11. Shift+щелчок с дрожанием 6 px — отмечен, не сдвинут", /Отмеченные корпуса/.test(stj) && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
+  check("11. Shift+щелчок с дрожанием 6 px — отмечен, не сдвинут", (await marks()) === 1 && bxj.b.x === 2800, `x ${bxj.b.x} · ${stj}`);
   // Shift+протяжка «Шкаф» (ещё не отмечен) при отмеченном «Сосед» — едут оба, «Шкаф» отмечается; одна отмена
   const gm = await modDrag("Shift", sb, { x: sb.x + 100 * fk, y: sb.y }, "shift-group-move");
   const bg = await settled((b) => b.a.x !== 1000);
@@ -415,6 +415,19 @@ try {
   check("11. Ctrl+Z — группа обратно одной отменой", bgu.a.x === 1000 && bgu.b.x === 2800, fmt(bgu.a) + " / " + fmt(bgu.b));
   await modClick("Shift", nb); await modClick("Shift", sb);
   check("11. Shift+щелчок — отметки сняты", (await marks()) === 0);
+  // критик 30.10 п.2: «Двигать всю композицию» + Shift+протяжка — едет композиция, галочка остаётся, отметок нет
+  const moveAllBox = page.getByRole("checkbox", { name: "Двигать всю композицию" });
+  await moveAllBox.evaluate((el) => (el as HTMLInputElement).click()); await page.waitForTimeout(400);
+  await modDrag("Shift", sb, { x: sb.x + 100 * fk, y: sb.y }, "shift-move-all");
+  const bma = await settled((b) => b.a.x !== 1000);
+  check("11. «Двигать всю композицию» + Shift+протяжка — оба +100, галочка на месте, отметок нет", Math.abs(bma.a.x - 1100) <= 5 && bma.b.x - bma.a.x === 1800 && (await moveAllBox.isChecked()) && (await marks()) === 0, fmt(bma.a) + " / " + fmt(bma.b));
+  if (bma.a.x !== 1000) { await key("Control+z"); await settled((b) => b.a.x === 1000); }
+  await moveAllBox.evaluate((el) => (el as HTMLInputElement).click()); await page.waitForTimeout(400);
+  // критик 30.10 п.1: в «Наполнении» Shift+щелчок корпус не отмечает
+  await page.getByRole("button", { name: "Наполнение", exact: true }).click(); await page.waitForTimeout(400);
+  await modClick("Shift", sb);
+  check("11. «Наполнение»: Shift+щелчок не отмечает корпус", (await marks()) === 0);
+  await page.getByRole("button", { name: "Двигать корпуса", exact: true }).click(); await page.waitForTimeout(400);
   // Shift+протяжка, упирающаяся в стену, — отказ всей группы (ничего не сдвинуто)
   await modClick("Shift", nb);
   await modDrag("Shift", sb, { x: sb.x + 900 * fk, y: sb.y }, "shift-group-refuse");
@@ -529,6 +542,9 @@ try {
   check("12. Ctrl+Z — группа обратно одной отменой", pgu.a.x === 1000 && pgu.b.x === 2800, fmt(pgu.a) + " / " + fmt(pgu.b));
   await modClick("Shift", pnb); await modClick("Shift", psb);
   check("12. Shift+щелчок ещё раз — сняты", (await fill()) !== "#cde6df" && (await marks()) === 0, String(await fill()));
+  // критик 30.10 п.3: на плане обычный щелчок по корпусу вне отмеченной группы снимает отметки (как в сцене и списке)
+  await modClick("Shift", pnb); await page.mouse.click(psb.x, psb.y); await page.waitForTimeout(400);
+  check("12. обычный щелчок по «Шкаф» на плане — отметка «Сосед» снята", (await marks()) === 0 && (await fill()) !== "#cde6df", String(await fill()));
   await page.mouse.move(pedge.x, pedge.y); await key("q"); await page.mouse.click(pedge.x, pedge.y); await page.waitForTimeout(150);
   await page.keyboard.down("Control"); await page.mouse.move(PX(2800) + 4, PZ(3) + 4); await page.waitForTimeout(200);
   const q12 = (await page.locator(".plan-badge").innerText().catch(() => "")).trim();
