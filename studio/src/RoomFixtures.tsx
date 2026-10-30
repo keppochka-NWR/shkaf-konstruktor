@@ -18,8 +18,7 @@ export function RoomFixtures({room,selected,onSelect,onChange,roomName,onImport}
   function patch(f:Fixture,change:Partial<Fixture>){return onChange({...room,fixtures:list.map(a=>a.id===f.id?{...a,...change}:a)});}
   function add(){
     // комната с контуром (задача Макса 30.10.2026): объект на стене контура по центру; «во всю стену» — во всю её длину
-    let f=newFixture(room,type,wall,id());
-    if(ol){const L=edgeLength(ol,addEdge),s=FIXTURES[type],w=s.fullWall?Math.floor(L):Math.min(s.w,L);f=onEdge(ol,{...f,width:w},addEdge,s.fullWall?0:(L-w)/2);}
+    const f=newFixture(room,type,wall,id(),ol?addEdge:undefined);
     if(onChange({...room,fixtures:[...list,f]}))onSelect(f.id);
   }
   const num=(f:Fixture,key:'offset'|'fromFloor'|'width'|'height'|'depth',label:string,i:number)=><label key={key}>{label}<input type="number" aria-label={label+' объекта '+(i+1)} key={f[key]} defaultValue={f[key]} onBlur={e=>{if(!patch(f,{[key]:Number(e.target.value)}))e.target.value=String(f[key]);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/><span>мм</span></label>;

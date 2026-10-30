@@ -148,6 +148,8 @@ type Props = {
   snapping?:boolean;
   groupIds?:string[];
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
+  /** Комната с контуром (критик 30.10): последний шаг тяги корпуса — упереться в стену (project.keepInRoom), на всех путях тяги. */
+  keepIn?:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
   onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
   moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
   onMoveDivider:(mid:string,sid:string,delta:number)=>boolean;
@@ -1333,6 +1335,8 @@ export function Scene(p: Props) {
           // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
           if(da)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
         }
+        // контур: после линий Q, Alt/Ctrl и без привязки — корпус упирается в стену, а не проходит сквозь скос (критик 30.10)
+        if(current.current.keepIn)next={...current.current.keepIn(drag.mid,next),y:next.y};
         markAt(hit,look,fromScene(drag.anchor));
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front'&&!sideView(current.current.view))next.y=drag.origin.y; // сбоку высота своя, как спереди (критик 29.10 п.7)

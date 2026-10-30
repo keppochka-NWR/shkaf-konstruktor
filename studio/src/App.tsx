@@ -169,7 +169,7 @@ import {
   newProject,
   parseProject,
   projectErrors,
-  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
+  appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, keepInRoom, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
   type Project,
 } from "./project";
 import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,turnModule,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
@@ -1546,6 +1546,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snapping={snapping}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
+            keepIn={project.room.outline?(mid,p)=>keepInRoom(project,mid,p,moveAll?project.modules.map(a=>a.id):liveGroupIds.includes(mid)?liveGroupIds:undefined):undefined}
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}

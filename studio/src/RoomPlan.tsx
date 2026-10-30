@@ -2,7 +2,7 @@ import {surfacePoint,surfaceOffset,type Surface} from './roomSurvey';
 import {moveComposition} from './operations';
 import {openingZone,roomWarnings} from './roomWarnings';
 import {useEffect,useRef,useState} from 'react';
-import {projectErrors,bounds,moduleFootprint,localToRoom,snapComposition,snapPlacement,type Project,type Opening} from './project';
+import {projectErrors,bounds,moduleFootprint,localToRoom,snapComposition,snapPlacement,keepInRoom,type Project,type Opening} from './project';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
@@ -10,7 +10,7 @@ import {editsText} from './historyShortcuts';
 import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {roomOutline,edgeLength,edgePoint,edgePoints,edgeArc,edgeFrame,edgeTangent,cornerAngle,moveVertex,insertVertex,removeVertex,chamferCorner,roundCorner,setBulge,moveEdge,setWallLength,projectToEdge,sagittaFromRadius,
   sameEdges,insertEdgeMap,removeEdgeMap,cornerEdgeMap,moveEdgeMap,outlineBounds,type RoomOutline,type EdgeMap} from './roomOutline';
-import {shapeEdit as shapeEditOf,itemEdge,onEdge,parseShiftTyped,parseWallTyped,snapVertex} from './roomShape';
+import {shapeEdit as shapeEditOf,itemEdge,onEdge,parseShiftTyped,parseWallTyped,snapVertex,offWalls} from './roomShape';
 import {ShapeMenu,ShapeAsk,type ShapeAskSpec,type ShapeMenuItem} from './RoomShapeMenu';
 import './guides.css';
 // Форма комнаты на плане (задача Макса 30.10.2026, как в Базисе): кнопка «Форма комнаты» — ручки углов (тянуть, «dx;dz» + Enter),
@@ -26,13 +26,6 @@ function outlinePath(o:RoomOutline){let d=`M${o[0].x} ${o[0].z}`;o.forEach((a,i)
 function edgePath(o:RoomOutline,i:number){const a=o[i],b=o[(i+1)%o.length],arc=edgeArc(a,b,a.bulge??0);return `M${a.x} ${a.z}`+(arc?`A${arc.R} ${arc.R} 0 0 ${arc.sweep>0?1:0} ${b.x} ${b.z}`:`L${b.x} ${b.z}`);}
 /** Участок стены i от s0 до s1 мм (по дуге — ломаной). */
 function edgeSpan(o:RoomOutline,i:number,s0:number,s1:number):XZ[]{const n=o[i].bulge?Math.max(2,Math.ceil(Math.abs(s1-s0)/60)):1;return Array.from({length:n+1},(_,k)=>edgePoint(o,i,s0+((s1-s0)*k)/n));}
-/** Стены контура как линии Alt/Ctrl (кроме тех, что сейчас едут). */
-function wallSegs(o:RoomOutline,skip:number[]):Seg2[]{const out:Seg2[]=[];o.forEach((_,i)=>{if(skip.includes(i))return;const pts=edgePoints(o,i,80);for(let k=0;k<pts.length-1;k++)out.push({a:toView({x:pts[k].x,y:0,z:pts[k].z},PLAN_LOOK),b:toView({x:pts[k+1].x,y:0,z:pts[k+1].z},PLAN_LOOK),what:'стена'});});return out;}
-/** Линии плана, лежащие на стенах, которые едут (их старое место не должно ловить привязку). */
-function offWalls(segs:Seg2[],o:RoomOutline,walls:number[]):Seg2[]{
-  const on=(p:P2,i:number)=>{const f=edgeFrame(o,i),q=fromView(p,PLAN_LOOK,{x:0,y:0,z:0});return Math.abs((q.x-f.a.x)*f.n.x+(q.z-f.a.z)*f.n.z)<1;};
-  return segs.filter(s=>!walls.some(i=>!o[i].bulge&&on(s.a,i)&&on(s.b,i)));
-}
 const VERTEX_HINT='Тяните угол · шаг 10 мм, стены ровно и под 45°, линии Q · Alt — на линию, Ctrl — в пересечение · «сдвиг X;Z» + Enter — точно';
 const WALL_HINT='Тяните стену параллельно себе · число + Enter — точный сдвиг · Alt — на линию, Ctrl — в пересечение';
 // Привязки клавишами (решение Макса 29.10.2026, pointSnap.ts) — как в сцене: Alt — точка на ближайшей линии (вспомогательные,
@@ -181,7 +174,7 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
       const v=o[s.i],prev=o[(s.i-1+n)%n],nx=o[(s.i+1)%n],near=[(s.i-1+n)%n,s.i];let t:XZ|null;
       if(s.typed){const k=parseShiftTyped(s.typed,d);t=k&&{x:v.x+k.x,z:v.z+k.z};}
       else if(isPointMode(s.mode)){
-        s.segs??=[...offWalls(planSegs([]),o,near),...wallSegs(o,near)];
+        s.segs??=offWalls(planSegs([]),o,near);
         const q=snapDelta(s.mode,toView({x:v.x,y:0,z:v.z},PLAN_LOOK),toView({x:d.x,y:0,z:d.z},PLAN_LOOK),s.segs,pointTol()),dv=viewDelta(q.delta.h,q.delta.v,PLAN_LOOK);hit=q.hit;
         t={x:Math.round((v.x+dv.x)*10)/10,z:Math.round((v.z+dv.z)*10)/10};
       }else{const g=guideXZ(),sn=snapVertex({x:v.x+d.x,z:v.z+d.z},prev,nx,g.xs,g.zs,snapTol());t=sn.p;what=sn.what;}
@@ -190,7 +183,7 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
       const f=edgeFrame(o,s.i),out={x:-f.n.x,z:-f.n.z},mid=edgePoint(o,s.i,edgeLength(o,s.i)/2);let dist=d.x*out.x+d.z*out.z;
       if(s.typed)dist=parseWallTyped(s.typed,dist)??NaN;
       else if(isPointMode(s.mode)){
-        s.segs??=[...offWalls(planSegs([]),o,[s.i]),...wallSegs(o,[s.i])];
+        s.segs??=offWalls(planSegs([]),o,[s.i]);
         const at={x:mid.x+out.x*dist,y:0,z:mid.z+out.z*dist},q=snapAlong(s.mode,toView(at,PLAN_LOOK),toView({x:out.x,y:0,z:out.z},PLAN_LOOK),toView({x:P.x,y:0,z:P.z},PLAN_LOOK),s.segs,pointTol());
         hit=q.hit;dist=Math.round((dist+q.shift)*10)/10;
       }else{
@@ -365,6 +358,8 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
         // края корпуса — к вспомогательным линиям плана (общие с «Сверху»), ближе обычной привязки
         if(snapping&&mode==='snap'&&planGuides.length)pos={...snapMoveToGuides(a,raw,pos,planGuides,snapTol()),y:raw.y};
       }
+      // контур: последний шаг на всех путях (линии Q, Alt/Ctrl, без привязки) — корпус упирается в стену (критик 30.10)
+      if(project.room.outline)pos={...keepInRoom(project,d.id,pos,moveAll?project.modules.map(x=>x.id):(d.group??groupIds).includes(d.id)?d.group??groupIds:undefined),y:raw.y};
       showMark(hit);if(moveAll||(d.group??groupIds).includes(d.id))n.modules=moveComposition(project,d.id,pos,moveAll?undefined:d.group??groupIds).modules;else Object.assign(a,pos);}
     else if(d.kind==='obstacle'){const o=n.room.obstacles!.find(o=>o.id===d.id)!;o.x=Math.round(d.origin.x+pt.x-d.start.x);o.z=Math.round(d.origin.z+pt.y-d.start.y);if(snapping&&mode==='snap'){const tol=35;if(Math.abs(o.x)<=tol)o.x=0;else if(Math.abs(o.x+o.width-r.width)<=tol)o.x=r.width-o.width;if(Math.abs(o.z)<=tol)o.z=0;else if(Math.abs(o.z+o.depth-r.depth)<=tol)o.z=r.depth-o.depth;}}
     else if(d.edge!==undefined&&project.room.outline){
