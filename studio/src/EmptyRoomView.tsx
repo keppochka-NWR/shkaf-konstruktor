@@ -15,8 +15,9 @@ import {RoomFixtures} from './RoomFixtures';
 import {RoomObstacles} from './RoomObstacles';
 import {RoomSurveyEditor} from './RoomSurveyEditor';
 import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProperties';
-import {newProject,appendModule,appendModuleGroup,applyAutoFillers,type Project,type Room} from './project';
+import {newProject,appendModuleGroup,applyAutoFillers,type Project,type Room} from './project';
 import {ModulePalette} from './ModulePalette';
+import {appendFromPalette} from './paletteAdd';
 export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload}:{project:Project;update:(p:Project)=>boolean;viewKey:string;title:string;bar:ReactNode;onAdd:()=>void;onDownload:()=>void}){
  const dummy=useMemo(()=>newProject().modules[0],[]),[plan,setPlan]=useState(false),[view,setView]=useState<View>('iso'),[fit,setFit]=useState(0),[stage,setStage]=useState<Stage>('room'),[advanced,setAdvanced]=useState(false),[selected,setSelected]=useState<EnvironmentSelection|null>(null);
  useEffect(()=>{setSelected(null);},[viewKey]);
@@ -35,7 +36,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  <WorkspacePanels>
  <aside className="library"><div className="panel-heading"><span className="eyebrow">ПОМЕЩЕНИЕ</span><h1>{title}</h1><p>{project.room.width} × {project.room.depth} × {project.room.height} мм</p></div>
  <div className="stage-note"><b>{stage==='room'?'Начните с размеров комнаты':stage==='fixtures'?'Что мешает установке мебели?':'Комната готова к расстановке'}</b><p>{stage==='room'?'Введите размеры справа. Затем добавьте окна, двери и коммуникации.':stage==='fixtures'?'Добавьте объекты справа. Нажмите правой кнопкой по объекту, чтобы изменить его параметры.':'Добавьте первый шкаф, чтобы перейти к корпусам, наполнению и фасадам.'}</p></div>
- <div className="project-modules"><ModulePalette source={dummy.module} onAdd={m=>addFirst(update(applyAutoFillers(appendModule(project,m))))} room={project.room} onAddGroup={(group,keep)=>addFirst(update(applyAutoFillers(appendModuleGroup(project,group,false,keep).project)))}/></div>
+ <div className="project-modules"><ModulePalette source={dummy.module} onAdd={m=>addFirst(update(applyAutoFillers(appendFromPalette(project,m))))} room={project.room} onAddGroup={(group,keep)=>addFirst(update(applyAutoFillers(appendModuleGroup(project,group,false,keep).project)))}/></div>
  <div className="library-bottom"><p>Другие комнаты сохранены и скрыты. Переключение комнаты — в панели заказа сверху.</p></div></aside>
  <section className="viewport" aria-label="Рабочая область">
  <div className="view-header"><div className="view-tabs">{([{id:'iso',label:'3D'},{id:'front',label:'Спереди'},{id:'side',label:'Сбоку'},{id:'top',label:'Сверху'}] as const).map(v=><button key={v.id} aria-pressed={!plan&&view===v.id} onClick={()=>{setView(v.id);setPlan(false);setFit(f=>f+1);}}>{v.label}</button>)}<button aria-pressed={plan} aria-label="Показать план комнаты" onClick={()=>setPlan(true)}>План</button></div><span className="scale-label">РАЗМЕРЫ В ММ</span></div>
