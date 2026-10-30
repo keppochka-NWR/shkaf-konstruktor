@@ -41,13 +41,15 @@ async function settled(expect: (r: Row) => boolean) { let r = await row(page); f
 const fmt = (r: Row) => ["c", "d", "e"].map((id) => `${id}:${r[id]?.x}+${r[id]?.w}`).join(" ");
 const center = async (sel: string) => { const b = await page.locator(sel).first().boundingBox(); return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null; };
 const plaque = async (side: "left" | "right") => ((await page.locator(`.row-gap[data-side=${side}]`).count()) ? (await page.locator(`.row-gap[data-side=${side}]`).first().innerText()).trim() : "");
+/** Галочка «Привязки корпусов» (с 30.10 «без привязки» — только она; Shift отмечает корпуса и тянет группу). */
+const snapToggle = async (on: boolean) => { const cb = page.getByRole("checkbox", { name: "Привязки корпусов" }); if ((await cb.isChecked()) !== on) await cb.evaluate((el) => (el as HTMLInputElement).click()); await page.waitForTimeout(250); };
 async function drag(from: { x: number; y: number }, toX: number, alt = false) {
   await page.mouse.move(from.x, from.y); await page.mouse.down();
-  if (alt) await page.keyboard.down("Shift"); // с 29.10 без привязки — Shift (Alt — к линии)
+  if (alt) await snapToggle(false); // без привязки — галочка «Привязки корпусов» (до 29.10 — Alt, до 30.10 — Shift)
   for (let i = 1; i <= 12; i++) { await page.mouse.move(from.x + ((toX - from.x) * i) / 12, from.y + (i % 2)); await page.waitForTimeout(25); }
   const live = (await page.locator(".drag-badge").innerText().catch(() => "")).trim();
   await shot(alt ? "live-alt" : "live-" + Math.round(toX));
-  await page.mouse.up(); if (alt) await page.keyboard.up("Shift");
+  await page.mouse.up(); if (alt) await snapToggle(true);
   await page.waitForTimeout(500);
   return live;
 }
@@ -80,7 +82,7 @@ try {
   // (б) клик по плашке → меню → «Дотянуть»
   await page.locator(".row-gap[data-side=right]").first().click();
   const menu = (await page.locator(".gap-menu").innerText().catch(() => "")).replace(/\s+/g, " ").trim();
-  check("(б) меню плашки: Дотянуть / Придвинуть / Задать зазор", /Дотянуть \(\+200 мм\).*Придвинуть вплотную.*Задать зазор/.test(menu), menu);
+  check("(б) меню плашки: Дотянуть / Придвинуть / Задать зазор", /Дотянуть \(\+200 мм\).*Придвинуть вплотную.*Задать зазор — изменить ширину/.test(menu), menu);
   await shot("03-gap-menu");
   await page.getByRole("menuitem", { name: /Дотянуть/ }).click();
   const b = await settled((r) => r.d?.w === 900);
@@ -128,17 +130,17 @@ try {
   await shot("08-rclick-size");
   await page.keyboard.press("Escape"); await page.keyboard.press("Escape");
 
-  // Shift — без привязки (до 29.10 — Alt)
+  // без привязки — галочка «Привязки корпусов» снята (до 29.10 — Alt, до 30.10 — Shift)
   const R3 = (await center(".stretch-handle[data-side=right]"))!;
   const liveAlt = await drag(R3, R3.x + 47 * pxmm, true);
-  check("Shift: без привязки (плашка «Без привязки»)", /Без привязки/.test(liveAlt), liveAlt);
+  check("галочка «Привязки корпусов» снята: без привязки (плашка «Без привязки»)", /Без привязки/.test(liveAlt), liveAlt);
 
   // m3: «Задать зазор…» меняет ширину (правый край), левый на месте; «Придвинуть вплотную» неактивно — оторвёт от «Шкаф 3»
   const m3a = await row(page);
   await page.locator(".row-gap[data-side=right]").first().click();
   const flushBtn = page.getByRole("menuitem", { name: /Придвинуть вплотную/ });
   check("m3: «Придвинуть вплотную» неактивно — оторвёт от «Шкаф 3»", (await flushBtn.isDisabled()) && /оторвёт от «Шкаф 3»/.test(await flushBtn.innerText()), (await flushBtn.innerText()).replace(/\s+/g, " "));
-  await page.getByRole("menuitem", { name: /Задать зазор/ }).click(); await page.waitForTimeout(300);
+  await page.getByRole("menuitem", { name: /Задать зазор — изменить ширину/ }).click(); // два пункта: «сдвинуть модуль» и «изменить ширину» (App) — m3 про ширину await page.waitForTimeout(300);
   const dlg = (await page.locator(".dimension-editor").innerText().catch(() => "")).replace(/\s+/g, " ");
   check("m4: окно «Задать зазор» без двойного «мм»", !/мм, мм/.test(dlg) && /Зазор справа до «Угловой», мм/.test(dlg), dlg.slice(0, 80));
   await shot("09-gap-dialog");
@@ -183,12 +185,12 @@ try {
     if (cam) { await page.evaluate((c) => (window as unknown as { __camera: (p: number[], l: number[]) => void }).__camera(c[0] as number[], c[1] as number[]), cam); await page.waitForTimeout(600); }
     const hl = (await center(".stretch-handle[data-side=left]"))!, hr = (await center(".stretch-handle[data-side=right]"))!;
     const k = Math.hypot(hr.x - hl.x, hr.y - hl.y) / 600, ux = (hr.x - hl.x) / Math.hypot(hr.x - hl.x, hr.y - hl.y), uy = (hr.y - hl.y) / Math.hypot(hr.x - hl.x, hr.y - hl.y);
-    await page.mouse.move(hr.x, hr.y); await page.mouse.down(); await page.keyboard.down("Shift");
+    await snapToggle(false); await page.mouse.move(hr.x, hr.y); await page.mouse.down();
     for (let i = 1; i <= 10; i++) { await page.mouse.move(hr.x + ux * 5 * i, hr.y + uy * 5 * i); await page.waitForTimeout(20); }
     const live = (await page.locator(".drag-badge").innerText().catch(() => "")).trim();
     const badgeBox = await page.locator(".drag-badge").boundingBox();
     await shot(`12-m8-${cam ? "near" : "default"}`);
-    await page.keyboard.press("Escape"); await page.keyboard.up("Shift"); await page.mouse.up(); await page.waitForTimeout(300);
+    await page.keyboard.press("Escape"); await page.mouse.up(); await snapToggle(true); await page.waitForTimeout(300);
     const mm = Number(/ширина (\d+(?:\.\d+)?) мм/.exec(live)?.[1] ?? NaN) - 600, expect = 50 / k;
     check(`m8: ${name} — 50 px ≈ ${Math.round(expect)} мм по масштабу (${k.toFixed(3)} px/мм)`, Math.abs(mm - expect) <= Math.max(10, expect * 0.15) && (!cam || mm <= 160), `сдвиг ${mm} мм · «${live}»`);
     check(`m6: ${name} — живая плашка у курсора`, !!badgeBox && Math.abs(badgeBox.x + badgeBox.width / 2 - (hr.x + ux * 50)) < 60 && badgeBox.y < hr.y, JSON.stringify(badgeBox));

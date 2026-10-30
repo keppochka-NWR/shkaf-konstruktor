@@ -1,4 +1,4 @@
-// «Фасады выделенных модулей» (решение Макса 29.10.2026): отмеченные Ctrl+щелчком корпуса правятся разом. Меняется только то поле,
+// «Фасады выделенных модулей» (решение Макса 29.10.2026): отмеченные Shift+щелчком корпуса правятся разом. Меняется только то поле,
 // которое правит менеджер; у корпусов с разными значениями поле показывает «— разные —». Корпуса, к которым поле не относится,
 // пропускаются с сообщением «к N модулям не применено: причина». Каждая правка — одно изменение проекта (одна отмена Ctrl+Z).
 import {useState} from 'react';
@@ -50,7 +50,7 @@ export function GroupFacadePanel({project,ids,commit}:{project:Project;ids:strin
  const mixedNote=(keys:string[])=>keys.length?' · разные: '+keys.map(k=>PATCH_LABEL[k]??k).join(', '):'';
  return <details className="property-section group-facades" open data-testid="group-facades">
   <summary><strong>Фасады выделенных модулей · {ids.length}</strong></summary>
-  <p className="field-note">Отмечены: {names.join(', ')}. Изменённое поле применяется ко всем отмеченным сразу, остальные настройки не меняются; «— разные —» — у модулей сейчас разные значения. Одна отмена Ctrl+Z возвращает всех. Отметить — Ctrl+щелчок по модулю в сцене или в списке слева.</p>
+  <p className="field-note">Отмечены: {names.join(', ')}. Изменённое поле применяется ко всем отмеченным сразу, остальные настройки не меняются; «— разные —» — у модулей сейчас разные значения. Одна отмена Ctrl+Z возвращает всех. Отметить — Shift+щелчок по модулю в сцене или в списке слева.</p>
   {field('kind',(['ldsp','vernissage','alu'] as const).map(k=>[k,KIND_LABEL[k]]))}
   {vern.count>0&&vern.base&&<div className="group-patch" data-group-field="vernissage"><p className="field-note">МДФ Вернисаж · {vern.count} мод.{mixedNote(vern.mixed)}. Меняется только то, что вы выберете.</p>
    <VernissagePicker value={vern.base as unknown as VernissageFacade} sizes={vernModule?vernissageSizes(vernModule):undefined} onChange={v=>run(()=>applyGroupPatch(project,ids,'vernissage',changedKeys(vern.base!,v as unknown as Record<string,unknown>)),'МДФ Вернисаж')}/></div>}

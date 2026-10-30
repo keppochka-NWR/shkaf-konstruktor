@@ -32,6 +32,7 @@ import PartialDividerPanel from './PartialDividerPanel';
 import {setPartialDivider,dividerInfo,dividerBounds,setDividerByShelves,moveDividerEnd,oneLeafAtDivider,announceDividerNotes} from './partialDivider';
 import {resizeOpening} from './sectionLayout';
 import {placeInRow,gaps,fillGap,flush,setGap,flushBlock,widthLock,planStretch,fillAdd,fillerNote,type GapSide} from './rowResize';
+import {isMarkClick} from './pointSnap';
 import {snapAxis,widthPull,keepOpposite,exactProblem,type CornerPull,type CornerPlan} from './cornerStretch';
 import type {Guide} from './guides';
 import {rowShortage} from './rowFit';
@@ -401,7 +402,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const liveGroupIds=groupIds.filter(id=>project.modules.some(a=>a.id===id));
   // m5 (критик релиза 22.10): после Esc выделение снято — справа не настройки прежнего модуля, а «Ничего не выбрано» и проект
   const nothingSelected=deselected&&!liveGroupIds.length&&project.modules.length>0;
-  /** Корпус в отмеченной группе из 2+ корпусов (Ctrl+щелчок): поворот и фасады действуют на всю группу. */
+  /** Корпус в отмеченной группе из 2+ корпусов (Shift+щелчок): поворот и фасады действуют на всю группу. */
   const inGroup=(mid:string)=>liveGroupIds.length>1&&liveGroupIds.includes(mid);
   const movingTogether=moveAll||liveGroupIds.includes(placed.id);
   const groupBounds=moveAll?mountingComposition:mountingCompositionBounds({...project,modules:project.modules.filter(a=>liveGroupIds.includes(a.id))});
@@ -691,7 +692,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       hint:!shift&&lock?lock[0].toUpperCase()+lock.slice(1):shift?`Задать зазор ${sideWord(side)} (сейчас ${g[side].gap} мм до ${g[side].to}): модуль сдвигается, ширина та же`:`Задать зазор ${sideWord(side)} (сейчас ${g[side].gap} мм до ${g[side].to}): меняется ширина, ${side==='right'?'левый':'правый'} край на месте`,run:()=>{(shift?askGapShift:askGap)(mid,side,g[side]);}});
     return [fill('right'),fill('left'),push('right'),push('left'),{id:'gap-set',label:'Задать зазор',icon:Ruler,hint:'Сдвинуть модуль или изменить ширину так, чтобы зазор стал нужным',children:[gapItem('right',true),gapItem('right',false),gapItem('left',true),gapItem('left',false)]}];
   }
-  // корпус в отмеченной группе (Ctrl+щелчок) — окна «Материалы»/«Ручки» сразу на всю группу (решение Макса 29.10, групповые фасады)
+  // корпус в отмеченной группе (Shift+щелчок) — окна «Материалы»/«Ручки» сразу на всю группу (решение Макса 29.10, групповые фасады)
   useEffect(()=>{setMaterialScope(inGroup(placed.id)?"group":"active");},[modal]); // eslint-disable-line react-hooks/exhaustive-deps
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{return commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);return false;}
@@ -1071,7 +1072,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       // окно поверх редактора (подсветка, фурнитура, крупные фасады Вернисажа…) или фокус в поле/списке — клавиши редактора не действуют (критик 29.10)
       if(direct||modal||document.querySelector('[aria-modal="true"]'))return;
       // Delete (правка Макса 29.10: «удаление шкафов по нажатию на Delete»): выбранная деталь — сразу (ящик — целиком), корпус или
-      // отмеченные Ctrl+щелчком корпуса — через «Да, удалить / Отмена», как «Удалить корпус» в меню правой кнопки (решение 19.10)
+      // отмеченные Shift+щелчком корпуса — через «Да, удалить / Отмена», как «Удалить корпус» в меню правой кнопки (решение 19.10)
       if(e.key==='Delete'&&!ctxMenu&&!gapMenu&&!lightMode&&!cutHost&&!presentation&&!(e.target instanceof Element&&e.target.closest('input,select,textarea'))){
         const t=deleteKeyTarget({removablePart:!!canRemove,groupIds:liveGroupIds,activeId:project.modules.length?placed.id:undefined,deselected,environment:!!(selectedOpening||selectedObstacle||selectedFixture||environmentSelection)});
         if(t?.kind==='part'){e.preventDefault();removeSelected();}
@@ -1366,7 +1367,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <Plus size={17} /> Добавить модуль
             </button>}
             {(project.modules.length>6||moduleSearch)&&<label className="module-search"><input type="search" aria-label="Найти корпус в проекте" placeholder="Название, номер, размер…" value={moduleSearch} onChange={e=>setModuleSearch(e.target.value)}/><small>{visibleModules.length} из {project.modules.length} корпусов</small></label>}
-            <p className="module-selection-hint">Ctrl + клик — выбрать несколько модулей.</p>{!!liveGroupIds.length&&<div><button className="outline" onClick={()=>{const id=liveGroupIds.includes(placed.id)?placed.id:liveGroupIds[0];if(liveGroupIds.length<2){selectModule(id);setModal("facade-editor");return;}setActive(id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}}>Фасады выделенных ({liveGroupIds.length})</button><button className="text-action" onClick={()=>setGroupIds([])}>Снять выделение</button></div>}
+            <p className="module-selection-hint">Shift + клик — выбрать несколько модулей; Shift + перетаскивание — двигать их вместе.</p>{!!liveGroupIds.length&&<div><button className="outline" onClick={()=>{const id=liveGroupIds.includes(placed.id)?placed.id:liveGroupIds[0];if(liveGroupIds.length<2){selectModule(id);setModal("facade-editor");return;}setActive(id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}}>Фасады выделенных ({liveGroupIds.length})</button><button className="text-action" onClick={()=>setGroupIds([])}>Снять выделение</button></div>}
             <div className="module-list" ref={moduleList}>
             {visibleModules.map(({a,i}) => (
               <button
@@ -1375,7 +1376,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 onContextMenu={e=>{e.preventDefault();setCtxMenu({mid:a.id,sid:a.module.sections[0]?.id??"",x:e.clientX,y:e.clientY});}}
                 title={a.module.name}
                 aria-pressed={!deselected&&a.id === placed.id}
-                onClick={e=>{if(e.ctrlKey||e.metaKey){toggleModuleGroup(a.id);return;}/* критик 29.10: обычный щелчок вне отмеченной группы снимает отметки — Delete удалит этот корпус */setGroupIds(g=>groupAfterPlainClick(g,a.id));selectModule(a.id);}}
+                onMouseDown={e=>{if(isMarkClick(e))e.preventDefault();/* Shift+щелчок не выделяет текст списка */}}
+                onClick={e=>{/* решение Макса 30.10: отметить — Shift+щелчок (Ctrl — только привязка к пересечению) */if(isMarkClick(e)){toggleModuleGroup(a.id);return;}/* критик 29.10: обычный щелчок вне отмеченной группы снимает отметки — Delete удалит этот корпус */setGroupIds(g=>groupAfterPlainClick(g,a.id));selectModule(a.id);}}
               >
                 <Box size={18} />
                 <span>
@@ -1390,7 +1392,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             ))}
             {!visibleModules.length&&<p className="field-note">Корпуса не найдены. Измените запрос.</p>}
             </div>
-<label className="snap-control"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
+<label className="snap-control" title="Снимите — корпус, угол и край «↔» тянутся без привязки, шагом 1 мм (вместо прежнего Shift; Shift теперь отмечает корпуса и тянет группу)"><input type="checkbox" aria-label="Привязки корпусов" checked={snapping} onChange={e=>setSnapping(e.target.checked)}/> Привязки корпусов</label>
 <label className="snap-control"><input type="checkbox" aria-label="Двигать всю композицию" checked={moveAll} onChange={e=>{setMoveAll(e.target.checked);if(e.target.checked){setGroupIds([]);setFocusActive(false);setFit(f=>f+1);}setMode('move');}}/> Двигать всю композицию</label>
             {project.modules.length>1&&<details className="move-group"><summary>Двигать группу{liveGroupIds.length?' · '+liveGroupIds.length:''}</summary><p className="field-note">Отметьте корпуса и тяните один из отмеченных. Остальные корпуса двигаются отдельно.</p><div className="move-group-list">{project.modules.map((a,i)=><label key={a.id}><input type="checkbox" aria-label={'В группу: '+(i+1)+'. '+a.module.name} checked={liveGroupIds.includes(a.id)} onChange={e=>{setGroupIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id));setMoveAll(false);if(e.target.checked){setFocusActive(false);setFit(f=>f+1);}setMode('move');}}/><span>{i+1}. {a.module.name}</span></label>)}</div><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>{try{const result=copyModuleGroup(project,liveGroupIds);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');}}catch(e){setError(e instanceof Error?e.message:'Не удалось скопировать группу.');}}}>Копировать группу</button>{(['ccw','cw'] as const).map(dir=><button key={dir} className="text-action" disabled={!liveGroupIds.length} aria-label={dir==='cw'?'Повернуть группу на 90° по часовой':'Повернуть группу на 90° против часовой'} onClick={()=>{try{if(commitProject(rotateModuleGroup(project,liveGroupIds,dir))){setFocusActive(false);setFit(f=>f+1);setMode('move');}}catch(e){setError((e as Error).message);}}}>{dir==='cw'?'Повернуть группу ↻ по часовой':'Повернуть группу ↺ против часовой'}</button>)}<p className="field-note">Стыки сохраняются. У стены группа сдвинется внутрь комнаты.</p><button className="text-action" disabled={!liveGroupIds.length} onClick={()=>setGroupIds([])}>Снять группу</button></details>}
             <button className="text-action" onClick={() => addModule(true)}>
@@ -1529,13 +1531,14 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}
             presentation={presentation||editingFacades}
             cutaway={cutaway}
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
+            snapping={snapping}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
             onMoveModule={moveBody}
             moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
@@ -1766,7 +1769,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             return <LightPanel module={lp} onModify={u=>{modifyAt(lightPanel,u);}} onClose={()=>setLightPanel(null)} onMode={lightMode?undefined:()=>{setLightPanel(null);setLightNote('');setLightMode(lightPanel);}}/>;})()}
           {rmbTip&&!presentation&&!roomPlan&&(stage==='bodies'||stage==='filling'||stage==='facades')&&<div className="rmb-tip" role="status"><span>Нажмите на шкаф <b>правой кнопкой мыши</b> — откроется меню: размеры, полки, ящики, петли, цвет.</span><button onClick={hideRmbTip}>Понятно</button></div>}
           <div className="orbit-help" style={{display:roomPlan?"none":undefined}}>
-            <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Shift — без привязки · Alt — к линии · Ctrl — к пересечению':'Тяните корпус · привязки отключены'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
+            <RotateCcw size={13} /> {focusActive?"Крупный вид выбранного корпуса · ":""}{mode==='move'?(moveAll?'Тяните любой корпус — движется вся композиция':liveGroupIds.length>1?'Отмеченные корпуса двигаются вместе':snapping?'Тяните корпус · Shift — отметить / тянуть группу · Alt — к линии · Ctrl — к пересечению · без привязки — снимите «Привязки корпусов» слева':'Тяните корпус · привязки отключены (галочка «Привязки корпусов» слева)'):mode==='fill'?'Полки и ящики — по высоте, перегородки — по ширине':mode==='select'?'Нажмите на деталь, чтобы выбрать':'Перетащите, чтобы повернуть'} <span>·</span>{" "}
             Колесо — масштаб <span>·</span> Зажатое колесо — вращение <span>·</span> <span className="view-keys" title="W — сверху, S — спереди, A — слева, D — справа, E — 3D. Q — вспомогательная линия (спереди, сверху, сбоку и на «Плане»; линии «Сверху» и «Плана» общие): щёлкните линию, наберите размер и Enter; щелчок по линии и Delete — убрать. Тяните за угол выбранного корпуса — два размера сразу; во время тяги наберите «600;2400» и Enter — точные размеры в порядке плашки (одно число — первый размер, «;2400» — второй). R — повернуть выбранный корпус (или отмеченную группу) на 90° по часовой, Shift+R — против. Esc — закрыть меню, отменить перетаскивание, снять выделение детали, затем модуля">W A S D — виды, E — 3D, Q — вспомогательная линия, R — поворот, Esc — снять выделение</span> <span>·</span> <b className="rmb-hint">Правая кнопка — меню действий</b>
           </div>
         </section>
@@ -1778,7 +1781,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </section>:<>
 
           {composer&&<div><FillingComposer key={placed.id+selectedId+composer} module={m} sid={selectedId} kind={composer} onCancel={()=>setComposer(null)} onApply={(count,config,fit)=>{try{const next=composer==='drawer'&&fit&&config?addFittedDrawers(project,placed.id,selectedId,count,config):addFillingBatch(project,placed.id,selectedId,composer,count,config);if(commitProject(next)){selectInserted(next,placed.id,selectedId,composer);setComposer(null);return true;}}catch(e){setError((e as Error).message);}return false;}}/></div>}
-          {/* решение Макса 29.10: фасады отмеченных Ctrl+щелчком модулей — разом (src/groupFacades.ts) */}
+          {/* решение Макса 29.10: фасады отмеченных Shift+щелчком модулей — разом (src/groupFacades.ts) */}
           {tab!=='room'&&liveGroupIds.length>1&&<GroupFacadePanel key={liveGroupIds.join('|')} project={project} ids={liveGroupIds} commit={commitProject}/>}
           {tab!=='room'&&!nothingSelected&&!m.raw&&!m.worktop&&!m.kupe&&<div className="selected-module-heading"><strong>{m.name}</strong><label>Секция<select aria-label="Выбранная секция" value={selectedId} onChange={e=>chooseSection(e.target.value)}>{m.sections.map((section,i)=><option key={section.id} value={section.id}>Секция {i+1}</option>)}</select></label></div>}
           {tab === "room" ? (
@@ -2621,7 +2624,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div className="help-content">
                 <div className="help-steps">
                   <button onClick={()=>{setModal(null);setRoomPlan(true);setTab('room');}}><b>1. Замерьте помещение</b><span>Габариты комнаты, окна и двери. В карточке замера — номер, дата и особенности.</span></button>
-                  <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('module');setMode('move');}}><b>2. Соберите шкаф из корпусов</b><span>Добавьте модули до 900 × 2200 мм. Тяните их в режиме «Двигать корпуса» или на плане: края притягиваются к соседям. Удерживайте Shift для точного отступа без привязки, Alt — чтобы встать на линию, Ctrl — в пересечение линий.</span></button>
+                  <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('module');setMode('move');}}><b>2. Соберите шкаф из корпусов</b><span>Добавьте модули до 900 × 2200 мм. Тяните их в режиме «Двигать корпуса» или на плане: края притягиваются к соседям. Shift + щелчок отмечает несколько корпусов, Shift + перетаскивание двигает их вместе; Alt — встать на линию, Ctrl — в пересечение линий; точный отступ без привязки — снимите галочку «Привязки корпусов».</span></button>
                   <button onClick={()=>{setModal(null);setRoomPlan(false);setTab('section');setMode('fill');setOpenDoors(true);}}><b>3. Настройте наполнение</b><span>В режиме «Наполнение» тяните полки и ящики по высоте или в другой корпус. Новые элементы перетаскивайте слева. Перегородки тяните влево или вправо. Нажмите ящик, чтобы выбрать направляющие.</span></button>
                   <button onClick={()=>{setOutputTab('sheets');setModal('output');}}><b>4. Проверьте проект</b><span>Смета, деталировка, карты Lamarty 2750 × 1830, ведомость и бирки — в «Выдать документы». «Скачать комплект ZIP» собирает их вместе для технолога.</span></button>
                   <button onClick={()=>{setModal(null);changePresentation(true);}}><b>5. Покажите клиенту</b><span>Крупный вид без рабочих панелей. Покажите помещение и фасады, сохраните изображение. КП — в документах.</span></button>

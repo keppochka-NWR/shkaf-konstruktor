@@ -5,13 +5,17 @@ import assert from 'node:assert/strict';
 import {initialModule} from '../src/model';
 import {newProject,type PlacedModule} from '../src/project';
 import {candidateLines,viewLook,PLAN_LOOK,carcassCorners,type GuideLine} from '../src/guides';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
+import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,closestOnSegment,nearestOnLine,segmentCross,nearestCross,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,crossName,type Seg2} from '../src/pointSnap';
 
 const seg=(h0:number,v0:number,h1:number,v1:number,what='л'):Seg2=>({a:{h:h0,v:v0},b:{h:h1,v:v1},what});
 
-test('модификаторы: Ctrl — пересечение, Alt — на линию, Shift — без привязки, без клавиш — обычные привязки',()=>{
+test('модификаторы: Ctrl — пересечение, Alt — на линию; Shift — НЕ привязка (с 30.10 — отметить/группа); без привязки — галочка',()=>{
   assert.equal(snapMode({}),'snap');
-  assert.equal(snapMode({shiftKey:true}),'free');
+  assert.equal(snapMode({shiftKey:true}),'snap','Shift — не «без привязки» (решение Макса 30.10)');
+  assert.equal(snapMode({},false),'free','галочка «Привязки корпусов» снята — без привязки');
+  assert.equal(snapMode({shiftKey:true},false),'free');
+  assert.equal(snapMode({altKey:true},false),'line','Alt/Ctrl работают и без галочки');
+  assert.equal(snapMode({ctrlKey:true},false),'cross');
   assert.equal(snapMode({altKey:true}),'line');
   assert.equal(snapMode({ctrlKey:true}),'cross');
   assert.equal(snapMode({metaKey:true}),'cross','Cmd на Mac — как Ctrl');
@@ -101,9 +105,11 @@ test('критик 29.10 п.3: Alt — составляющая, которую 
   assert.deepEqual(c.delta,{h:600,v:250.5},'пересечение — обе точно');
 });
 
-test('критик 29.10 п.4: Ctrl+щелчок с дрожанием 6 px — щелчок, перенос — от 9 px',()=>{
-  assert.equal(ctrlDragStarts(6,0),false);assert.equal(ctrlDragStarts(4,4),false);
-  assert.equal(ctrlDragStarts(9,0),true);assert.equal(ctrlDragStarts(7,7),true);
+test('решение Макса 30.10: отметить — Shift+щелчок (не Ctrl); с дрожанием 6 px — щелчок, перенос группы — от 9 px',()=>{
+  assert.equal(isMarkClick({shiftKey:true}),true);
+  assert.equal(isMarkClick({shiftKey:false,ctrlKey:true} as {shiftKey:boolean}),false,'Ctrl+щелчок больше не отмечает');
+  assert.equal(markDragStarts(6,0),false);assert.equal(markDragStarts(4,4),false);
+  assert.equal(markDragStarts(9,0),true);assert.equal(markDragStarts(7,7),true);
 });
 
 test('критик 29.10 п.5: Ctrl+колесо гасится только во время тяги',()=>{
@@ -120,6 +126,11 @@ test('критик 29.10 п.6: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z во время т
   assert.equal(historyGuard(k('KeyZ',{shiftKey:true}),true),true);
   assert.equal(historyGuard(k('KeyZ'),false),false);
   assert.equal(historyGuard(k('KeyQ'),true),false);
+  // критик 30.10 п.4: R / Shift+R во время тяги — не поворачивать группу посреди тяги; без тяги — поворот как было
+  const r=(o:Partial<KeyboardEvent>={})=>k('KeyR',{ctrlKey:false,key:'r',...o});
+  assert.equal(historyGuard(r(),true),true);
+  assert.equal(historyGuard(r({shiftKey:true}),true),true);
+  assert.equal(historyGuard(r(),false),false);
 });
 
 test('критик 29.10 п.7: сбоку (справа и слева) высота при переносе своя, сверху/3D — нет',()=>{

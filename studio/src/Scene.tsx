@@ -126,7 +126,7 @@ import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
 import {openEase,openToggleKey,stepOpen} from './editActions';
-import {altKeyupGuard,acrossSegments,ctrlDragStarts,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
+import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import './guides.css';
@@ -142,6 +142,8 @@ type Props = {
   hideFacades?:boolean;
   hideFurniture?:boolean;
   moveAll:boolean;
+  /** Галочка «Привязки корпусов»: false — тяга корпуса, угла и края «↔» без привязки (решение Макса 30.10: Shift больше не «без привязки»). */
+  snapping?:boolean;
   groupIds?:string[];
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
   onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
@@ -175,7 +177,7 @@ type Props = {
   onEnvironmentContext?:(kind:'opening'|'fixture'|'obstacle',id:string)=>void;
   onContextMenu?: (mid: string, sid: string, x: number, y: number, info?: { pid?: string; role?: string; localY?: number }) => void;
   onToggleModule?: (id:string)=>void;
-  /** Обычный щелчок по корпусу (без Ctrl): App снимает отметки группы, если корпус не в ней (критик 29.10). */
+  /** Обычный щелчок по корпусу (без Shift): App снимает отметки группы, если корпус не в ней (критик 29.10). */
   onPlainModuleClick?: (id:string)=>void;
   onModuleSelect: (id: string) => void;
   onDimension: (key: "width" | "height" | "depth") => void;
@@ -477,7 +479,7 @@ export function Scene(p: Props) {
     /** Ручка растяжения «↔» на боку выбранного корпуса (режим «Двигать корпуса»). */
     function stretchHandle(side:'left'|'right',pos:THREE.Vector3){
       const b=document.createElement('button');b.type='button';b.className='stretch-handle';b.dataset.side=side;b.textContent='↔';
-      b.title=(side==='right'?'Правый':'Левый')+' край: тяните, чтобы изменить ширину. Вплотную к соседу — двигается стык. Shift — без привязки (1 мм), Alt — к линии, Ctrl — к пересечению линий';
+      b.title=(side==='right'?'Правый':'Левый')+' край: тяните, чтобы изменить ширину. Вплотную к соседу — двигается стык. Alt — к линии, Ctrl — к пересечению линий; без привязки — галочка «Привязки корпусов»';
       b.setAttribute('aria-label','Растянуть '+(side==='right'?'правый':'левый')+' край');
       passThrough(b);
       b.addEventListener('pointerdown',e=>{if(e.button!==0)return;e.preventDefault();e.stopPropagation();startStretch(side,e);});
@@ -1133,8 +1135,10 @@ export function Scene(p: Props) {
       pointer = new THREE.Vector2();
     const badge=document.createElement('div');badge.className='drag-badge';badge.hidden=true;target.appendChild(badge);
     // ── Привязки курсора клавишами (решение Макса 29.10.2026, pointSnap.ts): Alt — точка на ближайшей линии, Ctrl — ближайшее
-    // пересечение двух линий, Shift — без привязки (1 мм). Для линии Q, угла, края «↔» и переноса корпуса в ортогональных видах.
+    // пересечение двух линий; без привязки — галочка «Привязки корпусов» (Shift с 30.10 — отметить/группа). Для линии Q, угла, края «↔» и переноса корпуса в ортогональных видах.
     type PtrLike={clientX:number;clientY:number;altKey:boolean;ctrlKey:boolean;metaKey:boolean;shiftKey:boolean};
+    /** Галочка «Привязки корпусов» (App): выключена — без привязки (с 30.10 вместо Shift; Alt/Ctrl работают всегда). */
+    const snapOn=()=>current.current.snapping!==false;
     const snapMark=document.createElement('div');snapMark.className='snap-mark';snapMark.hidden=true;target.appendChild(snapMark);
     let lastPtr:{clientX:number;clientY:number}|null=null,ptrMode:SnapMode='snap';
     const r1=(v:number)=>Math.round(v*10)/10;
@@ -1157,11 +1161,15 @@ export function Scene(p: Props) {
     const modeText=(mode:SnapMode,hit:PointHit|undefined,look:V3|null)=>mode==='snap'?'':(isPointMode(mode)&&!look?'Без привязки':hitText(hit,mode))+' · ';
     type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider'|'dividerEnd';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number;
       /** Alt/Ctrl (pointSnap.ts): опорный угол корпуса в осях вида и линии для привязки — считаются при первом нажатии. */
-      ref?:P2;segs?:Seg2[]};
+      ref?:P2;segs?:Seg2[];
+      /** Shift+протяжка: группа, что едет вместе (отмеченные + этот корпус) — пока App не перерисовал отметки. */
+      group?:string[]};
     let drag:Drag|null=null;
-    /** Ctrl+нажатие на корпус в ортогональном виде (режим «Двигать»): отпустили без движения — отметить корпус (как раньше),
-     *  потянули — перенос с привязкой к пересечениям (решение Макса 29.10.2026). */
-    let ctrlPress:{mid:string;x:number;y:number;pointerId:number}|null=null;
+    /** Группа, что едет с корпусом: при Shift+протяжке — своя (отметка ещё не дошла из App), иначе — отмеченные. */
+    const dragGroup=(d:Drag)=>d.group??current.current.groupIds;
+    /** Shift+нажатие на корпус (режим «Двигать»): отпустили без движения — отметить корпус (мультивыбор), потянули от 9 px —
+     *  перенос отмеченной группы вместе, с привязками (решение Макса 30.10: «Ctrl — привязка к пересечению 2 линий, выделение через Shift»; «Shift при перетягивании — группу вместе»). */
+    let markPress:{mid:string;x:number;y:number;pointerId:number}|null=null;
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
     function indicateTarget(hit:THREE.Intersection|undefined){
@@ -1183,17 +1191,19 @@ export function Scene(p: Props) {
     function sectionFor(hit:THREE.Intersection){const a=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;const focus=current.current.arrangement.find(a=>a.id===current.current.activeId)!;const center=moduleCenter(focus),xx=roomToLocal(a,hit.point.x+center.x,hit.point.z+center.z).x,yy=hit.point.y-(a.y??0);return hit.object.userData.sectionId||boxes(a.module).find(b=>xx>=b.x&&xx<=b.x+b.width&&yy>=b.bottom&&yy<=b.top)?.id||a.module.sections[0].id;}
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.presentation)return;
-      if((e.ctrlKey||e.metaKey)&&current.current.onToggleModule){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();
-        const s=current.current;if(s.mode==='move'&&!s.lightMode&&lookNow()&&picked.object.userData.role!=='handle'){ctrlPress={mid:picked.object.userData.moduleId,x:e.clientX,y:e.clientY,pointerId:e.pointerId};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);}
+      // Shift+щелчок — отметить корпус (решение Макса 30.10; Ctrl+щелчок больше не отмечает — Ctrl только привязка)
+      // в «Наполнении» Shift корпуса не отмечает: полки и ящики тянутся как обычно (критик 30.10 п.1)
+      if(isMarkClick(e)&&current.current.onToggleModule&&current.current.mode!=='fill'){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();
+        const s=current.current;if(s.mode==='move'&&!s.lightMode&&picked.object.userData.role!=='handle'){markPress={mid:picked.object.userData.moduleId,x:e.clientX,y:e.clientY,pointerId:e.pointerId};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);}
         else s.onToggleModule!(picked.object.userData.moduleId);}return;}
       if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();const mid=picked.object.userData.moduleId,alts=[...new Set(ray.intersectObjects(modelGroup.children,true).filter(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId===mid&&h.object.userData.partId).map(h=>h.object.userData.partId as string))].filter(x=>x!==picked.object.userData.partId);current.current.onLightPick(mid,picked.object.userData.partId,alts);}return;}
       if(current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
       if(first?.object.userData.fixtureId){current.current.onFixtureSelect?.(first.object.userData.fixtureId);return;}
-      // allowShell — перенос из Ctrl+нажатия: корпус выбран по оболочке и в прозрачном режиме (критик 29.10 п.8)
-      const hit=hitAt(e.clientX,e.clientY,!!(e as PointerEvent&{allowShell?:boolean}).allowShell);if(!hit)return;
-      current.current.onPlainModuleClick?.(String(hit.object.userData.moduleId));
+      // fromMark — перенос из Shift+нажатия: корпус выбран по оболочке и в прозрачном режиме (критик 29.10 п.8), отметки не снимаются
+      const fromMark=!!(e as PointerEvent&{fromMark?:boolean}).fromMark,hit=hitAt(e.clientX,e.clientY,fromMark);if(!hit)return;
+      if(!fromMark)current.current.onPlainModuleClick?.(String(hit.object.userData.moduleId));
       const state=current.current,a=state.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;
       const sid=sectionFor(hit),pid=hit.object.userData.partId as string;
       // Клик по ручке в любом режиме открывает выбор ручки для этого корпуса.
@@ -1212,25 +1222,28 @@ export function Scene(p: Props) {
     }
     function pointerMove(e:PtrLike){
       lastPtr={clientX:e.clientX,clientY:e.clientY};
-      // Ctrl+нажатие на корпус потянули — начинается обычный перенос из точки нажатия (дальше — с привязкой Ctrl)
-      if(ctrlPress&&!drag){const cp=ctrlPress;if(!ctrlDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;ctrlPress=null;
-        pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,allowShell:true,preventDefault(){}} as unknown as PointerEvent);
-        if(!drag){controls.enabled=true;return;}}
+      // Shift+нажатие на корпус потянули (от 9 px) — перенос отмеченной группы вместе (решение Макса 30.10): корпус, ещё не
+      // отмеченный, отмечается и едет с группой; привязки — как у обычного переноса (Alt/Ctrl — у этого корпуса, группа — тем же ходом)
+      if(markPress&&!drag){const cp=markPress;if(!markDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;markPress=null;
+        pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,fromMark:true,preventDefault(){}} as unknown as PointerEvent);
+        const md=drag as Drag|null;if(!md){controls.enabled=true;return;}
+        // «Двигать всю композицию» включено — едет композиция, отметки и галочку не трогаем (критик 30.10 п.2)
+        if(md.kind==='module'&&!current.current.moveAll){const s=current.current,g=s.groupIds??[];md.group=g.includes(md.mid)?g:[...g,md.mid];if(!g.includes(md.mid))s.onToggleModule?.(md.mid);}}
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
       needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
         // сбоку высота — только если ход по вертикали главный и > 15 px (дрожание руки не поднимает корпус с пола)
         const lockY=sideView(current.current.view)&&!sideHeightFree(e.clientX-drag.point[0],e.clientY-drag.point[1]);
         const raw={x:drag.origin.x+point.x,y:lockY?drag.origin.y:current.current.view==='front'||sideView(current.current.view)?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
-        const mode=snapMode(e),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined;
+        const mode=snapMode(e,snapOn()),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined;
         if(isPointMode(mode)&&look&&da){
           // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
           const s=current.current,d=drag;
           d.ref??=nearestOutlineCorner(carcassCorners({...da,...d.origin}),look,toView(fromScene(d.anchor),look));
-          d.segs??=snapSegs(s.moveAll?s.arrangement.map(a=>a.id):s.groupIds?.includes(d.mid)?s.groupIds:[d.mid]);
+          d.segs??=snapSegs(s.moveAll?s.arrangement.map(a=>a.id):dragGroup(d)?.includes(d.mid)?dragGroup(d)!:[d.mid]);
           const r=snapDelta(mode,d.ref,toView({x:raw.x-d.origin.x,y:raw.y-d.origin.y,z:raw.z-d.origin.z},look),d.segs,pointTol()),dv=viewDelta(r.delta.h,r.delta.v,look);hit=r.hit;
           next=hit?{x:r1(d.origin.x+dv.x),y:Math.max(0,r1(d.origin.y+dv.y)),z:r1(d.origin.z+dv.z)}:{x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)};
-        }else if(mode!=='snap')next={x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}; // Shift (и Alt/Ctrl в 3D) — без привязки
+        }else if(mode!=='snap')next={x:Math.round(raw.x),y:Math.round(raw.y),z:Math.round(raw.z)}; // галочка «Привязки корпусов» снята (и Alt/Ctrl в 3D) — без привязки
         else{
           next=current.current.snap(drag.mid,raw);
           // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
@@ -1240,7 +1253,7 @@ export function Scene(p: Props) {
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front'&&!sideView(current.current.view))next.y=drag.origin.y; // сбоку высота своя, как спереди (критик 29.10 п.7)
         else if(lockY&&!(hit&&!hit.free?.v))next.y=drag.origin.y; // сбоку без вертикального хода — высота прежняя (Alt/Ctrl, поймавшие высоту, — по привязке)
-        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||current.current.groupIds?.includes(drag.mid)&&current.current.groupIds.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':current.current.groupIds?.includes(drag.mid)?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||dragGroup(drag)?.includes(drag.mid)&&dragGroup(drag)!.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':dragGroup(drag)?.includes(drag.mid)&&(dragGroup(drag)?.length??0)>1?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else if(drag.kind==='divider'){
         const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;
         for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
@@ -1259,14 +1272,19 @@ export function Scene(p: Props) {
         badge.textContent=problem||(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';
       }
     }
-    function resetDrag(){needsRender=true;dropTarget.visible=false;snapMark.hidden=true;if(ctrlPress){ctrlPress=null;controls.enabled=true;}if(!drag)return;if(drag.kind==='module'){for(const group of moduleGroups.values())group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
+    function resetDrag(){needsRender=true;dropTarget.visible=false;snapMark.hidden=true;if(markPress){markPress=null;controls.enabled=true;}if(!drag)return;if(drag.kind==='module'){for(const group of moduleGroups.values())group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
-      // Ctrl+щелчок без движения — отметить корпус (мультивыбор, как раньше)
-      if(ctrlPress&&!drag){const cp=ctrlPress;ctrlPress=null;controls.enabled=true;if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);current.current.onToggleModule?.(cp.mid);return;}
+      // Shift+щелчок без движения — отметить корпус / снять отметку (мультивыбор, решение Макса 30.10)
+      if(markPress&&!drag){const cp=markPress;markPress=null;controls.enabled=true;if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);current.current.onToggleModule?.(cp.mid);return;}
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
       if(d.moved){
-        if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);
+        if(d.kind==='module'){
+          // группа (Shift+протяжка, отмеченные, вся композиция) — отказ целиком, если хоть один корпус упрётся или выйдет из помещения
+          const s=current.current,grouped=s.moveAll||(dragGroup(d)?.includes(d.mid)&&(dragGroup(d)?.length??0)>1),problem=grouped?s.moveProblem(d.mid,d.candidate):undefined;
+          if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Группа не перенесена',text:problem}}));
+          else s.onMoveModule(d.mid,d.candidate);
+        }
         else if(d.kind==='divider')current.current.onMoveDivider(d.mid,d.sid,d.delta);
         else if(d.kind==='dividerEnd')current.current.onMoveDividerEnd?.(d.mid,d.sid,d.pid.endsWith(':under')?'under':'over',d.delta);
         else{
@@ -1322,7 +1340,7 @@ export function Scene(p: Props) {
       if(!st.moved&&Math.hypot(e.clientX-st.start[0],e.clientY-st.start[1])<3)return;
       st.moved=true;
       const du=((e.clientX-st.start[0])*st.screen.x+(e.clientY-st.start[1])*st.screen.y)/st.screen.k;
-      const mode=snapMode(e),look=lookNow();let hit:PointHit|undefined,cur:V3|null=null;
+      const mode=snapMode(e,snapOn()),look=lookNow();let hit:PointHit|undefined,cur:V3|null=null;
       st.raw=Math.round((st.side==='right'?du:-du)*10)/10;st.snap=mode==='snap';
       const sa=current.current.arrangement.find(x=>x.id===st.mid);
       if(isPointMode(mode)&&look&&sa){
@@ -1385,7 +1403,7 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);const start=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,start))return;
       const texts=labels.filter(l=>l.element.dataset.dim&&dims.includes(l.element.dataset.dim as Dim)).map(l=>({el:l.element as HTMLElement,text:l.element.textContent??''}));
       const hl=labels.find(l=>l.element.classList.contains('corner-handle')&&l.element.dataset.corner===ends.join('-'));
-      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined,typed:'',mouse:[e.clientX,e.clientY],mode:snapMode(e)};
+      corner={mid:a.id,dims,ends,out,plane,start,origin:[e.clientX,e.clientY],moved:false,touched:[],texts,handle:hl?{label:hl,base:hl.position.clone()}:undefined,typed:'',mouse:[e.clientX,e.clientY],mode:snapMode(e,snapOn())};
       hl?.element.classList.add('active');
       controls.enabled=false;target.classList.add('stretching','corner-dragging');for(const o of modelGroup.children)if(o.userData.rowGap)o.visible=false;
       window.addEventListener('pointermove',cornerMove);window.addEventListener('pointerup',cornerUp);window.addEventListener('pointercancel',endCorner);
@@ -1410,7 +1428,7 @@ export function Scene(p: Props) {
     }
     function cornerMove(e:PointerEvent){
       const c=corner;if(!c)return;
-      c.mouse=[e.clientX,e.clientY];c.mode=snapMode(e);lastPtr={clientX:e.clientX,clientY:e.clientY};
+      c.mouse=[e.clientX,e.clientY];c.mode=snapMode(e,snapOn());lastPtr={clientX:e.clientX,clientY:e.clientY};
       if(c.typed){cornerTypedShow(c);return;} // набран размер — мышь размер не меняет
       if(!c.moved&&Math.hypot(e.clientX-c.origin[0],e.clientY-c.origin[1])<3)return;
       c.moved=true;cornerByMouse(c);
@@ -1557,7 +1575,7 @@ export function Scene(p: Props) {
       if(e.button!==0||current.current.presentation)return;
       const t=tool;
       if(t){
-        e.preventDefault();e.stopPropagation();ptrMode=snapMode(e);toolMove(e.clientX,e.clientY);
+        e.preventDefault();e.stopPropagation();ptrMode=snapMode(e,snapOn());toolMove(e.clientX,e.clientY);
         if(t.phase==='pick'){const h=t.hover,look=lookNow();if(!h||!look)return;tool={phase:'place',look,base:h,typed:''};toolMove(e.clientX,e.clientY);}
         else placeNow();
         return;
@@ -1567,11 +1585,11 @@ export function Scene(p: Props) {
       if(g){e.preventDefault();e.stopPropagation();selectGuide(g);toolBadge('Вспомогательная линия · Delete — убрать · Esc — снять выбор',e.clientX,e.clientY);}
       else if(selectedGuide)selectGuide(null);
     }
-    function trackMouse(e:PointerEvent){lastMouse=[e.clientX,e.clientY];ptrMode=snapMode(e);if(tool)toolMove(e.clientX,e.clientY);}
+    function trackMouse(e:PointerEvent){lastMouse=[e.clientX,e.clientY];ptrMode=snapMode(e,snapOn());if(tool)toolMove(e.clientX,e.clientY);}
     /** Нажали/отпустили Alt, Ctrl, Shift без движения мыши — привязка пересчитывается сразу (тяга, линия Q). */
     function modsKey(e:KeyboardEvent){
       if(!['Alt','Control','Shift','Meta'].includes(e.key)||current.current.presentation)return;
-      const m={altKey:e.altKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey};ptrMode=snapMode(m);
+      const m={altKey:e.altKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey,shiftKey:e.shiftKey};ptrMode=snapMode(m,snapOn());
       if(corner){if(corner.moved&&!corner.typed){corner.mode=ptrMode;cornerByMouse(corner);}return;}
       if(stretch){if(stretch.moved&&lastPtr)stretchMove({...lastPtr,...m});return;}
       if(drag){if(drag.moved&&drag.kind==='module'&&lastPtr)pointerMove({...lastPtr,...m});return;}
@@ -1583,7 +1601,7 @@ export function Scene(p: Props) {
       // открыто окно (вопрос «Удалить?», фурнитура, подсветка…) — клавиши сцены не действуют (критик 29.10: Q под вопросом начинал линию)
       if(document.querySelector('[aria-modal="true"]'))return;
       // Ctrl+Z/Ctrl+Y посреди тяги (Ctrl зажат ради привязки) — не отменять (критик 29.10 п.6)
-      if(historyGuard(e,!!(drag||stretch||corner||ctrlPress))){e.preventDefault();e.stopPropagation();return;}
+      if(historyGuard(e,!!(drag||stretch||corner||markPress))){e.preventDefault();e.stopPropagation();return;}
       // тяга за угол: набор размеров «600;2400», Enter, Esc, Backspace — раньше App и Q
       if(corner){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(corner,e)){e.preventDefault();e.stopPropagation();}return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
@@ -1615,7 +1633,7 @@ export function Scene(p: Props) {
     function altGuard(e:KeyboardEvent){if(e.key==='Alt'&&(drag||stretch||corner||tool||(e.type==='keyup'&&altKeyupGuard(e))))e.preventDefault();}
     window.addEventListener('keydown',modsKey);window.addEventListener('keyup',modsKey);
     // Ctrl+колесо во время тяги и линии Q не масштабирует страницу браузера (критик 29.10 п.5)
-    function ctrlWheel(e:WheelEvent){if(wheelGuard(e,!!(drag||stretch||corner||ctrlPress||tool)))e.preventDefault();}
+    function ctrlWheel(e:WheelEvent){if(wheelGuard(e,!!(drag||stretch||corner||markPress||tool)))e.preventDefault();}
     window.addEventListener('wheel',ctrlWheel,{passive:false,capture:true});
     function dragOver(e:DragEvent){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';badge.hidden=false;const destination=indicateTarget(hitAt(e.clientX,e.clientY,true));badge.textContent=destination?'Отпустите: '+destination:'Перетащите внутрь корпуса';}
     function drop(e:DragEvent){needsRender=true;e.preventDefault();badge.hidden=true;dropTarget.visible=false;const kind=e.dataTransfer?.getData('application/x-furniture');if(!kind)return;const hit=hitAt(e.clientX,e.clientY,true);if(!hit)return;const placed=current.current.arrangement.find(a=>a.id===hit.object.userData.moduleId)!;current.current.onDropItem(kind,placed.id,sectionFor(hit),hit.point.y-(placed.y??0));}
