@@ -60,6 +60,3 @@
   .dock-sums { grid-template-columns: 1fr; }
   .dock-body { padding: 12px 16px; }
 }
-/* модель цены (решение Макса 26.10.2026: цена по большей модели) — только менеджеру */
-.dock-price-model select{margin-left:6px;font-size:12px;padding:2px 4px}
-.dock-price-model small{color:#536066}
