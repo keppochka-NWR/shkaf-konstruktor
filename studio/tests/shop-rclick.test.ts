@@ -89,8 +89,8 @@ test('п.2 критика: промах мимо детали — меню то�
   assert.equal(missMenuTarget(m,rect,{x:300,y:300},{x:100,y:-50})!.localY,0,'высота в пределах корпуса');
 });
 
-// Решение Макса 20.10.2026: «Подсветки в горизонтах должны считаться 4000 ₽, в вертикалях 3000 ₽» — за пог.м, клиенту, поверх коэффициента
-test('подсветка в полках: N полок ширины W → сумма = длина × 4000 ₽ (розница поверх коэффициента), итог проекта не «уточняется»',()=>{
+// Решение Макса 20.10.2026: «Подсветки в горизонтах должны считаться 4000 ₽, в вертикалях 3000 ₽» — за пог.м, клиенту, сверх цены листов
+test('подсветка в полках: N полок ширины W → сумма = длина × 4000 ₽ (розница сверх цены листов), итог проекта не «уточняется»',()=>{
   const m=wardrobe();m.sections[0].shelves=[0.2,0.4,0.6];m.sections[0].shelfLight=true;
   const base=structuredClone(m);delete base.sections[0].shelfLight;
   const W=boxes(m).find(b=>b.id===m.sections[0].id)!.width,N=3,len=N*(W-40)/1000;
@@ -212,7 +212,7 @@ test('подсветка в полках: флаг секции, LED-профи�
   assert.ok(led.position[2]+led.size[2]/2<=shelf.position[2]+shelf.size[2]/2,'не выступает за кромку');
   const row=estimate(project(n)).lines.find(i=>i.id==='light-shelf')!;
   assert.ok(row,'строка сметы');assert.equal(row.label,'Подсветка в полках');assert.equal(row.unit,'пог.м');assert.equal(row.unitPrice,RULES.shelfLightRetailPerM);
-  assert.match(row.source,/4000 ₽\/пог\.м, поверх коэффициента/);
+  assert.match(row.source,/4000 ₽\/пог\.м, сверх цены листов/);
   assert.ok(!estimate(project(n)).lines.some(i=>i.id==='light-stand'),'не считается как подсветка в стойках');
   // без флага — шкаф без изменений
   assert.ok(!parts(m).some(p=>p.id.includes('shelf-light')));

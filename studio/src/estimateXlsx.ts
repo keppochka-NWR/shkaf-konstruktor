@@ -131,7 +131,9 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
   rows.push([]);
   p.modules.forEach((a, i) => plain(`Вес изделия, кг · ${i + 1}. ${a.module.name}`, num(moduleWeight(a.module).total, XS.subNum)));
   rows.push([]);
-  const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", e.missing.length ? "Позиций без цены: " + e.missing.length + "." : "", "Доставка, монтаж и неописанный крепёж не включены.", manager ? engineNote(e) + "." : ""].filter(Boolean);
+  const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", e.missingExtras ? "Позиций без цены: " + e.missingExtras + "." : "",
+    // справка менеджеру: позиции без закупочной цены внутри цены листа (итог не меняют)
+    manager && e.missing.length > e.missingExtras ? "Без закупочной цены внутри цены листа (на итог не влияют): " + (e.missing.length - e.missingExtras) + "." : "", "Доставка, монтаж и неописанный крепёж не включены.", manager ? engineNote(e) + "." : ""].filter(Boolean);
   for (const t of notes) { rows.push(row([empty(XS.text), str(t, XS.note)], 2, XS.text)); merges.push(`B${rows.length}:${ref(W - 1, rows.length - 1)}`); }
   return { name: "Смета", rows, merges, freeze: 4, landscape: manager, cols: manager ? [5, 46, 9, 7, 12, 13, 10, 18, 46] : [5, 56, 10, 8, 13, 14, 22] };
 }

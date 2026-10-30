@@ -30,8 +30,11 @@ export function reviewFiles(project:Project,created=new Date()):Record<string,st
     'ЗАМЕЧАНИЯ ПО РАССТАНОВКЕ: '+warnings.length,
     ...(warnings.length?warnings.map(w=>'• '+w.message):['Автоматических замечаний нет. Это не заменяет проверку технологом.']),
     '',
-    'НЕЗАПОЛНЕННЫЕ ЦЕНЫ: '+cost.missing.length,
-    ...(cost.missing.length?cost.missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit):['Все позиции текущей расчётной модели имеют цену. Полный крепёж, доставка и монтаж ещё не включены.']),
+    // цена — только по листам (30.10.2026): итог блокируют только позиции вне листа без цены (missingExtras)
+    'НЕЗАПОЛНЕННЫЕ ЦЕНЫ: '+cost.missingExtras,
+    ...(cost.missingExtras?cost.missingExtrasLines.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit):['Все позиции, которые входят в итог, имеют цену. Полный крепёж, доставка и монтаж ещё не включены.']),
+    ...(!PUBLIC_BUILD&&cost.missing.length>cost.missingExtras?['','Без закупочной цены внутри цены листа (на итог не влияют, справка): '+(cost.missing.length-cost.missingExtras),
+      ...cost.missing.filter(l=>!cost.missingExtrasLines.includes(l)).map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit)]:[]),
     ...(cost.pending.length?['',pendingTotalLabel(cost.pending.length).toUpperCase()+' (в итог не входят)',...cost.pending.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit)]:[]),
     '',
     p.cloud?'Последняя связанная серверная версия: '+p.cloud.revision+'. Локальные правки могут быть новее этой версии.':'Проект не связан с серверным сохранением.',
@@ -54,7 +57,7 @@ export function managerReviewFiles(project:Project,created=new Date()):Record<st
   delete files['01-Проект.project.json'];delete files['08-Смета.csv'];
   files['00-Прочитайте.txt']='\ufeffДокументы проекта · '+created.toLocaleString('ru-RU')+'\r\nЧертежи, деталировка, карты и бирки одной версии. Итоговая стоимость без доставки и монтажа. Для продолжения редактирования сохраните проект отдельно в редакторе. Перед производством технолог должен проверить замер, соединения, зазоры и присадку. Бирки 120 × 75 мм; масштаб печати 100%.\r\n';
   files['08-Стоимость.csv']=salesCSV(project);
-  const warnings=uniqueWarnings(roomWarnings(project)),missing=estimate(project).missing;
+  const warnings=uniqueWarnings(roomWarnings(project)),missing=estimate(project).missingExtrasLines;
   files['00-Прочитайте.txt']+='\r\nЗамечания по расстановке: '+warnings.length+'\r\n'+warnings.map(w=>'• '+w.message).join('\r\n')+'\r\nСтоимость требует уточнения: '+missing.length+' позиций\r\n'+missing.map(l=>'• '+l.label+' — '+l.quantity+' '+l.unit).join('\r\n');
   return files;
 }

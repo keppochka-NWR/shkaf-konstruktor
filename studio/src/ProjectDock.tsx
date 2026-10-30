@@ -134,7 +134,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
         <div className="dock-tabs">{TABS.map((t) => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}><t.icon size={15} />{t.label}</button>)}</div>
         <button className="room-warning-link" hidden={!warnings} onClick={onWarnings} title="Проверить расстановку"><span className="dock-warn-long">Проверить расстановку</span><span className="dock-warn-short">Расстановка</span> · {warnings}</button>
         <button className="dock-price" onClick={() => setTab("estimate")} aria-label="Открыть стоимость">
-          {!e ? "Считаем…" : <><b>{total === null ? missingPriceLabel(e.missing.length) : rub(total)}</b>{total !== null && e.pending.length > 0 && <small className="dock-pending" title={pendingTotalLabel(e.pending.length)}><span className="dock-warn-long">{pendingTotalLabel(e.pending.length)}</span><span className="dock-warn-short">+{e.pending.length} после расчёта</span></small>}</>}
+          {!e ? "Считаем…" : <><b>{total === null ? missingPriceLabel(e.missingExtras || e.unplaced) : rub(total)}</b>{total !== null && e.pending.length > 0 && <small className="dock-pending" title={pendingTotalLabel(e.pending.length)}><span className="dock-warn-long">{pendingTotalLabel(e.pending.length)}</span><span className="dock-warn-short">+{e.pending.length} после расчёта</span></small>}</>}
         </button>
       </nav>
     </div>

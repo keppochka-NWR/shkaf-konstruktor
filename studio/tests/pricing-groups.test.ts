@@ -165,3 +165,37 @@ test('k25 построчно: конфирматы 175, опоры 46, клип�
   assert.ok(e.lines.filter(l=>!l.retail&&['facade-external','plinth-external'].includes(l.id)||l.id.startsWith('worktop:')).every(l=>lineGroup(l.id)==='material'));
   assert.equal(e.byMarkup,null);assert.ok(e.byMarkupKnown>0);
 });
+
+// Критик 30.10.2026 (claude/sheet-only-price): один признак «цены нет» — missingExtras; позиции без цены внутри листа — справка менеджеру,
+// не статус и не в документах клиента (было: P111, кухня Базиса 92 000 ₽ с «Требуется уточнить стоимость…», Excel «Позиций без цены: 1»).
+test('цена по листам: фурнитура Базиса без цены — итог есть, нигде не «требует уточнения» (Стоимость, Excel клиента, комплект, публичный вид)',async()=>{
+  const {clientView,CLIENT_SOURCE_IN_SHEET}=await import('../src/clientPrices');
+  const {estimateSheet}=await import('../src/estimateXlsx');
+  const {reviewFiles}=await import('../src/reviewPackage');
+  const corpus=project(rawModule({source:'bazis-corpus',panels:[panel('Боковина',[0,0,0,16,2000,560]),panel('Полка',[16,500,0,584,516,560])],hardware:[{name:'Петля накладная',category:'петля',pos:[0,0,0],quat:[1,0,0,0]}]}));
+  const e=estimate(corpus);
+  assert.ok(e.missing.some(l=>l.id==='bazis-hardware:raw'),'справка менеджеру осталась');
+  assert.equal(e.missingExtras,0);assert.deepEqual(e.missingExtrasLines,[]);assert.equal(e.retail,e.bySheet);
+  const c=clientView(e);assert.deepEqual(c.missing,[]);assert.equal(c.lines.find(l=>l.id==='bazis-hardware:raw')!.source,CLIENT_SOURCE_IN_SHEET);
+  assert.ok(!JSON.stringify(estimateSheet(corpus,e,false).rows).includes('Позиций без цены'),'Excel клиента');
+  assert.match(reviewFiles(corpus)['00-Прочитайте.txt'],/НЕЗАПОЛНЕННЫЕ ЦЕНЫ: 0/);
+});
+test('цена по листам: 0 листов ЛДСП — позиции по закупке сверху × коэффициент (комплект не пропадает), без цены — итога нет',()=>{
+  // как P344 (стеклянные полки Базиса, 0 листов): комплект 150 ₽ × 2,2 сверху; фурнитура Базиса без цены — «цены листа» нет, итога нет
+  const glass=project(rawModule({source:'bazis-corpus',panels:[{name:'Полка стекло',kind:'glass',box:[0,0,0,500,6,300]} as never],hardware:[{name:'Петля накладная',category:'петля',pos:[0,0,0],quat:[1,0,0,0]}]}));
+  const e=estimate(glass);
+  assert.equal(e.ldspSheets,0);
+  const own=e.lines.filter(l=>!l.retail&&l.unitPrice!==null).reduce((s,l)=>s+l.quantity*l.unitPrice!,0);
+  assert.ok(own>0,e.lines.map(l=>l.id).join());assert.equal(e.offSheet,Math.round(own*e.markup),'всё по закупке — сверху × коэффициент');assert.equal(e.bySheet,e.offSheet+e.retailExtras);
+  assert.ok(e.missingExtrasLines.some(l=>l.id==='bazis-hardware:raw'));assert.equal(e.retail,null,'без цены при 0 листов — итога нет');
+  // та же фурнитура с ручной ценой — итог = закупка × коэффициент
+  const priced=estimate({...glass,calculation:{markup:2.2,overrides:{'bazis-hardware:raw':100}}});
+  assert.equal(priced.retail,priced.bySheet);assert.equal(priced.retail,Math.round((own+100)*2.2)+priced.retailExtras);
+});
+test('цена по листам: материал Базиса не ЛДСП (mat:, пластик/хром/стеновая) — вне листа, как стеновая панель ряда: без цены итога нет, с ценой — × коэффициент',()=>{
+  const p=project(rawModule({source:'bazis-corpus',counts:{hinges:0},panels:[panel('Боковина',[0,0,0,16,720,560]),{name:'Накладка',kind:'other',mat:'Пластик белый',box:[0,0,0,600,100,10]} as never],hardware:[]}));
+  const e=estimate(p),m=e.lines.find(l=>l.id.startsWith('mat:'))!;
+  assert.ok(m,'строка mat:');assert.ok(e.missingExtrasLines.includes(m));assert.equal(e.retail,null);
+  const priced=estimate({...p,calculation:{markup:2.2,overrides:{[m.id]:1000}}});
+  assert.equal(priced.offSheet,Math.round(m.quantity*1000*2.2));
+});

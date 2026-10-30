@@ -29,7 +29,7 @@ export function decorTitle(name: string): string | undefined {
 
 /** Итог без цены у части позиций — нейтрально, без «Нет цены». */
 export function missingPriceLabel(count: number): string {
-  return `Цена уточняется (${count} поз.)`;
+  return count > 0 ? `Цена уточняется (${count} поз.)` : "Цена уточняется";
 }
 
 /** Имя нового модуля из палитры: без порядкового номера («Для одежды», не «Для одежды 4») — номер виден в списке модулей. */

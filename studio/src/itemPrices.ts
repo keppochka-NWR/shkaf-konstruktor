@@ -35,7 +35,7 @@ export function ownValue(q: Project, model: "markup" | "sheet" = "sheet"): { val
   const frac = fractionalSheets(plan);
   let value = e.lines.reduce((s, l: PriceLine) => {
     if (l.pending || l.unitPrice === null) return s;
-    const c = clientLine(l, e.markup, e.vernissageMarkup, model);
+    const c = clientLine(l, e.markup, e.vernissageMarkup, model, e.ldspSheets === 0);
     if (c.unitPrice === null) return s;
     const qty = frac.has(l.id) ? frac.get(l.id)! : l.quantity;
     return s + qty * c.unitPrice;

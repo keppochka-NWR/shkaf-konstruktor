@@ -10,6 +10,6 @@ export function PriceStatus({project,open}:{project:Project;open:()=>void}) {
   const [failed,setFailed]=useState<Project|null>(null);
   useEffect(()=>{const timer=setTimeout(()=>{try{setResult({project,value:estimate(project)});setFailed(null);}catch{setFailed(project);}},350);return()=>clearTimeout(timer);},[project]);
   const value=result?.project===project?result.value:null;
-  const label=failed===project?'Смета · ошибка расчёта':!value?'Смета · расчёт…':value.retail===null?`Смета · нет цен: ${value.missingExtras||value.unplaced||value.missing.length}`:`Предварительно ${value.retail.toLocaleString('ru-RU')} ₽`+(value.pending.length?` · ${pendingTotalLabel(value.pending.length)}`:'');
+  const label=failed===project?'Смета · ошибка расчёта':!value?'Смета · расчёт…':value.retail===null?(value.missingExtras?`Смета · нет цен: ${value.missingExtras}`:value.unplaced?`Смета · не помещается в лист: ${value.unplaced}`:'Смета · цена уточняется'):`Предварительно ${value.retail.toLocaleString('ru-RU')} ₽`+(value.pending.length?` · ${pendingTotalLabel(value.pending.length)}`:'');
   return <button className="price-status" onClick={open} title="Открыть смету. Расчёт предварительный: крепёж, доставка и монтаж учитываются отдельно." aria-label={label+' — открыть смету'}>{label}</button>;
 }
