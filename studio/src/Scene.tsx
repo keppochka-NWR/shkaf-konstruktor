@@ -1267,7 +1267,12 @@ export function Scene(p: Props) {
       if(!drag){if(current.current.mode==='orbit')return;return;}
       const d=drag;
       if(d.moved){
-        if(d.kind==='module')current.current.onMoveModule(d.mid,d.candidate);
+        if(d.kind==='module'){
+          // группа (Shift+протяжка, отмеченные, вся композиция) — отказ целиком, если хоть один корпус упрётся или выйдет из помещения
+          const s=current.current,grouped=s.moveAll||(dragGroup(d)?.includes(d.mid)&&(dragGroup(d)?.length??0)>1),problem=grouped?s.moveProblem(d.mid,d.candidate):undefined;
+          if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Группа не перенесена',text:problem}}));
+          else s.onMoveModule(d.mid,d.candidate);
+        }
         else if(d.kind==='divider')current.current.onMoveDivider(d.mid,d.sid,d.delta);
         else if(d.kind==='dividerEnd')current.current.onMoveDividerEnd?.(d.mid,d.sid,d.pid.endsWith(':under')?'under':'over',d.delta);
         else{

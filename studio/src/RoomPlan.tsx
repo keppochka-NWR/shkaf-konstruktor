@@ -228,7 +228,11 @@ export function RoomPlan({stretchable,cornerPlan,onCorner,guides,onGuides,onTogg
       endCorner();if(c.moved&&c.pull)onCorner?.(c.pull);return;
     }
     const cp=markPress.current;if(cp&&!drag.current){markPress.current=null;if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);onToggleModule?.(cp.id);return;}
-    const d=drag.current;if(!d)return;if(preview)update(preview);drag.current=null;setPreview(null);setMark(null);if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);}
+    const d=drag.current;if(!d)return;
+    // группа (Shift+протяжка, отмеченные, вся композиция) — отказ целиком, если хоть один корпус упрётся или выйдет из помещения
+    const grouped=d.kind==='module'&&(moveAll||(d.group??groupIds).includes(d.id)&&(d.group??groupIds).length>1);
+    if(preview){if(grouped&&problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Группа не перенесена',text:problem}}));else update(preview);}
+    drag.current=null;setPreview(null);setMark(null);if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);}
   function cancel(){if(corner.current)endCorner();drag.current=null;markPress.current=null;setPreview(null);setMark(null);}
   // Нажали/отпустили Alt, Ctrl, Shift без движения мыши — привязка пересчитывается сразу (угол, перенос, линия Q)
   useEffect(()=>{
