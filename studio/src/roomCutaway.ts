@@ -37,11 +37,12 @@ export function edgeVisible<K>(walls:readonly K[],hidden:ReadonlySet<K>){return 
 export type CutKey=CutawayWall|number;
 /** Контур произвольной формы (задача Макса 30.10.2026): скрыть стены, за линией которых стоит камера. Камера внутри контура —
  *  ничего. Прямая стена — по своей линии; дуга наружу (эркер, скруглённый угол) — по линии через её вершину, параллельной хорде
- *  (как дальняя грань прямоугольника: камера сбоку от эркера его не прячет); дуга внутрь — по хорде. */
+ *  (как дальняя грань прямоугольника: камера сбоку от эркера его не прячет); дуга внутрь — тоже по линии через её вершину (критик 30.10:
+ *  камера между хордой и вогнутой дугой — уже за стеной, по хорде стена не пряталась). */
 export function hiddenEdges(o:RoomOutline,camera:{x:number;z:number},enabled=true):Set<number>{
   const hidden=new Set<number>();
   if(!enabled||!Number.isFinite(camera.x)||!Number.isFinite(camera.z)||pointInOutline(camera,o,0))return hidden;
-  o.forEach((a,i)=>{const b=o[(i+1)%o.length],n=inwardNormal(a,b);if((camera.x-a.x)*n.x+(camera.z-a.z)*n.z+Math.max(0,a.bulge??0)<0)hidden.add(i);});
+  o.forEach((a,i)=>{const b=o[(i+1)%o.length],n=inwardNormal(a,b);if((camera.x-a.x)*n.x+(camera.z-a.z)*n.z+(a.bulge??0)<0)hidden.add(i);});
   return hidden;
 }
 /** Рёбра контура для «Ближних стен»: низ и верх каждой стены (дуга — ломаной) — её стене, вертикаль в вершине — двум соседним. */

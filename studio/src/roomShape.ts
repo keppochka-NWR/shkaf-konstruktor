@@ -4,6 +4,9 @@
 // месте плана), короткая причина отказа, привязки угла, набор «dx;dz». Контур и его правки — roomOutline.ts.
 import {roomOutline,rectOutline,normalizeOutline,outlineBounds,outlineError,edgeLength,edgePoint,edgeFrame,projectToEdges,legacyToEdge,cornerAngle,RECT_WALLS,
   type RoomOutline,type EdgeMap,type P2} from './roomOutline';
+import {openingEdge,keepHanded} from './roomEdges';
+import {fromView,type Seg2} from './pointSnap';
+import {PLAN_LOOK} from './guides';
 import {projectErrors,type Project,type Room,type Opening} from './project';
 
 const r1=(v:number)=>{const r=Math.round(v*10)/10;return r===0?0:r;};
@@ -15,10 +18,9 @@ const clampOff=(s:number,L:number,w:number)=>r1(Math.max(0,Math.min(L-w,s)));
 export function itemEdge(room:Pick<Room,'width'|'depth'|'outline'>,item:WallItem):{edge:number;offset:number}{
   const o=room.outline;
   if(o&&item.edge!==undefined&&Number.isInteger(item.edge)&&item.edge>=0&&item.edge<o.length)return {edge:item.edge,offset:item.offset};
-  const l=legacyToEdge(room.width,room.depth,item.wall,item.offset,item.width);
-  if(!o)return l;
-  const mid=edgePoint(rectOutline(room.width,room.depth),l.edge,l.offset+item.width/2),pr=projectToEdges(o,mid);
-  return {edge:pr.edge,offset:clampOff(pr.s-item.width/2,edgeLength(o,pr.edge),item.width)};
+  if(!o)return legacyToEdge(room.width,room.depth,item.wall,item.offset,item.width);
+  // одно правило со сценой и проверками (roomEdges.openingEdge, критик 30.10): ближайшая стена своей стороны
+  const e=openingEdge(room,item);return {edge:e.edge,offset:e.offset};
 }
 /** Старое имя стены для стены контура (для старых читателей): по внутренней нормали — к какой стене прямоугольника ближе. */
 export function legacyWall(o:RoomOutline,e:number):Opening['wall']{
@@ -52,9 +54,10 @@ export function applyOutline(p:Project,raw:RoomOutline,edgeMap?:EdgeMap):{projec
     // объект длиннее новой стены укорачивается по стене; проём — отказ
     if(w>L+0.1){if(fit)w=r1(L);else problem??=`${label} не помещается на стене ${e+1} (${Math.round(L)} мм)`;}
     const off=clampOff(s,L,w);
-    if(norm.outline)return {...item,width:w,edge:e,wall:legacyWall(target,e),offset:off};
+    // петля и подоконник — на том же месте комнаты (критик 30.10): старая передняя/левая стена отсчитывает навстречу обходу контура
+    if(norm.outline)return keepHanded(item,room,{...item,width:w,edge:e,wall:legacyWall(target,e),offset:off},nextRoom);
     // прямоугольник: старые правила (задняя и передняя — от левой стены, боковые — от задней)
-    const wall=RECT_WALLS[e],next={...item,width:w,wall,offset:wall==='front'||wall==='left'?r1(L-off-w):off};delete next.edge;return next;
+    const wall=RECT_WALLS[e],next={...item,width:w,wall,offset:wall==='front'||wall==='left'?r1(L-off-w):off};delete next.edge;return keepHanded(item,room,next,nextRoom);
   };
   const nextRoom:Room={...room,width:norm.width,depth:norm.depth};
   if(norm.outline)nextRoom.outline=norm.outline;else delete nextRoom.outline;
@@ -118,6 +121,17 @@ export function snapVertex(p:P2,prev:P2,next:P2,xs:number[],zs:number[],tol:numb
     }
   }
   return {p:{x:r1(x),z:r1(z)},what:[...new Set(what)]};
+}
+
+/** Линии Alt/Ctrl плана при правке формы: без тех, что лежат на стенах, которые едут (их старое место не должно ловить привязку).
+ *  Стены контура в линиях уже есть (guides.candidateLines — «стена» и «дуга стены»): своих не добавляем, каждая стена одна (критик 30.10,
+ *  интеграция двух веток — редактор добавлял стены второй раз, а старое место едущей дуги оставалось). */
+export function offWalls(segs:Seg2[],o:RoomOutline,walls:number[]):Seg2[]{
+  const on=(p:Seg2['a'],i:number)=>{const f=edgeFrame(o,i),q=fromView(p,PLAN_LOOK,{x:0,y:0,z:0});
+    // дуга — точка на её окружности (хорды ломаной дуги короткие: и концы, и середина на ней; у прямой стены с концами на той же
+    // окружности середина далеко внутри)
+    return f.arc?Math.abs(Math.hypot(q.x-f.arc.c.x,q.z-f.arc.c.z)-f.arc.R)<1:Math.abs((q.x-f.a.x)*f.n.x+(q.z-f.a.z)*f.n.z)<1;};
+  return segs.filter(s=>!walls.some(i=>on(s.a,i)&&on(s.b,i)&&on({h:(s.a.h+s.b.h)/2,v:(s.a.v+s.b.v)/2},i)));
 }
 
 /** Таблица стен: длина, угол в начале стены (между стеной i−1 и i), стрела дуги. */

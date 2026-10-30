@@ -6,8 +6,7 @@
 import { id } from "./model";
 import type { Room, Opening } from "./project";
 import { FIXTURES, type Fixture, type FixtureType, type Wall } from "./fixtures";
-import { edgeToLegacy, openingEdge } from "./roomEdges";
-import { edgeTangent } from "./roomOutline";
+import { edgeToLegacy, keepHanded, openingEdge } from "./roomEdges";
 
 type Node = { name: string; value?: string; items: Node[] };
 /** Разбор простого XML скрипта (Item/Items/Value) без DOMParser, чтобы работало и в тестах node. */
@@ -130,19 +129,25 @@ export function importBazisConfig(xml: string): BazisImport {
 /** Контур произвольной формы (задача Макса 30.10.2026) скрипт Базиса не знает: у него 4 стены и 2 угла. Выгружается габарит, проёмы и
  *  объекты — на сторону габарита, к которой обращена их стена контура (центр — проекцией на неё). */
 export const BAZIS_OUTLINE_NOTE = "Контур помещения в Базис не передаётся — выгружен габарит.";
-export const bazisExportNote = (room: Pick<Room, "outline">) => (room.outline ? BAZIS_OUTLINE_NOTE : null);
+const WALL_LABEL: Record<Wall, string> = { back: "задней (фронтальной)", left: "левой", right: "правой", front: "передней (тыльной)" };
+/** Пометка к выгрузке. Скрипт Базиса читает на стене одну дверь и одно окно (первые): у прямоугольника так было всегда, у контура
+ *  несколько стен ложатся на одну сторону габарита — говорим, какие проёмы в Базис не уйдут (критик 30.10). */
+export const bazisExportNote = (room: Room) => {
+  if (!room.outline) return null;
+  const all = room.openings ?? [], rect = bazisRectRoom(room).openings ?? [], lost: string[] = [];
+  for (const { wall } of WALLS) for (const type of ["door", "window"] as const) {
+    const on = rect.map((o, i) => ({ o, i })).filter((x) => x.o.wall === wall && x.o.type === type);
+    if (on.length > 1) lost.push(`${on.slice(1).map((x) => (type === "door" ? "дверь " : "окно ") + (all.findIndex((q) => q.id === x.o.id) + 1)).join(", ")} — в Базис уйдёт только ${type === "door" ? "первая дверь" : "первое окно"} ${WALL_LABEL[wall]} стены`);
+  }
+  return lost.length ? `${BAZIS_OUTLINE_NOTE} Не перенесутся: ${lost.join("; ")}.` : BAZIS_OUTLINE_NOTE;
+};
 function bazisRectRoom(room: Room): Room {
   if (!room.outline) return room;
-  const rect = room as Room & { outline: NonNullable<Room["outline"]> };
-  const place = <T extends { wall: Wall; edge?: number; offset: number; width: number }>(x: T): T => { const e = openingEdge(rect, x), l = edgeToLegacy(rect, e.edge, e.offset, x.width); const { edge: _, ...rest } = x; return { ...rest, wall: l.wall, offset: l.offset } as T; };
-  const { outline: _o, ...plain } = room;
-  return { ...plain, openings: (room.openings ?? []).map((o) => { const p = place(o); if (o.windowSill) p.windowSill = { ...o.windowSill, offset: sillOffset(rect, o, p.wall, p.offset) }; return p; }), fixtures: (room.fixtures ?? []).map(place) };
-}
-/** Подоконник следует за проёмом: сдвиг его середины от середины проёма — по стене контура, затем по старой оси новой стены. */
-function sillOffset(room: Room & { outline: NonNullable<Room["outline"]> }, o: Opening, wall: Wall, offset: number): number {
-  const e = openingEdge(room, o), s = o.windowSill!, t = edgeTangent(room.outline, e.edge, e.offset + o.width / 2).t;
-  const sigma = (wall === "back" || wall === "front" ? t.x : t.z) < 0 ? -1 : 1, shift = (s.offset + s.width / 2 - (o.offset + o.width / 2)) * e.dir * sigma;
-  return Math.max(0, Math.round((offset + o.width / 2 + shift - s.width / 2) * 10) / 10);
+  const rect = room as Room & { outline: NonNullable<Room["outline"]> }, { outline: _o, ...plain } = room;
+  // проём — на сторону габарита, к которой обращена его стена; петля и подоконник — на том же месте (критик 30.10: сдвиг подоконника —
+  // с проекцией стены на ось стороны, как и середина проёма)
+  const place = <T extends { wall: Wall; edge?: number; offset: number; width: number }>(x: T): T => { const e = openingEdge(rect, x), l = edgeToLegacy(rect, e.edge, e.offset, x.width); const { edge: _, ...rest } = x; return keepHanded(x, rect, { ...rest, wall: l.wall, offset: l.offset } as T, plain, true); };
+  return { ...plain, openings: (room.openings ?? []).map(place), fixtures: (room.fixtures ?? []).map(place) };
 }
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 function item(name: string, body: string, value?: string) { return `<Item Name="${esc(name)}">${value === undefined ? "" : `<Value>${esc(value)}</Value>`}${body ? `<Items>${body}</Items>` : ""}</Item>`; }

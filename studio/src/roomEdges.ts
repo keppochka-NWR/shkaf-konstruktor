@@ -4,7 +4,7 @@
 // Комната без контура в эти функции по смыслу не заходит: её стены и проёмы — по-старому (wall + offset), чтобы прямоугольник
 // считался и рисовался байт в байт как раньше.
 import type { Opening, Room } from "./project";
-import { edgeArc, edgeLength, edgePoint, edgeTangent, flatten, inwardNormal, legacyToEdge, pointInOutline, projectToEdges, type P2, type RectWall, type RoomOutline } from "./roomOutline";
+import { edgeArc, edgeLength, edgePoint, edgeTangent, flatten, inwardNormal, legacyToEdge, pointInOutline, projectToEdges, rectOutline, type P2, type RectWall, type RoomOutline } from "./roomOutline";
 
 const r1 = (v: number) => { const r = Math.round(v * 10) / 10; return r === 0 ? 0 : r; };
 /** Что стоит на стене: проём или объект замера (у обоих старая стена wall, номер стены контура edge, отступ и ширина вдоль стены). */
@@ -24,9 +24,45 @@ export function openingEdge(room: Pick<Room, "width" | "depth" | "outline">, o: 
   if (!room.outline) { const e = legacyToEdge(room.width, room.depth, o.wall, o.offset, o.width); return { ...e, dir: o.wall === "front" || o.wall === "left" ? -1 : 1 }; }
   const ol = room.outline;
   if (o.edge !== undefined) return { edge: o.edge, offset: o.offset, dir: 1 };
-  const p = projectToEdges(ol, legacyCenter(room, o)), L = edgeLength(ol, p.edge), t = edgeTangent(ol, p.edge, p.s).t;
+  // критик 30.10: стена той же стороны (окно передней стены Г-комнаты — на переднюю, не на правую стенку выреза); из них — та, что
+  // проходит над тем же местом вдоль старой стены (меньше сдвиг вдоль), затем ближайшая; стен этой стороны нет — просто ближайшая
+  const c = legacyCenter(room, o), alongX = o.wall === "back" || o.wall === "front", sides = ol.map((_, i) => i).filter((i) => edgeLegacyWall(ol, i) === o.wall);
+  let p = projectToEdges(ol, c);
+  if (sides.length) {
+    let best = Infinity;
+    for (const i of sides) { const q = projectToEdges(ol, c, (j) => j === i), at = edgePoint(ol, i, q.s), slide = Math.round(Math.abs(alongX ? at.x - c.x : at.z - c.z)), key = slide * 1e6 + q.dist; if (key < best) { best = key; p = q; } }
+  }
+  const L = edgeLength(ol, p.edge), t = edgeTangent(ol, p.edge, p.s).t;
   const axis = o.wall === "back" || o.wall === "front" ? t.x : t.z;
   return { edge: p.edge, offset: r1(Math.max(0, Math.min(L - o.width, p.s - o.width / 2))), dir: axis < 0 ? -1 : 1 };
+}
+/** «Вправо» проёма в комнате (критик 30.10): куда растёт его отступ — на этом конце правая петля, туда отсчитан подоконник.
+ *  Прямоугольник — старые оси (+x у задней/передней, +z у боковых); проём со своей стеной контура — по обходу этой стены (её начало
+ *  слева, если смотреть из комнаты на стену); старый проём в комнате с контуром — старая ось, уложенная на его стену (dir). */
+export function itemAlong(room: Pick<Room, "width" | "depth" | "outline">, o: OnWall): P2 {
+  if (!room.outline) return o.wall === "back" || o.wall === "front" ? { x: 1, z: 0 } : { x: 0, z: 1 };
+  const e = openingEdge(room, o), t = edgeTangent(room.outline, e.edge, e.offset + o.width / 2).t;
+  return { x: t.x * e.dir, z: t.z * e.dir };
+}
+type Handed = OnWall & { hinge?: "left" | "right"; windowSill?: { width: number; offset: number } };
+/** Проём переехал (правка контура, выгрузка в Базис): петля и подоконник — на том же месте комнаты (критик 30.10). Ось «вправо»
+ *  развернулась — петля меняет сторону, сдвиг подоконника от середины проёма — знак (project: умножить на проекцию осей — когда
+ *  стену кладём на сторону габарита). */
+export function keepHanded<T extends OnWall>(before: T, roomBefore: Pick<Room, "width" | "depth" | "outline">, after: T, roomAfter: Pick<Room, "width" | "depth" | "outline">, project = false): T {
+  const b = before as T & Handed;
+  if (b.hinge === undefined && !b.windowSill) return after;
+  const a0 = itemAlong(roomBefore, before), a1 = itemAlong(roomAfter, after), k = a0.x * a1.x + a0.z * a1.z, flip = k < 0, out = { ...after } as T & Handed;
+  if (b.hinge !== undefined) out.hinge = flip ? (b.hinge === "right" ? "left" : "right") : b.hinge;
+  if (b.windowSill) {
+    const s = b.windowSill, shift = (s.offset + s.width / 2 - (b.offset + b.width / 2)) * (project ? k : flip ? -1 : 1);
+    out.windowSill = { ...s, offset: r1(Math.max(0, after.offset + after.width / 2 + shift - s.width / 2)) };
+  }
+  return out;
+}
+/** Середина подоконника на плане (стена контура или прямоугольника): как рисует сцена. */
+export function sillCenter(room: Pick<Room, "width" | "depth" | "outline">, o: OnWall & { windowSill: { width: number; offset: number } }): P2 {
+  const e = openingEdge(room, o), w = o.windowSill, ol = room.outline ?? rectOutline(room.width, room.depth);
+  return edgePoint(ol, e.edge, e.offset + o.width / 2 + e.dir * (w.offset + w.width / 2 - o.offset - o.width / 2));
 }
 /** Сторона габарита, к которой обращена стена контура (по внешней нормали хорды): для отделки стен по старым именам и для
  *  выгрузки в Базис. Скос 45° — к задней/передней. */

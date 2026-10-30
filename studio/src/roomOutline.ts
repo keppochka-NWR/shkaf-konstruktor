@@ -182,10 +182,12 @@ export function edgeTangent(o: RoomOutline, i: number, s: number): { t: P2; n: P
   const l = Math.hypot(q.x - p.x, q.z - p.z) || 1, t = { x: (q.x - p.x) / l, z: (q.z - p.z) / l };
   return { t, n: { x: -t.z, z: t.x } };
 }
-/** Ближайшая к точке стена: номер, расстояние s вдоль неё (от начала), отступ от стены. */
-export function projectToEdges(o: RoomOutline, p: P2): { edge: number; s: number; dist: number } {
+/** Ближайшая к точке стена: номер, расстояние s вдоль неё (от начала), отступ от стены. only — только из этих стен (критик 30.10:
+ *  старый проём ищет стену своей стороны). */
+export function projectToEdges(o: RoomOutline, p: P2, only?: (i: number) => boolean): { edge: number; s: number; dist: number } {
   let best = { edge: 0, s: 0, dist: Infinity };
   o.forEach((_, i) => {
+    if (only && !only(i)) return;
     const pts = edgePoints(o, i, 20);
     let acc = 0;
     for (let k = 0; k < pts.length - 1; k++) {
