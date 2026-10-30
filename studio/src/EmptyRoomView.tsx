@@ -18,9 +18,22 @@ import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProper
 import {newProject,appendModuleGroup,applyAutoFillers,type Project,type Room} from './project';
 import {ModulePalette} from './ModulePalette';
 import {appendFromPalette} from './paletteAdd';
+import {RoomShapePanel} from './RoomShapePanel';
+import {scaleOutline,sameEdges} from './roomOutline';
+import {shapeEdit as shapeEdit2} from './roomShape';
 export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload}:{project:Project;update:(p:Project)=>boolean;viewKey:string;title:string;bar:ReactNode;onAdd:()=>void;onDownload:()=>void}){
  const dummy=useMemo(()=>newProject().modules[0],[]),[plan,setPlan]=useState(false),[view,setView]=useState<View>('iso'),[fit,setFit]=useState(0),[stage,setStage]=useState<Stage>('room'),[advanced,setAdvanced]=useState(false),[selected,setSelected]=useState<EnvironmentSelection|null>(null);
  useEffect(()=>{setSelected(null);},[viewKey]);
+ // «Форма комнаты» (задача Макса 30.10.2026): правка на плане и панель заготовок/стен — как в редакторе
+ const [shapeEdit,setShapeEdit]=useState(false);
+ const toPlan=()=>{setPlan(true);setShapeEdit(true);};
+ /** Ширина/глубина при контуре — габарит: контур растягивается пропорционально. */
+ function size(axis:'width'|'depth'|'height',n:number){
+  const o=project.room.outline;
+  if(!o||axis==='height'||!Number.isFinite(n)||n<=0)return change({...project.room,[axis]:n});
+  const r=shapeEdit2(project,scaleOutline(o,axis==='width'?n/project.room.width:1,axis==='depth'?n/project.room.depth:1),sameEdges(o.length));
+  return !r.problem&&update(r.project);
+ }
  const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});
  const toggleTop=()=>setCompactTop(v=>{try{localStorage.setItem('yo-compact-top',v?'0':'1');}catch{}return !v;});
  const change=(room:Room)=>update({...project,room});
@@ -41,7 +54,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  <section className="viewport" aria-label="Рабочая область">
  <div className="view-header"><div className="view-tabs">{([{id:'iso',label:'3D'},{id:'front',label:'Спереди'},{id:'side',label:'Сбоку'},{id:'top',label:'Сверху'}] as const).map(v=><button key={v.id} aria-pressed={!plan&&view===v.id} onClick={()=>{setView(v.id);setPlan(false);setFit(f=>f+1);}}>{v.label}</button>)}<button aria-pressed={plan} aria-label="Показать план комнаты" onClick={()=>setPlan(true)}>План</button></div><span className="scale-label">РАЗМЕРЫ В ММ</span></div>
  <div className="interaction-bar"><button aria-pressed={!plan} onClick={()=>setPlan(false)}><RotateCcw size={16}/>Свободная камера</button><button onClick={()=>setFit(f=>f+1)}>Вписать комнату</button></div>
- {plan?<RoomPlan project={project} active="" moveAll={false} snapping={false} onSelect={()=>{}} onRoom={()=>{}} onObstacleSelect={id=>pick('obstacle',id)} onOpeningSelect={id=>pick('opening',id)} onFixtureSelect={id=>pick('fixture',id)} onEnvironmentContext={pick} update={update}/>:(          <Scene key={viewKey}
+ {plan?<RoomPlan project={project} active="" moveAll={false} snapping={false} onSelect={()=>{}} onRoom={()=>{}} onObstacleSelect={id=>pick('obstacle',id)} onOpeningSelect={id=>pick('opening',id)} onFixtureSelect={id=>pick('fixture',id)} onEnvironmentContext={pick} update={update} shapeEdit={shapeEdit} onShapeEdit={setShapeEdit}/>:(          <Scene key={viewKey}
             viewKey={viewKey}
             module={dummy.module}
             arrangement={[dummy]}
@@ -79,8 +92,9 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
           />)}
  </section>
  <aside className="properties"><section className="property-section"><h2>{stage==='fixtures'?'Коммуникации':'Замер помещения'}</h2>
- {(advanced||stage==='room')&&<><details><summary>Точки замера и кривые стены</summary><RoomSurveyEditor room={project.room} onChange={change}/></details>
- {(['width','depth','height'] as const).map(axis=><label className="number-field" key={axis}><span>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}</span><div><input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} key={project.room[axis]} defaultValue={project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.currentTarget.value=String(project.room[axis]);e.currentTarget.blur();}}} onBlur={e=>{const n=e.target.value.trim()?Number(e.target.value):NaN;if(n!==project.room[axis]&&!change({...project.room,[axis]:n}))e.target.value=String(project.room[axis]);}}/><span>мм</span></div></label>)}</>}
+ {(advanced||stage==='room')&&<><details><summary>Точки замера и кривые стены</summary>{project.room.outline?<p className="field-note">Точки замера и кривые стены пока работают для прямоугольной комнаты.</p>:<RoomSurveyEditor room={project.room} onChange={change}/>}</details>
+ {(['width','depth','height'] as const).map(axis=><label className="number-field" key={axis}><span>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}</span><div><input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} key={project.room[axis]} defaultValue={project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.currentTarget.value=String(project.room[axis]);e.currentTarget.blur();}}} onBlur={e=>{const n=e.target.value.trim()?Number(e.target.value):NaN;if(n!==project.room[axis]&&!size(axis,n))e.target.value=String(project.room[axis]);}}/><span>мм</span></div></label>)}
+ <RoomShapePanel project={project} commit={update} onPlan={toPlan}/></>}
  {(advanced||stage==='room'||stage==='fixtures')&&<><details><summary>Отделка: пол и стены</summary><RoomFinishes room={project.room} onChange={change}/></details><details open><summary>Двери и окна</summary><RoomEditor room={project.room} part="openings" onSelect={id=>pick('opening',id)} onChange={change}/></details><details><summary>Трубы, радиаторы и объекты на стенах</summary><RoomFixtures room={project.room} onSelect={id=>pick('fixture',id)} onChange={change} onImport={r=>change(keepFinish(project.room,r.room))}/></details><details><summary>Колонны и отдельные препятствия</summary><RoomObstacles room={project.room} onSelect={id=>pick('obstacle',id)} onChange={change}/></details></>}
  {['bodies','filling','facades'].includes(stage)&&<><p className="field-note">В этой комнате пока нет мебели. Добавьте шкаф, чтобы настроить корпуса, наполнение и фасады.</p><button className="primary full" onClick={add}>Добавить шкаф в комнату</button></>}
  {stage==='docs'&&<><p className="field-note">Сохраните помещение с замером и проёмами. Деталировка появится после добавления мебели.</p><button className="outline full" onClick={onDownload}>Скачать документ комнат</button></>}
