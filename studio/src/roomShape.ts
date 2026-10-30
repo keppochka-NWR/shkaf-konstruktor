@@ -126,6 +126,6 @@ export function wallRows(o:RoomOutline){return o.map((q,i)=>({i,length:Math.roun
 export function wallName(o:RoomOutline,i:number):string{
   if(o[i].bulge)return 'дуга';
   const f=edgeFrame(o,i),ax=Math.abs(f.t.x),az=Math.abs(f.t.z);
-  if(ax>0.02&&az>0.02)return 'скос';
+  if(ax>0.26&&az>0.26)return 'скос'; // наискось больше 15° — скос, чуть косая стена — по своей стороне
   return ({back:'задняя',front:'передняя',left:'левая',right:'правая'} as const)[legacyWall(o,i)];
 }

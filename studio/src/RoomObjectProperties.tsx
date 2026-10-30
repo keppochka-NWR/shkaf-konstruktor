@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Room, Opening } from "./project";
 import { FIXTURES, type Fixture } from "./fixtures";
+import { edgeLength } from "./roomOutline";
+import { itemEdge, onEdge, edgeTitle } from "./roomShape";
 export type EnvironmentSelection = {
   kind: "opening" | "fixture" | "obstacle";
   id: string;
@@ -105,7 +107,15 @@ export function RoomObjectProperties({
         </strong>
         <button onClick={onClose}>Закрыть параметры</button>
       </header>
-      {o || f ? (
+      {(o || f) && room.outline ? (
+        // комната с контуром (задача Макса 30.10.2026): стены по номерам контура
+        <label>
+          Стена
+          <select aria-label="Стена объекта" value={itemEdge(room, (o || f)!).edge} onChange={(e) => { const it = (o || f)!, ol = room.outline!, ne = Number(e.target.value); patch(onEdge(ol, it, ne, Math.min(itemEdge(room, it).offset, edgeLength(ol, ne) - it.width))); }}>
+            {room.outline.map((_, e) => <option value={e} key={e}>{edgeTitle(room.outline!, e)}</option>)}
+          </select>
+        </label>
+      ) : o || f ? (
         <label>
           Стена
           <select
