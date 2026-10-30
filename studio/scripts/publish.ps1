@@ -13,7 +13,7 @@
 #      --strict = all three token sources must exist (corpus index.json, public/local-projects, corpus privacy-tokens.txt)
 #   4b. price guard: published files (web/ without legacy 2D pages) must not contain purchase words
 #      (zakup / sebestoim / nacenk / "reshenie Maksa") or supplier names (SFZ, FAM, ATB, MVM, MDM, Pobeda, Mega-Treid, Dreviz);
-#      or purchase price literals in JS (price:<n>, markup:<n>, sheetPrice ?? 23e3 - same as PRICE_LITERALS in public-build.ts);
+#      or purchase price literals in JS (price:<n>, markup:<n> - same as PRICE_LITERALS in public-build.ts);
 #      a match stops the publication. The studio build is public by default (client prices only, see studio/src/buildMode.ts
 #      and studio/scripts/public-build.ts); STUDIO_MANAGER=1 builds are for local use and are refused here.
 #   5. web/studio/version.json = { commit, srcCommit, builtAt }
@@ -141,12 +141,14 @@ $legacyDirs = @('assets')
 #   supplier names (exact case): SFZ | FAM | FAS | ATB | MVM | MDM (not inside a word) | Pobed[a,y,e,u] | Mega-Treid/Megatreid | Dreviz
 $guardWords = New-Object System.Text.RegularExpressions.Regex('(?i)(\u0437\u0430\u043A\u0443\u043F|\u0441\u0435\u0431\u0435\u0441\u0442\u043E\u0438\u043C|\u043D\u0430\u0446\u0435\u043D\u043A|\u0440\u0435\u0448\u0435\u043D\u0438[\u0435\u044F] \u043C\u0430\u043A\u0441\u0430)')
 $guardNames = New-Object System.Text.RegularExpressions.Regex('(?<![\u0400-\u04FF])(\u0421\u0424\u0417|\u0424\u0410\u041C|\u0424\u0410\u0421|\u0410\u0422\u0411|\u041C\u0412\u041C|\u041C\u0414\u041C)(?![\u0400-\u04FF])|\u041F\u043E\u0431\u0435\u0434[\u0430\u044B\u0435\u0443]|\u041C\u0435\u0433\u0430-?[\u0422\u0442]\u0440\u0435\u0439\u0434|\u041C\u0435\u0433\u0430\u0442\u0440\u0435\u0439\u0434|\u0414\u0440\u0435\u0432\u0438\u0437')
-# coefficients in built JS (object keys survive minification): markup:2.2, vernissageMarkup:1.6, sheetPrice ?? 23e3.
+# coefficients in built JS (object keys survive minification): markup:2.2, vernissageMarkup:1.6.
+# Sheet price 23000 (sheetPrice ?? 23e3) is NOT checked since 30.10.2026: price is by sheets only (Max's decision),
+# 23000 per sheet is the client (retail) price and the public build needs it to price any project.
 # Line prices (price:979) are retail after baking (scripts/bake-prices.ts); purchase VALUES are checked below by
 # scripts/price-guard.ts against the set of source purchase values with the price field as context.
 # Same pattern as PRICE_LITERALS in studio/scripts/public-build.ts. Words alone are not enough: the client price is
 # computed in the browser from the purchase base, so these numbers are the purchase prices themselves.
-$guardNumbers = New-Object System.Text.RegularExpressions.Regex('(?<![\w$])(markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b')
+$guardNumbers = New-Object System.Text.RegularExpressions.Regex('(?<![\w$])(markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d')
 $textExt = @('.js', '.mjs', '.cjs', '.html', '.htm', '.css', '.json', '.txt', '.md', '.svg', '.map', '.csv', '.xml')
 $guardHits = @()
 $guardCount = 0
