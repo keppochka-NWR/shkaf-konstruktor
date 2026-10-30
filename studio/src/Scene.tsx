@@ -126,6 +126,7 @@ import {labelRank,isOverallDim} from './labelPriority';
 import {columnOf} from './matchSize';
 import {candidateLines,guidesInView,guideSegment,makeGuide,parseTyped,placeGuide,snapMoveToGuides,snapOut,guidePlanes,v3,carcassCorners,type Guide,type GuideLine,type V3} from './guides';
 import {openEase,openToggleKey,stepOpen} from './editActions';
+import {tweenState,tweenProgress,wantsViewTween,type CamState} from './cameraTween';
 import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
@@ -1061,7 +1062,29 @@ export function Scene(p: Props) {
       }
       guideGroup=null;drawGuides();
     }
+    // Плавный переход между видами (Макс 30.10.2026): fit() считает конечный кадр, затем камера возвращается в исходный и
+    // летит к нему VIEW_MS (cameraTween.ts). Любое касание мыши/колеса — сразу конечный кадр.
+    let fitView:string|undefined,camTween:{from:CamState&{persp:boolean};to:CamState;t0:number;end:THREE.Camera;pos:THREE.Vector3;target:THREE.Vector3;zoom:number;frustum:number[]|null;dist:number}|null=null;
+    const halfFov=()=>THREE.MathUtils.degToRad(perspective.fov)/2;
+    function camState():CamState{const T=controls.target.clone(),dist=camera.position.distanceTo(T)||1;return {T,d:camera.position.clone().sub(T).divideScalar(dist),H:camera===orthographic?(orthographic.top-orthographic.bottom)/orthographic.zoom:2*dist*Math.tan(halfFov())};}
+    function tweenFrame(e:number){
+      const t=camTween!,s=tweenState(t.from,t.to,e),aspect=target.clientWidth/Math.max(1,target.clientHeight);
+      // перспектива, если она хоть на одном конце (из 3D / в 3D); орто ↔ орто — орто
+      const persp=t.from.persp||t.end===perspective,cam=persp?perspective:orthographic;
+      if(persp){perspective.aspect=aspect;cam.position.copy(s.T).addScaledVector(s.d,s.H/(2*Math.tan(halfFov())));}
+      else{orthographic.left=-s.H*aspect/2;orthographic.right=s.H*aspect/2;orthographic.top=s.H/2;orthographic.bottom=-s.H/2;orthographic.zoom=1;cam.position.copy(s.T).addScaledVector(s.d,t.dist);}
+      camera=cam;controls.object=cam;cam.up.set(0,1,0);(cam as THREE.PerspectiveCamera|THREE.OrthographicCamera).updateProjectionMatrix();controls.target.copy(s.T);controls.update();needsRender=true;
+    }
+    function endTween(){
+      const t=camTween;if(!t)return;camTween=null;
+      camera=t.end as THREE.PerspectiveCamera|THREE.OrthographicCamera;controls.object=camera;camera.up.set(0,1,0);camera.position.copy(t.pos);controls.target.copy(t.target);camera.zoom=t.zoom;
+      if(camera===orthographic&&t.frustum)[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=t.frustum;
+      camera.updateProjectionMatrix();controls.update();needsRender=true;
+    }
+    controls.addEventListener('start',endTween);
     function fit() {
+      endTween();
+      const from={...camState(),persp:camera===perspective};
       fitting=true;needsRender=true;
       const m = current.current.module;
       const aspect = target.clientWidth / Math.max(1, target.clientHeight);
@@ -1112,6 +1135,14 @@ export function Scene(p: Props) {
       controls.update();
       if(current.current.fit===p.fit&&current.current.view===p.view)restoreCamera();
       fitting=false;
+      if(wantsViewTween(fitView,view,!!state.presentation)&&target.clientWidth>0){
+        const to=camState();
+        camTween={from,to,t0:performance.now(),end:camera,pos:camera.position.clone(),target:controls.target.clone(),zoom:camera.zoom,frustum:camera===orthographic?[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]:null,
+          // орто ↔ орто: камера на облёте не ближе 30 м — комната (до 20 м) не уходит за ближнюю плоскость при любом наклоне
+          dist:Math.max(camera.position.distanceTo(controls.target),30000)};
+        tweenFrame(0);
+      }
+      fitView=view;
       // другой вид — свои вспомогательные линии; начатая линия Q отменяется
       cancelTool();selectedGuide=null;drawGuides();
     }
@@ -1753,6 +1784,7 @@ export function Scene(p: Props) {
     let frame = 0;
     function animate() {
       if (disposed) return;
+      if(camTween){const e=tweenProgress(performance.now()-camTween.t0);if(e>=1)endTween();else tweenFrame(e);}
       controls.update();
       // плавное открывание: доли открытия идут к цели (stepOpen), сцена перерисовывается, пока что-то движется
       {const now=performance.now(),dt=now-lastFrame;lastFrame=now;for(const a of anims.values()){if(a.t===a.target)continue;a.t=stepOpen(a.t,a.target,dt);a.set(a.t);needsRender=true;}}
@@ -1800,6 +1832,7 @@ export function Scene(p: Props) {
     }
     animate();
     return () => {
+      endTween();controls.removeEventListener('start',endTween);
       saveCamera();controls.removeEventListener('end',saveCamera);
       endStretch();endCorner();cancelTool();window.removeEventListener('keyup',altGuard);window.removeEventListener('keydown',modsKey);window.removeEventListener('keyup',modsKey);window.removeEventListener('wheel',ctrlWheel,{capture:true});snapMark.remove();
       target.removeEventListener('pointerdown',toolDown,true);window.removeEventListener('pointermove',trackMouse);window.removeEventListener('keydown',guideKey,true);
