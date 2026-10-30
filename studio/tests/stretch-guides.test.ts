@@ -1,7 +1,7 @@
 // Решение Макса 29.10.2026 (ветка claude/stretch-guides): растяжение за угол как эластичная секция Базиса и вспомогательные линии Q.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initialModule} from '../src/model';
+import {initialModule,parts} from '../src/model';
 import {newProject,parseProject,localToRoom,type PlacedModule,type Project} from '../src/project';
 import {cornerDims,keepOpposite,snapAxis,widthPull,edgeOf,snapPlanes} from '../src/cornerStretch';
 import {viewLook,viewAxes,candidateLines,placeGuide,parseTyped,makeGuide,guidesInView,snapOut,guidePlanes,snapMoveToGuides,parseGuides,carcassCorners,dot} from '../src/guides';
@@ -86,6 +86,18 @@ test('линии-кандидаты Q: контур корпуса, кромки
   assert.ok(lines.some(l=>l.guideId==='g1'));
   // линия видна только в своём виде
   assert.equal(guidesInView([g],viewLook('top')).length,0);assert.equal(guidesInView([g],look).length,1);
+});
+
+test('линии-кандидаты Q от всего (Макс 30.10: от полки не строилась): полки и детали любого корпуса, не только выбранного',()=>{
+  const p=room([at('a',1000,mod(600,2000)),at('b',1600,mod(600,2000))]),look=viewLook('front')!;
+  const shelf=parts(p.modules[1].module).find(q=>q.role==='shelf'&&!q.rotY&&!q.rotZ);
+  assert.ok(shelf,'в шкафу есть полка');
+  const lines=candidateLines(p.modules,look,'a',p.room,[]),top=(p.modules[1].y??0)+shelf!.position[1]+shelf!.size[1]/2;
+  assert.ok(lines.some(l=>l.what==='кромка «'+shelf!.name+'»'&&l.n.y===1&&Math.abs(l.at-top)<.11),'верх полки невыбранного корпуса');
+  assert.ok(candidateLines(p.modules,look,undefined,p.room,[]).some(l=>l.what.startsWith('кромка')),'и без выбранного корпуса');
+  // совпадающие линии — один раз
+  const keys=lines.map(l=>[l.n.x,l.n.y,l.n.z,Math.round(l.at),Math.round(l.a.x),Math.round(l.a.y),Math.round(l.b.x),Math.round(l.b.y)].join());
+  assert.equal(new Set(keys).size,keys.length);
 });
 
 test('привязка к линии: край ширины, ход корпуса, высота угла',()=>{

@@ -82,33 +82,49 @@ export function guideSegment(g: { n: V3; at: number }, look: V3, center: V3, len
   const t = unit(cross(look, g.n)), base = add(add(scale(g.n, g.at - dot(center, g.n)), center), look, 0);
   return [add(base, t, -len), add(base, t, len)];
 }
-/** Линии, от которых строится вспомогательная (Q): контуры корпусов в виде, кромки деталей выбранного корпуса,
- *  стены/пол/потолок помещения, поставленные линии этого вида. */
+/** Углы детали в координатах помещения: габарит size вокруг position, повороты как у меша в Scene (сначала rotZ, потом rotY). */
+function partCorners(a: PlacedModule, p: ReturnType<typeof parts>[number]): V3[] {
+  const y0 = a.y ?? 0, pts: V3[] = [];
+  const tz = ((p.rotZ ?? 0) * Math.PI) / 180, ty = ((p.rotY ?? 0) * Math.PI) / 180, cz = Math.cos(tz), sz = Math.sin(tz), cy = Math.cos(ty), sy = Math.sin(ty);
+  for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [-1, 1]) {
+    const x = (dx * p.size[0]) / 2, y = (dy * p.size[1]) / 2, z = (dz * p.size[2]) / 2;
+    const x1 = x * cz - y * sz, y1 = x * sz + y * cz, x2 = x1 * cy + z * sy, z2 = -x1 * sy + z * cy;
+    const q = localToRoom(a, p.position[0] + x2, p.position[2] + z2);
+    pts.push({ x: q.x, y: y0 + p.position[1] + y1, z: q.z });
+  }
+  return pts;
+}
+/** Линии, от которых строится вспомогательная (Q): поставленные линии этого вида, кромки деталей всех корпусов (решение Макса
+ *  30.10.2026: «от всего» — полки, перегородки, ящики, фасады, штанги; выбранный корпус — первым), контуры корпусов,
+ *  стены/пол/потолок помещения. Совпадающие линии — один раз (первое имя). */
 export function candidateLines(modules: PlacedModule[], look: V3, activeId?: string, room?: Room, guides?: Guide[]): GuideLine[] {
-  const out: GuideLine[] = [];
+  const out: GuideLine[] = [], seen = new Set<string>(), { h, v } = viewAxes(look);
+  // совпадение — по экрану (глубина не важна): та же плоскость и тот же отрезок в осях вида
+  const push = (ls: GuideLine[]) => {
+    for (const l of ls) {
+      const k = [l.n.x, l.n.y, l.n.z].map((c) => Math.round(c * 1000)).join() + "|" + Math.round(l.at) + "|" + [dot(l.a, h), dot(l.a, v), dot(l.b, h), dot(l.b, v)].map(Math.round).join();
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(l);
+    }
+  };
   for (const g of guidesInView(guides, look)) {
     const n = v3(g.n), c = scale(n, g.at), [a, b] = guideSegment({ n, at: g.at }, look, c);
     out.push({ n, at: g.at, a, b, what: "вспомогательная линия", guideId: g.id });
   }
-  for (const a of modules) {
-    if (a.id !== activeId) continue;
-    // кромки деталей выбранного корпуса: стойки, полки, крыша, дно, фасады (без фурнитуры и повёрнутых деталей)
+  const ordered = [...modules.filter((a) => a.id === activeId), ...modules.filter((a) => a.id !== activeId)];
+  for (const a of ordered) push(outline(carcassCorners(a), look, "край «" + a.module.name + "»"));
+  for (const a of ordered) {
+    // кромки деталей: стойки, полки, перегородки, крыша, дно, фасады, ящики, штанги, ручки (без крепежа и петель — мелочь)
     for (const p of parts(a.module)) {
-      if (!["body", "shelf", "door"].includes(p.role) || p.rotY || p.rotZ || p.material === "metal") continue;
-      const y0 = a.y ?? 0, pts: V3[] = [];
-      for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [-1, 1]) {
-        const q = localToRoom(a, p.position[0] + (dx * p.size[0]) / 2, p.position[2] + (dz * p.size[2]) / 2);
-        pts.push({ x: q.x, y: y0 + p.position[1] + (dy * p.size[1]) / 2, z: q.z });
-      }
-      out.push(...outline(pts, look, "кромка «" + p.name + "»"));
+      if (p.role === "fastener" || p.role === "hinge" || !(p.size[0] > 0 && p.size[1] > 0 && p.size[2] > 0)) continue;
+      push(outline(partCorners(a, p), look, "кромка «" + p.name + "»"));
     }
   }
-  for (const a of modules) out.push(...outline(carcassCorners(a), look, "край «" + a.module.name + "»"));
   if (room) {
     const pts: V3[] = [];
     for (const x of [0, room.width]) for (const y of [0, room.height]) for (const z of [0, room.depth]) pts.push({ x, y, z });
     const horizontal = Math.abs(look.y) > 0.99;
-    out.push(...outline(pts, look, (s) => (horizontal || s === "left" || s === "right" ? "стена" : s === "bottom" ? "пол" : "потолок")));
+    push(outline(pts, look, (s) => (horizontal || s === "left" || s === "right" ? "стена" : s === "bottom" ? "пол" : "потолок")));
   }
   return out;
 }

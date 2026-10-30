@@ -162,8 +162,8 @@ test('линии вида спереди: углы корпуса и угол п
   const p=newProject();p.room={...p.room,width:4000,depth:3000,height:2700};
   const a:PlacedModule={id:'a',x:1000,y:0,z:0,rotation:0,module:{...initialModule(),name:'Шкаф',width:600,height:2000,depth:550}};
   const look=viewLook('front')!,lines:GuideLine[]=candidateLines([a],look,undefined,p.room,[]),segs=toSegments(lines,look);
-  // верхний правый угол корпуса: h=1600, v=2000
-  const c=nearestCross({h:1594,v:1993},segs,20)!;
+  // верхний правый угол корпуса: h=1600, v=2000 (с 30.10 линии и от деталей любого корпуса: в 2 мм — угол фасада, курсор у самого угла)
+  const c=nearestCross({h:1601,v:2002},segs,20)!;
   assert.deepEqual(c.p,{h:1600,v:2000});assert.match(c.what,/угол: край «Шкаф»/);
   // угол помещения пол × правая стена
   const w=nearestCross({h:3990,v:8},segs,20)!;assert.deepEqual(w.p,{h:4000,v:0});
