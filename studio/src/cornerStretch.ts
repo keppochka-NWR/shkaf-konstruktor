@@ -9,6 +9,7 @@
 import { localToRoom, type PlacedModule, type Project } from "./project";
 import type { Module } from "./model";
 import { ceilingClearance } from "./measurement";
+import { flatten } from "./roomOutline";
 import { carcassCorners, dot, guidePlanes, parseTyped, snapOut, type Guide, type SnapPlane, type V3 } from "./guides";
 
 export type Dim = "width" | "height" | "depth";
@@ -58,6 +59,10 @@ export function snapPlanes(p: Project, a: PlacedModule, d: Dim, guides?: Guide[]
     out.push({ n: ax, at: 0, what: "пол" }, { n: ax, at: room.height, what: "потолок" });
     const c = ceilingClearance(room.ceiling);
     out.push({ n: ax, at: room.height - c, what: `потолок − ${c} мм` });
+  } else if (room.outline) {
+    // контур (задача Макса 30.10.2026): стены — плоскости через вершины контура и крайние точки по оси (вершина дуги эркера)
+    const f = flatten(room.outline).pts.map((q) => q.x * ax.x + q.z * ax.z), at = [...new Set([...room.outline.map((q) => q.x * ax.x + q.z * ax.z), Math.min(...f), Math.max(...f)].map(r1))];
+    for (const v of at) out.push({ n: ax, at: v, what: "стена" });
   } else out.push({ n: ax, at: Math.min(...vals), what: "стена" }, { n: ax, at: Math.max(...vals), what: "стена" });
   out.push(...guidePlanes(guides));
   return out;

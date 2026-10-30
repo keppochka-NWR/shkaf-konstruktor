@@ -1,6 +1,7 @@
 // Объекты замера на стенах — по составу скрипта Базиса «Замер помещения» (технолог.бел): всё, что замерщик
 // отмечает на стене и что мешает мебели или требует доступа. Двери и окна остаются проёмами (Opening), здесь — остальное.
 import type { Opening } from "./project";
+import { edgeLength, type RoomOutline } from "./roomOutline";
 export type Wall = Opening["wall"];
 export type FixtureType =
   | "vent" | "socket" | "switch" | "stoveSocket" | "api" | "panel" | "cableDuct"
@@ -88,12 +89,16 @@ export function newFixture(room: { width: number; depth: number; height: number 
   const fromFloor = type === "ceilingPlinth" ? room.height - height : Math.min(s.y, Math.max(0, room.height - height));
   return { id: idValue, type, wall, offset: s.fullWall ? 0 : Math.round((len - width) / 2), fromFloor, width, height, depth: s.d, ...(s.round ? { round: true } : {}) };
 }
-export function validateFixture(room: { width: number; depth: number; height: number }, f: Fixture): string | null {
+export function validateFixture(room: { width: number; depth: number; height: number; outline?: RoomOutline }, f: Fixture): string | null {
   if (!f || typeof f.id !== "string" || !f.id) return "Объект на стене без идентификатора.";
   if (!(f.type in FIXTURES)) return "Неизвестный тип объекта на стене.";
   if (!["back", "left", "right", "front"].includes(f.wall)) return "Объект на стене: укажите стену.";
   if (![f.offset, f.fromFloor, f.width, f.height, f.depth].every(Number.isFinite)) return "Объект на стене: размеры и отступы должны быть числами.";
-  const len = wallLength(room, f.wall), label = f.name || FIXTURES[f.type].label;
+  // контур произвольной формы (задача Макса 30.10.2026): объект со стеной контура edge — отступ и длина по этой стене (дуга — по дуге);
+  // без контура edge не читается — старые правила по wall
+  const onEdge = !!room.outline && f.edge !== undefined;
+  if (onEdge && (!Number.isInteger(f.edge) || f.edge! < 0 || f.edge! >= room.outline!.length)) return `«${f.name || FIXTURES[f.type].label}»: стена ${Number(f.edge) + 1} не найдена в контуре помещения.`;
+  const len = onEdge ? Math.round(edgeLength(room.outline!, f.edge!) * 10) / 10 : wallLength(room, f.wall), label = f.name || FIXTURES[f.type].label;
   if (f.width < 5 || f.height < 3 || f.depth < 0 || f.depth > 600) return `«${label}»: ширина от 5, высота от 3, выступ 0–600 мм.`;
   if (f.offset < 0 || f.offset + f.width > len + 0.1) return `«${label}»: выходит за длину стены (${len} мм).`;
   if (f.fromFloor < 0 || f.fromFloor + f.height > room.height + 0.1) return `«${label}»: выходит за высоту помещения (${room.height} мм).`;

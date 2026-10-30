@@ -1,5 +1,8 @@
 import { bounds, localToRoom, type Project, type Opening } from "./project";
 import { fixtureBox } from "./fixtures";
+import { edgeZone, openingEdge } from "./roomEdges";
+import { edgePoint, inwardNormal } from "./roomOutline";
+import { convexOverlap } from "./roomGeometry";
 import {
   surfaceOffset,
   surveyNotes,
@@ -58,6 +61,13 @@ export function sectorHitsPolygon(
   return false;
 }
 export function openingSweepPoint(o: Opening, r: Project["room"], p: Pt): Pt {
+  // контур (задача Макса 30.10.2026): створка — на своей стене контура; ось вдоль — по хорде проёма, внутрь — её нормаль.
+  // «Справа» — конец с большим старым отступом, как у прямоугольника (dir — направление старого отсчёта по стене контура)
+  if (r.outline) {
+    const e = openingEdge(r, o), end = (o.hinge === "right") !== (e.dir < 0), a = edgePoint(r.outline, e.edge, e.offset), b = edgePoint(r.outline, e.edge, e.offset + o.width);
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1, t = { x: (b.x - a.x) / l, z: (b.z - a.z) / l }, n = inwardNormal(a, b), h = end ? b : a, d = { x: p.x - h.x, z: p.z - h.z };
+    return { x: (d.x * t.x + d.z * t.z) * (end ? -1 : 1), z: (d.x * n.x + d.z * n.z) * (o.direction === "out" ? -1 : 1) };
+  }
   const along = o.wall === "back" || o.wall === "front" ? p.x : p.z;
   const inward =
     o.wall === "back"
@@ -139,6 +149,13 @@ export function environmentChecks(p: Project) {
     }
     for (const f of r.fixtures ?? []) {
       if (!(f.serviceClearance && f.serviceClearance > 0)) continue;
+      // контур: зона доступа — от стены контура на выступ + зазор доступа (повёрнутый четырёхугольник)
+      if (r.outline) {
+        const e = openingEdge(r, f), gap = f.wallGap ?? 0, zone = edgeZone(r.outline, e.edge, e.offset, e.offset + f.width, gap, gap + Math.max(0, f.depth) + f.serviceClearance);
+        if (b.y < f.fromFloor + f.height && b.y + b.h > f.fromFloor && convexOverlap([{ x: b.x, z: b.z }, { x: b.x + b.w, z: b.z }, { x: b.x + b.w, z: b.z + b.d }, { x: b.x, z: b.z + b.d }], zone, 0))
+          result.push({ moduleId: a.id, fixtureId: f.id, kind: "service-zone", message: `«${a.module.name}»: занимает заданную зону доступа к «${f.name ?? f.type}» (${f.serviceClearance} мм).` });
+        continue;
+      }
       const box = fixtureBox(r, f),
         c = f.serviceClearance;
       const zone =

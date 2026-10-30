@@ -7,6 +7,7 @@
 // look — направление «на камеру» вида, в котором она поставлена.
 import { localToRoom, type PlacedModule, type Room } from "./project";
 import { parts } from "./model";
+import { edgePoints, type RoomOutline } from "./roomOutline";
 
 export type V3 = { x: number; y: number; z: number };
 export type Guide = { id: string; look: [number, number, number]; n: [number, number, number]; at: number };
@@ -120,11 +121,33 @@ export function candidateLines(modules: PlacedModule[], look: V3, activeId?: str
       push(outline(partCorners(a, p), look, "кромка «" + p.name + "»"));
     }
   }
-  if (room) {
+  if (room?.outline) push(outlineLines(room as Room & { outline: RoomOutline }, look));
+  else if (room) {
     const pts: V3[] = [];
     for (const x of [0, room.width]) for (const y of [0, room.height]) for (const z of [0, room.depth]) pts.push({ x, y, z });
     const horizontal = Math.abs(look.y) > 0.99;
     push(outline(pts, look, (s) => (horizontal || s === "left" || s === "right" ? "стена" : s === "bottom" ? "пол" : "потолок")));
+  }
+  return out;
+}
+/** Стены контура произвольной формы (задача Макса 30.10.2026) как линии вида. Сверху — каждая прямая стена своей линией (скос — косой),
+ *  дуга — хордами ломаной («дуга стены»). Спереди и сбоку — пол и потолок по габариту и прямые стены, видные с торца (вдоль взгляда). */
+function outlineLines(room: Room & { outline: RoomOutline }, look: V3): GuideLine[] {
+  const o = room.outline, out: GuideLine[] = [], horizontal = Math.abs(look.y) > 0.99, y = room.height / 2;
+  const wall = (a: { x: number; z: number }, b: { x: number; z: number }, what: string, y0: number, y1: number) => {
+    const l = Math.hypot(b.x - a.x, b.z - a.z); if (l < 1e-6) return;
+    const n: V3 = { x: r3(-(b.z - a.z) / l), y: 0, z: r3((b.x - a.x) / l) };
+    out.push({ n, at: r1(n.x * a.x + n.z * a.z), a: { x: a.x, y: y0, z: a.z }, b: horizontal ? { x: b.x, y: y1, z: b.z } : { x: a.x, y: y1, z: a.z }, what });
+  };
+  o.forEach((p, i) => {
+    const q = o[(i + 1) % o.length];
+    if (horizontal) { if (!p.bulge) wall(p, q, "стена", y, y); else { const pts = edgePoints(o, i); for (let k = 0; k < pts.length - 1; k++) wall(pts[k], pts[k + 1], "дуга стены", y, y); } }
+    else if (!p.bulge) { const l = Math.hypot(q.x - p.x, q.z - p.z); if (l && Math.abs(((q.x - p.x) * look.z - (q.z - p.z) * look.x) / l) < 1e-3) wall(p, q, "стена", 0, room.height); }
+  });
+  if (!horizontal) {
+    const pts: V3[] = [];
+    for (const x of [0, room.width]) for (const yy of [0, room.height]) for (const z of [0, room.depth]) pts.push({ x, y: yy, z });
+    out.push(...outline(pts, look, (s) => (s === "bottom" ? "пол" : "потолок")).slice(2)); // [левая, правая, низ, верх] — только пол и потолок
   }
   return out;
 }
