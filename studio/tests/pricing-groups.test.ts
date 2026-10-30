@@ -74,11 +74,12 @@ test('заглушка навеса — одна строка kitchen-hanger-cap
   assert.equal(q(project(rawModule({source:'bazis-kitchen',counts:{hangers:3},panels:[panel('Вертикальная',[0,0,0,16,720,300])],hardware:[]})),'kitchen-hanger')?.quantity,2);
 });
 
-test('сырой шкаф из корпуса Базиса без счётчиков: строка «Фурнитура Базиса не импортирована» без цены → «по коэффициенту» нет',()=>{
+test('сырой шкаф из корпуса Базиса без счётчиков: строка «Фурнитура Базиса не импортирована» без цены; цена по листам (фурнитура в цене листа)',()=>{
   const corpus=project(rawModule({source:'bazis-corpus',panels:[panel('Боковина',[0,0,0,16,2000,560]),panel('Полка',[16,500,0,584,516,560])],hardware:[{name:'Петля накладная',category:'петля',pos:[0,0,0],quat:[1,0,0,0]}]}));
   const e=estimate(corpus),l=e.lines.find(l=>l.id==='bazis-hardware:raw')!;
   assert.ok(l&&l.unitPrice===null);assert.match(l.label,/не импортирована/);
-  assert.equal(e.byMarkup,null);assert.equal(e.retail,null);assert.ok(e.byMarkupKnown>0);
+  // «по коэффициенту» нет (внутренняя оценка); цена — только по листам (30.10.2026): фурнитура внутри цены листа, итог есть
+  assert.equal(e.byMarkup,null);assert.equal(e.missingExtras,0);assert.equal(e.retail,e.bySheet);assert.equal(e.retail,e.ldspSheets*23000);
   // со счётчиками (кухня Базиса) строки нет
   const kitchen=project(rawModule({source:'bazis-kitchen',counts:{hinges:2},panels:[panel('Боковина',[0,0,0,16,720,560])],hardware:[]}));
   assert.ok(!estimate(kitchen).lines.some(l=>l.id==='bazis-hardware:raw'));

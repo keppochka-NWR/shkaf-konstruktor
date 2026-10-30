@@ -74,22 +74,20 @@ test('КП: шкаф — нулевые позиции не печатаются
   assert.ok(describeModule(m).filling.includes('1 штанга'));
 });
 
-test('КП: без «Стоимость введена менеджером»; разбивка материалы/фурнитура только при цене по смете (модель коэффициента)',()=>{
+test('КП: без «Стоимость введена менеджером»; цена — только по листам (30.10.2026): фурнитура внутри листа, разбивки материалы/фурнитура нет',()=>{
   const p=newProject(),e=estimate(p);
-  assert.notEqual(e.retail,null);
+  assert.notEqual(e.retail,null);assert.equal(e.model,'sheet');
   const html=quoteHTML(p,'Клиент','' + e.retail,'',undefined,{cost:e});
   assert.ok(!html.includes('введена менеджером'));
-  const b=quoteBreakdown(String(e.retail),e)!;
-  assert.ok(b&&b.material+b.hardware===e.retail&&b.hardware===e.split.hardware&&b.hardware>0);
-  assert.ok(html.includes('Материалы')&&html.includes('Фурнитура')&&html.includes(b.hardware.toLocaleString('ru-RU')+' ₽'));
-  // цена изменена вручную (скидка) — только итог
+  assert.equal(quoteBreakdown(String(e.retail),e),null);
+  assert.ok(!html.includes('Фурнитура')&&html.includes(e.retail!.toLocaleString('ru-RU')+' ₽'),'только итог');
+  assert.ok(!/коэффициент/i.test(html),'в КП нет слов о коэффициенте');
+  // цена изменена вручную (скидка) — тоже только итог
   assert.equal(quoteBreakdown(String(e.retail!-1000),e),null);
-  assert.ok(!quoteHTML(p,'','' + (e.retail!-1000),'',undefined,{cost:e}).includes('Фурнитура'));
-  // модель «цена за лист» — фурнитура внутри листа, разбивки нет
-  assert.equal(quoteBreakdown(String(e.retail),{...e,model:'sheet'}),null);
   assert.ok(quoteHTML(p,'','','').includes('после согласования'));
-  // нулевая фурнитура (двери купе) — без строки «Фурнитура 0 ₽»
-  assert.equal(quoteBreakdown(String(e.retail),{...e,split:{...e.split,hardware:0}}),null);
+  // разбивка по смете осталась в коде для старой модели (quoteBreakdown с model 'markup'), нулевая фурнитура — без строки «Фурнитура 0 ₽»
+  const b=quoteBreakdown(String(e.retail),{...e,model:'markup'})!;assert.ok(b&&b.material+b.hardware===e.retail);
+  assert.equal(quoteBreakdown(String(e.retail),{...e,model:'markup',split:{...e.split,hardware:0}}),null);
 });
 
 test('КП: шапка продавца из настроек — пустая не печатается; номер заказа и «Заказ не указан» в клиентских документах не печатаются',()=>{

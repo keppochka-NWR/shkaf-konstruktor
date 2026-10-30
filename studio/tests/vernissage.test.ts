@@ -291,13 +291,13 @@ test('Вернисаж: шкаф по умолчанию, №86, эмаль ма
   assert.equal(withV.retail! - plain.retail!, (withV.ldspSheets - plain.ldspSheets) * withV.sheetPrice + withV.vernissageOnTop);
   // закупка фасадов остаётся в себестоимости сметы (не розничная строка)
   assert.ok(withV.lines.filter((l) => l.id.startsWith('vernissage')).every((l) => !l.retail) && withV.knownCost >= Math.round(cost));
-  // модель наценки: фасады в «Материалах» по своему коэффициенту 1,6 — цена клиента тоже с фасадами
+  // цена — только по листам (30.10.2026): проект без настроек — та же цена; внутренняя оценка «по коэффициенту» тоже с фасадами × 1,6
   const mkBase = estimate(p), mk = estimate({ ...p, modules: [{ ...p.modules[0], module: m }] });
-  assert.equal(mk.model, 'markup'); assert.equal(mk.retail, mk.byMarkup);
-  assert.ok(mk.retail !== null && mk.retail > mkBase.retail!, `цена по коэффициенту ${mkBase.retail} → ${mk.retail}`);
+  assert.equal(mk.model, 'sheet'); assert.equal(mk.retail, withV.retail);
+  assert.ok(mk.byMarkup !== null && mk.byMarkup > mkBase.byMarkup!, `оценка по коэффициенту ${mkBase.byMarkup} → ${mk.byMarkup}`);
   assert.ok(mk.split.materialCost >= Math.round(cost) - 1, 'закупка фасадов — в материалах');
-  // CSV сметы показывает, что фасады идут сверху листов
-  assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('сверху фасады Вернисаж'));
+  // CSV сметы показывает фасады сверху листов
+  assert.ok(estimateCSV({ ...base, modules: [{ ...p.modules[0], module: m }] }).includes('Фасады Вернисаж: закупка × коэффициент Вернисажа'));
 });
 
 test('Вернисаж: цена клиенту = закупка × 1,6 (решение Макса 10.10.2026) в обеих моделях — ручной пример', () => {

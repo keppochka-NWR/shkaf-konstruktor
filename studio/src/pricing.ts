@@ -31,11 +31,12 @@ const vernissagePanelLabel=(label:string)=>`Панели МДФ ${label} (вид
 function vernissageRow(v:VernissageFacade,w:number,h:number){const pr=vernissageFacadePrice(v,w,h);
   return {key:`${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,label:vernissageLabel(v),qty:Math.round(pr.billArea*1e4)/1e4,perM2:pr.perM2,
     source:`Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`};}
-/** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
-export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
-  /** «Цена по большей модели» (решение Макса 26.10.2026): клиенту — большая из «себестоимость × коэффициент» и «цена за лист»
-   *  (листы × цена листа + то, что вне листовой модели: зеркало, стекло, розница, Вернисаж, Лемана). model при этом не используется. */
-  maxModel?:boolean;
+/** Цена клиенту — ТОЛЬКО по листам (решение Макса 30.10.2026): листы ЛДСП в раскрое × цена листа (плита, кромка, фурнитура и работа
+ *  внутри) + всё, что вне листа (розница, Вернисаж, Лемана, стекло и зеркало). markup — коэффициент к закупке позиций вне листа
+ *  (стекло, зеркало, ЛДСП дверей купе). Поля model ('markup'|'sheet') и maxModel («по большей модели») старых файлов при загрузке
+ *  отбрасываются (project.ts parseProject), расчёт их не читает. */
+export type PriceSettings={markup:number;overrides:Record<string,number>;sheetPrice?:number;vernissageMarkup?:number;
+  /** @deprecated не используется (решение 30.10.2026) */model?:'markup'|'sheet';/** @deprecated не используется */maxModel?:boolean;
   /** штамп менеджерской версии (withPriceStamp): базовые коэффициенты, с которыми запечена публичная сборка */
   baseMarkup?:number;baseVernissageMarkup?:number};
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
@@ -126,7 +127,7 @@ export function publicSettings(s:PriceSettings):{settings:PriceSettings;ov:numbe
 export function withPriceStamp<P extends {calculation?:PriceSettings}>(p:P):P{
   if(PUBLIC_BUILD||!p.calculation)return p;
   const c=p.calculation;
-  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...((c.model==='sheet'||c.maxModel)&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
+  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...(c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
 }
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
@@ -662,10 +663,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,maxModel=!!settings.maxModel;
-  const chosenModel:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
-  // R2: «цена за лист» без цены листа (публичная сборка: цены по умолчанию нет) — модель не меняется молча; итога нет, пока цену листа не укажут
-  const needSheetPrice=(chosenModel==='sheet'||maxModel)&&!(sheetPrice>0);
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
+  // R2: без цены листа итога нет, пока её не укажут (цена — только по листам, решение Макса 30.10.2026)
+  const needSheetPrice=!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
@@ -705,13 +705,18 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   // листов: закупка × коэффициент сметы (решение Макса 26.10.2026: «цена за лист 23 000» + то, что вне листовой модели, например зеркало).
   const offSheet=Math.round(lines.filter(l=>!l.retail&&isOffSheetLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup);
   const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop+offSheet;
-  // «Цена по большей модели» (maxModel): клиенту — большая из двух; цена по коэффициенту неполная (позиции без цены) — итога нет,
-  // как в модели наценки: большую выбрать нельзя. model результата — модель, по которой цена (КП, публичная смета, Excel).
-  const model:'markup'|'sheet'=maxModel?(byMarkup!==null&&bySheet>byMarkup?'sheet':'markup'):chosenModel;
-  /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
-   *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
-   *  выбор движка для цены — ярус B. */
-  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,maxModel,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
+  // Цена клиенту — ТОЛЬКО по листам (решение Макса 30.10.2026; «по коэффициенту» и «по большей модели» больше не используются).
+  // model результата всегда 'sheet' (КП, публичная смета, Excel, цены изделий).
+  const model='sheet' as const;
+  // позиция без цены внутри листа (плита, кромка, фурнитура, работа) итог не блокирует — она в цене листа; без цены «доп» вне листа
+  // (розница, Вернисаж, Лемана, стекло, столешница, фасады поставщика) — итога нет, как прежде при модели коэффициента
+  const missingExtras=missing.filter(l=>l.retail||isVernissageLine(l.id)||isOffSheetLine(l.id)||isLemanaLine(l.id)).length;
+  // коэффициент проекта без штампа (публичная сборка) влияет только на позиции вне листа и ЛДСП дверей купе
+  const markupMatters=offSheet>0||kupe>0;
+  /** byMarkup/byMarkupKnown/perSheet — «себестоимость × коэффициент» только для внутренней статистики (скрипты), в интерфейсе, КП и
+   *  выгрузках не показываются; unplaced — строк «не помещается в лист» (смета не завершена, retail=null); engine — движок раскроя
+   *  проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic): выбор движка для цены — ярус B. */
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:markupMatters?pub?.notice??null:null,missingExtras,retail:unplacedLines||blocked||needSheetPrice||missingExtras?null:bySheet};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }
@@ -728,7 +733,9 @@ export function estimateCSV(p:Project,result=estimate(p)){
  // публичная сборка: строки уже клиентские (clientPrices.ts) — без себестоимости, коэффициентов и сравнения моделей
  // B1 (критик 22.10): сумма строк ≠ итогу (копейки цен строк, итог к сотне) — явная строка «Округление», чтобы столбец сходился
  if(PUBLIC_BUILD)rows.push(['Итого по позициям','','','',result.knownCost,'',''],...(result.retail!==null&&result.retail!==result.knownCost?[['Округление до итога сметы','','','',result.retail-result.knownCost,'','']]:[]),['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
- else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой'+(result.vernissageOnTop?'; сверху фасады Вернисаж (закупка × '+vk+') '+result.vernissageOnTop+' ₽':''),result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'',result.byMarkup===null?'Не менее '+result.byMarkupKnown+' ₽ без '+result.missing.length+' позиций без цены':'',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ // цена — только по листам (решение Макса 30.10.2026): строк «по коэффициенту» и выбора модели нет
+ else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент к закупке вне листа (стекло, зеркало, столешница)',result.markup,'','',result.offSheet||'','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.ldspSheets*result.sheetPrice,'Цена за лист: плита, кромка, фурнитура и работа внутри','']
+   ,['Цена по листам','','','',result.bySheet,'Листы × цена листа + позиции вне листа (розница, Лемана, Вернисаж, стекло и зеркало)',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  // разбивка «Материалы / Фурнитура / Двери купе / Итого» (сумма граф = итогу) и позиции после финального расчёта конструктором (решения 16.10.2026)
  const split=result.retail===null?null:quoteBreakdown(String(result.retail),result);
  if(split)rows.push(...splitRows(split).map(([k,v])=>['Разбивка: '+k,'','','',v,'',''] as (string|number)[]),['Разбивка: Итого','','','',result.retail!,'','']);

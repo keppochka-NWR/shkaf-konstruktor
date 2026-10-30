@@ -81,15 +81,15 @@ test("подвесной ящик палитры 900 × 150 (консоль пр
   assert.equal(assembleModule("hanging-drawer", 800, 200, 282, look("Клауд")).sections[0].drawerConfigs![0].height, 104);
 });
 
-test("dp-2810: все 7 зон собираются функциями без ошибок проекта и проверки модулей; изделия и цена по большей модели", () => {
+test("dp-2810: все 7 зон собираются функциями без ошибок проекта и проверки модулей; изделия и цена по листам", () => {
   for (const z of Object.keys(ZONES) as ZoneId[]) {
     const { project, items } = buildZone(z);
     assert.deepEqual(projectErrors(project), [], z);
     for (const a of project.modules) assert.deepEqual(validate(a.module), [], `${z} ${a.id}`);
-    assert.ok(project.calculation?.maxModel, "цена по большей модели (решение Макса 26.10)");
     for (const i of items) assert.ok(project.modules.some((a) => itemOf(a.id) === i.key), `${z}: изделие ${i.key}`);
     const e = estimate(project);
-    assert.ok(e.retail !== null && e.retail > 0, z);
+    // цена — только по листам (решение Макса 30.10.2026; было «по большей модели» 26.10)
+    assert.ok(e.retail !== null && e.retail > 0, z); assert.equal(e.retail, e.bySheet, z);
   }
   // видимые бока — у шкафа лоджии, пенала под стиральную машину и тумбы ванной
   const has = (z: ZoneId, item: string) => buildZone(z).project.modules.filter((a) => itemOf(a.id) === item).some((a) => parts(a.module).some((p) => p.sideFacade));

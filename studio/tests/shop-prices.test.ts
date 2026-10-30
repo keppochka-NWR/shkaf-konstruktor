@@ -25,7 +25,8 @@ test('кухня 3 м: позиции без счёта — «после фин�
   const hk=e.lines.find(l=>l.id==='kitchen-hanger')!,hc=e.lines.find(l=>l.id==='kitchen-hanger-cap')!;
   assert.deepEqual([hk.unit,hk.unitPrice,hk.retail],['компл',120,true]);assert.equal(hc.unitPrice,0);assert.equal(hc.quantity,hk.quantity*2);
   assert.equal(e.missing.length,0,'не «нет цены»');
-  assert.equal(e.retail,e.byMarkupKnown,'итог = сумма известных позиций');
+  // цена — только по листам (30.10.2026): позиции «после расчёта» в итог не входят, итог = листы + розница
+  assert.equal(e.retail,e.ldspSheets*e.sheetPrice+e.retailExtras+e.offSheet,'итог = листы + известные позиции вне листа');
   assert.ok(e.pending.every(l=>l.unitPrice===null&&!e.missing.includes(l)));
   // поставщик и ориентир — менеджеру в источнике строки; в итог ориентир не входит
   const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
@@ -62,7 +63,7 @@ test('T2 18.10: кухня 2400 + Axis PRO + Gola + мойка Premial — Gola,
   assert.deepEqual(e.missing.map(l=>l.id),[],'нет строк «нет цены»');
   for(const id of ['gola-L','gola-C','worktop-cut:sink','premial-sink:210245'])assert.ok(ids.includes(id),id);
   assert.ok(e.lines.some(l=>l.id.startsWith('axis-pro:')&&l.pending),'Axis PRO — тоже после расчёта');
-  assert.ok((e.retail??0)>0);assert.equal(e.retail,e.byMarkupKnown,'итог = известные позиции');
+  assert.ok((e.retail??0)>0);assert.equal(e.retail,e.bySheet,'итог = листы + известные позиции вне листа');
   const src=(id:string)=>e.pending.find(l=>l.id===id)!.source;
   assert.match(src('gola-L'),/Поставщик не указан — уточнить/);assert.match(src('premial-sink:210245'),/^Premial/);assert.match(src('worktop-cut:sink'),/^Премиал/);
   // клиенту — нейтральная подпись без поставщиков, число позиций в итоговой строке
@@ -89,20 +90,25 @@ test('наполнение купе ЛДСП: цены 1800 ₽/м² нет, ц�
   assert.equal(kupeLines(k).find(l=>l.id==='kupe-fill:Белый')!.unitPrice,null);
 });
 
-test('двери купе — своя графа: Материалы / Фурнитура / Двери купе, сумма граф = итогу (КП, CSV, итог)',()=>{
+test('цена по листам (30.10.2026): двери купе — розница сверху листов; разбивки «Материалы / Фурнитура / Двери купе» нет — только итог',()=>{
   const p=kupe(),e=estimate(p);
   const kupeSum=Math.round(e.lines.filter(l=>l.id.startsWith('kupe-')).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   assert.equal(e.split.kupe,kupeSum);assert.ok(kupeSum>0);
+  assert.equal(e.retail,e.ldspSheets*e.sheetPrice+e.retailExtras+e.offSheet+e.vernissageOnTop);assert.ok(e.retailExtras>=kupeSum);
+  assert.equal(quoteBreakdown(String(e.retail),e),null);
+  const kp=quoteHTML(p,'Клиент',String(e.retail),'',undefined,{cost:e});assert.ok(!kp.includes('<td>Двери купе</td>')&&!kp.includes('<td>Фурнитура</td>'));
+  assert.ok(!estimateCSV(p,e).includes('"Разбивка:'));
+});
+test('разбивка по смете (код старой модели «по коэффициенту»): Материалы / Фурнитура / Двери купе, сумма граф = итогу',()=>{
+  const p=kupe(),e0=estimate(p),e={...e0,model:'markup' as const,retail:e0.byMarkup};
   const s=quoteBreakdown(String(e.retail),e)!;
   assert.equal(s.material+s.hardware+s.kupe,e.retail);assert.equal(s.kupe,e.split.kupe);
   assert.deepEqual(splitRows(s).map(r=>r[0]),['Материалы','Фурнитура','Двери купе']);
   const html=quoteHTML(p,'Клиент',String(e.retail),'',undefined,{cost:e});
   assert.ok(html.includes('<td>Двери купе</td>'));assert.ok(html.includes('<td>Итого</td>'));
-  const csv=estimateCSV(p,e);assert.ok(csv.includes('"Разбивка: Двери купе"'));assert.ok(csv.includes('"Разбивка: Итого"'));
-  assert.ok(salesCSV(p).includes('Двери купе;'+s.kupe));
   // клиентский вид — те же графы
   const c=clientView(e);assert.deepEqual(quoteBreakdown(String(c.retail),c),s);
   // без купе графы «Двери купе» нет
-  const sw=estimate(newProject()),ss=quoteBreakdown(String(sw.retail),sw)!;
+  const sw0=estimate(newProject()),sw={...sw0,model:'markup' as const,retail:sw0.byMarkup},ss=quoteBreakdown(String(sw.retail),sw)!;
   assert.equal(ss.kupe,0);assert.deepEqual(splitRows(ss).map(r=>r[0]),['Материалы','Фурнитура']);assert.equal(ss.material+ss.hardware,sw.retail);
 });

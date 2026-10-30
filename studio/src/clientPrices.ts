@@ -16,9 +16,11 @@ export const CLIENT_SOURCE_IN_SHEET='Входит в цену за лист';
 export const SHEETS_LINE_ID='client:sheets';
 /** позиции Лемана по выбору клиента — в «цене за лист» идут сверху листов как есть (то же условие, что lemana в pricing.ts estimate) */
 const isLemana=(id:string)=>id.startsWith('mesh:')||id.startsWith('handle:lm');
-/** Стекло и зеркало (glass-*: зеркало на фасаде, плёнка, полировка, наклейка, стеклянная крыша и полка) — вне листовой модели:
- *  в «цене за лист» сверху листов по закупке × коэффициент сметы (решение Макса 26.10.2026; pricing.ts estimate: offSheet). */
-export const isOffSheetLine=(id:string)=>id.startsWith('glass-');
+/** Позиции вне листа с закупочной ценой — в «цене за лист» сверху листов по закупке × коэффициент сметы (pricing.ts estimate: offSheet):
+ *  стекло и зеркало (glass-*: зеркало на фасаде, плёнка, полировка, наклейка, стеклянная крыша и полка; решение Макса 26.10.2026);
+ *  с 30.10.2026 (цена — только по листам, «листы + все допы») — и то, что не идёт в раскрой ЛДСП: столешница и вырезы в ней, фасады,
+ *  цоколь и стеновые панели из фасадного материала поставщика, мойка. Без цены они не «входят в лист» — итог требует уточнения. */
+export const isOffSheetLine=(id:string)=>id.startsWith('glass-')||id.startsWith('worktop:')||id.startsWith('worktop-cut:')||id==='facade-external'||id==='plinth-external'||id.startsWith('wallpanel:')||id.startsWith('premial-sink:');
 export function clientLine(l:PriceLine,markup:number,vernissageMarkup:number,model:'markup'|'sheet'='markup'):PriceLine{
   // позиция «после финального расчёта конструктором» (pendingPrices.ts) — без цены, с клиентской подписью; поставщик и ориентир — только менеджеру
   if(l.pending)return {...l,unitPrice:null,source:PENDING_CLIENT,retail:true};

@@ -3,7 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newProject, parseProject, projectErrors, applyAutoFillers, type Project } from '../src/project';
 import { estimate } from '../src/pricing';
-import { withPriceModel } from '../src/priceModel';
 import { activeRoom, addRoom, loadVariant, migrateRoomDocument, parseRoomDocument, persistRoomDocument, saveVariant, storedRoomDocument, updateRoom, ROOM_DOCUMENT_KEY } from '../src/roomDocument';
 import { clientBundle, importBundle, loadIndex, activeClient, readClientRooms, clientRoomsKey } from '../src/clientIndex';
 import { initialModule, section, validate, parts, drawerFacesEqual, type Module } from '../src/model';
@@ -21,59 +20,63 @@ import { scenarios, cornerReport } from '../scripts/corner-fillers-audit';
 
 function memory(){const m=new Map<string,string>();return {getItem:(k:string)=>m.get(k)??null,setItem:(k:string,v:string)=>{m.set(k,v);},removeItem:(k:string)=>{m.delete(k);},m};}
 
-test('«Модель цены» — одно место на документ комнат: правка в комнате — на весь заказ, в хранилище только в документе', () => {
+// С 30.10.2026 цена — только по листам (выбора «Модель цены» нет): настройки расчёта заказа — цена листа, коэффициент, ручные цены.
+const withSheet = (p: Project, sheetPrice: number): Project => ({ ...p, calculation: { ...(p.calculation ?? { markup: 2.2, overrides: {} }), sheetPrice } });
+
+test('Настройки расчёта — одно место на документ комнат: правка в комнате — на весь заказ, в хранилище только в документе', () => {
   let d = migrateRoomDocument(newProject());
   const first = activeRoom(d).id;
-  d = updateRoom(d, first, withPriceModel(activeRoom(d).project, 'max', 23000));
-  assert.equal(d.calculation?.maxModel, true);
+  d = updateRoom(d, first, withSheet(activeRoom(d).project, 25000));
+  assert.equal(d.calculation?.sheetPrice, 25000);
   d = addRoom(d, 'Спальня');
-  assert.equal(activeRoom(d).project.calculation?.maxModel, true, 'новая комната — по модели заказа');
+  assert.equal(activeRoom(d).project.calculation?.sheetPrice, 25000, 'новая комната — по настройкам заказа');
   d = updateRoom(d, activeRoom(d).id, { ...newProject(), calculation: activeRoom(d).project.calculation });
-  assert.ok(d.rooms.every((r) => r.project.calculation?.maxModel), 'все комнаты по одной модели');
+  assert.ok(d.rooms.every((r) => r.project.calculation?.sheetPrice === 25000), 'все комнаты по одним настройкам');
   // хранилище: настройки только на уровне документа
   const s = memory();
   const { serialized } = persistRoomDocument(s, d, null);
   const raw = JSON.parse(serialized);
-  assert.equal(raw.calculation.maxModel, true);
+  assert.equal(raw.calculation.sheetPrice, 25000);
   assert.ok(raw.rooms.every((r: { project: { calculation?: unknown } }) => r.project.calculation === undefined));
-  // чтение — снова в каждой комнате; цена комнаты — по большей модели
+  // чтение — снова в каждой комнате; цена комнаты — по листам с ценой листа заказа
   const back = parseRoomDocument(raw);
-  for (const r of back.rooms) { const e = estimate(r.project); assert.equal(e.retail, Math.max(e.byMarkup ?? 0, e.bySheet)); }
-  // смена модели в одной комнате меняет её для всего заказа
+  for (const r of back.rooms) { const e = estimate(r.project); assert.equal(e.sheetPrice, 25000); assert.equal(e.retail, e.bySheet); }
+  // смена цены листа в одной комнате меняет её для всего заказа
   const other = back.rooms.find((r) => r.id !== back.activeRoomId)!;
-  const d2 = updateRoom(back, other.id, withPriceModel(other.project, 'markup', 23000));
-  assert.ok(d2.rooms.every((r) => !r.project.calculation?.maxModel) && !d2.calculation?.maxModel);
+  const d2 = updateRoom(back, other.id, withSheet(other.project, 23000));
+  assert.ok(d2.rooms.every((r) => r.project.calculation?.sheetPrice === 23000) && d2.calculation?.sheetPrice === 23000);
 });
 
-test('«Модель цены»: прежний документ (модель только в активной комнате) читается на весь заказ; вариант не откатывает модель', () => {
+test('Настройки расчёта: прежний документ (модель «по большей» только в активной комнате) читается на весь заказ, модель отброшена; вариант не откатывает настройки', () => {
   let d = migrateRoomDocument(newProject());
   d = addRoom(d, 'Прихожая');
   // как писали документы до 29.10: у активной комнаты своя модель, у другой — нет
   const old = JSON.parse(JSON.stringify(storedRoomDocument(d)));
   delete old.calculation;
-  old.rooms.find((r: { id: string }) => r.id === old.activeRoomId).project.calculation = { markup: 2.2, overrides: {}, maxModel: true, sheetPrice: 23000 };
+  old.rooms.find((r: { id: string }) => r.id === old.activeRoomId).project.calculation = { markup: 2.2, overrides: {}, maxModel: true, sheetPrice: 24000 };
   const p = parseRoomDocument(old);
-  assert.ok(p.rooms.every((r) => r.project.calculation?.maxModel));
-  let v = saveVariant(updateRoom(p, p.activeRoomId, withPriceModel(activeRoom(p).project, 'markup', 23000)), 'Вариант без большей модели');
-  v = updateRoom(v, v.activeRoomId, withPriceModel(activeRoom(v).project, 'max', 23000));
+  assert.ok(p.rooms.every((r) => r.project.calculation?.sheetPrice === 24000 && r.project.calculation.maxModel === undefined));
+  for (const r of p.rooms.filter((x) => x.project.modules.length)) { const e = estimate(r.project); assert.equal(e.retail, e.bySheet, 'старый документ «по большей» — по листам'); }
+  let v = saveVariant(updateRoom(p, p.activeRoomId, withSheet(activeRoom(p).project, 23000)), 'Вариант 23 000');
+  v = updateRoom(v, v.activeRoomId, withSheet(activeRoom(v).project, 25000));
   const loaded = loadVariant(v, activeRoom(v).variants![0].id);
-  assert.equal(activeRoom(loaded).project.calculation?.maxModel, true, 'снимок мебели, модель — заказа');
+  assert.equal(activeRoom(loaded).project.calculation?.sheetPrice, 25000, 'снимок мебели, настройки — заказа');
 });
 
-test('«Модель цены» в экспорте/импорте JSON: папка клиента и файл проекта комнаты', () => {
+test('Настройки расчёта в экспорте/импорте JSON: папка клиента и файл проекта комнаты', () => {
   const s = memory();
   let d = migrateRoomDocument(newProject());
-  d = updateRoom(d, d.activeRoomId, withPriceModel(activeRoom(d).project, 'max', 23000));
+  d = updateRoom(d, d.activeRoomId, withSheet(activeRoom(d).project, 25000));
   persistRoomDocument({ getItem: (k) => s.getItem(k === ROOM_DOCUMENT_KEY ? clientRoomsKey('') : k), setItem: (k, v) => s.setItem(k === ROOM_DOCUMENT_KEY ? clientRoomsKey('') : k, v) }, d, null);
   const index = loadIndex(s), bundle = JSON.parse(JSON.stringify(clientBundle(s, activeClient(index))));
-  assert.equal(bundle.projects[0].project.calculation.maxModel, true, 'файл проекта комнаты — с моделью');
+  assert.equal(bundle.projects[0].project.calculation.sheetPrice, 25000, 'файл проекта комнаты — с настройками');
   const r = importBundle(s, index, bundle);
   const rooms = readClientRooms(s, r.key);
-  assert.equal(activeRoom(rooms).project.calculation?.maxModel, true, 'импорт папки клиента сохраняет модель');
+  assert.equal(activeRoom(rooms).project.calculation?.sheetPrice, 25000, 'импорт папки клиента сохраняет настройки');
   // файл одного проекта (кнопка «Скачать» редактора) → «Открыть документ комнат» (миграция)
   const single = JSON.parse(JSON.stringify(activeRoom(d).project));
-  assert.equal(parseProject(single).calculation?.maxModel, true);
-  assert.equal(migrateRoomDocument(single).calculation?.maxModel, true);
+  assert.equal(parseProject(single).calculation?.sheetPrice, 25000);
+  assert.equal(migrateRoomDocument(single).calculation?.sheetPrice, 25000);
 });
 
 test('«Тип фасадов»: рамка у дверей 2400 доступна (высота — по листу стекла, Макс 29.10), недоступный тип — с причиной, Вернисаж выбирается', () => {

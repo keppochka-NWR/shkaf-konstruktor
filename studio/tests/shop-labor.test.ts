@@ -28,13 +28,15 @@ test('шкаф с задником ХДФ: лист ЛХДФ 1 060 + работ�
   const free=estimate(withOv(p,{'sheet:hdf':0,'work-hdf':0,work:0}));
   assert.equal(e.knownCost-free.knownCost,hdf*(1060+2000)+ldsp*3500);
   // итог клиенту: × 2,2 (2 000 × 2,2 = 4 400 и 3 500 × 2,2 = 7 700 — кратны 100, итог к сотне сдвигается ровно)
-  assert.equal(e.retail!-estimate(withOv(p,{'work-hdf':0})).retail!,hdf*4400);
-  assert.equal(e.retail!-estimate(withOv(p,{work:0})).retail!,ldsp*7700);
+  // × 2,2 — внутренняя оценка byMarkupKnown (с 30.10.2026 цена клиенту — только по листам, работа внутри цены листа)
+  assert.equal(e.byMarkupKnown-estimate(withOv(p,{'work-hdf':0})).byMarkupKnown,hdf*4400);
+  assert.equal(e.byMarkupKnown-estimate(withOv(p,{work:0})).byMarkupKnown,ldsp*7700);
   const noHdf=estimate(withOv(p,{'sheet:hdf':0,'work-hdf':0}));
-  assert.ok(Math.abs(e.retail!-noHdf.retail!-hdf*(1060+2000)*2.2)<=100,'лист ЛХДФ с работой: (1 060 + 2 000) × 2,2 = 6 732 за лист, ±100 округления итога');
-  // клиентский вид (КП, публичная сборка): строки по цене клиента
+  assert.ok(Math.abs(e.byMarkupKnown-noHdf.byMarkupKnown-hdf*(1060+2000)*2.2)<=100,'лист ЛХДФ с работой: (1 060 + 2 000) × 2,2 = 6 732 за лист, ±100 округления итога');
+  assert.equal(estimate(withOv(p,{work:0})).retail,e.retail,'цена клиенту по листам от работы не зависит');
+  // клиентский вид (КП, публичная сборка): работа и ЛХДФ — «входит в цену за лист»
   const cv=clientView(e);
-  assert.equal(line(cv,'work-hdf')!.unitPrice,4400);assert.equal(line(cv,'work')!.unitPrice,7700);assert.equal(line(cv,'sheet:hdf')!.unitPrice,2332);
+  for(const id of ['work-hdf','work','sheet:hdf'])assert.equal(line(cv,id)!.unitPrice,null,id);
   assert.equal(cv.retail,e.retail);
 });
 
@@ -43,7 +45,7 @@ test('шкаф 1200: итог вырос ровно на (листы ЛДСП ×
   const e=estimate(p),plan=nest(p),hdf=plan.filter(s=>s.material==='hdf').length,ldsp=plan.length-hdf;
   // старое правило воспроизводим ручной ценой проекта: 2 500 за каждый лист в строке ЛДСП, работа ЛХДФ — внутри неё
   const old=estimate(withOv(p,{work:2500*(ldsp+hdf)/ldsp,'work-hdf':0}));
-  assert.equal(e.retail!-old.retail!,Math.round((ldsp*3500+hdf*2000-(ldsp+hdf)*2500)*2.2));
+  assert.equal(e.byMarkupKnown-old.byMarkupKnown,Math.round((ldsp*3500+hdf*2000-(ldsp+hdf)*2500)*2.2));
 });
 
 test('кухня 3 м: работа 3 500 за лист ЛДСП, лист ЛХДФ — 1 060 без работы (как до 20.10, вопрос Максу)',()=>{
@@ -53,5 +55,5 @@ test('кухня 3 м: работа 3 500 за лист ЛДСП, лист ЛХ�
   assert.equal(line(e,'work')!.unitPrice,3500);assert.equal(line(e,'work')!.quantity,plan.length-hdf);
   assert.equal(line(e,'work-hdf'),undefined,'у кухни работы за ЛХДФ нет');
   assert.equal(line(e,'sheet:hdf')!.unitPrice,1060);
-  assert.equal(e.retail!-estimate(withOv(p,{work:0})).retail!,(plan.length-hdf)*7700);
+  assert.equal(e.byMarkupKnown-estimate(withOv(p,{work:0})).byMarkupKnown,(plan.length-hdf)*7700);
 });
