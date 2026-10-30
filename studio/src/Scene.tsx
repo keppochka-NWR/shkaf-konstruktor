@@ -1182,7 +1182,8 @@ export function Scene(p: Props) {
     function pointerDown(e:PointerEvent){
       if(e.button!==0||current.current.presentation)return;
       // Shift+щелчок — отметить корпус (решение Макса 30.10; Ctrl+щелчок больше не отмечает — Ctrl только привязка)
-      if(isMarkClick(e)&&current.current.onToggleModule){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();
+      // в «Наполнении» Shift корпуса не отмечает: полки и ящики тянутся как обычно (критик 30.10 п.1)
+      if(isMarkClick(e)&&current.current.onToggleModule&&current.current.mode!=='fill'){const picked=hitAt(e.clientX,e.clientY,true);if(picked){e.preventDefault();
         const s=current.current;if(s.mode==='move'&&!s.lightMode&&picked.object.userData.role!=='handle'){markPress={mid:picked.object.userData.moduleId,x:e.clientX,y:e.clientY,pointerId:e.pointerId};controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);}
         else s.onToggleModule!(picked.object.userData.moduleId);}return;}
       if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();const mid=picked.object.userData.moduleId,alts=[...new Set(ray.intersectObjects(modelGroup.children,true).filter(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId===mid&&h.object.userData.partId).map(h=>h.object.userData.partId as string))].filter(x=>x!==picked.object.userData.partId);current.current.onLightPick(mid,picked.object.userData.partId,alts);}return;}
@@ -1216,7 +1217,8 @@ export function Scene(p: Props) {
       if(markPress&&!drag){const cp=markPress;if(!markDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;markPress=null;
         pointerDown({button:0,clientX:cp.x,clientY:cp.y,pointerId:cp.pointerId,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,fromMark:true,preventDefault(){}} as unknown as PointerEvent);
         const md=drag as Drag|null;if(!md){controls.enabled=true;return;}
-        if(md.kind==='module'){const s=current.current,g=s.groupIds??[];md.group=g.includes(md.mid)?g:[...g,md.mid];if(!g.includes(md.mid))s.onToggleModule?.(md.mid);}}
+        // «Двигать всю композицию» включено — едет композиция, отметки и галочку не трогаем (критик 30.10 п.2)
+        if(md.kind==='module'&&!current.current.moveAll){const s=current.current,g=s.groupIds??[];md.group=g.includes(md.mid)?g:[...g,md.mid];if(!g.includes(md.mid))s.onToggleModule?.(md.mid);}}
       if(!drag)return;if(!drag.moved&&Math.hypot(e.clientX-drag.point[0],e.clientY-drag.point[1])<4)return;
       needsRender=true;drag.moved=true;cast(e.clientX,e.clientY);const point=new THREE.Vector3();if(!ray.ray.intersectPlane(drag.plane,point))return;point.sub(drag.anchor);badge.hidden=false;
       if(drag.kind==='module'){
@@ -1241,7 +1243,7 @@ export function Scene(p: Props) {
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front'&&!sideView(current.current.view))next.y=drag.origin.y; // сбоку высота своя, как спереди (критик 29.10 п.7)
         else if(lockY&&!(hit&&!hit.free?.v))next.y=drag.origin.y; // сбоку без вертикального хода — высота прежняя (Alt/Ctrl, поймавшие высоту, — по привязке)
-        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||dragGroup(drag)?.includes(drag.mid)&&dragGroup(drag)!.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':dragGroup(drag)?.includes(drag.mid)?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||dragGroup(drag)?.includes(drag.mid)&&dragGroup(drag)!.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':dragGroup(drag)?.includes(drag.mid)&&(dragGroup(drag)?.length??0)>1?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else if(drag.kind==='divider'){
         const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;
         for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
