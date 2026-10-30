@@ -31,11 +31,12 @@ const vernissagePanelLabel=(label:string)=>`Панели МДФ ${label} (вид
 function vernissageRow(v:VernissageFacade,w:number,h:number){const pr=vernissageFacadePrice(v,w,h);
   return {key:`${v.milling}:${v.cover}:${v.film??v.enamelColor??''}:${v.thickness}:${v.open??'solid'}:${v.patina?1:0}${v.twoSided?1:0}${v.lacquer?1:0}`,label:vernissageLabel(v),qty:Math.round(pr.billArea*1e4)/1e4,perM2:pr.perM2,
     source:`Прайс Вернисаж от ${priceDateRu()}: ${pr.column??'нет колонки'}${pr.base!==null?' '+pr.base+' ₽/м²':''}${pr.notes.map(n=>'; '+n).join('')}${pr.warnings.length?'; ВНИМАНИЕ: '+pr.warnings.join('; '):''}`};}
-/** model: 'markup' — себестоимость × коэффициент; 'sheet' — модель цеха: листы ЛДСП × цена листа (фурнитура и работа включены) + розничные позиции. */
-export type PriceSettings={markup:number;overrides:Record<string,number>;model?:'markup'|'sheet';sheetPrice?:number;vernissageMarkup?:number;
-  /** «Цена по большей модели» (решение Макса 26.10.2026): клиенту — большая из «себестоимость × коэффициент» и «цена за лист»
-   *  (листы × цена листа + то, что вне листовой модели: зеркало, стекло, розница, Вернисаж, Лемана). model при этом не используется. */
-  maxModel?:boolean;
+/** Цена клиенту — ТОЛЬКО по листам (решение Макса 30.10.2026): листы ЛДСП в раскрое × цена листа (плита, кромка, фурнитура и работа
+ *  внутри) + всё, что вне листа (розница, Вернисаж, Лемана, стекло и зеркало). markup — коэффициент к закупке позиций вне листа
+ *  (стекло, зеркало, ЛДСП дверей купе). Поля model ('markup'|'sheet') и maxModel («по большей модели») старых файлов при загрузке
+ *  отбрасываются (project.ts parseProject), расчёт их не читает. */
+export type PriceSettings={markup:number;overrides:Record<string,number>;sheetPrice?:number;vernissageMarkup?:number;
+  /** @deprecated не используется (решение 30.10.2026) */model?:'markup'|'sheet';/** @deprecated не используется */maxModel?:boolean;
   /** штамп менеджерской версии (withPriceStamp): базовые коэффициенты, с которыми запечена публичная сборка */
   baseMarkup?:number;baseVernissageMarkup?:number};
 /** Коэффициент сметы по умолчанию (клиенту = закупка × коэффициент); в проекте — calculation.markup. */
@@ -59,27 +60,27 @@ export const ADAGIO_STD_RETAIL = 122.5;
 export const ADAGIO_STD_URL: Record<number, string> = {
   50: 'allpremial.ru/catalog/gazlifty-premial/58860/', 60: 'allpremial.ru/catalog/gazlifty-premial/58861/', 80: 'allpremial.ru/catalog/gazlifty-premial/58862/',
   100: 'allpremial.ru/catalog/gazlifty-premial/58863/', 120: 'allpremial.ru/catalog/gazlifty-premial/58864/'};
-/** Решение Макса 27.10.2026 (РЕШЕНИЯ.md), источник «Макс 27.10.2026»: цены КЛИЕНТУ — розница поверх коэффициента (в «цене за лист» — вне
+/** Решение Макса 27.10.2026 (РЕШЕНИЯ.md), источник «Макс 27.10.2026»: цены КЛИЕНТУ — розница сверх цены листов (в «цене за лист» — вне
  *  листовой модели, сверху листов); сборка их не запекает ×2,2. Толкатель TIP-ON — 120 ₽/шт; навесы ABS — 120 ₽ за комплект (комплект =
  *  пара левый + правый с заглушками; в смете навесы комплектами, заглушки — в комплекте, без своей цены); наклейка зеркала на основу —
  *  1 200 ₽/м² (клеит цех). */
 export const TIP_ON_RETAIL = 120;
 export const HANGER_KIT_RETAIL = 120;
 export const MIRROR_GLUE_RETAIL_M2 = 1200;
-const MAX_SRC_2710 = 'Макс 27.10.2026: цена клиенту (розница поверх коэффициента)';
+const MAX_SRC_2710 = 'Макс 27.10.2026: цена клиенту (розница сверх цены листов)';
 /** Навесов в комплекте ABS: левый + правый. Нечётный остаток модуля — ещё комплект (половину не продают). */
 export const hangerKits = (pieces: number) => Math.ceil(pieces / 2);
 /** Армирующая плёнка для зеркала — закупка АТБ, ₽/м² (прайс 01.01.2026, справочник закупочных цен). */
 export const MIRROR_FILM_M2 = 90;
-/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md): цены КЛИЕНТУ — розница поверх коэффициента, общими константами (сборка их не запекает ×2,2):
+/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md): цены КЛИЕНТУ — розница сверх цены листов, общими константами (сборка их не запекает ×2,2):
  *  Blum TANDEM — 10 000 ₽ за комплект на ящик; петля 110° (Blum) — 800 ₽/шт; петля 155° — 1 700 ₽/шт; ограничитель угла — 50 ₽;
  *  «петля на 90°» = петля 110° + ограничитель (на каждую петлю створки). */
 export const BLUM_TANDEM_RETAIL = 10000;
 export const HINGE110_RETAIL = 800;
 export const HINGE155_RETAIL = 1700;
 export const HINGE_LIMITER_RETAIL = 50;
-const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, поверх коэффициента)';
-/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md), источник «Макс 26.10.2026»: цены КЛИЕНТУ — розница поверх коэффициента (в «цене за лист» —
+const MAX_SRC = 'Цена Макса 26.10.2026 (клиенту, сверх цены листов)';
+/** Решение Макса 26.10.2026 (РЕШЕНИЯ.md), источник «Макс 26.10.2026»: цены КЛИЕНТУ — розница сверх цены листов (в «цене за лист» —
  *  вне листовой модели, сверху листов); сборка их не запекает ×2,2. Подсветка: блок питания, датчик открывания фасадов, диммер,
  *  беспроводной пьезовыключатель — на модуль с подсветкой (опции окна «Подсветка»). Торцевые ручки — 2 ₽ за мм длины
  *  (1200 → 2 400 ₽, 600 → 1 200 ₽, 500 → 1 000 ₽, 350 → 700 ₽), все торцевые (HEXA L-1200, FP527, торцевые под размер). */
@@ -88,7 +89,7 @@ export const LIGHT_SENSOR_RETAIL = 700;
 export const LIGHT_DIMMER_RETAIL = 1200;
 export const LIGHT_PIEZO_RETAIL = 8000;
 export const EDGE_HANDLE_RETAIL_PER_MM = 2;
-const MAX_SRC_2610 = 'Макс 26.10.2026: цена клиенту (розница поверх коэффициента)';
+const MAX_SRC_2610 = 'Макс 26.10.2026: цена клиенту (розница сверх цены листов)';
 /** Цена клиенту торцевой ручки (решение Макса 26.10.2026): 2 ₽ за мм длины. */
 export const edgeHandleRetail = (lenMm: number) => Math.round(EDGE_HANDLE_RETAIL_PER_MM * lenMm);
 /** Петля с доводчиком бренда: Blum 110° — розница Макса (800 ₽), остальные — закупка из hardware.ts. */
@@ -126,7 +127,7 @@ export function publicSettings(s:PriceSettings):{settings:PriceSettings;ov:numbe
 export function withPriceStamp<P extends {calculation?:PriceSettings}>(p:P):P{
   if(PUBLIC_BUILD||!p.calculation)return p;
   const c=p.calculation;
-  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...((c.model==='sheet'||c.maxModel)&&c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
+  return {...p,calculation:{...c,baseMarkup:MARKUP_DEFAULT,baseVernissageMarkup:VERNISSAGE_MARKUP_DEFAULT,...(c.sheetPrice===undefined?{sheetPrice:SHEET_PRICE_DEFAULT}:{})}};
 }
 
 // ---- ЛДСП 16 мм, лист 2750×1830. Закупка цеха: СФЗ (Lamarty) / Победа.
@@ -176,7 +177,7 @@ const hidden:Record<number,{price:number;source:string}>={
 /** Оценочная цена — до копейки, без округления до 10 ₽: формула линейна, и запечённая (× коэффициент) публичная сборка даёт тот же итог. */
 const est=(v:number)=>Math.round(v*100)/100;
 /** Цена комплекта направляющих по системе и длине. Опора — известные цены; остальное — шаг по длине и множители класса, помечено «оценка». */
-export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string;/** цена клиенту поверх коэффициента (Blum TANDEM) */retail?:boolean}{
+export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'length'>):{price:number|null;source:string;label:string;/** цена клиенту сверх цены листов (Blum TANDEM) */retail?:boolean}{
   const sys=slideSystem(c),L=c.length;
   const label=sys.label+' · '+L+' мм';
   if(sys.slide==='ball'){
@@ -187,7 +188,7 @@ export function slidePrice(c:Pick<DrawerConfig,'slide'|'operation'|'brand'|'leng
     if(sys.motion==='simple')return {price:est(base.price*0.55),source:'Оценка: шариковые без доводчика ≈ 55 % от Versalite с доводчиком; подтвердить счётом ФАМ',label};
     return {price:est(base.price*1.15),source:'Оценка: шариковые push-to-open ≈ +15 % к Versalite с доводчиком; подтвердить счётом ФАМ',label};
   }
-  // Blum TANDEM (решение Макса 26.10.2026): 10 000 ₽ клиенту за комплект на ящик — розница поверх коэффициента (retail)
+  // Blum TANDEM (решение Макса 26.10.2026): 10 000 ₽ клиенту за комплект на ящик — розница сверх цены листов (retail)
   if(sys.brand==='blum')return {price:BLUM_TANDEM_RETAIL,source:MAX_SRC+': Blum TANDEM — '+BLUM_TANDEM_RETAIL+' ₽ за комплект на ящик',label,retail:true};
   // Вне диапазона закупки/оценки длина остаётся без цены: смету не дополняем выдуманной позицией.
   // 250 мм — шкафы и подвесные ящики глубиной 300 вместе с фасадом (заказ 7437584): та же оценка шагом −50 ₽ от 300 мм
@@ -555,7 +556,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         else if(d.hinge==='top'&&selectedLift)add('lift-mechanism:premial-'+selectedLift,'Подъёмный механизм Premial СЕМПРЕ — подбор типоразмера',1,'компл',null,'Premial: комплект на фасад; артикул, количество механизмов, присадка и закупочная цена требуют подбора');
         if(d.hinge==='top'&&!selectedLift&&!a.module.kitchenLift&&!kitchen)add('lift-mechanism','Подъёмный механизм — требуется подбор по массе фасада',1,'компл',null,'Модель и техкарта механизма не заданы');
         // решение Макса 26.10.2026: откидной фасад на газлифте без ручки открывается толкателем TIP-ON — позиция сама; цена — Макс 27.10.2026:
-        // 120 ₽/шт клиенту, розница поверх коэффициента
+        // 120 ₽/шт клиенту, розница сверх цены листов
         if(d.hinge==='top'&&selectedLift&&!kitchen&&(push||!allParts.some(p=>p.role==='handle'&&p.id===d.id.replace(':door:',':handle:'))))add('tip-on-lift','Толкатель TIP-ON для откидного фасада без ручки',1,'шт',TIP_ON_RETAIL,MAX_SRC_2710+': толкатель TIP-ON — '+TIP_ON_RETAIL+' ₽/шт',true);
         // подъёмный фасад кухни: петли по верху поставлены по Базису — считаем их как обычные; без петель (шкаф) — только механизм
         if(d.hinge==='top'&&!placedHinges){/* петли не расставлены */}
@@ -565,7 +566,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
         else if(allParts.some(p=>p.falsePanelHinge&&p.id.startsWith(d.id.replace(':door:',':hingeplate:')+':')))add('hinge-false-panel'+suffix,'Петля под фальшпанель'+(bk==='gtv'?'':' · '+hb.label),n,'шт',null,'Петля под фальшпанель (угловой модуль): закупочной цены в прайсах нет — цена после финального расчёта конструктором');
         else if(push)add((inset?'hinge-push-inset':'hinge-push')+suffix,(bk==='gtv'?'Петля GTV без пружины '+(inset?'вкладная COCA':'накладная'):hb.free.label+(inset?' · вкладная':' · накладная')),n,'шт',bk==='gtv'?HINGE_FREE.price:hb.free.price,bk==='gtv'?HINGE_FREE.source:hb.free.source);
         // угол открывания створки (решение Макса 26.10.2026): «петля на 90°» = петля 110° бренда + ограничитель угла на каждую петлю
-        // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница поверх коэффициента.
+        // (50 ₽ клиенту); петля 155° (155–165°) — 1 700 ₽/шт клиенту. Розница сверх цены листов.
         else if(d.hingeAngle===90){const sh=softHinge(bk,hb);add((inset?'hinge-inset':'hinge')+suffix,inset?hb.soft.label+' · вкладная':hb.soft.label,n,'шт',sh.price,sh.source,sh.retail);
           add('hinge-limiter-90'+suffix,'Ограничитель угла открывания 90° '+hb.label,n,'шт',HINGE_LIMITER_RETAIL,MAX_SRC+': ограничитель угла — '+HINGE_LIMITER_RETAIL+' ₽ (петля на 90° = петля 110° + ограничитель)',true);}
         else if(d.hingeAngle)add('hinge-'+d.hingeAngle+(inset?'-inset':'')+suffix,'Петля '+hb.label+' 155° · '+HINGE_ANGLE_LABEL[d.hingeAngle]+' · с доводчиком'+(inset?' · вкладная':''),n,'шт',HINGE155_RETAIL,MAX_SRC+': петля 155° — '+HINGE155_RETAIL+' ₽/шт',true);
@@ -586,7 +587,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // ручка Базиса на фасаде кухни (kitchen.handle.name, n4-wall) — строкой Базиса по ручкам сцены; в bazisItems её нет (markBazis)
       const kh=a.module.kitchen?.handle;
       if(d.role==='handle'&&kh?.name&&d.name==='Ручка фасада · '+kh.name)add('bazis:ручка:'+kh.name,kh.name,1,'шт',null,BZ);
-      // торцевые ручки (решение Макса 26.10.2026): 2 ₽ за мм длины клиенту, розница поверх коэффициента
+      // торцевые ручки (решение Макса 26.10.2026): 2 ₽ за мм длины клиенту, розница сверх цены листов
       else if(d.role==='handle'&&handleShape(handleById(facadeHandleId(a.module,d.id)))==='edge'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',edgeHandleRetail(h.len),MAX_SRC_2610+': торцевая ручка — '+EDGE_HANDLE_RETAIL_PER_MM+' ₽ за мм длины ('+h.len+' мм)',true);}
       else if(d.role==='handle'){const h=handleById(facadeHandleId(a.module,d.id));add('handle:'+h.id,'Ручка '+h.label,1,'шт',h.pending?null:h.price,h.source);if(h.vendor==='lemana'&&!shelf.has('handle:'+h.id))shelf.set('handle:'+h.id,h.shelf??h.price);}
       // вешалка в два яруса на трубе (заказ 7437584): держатель штанги на трубе — своей строкой, фланцы трубы — как фланцы штанги
@@ -596,7 +597,7 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       if(d.role==='rod'&&d.id.endsWith(':pipe'))add('pipe25','Труба вертикальная D25 · вешалка в два яруса',d.length/1000,'м',300,'Как штанга D25 (старый калькулятор: 300 ₽/м); закупку подтвердить');
       else if(d.role==='rod'&&!d.id.includes('pantograph')){if(a.module.rodType==='oval')add('rod-oval','Труба-штанга овальная 15×30',d.length/1000,'м',300,'Оценка по трубе D25; хлыст 3000, закупку подтвердить');else add('rod25','Штанга D25',d.length/1000,'м',300,'Старый калькулятор: 300 ₽/м; закупку подтвердить');}
       // зеркало на фасаде (заказ 7427796): зеркало 4 мм по площади фасада на основу ЛДСП (фасад в раскрое), армирующая плёнка, полировка кромки;
-      // наклейка на основу — клеит цех, 1 200 ₽/м² клиенту (Макс 27.10.2026, розница поверх коэффициента; в «цене за лист» — сверху листов)
+      // наклейка на основу — клеит цех, 1 200 ₽/м² клиенту (Макс 27.10.2026, розница сверх цены листов; в «цене за лист» — сверху листов)
       if(d.role==='door'&&d.mirror){const ins=aluInsert(d.mirror),area=d.size[0]*d.size[1]/1e6,perimeter=2*(d.size[0]+d.size[1])/1000;
         add('glass-mirror:'+d.mirror,(ins?.label??'Зеркало')+' на фасад (основа — фасад ЛДСП 16)',area,'м²',ins?.perM2??null,ins?.source??'Цена зеркала не найдена');
         add('glass-mirror-film','Армирующая плёнка для зеркала',area,'м²',MIRROR_FILM_M2,'АТБ, прайс 01.01.2026: армировочная плёнка для зеркала 90 ₽/м²');
@@ -612,23 +613,23 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
       // Базиса нет — строку не добавляем). Ленты подсветки в спецификациях Базиса нет.
       // Настоящая подсветка (опция «Подсветка в стойках», в т.ч. в кухне студии) — считается как раньше.
       // Решение Макса 20.10.2026: подсветка в горизонтах (полках) — 4000 ₽/пог.м, в вертикалях (стойках) — 3000 ₽/пог.м, клиенту,
-      // розница поверх коэффициента. Длина — сумма LED-профилей полок. Цена — именованной константой (сборка не запекает ×2,2).
+      // розница сверх цены листов. Длина — сумма LED-профилей полок. Цена — именованной константой (сборка не запекает ×2,2).
       // Задача 14 (22.10.2026): тип и тон подсветки — описанием строки, только если менеджер их выбрал (у модуля или детали): своя строка
       // на сочетание, цена та же (по ориентации). Без выбора — прежние строки и названия (старые проекты считаются как раньше).
       const led=d.role==='light'&&!d.id.startsWith('groove:')?ledLook(a.module,d.id):null,ledId=led?.explicit?':'+led.type+':'+led.tone:'',ledText=led?.explicit?' · '+specText(led):'';
-      if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf'+ledId,'Подсветка в полках'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м, поверх коэффициента (решение Макса 20.10.2026)',true);
+      if(d.role==='light'&&d.id.includes(':shelf-light:'))add('light-shelf'+ledId,'Подсветка в полках'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м, сверх цены листов (решение Макса 20.10.2026)',true);
       // Подсветка в крыше нижнего модуля (casework, заказ Вотан, id «…:light:roof») — тоже горизонталь: 4000 ₽/пог.м, своей строкой.
       // подсветка рабочей зоны под навесным кухонным (kitchenUnderLight.ts) — горизонталь: 4000 ₽/пог.м, своей строкой
-      else if(d.role==='light'&&d.id===UNDER_LIGHT_ID)add('light-under'+ledId,'Подсветка рабочей зоны под навесными модулями'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
-      else if(d.role==='light'&&d.id.endsWith(':light:roof'))add('light-roof'+ledId,'Подсветка в крыше'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), поверх коэффициента (решение Макса 20.10.2026)',true);
-      else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, поверх коэффициента',true);
+      else if(d.role==='light'&&d.id===UNDER_LIGHT_ID)add('light-under'+ledId,'Подсветка рабочей зоны под навесными модулями'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), сверх цены листов (решение Макса 20.10.2026)',true);
+      else if(d.role==='light'&&d.id.endsWith(':light:roof'))add('light-roof'+ledId,'Подсветка в крыше'+ledText,d.length/1000,'пог.м',RULES.shelfLightRetailPerM,'Прайс цеха (розница): '+RULES.shelfLightRetailPerM+' ₽/пог.м (горизонталь), сверх цены листов (решение Макса 20.10.2026)',true);
+      else if(d.role==='light'&&!d.id.startsWith('groove:'))add('light-stand'+ledId,led?.explicit?'Подсветка в стойках'+ledText:'Подсветка врезная в стойках',d.length/1000,'пог.м',RULES.lightRetailPerM,'Прайс цеха (розница): '+RULES.lightRetailPerM+' ₽/пог.м, сверх цены листов',true);
     }
     if(bzHinges&&nm?.hinges)addHinges(byNames(bzHinges,nm.hinges),a.module.hingeBrand??'gtv');
     // навесы ABS (кухни, подвесные модули) — комплектами на модуль (решение Макса 27.10.2026), заглушка ABS — на каждый навес, как в Базисе
     // (34 кухни: у параметрических модулей навесов 34, заглушек 34), цена заглушек — в комплекте навесов
     const hangerPcs=allParts.filter(p=>p.id.startsWith('kitchen-hanger:')).length;
     if(hangerPcs){addHangers(hangerPcs);add('kitchen-hanger-cap','Заглушка для мебельного навеса ABS (в комплекте навесов)',hangerPcs,'шт',0,HANGER_CAP_SRC);}
-    // управление подсветкой модуля (окно «Подсветка», цены Макса 26.10.2026 — клиенту, поверх коэффициента): датчик открывания фасадов
+    // управление подсветкой модуля (окно «Подсветка», цены Макса 26.10.2026 — клиенту, сверх цены листов): датчик открывания фасадов
     // (m.lightSensor, заказ 7442203), диммер, беспроводной пьезовыключатель; блок питания — флагом или сам с любым из них (один на модуль).
     // Блок питания — ОТДЕЛЬНОЙ строкой, в цену подсветки за метр (light-shelf / light-roof / light-stand) он не входит (решение Макса 27.10.2026)
     if(allParts.some(p=>p.role==='light'&&!p.id.startsWith('groove:'))){const mm=a.module;
@@ -662,10 +663,9 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   for(const l of lines)if(l.unitPrice===null){const pp=pendingPrice(l.id);if(pp){l.pending=true;l.source=pp.source;}}
   const missing=lines.filter(l=>l.unitPrice===null&&!l.pending),pending=lines.filter(l=>l.pending),knownCost=Math.round(lines.filter(l=>!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
   const retailExtras=Math.round(lines.filter(l=>l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
-  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT,maxModel=!!settings.maxModel;
-  const chosenModel:'markup'|'sheet'=settings.model==='sheet'?'sheet':'markup';
-  // R2: «цена за лист» без цены листа (публичная сборка: цены по умолчанию нет) — модель не меняется молча; итога нет, пока цену листа не укажут
-  const needSheetPrice=(chosenModel==='sheet'||maxModel)&&!(sheetPrice>0);
+  const ldspSheets=plan.filter(s=>s.material!=='hdf').length,sheetPrice=settings.sheetPrice??SHEET_PRICE_DEFAULT;
+  // R2: без цены листа итога нет, пока её не укажут (цена — только по листам, решение Макса 30.10.2026)
+  const needSheetPrice=!(sheetPrice>0);
   // Решение Макса 06.10.2026: клиенту показываем отдельно «материалы» (плита, кромка, работа, фасадные материалы) и «фурнитуру»,
   // чтобы смена фурнитуры сразу меняла цену. Итог по коэффициенту = сумма двух округлённых частей.
   const costOf=(g:LineGroup)=>Math.round(lines.filter(l=>!l.retail&&lineGroup(l.id)===g).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0));
@@ -703,15 +703,24 @@ export function estimate(p:Project,plan:Sheet[]=nest(p)){
   const vernissageOnTop=vernissageClient;
   // Стекло и зеркало (зеркало на фасаде с плёнкой и полировкой, стеклянная крыша) в раскрой ЛДСП не идут — в «цене за лист» они сверху
   // листов: закупка × коэффициент сметы (решение Макса 26.10.2026: «цена за лист 23 000» + то, что вне листовой модели, например зеркало).
-  const offSheet=Math.round(lines.filter(l=>!l.retail&&isOffSheetLine(l.id)).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup);
+  // Листов ЛДСП нет (стекло, металл, сырые детали Базиса без плиты): «цены листа», в которую входят фурнитура и работа, нет — всё по закупке
+  // идёт сверху × коэффициент, как позиции вне листа (критик 30.10: комплект 150 ₽ не должен пропадать при 0 листов).
+  const noSheets=ldspSheets===0,offLine=(l:PriceLine)=>!l.retail&&!isVernissageLine(l.id)&&!isLemanaLine(l.id)&&(noSheets||isOffSheetLine(l.id));
+  const offSheet=Math.round(lines.filter(offLine).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0)*settings.markup);
   const bySheet=ldspSheets*sheetPrice+retailExtras+lemana+vernissageOnTop+offSheet;
-  // «Цена по большей модели» (maxModel): клиенту — большая из двух; цена по коэффициенту неполная (позиции без цены) — итога нет,
-  // как в модели наценки: большую выбрать нельзя. model результата — модель, по которой цена (КП, публичная смета, Excel).
-  const model:'markup'|'sheet'=maxModel?(byMarkup!==null&&bySheet>byMarkup?'sheet':'markup'):chosenModel;
-  /** byMarkupKnown — та же формула по строкам с ценой («не менее N ₽», когда byMarkup=null); unplaced — строк «не помещается в лист»
-   *  (смета не завершена, retail=null); engine — движок раскроя проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic):
-   *  выбор движка для цены — ярус B. */
-  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,maxModel,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:pub?.notice??null,retail:unplacedLines||blocked||needSheetPrice?null:model==='sheet'?bySheet:byMarkup};
+  // Цена клиенту — ТОЛЬКО по листам (решение Макса 30.10.2026; «по коэффициенту» и «по большей модели» больше не используются).
+  // model результата всегда 'sheet' (КП, публичная смета, Excel, цены изделий).
+  const model='sheet' as const;
+  // ЕДИНСТВЕННЫЙ признак «цены нет из-за позиций без цены» — missingExtras (КП, «Стоимость», Excel, статус, комплект на проверку):
+  // позиция без цены внутри листа (плита, кромка, фурнитура, работа) итог не блокирует — она в цене листа, это справка менеджеру (missing);
+  // без цены «доп» вне листа (розница, Вернисаж, Лемана, стекло, столешница, фасады поставщика, при 0 листов — всё) — итога нет
+  const missingExtrasLines=missing.filter(l=>l.retail||isVernissageLine(l.id)||isLemanaLine(l.id)||offLine(l)),missingExtras=missingExtrasLines.length;
+  // коэффициент проекта без штампа (публичная сборка) влияет только на позиции вне листа и ЛДСП дверей купе
+  const markupMatters=offSheet>0||kupe>0;
+  /** byMarkup/byMarkupKnown/perSheet — «себестоимость × коэффициент» только для внутренней статистики (скрипты), в интерфейсе, КП и
+   *  выгрузках не показываются; unplaced — строк «не помещается в лист» (смета не завершена, retail=null); engine — движок раскроя
+   *  проекта (флаг); листы сметы — по картам plan (по умолчанию nest, classic): выбор движка для цены — ярус B. */
+  const result={lines,missing,pending,knownCost,retailExtras,split,markup:settings.markup,model,offSheet,sheetPrice,ldspSheets,byMarkup,byMarkupKnown,bySheet,vernissageOnTop,vernissageMarkup,vernissageCost:Math.round(vernissageCost*100)/100,perSheet:byMarkup!==null&&ldspSheets?Math.round(byMarkup/ldspSheets):null,unplaced:unplacedLines,engine,needSheetPrice,notice:needSheetPrice?SHEET_PRICE_NOTICE:blocked?MANAGER_CALC_NOTICE:markupMatters?pub?.notice??null:null,missingExtras,missingExtrasLines,retail:unplacedLines||blocked||needSheetPrice||missingExtras?null:bySheet};
   // публичная сборка: в строках только клиентские цены, итог тот же (buildMode.ts, clientPrices.ts)
   return PUBLIC_BUILD?clientView(result):result;
 }
@@ -728,7 +737,9 @@ export function estimateCSV(p:Project,result=estimate(p)){
  // публичная сборка: строки уже клиентские (clientPrices.ts) — без себестоимости, коэффициентов и сравнения моделей
  // B1 (критик 22.10): сумма строк ≠ итогу (копейки цен строк, итог к сотне) — явная строка «Округление», чтобы столбец сходился
  if(PUBLIC_BUILD)rows.push(['Итого по позициям','','','',result.knownCost,'',''],...(result.retail!==null&&result.retail!==result.knownCost?[['Округление до итога сметы','','','',result.retail-result.knownCost,'','']]:[]),['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
- else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент',result.markup,'','','','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции поверх коэффициента','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.bySheet,'Модель цеха: цена за лист с фурнитурой'+(result.vernissageOnTop?'; сверху фасады Вернисаж (закупка × '+vk+') '+result.vernissageOnTop+' ₽':''),result.model==='sheet'?'Выбрана':'Для сравнения'],['Цена по коэффициенту','','','',result.byMarkup??'',result.byMarkup===null?'Не менее '+result.byMarkupKnown+' ₽ без '+result.missing.length+' позиций без цены':'',result.model==='markup'?'Выбрана':'Для сравнения'],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
+ // цена — только по листам (решение Макса 30.10.2026): строк «по коэффициенту» и выбора модели нет
+ else rows.push(['Учтённая себестоимость','','','',result.knownCost,'',''],['Коэффициент к закупке вне листа (стекло, зеркало, столешница)',result.markup,'','',result.offSheet||'','',''],...(result.vernissageOnTop?[['Фасады Вернисаж: закупка × коэффициент Вернисажа',result.vernissageMarkup,'',result.vernissageCost,result.vernissageOnTop,'Решение Макса 10.10.2026: клиенту закупка по прайсу × '+vk,'']]:[]),...(result.retailExtras?[['Розничные позиции','','','',result.retailExtras,'','']]:[]),['Листов ЛДСП',result.ldspSheets,'лист',result.sheetPrice,result.ldspSheets*result.sheetPrice,'Цена за лист: плита, кромка, фурнитура и работа внутри','']
+   ,['Цена по листам','','','',result.bySheet,'Листы × цена листа + позиции вне листа (розница, Лемана, Вернисаж, стекло и зеркало)',''],['Расчётная цена','','','',result.retail??'','',result.retail===null?'Смета не завершена':'Предварительно'],[engineNote(result),result.engine,'','','','',''],['Ограничения','Доставка, монтаж и неописанный крепёж не включены','','','','','']);
  // разбивка «Материалы / Фурнитура / Двери купе / Итого» (сумма граф = итогу) и позиции после финального расчёта конструктором (решения 16.10.2026)
  const split=result.retail===null?null:quoteBreakdown(String(result.retail),result);
  if(split)rows.push(...splitRows(split).map(([k,v])=>['Разбивка: '+k,'','','',v,'',''] as (string|number)[]),['Разбивка: Итого','','','',result.retail!,'','']);

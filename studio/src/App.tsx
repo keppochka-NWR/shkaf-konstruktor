@@ -590,7 +590,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // отклонённый вариант (кнопки исправления в плашке ошибки применяют исправление к нему: «Опустить полки под скос», критик 29.10)
   const rejectedProject=useRef<Project|null>(null);
   function commitProject(raw: Project) {
-    // Модель цены — свойство заказа (критик 29.10, блокер 1): проект комнаты без настроек расчёта («Новый проект», «без мебели»,
+    // Настройки расчёта (цена листа, коэффициент, ручные цены) — свойство заказа (критик 29.10, блокер 1): проект комнаты без них («Новый проект», «без мебели»,
     // файл без расчёта) получает настройки заказа, а не сбрасывает их.
     if(saveManagedProject&&raw.calculation===undefined&&project.calculation)raw={...raw,calculation:structuredClone(project.calculation)};
     // Вырезы идут за своей деталью, а не за её номером (критик 29.10, блокер 2): вставили/удалили полку, ящик, дверь — перепривязка.
@@ -1256,7 +1256,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             if(currentProject.current!==before)throw Error("Проект изменился во время чтения файла. Откройте файл ещё раз, чтобы сохранить последние правки в истории отмены.");
             const raw=JSON.parse(text);
             if(isClientBundle(raw)){if(!onImportBundle)throw Error('Папку клиента открывайте в основном редакторе, без ссылки на отдельный проект.');onImportBundle(raw);return;}
-            // в комнате заказа модель цены из файла не заменяет модель заказа молча (критик 29.10, блокер 1): заказ приоритетен, предупреждение
+            // в комнате заказа настройки расчёта из файла не заменяют настройки заказа молча (критик 29.10, блокер 1): заказ приоритетен, предупреждение
             const own: OrderCalculation = saveManagedProject ? withOrderCalculation(parseProject(raw), project.calculation) : { project: parseProject(raw) };
             const imported = own.project;
             const next = imported.modules[0].module;

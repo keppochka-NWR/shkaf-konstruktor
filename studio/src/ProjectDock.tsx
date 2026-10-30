@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
 import {estimate, MARKUP_DEFAULT} from "./pricing";
-import { PUBLIC_BUILD } from "./buildMode";
 import { missingPriceLabel } from "./clientLabels";
 import { handleById } from "./handles";
 import { HINGE_BRANDS, SLIDE_SYSTEMS } from "./hardware";
@@ -12,7 +11,6 @@ import { hardwareChoice } from "./hardwareSwap";
 import { HardwareWindow } from "./HardwareWindow";
 import { createPortal } from "react-dom";
 import { MANAGER_PRICING } from "./buildMode";
-import { withPriceModel } from "./priceModel";
 
 /** Ориентир цены системы направляющих на 450 мм, чтобы клиент видел разницу прямо в списке. */
 
@@ -25,7 +23,6 @@ import "./project-dock.css";
 export type DockTab = "project" | "estimate" | "hardware" | "details" | "docs";
 export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement" | "client-spec";
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
-export { withPriceModel };
 const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "project", label: "Проект", icon: Box },
   { id: "estimate", label: "Стоимость", icon: Calculator },
@@ -97,12 +94,10 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
     <div className="dock-body dock-estimate">
       {calcError?.project === project && <div className="dock-unplaced" role="alert"><b>Смета не посчитана: {calcError.message}</b></div>}
       {fresh && fresh.unplaced.length > 0 && <div className="dock-unplaced" role="alert" aria-label="Не помещаются в лист"><b>Смета не завершена — не помещаются в лист ({fresh.unplaced.length}):</b><ul>{fresh.unplaced.slice(0, 6).map((u) => <li key={u.detail.code}>Деталь {u.detail.code} · {u.detail.moduleName} / {u.detail.name} {u.detail.length} × {u.detail.width} — сращивать или заказать отдельно{inspect && <button type="button" className="text-action" aria-label={"Показать деталь " + u.detail.code} onClick={() => inspect(u.detail.moduleId, u.detail.id)}>Показать</button>}</li>)}{fresh.unplaced.length > 6 && <li>…и ещё {fresh.unplaced.length - 6}</li>}</ul></div>}
-      <div className="dock-sum total"><span>Итоговая стоимость</span><b>{calcError?.project === project ? 'Ошибка расчёта' : !e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missing.length?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
+      <div className="dock-sum total"><span>Итоговая стоимость</span><b>{calcError?.project === project ? 'Ошибка расчёта' : !e?'Считаем…':total===null?'Требует уточнения':rub(total)}</b><small>{e?.missingExtras?'Не все позиции оценены':e?.pending.length?pendingTotalLabel(e.pending.length):'Предварительно, без доставки и монтажа'}</small></div>
       {split && <div className={"dock-cost-split" + (split.kupe ? " has-kupe" : "")} aria-label="Разбивка стоимости">{splitRows(split).map(([k, v], i) => <div key={k} className={"dock-sum " + ["material", "hardware", "kupe"][i]}><span>{k}</span><b>{rub(v)}</b></div>)}</div>}
       {fresh && <p className="dock-sheets" aria-label="Листы раскроя">Листов ЛДСП в раскрое: <b>{fresh.ldsp}</b>{fresh.hdf ? <> · ЛХДФ: <b>{fresh.hdf}</b></> : null}{fresh.note && <small role="status">{fresh.note}</small>}</p>}
-      {/* модель цены — только менеджеру (решение Макса 26.10.2026: «цена по большей модели»); клиент видит итог */}
-      {!PUBLIC_BUILD && e && <p className="dock-sheets dock-price-model"><label>Модель цены <select aria-label="Модель цены" value={project.calculation?.maxModel ? "max" : project.calculation?.model === "sheet" ? "sheet" : "markup"} onChange={(ev) => commit(withPriceModel(project, ev.target.value, e.sheetPrice))}><option value="markup">По коэффициенту</option><option value="sheet">За лист ЛДСП</option><option value="max">Цена по большей модели</option></select></label>
-        <small aria-label="Цены по моделям">По коэффициенту {String(e.markup).replace(".", ",")}: <b>{e.byMarkup === null ? "не менее " + rub(e.byMarkupKnown) : rub(e.byMarkup)}</b> · за лист: <b>{rub(e.bySheet)}</b> ({e.ldspSheets} × {rub(e.sheetPrice)}{e.offSheet ? " + зеркало и стекло " + rub(e.offSheet) : ""}{e.retailExtras ? " + розница " + rub(e.retailExtras) : ""}){project.calculation?.maxModel && total !== null ? " · в цене большая" : ""}</small></p>}
+      {/* цена — только по листам (решение Макса 30.10.2026): выбора «Модель цены» и строки «По коэффициенту … · за лист …» нет */}
       <div className="dock-actions"><button className="outline" onClick={()=>openOutput('estimate')}>Стоимость проекта</button><button className="outline" onClick={()=>openOutput('quote')}>КП</button><button className="text-action" onClick={()=>setHwOpen(true)}>Поменять фурнитуру</button></div>
     </div>
   ) : tab === "hardware" ? (
@@ -139,7 +134,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
         <div className="dock-tabs">{TABS.map((t) => <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}><t.icon size={15} />{t.label}</button>)}</div>
         <button className="room-warning-link" hidden={!warnings} onClick={onWarnings} title="Проверить расстановку"><span className="dock-warn-long">Проверить расстановку</span><span className="dock-warn-short">Расстановка</span> · {warnings}</button>
         <button className="dock-price" onClick={() => setTab("estimate")} aria-label="Открыть стоимость">
-          {!e ? "Считаем…" : <><b>{total === null ? missingPriceLabel(e.missing.length) : rub(total)}</b>{total !== null && e.pending.length > 0 && <small className="dock-pending" title={pendingTotalLabel(e.pending.length)}><span className="dock-warn-long">{pendingTotalLabel(e.pending.length)}</span><span className="dock-warn-short">+{e.pending.length} после расчёта</span></small>}</>}
+          {!e ? "Считаем…" : <><b>{total === null ? missingPriceLabel(e.missingExtras || e.unplaced) : rub(total)}</b>{total !== null && e.pending.length > 0 && <small className="dock-pending" title={pendingTotalLabel(e.pending.length)}><span className="dock-warn-long">{pendingTotalLabel(e.pending.length)}</span><span className="dock-warn-short">+{e.pending.length} после расчёта</span></small>}</>}
         </button>
       </nav>
     </div>

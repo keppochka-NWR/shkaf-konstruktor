@@ -122,18 +122,17 @@ test('заказ 7427796: оба варианта собираются функ�
   assert.equal(Math.max(...b.modules.map(x=>(x.y??0)+x.module.height)),2450);
 });
 
-test('цена по большей модели: max(коэффициент; лист + стекло/зеркало), по умолчанию выключена', () => {
+test('цена только по листам (решение 30.10.2026): лист + стекло/зеркало; «по большей модели» не используется', () => {
   const m=mod({width:600,mirror:'mirror-silver'},{doorLeaves:1});
-  const base=proj(m,{markup:2.2,overrides:{},sheetPrice:23000}),e0=estimate(base);
-  assert.equal(e0.maxModel,false);assert.equal(e0.retail,e0.byMarkup);
-  // интеграция 26.10: одно поле calculation.maxModel (ef9811a) — зеркало/стекло × коэффициент в «цене за лист» (offSheet, без округления до 100)
-  const e=estimate(proj(m,{markup:2.2,overrides:{},sheetPrice:23000,maxModel:true}));
+  const e=estimate(proj(m,{markup:2.2,overrides:{},sheetPrice:23000}));
+  // зеркало/стекло × коэффициент в цене по листам (offSheet, без округления до 100)
   const glass=e.lines.filter(l=>l.id.startsWith('glass-')&&!l.retail).reduce((s,l)=>s+l.quantity*(l.unitPrice??0),0);
   assert.equal(e.offSheet,Math.round(glass*2.2));
-  assert.equal(e.retail,Math.max(e.byMarkup!,e.bySheet));
-  // старое поле ветки o-7427796 (calculation.priceMax) читается при загрузке как maxModel
+  assert.equal(e.retail,e.bySheet);
+  assert.equal(estimate(proj(m,{markup:2.2,overrides:{},sheetPrice:23000,maxModel:true})).retail,e.retail,'старый флаг не меняет цену');
+  // старое поле ветки o-7427796 (calculation.priceMax) при загрузке отбрасывается
   const old=JSON.parse(JSON.stringify(proj(m,{markup:2.2,overrides:{}})));old.calculation.priceMax=true;
-  assert.equal(parseProject(old).calculation!.maxModel,true);
+  assert.equal(parseProject(old).calculation!.maxModel,undefined);
 });
 test('фасады по эскизу: свои низ и верх, карниз вплотную к верху, проверка зазора до карниза', () => {
   const m=mod({width:586,plinthHeight:80,facadeFrom:78,facadeTo:1998},{doorLeaves:1});

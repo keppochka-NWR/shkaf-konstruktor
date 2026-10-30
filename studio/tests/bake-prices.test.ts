@@ -97,8 +97,8 @@ test('запекание: работа цеха — константы ЛДСП 
     assert.equal(pub.retail,cv.retail);
     for(const id of ['work','work-hdf','sheet:hdf'])assert.equal(pub.lines.find(l=>l.id===id)?.unitPrice,cv.lines.find(l=>l.id===id)?.unitPrice,id);
   }
-  assert.equal(baked.estimate(swing1200()).lines.find(l=>l.id==='work-hdf')!.unitPrice,4400);
-  assert.equal(baked.estimate(swing1200()).lines.find(l=>l.id==='work')!.unitPrice,7700);
+  // цена — только по листам (30.10.2026): работа цеха у клиента «входит в цену за лист» (без своей цены), запечённые константы — выше
+  for(const id of ['work','work-hdf']){const l=baked.estimate(swing1200()).lines.find(l=>l.id===id)!;assert.equal(l.unitPrice,null,id);assert.equal(l.source,'Входит в цену за лист',id);}
   assert.equal(baked.estimate(typical.kitchen()).lines.find(l=>l.id==='work-hdf'),undefined,'кухня: работы за ЛХДФ нет и в публичной сборке');
 });
 for(const [n,make] of Object.entries(typical))test(`запекание: типовой заказ «${n}» — итог тот же до рубля, строки — розница`,()=>{compare(n,make(),true);});
@@ -108,8 +108,8 @@ test('запекание: примеры examples/ — итог в предел�
 test('запекание: локальные проекты (если есть, только чтение) — итог в пределах округления',()=>{
   const dir=join(studio,'public','local-projects');if(!existsSync(dir))return;
   let n=0;for(const f of readdirSync(dir).filter(f=>f.endsWith('.json')).slice(0,40)){let p:Project;try{p=parseProject(JSON.parse(readFileSync(join(dir,f),'utf8')));}catch{continue;}
-    // публичная сборка: модель «себестоимость × коэффициент», без ручных цен проекта (закупка) — сравниваем в тех же условиях
-    p={...p,calculation:{...(p.calculation??{markup:2.2,overrides:{}}),model:'markup',overrides:{}}};compare(f,p,false);n++;}
+    // без ручных цен проекта (закупка) — сравниваем в тех же условиях; цена — по листам (решение 30.10.2026)
+    p={...p,calculation:{...(p.calculation??{markup:2.2,overrides:{}}),overrides:{}}};compare(f,p,false);n++;}
   assert.ok(n>=0);
 });
 
@@ -120,7 +120,7 @@ test('запекание: в запечённых таблицах нет зак
   assert.ok(values.some(v=>v.key==='MARKUP_DEFAULT'&&v.value===2.2));
   for(const r of BAKE_RULES){const code=readFileSync(join(out,r.file),'utf8');assert.deepEqual(findPurchaseNumbers(code,values.filter(v=>v.file===r.file)).slice(0,3),[],r.file);}
   const pricing=readFileSync(join(out,'pricing.ts'),'utf8');
-  assert.match(pricing,/export const MARKUP_DEFAULT=1;/);assert.match(pricing,/export const VERNISSAGE_MARKUP_DEFAULT=1;/);assert.match(pricing,/export const SHEET_PRICE_DEFAULT=0;/);
+  assert.match(pricing,/export const MARKUP_DEFAULT=1;/);assert.match(pricing,/export const VERNISSAGE_MARKUP_DEFAULT=1;/);assert.match(pricing,/export const SHEET_PRICE_DEFAULT=23000;/,'цена листа — цена клиенту, не запекается (решение 30.10.2026)');
   assert.ok(!/\{price:445,/.test(pricing)&&/\{price:979,/.test(pricing),'445 × 2,2 = 979');
   assert.equal([...pricing.matchAll(PRICE_LITERALS)].filter(m=>/markup|sheetPrice|\?\?/.test(m[0])).length,0);
 });
@@ -136,20 +136,20 @@ const kitchen3m=()=>({...newProject(),modules:createKitchenRow(3000,initialModul
 test('R1: ручная цена проекта (лист 10 000) в публичной сборке — тот же итог, что у менеджера (83 000 + склейка), не 50 800',()=>{
   const p=newProject();p.calculation={markup:2.2,overrides:{'sheet:Дуб Вотан':10000}};
   const m=estimate(p),pub=baked.estimate(p);
-  // 83 000 у Codex (5bd8335) + склейка составного фальша 1000 ₽/м² (3dd13b2) и вставки за петлёй (R4) = 83 303
-  // + работа цеха 20.10.2026 (3 листа ЛДСП × 1 000 + 1 лист ЛХДФ × (2 000 − 2 500)) × 2,2 = +5 500
-  // + крепёж корпуса 28.10.2026 (hullFasteners: эксцентрики цоколя, конфирматы коробов ящиков) = +100
-  assert.equal(m.retail,88903);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
+  // до 30.10.2026 (по коэффициенту) 88 903; цена — только по листам: плита внутри цены листа, ручная цена плиты итог не меняет —
+  // 3 листа × 23 000 + 203 ₽ склейки фальша
+  assert.equal(m.retail,69203);assert.equal(m.retail,estimate(newProject()).retail);assert.equal(pub.retail,m.retail);assert.equal(pub.notice===baked.MANAGER_CALC_NOTICE,false);
 });
 test('R1: кухня с 5 ручными ценами 1000 — итог как в менеджерской, позиции не pending',()=>{
   // 5 (было 7): навесы ABS и заглушки с 27.10.2026 с ценой Макса — комплект 120 ₽ клиенту, розница
   const p=kitchen3m(),e=estimate(p);assert.equal(e.pending.length,5);
   p.calculation={markup:2.2,overrides:Object.fromEntries(e.pending.map(l=>[l.id,1000]))};
   const m=estimate(p),pub=baked.estimate(p);
-  // + работа цеха 20.10.2026: 6 листов ЛДСП × (3 500 − 2 500) × 2,2 = +13 200; ЛХДФ у кухни без работы
-  // 27.10.2026: навесы (10 шт) и заглушки (10 шт) больше не ручные 1000 × 2,2 (−44 000), а 5 комплектов × 120 ₽ розницы (+600) = −43 400
-  // 28.10.2026: ручки на фасадах ящиков нижнего с ящиками (3 × UZ 819 · 128, 100 × 2,2) = +600 после округления итога
-  assert.equal(m.retail,186000);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
+  // до 30.10.2026 (по коэффициенту) 186 000; цена — только по листам: ручные цены фурнитуры (Axis, опоры, клипсы) — внутри цены листа,
+  // ручная цена столешницы (вне листа) — сверху листов × коэффициент
+  const top=m.lines.filter(l=>l.id.startsWith('worktop')&&!l.retail).reduce((s,l)=>s+l.quantity*l.unitPrice!,0);
+  assert.ok(top>0,'столешница с ручной ценой');assert.equal(m.offSheet,Math.round(top*2.2));
+  assert.equal(m.retail,e.retail!+m.offSheet);assert.equal(m.retail,145200);assert.equal(pub.retail,m.retail);assert.equal(pub.pending.length,0);assert.equal(m.pending.length,0);
 });
 test('R1: нестандартный коэффициент проекта не теряется: со штампом менеджера — итог менеджера, без штампа — явное предупреждение',()=>{
   const p=newProject();p.calculation={markup:2.5,overrides:{}};
@@ -157,31 +157,34 @@ test('R1: нестандартный коэффициент проекта не 
   assert.equal(stamped.calculation!.baseMarkup,2.2);
   const pubStamped=baked.estimate(parseProject(JSON.parse(JSON.stringify(stamped))));
   assert.ok(Math.abs(pubStamped.retail!-m.retail!)<=100,`со штампом ${pubStamped.retail} vs ${m.retail}`);assert.equal(pubStamped.notice,null);
-  const pubOld=baked.estimate(p);assert.equal(pubOld.notice,baked.MARKUP_UNVERIFIED_NOTICE);
+  // цена — только по листам (30.10.2026): коэффициент влияет лишь на позиции вне листа — без них предупреждения нет, с зеркалом есть
+  assert.equal(baked.estimate(p).notice,null);
+  const pm={...p,modules:[{...p.modules[0],module:{...p.modules[0].module,mirror:'mirror-silver'}}]} as Project;
+  const pubOld=baked.estimate(pm);assert.ok(pubOld.offSheet>0);assert.equal(pubOld.notice,baked.MARKUP_UNVERIFIED_NOTICE);
   // ручная цена без коэффициента проекта — пересчитать нельзя: итога нет, «Расчёт сделан менеджером»
   const b=baked.publicSettings({markup:Number.NaN,overrides:{'sheet:Дуб Вотан':10000}});assert.equal(b.blocked,true);assert.equal(b.ov,null);
   assert.equal(baked.publicSettings({markup:Number.NaN,overrides:{}}).blocked,false,'без ручных цен пересчитывать нечего');
   // проект публичной сборки (коэффициент запечён в 1) — без предупреждений
   assert.equal(baked.estimate({...newProject(),calculation:{markup:1,overrides:{}}}).notice,null);
 });
-test('R2: «цена за лист» без цены листа — модель не переключается, итог 69 000 не подменяется; штамп менеджера сохраняет цену листа',()=>{
-  const p=newProject();p.calculation={markup:2.2,model:'sheet',overrides:{}};
+test('R2 → 30.10.2026: цена по листам без цены листа проекта — публичная сборка считает по 23 000 (цена клиенту), итог тот же, что у менеджера; штамп сохраняет цену листа',()=>{
+  const p=newProject();p.calculation={markup:2.2,overrides:{}};
   const m=estimate(p);assert.equal(m.model,'sheet');assert.equal(m.retail,69203,'69 000 у Codex + 203 ₽ склейки фальша (0,203 м² со вставками R4)');
   const pub=baked.estimate(p);
-  assert.equal(pub.model,'sheet','модель не меняется молча');assert.equal(pub.retail,null,'нового меньшего итога нет');
-  assert.equal(pub.needSheetPrice,true);assert.equal(pub.notice,baked.SHEET_PRICE_NOTICE);
+  assert.equal(pub.model,'sheet');assert.equal(pub.retail,69203,'публичная сборка — тот же итог по листам');
+  assert.equal(pub.needSheetPrice,false);assert.equal(pub.notice,null);
   const saved=parseProject(JSON.parse(JSON.stringify(withPriceStamp(p))));
   assert.equal(saved.calculation!.sheetPrice,23000);
   const pubSaved=baked.estimate(saved);assert.equal(pubSaved.model,'sheet');assert.equal(pubSaved.retail,69203);
 });
-test('R5: «цена за лист» с ручками Лемана — розница как есть (98 ₽), итог 69 294 и в публичной сборке',()=>{
-  const p=newProject();p.calculation={markup:2.2,model:'sheet',sheetPrice:23000,overrides:{}};p.modules[0].module.handleId='lm86728212';
+test('R5: цена по листам с ручками Лемана — розница как есть (98 ₽), итог 69 294 и в публичной сборке',()=>{
+  const p=newProject();p.calculation={markup:2.2,sheetPrice:23000,overrides:{}};p.modules[0].module.handleId='lm86728212';
   const m=clientView(estimate(p)),pub=baked.estimate(p);
   assert.equal(m.retail,69497,'69 294 у Codex + 203 ₽ склейки фальша');assert.equal(pub.retail,m.retail);
   const h=pub.lines.find(l=>l.id==='handle:lm86728212')!;assert.equal(h.unitPrice,98);assert.equal(h.quantity,3);
-  // модель наценки — та же ручка × коэффициент (215,60), как у менеджера
+  // проект без настроек расчёта — тоже по листам: ручка Лемана по рознице 98 ₽, как у менеджера
   const pk=newProject();pk.modules[0].module.handleId='lm86728212';
-  assert.equal(baked.estimate(pk).lines.find(l=>l.id==='handle:lm86728212')!.unitPrice,215.6);
+  assert.equal(baked.estimate(pk).lines.find(l=>l.id==='handle:lm86728212')!.unitPrice,98);
   assert.equal(baked.estimate(pk).retail,clientView(estimate(pk)).retail);
 });
 

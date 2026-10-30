@@ -38,7 +38,7 @@ const title = (p: Project) => p.offer?.customer?.trim() || "Проект меб�
 function status(l: PriceLine, manager: boolean): string {
   if (l.pending) return "После финального расчёта";
   if (l.unitPrice === null) return l.source === CLIENT_SOURCE_IN_SHEET ? "Входит в цену за лист" : "Уточнить цену";
-  return manager && l.retail ? "Розница, поверх коэффициента" : "Учтено";
+  return manager && l.retail ? "Розница, сверху листов" : "Учтено";
 }
 export const ROUNDING_LABEL = "Округление до итога сметы";
 /** B1: разница между суммой строк клиентской сметы (цены строк с копейками) и итогом (до рубля / до 100 ₽) — по группам Excel так,
@@ -73,7 +73,7 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
   const W = manager ? 9 : 7, rows: XCell[][] = [], merges: string[] = [];
   const full = (r: number) => merges.push(`A${r + 1}:${ref(W - 1, r)}`);
   rows.push(row([str("Смета проекта · " + title(p), XS.title)], W, XS.text)); full(0);
-  rows.push(row([str(`${stamp(created)} · ${manager ? "закупочные цены цеха × коэффициент " + String(e.markup).replace(".", ",") + "; розничные позиции — поверх коэффициента" : "цены салона, предварительный расчёт"}`, XS.subtitle)], W, XS.text)); full(1);
+  rows.push(row([str(`${stamp(created)} · ${manager ? "цена по листам: " + e.ldspSheets + " × " + e.sheetPrice.toLocaleString("ru-RU") + " ₽ + позиции вне листа; закупка цеха — для справки" : "цены салона, предварительный расчёт"}`, XS.subtitle)], W, XS.text)); full(1);
   rows.push([]);
   rows.push(["№", "Позиция", "Кол-во", "Ед.", "Цена, ₽", "Сумма, ₽", ...(manager ? ["Цена", "Статус", "Источник"] : ["Статус"])].map((h) => str(h, XS.header)));
   const buy: string[] = [], retail: string[] = [];
@@ -111,13 +111,11 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
   if (fit?.total) { const r = rows.length; plain(ROUNDING_LABEL, num(fit.total, XS.price), fit.note); buy.push(`F${r + 1}`); }
   if (manager) {
     plain("Себестоимость (закупка)", sumCells(buy, e.lines.filter((l) => !l.retail && l.unitPrice !== null).reduce((s, l) => s + l.quantity * l.unitPrice!, 0)));
-    plain("Коэффициент", num(e.markup, XS.subNum));
-    if (e.vernissageOnTop) plain("Фасады Вернисаж клиенту (закупка × " + String(e.vernissageMarkup).replace(".", ",") + ")", num(e.vernissageOnTop, XS.subMoney), "свой коэффициент вместо общего");
-    if (retail.length) plain("Розничные позиции поверх коэффициента", sumCells(retail, e.retailExtras));
-    // «Цена по большей модели» (calculation.maxModel, решение Макса 26.10.2026): в цене — большая из двух
-    const chosen = e.maxModel ? "выбрана — большая из двух" : "выбрана";
-    plain("Цена по коэффициенту", e.byMarkup === null ? str("не менее " + e.byMarkupKnown.toLocaleString("ru-RU") + " ₽", XS.subLabel) : num(e.byMarkup, XS.subMoney), e.model === "markup" ? chosen : "для сравнения");
-    plain(`Цена за лист: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽${e.offSheet ? " + зеркало и стекло " + e.offSheet.toLocaleString("ru-RU") + " ₽" : ""}`, num(e.bySheet, XS.subMoney), e.model === "sheet" ? chosen : "для сравнения");
+    plain("Коэффициент к закупке вне листа (стекло, зеркало, столешница)", num(e.markup, XS.subNum));
+    if (e.vernissageOnTop) plain("Фасады Вернисаж клиенту (закупка × " + String(e.vernissageMarkup).replace(".", ",") + ")", num(e.vernissageOnTop, XS.subMoney), "сверху листов");
+    if (retail.length) plain("Розничные позиции", sumCells(retail, e.retailExtras));
+    // цена — только по листам (решение Макса 30.10.2026): строки «по коэффициенту» и выбора модели нет
+    plain(`Цена по листам: ${e.ldspSheets} × ${e.sheetPrice.toLocaleString("ru-RU")} ₽${e.offSheet ? " + вне листа (стекло, зеркало, столешница…) " + e.offSheet.toLocaleString("ru-RU") + " ₽" : ""}`, num(e.bySheet, XS.subMoney), "листы + позиции вне листа");
   } else plain("Итого по позициям", sumCells(buy, fit ? e.retail! : e.knownCost));
   const rounded = !!fit && e.retail !== null && e.retail % 100 === 0;
   total("Расчётная цена", e.retail === null ? str(e.notice ?? (e.unplaced ? "Смета не завершена: не помещается в лист" : "Стоимость уточнит менеджер"), XS.totalLabel) : num(e.retail, XS.totalMoney), e.retail === null ? "" : (rounded ? "итог округлён до 100 ₽; " : "") + "предварительно, без доставки и монтажа");
@@ -133,7 +131,9 @@ export function estimateSheet(p: Project, e: Estimate, manager = !PUBLIC_BUILD, 
   rows.push([]);
   p.modules.forEach((a, i) => plain(`Вес изделия, кг · ${i + 1}. ${a.module.name}`, num(moduleWeight(a.module).total, XS.subNum)));
   rows.push([]);
-  const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", e.missing.length ? "Позиций без цены: " + e.missing.length + "." : "", "Доставка, монтаж и неописанный крепёж не включены.", manager ? engineNote(e) + "." : ""].filter(Boolean);
+  const notes = [e.pending.length ? pendingTotalLabel(e.pending.length) + " — в итог не входят." : "", e.missingExtras ? "Позиций без цены: " + e.missingExtras + "." : "",
+    // справка менеджеру: позиции без закупочной цены внутри цены листа (итог не меняют)
+    manager && e.missing.length > e.missingExtras ? "Без закупочной цены внутри цены листа (на итог не влияют): " + (e.missing.length - e.missingExtras) + "." : "", "Доставка, монтаж и неописанный крепёж не включены.", manager ? engineNote(e) + "." : ""].filter(Boolean);
   for (const t of notes) { rows.push(row([empty(XS.text), str(t, XS.note)], 2, XS.text)); merges.push(`B${rows.length}:${ref(W - 1, rows.length - 1)}`); }
   return { name: "Смета", rows, merges, freeze: 4, landscape: manager, cols: manager ? [5, 46, 9, 7, 12, 13, 10, 18, 46] : [5, 56, 10, 8, 13, 14, 22] };
 }

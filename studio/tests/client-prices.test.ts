@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {estimate} from '../src/pricing';
-import {clientView,clientLine,CLIENT_SOURCE,CLIENT_SOURCE_MISSING,CLIENT_SOURCE_IN_SHEET,SHEETS_LINE_ID} from '../src/clientPrices';
+import {clientView,clientLine,isOffSheetLine,CLIENT_SOURCE,CLIENT_SOURCE_MISSING,CLIENT_SOURCE_IN_SHEET,SHEETS_LINE_ID} from '../src/clientPrices';
 import {PUBLIC_BUILD} from '../src/buildMode';
 import {PENDING_CLIENT} from '../src/pendingPrices';
 import {newProject,parseProject,type Project} from '../src/project';
@@ -30,10 +30,11 @@ for(const [name,p] of Object.entries(typical))test(`client view keeps the client
   const sheet=manager.model==='sheet',own=client.lines.filter(l=>l.id!==SHEETS_LINE_ID);
   assert.equal(own.length,manager.lines.length);
   for(const [i,l] of own.entries()){
-    const m=manager.lines[i],vern=m.id.startsWith('vernissage'),lemana=m.id.startsWith('mesh:')||m.id.startsWith('handle:lm');
+    const m=manager.lines[i],vern=m.id.startsWith('vernissage'),lemana=m.id.startsWith('mesh:')||m.id.startsWith('handle:lm'),off=isOffSheetLine(m.id);
     assert.equal(l.id,m.id);
-    if(sheet&&!m.retail&&!vern&&!lemana){assert.equal(l.unitPrice,null,l.id);assert.ok(l.source===CLIENT_SOURCE_IN_SHEET||l.source===CLIENT_SOURCE_MISSING,l.source);continue;}
-    const k=m.retail?1:vern?manager.vernissageMarkup:sheet?1:manager.markup;
+    if(m.pending){assert.equal(l.unitPrice,null,l.id);assert.equal(l.source,PENDING_CLIENT,l.id);continue;}
+    if(sheet&&!m.retail&&!vern&&!lemana&&!off){assert.equal(l.unitPrice,null,l.id);assert.ok(l.source===CLIENT_SOURCE_IN_SHEET||l.source===CLIENT_SOURCE_MISSING,l.source);continue;}
+    const k=m.retail?1:vern?manager.vernissageMarkup:sheet&&!off?1:manager.markup;
     assert.equal(l.unitPrice,m.unitPrice===null?null:Math.round(m.unitPrice*k*100)/100,l.id);
     assert.ok(l.source===CLIENT_SOURCE||l.source===CLIENT_SOURCE_MISSING||(m.pending&&l.source===PENDING_CLIENT),l.source);
   }
@@ -73,9 +74,11 @@ test('public build sanitizer: strings with purchase words or supplier names beco
 });
 
 // после запекания (16.10.2026) цены строк в сборке — розница; шаблон ловит коэффициенты, закупочные значения — scripts/price-guard.ts (tests/bake-prices.test.ts)
-test('price guard pattern: coefficients and the default sheet price in minified JS are caught, plain numbers and retail prices are not',()=>{
+// 30.10.2026: цена — только по листам, 23 000 за лист — цена клиенту в публичной сборке (sheetPrice??23e3 больше не ловится)
+test('price guard pattern: coefficients in minified JS are caught; plain numbers, retail prices and the client sheet price are not',()=>{
   const hits=(s:string)=>[...s.matchAll(PRICE_LITERALS)].length;
-  assert.equal(hits(`250:{price:979,source:""},cap:{price:1.54},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),2);
+  assert.equal(hits(`250:{price:979,source:""},cap:{price:1.54},s=p.calculation||{markup:2.2,overrides:{}},r=e.sheetPrice??23e3`),1);
+  assert.equal(hits(`r=e.sheetPrice??23e3`),0);
   assert.equal(hits(`{lengths:[250,300],width:600,priceDate:"2026-08-10",unitPrice:null,markup:t.markup,markup:1,vernissageMarkup:1,sheetPrice:0,lightRetailPerM:3e3}`),0);
   assert.equal(hits(`{markup:1.6},{vernissageMarkup:1.6},{price:10},{price:1e3}`),2);
 });

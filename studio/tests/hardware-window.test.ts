@@ -17,11 +17,14 @@ test('scopedSwap: модуль — меняется только он, прое�
   assert.equal(p.modules[1].module.hingeBrand,undefined,'исходный проект не меняется');
 });
 
-test('разница в цене: Blum дороже GTV, Pulse дешевле; в модуле — меньше, чем во всём проекте; направляющие меняют цену',()=>{
+// Цена — только по листам (решение Макса 30.10.2026): фурнитура по закупке входит в цену листа (Pulse, Premial — разницы нет),
+// фурнитура с ценой клиента (Blum: петля 800 ₽, TANDEM 10 000 ₽ — розница сверху листов) меняет цену.
+test('разница в цене: Blum дороже GTV; Pulse внутри цены листа; в модуле — меньше, чем во всём проекте; Blum TANDEM меняет цену',()=>{
   const p=two(),base=estimate(p).retail!;
   const d=(q:Project)=>estimate(q).retail!-base;
   const blumAll=d(scopedSwap(p,null,q=>setAllHinges(q,'blum'))),blumOne=d(scopedSwap(p,'m2',q=>setAllHinges(q,'blum')));
   assert.ok(blumAll>0&&blumOne>0&&blumOne<blumAll,`${blumOne} < ${blumAll}`);
-  assert.ok(d(scopedSwap(p,null,q=>setAllHinges(q,'pulse')))<0);
-  assert.notEqual(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-premial-soft'))),0);
+  assert.equal(d(scopedSwap(p,null,q=>setAllHinges(q,'pulse'))),0);
+  assert.equal(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-premial-soft'))),0);
+  assert.ok(d(scopedSwap(p,null,q=>setAllSlides(q,'hidden-blum-soft')))>0);
 });

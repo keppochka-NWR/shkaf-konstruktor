@@ -6,7 +6,7 @@
 // занятой площади (доля листа), а не целыми листами: больше материала — больше доля.
 // K3: изделие, у которого все позиции «после финального расчёта конструктором» (столешница и т. п.), — без доли («0 ₽» в КП был
 // неверен); признак pending — у изделия есть такие позиции.
-import { estimate, MARKUP_DEFAULT, type PriceLine } from "./pricing";
+import { estimate, type PriceLine } from "./pricing";
 import { nest, type Sheet } from "./exports";
 import { clientLine, SHEETS_LINE_ID } from "./clientPrices";
 import type { Project } from "./project";
@@ -27,18 +27,15 @@ function fractionalSheets(plan: Sheet[]): Map<string, number> {
 /** Собственная «цена» изделия для пропорции: розница строк (как у клиента), листы — по занятой площади. null — смета не считается.
  *  model 'sheet' (цена проекта — «цена за лист», в т.ч. по большей модели): доля = листы ЛДСП по занятой площади × цена листа +
  *  то, что вне листа (зеркало, стекло, розница, Вернисаж, Лемана); плита, кромка, фурнитура и работа — внутри цены листа. */
-export function ownValue(q: Project, model: "markup" | "sheet" = "markup"): { value: number; pending: boolean; sheets: number } | null {
-  // смета изделия — в модели доли (у проекта с «ценой за лист» или «по большей» иначе клиентские строки были бы другой модели)
-  const c0 = q.calculation;
-  if (c0 && (c0.maxModel || (c0.model ?? "markup") !== model)) { const calc = { ...c0, model }; delete calc.maxModel; q = { ...q, calculation: calc }; }
-  else if (!c0 && model === "sheet") q = { ...q, calculation: { markup: MARKUP_DEFAULT, overrides: {}, model } };
+export function ownValue(q: Project, model: "markup" | "sheet" = "sheet"): { value: number; pending: boolean; sheets: number } | null {
+  // смета изделия — по листам (цена — только по листам, решение Макса 30.10.2026); model 'markup' — пропорция по рознице строк
   let plan: Sheet[], e: ReturnType<typeof estimate>;
   try { plan = nest(q); e = estimate(q, plan); } catch { return null; }
   if (e.retail === null && !e.pending.length) return null;
   const frac = fractionalSheets(plan);
   let value = e.lines.reduce((s, l: PriceLine) => {
     if (l.pending || l.unitPrice === null) return s;
-    const c = clientLine(l, e.markup, e.vernissageMarkup, model);
+    const c = clientLine(l, e.markup, e.vernissageMarkup, model, e.ldspSheets === 0);
     if (c.unitPrice === null) return s;
     const qty = frac.has(l.id) ? frac.get(l.id)! : l.quantity;
     return s + qty * c.unitPrice;
@@ -50,11 +47,9 @@ export function ownValue(q: Project, model: "markup" | "sheet" = "markup"): { va
   const ok = (v: number) => (Number.isFinite(v) && v > 0 ? v : 0);
   return { value: ok(value), pending: e.pending.length > 0, sheets: Math.min(ok(sheets), ok(value)) };
 }
-/** Модель, по которой посчитан итог проекта: «цена за лист» или «по большей модели» — по estimate(), иначе по коэффициенту. */
-export function priceModel(p: Project): "markup" | "sheet" {
-  const c = p.calculation;
-  if (!c || (!c.maxModel && c.model !== "sheet")) return "markup";
-  try { return estimate(p).model; } catch { return c.model === "sheet" ? "sheet" : "markup"; }
+/** Модель, по которой посчитан итог проекта: всегда «по листам» (решение Макса 30.10.2026). */
+export function priceModel(_p: Project): "markup" | "sheet" {
+  return "sheet";
 }
 
 /** Цены изделий и признак «есть позиции после финального расчёта» в порядке p.modules; сумма цен = total.

@@ -45,8 +45,8 @@ export const BAKE_RULES: Rule[] = [
 export const BAKE_SETS: { file: string; name: string; value: number }[] = [
   { file: 'pricing.ts', name: 'MARKUP_DEFAULT', value: 1 },
   { file: 'pricing.ts', name: 'VERNISSAGE_MARKUP_DEFAULT', value: 1 },
-  // цена клиенту за лист в модели «цена за лист» — экономика цеха; в публичной сборке модель — только с ценой листа проекта
-  { file: 'pricing.ts', name: 'SHEET_PRICE_DEFAULT', value: 0 },
+  // SHEET_PRICE_DEFAULT (23 000) не запекается: с 30.10.2026 цена — только по листам (решение Макса), это цена клиенту за лист,
+  // и публичная сборка считает по ней (раньше — 0: «цена за лист» на сайте только с ценой листа проекта)
   { file: 'kupeData.ts', name: 'KUPE_PROFILE_MULT', value: 1 },
 ];
 /** Во всех модулях: коэффициент в значениях по умолчанию ({markup:2.2,overrides:{}}) → 1. */

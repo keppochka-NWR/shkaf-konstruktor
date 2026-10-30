@@ -18,12 +18,13 @@ export const SENSITIVE_NAMES = /(?<![А-Яа-яЁё])(СФЗ|ФАМ|ФАС|АТ�
 export const SENSITIVE_SOURCES = /старый калькулятор|оценк[аи] по классу|цена продажи|розница [\w.-]+\.ru|интерполяция прайса|\d\s*₽ \(розница|в прайсе[^.;«»]{0,20}\d|\d[\d  ]*₽[^.;«»]{0,20}в прайсе/i;
 export const isSensitive = (s: string) => SENSITIVE_WORDS.test(s) || SENSITIVE_NAMES.test(s) || SENSITIVE_SOURCES.test(s);
 export const NEUTRAL = '';
-/** Коэффициенты в собранном JS (ключи объектов минификатор не переименовывает): markup:2.2, vernissageMarkup:1.6, цена листа
- *  sheetPrice??23e3 — после запекания (scripts/bake-prices.ts) их там быть не должно (0 и 1 — нейтральные). Цены строк (price:979)
- *  в публичной сборке — розница; закупочные значения ищет scripts/price-guard.ts по множеству исходных таблиц с ключом поля.
- *  Тот же шаблон — в publish.ps1 Step 4b ($guardNumbers).
+/** Коэффициенты в собранном JS (ключи объектов минификатор не переименовывает): markup:2.2, vernissageMarkup:1.6 — после запекания
+ *  (scripts/bake-prices.ts) их там быть не должно (0 и 1 — нейтральные). Цена листа 23 000 (sheetPrice??23e3) с 30.10.2026 — цена
+ *  клиенту в публичной сборке: цена — только по листам (решение Макса 30.10.2026), без неё сайт не посчитает ни одного проекта;
+ *  это розница, не закупка, и стражем больше не ищется. Цены строк (price:979) в публичной сборке — розница; закупочные значения
+ *  ищет scripts/price-guard.ts по множеству исходных таблиц с ключом поля. Тот же шаблон — в publish.ps1 Step 4b ($guardNumbers).
  */
-export const PRICE_LITERALS = /(?<![\w$])(markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d|\?\?\s*(23e3|23000)\b/g;
+export const PRICE_LITERALS = /(?<![\w$])(markup|sheetPrice|vernissageMarkup)\s*:\s*(?![01](?![\d.e]))-?\.?\d/g;
 
 type Node = { type: string; start: number; end: number; [k: string]: unknown };
 type Edit = { start: number; end: number; text: string; was: string };

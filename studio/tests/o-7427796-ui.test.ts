@@ -5,11 +5,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {initialModule,section,validate,parts,type Module} from '../src/model';
-import {newProject,projectErrors} from '../src/project';
+import {newProject,parseProject,projectErrors} from '../src/project';
 import {editDrawerConfig} from '../src/drawerEditing';
 import {moveShelfKeepRod} from '../src/shelfRod';
 import {addUpperModule} from '../src/operations';
-import {withPriceModel} from '../src/priceModel';
 import {estimate} from '../src/pricing';
 
 const seatModule=():Module=>{const m={...initialModule(),width:702,height:2000,depth:600,doors:false,plinthHeight:0};
@@ -42,11 +41,12 @@ test('антресоль сверху: без задника «от высоты
   assert.equal(up.backFrom,undefined);assert.equal(up.mirror,undefined);assert.equal(up.sidePanels,undefined);
   assert.deepEqual(projectErrors(n),[]);
 });
-test('«Цена по большей модели» из панели стоимости («Модель цены»): maxModel и цена листа, «По коэффициенту» убирает', () => {
-  // интеграция 26.10: одно поле calculation.maxModel (o-7441182 ef9811a); priceMax ветки o-7427796 — синоним при загрузке
-  const p=newProject({...initialModule(),width:600,height:2000,depth:550});
-  const on=withPriceModel(p,'max',23000);
-  assert.equal(on.calculation!.maxModel,true);assert.equal(on.calculation!.sheetPrice,23000);
-  assert.ok(estimate(on).retail!>=estimate(p).retail!);
-  const off=withPriceModel(on,'markup',23000);assert.equal(off.calculation!.maxModel,undefined);assert.equal(off.calculation!.sheetPrice,23000);
+test('Цена — только по листам (решение Макса 30.10.2026): старые maxModel/priceMax/model при загрузке отброшены, цена та же', () => {
+  const p=newProject({...initialModule(),width:600,height:2000,depth:550}),e=estimate(p);
+  assert.equal(e.model,'sheet');assert.equal(e.retail,e.bySheet);
+  for(const old of [{maxModel:true},{priceMax:true},{model:'markup'}]){
+    const q=parseProject(JSON.parse(JSON.stringify({...p,calculation:{markup:2.2,overrides:{},sheetPrice:23000,...old}})));
+    assert.equal(q.calculation!.maxModel,undefined);assert.equal(q.calculation!.model,undefined);assert.equal(q.calculation!.sheetPrice,23000);
+    assert.equal(estimate(q).retail,e.retail);
+  }
 });

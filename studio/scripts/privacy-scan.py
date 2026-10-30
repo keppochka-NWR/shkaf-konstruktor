@@ -164,7 +164,8 @@ def names_dir_components(path):
         # служебные проекты: кухни базы, импорт шкафов, тестовые и демо-расчёты, расчёты заказов order-<номер>-<вариант>
         # (имена без клиентов) — не источник фамилий; order-7441182-mirror давал ложное «mirror» в manifest.json (mirrorX), 26.10
         # dp-<номер>-<зона> — обезличенные дизайн-проекты (dp-2810-hall, -kids…, 29.10): зона — обычное слово, не фамилия
-        if base.startswith(("kitchen", "wardrobe-", "test-", "garderob-", "demo-", "order-", "dp-")):
+        # sketch-<дата>-<изделие> — шкафы по эскизам Макса без клиента (sketch-3010-shkaf-600 давал ложное «shkaf» в quote.js, 30.10)
+        if base.startswith(("kitchen", "wardrobe-", "test-", "garderob-", "demo-", "order-", "dp-", "sketch-")):
             continue
         out.append(base)
     return out

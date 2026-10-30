@@ -56,7 +56,7 @@ export function LightPanel(p: { module: Module; onModify: (u: (n: Module) => voi
         <div className="lp-field"><span>Тип — на весь модуль</span>
           <div className="lp-chips" role="group" aria-label="Тип подсветки модуля">{LIGHT_TYPES.map((t) => <button key={t} type="button" aria-pressed={m.lightType === t} title={TYPE_INFO[t].hint} onClick={() => p.onModify((n) => applyToAll(n, { type: t }))}>{TYPE_INFO[t].label}</button>)}</div>
           {m.lightType === undefined && <small>Не выбран: врезной профиль, в смете без описания</small>}</div>
-        {/* управление подсветкой модуля — цены Макса 26.10.2026 (клиенту, поверх коэффициента), pricing.ts LIGHT_*_RETAIL */}
+        {/* управление подсветкой модуля — цены Макса 26.10.2026 (клиенту, сверх цены листов), pricing.ts LIGHT_*_RETAIL */}
         <div className="lp-field lp-controls" role="group" aria-label="Управление подсветкой"><span>Управление и питание — на модуль</span>
           <label className="lp-sensor"><span><input type="checkbox" aria-label="Датчик открывания фасадов (включение при открывании)" checked={!!m.lightSensor} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightSensor = true; else delete n.lightSensor; }); }} /> Датчик открывания фасадов (включение при открывании) · {rub(LIGHT_SENSOR_RETAIL)}</span></label>
           <label className="lp-sensor"><span><input type="checkbox" aria-label="Диммер подсветки" checked={!!m.lightDimmer} onChange={(e) => { const on = e.target.checked; p.onModify((n) => { if (on) n.lightDimmer = true; else delete n.lightDimmer; }); }} /> Диммер (яркость) · {rub(LIGHT_DIMMER_RETAIL)}</span></label>
