@@ -11,6 +11,8 @@ export type Fixture = {
   id: string;
   type: FixtureType;
   wall: Wall;
+  /** стена контура (номер ребра room.outline), как Opening.edge */
+  edge?: number;
   /** Отступ вдоль стены от её начала (как у проёмов: слева направо на задней/передней, от задней стены — на боковых). */
   offset: number;
   /** Низ объекта от пола. */
