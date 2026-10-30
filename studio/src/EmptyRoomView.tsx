@@ -19,8 +19,7 @@ import {newProject,appendModuleGroup,applyAutoFillers,type Project,type Room} fr
 import {ModulePalette} from './ModulePalette';
 import {appendFromPalette} from './paletteAdd';
 import {RoomShapePanel} from './RoomShapePanel';
-import {scaleOutline,sameEdges} from './roomOutline';
-import {shapeEdit as shapeEdit2} from './roomShape';
+import {scaleRoom} from './roomShape';
 export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload}:{project:Project;update:(p:Project)=>boolean;viewKey:string;title:string;bar:ReactNode;onAdd:()=>void;onDownload:()=>void}){
  const dummy=useMemo(()=>newProject().modules[0],[]),[plan,setPlan]=useState(false),[view,setView]=useState<View>('iso'),[fit,setFit]=useState(0),[stage,setStage]=useState<Stage>('room'),[advanced,setAdvanced]=useState(false),[selected,setSelected]=useState<EnvironmentSelection|null>(null);
  useEffect(()=>{setSelected(null);},[viewKey]);
@@ -31,7 +30,7 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  function size(axis:'width'|'depth'|'height',n:number){
   const o=project.room.outline;
   if(!o||axis==='height'||!Number.isFinite(n)||n<=0)return change({...project.room,[axis]:n});
-  const r=shapeEdit2(project,scaleOutline(o,axis==='width'?n/project.room.width:1,axis==='depth'?n/project.room.depth:1),sameEdges(o.length));
+  const r=scaleRoom(project,axis,n);
   return !r.problem&&update(r.project);
  }
  const [compactTop,setCompactTop]=useState(()=>{try{return localStorage.getItem('yo-compact-top')!=='0';}catch{return true;}});

@@ -2,7 +2,7 @@
 // скосом, со скруглениями; редактировать комнату свободнее», как в Базисе: тянуть углы, точные размеры с Enter, меню правой
 // кнопкой, линии Q, Alt/Ctrl). Здесь без React: новый контур → проект (проёмы и объекты едут со своими стенами, мебель стоит на
 // месте плана), короткая причина отказа, привязки угла, набор «dx;dz». Контур и его правки — roomOutline.ts.
-import {roomOutline,rectOutline,normalizeOutline,outlineBounds,outlineError,edgeLength,edgePoint,edgeFrame,projectToEdges,legacyToEdge,cornerAngle,RECT_WALLS,
+import {roomOutline,rectOutline,normalizeOutline,outlineBounds,outlineError,outlineArea,edgeLength,edgePoint,edgeFrame,projectToEdges,legacyToEdge,cornerAngle,RECT_WALLS,scaleOutline,scaleEdgeMap,
   type RoomOutline,type EdgeMap,type P2} from './roomOutline';
 import {openingEdge,keepHanded} from './roomEdges';
 import {fromView,type Seg2} from './pointSnap';
@@ -41,28 +41,47 @@ export function applyOutline(p:Project,raw:RoomOutline,edgeMap?:EdgeMap):{projec
   const norm=normalizeOutline(shifted),target=norm.outline??rectOutline(norm.width,norm.depth);
   const same=!!norm.outline&&norm.outline.length===shifted.length&&norm.outline.every((q,k)=>Math.abs(q.x-shifted[k].x)<0.2&&Math.abs(q.z-shifted[k].z)<0.2);
   let problem:string|undefined;
-  const place=<T extends WallItem>(item:T,label:string,fit:boolean):T=>{
-    const old=itemEdge(room,item);let w=item.width,e:number|undefined=edgeMap?.[old.edge],s:number;
+  // стену протащили сквозь противоположную — обход вывернулся, normalizeOutline молча развернул бы его (критик 30.10)
+  if(outlineArea(shifted)<=0||/пересекает/.test(outlineError(shifted)??''))problem='Стены пересекаются';
+  const ids=new Set([...(room.openings??[]),...(room.fixtures??[])].map(x=>x.id)),fresh=(id:string)=>{let k=2;while(ids.has(id+'-'+k))k++;ids.add(id+'-'+k);return id+'-'+k;};
+  /** Проём/объект → один или несколько (объект во всю разрезанную стену — на каждую её часть) с номером старой стены и «во всю стену». */
+  const place=<T extends WallItem&{id:string}>(item:T,label:string,fit:boolean):{item:T;from:number;full:boolean}[]=>{
+    const old=itemEdge(room,item),to=edgeMap?.[old.edge],L0=edgeLength(o0,old.edge),full=fit&&Math.abs(item.width-L0)<1;
+    const byPlace=():[number,number]=>{const m=edgePoint(o0,old.edge,old.offset+item.width/2),pr=projectToEdges(shifted,{x:m.x+dx,z:m.z+dz});return [pr.edge,pr.s-item.width/2];};
     // 1) стена и отступ в сдвинутом сыром контуре
-    if(e!==undefined&&e>=0&&e<shifted.length)s=old.offset;
-    else{const m=edgePoint(o0,old.edge,old.offset+w/2),pr=projectToEdges(shifted,{x:m.x+dx,z:m.z+dz});e=pr.edge;s=pr.s-w/2;}
-    // объект во всю стену (плинтус, фартук, короб) — во всю новую стену
-    const L0=edgeLength(o0,old.edge);if(fit&&Math.abs(w-L0)<1){w=r1(edgeLength(shifted,e));s=0;}
-    // 2) после нормализации порядок вершин другой (прямоугольник, слитые точки) — снова по месту
-    if(!same){const m=edgePoint(shifted,e,Math.max(0,Math.min(edgeLength(shifted,e)-w,s))+w/2),pr=projectToEdges(target,m);e=pr.edge;s=pr.s-w/2;}
-    const L=edgeLength(target,e);
-    // объект длиннее новой стены укорачивается по стене; проём — отказ
-    if(w>L+0.1){if(fit)w=r1(L);else problem??=`${label} не помещается на стене ${e+1} (${Math.round(L)} мм)`;}
-    const off=clampOff(s,L,w);
-    // петля и подоконник — на том же месте комнаты (критик 30.10): старая передняя/левая стена отсчитывает навстречу обходу контура
-    if(norm.outline)return keepHanded(item,room,{...item,width:w,edge:e,wall:legacyWall(target,e),offset:off},nextRoom);
-    // прямоугольник: старые правила (задняя и передняя — от левой стены, боковые — от задней)
-    const wall=RECT_WALLS[e],next={...item,width:w,wall,offset:wall==='front'||wall==='left'?r1(L-off-w):off};delete next.edge;return keepHanded(item,room,next,nextRoom);
+    let at:[number,number][];
+    if(typeof to==='number'&&to>=0&&to<shifted.length)at=[[to,old.offset]];
+    else if(to&&typeof to==='object'&&'scale' in to)at=[[to.edge,L0?((old.offset+item.width/2)*edgeLength(shifted,to.edge))/L0-item.width/2:old.offset]];
+    else if(to&&typeof to==='object'){
+      const q=to.parts.find(q=>old.offset>=q.from-0.5&&old.offset+item.width<=q.to+0.5);
+      if(full)at=to.parts.map(q=>[q.edge,0]);
+      else if(q)at=[[q.edge,old.offset-q.from]];
+      else{if(to.why)problem??=`${label} ${to.why} — сдвиньте ${/^Дверь/.test(label)?'её':'его'}`;at=[byPlace()];}
+    }else at=[byPlace()];
+    return at.map(([e,s],k)=>{
+      let w=item.width;
+      // объект во всю стену (плинтус, фартук, короб) — во всю новую стену
+      if(full){w=r1(edgeLength(shifted,e));s=0;}
+      // 2) после нормализации порядок вершин другой (прямоугольник, слитые точки) — снова по месту
+      if(!same){const m=edgePoint(shifted,e,Math.max(0,Math.min(edgeLength(shifted,e)-w,s))+w/2),pr=projectToEdges(target,m);e=pr.edge;s=pr.s-w/2;}
+      const L=edgeLength(target,e),src=k?{...item,id:fresh(item.id)}:item;
+      // объект длиннее новой стены укорачивается по стене; проём — отказ
+      if(w>L+0.1){if(fit)w=r1(L);else problem??=`${label} не помещается на стене ${e+1} (${Math.round(L)} мм)`;}
+      const off=clampOff(s,L,w);
+      // петля и подоконник — на том же месте комнаты (критик 30.10): старая передняя/левая стена отсчитывает навстречу обходу контура
+      if(norm.outline)return {item:keepHanded(src,room,{...src,width:w,edge:e,wall:legacyWall(target,e),offset:off},nextRoom),from:old.edge,full};
+      // прямоугольник: старые правила (задняя и передняя — от левой стены, боковые — от задней)
+      const wall=RECT_WALLS[e],next={...src,width:w,wall,offset:wall==='front'||wall==='left'?r1(L-off-w):off};delete next.edge;return {item:keepHanded(src,room,next,nextRoom),from:old.edge,full};
+    });
   };
   const nextRoom:Room={...room,width:norm.width,depth:norm.depth};
   if(norm.outline)nextRoom.outline=norm.outline;else delete nextRoom.outline;
-  if(room.openings)nextRoom.openings=room.openings.map((o,i)=>place(o,(o.type==='window'?'Окно ':'Дверь ')+(i+1),false));
-  if(room.fixtures)nextRoom.fixtures=room.fixtures.map((f,i)=>place(f,'О'+(i+1),true));
+  if(room.openings)nextRoom.openings=room.openings.flatMap((o,i)=>place(o,(o.type==='window'?'Окно ':'Дверь ')+(i+1),false).map(x=>x.item));
+  if(room.fixtures){
+    // разрезанный плинтус — две части; стены снова слили — две одинаковые части во всю стену становятся одной
+    const seen=new Map<string,number>();
+    nextRoom.fixtures=room.fixtures.flatMap((f,i)=>place(f,'Объект О'+(i+1),true)).filter(x=>{if(!x.full)return true;const key=JSON.stringify({...x.item,id:''}),e=seen.get(key);if(e===undefined){seen.set(key,x.from);return true;}return e===x.from;}).map(x=>x.item);
+  }
   if(room.obstacles&&(dx||dz))nextRoom.obstacles=room.obstacles.map(o=>({...o,x:r1(o.x+dx),z:r1(o.z+dz)}));
   const next:Project={...p,room:nextRoom};
   if(dx||dz){
@@ -88,6 +107,12 @@ export function shapeProblem(next:Project,pre?:string):string|null{
 /** Правка формы целиком: новый контур → проект и причина отказа (null — можно). */
 export function shapeEdit(p:Project,raw:RoomOutline,edgeMap?:EdgeMap):{project:Project;problem:string|null}{
   const r=applyOutline(p,raw,edgeMap);return {project:r.project,problem:shapeProblem(r.project,r.problem)};
+}
+
+/** Ширина/глубина комнаты с контуром — габарит: контур растягивается, проёмы и объекты — в ту же долю своей стены (критик 30.10:
+ *  отступ от начала стены не менялся, и дверь в 500 от правого конца съезжала к левому). */
+export function scaleRoom(p:Project,axis:'width'|'depth',v:number){
+  const o=roomOutline(p.room);return shapeEdit(p,scaleOutline(o,axis==='width'?v/p.room.width:1,axis==='depth'?v/p.room.depth:1),scaleEdgeMap(o.length));
 }
 
 /** Набор при тяге угла «dx;dz» (как «600;2400» у угла корпуса): число без знака идёт в сторону мыши по своей оси, «-» — явно

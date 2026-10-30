@@ -2,7 +2,7 @@
 // заготовки с маленькими значками, таблица стен (длина, угол, дуга — Enter), «Сделать прямоугольной», переход к правке на плане.
 // Общая для редактора (App) и пустой комнаты (EmptyRoomView). Правка — через roomShape.shapeEdit: отказ с причиной, одна отмена.
 import {useState} from 'react';
-import {roomOutline,outlinePreset,rectOutline,flatten,normalizeOutline,setWallLength,setCornerAngle,setBulge,moveEdgeMap,sameEdges,edgeFrame,PRESET_NAMES,type OutlinePreset,type RoomOutline,type EdgeMap} from './roomOutline';
+import {roomOutline,outlinePreset,rectOutline,flatten,normalizeOutline,wallLengthEdit,setCornerAngle,setBulge,sameEdges,edgeFrame,PRESET_NAMES,type OutlinePreset,type RoomOutline,type EdgeMap} from './roomOutline';
 import {shapeEdit,wallRows,wallName} from './roomShape';
 import type {Project} from './project';
 import './room-shape.css';
@@ -28,7 +28,7 @@ export function RoomShapePanel({project,commit,onPlan}:{project:Project;commit:(
     <div className="room-shape-presets" role="group" aria-label="Заготовки формы комнаты">{PRESETS.map(k=><button key={k} type="button" aria-pressed={k==='rect'&&!room.outline} title={PRESET_NAMES[k]+' — по габариту '+room.width+' × '+room.depth+' мм'} onClick={()=>{if(apply(outlinePreset(k,room.width,room.depth)))onPlan?.();}}><PresetIcon kind={k}/><span>{PRESET_NAMES[k]}</span></button>)}</div>
     <table className="room-shape-walls"><thead><tr><th>№</th><th>Стена</th><th>Длина, мм</th><th title="Угол в начале стены, между ней и предыдущей">Угол, °</th><th title="Стрела дуги: > 0 — наружу, < 0 — внутрь, 0 — прямая">Дуга, мм</th></tr></thead>
       <tbody>{rows.map(w=><tr key={w.i}><td>{w.i+1}</td><td>{wallName(o,w.i)}</td>
-        <td>{cell(`Длина стены ${w.i+1}`,w.length,v=>v>=50?apply(setWallLength(o,w.i,v),moveEdgeMap(o.length,(w.i+1)%o.length)):(setNote('Стена от 50 мм'),false))}</td>
+        <td>{cell(`Длина стены ${w.i+1}`,w.length,v=>v>=50?(l=>apply(l.outline,l.map))(wallLengthEdit(o,w.i,v)):(setNote('Стена от 50 мм'),false))}</td>
         <td>{cell(`Угол ${w.i+1}`,w.angle,v=>v>0&&v<360?apply(setCornerAngle(o,w.i,v),sameEdges(o.length)):(setNote('Угол от 1 до 359°'),false),0.1)}</td>
         <td>{cell(`Дуга стены ${w.i+1}`,w.bulge,v=>{const ch=edgeFrame(o,w.i).chord;if(Math.abs(v)>ch/2)return setNote(`Стрела не больше половины стены (${Math.floor(ch/2)} мм)`),false;return apply(setBulge(o,w.i,v),sameEdges(o.length));})}</td></tr>)}</tbody></table>
     {note&&<p role="alert" className="field-note room-shape-note">{note}</p>}

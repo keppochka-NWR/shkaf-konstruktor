@@ -45,6 +45,9 @@ function fromOffset(wall: Wall, len: number, offset: number, width: number) { re
 const otstup = (n: Node | undefined, dflt: number) => num(n, "Отступ слева", NaN) || num(n, "Отступ справа", NaN) || num(n, "Отступ слева до откоса", NaN) || num(n, "Отступ справа до откоса", NaN) || dflt;
 
 export type BazisImport = { room: Room; name: string; notes: string[] };
+/** Замер из Базиса поверх комнаты проекта (отделка, стены и прочее остаются): контур — нет, замер Базиса прямоугольный (критик 30.10:
+ *  старый контур оставался, и при другом габарите проект не принимался — «Контур помещения не совпадает с его габаритом»). */
+export function withBazisRoom(prev: Room, imported: Room): Room { const { outline: _old, ...rest } = prev; void _old; return { ...rest, ...imported }; }
 export function importBazisConfig(xml: string): BazisImport {
   const cfg = parseConfigXml(xml);
   const root = cfg.items[0]?.items?.length && cfg.items[0].name === "" ? cfg.items[0] : cfg;

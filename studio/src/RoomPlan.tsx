@@ -8,8 +8,8 @@ import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parse
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
 import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
-import {roomOutline,edgeLength,edgePoint,edgePoints,edgeArc,edgeFrame,edgeTangent,cornerAngle,moveVertex,insertVertex,removeVertex,chamferCorner,roundCorner,setBulge,moveEdge,setWallLength,projectToEdge,sagittaFromRadius,
-  sameEdges,insertEdgeMap,removeEdgeMap,cornerEdgeMap,moveEdgeMap,outlineBounds,type RoomOutline,type EdgeMap} from './roomOutline';
+import {roomOutline,edgeLength,edgePoint,edgePoints,edgeArc,edgeFrame,edgeTangent,cornerAngle,moveVertex,insertVertex,removeVertex,chamferEdit,roundEdit,ARC_NEXT,setBulge,moveEdge,wallLengthEdit,projectToEdge,sagittaFromRadius,
+  sameEdges,insertEdgeMap,removeEdgeMap,moveEdgeMap,outlineBounds,type RoomOutline,type EdgeMap} from './roomOutline';
 import {shapeEdit as shapeEditOf,itemEdge,onEdge,parseShiftTyped,parseWallTyped,snapVertex,offWalls} from './roomShape';
 import {ShapeMenu,ShapeAsk,type ShapeAskSpec,type ShapeMenuItem} from './RoomShapeMenu';
 import './guides.css';
@@ -222,23 +222,23 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
   function addPoint(i:number,at:XZ,cx?:number,cy?:number){
     const o=roomOutline(project.room),L=edgeLength(o,i),s=Math.round(projectToEdge(o,i,at)/10)*10;
     if(s<50||s>L-50){refuse('Точка ближе 50 мм к углу',cx,cy);return;}
-    applyShape(insertVertex(o,i,s/L),insertEdgeMap(o.length,i),false,cx,cy);
+    applyShape(insertVertex(o,i,s/L),insertEdgeMap(o.length,i,s),false,cx,cy);
   }
   const num=(v:string)=>{const t=v.trim().replace(',','.');return t&&/^\d*\.?\d*$/.test(t)?Number(t):NaN;};
   function askLength(i:number){
     const o=roomOutline(project.room);
-    setAsk({spec:{title:`Длина стены ${i+1}`,label:'Длина',value:String(Math.round(edgeLength(o,i))),hint:'Следующая стена переносится параллельно себе — углы на месте.'},apply:v=>{const x=num(v);if(!(x>=50))return 'Стена от 50 мм';return applyShape(setWallLength(o,i,x),moveEdgeMap(o.length,(i+1)%o.length),true);}});
+    setAsk({spec:{title:`Длина стены ${i+1}`,label:'Длина',value:String(Math.round(edgeLength(o,i))),hint:'Следующая стена переносится параллельно себе — углы на месте.'},apply:v=>{const x=num(v);if(!(x>=50))return 'Стена от 50 мм';const w=wallLengthEdit(o,i,x);return applyShape(w.outline,w.map,true);}});
   }
   function cornerMenu(i:number):ShapeMenuItem[]{
-    const o=roomOutline(project.room),n=o.length,lp=edgeLength(o,(i-1+n)%n),ln=edgeLength(o,i);
+    const o=roomOutline(project.room),n=o.length,lp=edgeLength(o,(i-1+n)%n),ln=edgeLength(o,i),arcNear=!!(o[(i-1+n)%n].bulge||o[i].bulge);
     return [
-      {label:'Скос угла…',run:()=>setAsk({spec:{title:`Скос угла ${i+1}`,label:'Срез по стенам',value:'300',hint:'Одно число — одинаково по обеим стенам; «600;400» — по входящей и выходящей стене.'},apply:v=>{
+      {label:'Скос угла…',run:()=>arcNear?refuse(ARC_NEXT,menu?.x,menu?.y):setAsk({spec:{title:`Скос угла ${i+1}`,label:'Срез по стенам',value:'300',hint:'Одно число — одинаково по обеим стенам; «600;400» — по входящей и выходящей стене.'},apply:v=>{
         const [a,b=a]=v.split(';').map(num);if(!(a>0)||!(b>0))return 'Введите срез: «300» или «600;400»';if(a>=lp-1||b>=ln-1)return 'Скос длиннее стены';
-        return applyShape(chamferCorner(o,i,a,b),cornerEdgeMap(n,i),true);}})},
-      {label:'Скругление…',run:()=>setAsk({spec:{title:`Скругление угла ${i+1}`,label:'Радиус',value:'500'},apply:v=>{
+        const c=chamferEdit(o,i,a,b);return typeof c==='string'?c:applyShape(c.outline,c.map,true);}})},
+      {label:'Скругление…',run:()=>arcNear?refuse(ARC_NEXT,menu?.x,menu?.y):setAsk({spec:{title:`Скругление угла ${i+1}`,label:'Радиус',value:'500'},apply:v=>{
         const R=num(v),ang=cornerAngle(o,i),th=(Math.min(ang,360-ang)*Math.PI)/180;if(!(R>0))return 'Введите радиус';if(Math.abs(ang-180)<1)return 'Угол 180° — скруглять нечего';
         const t=R/Math.tan(th/2);if(t>=lp-1||t>=ln-1)return 'Радиус велик для этих стен';
-        return applyShape(roundCorner(o,i,R),cornerEdgeMap(n,i),true);}})},
+        const c=roundEdit(o,i,R);return typeof c==='string'?c:applyShape(c.outline,c.map,true);}})},
       {label:'Удалить точку',disabled:n<=3,title:n<=3?'В комнате не меньше 3 углов':undefined,run:()=>applyShape(removeVertex(o,i),removeEdgeMap(n,i))},
     ];
   }

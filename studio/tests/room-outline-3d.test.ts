@@ -74,7 +74,7 @@ test('ближние стены пятиугольника: внутри — н�
 
 test('ближние стены эркера: сбоку от дуги она видна, за её вершиной — скрыта; в эркере — ничего',()=>{
   const p=shaped('bay'),o=p.room.outline!;
-  assert.equal(p.room.depth,4000);
+  assert.equal(p.room.depth,3000,'эркер в прежнем габарите (критик 30.10)');
   assert.deepEqual(names(hiddenEdges(o,{x:-1000,z:1200})),[3]);
   assert.deepEqual(names(hiddenEdges(o,{x:2000,z:-100})),[0]);
   assert.deepEqual(names(hiddenEdges(o,{x:2000,z:500})),[]);

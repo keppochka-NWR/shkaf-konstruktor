@@ -141,8 +141,9 @@ import { RoomEditor } from './RoomEditor';
 import { RoomFinishes } from './RoomFinishPicker';
 import {RoomPlan} from './RoomPlan';
 import {RoomShapePanel} from './RoomShapePanel';
-import {edgeLength,scaleOutline,sameEdges} from './roomOutline';
-import {itemEdge,shapeEdit as shapeEditOf} from './roomShape';
+import {edgeLength} from './roomOutline';
+import {itemEdge,scaleRoom} from './roomShape';
+import {withBazisRoom} from './bazisRoom';
 import {CloudPanel} from './CloudPanel';
 import { catalog } from "./catalog";
 import { decorPrice, withPriceStamp } from "./pricing";
@@ -468,7 +469,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const labels:Record<string,string>={width:'Ширина',depth:'Глубина комнаты',height:'Высота',offset:'От угла стены',end:'До конца стены',sill:'Подоконник от пола',fromFloor:'От пола'};
     const label=(kind==='room'?{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота потолка'}[field]:labels[field])??field;
     editDimension(label,Math.round(value),v=>{
-      if(kind==='room')return commitProject({...project,room:{...room,[field]:v}});
+      // комната с контуром: ширина/глубина с эскиза — тоже габарит, контур растягивается (критик 30.10)
+      if(kind==='room'){if(room.outline&&(field==='width'||field==='depth')){const r=scaleRoom(project,field,v);if(r.problem){setError(r.problem);return false;}return commitProject(r.project);}return commitProject({...project,room:{...room,[field]:v}});}
       const list=kind==='opening'?(room.openings||[]):(room.fixtures||[]);
       const item=list.find(x=>x.id===id) as {wall:'back'|'left'|'right'|'front';edge?:number;offset:number;width:number}|undefined;if(!item)return false;
       // комната с контуром: «до конца стены» — по длине своей стены контура (задача Макса 30.10.2026)
@@ -1811,7 +1813,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   onChange={(v) => {
                     // комната с контуром: ширина/глубина — габарит, контур растягивается пропорционально (задача Макса 30.10.2026)
                     const o=project.room.outline;
-                    if(o&&k!=='height'){const r=shapeEditOf(project,scaleOutline(o,k==='width'?v/project.room.width:1,k==='depth'?v/project.room.depth:1),sameEdges(o.length));if(r.problem){setError(r.problem);return false;}return commitProject(r.project);}
+                    if(o&&k!=='height'){const r=scaleRoom(project,k,v);if(r.problem){setError(r.problem);return false;}return commitProject(r.project);}
                     return commitProject({
                       ...project,
                       room: { ...project.room, [k]: v },
@@ -1828,7 +1830,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <div data-stages="room"><RoomEditor part="walls" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <RoomFinishes room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <div data-stages="fixtures"><RoomEditor part="openings" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
-              <RoomFixtures selected={selectedFixture} onSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} room={project.room} roomName={project.measurement?.number?'Замер '+project.measurement.number:project.offer?.customer} onChange={room=>commitProject({...project,room})} onImport={r=>{const room={...project.room,...r.room};if(commitProject({...project,room,measurement:{number:project.measurement?.number||'',date:project.measurement?.date||'',notes:[project.measurement?.notes||'',r.name?'Замер из Базиса: '+r.name:'',...r.notes].filter(Boolean).join('\n')}})){setShowRoom(true);setFit(f=>f+1);}}}/>
+              <RoomFixtures selected={selectedFixture} onSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} room={project.room} roomName={project.measurement?.number?'Замер '+project.measurement.number:project.offer?.customer} onChange={room=>commitProject({...project,room})} onImport={r=>{const room=withBazisRoom(project.room,r.room);if(commitProject({...project,room,measurement:{number:project.measurement?.number||'',date:project.measurement?.date||'',notes:[project.measurement?.notes||'',r.name?'Замер из Базиса: '+r.name:'',...r.notes].filter(Boolean).join('\n')}})){setShowRoom(true);setFit(f=>f+1);}}}/>
               <RoomObstacles modules={project.modules} selected={selectedObstacle} onSelect={setSelectedObstacle} room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <button className="text-action" data-stages="bodies filling facades" onClick={() => setTab("module")}>
                 К выбранному модулю
