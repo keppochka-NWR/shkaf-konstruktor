@@ -6,7 +6,7 @@ import './room-shape.css';
 export type ShapeMenuItem={label:string;run:()=>void;disabled?:boolean;title?:string};
 export function ShapeMenu({title,x,y,items,onClose}:{title:string;x:number;y:number;items:ShapeMenuItem[];onClose:()=>void}){
   return <div className="gap-menu-backdrop" onPointerDown={onClose} onContextMenu={e=>{e.preventDefault();onClose();}}>
-    <div className="gap-menu room-shape-menu" role="menu" aria-label={title} style={{left:Math.max(8,Math.min(x-20,window.innerWidth-296)),top:Math.max(8,Math.min(y+14,window.innerHeight-220))}} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onClose();}}}>
+    <div className="gap-menu room-shape-menu" role="menu" aria-modal="true" aria-label={title} style={{left:Math.max(8,Math.min(x-20,window.innerWidth-296)),top:Math.max(8,Math.min(y+14,window.innerHeight-220))}} onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onClose();}}}>
       <div className="gap-menu-title">{title}</div>
       {items.map((it,k)=><button key={it.label} role="menuitem" autoFocus={k===0} disabled={it.disabled} title={it.title} onClick={()=>{onClose();it.run();}}>{it.label}</button>)}
     </div></div>;
@@ -16,7 +16,7 @@ export type ShapeAskSpec={title:string;label:string;value:string;hint?:string;ar
 export function ShapeAsk({spec,apply,onClose}:{spec:ShapeAskSpec;apply:(value:string,arc?:{mode:'sagitta'|'radius';dir:'out'|'in'})=>string|null;onClose:()=>void}){
   const [value,setValue]=useState(spec.value),[arc,setArc]=useState(spec.arc),[error,setError]=useState('');
   const seg=(k:'mode'|'dir',opts:[string,string][])=><div className="room-shape-seg" role="radiogroup" aria-label={k==='mode'?'Задать дугу':'Куда выгнута'}>{opts.map(([v,l])=><button type="button" key={v} role="radio" aria-checked={arc?.[k]===v} onClick={()=>setArc(a=>a&&{...a,[k]:v})}>{l}</button>)}</div>;
-  return <div className="dimension-editor" role="dialog" aria-label={spec.title} onPointerDown={e=>{if(e.target===e.currentTarget)onClose();}}>
+  return <div className="dimension-editor" role="dialog" aria-modal="true" aria-label={spec.title} onPointerDown={e=>{if(e.target===e.currentTarget)onClose();}}>
     <form onSubmit={e=>{e.preventDefault();const p=apply(value,arc);if(p)setError(p);else onClose();}} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();onClose();}}}>
       <strong className="room-shape-ask-title">{spec.title}</strong>
       {arc&&<>{seg('mode',[['sagitta','Стрела'],['radius','Радиус']])}{seg('dir',[['out','Наружу'],['in','Внутрь']])}</>}

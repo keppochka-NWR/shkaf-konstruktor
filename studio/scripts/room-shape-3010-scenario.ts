@@ -12,6 +12,9 @@
 //  8. Этап «Окна и двери»: «+ Окно», стена проёма — косая правая стена (Стена 5): окно на ней, вдоль неё.
 //  9. Ctrl+Z ×3 — окно убрано, длина стены 3 прежняя; контур = расчёт тех же правок функциями roomOutline (числа сверяются).
 // 10. Отказ: заднюю стену за шкафом (стена 2) внутрь на «300» — «Корпус «Шкаф» оказывается вне комнаты», контур не изменился.
+// Критик 30.10 (редактор): 9б — одна отмена сразу (без задержки сброса истории); 9в/9г — клавиши в меню угла и во время тяги не уходят
+// в редактор (Delete, W); 9д — точка посреди окна — отказ «Окно 1 на месте точки»; 11 — Esc выходит из режима формы;
+// 12 — на «Построении мебели» план без ручек формы, с ручками угла корпуса; 1 — ручка середины стены не меньше 14 × 14 px.
 import { chromium, type Page } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule } from "../src/model";
@@ -60,6 +63,7 @@ model = shapeEdit(model, outlinePreset("chamfer", 4000, 3000)).project;
 let r = await room();
 check("1. заготовка «Скошенный угол»: 5 углов, скос 750", near(r.outline, model.room.outline) && r.outline?.length === 5, pts(r.outline));
 check("1. план в режиме «Форма комнаты» — ручки углов и стен", (await page.locator(".shape-vertex").count()) === 5 && (await page.locator(".shape-wall-mid").count()) === 5);
+{ const b = (await page.locator('.shape-wall-mid').first().boundingBox())!; check("1. ручка середины стены не меньше 14 × 14 px (критик 30.10)", b.width >= 14 && b.height >= 14, Math.round(b.width) + ' × ' + Math.round(b.height)); }
 check("1. угол 135° подписан на плане", (await page.locator(".plan-corner-angle").allTextContents()).filter((t) => t.startsWith("135")).length === 2);
 await shot("preset-chamfer");
 
@@ -188,9 +192,45 @@ const beforeWindow = await room();
   await dlg.getByRole("textbox").fill("1100"); await dlg.getByRole("textbox").press("Enter"); await page.waitForTimeout(500);
   r = await room();
   check("9б. щелчок по длине стены на плане — 1100 + Enter", Math.abs(edgeLength(r.outline!, 2) - 1100) < 1, pts(r.outline));
-  await blur(); await page.keyboard.press("Control+z"); await page.waitForTimeout(400);
+  // критик 30.10: под нагрузкой первый рендер после отмены показывал прежний проект ~0,5 с — теперь сразу; и ровно один шаг
+  await blur(); await page.keyboard.press("Control+z"); await page.waitForTimeout(250);
   r = await room();
-  check("9б. Ctrl+Z — одной отменой обратно", pts(r.outline) === pts(before.outline));
+  const first = pts(r.outline); await page.waitForTimeout(600);
+  check("9б. Ctrl+Z — одной отменой обратно (сразу и без второго шага)", first === pts(before.outline) && pts((await room()).outline) === pts(before.outline), first);
+}
+
+// 9в. меню угла: Delete не открывает «Удалить корпус?», Esc закрывает меню, режим формы остаётся
+{
+  await page.locator('[data-vertex="1"]').click({ button: "right" });
+  await page.keyboard.press("Delete"); await page.waitForTimeout(250);
+  const ask = await page.getByTestId("delete-ask").count();
+  await page.keyboard.press("Escape"); await page.waitForTimeout(250);
+  check("9в. меню угла: Delete — без «Удалить корпус?», Esc закрыл меню", ask === 0 && (await page.getByRole("menu").count()) === 0 && (await page.locator(".shape-vertex").count()) > 0, 'вопрос: ' + ask);
+  if (await page.getByTestId("delete-ask").count()) await page.keyboard.press("Escape");
+}
+// 9г. тяга угла: Delete и W не действуют (ни вопроса, ни смены вида), Esc — отмена тяги
+{
+  const before = await room(), c = await center('[data-vertex="2"]');
+  await page.mouse.move(c.x, c.y); await page.mouse.down(); await page.mouse.move(c.x + 15, c.y + 12, { steps: 3 });
+  await page.keyboard.press("Delete"); await page.keyboard.press("w"); await page.keyboard.press("e"); await page.waitForTimeout(250);
+  const ask = await page.getByTestId("delete-ask").count(), plan = await page.locator(".room-plan").count();
+  await page.keyboard.press("Escape"); await page.mouse.up(); await page.waitForTimeout(300);
+  check("9г. тяга угла: Delete/W/E — без вопроса и смены вида, Esc — контур тот же", ask === 0 && plan === 1 && pts((await room()).outline) === pts(before.outline), 'вопрос ' + ask + ', план ' + plan);
+  if (ask) await page.keyboard.press("Escape");
+}
+// 9д. окно на стене 2 поперёк её середины → правая кнопка по стене → «Добавить точку» — отказ, окно и контур на месте
+{
+  const add = page.getByRole("button", { name: "Окно", exact: true }).first();
+  await add.scrollIntoViewIfNeeded(); await add.click(); await page.waitForTimeout(400);
+  await page.getByLabel("Стена проёма 1").selectOption("1"); await page.waitForTimeout(400);
+  const before = await room(), w = before.openings?.[0], L = edgeLength(before.outline!, 1);
+  await page.locator('[data-wall="1"].shape-wall-mid').click({ button: "right" });
+  await page.getByRole("menu").getByRole("menuitem", { name: "Добавить точку" }).click(); await page.waitForTimeout(400);
+  const note = await page.getByTestId("studio-note").innerText().catch(() => "");
+  r = await room();
+  check("9д. точка посреди окна — отказ «Окно 1 на месте точки — сдвиньте его», окно и контур на месте", !!w && w.edge === 1 && w.offset < L / 2 && w.offset + w.width > L / 2 && /Окно 1 на месте точки — сдвиньте его/.test(note) && pts(r.outline) === pts(before.outline) && JSON.stringify(r.openings) === JSON.stringify(before.openings), JSON.stringify(w) + ' | ' + note);
+  await blur(); for (let k = 0; k < 2; k++) { await page.keyboard.press("Control+z"); await page.waitForTimeout(350); }
+  check("9д. Ctrl+Z ×2 — окна нет", !((await room()).openings ?? []).length);
 }
 
 // 10. отказ: заднюю стену за шкафом внутрь
@@ -208,6 +248,22 @@ const beforeWindow = await room();
   r = await room();
   check("10. отказ: «Корпус «Шкаф» оказывается вне комнаты», контур тот же", /Корпус «Шкаф» оказывается вне комнаты/.test(badge + note) && pts(r.outline) === pts(before.outline), badge + " | " + note);
   await shot("refused");
+}
+
+// 11. Esc в режиме формы (без тяги и меню) — выход из режима, как в Базисе
+{
+  await blur(); await page.mouse.move(5, 5); await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  check("11. Esc — выход из режима «Форма комнаты»", (await page.locator(".shape-vertex").count()) === 0 && (await page.locator(".room-shape-toggle").getAttribute("aria-pressed")) === "false");
+}
+// 12. режим формы не переходит на «Построение мебели»: там на плане — ручки угла корпуса, ручек формы нет
+{
+  await page.locator(".room-shape-toggle").click(); await page.waitForTimeout(300);
+  const on = await page.locator(".shape-vertex").count();
+  await page.getByRole("button", { name: /Построение мебели/ }).first().click(); await page.waitForTimeout(600);
+  await page.getByRole("button", { name: "План", exact: true }).click(); await page.waitForTimeout(600);
+  const handles = await page.locator(".shape-vertex, .shape-wall-mid, .room-shape-toggle").count(), corners = await page.locator(".plan-corner").count();
+  check("12. «Построение мебели» → План: без ручек формы, ручки угла корпуса на месте", on > 0 && handles === 0 && corners > 0, 'форма ' + handles + ', угол корпуса ' + corners);
+  await shot("bodies-plan");
 }
 
 check("без ошибок страницы", errors.length === 0, errors.join(" | "));

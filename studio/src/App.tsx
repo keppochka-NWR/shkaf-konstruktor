@@ -336,7 +336,13 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   });
   const [history, setHistory] = useState<Project[]>([startup.model]),
     [cursor, setCursor] = useState(0);
-  const project = history[cursor];
+  // отмена/повтор заказа (RoomWorkspace, externalVersion) — история сбрасывается в том же рендере, а не эффектом после него (критик 30.10:
+  // под нагрузкой первый рендер после Ctrl+Z показывал прежний проект ~0,5 с — «первая отмена ничего не сделала», вторая «перескакивала»,
+  // и правка в этом окне шла бы от устаревшего проекта)
+  const [historyVersion,setHistoryVersion]=useState(externalVersion);
+  const externalReset=historyVersion!==externalVersion&&!!saveManagedProject&&!!initialProject;
+  if(historyVersion!==externalVersion){setHistoryVersion(externalVersion);if(externalReset){setHistory([initialProject!]);setCursor(0);}}
+  const project = externalReset?initialProject!:history[cursor];
   const lastLocalWrite=useRef(startup.currentRaw);
   const currentProject=useRef(project),importSequence=useRef(0);currentProject.current=project;
   const [active, setActive] = useState(()=>{try{const id=viewKey?sessionStorage.getItem('garderyob-selection:'+viewKey):null;return project.modules.some(a=>a.id===id)?id!:project.modules[0].id;}catch{return project.modules[0].id;}});
@@ -482,7 +488,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   /** Переход на этап: подстраивает вкладку, режим, вид и открытие фасадов. */
   function goStage(next:Stage){
-    setStageState(normalizeStage(next));setModal(m=>m==='room-setup'?null:m);
+    setStageState(normalizeStage(next));setModal(m=>m==='room-setup'?null:m);setShapeEdit(false);
     if(next==='room'){setTab('room');setShowRoom(true);setRoomPlan(false);setView('iso');setFit(f=>f+1);}
     else if(next==='fixtures'){setTab('room');setShowRoom(true);setRoomPlan(true);}
     else if(next==='bodies'){setTab('module');setMode('move');setRoomPlan(false);setShowRoom(true);setOpenDoors(false);}
@@ -567,6 +573,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Restore the workspace as well as the stage label after a reload.
   useEffect(()=>{goStage(stage);},[]);
   useEffect(()=>{if((stage==='room'||stage==='fixtures')&&tab!=='room'&&!advanced)setTab('room');},[stage,tab,advanced]);
+  // ручки формы — только на «Помещении» с открытым планом (критик 30.10: режим оставался на «Построении мебели» и прятал ручки корпуса)
+  const shapeStage=tab==='room'&&(advanced||stage==='room');
+  useEffect(()=>{if(shapeEdit&&(!roomPlan||!shapeStage))setShapeEdit(false);},[shapeEdit,roomPlan,shapeStage]);
   const materialRecipients=project.modules.filter(a=>materialScope==='all'||(materialScope==='group'?liveGroupIds.includes(a.id):a.id===placed.id));
   const capture = useRef<((opts?: {frame?: boolean}) => string) | undefined>(undefined);
   const upload = useRef<HTMLInputElement>(null),
@@ -582,8 +591,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     setSelectedPart(null);setDrawerIndex(null);setDrawerPreview(false);
     setSelectedOpening(undefined);setSelectedObstacle(undefined);
   }
-  const externalSeen=useRef(externalVersion);
-  useEffect(()=>{if(externalVersion===externalSeen.current)return;externalSeen.current=externalVersion;if(saveManagedProject&&initialProject){setHistory([initialProject]);setCursor(0);setActive(a=>initialProject.modules.some(m=>m.id===a)?a:initialProject.modules[0].id);clearHistorySelection();}},[externalVersion]);
+  if(externalReset){setActive(a=>initialProject!.modules.some(m=>m.id===a)?a:initialProject!.modules[0].id);clearHistorySelection();}
   const undo = () => {
     if(managedHistory){managedHistory.undo();return;}
     if(saveManagedProject&&!saveManagedProject(history[Math.max(0,cursor-1)]))return;
@@ -1539,7 +1547,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           </div>
           <div className="interaction-bar" style={{display:roomPlan||(!advanced&&stage==='fixtures')?"none":undefined}}>{([{id:'select',label:'Выбрать',icon:Check},{id:'move',label:'Двигать корпуса',icon:Move3D},{id:'fill',label:'Наполнение',icon:Rows3},{id:'orbit',label:'Свободная камера',icon:RotateCcw}] as const).map(t=><button key={t.id} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><t.icon size={16}/>{t.label}</button>)}<button aria-pressed={hideFacades} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?'Показать фасады':'Скрыть фасады'}</button>{stage==='bodies'&&!m.corner&&<button className="gap-toggle" aria-label="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}>Проёмы</button>}</div>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
-          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={tab==='room'?setShapeEdit:undefined}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
+          <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={shapeStage?setShapeEdit:undefined}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
             moveAll={moveAll}
             groupIds={liveGroupIds}
             mode={presentation||editingFacades?'orbit':mode}

@@ -301,9 +301,12 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
       // Ctrl+Z/Ctrl+Y посреди тяги (Ctrl зажат ради привязки) — не отменять (критик 29.10 п.6)
       if(historyGuard(e,!!(corner.current||drag.current||markPress.current||sdrag.current))){e.preventDefault();e.stopPropagation();return;}
       const sd=sdrag.current;
-      if(sd){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&shapeKey(sd,e)){e.preventDefault();e.stopPropagation();}return;}
+      // тяга формы: все клавиши, кроме Alt/Ctrl/Shift, — её (критик 30.10: Delete открывал «Удалить корпус?», W/A/S/D/E меняли вид)
+      if(sd){if(['Alt','Control','Shift','Meta'].includes(e.key))return;if(!e.ctrlKey&&!e.metaKey&&!e.altKey)shapeKey(sd,e);e.preventDefault();e.stopPropagation();return;}
       const c=corner.current;
       if(c){if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&cornerKey(c,e)){e.preventDefault();e.stopPropagation();}return;}
+      // Esc в режиме формы (без тяги, меню, окна ввода, линии Q и линейки) — выход из режима, как в Базисе (критик 30.10)
+      if(e.key==='Escape'&&shaping&&!tool&&!selGuide&&!measuring&&!menu&&!ask&&!document.querySelector('[aria-modal="true"]')){e.preventDefault();e.stopPropagation();onShapeEdit?.(false);setBadge(null);return;}
       if(e.code==='KeyQ'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(!onGuides)return;e.preventDefault();if(e.repeat)return;if(tool)cancelTool();else startTool();return;}
       if(tool){
         if(e.key==='Escape'){e.preventDefault();cancelTool();return;}
@@ -517,8 +520,9 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
     {showCorners&&(['lo','hi'] as const).flatMap(w=>(['lo','hi'] as const).map(d=>{const q=localToRoom(act,w==='hi'?act.module.width:0,d==='hi'?act.module.depth:0),hs=u*16,on=corner.current?.ends.join('-')===w+'-'+d;return <rect key={'corner-'+w+d} className="plan-corner" data-corner={w+'-'+d} role="button" aria-label="Растянуть за угол: ширина и глубина" x={q.x-hs/2} y={q.z-hs/2} width={hs} height={hs} rx={u*3} fill={on?'#1f3fc4':'#325bee'} stroke="#fff" strokeWidth={u*2} style={{cursor:'move',touchAction:'none'}} onPointerDown={e=>startCorner(e,[w,d])}><title>{cornerHandleTitle(DIMS)}</title></rect>;}))}
     {shaping&&<g className="room-shape-handles" transform={shift.x||shift.z?`translate(${-shift.x} ${-shift.z})`:undefined}>
       {/* середины стен — перенос стены параллельно себе */}
-      {ro.map((_,i)=>{const m=edgePoint(ro,i,edgeLength(ro,i)/2),f=edgeTangent(ro,i,edgeLength(ro,i)/2),hs=u*13,on=sdrag.current?.kind==='wall'&&sdrag.current.i===i,ang=(Math.atan2(f.t.z,f.t.x)*180)/Math.PI;
-        return <rect key={'wall-mid-'+i} className="shape-handle shape-wall-mid" data-wall={i} role="button" aria-label={`Стена ${i+1}: перенести параллельно`} x={m.x-hs/2} y={m.z-hs/4} width={hs} height={hs/2} rx={u*2} transform={`rotate(${Math.round(ang*10)/10} ${m.x} ${m.z})`} fill={on?'#e8590c':'#fff'} stroke="#e8590c" strokeWidth={u*2} style={{cursor:'move',touchAction:'none'}} onPointerDown={e=>startShape(e,'wall',i)} onContextMenu={e=>{e.preventDefault();e.stopPropagation();setMenu({kind:'wall',i,x:e.clientX,y:e.clientY,at:m});}}><title>{`Стена ${i+1}: тяните — перенос параллельно, число + Enter — точно; правая кнопка — меню`}</title></rect>;})}
+      {/* ручка 18 × 14 px — не меньше ручки угла (критик 30.10: 15 × 8,5 px было не ухватить) */}
+      {ro.map((_,i)=>{const m=edgePoint(ro,i,edgeLength(ro,i)/2),f=edgeTangent(ro,i,edgeLength(ro,i)/2),hs=u*18,hh=u*14,on=sdrag.current?.kind==='wall'&&sdrag.current.i===i,ang=(Math.atan2(f.t.z,f.t.x)*180)/Math.PI;
+        return <rect key={'wall-mid-'+i} className="shape-handle shape-wall-mid" data-wall={i} role="button" aria-label={`Стена ${i+1}: перенести параллельно`} x={m.x-hs/2} y={m.z-hh/2} width={hs} height={hh} rx={u*4} transform={`rotate(${Math.round(ang*10)/10} ${m.x} ${m.z})`} fill={on?'#e8590c':'#fff'} stroke="#e8590c" strokeWidth={u*2} style={{cursor:'move',touchAction:'none'}} onPointerDown={e=>startShape(e,'wall',i)} onContextMenu={e=>{e.preventDefault();e.stopPropagation();setMenu({kind:'wall',i,x:e.clientX,y:e.clientY,at:m});}}><title>{`Стена ${i+1}: тяните — перенос параллельно, число + Enter — точно; правая кнопка — меню`}</title></rect>;})}
       {/* углы — тянуть; правая кнопка — скос, скругление, удалить точку */}
       {ro.map((c,i)=>{const hs=u*15,on=sdrag.current?.kind==='vertex'&&sdrag.current.i===i;return <rect key={'vertex-'+i} className="shape-handle shape-vertex" data-vertex={i} role="button" aria-label={`Угол ${i+1}: тянуть`} x={c.x-hs/2} y={c.z-hs/2} width={hs} height={hs} rx={u*3} fill={on?'#b8430a':'#e8590c'} stroke="#fff" strokeWidth={u*2} style={{cursor:'move',touchAction:'none'}} onPointerDown={e=>startShape(e,'vertex',i)} onContextMenu={e=>{e.preventDefault();e.stopPropagation();setMenu({kind:'corner',i,x:e.clientX,y:e.clientY,at:c});}}><title>{`Угол ${i+1}: тяните; во время тяги «сдвиг X;Z» + Enter; правая кнопка — скос, скругление`}</title></rect>;})}
     </g>}
