@@ -71,6 +71,16 @@ const handleModels = new Map<string, Promise<THREE.Group>>();
 // Паузы 0,5–1–2–4 с (≈7,5 с всего), а не 3×0,5: пересборка демо (vite build, emptyOutDir) держит папку models пустой дольше 1,5 с —
 // вкладка, открытая во время пересборки, рисовала крепёж заглушками и декоры без текстур (снимок Макса 20.10, «что-то выпирает»).
 const RETRY_DELAYS = [500, 1000, 2000, 4000];
+/** Отделка стены (покраска, обои, плитка), руководство 30.10, п. 3: левую стену солнце (слева-спереди) не освещает, её видно только
+ *  в холодном заполняющем свете и небе — бежевая покраска уходила в серо-зелёный, хотя у всех стен один цвет. Часть цвета отделки —
+ *  собственное свечение: стены одного цвета остаются одного оттенка, свет и тени мебели дают только естественную разницу яркости. */
+const WALL_LIT = 0.5, WALL_GLOW = 0.55;
+function evenWallLight(mat: THREE.MeshStandardMaterial) {
+  const base = mat.color.clone();
+  mat.color.copy(base).multiplyScalar(WALL_LIT);
+  mat.emissive.copy(base).multiplyScalar(WALL_GLOW);
+  if (mat.map) mat.emissiveMap = mat.map;
+}
 function withRetry<T>(load: (ok: (v: T) => void, fail: (e: unknown) => void) => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const attempt = (k: number) => load(resolve, (e) => k < RETRY_DELAYS.length ? setTimeout(() => attempt(k + 1), RETRY_DELAYS[k]) : reject(e));
@@ -837,7 +847,7 @@ export function Scene(p: Props) {
         const wallFinish=new Map<string,{mat:THREE.MeshStandardMaterial;unit?:FinishUnit}>();
         for(const [w,v] of Object.entries(r.finish?.walls??{})){
           const m='paint' in v?{mat:new THREE.MeshStandardMaterial({color:new THREE.Color(v.paint),roughness:.95,side:THREE.DoubleSide})}:finishMaterial(v.id);
-          if(m){wallFinish.set(w,m);finishParts.push({mat:m.mat,wall:w as CutawayWall});}
+          if(m){evenWallLight(m.mat);wallFinish.set(w,m);finishParts.push({mat:m.mat,wall:w as CutawayWall});}
         }
         const innerPoint=(wall:string,u:number,y:number)=>wall==='back'?new THREE.Vector3(x0+u,y,z0+.5):wall==='front'?new THREE.Vector3(x0+u,y,z0+r.depth-.5):wall==='left'?new THREE.Vector3(x0+.5,y,z0+u):new THREE.Vector3(x0+r.width-.5,y,z0+u);
         for(const panel of wallPanels(r)){
