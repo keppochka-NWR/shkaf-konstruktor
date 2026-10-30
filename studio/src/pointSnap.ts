@@ -8,7 +8,7 @@
 // выделение через Shift»); Shift+протяжка — перенос отмеченной группы вместе (с привязками); Ctrl+щелчок ничего не отмечает. Здесь только 2D-геометрия в осях экрана вида
 // (h — вправо, v — вверх, guides.viewAxes) — без React и three; проверяется тестами tests/point-snap.test.ts.
 import { dot, viewAxes, type GuideLine, type V3 } from "./guides";
-import { editsText, historyShortcut } from "./historyShortcuts";
+import { editsText, historyShortcut, rotateShortcut } from "./historyShortcuts";
 
 /** Отпускание Alt (критик 29.10, блокер): Chrome на Windows по keyup Alt уводит фокус в меню браузера — и следующая клавиша
  *  уходит туда. Alt теперь — привязка, его отпускают и после тяги: гасим всегда, кроме полей ввода. */
@@ -44,7 +44,8 @@ export const sideHeightFree = (dx: number, dy: number) => Math.abs(dy) > Math.ab
 /** Колесо с Ctrl во время тяги (Ctrl зажат ради привязки) масштабирует всю страницу браузера — гасим (критик 29.10 п.5). */
 export const wheelGuard = (e: { ctrlKey: boolean; metaKey: boolean }, dragging: boolean) => dragging && (e.ctrlKey || e.metaKey);
 /** Ctrl+Z / Ctrl+Y во время тяги (Ctrl зажат ради привязки) не отменяют посреди тяги (критик 29.10 п.6). */
-export const historyGuard = (e: KeyboardEvent, dragging: boolean) => dragging && historyShortcut(e) !== null;
+/** + R / Shift+R (поворот) во время тяги не поворачивают группу посреди тяги (критик 30.10 п.4). */
+export const historyGuard = (e: KeyboardEvent, dragging: boolean) => dragging && (historyShortcut(e) !== null || rotateShortcut(e) !== null);
 /** Допуск привязки к точке, px экрана (Alt/Ctrl нажаты нарочно — чуть шире обычных 10 px). */
 export const POINT_SNAP_PX = 14;
 

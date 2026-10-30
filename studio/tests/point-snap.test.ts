@@ -126,6 +126,11 @@ test('критик 29.10 п.6: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z во время т
   assert.equal(historyGuard(k('KeyZ',{shiftKey:true}),true),true);
   assert.equal(historyGuard(k('KeyZ'),false),false);
   assert.equal(historyGuard(k('KeyQ'),true),false);
+  // критик 30.10 п.4: R / Shift+R во время тяги — не поворачивать группу посреди тяги; без тяги — поворот как было
+  const r=(o:Partial<KeyboardEvent>={})=>k('KeyR',{ctrlKey:false,key:'r',...o});
+  assert.equal(historyGuard(r(),true),true);
+  assert.equal(historyGuard(r({shiftKey:true}),true),true);
+  assert.equal(historyGuard(r(),false),false);
 });
 
 test('критик 29.10 п.7: сбоку (справа и слева) высота при переносе своя, сверху/3D — нет',()=>{
