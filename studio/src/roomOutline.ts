@@ -207,7 +207,7 @@ export function legacyToEdge(w: number, d: number, wall: RectWall, offset: numbe
 // Перенумерация стен после правки (для проёмов и объектов на стенах, roomShape.applyOutline): старая стена → новая,
 // undefined — стену разрезали/слили/её начало уехало — проём ищет ближайшую стену по своему месту на плане.
 export type EdgeMap = (number | undefined)[];
-export const sameEdges = (n: number): EdgeMap => Array.from({ length: n }, (_, e) => e);
+export const sameEdges = (n: number): number[] => Array.from({ length: n }, (_, e) => e);
 /** insertVertex(o, i): стена i разрезана, дальше — +1. */
 export const insertEdgeMap = (n: number, i: number): EdgeMap => sameEdges(n).map((e) => (e < i ? e : e === i ? undefined : e + 1));
 /** removeVertex(o, i): стены i−1 и i слиты в одну, дальше — −1. */
