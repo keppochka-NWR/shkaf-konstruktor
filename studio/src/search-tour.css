@@ -1,0 +1,54 @@
+/* Поиск по параметрам и микро-обучение (Макс 31.10.2026). Свои классы, без привязки к раскладке панелей (claude/ui-layout). */
+.param-search-trigger{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 10px 0 11px;border:1px solid #d5dde6;border-radius:9px;background:#f6f8fa;color:#41505f;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.param-search-trigger:hover{background:#eef2f6;border-color:#c3cdd8}
+.param-search-trigger:focus-visible{outline:2px solid #385dee;outline-offset:2px}
+.param-search-trigger kbd,.param-search-field kbd{font:600 10.5px/1 ui-monospace,Consolas,monospace;color:#6b7a89;background:#fff;border:1px solid #d5dde6;border-bottom-width:2px;border-radius:5px;padding:3px 5px}
+@media(max-width:900px){.param-search-trigger kbd{display:none}}
+@media(max-width:650px){.param-search-trigger span{display:none}}
+
+.param-search-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(15,23,42,.32);display:flex;justify-content:center;align-items:flex-start;padding:10vh 16px 16px}
+.param-search{width:min(620px,100%);max-height:72vh;display:flex;flex-direction:column;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.28),0 2px 6px rgba(15,23,42,.12);overflow:hidden}
+.param-search-field{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #e5eaf0;color:#64748b}
+.param-search-field input{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:16px;color:#1d2b3a;background:transparent}
+.param-search-head{margin:10px 16px 2px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#7b8794}
+.param-search-list{list-style:none;margin:0;padding:6px;overflow-y:auto}
+.param-search-item{display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:9px;cursor:pointer}
+.param-search-item.current{background:#eef3ff}
+.param-search-item.off{cursor:not-allowed}
+.param-search-item.off b{color:#8b96a3}
+.param-search-item.off small{color:#a2622a}
+.param-search-kind{flex:0 0 74px;font-size:11px;color:#5d6b79;background:#f1f4f7;border-radius:6px;padding:3px 6px;text-align:center}
+.param-search-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.param-search-text b{font-size:14px;font-weight:600;color:#1d2b3a}
+.param-search-text small{font-size:12px;color:#6b7a89;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.param-search-enter{color:#385dee;flex:none}
+.param-search-empty{padding:16px 12px;color:#6b7a89;font-size:13px}
+.param-search-foot{margin:0;padding:9px 16px;border-top:1px solid #e5eaf0;font-size:11.5px;color:#7b8794;background:#fafbfc}
+
+/* подсветка найденного: мягкое свечение ~1,5 с */
+.search-pulse{position:fixed;z-index:1150;pointer-events:none;border-radius:9px;border:2px solid #385dee;box-shadow:0 0 0 4px rgba(56,93,238,.22),0 0 18px 4px rgba(56,93,238,.35);animation:search-pulse 1.6s ease-out forwards}
+@keyframes search-pulse{0%{opacity:0;transform:scale(1.04)}12%{opacity:1;transform:scale(1)}55%{box-shadow:0 0 0 7px rgba(56,93,238,.14),0 0 24px 6px rgba(56,93,238,.3)}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.search-pulse{animation:none;opacity:1}}
+.search-toast{position:fixed;z-index:1250;left:50%;bottom:64px;transform:translateX(-50%);max-width:min(520px,calc(100vw - 32px));padding:10px 14px;border-radius:10px;background:#1f2d3d;color:#fff;font-size:13px;line-height:1.4;box-shadow:0 10px 30px rgba(15,23,42,.3)}
+.search-toast.bad{background:#7a3d12}
+
+/* тур: затемнение с окном на цели; мышь проходит насквозь — сценарии и работа не блокируются */
+.studio-tour{position:fixed;inset:0;z-index:1180;pointer-events:none}
+.tour-spot{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(15,23,42,.5);outline:2px solid #fff;transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease}
+.tour-dim{position:fixed;inset:0;background:rgba(15,23,42,.5)}
+.tour-card{position:fixed;pointer-events:auto;background:#fff;border-radius:14px;padding:14px 16px 12px;box-shadow:0 18px 48px rgba(15,23,42,.32);transition:left .25s ease,top .25s ease}
+.tour-head{display:flex;justify-content:space-between;align-items:center}
+.tour-count{font-size:11.5px;color:#6b7a89;letter-spacing:.04em}
+.tour-x{border:0;background:transparent;color:#6b7a89;cursor:pointer;padding:4px;border-radius:6px;display:inline-flex}
+.tour-x:hover{background:#f1f4f7}
+.tour-card h3{margin:4px 0 6px;font-size:16px;color:#1d2b3a}
+.tour-card p{margin:0 0 12px;font-size:13.5px;line-height:1.5;color:#3d4b59}
+.tour-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+.tour-actions .text-action{margin-right:auto}
+.tour-offer{position:fixed;z-index:1180;right:18px;bottom:64px;width:min(320px,calc(100vw - 32px));background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 18px 48px rgba(15,23,42,.28);border:1px solid #e5eaf0}
+.tour-offer b{font-size:14.5px;color:#1d2b3a}
+.tour-offer p{margin:6px 0 12px;font-size:13px;line-height:1.45;color:#4b5866}
+.tour-offer div{display:flex;gap:8px}
+@media (prefers-reduced-motion:reduce){.tour-spot,.tour-card{transition:none}}
+.help-tour{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+

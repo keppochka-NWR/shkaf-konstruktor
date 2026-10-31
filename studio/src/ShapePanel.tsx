@@ -41,7 +41,7 @@ export function ShapePanel({ m, modify, openCuts }: { m: Module; modify: (u: (n:
     {hosts.length > 0 && <div className="shape-cuts">
       <p className="shape-cut-head"><b>Вырезы в деталях{m.cutouts?.length ? `: ${m.cutouts.length}` : ""}</b> — под плинтус, трубу, подоконник, розетку, кабель.</p>
       {(m.cutouts ?? []).map((c, i) => { const pid = cutHost(m, c) ?? c.host, h = hosts.find((p) => p.id === pid); return <p key={c.id} className="shape-cut-item">{i + 1}. {name(pid)}: {h ? cutText(c, faceAxes(h)) : "деталь не найдена"} <button type="button" className="text-action" aria-label={`Изменить вырез ${i + 1}`} onClick={() => openCuts(pid)}>Изменить</button></p>; })}
-      {(() => { const first = m.cutouts?.[0] && cutHost(m, m.cutouts[0]); return <button type="button" className="outline" onClick={() => openCuts(first && hosts.some((p) => p.id === first) ? first : hosts.find((p) => p.id === "left")?.id ?? hosts[0].id)}>Вырезы деталей…</button>; })()}
+      {(() => { const first = m.cutouts?.[0] && cutHost(m, m.cutouts[0]); return <button type="button" className="outline" data-search="cutouts" onClick={() => openCuts(first && hosts.some((p) => p.id === first) ? first : hosts.find((p) => p.id === "left")?.id ?? hosts[0].id)}>Вырезы деталей…</button>; })()}
     </div>}
   </div>;
 }

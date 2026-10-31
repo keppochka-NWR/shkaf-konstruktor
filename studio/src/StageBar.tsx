@@ -6,7 +6,7 @@ type Props={stage:Stage;advanced:boolean;onStage:(s:Stage)=>void;onAdvanced:(v:b
 export function StageBar({stage,advanced,onStage,onAdvanced,done,rawSelected}:Props){
   const i=stageIndex(stage),current=STAGES[i];
   const hint=stageHint(stage,rawSelected);
-  return <nav className="stage-bar" aria-label="Этапы работы" style={{'--stage':current.color} as React.CSSProperties}>
+  return <nav className="stage-bar" aria-label="Этапы работы" data-tour="stages" style={{'--stage':current.color} as React.CSSProperties}>
     <ol className="stage-steps">
       {STAGES.map((s,k)=><li key={s.id}><button className={'stage-step'+(s.id===stage?' current':'')+(k<i?' passed':'')} style={{'--step':s.color} as React.CSSProperties} aria-label={s.title} aria-current={s.id===stage?'step':undefined} onClick={()=>onStage(s.id)}><span className="stage-num">{done[s.id]&&s.id!==stage?<Check size={13}/>:s.n}</span><span className="stage-title">{s.title}</span></button></li>)}
     </ol>
