@@ -36,6 +36,8 @@ export function placeMenu(x: number, y: number, r: number, size: number, area: M
 export function menuArea(win: { width: number; height: number }, canvas?: MenuArea | null, tools?: MenuArea | null, top?: (MenuArea | null | undefined)[]): MenuArea {
   const a = canvas ? { left: Math.max(0, canvas.left), top: Math.max(0, canvas.top), right: Math.min(win.width, canvas.right), bottom: Math.min(win.height, canvas.bottom) } : { left: 0, top: 0, right: win.width, bottom: win.height };
   if (tools && tools.right > tools.left && tools.left > (a.left + a.right) / 2 && tools.left < a.right) a.right = tools.left - 6;
+  // Макс 31.10: колонка быстрых действий — у левого края сцены; меню не заходит на неё
+  else if (tools && tools.right > tools.left && tools.right < (a.left + a.right) / 2 && tools.right > a.left) a.left = tools.right + 6;
   for (const b of top ?? []) if (b && b.bottom > b.top && b.right > a.left && b.left < a.right && b.top < (a.top + a.bottom) / 2 && b.bottom > a.top) a.top = Math.max(a.top, b.bottom + 4);
   return a;
 }
