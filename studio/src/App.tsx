@@ -173,7 +173,10 @@ import {
   appendModule, appendModuleGroup, copyModuleGroup, snapComposition, snapPlacement, keepInRoom, bounds, compositionBounds, mountingCompositionBounds, applyAutoFillers, setWallFillersOff,
   type Project,
 } from "./project";
-import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,turnModule,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
+import {settleDrag,supportProblem,fixSupport,settleAdded} from './placement';
+import {placeOpening} from './openingDrag';
+import {RADIUS,radiusEditErrors} from './shapes';
+import {wholeDrawerPid,fitMeshItem,insertedPartId,captureSectionFilling,pasteSectionFilling,type SectionFilling,duplicatePart,moveComposition,compactDrawers,setCompositionDistance,applyDrawerSlide,clearSection,removeSection,addUpperModule,rotateModuleGroup,rotateModule,turnNear,type Turn,setWallDistance,mirrorModule,moveDivider,insertItem,insertGlassShelf,moveModule,movePart,removePart,transferPart,type FillKind} from './operations';
 import {drawerAddReason,drawerFitsOnTop} from './drawerLimit';
 import {moduleHandleFloor,setModuleHandleFloor} from './handleFloorGroup';
 function NumberField({
@@ -531,7 +534,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     const source = copy
       ? m
       : { ...initialModule(), width: 600, sections: [section()] };
-    const next = appendModule(project, source,copy?placed:undefined);
+    const raw = appendModule(project, source,copy?placed:undefined),next=settleAdded(raw,raw.modules.at(-1)!.id); // навесной — к стене (Макс 31.10)
     if (commitProject(next)) {
       selectModule(next.modules.at(-1)!.id);
     }
@@ -623,7 +626,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     {const r=keepProjectCutouts(project,raw);raw=r.project;cutNotes.push(...r.notes);}
     // Угловые фальши ставятся и снимаются автоматически по факту примыкания корпусов под 90°.
     const next = applyAutoFillers(raw);
-    const e = projectErrors(next,!!onEmptyProject);
+    // радиусный стеллаж (Макс 31.10): новая ширина/глубина — в пределах RADIUS (600 × 600); старый файл шире открывается и правится
+    const e = [...next.modules.flatMap(a=>radiusEditErrors(project.modules.find(b=>b.id===a.id)?.module,a.module).map(x=>`${a.module.name}: ${x}`)),...projectErrors(next,!!onEmptyProject)];
     if (e.length) {
       rejectedProject.current=next;
       setError(e[0]);
@@ -710,6 +714,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   // корпус в отмеченной группе (Shift+щелчок) — окна «Материалы»/«Ручки» сразу на всю группу (решение Макса 29.10, групповые фасады)
   useEffect(()=>{setMaterialScope(inGroup(placed.id)?"group":"active");},[modal]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Окно/дверь мышью (Макс 31.10, openingDrag.ts): новое место одной правкой, проём выбран — видны «от угла / до угла». */
+  function moveOpeningTo(id:string,at:{s:number;sill:number}){try{if(!commitProject(placeOpening(project,id,at)))return false;setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);return true;}catch(e){setError((e as Error).message);return false;}}
   function movePlaced(key: "x" | "y" | "z", value: number) {
     try{return commitProject(setWallDistance(project,placed.id,key,value,moveAll,liveGroupIds));}catch(e){setError((e as Error).message);return false;}
   }
@@ -850,7 +856,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   }
   /** Поворот на 90° по часовой / против (кнопки, круговое меню, R / Shift+R). Корпус в отмеченной группе — поворачивается группа. */
   function turnSelected(mid:string,dir:Turn,fit=false){
-    try{const ids=inGroup(mid)?liveGroupIds:null;if(commitProject(ids?rotateModuleGroup(project,ids,dir):turnModule(project,mid,dir))&&(fit||ids)){if(ids)setFocusActive(false);setFit(f=>f+1);}}catch(e){setError((e as Error).message);}
+    // Макс 31.10: на месте не помещается — повёрнут и сдвинут в ближайшее свободное положение (сообщение — на сколько)
+    try{const ids=inGroup(mid)?liveGroupIds:null,r=ids?{project:rotateModuleGroup(project,ids,dir),moved:0}:turnNear(project,mid,dir);if(commitProject(r.project)){if(r.moved)setNotice({title:'Поворот',text:`На месте корпус не помещался — повёрнут и сдвинут на ${r.moved} мм в ближайшее свободное место.`});if(fit||ids){if(ids)setFocusActive(false);setFit(f=>f+1);}}}catch(e){setError((e as Error).message);}
   }
   function modifyAt(mid:string,update:(draft:Module)=>void){
     const a=project.modules.find(x=>x.id===mid);if(!a)return false;
@@ -1556,9 +1563,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             drawerPreview={!presentation&&drawerPreview&&s.drawers>0?{sid:s.id,index:Math.min(drawerIndex??0,s.drawers-1)}:undefined}
             snapping={snapping}
             snap={(mid,p)=>snapping?snapBodies(mid,p):{x:Math.round(p.x),y:Math.round(p.y),z:Math.round(p.z)}}
-            keepIn={project.room.outline?(mid,p)=>keepInRoom(project,mid,p,moveAll?project.modules.map(a=>a.id):liveGroupIds.includes(mid)?liveGroupIds:undefined):undefined}
+            keepIn={(mid,p)=>keepInRoom(project,mid,p,moveAll?project.modules.map(a=>a.id):liveGroupIds.includes(mid)?liveGroupIds:undefined)}
+            settle={(mid,p,ctx)=>settleDrag(project,mid,p,ctx)}
             onMoveModule={moveBody}
-            moveProblem={(mid,p)=>projectErrors(movedBodies(mid,p))[0]}
+            moveProblem={(mid,p)=>{const n=movedBodies(mid,p),one=!moveAll&&!liveGroupIds.includes(mid);return projectErrors(n)[0]??(one?supportProblem(n,n.modules.find(a=>a.id===mid)!)??undefined:undefined);}}
+            onOpeningMove={moveOpeningTo}
             onMoveDivider={(mid,sid,delta)=>{try{return commitProject(moveDivider(project,mid,sid,delta));}catch(e){setError((e as Error).message);return false;}}}
             onMoveDividerEnd={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module,notes=moveDividerEnd(t,sid,edge,delta),ok=commitProject(n);if(ok)announceDividerNotes(notes);return ok;}catch(e){setError((e as Error).message);return false;}}}
             dividerEndProblem={(mid,sid,edge,delta)=>{try{const n=structuredClone(project),t=n.modules.find(x=>x.id===mid)!.module;moveDividerEnd(t,sid,edge,delta);return validate(t)[0];}catch(e){return (e as Error).message;}}}
@@ -1834,7 +1843,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <details className="measurement-fields"><summary>Мебель в нише · вычеты СТП</summary><p className="field-note">Введите минимальные размеры по нескольким точкам. Отклонение стены измеряется относительно уровня.</p>{!project.measurement?.niche?<button className="outline" onClick={()=>commitProject({...project,measurement:{number:'',date:'',notes:'',...project.measurement,niche:{width:project.room.width,height:project.room.height,depth:project.room.depth,deviation:0}}})}>Рассчитать по замеру</button>:<>{(['width','height','depth','deviation'] as const).map(k=><NumberField key={k} label={{width:'Минимальная ширина ниши',height:'Нижняя точка потолка',depth:'Минимальная глубина ниши',deviation:'Отклонение стены'}[k]} value={k==='deviation'?project.measurement!.niche![k]:nicheMinimum(project.measurement!.niche!,k)} min={k==='deviation'?0:500} max={k==='deviation'?300:20000} onChange={v=>commitProject({...project,measurement:{...project.measurement!,niche:{...project.measurement!.niche!,[k]:v,readings:Object.fromEntries(Object.entries(project.measurement!.niche!.readings??{}).filter(([axis])=>axis!==k))}}})}/>)}<NicheReadings niche={project.measurement!.niche!} onApply={niche=>commitProject({...project,measurement:{...project.measurement!,niche}})}/>{(()=>{const fit=nicheSize(project.measurement!.niche!,project.room.ceiling);return <div className="niche-result"><strong>Предельные габариты мебели</strong><p>{fit.width} × {fit.height} × {fit.depth} мм</p><small>Ширина −{fit.side}, высота −{ceilingClearance(project.room.ceiling)}, глубина −5 мм. Предел редактора для одного корпуса — {RULES.maxW} × {RULES.maxH} мм; логистику крупных корпусов проверьте отдельно.</small></div>;})()}<p className="field-note">При отклонении ровно 10 мм выбран запас 15 мм. Проверьте светильники, выступы и карнизы. Расчёт не меняет размеры комнаты и модулей автоматически. Габариты всей закрытой композиции сравниваются с нишей; превышения видны в замечаниях и документах.</p><button className="text-action" onClick={()=>{const measurement={...project.measurement!};delete measurement.niche;commitProject({...project,measurement});}}>Убрать расчёт ниши</button></>}</details>
               <details className="measurement-fields"><summary>Сдвинуть всю композицию</summary><p className="field-note">Все {project.modules.length} корпуса сдвигаются вместе. Стыки, расстояния и положение антресолей относительно нижних модулей сохраняются.</p>{(['x','z','y'] as const).map(axis=><NumberField key={axis} label={{x:'Композиция от левой стены',z:'Композиция от задней стены',y:'Композиция от пола'}[axis]} value={Math.round(mountingComposition[axis]*10)/10} min={0} max={{x:project.room.width-mountingComposition.w,z:project.room.depth-mountingComposition.d,y:project.room.height-mountingComposition.h}[axis]} onChange={v=>{try{commitProject(setCompositionDistance(project,axis,v));}catch(e){setError((e as Error).message);}}}/>)}<p className="field-note">Отступы — по монтажному габариту, как у отдельного корпуса. Выступы ручек проверяются отдельными подсказками. Отмена возвращает всю расстановку одним шагом.</p></details>
               </div>
-              <div data-stages="room fixtures bodies filling facades docs"><RoomWarnings project={project} select={w=>{selectModule(w.moduleId);setSelectedOpening(w.openingId);setSelectedObstacle(w.obstacleId);setSelectedFixture(w.fixtureId);setRoomPlan(true);}}/></div>
+              <div data-stages="room fixtures bodies filling facades docs"><RoomWarnings project={project} fix={w=>{try{if(commitProject(fixSupport(project,w.moduleId)))selectModule(w.moduleId);}catch(e){setError((e as Error).message);}}} select={w=>{selectModule(w.moduleId);setSelectedOpening(w.openingId);setSelectedObstacle(w.obstacleId);setSelectedFixture(w.fixtureId);setRoomPlan(true);}}/></div>
               <div data-stages="room"><RoomEditor part="walls" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
               <RoomFinishes room={project.room} onChange={room=>commitProject({...project,room})}/></div>
               <div data-stages="fixtures"><RoomEditor part="openings" selected={selectedOpening} onSelect={setSelectedOpening} room={project.room} onChange={room=>commitProject({...project,room})}/>
@@ -1868,8 +1877,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <NumberField
                   label="Ширина"
                   value={m.width}
-                  min={RULES.minW}
-                  max={RULES.maxW}
+                  min={m.radius?RADIUS.minW:RULES.minW}
+                  max={m.radius?RADIUS.maxW:RULES.maxW}
                   reasons={v=>({list:fieldReasons(m,'width',v),moduleId:placed.id,moduleName:m.name})}
                   onChange={(v) => modify((n) => (n.width = v))}
                 />
@@ -1884,8 +1893,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <NumberField
                   label="Глубина"
                   value={m.depth}
-                  min={RULES.minD}
-                  max={RULES.maxD}
+                  min={m.radius?RADIUS.minD:RULES.minD}
+                  max={m.radius?RADIUS.maxD:RULES.maxD}
                   reasons={v=>({list:fieldReasons(m,'depth',v),moduleId:placed.id,moduleName:m.name})}
                   onChange={(v) => modify((n) => (n.depth = v))}
                 />

@@ -199,3 +199,4 @@
 .module-palette .module-sizes input { width:84px; }
 /* разбивка стоимости и позиции после финального расчёта конструктором (решения 16.10.2026) */
 .estimate-panel table.estimate-split{width:auto;min-width:280px;margin:12px 0 0 auto;font-size:13px}.estimate-panel table.estimate-split td{padding:6px 10px}.estimate-panel table.estimate-split td:last-child{text-align:right}.estimate-panel table.estimate-split tr:last-child td{font-weight:700;border-top:2px solid #23404c}.estimate-pending{margin:8px 0 0;text-align:right;color:#5d6b75;font-size:12px}.estimate-panel tr.price-pending td:first-child small{color:#5d6b75}
+/* физика расстановки (31.10): исправление опоры одним щелчком у предупреждения */.room-warnings .support-warning .outline{display:inline-block;width:auto;margin:6px 0 4px;padding:5px 12px;border:1px solid #c98a1b;border-radius:6px;background:#fff;color:#80510a;font-weight:600}
