@@ -1,7 +1,7 @@
 // «Фасады выделенных модулей» (решение Макса 29.10.2026): отмеченные Shift+щелчком корпуса правятся разом. Меняется только то поле,
 // которое правит менеджер; у корпусов с разными значениями поле показывает «— разные —». Корпуса, к которым поле не относится,
 // пропускаются с сообщением «к N модулям не применено: причина». Каждая правка — одно изменение проекта (одна отмена Ctrl+Z).
-import {useState} from 'react';
+import {useMemo,useState} from 'react';
 import type {Project} from './project';
 import {catalog} from './catalog';
 import {decorLabel,decorTitle} from './clientLabels';
@@ -13,7 +13,7 @@ import {AluPicker} from './AluPicker';
 import type {VernissageFacade} from './facadesVernissage';
 import type {AluFacade} from './alu';
 import {applyGroupFilling,fillingKindProblem} from './groupFilling';
-import {applyGroupFacade,applyGroupPatch,changedKeys,groupFacadeValue,groupPatchMixed,groupValueLabel,skippedNote,GROUP_FIELDS,KIND_LABEL,OPEN_LABEL,type GroupFacadeField,type GroupResult} from './groupFacades';
+import {applyGroupFacade,applyGroupPatch,changedKeys,groupFacadeSummary,groupPatchMixed,groupValueLabel,skippedNote,GROUP_FIELDS,KIND_LABEL,OPEN_LABEL,type GroupFacadeField,type GroupResult} from './groupFacades';
 
 const MIXED='__mixed';
 const PATCH_LABEL:Record<string,string>={milling:'фрезеровка',cover:'покрытие',film:'плёнка',enamelColor:'цвет эмали',thickness:'толщина',open:'открывание',patina:'патина',twoSided:'покраска с двух сторон',lacquer:'лак',profile:'профиль',color:'цвет профиля',insert:'наполнение'};
@@ -43,6 +43,8 @@ export function GroupFillingBlock({project,ids,sourceId,commit}:{project:Project
 export function GroupFacadePanel({project,ids,commit}:{project:Project;ids:string[];commit:(p:Project)=>boolean}){
  const [note,setNote]=useState<{ok:boolean;text:string}|null>(null);
  const names=ids.map(id=>project.modules.find(a=>a.id===id)?.module.name).filter(Boolean) as string[];
+ // ревью 31.10: значения всех полей и Вернисажа/ALU — один расчёт на набор модулей и отметок, не на каждую отрисовку
+ const idKey=ids.join('|'),{summary,vern,alu}=useMemo(()=>({summary:groupFacadeSummary(project,ids),vern:groupPatchMixed(project,ids,'vernissage'),alu:groupPatchMixed(project,ids,'alu')}),[project.modules,idKey]);
  function run(make:()=>GroupResult,label:string){
   try{
    const r=make();
@@ -53,7 +55,7 @@ export function GroupFacadePanel({project,ids,commit}:{project:Project;ids:strin
   }catch(e){setNote({ok:false,text:(e as Error).message});}
  }
  const field=(f:GroupFacadeField,options:[string,string][],title?:(v:string)=>string|undefined)=>{
-  const s=groupFacadeValue(project,ids,f);if(!s.applicable)return null;
+  const s=summary[f];if(!s.applicable)return null;
   const label=GROUP_FIELDS[f].label,value=s.value===null?MIXED:s.value;
   return <label className="hardware-field" key={f} data-group-field={f}>
    <span>{label}{s.applicable<s.total&&<small className="group-count"> · {s.applicable} из {s.total}</small>}</span>
@@ -67,7 +69,6 @@ export function GroupFacadePanel({project,ids,commit}:{project:Project;ids:strin
  };
  const decorOptions:[string,string][]=catalog.map(c=>[c.n,decorLabel(c.n)]);
  const handleOptions:[string,string][]=[...HANDLES].sort((a,b)=>a.vendor.localeCompare(b.vendor)||a.len-b.len||a.price-b.price).map(h=>[h.id,`${h.label} · ${h.len} мм${h.vendor==='lemana'?' · Лемана':''}`]);
- const vern=groupPatchMixed(project,ids,'vernissage'),alu=groupPatchMixed(project,ids,'alu');
  const vernModule=project.modules.find(a=>ids.includes(a.id)&&a.module.vernissage)?.module;
  const mixedNote=(keys:string[])=>keys.length?' · разные: '+keys.map(k=>PATCH_LABEL[k]??k).join(', '):'';
  return <details className="property-section group-facades" open data-testid="group-facades">

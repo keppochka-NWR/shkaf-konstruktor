@@ -17,14 +17,17 @@ export type GroupFacadeField='kind'|'facadeDecor'|'drawerFacadeDecor'|'handle'|'
 export type GroupSkip={id:string;name:string;reason:string};
 export type GroupResult={project:Project;changed:string[];skipped:GroupSkip[]};
 
-/** Почему корпус вообще без фасадов для группы (как в facadeAppearance.eligible, но импорт Базиса-кухни правится, как в его панели). */
+/** Почему корпус вообще без фасадов для группы (как в facadeAppearance.eligible, но импорт Базиса-кухни правится, как в его панели).
+ *  Ревью 31.10: панель «Фасады выделенных» спрашивает это у каждого поля (~30 раз за отрисовку) — ответ запоминается на модуле, пока его JSON тот же. */
+const facadesMemo=new WeakMap<Module,{key:string;why:string|null}>();
 function noFacades(m:Module):string|null{
  if(m.kupe)return 'двери купе';
  if(m.worktop)return 'столешница';
  if(m.raw)return 'импорт Базиса как есть';
  if(m.desk)return 'стол';
- if(!parts(m).some(p=>p.facadeSide||p.role==='door'||p.id.endsWith(':facade')))return 'нет фасадов';
- return null;
+ const key=JSON.stringify(m),hit=facadesMemo.get(m);if(hit&&hit.key===key)return hit.why;
+ const why=parts(m).some(p=>p.facadeSide||p.role==='door'||p.id.endsWith(':facade'))?null:'нет фасадов';
+ facadesMemo.set(m,{key,why});return why;
 }
 const hasDrawerFronts=(m:Module)=>!!m.kdrawers?.length||m.sections.some(s=>s.drawers>0&&Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>!c.noFacade&&!c.mesh));
 const sectionDrawerHandles=(m:Module)=>m.sections.some(s=>Array.from({length:s.drawers},(_,j)=>drawerConfig(m,s,j)).some(c=>drawerHasHandle(c)));
@@ -113,6 +116,11 @@ const reasonOf=(field:GroupFacadeField,m:Module,value?:string)=>noFacades(m)??GR
 export function groupFacadeValue(p:Project,ids:readonly string[],field:GroupFacadeField):{value:string|null;applicable:number;total:number}{
  const list=chosen(p,ids),own=list.filter(a=>!reasonOf(field,a.module)),values=new Set(own.map(a=>GROUP_FIELDS[field].read(a.module)));
  return {value:values.size===1?[...values][0]:null,applicable:own.length,total:list.length};
+}
+
+/** Все поля панели «Фасады выделенных» разом (одно useMemo на отрисовку панели). */
+export function groupFacadeSummary(p:Project,ids:readonly string[]):Record<GroupFacadeField,ReturnType<typeof groupFacadeValue>>{
+ return Object.fromEntries((Object.keys(GROUP_FIELDS) as GroupFacadeField[]).map(f=>[f,groupFacadeValue(p,ids,f)])) as Record<GroupFacadeField,ReturnType<typeof groupFacadeValue>>;
 }
 
 /** Одна правка у каждого отмеченного корпуса (как в его панели, по очереди — placeInRow), пропуски — с причиной. */
