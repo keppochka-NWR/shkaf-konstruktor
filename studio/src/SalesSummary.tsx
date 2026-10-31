@@ -6,7 +6,7 @@ import {estimate} from './pricing';
 import {nest} from './exports';
 import {saveFile,quoteBreakdown,splitRows} from './exports';
 import {pendingTotalLabel} from './pendingPrices';
-import {estimateBreakdown,itemShares,breakdownText,breakdownHTML,STATUS_TEXT,type BreakdownRow} from './estimateBreakdown';
+import {estimateBreakdown,itemShares,breakdownText,breakdownHTML,groupBadge,STATUS_TEXT,type BreakdownRow} from './estimateBreakdown';
 import {PENDING_ITEM_PRICE} from './itemPrices';
 import {printDocument} from './printDocument';
 // стили — в OutputPanel (estimate-breakdown.css): этот файл читают тесты и комплект на проверку (salesCSV), им CSS не нужен
@@ -33,7 +33,7 @@ export function SalesSummary({project}:{project:Project}){
    <div className="eb-head"><h3>Из чего складывается цена</h3><button className="text-action" onClick={toggleAll}>{allOpen?'Свернуть всё':'Развернуть всё'}</button></div>
    <p className="field-note">Цена — листы ЛДСП в раскрое × {rub(b.sheetPrice)} (плита, кромка, фурнитура корпуса и работа) + позиции вне листа.{b.hdfSheets?` ЛХДФ (задники, дно ящиков) — ${b.hdfSheets} л., в цене листов.`:''}</p>
    {b.groups.map(g=><details key={g.id} className="eb-group" data-group={g.id} open={!!open[g.id]} onToggle={ev=>{const o=(ev.currentTarget as HTMLDetailsElement).open;if(o!==!!open[g.id])setOpen(s=>({...s,[g.id]:o}));}}>
-    <summary><span className="eb-title">{g.title}</span><span className="eb-count">{g.rows.length} поз.{g.inSheet?` · ${g.inSheet} в цене листов`:''}{g.pending?` · ${g.pending} после расчёта`:''}{g.missing?<b className="eb-missing"> · {g.missing} без цены</b>:''}</span><b className="eb-sum">{g.total===0&&g.inSheet===g.rows.length?<span className="eb-badge">в цене листов</span>:rub(g.total)}</b></summary>
+    <summary><span className="eb-title">{g.title}</span><span className="eb-count">{g.rows.length} поз.{g.inSheet?` · ${g.inSheet} в цене листов`:''}{g.pending?` · ${g.pending} после расчёта`:''}{g.missing?<b className="eb-missing"> · {g.missing} без цены</b>:''}</span><b className="eb-sum">{(s=>s?<span className="eb-badge">{STATUS_TEXT[s]}</span>:rub(g.total))(groupBadge(g))}</b></summary>
     <table className="eb-table"><tbody>{g.rows.map((r,i)=><Fragment key={r.id}>{r.sub&&r.sub!==g.rows[i-1]?.sub&&<tr className="eb-sub"><th colSpan={4}>{r.sub}</th></tr>}<tr className={'eb-row '+r.status}><td>{r.label}</td><td className="n">{qty(r)}</td><td className="n">{r.status==='priced'&&r.price!==null?'× '+rub(r.price):''}</td><td className="n">{r.status==='priced'?rub(r.amount!):<span className="eb-badge">{STATUS_TEXT[r.status]}</span>}</td></tr></Fragment>)}</tbody></table>
    </details>)}
    {e.retail!==null&&b.rounding!==0&&<p className="eb-line"><span>Округление до итога</span><b>{b.rounding>0?'+':''}{rub(b.rounding)}</b></p>}

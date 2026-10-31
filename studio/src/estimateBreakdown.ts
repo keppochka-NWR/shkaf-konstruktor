@@ -67,13 +67,20 @@ export function itemShares(p:Project,total:number|null):{name:string;price:numbe
  return p.modules.map((a,i)=>({name:a.module.name,price:q.pending[i]&&!q.prices[i]?null:q.prices[i],pending:q.pending[i]}));
 }
 
+/** Группа, в которой ни у одной строки нет цены: вместо суммы «0 ₽» — значок (ревью 31.10): все в цене листов — «в цене листов»,
+ *  есть позиции после финального расчёта — «после финального расчёта», иначе «нет цены». null — у группы есть сумма. */
+export function groupBadge(g:BreakdownGroup):Exclude<RowStatus,'priced'>|null{
+ if(g.rows.some(r=>r.status==='priced'))return null;
+ return g.inSheet===g.rows.length?'in-sheet':g.pending?'pending':'missing';
+}
 const fmt=(v:number)=>v.toLocaleString('ru-RU');
+const groupSum=(g:BreakdownGroup)=>{const s=groupBadge(g);return s?STATUS_TEXT[s]:fmt(g.total)+' ₽';};
 const qtyText=(r:BreakdownRow)=>`${String(Math.round(r.qty*1000)/1000).replace('.',',')} ${r.unit}`;
 const amountText=(r:BreakdownRow)=>r.status==='priced'?fmt(r.amount!)+' ₽':STATUS_TEXT[r.status];
 /** Текст для буфера обмена (мессенджер, письмо): группы, строки, итог. */
 export function breakdownText(b:Breakdown,title='Стоимость проекта'):string{
  const out=[title];
- for(const g of b.groups){out.push('',`${g.title}: ${fmt(g.total)} ₽`);for(const r of g.rows)out.push(`  ${r.label} — ${qtyText(r)}${r.price!==null&&r.status==='priced'?' × '+fmt(r.price)+' ₽':''} = ${amountText(r)}`);}
+ for(const g of b.groups){out.push('',`${g.title}: ${groupSum(g)}`);for(const r of g.rows)out.push(`  ${r.label} — ${qtyText(r)}${r.price!==null&&r.status==='priced'?' × '+fmt(r.price)+' ₽':''} = ${amountText(r)}`);}
  out.push('');if(b.total!==null&&b.rounding)out.push(`Округление до итога: ${b.rounding>0?'+':''}${fmt(b.rounding)} ₽`);
  out.push(b.total===null?'Итого: требует уточнения (учтено '+fmt(b.sum)+' ₽)':'Итого: '+fmt(b.total)+' ₽','Предварительно, без доставки и монтажа.');
  return out.join('\n');
@@ -81,7 +88,7 @@ export function breakdownText(b:Breakdown,title='Стоимость проект
 const esc=(s:string)=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!));
 /** Печатная «Стоимость проекта» (A4): те же группы и строки. */
 export function breakdownHTML(b:Breakdown,title='Стоимость проекта',items?:{name:string;price:number|null;pending:boolean}[]|null):string{
- const rows=b.groups.map(g=>`<tr class="g"><th colspan="3">${esc(g.title)}</th><th>${fmt(g.total)} ₽</th></tr>`+g.rows.map(r=>`<tr${r.status==='priced'?'':' class="s"'}><td>${esc(r.label)}</td><td>${esc(qtyText(r))}</td><td>${r.status==='priced'&&r.price!==null?fmt(r.price)+' ₽':''}</td><td>${esc(amountText(r))}</td></tr>`).join('')).join('');
+ const rows=b.groups.map(g=>`<tr class="g"><th colspan="3">${esc(g.title)}</th><th>${esc(groupSum(g))}</th></tr>`+g.rows.map(r=>`<tr${r.status==='priced'?'':' class="s"'}><td>${esc(r.label)}</td><td>${esc(qtyText(r))}</td><td>${r.status==='priced'&&r.price!==null?fmt(r.price)+' ₽':''}</td><td>${esc(amountText(r))}</td></tr>`).join('')).join('');
  const tail=(b.total!==null&&b.rounding?`<tr><td colspan="3">Округление до итога</td><td>${fmt(b.rounding)} ₽</td></tr>`:'')+`<tr class="t"><th colspan="3">Итого</th><th>${b.total===null?'требует уточнения':fmt(b.total)+' ₽'}</th></tr>`;
  const it=items?.length?`<h2>По изделиям</h2><table><tbody>${items.map(i=>`<tr><td>${esc(i.name)}</td><td>${i.price===null?PENDING_ITEM_PRICE:fmt(i.price)+' ₽'}</td></tr>`).join('')}</tbody></table>`:'';
  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page{size:A4;margin:14mm}body{font:12px/1.4 Arial,sans-serif;color:#222}h1{font-size:18px}h2{font-size:14px;margin-top:18px}table{width:100%;border-collapse:collapse}td,th{padding:3px 6px;border-bottom:1px solid #ddd;text-align:left}td:nth-child(n+2),th:last-child{text-align:right;white-space:nowrap}tr.g th{background:#f2f4f7;padding-top:8px}tr.s td{color:#777}tr.t th{font-size:14px;border-top:2px solid #222}</style></head><body><h1>${esc(title)}</h1><table><thead><tr><th>Позиция</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead><tbody>${rows}${tail}</tbody></table>${it}<p>Предварительная стоимость без доставки и монтажа. «В цене листов» — входит в цену листа ЛДСП (плита, кромка, фурнитура корпуса и работа цеха).</p></body></html>`;

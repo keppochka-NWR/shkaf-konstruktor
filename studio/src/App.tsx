@@ -838,7 +838,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     }catch(e){setError((e as Error).message);return false;}
   }
   /** Макс 31.10: показать, где появились параметры выбранной детали (колесо «Параметры», плашка «Параметры»): раскрыть, прокрутить, подсветить. */
-  /** Макс 31.10: при отмеченных модулях в «Полках», «Ящиках», «Секции» — что наполнение правится у выбранного и где перенести его на отмеченные. */
+  /** Макс 31.10: при отмеченных модулях — один раз в начале «Наполнения» (ревью 31.10: было в «Полках», «Ящиках», «Секции») — что наполнение правится у выбранного и где перенести его на отмеченные. */
   const groupFillNote=liveGroupIds.length>1?<p className="field-note group-fill-hint" role="note" data-testid="group-fill-hint">Наполнение правится у выбранного «{m.name}». Применить к отмеченным ({liveGroupIds.filter(x=>x!==placed.id).length}) — кнопка <button className="text-action" onClick={()=>void highlightControls('[data-testid="group-filling"]')}>«Наполнение как у этого»</button>.</p>:null;
   function showParams(focus=false){void highlightControls('.properties .selected-filling',{focus}).then(els=>{if(!els.length)void highlightControls('.properties details[data-setting="Секция"]');});}
   function groupFacadeEdit(field:GroupFacadeField,value:string,label:string){
@@ -1861,7 +1861,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
               <button className="text-action" onClick={()=>setTab('room')}>Замер помещения и проверка расстановки</button>
             </div>
           ) : m.raw||m.worktop||kitchenModule ? <KitchenPanel allowEmpty={!!onEmptyProject} m={m} placed={placed} project={project} stage={stage} modify={modify} commit={commitProject} move={movePlaced} place={placePlaced} toWall={m.worktop?undefined:w=>moduleToWall(placed.id,w)} turns={m.worktop?[]:cornerTurns(project,placed.id)} aroundCorner={t=>aroundCorner(placed.id,t)} position={placedBounds} room={project.room} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} material={target=>{setMaterialTarget(target);setModal('materials');}} handles={()=>{setHandleFace('');setHandleTarget('doors');setModal('handles');}} showInside={()=>{setHideFacades(false);userDoors(true);}}/> : m.kupe ? <KupePanel m={m} modify={modify} openDoors={openDoors} setOpenDoors={userDoors} selectedPid={selectedPart?.mid===placed.id?selectedPart.pid:undefined}/> : m.corner ? <CornerModulePanel module={m} stage={tab==='section'?'filling':stage} selected={selectedId} update={commit} select={chooseSection} material={target=>{setMaterialTarget(target);setModal('materials');}} addUpper={addUpper} rotation={placed.rotation??0} rotate={rotation=>{try{return commitProject(rotateModule(project,placed.id,rotation));}catch(e){setError((e as Error).message);return false;}}} position={placedBounds} room={project.room} move={movePlaced} preview={(sid,j,pid)=>{chooseSection(sid);setMode('fill');setOpenDoors(true);setDrawerIndex(j);setDrawerPreview(j!==null);setSelectedPart({mid:placed.id,sid,pid});}}/> : (
-            <SettingsTree className="furniture-settings" key={active}>
+            <SettingsTree className="furniture-settings" key={active} leads={{"Наполнение":groupFillNote}}>
               <SettingsSection title="Габариты">
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Боковины над цоколем" checked={!!m.raisedSides} onChange={e=>modify(n=>{n.raisedSides=e.target.checked;})}/> Боковины над цоколем</span></label>
                 <label className="hardware-field expert-only"><span><input type="checkbox" aria-label="Открытый угловой стык" checked={!!m.openJunction} onChange={e=>modify(n=>{n.openJunction=e.target.checked;delete n.cornerFiller;delete n.wallFiller;})}/> Открытый угловой стык без дверных фальшей</span></label>
@@ -1994,7 +1994,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </button>
                 </div>
               </SettingsSection>
-<SettingsSection title="Полки">{groupFillNote}                <Counter
+<SettingsSection title="Полки">                <Counter
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
@@ -2055,7 +2055,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </>
                 )}
 </SettingsSection>
-<SettingsSection title="Ящики">{groupFillNote}                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={drawerFaceGap(m,s)/* критик 29.10: как виден по деталям */} min={2} max={10} onChange={v=>modify(n=>setDrawerGap(n,s.id,v))}/>}
+<SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={drawerFaceGap(m,s)/* критик 29.10: как виден по деталям */} min={2} max={10} onChange={v=>modify(n=>setDrawerGap(n,s.id,v))}/>}
                 {s.drawers>0&&(falshGlue(m)[s.id+':left']||falshGlue(m)[s.id+':right'])&&<p className="field-note" role="note" data-testid="falsh-glue-note">Фальш 32 мм: склейка, разрыв у петель — петля в зоне ящиков не сдвигается, фальш из двух плит 16 с разрывом 100 мм у петли.</p>}
 
                 <Counter
@@ -2305,7 +2305,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {m.doors&&m.doorOpen!=='push'&&<label className="hardware-field"><span><input type="checkbox" aria-label="Петли 155–165°" checked={allHingeAngles(m,165)} onChange={e=>{const on=e.target.checked;modify(n=>setAllHingeAngles(n,on?165:null));}}/> Петли с углом открывания 155–165° · все двери модуля</span><small>Дверь откидывается к соседней и не загораживает проём. Петля 155° — 1 700 ₽ клиенту. Угол одной двери — в её настройках (клик по двери).</small></label>}
                 {m.doors&&!m.kitchen&&<><button className="outline full" onClick={()=>modify(n=>Object.assign(n,repairHinges(n)))}>Подобрать положение петель</button><p className="field-note">Подбирает свободные высоты и отступ чашки. Старые проекты меняются только по этой кнопке; Ctrl+Z отменяет. Присадку и достаточность опоры створки проверяет технолог.</p></>}
 </SettingsSection>
-<SettingsSection title="Секция">{groupFillNote}
+<SettingsSection title="Секция">
                 <div className="section-heading">
                   <h2>Секция {idx + 1}</h2>
                   <Columns2 size={17} />
