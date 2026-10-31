@@ -2,7 +2,8 @@ import {PanelTopOpen,PanelTopClose} from 'lucide-react';
 import './editor-visibility.css';
 import {WorkspacePanels} from './WorkspacePanels';
 import {useEffect,useMemo,useState,type ReactNode} from 'react';
-import {Download,Plus,RotateCcw,Box,FileText} from 'lucide-react';
+import {Download,Plus,RotateCcw,Box,Maximize} from 'lucide-react';
+import {SceneToolbar,ViewButtons} from './SceneToolbar';
 import {EditorBrand} from './EditorBrand';
 import {StageBar} from './StageBar';
 import {STAGES,stageIndex,normalizeStage,rememberStage,type Stage} from './stages';
@@ -41,18 +42,31 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  // T1 (18.10): первая мебель открывает редактор на «Построении мебели», а не возвращает на «Помещение».
  const addFirst=(ok:boolean)=>{if(ok)rememberStage('bodies');return ok;};
  const add=()=>{rememberStage('bodies');onAdd();};
+ // Макс 31.10: «построение помещения — в левом меню»: на «Помещении» замер слева, палитра «Добавить мебель» справа
+ const roomLeft=stage==='room';
+ const palette=<div className="project-modules"><ModulePalette source={dummy.module} onAdd={m=>addFirst(update(applyAutoFillers(appendFromPalette(project,m))))} room={project.room} onAddGroup={(group,keep)=>addFirst(update(applyAutoFillers(appendModuleGroup(project,group,false,keep).project)))}/></div>;
+ const roomSection=<>
+<section className="property-section"><h2>{stage==='fixtures'?'Коммуникации':'Замер помещения'}</h2>
+ {(advanced||stage==='room')&&<><details><summary>Точки замера и кривые стены</summary>{project.room.outline?<p className="field-note">Точки замера и кривые стены пока работают для прямоугольной комнаты.</p>:<RoomSurveyEditor room={project.room} onChange={change}/>}</details>
+ {(['width','depth','height'] as const).map(axis=><label className="number-field" key={axis}><span>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}</span><div><input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} key={project.room[axis]} defaultValue={project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.currentTarget.value=String(project.room[axis]);e.currentTarget.blur();}}} onBlur={e=>{const n=e.target.value.trim()?Number(e.target.value):NaN;if(n!==project.room[axis]&&!size(axis,n))e.target.value=String(project.room[axis]);}}/><span>мм</span></div></label>)}
+ <RoomShapePanel project={project} commit={update} onPlan={toPlan}/></>}
+ {(advanced||stage==='room'||stage==='fixtures')&&<><details><summary>Отделка: пол и стены</summary><RoomFinishes room={project.room} onChange={change}/></details><details open><summary>Двери и окна</summary><RoomEditor room={project.room} part="openings" onSelect={id=>pick('opening',id)} onChange={change}/></details><details><summary>Трубы, радиаторы и объекты на стенах</summary><RoomFixtures room={project.room} onSelect={id=>pick('fixture',id)} onChange={change} onImport={r=>change(keepFinish(project.room,r.room))}/></details><details><summary>Колонны и отдельные препятствия</summary><RoomObstacles room={project.room} onSelect={id=>pick('obstacle',id)} onChange={change}/></details></>}
+ {['bodies','filling','facades'].includes(stage)&&<><p className="field-note">В этой комнате пока нет мебели. Добавьте шкаф, чтобы настроить корпуса, наполнение и фасады.</p><button className="primary full" onClick={add}>Добавить шкаф в комнату</button></>}
+ {stage==='docs'&&<><p className="field-note">Сохраните помещение с замером и проёмами. Деталировка появится после добавления мебели.</p><button className="outline full" onClick={onDownload}>Скачать документ комнат</button></>}
+</section>
+ </>;
  return <div className={'app empty-room-app'+(advanced?' advanced':'')+(compactTop?' compact-top':'')} data-stage={stage} style={{'--stage':STAGES[stageIndex(stage)].color} as React.CSSProperties}>
  <header className="header"><EditorBrand/><button className="top-toggle" aria-label={compactTop?"Заказ и инструменты":"Свернуть верхнюю панель"} aria-expanded={!compactTop} onClick={toggleTop}>{compactTop?<PanelTopOpen size={18}/>:<PanelTopClose size={18}/>}<span>{compactTop?'Заказ и инструменты':'Свернуть верхнюю панель'}</span></button><div className="document-name"><strong>{title}</strong><span>Помещение · без мебели</span></div><div className="header-actions"><button className="outline" onClick={add}><Plus size={16}/>Добавить первый шкаф</button><button className="primary" onClick={onDownload}><Download size={16}/><span>Скачать документ</span></button></div></header>
  <div className="editor-order-area" hidden={compactTop}>{bar}</div>
  <StageBar stage={stage} advanced={advanced} onStage={go} onAdvanced={setAdvanced} done={{}}/>
  <WorkspacePanels>
  <aside className="library"><div className="panel-heading"><span className="eyebrow">ПОМЕЩЕНИЕ</span><h1>{title}</h1><p>{project.room.width} × {project.room.depth} × {project.room.height} мм</p></div>
- <div className="stage-note"><b>{stage==='room'?'Начните с размеров комнаты':stage==='fixtures'?'Что мешает установке мебели?':'Комната готова к расстановке'}</b><p>{stage==='room'?'Введите размеры справа. Затем добавьте окна, двери и коммуникации.':stage==='fixtures'?'Добавьте объекты справа. Нажмите правой кнопкой по объекту, чтобы изменить его параметры.':'Добавьте первый шкаф, чтобы перейти к корпусам, наполнению и фасадам.'}</p></div>
- <div className="project-modules"><ModulePalette source={dummy.module} onAdd={m=>addFirst(update(applyAutoFillers(appendFromPalette(project,m))))} room={project.room} onAddGroup={(group,keep)=>addFirst(update(applyAutoFillers(appendModuleGroup(project,group,false,keep).project)))}/></div>
+ <div className="stage-note"><b>{stage==='room'?'Начните с размеров комнаты':stage==='fixtures'?'Что мешает установке мебели?':'Комната готова к расстановке'}</b><p>{stage==='room'?'Введите размеры ниже. Затем добавьте окна, двери и коммуникации.':stage==='fixtures'?'Добавьте объекты справа. Нажмите правой кнопкой по объекту, чтобы изменить его параметры.':'Добавьте первый шкаф, чтобы перейти к корпусам, наполнению и фасадам.'}</p></div>
+ {roomLeft?<div className="room-left-panel">{roomSection}</div>:palette}
  <div className="library-bottom"><p>Другие комнаты сохранены и скрыты. Переключение комнаты — в панели заказа сверху.</p></div></aside>
  <section className="viewport" aria-label="Рабочая область">
- <div className="view-header"><div className="view-tabs">{([{id:'iso',label:'3D'},{id:'front',label:'Спереди'},{id:'side',label:'Сбоку'},{id:'top',label:'Сверху'}] as const).map(v=><button key={v.id} aria-pressed={!plan&&view===v.id} onClick={()=>{setView(v.id);setPlan(false);setFit(f=>f+1);}}>{v.label}</button>)}<button aria-pressed={plan} aria-label="Показать план комнаты" onClick={()=>setPlan(true)}>План</button></div><span className="scale-label">РАЗМЕРЫ В ММ</span></div>
- <div className="interaction-bar"><button aria-pressed={!plan} onClick={()=>setPlan(false)}><RotateCcw size={16}/>Свободная камера</button><button onClick={()=>setFit(f=>f+1)}>Вписать комнату</button></div>
+ {/* Макс 31.10: та же полоса, что в редакторе, — иконки видов как в Базисе и режимы в одну строку */}
+ <SceneToolbar views={<ViewButtons active={plan?'plan':view} onView={v=>{if(v==='plan'){setPlan(true);return;}setView(v);setPlan(false);setFit(f=>f+1);}}/>}><div className="interaction-bar"><button aria-label="Свободная камера" aria-pressed={!plan} onClick={()=>setPlan(false)}><RotateCcw size={16}/><span className="mode-label">Свободная камера</span></button><button aria-label="Вписать комнату" onClick={()=>setFit(f=>f+1)}><Maximize size={16}/><span className="mode-label">Вписать комнату</span></button></div></SceneToolbar>
  {plan?<RoomPlan project={project} active="" moveAll={false} snapping={false} onSelect={()=>{}} onRoom={()=>{}} onObstacleSelect={id=>pick('obstacle',id)} onOpeningSelect={id=>pick('opening',id)} onFixtureSelect={id=>pick('fixture',id)} onEnvironmentContext={pick} update={update} shapeEdit={shapeEdit} onShapeEdit={setShapeEdit}/>:(          <Scene key={viewKey}
             viewKey={viewKey}
             module={dummy.module}
@@ -90,15 +104,8 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
             roomDimensions
           />)}
  </section>
- <aside className="properties"><section className="property-section"><h2>{stage==='fixtures'?'Коммуникации':'Замер помещения'}</h2>
- {(advanced||stage==='room')&&<><details><summary>Точки замера и кривые стены</summary>{project.room.outline?<p className="field-note">Точки замера и кривые стены пока работают для прямоугольной комнаты.</p>:<RoomSurveyEditor room={project.room} onChange={change}/>}</details>
- {(['width','depth','height'] as const).map(axis=><label className="number-field" key={axis}><span>{{width:'Ширина комнаты',depth:'Глубина комнаты',height:'Высота комнаты'}[axis]}</span><div><input type="number" aria-label={{width:'Ширина пустой комнаты',depth:'Глубина пустой комнаты',height:'Высота пустой комнаты'}[axis]} key={project.room[axis]} defaultValue={project.room[axis]} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){e.currentTarget.value=String(project.room[axis]);e.currentTarget.blur();}}} onBlur={e=>{const n=e.target.value.trim()?Number(e.target.value):NaN;if(n!==project.room[axis]&&!size(axis,n))e.target.value=String(project.room[axis]);}}/><span>мм</span></div></label>)}
- <RoomShapePanel project={project} commit={update} onPlan={toPlan}/></>}
- {(advanced||stage==='room'||stage==='fixtures')&&<><details><summary>Отделка: пол и стены</summary><RoomFinishes room={project.room} onChange={change}/></details><details open><summary>Двери и окна</summary><RoomEditor room={project.room} part="openings" onSelect={id=>pick('opening',id)} onChange={change}/></details><details><summary>Трубы, радиаторы и объекты на стенах</summary><RoomFixtures room={project.room} onSelect={id=>pick('fixture',id)} onChange={change} onImport={r=>change(keepFinish(project.room,r.room))}/></details><details><summary>Колонны и отдельные препятствия</summary><RoomObstacles room={project.room} onSelect={id=>pick('obstacle',id)} onChange={change}/></details></>}
- {['bodies','filling','facades'].includes(stage)&&<><p className="field-note">В этой комнате пока нет мебели. Добавьте шкаф, чтобы настроить корпуса, наполнение и фасады.</p><button className="primary full" onClick={add}>Добавить шкаф в комнату</button></>}
- {stage==='docs'&&<><p className="field-note">Сохраните помещение с замером и проёмами. Деталировка появится после добавления мебели.</p><button className="outline full" onClick={onDownload}>Скачать документ комнат</button></>}
- </section></aside></WorkspacePanels>
- <div className="project-dock"><nav className="dock-bar" aria-label="Навигация по проекту"><button aria-pressed={stage!=='docs'} onClick={()=>go('room')}><Box size={17}/>Проект</button><button aria-pressed={stage==='docs'} onClick={()=>go('docs')}><FileText size={17}/>Документы</button><span className="empty-room-total">В комнате пока нет мебели</span></nav></div>
+ <aside className="properties">{roomLeft?<section className="property-section">{palette}</section>:roomSection}</aside></WorkspacePanels>
+ <div className="project-dock"><nav className="dock-bar" aria-label="Навигация по проекту"><button aria-pressed onClick={()=>go('room')}><Box size={17}/>Проект</button><span className="empty-room-total">В комнате пока нет мебели</span></nav></div>
  {selected&&<RoomObjectProperties room={project.room} selection={selected} onChange={change} onClose={()=>setSelected(null)}/>}
  </div>;
 }

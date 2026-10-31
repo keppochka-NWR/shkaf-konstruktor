@@ -84,7 +84,7 @@ for (const view of VIEWS) {
     const m = await page.evaluate(() => {
       const labels = [...document.querySelectorAll(".radial-label")].map((e) => ({ t: e.textContent, r: e.getBoundingClientRect().toJSON() }));
       const items = [...document.querySelectorAll(".radial-item")].map((e) => e.getBoundingClientRect().toJSON());
-      const bars = [".interaction-bar", ".view-header"].map((s) => document.querySelector(s)?.getBoundingClientRect().toJSON()).filter(Boolean);
+      const bars = [".scene-toolbar"].map((s) => document.querySelector(s)?.getBoundingClientRect().toJSON()).filter(Boolean);
       // m2: что под центром подписи — сама подпись/меню, а не ручка или плашка размера
       // подпись с pointer-events:none — по ней elementFromPoint не попадает; проверяем, что под подписью ручки и плашки не ловят мышь,
       // а слой меню (портал в body, z-index) выше слоя сцены

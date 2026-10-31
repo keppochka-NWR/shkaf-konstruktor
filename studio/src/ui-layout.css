@@ -1,0 +1,164 @@
+/* Раскладка экрана (Макс 31.10.2026, 11 правок): полоса сцены в одну строку как в Базисе, инструменты слева с «Назад/Вперёд»,
+   клавиши плашками, синие заголовки разделов, колонки по clamp() для 1280–2560, серые недоступные кнопки с причиной.
+   Подключается последним (main.tsx) — перекрывает старые слои studio-refresh / layout-fixes без !important, кроме отмеченных. */
+:root{
+ --left-col:clamp(256px,calc(10vw + 120px),360px);  /* 1280 → 256, 1366 → 257, 1920 → 312, 2560 → 360 */
+ --right-col:clamp(296px,calc(10vw + 160px),400px); /* 1280 → 296, 1366 → 297, 1920 → 352, 2560 → 400; сцена на 1280 — 728 px */
+ --rail-w:52px;--toolbar-h:44px;--keys-h:30px;
+ --accent:#325bee;--accent-hover:#2449d6;--accent-soft:#eef2ff;--muted:#5a6b74;--text-muted:#5a6b74;--blue:#325bee;--light:#eef2ff;--accent-line:#c3cff9;--accent-ink:#1f3fb8;
+ --neutral-ink:#3b4652;--disabled-ink:#8a96a0;--disabled-bg:#f3f5f7;
+}
+
+/* ── 7. Колонки: токены по ширине экрана; ширина, заданная мышью, — в px поверх (WorkspacePanels) ── */
+.workspace.resizable-workspace{grid-template-columns:var(--left-panel-width,var(--left-col)) minmax(0,1fr) var(--right-panel-width,var(--right-col))}
+.workspace.right-collapsed>.properties{visibility:hidden;overflow:hidden;padding:0;border:0}
+.workspace.right-collapsed>.panel-resizer-right,.workspace.left-collapsed>.panel-resizer-left{display:none}
+.app .library,.app .properties{min-width:0;overflow-x:hidden}
+
+/* ── 1. Верхняя полоса сцены: одна строка, сплошной фон, сцена — под ней ── */
+.app .viewport{container-type:inline-size;container-name:scene}
+.viewport .scene-toolbar{position:absolute;z-index:6;top:0;left:0;right:0;height:var(--toolbar-h);display:flex;align-items:center;gap:2px;padding:0 10px;background:#fff;border-bottom:1px solid var(--line);overflow:hidden}
+.app .scene-toolbar .view-tabs{position:static;display:flex;gap:4px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;flex:none}
+.app .scene-toolbar .view-tabs .view-button{position:relative;width:32px;height:32px;min-height:0;padding:0;display:grid;place-items:center;border:1px solid transparent;border-radius:6px;background:none;color:var(--text-muted);font-size:0}
+.app .scene-toolbar .view-tabs .view-button:hover{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.app .scene-toolbar .view-tabs .view-button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.app .scene-toolbar .view-tabs button[hidden]{display:none}
+.scene-toolbar .toolbar-sep{flex:none;width:1px;height:24px;margin:0 8px;background:var(--line)}
+.app .scene-toolbar .interaction-bar{position:static;display:flex;flex-wrap:nowrap;align-items:center;gap:2px;width:auto;min-width:0;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;inset:auto}
+.app .scene-toolbar .interaction-bar button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid transparent;border-radius:6px;background:none;color:var(--neutral-ink);font-size:12px;font-weight:550;white-space:nowrap}
+.app .scene-toolbar .interaction-bar button:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent-line)}
+.app .scene-toolbar .interaction-bar button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent);font-size:12px}
+.app .scene-toolbar .interaction-bar .tool-toggle{padding:6px 8px}
+.app .scene-toolbar .interaction-bar .mode-sep{flex:none;width:1px;height:20px;margin:0 6px;background:var(--line)}
+.scene-toolbar .toolbar-end{margin-left:auto;display:flex;align-items:center;gap:4px;flex:none}
+/* узкая сцена (1280): подпись только у включённого режима, остальные — значки с подсказкой */
+@container scene (max-width:805px){.app .scene-toolbar .interaction-bar button:not([aria-pressed=true]) .mode-label{display:none}.app .scene-toolbar .interaction-bar button{padding:6px 8px}}
+.app:not(.presentation) .viewport .scene{top:var(--toolbar-h);bottom:var(--keys-h)}.app.empty-room-app:not(.presentation) .viewport .scene{bottom:0} /* в пустой комнате строки клавиш нет */
+.app.presentation .viewport .scene-toolbar{position:absolute}
+.app .viewport .room-plan{inset:calc(var(--toolbar-h) + 10px) 16px 16px calc(var(--rail-w) + 8px)}
+.app .viewport>.view-header{display:none}
+
+/* ── 2–3. Колонка быстрых действий — слева, сверху «Назад / Вперёд» ── */
+.app .viewport .scene-tools{left:8px;right:auto;top:calc(var(--toolbar-h) + 8px);padding:4px;gap:2px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 2px 8px #1d2b3a0d}
+.app .viewport .scene-tools button{width:32px;height:30px;min-height:28px;flex:none;display:grid;place-items:center;border:1px solid transparent;border-radius:6px;color:var(--text-muted)}.app .viewport .scene-tools button svg{width:16px;height:16px}
+.app .viewport .scene-tools button:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.app .viewport .scene-tools button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent)}
+.app .viewport .scene-tools .tools-sep{flex:none;height:1px;margin:3px 4px;background:var(--line)}
+.app .viewport .scene-tools.plan-only>:not(.history-tool):not(.tools-sep){display:none}
+.app .viewport .scene-tools.plan-only>.tools-sep{display:none}
+/* подпись при наведении — вправо от колонки (колонка у левого края) */
+.app .viewport .scene-tools button[aria-label]:hover::after,.app .viewport .scene-tools button[aria-label]:focus-visible::after{left:calc(100% + 10px);right:auto}
+.app .viewport .scene-tools{overflow:visible}
+@media (max-height:760px){.app .viewport .scene-tools button{height:28px}}
+/* левый край сцены занят колонкой: плашки внизу слева сдвигаем вправо */
+.app .viewport .error-banner,.app .viewport .restore-modules,.app .rmb-tip{left:calc(var(--rail-w) + 12px)}
+.app .viewport .error-banner{bottom:calc(var(--keys-h) + 12px)}
+.app .viewport .restore-modules{bottom:calc(var(--keys-h) + 10px)}
+.app .viewport .section-picker{bottom:calc(var(--keys-h) + 10px)}
+.app .viewport .clear-guides{bottom:calc(var(--keys-h) + 10px)}
+.app .viewport .light-mode-bar{top:calc(var(--toolbar-h) + 10px)}
+
+/* ── 4. Клавиши: плашки на сплошной полосе внизу сцены ── */
+.app .viewport .orbit-help.key-hints{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;height:var(--keys-h);display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:0 10px 0 calc(var(--rail-w) + 8px);margin:0;background:#f7f8fa;border-top:1px solid var(--line);color:#2f3a45;font-size:11.5px;line-height:1;pointer-events:auto;white-space:nowrap;overflow:hidden;flex-wrap:nowrap}
+.key-hints .key-action{font-weight:600;color:#1f2933;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.key-hints .view-keys{display:inline-flex;gap:12px;flex:none}
+.key-hints .key-hint{display:inline-flex;align-items:center;gap:3px;flex:none}
+.key-hints .key-hint>span{margin-left:2px;color:#3e4a56}
+.key-hints kbd{display:inline-grid;place-items:center;min-width:20px;height:19px;padding:0 5px;border:1px solid #c5ccd5;border-bottom-width:2px;border-radius:4px;background:#fff;color:#1d2733;font:650 11px/1 "Golos Text",Arial,sans-serif}
+.key-hints .rmb-hint kbd{border-color:var(--accent-line);color:var(--accent)}
+.key-hints .rmb-hint span{color:var(--accent-ink);font-weight:650}
+.key-hints .key-off{color:#8a5a12}
+.key-hints .key-help{flex:none;margin-left:auto;display:grid;place-items:center;width:22px;height:22px;padding:0;border-radius:50%;color:var(--accent);background:var(--accent-soft)}
+@container scene (max-width:1180px){.key-hints .key-wide{display:none}}
+@container scene (max-width:1080px){.key-hints .key-action{display:none}}
+@container scene (max-width:980px){.key-hints .view-keys .key-hint:nth-child(n+4){display:none}.app .viewport .orbit-help.key-hints,.key-hints .view-keys{gap:9px}}
+@container scene (max-width:840px){.key-hints .rmb-hint .key-hint>span{display:none}}
+
+/* ── 5 и 10. Раскрывающиеся разделы — основной синий, явное открыто/закрыто ── */
+.app .settings-category>summary{transition:background .12s}
+.app .settings-category>summary strong{color:var(--accent);font-size:14px;font-weight:600}
+.app .settings-category>summary::after{content:'';top:21px;right:14px;width:7px;height:7px;border:solid var(--accent);border-width:0 2px 2px 0;transform:rotate(45deg);transition:transform .15s}
+.app .settings-category[open]>summary::after{content:'';transform:rotate(-135deg);top:24px}
+.app .settings-category>summary:hover{background:#f6f8ff}
+.app .settings-category[open]>summary{background:var(--accent-soft)}
+.app .settings-section>summary,.app .measurement-fields>summary,.app .module-palette>summary,.app .replace-filling>summary,.app .move-group>summary,.app .catalog-presets>summary,.app .room-left-panel details>summary{color:var(--accent-ink);list-style:none;position:relative;padding-left:18px}
+.app .settings-section>summary{padding-left:34px}
+.app .settings-section>summary::-webkit-details-marker,.app .measurement-fields>summary::-webkit-details-marker,.app .module-palette>summary::-webkit-details-marker,.app .replace-filling>summary::-webkit-details-marker,.app .move-group>summary::-webkit-details-marker,.app .catalog-presets>summary::-webkit-details-marker,.app .room-left-panel details>summary::-webkit-details-marker{display:none}
+.app .settings-section>summary::before,.app .measurement-fields>summary::before,.app .module-palette>summary::before,.app .replace-filling>summary::before,.app .move-group>summary::before,.app .catalog-presets>summary::before,.app .room-left-panel details>summary::before{content:'';position:absolute;left:3px;top:50%;width:6px;height:6px;margin-top:-5px;border:solid var(--accent);border-width:0 2px 2px 0;transform:rotate(-45deg);transition:transform .15s}
+.app .settings-section>summary::before{left:18px}
+.app .settings-section[open]>summary::before,.app .measurement-fields[open]>summary::before,.app .module-palette[open]>summary::before,.app .replace-filling[open]>summary::before,.app .move-group[open]>summary::before,.app .catalog-presets[open]>summary::before,.app .room-left-panel details[open]>summary::before{transform:rotate(45deg);margin-top:-6px}
+.app .settings-section[open]>summary{background:var(--accent-soft);color:var(--accent)}
+
+/* ── 10. Акценты: синий — главное действие и активное, остальное нейтрально ── */
+.app .library .module-item[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.app .section-picker button[aria-pressed=true]{border-color:var(--accent-line);background:var(--accent-soft)}
+.app .library .module-palette .module-kinds button[aria-pressed=true],.app .library .module-palette .catalog-tabs [role=tab][aria-selected=true]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.app .primary:hover:not(:disabled){background:var(--accent-hover)}
+
+/* ── 11. Недоступно — серым, причина в подсказке ── */
+.app button:disabled,.app button[aria-disabled=true]{color:var(--disabled-ink)!important;cursor:not-allowed;box-shadow:none}
+.app button.primary:disabled{background:#c9ced6!important;border-color:#c9ced6!important;color:#fff!important}
+.app button.outline:disabled{background:var(--disabled-bg);border-color:#e1e5ea}
+.app .scene-tools button:disabled,.app .fill-buttons button:disabled,.app .scene-toolbar button:disabled{background:none;opacity:1}
+.app .fill-buttons button:disabled{cursor:not-allowed;border-style:dashed}
+.app .fill-buttons button:disabled:hover{border-color:#e1e5ea;background:none}
+
+/* ── 6. Левая колонка: иконки одного размера, подписи не плывут ── */
+.app .library{container-type:inline-size;container-name:lib}
+.app .library .module-palette .module-kinds button{min-height:58px;justify-content:center}
+.app .library .module-palette .module-kinds button svg{width:20px;height:20px;flex:none}
+.app .library .module-palette .module-kinds button span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;max-width:100%;font-size:11px;line-height:1.2;overflow-wrap:normal;word-break:normal;hyphens:auto}
+.app .library .module-palette .catalog-tabs [role=tab]{overflow:hidden;overflow-wrap:normal;word-break:normal;hyphens:none}
+.app .library .module-item b,.app .library .module-item small{overflow:hidden;text-overflow:ellipsis}
+.app .library .fill-buttons button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.app .library .fill-buttons button svg{flex:none}
+/* узкая колонка (тянули разделитель): палитра — сетка значков, подписи — в подсказке */
+@container lib (max-width:170px){
+ .app .library .module-palette .module-kinds{grid-template-columns:repeat(auto-fill,minmax(44px,1fr))}
+ .app .library .module-palette .module-kinds button{min-height:44px}
+ .app .library .module-palette .module-kinds button span{display:none}
+ .app .library .module-palette .catalog-tabs{grid-template-columns:1fr}
+ .app .library .module-palette .module-sizes{grid-template-columns:1fr 1fr}
+}
+/* свёрнутая колонка: узкая полоса значков */
+.library-collapse{position:absolute;top:8px;right:8px;z-index:3;width:28px;height:28px;padding:0;display:grid;place-items:center;border-radius:6px;color:#5b6773;background:#fff;border:1px solid var(--line)}
+.library-collapse:hover{color:var(--accent);border-color:var(--accent-line)}
+.app .library{position:relative}
+.library-rail{display:none}
+.workspace.left-collapsed>.library{padding:8px 0!important;overflow:hidden auto;scrollbar-width:none}
+.workspace.left-collapsed>.library>:not(.library-rail){display:none!important}
+.workspace.left-collapsed .library-rail{display:flex;flex-direction:column;align-items:center;gap:4px}
+.library-rail button{width:36px;height:36px;flex:none;padding:0;display:grid;place-items:center;border-radius:7px;color:#4d5864;background:none;border:1px solid transparent;font:650 12px/1 "Golos Text",Arial,sans-serif}
+.library-rail button:hover{background:#f2f4f7;color:var(--accent)}
+.library-rail button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+.library-rail .rail-sep{width:24px;height:1px;background:var(--line);margin:4px 0;flex:none}
+
+/* ── 8. Помещение в левой колонке ── */
+.app .library .room-left-panel{margin:0 -14px;padding:0}
+.app .library .room-left-panel .property-section{padding:12px 14px}
+.app .library .room-left-panel .property-section>h2{font-size:15px;margin:0 0 8px}
+.app .library .room-left-panel .number-field{grid-template-columns:minmax(0,1fr) minmax(96px,120px)}
+
+/* ── «Документы» только сверху (9): нижняя вкладка убрана — панели доков не нужно места под неё ── */
+
+/* Sims: на время перетаскивания боковые колонки приглушены — видны сцена, размер и клавиши */
+.app .library,.app .properties{transition:opacity .15s}.app:has(.viewport .drag-badge:not([hidden])) .library,.app:has(.viewport .drag-badge:not([hidden])) .properties{opacity:.45}
+/* переключатели вида (фасады, проёмы) — значками с подсказкой: режимы с подписями помещаются в строку на 1366 */
+.app .scene-toolbar .interaction-bar .tool-toggle .mode-label{display:none}
+/* подпись иконки вида — для чтения с экрана и сценариев (hasText «Спереди»), на экране не видна */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
+
+/* ── ревью 31.10 (визуал): один акцент и читаемые серые ── */
+.app .stage-step.current,.app .stage-bar{--stage:var(--accent)}
+.app .properties .property-section>h2,.app .library .room-left-panel .property-section>h2{color:var(--accent);font-size:14px;font-weight:600;border-left:0;padding-left:0}
+.app .number-field div>span{font-size:11px;color:var(--text-muted)}
+.app .field-note,.app .library-bottom p,.app .panel-heading p{color:var(--text-muted)}
+.app button:disabled{background-color:var(--disabled-bg)}
+.app .scene-tools button:disabled,.app .scene-toolbar button:disabled{background-color:transparent}
+/* ревью 31.10 (структура): «Заказ и инструменты» сворачивает только полосу заказа/комнат — имя проекта, «Показать клиенту»,
+   «Выдать документы», «Открыть/Сохранить» и «Дальше» этапа видны всегда */
+.app.compact-top>.header .document-name{display:flex}
+.app.compact-top>.header .header-actions{display:flex;margin-left:auto}
+.app.compact-top>.stage-bar .stage-actions>button{display:inline-flex}
+@media (max-width:1560px){.app.compact-top>.header .header-actions .quiet span,.app.compact-top>.header .header-actions .primary span,.app.compact-top>.header .top-toggle span{display:none}.app.compact-top>.stage-bar .stage-hint{display:none}}
+@media (max-width:1380px){.app.compact-top>.header .document-name{max-width:180px}.app.compact-top>.header .document-name>span{display:none}}

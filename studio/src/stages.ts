@@ -4,7 +4,7 @@ export type Stage = "room" | "fixtures" | "bodies" | "filling" | "facades" | "do
 /** Legacy ids remain accepted by context-menu commands and saved preferences. */
 export const normalizeStage=(s:Stage):Stage=>s==='fixtures'?'room':s==='filling'||s==='facades'?'bodies':s;
 export const STAGES: { id: Stage; n: number; title: string; short: string; color: string; hint: string }[] = [
- {id:'room',n:1,title:'Помещение',short:'Помещение',color:'#1b697a',hint:'Габариты помещения, проёмы и коммуникации — справа.'},
+ {id:'room',n:1,title:'Помещение',short:'Помещение',color:'#325bee',hint:'Габариты помещения, проёмы и коммуникации — слева.'} /* Макс 31.10: помещение — в левой колонке; один акцент — синий */,
  {id:'bodies',n:2,title:'Построение мебели',short:'Мебель',color:'#325bee',hint:'Слева добавляйте модули. Справа раскрывайте нужный раздел выбранного модуля: наполнение, фасады и фурнитура.'},
  {id:'docs',n:3,title:'Документы',short:'Документы',color:'#55606a',hint:'Смета, карты листов, ведомость и коммерческое предложение.'},
 ];

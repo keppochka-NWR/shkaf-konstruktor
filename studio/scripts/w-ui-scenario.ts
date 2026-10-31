@@ -83,9 +83,9 @@ try {
 
   // ── п.28: виды W/A/S/D/Q/E ──
   const hint = (await page.locator(".orbit-help .view-keys").innerText().catch(() => "")).trim();
-  check("п.28 подсказка в строке сцены", /W A S D — виды/.test(hint), hint);
+  check("п.28 подсказка в строке сцены", /W\s*A\s*S\s*D\s*виды/.test(hint), hint); /* 31.10: клавиши плашками */
   // фокус на кнопке корпуса в списке (последний клик) — не поле ввода
-  const seq: [string, string][] = [["w", "Сверху"], ["s", "Спереди"], ["a", "Сбоку"], ["d", "Сбоку"], ["e", "3D"]];
+  const seq: [string, string][] = [["w", "Сверху"], ["s", "Спереди"], ["a", "Слева"], ["d", "Сбоку"], ["e", "3D"]];
   for (const [k, label] of seq) {
     await page.keyboard.press(k); await wait(500);
     const v = await pressedView();

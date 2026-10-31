@@ -104,12 +104,13 @@ const modeBtn = (page: Page, name: string) => page.locator(".interaction-bar but
   const buf = await page.screenshot({ path: `${out}/05-walls-beige.png`, timeout: 60000 });
   // оттенок стен по снимку: доля синего к красному на левой и задней стене (серо-зелёная левая была заметно «холоднее»)
   const pts = (await page.evaluate(() => { const r = document.querySelector("canvas")!.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })) as number[];
+  // 31.10: сцена под полосой видов (холст ниже и уже) — левая стена правее, точка 0.3 вместо 0.24
   // точки: левая стена — левая четверть холста, задняя — правее середины, чуть выше (строка, а не функция: tsx вставляет __name)
   const sample = (await page.evaluate(`(async function(b64,area){
     var img=new Image();img.src="data:image/png;base64,"+b64;await img.decode();
     var cv=document.createElement("canvas");cv.width=img.width;cv.height=img.height;var g=cv.getContext("2d");g.drawImage(img,0,0);
     function at(fx,fy){var d=g.getImageData(Math.round(area[0]+area[2]*fx)-3,Math.round(area[1]+area[3]*fy)-3,7,7).data,r=0,gg=0,b=0;for(var i=0;i<d.length;i+=4){r+=d[i];gg+=d[i+1];b+=d[i+2];}var n=d.length/4;return [r/n,gg/n,b/n];}
-    var left=[],back=[];for(var fy=0.35;fy<=0.6;fy+=0.05){left.push(at(0.24,fy));back.push(at(0.62,fy-0.08));}
+    var left=[],back=[];for(var fy=0.35;fy<=0.6;fy+=0.05){left.push(at(0.3,fy));back.push(at(0.62,fy-0.08));}
     return {left:left,back:back};
   })(${JSON.stringify(buf.toString("base64"))},${JSON.stringify(pts)})`)) as { left: number[][]; back: number[][] };
   const avg = (a: number[][]) => [0, 1, 2].map((i) => a.reduce((s, p) => s + p[i], 0) / a.length);

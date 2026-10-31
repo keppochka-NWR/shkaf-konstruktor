@@ -229,7 +229,7 @@ test('P2/P3: empty room 3D, right-click properties and measured surface survive 
  await page.getByRole('button',{name:'Окно',exact:true}).click();
  let dialog=page.getByRole('dialog',{name:'Параметры объекта помещения'});await expect(dialog).toBeVisible();
  await dialog.getByLabel('Глубина откосов',{exact:true}).fill('150');await dialog.getByLabel('Глубина откосов',{exact:true}).press('Enter');
- await dialog.getByRole('button',{name:'Закрыть параметры'}).click();await page.getByRole('button',{name:'Показать план комнаты'}).click();
+ await dialog.getByRole('button',{name:'Закрыть параметры'}).click();await page.getByRole('button',{name:'План',exact:true}).click();
  await page.getByRole('button',{name:/На плане: Окно 1/}).click({button:'right'});await expect(dialog.getByLabel('Глубина откосов',{exact:true})).toHaveValue('150');
  await dialog.getByLabel('Ширина проёма',{exact:true}).fill('1100');await dialog.getByLabel('Ширина проёма',{exact:true}).press('Enter');await dialog.getByRole('button',{name:'Закрыть параметры'}).click();
  await page.getByText('Общий план · замер · панели · варианты · передача',{exact:true}).click();

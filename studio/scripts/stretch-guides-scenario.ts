@@ -79,7 +79,7 @@ try {
   await page.goto(url); await page.waitForSelector("canvas"); await page.waitForTimeout(2500);
   await page.getByRole("button", { name: "Двигать корпуса", exact: true }).click(); await page.waitForTimeout(400);
   const hint = (await page.locator(".orbit-help .view-keys").innerText().catch(() => "")).trim();
-  check("подсказка: «E — 3D, Q — вспомогательная линия»", /E — 3D, Q — вспомогательная линия/.test(hint), hint);
+  check("подсказка: плашки «E 3D», «Q линия»", /E\s*3D/.test(hint) && /Q\s*линия/.test(hint), hint); /* 31.10: клавиши плашками (KeyHints.tsx) */
 
   // 1. Спереди
   await view("s");
