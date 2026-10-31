@@ -77,7 +77,7 @@ try {
   await fill("Ширина новой мебели", 3000);
   await page.getByRole("button", { name: "Добавить в комнату" }).click(); await settle();
   await shot("05-kitchen-added");
-  await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Выдать документы" }).click(); /* 31.10: «Документы» только сверху */ await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Коммерческое предложение", exact: true }).first().click(); await page.waitForTimeout(500);
   await settle(); await shot("05a-kp-form");
   const fillBtn = page.getByRole("button", { name: "Подставить текущую смету" });

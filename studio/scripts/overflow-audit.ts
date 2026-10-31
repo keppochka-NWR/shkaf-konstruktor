@@ -99,7 +99,7 @@ for (const w of (widthsArg ? widths : [1440, 1100, 768, 400])) {
   const page = await browser.newPage({ viewport: { width: w, height: w < 700 ? 860 : 900 } });
   const open = async (stage: string) => { await page.goto(url); await page.evaluate(([raw, st]) => { localStorage.clear(); localStorage.setItem("module-studio-v3", raw); localStorage.setItem("studio-stage", st); localStorage.setItem("studio-dock", "project"); }, [project, stage]); await page.goto(url); await page.waitForSelector(".app"); await page.waitForTimeout(1300); await closeModal(page); };
   await open("bodies");
-  for (const tab of ["Смета", "Фурнитура", "Детали", "Документы"]) {
+  for (const tab of ["Смета", "Фурнитура", "Детали"]) { /* 31.10: вкладки «Документы» внизу нет */
     await page.locator(".dock-tabs button", { hasText: tab }).click();
     await page.waitForTimeout(900);
     report(w, "нижняя панель · " + tab, (await page.evaluate(auditCode(false))) as string[]);

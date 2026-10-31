@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 
 async function furniture(page:Page){await page.getByRole('button',{name:/^(?:2 )?Построение мебели$/}).click();}
 async function add(page:Page,kind:string){if(/кухонный|Столешница|Кухня/.test(kind))await page.getByRole('tab',{name:'Кухонные модули',exact:true}).click();await page.getByRole('button',{name:kind,exact:true}).click();await page.getByRole('button',{name:'Добавить в комнату',exact:true}).click();}
-async function docs(page:Page){await page.locator('.dock-tabs').getByRole('button',{name:'Документы'}).click();await page.locator('.dock-docs').getByRole('button',{name:'Ведомость',exact:true}).click();}
+/* 31.10: «Документы» только сверху — «Выдать документы» и вкладка «Ведомость» окна */async function docs(page:Page){await page.getByRole('button',{name:'Выдать документы'}).click();await page.locator('.output-tabs').getByRole('button',{name:'Ведомость',exact:true}).click();}
 async function state(page:Page){return page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project);}
 async function download(page:Page,name:string){const wait=page.waitForEvent('download');await page.getByRole('button',{name,exact:true}).click();const file=await wait;expect(await file.failure()).toBeNull();const bytes=await readFile((await file.path())!);expect(bytes.length).toBeGreaterThan(80);return {bytes,name:file.suggestedFilename()};}
 

@@ -71,7 +71,7 @@ try {
   const scr0 = await stats(before, ref);
   check("на экране створки открыты, задник виден; без тёмного «треугольника» тени на заднике", scr0.back > 0.05 && scr0.dark < 0.02, `задник rgb(${ref.join(",")}) ${pct(scr0.back)}, тёмного ${pct(scr0.dark)}`);
   // Документы → КП → Предпросмотр
-  await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Выдать документы" }).click(); /* 31.10: «Документы» только сверху */ await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Коммерческое предложение", exact: true }).first().click(); await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Подставить текущую смету" }).click().catch(() => {}); await page.waitForTimeout(300);
   await page.getByRole("button", { name: "Предпросмотр КП" }).click(); await settle();
@@ -90,10 +90,10 @@ try {
   const scr = await stats(after, ref);
   check("после снимка на экране створки по-прежнему открыты (задник виден, как до снимка)", scr.back > 0.05 && Math.abs(scr.back - scr0.back) < 0.03, `до ${pct(scr0.back)}, после ${pct(scr.back)}`);
   // тот же снимок из вида «3D» (перспектива): ракурс как на экране, створки закрыты
-  await page.locator(".dock-tabs button", { hasText: "Документы" }).click().catch(() => {}); await page.waitForTimeout(300);
+  await page.keyboard.press("Escape").catch(() => {}); /* 31.10: документы — окно сверху, закрыть Esc */ await page.waitForTimeout(300);
   await page.locator(".view-tabs button", { hasText: "3D" }).first().click(); await settle();
   await shot("04-screen-3d");
-  await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Выдать документы" }).click(); /* 31.10: «Документы» только сверху */ await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Коммерческое предложение", exact: true }).first().click(); await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Предпросмотр КП" }).click(); await settle();
   const doc3 = (await page.locator('iframe[title="Предпросмотр коммерческого предложения"]').getAttribute("srcdoc").catch(() => "")) ?? "";

@@ -69,7 +69,7 @@ try {
   // экран: итог в нижней строке
   // проект из localStorage нормализуется первой правкой через интерфейс (автофальшь у стены 21 мм) — итог экрана читаем после КП
   // КП: итог
-  await page.locator(".dock-tabs button", { hasText: "Документы" }).click(); await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "Выдать документы" }).click(); /* 31.10: «Документы» только сверху */ await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Коммерческое предложение", exact: true }).first().click(); await page.waitForTimeout(500);
   // проект прямо из localStorage нормализуется первой правкой (автофальшь у стены) — «Подставить» и есть эта правка: цена КП
   // должна быть по нормализованному проекту (было 120 441 при экране 121 041 после клика)

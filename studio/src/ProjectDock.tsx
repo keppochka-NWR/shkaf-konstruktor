@@ -1,7 +1,7 @@
 // Нижняя навигация по проекту (решение Макса 06.10.2026, по мотивам Самопила): вкладки внизу экрана,
 // панель выезжает над ними и не закрывает 3D. Цена — материалы и фурнитура отдельно; смена фурнитуры сразу меняет итог.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Calculator, FileText, Layers, Wrench } from "lucide-react";
+import { Box, Calculator, Layers, Wrench } from "lucide-react";
 import type { Project } from "./project";
 import {estimate, MARKUP_DEFAULT} from "./pricing";
 import { missingPriceLabel } from "./clientLabels";
@@ -20,7 +20,8 @@ import { fillerCount, sameDesign, sheetChangeNote } from "./sheetNote";
 import { count, DETAILS, SHEETS } from "./ru";
 import "./project-dock.css";
 
-export type DockTab = "project" | "estimate" | "hardware" | "details" | "docs";
+// «Документы» — только сверху (этап «3 Документы» и «Выдать документы»): нижняя вкладка дублировала их (Макс 31.10)
+export type DockTab = "project" | "estimate" | "hardware" | "details";
 export type OutputTab = "sheets" | "quote" | "estimate" | "labels" | "drawings" | "specification" | "placement" | "client-spec";
 const rub = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
@@ -28,7 +29,6 @@ const TABS: { id: DockTab; label: string; icon: typeof Box }[] = [
   { id: "estimate", label: "Стоимость", icon: Calculator },
   { id: "hardware", label: "Фурнитура", icon: Wrench },
   { id: "details", label: "Детали", icon: Layers },
-  { id: "docs", label: "Документы", icon: FileText },
 ];
 // m10 (критик релиза 22.10): открытая нижняя панель не восстанавливается после F5 — она закрывала кнопки «Добавить…» кухонной
 // палитры. При загрузке всегда «Проект» (панель закрыта); выбор вкладки живёт до перезагрузки.
@@ -111,20 +111,7 @@ export function ProjectDock({ project, commit, openOutput, openParts, warnings, 
       <p>{fresh ? <>{count(fresh.parts, DETAILS)} · {count(fresh.ldsp, SHEETS)} ЛДСП{fresh.hdf ? <> · {count(fresh.hdf, SHEETS)} ЛХДФ</> : null}</> : "Считаем…"}</p>
       <div className="dock-actions"><button className="outline" onClick={openParts}>Список деталей</button><button className="outline" onClick={() => openOutput("sheets")}>Карты листов</button></div>
     </div>
-  ) : (
-    <div className="dock-body dock-docs">
-      <div className="dock-actions">
-        <span className="dock-group">Клиенту</span>
-        <button className="outline" onClick={() => openOutput("quote")}>Коммерческое предложение</button>
-        <button className="outline" onClick={() => openOutput("client-spec")}>Спецификация</button>
-        <button className="outline" onClick={() => openOutput("placement")}>Расстановка</button>
-        <span className="dock-group">Производству</span>
-        <button className="outline" onClick={() => openOutput("specification")}>Ведомость</button>
-        <button className="outline" onClick={() => openOutput("drawings")}>Чертежи</button>
-        <button className="outline" onClick={() => openOutput("labels")}>Бирки</button>
-      </div>
-    </div>
-  );
+  ) : null;
 
   return (
     <div className="project-dock">
