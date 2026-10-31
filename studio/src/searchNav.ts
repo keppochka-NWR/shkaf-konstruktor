@@ -10,7 +10,18 @@ export type StudioNav = {
   stage: Stage; advanced: boolean; compactTop: boolean; hasModules: boolean; deselected: boolean; module?: Module; moduleName: string; activeId?: string;
   goStage(s: Stage): void; selectModule(id: string): void; setTab(t: "module" | "section" | "room"): void; setPlan(on: boolean): void;
   openOutput(t: OutputTab): void; openModal(name: "help" | "cloud"): void; closeModal(): void; expandTop(): void; openRadial(): void;
+  /** Закрыть круговое меню (палитра поверх него перехватывала стрелки и Enter — критик 31.10). */
+  closeMenu(): void;
+  /** Пустая комната (EmptyRoomView): работают пункты помещения, остальные — серым с причиной. */
+  empty?: boolean;
+  /** Открыт заказ с комнатами (папка клиента): есть «Варианты комнаты». */
+  folder?: boolean;
+  /** Открыт вопрос «Удалить?» или окно вырезов — поиск не открывается поверх. */
+  blocked?: boolean;
 };
+/** Пункты, которые работают в пустой комнате помимо пунктов помещения. */
+const EMPTY_OK = new Set(["stages", "views", "advanced", "tour"]);
+const EMPTY_REASON = "В комнате пока нет мебели — добавьте первый шкаф (палитра слева)";
 
 /** «селектор::текст» — элементы по селектору, в тексте которых есть «текст». */
 export function queryTargets(sel: string): HTMLElement[] {
@@ -36,6 +47,7 @@ export async function waitTarget(selectors: string[], ms = 2500, open = true): P
   }
 }
 
+const NO_FOCUS = '[data-testid="scene"],[data-tour="guides"],[data-tour="views"],[data-tour="modes"],[data-tour="palette"],[data-tour="modules"]';
 const FOCUSABLE = "input:not([type=hidden]):not(:disabled),select:not(:disabled),textarea,button:not(:disabled),summary,[tabindex]:not([tabindex='-1'])";
 /** Фокус на самом поле, а у раздела — на первом поле внутри. */
 export function focusIn(el: HTMLElement) {
@@ -57,7 +69,9 @@ export function pulse(el: HTMLElement, ms = 1600) {
 }
 
 /** Причина, почему пункт сейчас недоступен (серым), и подсказка, если нужен выбор шкафа. */
-export function itemState(item: SearchItem, nav: Pick<StudioNav, "hasModules" | "deselected" | "module" | "moduleName">): { reason?: string; hint?: string } {
+export function itemState(item: SearchItem, nav: Pick<StudioNav, "hasModules" | "deselected" | "module" | "moduleName" | "empty" | "folder">): { reason?: string; hint?: string } {
+  if (nav.empty && !((item.stage === "room" && !item.full) || item.empty || EMPTY_OK.has(item.id))) return { reason: EMPTY_REASON };
+  if (item.folder && !nav.folder) return { reason: "Есть только в папке клиента (заказ с комнатами)" };
   if (!item.module && item.radial === undefined) return {};
   if (!nav.hasModules || !nav.module) return { reason: "Выберите шкаф: в проекте пока нет мебели" };
   const reason = item.applies?.(nav.module);
@@ -68,7 +82,7 @@ export function itemState(item: SearchItem, nav: Pick<StudioNav, "hasModules" | 
 /** Переход к пункту. Возвращает текст ошибки, если цель не нашлась. */
 export async function goToItem(item: SearchItem, nav: StudioNav): Promise<string | undefined> {
   if (item.action === "tour") { window.dispatchEvent(new CustomEvent("studio-tour")); return; }
-  nav.closeModal();
+  nav.closeModal(); nav.closeMenu();
   if (item.action === "help" || item.action === "cloud") { nav.openModal(item.action); await frame(); return; }
   if (item.top && nav.compactTop) nav.expandTop();
   if (item.stage && normalizeStage(nav.stage) !== item.stage) nav.goStage(item.stage);
@@ -84,6 +98,7 @@ export async function goToItem(item: SearchItem, nav: StudioNav): Promise<string
   if (!el) return `«${item.title}» сейчас не на экране${item.module ? " для этого шкафа" : ""}.${item.note ? " " + item.note + "." : ""}`;
   el.scrollIntoView({ block: "center", inline: "nearest" });
   // в круговом меню фокус держит само меню (стрелки по кругу) — пункт только подсвечиваем
-  if (item.radial === undefined) focusIn(el);
+  // сцену и подсказки клавиш не фокусируем: случайный Enter открыл бы правку размера (критик 31.10)
+  if (item.radial === undefined && !el.matches(NO_FOCUS)) focusIn(el);
   pulse(el);
 }

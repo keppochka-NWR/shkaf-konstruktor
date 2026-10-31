@@ -5,6 +5,8 @@ import {searchItems,stem,norm,wordMatch,lev} from '../src/searchMatch';
 import {SEARCH_ITEMS,SUGGESTED} from '../src/searchRegistry';
 import {TOUR_STEPS,tourAllowed} from '../src/tourSteps';
 import {initialModule} from '../src/model';
+import {itemState} from '../src/searchNav';
+import {searchShortcut} from '../src/searchKeys';
 
 const top=(q:string,n=1)=>searchItems(SEARCH_ITEMS,q).slice(0,n).map(h=>h.item.id);
 const first=(q:string)=>top(q)[0];
@@ -86,6 +88,48 @@ test('неприменимые пункты: причина для шкафа б
   m.doors=true;assert.equal(hinges.applies!(m),undefined);
   const shelves=SEARCH_ITEMS.find(i=>i.id==='shelves')!;
   assert.match(shelves.applies!({...m,raw:{} as never})!,/Базис/);
+});
+
+test('критик 31.10: основы, ранжирование коротких слов, новые пункты',()=>{
+  assert.equal(stem(norm('проём')),'проем');assert.equal(stem(norm('проёмы')),'проем');
+  assert.ok(top('проём',5).includes('openings'),top('проём',5).join());
+  assert.ok(!top('проём',5).some(id=>['save-file','open-file','transparent'].includes(id)),top('проём',5).join());
+  const cases:[string,string][]=[['пол','finishes'],['потолок','ceiling'],['фп','fillers'],['открыть','open-file'],['модуль','modules'],['сверху','views'],['отменить','undo'],['ламинат','finishes'],['раскрой','doc-sheets'],
+    ['удалить шкаф','delete-module'],['удалить полку','delete-part'],['блюм','hinges'],['петли блюм','hinges'],['хеттих','hinges'],['хетих','hinges'],['купе','add-kupe'],['двери купе','add-kupe'],['тумба','add-kitchen'],['пенал','add-kitchen'],
+    ['кухонный','add-kitchen'],['письменный стол','add-desk'],['холодильник','obstacles'],['балка','obstacles'],['плита','obstacles'],['вытяжка','obstacles'],['духовка','oven'],['мойка','sink'],['полочка','shelves'],['3д','views'],['undo','undo'],['redo','undo']];
+  for(const [q,id] of cases)assert.equal(first(q),id,`«${q}» → ${top(q,3).join(', ')}`);
+  // шумные синонимы убраны
+  assert.ok(!top('отменить',5).includes('mansard'));assert.ok(!top('ламинат',5).includes('handle-height'));assert.ok(!top('раскрой',5).includes('measure-card'));
+});
+
+test('критик 31.10: пустая комната, папка клиента, кухонные модули',()=>{
+  const m=initialModule(),item=(id:string)=>SEARCH_ITEMS.find(i=>i.id===id)!;
+  const empty={hasModules:false,deselected:false,moduleName:'',empty:true,folder:true};
+  for(const id of ['room-shape','room-size','openings','fixtures','finishes','add-cabinet','add-kupe','views','tour'])assert.equal(itemState(item(id),empty).reason,undefined,id);
+  for(const id of ['hinges','price','doc-quote','radial-wall','snapping','walls','niche','undo'])assert.match(itemState(item(id),empty).reason??'',/нет мебели/,id);
+  const full={hasModules:true,deselected:false,module:m,moduleName:'Шкаф'};
+  assert.match(itemState(item('variants'),full).reason??'',/папке клиента/);
+  assert.equal(itemState(item('variants'),{...full,folder:true}).reason,undefined);
+  assert.match(itemState(item('hinges'),{...full,deselected:true}).hint??'',/Выберите шкаф/);
+  // кухня: пенал без ящиков — ящики и система ящиков серым; нижний с ящиками — доступны
+  const tall={...initialModule(),kitchen:{role:'tall'}} as never as typeof m,base={...initialModule(),kitchen:{role:'base'},kdrawers:[{system:'modern-slide'}]} as never as typeof m;
+  assert.match(item('drawers').applies!(tall)!,/ящиков нет/);assert.match(item('slides').applies!(tall)!,/добавьте ящики/);
+  assert.equal(item('drawers').applies!(base),undefined);assert.equal(item('slides').applies!(base),undefined);
+  assert.match(item('glass-shelf').applies!(base)!,/только ящики/);
+  // кухонные селекторы есть у полей, что вели в никуда (критик: 10 пунктов)
+  for(const [id,sel] of [['width','input[aria-label="Ширина"]'],['depth','input[aria-label="Глубина"]'],['decor','выбрать декор'],['doors','input[aria-label="Распашные фасады"]'],['facade-kind','Материал кухонных фасадов'],['opening','Ручки на фасадах'],['drawers','Количество ящиков'],['slides','Система ящиков'],['glass-shelf','Полки из стекла']] as const)
+    assert.ok(item(id).target.some(t=>t.includes(sel)),id);
+});
+
+test('критик 31.10: клавиши поиска — Ctrl+K везде, «/» не в полях',()=>{
+  const ev=(o:Partial<KeyboardEvent>)=>({key:'',code:'',ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,repeat:false,target:null,...o}) as KeyboardEvent;
+  assert.equal(searchShortcut(ev({code:'KeyK',key:'k',ctrlKey:true})),'ctrl');
+  assert.equal(searchShortcut(ev({code:'KeyK',key:'л',ctrlKey:true})),'ctrl');
+  assert.equal(searchShortcut(ev({code:'Slash',key:'/'})),'slash');
+  assert.equal(searchShortcut(ev({code:'Slash',key:'.'})),'slash'); // русская раскладка
+  assert.equal(searchShortcut(ev({code:'KeyK',key:'k'})),null);
+  assert.equal(searchShortcut(ev({code:'KeyK',key:'k',ctrlKey:true,repeat:true})),null);
+  assert.equal(searchShortcut(ev({code:'Slash',key:'?',shiftKey:true})),null);
 });
 
 test('тур: 6–9 шагов, у каждого цель и текст; авто-показ не мешает сценариям',()=>{

@@ -436,7 +436,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const [selectedFixture,setSelectedFixture]=useState<string>();
   const [presentation,setPresentation]=useState(false);
   const beforePresentation=useRef<{view:View;roomPlan:boolean;openDoors:boolean;showRoom:boolean}|null>(null);
-  const [outputTab,setOutputTab] = useState<OutputTab>("sheets");
+  const [outputTab,setOutputTab] = useState<OutputTab>("sheets");const [outputNonce,setOutputNonce]=useState(0);
   // Пошаговый режим: этап определяет, какие панели видны и куда ведёт «Дальше». Сохраняется в браузере.
   const [stage,setStageState]=useState<Stage>(()=>restoredStage(startup.model.modules.length>0,storedStage()));
   const [advanced,setAdvanced]=useState(()=>{try{return localStorage.getItem(STAGE_KEY+'-advanced')==='1';}catch{return false;}});
@@ -1196,7 +1196,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
     catalog.find((c) => c.n === name)?.tex || undefined;
   // Макс 31.10: мост для поиска по параметрам и обучения — только действия и снимок состояния, без доступа к проекту
   const studioNav:StudioNav={stage,advanced,compactTop,hasModules:project.modules.length>0,deselected:deselected&&!liveGroupIds.length,module:project.modules.length?m:undefined,moduleName:m.name,activeId:project.modules.length?placed.id:undefined,
-    goStage,selectModule,setTab,setPlan:on=>{setRoomPlan(on);if(on)setTab('room');else setView('iso');},openOutput:t=>{if(roomPlan){setRoomPlan(false);setView('iso');setShowRoom(true);}setOutputTab(t);setModal('output');},
+    goStage,selectModule,setTab,setPlan:on=>{setRoomPlan(on);if(on)setTab('room');else setView('iso');},openOutput:t=>{if(roomPlan){setRoomPlan(false);setView('iso');setShowRoom(true);}setOutputTab(t);setOutputNonce(n=>n+1);setModal('output');},closeMenu:()=>{setCtxMenu(null);setGapMenu(null);},folder:!!clientBar,blocked:!!deleteAsk||!!cutHost,
     openModal:name=>setModal(name),closeModal:()=>{setModal(null);setCtxMenu(null);setComposer(null);},expandTop:()=>{setCompactTop(false);try{localStorage.setItem('yo-compact-top','0');}catch{}},
     openRadial:()=>{if(!project.modules.length)return;setRoomPlan(false);const r=document.querySelector('section[aria-label="Рабочая область"]')?.getBoundingClientRect(),dock=document.querySelector('.dock-panel')?.getBoundingClientRect(),bottom=r?Math.min(r.bottom,dock&&dock.top>r.top+200?dock.top:r.bottom):innerHeight;/* меню — в видимой части сцены, над раскрытой панелью внизу */setCtxMenu({mid:placed.id,sid:m.sections[0]?.id??'',x:r?r.left+r.width/2:innerWidth/2,y:r?(r.top+bottom)/2:innerHeight/2});}};
   return (
@@ -1205,7 +1205,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       <header className="header">
         <EditorBrand kitchen={kitchenMode}/>
         {!presentation&&<button className="top-toggle" aria-label={compactTop?"Заказ и инструменты":"Свернуть верхнюю панель"} aria-expanded={!compactTop} onClick={toggleTop} title="Свернуть или раскрыть управление заказом и комнатами">{compactTop?<PanelTopOpen size={18}/>:<PanelTopClose size={18}/>}<span>{compactTop?'Заказ и инструменты':'Свернуть верхнюю панель'}</span></button>}
-        {!presentation&&<ParamSearch nav={studioNav}/>}{!presentation&&<StudioTour nav={studioNav}/>}
+        <ParamSearch nav={studioNav} disabled={presentation}/>{!presentation&&<StudioTour nav={studioNav}/>}
         <div className="document-name">
           <input
             aria-label="Название модуля"
@@ -2521,7 +2521,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 <p className="field-note">Есть Config.xml из скрипта Базиса «Замер помещения»? Его можно загрузить на шаге «Коммуникации» — комната и объекты появятся сами.</p>
               </div> : modal === "new" ? <NewProjectPanel project={project} allowEmpty={!!onEmptyProject} open={(raw,source)=>{/* круг 2 (критик 29.10, блокер 1): «Восстановить предыдущий проект» в комнате заказа — как импорт: модель заказа не заменяется молча, менеджеру сообщение */const own:OrderCalculation=saveManagedProject?withOrderCalculation(raw,project.calculation):{project:raw},next=own.project,priceNote=saveManagedProject&&source?orderCalculationNotice(own,project.calculation,source):undefined;if(commitProject(next)){if(priceNote)setNotice(priceNote);if(next.modules[0])selectModule(next.modules[0].id);setRoomPlan(false);setView("iso");setMode("move");setModal(null);return true;}return false;}}/> : modal === "library" ? <ModuleLibrary module={m} group={project.modules.filter(a=>liveGroupIds.includes(a.id))} insertGroup={source=>{const result=appendModuleGroup(project,source);if(commitProject(result.project)){setGroupIds(result.ids);setMoveAll(false);setFocusActive(false);selectModule(result.ids[0]);setMode('move');setModal(null);return true;}return false;}} insert={source=>{const next=appendModule(project,source);next.modules.at(-1)!.module.name=source.name;if(commitProject(next)){selectModule(next.modules.at(-1)!.id);setModal(null);return true;}return false;}}/> : modal === "render" ? <div className="render-preview"><img src={renderImage} alt="Изображение мебели для клиента"/><button className="primary render-download" onClick={()=>savePng(renderImage)}>Скачать PNG</button><p className="field-note">PNG, до 2560 пикселей. Файл можно сохранить и отправить клиенту.</p></div> : modal === "cloud" ? <CloudPanel project={project} update={commitProject}/> : modal === "output" ? (
               <SafeBoundary label="Документы проекта" resetKey={project}><OutputPanel
-                  key={outputTab/* Макс 31.10: поиск открывает нужную вкладку и при открытом окне */}
+                  key={outputTab+':'+outputNonce/* Макс 31.10: поиск открывает нужную вкладку и при открытом окне, и повторно (критик 31.10) */}
                   initialTab={outputTab}
                 project={project}
                 capture={(opts) => capture.current?.(opts)}

@@ -1,14 +1,18 @@
 // Поиск по параметрам и микро-обучение (Макс 31.10.2026) клавиатурой и мышью, как менеджер:
-//   npx tsx scripts/search-tour-3110-scenario.ts "<url ?project=sketch-3010-shkaf-600&fresh=1>" <outDir вне studio/>
+//   npx tsx scripts/search-tour-3110-scenario.ts "<url ?fresh=1 или ?project=sketch-3010-shkaf-600&fresh=1>" <outDir вне studio/>
+//  0. ?fresh=1 — пустая комната: поиск работает, мебельные пункты серым; первый шкаф из палитры (критик 31.10).
 //  1. Сценарий (navigator.webdriver) — обучение само не предлагается.
 //  2. Ctrl+K → «петли» → Enter: этап «Мебель», поле «Петли корпуса» видно, в фокусе и подсвечено.
 //  3. Ctrl+K → «форма комнаты» → Enter: этап «Помещение», панель «Форма комнаты» подсвечена.
 //  4. «/» → «стоимость» → Enter: открыта панель стоимости внизу, итог подсвечен.
 //  5. «полку» — первым «Полки»; Esc закрывает поиск без перехода. Без выбранного шкафа — подсказка «Выберите шкаф».
 //  6. «обучение» → тур: все шаги «Далее» до «Готово», тур закрыт; повтор из «Как пользоваться», Esc закрывает.
+//  5б–5е. Меню ПКМ: «поставить к стене»; поиск над круговым меню; повторный «кп»; Q и «Показать клиенту» не открывают поиск.
 //  7. ?tour=1 — предложение обучения видно; «Не сейчас» — больше не предлагается.
+//  8. Кухня dp-2810-kitchen (если есть в local-projects): 10 пунктов ведут к полю или серые с причиной.
 import { chromium, type Page } from "playwright";
 import { mkdirSync } from "node:fs";
+import { SEARCH_ITEMS } from "../src/searchRegistry";
 
 const [url, out] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -46,6 +50,42 @@ await page.waitForTimeout(2600);
 check("сценарий: обучение само не предлагается", (await page.locator("[data-testid=tour-offer], [data-testid=studio-tour]").count()) === 0);
 check("кнопка поиска в шапке", await page.getByRole("button", { name: "Поиск по параметрам" }).isVisible());
 await snap("start");
+
+// 1б. пустая комната (?fresh=1 — комната без мебели, EmptyRoomView; критик 31.10): поиск работает, мебельные пункты — серым
+const emptyRoom = (await page.locator(".empty-room-app").count()) > 0;
+if (emptyRoom) {
+  await find("петли");
+  const off = await palette.locator('[data-item="hinges"]').getAttribute("aria-disabled");
+  const why = await palette.locator('[data-item="hinges"] small').textContent();
+  check("пустая комната: Ctrl+K открывает поиск, «Петли» серым с причиной", off === "true" && /нет мебели/.test(why ?? ""), String(why));
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  check("пустая комната: Enter по серому — палитра открыта, причина в подсказке", (await palette.count()) === 1 && /нет мебели/.test((await page.locator("[data-testid=search-toast]").textContent()) ?? ""));
+  await page.keyboard.press("Escape");
+  await find("форма комнаты");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(400);
+  const e1 = await highlighted("[data-testid=room-shape-panel]");
+  check("пустая комната: «форма комнаты» подсвечена", e1.ok, e1.why);
+  await page.waitForTimeout(1700);
+  await find("окно");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(400);
+  const e2 = await highlighted('[data-search="openings"]');
+  check("пустая комната: «окно» → «Окна и двери»", e2.ok, e2.why);
+  await snap("empty-room-openings");
+  await page.waitForTimeout(1700);
+  // первый шкаф из палитры — дальше полный редактор
+  const pal = page.locator("details.module-palette").first();
+  if ((await pal.getAttribute("open")) === null) await pal.locator("summary").first().click();
+  await pal.getByRole("button", { name: "Добавить в комнату" }).click();
+  await page.waitForTimeout(1500);
+  const apart = page.getByRole("button", { name: /^Поставить отдельно/ });
+  if (await apart.count() && await apart.first().isVisible()) { await apart.first().click(); await page.waitForTimeout(800); }
+  await page.locator(".app:not(.empty-room-app) [data-testid=scene] canvas").first().waitFor({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  check("первый шкаф добавлен — редактор с поиском", await page.getByRole("button", { name: "Поиск по параметрам" }).isVisible() && (await page.locator(".empty-room-app").count()) === 0);
+}
 
 // 2. петли
 await find("петли");
@@ -120,6 +160,60 @@ await page.keyboard.press("Escape");
 await page.waitForTimeout(1700);
 check("Esc закрывает меню", (await page.locator(".radial-menu").count()) === 0);
 
+// 5в. критик 31.10: открыто круговое меню → «/» → «петли» → ↓ → Enter: меню закрыто, действие меню не выполнено, переход — по поиску
+await find("меню правой кнопкой");
+await page.keyboard.press("Enter");
+await page.locator(".radial-menu").waitFor({ state: "attached" }); // само меню 0×0, кольцо — потомки
+await page.waitForTimeout(300);
+await page.keyboard.press("/");
+await palette.waitFor();
+check("«/» над круговым меню — поиск открыт, меню закрыто", (await page.locator(".radial-menu").count()) === 0);
+await page.keyboard.type("петли", { delay: 15 });
+await page.waitForTimeout(150);
+const second = await palette.locator("[role=option]").nth(1).getAttribute("data-item");
+await page.keyboard.press("ArrowDown");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(600);
+const hitId = await page.evaluate(() => document.querySelector("[data-search-hit]")?.getAttribute("aria-label") ?? null);
+check("↓ Enter — второй пункт поиска, модуль не скрыт", (await page.getByRole("button", { name: /Показать все скрытые/ }).count()) === 0 && !!hitId, `${second} → ${hitId}`);
+await page.waitForTimeout(1700);
+
+// 5г. критик 31.10: повторный поиск документа переключает вкладку («кп» → «Карты» → «кп»)
+await find("кп");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(800);
+await page.locator('[aria-label="Документы для производства"] button', { hasText: "Карты листов" }).click();
+await page.waitForTimeout(500);
+await find("кп");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(800);
+check("повторный «кп» — снова вкладка КП", (await page.locator('[aria-label="Документы для клиента"] button', { hasText: "Коммерческое" }).getAttribute("aria-pressed")) === "true");
+await page.getByRole("button", { name: "Закрыть окно" }).click();
+await page.waitForTimeout(1700);
+
+// 5д. критик 31.10: инструмент Q (вид спереди) — «/» не открывает поиск; Esc снимает инструмент
+await page.locator('[data-tour="views"] button', { hasText: "Спереди" }).click();
+await page.waitForTimeout(1200);
+await page.locator("[data-testid=scene] canvas").first().hover({ position: { x: 300, y: 300 } });
+await page.keyboard.press("q");
+await page.waitForTimeout(200);
+await page.keyboard.press("/");
+await page.waitForTimeout(250);
+check("инструмент Q: «/» поиск не открывает", (await palette.count()) === 0);
+await page.keyboard.press("Escape");
+await page.locator('[data-tour="views"] button', { hasText: "3D" }).click();
+await page.waitForTimeout(1000);
+
+// 5е. «Показать клиенту»: Ctrl+K не открывает поиск (и не уходит браузеру)
+await page.locator('button[aria-label="Заказ и инструменты"]').click().catch(() => {});
+await page.locator(".presentation-trigger").click();
+await page.waitForTimeout(500);
+await page.keyboard.press("Control+KeyK");
+await page.waitForTimeout(250);
+check("режим «Показать клиенту»: поиска нет", (await palette.count()) === 0);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+
 // 6. обучение
 await find("обучение");
 check("«обучение» — первым тур", (await firstItem()) === "tour", String(await firstItem()));
@@ -148,9 +242,44 @@ await page.getByRole("button", { name: "Как пользоваться" }).clic
 await page.getByRole("button", { name: /Пройти обучение/ }).click();
 await tour.waitFor();
 check("повтор из «Как пользоваться»", (await tour.getAttribute("data-step")) === "stages");
+// критик 31.10: при открытом туре Esc в поиске закрывает поиск, а не тур
+await page.keyboard.press("Control+KeyK");
+await palette.waitFor();
+await page.keyboard.press("Escape");
+await page.waitForTimeout(200);
+check("Esc в поиске при туре — закрыт поиск, тур открыт", (await palette.count()) === 0 && (await tour.count()) === 1);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(200);
 check("Esc закрывает тур", (await tour.count()) === 0);
+
+// 8. кухня (критик 31.10): «Пенал под холодильник 600» — 10 пунктов либо ведут к полю, либо серые с причиной
+const kitchenUrl = new URL(url); kitchenUrl.search = "?project=dp-2810-kitchen&fresh=1";
+const hasKitchen = (await page.request.get(new URL("local-projects/dp-2810-kitchen.json", kitchenUrl).href)).ok();
+if (!hasKitchen) console.log("     кухня: нет local-projects/dp-2810-kitchen.json — пропуск");
+else {
+  await page.goto(kitchenUrl.href);
+  await page.locator("[data-testid=scene] canvas").first().waitFor({ timeout: 20000 });
+  await page.waitForTimeout(2500);
+  for (const name of ["Пенал под холодильник 600", "Нижний с ящиками 600"]) {
+    await page.locator('[data-tour="stages"] button[aria-label="Построение мебели"]').click();
+    await page.locator(".module-list button", { hasText: name }).first().click();
+    await page.waitForTimeout(500);
+    const bad: string[] = [];
+    for (const id of ["width", "height", "depth", "decor", "doors", "facade-kind", "opening", "drawers", "slides", "glass-shelf"]) {
+      const title = SEARCH_ITEMS.find((i) => i.id === id)!.title;
+      await find(title.replace(/[«»():]/g, " "));
+      const opt = palette.locator(`[data-item="${id}"]`);
+      if (!(await opt.count())) { bad.push(id + ":нет в списке"); await page.keyboard.press("Escape"); continue; }
+      if ((await opt.getAttribute("aria-disabled")) === "true") { await page.keyboard.press("Escape"); continue; }
+      await opt.click();
+      const ok = await page.locator("[data-search-hit]").first().waitFor({ timeout: 3500 }).then(() => true, () => false);
+      if (!ok) bad.push(id);
+      await page.waitForTimeout(1700);
+    }
+    check(`кухня «${name}»: пункты ведут к полю или серые`, !bad.length, bad.join(", "));
+  }
+  await snap("kitchen");
+}
 
 // 7. предложение обучения (?tour=1 — принудительно, в сценарии иначе не показывается)
 const p2 = await browser.newPage({ viewport: { width: 1366, height: 768 } });

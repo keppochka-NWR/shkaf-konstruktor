@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { TOUR_STEPS, markTourSeen, tourAllowed, tourSeen } from "./tourSteps";
 import { waitTarget, type StudioNav } from "./searchNav";
 import { normalizeStage, type Stage } from "./stages";
+import { editsText } from "./historyShortcuts";
 import "./search-tour.css";
 
 type Box = { left: number; top: number; width: number; height: number };
@@ -16,17 +17,22 @@ export function StudioTour({ nav }: { nav: StudioNav }) {
   const [step, setStep] = useState<number | null>(null), [offer, setOffer] = useState(false);
   const [box, setBox] = useState<Box | null>(null), [cardH, setCardH] = useState(180);
   const navRef = useRef(nav); navRef.current = nav;
-  const dir = useRef(1), startStage = useRef<Stage>("room"), target = useRef<HTMLElement | null>(null), card = useRef<HTMLDivElement>(null), next = useRef<HTMLButtonElement>(null);
-  const start = () => { setOffer(false); markTourSeen(); startStage.current = normalizeStage(navRef.current.stage); dir.current = 1; setStep(0); };
+  const dir = useRef(1), startStage = useRef<Stage>("room"), tourStage = useRef<Stage | null>(null), before = useRef<HTMLElement | null>(null), target = useRef<HTMLElement | null>(null), card = useRef<HTMLDivElement>(null), next = useRef<HTMLButtonElement>(null);
+  const start = () => { setOffer(false); markTourSeen(); before.current = document.activeElement as HTMLElement | null; startStage.current = normalizeStage(navRef.current.stage); tourStage.current = null; dir.current = 1; setStep(0); };
   const close = () => {
     setStep(null); setBox(null); target.current = null; markTourSeen();
-    // вернуть этап, с которого начали (тур переключает на «Мебель» для палитры и меню)
-    const n = navRef.current; if (normalizeStage(n.stage) !== startStage.current) n.goStage(startStage.current);
+    // вернуть этап, с которого начали (тур переключает на «Мебель» для палитры и меню) — только если этап сменил сам тур,
+    // а пользователь его не трогал (критик 31.10); фокус — туда, где был до тура
+    const n = navRef.current, cur = normalizeStage(n.stage);
+    if (tourStage.current && cur === tourStage.current && cur !== startStage.current) n.goStage(startStage.current);
+    const b = before.current; if (b && b.isConnected) requestAnimationFrame(() => b.focus({ preventScroll: true }));
   };
   // один раз новому пользователю, через пару секунд после открытия; не в сценариях Playwright и не с ?fresh=1
   useEffect(() => {
     if (!tourAllowed({ search: location.search, webdriver: !!navigator.webdriver, seen: tourSeen() })) return;
-    const t = setTimeout(() => setOffer(true), 1800); return () => clearTimeout(t);
+    // предложение — ровно один раз: флаг ставится при показе (пустая комната и редактор не предлагают дважды)
+    const forced = new URLSearchParams(location.search).get("tour") === "1";
+    const t = setTimeout(() => { if (!forced && tourSeen()) return; markTourSeen(); setOffer(true); }, 1800); return () => clearTimeout(t);
   }, []);
   useEffect(() => { const on = () => start(); window.addEventListener("studio-tour", on); return () => window.removeEventListener("studio-tour", on); }); // eslint-disable-line react-hooks/exhaustive-deps
   // шаг: нужный этап → ждём цель; нет цели — пропускаем в сторону движения
@@ -34,7 +40,7 @@ export function StudioTour({ nav }: { nav: StudioNav }) {
     if (step === null) return;
     let live = true;
     const s = TOUR_STEPS[step], n = navRef.current;
-    if (s.stage && normalizeStage(n.stage) !== s.stage) n.goStage(s.stage);
+    if (s.stage && normalizeStage(n.stage) !== s.stage) { n.goStage(s.stage); tourStage.current = s.stage; }
     setBox(null);
     void waitTarget(s.target, 900, false).then((el) => {
       if (!live) return;
@@ -56,7 +62,9 @@ export function StudioTour({ nav }: { nav: StudioNav }) {
   useEffect(() => {
     if (step === null) return;
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+      // Esc в палитре поиска или в поле ввода — им, а не туру (критик 31.10)
+      if (e.key !== "Escape" || document.querySelector("[data-testid=param-search]") || editsText(e.target)) return;
+      e.preventDefault(); e.stopImmediatePropagation(); close();
     };
     window.addEventListener("keydown", key, true); return () => window.removeEventListener("keydown", key, true);
   }); // eslint-disable-line react-hooks/exhaustive-deps

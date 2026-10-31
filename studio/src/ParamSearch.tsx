@@ -6,27 +6,30 @@ import { Search, CornerDownLeft } from "lucide-react";
 import { searchItems } from "./searchMatch";
 import { SEARCH_ITEMS, SUGGESTED, type SearchItem } from "./searchRegistry";
 import { goToItem, itemState, type StudioNav } from "./searchNav";
-import { editsText } from "./historyShortcuts";
+import { searchShortcut } from "./searchKeys";
 import "./search-tour.css";
 
 const suggested = SUGGESTED.map((id) => SEARCH_ITEMS.find((i) => i.id === id)!).filter(Boolean);
 
-export function ParamSearch({ nav }: { nav: StudioNav }) {
+/** disabled — режим «Показать клиенту»: кнопки нет, Ctrl+K не уходит браузеру (критик 31.10). */
+export function ParamSearch({ nav, disabled }: { nav: StudioNav; disabled?: boolean }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState(""), [cursor, setCursor] = useState(0);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const navRef = useRef(nav); navRef.current = nav;
   const input = useRef<HTMLInputElement>(null), before = useRef<HTMLElement | null>(null), listId = useId();
   const results: SearchItem[] = useMemo(() => (query.trim() ? searchItems(SEARCH_ITEMS, query, 12).map((h) => h.item) : suggested), [query]);
-  const show = () => { before.current = document.activeElement as HTMLElement | null; setQuery(""); setCursor(0); setOpen(true); };
+  // поверх кругового меню: меню закрываем, иначе оно ловит стрелки и Enter с window (критик 31.10)
+  const show = () => { before.current = document.activeElement as HTMLElement | null; navRef.current.closeMenu(); setQuery(""); setCursor(0); setOpen(true); };
   const close = (restore = true) => { setOpen(false); if (restore) before.current?.focus?.(); };
   // Ctrl+K — везде (в том числе в поле); «/» — не в полях ввода (Макс 31.10). Физическая клавиша: работает и в русской раскладке.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.repeat) return;
-      const ctrlK = (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === "KeyK";
-      const slash = !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "/" || (e.code === "Slash" && !e.shiftKey)) && !editsText(e.target) && !(e.target instanceof Element && e.target.closest("select"));
-      if (!ctrlK && !slash) return;
-      if (slash && document.querySelector('[aria-modal="true"]')) return;
+      if (e.defaultPrevented) return;
+      const k = searchShortcut(e); if (!k) return;
+      // поверх своих окон (вопрос «Удалить?», вырезы, фурнитура, подсветка…) поиск не открывается; окно документов/материалов — можно,
+      // переход его закроет. Ctrl+K в этих случаях всё равно не отдаём браузеру.
+      const foreign = Array.from(document.querySelectorAll('[aria-modal="true"]')).some((el) => el.getAttribute("aria-labelledby") !== "modal-title" && !el.closest("[data-testid=param-search]"));
+      if (disabled || navRef.current.blocked || foreign || (k === "slash" && document.querySelector('[aria-modal="true"]') && !open)) { if (k === "ctrl") e.preventDefault(); return; }
       e.preventDefault();
       if (open) input.current?.select(); else show();
     };
@@ -47,16 +50,18 @@ export function ParamSearch({ nav }: { nav: StudioNav }) {
     if (error) setToast({ text: error, bad: true }); else if (tip) setToast({ text: tip });
   }
   return <>
-    <button type="button" className="param-search-trigger" data-tour="search" aria-label="Поиск по параметрам" title="Поиск по параметрам · Ctrl+K или /" onClick={show}>
+    {!disabled && <button type="button" className="param-search-trigger" data-tour="search" aria-label="Поиск по параметрам" aria-keyshortcuts="Control+K /" title="Поиск по параметрам · Ctrl+K или /" onClick={show}>
       <Search size={16} /><span>Поиск</span><kbd>Ctrl K</kbd>
-    </button>
+    </button>}
     {open && createPortal(<div className="param-search-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="param-search" role="dialog" aria-modal="true" aria-label="Поиск по параметрам" data-testid="param-search">
         <label className="param-search-field"><Search size={18} />
-          <input ref={input} autoFocus /* сразу при открытии: быстрый набор после Ctrl+K не теряет первые буквы */ role="combobox" aria-expanded="true" aria-controls={listId} aria-activedescendant={results.length ? `${listId}-${cursor}` : undefined} aria-label="Что настроить" placeholder="Петли, полка, цоколь, форма комнаты, КП…" value={query}
+          <input ref={input} autoFocus /* сразу при открытии: быстрый набор после Ctrl+K не теряет первые буквы */ role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls={listId} aria-activedescendant={results.length ? `${listId}-${cursor}` : undefined} aria-label="Что настроить" placeholder="Петли, полка, цоколь, форма комнаты, КП…" value={query}
             onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
             onKeyDown={(e) => {
-              if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); return; }
+              // клавиши палитры дальше не идут: на window их слушают круговое меню и редактор (критик 31.10)
+              if (["Escape", "ArrowDown", "ArrowUp", "Enter", "Tab"].includes(e.key)) e.stopPropagation();
+              if (e.key === "Escape") { e.preventDefault(); close(); return; }
               if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); const n = results.length; if (n) setCursor((c) => (c + (e.key === "ArrowDown" ? 1 : n - 1)) % n); return; }
               if (e.key === "Enter") { e.preventDefault(); void choose(results[cursor]); }
               if (e.key === "Tab") e.preventDefault(); // фокус остаётся в поиске
@@ -71,8 +76,8 @@ export function ParamSearch({ nav }: { nav: StudioNav }) {
             <span className="param-search-text"><b>{item.title}</b><small>{st.reason ?? st.hint ?? item.where}</small></span>
             {i === cursor && !st.reason && <CornerDownLeft size={15} className="param-search-enter" aria-hidden="true" />}
           </li>; })}
-          {!results.length && <li className="param-search-empty" role="option" aria-selected="false" aria-disabled="true">Ничего не нашлось. Попробуйте другое слово: «ручки», «фасад», «размер».</li>}
         </ul>
+        {!results.length && <p className="param-search-empty" role="status">Ничего не нашлось. Попробуйте другое слово: «ручки», «фасад», «размер».</p>}
         <p className="param-search-foot">↑↓ — выбрать · Enter — перейти · «обучение» — короткий тур по студии</p>
       </div>
     </div>, document.body)}
