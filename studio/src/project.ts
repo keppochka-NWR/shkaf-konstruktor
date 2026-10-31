@@ -371,6 +371,8 @@ export function keepInRoom<T extends {x:number;y:number;z:number}>(p:Project,mid
   const moving=ids?p.modules.filter(b=>ids.includes(b.id)):[a];
   // прямоугольник (Макс 31.10, «при быстрой тяге модули слетают»): в перспективе курсор у горизонта уводил корпус за стену на метры —
   // при отпускании отказ, корпус «улетал» назад. Теперь габарит упирается в стены и скользит вдоль них (по осям)
+  // группа и композиция — как было: за стеной отказ целиком при отпускании («Группа не перенесена»), без подгонки к стене
+  if(!p.room.outline&&moving.length>1)return next;
   if(!p.room.outline){const g=mountingCompositionBounds({...p,modules:moving}),W=p.room.width,D=p.room.depth;let dx=next.x-a.x,dz=next.z-a.z;
     if(g.w<=W+0.1){if(g.x+dx<0)dx=-g.x;else if(g.x+g.w+dx>W)dx=W-g.x-g.w;}if(g.d<=D+0.1){if(g.z+dz<0)dz=-g.z;else if(g.z+g.d+dz>D)dz=D-g.z-g.d;}
     return {...next,x:Math.round((a.x+dx)*10)/10,z:Math.round((a.z+dz)*10)/10};}
