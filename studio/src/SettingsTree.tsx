@@ -22,7 +22,8 @@ export function categoryHint(title:string,childTitles:string[],hints:Partial<Rec
  if(title==='Наполнение'&&!childTitles.some(t=>/^Подсветка/.test(t)))return 'Секции, полки, ящики и штанги';
  return g.hint;
 }
-export function SettingsTree({children,className='',hints}:{children:ReactNode;className?:string;hints?:Partial<Record<string,string>>}){
+/** leads — строка в начале категории (над её разделами), один раз на категорию: подсказка «Наполнение правится у выбранного…» (ревью 31.10). */
+export function SettingsTree({children,className='',hints,leads}:{children:ReactNode;className?:string;hints?:Partial<Record<string,string>>;leads?:Partial<Record<string,ReactNode>>}){
  const buckets:ReactNode[][]=groups.map(()=>[]),titles:string[][]=groups.map(()=>[]),intro:ReactNode[]=[];
  for(const child of flatten(children)){
   const title=isValidElement(child)?titleOf(child):undefined;
@@ -30,7 +31,7 @@ export function SettingsTree({children,className='',hints}:{children:ReactNode;c
   const i=groups.findIndex(g=>g.match.test(title));buckets[i].push(child);titles[i].push(title);
  }
  return <div className={'settings-tree '+className}>{intro}{groups.map((group,i)=>buckets[i].length>0&&<details className="settings-category" data-settings-category={group.title} key={group.title}>
-  <summary><strong>{group.title}</strong><small>{categoryHint(group.title,titles[i],hints)}</small></summary><div className="settings-subsections">{buckets[i]}</div>
+  <summary><strong>{group.title}</strong><small>{categoryHint(group.title,titles[i],hints)}</small></summary><div className="settings-subsections">{leads?.[group.title]}{buckets[i]}</div>
  </details>)}</div>;
 }
 export function revealSettings(element:HTMLElement|null|undefined){

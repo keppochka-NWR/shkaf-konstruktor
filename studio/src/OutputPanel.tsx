@@ -31,6 +31,7 @@ import {
 } from "./exports";
 import {printDocument} from './printDocument';
 import './documents.css';
+import './estimate-breakdown.css';
 import {loadSeller,saveSeller,hasSeller,type SellerInfo} from './sellerInfo';
 import {count,DETAILS,SHEETS} from './ru';
 const PRINT_BUTTON='<button onclick="window.print()">Печать / Сохранить PDF</button>';

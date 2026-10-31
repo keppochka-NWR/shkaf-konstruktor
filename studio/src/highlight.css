@@ -1,0 +1,11 @@
+/* highlight.ts (Макс 31.10): мягкое синее свечение параметров, куда привело действие; только box-shadow — фон и размеры не трогаем */
+@keyframes ui-highlight-pulse{
+  0%{box-shadow:0 0 0 0 rgba(50,91,238,0)}
+  18%{box-shadow:0 0 0 3px rgba(50,91,238,.55),0 0 16px 4px rgba(50,91,238,.35)}
+  60%{box-shadow:0 0 0 2px rgba(50,91,238,.35),0 0 10px 2px rgba(50,91,238,.2)}
+  100%{box-shadow:0 0 0 0 rgba(50,91,238,0)}
+}
+.ui-highlight{animation:ui-highlight-pulse var(--ui-highlight-ms,1300ms) ease-out 1;border-radius:6px;scroll-margin:24px}
+@media (prefers-reduced-motion:reduce){
+  .ui-highlight{animation:none;outline:2px solid rgba(50,91,238,.75);outline-offset:2px}
+}
