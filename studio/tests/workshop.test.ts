@@ -424,7 +424,8 @@ test('group rotation is a rigid transform and four turns restore bodies away fro
 test('group rotation stays inside the room and rejects collisions without changing source',()=>{
  const p=appendModule(newProject(),initialModule()),ids=p.modules.map(a=>a.id),turned=rotateModuleGroup(p,ids);
  assert.deepEqual(projectErrors(turned),[]);assert.ok(turned.modules.every(a=>bounds(a).x>=0&&bounds(a).z>=0));
- const before=JSON.stringify(p);assert.throws(()=>rotateModuleGroup(p,[ids[0]]),/пересекается/);assert.equal(JSON.stringify(p),before);
+ // Макс 31.10: на месте не помещается — не отказ, а ближайшее свободное положение (placement.nearestGroupPlace); исходный проект не меняется
+ const before=JSON.stringify(p),moved=rotateModuleGroup(p,[ids[0]]);assert.deepEqual(projectErrors(moved),[]);assert.equal(JSON.stringify(p),before);
  const narrow=structuredClone(p);narrow.room.depth=800;assert.throws(()=>rotateModuleGroup(narrow,ids),/не помещается/);
  assert.throws(()=>rotateModuleGroup(p,[]),/Отметьте корпуса/);
  const extra=appendModule(p,initialModule());extra.modules[2].x=3000;extra.modules[2].z=1800;

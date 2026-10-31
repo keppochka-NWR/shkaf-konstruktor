@@ -11,6 +11,7 @@ import {bindCutouts,insertShelf,dropId,fitDrawerIds,renewIds,ensureIds,cutHost} 
 import {drawersUnderMansard} from './mansardFit';
 import {bounds,moduleCenter,mountingCompositionBounds,type Project,projectErrors,applyAutoFillers} from './project';
 import {placeInRow} from './rowResize';
+import {nearestTurn,nearestGroupPlace,supportRole,supportProblem} from './placement';
 import {mirrorKitchen} from './kitchen';
 import type {DrawerConfig} from './hardware';
 export type FillKind='shelf'|'drawer'|'rod'|'pantograph'|'mesh';
@@ -343,9 +344,17 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
  *  'cw' — по часовой, −90°. Поворот вокруг центра, у стены корпус сдвигается внутрь комнаты — как rotateModule. */
 export type Turn='cw'|'ccw';
 export const turnedRotation=(rotation:number|undefined,dir:Turn)=>((((rotation??0)+(dir==='ccw'?90:-90))%360)+360)%360;
-export function turnModule(p:Project,mid:string,dir:Turn):Project{
+export function turnModule(p:Project,mid:string,dir:Turn):Project{return turnNear(p,mid,dir).project;}
+/** Поворот R / Shift+R / кнопки (запрос Макса 31.10): на месте не помещается (сосед, стена) — корпус повёрнут и сдвинут в ближайшее
+ *  свободное положение к исходному (placement.nearestTurn, радиус 1000); навесной после поворота — снова спиной к стене. moved — сдвиг центра, мм. */
+export function turnNear(p:Project,mid:string,dir:Turn):{project:Project;moved:number}{
  const a=p.modules.find(a=>a.id===mid);if(!a)throw Error('Выберите корпус для поворота.');
- return rotateModule(p,mid,turnedRotation(a.rotation,dir));
+ const rotation=turnedRotation(a.rotation,dir);let direct:Project|undefined;
+ try{direct=rotateModule(p,mid,rotation);}catch{direct=undefined;}
+ // поворот на месте проверяется и с автофальшами (как его сохранит commitProject): угловая планка у соседа сдвигала его в корпус — отказ
+ const old=new Set(projectErrors(applyAutoFillers(p),true));
+ if(direct&&projectErrors(applyAutoFillers(direct),true).every(e=>old.has(e))&&!(supportRole(p,a)==='wall'&&supportProblem(direct,direct.modules.find(x=>x.id===mid)!)))return {project:direct,moved:0};
+ return nearestTurn(p,mid,rotation);
 }
 export function rotateModuleGroup(p:Project,ids:readonly string[],dir:Turn='ccw'):Project{
  const chosen=p.modules.filter(a=>ids.includes(a.id));
@@ -363,7 +372,8 @@ export function rotateModuleGroup(p:Project,ids:readonly string[],dir:Turn='ccw'
  const dx=Math.max(0,Math.min(p.room.width-rotated.w,rotated.x))-rotated.x;
  const dz=Math.max(0,Math.min(p.room.depth-rotated.d,rotated.z))-rotated.z;
  for(const a of n.modules.filter(a=>ids.includes(a.id))){a.x+=dx;a.z+=dz;}
- const error=projectErrors(n)[0];if(error)throw Error(error);
+ // Макс 31.10: на месте группа не помещается — ближайший свободный сдвиг всей группы (радиус 1000), иначе — понятный отказ
+ if(projectErrors(n)[0])return nearestGroupPlace(p,n,ids).project;
  return n;
 }
 

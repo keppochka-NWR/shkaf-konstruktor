@@ -367,8 +367,14 @@ export function snapPlacement(p:Project,mid:string,position:{x:number;y:number;z
 /** Последний шаг перетаскивания в комнате с контуром (критик 30.10): после линий Q, Alt/Ctrl и без привязки корпус тоже упирается в
  *  стену, а не проходит сквозь скос (отказ был только при отпускании). ids — что едет вместе (композиция, группа); прямоугольник — как есть. */
 export function keepInRoom<T extends {x:number;y:number;z:number}>(p:Project,mid:string,next:T,ids?:readonly string[]):T{
-  const a=p.modules.find(a=>a.id===mid);if(!p.room.outline||!a)return next;
-  return {...next,...keepInside(p,ids?p.modules.filter(b=>ids.includes(b.id)):[a],a,next,next)};
+  const a=p.modules.find(a=>a.id===mid);if(!a)return next;
+  const moving=ids?p.modules.filter(b=>ids.includes(b.id)):[a];
+  // прямоугольник (Макс 31.10, «при быстрой тяге модули слетают»): в перспективе курсор у горизонта уводил корпус за стену на метры —
+  // при отпускании отказ, корпус «улетал» назад. Теперь габарит упирается в стены и скользит вдоль них (по осям)
+  if(!p.room.outline){const g=mountingCompositionBounds({...p,modules:moving}),W=p.room.width,D=p.room.depth;let dx=next.x-a.x,dz=next.z-a.z;
+    if(g.w<=W+0.1){if(g.x+dx<0)dx=-g.x;else if(g.x+g.w+dx>W)dx=W-g.x-g.w;}if(g.d<=D+0.1){if(g.z+dz<0)dz=-g.z;else if(g.z+g.d+dz>D)dz=D-g.z-g.d;}
+    return {...next,x:Math.round((a.x+dx)*10)/10,z:Math.round((a.z+dz)*10)/10};}
+  return {...next,...keepInside(p,moving,a,next,next)};
 }
 function keepInside(p:Project,moving:PlacedModule[],a:PlacedModule,position:{x:number;y:number;z:number},next:{x:number;y:number;z:number}){
   const poly:FlatPolygon=flatten(p.room.outline!),ok=(q:{x:number;z:number})=>moving.every(b=>polygonInOutline(moduleFootprint({...b,x:b.x+q.x-a.x,z:b.z+q.z-a.z}),poly));

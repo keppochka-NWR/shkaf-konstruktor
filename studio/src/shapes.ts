@@ -414,7 +414,14 @@ export function mansardErrors(m: Module): string[] {
 }
 
 // ─────────────────────────── Стеллаж с радиусными полками ───────────────────────────
-export const RADIUS = { min: 50, minW: 250, maxW: 1000, minD: 250, maxD: 700, plinthRecess: 50 };
+/** Пределы радиусного стеллажа (Макс 31.10 «радиусная секция — добавить ограничения по ширине»; числа — предложение Claude, ждут
+ *  подтверждения): полка ЛДСП 16 держится на конфирматах только с двух сторон — боковина и задник, скруглённый передний угол свободен
+ *  (консоль). Ширина 250–600: от 250 — внутри 234, места под радиус от 50; до 600 — свободный угол полки не дальше 584 от боковины
+ *  (дальше полка 16 провисает у дуги, нужна вторая боковина — это уже обычный стеллаж). Глубина 250–600 — то же для выноса от задника.
+ *  Радиус 50…min(ширина, глубина) − 16 (четверть круга, дуга не заходит на боковину и задник). Было 250–1000 × 250–700. */
+export const RADIUS = { min: 50, minW: 250, maxW: 600, minD: 250, maxD: 600, plinthRecess: 50 };
+/** Прежние пределы (до 31.10): стеллаж, сохранённый шире/глубже новых, открывается (validate), новая правка — только в RADIUS (radiusEditErrors). */
+export const RADIUS_OPEN = { maxW: 1000, maxD: 700 };
 /** Наибольший радиус скругления у стеллажа: до глубины/ширины полки (четверть круга). */
 export const radiusMax = (m: Pick<Module, "width" | "depth">) => Math.min(m.width, m.depth) - RULES.panel;
 /** Горизонталь стеллажа в плане: прямоугольник (0..Wl) × (0..Dl) со скруглённым углом у открытой стороны (u — от стороны боковины, v — от задника). */
@@ -534,14 +541,34 @@ export function parseShapes(x: Record<string, unknown>): Partial<Pick<Module, "m
     ...(typeof c?.ref === "string" && c.ref ? { ref: c.ref } : {}) }));
   return out;
 }
+const radiusWidthText = `Радиусный стеллаж: ширина от ${RADIUS.minW} до ${RADIUS.maxW} мм — полка держится только на боковине и заднике, шире скруглённый угол провисает.`;
+const radiusDepthText = `Радиусный стеллаж: глубина от ${RADIUS.minD} до ${RADIUS.maxD} мм — полка держится только на боковине и заднике.`;
+/** Пределы ширины и глубины радиусного стеллажа (RADIUS) — для новых значений: палитра, поля, растяжение, правка (Макс 31.10). */
+export function radiusLimitErrors(m: Pick<Module, "radius" | "width" | "depth">): string[] {
+  if (!m.radius) return [];
+  const e: string[] = [];
+  if (m.width < RADIUS.minW || m.width > RADIUS.maxW) e.push(radiusWidthText);
+  if (m.depth < RADIUS.minD || m.depth > RADIUS.maxD) e.push(radiusDepthText);
+  return e;
+}
+/** Правка (commitProject): новый радиусный стеллаж или изменённые ширина/глубина — в пределах RADIUS; прежний размер старого файла
+ *  (шире 600 по пределам до 31.10) не мешает другим правкам. */
+export function radiusEditErrors(before: Pick<Module, "radius" | "width" | "depth"> | undefined, m: Pick<Module, "radius" | "width" | "depth">): string[] {
+  if (!m.radius) return [];
+  const e = radiusLimitErrors(m);
+  if (before?.radius && before.width === m.width) { const i = e.indexOf(radiusWidthText); if (i >= 0) e.splice(i, 1); }
+  if (before?.radius && before.depth === m.depth) { const i = e.indexOf(radiusDepthText); if (i >= 0) e.splice(i, 1); }
+  return e;
+}
 /** Ошибки стеллажа с радиусными полками (validate). */
 export function radiusErrors(m: Module): string[] {
   if (!m.radius) return [];
   const e: string[] = [], r = m.radius, s = m.sections;
   if (!["left", "right"].includes(r.side)) e.push("Радиусный стеллаж: сторона скругления — слева или справа.");
   if (!Number.isFinite(r.r) || r.r < RADIUS.min || r.r > radiusMax(m)) e.push(`Радиусный стеллаж: радиус от ${RADIUS.min} до ${radiusMax(m)} мм (не больше ширины и глубины полки).`);
-  if (m.width < RADIUS.minW || m.width > RADIUS.maxW) e.push(`Радиусный стеллаж: ширина от ${RADIUS.minW} до ${RADIUS.maxW} мм.`);
-  if (m.depth < RADIUS.minD || m.depth > RADIUS.maxD) e.push(`Радиусный стеллаж: глубина от ${RADIUS.minD} до ${RADIUS.maxD} мм.`);
+  // открытие файла — по прежним пределам (старый проект не ломается); новая ширина/глубина — radiusEditErrors
+  if (m.width < RADIUS.minW || m.width > RADIUS_OPEN.maxW) e.push(radiusWidthText);
+  if (m.depth < RADIUS.minD || m.depth > RADIUS_OPEN.maxD) e.push(radiusDepthText);
   if (m.doors || s.length !== 1 || s.some((x) => x.drawers > 0 || x.rod || x.pantograph || x.pullouts || x.divider)) e.push("Радиусный стеллаж — открытый, одна секция только с полками (без дверей, ящиков и штанг).");
   if (m.kitchen || m.raw || m.corner || m.desk || m.casework || m.kupe || m.worktop || m.slope || m.skew || m.mansard || m.sectionLayout || m.topGlass || m.seatTop || m.feet || m.hanging) e.push("Радиусный стеллаж: скосы, ножки, стекло и навесной вариант не применяются.");
   return e;
