@@ -12,12 +12,34 @@ import {VernissagePicker} from './VernissagePicker';
 import {AluPicker} from './AluPicker';
 import type {VernissageFacade} from './facadesVernissage';
 import type {AluFacade} from './alu';
+import {applyGroupFilling,fillingKindProblem} from './groupFilling';
 import {applyGroupFacade,applyGroupPatch,changedKeys,groupFacadeValue,groupPatchMixed,groupValueLabel,skippedNote,GROUP_FIELDS,KIND_LABEL,OPEN_LABEL,type GroupFacadeField,type GroupResult} from './groupFacades';
 
 const MIXED='__mixed';
 const PATCH_LABEL:Record<string,string>={milling:'фрезеровка',cover:'покрытие',film:'плёнка',enamelColor:'цвет эмали',thickness:'толщина',open:'открывание',patina:'патина',twoSided:'покраска с двух сторон',lacquer:'лак',profile:'профиль',color:'цвет профиля',insert:'наполнение'};
 const say=(title:string,text:string)=>window.dispatchEvent(new CustomEvent('studio-note',{detail:{title,text}}));
 
+/** «Наполнение как у этого» (Макс 31.10): наполнение выбранного модуля — отмеченным, одной правкой (groupFilling.ts). */
+export function GroupFillingBlock({project,ids,sourceId,commit}:{project:Project;ids:string[];sourceId:string;commit:(p:Project)=>boolean}){
+ const [note,setNote]=useState<{ok:boolean;text:string}|null>(null);
+ const src=project.modules.find(a=>a.id===sourceId)?.module,why=src?fillingKindProblem(src):'нет выбранного модуля',targets=ids.filter(id=>id!==sourceId);
+ function run(){
+  try{const r=applyGroupFilling(project,sourceId,ids);
+   if(!r.changed.length&&!r.skipped.length){setNote({ok:true,text:'У отмеченных уже такое наполнение.'});return;}
+   if(r.changed.length&&!commit(r.project)){setNote({ok:false,text:'Изменение не принято: проверьте сообщение студии. Наполнение не изменено.'});return;}
+   const skipped=skippedNote(r.skipped),text=`Наполнение как у «${src!.name}» — применено к ${r.changed.length} из ${targets.length}.`+(skipped?' '+skipped:'')+' Отменить — Ctrl+Z.';
+   setNote({ok:true,text});if(skipped)say('Наполнение выделенных',text);
+  }catch(e){setNote({ok:false,text:(e as Error).message});}
+ }
+ return <details className="property-section group-filling" open data-testid="group-filling">
+  <summary><strong>Наполнение выделенных модулей · {ids.length}</strong></summary>
+  <p className="field-note" role="note">Образец — выбранный{src?` «${src.name}»`:''}; применить к отмеченным: {targets.length}.</p>
+  <p className="field-note">Наполнение правится у выбранного модуля. Кнопка переносит его полки, ящики, штанги, подсветку в секциях и частичные перегородки на остальные отмеченные ({targets.length}): то же число секций, ширина секции ±100 мм; высоты полок — по доле высоты, направляющие — по глубине. Двери, ручки, материалы и размеры не меняются.</p>
+  <button className="outline full" disabled={!!why||!targets.length} title={why?'Не переносится: '+why:!targets.length?'Отметьте другие модули Shift+щелчком':undefined} onClick={run}>Наполнение как у этого</button>
+  {why&&<p className="field-note" role="note">Образец не подходит: {why}.</p>}
+  {note&&<p role={note.ok?'status':'alert'} className="field-note group-note" data-testid="group-filling-note">{note.text}</p>}
+ </details>;
+}
 export function GroupFacadePanel({project,ids,commit}:{project:Project;ids:string[];commit:(p:Project)=>boolean}){
  const [note,setNote]=useState<{ok:boolean;text:string}|null>(null);
  const names=ids.map(id=>project.modules.find(a=>a.id===id)?.module.name).filter(Boolean) as string[];

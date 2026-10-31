@@ -65,7 +65,8 @@ import {MEASUREMENT_RULES,nicheSize,nicheMinimum,ceilingClearance} from './measu
 import {ModuleLibrary} from './ModuleLibrary';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "react";
 import {historyShortcut,editsText,viewShortcut,rotateShortcut} from './historyShortcuts';
-import {GroupFacadePanel} from './GroupFacadePanel';
+import {GroupFacadePanel,GroupFillingBlock} from './GroupFacadePanel';
+import {highlightControls} from './highlight';
 import {applyGroupFacade,skippedNote,groupFacadeValue,type GroupFacadeField} from './groupFacades';
 import {matchGroupSize,SIZE_WORD,type SizeKey} from './matchSize';
 import {matchSizeItems,groupSizeItems} from './matchSizeMenu';
@@ -836,6 +837,10 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       const s=skippedNote(r.skipped);setNotice({title:'Заменить у всех',text:`${target==='facadeDecor'?'Декор фасадов':'Декор фасадов ящиков'} «${decorLabel(value)}» — заменён у ${r.changed.length} из ${all.length}.`+(s?' '+s:'')});return true;
     }catch(e){setError((e as Error).message);return false;}
   }
+  /** Макс 31.10: показать, где появились параметры выбранной детали (колесо «Параметры», плашка «Параметры»): раскрыть, прокрутить, подсветить. */
+  /** Макс 31.10: при отмеченных модулях в «Полках», «Ящиках», «Секции» — что наполнение правится у выбранного и где перенести его на отмеченные. */
+  const groupFillNote=liveGroupIds.length>1?<p className="field-note group-fill-hint" role="note" data-testid="group-fill-hint">Наполнение правится у выбранного «{m.name}». Применить к отмеченным ({liveGroupIds.filter(x=>x!==placed.id).length}) — кнопка <button className="text-action" onClick={()=>void highlightControls('[data-testid="group-filling"]')}>«Наполнение как у этого»</button>.</p>:null;
+  function showParams(focus=false){void highlightControls('.properties .selected-filling',{focus}).then(els=>{if(!els.length)void highlightControls('.properties details[data-setting="Секция"]');});}
   function groupFacadeEdit(field:GroupFacadeField,value:string,label:string){
     try{const r=applyGroupFacade(project,liveGroupIds,field,value);if(r.changed.length&&!commitProject(r.project))return false;
       const s=skippedNote(r.skipped);setNotice({title:'Фасады выделенных',text:`${label} — применено к ${r.changed.length} из ${liveGroupIds.length}.`+(s?' '+s:'')});return true;}
@@ -893,7 +898,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'open-handle',label:'С ручками',icon:Hand,active:mod.doorOpen!=='push',hint:'Ручка и петли с доводчиком',run:()=>modifyAt(a.id,n=>{delete n.doorOpen;})},
       {id:'open-push',label:'Нажатием',icon:MousePointerClick,active:mod.doorOpen==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>modifyAt(a.id,n=>{n.doorOpen='push';})},
       ...(()=>{const single=mod.doors&&!mod.raw?singleLeafDoors(mod):[];return single.length?(['left','right'] as const).map(side=>({id:'hinge-all-'+side,label:side==='left'?'Петли слева':'Петли справа',icon:DoorOpen,active:single.every(d=>d.hinge===side),hint:'Все одностворчатые фасады корпуса. Отдельный фасад — правой кнопкой по нему',run:()=>modifyAt(a.id,n=>{setModuleHingeSide(n,side);})})):[];})()]};
-    const editFacade:RadialItem={id:'edit-facade',label:'Редактировать фасад',icon:SlidersHorizontal,hint:'Материал, плёнка, краска и фрезеровка фасадов корпуса',disabled:!!mod.raw||!!mod.bazis||!!mod.kupe,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setModal('facade-editor');}};
+    const editFacade:RadialItem={id:'edit-facade',label:'Редактировать фасад',icon:SlidersHorizontal,hint:'Материал, плёнка, краска и фрезеровка фасадов корпуса',disabled:!!mod.raw||!!mod.bazis||!!mod.kupe,run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setModal('facade-editor');void highlightControls('.properties .facade-panel');}};
     // мультивыбор (решение Макса 29.10): щелчок по модулю из отмеченной группы — фасадные действия на всю группу
     const gv=(f:GroupFacadeField)=>groupFacadeValue(project,liveGroupIds,f).value;
     const groupItem:RadialItem[]=inGroup(a.id)?[{id:'group-facades',label:`Фасады выделенных · ${liveGroupIds.length}`,icon:Layers,hint:'Цвет, ручки, петли, открывание — всем отмеченным модулям сразу (одна отмена Ctrl+Z)',children:[
@@ -903,7 +908,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {id:'group-open',label:'Открывание',icon:MousePointerClick,hint:'С ручками или нажатием — всем отмеченным',children:[
         {id:'group-open-handle',label:'С ручками',icon:Hand,active:gv('doorOpen')==='handle',hint:'Ручка и петли с доводчиком',run:()=>{groupFacadeEdit('doorOpen','handle','Открывание: с ручками');}},
         {id:'group-open-push',label:'Нажатием',icon:MousePointerClick,active:gv('doorOpen')==='push',hint:'Push-to-open: без ручек, толкатель',run:()=>{groupFacadeEdit('doorOpen','push','Открывание: нажатием');}}]},
-      {id:'group-panel',label:'Все настройки…',icon:SlidersHorizontal,hint:'Раздел справа: все поля фасадов',run:()=>{setActive(a.id);setTab('module');setTimeout(()=>{const el=document.querySelector<HTMLDetailsElement>('[data-testid="group-facades"]');if(el){el.open=true;el.scrollIntoView({block:'start'});}},60);}},
+      {id:'group-panel',label:'Все настройки…',icon:SlidersHorizontal,hint:'Раздел справа: все поля фасадов',run:()=>{setActive(a.id);setTab('module');void highlightControls('[data-testid="group-facades"]');}},
     ]}]:[];
     // мультивыбор (Макс 29.10): «Выровнять высоту/глубину отмеченных по этому модулю»
     const groupSize:RadialItem[]=inGroup(a.id)?[{id:'group-size',label:`Выровнять отмеченные · ${liveGroupIds.length}`,icon:Ruler,hint:`Высота или глубина — как у «${mod.name}»`,children:groupSizeItems(project,liveGroupIds,a.id,key=>groupSizeEdit(key,a.id))}]:[];
@@ -922,7 +927,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       run:()=>{try{const r=worktopOnModule(project,a.id);if(commitProject(r.project))selectModule(r.id);}catch(e){setError((e as Error).message);}}};
     const bodyRing:RadialItem[]=[hideItem,
       {id:'size',label:'Размеры',icon:Ruler,hint:`${mod.width} × ${mod.height} × ${mod.depth} мм`,children:[size('width','Ширина'),size('height','Высота'),size('depth','Глубина'),...rowGapItems(a.id),...matchSizeItems(project,a.id,(np,notes)=>{if(commitProject(np)&&notes.length)setNotice({title:'Малый корпус',text:notes.join(' ')});})]},
-      mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');}}),
+      mod.worktop?worktopMaterialItem(mod,u=>modifyAt(a.id,u)):addMenuItem(mod,c.sid,{drop:(kind,o)=>{select();dropFilling(kind,a.id,c.sid,menuDropY(mod,c.sid,kind,y),o?.meshId,o?.glass,true);},modify:u=>modifyAt(a.id,u),split:()=>{try{commitProject(placeInRow(project,a.id,splitSection(mod,c.sid)));}catch(e){setError((e as Error).message);}},openKitchen:()=>{setActive(a.id);goStage('filling');void highlightControls('.properties .kitchen-panel details[data-settings-category="Наполнение"]');}}),
       ...(mod.worktop||mod.kupe||mod.raw?[]:[worktopItem]),
       ...quickItems(mod,c.sid,quickOps),...kitchenFillerItems(mod,quickOps),...cornerItems(mod,quickOps),
       {id:'decor',label:'Цвет',icon:Palette,hint:'Декор корпуса: '+mod.decor,run:()=>{setActive(a.id);setMaterialTarget('decor');setModal('materials');}},
@@ -955,7 +960,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       // Двери купе: своё кольцо — наполнение, количество дверей, доводчики, сдвинуть, профиль, размеры, копия, удалить.
       const k=mod.kupe,setK=(patch:Partial<NonNullable<Module['kupe']>>)=>modifyAt(a.id,n=>{n.kupe={...n.kupe!,...patch};});
       const fillItem=(name:string,label:string):RadialItem=>({id:'kf-'+name,label,icon:Palette,active:k.fills.every(f=>f===name),hint:name,run:()=>setK({fills:[name],sectionFills:undefined})});
-      const panel=()=>{selectModule(a.id);setTab('module');};
+      const panel=()=>{selectModule(a.id);setTab('module');void highlightControls('.properties .kupe-panel');};
       return {title:'Двери купе',subtitle:`${mod.width} × ${mod.height} · ${k.doors} дв.`,items:[hideItem,
         {id:'kupe-fill',label:'Наполнение',icon:Palette,hint:'Зеркало, стекло, ЛДСП — для всех дверей',children:[fillItem('Зеркало Серебро 4мм','Зеркало'),fillItem('Зеркало Бронза 4мм','Бронза'),fillItem('Зеркало Графит 4мм','Графит'),fillItem('Стекло сатин матовый 4мм','Сатин'),fillItem(mod.decor,'ЛДСП корпуса'),{id:'kf-more',label:'Другое…',icon:SlidersHorizontal,hint:'Весь каталог наполнений и разное по дверям',run:panel}]},
         {id:'kupe-doors',label:'Дверей',icon:Columns2,hint:`Сейчас ${k.doors}, полотно ${Math.round(kupeLeafWidth(mod.width,k.doors,kupeSystem(k)).width)} мм с нахлёстом`,children:[2,3,4,5].map(n=>({id:'kd-'+n,label:String(n),icon:Columns2,active:k.doors===n,hint:`Полотно ${Math.round(kupeLeafWidth(mod.width,n,kupeSystem(k)).width)} мм с нахлёстом`,run:()=>setK({doors:n,fills:k.fills.slice(0,n)})}))},
@@ -971,7 +976,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       copy:{id:'copy-part',label:'Копия',icon:Copy,hint:'Ещё такой же элемент в этой секции (если есть место)',run:()=>{try{const r=duplicatePart(project,a.id,c.sid,pid);commitProject(r.project);}catch(e){setError((e as Error).message);}}} as RadialItem,
       up:{id:'up',label:'Выше',icon:ArrowUp,hint:'Поднять на 32 мм (шаг полкодержателя)',run:()=>moveFilling(a.id,c.sid,pid,32)} as RadialItem,
       down:{id:'down',label:'Ниже',icon:ArrowDown,hint:'Опустить на 32 мм',run:()=>moveFilling(a.id,c.sid,pid,-32)} as RadialItem,
-      params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');}} as RadialItem});
+      // Макс 31.10: «Параметры» из колеса — поля выбранной детали справа раскрываются, прокручиваются и подсвечиваются (highlight.ts)
+      params:{id:'params',label:'Параметры',icon:SlidersHorizontal,hint:'Все настройки справа',run:()=>{select();setSelectedPart({mid:a.id,sid:c.sid,pid});setTab('section');setMode('fill');showParams();}} as RadialItem});
     if(/:shelf:\d+$/.test(pid)){
       const j=Number(pid.split(':shelf:')[1]),isFixed=!!sec.fixed?.includes(j),p=part('Полка');
       return {title:'Полка '+(j+1),subtitle:mod.name,items:[p.up,p.down,p.copy,{id:'fixed',label:isFixed?'Съёмная':'Жёсткая',icon:isFixed?LockOpen:Lock,hint:isFixed?'Сделать съёмной: на полкодержателях':'Закрепить на конфирматах: держит корпус',run:()=>modifyAt(a.id,n=>{const s=n.sections.find(x=>x.id===c.sid)!;const f=new Set(s.fixed??[]);if(isFixed)f.delete(j);else f.add(j);s.fixed=f.size?[...f].sort((x,z)=>x-z):undefined;})},cutItem,...cutCopy,p.params,body,p.remove]};
@@ -1248,7 +1254,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
       {/* окно «Вырезы» открыто (в т. ч. правой кнопкой — деталь выбрана): плашку не показываем, иначе она закрывает «Сохранить вырезы» */}
       {!presentation&&stage==='bodies'&&canRemove&&!cutHost&&<div className="selection-action-bar" role="group" aria-label="Действия с выбранной деталью">
         <div className="selection-context"><strong>{selectedFillingName}</strong><span>{m.name} · секция {idx+1}</span></div>
-        <button className="outline" onClick={()=>{setTab('section');requestAnimationFrame(()=>{const target=propertiesRef.current?.querySelector<HTMLElement>('.selected-filling');revealSettings(target);target?.scrollIntoView({block:'nearest'});target?.querySelector<HTMLInputElement>('input')?.focus();});}}>Параметры</button>
+        <button className="outline" onClick={()=>{setTab('section');showParams(true);}}>Параметры</button>
         {selectedDetail?.role!=='door'&&<><button className="outline" aria-label="Быстро опустить элемент на 10 мм" onClick={()=>nudgeSelected(-10)}>↓ 10 мм</button>
         <button className="outline" aria-label="Быстро поднять элемент на 10 мм" onClick={()=>nudgeSelected(10)}>↑ 10 мм</button></>}
         {selectedDetail&&/:shelf:|:drawer:/.test(selectedDetail.id)&&<button className="outline" onClick={copySelected}>Копировать</button>}
@@ -1800,6 +1806,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
           {composer&&<div><FillingComposer key={placed.id+selectedId+composer} module={m} sid={selectedId} kind={composer} onCancel={()=>setComposer(null)} onApply={(count,config,fit)=>{try{const next=composer==='drawer'&&fit&&config?addFittedDrawers(project,placed.id,selectedId,count,config):addFillingBatch(project,placed.id,selectedId,composer,count,config);if(commitProject(next)){selectInserted(next,placed.id,selectedId,composer);setComposer(null);return true;}}catch(e){setError((e as Error).message);}return false;}}/></div>}
           {/* решение Макса 29.10: фасады отмеченных Shift+щелчком модулей — разом (src/groupFacades.ts) */}
           {tab!=='room'&&liveGroupIds.length>1&&<GroupFacadePanel key={liveGroupIds.join('|')} project={project} ids={liveGroupIds} commit={commitProject}/>}
+          {/* Макс 31.10: «Наполнение как у этого» — наполнение выбранного модуля отмеченным (src/groupFilling.ts) */}
+          {tab!=='room'&&liveGroupIds.length>1&&<GroupFillingBlock key={'fill:'+placed.id+'|'+liveGroupIds.join('|')} project={project} ids={liveGroupIds} sourceId={placed.id} commit={commitProject}/>}
           {tab!=='room'&&!nothingSelected&&!m.raw&&!m.worktop&&!m.kupe&&<div className="selected-module-heading"><strong>{m.name}</strong><label>Секция<select aria-label="Выбранная секция" value={selectedId} onChange={e=>chooseSection(e.target.value)}>{m.sections.map((section,i)=><option key={section.id} value={section.id}>Секция {i+1}</option>)}</select></label></div>}
           {tab === "room" ? (
             <div className="property-section">
@@ -1986,7 +1994,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </button>
                 </div>
               </SettingsSection>
-<SettingsSection title="Полки">                <Counter
+<SettingsSection title="Полки">{groupFillNote}                <Counter
                   label="Полки"
                   value={s.shelves.length}
                   max={RULES.maxShelves}
@@ -2047,7 +2055,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   </>
                 )}
 </SettingsSection>
-<SettingsSection title="Ящики">                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={drawerFaceGap(m,s)/* критик 29.10: как виден по деталям */} min={2} max={10} onChange={v=>modify(n=>setDrawerGap(n,s.id,v))}/>}
+<SettingsSection title="Ящики">{groupFillNote}                {s.drawers>0&&<NumberField label="Зазор между фасадами ящиков" value={drawerFaceGap(m,s)/* критик 29.10: как виден по деталям */} min={2} max={10} onChange={v=>modify(n=>setDrawerGap(n,s.id,v))}/>}
                 {s.drawers>0&&(falshGlue(m)[s.id+':left']||falshGlue(m)[s.id+':right'])&&<p className="field-note" role="note" data-testid="falsh-glue-note">Фальш 32 мм: склейка, разрыв у петель — петля в зоне ящиков не сдвигается, фальш из двух плит 16 с разрывом 100 мм у петли.</p>}
 
                 <Counter
@@ -2297,7 +2305,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                 {m.doors&&m.doorOpen!=='push'&&<label className="hardware-field"><span><input type="checkbox" aria-label="Петли 155–165°" checked={allHingeAngles(m,165)} onChange={e=>{const on=e.target.checked;modify(n=>setAllHingeAngles(n,on?165:null));}}/> Петли с углом открывания 155–165° · все двери модуля</span><small>Дверь откидывается к соседней и не загораживает проём. Петля 155° — 1 700 ₽ клиенту. Угол одной двери — в её настройках (клик по двери).</small></label>}
                 {m.doors&&!m.kitchen&&<><button className="outline full" onClick={()=>modify(n=>Object.assign(n,repairHinges(n)))}>Подобрать положение петель</button><p className="field-note">Подбирает свободные высоты и отступ чашки. Старые проекты меняются только по этой кнопке; Ctrl+Z отменяет. Присадку и достаточность опоры створки проверяет технолог.</p></>}
 </SettingsSection>
-<SettingsSection title="Секция">
+<SettingsSection title="Секция">{groupFillNote}
                 <div className="section-heading">
                   <h2>Секция {idx + 1}</h2>
                   <Columns2 size={17} />
