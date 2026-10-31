@@ -50,7 +50,9 @@ export const historyGuard = (e: KeyboardEvent, dragging: boolean) => dragging &&
 export const POINT_SNAP_PX = 14;
 
 export type P2 = { h: number; v: number };
-export type Seg2 = { a: P2; b: P2; what: string };
+/** minor — кромка детали (guides.candidateLines): Alt/Ctrl ловят её, только если рядом нет края корпуса, стены или линии —
+ *  иначе у угла корпуса побеждает внутренний угол боковины в 16 мм, а сбоку — невидимые ящики соседа (сценарий 31.10). */
+export type Seg2 = { a: P2; b: P2; what: string; minor?: boolean };
 /** free — составляющие, которые привязка не задаёт (вдоль вертикальной линии — v, вдоль горизонтальной — h): они идут за курсором. */
 export type PointHit = { p: P2; what: string; d: number; kind: "line" | "cross"; free?: { h: boolean; v: boolean } };
 
@@ -69,7 +71,7 @@ export function toSegments(lines: GuideLine[], look: V3): Seg2[] {
   const out: Seg2[] = [];
   for (const l of lines) {
     const a = toView(l.a, look), b = toView(l.b, look);
-    if (Math.hypot(b.h - a.h, b.v - a.v) > 1e-6) out.push({ a, b, what: l.what });
+    if (Math.hypot(b.h - a.h, b.v - a.v) > 1e-6) out.push({ a, b, what: l.what, ...(l.minor ? { minor: true } : {}) });
   }
   return out;
 }
@@ -116,9 +118,13 @@ export function nearestCross(p: P2, segs: Seg2[], tol: number): PointHit | undef
     }
   return best;
 }
-/** Привязка точки по режиму: line — на линию, cross — к пересечению; иначе undefined. */
+/** Привязка точки по режиму: line — на линию, cross — к пересечению; иначе undefined. Сначала — края корпусов, стены и
+ *  линии (без кромок деталей); не нашлось в допуске — по всем, с кромками (Seg2.minor). */
 export function pointSnap(mode: SnapMode, p: P2, segs: Seg2[], tol: number): PointHit | undefined {
-  return mode === "line" ? nearestOnLine(p, segs, tol) : mode === "cross" ? nearestCross(p, segs, tol) : undefined;
+  const find = (s: Seg2[]) => (mode === "line" ? nearestOnLine(p, s, tol) : mode === "cross" ? nearestCross(p, s, tol) : undefined);
+  if (mode !== "line" && mode !== "cross") return undefined;
+  const major = segs.some((s) => s.minor) ? segs.filter((s) => !s.minor) : segs;
+  return (major !== segs && find(major)) || find(segs);
 }
 /** Ход по одной оси dir (линия Q вдоль своей нормали, край «↔» вдоль ширины): линии, параллельные ходу, для Alt не в счёт —
  *  иначе у пола побеждает пол и ход вдоль оси нулевой (критик 29.10, п.2). */

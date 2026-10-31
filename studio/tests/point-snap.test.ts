@@ -162,8 +162,8 @@ test('линии вида спереди: углы корпуса и угол п
   const p=newProject();p.room={...p.room,width:4000,depth:3000,height:2700};
   const a:PlacedModule={id:'a',x:1000,y:0,z:0,rotation:0,module:{...initialModule(),name:'Шкаф',width:600,height:2000,depth:550}};
   const look=viewLook('front')!,lines:GuideLine[]=candidateLines([a],look,undefined,p.room,[]),segs=toSegments(lines,look);
-  // верхний правый угол корпуса: h=1600, v=2000 (с 30.10 линии и от деталей любого корпуса: в 2 мм — угол фасада, курсор у самого угла)
-  const c=nearestCross({h:1601,v:2002},segs,20)!;
+  // верхний правый угол корпуса: h=1600, v=2000 (кромки деталей — второй очереди: угол фасада в 2 мм не перебивает угол корпуса)
+  const c=pointSnap('cross',{h:1594,v:1993},segs,20)!;
   assert.deepEqual(c.p,{h:1600,v:2000});assert.match(c.what,/угол: край «Шкаф»/);
   // угол помещения пол × правая стена
   const w=nearestCross({h:3990,v:8},segs,20)!;assert.deepEqual(w.p,{h:4000,v:0});
@@ -172,4 +172,17 @@ test('линии вида спереди: углы корпуса и угол п
   // опорный угол переноса — ближайший к месту захвата
   assert.deepEqual(nearestOutlineCorner(carcassCorners(a),look,{h:1100,v:1800}),{h:1000,v:2000});
   assert.deepEqual(nearestOutlineCorner(carcassCorners(a),look,{h:1500,v:100}),{h:1600,v:0});
+});
+
+test('кромки деталей — второй очереди (сценарий 31.10): рядом край корпуса — он; рядом только полка — полка',()=>{
+  const p=newProject();p.room={...p.room,width:4000,depth:3000,height:2700};
+  const a:PlacedModule={id:'a',x:1000,y:0,z:0,rotation:0,module:{...initialModule(),name:'Шкаф',width:600,height:2000,depth:550}};
+  const look=viewLook('front')!,segs=toSegments(candidateLines([a],look,undefined,p.room,[]),look);
+  assert.ok(segs.some(s=>s.minor)&&segs.some(s=>!s.minor));
+  // внутренний угол боковины (1016; 1984) ближе к курсору, но угол корпуса в допуске — берётся угол корпуса
+  assert.deepEqual(pointSnap('cross',{h:1017,v:1985},segs,30)!.p,{h:1000,v:2000});
+  // посреди корпуса, у кромки полки: ни край, ни стена не в допуске — Alt ловит полку
+  const shelf=segs.find(s=>s.minor&&/Полка/.test(s.what)&&Math.abs(s.a.v-s.b.v)<1e-6)!;
+  const hit=pointSnap('line',{h:1300,v:shelf.a.v+3},segs,10)!;
+  assert.match(hit.what,/Полка/);assert.equal(hit.p.v,Math.round(shelf.a.v*10)/10);
 });

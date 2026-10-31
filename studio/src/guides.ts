@@ -12,7 +12,9 @@ import { edgePoints, type RoomOutline } from "./roomOutline";
 export type V3 = { x: number; y: number; z: number };
 export type Guide = { id: string; look: [number, number, number]; n: [number, number, number]; at: number };
 /** Линия-кандидат для Q (и база для новой): плоскость n·P = at, отрезок a–b для показа и попадания мышью. */
-export type GuideLine = { n: V3; at: number; a: V3; b: V3; what: string; guideId?: string };
+export type GuideLine = { n: V3; at: number; a: V3; b: V3; what: string; guideId?: string;
+  /** кромка детали (не край корпуса, стена или линия): для Alt/Ctrl — второй очереди, pointSnap.ts (сценарий 31.10) */
+  minor?: boolean };
 
 export const dot = (a: V3, b: V3) => a.x * b.x + a.y * b.y + a.z * b.z;
 const add = (a: V3, b: V3, k = 1): V3 => ({ x: a.x + b.x * k, y: a.y + b.y * k, z: a.z + b.z * k });
@@ -118,7 +120,7 @@ export function candidateLines(modules: PlacedModule[], look: V3, activeId?: str
     // кромки деталей: стойки, полки, перегородки, крыша, дно, фасады, ящики, штанги, ручки (без крепежа и петель — мелочь)
     for (const p of parts(a.module)) {
       if (p.role === "fastener" || p.role === "hinge" || !(p.size[0] > 0 && p.size[1] > 0 && p.size[2] > 0)) continue;
-      push(outline(partCorners(a, p), look, "кромка «" + p.name + "»"));
+      push(outline(partCorners(a, p), look, "кромка «" + p.name + "»").map((l) => ({ ...l, minor: true })));
     }
   }
   if (room?.outline) push(outlineLines(room as Room & { outline: RoomOutline }, look));

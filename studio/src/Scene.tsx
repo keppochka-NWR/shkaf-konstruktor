@@ -1166,6 +1166,8 @@ export function Scene(p: Props) {
       camera=t.end as THREE.PerspectiveCamera|THREE.OrthographicCamera;controls.object=camera;camera.up.set(0,1,0);camera.position.copy(t.pos);controls.target.copy(t.target);camera.zoom=t.zoom;
       if(camera===orthographic&&t.frustum)[orthographic.left,orthographic.right,orthographic.top,orthographic.bottom]=t.frustum;
       camera.updateProjectionMatrix();controls.update();needsRender=true;
+      // линии вида берутся по направлению камеры (lookNow) — на облёте они были от старого вида, в конце — свои (сценарий 31.10)
+      drawGuides();
     }
     controls.addEventListener('start',endTween);
     function fit() {
