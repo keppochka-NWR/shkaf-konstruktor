@@ -164,7 +164,7 @@ export function doorSplitItem(m: Module, sid: string, ops: QuickMenuOps): Radial
 export function doorRowsItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
   const s = m.sections.find((x) => x.id === sid) ?? m.sections[0], cur = doorRowCount(m, s), top = maxDoorRows(m, s);
   return { id: "q-door-rows", label: "Рядов фасадов", icon: Rows3, active: cur > 2, hint: `Сейчас ${cur}. Ряды поровну, высота каждого — в панели`,
-    children: Array.from({ length: MAX_DOOR_ROWS - 1 }, (_, i) => i + 2).map((n) => ({ id: "q-door-rows-" + n, label: String(n), icon: Rows3, active: cur === n, disabled: n > top && n !== cur, hint: n > top ? `Фасад выйдет меньше ${RULES.doorMinH} мм` : `${n} равных ряда на всю высоту двери`, run: () => ops.modify((x) => setDoorRowCount(x, s.id, n)) })) };
+    children: Array.from({ length: MAX_DOOR_ROWS - 1 }, (_, i) => i + 2).map((n) => ({ id: "q-door-rows-" + n, label: String(n), icon: Rows3, active: cur === n, disabled: n > top && n !== cur, hint: n > top ? `Ряд выйдет ниже ${RULES.doorRowMinH} мм` : `${n} равных ряда на всю высоту двери`, run: () => ops.modify((x) => setDoorRowCount(x, s.id, n)) })) };
 }
 
 /**

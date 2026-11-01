@@ -22,10 +22,11 @@ import {RoomSurveyEditor} from './RoomSurveyEditor';
 import { refitKDrawers } from "./kitchenDrawers";
 import { configureColumn } from "./kitchenTall";
 import { syncKitchenLift } from "./kitchenLift";
-import {drawersBehindDoors,doorRowsBlock,drawersFlush,facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable,evenDrawerConfigs,drawerFacesEqual} from './model';
+import {fb,drawersBehindDoors,doorRowsBlock,drawersFlush,facadeHandleId,setFacadeHandle,mirrorEdgeHandles,mirrorBracketDoors,doorHandleFloorInfo,setDoorHandleFloor,doorHandlePos,handlePosIssue,setDoorHandlePos,setModuleHandlePos,isUpperModule,HANDLE_POS_LABEL,type HandlePos,facadeTop,facadeBottom,fitDrawersAfterResize,pulloutLength,vernissageSizes,falshGlue,drawerFaceSpan,drawerGripOn,aluDrawersAvailable,evenDrawerConfigs,drawerFacesEqual} from './model';
 import {setDrawerCount,setDrawersOverlay,setDoorMount,fullSectionDrawer,fullDrawerFacadeH,drawerFaceGap,setDrawerGap} from './drawerModes';
 import {setDoorSplit,setDoorRowCount,doorRowHeights,doorPickLabel,maxDoorRows,MAX_DOOR_ROWS} from './doorRows';
 import {DrawerFlushCheck} from './DrawerFlushCheck';
+import {keepDrawersOnRows,setDrawersToRow} from './drawerRowAlign';
 import {CURRENT_PROJECT,persistProject,ProjectStorageConflict} from './projectStorage';
 import {backupProject} from './projectStorage';
 import {CornerModulePanel} from './CornerModulePanel';
@@ -639,6 +640,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // отклонённый вариант (кнопки исправления в плашке ошибки применяют исправление к нему: «Опустить полки под скос», критик 29.10)
   const rejectedProject=useRef<Project|null>(null);
   function commitProject(raw: Project) {
+    // Макс 01.11: ящики вровень идут за рядом соседней секции в том же шаге отмены (флаг ставит только галочка — старые проекты не трогаем)
+    raw=keepDrawersOnRows(project,raw);
     // Настройки расчёта (цена листа, коэффициент, ручные цены) — свойство заказа (критик 29.10, блокер 1): проект комнаты без них («Новый проект», «без мебели»,
     // файл без расчёта) получает настройки заказа, а не сбрасывает их.
     if(saveManagedProject&&raw.calculation===undefined&&project.calculation)raw={...raw,calculation:structuredClone(project.calculation)};
@@ -2163,7 +2166,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                           {meshItem&&<p className="field-note">Арт. {meshItem.art}, высота {meshItem.h} мм, нужен проём {meshItem.reqW}–{meshItem.reqW+60} мм в ширину и глубина от {meshItem.reqD} мм. Направляющие в комплекте, без фасада и ручки; за распашными дверями ставятся фальши.</p>}
                           {meshItem&&<NumberField label="Элемент от дна проёма" value={drawerOffsets(s)[j]} min={0} max={b.top-b.bottom-c.height-40} onChange={v=>update({y:v})}/>}
                           {!meshItem&&<>
-                          {/* Макс 01.11: «вровень» — в настройках ящика, одно название с галочкой секции и меню правой кнопки */}{quickMenuApplies(m)&&m.doors&&!c.noFacade&&<DrawerFlushCheck m={m} s={s} set={on=>modify(n=>setDrawersOverlay(n,s.id,on))}/>}
+                          {/* Макс 01.11: «вровень» — в настройках ящика, одно название с галочкой секции и меню правой кнопки */}{quickMenuApplies(m)&&m.doors&&!c.noFacade&&<DrawerFlushCheck m={m} s={s} set={on=>modify(n=>setDrawersOverlay(n,s.id,on))} setToRow={on=>modify(n=>setDrawersToRow(n,s.id,on))}/>}
                           <label className="hardware-field">
                             Направляющие
                             <select
@@ -2331,12 +2334,12 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
 <label className="hardware-field">Створки<select aria-label="Створки выбранной секции" value={s.doorLeaves??'auto'} onChange={e=>modifySection(a=>{a.doorLeaves=e.target.value==='auto'?undefined:Number(e.target.value) as 1|2;delete a.removedDoors;})}><option value="auto">Автоматически по ширине</option><option value="1">Одна створка</option><option value="2">Две створки</option></select></label>
 <label className="hardware-field">Петли одной створки<select aria-label="Петли выбранной секции" value={s.hingeSide??m.hingeSide??'left'} onChange={e=>modifySection(a=>a.hingeSide=e.target.value as 'left'|'right')}><option value="left">Слева</option><option value="right">Справа</option></select></label>
 <p className="field-note">Выберите дверь выше: её ручка и сторона открывания меняются независимо.</p>
-{/* Макс 01.11: то же, что галочка в настройках ящика — одно название; ящиков нет — сравнивать нечего */}{!doorRowsBlock(m)&&(s.drawers>0||!!s.externalDrawers)&&<DrawerFlushCheck m={m} s={s} set={on=>modify(n=>setDrawersOverlay(n,s.id,on))}/>}
+{/* Макс 01.11: то же, что галочка в настройках ящика — одно название; ящиков нет — сравнивать нечего */}{!doorRowsBlock(m)&&(s.drawers>0||!!s.externalDrawers)&&<DrawerFlushCheck m={m} s={s} set={on=>modify(n=>setDrawersOverlay(n,s.id,on))} setToRow={on=>modify(n=>setDrawersToRow(n,s.id,on))}/>}
 {doorRowsBlock(m)?<p className="field-note" role="note" data-testid="door-rows-block">{doorRowsBlock(m)}</p>:<>
 <label className="hardware-field"><span><input type="checkbox" aria-label="Разделить фасады по высоте" checked={s.doorSplit!==undefined} onChange={e=>modify(n=>setDoorSplit(n,s.id,e.target.checked))}/> Разделить фасады по высоте</span></label>
-{s.doorSplit!==undefined&&<label className="hardware-field">Рядов фасадов{/* Макс 01.11: ряды у обычного шкафа, не только у кухни */}<select aria-label={m.kitchen?'Рядов фасадов пенала':'Рядов фасадов'} value={2+(s.doorRows?.length??0)} onChange={e=>modify(n=>setDoorRowCount(n,s.id,Number(e.target.value)))}>{(m.kitchen?[2,3,4]:Array.from({length:MAX_DOOR_ROWS-1},(_,i)=>i+2)).map(n=><option key={n} value={n} disabled={!m.kitchen&&n>maxDoorRows(m,s)&&n!==2+(s.doorRows?.length??0)}>{n}{!m.kitchen&&n>maxDoorRows(m,s)?` · фасад меньше ${RULES.doorMinH} мм`:''}</option>)}</select>{!m.kitchen&&<small>Выбор числа ставит ряды поровну на всю высоту двери, ниже можно задать высоту каждого.</small>}</label>}
-{s.doorSplit!==undefined&&<NumberField label="Высота нижнего ряда фасадов" value={s.doorSplit} min={RULES.doorMinH} max={m.height-RULES.doorMinH} onChange={v=>modifySection(a=>a.doorSplit=v)}/>}
-{s.doorSplit!==undefined&&(s.doorRows??[]).map((h,i)=><NumberField key={'dr'+i} label={`Высота фасада ${i+2}-го ряда`} value={h} min={m.kitchen?100:RULES.doorMinH} max={m.height-(m.kitchen?200:RULES.doorMinH)} onChange={v=>modifySection(a=>{const r=[...(a.doorRows??[])];r[i]=v;a.doorRows=r;})}/>)}
+{s.doorSplit!==undefined&&<label className="hardware-field">Рядов фасадов{/* Макс 01.11: ряды у обычного шкафа, не только у кухни */}<select aria-label={m.kitchen?'Рядов фасадов пенала':'Рядов фасадов'} value={2+(s.doorRows?.length??0)} onChange={e=>modify(n=>setDoorRowCount(n,s.id,Number(e.target.value)))}>{(m.kitchen?[2,3,4]:Array.from({length:MAX_DOOR_ROWS-1},(_,i)=>i+2)).map(n=><option key={n} value={n} disabled={!m.kitchen&&n>maxDoorRows(m,s)&&n!==2+(s.doorRows?.length??0)}>{n}{!m.kitchen&&n>maxDoorRows(m,s)?` · ряд ниже ${RULES.doorRowMinH} мм`:''}</option>)}</select>{!m.kitchen&&<small>Выбор числа ставит ряды поровну на всю высоту двери, ниже можно задать высоту каждого.</small>}</label>}
+{s.doorSplit!==undefined&&<NumberField label="Высота нижнего ряда фасадов" value={s.doorSplit} min={m.kitchen?RULES.doorMinH:RULES.doorRowMinH+(s.doorGap??fb(m))/2/* фасад = поле минус пол-зазора */} max={m.height-(m.kitchen?RULES.doorMinH:RULES.doorRowMinH)} onChange={v=>modifySection(a=>a.doorSplit=v)}/>}
+{s.doorSplit!==undefined&&(s.doorRows??[]).map((h,i)=><NumberField key={'dr'+i} label={`Высота фасада ${i+2}-го ряда`} value={h} min={m.kitchen?100:RULES.doorRowMinH} max={m.height-(m.kitchen?200:RULES.doorRowMinH)} onChange={v=>modifySection(a=>{const r=[...(a.doorRows??[])];r[i]=v;a.doorRows=r;})}/>)}
 {s.doorSplit!==undefined&&!m.kitchen&&<p className="field-note" data-testid="door-rows-top">Верхний ряд — что осталось до верха фасадов: {doorRowHeights(m,s).at(-1)} мм.</p>}
 </>}
 {s.doorSplit!==undefined&&!doorRowsBlock(m)&&<NumberField label={m.kitchen?"Ниша под технику между рядами, мм (0 — без ниши)":"Открытый проём между рядами фасадов, мм (ящики и ниша; 0 — без проёма)"} value={s.doorNiche??0} min={0} max={Math.max(0,m.height-200-s.doorSplit)} onChange={v=>modifySection(a=>{if(v>0)a.doorNiche=v;else delete a.doorNiche;})}/>}
