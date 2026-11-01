@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {newProject,projectErrors,type Opening,type Project} from '../src/project';
-import {snapOpening,placeOpening,openingSpot,parseOpeningTyped,ownOffset,clampOpening,openingOverlap} from '../src/openingDrag';
+import {snapOpening,placeOpening,openingSpot,parseOpeningTyped,ownOffset,clampOpening,openingOverlap,openingFacesCamera} from '../src/openingDrag';
 import {outlinePreset,withOutline} from '../src/roomOutline';
 
 const win=(id:string,wall:Opening['wall'],offset:number,width=1200,sill=850,height=1400):Opening=>({id,type:'window',wall,offset,width,height,sill});
@@ -54,4 +54,13 @@ test('набор и тяга окна: в пределах стены и пот�
   assert.match(openingOverlap(p.room,'a',2000,850)!,/пересекается с окном 2/);
   assert.equal(openingOverlap(p.room,'a',1300,850),null,'вплотную — можно');
   assert.equal(openingOverlap(p.room,'a',2000,2300-1400+1400),null,'выше окна 2 — можно');
+});
+test('щелчок по проёму: тянется стена лицом к камере; ближняя и видная с ребра — нет, сверху — любая (критик 31.10)', () => {
+  const back={x:0,z:1},left={x:1,z:0},front={x:0,z:-1},toBack={x:0,y:-0.2,z:-0.98};
+  assert.equal(openingFacesCamera(back,toBack),true);
+  assert.equal(openingFacesCamera(front,toBack),false,'ближняя стена');
+  assert.equal(openingFacesCamera(left,toBack),false,'боковая с ребра');
+  assert.equal(openingFacesCamera(left,{x:-0.1,y:-0.2,z:-0.97}),false,'почти с ребра: скалярное −0,1');
+  assert.equal(openingFacesCamera(left,{x:-0.7,y:-0.3,z:-0.65}),true,'боковая видна в 3D');
+  assert.equal(openingFacesCamera(left,{x:0,y:-1,z:0}),true,'сверху');
 });

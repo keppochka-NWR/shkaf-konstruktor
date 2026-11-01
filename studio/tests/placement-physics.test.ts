@@ -100,8 +100,33 @@ test('опора: композиция в 30 мм от стены — навес
   const row=place('r',box('Шкаф2',600,2000,550),2000,120),q2=room([row,{...off,x:2000,y:2050,module:{...off.module,height:500}}]);
   assert.equal(supportProblem(q2,q2.modules[1]),null,'вровень со спиной ряда у стены (117 ≤ 150)');
   const s=settleDrag(p,'h',{x:400,y:2050,z:30},{view:'top'});assert.equal(s.z,30,'тянем вдоль — зазор 30 сохранён');assert.equal(s.x,400);
+  // ряд навесных в 30 мм: 1 мм в соседа — обратно на своё место, а не вплотную к стене
+  const h1=place('h1',box('Н1',600,700,300,{hanging:true,plinthHeight:0}),1000,30,1400),h2=place('h2',box('Н2',600,700,300,{hanging:true,plinthHeight:0}),1600,30,1400),q3=room([h1,h2]);
+  const k=settleDrag(q3,'h2',{x:1599,y:1400,z:30},{view:'top'});assert.equal(k.z,30);assert.equal(k.x,1600);
 });
 
+test('тяга навесного: малая тяга не разворачивает, ряд дальше допуска не прижимается, линия Q не сдёргивается (критик 31.10)', () => {
+  const hang=(w=600,d=300,h=700)=>box('Н',w,h,d,{hanging:true,plinthHeight:0});
+  // стоит боком к задней стене (спина смотрит на левую, далеко): 1 мм — ни поворота, ни прыжка
+  const side=place('s',hang(),2000,40,1400,90),q=room([side]);
+  const s=settleDrag(q,'s',{x:2001,y:1400,z:40},{view:'top'});assert.equal(s.rotation,90);assert.equal(s.x,2001);assert.equal(s.z,40);
+  // узкий глубокий навесной в углу у правой стены: центр ближе к ней, но тяга мала — своя стена, поворот прежний
+  const corner=place('c',hang(200,600),3800,3,1400),q2=room([corner]);
+  const c=settleDrag(q2,'c',{x:3790,y:1400,z:3},{view:'top'});assert.equal(c.rotation,0);assert.equal(c.z,3);
+  // вровень с рядом в 120 мм от стены (дальше допуска 50): тянем вдоль — зазор ряда сохранён
+  const row=place('r',box('Шкаф',600,2000,550),2000,120),up=place('u',hang(600,550,500),2000,120,2050),q3=room([row,up]);
+  assert.equal(supportProblem(q3,up),null);
+  const u=settleDrag(q3,'u',{x:2100,y:2050,z:120},{view:'top'});assert.equal(u.z,120);assert.equal(u.rotation,0);
+  // отъехал на 100 мм, спина смотрит на стену: пользователь двигает — прижимается, поворот тот же
+  const off=place('o',hang(),2000,100,1400),q4=room([off]);
+  const o0=settleDrag(q4,'o',{x:2001,y:1400,z:100},{view:'top'});assert.equal(o0.z,100,'1 мм — не перебрасывает к стене');
+  const o=settleDrag(q4,'o',{x:2300,y:1400,z:100},{view:'top'});assert.equal(o.z,3);assert.equal(o.rotation,0);
+  // шкаф на линии Q / Alt/Ctrl: сосед не сдёргивает с места, пересечение покажет красный след
+  const a=place('a',box('А'),1000,3),b=place('b',box('Б'),2000,3),q5=room([a,b]);
+  assert.equal(settleDrag(q5,'b',{x:1300,y:0,z:3},{view:'top',point:true}).x,1300);
+  // на 1 мм в соседа, стоя вплотную — на прежнее место, а не на шаг сетки
+  const f1=place('f',box('Вплотную'),1600,3),q6=room([a,f1]);assert.equal(settleDrag(q6,'f',{x:1599,y:0,z:3},{view:'top'}).x,1600);
+});
 test('опора: шкаф студии, поднятый без флага навесного, не у стены — «висит в воздухе», к стене при тяге не тянется', () => {
   const r=place('r',box('Полка',600,400,300),1500,800,1200),p=room([r]);
   assert.equal(supportRole(p,r),'floor');assert.match(supportProblem(p,r)!,/висит в воздухе/);

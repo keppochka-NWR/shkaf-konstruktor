@@ -134,24 +134,25 @@ function fitsShift(c: Fit, list: Moving[], dx: number, dz: number, margin = 0): 
 /** Место свободно (в комнате, без пересечений с остальными корпусами), ids — что едет вместе. */
 export function placeFits(p: Project, list: PlacedModule[]): boolean { return fitsShift(fitCtx(p, new Set(list.map((a) => a.id))), moving(list), 0, 0); }
 /** Сдвиги группы, по удалению: на месте, вплотную к стенам (и с фальшем 20 у стены), к соседям, сетка step в радиусе. */
-function shifts(c: Fit, list: Moving[], radius: number, step: number): { dx: number; dz: number; d: number }[] {
+function shifts(c: Fit, list: Moving[], radius: number, step: number, extra?: { dx: number; dz: number }): { dx: number; dz: number; d: number }[] {
   const x0 = Math.min(...list.map((m) => m.b.x)), z0 = Math.min(...list.map((m) => m.b.z)), w = Math.max(...list.map((m) => m.b.x + m.b.w)) - x0, d = Math.max(...list.map((m) => m.b.z + m.b.d)) - z0;
   const xs = new Set([0, -x0, -x0 + WALL_FILLER, c.W - x0 - w, c.W - x0 - w - WALL_FILLER, ...c.others.flatMap((o) => [o.b.x + o.b.w - x0, o.b.x - w - x0])].map(r1));
   const zs = new Set([0, -z0, c.D - z0 - d, ...c.others.flatMap((o) => [o.b.z + o.b.d - z0, o.b.z - d - z0])].map(r1));
   for (let k = -radius; k <= radius; k += step) { xs.add(k); zs.add(k); }
+  if (extra) { xs.add(r1(extra.dx)); zs.add(r1(extra.dz)); }
   const out: { dx: number; dz: number; d: number }[] = [];
   for (const dx of xs) for (const dz of zs) { const dd = Math.hypot(dx, dz); if (dd <= radius + 0.01) out.push({ dx, dz, d: dd }); }
   return out.sort((a, b) => a.d - b.d || Math.abs(a.dx) + Math.abs(a.dz) - Math.abs(b.dx) - Math.abs(b.dz));
 }
 /** Ближайший свободный сдвиг группы (дёшево, без автофальшей); null — в радиусе места нет. */
-export function nearestShift(p: Project, list: PlacedModule[], radius: number, step = 25): { dx: number; dz: number } | null {
+export function nearestShift(p: Project, list: PlacedModule[], radius: number, step = 25, extra?: { dx: number; dz: number }): { dx: number; dz: number } | null {
   const c = fitCtx(p, new Set(list.map((a) => a.id))), mv = moving(list);
-  for (const s of shifts(c, mv, radius, step)) if (fitsShift(c, mv, s.dx, s.dz)) return { dx: s.dx, dz: s.dz };
+  for (const s of shifts(c, mv, radius, step, extra)) if (fitsShift(c, mv, s.dx, s.dz)) return { dx: s.dx, dz: s.dz };
   return null;
 }
 /** Места навесного у стен с удалением центра d от want (вдоль стены шагом step, у каждой стены — лицом в комнату). Только стены,
  *  у которых нормаль не дальше maxTurn° от нынешнего «лица» корпуса (поворот: та же сторона; исправление: любая). */
-function wallSpots(p: Project, want: PlacedModule, radius: number, maxTurn = 180): { t: PlacedModule; d: number }[] {
+function wallSpots(p: Project, want: PlacedModule, radius: number, maxTurn = 180, inset = 0): { t: PlacedModule; d: number }[] {
   const o = roomOutline(p.room), C = moduleCenter(want), out: { t: PlacedModule; d: number }[] = [], face = faceOf(want.rotation), reach = radius + Math.max(want.module.width, want.module.depth);
   o.forEach((_, i) => {
     const L = edgeLength(o, i);
@@ -161,7 +162,7 @@ function wallSpots(p: Project, want: PlacedModule, radius: number, maxTurn = 180
       if ((Math.acos(Math.max(-1, Math.min(1, n.x * face.x + n.z * face.z))) * 180) / Math.PI > maxTurn + 0.5) continue;
       const P = edgePoint(o, i, s);
       if (Math.hypot(P.x - C.x, P.z - C.z) > reach) continue;
-      const b = attachToWall(p, want, i, s), q = moduleCenter(b), dd = Math.hypot(q.x - C.x, q.z - C.z);
+      const b = attachToWall(p, want, i, s, inset), q = moduleCenter(b), dd = Math.hypot(q.x - C.x, q.z - C.z);
       if (dd <= radius) out.push({ t: b, d: dd });
     }
   });
@@ -231,10 +232,17 @@ export function settleDrag(p: Project, mid: string, next: Pos, ctx: { view: Drag
   const c = fitCtx(p, new Set([mid])), loose = !ctx.free && !ctx.point;
   if (role === "wall") {
     if ((b.y ?? 0) > SUPPORT.rest && !restsOn(p, a, b)) {
-      const o = roomOutline(p.room), C = moduleCenter(b), near = projectToEdges(o, C), cur = backContact(p, a), curOk = !!cur && cur.gap <= WALL_TOL;
-      const edge = curOk && projectToEdges(o, C, (j) => j === cur!.edge).dist <= near.dist + SUPPORT.magnet ? cur!.edge : near.edge;
-      b = attachToWall(p, b, edge, projectToEdges(o, C, (j) => j === edge).s, curOk && edge === cur!.edge ? cur!.gap : 0);
-      if (loose && !fitsShift(c, moving([b]), 0, 0)) { const q = wallSpots(p, b, SUPPORT.dragRadius, 1).find((x) => placeFits(p, [x.t])); if (q) b = q.t; }
+      const o = roomOutline(p.room), C = moduleCenter(b), C0 = moduleCenter(a), near = projectToEdges(o, C), cur = backContact(p, a), held = !!cur && (cur.gap <= WALL_TOL || rowAligned(p, a));
+      // своя стена держит: и пока курсор не ближе к другой на magnet, и пока корпус не сдвинут на magnet (малая тяга у угла не разворачивает)
+      const own = !!cur && (held || cur.gap <= SUPPORT.magnet) && (projectToEdges(o, C, (j) => j === cur.edge).dist <= near.dist + SUPPORT.magnet || Math.hypot(C.x - C0.x, C.z - C0.z) <= SUPPORT.magnet);
+      const edge = own ? cur!.edge : near.edge, t = attachToWall(p, b, edge, projectToEdges(o, C, (j) => j === edge).s, held && edge === cur!.edge ? cur!.gap : 0);
+      // навесной не у стены (старый файл): малая тяга (до magnet) его не перебрасывает к стене — едет как есть, предупреждение остаётся
+      if (!held && Math.hypot(C.x - C0.x, C.z - C0.z) <= SUPPORT.magnet) return { x: b.x, y: b.y ?? 0, z: b.z, rotation: a.rotation ?? 0 };
+      // тяга началась у стены, а спина на неё не смотрит (навесной стоит боком): поворот не меняем — только сдвиг (критик 31.10)
+      if (!held && moduleFootprint(a).some((q) => projectToEdges(o, q).dist <= SUPPORT.magnet) && Math.abs(norm360(t.rotation ?? 0) - norm360(a.rotation ?? 0)) > 0.5) return { x: b.x, y: b.y ?? 0, z: b.z, rotation: a.rotation ?? 0 };
+      b = t;
+      // упёрся в соседа: ближайшее место с тем же зазором от стены (ряд в 30 мм не прижимается) или то, откуда тянем
+      if (loose && !fitsShift(c, moving([b]), 0, 0)) { const C1 = moduleCenter(b), back = held ? [{ t: a, d: Math.hypot(C0.x - C1.x, C0.z - C1.z) }] : [], q = [...back, ...wallSpots(p, b, SUPPORT.dragRadius, 1, held && edge === cur!.edge ? cur!.gap : 0)].sort((u, v) => u.d - v.d).find((x) => placeFits(p, [x.t])); if (q) b = q.t; }
     }
     return { x: b.x, y: b.y ?? 0, z: b.z, rotation: b.rotation ?? 0 };
   }
@@ -245,7 +253,7 @@ export function settleDrag(p: Project, mid: string, next: Pos, ctx: { view: Drag
     else if (y > SUPPORT.rest && !restsOn(p, a, b)) b.y = Math.max(...levels.filter((v) => v <= y + SUPPORT.rest));
   }
   if (loose && !vertical && (b.y ?? 0) <= SUPPORT.rest && !a.module.kupe && !a.module.corner) { const m = wallFlush(p, a, b); if (m) b = m; }
-  if (loose && !fitsShift(c, moving([b]), 0, 0)) { const s = nearestShift(p, [b], SUPPORT.dragRadius, 20); if (s) b = { ...b, x: r1(b.x + s.dx), z: r1(b.z + s.dz) }; }
+  if (loose && !fitsShift(c, moving([b]), 0, 0)) { /* и место, откуда тянем: дверь купе в проёме на 1 мм в сторону возвращается на место, а не уезжает на шаг сетки */ const s = nearestShift(p, [b], SUPPORT.dragRadius, 20, { dx: a.x - b.x, dz: a.z - b.z }); if (s) b = { ...b, x: r1(b.x + s.dx), z: r1(b.z + s.dz) }; }
   return { x: b.x, y: b.y ?? 0, z: b.z, rotation: b.rotation ?? 0 };
 }
 /** Прижим шкафа к стене при тяге (The Sims, ресёрч 31.10 п. 3, урезано по критику 31.10): только сдвиг, без поворота. Стена — та, на которую

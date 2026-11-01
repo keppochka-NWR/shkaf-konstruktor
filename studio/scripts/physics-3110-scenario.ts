@@ -13,6 +13,8 @@ import { chromium, type Page } from "playwright";
 import { mkdirSync } from "node:fs";
 import { initialModule, type Module } from "../src/model";
 import { newProject, type PlacedModule, type Project } from "../src/project";
+import { outlinePreset, withOutline, edgeLength, edgePoint, edgeTangent } from "../src/roomOutline";
+import { edgeLegacyWall } from "../src/roomEdges";
 
 const [url = "http://127.0.0.1:8467/?fresh=1", out = "../qa-phys3110/scenario"] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
@@ -41,7 +43,7 @@ const inside = (a: Arr, W = 4000, D = 3000) => { const rot = ((a.r % 360) + 360)
 const box = (name: string, w: number, h: number, d: number, extra: Partial<Module> = {}): Module => { const m = initialModule(); return { ...m, name, width: w, height: h, depth: d, sections: m.sections.map((s) => ({ ...s, shelves: [], rod: false })), ...extra }; };
 const place = (id: string, m: Module, x: number, z: number, y = 0, rotation = 0): PlacedModule => ({ id, x, z, y, rotation, module: m });
 const model: Project = (() => {
-  const p = newProject(); p.room = { width: 4000, depth: 3000, height: 2700, openings: [{ id: "win", type: "window", wall: "back", offset: 3150, width: 600, height: 1200, sill: 900 }] };
+  const p = newProject(); p.room = { width: 4000, depth: 3000, height: 2700, openings: [{ id: "win", type: "window", wall: "back", offset: 3150, width: 600, height: 1200, sill: 900 }, { id: "win2", type: "window", wall: "back", offset: 1800, width: 500, height: 1200, sill: 900 }] };
   p.modules = [place("a", box("А", 600, 2000, 550), 300, 3), place("b", box("Б", 600, 2000, 550), 2400, 3), place("c", box("В", 600, 2000, 550), 2400, 610),
     place("h", box("Н", 600, 700, 300, { hanging: true, plinthHeight: 0 }), 1100, 3, 1400), place("f", box("Ф", 600, 1800, 500, { feet: { height: 100 } }), 1300, 1700, 300)];
   return p;
@@ -142,7 +144,7 @@ await view("Сверху");
   await page.mouse.up(); await page.waitForTimeout(500);
   const n = await one("b");
   check("3д. тянем в соседа — плашка красная с причиной «пересекается»", /пересекается/.test(red), red);
-  check("3д. отпустили на красном — корпус на прежнем месте", n.x === b.x && n.z === b.z, JSON.stringify(n));
+  check("3д. отпустили на красном — корпус на прежнем месте, причина в сообщении", n.x === b.x && n.z === b.z && /Корпус не перенесён/.test(await noteText()), JSON.stringify(n) + " " + (await noteText()));
   await page.locator(".error-banner button[aria-label=\"Закрыть сообщение\"]").first().click().catch(() => {});
 }
 await view("План");
@@ -206,6 +208,16 @@ await view("Спереди");
     const w4 = (await room())!.openings!.find((o) => o.id === "win")!;
     check("5б. набор «3900;2000» — сразу в пределах стены и потолка (3400 от угла, 1500 от пола), R во время тяги не поворачивает", w4.offset === 3400 && w4.sill === 1500 && /3400 от угла · 1500 от пола/.test(live) && (await arr()).every((a) => a.r === 0 || a.id === "h"), `${w4.offset}/${w4.sill} «${live}»`);
   }
+  {
+    // поверх второго окна: плашка красная с причиной, отпустили — окно на месте
+    const w5 = (await room())!.openings!.find((o) => o.id === "win")!, s6 = await scr(w5.offset + 150, w5.sill + 900, 0);
+    await page.mouse.move(s6.x, s6.y); await page.mouse.down(); await page.mouse.move(s6.x - 20, s6.y - 10, { steps: 3 }); await page.waitForTimeout(120);
+    await typeKeys("1800;900"); await page.waitForTimeout(150);
+    const redo = await page.locator(".drag-badge.invalid").innerText().catch(() => "");
+    await page.keyboard.press("Enter"); await page.mouse.up(); await page.waitForTimeout(500);
+    const w6 = (await room())!.openings!.find((o) => o.id === "win")!;
+    check("5б. набор поверх другого окна — красная плашка, окно на месте", /пересекается с окном/.test(redo) && w6.offset === w5.offset && w6.sill === w5.sill, `«${redo}» ${w6.offset}/${w6.sill}`);
+  }
 }
 await view("План");
 {
@@ -216,7 +228,25 @@ await view("План");
   check("5в. «План»: окно у края стены — привязка к углу (до угла 0)", w2.offset + w2.width === 4000, `${w.offset} → ${w2.offset}`);
   await shot("window-plan");
 }
-check("ошибок страницы нет", errors.length === 0, errors.join(" | "));
+// ── 5г. окно на дуге (эркер) — едет по дуге, стена та же ──
+{
+  const o = outlinePreset("bay", 4000, 3000), edge = o.findIndex((q) => q.bulge), L = edgeLength(o, edge), offset = Math.round(L / 2 - 700);
+  const pr = newProject(); pr.room = { width: 4000, depth: 3000, height: 2700, outline: o, openings: [{ id: "arc", type: "window", wall: edgeLegacyWall(o, edge), edge, offset, width: 500, height: 1200, sill: 900 }] };
+  const nb = withOutline(pr.room, o); pr.room = { ...nb, openings: pr.room.openings };
+  pr.modules = [place("a", box("А", 600, 2000, 550), 300, 2000)];
+  const bo = pr.room.outline!, be = bo.findIndex((q) => q.bulge), r0 = pr.room.openings![0];
+  await page.goto(url, { timeout: 60000 }); await page.waitForSelector("canvas", { timeout: 60000 });
+  await page.evaluate((raw) => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem("module-studio-v3", raw); localStorage.setItem("studio-stage", "bodies"); localStorage.setItem("studio-tip-rmb", "1"); }, JSON.stringify(pr));
+  await page.goto(url, { timeout: 60000 }); await page.waitForSelector("canvas", { timeout: 60000 }); await page.waitForTimeout(2000);
+  await page.getByRole("button", { name: "Двигать корпуса", exact: true }).click();
+  await view("Сверху");
+  const P0 = edgePoint(bo, be, r0.offset + 250), P1 = edgePoint(bo, be, r0.offset + 250 + 500), { n } = edgeTangent(bo, be, r0.offset + 250);
+  const s7 = await scr(P0.x - n.x * 30, r0.sill + r0.height, P0.z - n.z * 30), t7 = await scr(P1.x - n.x * 30, r0.sill + r0.height, P1.z - n.z * 30);
+  await page.mouse.move(s7.x, s7.y); await page.mouse.down(); await page.mouse.move(t7.x, t7.y, { steps: 10 }); await page.waitForTimeout(150); const live = await page.locator(".drag-badge").innerText().catch(() => ""); await page.mouse.up(); await page.waitForTimeout(500);
+  const w = (await room())!.openings![0];
+  check("5г. окно на дуге: едет по дуге, стена та же, шаг 10", w.edge === be && Math.abs(w.offset - (r0.offset + 500)) <= 40 && w.offset % 10 === 0, `${r0.offset} → ${w.offset} стена ${w.edge}/${be} «${live}»`);
+  await shot("window-arc");
+}check("ошибок страницы нет", errors.length === 0, errors.join(" | "));
 await browser.close();
 const failed = results.filter((r) => !r[1]);
 console.log(`\nИтог: ${results.length - failed.length}/${results.length}`);

@@ -5,7 +5,7 @@ import {hiddenWalls,roomEdges,edgeVisible,readCutaway,hiddenEdges,outlineEdges,t
 import {edgePanels,edgeLegacyWall,floorPolygon,openingEdge,wallFace,wallPrism,wallSpot,type OnWall} from './roomEdges';
 import {edgeLength,edgeTangent,roomOutline,projectToEdges,edgeArc,type RoomOutline} from './roomOutline';
 const edgeArcOf=(o:RoomOutline,i:number)=>edgeArc(o[i],o[(i+1)%o.length],o[i].bulge??0);
-import {openingSpot,snapOpening,edgeOffset,parseOpeningTyped,clampOpening,openingOverlap} from './openingDrag';
+import {openingSpot,snapOpening,edgeOffset,parseOpeningTyped,clampOpening,openingOverlap,openingFacesCamera} from './openingDrag';
 import {finishById,floorUv,wallUv,defaultAlong,type FinishUnit} from './roomFinishes';
 import {drawFinish,FINISH_TEXTURE_PX} from './finishTextures';
 import {facadeHandleId} from './model';
@@ -1386,7 +1386,7 @@ export function Scene(p: Props) {
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
       // окно/дверь (Макс 31.10): тянется вдоль своей стены, окно на видах спереди/сбоку — и по высоте подоконника (openingDrag.ts)
       // проём ближней стены (между камерой и комнатой, обычно скрыт «Ближние стены») не перехватывает щелчок — тянется только стена лицом к камере
-      const facing=(h:THREE.Intersection)=>{const r=current.current.room,o=r?.openings?.find(x=>x.id===h.object.userData.openingId);if(!r||!o||!h.object.visible)return false;const sp=openingSpot(r,o),n=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)).n,dir=camera.getWorldDirection(new THREE.Vector3());return n.x*dir.x+n.z*dir.z<-0.2||Math.abs(dir.y)>0.9;}; // стена лицом к камере; окно боковой стены, видное с ребра, щелчок не перехватывает (критик 31.10)
+      const facing=(h:THREE.Intersection)=>{const r=current.current.room,o=r?.openings?.find(x=>x.id===h.object.userData.openingId);if(!r||!o||!h.object.visible)return false;const sp=openingSpot(r,o),n=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)).n,dir=camera.getWorldDirection(new THREE.Vector3());return openingFacesCamera(n,dir);};
       const oh=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.openingId?facing(h):(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId)));
       if(oh?.object.userData.openingId&&current.current.onOpeningMove&&current.current.room&&(current.current.mode==='move'||current.current.mode==='select')){startOpeningDrag(oh,e);return;}
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}

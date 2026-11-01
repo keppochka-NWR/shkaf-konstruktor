@@ -67,6 +67,9 @@ export function openingOverlap(room: R, id: string, s: number, sill: number): st
   }
   return null;
 }
+/** Проём тянется, только если его стена лицом к камере (n — нормаль стены внутрь, dir — взгляд камеры). Окно ближней стены и окно боковой,
+ *  видное с ребра, щелчок не перехватывают (критик 31.10: порог −0.2); сверху (взгляд вертикальный) — любая стена. */
+export const openingFacesCamera = (n: { x: number; z: number }, dir: { x: number; y: number; z: number }) => n.x * dir.x + n.z * dir.z < -0.2 || Math.abs(dir.y) > 0.9;
 /** Набор «отступ;от пола» (подпись «от угла» и «от пола»); одно число — только отступ. null — не число. */
 export function parseOpeningTyped(t: string): { offset: number; sill?: number } | null {
   const m = /^\s*(\d+(?:[.,]\d+)?)\s*(?:;\s*(\d+(?:[.,]\d+)?)\s*)?$/.exec(t);
