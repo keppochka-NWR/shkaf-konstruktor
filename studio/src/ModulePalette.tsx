@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {Box,Rows3,Shirt,Archive,PanelTop,Columns2,SquareSplitHorizontal,CookingPot,PanelBottom,PanelTopOpen,RectangleHorizontal,CornerDownRight,CircleDashed} from 'lucide-react';
 import {withMansard,radiusShelving} from './paletteBuild';
-import {MANSARD,RADIUS,radiusMax} from './shapes';
+import {MANSARD,RADIUS,radiusMax,radiusLimitErrors} from './shapes';
 import {validate} from './model';
 import {createKitchenCornerRow,createKitchenURow} from './kitchenCornerRow';
 import {RULES,type Module} from './model';
@@ -54,7 +54,7 @@ export function ModulePalette({source,onAdd,onAddGroup,kitchenTemplates,fit,room
   const [mansardOn,setMansardOn]=useState(false),[mansardRear,setMansardRear]=useState(1700);
   const [radSide,setRadSide]=useState<'left'|'right'>('right'),[radR,setRadR]=useState(0);
   const mansardKind=kind==='empty'||kind==='shelves'||kind==='wardrobe';
-  const shaped=(m:Module):Module=>{let n=m;if(kind==='radius')n=radiusShelving(m.width,m.height,m.depth,source,{side:radSide,r:radR||radiusMax(m)});else if(mansardKind&&mansardOn)n={...withMansard(m,mansardRear),name:m.name+' · мансарда'};if(n!==m){const e=validate(n)[0];if(e)throw Error(e);}return n;};
+  const shaped=(m:Module):Module=>{let n=m;if(kind==='radius')n=radiusShelving(m.width,m.height,m.depth,source,{side:radSide,r:radR||radiusMax(m)});else if(mansardKind&&mansardOn)n={...withMansard(m,mansardRear),name:m.name+' · мансарда'};if(n!==m){const e=radiusLimitErrors(n)[0]??validate(n)[0];if(e)throw Error(e);}return n;}; /* радиусный — ширина и глубина 250–600 (Макс 31.10, shapes.RADIUS) */
   // v5 (замер удобства 22.10): смена типа шкафа (Пустой → Стеллаж) не сбрасывает введённые габариты, если новый тип их принимает;
   // у кухни, купе, углового и стола размеры значат другое — там, как раньше, размеры типа (П-образная — по задней стене во всю ширину комнаты)
   const pick=(next:ModuleKind)=>{const same=(KEEP_SIZES as readonly string[]).includes(kind)&&(KEEP_SIZES as readonly string[]).includes(next);let keep=false;if(same&&next!==kind){try{createModule(next,Math.max(...bodyWidths(width,bodies)),height,depth,source);keep=true;}catch{keep=false;}}

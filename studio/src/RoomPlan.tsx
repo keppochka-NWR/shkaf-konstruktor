@@ -3,6 +3,8 @@ import {moveComposition} from './operations';
 import {openingZone,roomWarnings} from './roomWarnings';
 import {useEffect,useRef,useState} from 'react';
 import {projectErrors,bounds,moduleFootprint,localToRoom,snapComposition,snapPlacement,keepInRoom,type Project,type Opening} from './project';
+import {settleDrag,supportProblem} from './placement';
+import {snapOpening,placeOpening,edgeOffset} from './openingDrag';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
 import {candidateLines,guidesInView,guideSegment,makeGuide,nearestPlanLine,parseTyped,placeGuide,snapMoveToGuides,v3,carcassCorners,PLAN_LOOK,type Guide,type GuideLine,type V3} from './guides';
 import {cornerPullFromDelta,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type End} from './cornerStretch';
@@ -45,7 +47,7 @@ type Props={onPlainModuleClick?:(id:string)=>void;stretchable?:boolean;cornerPla
   /** «Форма комнаты» (задача Макса 30.10.2026): есть onShapeEdit — форму можно править (кнопка на плане, щелчок по длине стены); shapeEdit — ручки включены. */
   shapeEdit?:boolean;onShapeEdit?:(on:boolean)=>void};
 /** edge/grab — проём или объект в комнате с контуром едет вдоль своей стены (grab — где схватили, мм от его начала). */
-type Drag={kind:'module'|'opening'|'obstacle'|'fixture';id:string;start:{x:number;y:number};origin:{x:number;z:number};pointerId:number;ref?:P2;segs?:Seg2[];group?:string[];edge?:number;grab?:number};
+type Drag={kind:'module'|'opening'|'obstacle'|'fixture';id:string;start:{x:number;y:number};origin:{x:number;z:number};pointerId:number;ref?:P2;segs?:Seg2[];group?:string[];edge?:number;grab?:number;/** последнее место тяги — сразу, не через состояние React (быстрая тяга, Макс 31.10) */last?:Project;startS?:number;ending?:boolean};
 export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,guides,onGuides,onToggleModule,hiddenModuleIds=[],onModuleContext,onEnvironmentContext,showModules=true,groupIds=[],moveAll,snapping,project,active,onSelect,onRoom,selectedOpening,onOpeningSelect,selectedObstacle,onObstacleSelect,selectedFixture,onFixtureSelect,onDimension,update,shapeEdit,onShapeEdit}:Props){
   const svg=useRef<SVGSVGElement>(null),drag=useRef<Drag|null>(null),[preview,setPreview]=useState<Project|null>(null);
   // правка формы: превью сдвинуто (габарит снова от 0) — рисуем его в прежней рамке (shift), чтобы план не прыгал под мышью
@@ -293,7 +295,7 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
     measurePoint(e);
   }
   // Для сценариев мышью (scripts/stretch-guides-scenario.ts), только чтение — как у сцены: корпуса и линии проекта на «Плане»
-  useEffect(()=>{const w=window as unknown as {__arrangement?:()=>unknown[];__guides?:()=>unknown;__room?:()=>unknown};w.__arrangement=()=>project.modules.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width,y:a.y??0,h:a.module.height,d:a.module.depth}));w.__guides=()=>project.guides??[];w.__room=()=>project.room;});
+  useEffect(()=>{const w=window as unknown as {__arrangement?:()=>unknown[];__guides?:()=>unknown;__room?:()=>unknown};w.__arrangement=()=>project.modules.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width,y:a.y??0,h:a.module.height,d:a.module.depth,r:a.rotation??0}));w.__guides=()=>project.guides??[];w.__room=()=>project.room;});
   // Q, цифры, «;», Enter, Esc, Delete — раньше App (фаза захвата на window; App пропускает defaultPrevented)
   useEffect(()=>{
     const on=(e:KeyboardEvent)=>{
@@ -338,6 +340,8 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
     if(item&&ol){const it=itemEdge(project.room,item);drag.current.edge=it.edge;drag.current.origin={x:it.offset,z:0};drag.current.grab=projectToEdge(ol,it.edge,{x:pt.x,z:pt.y})-it.offset;}
     svg.current?.setPointerCapture(pointerId);if(kind==='module')onSelect(id);else {onRoom();if(kind==='obstacle')onObstacleSelect(id);else if(kind==='fixture')onFixtureSelect?.(id);else onOpeningSelect(id);}}
   function move(e:PtrLike){
+    // кнопку отпустили, а pointerup не дошёл (быстрая тяга за окно, Макс 31.10) — тяга заканчивается здесь, не едет за мышью без кнопки
+    {const pe=e as Partial<PointerEvent>;if(drag.current&&!drag.current.ending&&pe.type==='pointermove'&&pe.pointerType==='mouse'&&pe.buttons===0&&pe.pointerId!==undefined){finish(e as unknown as React.PointerEvent);return;}}
     mouse.current=[e.clientX,e.clientY];const mode=snapMode(e,snapping);modeRef.current=mode;
     const sd=sdrag.current;
     if(sd){sd.mouse=[e.clientX,e.clientY];sd.mode=snapMode(e,true);if(!sd.typed&&!sd.moved&&Math.hypot(e.clientX-sd.origin[0],e.clientY-sd.origin[1])<3)return;if(!sd.typed)sd.moved=true;shapeShow(sd);return;}
@@ -349,7 +353,7 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
     if(cp&&!drag.current){if(!markDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;markPress.current=null;beginDrag('module',cp.id,cp.x,cp.y,cp.pointerId);
       const dm=drag.current as Drag|null;if(dm&&!moveAll){/* «Двигать всю композицию» — едет композиция, отметки не трогаем (критик 30.10 п.2) */dm.group=groupIds.includes(cp.id)?groupIds:[...groupIds,cp.id];if(!groupIds.includes(cp.id))onToggleModule?.(cp.id);}}
     const d=drag.current;if(!d)return;const pt=point(e),n=structuredClone(project);
-    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};let pos:{x:number;y:number;z:number},hit:PointHit|undefined;
+    if(d.kind==='module'){const a=n.modules.find(a=>a.id===d.id)!;const raw={x:d.origin.x+pt.x-d.start.x,z:d.origin.z+pt.y-d.start.y,y:a.y??0};let pos:{x:number;y:number;z:number},hit:PointHit|undefined,onGuide=false;
       if(isPointMode(mode)){
         // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
         const orig={...a,x:d.origin.x,z:d.origin.z};d.ref??=nearestOutlineCorner(carcassCorners(orig),PLAN_LOOK,toView({x:d.start.x,y:0,z:d.start.y},PLAN_LOOK));
@@ -359,19 +363,25 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
       }else{
         pos=!snapping||mode==='free'?{x:Math.round(raw.x),y:raw.y,z:Math.round(raw.z)}:moveAll?snapComposition(project,d.id,raw):(d.group??groupIds).includes(d.id)?snapComposition(project,d.id,raw,35,d.group??groupIds):snapPlacement(project,d.id,raw);pos.y=raw.y;
         // края корпуса — к вспомогательным линиям плана (общие с «Сверху»), ближе обычной привязки
-        if(snapping&&mode==='snap'&&planGuides.length)pos={...snapMoveToGuides(a,raw,pos,planGuides,snapTol()),y:raw.y};
+        if(snapping&&mode==='snap'&&planGuides.length){const g={...snapMoveToGuides(a,raw,pos,planGuides,snapTol()),y:raw.y};onGuide=g.x!==pos.x||g.z!==pos.z;pos=g;}
       }
       // контур: последний шаг на всех путях (линии Q, Alt/Ctrl, без привязки) — корпус упирается в стену (критик 30.10)
-      if(project.room.outline)pos={...keepInRoom(project,d.id,pos,moveAll?project.modules.map(x=>x.id):(d.group??groupIds).includes(d.id)?d.group??groupIds:undefined),y:raw.y};
+      // прямоугольник тоже (Макс 31.10, быстрая тяга): габарит упирается в стены и скользит вдоль них, а не уходит за стену
+      pos={...keepInRoom(project,d.id,pos,moveAll?project.modules.map(x=>x.id):(d.group??groupIds).includes(d.id)?d.group??groupIds:undefined),y:raw.y};
+      // физика расстановки (Макс 31.10, placement.settleDrag): одиночный корпус — на полу/на модуле, навесной — спиной к стене, упор в соседа, магнит к стене
+      if(!moveAll&&!((d.group??groupIds).includes(d.id)&&(d.group??groupIds).length>1))pos=settleDrag(project,d.id,pos,{view:'plan',free:mode==='free',point:isPointMode(mode)||onGuide});
       showMark(hit);if(moveAll||(d.group??groupIds).includes(d.id))n.modules=moveComposition(project,d.id,pos,moveAll?undefined:d.group??groupIds).modules;else Object.assign(a,pos);}
     else if(d.kind==='obstacle'){const o=n.room.obstacles!.find(o=>o.id===d.id)!;o.x=Math.round(d.origin.x+pt.x-d.start.x);o.z=Math.round(d.origin.z+pt.y-d.start.y);if(snapping&&mode==='snap'){const tol=35;if(Math.abs(o.x)<=tol)o.x=0;else if(Math.abs(o.x+o.width-r.width)<=tol)o.x=r.width-o.width;if(Math.abs(o.z)<=tol)o.z=0;else if(Math.abs(o.z+o.depth-r.depth)<=tol)o.z=r.depth-o.depth;}}
+    // окно/дверь (Макс 31.10, openingDrag.ts): вдоль своей стены, шаг 10, привязка к углам комнаты и краям других проёмов — как в 3D
+    else if(d.kind==='opening'){const o=project.room.openings!.find(x=>x.id===d.id)!,ol=project.room.outline;
+      const want=ol&&d.edge!==undefined?projectToEdge(ol,d.edge,{x:pt.x,z:pt.y})-(d.grab??0):edgeOffset(project.room,o,d.origin.x+(o.wall==='back'||o.wall==='front'?pt.x-d.start.x:pt.y-d.start.y));
+      const s=snapOpening(project.room,d.id,want,o.sill,{vertical:false,free:mode==='free'});n.room=placeOpening(n,d.id,{s:s.s,sill:o.sill}).room;}
     else if(d.edge!==undefined&&project.room.outline){
       const ol=project.room.outline,e=d.edge,L=edgeLength(ol,e),it=(d.kind==='fixture'?n.room.fixtures:n.room.openings)?.find(x=>x.id===d.id);
       if(it)Object.assign(it,onEdge(ol,it,e,Math.max(0,Math.min(L-it.width,Math.round((projectToEdge(ol,e,{x:pt.x,z:pt.y})-(d.grab??0))/10)*10))));
     }
     else if(d.kind==='fixture'){const f=n.room.fixtures!.find(f=>f.id===d.id)!,horizontal=f.wall==='back'||f.wall==='front',length=horizontal?r.width:r.depth;f.offset=Math.max(0,Math.min(length-f.width,Math.round((d.origin.x+(horizontal?pt.x-d.start.x:pt.y-d.start.y))/10)*10));}
-    else{const o=n.room.openings!.find(o=>o.id===d.id)!,horizontal=o.wall==='back'||o.wall==='front',length=horizontal?r.width:r.depth;o.offset=Math.max(0,Math.min(length-o.width,Math.round((d.origin.x+(horizontal?pt.x-d.start.x:pt.y-d.start.y))/10)*10));}
-    setPreview(n);
+    d.last=n;setPreview(n);
   }
   function finish(e:React.PointerEvent){
     const sd=sdrag.current;
@@ -387,7 +397,13 @@ export function RoomPlan({onPlainModuleClick,stretchable,cornerPlan,onCorner,gui
     const d=drag.current;if(!d)return;
     // группа (Shift+протяжка, отмеченные, вся композиция) — отказ целиком, если хоть один корпус упрётся или выйдет из помещения
     const grouped=d.kind==='module'&&(moveAll||(d.group??groupIds).includes(d.id)&&(d.group??groupIds).length>1);
-    if(preview){if(grouped&&problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Группа не перенесена',text:problem}}));else update(preview);}
+    // быстрая тяга (Макс 31.10): итог — по месту отпускания и последнему расчёту тяги (d.last), а не по состоянию React (preview ещё
+    // не отрисован: корпус оставался на месте или на промежуточной точке)
+    // ending: последний пересчёт по месту отпускания не уходит снова в finish (потерянный pointerup — move с buttons 0, критик 31.10)
+    // отпустили на красном — одиночный корпус и проём тоже остаются на месте (пересечение, за стеной, новая беда с опорой), причина — в сообщении
+    if(d.last){d.ending=true;move(e);const fin=d.last,a0=d.kind==='module'?project.modules.find(x=>x.id===d.id):undefined,a1=a0&&fin.modules.find(x=>x.id===a0.id);
+      const why=projectErrors(fin,project.modules.length===0)[0]??(a0&&a1&&!grouped&&!supportProblem(project,a0)?supportProblem(fin,a1)??undefined:undefined);
+      if(why)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:grouped?'Группа не перенесена':d.kind==='module'?'Корпус не перенесён':'Не сдвинуто',text:why}}));else update(fin);}
     drag.current=null;setPreview(null);setMark(null);if(svg.current?.hasPointerCapture(e.pointerId))svg.current.releasePointerCapture(e.pointerId);}
   function cancel(){if(corner.current)endCorner();if(sdrag.current)endShape();drag.current=null;markPress.current=null;setPreview(null);setMark(null);}
   // Нажали/отпустили Alt, Ctrl, Shift без движения мыши — привязка пересчитывается сразу (угол, перенос, линия Q)

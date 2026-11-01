@@ -3,7 +3,9 @@ import {applianceModel,APPLIANCE_MODEL_TYPES} from './applianceGeometry';
 import {surfacePoint} from './roomSurvey';
 import {hiddenWalls,roomEdges,edgeVisible,readCutaway,hiddenEdges,outlineEdges,type CutawayWall,type CutKey} from './roomCutaway';
 import {edgePanels,edgeLegacyWall,floorPolygon,openingEdge,wallFace,wallPrism,wallSpot,type OnWall} from './roomEdges';
-import {edgeLength,type RoomOutline} from './roomOutline';
+import {edgeLength,edgeTangent,roomOutline,projectToEdges,edgeArc,type RoomOutline} from './roomOutline';
+const edgeArcOf=(o:RoomOutline,i:number)=>edgeArc(o[i],o[(i+1)%o.length],o[i].bulge??0);
+import {openingSpot,snapOpening,edgeOffset,parseOpeningTyped,clampOpening,openingOverlap,openingFacesCamera} from './openingDrag';
 import {finishById,floorUv,wallUv,defaultAlong,type FinishUnit} from './roomFinishes';
 import {drawFinish,FINISH_TEXTURE_PX} from './finishTextures';
 import {facadeHandleId} from './model';
@@ -117,7 +119,7 @@ function fitProfile(src: THREE.Group, part: { size: [number, number, number]; mo
 }
 import { boxes, parts, shelfGaps, drawerConfig, drawerStackHeight, RULES, type Module } from "./model";
 import { catalog } from "./catalog";
-import {localToRoom,roomToLocal,moduleCenter,bounds,sideExtension,type Room,type PlacedModule} from "./project";
+import {localToRoom,roomToLocal,moduleCenter,moduleFootprint,bounds,sideExtension,type Room,type PlacedModule} from "./project";
 import type {GapSide,StretchPlan} from './rowResize';
 import {wallPanels} from './roomGeometry';
 import {FIXTURES,fixtureBox,fixtureLabel} from './fixtures';
@@ -153,8 +155,13 @@ type Props = {
   snap:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
   /** Комната с контуром (критик 30.10): последний шаг тяги корпуса — упереться в стену (project.keepInRoom), на всех путях тяги. */
   keepIn?:(id:string,p:{x:number;y:number;z:number})=>{x:number;y:number;z:number};
-  onMoveModule:(id:string,p:{x:number;y:number;z:number})=>boolean;
-  moveProblem:(id:string,p:{x:number;y:number;z:number})=>string|undefined;
+  onMoveModule:(id:string,p:{x:number;y:number;z:number;rotation?:number})=>boolean;
+  moveProblem:(id:string,p:{x:number;y:number;z:number;rotation?:number})=>string|undefined;
+  /** Физика расстановки (Макс 31.10, placement.settleDrag): одиночный корпус при тяге — на полу/на модуле, навесной — у стены, упор в соседа,
+   *  магнит к стене (поворот). view — вид, free — без привязок, point — Alt/Ctrl поймал линию. */
+  settle?:(id:string,p:{x:number;y:number;z:number},ctx:{view:View;free:boolean;point:boolean})=>{x:number;y:number;z:number;rotation?:number};
+  /** Тяга окна/двери по стене в 3D и на видах (Макс 31.10): s — отступ вдоль стены контура от её начала, sill — подоконник; одна правка. */
+  onOpeningMove?:(id:string,at:{s:number;sill:number})=>boolean;
   onMoveDivider:(mid:string,sid:string,delta:number)=>boolean;
   dividerProblem:(mid:string,sid:string,delta:number)=>string|undefined;
   /** Частичная перегородка (решение Макса 23.10.2026): тянуть её конец — горизонталь-опору под/над ней — по высоте. Без поля — не тянется. */
@@ -294,6 +301,8 @@ export function Scene(p: Props) {
       perspective.position.set(pos[0]-o.x,pos[1],pos[2]-o.z);controls.target.set(look[0]-o.x,look[1],look[2]-o.z);
       perspective.updateProjectionMatrix();controls.update();needsRender=true;
     };
+    // сценарии мышью (scripts/physics-3110-scenario.ts, только чтение): точка комнаты (мм) → экран, px
+    (window as unknown as {__toScreen?:(x:number,y:number,z:number)=>{x:number;y:number}}).__toScreen=(x,y,z)=>{const o=sceneOrigin??{x:0,z:0},v=new THREE.Vector3(x-o.x,y,z-o.z).project(camera),r=renderer.domElement.getBoundingClientRect();return {x:r.left+(v.x+1)/2*r.width,y:r.top+(1-v.y)/2*r.height};};
     scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8991, 2.1));
     const sun = new THREE.DirectionalLight(0xfff8ed, 3.1);
     sun.position.set(-2200, 5000, 4200);
@@ -342,7 +351,8 @@ export function Scene(p: Props) {
     // Для снимков проверки: скрипт ждёт, пока догрузятся текстуры и модели фурнитуры (window.__pending() === 0).
     (window as unknown as {__pending?:()=>number}).__pending=()=>pendingTextures;
     // Для сценариев мышью (scripts/stretch-scenario.ts): только чтение — положение и ширина корпусов на сцене.
-    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width,y:a.y??0,h:a.module.height,d:a.module.depth}));
+    (window as unknown as {__arrangement?:()=>{id:string;x:number;z:number;w:number}[]}).__arrangement=()=>current.current.arrangement.map(a=>({id:a.id,x:a.x,z:a.z,w:a.module.width,y:a.y??0,h:a.module.height,d:a.module.depth,r:a.rotation??0}));
+    (window as unknown as {__room?:()=>unknown}).__room=()=>current.current.room; // сценарии (physics-3110): помещение со сцены, только чтение
     // scripts/stretch-guides-scenario.ts (только чтение): вспомогательные линии проекта
     (window as unknown as {__guides?:()=>unknown}).__guides=()=>current.current.guides??[];
     // Для сценария scripts/fastener-render-check.ts (только чтение): коробки ОТРИСОВАННОЙ фурнитуры (сетки GLB, запасные модели,
@@ -556,7 +566,7 @@ export function Scene(p: Props) {
         const m = placed.module,
           active = placed.id === focus.id;
         const origin=localToRoom(placed,0,0),center=moduleCenter(focus);
-        moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();
+        moduleGroup.position.set(origin.x-center.x,placed.y??0,origin.z-center.z);moduleGroup.rotation.y=(placed.rotation??0)*Math.PI/180;moduleGroup.userData.base=moduleGroup.position.clone();moduleGroup.userData.baseRot=moduleGroup.rotation.y;
         const mParts = parts(m), byId = new Map(mParts.map((q) => [q.id, q]));
         for (const part of mParts) {
           // «Скрыть фасады» убирает двери (распашные и полотна купе) с петлями и их ручками; ящики остаются с фасадами — это наполнение.
@@ -1280,7 +1290,7 @@ export function Scene(p: Props) {
     }
     /** Начало плашки по режиму: «Без привязки · », «Ctrl · пересечение: … · »; обычные привязки — пусто. */
     const modeText=(mode:SnapMode,hit:PointHit|undefined,look:V3|null)=>mode==='snap'?'':(isPointMode(mode)&&!look?'Без привязки':hitText(hit,mode))+' · ';
-    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider'|'dividerEnd';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number};meshes:THREE.Object3D[];delta:number;
+    type Drag={mid:string;sid:string;pid:string;kind:'module'|'part'|'divider'|'dividerEnd';plane:THREE.Plane;anchor:THREE.Vector3;origin:{x:number;y:number;z:number};point:[number,number];moved:boolean;candidate:{x:number;y:number;z:number;rotation?:number};meshes:THREE.Object3D[];delta:number;
       /** Alt/Ctrl (pointSnap.ts): опорный угол корпуса в осях вида и линии для привязки — считаются при первом нажатии. */
       ref?:P2;segs?:Seg2[];
       /** Shift+протяжка: группа, что едет вместе (отмеченные + этот корпус) — пока App не перерисовал отметки. */
@@ -1293,6 +1303,62 @@ export function Scene(p: Props) {
     let markPress:{mid:string;x:number;y:number;pointerId:number}|null=null;
     const targetGeometry=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),targetMaterial=new THREE.LineBasicMaterial({color:0x4057ee,depthTest:false,transparent:true,opacity:.8});
     const dropTarget=new THREE.LineSegments(targetGeometry,targetMaterial);dropTarget.visible=false;dropTarget.renderOrder=100;scene.add(dropTarget);
+    // след корпуса на полу при тяге (ресёрч The Sims 31.10, п. 1): зелёный — ставится, красный — нет (причина — в плашке у курсора)
+    const footMat=new THREE.MeshBasicMaterial({color:0x2f9e44,transparent:true,opacity:.32,depthTest:false,depthWrite:false,side:THREE.DoubleSide}),foot=new THREE.Mesh(new THREE.BufferGeometry(),footMat);foot.visible=false;foot.renderOrder=99;foot.rotation.x=-Math.PI/2;foot.position.y=1;foot.userData.footprint=true;scene.add(foot);
+    // тяга окна/двери (Макс 31.10): плоскость стены (сверху — пол), сдвиг вдоль стены и по высоте с привязками; детали проёма едут на
+    // экране, правка — при отпускании или по набору «от угла;от пола» + Enter (одна отмена)
+    let odrag:{id:string;plane:THREE.Plane;anchor:THREE.Vector3;t:THREE.Vector3;start:{s:number;sill:number};at:{s:number;sill:number};point:[number,number];moved:boolean;typed:string;what:string[];meshes:{o:THREE.Object3D;base:THREE.Vector3;rot:number}[];mouse:[number,number];bad?:string}|null=null;
+    function startOpeningDrag(hit:THREE.Intersection,e:PointerEvent){
+      const r=current.current.room!,id=String(hit.object.userData.openingId),o=(r.openings??[]).find(x=>x.id===id);if(!o)return;
+      const sp=openingSpot(r,o),tn=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)),t=new THREE.Vector3(tn.t.x,0,tn.t.z);
+      const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(current.current.view==='top'?new THREE.Vector3(0,1,0):new THREE.Vector3(tn.n.x,0,tn.n.z),hit.point),anchor=new THREE.Vector3();if(!ray.ray.intersectPlane(plane,anchor))return;
+      const meshes:{o:THREE.Object3D;base:THREE.Vector3;rot:number}[]=[];modelGroup.traverse(x=>{if(x.userData.openingId===id)meshes.push({o:x,base:x.position.clone(),rot:x.rotation.y});});
+      odrag={id,plane,anchor,t,start:{s:sp.s,sill:o.sill},at:{s:sp.s,sill:o.sill},point:[e.clientX,e.clientY],moved:false,typed:'',what:[],meshes,mouse:[e.clientX,e.clientY]};
+      controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);window.addEventListener('keydown',openingKey,true);
+    }
+    function showOpening(){
+      const d=odrag;if(!d)return;const r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id);if(!o)return;
+      // по дуге — по дуге (критик 31.10): детали проёма переносятся из точки стены в точку стены с поворотом по касательной
+      const ol=roomOutline(r),edge=openingSpot(r,o).edge,w0=wallSpot(ol,edge,d.start.s+o.width/2),w1=wallSpot(ol,edge,d.at.s+o.width/2),so=sceneOrigin??{x:0,z:0};
+      const da=Math.atan2(-w1.t.z,w1.t.x)-Math.atan2(-w0.t.z,w0.t.x),cs=Math.cos(da),sn=Math.sin(da),dy=d.at.sill-d.start.sill;
+      for(const m of d.meshes){const rx=m.base.x-(w0.p.x-so.x),rz=m.base.z-(w0.p.z-so.z);m.o.position.set(w1.p.x-so.x+rx*cs+rz*sn,m.base.y+dy,w1.p.z-so.z-rx*sn+rz*cs);m.o.rotation.y=m.rot+da;}needsRender=true;
+      d.bad=openingOverlap(r,d.id,d.at.s,d.at.sill)??undefined;
+      const rr=target.getBoundingClientRect();badge.hidden=false;badge.classList.toggle('invalid',!!d.bad);
+      Object.assign(badge.style,{left:Math.max(8,Math.min(d.mouse[0]-rr.left,target.clientWidth-8))+'px',top:Math.max(40,d.mouse[1]-rr.top-26)+'px',bottom:'auto',right:'auto',transform:'translate(-50%,-100%)'});
+      badge.textContent=(d.bad?(o.type==='door'?'Дверь ':'Окно ')+d.bad+' · ':'')+(d.typed?'Набор: '+d.typed+' · ':'')+(o.type==='door'?'Дверь':'Окно')+': '+Math.round(edgeOffset(r,o,d.at.s))+' от угла'+(o.type==='window'?' · '+Math.round(d.at.sill)+' от пола':'')+(d.what.length?' · по: '+d.what.join(', '):'')+' · «от угла;от пола» + Enter — точно';
+    }
+    function moveOpening(e:PtrLike){
+      const d=odrag;if(!d)return;d.mouse=[e.clientX,e.clientY];if(d.typed)return;if(!d.moved&&Math.hypot(e.clientX-d.point[0],e.clientY-d.point[1])<4)return;d.moved=true;
+      const r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id),view=current.current.view,vertical=(view==='front'||sideView(view))&&o?.type==='window';
+      cast(e.clientX,e.clientY);const q=new THREE.Vector3();if(!ray.ray.intersectPlane(d.plane,q))return;
+      // вдоль стены: дуга — по проекции курсора на дугу (roomOutline.projectToEdges), прямая — по касательной
+      const ol=roomOutline(r),sp=o?openingSpot(r,o):undefined,arc=!!(sp&&r.outline&&edgeArcOf(ol,sp.edge)),so=sceneOrigin??{x:0,z:0};
+      const want=arc&&sp&&o?projectToEdges(ol,{x:q.x+so.x,z:q.z+so.z},j=>j===sp.edge).s-(projectToEdges(ol,{x:d.anchor.x+so.x,z:d.anchor.z+so.z},j=>j===sp.edge).s-d.start.s):d.start.s+q.clone().sub(d.anchor).dot(d.t);
+      const s=snapOpening(r,d.id,want,d.start.sill+(vertical?q.y-d.anchor.y:0),{vertical,free:!snapOn()});d.at={s:s.s,sill:s.sill};d.what=s.what;showOpening();
+    }
+    function endOpening(commit:boolean){
+      const d=odrag;if(!d)return;odrag=null;window.removeEventListener('keydown',openingKey,true);
+      for(const m of d.meshes){m.o.position.copy(m.base);m.o.rotation.y=m.rot;}badge.hidden=true;badge.classList.remove('invalid');badge.style.cssText='';controls.enabled=true;needsRender=true;
+      if(!commit||(d.at.s===d.start.s&&d.at.sill===d.start.sill))return;
+      // отпустили на красном — проём на месте (как у корпуса)
+      if(d.bad){window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Проём не сдвинут',text:'На новом месте проём '+d.bad+'.'}}));return;}
+      current.current.onOpeningMove?.(d.id,d.at);
+    }
+    function openingKey(e:KeyboardEvent){
+      const d=odrag;if(!d)return;
+      const stop=()=>{e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();};
+      if(e.key==='Escape'){stop();endOpening(false);return;}
+      if(/^[0-9;.,]$/.test(e.key)||e.key==='Backspace'){stop();d.typed=e.key==='Backspace'?d.typed.slice(0,-1):d.typed+e.key;
+        // набор сразу на экране и в пределах стены/потолка
+        const t=parseOpeningTyped(d.typed),r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id);if(t&&o)d.at=clampOpening(r,d.id,edgeOffset(r,o,t.offset),t.sill??o.sill);showOpening();return;}
+      if(e.key==='Enter'&&d.typed){stop();openingTyped();return;}
+      // во время тяги проёма клавиши сцены и редактора (R — поворот, Delete, W/A/S/D/E — камера и виды) не срабатывают
+      if(['KeyR','KeyW','KeyA','KeyS','KeyD','KeyE','KeyQ','Delete'].includes(e.code)||e.key==='Delete')stop();
+    }
+    /** набранное «от угла;от пола» — точно (Enter или отпускание с набором, как у угла корпуса), в пределах стены и потолка; не число — отказ */
+    function openingTyped(){const d=odrag;if(!d)return;const t=parseOpeningTyped(d.typed),r=current.current.room!,o=(r.openings??[]).find(x=>x.id===d.id);
+      if(!t||!o){endOpening(false);window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Проём не сдвинут',text:'Наберите «от угла;от пола», например 600;900.'}}));return;}d.at=clampOpening(r,d.id,edgeOffset(r,o,t.offset),t.sill??o.sill);d.bad=openingOverlap(r,d.id,d.at.s,d.at.sill)??undefined;endOpening(true);}
+    function showFootprint(a:PlacedModule|undefined,at:{x:number;y:number;z:number;rotation?:number},bad:boolean){if(!a){foot.visible=false;return;}const o=sceneOrigin??{x:0,z:0},pts=moduleFootprint({...a,...at,rotation:at.rotation??a.rotation});foot.geometry.dispose();foot.geometry=new THREE.ShapeGeometry(new THREE.Shape(pts.map(p=>new THREE.Vector2(p.x-o.x,-(p.z-o.z)))));footMat.color.set(bad?0xe03131:0x2f9e44);foot.visible=true;}
     function indicateTarget(hit:THREE.Intersection|undefined){
       needsRender=true;targetMaterial.color.set(0x4057ee);
       if(!hit){dropTarget.visible=false;return '';}
@@ -1320,6 +1386,11 @@ export function Scene(p: Props) {
       if(current.current.lightMode&&current.current.onLightPick){const picked=hitAt(e.clientX,e.clientY,true);if(picked?.object.userData.partId){e.preventDefault();const mid=picked.object.userData.moduleId,alts=[...new Set(ray.intersectObjects(modelGroup.children,true).filter(h=>h.object instanceof THREE.Mesh&&h.object.userData.moduleId===mid&&h.object.userData.partId).map(h=>h.object.userData.partId as string))].filter(x=>x!==picked.object.userData.partId);current.current.onLightPick(mid,picked.object.userData.partId,alts);}return;}
       if(current.current.mode==='orbit')return;
       cast(e.clientX,e.clientY);const first=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId));
+      // окно/дверь (Макс 31.10): тянется вдоль своей стены, окно на видах спереди/сбоку — и по высоте подоконника (openingDrag.ts)
+      // проём ближней стены (между камерой и комнатой, обычно скрыт «Ближние стены») не перехватывает щелчок — тянется только стена лицом к камере
+      const facing=(h:THREE.Intersection)=>{const r=current.current.room,o=r?.openings?.find(x=>x.id===h.object.userData.openingId);if(!r||!o||!h.object.visible)return false;const sp=openingSpot(r,o),n=edgeTangent(roomOutline(r),sp.edge,Math.min(sp.len,sp.s+o.width/2)).n,dir=camera.getWorldDirection(new THREE.Vector3());return openingFacesCamera(n,dir);};
+      const oh=ray.intersectObjects(modelGroup.children,true).find(h=>h.object instanceof THREE.Mesh&&(h.object.userData.openingId?facing(h):(h.object.userData.obstacleId||h.object.userData.fixtureId||h.object.userData.moduleId)));
+      if(oh?.object.userData.openingId&&current.current.onOpeningMove&&current.current.room&&(current.current.mode==='move'||current.current.mode==='select')){startOpeningDrag(oh,e);return;}
       if(first?.object.userData.obstacleId){current.current.onObstacleSelect(first.object.userData.obstacleId);return;}
       if(first?.object.userData.fixtureId){current.current.onFixtureSelect?.(first.object.userData.fixtureId);return;}
       // fromMark — перенос из Shift+нажатия: корпус выбран по оболочке и в прозрачном режиме (критик 29.10 п.8), отметки не снимаются
@@ -1343,6 +1414,10 @@ export function Scene(p: Props) {
     }
     function pointerMove(e:PtrLike){
       lastPtr={clientX:e.clientX,clientY:e.clientY};
+      // быстрая тяга (Макс 31.10): кнопку отпустили, а pointerup не дошёл (захват потерян: окно, другой экран) — тяга заканчивается здесь,
+      // а не едет за мышью без кнопки
+      if((drag||odrag)&&typeof PointerEvent!=='undefined'&&e instanceof PointerEvent&&e.pointerType==='mouse'&&!(e.buttons&1)){pointerUp(e);return;}
+      if(odrag){moveOpening(e);return;}
       // Shift+нажатие на корпус потянули (от 9 px) — перенос отмеченной группы вместе (решение Макса 30.10): корпус, ещё не
       // отмеченный, отмечается и едет с группой; привязки — как у обычного переноса (Alt/Ctrl — у этого корпуса, группа — тем же ходом)
       if(markPress&&!drag){const cp=markPress;if(!markDragStarts(e.clientX-cp.x,e.clientY-cp.y))return;markPress=null;
@@ -1356,7 +1431,7 @@ export function Scene(p: Props) {
         // сбоку высота — только если ход по вертикали главный и > 15 px (дрожание руки не поднимает корпус с пола)
         const lockY=sideView(current.current.view)&&!sideHeightFree(e.clientX-drag.point[0],e.clientY-drag.point[1]);
         const raw={x:drag.origin.x+point.x,y:lockY?drag.origin.y:current.current.view==='front'||sideView(current.current.view)?Math.max(0,drag.origin.y+point.y):drag.origin.y,z:drag.origin.z+point.z};
-        const mode=snapMode(e,snapOn()),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined;
+        const mode=snapMode(e,snapOn()),look=lookNow(),da=current.current.arrangement.find(a=>a.id===drag!.mid);let next:{x:number;y:number;z:number},hit:PointHit|undefined,onGuide=false;
         if(isPointMode(mode)&&look&&da){
           // Alt/Ctrl: угол корпуса, ближайший к месту захвата, — на линию / в пересечение (корпуса, что едут вместе, не в счёт)
           const s=current.current,d=drag;
@@ -1368,7 +1443,7 @@ export function Scene(p: Props) {
         else{
           next=current.current.snap(drag.mid,raw);
           // края корпуса — к вспомогательным линиям этого вида (Q), ближе обычной привязки
-          if(da)next=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());
+          if(da){const g=snapMoveToGuides(da,raw,next,viewGuides(),snapTol());onGuide=g.x!==next.x||g.y!==next.y||g.z!==next.z;next=g;}
         }
         // контур: после линий Q, Alt/Ctrl и без привязки — корпус упирается в стену, а не проходит сквозь скос (критик 30.10)
         if(current.current.keepIn)next={...current.current.keepIn(drag.mid,next),y:next.y};
@@ -1376,7 +1451,14 @@ export function Scene(p: Props) {
         // Horizontal dragging must not snap height to a neighbour or the floor.
         if(current.current.view!=='front'&&!sideView(current.current.view))next.y=drag.origin.y; // сбоку высота своя, как спереди (критик 29.10 п.7)
         else if(lockY&&!(hit&&!hit.free?.v))next.y=drag.origin.y; // сбоку без вертикального хода — высота прежняя (Alt/Ctrl, поймавшие высоту, — по привязке)
-        drag.candidate=next;for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||dragGroup(drag)?.includes(drag.mid)&&dragGroup(drag)!.includes(mid))group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));const problem=current.current.moveProblem(drag.mid,next);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':dragGroup(drag)?.includes(drag.mid)&&(dragGroup(drag)?.length??0)>1?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
+        // физика расстановки (Макс 31.10, placement.settleDrag): одиночный корпус — на полу или на модуле, навесной — спиной к стене, в соседа
+        // упирается, у стены разворачивается к ней спиной; группа и композиция едут как есть (проверка — при отпускании)
+        const single=!current.current.moveAll&&!(dragGroup(drag)?.includes(drag.mid)&&(dragGroup(drag)?.length??0)>1);let rot:number|undefined;
+        if(single&&current.current.settle){const st=current.current.settle(drag.mid,next,{view:current.current.view,free:mode==='free',point:isPointMode(mode)||onGuide/* Alt/Ctrl зажат или линия Q поймала — физика не сдёргивает с линии (критик 31.10) */});next={x:st.x,y:st.y,z:st.z};if(st.rotation!==undefined&&st.rotation!==(da?.rotation??0))rot=st.rotation;}
+        drag.candidate=rot===undefined?next:{...next,rotation:rot};for(const [mid,group] of moduleGroups)if(current.current.moveAll||mid===drag.mid||dragGroup(drag)?.includes(drag.mid)&&dragGroup(drag)!.includes(mid)){
+          if(mid===drag.mid&&da){const o=sceneOrigin??{x:0,z:0},q=localToRoom({...da,...next,rotation:rot??da.rotation},0,0);group.position.set(q.x-o.x,next.y,q.z-o.z);group.rotation.y=(rot??da.rotation??0)*Math.PI/180;}
+          else group.position.copy(group.userData.base).add(new THREE.Vector3(next.x-drag.origin.x,next.y-drag.origin.y,next.z-drag.origin.z));}
+        const problem=current.current.moveProblem(drag.mid,drag.candidate);showFootprint(da,drag.candidate,!!problem);badge.classList.toggle('invalid',!!problem);badge.textContent=problem||(current.current.moveAll?'Вся композиция · ':dragGroup(drag)?.includes(drag.mid)&&(dragGroup(drag)?.length??0)>1?'Группа · ':'')+modeText(mode,hit,look)+'Положение: '+next.x+' / '+next.y+' / '+next.z+' мм';
       }else if(drag.kind==='divider'){
         const a=current.current.arrangement.find(a=>a.id===drag!.mid)!,angle=(a.rotation??0)*Math.PI/180,dx=Math.round((point.x*Math.cos(angle)-point.z*Math.sin(angle))/5)*5;
         for(const mesh of drag.meshes)mesh.position.x+=dx-drag.delta;drag.delta=dx;
@@ -1395,8 +1477,9 @@ export function Scene(p: Props) {
         badge.textContent=problem||(destination?destination+' · ':'')+'по высоте '+(dy>0?'+':'')+dy+' мм';
       }
     }
-    function resetDrag(){needsRender=true;dropTarget.visible=false;snapMark.hidden=true;if(markPress){markPress=null;controls.enabled=true;}if(!drag)return;if(drag.kind==='module'){for(const group of moduleGroups.values())group.position.copy(group.userData.base);}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
+    function resetDrag(){needsRender=true;dropTarget.visible=false;foot.visible=false;snapMark.hidden=true;if(markPress){markPress=null;controls.enabled=true;}if(!drag)return;if(drag.kind==='module'){for(const group of moduleGroups.values()){group.position.copy(group.userData.base);group.rotation.y=group.userData.baseRot??group.rotation.y;}}else for(const mesh of drag.meshes){if(drag.kind==='divider')mesh.position.x-=drag.delta;else mesh.position.y-=drag.delta;}drag=null;badge.hidden=true;badge.classList.remove('invalid');controls.enabled=true;}
     function pointerUp(e:PointerEvent){
+      if(odrag){if(odrag.typed)openingTyped();else endOpening(true);if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);return;}
       // Shift+щелчок без движения — отметить корпус / снять отметку (мультивыбор, решение Макса 30.10)
       if(markPress&&!drag){const cp=markPress;markPress=null;controls.enabled=true;if(renderer.domElement.hasPointerCapture(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);current.current.onToggleModule?.(cp.mid);return;}
       if(!drag){if(current.current.mode==='orbit')return;return;}
@@ -1404,8 +1487,9 @@ export function Scene(p: Props) {
       if(d.moved){
         if(d.kind==='module'){
           // группа (Shift+протяжка, отмеченные, вся композиция) — отказ целиком, если хоть один корпус упрётся или выйдет из помещения
-          const s=current.current,grouped=s.moveAll||(dragGroup(d)?.includes(d.mid)&&(dragGroup(d)?.length??0)>1),problem=grouped?s.moveProblem(d.mid,d.candidate):undefined;
-          if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:'Группа не перенесена',text:problem}}));
+          // отпустили на красном (одиночный корпус тоже, критик 31.10) — корпус на прежнем месте, причина в сообщении
+          const s=current.current,grouped=s.moveAll||(dragGroup(d)?.includes(d.mid)&&(dragGroup(d)?.length??0)>1),problem=s.moveProblem(d.mid,d.candidate);
+          if(problem)window.dispatchEvent(new CustomEvent('studio-note',{detail:{title:grouped?'Группа не перенесена':'Корпус не перенесён',text:problem}}));
           else s.onMoveModule(d.mid,d.candidate);
         }
         else if(d.kind==='divider')current.current.onMoveDivider(d.mid,d.sid,d.delta);
@@ -1942,7 +2026,7 @@ export function Scene(p: Props) {
       grid.geometry.dispose();
       (grid.material as THREE.Material).dispose();
       for (const l of labels) l.element.remove();
-      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);renderer.domElement.removeEventListener('pointerdown',rightPointer,true);renderer.domElement.removeEventListener('pointerdown',middlePointer,true);renderer.domElement.removeEventListener('pointerup',middleUp,true);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();badge.remove();
+      window.removeEventListener('keydown',key);renderer.domElement.removeEventListener('contextmenu',contextMenu);renderer.domElement.removeEventListener('pointerdown',rightPointer,true);renderer.domElement.removeEventListener('pointerdown',middlePointer,true);renderer.domElement.removeEventListener('pointerup',middleUp,true);target.removeEventListener('dragover',dragOver);target.removeEventListener('drop',drop);target.removeEventListener('dragleave',dragLeave);targetGeometry.dispose();targetMaterial.dispose();foot.geometry.dispose();footMat.dispose();if(odrag)window.removeEventListener('keydown',openingKey,true);badge.remove();
       sun.shadow.dispose();
       for(const texture of loadedTextures)texture.dispose();loadedTextures.clear();textureLoads.clear();
       handleEnv?.dispose();
