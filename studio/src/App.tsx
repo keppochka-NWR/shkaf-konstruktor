@@ -14,7 +14,7 @@ import {SettingsTree,revealSettings} from './SettingsTree';
 import {SettingsSection} from './SettingsSection';
 import {setDoorHinge,setModuleHingeSide,singleLeafDoors} from './facadeEditing';
 import {applyFacadeStyle} from './applyFacadeStyle';
-import {WorkspacePanels} from './WorkspacePanels';
+import {WorkspacePanels,useSceneDragFade} from './WorkspacePanels';
 import {layoutKitchenDrawers} from './kitchenEditing';
 import {EditorBrand} from './EditorBrand';
 import {RoomObjectProperties,type EnvironmentSelection} from './RoomObjectProperties';
@@ -67,7 +67,8 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from "re
 import {historyShortcut,editsText,viewShortcut,rotateShortcut,planShortcut} from './historyShortcuts';
 import {SceneToolbar,ViewButtons,type ToolbarView} from './SceneToolbar';
 import {KeyHints} from './KeyHints';
-import {PanelLeftClose,PanelLeftOpen} from 'lucide-react';
+import {PanelLeftClose,PanelLeftOpen,MonitorPlay,UserRound,HardDriveDownload} from 'lucide-react';
+import {hasHideableFacades} from './facadeHide';
 import {GroupFacadePanel,GroupFillingBlock} from './GroupFacadePanel';
 import {highlightControls} from './highlight';
 import {applyGroupFacade,skippedNote,groupFacadeValue,type GroupFacadeField} from './groupFacades';
@@ -424,6 +425,9 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   const fillBlock=m.kupe?'Недоступно: двери купе — только двери; полки, ящики и штанги ставьте в корпус за ними':'';
   const upperBlock=nothingSelected?'Недоступно: не выбран корпус':m.mansard?'Недоступно: над мансардным шкафом антресоль не ставится':Math.floor(project.room.height-(placed.y??0)-m.height-MEASUREMENT_RULES.ceilingClearance)<RULES.minH?`Недоступно: над корпусом меньше ${RULES.minH} мм и ${MEASUREMENT_RULES.ceilingClearance} мм зазора до потолка`:'';
   const noGroup='Недоступно: не отмечены корпуса (Shift + щелчок)';
+  const hideableFacades=useMemo(()=>hasHideableFacades(project.modules.map(a=>a.module)),[project.modules]);
+  // створки открываются во всём проекте, поэтому и условие — по всему проекту (критик 31.10: без выбранного корпуса кнопка работает)
+  const anyDoors=project.modules.some(a=>a.module.doors||!!a.module.kdrawers?.length||!!a.module.kupe);
   const groupBounds=moveAll?mountingComposition:mountingCompositionBounds({...project,modules:project.modules.filter(a=>liveGroupIds.includes(a.id))});
   const [focusActive,setFocusActive]=useState(false);
   const [transparent, setTransparent] = useState(false);
@@ -508,6 +512,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
   // Макс 31.10 «при сжатии левого меню шрифты плывут»: колонку можно свернуть в полосу значков (запоминается в браузере)
   const [leftCollapsed,setLeftCollapsedState]=useState(()=>{try{return localStorage.getItem('yo-left-collapsed')==='1';}catch{return false;}});
   const setLeftCollapsed=(v:boolean)=>{setLeftCollapsedState(v);try{localStorage.setItem('yo-left-collapsed',v?'1':'0');}catch{/* без хранилища — до перезагрузки */}setTimeout(()=>setFit(f=>f+1),60);};
+  useSceneDragFade();
   /** Иконки видов верхней полосы (Макс 31.10): «План» — план комнаты, остальные — камера сцены. */
   function showPlan(){setRoomPlan(true);setTab('room');}
   function chooseView(v:ToolbarView){if(v==='plan'){showPlan();return;}setView(v);setRoomPlan(false);setFit(f=>f+1);}
@@ -1291,8 +1296,8 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         </div>
         {/* «Назад» / «Вперёд» — в колонке быстрых действий у сцены (Макс 31.10), Ctrl+Z / Ctrl+Y как прежде */}
         <div className="header-actions">
-          <button className="outline presentation-trigger" onClick={()=>changePresentation(!presentation)}>{presentation?'Вернуться к редактору':'Показать клиенту'}</button>
-          {!saveManagedProject&&<button className="outline" onClick={()=>setModal("cloud")}>Кабинет</button>}
+          <button className="outline presentation-trigger" aria-label={presentation?'Вернуться к редактору':'Показать клиенту'} title={presentation?'Вернуться к редактору':'Показать клиенту'} onClick={()=>changePresentation(!presentation)}><MonitorPlay size={16}/><span>{presentation?'Вернуться к редактору':'Показать клиенту'}</span></button>
+          {!saveManagedProject&&<button className="outline" aria-label="Кабинет" title="Кабинет" onClick={()=>setModal("cloud")}><UserRound size={16}/><span>Кабинет</span></button>}
           <button className="outline documents-action" aria-label="Выдать документы" title="Карты листов, деталировка и КП" onClick={() => {if(roomPlan){setRoomPlan(false);setView("iso");setShowRoom(true);}setOutputTab("quote");setModal("output");}}>
             <Layers size={16} /> <span>Выдать документы</span>
           </button>
@@ -1304,7 +1309,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <Upload size={16} />
             <span>{saveManagedProject?'Заменить мебель комнаты':'Открыть'}</span>
           </button>
-          {import.meta.env.DEV&&<button className="outline" onClick={localBackup}>Резервная копия</button>}
+          {import.meta.env.DEV&&<button className="outline" aria-label="Резервная копия" title="Резервная копия" onClick={localBackup}><HardDriveDownload size={16}/><span>Резервная копия</span></button>}
           <button className="primary" aria-label="Сохранить проект файлом" title="Скачать проект для открытия на другом компьютере. Автосохранение работает в этом браузере." onClick={download}>
             <Download size={16} />
             <span>{saveManagedProject?'Скачать комнату':'Сохранить файл'}</span>
@@ -1442,7 +1447,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             <button data-testid="left-expand" aria-label="Развернуть левую панель" title="Развернуть левую панель" onClick={()=>setLeftCollapsed(false)}><PanelLeftOpen size={18}/></button>
             <span className="rail-sep" aria-hidden="true"/>
             {stage==='room'?<button aria-label="Размеры помещения" title="Размеры помещения" onClick={()=>setLeftCollapsed(false)}><Ruler size={18}/></button>:<button aria-label="Добавить мебель" title="Добавить мебель" onClick={()=>{setLeftCollapsed(false);requestAnimationFrame(()=>{const d=document.querySelector<HTMLDetailsElement>('.library .module-palette');if(d){d.open=true;d.scrollIntoView({block:'start'});}});}}><Plus size={18}/></button>}
-            {stage!=='room'&&project.modules.slice(0,14).map((a,i)=><button key={a.id} aria-pressed={!deselected&&a.id===placed.id} aria-label={'Корпус '+(i+1)+': '+a.module.name} title={(i+1)+'. '+a.module.name+' · '+a.module.width+' × '+a.module.height+' × '+a.module.depth} onClick={e=>{if(isMarkClick(e)){toggleModuleGroup(a.id);return;}setGroupIds(g=>groupAfterPlainClick(g,a.id));selectModule(a.id);}}>{i+1}</button>)}
+            {stage!=='room'&&project.modules.map((a,i)=><button key={a.id} aria-pressed={!deselected&&a.id===placed.id} aria-label={'Корпус '+(i+1)+': '+a.module.name} title={(i+1)+'. '+a.module.name+' · '+a.module.width+' × '+a.module.height+' × '+a.module.depth} onClick={e=>{if(isMarkClick(e)){toggleModuleGroup(a.id);return;}setGroupIds(g=>groupAfterPlainClick(g,a.id));selectModule(a.id);}}>{i+1}</button>)}
             <span className="rail-sep" aria-hidden="true"/>
             <button aria-label="Как пользоваться" title="Как пользоваться" onClick={()=>setModal('help')}><HelpCircle size={18}/></button>
           </nav>}
@@ -1603,7 +1608,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
         <section className="viewport" aria-label="Рабочая область">
           {/* Макс 31.10: одна строка как в Базисе — иконки видов, затем режимы и переключатели; сплошной фон, сцена под полосой */}
           <SceneToolbar views={<ViewButtons active={roomPlan?'plan':view} onView={chooseView} hidden={presentation?['plan']:[]}/>}>
-            {!presentation&&!roomPlan&&!(!advanced&&stage==='fixtures')&&<div className="interaction-bar" data-tour="modes" role="group" aria-label="Режим">{([{id:'select',label:'Выбрать',icon:Check,hint:'Выбрать деталь щелчком'},{id:'move',label:'Двигать корпуса',icon:Move3D,hint:'Тянуть корпуса мышью'},{id:'fill',label:'Наполнение',icon:Rows3,hint:'Двигать полки, ящики и перегородки (створки открываются)'},{id:'orbit',label:'Свободная камера',icon:RotateCcw,hint:'Вращать камеру левой кнопкой'}] as const).map(t=><button key={t.id} aria-label={t.label} title={t.hint} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><t.icon size={16}/><span className="mode-label">{t.label}</span></button>)}<span className="mode-sep" aria-hidden="true"/>{(()=>{const none=!project.modules.some(a=>a.module.doors||a.module.kupe||a.module.sections.some(s=>s.drawers));return <button className="tool-toggle" aria-label={hideFacades?'Показать фасады':'Скрыть фасады'} aria-pressed={hideFacades} disabled={none&&!hideFacades} title={none&&!hideFacades?'Недоступно: в проекте нет фасадов':hideFacades?'Показать фасады — вернуть двери на место':'Скрыть фасады — видно наполнение'} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?<Eye size={16}/>:<EyeOff size={16}/>}<span className="mode-label">{hideFacades?'Показать фасады':'Скрыть фасады'}</span></button>;})()}{stage==='bodies'&&!m.corner&&<button className="gap-toggle tool-toggle" aria-label="Размеры проёмов между полками" title="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}><Columns2 size={16}/><span className="mode-label">Проёмы</span></button>}</div>}
+            {!presentation&&!roomPlan&&!(!advanced&&stage==='fixtures')&&<div className="interaction-bar" data-tour="modes" role="group" aria-label="Режим">{([{id:'select',label:'Выбрать',icon:Check,hint:'Выбрать деталь щелчком'},{id:'move',label:'Двигать корпуса',icon:Move3D,hint:'Тянуть корпуса мышью'},{id:'fill',label:'Наполнение',icon:Rows3,hint:'Двигать полки, ящики и перегородки (створки открываются)'},{id:'orbit',label:'Свободная камера',icon:RotateCcw,hint:'Вращать камеру левой кнопкой'}] as const).map(t=><button key={t.id} aria-label={t.label} title={t.hint} aria-pressed={mode===t.id} onClick={()=>{setMode(t.id);if(t.id==='fill')setOpenDoors(true);else if(!doorsByUser.current)setOpenDoors(false);}}><t.icon size={16}/><span className="mode-label">{t.label}</span></button>)}<span className="mode-sep" aria-hidden="true"/>{(()=>{const none=!hideableFacades;return <button className="tool-toggle" aria-label={hideFacades?'Показать фасады':'Скрыть фасады'} aria-pressed={hideFacades} disabled={none&&!hideFacades} title={none&&!hideFacades?'Недоступно: в проекте нет фасадов':hideFacades?'Показать фасады — вернуть двери на место':'Скрыть фасады — видно наполнение'} onClick={()=>setHideFacades(v=>!v)}>{hideFacades?<Eye size={16}/>:<EyeOff size={16}/>}<span className="mode-label">{hideFacades?'Показать фасады':'Скрыть фасады'}</span></button>;})()}{stage==='bodies'&&!m.corner&&<button className="gap-toggle tool-toggle" aria-label="Размеры проёмов между полками" title="Размеры проёмов между полками" aria-pressed={gapDimensions} onClick={()=>setGapDimensions(v=>!v)}><Columns2 size={16}/><span className="mode-label">Проёмы</span></button>}</div>}
           </SceneToolbar>
           {hiddenIds.length>0&&!presentation&&<button className="restore-modules" onClick={()=>setHiddenModules([])}><Eye size={16}/>Показать все скрытые ({hiddenIds.length})</button>}
           <SafeBoundary label="Сцена" resetKey={project}>{roomPlan?<RoomPlan onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} stretchable={!widthLock(m)&&!deselected} cornerPlan={pull=>planCorner(pull)} onCorner={commitCorner} guides={project.guides} onGuides={commitGuides} onToggleModule={toggleModuleGroup} hiddenModuleIds={hiddenIds} onModuleContext={(mid,x,y)=>{const a=project.modules.find(a=>a.id===mid)!;setCtxMenu({mid,sid:a.module.sections[0]?.id??"",x,y});}} onEnvironmentContext={(kind,id)=>setEnvironmentSelection({kind,id})} showModules={advanced||stage!=='fixtures'} groupIds={liveGroupIds} moveAll={moveAll} selectedObstacle={selectedObstacle} onObstacleSelect={id=>{setSelectedObstacle(id);setSelectedOpening(undefined);setSelectedFixture(undefined);}} selectedOpening={selectedOpening} onOpeningSelect={id=>{setSelectedOpening(id);setSelectedObstacle(undefined);setSelectedFixture(undefined);}} selectedFixture={selectedFixture} onFixtureSelect={id=>{setSelectedFixture(id);setSelectedObstacle(undefined);setSelectedOpening(undefined);}} onDimension={roomDimension} snapping={snapping} project={project} active={placed.id} onSelect={selectModule} onRoom={()=>setTab('room')} update={commitProject} shapeEdit={shapeEdit} onShapeEdit={shapeStage?setShapeEdit:undefined}/>:<Scene onToggleModule={toggleModuleGroup} onPlainModuleClick={id=>setGroupIds(g=>groupAfterPlainClick(g,id))} hiddenModuleIds={hiddenIds} viewKey={viewKey}
@@ -1820,11 +1825,11 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
             >
               <RotateCw size={19} />
             </button>
-            {(()=>{const can=!nothingSelected&&(m.doors||!!m.kdrawers?.length||!!m.kupe);return <button
+            {(()=>{return <button
                 aria-label="Открыть фасады"
-                title={can?"Открыть фасады":nothingSelected?'Недоступно: не выбран корпус':'Недоступно: у модуля нет дверей'}
-                aria-pressed={can&&openDoors}
-                disabled={!can}
+                title={anyDoors?"Открыть фасады":'Недоступно: в проекте нет дверей'}
+                aria-pressed={anyDoors&&openDoors}
+                disabled={!anyDoors}
                 onClick={() => userDoors(!openDoors)}
               >
                 <DoorOpen size={19} />
@@ -2678,7 +2683,7 @@ export default function App({initialProject,projectKey,clientBar,onProjectChange
                   <button onClick={()=>setModal('cloud')}><b>6. Сохраните вариант</b><span>Кабинет хранит проекты и историю версий. Сейчас сервер работает на этом компьютере. Файл проекта можно перенести кнопками «Скачать» и «Открыть».</span></button>
                 </div>
                 <p><strong>Размеры:</strong> нажмите число на модели или введите справа и нажмите Enter. Проёмы показывают расстояние в свету между полками.</p>
-                <p><strong>Камера:</strong> режим «Повернуть вид» — вращение мышью; колесо — масштаб; правая кнопка — сдвиг вида. Лупа приближает выбранный корпус, «Вписать модель» возвращает общий вид.</p>
+                <p><strong>Камера:</strong> режим «Свободная камера» — вращение мышью; колесо — масштаб; зажатое колесо — вращение; правая кнопка — сдвиг вида. Лупа приближает выбранный корпус, «Вписать модель» возвращает общий вид.</p>
                 <p><strong>Отмена:</strong> Ctrl+Z; повтор — Ctrl+Shift+Z. Delete удаляет выбранное наполнение, когда вы не редактируете поле или список. Escape отменяет незавершённое перетаскивание.</p>
                 <details><summary>Как двигать шкаф вместе с антресолью?</summary><p>Слева раскройте «Двигать группу» и отметьте нижний корпус и антресоль. Тяните любой из отмеченных: они двигаются вместе. Отступы в свойствах тоже сдвигают группу. В этом же разделе можно скопировать группу или повернуть её на 90° по часовой или против (клавиши R и Shift+R). Фасады отмеченных корпусов правятся разом — раздел «Фасады выделенных» справа.</p><p>«Снять группу» возвращает отдельное перемещение. Изменение ширины и удаление относятся к активному корпусу.</p></details>
                 <details><summary>Как повторно использовать удачный шкаф?</summary><p>Отметьте нужные корпуса в группе, откройте «Моя библиотека модулей», задайте название и сохраните группу. Можно сохранить и один корпус. При вставке каждый корпус остаётся независимым; антресоли сохраняют положение над нижними модулями. Нижний край шаблона ставится на пол.</p><p>Поиск понимает названия, декоры и размеры, например «500 × 2000 Вотан». Библиотека хранится в браузере и переносится одним файлом. В свойствах секции отдельно можно скопировать её наполнение и вставить в другую секцию.</p><button className="text-action" onClick={()=>setModal('library')}>Открыть мою библиотеку</button></details>

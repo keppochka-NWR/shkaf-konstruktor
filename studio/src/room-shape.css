@@ -3,8 +3,8 @@
 .room-shape-panel h3 { margin: 0; }
 .room-shape-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .room-shape-presets button { display: grid; justify-items: center; align-content: start; gap: 3px; padding: 6px 1px; min-width: 0; border: 1px solid #d5dbe2; border-radius: 8px; background: #fff; font: inherit; font-size: 10px; letter-spacing: -0.1px; line-height: 1.2; color: #2b3640; cursor: pointer; }
-.room-shape-presets button:hover { border-color: #e8590c; background: #fff7f2; }
-.room-shape-presets button[aria-pressed="true"] { border-color: #e8590c; box-shadow: inset 0 0 0 1px #e8590c; }
+.room-shape-presets button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.room-shape-presets button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
 .room-shape-walls { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 .room-shape-walls th:nth-child(1) { width: 8%; } .room-shape-walls th:nth-child(2) { width: 22%; } .room-shape-walls th:nth-child(3) { width: 26%; } .room-shape-walls th:nth-child(4), .room-shape-walls th:nth-child(5) { width: 22%; }
 .room-shape-walls input::-webkit-outer-spin-button, .room-shape-walls input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -21,5 +21,5 @@
 .room-shape-seg button:first-child { border-radius: 6px 0 0 6px; }
 .room-shape-seg button:last-child { border-radius: 0 6px 6px 0; }
 .room-shape-seg button[aria-checked="true"] { background: #325bee; border-color: #325bee; color: #fff; }
-.room-plan .room-shape-toggle[aria-pressed="true"] { background: #e8590c; border-color: #e8590c; color: #fff; }
-.room-plan .plan-wall-length[role="button"]:hover { fill: #e8590c; }
+.room-plan .room-shape-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.room-plan .plan-wall-length[role="button"]:hover { fill: var(--accent); }

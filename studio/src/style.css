@@ -217,8 +217,8 @@
   border-radius: 7px;
 }
 .output-tabs button[aria-pressed="true"] {
-  background: #e1f2f4;
-  border-color: #24899b;
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 .output-actions {
   display: flex;

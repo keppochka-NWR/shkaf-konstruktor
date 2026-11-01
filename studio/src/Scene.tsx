@@ -132,6 +132,7 @@ import {tweenState,tweenProgress,wantsViewTween,type CamState} from './cameraTwe
 import {altKeyupGuard,acrossSegments,markDragStarts,isMarkClick,wheelGuard,historyGuard,sideView,sideHeightFree,snapMode,isPointMode,toView,fromView,viewDelta,toSegments,pointSnap,snapDelta,snapAlong,nearestOutlineCorner,hitText,POINT_SNAP_PX,type SnapMode,type Seg2,type P2,type PointHit} from './pointSnap';
 import {cornerDims,axisOf,edgeOf,typedCornerPull,parseCornerTyped,cornerHandleTitle,DIM_WORD,type CornerPull,type CornerPlan,type Dim,type End} from './cornerStretch';
 import {editsText} from './historyShortcuts';
+import {hiddenWithFacades} from './facadeHide';
 import {searchShortcut} from './searchKeys';
 import './guides.css';
 /** side — вид справа (камера с +X), left — вид слева (клавиша A, п.28 волны 22.10). */
@@ -559,7 +560,7 @@ export function Scene(p: Props) {
         const mParts = parts(m), byId = new Map(mParts.map((q) => [q.id, q]));
         for (const part of mParts) {
           // «Скрыть фасады» убирает двери (распашные и полотна купе) с петлями и их ручками; ящики остаются с фасадами — это наполнение.
-          if(state.hideFacades&&(part.role==='door'||part.role==='hinge'||(part.role==='handle'&&!part.id.includes(':drawer:'))||(part.id.endsWith(':facade')&&!part.id.includes(':drawer:'))))continue;
+          if(state.hideFacades&&hiddenWithFacades(part))continue;
           const isMetal = part.material === "metal",
             isBack = part.material === "hdf",
             isFacade = part.role === "door" || part.id.endsWith(":facade");

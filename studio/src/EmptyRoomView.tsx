@@ -4,6 +4,7 @@ import {WorkspacePanels} from './WorkspacePanels';
 import {useEffect,useMemo,useState,type ReactNode} from 'react';
 import {Download,Plus,RotateCcw,Box,Maximize} from 'lucide-react';
 import {SceneToolbar,ViewButtons} from './SceneToolbar';
+import {editsText,viewShortcut,planShortcut} from './historyShortcuts';
 import {EditorBrand} from './EditorBrand';
 import {StageBar} from './StageBar';
 import {STAGES,stageIndex,normalizeStage,rememberStage,type Stage} from './stages';
@@ -43,6 +44,8 @@ export function EmptyRoomView({project,update,viewKey,title,bar,onAdd,onDownload
  // T1 (18.10): первая мебель открывает редактор на «Построении мебели», а не возвращает на «Помещение».
  const addFirst=(ok:boolean)=>{if(ok)rememberStage('bodies');return ok;};
  const add=()=>{rememberStage('bodies');onAdd();};
+ // подсказки иконок обещают E S A D W P — клавиши работают и в пустой комнате (критик 31.10)
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{if(editsText(e.target)||document.querySelector('[aria-modal="true"]'))return;const v=viewShortcut(e);if(v){e.preventDefault();setView(v);setPlan(false);setFit(f=>f+1);}else if(planShortcut(e)){e.preventDefault();setPlan(true);}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[]);
  // Макс 31.10: «построение помещения — в левом меню»: на «Помещении» замер слева, палитра «Добавить мебель» справа
  const roomLeft=stage==='room';
  const palette=<div className="project-modules" data-tour="palette"><ModulePalette source={dummy.module} onAdd={m=>addFirst(update(applyAutoFillers(appendFromPalette(project,m))))} room={project.room} onAddGroup={(group,keep)=>addFirst(update(applyAutoFillers(appendModuleGroup(project,group,false,keep).project)))}/></div>;

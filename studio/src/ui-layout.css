@@ -2,8 +2,8 @@
    клавиши плашками, синие заголовки разделов, колонки по clamp() для 1280–2560, серые недоступные кнопки с причиной.
    Подключается последним (main.tsx) — перекрывает старые слои studio-refresh / layout-fixes без !important, кроме отмеченных. */
 :root{
- --left-col:clamp(256px,calc(10vw + 120px),360px);  /* 1280 → 256, 1366 → 257, 1920 → 312, 2560 → 360 */
- --right-col:clamp(296px,calc(10vw + 160px),400px); /* 1280 → 296, 1366 → 297, 1920 → 352, 2560 → 400; сцена на 1280 — 728 px */
+ --left-col:clamp(248px,calc(10vw + 120px),360px);  /* 1024–1280 → 248, 1366 → 257, 1920 → 312, 2560 → 360 */
+ --right-col:clamp(288px,calc(10vw + 160px),400px); /* 1024–1280 → 288, 1366 → 297, 1920 → 352, 2560 → 400; сцена на 1024 — 488 px */
  --rail-w:52px;--toolbar-h:44px;--keys-h:30px;
  --accent:#325bee;--accent-hover:#2449d6;--accent-soft:#eef2ff;--muted:#5a6b74;--text-muted:#5a6b74;--blue:#325bee;--light:#eef2ff;--accent-line:#c3cff9;--accent-ink:#1f3fb8;
  --neutral-ink:#3b4652;--disabled-ink:#8a96a0;--disabled-bg:#f3f5f7;
@@ -17,22 +17,24 @@
 
 /* ── 1. Верхняя полоса сцены: одна строка, сплошной фон, сцена — под ней ── */
 .app .viewport{container-type:inline-size;container-name:scene}
-.viewport .scene-toolbar{position:absolute;z-index:6;top:0;left:0;right:0;height:var(--toolbar-h);display:flex;align-items:center;gap:2px;padding:0 10px;background:#fff;border-bottom:1px solid var(--line);overflow:hidden}
+.viewport .scene-toolbar{position:absolute;z-index:6;top:0;left:0;right:0;height:var(--toolbar-h);display:flex;align-items:center;gap:2px;padding:0 6px;background:#fff;border-bottom:1px solid var(--line);overflow:auto hidden;scrollbar-width:none}
 .app .scene-toolbar .view-tabs{position:static;display:flex;gap:4px;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;flex:none}
 .app .scene-toolbar .view-tabs .view-button{position:relative;width:32px;height:32px;min-height:0;padding:0;display:grid;place-items:center;border:1px solid transparent;border-radius:6px;background:none;color:var(--text-muted);font-size:0}
 .app .scene-toolbar .view-tabs .view-button:hover{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 .app .scene-toolbar .view-tabs .view-button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
 .app .scene-toolbar .view-tabs button[hidden]{display:none}
-.scene-toolbar .toolbar-sep{flex:none;width:1px;height:24px;margin:0 8px;background:var(--line)}
-.app .scene-toolbar .interaction-bar{position:static;display:flex;flex-wrap:nowrap;align-items:center;gap:2px;width:auto;min-width:0;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;inset:auto}
-.app .scene-toolbar .interaction-bar button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid transparent;border-radius:6px;background:none;color:var(--neutral-ink);font-size:12px;font-weight:550;white-space:nowrap}
+.scene-toolbar .toolbar-sep{flex:none;width:1px;height:24px;margin:0 4px;background:var(--line)}
+.app .scene-toolbar .interaction-bar{position:static;display:flex;flex:none;flex-wrap:nowrap;align-items:center;gap:2px;width:auto;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none;inset:auto}
+.app .scene-toolbar .interaction-bar button{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:6px 7px;border:1px solid transparent;border-radius:6px;background:none;color:var(--neutral-ink);font-size:12px;font-weight:550;white-space:nowrap}
 .app .scene-toolbar .interaction-bar button:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent-line)}
 .app .scene-toolbar .interaction-bar button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent);font-size:12px}
-.app .scene-toolbar .interaction-bar .tool-toggle{padding:6px 8px}
-.app .scene-toolbar .interaction-bar .mode-sep{flex:none;width:1px;height:20px;margin:0 6px;background:var(--line)}
+.app .scene-toolbar .interaction-bar .tool-toggle{padding:6px 7px}
+.app .scene-toolbar .interaction-bar .mode-sep{flex:none;width:1px;height:20px;margin:0 4px;background:var(--line)}
 .scene-toolbar .toolbar-end{margin-left:auto;display:flex;align-items:center;gap:4px;flex:none}
-/* узкая сцена (1280): подпись только у включённого режима, остальные — значки с подсказкой */
-@container scene (max-width:805px){.app .scene-toolbar .interaction-bar button:not([aria-pressed=true]) .mode-label{display:none}.app .scene-toolbar .interaction-bar button{padding:6px 8px}}
+/* Строка со всеми подписями занимает ~805 px (проба scripts/ui-layout-3110-scenario.ts; 1366: сцена 813); уже — подпись только у включённого режима; ещё уже — одни значки.
+   На всякий случай полоса прокручивается (overflow-x), кнопка не бывает недоступной. */
+@container scene (max-width:810px){.app .scene-toolbar .interaction-bar button:not([aria-pressed=true]) .mode-label{display:none}.app .scene-toolbar .interaction-bar button{padding:6px 8px}}
+@container scene (max-width:580px){.app .scene-toolbar .interaction-bar button .mode-label{display:none}.scene-toolbar .toolbar-sep{margin:0 3px}.app .scene-toolbar .view-tabs{gap:2px}}
 .app:not(.presentation) .viewport .scene{top:var(--toolbar-h);bottom:var(--keys-h)}.app.empty-room-app:not(.presentation) .viewport .scene{bottom:0} /* в пустой комнате строки клавиш нет */
 .app.presentation .viewport .scene-toolbar{position:absolute}
 .app .viewport .room-plan{inset:calc(var(--toolbar-h) + 10px) 16px 16px calc(var(--rail-w) + 8px)}
@@ -59,7 +61,7 @@
 .app .viewport .light-mode-bar{top:calc(var(--toolbar-h) + 10px)}
 
 /* ── 4. Клавиши: плашки на сплошной полосе внизу сцены ── */
-.app .viewport .orbit-help.key-hints{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;height:var(--keys-h);display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:0 10px 0 calc(var(--rail-w) + 8px);margin:0;background:#f7f8fa;border-top:1px solid var(--line);color:#2f3a45;font-size:11.5px;line-height:1;pointer-events:auto;white-space:nowrap;overflow:hidden;flex-wrap:nowrap}
+.app .viewport .orbit-help.key-hints{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;height:var(--keys-h);display:flex;align-items:center;justify-content:flex-start;gap:12px;padding:0 10px;margin:0;background:#f7f8fa;border-top:1px solid var(--line);color:#2f3a45;font-size:11.5px;line-height:1;pointer-events:auto;white-space:nowrap;overflow:hidden;flex-wrap:nowrap}
 .key-hints .key-action{font-weight:600;color:#1f2933;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
 .key-hints .view-keys{display:inline-flex;gap:12px;flex:none}
 .key-hints .key-hint{display:inline-flex;align-items:center;gap:3px;flex:none}
@@ -71,7 +73,9 @@
 .key-hints .key-help{flex:none;margin-left:auto;display:grid;place-items:center;width:22px;height:22px;padding:0;border-radius:50%;color:var(--accent);background:var(--accent-soft)}
 @container scene (max-width:1180px){.key-hints .key-wide{display:none}}
 @container scene (max-width:1080px){.key-hints .key-action{display:none}}
-@container scene (max-width:980px){.key-hints .view-keys .key-hint:nth-child(n+4){display:none}.app .viewport .orbit-help.key-hints,.key-hints .view-keys{gap:9px}}
+@container scene (max-width:980px){.app .viewport .orbit-help.key-hints,.key-hints .view-keys{gap:9px}}
+@container scene (max-width:810px){.key-hints .view-keys .key-hint:nth-child(n+4){display:none}}
+@container scene (max-width:690px){.key-hints .key-hint>span{display:none}}
 @container scene (max-width:840px){.key-hints .rmb-hint .key-hint>span{display:none}}
 
 /* ── 5 и 10. Раскрывающиеся разделы — основной синий, явное открыто/закрыто ── */
@@ -142,8 +146,8 @@
 /* ── «Документы» только сверху (9): нижняя вкладка убрана — панели доков не нужно места под неё ── */
 
 /* Sims: на время перетаскивания боковые колонки приглушены — видны сцена, размер и клавиши */
-.app .library,.app .properties{transition:opacity .15s}.app:has(.viewport .drag-badge:not([hidden])) .library,.app:has(.viewport .drag-badge:not([hidden])) .properties{opacity:.45}
-/* переключатели вида (фасады, проёмы) — значками с подсказкой: режимы с подписями помещаются в строку на 1366 */
+.app .library,.app .properties{transition:opacity .15s}html[data-scene-drag] .app .library,html[data-scene-drag] .app .properties{opacity:.45}
+/* переключатели вида (фасады, проёмы) — всегда значками с подсказкой, подписи у четырёх режимов */
 .app .scene-toolbar .interaction-bar .tool-toggle .mode-label{display:none}
 /* подпись иконки вида — для чтения с экрана и сценариев (hasText «Спереди»), на экране не видна */
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
@@ -161,4 +165,9 @@
 .app.compact-top>.header .header-actions{display:flex;margin-left:auto}
 .app.compact-top>.stage-bar .stage-actions>button{display:inline-flex}
 @media (max-width:1560px){.app.compact-top>.header .header-actions .quiet span,.app.compact-top>.header .header-actions .primary span,.app.compact-top>.header .top-toggle span{display:none}.app.compact-top>.stage-bar .stage-hint{display:none}}
+/* критик 31.10, блокер 1: шапка не шире окна и не наезжает на этапы — ниже 1240 все действия значками, строка не переносится */
+.app.compact-top>.header{flex-wrap:nowrap;min-width:0}
+.app.compact-top>.header .header-actions{width:auto;flex:none;flex-wrap:nowrap}.app.compact-top>.header .header-actions button{white-space:nowrap;min-height:34px}.app.compact-top>.header .document-name{min-width:0;flex:0 1 auto}
+@media (max-width:1560px){.app.compact-top>.header .header-actions button[aria-label="Резервная копия"] span{display:none}}
+@media (max-width:1240px){.app.compact-top>.header .header-actions button>span{display:none}.app.compact-top>.header .header-actions{gap:4px}.app.compact-top>.header .header-actions button{padding-inline:9px}.app.compact-top>.header .document-name{flex:0 1 140px}.app.compact-top>.header .param-search-trigger kbd{display:none}}
 @media (max-width:1380px){.app.compact-top>.header .document-name{max-width:180px}.app.compact-top>.header .document-name>span{display:none}}
