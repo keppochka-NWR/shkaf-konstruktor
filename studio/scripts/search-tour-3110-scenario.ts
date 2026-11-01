@@ -137,7 +137,7 @@ check("Esc закрывает поиск, этап тот же", (await palette.
 // снять выделение: этап мебели, Esc по шагам до «Ничего не выбрано»
 await page.locator('[data-tour="stages"] button[aria-label="Построение мебели"]').click();
 await page.waitForTimeout(300);
-for (let i = 0; i < 4 && !(await page.locator("[data-testid=nothing-selected]").count()); i++) { await page.locator("[data-testid=scene] canvas").first().hover({ position: { x: 20, y: 20 } }); await page.keyboard.press("Escape"); await page.waitForTimeout(120); }
+for (let i = 0; i < 4 && !(await page.locator("[data-testid=nothing-selected]").count()); i++) { await page.locator("[data-testid=scene] canvas").first().hover({ position: { x: 120, y: 20 } }); /* 31.10: левый край сцены — колонка быстрых действий */ await page.keyboard.press("Escape"); await page.waitForTimeout(120); }
 const nothing = (await page.locator("[data-testid=nothing-selected]").count()) > 0;
 await find("петли");
 const hint = await palette.locator('[data-item="hinges"] small').textContent();

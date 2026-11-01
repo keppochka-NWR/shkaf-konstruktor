@@ -307,7 +307,7 @@ test('kitchen through controls: drawers, Gola, wall cabinets, worktop, persisten
  await page.getByRole('button',{name:'Отменить',exact:true}).click();await page.reload();await page.getByRole('button',{name:'3D',exact:true}).click();await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
  await page.getByRole('button',{name:'Показать помещение',exact:true}).click();await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
  const scene=page.getByTestId('scene'),canvas=scene.locator('canvas'),region=page.getByRole('region',{name:'Рабочая область'});
- const cb=await canvas.boundingBox(),vb=await region.boundingBox();expect(Math.abs(cb!.height-vb!.height)).toBeLessThan(2);
+ const cb=await canvas.boundingBox(),vb=await region.boundingBox();/* 31.10: холст между полосой видов (44) и строкой клавиш (30) */expect(Math.abs(cb!.height-(vb!.height-74))).toBeLessThan(2);
  await page.mouse.move(cb!.x+cb!.width/2,cb!.y+cb!.height/2);for(let i=0;i<6;i++){await page.mouse.wheel(0,-180);await page.waitForTimeout(80);}
  await page.waitForTimeout(500);
  const overlaps=await page.evaluate(()=>{const scene=document.querySelector('.scene')!,r=scene.getBoundingClientRect();const controls=[...document.querySelectorAll('.view-tabs,.interaction-bar,.scene-tools,.section-picker,.orbit-help')].filter(e=>e.getClientRects().length).map(e=>e.getBoundingClientRect());return [...scene.querySelectorAll<HTMLElement>('.model-dimension')].filter(e=>getComputedStyle(e).display!=='none'&&getComputedStyle(e).visibility!=='hidden').filter(e=>{const b=e.getBoundingClientRect();return b.left<r.left||b.right>r.right||b.top<r.top||b.bottom>r.bottom||controls.some(c=>b.left<c.right&&b.right>c.left&&b.top<c.bottom&&b.bottom>c.top);}).map(e=>e.textContent);});
@@ -396,7 +396,7 @@ test('Premial sink: real cutout, persistence, invalid edit and small viewport ca
  await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
  const viewport=page.locator('.viewport');
  expect(await viewport.evaluate(e=>e.scrollTop)).toBe(0);
- const r=await viewport.boundingBox(),c=await page.locator('.scene canvas').boundingBox();expect(Math.abs(r!.y-c!.y)).toBeLessThan(1);
+ const r=await viewport.boundingBox(),c=await page.locator('.scene canvas').boundingBox();/* 31.10: холст под полосой видов */expect(Math.abs(r!.y+44-c!.y)).toBeLessThan(1);
  await page.setViewportSize({width:1600,height:1000});
  const tip=page.getByRole('button',{name:'Понятно',exact:true});if(await tip.isVisible())await tip.click();
  await page.getByRole('button',{name:'Вписать модель',exact:true}).click();
@@ -410,12 +410,12 @@ test('sidebars resize by dragging, persist across empty and furnished rooms, and
  const left=page.getByRole('separator',{name:'Ширина левой панели'}),right=page.getByRole('separator',{name:'Ширина правой панели'});
  const drag=async(locator:any,dx:number)=>{const b=(await locator.boundingBox())!;await page.mouse.move(b.x+b.width/2,b.y+80);await page.mouse.down();await page.mouse.move(b.x+b.width/2+dx,b.y+80,{steps:6});await page.mouse.up();};
  await drag(left,90);await drag(right,-80);
- await expect(left).toHaveAttribute('aria-valuenow','340');await expect(right).toHaveAttribute('aria-valuenow','380');
- expect(Math.round((await page.locator('.library').boundingBox())!.width)).toBe(340);
- await page.reload();await expect(left).toHaveAttribute('aria-valuenow','340');
- await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await expect(right).toHaveAttribute('aria-valuenow','380');
- await right.focus();await right.press('ArrowLeft');await expect(right).toHaveAttribute('aria-valuenow','390');
- await left.dblclick();await expect(left).toHaveAttribute('aria-valuenow','250');
+ /* 31.10: по умолчанию на 1600 — 280/320 (ui-layout.css) */await expect(left).toHaveAttribute('aria-valuenow','370');await expect(right).toHaveAttribute('aria-valuenow','400');
+ expect(Math.round((await page.locator('.library').boundingBox())!.width)).toBe(370);
+ await page.reload();await expect(left).toHaveAttribute('aria-valuenow','370');
+ await page.getByRole('button',{name:'Добавить первый шкаф'}).click();await expect(right).toHaveAttribute('aria-valuenow','400');
+ await right.focus();await right.press('ArrowLeft');await expect(right).toHaveAttribute('aria-valuenow','410');
+ await left.dblclick();await expect(left).toHaveAttribute('aria-valuenow','280');await expect(right).toHaveAttribute('aria-valuenow','410');/* 31.10: сброс только своей колонки */await page.setViewportSize({width:1100,height:800});await expect.poll(async()=> (await page.locator('.viewport').boundingBox())!.width).toBeGreaterThanOrEqual(479);
  await page.setViewportSize({width:920,height:800});await expect.poll(async()=> (await page.locator('.viewport').boundingBox())!.width).toBeGreaterThanOrEqual(319);
  await page.setViewportSize({width:500,height:800});await expect(left).toBeHidden();
 });
@@ -590,7 +590,7 @@ test('kitchen facade sides: choose both, floor default, undo redo and reload thr
  await page.getByLabel('Правая боковина — материал фасадов',{exact:true}).check();
  const sides=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('garderyob-rooms-v1')!).rooms[0].project.modules[0].module.kitchen.facadeSides);
  expect(await sides()).toMatchObject({left:true,right:true});
- await page.locator('.scene canvas').click({position:{x:10,y:10}});await page.keyboard.press('Control+z');expect((await sides()).right).not.toBe(true);
+ /* 31.10: левый край сцены — колонка быстрых действий */await page.locator('.scene canvas').click({position:{x:120,y:10}});await page.keyboard.press('Control+z');expect((await sides()).right).not.toBe(true);
  await page.keyboard.press('Control+y');expect((await sides()).right).toBe(true);await page.reload();expect(await sides()).toMatchObject({left:true,right:true});
  await page.getByRole('button',{name:'Построение мебели',exact:true}).click();await openSettings(page,'Корпус');
  await expect(page.getByLabel('Правая боковина — материал фасадов',{exact:true})).toBeChecked();
