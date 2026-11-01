@@ -316,12 +316,12 @@ export function duplicatePart(p:Project,mid:string,sid:string,pid:string):{proje
 
 
 /** Заказ 7437584: копия несёт и настройки ящиков секции (зазор 30 / хват за фасад, полка над ящиками, посадка фасадов, зазор фасадов) и второй ярус штанги. */
-export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number;shelfDepth?:number;fixed?:number[];drawerGrip?:boolean;drawerCap?:boolean;drawerMount?:'inset';drawerGap?:number;rodLowerHeight?:number};
+export type SectionFilling={name:string;shelves:number[];drawers:DrawerConfig[];hanger:'rod'|'pantograph'|null;hangerHeight?:number;shelfDepth?:number;fixed?:number[];drawerGrip?:boolean;drawerCap?:boolean;drawerMount?:'inset';drawerGap?:number;rodLowerHeight?:number;externalDrawers?:boolean};
 export function captureSectionFilling(p:Project,mid:string,sid:string):SectionFilling{
  const m=p.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для копирования.');
  const b=boxes(m).find(b=>b.id===sid)!,offsets=drawerOffsets(s),hanger=s.pantograph?'pantograph':s.rod?'rod':null;
  const rod=parts(m).find(a=>a.id===sid+':rod'||a.id===sid+':pantograph:rod');
- return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),...(s.fixed?{fixed:[...s.fixed]}:{}),...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{}),...(s.drawerGrip?{drawerGrip:true}:{}),...(s.drawerCap!==undefined?{drawerCap:s.drawerCap}:{}),...(s.drawerMount?{drawerMount:s.drawerMount}:{}),...(s.drawerGap!==undefined?{drawerGap:s.drawerGap}:{}),...(s.rod&&s.rodLower!==undefined?{rodLowerHeight:s.rodLower*(b.top-b.bottom)}:{})};
+ return {name:m.name+' · секция '+(m.sections.indexOf(s)+1),shelves:s.shelves.map(f=>f*(b.top-b.bottom)),drawers:Array.from({length:s.drawers},(_,j)=>({...drawerConfig(m,s,j),y:offsets[j]})),hanger,...(s.shelfDepth===undefined?{}:{shelfDepth:s.shelfDepth}),...(s.fixed?{fixed:[...s.fixed]}:{}),...(hanger&&rod?{hangerHeight:rod.position[1]-b.bottom}:{}),...(s.drawerGrip?{drawerGrip:true}:{}),...(s.drawerCap!==undefined?{drawerCap:s.drawerCap}:{}),...(s.drawerMount?{drawerMount:s.drawerMount}:{}),...(s.drawerGap!==undefined?{drawerGap:s.drawerGap}:{}),...(s.externalDrawers?{externalDrawers:true}:{}),...(s.rod&&s.rodLower!==undefined?{rodLowerHeight:s.rodLower*(b.top-b.bottom)}:{})};
 }
 export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:SectionFilling):Project{
  const n=structuredClone(p),m=n.modules.find(a=>a.id===mid)?.module,s=m?.sections.find(s=>s.id===sid);if(!m||!s)throw Error('Выберите секцию для вставки.');
@@ -335,6 +335,8 @@ export function pasteSectionFilling(p:Project,mid:string,sid:string,copy:Section
  if(copy.drawerCap!==undefined)s.drawerCap=copy.drawerCap;else delete s.drawerCap;
  if(copy.drawerMount)s.drawerMount=copy.drawerMount;else delete s.drawerMount;
  if(copy.drawerGap!==undefined)s.drawerGap=copy.drawerGap;else delete s.drawerGap;
+ /* Макс 01.11: копия ящиков вровень с дверьми — вровень и в новой секции (посадка — по дверям цели) */
+ if(copy.externalDrawers&&m.doors){s.externalDrawers=true;if(m.doorMount==='inset')s.drawerMount='inset';else delete s.drawerMount;}
  if(copy.hanger==='rod'&&copy.rodLowerHeight!==undefined)s.rodLower=copy.rodLowerHeight/height;else delete s.rodLower;
  renewIds(s);settleCutouts(m);/* круг 3: наполнение — копия с новыми id; вырезы на заменённых деталях снимаются (сообщение при сохранении) */
  const error=projectErrors(n)[0];if(error)throw Error('Наполнение не подходит этой секции: '+error);return n;

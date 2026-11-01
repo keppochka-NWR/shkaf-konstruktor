@@ -6,10 +6,11 @@
 import { ArrowUpToLine, Eraser, Footprints, Layers, Lightbulb, Link2, MousePointerClick, PanelBottom, PanelLeft, Rows2, Rows3, Shirt, Archive, Square, Trash, PanelRight, Ruler, Columns2, SlidersHorizontal } from "lucide-react";
 import { cornerOf, reshapeCorner, type CornerSide } from "./kitchenCorner";
 import type { RadialItem } from "./RadialMenu";
-import { boxes, distribute, drawerCapTop, drawerFacesEqual, evenDrawerConfigs, externalDrawerBoundary, facadeBottom, facadeTop, plinth, RULES, TOP_STRIP_STEPS, type Module, type Section } from "./model";
+import { boxes, distribute, doorRowCount, drawerFacesEqual, drawersFlush, drawersFlushBlock, evenDrawerConfigs, plinth, RULES, TOP_STRIP_STEPS, type Module, type Section } from "./model";
 import { anyLight, clearLights, hasShelf, hasStand, setSectionShelves, setStands } from "./lights";
 import { rawKitchen } from "./rawModule";
-import { fullSectionDrawer, relayoutDrawers, setDrawersOverlay } from "./drawerModes";
+import { fullSectionDrawer, relayoutDrawers, setDoorMount, setDrawersOverlay } from "./drawerModes";
+import { MAX_DOOR_ROWS, maxDoorRows, setDoorRowCount, setDoorSplit } from "./doorRows";
 import { sideFillerApplies } from "./sideFiller";
 
 export type QuickMenuOps = {
@@ -148,20 +149,22 @@ export function lightItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem
   ] };
 }
 
-/** Высота нижнего ряда при включении «Разделить фасады по высоте» — та же формула, что галочка панели (половина высоты фасадов секции). */
-export function defaultDoorSplit(m: Module, s: Section) {
-  // ящики в накладку (правка 29.10): дверь начинается над ящиками — от низа двери (externalDrawerBoundary), как в parts()
-  const ext = externalDrawerBoundary(m, s);
-  return Math.round((facadeTop(m) - (ext && Number.isFinite(ext.doorBottom) ? Math.max(facadeBottom(m), ext.doorBottom) : s.externalDrawers && s.drawers ? drawerCapTop(m, s) + (s.doorGap ?? RULES.faceGap) : facadeBottom(m))) / 2);
-}
+export { defaultDoorSplit } from "./doorRows";
 
 /** Ф3b (Покрытие.md, «деление двери по высоте» — 72 изделия): вкл/выкл деления фасадов секции, как галочка панели. */
 export function doorSplitItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
   const s = m.sections.find((x) => x.id === sid) ?? m.sections[0];
   const on = s.doorSplit !== undefined;
   return { id: "q-door-split", label: on ? "Не делить дверь" : "Разделить по высоте", icon: Rows2, active: on, disabled: !m.doors,
-    hint: !m.doors ? "У корпуса нет распашных фасадов" : on ? `Сейчас нижний ряд ${s.doorSplit} мм. Снять деление — одна дверь на секцию` : "Два фасада друг над другом; высота нижнего ряда — половина, число — в панели",
-    run: () => ops.modify((n) => { const a = n.sections.find((x) => x.id === s.id)!; if (a.doorSplit !== undefined) delete a.doorSplit; else a.doorSplit = defaultDoorSplit(n, a); delete a.removedDoors; }) };
+    hint: !m.doors ? "У корпуса нет распашных фасадов" : on ? `Сейчас нижний ряд ${s.doorSplit} мм. Снять деление — одна дверь на секцию` : "Два фасада друг над другом; высота нижнего ряда — половина, рядов до " + MAX_DOOR_ROWS,
+    run: () => ops.modify((n) => setDoorSplit(n, s.id, !on)) };
+}
+
+/** Макс 01.11: «Рядов фасадов ›» — 2…5 равных рядов, как список панели; меню показывает пункт только у разделённой секции. */
+export function doorRowsItem(m: Module, sid: string, ops: QuickMenuOps): RadialItem {
+  const s = m.sections.find((x) => x.id === sid) ?? m.sections[0], cur = doorRowCount(m, s), top = maxDoorRows(m, s);
+  return { id: "q-door-rows", label: "Рядов фасадов", icon: Rows3, active: cur > 2, hint: `Сейчас ${cur}. Ряды поровну, высота каждого — в панели`,
+    children: Array.from({ length: MAX_DOOR_ROWS - 1 }, (_, i) => i + 2).map((n) => ({ id: "q-door-rows-" + n, label: String(n), icon: Rows3, active: cur === n, disabled: n > top && n !== cur, hint: n > top ? `Фасад выйдет меньше ${RULES.doorMinH} мм` : `${n} равных ряда на всю высоту двери`, run: () => ops.modify((x) => setDoorRowCount(x, s.id, n)) })) };
 }
 
 /**
@@ -171,9 +174,9 @@ export function doorSplitItem(m: Module, sid: string, ops: QuickMenuOps): Radial
 export function doorMountItem(m: Module, ops: QuickMenuOps): RadialItem {
   const cur = m.doorMount ?? "overlay";
   return { id: "q-door-mount", label: "Тип петли", icon: Link2, disabled: !m.doors, hint: (m.doors ? "Монтаж фасадов всего корпуса. Сейчас: " + (cur === "inset" ? "вкладные" : "накладные") : "У корпуса нет распашных фасадов"), children: [
-    { id: "q-mount-overlay", label: "Накладная", icon: Link2, active: cur === "overlay", hint: "Фасад закрывает торцы боковин — как по умолчанию", run: () => ops.modify((n) => { delete n.doorMount; }) },
+    { id: "q-mount-overlay", label: "Накладная", icon: Link2, active: cur === "overlay", hint: "Фасад закрывает торцы боковин — как по умолчанию", run: () => ops.modify((n) => setDoorMount(n, "overlay")) },
     { id: "q-mount-half", label: "Полунакладная", icon: Link2, disabled: true, hint: "Нет в студии: полунакладной монтаж пока не задаётся (общая стойка двух дверей)" },
-    { id: "q-mount-inset", label: "Вкладная", icon: Link2, active: cur === "inset", hint: "Фасад внутри проёма корпуса, петли вкладные", run: () => ops.modify((n) => { n.doorMount = "inset"; }) },
+    { id: "q-mount-inset", label: "Вкладная", icon: Link2, active: cur === "inset", hint: "Фасад внутри проёма корпуса, петли вкладные", run: () => ops.modify((n) => setDoorMount(n, "inset")) },
   ] };
 }
 
@@ -207,20 +210,21 @@ export function kitchenFillerItems(m: Module, ops: QuickMenuOps): RadialItem[] {
 /** Пункты для меню фасада/двери (тот же модуль): деление по высоте и тип петли. */
 export function doorQuickItems(m: Module, sid: string, ops: QuickMenuOps): RadialItem[] {
   if (!quickMenuApplies(m) || !m.doors) return [];
-  return [doorSplitItem(m, sid, ops), doorMountItem(m, ops)];
+  const s = m.sections.find((x) => x.id === sid) ?? m.sections[0];
+  return [doorSplitItem(m, sid, ops), ...(s.doorSplit !== undefined ? [doorRowsItem(m, sid, ops)] : []), doorMountItem(m, ops)];
 }
 
-/** Меню ящика (правки Макса 29.10.2026): «В накладку» / «За дверью» — как выбор «Фасады ящиков» панели; «Фасады поровну» — когда
- *  накладные фасады ящиков секции разной высоты, а расстановку можно выровнять (evenDrawerConfigs). */
+/** Меню ящика (правки Макса 29.10.2026, название — 01.11): «Вровень с дверью» / «За дверью» — как галочка «Фасад ящика вровень с распашными
+ *  фасадами» в настройках ящика; «Фасады поровну» — когда накладные фасады ящиков секции разной высоты, а расстановку можно выровнять (evenDrawerConfigs). */
 export function drawerQuickItems(m: Module, sid: string, ops: QuickMenuOps): RadialItem[] {
   if (!quickMenuApplies(m)) return [];
   const s = m.sections.find((x) => x.id === sid);
   if (!s || !s.drawers) return [];
   const out: RadialItem[] = [];
   if (m.doors) {
-    const on = !!s.externalDrawers;
-    out.push({ id: "drawer-mount", label: on ? "За дверью" : "В накладку", icon: Rows2, active: on,
-      hint: on ? "Ящики за распашной дверью: дверь снова во всю высоту секции" : "Фасады ящиков в плоскости дверей, дверь короче и начинается над ящиками через зазор; петли — по новой высоте",
+    const on = drawersFlush(m, s), why = on ? null : drawersFlushBlock(m, s);
+    out.push({ id: "drawer-mount", label: on ? "За дверью" : "Вровень с дверью", icon: Rows2, active: on, disabled: !!why,
+      hint: why ?? (on ? "Ящики за распашной дверью: дверь снова во всю высоту секции" : "Фасады ящиков в плоскости дверей, дверь короче и начинается над ящиками через зазор; петли — по новой высоте"),
       run: () => ops.modify((n) => setDrawersOverlay(n, sid, !on)) });
   }
   if (s.drawers > 1 && !drawerFacesEqual(m, s) && evenDrawerConfigs(m, s))

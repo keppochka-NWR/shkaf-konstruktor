@@ -130,10 +130,10 @@ test('правка 3: ящики в накладку — фасады в пло�
   }
 });
 
-test('правка 3: меню ящика — «В накладку» / «За дверью»; «Фасады поровну» только когда разные',()=>{
+test('правка 3: меню ящика — «Вровень с дверью» (название Макса 01.11) / «За дверью»; «Фасады поровну» только когда разные',()=>{
   let m=initialModule();const sid=m.sections[0].id;
   const ops:QuickMenuOps={modify:u=>{const n=structuredClone(m);u(n);m=n;},addUpper:()=>{}};
-  const it=drawerQuickItems(m,sid,ops);assert.deepEqual(it.map(i=>i.label),['В накладку']);
+  const it=drawerQuickItems(m,sid,ops);assert.deepEqual(it.map(i=>i.label),['Вровень с дверью']);
   it[0].run!();assert.equal(m.sections[0].externalDrawers,true);assert.deepEqual(validate(m),[]);assertEven(m,'меню');
   const again=drawerQuickItems(m,sid,ops);assert.equal(again[0].label,'За дверью');assert.ok(again[0].active);
   again[0].run!();assert.equal(m.sections[0].externalDrawers,undefined);
