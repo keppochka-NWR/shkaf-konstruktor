@@ -1,5 +1,5 @@
 import {MEASUREMENT_RULES} from './measurement';
-import {createCornerUpper} from './cornerWardrobe';
+import {createCornerUpper,cornerDrawerBlock} from './cornerWardrobe';
 import {fitSmallModule} from './smallSize';
 import {removeOpening,mirrorOpenings,resizeOpening} from './sectionLayout';
 import {id,section,boxes,drawerConfig,drawerOffsets,drawerStackHeight,doorCount,fillerSides,parts,RULES,MAX_SHELVES_REASON,MAX_DRAWERS_REASON,evenDrawerConfigs,isAutoDrawerLayout,drawersToRoof,type Module,type Section} from './model';
@@ -51,6 +51,8 @@ export function insertItem(p:Project,kind:FillKind,mid:string,sid:string,worldY:
   if(!target||!b)throw Error('Выберите секцию для наполнения.');
   if(kind==='shelf'&&target.shelves.length>=RULES.maxShelves)throw Error(MAX_SHELVES_REASON);
   if((kind==='drawer'||kind==='mesh')&&target.drawers>=RULES.maxDrawers)throw Error(MAX_DRAWERS_REASON);
+  // Макс 01.11: центр угла и угловая антресоль — причина, а не «недостаточно места» после перебора высот
+  if(kind==='drawer'){const why=cornerDrawerBlock(source,target);if(why)throw Error(why);}
   if(kind==='mesh'){
     const item=meshById(meshId);if(!item)throw Error('Элемент Лемана Про не найден в каталоге.');
     kind='drawer';drawer={slide:'ball',length:250,height:item.h,mesh:item.id};

@@ -12,6 +12,24 @@ export function cornerDrawer(m:Module,s:Section,j:number):DrawerConfig {
  const c=m.corner!;return s.drawerConfigs?.[j]??{slide:c.slide,height:c.drawerHeight,length:c.slideLength,handle:false};
 }
 export function cornerOffsets(m:Module,s:Section):number[]{let y=0;return Array.from({length:s.drawers},(_,j)=>{const cfg=cornerDrawer(m,s,j),start=cfg.y??y;y=start+cfg.height+40;return start;});}
+/** Макс 01.11: куда ящик физически не встаёт. Боковой блок — две параллельные стенки (боковина и перегородка), ящик едет вдоль них, фасад к ним поперёк.
+ *  В центральном отделении и в антресоли параллельных стенок нет (к диагональным дверям стенки идут под 45°) — направляющие крепить не к чему: причина, а не «нет места». */
+export function cornerDrawerBlock(m:Module,s:Section,short=false):string|undefined{
+ const c=m.corner;if(!c)return undefined;
+ if(c.level==='upper')return short?'Только в боковые блоки: в антресоли нет параллельных стенок':'Ящики ставятся только в левый и правый блоки нижнего корпуса: в угловой антресоли нет параллельных стенок, направляющие крепить не к чему.';
+ if(m.sections.indexOf(s)===2)return short?'Только в боковые блоки: здесь стенки под 45° к дверям':'Ящики ставятся только в левый и правый блоки: стенки центрального отделения идут под 45° к дверям, направляющие крепить не к чему.';
+ return undefined;
+}
+/** Макс 01.11: блок подстраивается, когда стала короче сторона угла или мельче боковина (всё заявленное 950–1400 / 400–650 должно строиться, раньше 950 и 400 — отказ):
+ *  фасады не выходят за край боковины, центру остаётся проём от 170; короба — по новой глубине блока (запас 30). Блок и направляющие, которые и так встают, не меняются. */
+export function fitCornerFilling(m:Module):Module{
+ const c=m.corner;if(!c||c.level==='upper')return m;
+ c.bayDepth=Math.max(300,Math.min(c.bayDepth,c.sideDepth-T-10,m.width-c.bayWidth-2*T-170));
+ const fit=(length:number)=>length+30<=c.bayDepth?length:[350,300,250].find(l=>l+30<=c.bayDepth)??250;
+ c.slideLength=fit(c.slideLength);
+ for(const s of m.sections)s.drawerConfigs?.forEach(d=>{d.length=fit(d.length);});
+ return m;
+}
 export function cornerBoxes(m:Module):SectionBox[]{
  const c=m.corner!,bottom=c.level==='upper'?T:BASE+T,top=c.level==='upper'?m.height-T:m.height-c.middleClear-T-(c.sharedTop?0:T);
  return m.sections.map((s,i)=>({id:s.id,x:T,width:c.level==='upper'?Math.SQRT2*(m.width-c.sideDepth-T):i<2?c.bayWidth-T:Math.SQRT2*(m.width-c.bayWidth-2*T-c.bayDepth),bottom,top}));
@@ -31,7 +49,7 @@ export function normalizeCorner(m:Module):Module{
 export function createCornerModule(arm=1050,height=2000,sideDepth=450,source?:Pick<Module,'decor'|'facadeDecor'>):Module{
  const m=cornerProject({...CORNER_DEFAULT,decor:source?.decor??CORNER_DEFAULT.decor,facadeDecor:source?.facadeDecor??CORNER_DEFAULT.facadeDecor}).modules[0].module;
  m.width=arm;m.depth=arm;m.height=height;m.name='Угловой шкаф';m.corner!.sideDepth=sideDepth;m.corner!.sharedTop=false;
- m.sections.forEach(s=>s.id=crypto.randomUUID());
+ m.sections.forEach(s=>s.id=crypto.randomUUID());fitCornerFilling(m);
  const error=cornerErrors(m)[0];if(error)throw Error(error);return m;
 }
 export function createCornerUpper(base:Module,height:number):Module{
@@ -105,7 +123,7 @@ export function cornerErrors(m:Module):string[]{
  m.sections.forEach((s,i)=>{
   const span=boxes[i].top-boxes[i].bottom;
   if(!Number.isInteger(s.drawers)||s.drawers<0||s.drawers>5||!Array.isArray(s.shelves)||s.shelves.length>10||s.shelves.some(f=>!Number.isFinite(f)||f*span<24||f*span>span-24))errors.push('Полки должны находиться внутри своего отделения, с отступом от дна и крыши.');
-  if((i===2||c.level==='upper')&&s.drawers)errors.push('Ящики устанавливаются в левый или правый боковой блок.');
+  if(s.drawers&&cornerDrawerBlock(m,s))errors.push(cornerDrawerBlock(m,s)!);
   if(s.pantograph||s.drawerConfigs?.some(d=>d.mesh||d.tray))errors.push('Для этого угла доступны обычные полки, штанга и ящики.');
   if(s.rod&&(i!==2||c.level!=='main'))errors.push('Штанга устанавливается в центральное отделение.');
   const rod=(s.rodAt??(span-70)/span)*span;
@@ -188,7 +206,8 @@ export function cornerParts(m:Module):Part[]{
      local(`drawer:${j}:${label}`,`Ящик ${j+1} · поперечина`,[boxW-2*t,endH,t],[clear/2,endY+endH/2,z],'drawer',0);
     local(`drawer:${j}:bottom`,`Ящик ${j+1} · дно ЛДСП`,[hidden?boxW-2*t:boxW,t,boxD],[clear/2,hidden?y+12+t/2:y-t/2,backZ+boxD/2],'drawer',0);
     if(!cfg.noFacade){const frontPart=local(`drawer:${j}:facade`,`Ящик ${j+1} · вкладной фасад`,[clear-4,pitch-4,t],[clear/2,bottom+offsets[j]+(pitch-4)/2+2,face-8],'drawer',1);frontPart.edge=[2,2,2,2];}
-    for(const [label,x] of [['left',boxX-6],['right',boxX+boxW+6]] as const)
+    // Макс 01.11: скрытая направляющая — под дном короба, у его края (как в прямом шкафу), а не как шариковая сбоку: была на 11 мм в боковине и перегородке и на 4 мм в коробе
+    for(const [label,x] of [['left',hidden?boxX+10:boxX-6],['right',hidden?boxX+boxW-10:boxX+boxW+6]] as const)
      local(`drawer:${j}:slide:${label}`,'Направляющая · '+cfg.slide,[hidden?20:12,hidden?12:45,cfg.length],[x,hidden?y+6:y+cfg.height/2,frontZ-cfg.length/2],'drawer',2,'metal');
    }
   }
@@ -201,7 +220,8 @@ export function cornerParts(m:Module):Part[]{
   });
   if(frontSection.rod){
    const rodCenter=(vfront-55)/Math.SQRT2;
-   const rod=add(frontId+':rod','Штанга центрального отделения · крепления уточнить',[2*Math.SQRT2*(partition-rodCenter),25,25],[rodCenter,bottom+(frontSection.rodAt??(openH-70)/openH)*openH,rodCenter],'rod',0,'metal');rod.rotY=45;
+   // Макс 01.11: перегородка стоит к штанге под 45° — штанга до оси в неё врезалась на 8,8 мм (красная плашка у каждого углового шкафа); короче на диаметр — торцы впритык к перегородкам
+   const rod=add(frontId+':rod','Штанга центрального отделения · крепления уточнить',[2*Math.SQRT2*(partition-rodCenter)-25,25,25],[rodCenter,bottom+(frontSection.rodAt??(openH-70)/openH)*openH,rodCenter],'rod',0,'metal');rod.rotY=45;
   }
  }
  if(c.level==='upper')frontSection.shelves.forEach((f,k)=>plate(frontId+':shelf:'+k,'Полка антресоли · пятиугольная',pent,t+f*(h-2*t),'shelf',[.4,.4,2,.4,.4]));
